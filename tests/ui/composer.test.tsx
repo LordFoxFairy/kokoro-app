@@ -124,7 +124,6 @@ describe("Composer model selector", () => {
     const intent = screen.getByTestId("creation-intent-pill")
     const closeButton = screen.getByRole("button", { name: "Dismiss Websites creation mode", hidden: true })
     expect(intent).toHaveTextContent("Websites")
-    expect(intent.className).toContain("creationIntent")
     expect(intent).toHaveAttribute("data-slot", "creation-intent")
     expect(intent).toHaveAttribute("data-intent", "website")
     const closeIcon = closeButton.querySelector('[data-testid="creation-intent-close"]')
@@ -251,10 +250,10 @@ describe("CreationIntentPill dismissal", () => {
     const closeButton = screen.getByRole("button", { name: "Dismiss Websites", hidden: true })
 
     expect(capsule).toHaveAttribute("data-slot", "creation-intent")
-    expect(capsule.className).toContain("creationIntent")
     expect(capsule).toHaveAttribute("data-dismiss-action", "creation-intent")
     const closeIcon = closeButton.querySelector(".lucide-x")
     expect(closeIcon).toBeInTheDocument()
+    expect(screen.getByTestId("creation-intent-glyph")).toHaveAttribute("data-slot", "code-window-icon")
     expect(closeIcon).toHaveAttribute("data-testid", "creation-intent-close")
     expect(closeIcon).toHaveAttribute("aria-hidden", "true")
     expect(closeButton).toHaveAttribute("title", "Dismiss Websites")
@@ -317,11 +316,14 @@ describe("CreationIntentPill dismissal", () => {
 
     const capsule = screen.getByTestId("creation-intent-pill")
     const closeButton = screen.getByRole("button", { name: "Dismiss Websites" })
+    const glyph = screen.getByTestId("creation-intent-glyph")
     const before = capsule.getBoundingClientRect().width
 
+    expect(glyph).toBeVisible()
     fireEvent.pointerEnter(capsule, { pointerType: "mouse" })
     expect(capsule).not.toHaveAttribute("data-hovered")
     expect(closeButton).toBeVisible()
+    expect(glyph).toBeVisible()
     expect(capsule.getBoundingClientRect().width).toBe(before)
 
     fireEvent.pointerLeave(capsule, { pointerType: "mouse" })
@@ -374,7 +376,8 @@ describe("CreationIntentPill dismissal", () => {
     const closeButton = screen.getByTestId("creation-intent-close-button")
     const iconSlot = closeButton.parentElement
 
-    expect(iconSlot?.className).toContain("creationIntentIconSlot")
+    expect(iconSlot).toBeInTheDocument()
+    expect(iconSlot).toHaveAttribute("data-slot", "creation-intent-icon-slot")
     expect(screen.getByTestId("creation-intent-close-button").parentElement).toBe(iconSlot)
     expect(capsule).toHaveTextContent("网站")
 
@@ -387,8 +390,9 @@ describe("CreationIntentPill dismissal", () => {
     )
 
     const longCapsule = screen.getByTestId("creation-intent-pill")
-    expect(longCapsule.querySelector('[data-testid="creation-intent-close-button"]')?.parentElement?.className).toContain(
-      "creationIntentIconSlot",
+    expect(longCapsule.querySelector('[data-testid="creation-intent-close-button"]')?.parentElement).toHaveAttribute(
+      "data-slot",
+      "creation-intent-icon-slot",
     )
     expect(longCapsule.querySelectorAll("button")).toHaveLength(1)
   })

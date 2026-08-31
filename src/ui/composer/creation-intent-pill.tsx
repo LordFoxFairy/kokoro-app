@@ -1,6 +1,8 @@
 import { X } from "lucide-react"
 
-import styles from "./composer.module.css"
+import { CodeWindowIcon } from "@/components/icons/code-window-icon"
+
+import styles from "./creation-intent-pill.module.css"
 
 export type CreationIntent = "website" | "app"
 
@@ -20,16 +22,17 @@ type CreationIntentPillProps = {
 export function CreationIntentPill({ intent, label, onDismiss, dismissLabel = `Dismiss ${label}` }: CreationIntentPillProps) {
   return (
     <div
-      className={styles.creationIntent}
+      className={styles.root}
       data-slot="creation-intent"
       data-testid="creation-intent-pill"
       data-intent={intent}
       data-dismiss-action="creation-intent"
     >
-      <span className={styles.creationIntentIconSlot}>
+      <span className={styles.iconSlot} data-slot="creation-intent-icon-slot">
+        <CodeWindowIcon className={styles.glyph} data-testid="creation-intent-glyph" />
         <button
           type="button"
-          className={styles.creationIntentCloseButton}
+          className={styles.closeButton}
           aria-label={dismissLabel}
           title={dismissLabel}
           data-testid="creation-intent-close-button"
@@ -47,10 +50,10 @@ export function CreationIntentPill({ intent, label, onDismiss, dismissLabel = `D
             onDismiss()
           }}
         >
-          <X className={styles.creationIntentCloseIcon} data-testid="creation-intent-close" aria-hidden="true" />
+          <X className={styles.closeIcon} data-testid="creation-intent-close" aria-hidden="true" />
         </button>
       </span>
-      <span className={styles.creationIntentLabel}>{label}</span>
+      <span className={styles.label}>{label}</span>
     </div>
   )
 }

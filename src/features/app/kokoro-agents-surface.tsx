@@ -317,6 +317,18 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
             <h1>{t("agents.heroPrefix")} <span key={wordIndex}>{words[wordIndex]}</span></h1>
           </div>
 
+          <div className={styles.featureList}>
+            {FEATURES.map(({ title, description, icon: Icon }) => (
+              <article className={styles.featureCard} key={title}>
+                <div className={styles.featureIcon}><Icon aria-hidden="true" /></div>
+                <div>
+                  <h2>{t(title)}</h2>
+                  <p>{t(description)}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
           <div className={styles.startAction}>
             <Button
               ref={startButtonRef}
@@ -341,18 +353,6 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
               </span>
               {t("agents.start")}
             </Button>
-          </div>
-
-          <div className={styles.featureList}>
-            {FEATURES.map(({ title, description, icon: Icon }) => (
-              <article className={styles.featureCard} key={title}>
-                <div className={styles.featureIcon}><Icon aria-hidden="true" /></div>
-                <div>
-                  <h2>{t(title)}</h2>
-                  <p>{t(description)}</p>
-                </div>
-              </article>
-            ))}
           </div>
 
           <section className={styles.comingSoon} aria-labelledby="agents-coming-soon">

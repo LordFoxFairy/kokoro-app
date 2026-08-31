@@ -84,6 +84,13 @@ export function KokoroDirectChatWelcome({
     return () => window.clearInterval(timer)
   }, [bannerPaused, hasDraft])
 
+  useLayoutEffect(() => {
+    // The welcome surface is its own scroll container. Reset it whenever the
+    // direct workbench mounts or the creation capsule changes so a previous
+    // catalog visit cannot reopen the homepage halfway down the document.
+    if (surfaceRef.current) surfaceRef.current.scrollTop = 0
+  }, [creationIntent])
+
   useEffect(() => {
     if (!creationIntent) return
     let innerFrame = 0

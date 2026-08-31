@@ -359,7 +359,7 @@
 
 ## 2026-08-30 `/app/agents` 桌面精修
 
-- `src/features/app/kokoro-agents-surface.tsx` + `kokoro-agents-surface.module.css`：保留 Kokoro 合成 Agent fixture，按 Manus 的页面轴收口为固定宽度内容列、等高能力卡和清晰的 Hero → CTA → Coming soon 层级；实际 surface 宽度在 `≥768px` 的窄桌面容器使用两列，宽桌面保持四列，手机断点不参与本轮改动。
+- `src/features/app/kokoro-agents-surface.tsx` + `kokoro-agents-surface.module.css`：保留 Kokoro 合成 Agent fixture，按 Manus 的页面轴收口为固定宽度内容列、等高能力卡和清晰的 Hero → 能力卡 → CTA → Coming soon 层级；实际 Agent surface 容器达到 `42rem` 使用两列、达到 `60rem` 使用四列，`648px` 紧凑桌面仍保持单列，手机断点不参与本轮改动。
 - Start/setup Dialog 保持 `400×446px` 的基准几何；短桌面视口使用内部纵向滚动，关闭按钮为 44px 命中区，Radix Dialog focus scope 进入时把焦点交给当前平台 Tab，Escape/关闭后回到 Start 按钮。
 - Telegram、LINE、Slack 使用 Radix Tabs 键盘循环；setup 请求按平台和请求序列隔离，二维码槽恒定 `160×160px`，loading 保留 Skeleton，error 使用 Alert + retry 且不产生假 continue 链接。
 - 验收证据：`output/playwright/agents-refined-wide-1440x900.png`、`output/playwright/agents-refined-narrow-960x900.png`、`output/playwright/agents-refined-dialog.png`、`output/playwright/agents-refined-dialog-short-768x400.png`、`output/playwright/agents-refined-dialog-error.png`；对应交互测试为 `tests/ui/kokoro-agents-surface.test.tsx`。

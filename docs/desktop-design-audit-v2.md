@@ -3854,8 +3854,9 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 
 ### 3. Composer 胶囊与语音输入当前基线 v202
 
-- 网站/应用创作胶囊固定为 `68×32px`，左侧使用 `16×16px` 的始终可见 X；X 是唯一关闭动作，关闭
-  不提交表单、不改 URL，只清除 creation intent 并保留 draft。
+- 网站/应用创作胶囊固定为 `68×32px`，左侧使用独立的 `16×16px` 图标槽位；静止态显示创建类型图标，悬停
+  或键盘聚焦时在同一槽位切换为 X。X 是唯一关闭动作，关闭不提交表单、不改 URL，只清除 creation intent
+  并保留 draft。
 - 桌面麦克风是固定 `32×32px` 的内联按钮。点击只改变按钮的无障碍状态和轻微颜色，不替换 textarea，
   不新增录音条、Dialog 或 Popover；preview 按 `listening → transcribing → idle` 追加合成文本，生产
   只使用浏览器 SpeechRecognition 结果。
@@ -3900,3 +3901,32 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 - 截图：`output/playwright/perf-v135-account-settings-immediate.png`。
 
 本轮只修改桌面 User Web 的交互等待，不修改手机端布局；命令菜单与嵌套 Dialog 的延迟仍保留，因为它们用于释放另一个 modal focus scope，不属于无网络的普通导航等待。
+
+## v206 Agent Hero 轴与窄桌面卡栅格复核（2026-08-31）
+
+重新以 `786×674` 桌面视口与已保存的 Manus 基线逐像素复核 `/app/agents` 后，修正了两个会让整页
+“看起来不一样”的结构差异：
+
+- 能力卡现在紧跟 Hero 标题，Start/Setup CTA 放在能力卡之后；此前 CTA 插在标题与能力卡之间，
+  使窄桌面首屏的卡片整体下移，并与 Manus 的 `Hero → cards → Start now` 顺序相反。
+- Agent surface 的两列门槛由 `48rem` 调整为 `42rem`，同时保留 `60rem` 的四列门槛。这样 `786×674`
+  下的内容列（`x=72,w=694`）稳定呈现两列 `341px` 卡片，`648px` 紧凑参考仍是一列，宽桌面仍是四列。
+
+实测坐标（`786×674`、DPR 1）：能力卡为
+`(72,408,341,115)`、`(425,408,341,115)` 与第二行 `(72,535)`、`(425,535)`；页面无横向溢出。
+截图：`output/playwright/agents-local-786x674-dpr1.png`、
+`output/playwright/agents-local-786x674-final-grid.png`，对照
+`output/playwright/agents-v130-manus-current.png`。
+
+## v207 网站胶囊 QA 入口与欢迎页滚动复位（2026-08-31）
+
+针对桌面复核 URL `?qa=capsule-final` 在新标签页没有网站胶囊、且从目录返回首页时可能保留旧滚动位置的问题，补上两项边界：
+
+- 本地非生产构建在没有 sessionStorage 状态时，将 `qa=capsule-final` 解释为确定性网站创建预览；真实 `/app` 仍保持中性的直接会话，
+  用户点击网站入口后才显示胶囊。该 QA 查询不会写入后端、不会改变生产路由语义。
+- 胶囊本身拆成独立的 `CreationIntentPill` 组件与 `creation-intent-pill.module.css`：静止态展示 `CodeWindowIcon`，悬停或键盘聚焦时在同一 `16×16px`
+  槽位交叉显示 X；关闭按钮始终挂载但不改变尺寸，点击后只清除当前创建意图，不提交表单、不丢失草稿。
+- `KokoroDirectChatWelcome` 在挂载和 creation intent 切换时同步把自己的滚动容器复位到 `scrollTop=0`，避免从 `/skills`、`/library` 等独立面返回时，
+  页面从中段打开导致 Composer 和网站胶囊被裁出首屏。网站模式后续两帧复位仍保留，用于抵消新增上下文轨道触发的浏览器 scroll anchoring。
+
+本轮只调整桌面 Web 的本地 QA 状态和欢迎页滚动边界，没有修改手机端布局。

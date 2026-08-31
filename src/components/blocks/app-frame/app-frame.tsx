@@ -107,6 +107,19 @@ function readPendingCreationIntent(): CreationIntent | null {
   }
 }
 
+function readInitialCreationIntent(): CreationIntent | null {
+  const stored = readPendingCreationIntent()
+  if (stored !== null) return stored
+  // `qa=capsule-final` is a local screenshot fixture, not a product mode. It
+  // makes the capsule comparison URL deterministic after a fresh tab while
+  // keeping the real `/app` route neutral until the user chooses Website.
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    const qa = new URLSearchParams(window.location.search).get("qa")
+    if (qa === "capsule-final") return "website"
+  }
+  return null
+}
+
 function writePendingCreationIntent(value: CreationIntent | null): void {
   if (typeof window === "undefined") return
   try {
@@ -488,7 +501,7 @@ export function AppFrame({
     }
     return settingsTabFromLocation()
   })
-  const [deploymentIntent, setDeploymentIntentState] = useState<CreationIntent | null>(readPendingCreationIntent)
+  const [deploymentIntent, setDeploymentIntentState] = useState<CreationIntent | null>(readInitialCreationIntent)
   const setDeploymentIntent = useCallback((intent: CreationIntent | null) => {
     setDeploymentIntentState(intent)
     writePendingCreationIntent(intent)

@@ -187,7 +187,7 @@ it("过期连接禁用 Continue，并通过重试重新生成可继续的连接"
 it("桌面能力卡布局由 agents-surface 容器宽度决定，而不是 pointer 条件", () => {
   const css = readFileSync("src/features/app/kokoro-agents-surface.module.css", "utf8")
 
-  expect(css).toContain("@container agents-surface (min-width: 48rem)")
+  expect(css).toContain("@container agents-surface (min-width: 42rem)")
   expect(css).toContain("@container agents-surface (min-width: 60rem)")
   expect(css).not.toContain("(pointer: fine)")
 })
