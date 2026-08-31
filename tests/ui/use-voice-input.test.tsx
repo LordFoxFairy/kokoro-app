@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react"
+import { act, cleanup, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useVoiceInput } from "@/ui/composer/use-voice-input"
@@ -62,12 +62,16 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Keep the assertion after RTL cleanup so a leaked preview timer is caught
+  // instead of surviving until the next test. The explicit unmounts below
+  // still make each lifecycle assertion local and readable.
+  cleanup()
   const pendingTimers = vi.getTimerCount()
+  expect(pendingTimers).toBe(0)
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  expect(pendingTimers).toBe(0)
 })
 
 describe("useVoiceInput", () => {
@@ -101,12 +105,31 @@ describe("useVoiceInput", () => {
     const { result, props, unmount } = renderVoiceInput({ preview: true })
 
     act(() => result.current.toggle())
+    act(() => vi.advanceTimersByTime(620))
+    expect(result.current.state).toBe("transcribing")
     act(() => result.current.toggle())
 
     expect(result.current.state).toBe("idle")
     expect(vi.getTimerCount()).toBe(0)
     act(() => vi.advanceTimersByTime(1000))
     expect(props.onDraftChange).not.toHaveBeenCalled()
+
+    unmount()
+  })
+
+  it("preview 取消后不会写入已经捕获但尚未完成的结果", () => {
+    const { result, props, unmount } = renderVoiceInput({ preview: true })
+
+    act(() => result.current.toggle())
+    act(() => vi.advanceTimersByTime(620))
+    expect(result.current.state).toBe("transcribing")
+
+    act(() => result.current.cancel())
+    act(() => vi.advanceTimersByTime(220))
+
+    expect(result.current.state).toBe("idle")
+    expect(props.onDraftChange).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
 
     unmount()
   })
@@ -162,6 +185,26 @@ describe("useVoiceInput", () => {
     })
     expect(result.current.state).toBe("error")
     expect(props.onDraftChange).not.toHaveBeenCalled()
+
+    unmount()
+  })
+
+  it("recognition.start 抛错时进入 error 且不追加草稿", () => {
+    class ThrowingSpeechRecognition extends FakeSpeechRecognition {
+      override start = vi.fn(() => {
+        throw new Error("permission denied")
+      })
+    }
+
+    vi.stubGlobal("SpeechRecognition", ThrowingSpeechRecognition)
+    const { result, props, unmount } = renderVoiceInput()
+
+    act(() => result.current.toggle())
+
+    expect(result.current.state).toBe("error")
+    expect(props.onDraftChange).not.toHaveBeenCalled()
+    expect(FakeSpeechRecognition.latest?.abort).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
 
     unmount()
   })

@@ -3802,7 +3802,11 @@ selected ideas      y=572；integration title y=681（选中“着陆页”后�
 
 本轮测试新增 Agent 启动动作的三枚渠道图标断言；排程首屏新增一级标题断言。
 
-## v200 Composer 录音内联状态与共享 package 边界（2026-08-31）
+## v200 Composer 录音内联状态与共享 package 边界（历史记录，2026-08-31）
+
+> 历史记录说明：本节记录的是一次早期参考站点观察，不是当前 `useVoiceInput` 的实现基线。
+> 其中“波形/计时器/取消与完成动作”的描述已被 v210 的实际源码审计覆盖；当前 User Web 不渲染录音行，
+> 以同一个麦克风槽位承接全部语音状态。
 
 本轮继续在 `1280×720`、DPR 2 的桌面 Web 视口中复核 Manus 的实际录音状态。点击麦克风后参考页不是
 Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/计时器，并在原工具栏槽位显示取消与完成动作。
@@ -3957,3 +3961,55 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 
 真实桌面 QA：`?qa=capsule-final` 中胶囊为 `100.78125×32px`，直接点击关闭后节点立即卸载；本地页面无
 hydration/page error。截图：`output/playwright/v220-capsule-visible.png`。
+
+## v210 `useVoiceInput` 当前实现审计（2026-08-31）
+
+本节以当前源码 `src/ui/composer/use-voice-input.ts`、`src/ui/composer/composer.tsx` 和
+`src/ui/composer/composer.module.css` 为权威，不沿用 v200 的历史录音行描述。语音输入是 Composer 内联能力，
+不是新的页面 surface：
+
+### 1. 状态机与 DOM 语义
+
+- controller 状态只有 `idle`、`listening`、`transcribing`、`error` 四种；同一个 `32×32px` shadcn `Button`
+  始终留在 Composer 的语音槽位，Lucide `Mic` 保持 `16×16px`。
+- `listening` 与 `transcribing` 时按钮的 `aria-pressed=true`，标签切换为“停止语音输入”；`idle`/`error` 时为
+  “语音输入”且 `aria-pressed=false`。按钮通过 `data-state` 暴露四种 controller 状态；不新增 recorder 节点。
+- `listening`、`transcribing` 和 `error` 使用同一处 `role=status`、`aria-live=polite` 的屏幕阅读器状态文字；
+  状态文字不进入视觉布局流。`error` 使用统一的浏览器不可用文案，不把浏览器错误详情写入 UI。
+- 点击 listening/transcribing 状态的同一按钮执行 cancel；清理计时器、使迟到 callback 失效，并对 live recognition 调用
+  `abort()`，回到 `idle`。
+
+### 2. Preview fixture
+
+`voicePreview=true` 时 controller 使用浏览器无关的确定性 fixture：点击后 `620ms` 保持 `listening`，随后
+`220ms` 处于 `transcribing`，完成后把 i18n 的 `composer.voicePreviewTranscript` 追加到当前 draft 并回到 `idle`。
+追加规则是保留已有输入、去掉两端多余空白，并在非空 draft 与新文本之间插入一个空格；preview 不提交表单、不创建
+任务，也不发送请求。期间再次点击会取消 pending timer，不追加文本。
+
+AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !== "production"}` 提供确定性预览；
+生产默认进入 live 浏览器能力路径，除非调用方显式传入 preview。该开关是本地渲染配置，不是 API 字段。
+
+### 3. Live SpeechRecognition
+
+非 preview 路径只探测浏览器原生 `window.SpeechRecognition` 或 `window.webkitSpeechRecognition`：
+
+- 实例使用 `continuous=false`、`interimResults=false`，语言取 `document.documentElement.lang || navigator.language`；
+- `onresult` 将浏览器返回的 transcript 追加到受控 draft，并短暂标记 `transcribing`；正常 `onend` 回到 `idle`；
+- API 不存在、`start()` 抛错或浏览器 `onerror`（包括权限拒绝）时回到 `error`，保留原位按钮并允许重新尝试；
+- unmount、cancel 和新一轮 attempt 会 abort 当前实例并使迟到的 result/end/error callback 无效，避免卸载后改写 draft。
+
+浏览器可能在首次启动时显示自己的录音权限提示，但 Kokoro 不创建 Dialog、Popover、录音条或第二套焦点容器；
+该浏览器提示不属于 User Web DOM。
+
+### 4. 布局与传输边界
+
+- 状态切换不替换 textarea，不改变 Composer 外壳宽高、网站创作胶囊、环境投影、相邻控件或发送按钮坐标；
+  不存在 v200 所述的可视波形行、计时器行或完成按钮。
+- 原始音频由浏览器语音能力处理，不进入 Kokoro BFF、IAM、System、日志或分析；本地 fixture、截图和测试只保留
+  合成文本与 DOM 状态。
+- 只有用户随后显式提交 Composer draft，识别出的文本才沿用既有任务消息契约；语音能力不增加 endpoint、request
+  body、`audio` 字段、上传流程、凭据字段或 tenant/site 上文字段。
+
+验证依据：`tests/ui/composer.test.tsx` 的 46 项测试与 `tests/ui/use-voice-input.test.tsx` 的 controller 测试在同一次
+定向运行中共 56/56 通过，覆盖 preview 转换、cancel、unsupported/error、live recognition、原位 DOM 和两个语音入口；
+本节只覆盖桌面 Web，不覆盖手机端。

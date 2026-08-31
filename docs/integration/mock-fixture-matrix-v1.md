@@ -634,7 +634,10 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | Scheduled empty state | 空任务列表 | 建议项与创建按钮进入共享排程编辑器，标题由 route surface 自己承接 | `v199-local-scheduled.png` 对照 `v199-manus-scheduled.png` |
 | Kokoro desktop skin | `--background: #ffffff`、`--sidebar` 独立 | 只改变 Site skin token，不改变移动端 surface | Agent、Scheduled、Skills、Library 同一桌面视口 |
 
-## 40. Composer 录音与 package bootstrap v200
+## 40. Composer 录音与 package bootstrap v200（历史记录）
+
+> v200 的“波形、计时器、完成动作”是早期参考观察，已被 v210 当前实现 fixture 覆盖；本仓库现行 preview
+> 不渲染录音行，详细状态与时序以 v210 为准。
 
 | Fixture / surface | 本地预览数据 | 交互边界 | 验收标准 |
 | --- | --- | --- | --- |
@@ -704,3 +707,24 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 证据：`output/playwright/v217-footer-aligned-786.png`、`output/playwright/v218-rail-resize-aligned-440.png`、
 `output/playwright/v220-capsule-visible.png`。以上均为桌面 Web 合成 fixture，不访问 Manus API，不覆盖手机端。
+
+## 44. `useVoiceInput` 当前 preview/live fixture v210
+
+本节是当前 User Web 的权威 fixture 矩阵，直接对应 `src/ui/composer/use-voice-input.ts`。它替代 v200 对可视录音行
+的假设：语音状态始终复用 Composer 内联麦克风槽位，不产生第二个 surface。
+
+| Fixture key | 触发 / 输入 | 本地合成行为 | DOM、布局与 transport 断言 |
+| --- | --- | --- | --- |
+| `composer.voice.preview.transition.v210` | `voicePreview=true`，点击 idle 麦克风 | `620ms listening → 220ms transcribing → idle`；完成后将 `composer.voicePreviewTranscript` 追加到 draft | 同一 `32×32px` 按钮；`aria-pressed` 只在前两态为 true；不新增 recorder、录音条、Dialog、Popover 或可见状态栏；不提交、不发请求 |
+| `composer.voice.preview.append.v210` | 已有非空 draft 的 preview | 保留现有 draft，在 trim 后的两段文本之间插入单个空格；空 transcript 不改 draft | 不覆盖用户输入；网站胶囊、环境槽和发送槽位几何不变；fixture 只保存合成文本 |
+| `composer.voice.preview.cancel.v210` | listening/transcribing 时再次点击同一麦克风 | 递增 attempt、清理 pending timer、回到 idle，不追加 preview 文本 | URL、Dialog 数量、Composer 外壳和相邻控件不变；没有迟到 timer 更新 |
+| `composer.voice.live-recognition.v210` | `voicePreview=false` 且存在 `SpeechRecognition`/`webkitSpeechRecognition` | 原生识别实例为 single-shot、无 interim result；`onresult` 追加 transcript，`onend` 回 idle | 不创建 Kokoro recorder 或 BFF 请求；浏览器权限 UI 若出现属于浏览器，不属于应用 DOM；不上传音频/凭据 |
+| `composer.voice.unsupported-or-error.v210` | API 缺失、`start()` 异常或浏览器 `onerror` | 原位进入 `error`，显示 `role=status[aria-live=polite]` 的 unavailable 文案，可重新尝试 | 麦克风尺寸、位置和 textarea 不变；不回显底层错误详情，不创建伪权限弹窗 |
+| `composer.voice.cancel-and-unmount.v210` | cancel、surface 切换或组件卸载 | live 调用 `abort()`；preview 清理 timer；attempt guard 丢弃迟到 result/end/error | 卸载后不写 draft、不更新 UI；测试与日志不得保存原始音频、Cookie、token、邮箱或 tenant/site 字段 |
+
+本地开发由 AppFrame 的 `voicePreview={preview || process.env.NODE_ENV !== "production"}` 选择确定性 preview；生产默认
+使用浏览器原生识别。两条路径都不新增语音 API。只有用户显式提交已经写入 draft 的文本时，才进入既有
+`POST /api/tasks/{task_id}/messages` 会话消息契约；没有 `audio`、音频 URL、设备权限或录音 blob 字段。
+
+验证：`pnpm exec vitest run tests/ui/composer.test.tsx tests/ui/use-voice-input.test.tsx`（56/56）；本节只覆盖桌面 Web
+与合成 fixture，不覆盖手机端，也不调用 Manus API。

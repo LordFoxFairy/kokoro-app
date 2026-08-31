@@ -1239,3 +1239,70 @@ Dialog、焦点与取消语义属于前端交互契约，不代表后端已经�
 权限返回 artifact/detail projection；浏览器不得发送或接收 `tenant_id`、`site_id`、namespace、内部 token 或凭据。
 
 本节只覆盖桌面 User Web；手机端不纳入本轮契约和回归。
+
+## 35. Composer `useVoiceInput` API 边界 v210
+
+本节以当前 User Web 源码为准，明确语音输入**不新增后端 API**。v200 中关于波形/计时器/录音完成动作的描述属于
+历史参考记录，现行实现是同一个 Composer 麦克风按钮的内联状态机。
+
+### 35.1 前端 controller contract
+
+`useVoiceInput` 的受控输入为：
+
+```ts
+type UseVoiceInputOptions = {
+  draft: string
+  onDraftChange: (value: string) => void
+  preview: boolean
+  previewTranscript: string
+}
+
+type VoiceInputState = "idle" | "listening" | "transcribing" | "error"
+```
+
+Composer 将 controller 映射到一个固定的 `32×32px` shadcn `Button`：
+
+- `data-state` 始终反映 controller 状态；`aria-pressed` 仅在 `listening`/`transcribing` 为 `true`；
+- 活动态的 accessible name 是停止语音输入，其他状态是语音输入；
+- 状态提示使用同一 `role=status`、`aria-live=polite` 节点；它不产生新的视觉布局层；
+- cancel、unmount 和 attempt invalidation 必须清理 preview timer、abort live recognition，并丢弃迟到事件。
+
+这些是浏览器端 presentation/interaction contract，不是后端资源字段。浏览器不发送 `voice_state`、设备权限、录音计时、
+`tenant_id`、`site_id` 或其它内部 scope。
+
+### 35.2 Preview 与 live 行为
+
+当 `preview=true` 时，客户端使用合成文本：点击后保持 `listening` 620ms，再保持 `transcribing` 220ms，完成后按
+现有 draft 追加 `previewTranscript`。再次点击会取消 pending timer，取消路径不调用 `onDraftChange`。
+该 fixture 不提交任务、不访问 BFF、不改变 URL，也不能被解释为服务端转写成功。
+
+当 `preview=false` 时，客户端仅使用浏览器 `SpeechRecognition` 或 `webkitSpeechRecognition`：
+
+```ts
+recognition.continuous = false
+recognition.interimResults = false
+recognition.lang = document.documentElement.lang || navigator.language
+```
+
+识别结果写回受控 draft；正常结束回到 `idle`。浏览器缺少构造器、启动异常或 `onerror`（包括权限拒绝）进入统一
+`error` 状态。浏览器自身的权限提示不属于 Kokoro API 或 DOM surface，Kokoro 不创建录音 Dialog、Popover、上传面板或
+自定义权限接口。
+
+### 35.3 Wire、音频和既有消息契约
+
+浏览器原始音频不经过 Kokoro BFF、IAM 或 System，不落入 API body、日志、fixture、截图或持久化存储；本仓库没有
+`POST /api/voice`、音频上传、语音转写或音频存储 endpoint。BFF 不应接收或转发 `audio`、`audio_blob`、`media_url`、
+设备权限结果或浏览器凭据。
+
+只有用户显式发送已经写入 Composer draft 的文本时，才沿用既有任务消息接口：
+
+```http
+POST /api/tasks/{task_id}/messages
+```
+
+语音功能不改变该消息 endpoint 的 request/response envelope、幂等、SSE 或错误码，也不添加“语音来源”字段；识别文本
+只是用户草稿内容。preview 与 live 都不得发送 `X-Domain`、`KOKORO_DOMAIN`、tenant/site header 或浏览器 `Forwarded`。
+
+当前前端验收以 `tests/ui/composer.test.tsx` 与 `tests/ui/use-voice-input.test.tsx` 的 preview 转换、cancel、
+unsupported/error、live recognition、原位 DOM 和入口分态断言为准；定向运行共 56/56 通过。本节只覆盖桌面 Web，
+不覆盖手机端。真实浏览器 SpeechRecognition 是否可用由浏览器决定，不应在后端用成功 fixture 冒充。
