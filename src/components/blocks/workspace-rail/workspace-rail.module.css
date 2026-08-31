@@ -422,7 +422,13 @@
     height: 4rem;
     min-height: 4rem;
     flex: 0 0 4rem;
-    align-self: center;
+    /* Keep the compact controls on the left edge for the whole 200ms
+     * Sidebar transition. Centering these 52px children inside the still
+     * 300px container makes every icon travel through the middle of the rail
+     * before the outer track reaches its final width. The final 52px track is
+     * already the same width, so left anchoring removes the flash without
+     * changing the settled layout. */
+    align-self: flex-start;
     align-items: center;
     justify-content: center;
     gap: 0;
@@ -466,7 +472,10 @@
     width: var(--collapsed-track);
     min-height: 0;
     flex: 1;
-    align-self: center;
+    /* The fixed Sidebar container shrinks after this state commits. Do not
+     * center a compact footer inside the old expanded width: the account,
+     * device and notification controls would visibly jump to the middle. */
+    align-self: flex-start;
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -520,7 +529,9 @@
     height: 7.5rem;
     min-height: 7.5rem;
     flex: 0 0 7.5rem;
-    align-self: center;
+    /* Keep the footer anchored to the compact track while the outer shell
+     * animates from the expanded width. */
+    align-self: flex-start;
     align-items: stretch;
     justify-content: center;
     margin-top: auto;

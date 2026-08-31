@@ -728,3 +728,14 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 验证：`pnpm exec vitest run tests/ui/composer.test.tsx tests/ui/use-voice-input.test.tsx`（56/56）；本节只覆盖桌面 Web
 与合成 fixture，不覆盖手机端，也不调用 Manus API。
+
+## 45. Rail collapse transition v211
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `rail.collapse.left-anchor.v211` | 在 `300px` 展开 rail 点击收起 | Sidebar 外层可保留 `200ms` 宽度过渡，但已切换为 `52px` 的 head/content/footer 子树必须以 `align-self:flex-start` 左侧锚定；导航按钮在过渡各采样帧均保持 `x=8px`，不经过 rail 中央 |
+| `rail.expand.left-anchor.v211` | 在 `52px` 收起 rail 点击展开 | 展开过程不产生第二个图标列；按钮从紧凑轨道恢复到 `x=12px` 的完整 rail 内容宽度，最终状态与展开基线一致 |
+| `rail.collapse.footer-anchor.v211` | 收起时观察账户、设备、通知组 | footer 不独立居中或闪动；账户/设备/通知仍落在单一 `52px` 轨道，seam 数量保持 1 |
+
+真实桌面证据：`output/playwright/v222-rail-collapse-mid.png`、`output/playwright/v222-rail-expand-mid.png`。
+本 fixture 只覆盖桌面 Web，不覆盖手机端。

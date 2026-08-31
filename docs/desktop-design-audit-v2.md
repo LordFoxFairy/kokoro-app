@@ -4013,3 +4013,20 @@ AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !=
 验证依据：`tests/ui/composer.test.tsx` 的 46 项测试与 `tests/ui/use-voice-input.test.tsx` 的 controller 测试在同一次
 定向运行中共 56/56 通过，覆盖 preview 转换、cancel、unsupported/error、live recognition、原位 DOM 和两个语音入口；
 本节只覆盖桌面 Web，不覆盖手机端。
+
+## v211 收起 Rail 左侧锚定（2026-08-31）
+
+真实桌面回归发现，收起动作提交 `data-collapsed=true` 后，外层 shadcn Sidebar 仍需要约 `200ms` 从 `300px`
+过渡到 `52px`。旧规则把已经变成 `52px` 的 `head`、`content` 和 `footer` 子树设置为 `align-self:center`，
+因此它们会先在旧的 `300px` 容器中央绘制（例如导航按钮首帧 `x=132`），再随着容器收窄移动到左侧 `x=8`，
+用户看到的就是“图标突然跑到中间再收回”。
+
+现行桌面规则将三个紧凑子树统一设为 `align-self:flex-start`：
+
+- 收起点击后 `0ms / 8ms / 16ms / 32ms / 64ms / 120ms / 220ms` 的导航按钮 `x` 均为 `8px`；
+- 外层 Sidebar 仍可保留平滑的宽度过渡，图标列不会跟随旧宽度做横向位移；
+- 展开态恢复后导航按钮仍从 `x=12px` 开始，按钮宽度最终恢复到完整 rail 内宽，不引入第二条 seam；
+- 账户、设备、通知底部组也使用同一左侧锚点，避免 footer 在收起过渡中单独闪到中央。
+
+证据截图：`output/playwright/v222-rail-collapse-mid.png`、`output/playwright/v222-rail-expand-mid.png`。
+验证范围为桌面 Web，未修改手机端 Sheet。
