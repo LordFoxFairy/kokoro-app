@@ -54,6 +54,17 @@ it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同�
   expect(screen.getByText("研究摘要.pdf")).toBeInTheDocument()
 })
 
+it("注入资料库 fixture 时直接渲染，不为首屏取数排队动画帧", () => {
+  const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame")
+
+  renderLibrary()
+
+  expect(screen.getByTestId("library-artifacts")).toBeInTheDocument()
+  expect(requestAnimationFrame).not.toHaveBeenCalled()
+
+  requestAnimationFrame.mockRestore()
+})
+
 it("无匹配筛选时给出明确空态并可一键恢复", async () => {
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
@@ -100,7 +111,12 @@ it("卡片使用独立内容和动作布局，避免继承 Card 的空壳间距"
 
 it("注入的 live client 失败时显示错误，而不是静默伪装成空资料库", async () => {
   const artifactClient = { listArtifacts: vi.fn(async () => { throw new Error("BFF unavailable") }) }
+  const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame")
   renderLibrary({ fixtureArtifacts: undefined, artifactClient })
+
+  expect(artifactClient.listArtifacts).toHaveBeenCalledTimes(1)
+  expect(requestAnimationFrame).not.toHaveBeenCalled()
+  requestAnimationFrame.mockRestore()
 
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("作品加载失败"))
   expect(screen.queryByTestId("library-empty-state")).not.toBeInTheDocument()

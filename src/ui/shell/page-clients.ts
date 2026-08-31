@@ -135,6 +135,26 @@ export function browserListClient(options: { preview?: boolean } = {}): ListClie
 
 // 整页共享一个引擎实例（含流句柄与重连计时器），仅浏览器创建，SSR 为 null。
 const pageEngines = new Map<string, SessionEngine>()
+
+/**
+ * Release an engine when its route scope leaves the mounted AppFrame.
+ *
+ * The browser cache is useful while a single scope is mounted, but retaining
+ * every project engine forever leaves its SSE handle, storage listener, and
+ * reattach timer alive. That turns repeated rail navigation into progressively
+ * slower work and can make an old scope publish after the user has moved on.
+ * The server remains the source of truth; a later visit recreates the engine
+ * and hydrates the same scope again.
+ */
+export function releaseBrowserEngine(engine: SessionEngine | null | undefined): void {
+  if (!engine) return
+  for (const [key, candidate] of pageEngines) {
+    if (candidate !== engine) continue
+    pageEngines.delete(key)
+    candidate.dispose()
+  }
+}
+
 export function browserEngine(options: { preview?: boolean; scope?: SessionScope } = {}): SessionEngine | null {
   if (typeof window === "undefined") {
     return null

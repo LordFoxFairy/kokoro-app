@@ -175,11 +175,15 @@ export function KokoroLibrarySurface({
   const [view, setView] = useState<"grid" | "list">(initialUrlState.view)
   const [favoritesOnly, setFavoritesOnly] = useState(initialUrlState.favoritesOnly)
   const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(initialFavoriteHashes))
-  const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([])
+  const fixtureSnapshot = useMemo(
+    () => fixtureArtifacts === undefined ? undefined : appendUniqueArtifacts([], fixtureArtifacts),
+    [fixtureArtifacts],
+  )
+  const [loadedArtifacts, setLoadedArtifacts] = useState<ArtifactRecord[]>(() => fixtureSnapshot ?? [])
   const [nextCursor, setNextCursor] = useState<string | undefined>()
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadMoreError, setLoadMoreError] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => fixtureSnapshot === undefined)
   const [error, setError] = useState(false)
   const [downloadState, setDownloadState] = useState<Record<string, "loading" | "error">>({})
   const requestSeqRef = useRef(0)
@@ -207,17 +211,12 @@ export function KokoroLibrarySurface({
     const requestSeq = ++requestSeqRef.current
     loadedCursorsRef.current.clear()
     inFlightCursorRef.current = undefined
-    setLoading(true)
-    setError(false)
-    setNextCursor(undefined)
-    setLoadingMore(false)
-    setLoadMoreError(false)
     try {
       const page: ArtifactList = fixtureArtifacts
         ? { artifacts: [...fixtureArtifacts] }
         : await client.listArtifacts()
       if (requestSeq !== requestSeqRef.current) return
-      setArtifacts(appendUniqueArtifacts([], page.artifacts))
+      setLoadedArtifacts(appendUniqueArtifacts([], page.artifacts))
       setNextCursor(page.next_cursor)
     } catch {
       if (requestSeq !== requestSeqRef.current) return
@@ -225,7 +224,7 @@ export function KokoroLibrarySurface({
       // A live client failure must stay visible so an unavailable library is
       // never misread as a successful empty state in local development.
       if (useFixtureTransport) {
-        setArtifacts([])
+        setLoadedArtifacts([])
         setNextCursor(undefined)
       } else {
         setError(true)
@@ -234,6 +233,15 @@ export function KokoroLibrarySurface({
       if (requestSeq === requestSeqRef.current) setLoading(false)
     }
   }, [client, fixtureArtifacts, useFixtureTransport])
+
+  const reload = useCallback(() => {
+    setLoading(true)
+    setError(false)
+    setNextCursor(undefined)
+    setLoadingMore(false)
+    setLoadMoreError(false)
+    void load()
+  }, [load])
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursor
@@ -252,7 +260,7 @@ export function KokoroLibrarySurface({
       const page = await client.listArtifacts(cursor)
       if (requestSeq !== requestSeqRef.current) return
       loadedCursorsRef.current.add(cursor)
-      setArtifacts((current) => appendUniqueArtifacts(current, page.artifacts))
+      setLoadedArtifacts((current) => appendUniqueArtifacts(current, page.artifacts))
       setNextCursor(page.next_cursor !== undefined && !loadedCursorsRef.current.has(page.next_cursor) ? page.next_cursor : undefined)
     } catch {
       if (requestSeq !== requestSeqRef.current) return
@@ -265,13 +273,22 @@ export function KokoroLibrarySurface({
     }
   }, [client, loadingMore, nextCursor])
 
+  // Controlled fixture props are the source of truth when a host changes them
+  // after mount; fetched data remains stateful for live/preview transport.
+  const artifacts = fixtureSnapshot ?? loadedArtifacts
+
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => { void load() })
+    if (fixtureSnapshot !== undefined) {
+      return
+    }
+    // The loading state is initialized before mount; start the live/preview
+    // transport from this effect without adding a frame or microtask gate.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load updates state only after the transport settles.
+    void load()
     return () => {
-      window.cancelAnimationFrame(frame)
       requestSeqRef.current += 1
     }
-  }, [load])
+  }, [fixtureSnapshot, load])
 
   const filteredArtifacts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
@@ -407,7 +424,7 @@ export function KokoroLibrarySurface({
           <Alert variant="destructive" className={styles.errorState}>
             <AlertDescription>
               <span>{t("library.loadError")}</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => void load()}>{t("library.retry")}</Button>
+              <Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.retry")}</Button>
             </AlertDescription>
           </Alert>
         </div>

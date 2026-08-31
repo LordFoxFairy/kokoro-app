@@ -57,7 +57,7 @@ import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime
 import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
 import { useIsMobile } from "@/hooks/use-mobile"
 
-import { browserEngine, browserHubClient, browserListClient } from "@/ui/shell/page-clients"
+import { browserEngine, browserHubClient, browserListClient, releaseBrowserEngine } from "@/ui/shell/page-clients"
 import { McpCreateDialog, type McpCreateMode } from "@/ui/mcp/mcp-panel"
 import { CustomApiDialog } from "@/ui/mcp/connector-catalog-dialog"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
@@ -394,6 +394,34 @@ export function AppFrame({
   const snapshot = useSessionEngine(engine)
   const { machine, store, thread, pendingMode, staging } = snapshot
   const activeId = store?.activeId ?? null
+
+  // A project/direct route change replaces the scope-owned engine while this
+  // AppFrame stays mounted. Close the old scope immediately so its SSE,
+  // storage subscription, and reattach timers cannot accumulate behind the
+  // current rail selection. Injected test engines remain caller-owned.
+  const browserEngineRef = useRef<SessionEngine | null>(engine)
+  const browserEngineMountedRef = useRef(false)
+  useEffect(() => {
+    if (injectedEngine !== undefined) return
+    const previous = browserEngineRef.current
+    if (previous !== engine) {
+      releaseBrowserEngine(previous)
+    }
+    browserEngineMountedRef.current = true
+    browserEngineRef.current = engine
+    return () => {
+      // React Strict Mode deliberately runs effect cleanup/setup once during
+      // development. Defer unmount disposal by one macrotask so that probe
+      // cleanup does not dispose the engine that the immediately-following
+      // setup is about to reuse. A real unmount has no setup to cancel it.
+      browserEngineMountedRef.current = false
+      window.setTimeout(() => {
+        if (browserEngineMountedRef.current || engine !== browserEngineRef.current) return
+        releaseBrowserEngine(engine)
+        browserEngineRef.current = null
+      }, 0)
+    }
+  }, [engine, injectedEngine])
 
   // 水合后才渲染主内容：rail 与 composer 立即就位，会话线随后淡入。
   const mounted = useHydrated()

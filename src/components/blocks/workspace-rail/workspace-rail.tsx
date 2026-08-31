@@ -170,6 +170,10 @@ function WorkspaceRailContent({
   const { state, isMobile, setOpen, setOpenMobile } = useSidebar()
   const visualCollapsed = state === "collapsed"
   const compactDesktop = !isMobile && visualCollapsed
+  // These desktop routes are committed by mounted-surface history projection,
+  // so Next's default viewport/hover RSC prefetch is redundant work. Keep the
+  // touch Sheet's native Link behavior unchanged.
+  const mountedSurfacePrefetch = isMobile ? undefined : false
   // The narrow desktop shell removes the rail from layout altogether. Keep
   // only the header menu reachable in that state; the normal 52px rail still
   // owns its brand trigger on wide desktop.
@@ -374,6 +378,7 @@ function WorkspaceRailContent({
         {!compactDesktop ? <Link
           className={styles.brand}
           href={chatHref}
+          prefetch={mountedSurfacePrefetch}
           aria-label={brandName ?? "Workspace"}
           tabIndex={0}
           onClickCapture={(event) => interceptMountedSurfaceNavigation(event, chatHref)}
@@ -498,6 +503,7 @@ function WorkspaceRailContent({
             <SidebarMenuButton asChild tooltip={t("rail.directChats")} className={styles.navItem} isActive={activeNavigationKey === "chat"}>
               <Link
                 href={chatHref}
+                prefetch={mountedSurfacePrefetch}
                 onClickCapture={(event) => interceptMountedSurfaceNavigation(event, chatHref)}
                 onClick={closeNavigation}
                 data-testid="rail-direct-chat"
@@ -522,7 +528,7 @@ function WorkspaceRailContent({
                   return (
                     <SidebarMenuItem key={key}>
                       <SidebarMenuButton asChild tooltip={label} className={styles.navItem} data-testid={`rail-${key}`} data-navigation-section={key} isActive={activeNavigationKey === key}>
-                        <Link href={href} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-label={label} aria-current={activeNavigationKey === key ? "page" : undefined}>
+                        <Link href={href} prefetch={mountedSurfacePrefetch} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-label={label} aria-current={activeNavigationKey === key ? "page" : undefined}>
                           <Icon className={styles.icon} />
                           {navigationExpanded ? <span className={styles.navLabel}>{label}</span> : null}
                         </Link>
@@ -563,7 +569,7 @@ function WorkspaceRailContent({
           {!compactDesktop ? <SidebarGroupLabel className={styles.navGroupLabel}>
             <span>{t("firstSite.projects")}</span>
             <Button asChild variant="ghost" size="icon-xs" className={styles.sectionAction} aria-label={t("firstSite.newProject")}>
-              <Link href={projectHref} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}>
+              <Link href={projectHref} prefetch={mountedSurfacePrefetch} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}>
                 <Plus aria-hidden="true" />
               </Link>
             </Button>
@@ -581,7 +587,7 @@ function WorkspaceRailContent({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" sideOffset={10} className={styles.projectMenu}>
                       <DropdownMenuItem asChild>
-                        <Link href={projectHref} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
+                        <Link href={projectHref} prefetch={mountedSurfacePrefetch} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
                           <Folder aria-hidden="true" />
                           {brandName ?? DEFAULT_BRAND.name}
                         </Link>
@@ -590,7 +596,7 @@ function WorkspaceRailContent({
                   </DropdownMenu>
                 ) : (
                   <SidebarMenuButton asChild type="button" className={styles.navItem} isActive={projectActive} data-testid="rail-project" data-navigation-section="project">
-                    <Link href={projectHref} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation} aria-label={brandName ?? DEFAULT_BRAND.name} aria-current={projectActive ? "page" : undefined}>
+                    <Link href={projectHref} prefetch={mountedSurfacePrefetch} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation} aria-label={brandName ?? DEFAULT_BRAND.name} aria-current={projectActive ? "page" : undefined}>
                       <Folder className={styles.icon} />
                       {navigationExpanded ? <span className={styles.navLabel}>{brandName ?? DEFAULT_BRAND.name}</span> : null}
                     </Link>
@@ -599,7 +605,7 @@ function WorkspaceRailContent({
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild type="button" className={styles.navItem} data-testid="rail-project-task" data-navigation-section="project-task">
-                    <Link href={projectHref} aria-label={t("firstSite.tasks")} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
+                    <Link href={projectHref} prefetch={mountedSurfacePrefetch} aria-label={t("firstSite.tasks")} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
                     <ListTodo className={styles.icon} />
                   </Link>
                 </SidebarMenuButton>
@@ -1114,7 +1120,11 @@ function UserCard({
             <DropdownMenuItem onSelect={() => openSettingsFromAccount("appearance")}><SlidersHorizontal aria-hidden="true" />{t("settings.title")}<DropdownMenuShortcut>⌘⇧,</DropdownMenuShortcut></DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild><Link href="/app"><Home aria-hidden="true" />{t("rail.accountHome")}<ArrowUpRight className={styles.accountLinkArrow} aria-hidden="true" /></Link></DropdownMenuItem>
+          <DropdownMenuItem asChild><Link
+            href="/app"
+            prefetch={false}
+            onClickCapture={(event) => interceptMountedSurfaceNavigation(event, "/app")}
+          ><Home aria-hidden="true" />{t("rail.accountHome")}<ArrowUpRight className={styles.accountLinkArrow} aria-hidden="true" /></Link></DropdownMenuItem>
           <DropdownMenuItem asChild><a href="/docs"><CircleHelp aria-hidden="true" />{t("rail.accountHelp")}<ArrowUpRight className={styles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
           <DropdownMenuItem asChild><a href="/docs"><FileText aria-hidden="true" />{t("rail.accountDocs")}<ArrowUpRight className={styles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
           <DropdownMenuSeparator />
