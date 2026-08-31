@@ -24,6 +24,18 @@ describe("Kokoro App surface routing", () => {
     })
   })
 
+  it("decodes an encoded project reference exactly once before client encoding", () => {
+    expect(kokoroAppRoute("/app/project/project%20a")).toEqual({
+      surface: "project",
+      projectRef: "project a",
+    })
+    expect(kokoroAppRoute("/app/project/project%2Fa")).toEqual({
+      surface: "project",
+      projectRef: "project/a",
+    })
+    expect(kokoroAppRoute("/app/project/%E0%A4%A")).toEqual({ surface: "chat" })
+  })
+
   it("falls back to direct chat for unknown app paths instead of mounting a second shell", () => {
     expect(kokoroAppRoute("/app/unknown/catalog")).toEqual({ surface: "chat" })
     expect(kokoroAppRoute("/login")).toEqual({ surface: "chat" })

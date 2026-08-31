@@ -79,6 +79,10 @@ Direct Chat 与项目 Chat 共用上表中除列表 scope 外的全部 endpoint�
 `project_ref=PROJECT_REF`。项目消息请求必须带同一 opaque `project_ref`，Direct 消息请求不带；
 snapshot、SSE envelope 和 cancel/resume body 均不重复携带该 scope。
 
+`project_ref` 在 Web 路由中是一个编码后的 path segment：`kokoro-app` 先解码一次得到原始
+引用，再由链接和 `URLSearchParams` 在 wire 上编码一次。Gateway/Session 侧只接收解码语义对应的
+opaque 引用；调用方不要把已经编码的值再次交给 Web route adapter。
+
 ### Message request
 
 ```json

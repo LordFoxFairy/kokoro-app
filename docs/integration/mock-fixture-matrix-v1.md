@@ -63,7 +63,7 @@ HTTP `Host`（目标连接 authority）与 `Forwarded`（经 service auth/来源
 | Integrations | Y | Y | Y | Y | Y | Y |
 | API keys / Webhooks | Y | Y | Y | Y | Y | Y |
 
-`Y` 是目标验收状态，不表示当前仓库已经全部完成。当前完整：Task/Event、Models/Agents、Skills、
+`Y` 是目标验收状态，不表示当前仓库已经全部完成。Preview fixture 当前完整：Task/Event、Models/Agents、Skills、
 MCP、Billing、Team、Data Management、Runtime。优先补齐：Projects、Developer、Connectors、
 Deployment、Computer、Mail、Integrations，然后把组件内裸 `fetch` 下沉到 typed client。
 

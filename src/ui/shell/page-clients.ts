@@ -128,7 +128,11 @@ export function browserListClient(options: { preview?: boolean } = {}): ListClie
     return browserPreviewClient()
   }
   if (!pageListClient) {
-    pageListClient = previewClientFromEnv() ?? createSessionClient({ baseUrl: sessionBaseUrl() })
+    // `preview` is the route adapter's explicit transport decision. Do not
+    // silently re-enter preview here just because a development env happens
+    // to contain NEXT_PUBLIC_SESSION_PREVIEW=1; AppGate already passes the
+    // correct mode after the auth probe, and live Chat must reach the BFF.
+    pageListClient = createSessionClient({ baseUrl: sessionBaseUrl() })
   }
   return pageListClient
 }
@@ -167,10 +171,11 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
   const existing = pageEngines.get(engineKey)
   if (existing) return existing
   {
-    // 显式 env 开关的开发假流优先；否则走同源 `/api/session` BFF 代理。
+    // The route adapter explicitly selects preview; otherwise Chat always
+    // uses the same-origin `/api/session` BFF, including in development.
     const client = options.preview === true
       ? browserPreviewClient()
-      : previewClientFromEnv() ?? createSessionClient({ baseUrl: sessionBaseUrl() })
+      : createSessionClient({ baseUrl: sessionBaseUrl() })
     const engine = createSessionEngine({
       client,
       storage: createPersistedStore({

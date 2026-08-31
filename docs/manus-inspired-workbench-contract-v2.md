@@ -4,6 +4,10 @@
 [`user-web-bff-contract-v3.md`](./user-web-bff-contract-v3.md)。本文保留桌面工作台设计背景，
 若路径、字段、状态或安全边界与 v3 冲突，以 v3 为准。
 
+> 当前 kokoro-app 的实际 Chat 路径、scope、SSE 和 Gateway 边界以
+> [`integration/user-web-api-contract-v4.md`](./integration/user-web-api-contract-v4.md) 为准。
+> 下方的旧版入口只保留历史设计背景，不得作为当前 `/api/session/*` 路由示例复制。
+
 ## 1. 契约分层
 
 ```text
@@ -11,8 +15,8 @@ GET /api/system/runtime-manifest       启动能力和导航投影
 GET /api/system/composer-catalog       Composer 可选项
 GET /api/workspace/context              当前 workspace/project 上下文
 GET /api/session/sessions               任务/会话列表
-POST /api/session/runs                  创建一次执行
-GET /api/session/{id}/events            SSE 增量事件
+POST /api/session/sessions/{session_id}/messages  创建消息并启动/续接 Run
+GET /api/session/sessions/{session_id}/events     SSE 增量事件
 ```
 
 浏览器只调用同源 BFF。Host 解析出的 tenant context 由服务端注入；浏览器请求体和响应不得包含 `tenant_id`、`site_id`、workload token 或 IAM token。
@@ -249,8 +253,8 @@ httpOnly 信封派生 tenant/site，并验证当前用户对该专案的成员�
 ## 4. Privacy / share
 
 - 任务默认 private。
-- `POST /api/session/{id}/share` 创建分享，使用 `Idempotency-Key`。
-- `DELETE /api/session/{id}/share/{share_id}` 撤销分享，必须在 UI 中明确显示影响并二次确认。
+- `POST /api/session/sessions/{session_id}/share` 创建分享，使用当前消息/分享幂等语义。
+- `DELETE /api/session/sessions/{session_id}/share` 撤销分享；当前 receipt 以 session 为边界。
 - share receipt 只返回 opaque `share_id` 和可分享 URL；不返回 tenant、内部 actor 或权限判定细节。
 
 ## 5. 统一错误

@@ -51,6 +51,11 @@ kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
 request id，以及向 Session/Agent runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
 状态、同源 BFF 传输和 public projection。
 
+Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` → `SessionClient` →
+`/api/session/*` BFF → 当前 `KOKORO_SESSION_BASE_URL`；将来只替换 BFF 后面的业务网关，
+不把 Chat UI、页面路由或 gateway 源码搬进另一个子仓库。Direct Chat 与 Project Chat 共享这条
+链路，只有 scope 和项目引用不同。
+
 | 责任 | kokoro-app | gateway（规划） | Session/Agent runtime |
 |---|---|---|---|
 | 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
@@ -289,6 +294,10 @@ BFF 只负责认证、代理和流式转发；上游 session service 负责这�
 是 `createSessionClient({baseUrl: "/api/session"})`；显式 Preview 才切到内存
 `createPreviewClient`。项目上下文的 `/api/hub/projects/{project_ref}/*` 请求属于 Project
 projection，不是另一套 Chat transport，也不改变 Session message/SSE/control 契约。
+
+`project_ref` 是不透明原始引用：路由适配器从 `/app/project/{encoded_ref}` 解码一次，随后由
+`encodeURIComponent`/`URLSearchParams` 在链接和请求中各编码一次。调用方不要预先编码
+`project_ref`，否则会形成双重编码并让项目 Chat 看起来像进入了错误工作区。
 
 ### 5.2 HTTP 接口
 

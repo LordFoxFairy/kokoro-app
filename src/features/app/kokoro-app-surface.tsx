@@ -28,13 +28,26 @@ export type KokoroAppRoute = {
 const DIRECT_ROUTE: KokoroAppRoute = { surface: "chat" }
 type NativeSurfaceNavigation = { basePathname: string; pathname: string }
 
+function decodeProjectRef(segment: string): string | null {
+  try {
+    const decoded = decodeURIComponent(segment)
+    return decoded.length > 0 ? decoded : null
+  } catch {
+    // A malformed encoded segment is not a valid project route. Let the
+    // caller fall back to direct chat instead of passing an undecodable value
+    // into the session and project BFF clients.
+    return null
+  }
+}
+
 /**
  * Keep pathname selection pure and independently testable. Query/hash state
  * belongs to the selected surface (for example `tab=calendar` and settings),
  * while this function only decides which stable AppFrame projection mounts.
  */
 export function kokoroAppRoute(pathname: string): KokoroAppRoute {
-  const projectRef = /^\/app\/project\/([^/]+)\/?$/.exec(pathname)?.[1]
+  const projectRefSegment = /^\/app\/project\/([^/]+)\/?$/.exec(pathname)?.[1]
+  const projectRef = projectRefSegment === undefined ? null : decodeProjectRef(projectRefSegment)
   if (projectRef) return { surface: "project", projectRef }
   if (/^\/app\/agents\/?$/.test(pathname)) return { surface: "agents" }
   if (/^\/app\/plugins\/?$/.test(pathname)) return { surface: "plugins" }
