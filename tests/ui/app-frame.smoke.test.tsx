@@ -227,6 +227,24 @@ it("站点路由把直接会话与专案内会话投影为两个独立工作区"
   })
 })
 
+it("专案路由首帧展开 scoped rail，而直接会话仍保持紧凑 rail", async () => {
+  buildEngine()
+  mockedPathname.value = "/app/project/kokoro"
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => {
+    const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
+    expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+    expect(shell).toHaveStyle({ "--rail-seam-width": "300px" })
+  })
+})
+
 it("外挂路由渲染一级插件目录且不残留会话 Composer", async () => {
   buildEngine()
   mockedPathname.value = "/app/plugins"

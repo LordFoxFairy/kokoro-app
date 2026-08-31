@@ -184,6 +184,16 @@ describe("Composer model selector", () => {
     expect(screen.getByRole("button", { name: "Voice input" })).toBeEnabled()
   })
 
+  it("麦克风指针焦点标记在失焦时清理，不产生异步事件错误", () => {
+    renderComposer({ emptyWorkspace: true, creationIntent: "website" })
+    const voice = screen.getByRole("button", { name: "Voice input" })
+
+    fireEvent.pointerDown(voice, { pointerType: "mouse" })
+    expect(voice).toHaveAttribute("data-pointer-focus", "true")
+    fireEvent.blur(voice)
+    expect(voice).not.toHaveAttribute("data-pointer-focus")
+  })
+
   it("preview 语音输入保持原位按钮，并异步完成转写", async () => {
     vi.useFakeTimers()
     const props = renderComposer({ emptyWorkspace: true, creationIntent: "website", voicePreview: true })
