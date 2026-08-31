@@ -95,17 +95,14 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
       // Preview owns the same navigation rhythm as the reference workbench;
       // an explicitly supplied live manifest always wins, including `[]`.
       navigation={props.navigation ?? previewNavigation}
-      // Manus presents both the direct inbox and project workbench with the
-      // compact icon rail on first paint. The user can still expand it with
-      // the rail trigger; this prop only establishes the initial desktop
-      // composition and prevents project navigation from changing the page
-      // geometry on route transition.
-      // Manus enters the desktop workbench with the compact command rail. The
-      // full navigation remains one click away through the shadcn trigger and
-      // can still be supplied explicitly by an embed/test. Starting compact
-      // keeps the first paint stable at 1280px and leaves the Composer on the
-      // same canvas track as the reference instead of shifting it by 300px.
-      desktopRailCollapsed={props.desktopRailCollapsed ?? true}
+      // Direct chat and project workbench have different initial compositions
+      // in the reference: the inbox opens on the quiet 52px command rail,
+      // while a project opens with its scoped navigation visible. This is not
+      // a viewport guess; the same controlled rail can still be toggled and
+      // persisted by the user, and the compact-desktop breakpoint below takes
+      // care of narrowing the canvas without moving the icons through the
+      // middle of the rail.
+      desktopRailCollapsed={props.desktopRailCollapsed ?? route.surface !== "project"}
       projectWorkspace={route.surface === "project"}
       projectRef={route.projectRef}
       activeNavigationKey={route.surface === "chat" ? "chat" : route.surface === "project" ? "project" : route.surface === "agents" ? "agent" : route.surface === "plugins" ? "mcp" : route.surface}

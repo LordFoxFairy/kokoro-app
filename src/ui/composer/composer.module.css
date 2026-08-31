@@ -409,6 +409,24 @@
   white-space: nowrap;
 }
 
+/* Models marked with the wire-level `-new` suffix keep the base name as the
+ * primary label and expose the marker as a small Manus-style blue badge. */
+.newModelBadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid rgb(0 129 242 / 24%);
+  border-radius: 999px;
+  background: rgb(0 129 242 / 9%);
+  padding: 0.1rem 0.3rem;
+  color: rgb(0 104 204);
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 /* 模式图标：闪电(Fast)/火花(Thinking)，触发器与下拉项共用。 */
 .modeGlyph {
   width: 0.9rem;

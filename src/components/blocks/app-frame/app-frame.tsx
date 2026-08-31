@@ -454,7 +454,14 @@ export function AppFrame({
   // different rail tree on the client, triggering a hydration rebuild and the
   // visible dev "Issues" pill.
   const [railCollapsed, setRailCollapsed] = useState(desktopRailCollapsed)
+  const railPreferenceReadRef = useRef(false)
   useLayoutEffect(() => {
+    // The route adapter can change its default while this AppFrame stays
+    // mounted. Cookie reconciliation is a first-mount concern only; reading
+    // it again during mounted-surface navigation would submit a second rail
+    // state in the same transition and bring back the one-frame flash.
+    if (railPreferenceReadRef.current) return
+    railPreferenceReadRef.current = true
     let active = true
     // Queue after the layout effect so the server/client tree stays identical
     // while still reconciling before the next user interaction. The async
@@ -468,7 +475,7 @@ export function AppFrame({
     return () => {
       active = false
     }
-  }, [desktopRailCollapsed])
+  }, [])
   const [compactRailOpen, setCompactRailOpen] = useState(false)
   const resolvedRailCollapsed = compactDesktopRail ? !compactRailOpen : railCollapsed
   const railHidden = compactDesktopRail && resolvedRailCollapsed

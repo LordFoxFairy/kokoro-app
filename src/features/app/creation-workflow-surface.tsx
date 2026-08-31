@@ -2,8 +2,17 @@
 
 import { ChevronDown, ChevronRight, LayoutTemplate } from "lucide-react"
 import Image from "next/image"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { MessageKey } from "@/i18n/messages"
@@ -29,10 +38,42 @@ const presentationPrompts: ReadonlyArray<{ label: MessageKey; prompt: MessageKey
   { label: "firstSite.presentationExampleCompetitor", prompt: "firstSite.presentationExampleCompetitor" },
 ]
 
-const presentationTemplates: ReadonlyArray<{ label: MessageKey; image: string }> = [
-  { label: "firstSite.presentationTemplateBriefing", image: "/site-assets/project-website.webp" },
-  { label: "firstSite.presentationTemplateReport", image: "/site-assets/game-creation.png" },
-  { label: "firstSite.presentationTemplatePlan", image: "/integrations/zapier.webp" },
+const presentationTemplateRanges = ["4 - 8", "8 - 12", "12 - 16", "16 - 20", "20 - 24"] as const
+type PresentationTemplateRange = (typeof presentationTemplateRanges)[number]
+
+type PresentationTemplate = {
+  label: MessageKey
+  prompt: MessageKey
+  image?: string
+  images?: ReadonlyArray<string>
+}
+
+const presentationTemplates: ReadonlyArray<PresentationTemplate> = [
+  {
+    label: "firstSite.presentationTemplateBriefing",
+    prompt: "firstSite.presentationTemplateBriefing",
+    image: "/site-assets/project-website.webp",
+  },
+  {
+    label: "firstSite.presentationTemplateReport",
+    prompt: "firstSite.presentationTemplateReport",
+    image: "/site-assets/game-creation.png",
+  },
+  {
+    label: "firstSite.presentationTemplatePlan",
+    prompt: "firstSite.presentationTemplatePlan",
+    image: "/integrations/zapier.webp",
+  },
+  {
+    label: "firstSite.presentationTemplateReview",
+    prompt: "firstSite.presentationTemplateReview",
+    images: [
+      "/site-assets/project-website.webp",
+      "/site-assets/game-creation.png",
+      "/integrations/zapier.webp",
+      "/integrations/slack.svg",
+    ],
+  },
 ]
 
 const designCards: ReadonlyArray<WorkflowCard> = [
@@ -40,25 +81,25 @@ const designCards: ReadonlyArray<WorkflowCard> = [
     title: "firstSite.designCardData",
     description: "firstSite.designCardDataDescription",
     prompt: "firstSite.designCardDataPrompt",
-    image: "/site-assets/project-website.webp",
+    image: "/site-assets/design-data.svg",
   },
   {
     title: "firstSite.designCardMenu",
     description: "firstSite.designCardMenuDescription",
     prompt: "firstSite.designCardMenuPrompt",
-    image: "/site-assets/game-creation.png",
+    image: "/site-assets/design-menu.svg",
   },
   {
     title: "firstSite.designCardWearable",
     description: "firstSite.designCardWearableDescription",
     prompt: "firstSite.designCardWearablePrompt",
-    image: "/integrations/slack.svg",
+    image: "/site-assets/design-wearable.svg",
   },
   {
     title: "firstSite.designCardSaas",
     description: "firstSite.designCardSaasDescription",
     prompt: "firstSite.designCardSaasPrompt",
-    image: "/integrations/zapier.webp",
+    image: "/site-assets/design-saas.svg",
   },
 ]
 
@@ -109,8 +150,33 @@ function PromptCard({ label, prompt, onPrompt, intent }: {
   )
 }
 
+function PresentationTemplatePreview({ image, images }: Pick<PresentationTemplate, "image" | "images">) {
+  if (images) {
+    return (
+      <div
+        className={styles.presentationTemplateMosaic}
+        aria-hidden="true"
+      >
+        {images.map((source) => (
+          <Image
+            key={source}
+            src={source}
+            alt=""
+            width={120}
+            height={72}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  return <Image src={image ?? ""} alt="" width={120} height={72} />
+}
+
 function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "onPrompt">) {
   const t = useT()
+  const [templateRange, setTemplateRange] = useState<PresentationTemplateRange>("8 - 12")
+
   return (
     <div className={styles.workflowStack}>
       <section className={styles.workflowSection} aria-labelledby="kokoro-presentation-prompts-heading">
@@ -124,16 +190,52 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
       <section className={styles.workflowSection} aria-labelledby="kokoro-presentation-templates-heading">
         <div className={styles.workflowSectionHeader}>
           <h2 id="kokoro-presentation-templates-heading">{t("firstSite.presentationTemplates")}</h2>
-          <Button type="button" variant="outline" size="sm" className={styles.templateFilter}>
-            <LayoutTemplate aria-hidden="true" />
-            <span>8 - 12</span>
-            <ChevronDown aria-hidden="true" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={styles.templateFilter}
+                aria-label={t("firstSite.slideCount", { range: templateRange })}
+              >
+                <LayoutTemplate aria-hidden="true" />
+                <span>{templateRange}</span>
+                <ChevronDown aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+              <DropdownMenuRadioGroup
+                value={templateRange}
+                onValueChange={(value) => {
+                  const selectedRange = presentationTemplateRanges.find((range) => range === value)
+                  if (selectedRange) setTemplateRange(selectedRange)
+                }}
+                aria-label={t("firstSite.slideCount", { range: templateRange })}
+              >
+                <DropdownMenuGroup>
+                  {presentationTemplateRanges.map((range) => (
+                    <DropdownMenuRadioItem key={range} value={range}>
+                      {range}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className={styles.presentationTemplateGrid}>
-          {presentationTemplates.map(({ label, image }) => (
-            <Button key={label} type="button" variant="ghost" className={styles.presentationTemplate}>
-              <Image src={image} alt="" width={120} height={72} />
+          {presentationTemplates.map(({ label, prompt, image, images }) => (
+            <Button
+              key={label}
+              type="button"
+              variant="ghost"
+              className={styles.presentationTemplate}
+              data-slot="presentation-template"
+              data-testid="presentation-template"
+              onClick={() => onPrompt?.(t(prompt), "presentation")}
+            >
+              <PresentationTemplatePreview image={image} images={images} />
               <span>{t(label)}</span>
             </Button>
           ))}

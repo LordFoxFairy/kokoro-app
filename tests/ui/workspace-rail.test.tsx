@@ -87,6 +87,14 @@ it("桌面 Rail 显示邀请入口并进入团队设置", () => {
   expect(onOpenSettings).toHaveBeenCalledWith("team")
 })
 
+it("桌面 Rail 的紧凑样式由实际 rail 模式标记驱动", () => {
+  renderRail({ brandName: "Kokoro" })
+
+  const rail = document.querySelector('[data-collapsed="false"]')
+  expect(rail).toHaveAttribute("data-desktop-rail", "true")
+  expect(rail).toHaveAttribute("data-desktop-web", "true")
+})
+
 it("收起 Rail 时不渲染邀请卡，避免占用图标轨道", () => {
   renderRail({ collapsed: true, brandName: "Kokoro" })
 

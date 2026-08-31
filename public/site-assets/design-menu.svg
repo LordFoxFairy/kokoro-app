@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120">
+  <rect width="160" height="120" rx="8" fill="#e4d8bf"/>
+  <rect x="22" y="9" width="88" height="116" rx="4" transform="rotate(7 22 9)" fill="#fffdf7" stroke="#c9b997"/>
+  <text x="35" y="30" font-family="Georgia,serif" font-size="10" fill="#574b3d" transform="rotate(7 35 30)">Sakura</text>
+  <text x="35" y="42" font-family="Georgia,serif" font-size="7" fill="#998a73" transform="rotate(7 35 42)">OMAKASE</text>
+  <path d="M39 61c11-15 26-15 37 0-11 16-26 16-37 0Z" fill="#e1a66b" opacity=".85" transform="rotate(7 39 61)"/>
+  <circle cx="58" cy="61" r="8" fill="#f6d39a" transform="rotate(7 58 61)"/>
+  <path d="M35 88h47M35 96h35" stroke="#baaa8e" stroke-width="3" stroke-linecap="round" transform="rotate(7 35 88)"/>
+  <rect x="111" y="48" width="48" height="54" rx="7" fill="#faf8f1" stroke="#c9b997"/>
+  <circle cx="135" cy="75" r="17" fill="#f1c889"/>
+  <path d="M118 67c9-8 25-8 34 0" fill="none" stroke="#fff5db" stroke-width="4"/>
+</svg>

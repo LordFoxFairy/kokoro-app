@@ -348,6 +348,7 @@ function WorkspaceRailContent({
         data-collapsed={visualCollapsed}
         data-active-navigation-key={activeNavigationKey ?? "none"}
         data-desktop-web="true"
+        data-desktop-rail={!isMobile ? "true" : undefined}
       >
       <SidebarHeader className={styles.head}>
         <SidebarTrigger

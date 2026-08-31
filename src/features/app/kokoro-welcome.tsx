@@ -1,7 +1,6 @@
 "use client"
 
 import { ArrowUp, ArrowUpLeft, BarChart3, BriefcaseBusiness, Building2, ChartPie, ChevronDown, ChevronLeft, ChevronRight, Cloud, FileText, Folder, Gamepad2, Images, LayoutGrid, Link2, Map, PenLine, Rocket, Search, ShoppingBag, SquareTerminal } from "lucide-react"
-import Image from "next/image"
 
 import { Button } from "@/components/ui/button"
 import { CodeWindowIcon } from "@/components/icons/code-window-icon"
@@ -65,8 +64,10 @@ export function KokoroDirectChatWelcome({
   const [creationTypesScrolled, setCreationTypesScrolled] = useState(false)
   const [bannerIndex, setBannerIndex] = useState(0)
   const [bannerPaused, setBannerPaused] = useState(false)
+  const [referenceStatus, setReferenceStatus] = useState<string | null>(null)
   const promptSelectedRef = useRef(false)
   const creationTypesRef = useRef<HTMLDivElement>(null)
+  const referenceInputRef = useRef<HTMLInputElement>(null)
   const surfaceRef = useRef<HTMLElement>(null)
   const hasDraft = draft.trim().length > 0
   const websiteCreation = creationIntent === "website"
@@ -260,10 +261,42 @@ export function KokoroDirectChatWelcome({
             <div className={styles.creationOptionsHeader}>
               <p id="kokoro-creation-options-heading">{t("firstSite.whatToBuild")}</p>
               <div className={styles.creationReferences}>
-                <Button type="button" variant="ghost" size="sm"><Link2 aria-hidden="true" />{t("firstSite.addWebsiteReference")}</Button>
-                <Button type="button" variant="ghost" size="sm"><FigmaMark />{t("firstSite.importFromDesign")}</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setReferenceStatus(null)
+                    if (referenceInputRef.current) {
+                      referenceInputRef.current.value = ""
+                      referenceInputRef.current.click()
+                    }
+                  }}
+                >
+                  <Link2 aria-hidden="true" />{t("firstSite.addWebsiteReference")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReferenceStatus(t("firstSite.importFromDesign"))}
+                >
+                  <FigmaMark />{t("firstSite.importFromDesign")}
+                </Button>
+                <input
+                  ref={referenceInputRef}
+                  className={styles.referenceInput}
+                  type="file"
+                  accept="image/*,.pdf,.zip,.html,.css,.js"
+                  aria-label={t("firstSite.addWebsiteReference")}
+                  onChange={(event) => {
+                    const fileName = event.currentTarget.files?.[0]?.name
+                    setReferenceStatus(fileName ?? null)
+                  }}
+                />
               </div>
             </div>
+            <span className="sr-only" role="status" aria-live="polite">{referenceStatus ?? ""}</span>
             <div className={styles.creationTypesFrame}>
               <div
                 ref={creationTypesRef}
@@ -395,13 +428,15 @@ export function KokoroDirectChatWelcome({
             <strong>{t(activeBanner.title)}</strong>
             <span>{t(activeBanner.hint)}</span>
           </div>
-          <Image
-            className={styles.desktopBannerArtwork}
-            src={activeBanner.image}
-            alt=""
-            width={120}
-            height={72}
-          />
+          <div className={styles.desktopBannerArtwork} data-banner-kind={activeBanner.kind} aria-hidden="true">
+            <span className={styles.desktopBannerWindow}>
+              <span className={styles.desktopBannerWindowBar}><i /><i /><i /></span>
+              <b>{activeBanner.kind === "website" ? "AI website builder" : "Kokoro workspace"}</b>
+              <span className={styles.desktopBannerChart}><i /><i /><i /></span>
+              <span className={styles.desktopBannerService}><i />{activeBanner.kind === "schedule" ? "Tasks" : "Workspace"}</span>
+            </span>
+            <span className={styles.desktopBannerStand} />
+          </div>
           </div>
           <div className={styles.bannerDots}>
             {desktopBanners.map((banner, index) => (
@@ -429,11 +464,11 @@ const directPrompts = [
 ] as const
 
 const desktopBanners = [
-  { title: "firstSite.desktopBanner", hint: "firstSite.desktopBannerHint", image: "/site-assets/game-creation.png" },
-  { title: "firstSite.promptWebsite", hint: "firstSite.websitesHint", image: "/site-assets/project-website.webp" },
-  { title: "firstSite.scheduledTasks", hint: "firstSite.scheduledTasksHint", image: "/site-assets/project-scheduled-tasks.svg" },
-  { title: "settings.integration.slack.name", hint: "settings.integration.slack.description", image: "/integrations/slack.svg" },
-  { title: "settings.integration.zapier.name", hint: "settings.integration.zapier.description", image: "/integrations/zapier.webp" },
+  { title: "firstSite.desktopBanner", hint: "firstSite.desktopBannerHint", kind: "workspace" },
+  { title: "firstSite.promptWebsite", hint: "firstSite.websitesHint", kind: "website" },
+  { title: "firstSite.scheduledTasks", hint: "firstSite.scheduledTasksHint", kind: "schedule" },
+  { title: "settings.integration.slack.name", hint: "settings.integration.slack.description", kind: "integration" },
+  { title: "settings.integration.zapier.name", hint: "settings.integration.zapier.description", kind: "integration" },
 ] as const
 
 const creationTypes = [

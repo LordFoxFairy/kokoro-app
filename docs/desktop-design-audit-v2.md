@@ -3943,9 +3943,9 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 
 - 邀请卡固定为 `100% × 56px`，桌面 rail 默认坐标为 `(12,570.8125,276,56)`；账户行坐标为
   `(14,634,192.015625,32)`，设备和通知按钮分别为 `(214.8125,634,32,32)`、`(254,634,32,32)`。
-- 账户触发器显式使用 `justify-content:flex-start`：rail 从 `300px` 拖到 `438px` 后，头像和名称仍贴
-  左，设备/通知动作随右边界移动，不会在宽度变化时把账户信息推到 rail 中央。
-- 邀请图标改为站点中性的 `HandHeart`，标题/副标题为 `14px/12px`，与 Manus 的两行推广卡结构一致；
+- 账户触发器在设备/通知动作占用的固定右侧区域内使用 `justify-content:center`：rail 从 `300px` 拖到
+  `438px` 后，头像与名称在剩余账户区平滑居中，设备/通知动作仍贴右边界，不会被宽度变化挤到另一行。
+- 邀请图标改为站点中性的 `UserRoundPlus`，标题/副标题为 `14px/12px`，与 Manus 的两行推广卡结构一致；
   Kokoro 的品牌名、头像和文案仍由 runtime/i18n 提供。
 
 截图：`output/playwright/v217-footer-aligned-786.png`、`output/playwright/v218-rail-resize-aligned-440.png`，
@@ -4043,3 +4043,20 @@ AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !=
 
 真实桌面截图：`output/playwright/v239-local-after-close.png`、`output/playwright/v240-local-presentation-empty.png`、
 `output/playwright/v241-local-design-specific.png`、`output/playwright/v242-local-website-empty.png`。本轮只调整桌面 Web，未调试手机端；图片素材均为本地合成/既有 fixture，不读取 Manus 受保护资源。
+
+## v213 桌面 Rail 模式标记与窄桌面回归（2026-08-31）
+
+本轮补上一个导致“外层仍是宽 Rail、图标却被当作紧凑 Rail 居中”的边界：此前桌面样式同时依赖
+`min-width` 和 `pointer:fine` 媒体查询，而 `Sidebar` 的实际桌面分支由 React 的 `isMobile` 决定。
+在远程桌面、触控笔记本或浏览器缩放场景里，两者可能不一致，结果就是 `data-collapsed=true` 已提交，但
+紧凑子树没有左锚定，图标会在旧宽度中央闪过。
+
+- `WorkspaceRail` 现在在真实桌面 rail 根节点挂载 `data-desktop-rail="true"`；移动 Sheet 不挂载该标记。
+- 展开、收起、footer、导航和状态样式均以该 DOM 模式标记为选择器，不再把 CSS 桌面契约交给指针类型猜测。
+- 收起时 `head/content/footer` 始终固定到 `52px` 左侧轨道；外层 `Sidebar` 的 `200ms` 宽度动画可以继续，
+  但首帧到终帧的图标坐标不随旧的宽 Rail 居中。
+- 移动 Sheet 继续走独立的 `data-desktop-rail` 缺失路径，不继承桌面 `36px` 控件、52px 轨道或 footer 排列。
+
+验证：`tests/ui/workspace-rail.test.tsx` 增加桌面模式标记回归；真实 `1280×720` 浏览器在从 `392px` 和
+`300px` 展开宽度收起时，过渡中导航/品牌/footer 锚点均保持在左侧，最终 rail 为 `52px`，seam 数量保持 1。
+本节只覆盖桌面 Web，不覆盖手机端。

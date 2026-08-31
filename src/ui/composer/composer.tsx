@@ -94,6 +94,33 @@ function modelLabel(model: ModelCandidate): string {
   return model.display_name ?? model.name
 }
 
+function isNewModel(model: ModelCandidate): boolean {
+  return model.name.endsWith("-new")
+}
+
+// The `-new` suffix is a wire-level marker. Keep it out of the main label so
+// the trigger can give the marker its own compact badge without changing the
+// catalogue option labels or the model-selection contract.
+function modelTriggerLabel(model: ModelCandidate): string {
+  const label = modelLabel(model)
+  if (!isNewModel(model)) {
+    return label
+  }
+
+  return label.replace(/\s*(?:[-–—:]\s*)?(?:new|\u65b0)$/iu, "").trim()
+    || model.name.replace(/-new$/u, "")
+}
+
+function modelNewBadgeLabel(model: ModelCandidate): string | null {
+  if (!isNewModel(model)) {
+    return null
+  }
+
+  // Preserve a localized marker already present in display_name; otherwise
+  // fall back to the wire suffix so the badge remains useful without one.
+  return modelLabel(model).match(/(?:^|\s)(new|\u65b0)$/iu)?.[1] ?? model.name.slice(-3)
+}
+
 export function Composer({
   draft,
   onDraftChange,
@@ -164,6 +191,11 @@ export function Composer({
     ?? models.find((m) => modelSelector(m) === preferredModelSelector)
     ?? defaultModel
   const currentSelector = currentModel ? modelSelector(currentModel) : undefined
+  const currentModelTriggerLabel = currentModel ? modelTriggerLabel(currentModel) : ""
+  const currentModelNewBadgeLabel = currentModel ? modelNewBadgeLabel(currentModel) : null
+  const currentModelTriggerTitle = currentModelNewBadgeLabel
+    ? `${currentModelTriggerLabel} ${currentModelNewBadgeLabel}`
+    : currentModel ? modelLabel(currentModel) : undefined
 
   // 当前选中 agent：selectedAgent 命中候选则用之，否则回落缺省项（is_default=general）。
   // 单候选（只有 general，无具名预设）=不渲染选择器（无可选项，隐去）。
@@ -335,10 +367,21 @@ export function Composer({
                 <ComposerMenu
                   triggerClassName={styles.mode}
                   triggerLabel={t("composer.modelSwitch")}
-                  triggerTitle={modelLabel(currentModel)}
+                  triggerTitle={currentModelTriggerTitle}
                   trigger={
                     <>
-                      <span>{modelLabel(currentModel)}</span>
+                      <span data-slot={currentModelNewBadgeLabel ? "new-model-name" : undefined}>
+                        {currentModelTriggerLabel}
+                      </span>
+                      {currentModelNewBadgeLabel ? (
+                        <span
+                          className={styles.newModelBadge}
+                          data-slot="new-model-badge"
+                          aria-hidden="true"
+                        >
+                          {currentModelNewBadgeLabel}
+                        </span>
+                      ) : null}
                       <ChevronDown className={styles.chevron} data-icon="inline-end" />
                     </>
                   }
@@ -406,9 +449,10 @@ export function Composer({
                 // leave a focus ring flashing around this 32px icon.
                 const pointerType = event.pointerType as string
                 if (pointerType !== "mouse" && pointerType !== "pen" && pointerType !== "") return
-                event.currentTarget.dataset.pointerFocus = "true"
-                event.currentTarget.addEventListener("blur", () => {
-                  delete event.currentTarget.dataset.pointerFocus
+                const target = event.currentTarget
+                target.dataset.pointerFocus = "true"
+                target.addEventListener("blur", () => {
+                  delete target.dataset.pointerFocus
                 }, { once: true })
               }}
               onClick={voiceInput.toggle}

@@ -22,28 +22,28 @@
   background: var(--background);
 }
 
-.rail[data-desktop-web="true"] {
+.rail[data-desktop-rail="true"] {
   background: var(--sidebar);
 }
 
-.rail[data-desktop-web="true"] .nav,
-.rail[data-desktop-web="true"] .navGroup {
+.rail[data-desktop-rail="true"] .nav,
+.rail[data-desktop-rail="true"] .navGroup {
   gap: 0.0625rem;
   margin-top: 0;
 }
 
-.rail[data-desktop-web="true"] [data-sidebar="group"],
-.rail[data-desktop-web="true"] [data-sidebar="menu"] {
+.rail[data-desktop-rail="true"] [data-sidebar="group"],
+.rail[data-desktop-rail="true"] [data-sidebar="menu"] {
   gap: 0.0625rem;
   padding: 0;
 }
 
-.rail[data-desktop-web="true"] .content {
+.rail[data-desktop-rail="true"] .content {
   min-height: 0;
   overflow: hidden;
 }
 
-.rail[data-desktop-web="true"] .navItem {
+.rail[data-desktop-rail="true"] .navItem {
   position: relative;
   z-index: 1;
   min-height: 2.4rem;
@@ -58,16 +58,16 @@
  * visible glyph is decorative; the shadcn button/link is the complete target.
  * This matters at browser zoom levels where the painted glyph and the 36px
  * control are rendered on different device-pixel boundaries. */
-.rail[data-desktop-web="true"] .navItem .icon {
+.rail[data-desktop-rail="true"] .navItem .icon {
   pointer-events: none;
 }
 
-.rail[data-desktop-web="true"] .navItem:hover {
+.rail[data-desktop-rail="true"] .navItem:hover {
   background: color-mix(in srgb, var(--accent) 70%, var(--card));
 }
 
-.rail[data-desktop-web="true"] .navItem[data-active="true"],
-.rail[data-desktop-web="true"] .navItem[aria-current="page"] {
+.rail[data-desktop-rail="true"] .navItem[data-active="true"],
+.rail[data-desktop-rail="true"] .navItem[aria-current="page"] {
   background: var(--sidebar-accent);
   color: var(--foreground);
 }
@@ -75,23 +75,23 @@
 /* Pointer navigation should not leave a focus ring around the selected icon;
  * the active surface already supplies the state cue. Keyboard focus still
  * uses the stock shadcn ring because keyboard users never receive this mark. */
-.rail[data-desktop-web="true"] .navItem[data-pointer-focus="true"]:focus-visible {
+.rail[data-desktop-rail="true"] .navItem[data-pointer-focus="true"]:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
 
-.rail[data-desktop-web="true"] .navShortcut {
+.rail[data-desktop-rail="true"] .navShortcut {
   display: none;
 }
 
 /* A wide rail exposes the scoped list, while the icon rail exposes the
  * destinations. The two compact counterparts are never duplicated. */
-.rail[data-desktop-web="true"][data-collapsed="false"] [data-desktop-direct-chat="true"],
-.rail[data-desktop-web="true"][data-collapsed="false"] .projectGroup [data-sidebar="menu-item"]:last-child {
+.rail[data-desktop-rail="true"][data-collapsed="false"] [data-desktop-direct-chat="true"],
+.rail[data-desktop-rail="true"][data-collapsed="false"] .projectGroup [data-sidebar="menu-item"]:last-child {
   display: none;
 }
 
-.rail[data-desktop-web="true"][data-collapsed="false"] .emptyDirectList {
+.rail[data-desktop-rail="true"][data-collapsed="false"] .emptyDirectList {
   display: none;
 }
 
@@ -365,51 +365,48 @@
 
 /* Expanded desktop geometry. This block is deliberately separate from the
  * collapsed block so no width/height declaration is silently overridden. */
-@media (min-width: 768px), (pointer: fine) {
-  .rail[data-desktop-web="true"] { padding: 1rem 0.75rem 0.5rem; }
-  .rail[data-desktop-web="true"] .head {
+.rail[data-desktop-rail="true"] { padding: 1rem 0.75rem 0.5rem; }
+.rail[data-desktop-rail="true"] .head {
     height: 2.75rem;
     min-height: 2.75rem;
     box-sizing: border-box;
     align-items: flex-start;
     padding: 0.15rem 0.35rem 0.5rem;
   }
-  .rail[data-desktop-web="true"] .brand { gap: 0.45rem; }
-  .rail[data-desktop-web="true"] .brandMark {
+.rail[data-desktop-rail="true"] .brand { gap: 0.45rem; }
+.rail[data-desktop-rail="true"] .brandMark {
     width: 1.5rem;
     height: 1.5rem;
     flex-basis: 1.5rem;
     border-radius: 0.5rem;
   }
-  .rail[data-desktop-web="true"] .navItem {
+.rail[data-desktop-rail="true"] .navItem {
     height: 2.25rem;
     min-height: 2.25rem;
   }
   /* Manus' expanded rail uses a one-pixel rhythm between the 36px rows.
      Keeping the compact and expanded tracks on the same primitive prevents
      route changes from adding a visible vertical jump to the command rail. */
-  .rail[data-desktop-web="true"] .nav { gap: 0.0625rem; }
-  .rail[data-desktop-web="true"] .navGroup { margin-top: 0; }
-  .rail[data-desktop-web="true"] .navGroupLabel,
-  .rail[data-desktop-web="true"] .section { padding-inline: 0.75rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
-  .rail[data-desktop-web="true"] .projectGroup { margin-top: 0.6875rem; }
-  .rail[data-desktop-web="true"] .projectGroup .navGroupLabel {
+.rail[data-desktop-rail="true"] .nav { gap: 0.0625rem; }
+.rail[data-desktop-rail="true"] .navGroup { margin-top: 0; }
+.rail[data-desktop-rail="true"] .navGroupLabel,
+.rail[data-desktop-rail="true"] .section { padding-inline: 0.75rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.rail[data-desktop-rail="true"] .projectGroup { margin-top: 0.6875rem; }
+.rail[data-desktop-rail="true"] .projectGroup .navGroupLabel {
     height: 2.25rem;
     min-height: 2.25rem;
     box-sizing: border-box;
     padding-bottom: 0.5rem;
   }
-  .rail[data-desktop-web="true"] .footer { gap: 0; }
-  .rail[data-desktop-web="true"] .userCard { margin: 0; height: 2rem; min-height: 2rem; padding: 0 0.125rem; }
-  .rail[data-desktop-web="true"] .userTrigger { padding-left: 0.125rem; }
-}
+.rail[data-desktop-rail="true"] .footer { gap: 0; }
+.rail[data-desktop-rail="true"] .userCard { margin: 0; height: 2rem; min-height: 2rem; padding: 0 0.125rem; }
+.rail[data-desktop-rail="true"] .userTrigger { justify-content: center; padding-left: 0.125rem; }
 
 /* One compact desktop contract. 52px is the CSS track; 36px targets are
  * centered on x=26, and the header reserves 64px so the first icon starts at
  * the same y rhythm as the reference. The footer is a 120px bottom anchor:
  * device, notifications, account at 32px/4px/32px/4px/32px. */
-@media (min-width: 768px), (pointer: fine) {
-  .rail[data-desktop-web="true"][data-collapsed="true"] {
+.rail[data-desktop-rail="true"][data-collapsed="true"] {
     --collapsed-track: var(--sidebar-width-icon, 52px);
     position: relative;
     align-items: stretch;
@@ -417,7 +414,7 @@
     padding: 0 0 0.5rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .head {
+.rail[data-desktop-rail="true"][data-collapsed="true"] .head {
     width: var(--collapsed-track);
     height: 4rem;
     min-height: 4rem;
@@ -436,7 +433,7 @@
     box-sizing: border-box;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .brand {
+.rail[data-desktop-rail="true"][data-collapsed="true"] .brand {
     visibility: hidden;
     width: 0;
     max-width: 0;
@@ -447,7 +444,7 @@
     pointer-events: none;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .collapsedBrand {
+.rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedBrand {
     top: 0.625rem;
     width: 2.25rem;
     min-width: 2.25rem;
@@ -457,7 +454,7 @@
     pointer-events: auto;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .brandMark {
+.rail[data-desktop-rail="true"][data-collapsed="true"] .brandMark {
     width: 1.75rem;
     height: 1.75rem;
     flex-basis: 1.75rem;
@@ -467,7 +464,7 @@
     color: var(--foreground);
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .content {
+.rail[data-desktop-rail="true"][data-collapsed="true"] .content {
     display: flex;
     width: var(--collapsed-track);
     min-height: 0;
@@ -480,8 +477,8 @@
     box-sizing: border-box;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .nav,
-  .rail[data-desktop-web="true"][data-collapsed="true"] .navGroup {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .nav,
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .navGroup {
     width: var(--collapsed-track);
     align-items: center;
     gap: 0.0625rem;
@@ -489,23 +486,23 @@
     padding: 0;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .projectGroup {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .projectGroup {
     margin-top: 1.125rem;
     border-top: 1px solid var(--sidebar-border);
     padding-top: 0.0625rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .projectGroup [data-sidebar="menu"] {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .projectGroup [data-sidebar="menu"] {
     gap: 0.125rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] [data-sidebar="menu-item"] {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] [data-sidebar="menu-item"] {
     display: flex;
     width: var(--collapsed-track);
     justify-content: center;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .navItem {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .navItem {
     width: 2.25rem;
     min-width: 2.25rem;
     height: 2.25rem;
@@ -518,12 +515,12 @@
     padding: 0.5rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .navItem .icon {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .navItem .icon {
     width: 1.125rem;
     height: 1.125rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .footer {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .footer {
     display: flex;
     width: var(--collapsed-track);
     height: 7.5rem;
@@ -539,7 +536,7 @@
     box-sizing: border-box;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .userCard {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .userCard {
     display: flex;
     width: 100%;
     height: 7.5rem;
@@ -552,7 +549,7 @@
     padding: 0;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .userTrigger {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .userTrigger {
     display: flex;
     width: 2rem;
     height: 2rem;
@@ -565,7 +562,7 @@
     padding: 0;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .accountStatus {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .accountStatus {
     display: flex;
     width: 2rem;
     flex-direction: column;
@@ -575,7 +572,7 @@
     order: 1;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .utilityAction {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .utilityAction {
     display: inline-flex;
     width: 2rem;
     height: 2rem;
@@ -587,33 +584,31 @@
     padding: 0;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .utilityAction .icon {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .utilityAction .icon {
     width: 1.125rem;
     height: 1.125rem;
   }
 
-  .rail[data-desktop-web="true"][data-collapsed="true"] .userAvatar {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .userAvatar {
     width: 1.75rem;
     height: 1.75rem;
     border-radius: 999px;
   }
 
-}
-
 /* The Sheet is the touch version of the rail. These selectors are kept
  * outside the desktop contract so mobile hit areas and layout stay unchanged. */
 @media (max-width: 960px) {
-  .rail:not([data-desktop-web="true"]) { padding: 1rem 0.85rem; }
-  .rail:not([data-desktop-web="true"]) .head { min-height: 3.25rem; padding-bottom: 1rem; }
-  .rail:not([data-desktop-web="true"]) .headBtn,
-  .rail:not([data-desktop-web="true"]) .searchClose { width: 2.75rem; height: 2.75rem; }
-  .rail:not([data-desktop-web="true"]) .navItem { min-height: 2.75rem; padding-inline: 0.75rem; font-size: 0.95rem; }
-  .rail:not([data-desktop-web="true"]) .itemSelect { min-height: 2.75rem; padding-right: 6rem; }
-  .rail:not([data-desktop-web="true"]) .itemRename,
-  .rail:not([data-desktop-web="true"]) .itemDelete { top: 50%; width: 2.75rem; height: 2.75rem; transform: translateY(-50%); }
-  .rail:not([data-desktop-web="true"]) .itemRename { right: 2.8rem; }
-  .rail:not([data-desktop-web="true"]) .itemDeleteAction { right: 0.25rem; }
-  .rail:not([data-desktop-web="true"]) .itemRenameInput { min-height: 2.75rem; }
+  .rail:not([data-desktop-rail="true"]) { padding: 1rem 0.85rem; }
+  .rail:not([data-desktop-rail="true"]) .head { min-height: 3.25rem; padding-bottom: 1rem; }
+  .rail:not([data-desktop-rail="true"]) .headBtn,
+  .rail:not([data-desktop-rail="true"]) .searchClose { width: 2.75rem; height: 2.75rem; }
+  .rail:not([data-desktop-rail="true"]) .navItem { min-height: 2.75rem; padding-inline: 0.75rem; font-size: 0.95rem; }
+  .rail:not([data-desktop-rail="true"]) .itemSelect { min-height: 2.75rem; padding-right: 6rem; }
+  .rail:not([data-desktop-rail="true"]) .itemRename,
+  .rail:not([data-desktop-rail="true"]) .itemDelete { top: 50%; width: 2.75rem; height: 2.75rem; transform: translateY(-50%); }
+  .rail:not([data-desktop-rail="true"]) .itemRename { right: 2.8rem; }
+  .rail:not([data-desktop-rail="true"]) .itemDeleteAction { right: 0.25rem; }
+  .rail:not([data-desktop-rail="true"]) .itemRenameInput { min-height: 2.75rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -96,16 +96,19 @@
 .draftProjectContext {
   display: flex;
   width: 100%;
-  height: 4.9375rem;
+  height: 3.75rem;
   align-items: center;
   gap: 0.5rem;
-  margin-top: -1.375rem;
+  /* The context rail is attached to the Composer's bottom edge. A negative
+     margin hid its title under the editor during the website handoff and
+     made the row look clipped; keep the two surfaces adjacent instead. */
+  margin-top: 0;
   border-right: 1px solid rgb(0 0 0 / 6%);
   border-bottom: 1px solid rgb(0 0 0 / 6%);
   border-left: 1px solid rgb(0 0 0 / 6%);
   border-radius: 0 0 1.375rem 1.375rem;
   background: rgb(55 53 47 / 4%);
-  padding: 2rem 0.75rem 0.625rem;
+  padding: 1.25rem 0.75rem 0.5rem;
   box-sizing: border-box;
 }
 
@@ -196,6 +199,7 @@
   cursor: pointer;
 }
 .creationReferences svg { width: 0.875rem; height: 0.875rem; }
+.referenceInput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
 
 .creationTypesFrame {
   position: relative;
@@ -569,7 +573,7 @@
 }
 
 .presentationTemplateGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .presentationTemplate {
@@ -595,6 +599,24 @@
   height: 100%;
   object-fit: cover;
   opacity: 0.72;
+}
+
+.presentationTemplateMosaic {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  background: white;
+}
+
+.presentationTemplateMosaic img {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .presentationTemplate span {
@@ -818,13 +840,43 @@
 }
 
 .desktopBannerArtwork {
+  position: relative;
+  overflow: hidden;
   width: 7.5rem;
   height: 4.5rem;
   flex: 0 0 auto;
-  border-radius: 0.45rem;
-  object-fit: cover;
-  object-position: center;
 }
+
+.desktopBannerWindow {
+  position: absolute;
+  right: 0.05rem;
+  bottom: 0.25rem;
+  display: block;
+  width: 6.95rem;
+  height: 4.15rem;
+  overflow: hidden;
+  border: 1px solid rgb(55 53 47 / 14%);
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 0.25rem 0.75rem rgb(55 53 47 / 14%);
+  transform: perspective(12rem) rotateY(-8deg);
+}
+.desktopBannerWindowBar { display: flex; gap: 0.2rem; height: 0.65rem; align-items: center; padding-inline: 0.4rem; background: rgb(245 246 248); }
+.desktopBannerWindowBar i { display: block; width: 0.22rem; height: 0.22rem; border-radius: 50%; background: rgb(255 95 86); }
+.desktopBannerWindowBar i:nth-child(2) { background: rgb(255 189 46); }
+.desktopBannerWindowBar i:nth-child(3) { background: rgb(39 201 63); }
+.desktopBannerWindow b { display: block; margin: 0.35rem 0.45rem 0.2rem; color: rgb(55 53 47 / 78%); font-size: 0.48rem; line-height: 0.65rem; }
+.desktopBannerChart { position: relative; display: block; height: 1.75rem; margin: 0 0.45rem; border: 1px solid rgb(55 53 47 / 8%); border-radius: 0.2rem; background: rgb(248 250 252); }
+.desktopBannerChart::before { position: absolute; right: 0.25rem; bottom: 0.35rem; left: 0.25rem; height: 0.8rem; border-bottom: 0.12rem solid rgb(0 129 242 / 58%); border-radius: 45% 55% 35% 60%; content: ""; transform: skewY(-12deg); }
+.desktopBannerChart i { position: absolute; right: 0.2rem; left: 0.2rem; height: 1px; background: rgb(55 53 47 / 8%); }
+.desktopBannerChart i:nth-child(1) { top: 0.55rem; }
+.desktopBannerChart i:nth-child(2) { top: 1.05rem; }
+.desktopBannerChart i:nth-child(3) { top: 1.45rem; }
+.desktopBannerService { position: absolute; right: -0.45rem; bottom: 0.15rem; display: inline-flex; width: 3.75rem; height: 1.2rem; align-items: center; gap: 0.2rem; border: 1px solid rgb(55 53 47 / 12%); border-radius: 0.3rem; background: var(--background); padding-inline: 0.25rem; color: rgb(55 53 47 / 70%); font-size: 0.42rem; box-shadow: 0 0.125rem 0.3rem rgb(55 53 47 / 12%); }
+.desktopBannerService i { display: block; width: 0.42rem; height: 0.42rem; border-radius: 0.1rem; background: rgb(0 129 242 / 76%); }
+.desktopBannerStand { position: absolute; right: 2.25rem; bottom: -0.2rem; width: 2.5rem; height: 0.28rem; border-radius: 999px; background: rgb(55 53 47 / 70%); }
+.desktopBannerArtwork[data-banner-kind="schedule"] .desktopBannerChart::before { border-color: rgb(149 191 71 / 70%); }
+.desktopBannerArtwork[data-banner-kind="integration"] .desktopBannerChart::before { border-color: rgb(255 111 54 / 68%); }
 
 .bannerDots {
   display: flex;
@@ -1155,13 +1207,15 @@
 @media (pointer: fine) and (max-width: 960px) {
   .directSurface {
     padding-top: 3.0625rem;
-    padding-right: 1rem;
-    padding-left: 1rem;
+    padding-right: 0.875rem;
+    padding-left: 0.875rem;
   }
 
   .desktopCarousel {
     margin-top: 3.75rem;
   }
+
+  .directContent { width: 100%; }
 
   /* Preserve the reference's single-line prompt rail on narrow desktop
    * windows, but keep the overflow inside this control instead of letting it

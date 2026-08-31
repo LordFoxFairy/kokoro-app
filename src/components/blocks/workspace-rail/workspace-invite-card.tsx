@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, HandHeart } from "lucide-react"
+import { ChevronRight, UserRoundPlus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/context"
@@ -24,7 +24,7 @@ export function WorkspaceInviteCard({ brandName, onOpen }: WorkspaceInviteCardPr
       onClick={onOpen}
       aria-label={t("rail.inviteFriendsTitle", { brand: brandName })}
     >
-      <HandHeart className={styles.inviteIcon} aria-hidden="true" />
+      <UserRoundPlus className={styles.inviteIcon} aria-hidden="true" />
       <span className={styles.inviteCopy}>
         <strong>{t("rail.inviteFriendsTitle", { brand: brandName })}</strong>
         <small>{t("rail.inviteFriendsHint")}</small>
