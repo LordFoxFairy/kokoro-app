@@ -1306,3 +1306,23 @@ POST /api/tasks/{task_id}/messages
 当前前端验收以 `tests/ui/composer.test.tsx` 与 `tests/ui/use-voice-input.test.tsx` 的 preview 转换、cancel、
 unsupported/error、live recognition、原位 DOM 和入口分态断言为准；定向运行共 56/56 通过。本节只覆盖桌面 Web，
 不覆盖手机端。真实浏览器 SpeechRecognition 是否可用由浏览器决定，不应在后端用成功 fixture 冒充。
+
+### 35.4 Creation capability selection has no API request
+
+直接会话首屏的制作简报、建立网站、设计、制作游戏胶囊是 Web presentation state，不是资源创建请求：
+
+```ts
+type CreationIntent = "presentation" | "website" | "design" | "game" | "app"
+type CreationIntentSelect = (intent: CreationIntent) => void
+```
+
+点击胶囊只更新 shell-owned `creationIntent`、placeholder 和对应的本地工作流组件；不得发送 `POST`、修改 URL、创建空 task 或把
+`creation_intent`、`site_id`、`tenant_id` 写进消息 body。点击工作流内部示例卡片后，只有用户随后显式提交的文本才沿用既有：
+
+```http
+POST /api/tasks/{task_id}/messages
+```
+
+预览模型目录沿用既有 `GET /api/session/models` typed response，仅用于渲染 presentation/design 的模型选择器；中性、Website、App 首屏
+可由站点壳层隐藏该选择器。`display_name` 是 UI 文案，不是可直接信任的 provider 权限或路由信息；真实服务端仍需按 workspace policy 再解析
+model selector。胶囊关闭同样只清除本地 creation intent，不调用 API。

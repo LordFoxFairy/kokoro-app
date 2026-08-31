@@ -47,6 +47,15 @@ const COMPLETED_PREVIEW_TODOS = PREVIEW_TODOS.map((todo) => ({
   status: "completed" as const,
 }))
 
+// Keep the local catalogue small and deterministic, while still projecting
+// the model affordances visible in Manus' creation workflows. The site shell
+// decides which workflow can show this list; the transport only owns the API
+// shape and fixture data.
+const PREVIEW_MODELS = [
+  { provider: "kokoro", name: "standard-new", is_default: true, display_name: "标准 新" },
+  { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+] as const
+
 export function createPreviewClient(options?: { stepMs?: number }): SessionClient {
   const stepMs = options?.stepMs ?? 40
   const sessions = new Map<string, PreviewSession>()
@@ -241,8 +250,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)),
       }),
 
-    // 预览档无 platform 模型源：候选恒为空（输入框据此隐藏模型选择器）。
-    listModels: () => Promise.resolve({ models: [] }),
+    // The preview catalog mirrors the two creation-specific model labels used
+    // by the desktop reference. Neutral/Website/App states hide this control
+    // at the shell boundary, so the catalogue never adds toolbar noise there.
+    listModels: () => Promise.resolve({ models: [...PREVIEW_MODELS] }),
 
     // 预览档无 namespace profile 源：agent 候选恒为空（输入框据此隐藏 agent 选择器）。
     listAgents: () => Promise.resolve({ agents: [] }),

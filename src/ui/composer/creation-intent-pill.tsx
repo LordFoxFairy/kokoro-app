@@ -1,10 +1,10 @@
-import { X } from "lucide-react"
+import { Gamepad2, Presentation, Sparkles, X } from "lucide-react"
 
 import { CodeWindowIcon } from "@/components/icons/code-window-icon"
 
 import styles from "./creation-intent-pill.module.css"
 
-export type CreationIntent = "website" | "app"
+export type CreationIntent = "presentation" | "website" | "design" | "game" | "app"
 
 type CreationIntentPillProps = {
   intent: CreationIntent
@@ -18,6 +18,13 @@ type CreationIntentPillProps = {
   dismissLabel?: string
 }
 
+function IntentGlyph({ intent, className }: { intent: CreationIntent; className?: string }) {
+  if (intent === "presentation") return <Presentation className={className} data-testid="creation-intent-glyph" aria-hidden="true" />
+  if (intent === "design") return <Sparkles className={className} data-testid="creation-intent-glyph" aria-hidden="true" />
+  if (intent === "game") return <Gamepad2 className={className} data-testid="creation-intent-glyph" aria-hidden="true" />
+  return <CodeWindowIcon className={className} data-testid="creation-intent-glyph" />
+}
+
 /** Selected creation context shown in the composer toolbar. */
 export function CreationIntentPill({ intent, label, onDismiss, dismissLabel = `Dismiss ${label}` }: CreationIntentPillProps) {
   return (
@@ -29,7 +36,7 @@ export function CreationIntentPill({ intent, label, onDismiss, dismissLabel = `D
       data-dismiss-action="creation-intent"
     >
       <span className={styles.iconSlot} data-slot="creation-intent-icon-slot">
-        <CodeWindowIcon className={styles.glyph} data-testid="creation-intent-glyph" />
+        <IntentGlyph intent={intent} className={styles.glyph} />
         <button
           type="button"
           className={styles.closeButton}

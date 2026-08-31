@@ -4030,3 +4030,16 @@ AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !=
 
 证据截图：`output/playwright/v222-rail-collapse-mid.png`、`output/playwright/v222-rail-expand-mid.png`。
 验证范围为桌面 Web，未修改手机端 Sheet。
+
+## v212 直接会话能力胶囊与创作工作流分层（2026-08-31）
+
+本轮对照 Manus 的四组桌面截图复核了“中性直接会话 → 选择能力 → 创作工作流”的完整层级，修正了此前把能力胶囊隐藏、点击后误填示例提示词，以及所有创作态复用同一组卡片的问题：
+
+- 中性 `/app` 首屏在 Composer 下方显示单一能力胶囊轨道：制作简报、建立网站、设计、制作游戏、更多；推广轮播位独立位于其下方，不再和旧的“开始使用”卡片同时挂载。
+- 点击能力胶囊只切换 `creationIntent`，不修改 draft、不创建会话、不改变 URL；Composer 使用对应 placeholder。点击工作流内部的示例卡片才把 prompt 写入草稿并沿用当前 intent。
+- 胶囊继续由独立 `CreationIntentPill` 组件负责，固定 `32px` 高和 `16×16px` 图标槽。presentation/design/game 使用各自图标；hover/focus 在同一槽位切换 X，dismiss 保留 draft 和焦点。
+- presentation 进入独立的“范例提示词 / 选择模板”组件组合；design/game 进入独立的“开始使用”卡片组合。Website 仍使用专属的专案归档、网站类型和内建整合轨道，不能被通用创作卡片覆盖。
+- presentation 与 design/game 的预览模型目录分别投影“标准 新”和“GPT Image 2”；中性、Website、App 首屏隐藏模型控件，避免异步模型目录把无关按钮插入 Composer。模型目录仍是 typed client fixture，不代表生产模型已上线。
+
+真实桌面截图：`output/playwright/v239-local-after-close.png`、`output/playwright/v240-local-presentation-empty.png`、
+`output/playwright/v241-local-design-specific.png`、`output/playwright/v242-local-website-empty.png`。本轮只调整桌面 Web，未调试手机端；图片素材均为本地合成/既有 fixture，不读取 Manus 受保护资源。

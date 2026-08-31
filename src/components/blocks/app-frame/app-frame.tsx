@@ -38,6 +38,7 @@ import { useT } from "@/i18n/context"
 import { useHydrated } from "@/lib/use-hydrated"
 import { isCreditInsufficient } from "@/billing/rules"
 import { Composer, MAX_INPUT_LENGTH } from "@/ui/composer/composer"
+import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import {
   RAIL_COLLAPSED_WIDTH,
@@ -95,13 +96,17 @@ function readRailCollapsedCookie(): boolean | null {
   return value === "true" ? false : value === "false" ? true : null
 }
 
-type CreationIntent = "website" | "app"
+const CREATION_INTENTS: readonly CreationIntent[] = ["presentation", "website", "design", "game", "app"]
+
+function isCreationIntent(value: string | null): value is CreationIntent {
+  return value !== null && CREATION_INTENTS.includes(value as CreationIntent)
+}
 
 function readPendingCreationIntent(): CreationIntent | null {
   if (typeof window === "undefined") return null
   try {
     const value = window.sessionStorage.getItem(PENDING_CREATION_INTENT_KEY)
-    return value === "website" || value === "app" ? value : null
+    return isCreationIntent(value) ? value : null
   } catch {
     return null
   }
@@ -258,6 +263,8 @@ export type EmptyStateProps = {
   /** Explicit creation mode; a non-empty draft alone never selects a product workflow. */
   creationIntent?: CreationIntent
   onPrompt: (prompt: string, intent?: CreationIntent) => void
+  /** Selects a capability capsule without inventing prompt text in the editor. */
+  onCreationIntentSelect?: (intent: CreationIntent) => void
   /** Session-backed conversations for a site-owned project workbench. */
   projectConversations?: readonly {
     id: string
@@ -1011,6 +1018,16 @@ export function AppFrame({
     })
   }, [focusComposer, setDeploymentIntent, updateDraft])
 
+  const handleCreationIntentSelect = useCallback((intent: CreationIntent) => {
+    // A capability capsule is a mode switch, not a prompt starter. Manus
+    // keeps the editor empty after this click so the selected workflow can
+    // provide its own placeholder, model and examples below the Composer.
+    setDeploymentIntent(intent)
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => focusComposer())
+    })
+  }, [focusComposer, setDeploymentIntent])
+
   const openMcpCreate = useCallback((mode: McpCreateMode, returnTarget?: HTMLElement | null) => {
     mcpCreateReturnFocusRef.current = returnTarget ?? null
     setMcpCreateMode(mode)
@@ -1272,6 +1289,28 @@ export function AppFrame({
   // its own website/resources capabilities and must not inherit a pending
   // homepage mode merely because both surfaces share the Composer primitive.
   const projectedCreationIntent = projectWorkspace ? null : deploymentIntent
+  const creationPlaceholder = projectWorkspace && !hasMessages
+    ? t("firstSite.startTask")
+    : !projectWorkspace && !hasMessages
+      ? deploymentIntent === "website"
+        ? t("settings.deploymentWebsitePlaceholder")
+        : deploymentIntent === "app"
+          ? t("settings.deploymentAppPlaceholder")
+          : deploymentIntent === "presentation"
+            ? t("firstSite.presentationPlaceholder")
+            : deploymentIntent === "design"
+              ? t("firstSite.designPlaceholder")
+              : deploymentIntent === "game"
+                ? t("firstSite.gamePlaceholder")
+                : t("firstSite.homePlaceholder")
+      : undefined
+  const preferredCreationModel = !hasMessages
+    ? deploymentIntent === "presentation" || deploymentIntent === "game"
+      ? "kokoro:standard-new"
+      : deploymentIntent === "design"
+        ? "openai:gpt-image-2"
+        : undefined
+    : undefined
 
   const composer = (
     <div data-slot="composer" className="shrink-0">
@@ -1286,24 +1325,17 @@ export function AppFrame({
       onStop={() => engine?.cancelRun()}
       composerRef={composerRef}
       emptyWorkspace={!hasMessages}
-      placeholder={projectWorkspace && !hasMessages
-        ? t("firstSite.startTask")
-        : !projectWorkspace && !hasMessages
-          ? deploymentIntent === "website"
-            ? t("settings.deploymentWebsitePlaceholder")
-            : deploymentIntent === "app"
-              ? t("settings.deploymentAppPlaceholder")
-              : t("firstSite.homePlaceholder")
-          : undefined}
+      placeholder={creationPlaceholder}
       mode={mode}
       onModeChange={(next) => engine?.setMode(next)}
       modeLocked={modeLocked}
       pinnedSkills={pinnedSkills}
       onUnpinSkill={removePinned}
       models={selectors.models}
-      // A Project task starts in the shared chat shell. Keep model selection
-      // beside the message controls from the first draft through execution.
-      hideModelSelector={false}
+      // Neutral and Website/App creation surfaces keep the reference's quiet
+      // toolbar. Presentation/Design/Game expose their workflow model inline.
+      hideModelSelector={!hasMessages && (!projectedCreationIntent || projectedCreationIntent === "website" || projectedCreationIntent === "app")}
+      preferredModelSelector={preferredCreationModel}
       selectedModel={selectors.selectedModel}
       onModelChange={selectors.setSelectedModel}
       modelLocked={modeLocked}
@@ -1436,6 +1468,7 @@ export function AppFrame({
             creationIntent={projectedCreationIntent ?? undefined}
             projectWorkspace={projectWorkspace}
             onPrompt={handlePrompt}
+            onCreationIntentSelect={handleCreationIntentSelect}
             // The engine has already scoped this list by `project_ref` or the
             // direct inbox. A project workspace may therefore render its own
             // conversation list without ever reading a direct-chat session here.

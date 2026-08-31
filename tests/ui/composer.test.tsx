@@ -146,6 +146,30 @@ describe("Composer model selector", () => {
     expect(intent).toHaveAttribute("data-intent", "app")
   })
 
+  it("设计创作意图使用对应图标，并在同一工具栏显示图像模型", () => {
+    renderComposer({
+      creationIntent: "design",
+      models: [
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+      ],
+      preferredModelSelector: "openai:gpt-image-2",
+      hideModelSelector: false,
+    })
+
+    const intent = screen.getByTestId("creation-intent-pill")
+    expect(intent).toHaveAttribute("data-intent", "design")
+    expect(screen.getByTestId("creation-intent-glyph")).toHaveClass("lucide-sparkles")
+    expect(screen.getByRole("button", { name: "Switch model: GPT Image 2" })).toBeInTheDocument()
+  })
+
+  it("简报创作态使用投影片胶囊文案而不是入口文案", () => {
+    renderComposer({ creationIntent: "presentation", models: [], hideModelSelector: true })
+
+    expect(screen.getByTestId("creation-intent-pill")).toHaveTextContent("Slides")
+    expect(screen.getByTestId("creation-intent-pill")).toHaveAttribute("data-intent", "presentation")
+  })
+
   it("普通空白直接会话显示语音模式与麦克风两个入口", () => {
     renderComposer({ emptyWorkspace: true })
 

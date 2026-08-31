@@ -13,6 +13,7 @@ import { useT } from "@/i18n/context"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import styles from "./kokoro-welcome.module.css"
+import { CreationWorkflowSurface } from "./creation-workflow-surface"
 
 function DesignWandIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -45,7 +46,7 @@ function ShopifyMark() {
  * The direct inbox is a standalone chat surface. Project workspaces use a
  * separate component because their task list and context are persistent.
  */
-type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings"> & {
+type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings" | "onCreationIntentSelect"> & {
   onPrompt?: EmptyStateProps["onPrompt"]
 }
 
@@ -55,6 +56,7 @@ export function KokoroDirectChatWelcome({
   draft = "",
   creationIntent,
   onPrompt,
+  onCreationIntentSelect,
   onOpenSettings,
 }: DirectChatWelcomeProps = {}) {
   const t = useT()
@@ -75,6 +77,14 @@ export function KokoroDirectChatWelcome({
   // clears the intent and removes the rail together with the creation row.
   const showDraftProjectContext = creationIntent === "website"
   const showDirectPrompts = !creationIntent && !hasDraft
+  // The neutral inbox uses the compact capability rail and promotion carousel.
+  // The larger starter cards only belong to a selected creative workflow;
+  // otherwise they compete with the capsules and make the welcome surface
+  // look like two different home pages stacked together.
+  const creativeIntent = creationIntent === "presentation" || creationIntent === "design" || creationIntent === "game"
+    ? creationIntent
+    : null
+  const showStarterCards = creativeIntent !== null
 
   useEffect(() => {
     if (hasDraft || bannerPaused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
@@ -199,7 +209,16 @@ export function KokoroDirectChatWelcome({
               size="sm"
               className={styles.directPrompt}
               aria-label={`${t(title)} ${t(description)}`}
-              onClick={() => onPrompt?.(t(prompt), intent)}
+              onClick={() => {
+                // The row is a capability switch. Keep the draft empty and
+                // let the selected workflow render its own Composer state;
+                // starter cards remain the place that inserts prompt text.
+                if (intent && onCreationIntentSelect) {
+                  onCreationIntentSelect(intent)
+                  return
+                }
+                onPrompt?.(t(prompt), intent)
+              }}
             >
               <PromptIcon aria-hidden="true" />
               <span>{t(title)}</span>
@@ -358,33 +377,7 @@ export function KokoroDirectChatWelcome({
           </div>
         ) : null}
 
-        <section className={styles.desktopSuggestions} aria-label={t("firstSite.getStarted")}>
-          <div className={styles.desktopSuggestionsHeader}>
-            <h2>{t("firstSite.getStarted")}</h2>
-          </div>
-          <div className={styles.desktopSuggestionGrid}>
-            {starterCards.map(({ title, description, prompt, image }) => (
-              <Button
-                key={title}
-                type="button"
-                variant="ghost"
-                className={styles.desktopSuggestion}
-                onClick={() => onPrompt?.(t(prompt))}
-              >
-                <span className={styles.desktopSuggestionCopy}>
-                  <span className={styles.desktopSuggestionTitle}>
-                    <span>{t(title)}</span>
-                    <ChevronRight aria-hidden="true" />
-                  </span>
-                  <span className={styles.desktopSuggestionDescription}>{t(description)}</span>
-                </span>
-                <span className={styles.desktopSuggestionMedia} aria-hidden="true">
-                  <Image src={image} alt="" width={68} height={90} />
-                </span>
-              </Button>
-            ))}
-          </div>
-        </section>
+        {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} onPrompt={onPrompt} /> : null}
 
         {!hasDraft && !creationIntent ? <div
           className={styles.desktopCarousel}
@@ -429,10 +422,10 @@ export function KokoroDirectChatWelcome({
 }
 
 const directPrompts = [
-  { title: "firstSite.promptBrief", description: "scenario.writeDesc", prompt: "scenario.writePrompt", intent: undefined, icon: BriefcaseBusiness },
+  { title: "firstSite.promptBrief", description: "scenario.writeDesc", prompt: "scenario.writePrompt", intent: "presentation", icon: BriefcaseBusiness },
   { title: "firstSite.promptWebsite", description: "firstSite.websitePrompt", prompt: "firstSite.websitePrompt", intent: "website", icon: CodeWindowIcon },
-  { title: "firstSite.promptDesign", description: "scenario.dataDesc", prompt: "scenario.dataPrompt", intent: undefined, icon: DesignWandIcon },
-  { title: "firstSite.promptGame", description: "scenario.codeDesc", prompt: "scenario.codePrompt", intent: undefined, icon: Gamepad2 },
+  { title: "firstSite.promptDesign", description: "scenario.dataDesc", prompt: "scenario.dataPrompt", intent: "design", icon: DesignWandIcon },
+  { title: "firstSite.promptGame", description: "scenario.codeDesc", prompt: "scenario.codePrompt", intent: "game", icon: Gamepad2 },
 ] as const
 
 const desktopBanners = [
@@ -441,15 +434,6 @@ const desktopBanners = [
   { title: "firstSite.scheduledTasks", hint: "firstSite.scheduledTasksHint", image: "/site-assets/project-scheduled-tasks.svg" },
   { title: "settings.integration.slack.name", hint: "settings.integration.slack.description", image: "/integrations/slack.svg" },
   { title: "settings.integration.zapier.name", hint: "settings.integration.zapier.description", image: "/integrations/zapier.webp" },
-] as const
-
-const starterCards = [
-  { title: "scenario.dataTitle", description: "firstSite.starterDataDescription", prompt: "scenario.dataPrompt", image: "/site-assets/project-website.webp" },
-  { title: "scenario.writeTitle", description: "firstSite.starterWritingDescription", prompt: "scenario.writePrompt", image: "/site-assets/game-creation.png" },
-  { title: "scenario.researchTitle", description: "firstSite.starterResearchDescription", prompt: "scenario.researchPrompt", image: "/site-assets/project-scheduled-tasks.svg" },
-  { title: "scenario.planTitle", description: "firstSite.starterPlanDescription", prompt: "scenario.planPrompt", image: "/integrations/zapier.webp" },
-  { title: "scenario.codeTitle", description: "firstSite.starterCodeDescription", prompt: "scenario.codePrompt", image: "/integrations/slack.svg" },
-  { title: "scenario.summaryTitle", description: "firstSite.starterSummaryDescription", prompt: "scenario.summaryPrompt", image: "/site-assets/project-website.webp" },
 ] as const
 
 const creationTypes = [

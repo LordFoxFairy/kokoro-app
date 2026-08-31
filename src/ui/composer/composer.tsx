@@ -54,6 +54,8 @@ export type ComposerProps = {
   models: readonly ModelCandidate[]
   /** Site-owned empty surfaces may place model selection in their own topbar. */
   hideModelSelector?: boolean
+  /** Empty creation surfaces may choose a synthetic default model per workflow. */
+  preferredModelSelector?: string
   selectedModel: string | null
   onModelChange: (selector: string) => void
   modelLocked: boolean
@@ -109,6 +111,7 @@ export function Composer({
   onUnpinSkill,
   models,
   hideModelSelector = false,
+  preferredModelSelector,
   selectedModel,
   onModelChange,
   modelLocked,
@@ -129,6 +132,17 @@ export function Composer({
   const t = useT()
   const modeLabel = modeLabelText(t, mode)
   const ModeIcon = mode === "thinking" ? Sparkles : Zap
+  const creationIntentLabel = creationIntent === "website"
+    ? t("firstSite.websites")
+    : creationIntent === "presentation"
+      ? t("firstSite.presentationSelected")
+      : creationIntent === "design"
+        ? t("firstSite.promptDesign")
+        : creationIntent === "game"
+          ? t("firstSite.promptGame")
+          : creationIntent === "app"
+            ? t("settings.deploymentAppIntent")
+            : null
   const voiceInput = useVoiceInput({
     draft,
     onDraftChange,
@@ -146,7 +160,9 @@ export function Composer({
 
   // 当前选中模型：selectedModel 命中候选则用之，否则回落缺省项（is_default）。空候选=不渲染选择器。
   const defaultModel = models.find((m) => m.is_default) ?? models[0]
-  const currentModel = models.find((m) => modelSelector(m) === selectedModel) ?? defaultModel
+  const currentModel = models.find((m) => modelSelector(m) === selectedModel)
+    ?? models.find((m) => modelSelector(m) === preferredModelSelector)
+    ?? defaultModel
   const currentSelector = currentModel ? modelSelector(currentModel) : undefined
 
   // 当前选中 agent：selectedAgent 命中候选则用之，否则回落缺省项（is_default=general）。
@@ -171,6 +187,7 @@ export function Composer({
       data-desktop-web="true"
       data-empty-workspace={emptyWorkspace ? "true" : undefined}
       data-project-workspace={projectWorkspace ? "true" : undefined}
+      data-creation-intent={creationIntent}
     >
       {pinnedSkills.length > 0 ? (
         <div className={styles.pinnedRow} aria-label={t("composer.pinnedAria")}>
@@ -197,7 +214,7 @@ export function Composer({
         data-voice-state={voiceActive ? voiceInput.state : undefined}
         onSubmit={onSubmit}
       >
-        {models.length === 0 && projectWorkspace && environmentSelectorPlacement === "floating" ? (
+        {projectWorkspace && environmentSelectorPlacement === "floating" ? (
           <span
             className={cn(styles.mode, styles.environmentSelector, styles.floatingEnvironment)}
             role="status"
@@ -228,7 +245,7 @@ export function Composer({
         {/* 控件行：未接入的附件不占位；语音输入始终保留在同一 32px 槽位，避免录音状态改变布局。 */}
         <div className={styles.controls}>
           {leadingActions ? <div className={styles.leadingActions}>{leadingActions}</div> : null}
-          {models.length === 0 && projectWorkspace && environmentSelectorPlacement === "floating" ? (
+          {projectWorkspace && environmentSelectorPlacement === "floating" ? (
             <span
               className={cn(styles.mode, styles.environmentSelector, styles.environmentIconOnly)}
               role="status"
@@ -239,7 +256,7 @@ export function Composer({
               <Monitor className={styles.modeGlyph} aria-hidden="true" />
             </span>
           ) : null}
-          {models.length === 0 && environmentSelectorPlacement === "controls" ? (
+          {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? (
             <span
               className={cn(styles.mode, styles.environmentSelector)}
               role="status"
@@ -254,9 +271,9 @@ export function Composer({
           {creationIntent ? (
             <CreationIntentPill
               intent={creationIntent}
-              label={t(creationIntent === "website" ? "firstSite.websites" : "settings.deploymentAppIntent")}
+              label={creationIntentLabel ?? ""}
               dismissLabel={t("composer.dismissCreationIntent", {
-                label: t(creationIntent === "website" ? "firstSite.websites" : "settings.deploymentAppIntent"),
+                label: creationIntentLabel ?? "",
               })}
               onDismiss={onCreationIntentDismiss}
             />

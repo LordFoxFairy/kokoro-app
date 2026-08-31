@@ -360,6 +360,16 @@
   display: none;
 }
 
+/* Presentation and image creation expose their model choice beside the
+ * selected capability capsule. The response-mode selector remains hidden by
+ * the empty-state rule below, so this only restores the model slot that the
+ * reference workflow actually owns. */
+.wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="presentation"] .cluster,
+.wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="design"] .cluster,
+.wrap[data-desktop-web="true"][data-empty-workspace="true"][data-creation-intent="game"] .cluster {
+  display: flex;
+}
+
 .wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .trailingActions {
   margin-left: auto;
 }

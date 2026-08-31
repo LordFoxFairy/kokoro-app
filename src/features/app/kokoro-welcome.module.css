@@ -488,8 +488,129 @@
 .integrationServicePanel i:nth-of-type(2) { width: 88%; }
 .integrationServicePanel i:nth-of-type(3) { width: 52%; }
 
-.desktopSuggestions {
+/* Creation workflows are separate content assemblies, not a relabelled
+ * version of the neutral inbox. They stay hidden outside the desktop Web
+ * surface so the existing mobile workbench remains a separate contract. */
+.workflowStack {
   display: none;
+}
+
+.workflowSection h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.workflowSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.presentationPromptGrid,
+.presentationTemplateGrid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.presentationPromptGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.presentationPrompt {
+  display: flex;
+  min-width: 0;
+  height: 5.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 0.875rem;
+  background: transparent;
+  padding: 0.875rem;
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  text-align: left;
+  white-space: normal;
+}
+
+.presentationPrompt span {
+  min-width: 0;
+}
+
+.presentationPrompt svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 0.875rem;
+  align-self: flex-end;
+  color: var(--muted-foreground);
+}
+
+.presentationPrompt:hover,
+.presentationTemplate:hover {
+  background: rgb(55 53 47 / 4%);
+}
+
+.templateFilter {
+  gap: 0.5rem;
+  border-color: rgb(0 0 0 / 10%);
+  color: var(--foreground);
+}
+
+.templateFilter svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.presentationTemplateGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.presentationTemplate {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 7.5rem;
+  align-items: flex-end;
+  justify-content: flex-start;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 0.875rem;
+  background: rgb(55 53 47 / 3%);
+  padding: 0;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.presentationTemplate img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.72;
+}
+
+.presentationTemplate span {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: linear-gradient(transparent, rgb(255 255 255 / 96%));
+  padding: 2rem 0.75rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.workflowCardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .appSuggestions {
@@ -542,29 +663,6 @@
   color: var(--muted-foreground);
   stroke-width: 2;
   transform: rotate(-45deg);
-}
-
-.desktopSuggestionsHeader {
-  display: flex;
-  align-items: center;
-  min-height: 1.25rem;
-  padding: 0;
-}
-
-.desktopSuggestionsHeader h2 {
-  margin: 0;
-  color: var(--foreground);
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-  letter-spacing: -0.01em;
-}
-
-.desktopSuggestionGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
 }
 
 .desktopSuggestion {
@@ -950,11 +1048,16 @@
     margin-inline: auto;
   }
 
-  /* The Composer owns the capability pills. Manus starts the direct-chat
-   * welcome list immediately after the editor, so do not render a second
-   * horizontal action rail on the desktop surface. */
+  /* The direct inbox keeps Manus' capability capsules below the editor. They
+   * are a surface-level choice (brief, website, design, game, more), not a
+   * second control row inside the Composer. Keeping this rail in the welcome
+   * surface also lets each creation mode replace it with its own follow-up
+   * layout without moving the editor itself. */
   .directPrompts {
-    display: none;
+    display: flex;
+    min-height: 2.625rem;
+    align-items: center;
+    justify-content: center;
     gap: 0.5rem;
   }
 
@@ -972,7 +1075,7 @@
     width: 1.125rem;
     height: 1.125rem;
   }
-  .desktopSuggestions {
+  .workflowStack {
     display: block;
     width: 100%;
     margin: 0;
@@ -980,7 +1083,11 @@
     box-sizing: border-box;
   }
 
-  .desktopCarousel { display: none; }
+  .workflowSection + .workflowSection {
+    margin-top: 2rem;
+  }
+
+  .desktopCarousel { display: block; }
 
   .desktopCarousel {
     /* Anchor the promotional carousel near the lower fold like Manus. Keep
@@ -990,12 +1097,6 @@
   }
 
   .bannerDots { margin-top: 0.75rem; }
-}
-
-@media (pointer: fine) and (min-width: 48rem) {
-  .desktopSuggestionGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (min-width: 1200px) {

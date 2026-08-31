@@ -739,3 +739,16 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 真实桌面证据：`output/playwright/v222-rail-collapse-mid.png`、`output/playwright/v222-rail-expand-mid.png`。
 本 fixture 只覆盖桌面 Web，不覆盖手机端。
+
+## 46. Direct capability capsules and workflow fixtures v212
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `composer.capability-rail.neutral.v212` | 新的直接会话 `/app` 空态 | Composer 下方只挂载一条能力胶囊轨道和一个推广轮播；旧的通用“开始使用”卡片不与中性空态并存 |
+| `composer.capability-rail.select.v212` | 点击制作简报/建立网站/设计/制作游戏 | 只更新 `creationIntent` 与对应 placeholder；draft 保持空、URL 不变、不会自动提交或创建任务 |
+| `composer.creation-intent.variant-glyph.v212` | 进入任一创作态并 hover/focus 胶囊 | `CreationIntentPill` 保持 `32px` 高、固定 `16×16px` 槽；presentation/design/game 显示对应图标，hover/focus 同槽位显示 X，不发生横向位移 |
+| `welcome.presentation-workflow.v212` | 选择制作简报 | 显示“范例提示词”四项和“选择模板”区；模型控件显示本地合成 `标准 新`；示例点击才写入 presentation prompt |
+| `welcome.design-workflow.v212` | 选择设计 | 显示设计专属“开始使用”四张卡；Composer placeholder 为图片创作文案，模型控件显示本地合成 `GPT Image 2` |
+| `welcome.website-workflow.v212` | 选择建立网站 | 保留网站专属专案归档和类型选择轨道；不渲染模型控件或通用创作卡片 |
+
+以上 fixture 不新增后端 endpoint。`onCreationIntentSelect` 是站点壳层与空态组件之间的前端 callback；后续真实接入仍只在用户提交草稿时走既有 task/session message contract。预览模型仅验证 UI 的异步目录和选择器形状，不携带品牌、tenant、site、Cookie、token 或原始 Manus 数据。

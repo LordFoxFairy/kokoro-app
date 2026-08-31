@@ -68,6 +68,21 @@ it("建立网站入口把网站意图交给壳层以显示选中胶囊", () => {
   expect(onPrompt).toHaveBeenCalledWith("描述你想要建立的网站", "website")
 })
 
+it("能力胶囊只切换创作模式，不把示例提示词误填进编辑器", () => {
+  const onPrompt = vi.fn()
+  const onCreationIntentSelect = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome onPrompt={onPrompt} onCreationIntentSelect={onCreationIntentSelect} />
+    </LocaleProvider>,
+  )
+
+  fireEvent.click(screen.getByRole("button", { name: "设计 找趋势、出结论、给建议" }))
+
+  expect(onCreationIntentSelect).toHaveBeenCalledWith("design")
+  expect(onPrompt).not.toHaveBeenCalled()
+})
+
 it("显式网站意图切换为专案归档与创建类型布局", () => {
   render(
     <LocaleProvider>
