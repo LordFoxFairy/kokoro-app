@@ -215,7 +215,7 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
     prompt: "汇总今天的重要消息",
     frequency: "daily",
     time: "08:00",
-    timezone: "America/New_York",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     expiresAt: undefined,
     autoApprove: false,
   }))
