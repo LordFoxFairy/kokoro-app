@@ -7,7 +7,11 @@
 
 # Kokoro User Web 重写执行方案 v2
 
-状态：待按 `docs/user-web-architecture-v2.md` 执行。
+状态：已归档，仅供历史参考；当前 `kokoro` 子仓库已按后续 User Web 基线实现。
+
+本文件不再作为实施计划。文中的多 Site / `SiteDefinition` / 旧目录结构均已废止；当前
+实现只允许在本仓库内闭环，发布仓库为 `LordFoxFairy/kokoro-app`，通用 package 的迁移
+以 `docs/site-repository-architecture-v2.md` 的现行规则为准。
 
 ## 0. 重要决策
 

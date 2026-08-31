@@ -106,6 +106,8 @@ export type WorkspaceRailProps = {
   /** Site-owned project overview route. */
   projectHref?: string
   projectActive?: boolean
+  /** Optional host action for the project-creation menu entry. */
+  onCreateProject?: () => void
   /** Route-owned active state for direct and catalog destinations. */
   activeNavigationKey?: string
   conversations: ConversationSummary[]
@@ -146,6 +148,7 @@ function WorkspaceRailContent({
   chatHref,
   projectHref,
   projectActive = false,
+  onCreateProject,
   activeNavigationKey,
   conversations,
   activeId,
@@ -568,11 +571,25 @@ function WorkspaceRailContent({
         {projectHref ? <SidebarGroup className={cn(styles.navGroup, styles.projectGroup)} data-desktop-projects="true">
           {!compactDesktop ? <SidebarGroupLabel className={styles.navGroupLabel}>
             <span>{t("firstSite.projects")}</span>
-            <Button asChild variant="ghost" size="icon-xs" className={styles.sectionAction} aria-label={t("firstSite.newProject")}>
-              <Link href={projectHref} prefetch={mountedSurfacePrefetch} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}>
-                <Plus aria-hidden="true" />
-              </Link>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={styles.sectionAction}
+                  aria-label={t("firstSite.newProject")}
+                  data-testid="rail-new-project"
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={4} className={styles.projectMenu}>
+                <DropdownMenuItem onSelect={onCreateProject}>
+                  <Folder aria-hidden="true" />
+                  {t("firstSite.newProject")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarGroupLabel> : null}
           <SidebarGroupContent>
             <SidebarMenu>
@@ -605,9 +622,27 @@ function WorkspaceRailContent({
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild type="button" className={styles.navItem} data-testid="rail-project-task" data-navigation-section="project-task">
-                    <Link href={projectHref} prefetch={mountedSurfacePrefetch} aria-label={t("firstSite.tasks")} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
-                    <ListTodo className={styles.icon} />
-                  </Link>
+                  {projectActive ? (
+                    <button
+                      type="button"
+                      aria-label={t("firstSite.tasks")}
+                      onPointerDown={markPointerFocus}
+                      onClick={() => { onNewChat(); closeNavigation() }}
+                    >
+                      <ListTodo className={styles.icon} />
+                    </button>
+                  ) : (
+                    <Link
+                      href={projectHref}
+                      prefetch={mountedSurfacePrefetch}
+                      aria-label={t("firstSite.tasks")}
+                      onPointerDown={markPointerFocus}
+                      onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}
+                      onClick={closeNavigation}
+                    >
+                      <ListTodo className={styles.icon} />
+                    </Link>
+                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

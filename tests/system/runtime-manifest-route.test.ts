@@ -66,6 +66,8 @@ describe("System Runtime Manifest BFF", () => {
     const [systemTarget, domain, upstreamInit] = getJsonWithDomain.mock.calls[0] as [URL, string, Record<string, string>]
 
     expect(String(systemTarget)).toContain("https://system.internal/system/runtime-manifest")
+    expect(systemTarget.searchParams.get("product_id")).toBe("kokoro")
+    expect(systemTarget.searchParams.get("surface_id")).toBe("user-web")
     expect(domain).toBe("dev.kokoro.localhost")
     expect(new Headers(upstreamInit).get("x-kokoro-request-id")).toBeTruthy()
     expect(new Headers(upstreamInit).get("authorization")).toBe("Bearer system-workload-token")
@@ -91,6 +93,40 @@ describe("System Runtime Manifest BFF", () => {
     const response = await GET(new Request("https://app.example/api/system/runtime-manifest?product_id=kokoro"))
 
     expect(response.status).toBe(200)
+  })
+
+  it("keeps the canonical Kokoro User Web target when query assertions are omitted", async () => {
+    process.env.KOKORO_SYSTEM_BASE_URL = "https://system.internal"
+    process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
+    getJsonWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+      tenantId: "any-backend-tenant",
+      productId: "kokoro",
+      locale: "en-US",
+      navigation: [], localeNamespaces: [], theme: {}, featureFlags: [], references: [],
+      configVersion: "1", releaseId: null, digest: "abc",
+    } }), { status: 200 }))
+
+    const response = await GET(new Request("https://app.example/api/system/runtime-manifest"))
+    const [systemTarget] = getJsonWithDomain.mock.calls[0] as [URL]
+
+    expect(response.status).toBe(200)
+    expect(systemTarget.searchParams.get("product_id")).toBe("kokoro")
+    expect(systemTarget.searchParams.get("surface_id")).toBe("user-web")
+  })
+
+  it.each([
+    "?product_id=other",
+    "?surface_id=admin",
+    "?product_id=kokoro&surface_id=admin",
+  ])("rejects a cross-product or cross-surface manifest assertion (%s)", async (query) => {
+    process.env.KOKORO_SYSTEM_BASE_URL = "https://system.internal"
+    process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
+
+    const response = await GET(new Request(`https://app.example/api/system/runtime-manifest${query}`))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: "invalid_runtime_manifest_request" })
+    expect(getJsonWithDomain).not.toHaveBeenCalled()
   })
 
   it("returns 503 in production when the web-bff internal secret is missing", async () => {

@@ -992,11 +992,80 @@
   min-height: 7.1rem;
 }
 
-/* Match the desktop Manus rhythm at every Web width: the welcome copy, editor,
- * prompt row and promotional slot share one centered document axis. This is
- * scoped to the desktop Web marker and leaves the phone surface on its
- * existing rules. */
-@media (min-width: 768px), (pointer: fine) {
+@media (min-width: 480px) and (max-width: 767px) {
+  /* Manus keeps the compact desktop/in-app-browser welcome rhythm below the
+   * full 768px rail breakpoint: 28px serif heading and a 120px Composer. */
+  .directSurface {
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .directPlan {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    display: inline-flex;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+    transform: translateX(-50%);
+    border-radius: 9999px;
+    background: rgb(55 53 47 / 4%);
+    padding: 0.25rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.3125rem;
+  }
+
+  .directPlanSeparator {
+    display: block;
+    width: 1px;
+    height: 1rem;
+    background: rgb(0 0 0 / 14%);
+  }
+
+  .directPlanAction {
+    width: 1.75rem;
+    min-width: 1.75rem;
+    height: 1.3125rem;
+    min-height: 1.3125rem;
+    padding: 0;
+    font-size: 0.875rem;
+    line-height: 1.3125rem;
+  }
+
+  .directIntro {
+    position: relative;
+    padding-top: 5.3625rem;
+  }
+
+  .directIntro h1 {
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto 1.75rem;
+    color: var(--foreground);
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .directComposer :global([data-slot="composer-wrap"] form) {
+    height: 7.5rem;
+    min-height: 7.5rem;
+  }
+
+  .directComposer {
+    margin-top: 1.75rem;
+  }
+}
+
+/* Match the desktop Manus rhythm at every desktop Web width: the welcome
+ * copy, editor, prompt row and promotional slot share one centered document
+ * axis. The reference switches to its compact welcome track below 768px even
+ * when a desktop pointer is present, so width—not pointer capability—owns this
+ * breakpoint. */
+@media (min-width: 768px) {
   .directSurface {
     /* The reference welcome page starts its document axis just below the
      * 56px header. Do not vertically center the empty state: that makes the
@@ -1049,13 +1118,13 @@
   }
 
   .directIntro h1 {
-    /* Manus uses a content-sized 28px headline, not a full-width 36px block.
-     * The fixed reading width is what keeps the title centered at 1x, 2K and
-     * compact desktop zoom without changing the Composer axis. */
+    /* Manus uses a content-sized 36px headline on the desktop welcome state.
+     * Keeping the heading on its own measured width centers it without
+     * stretching the reading axis or changing the Composer width. */
     width: max-content;
     max-width: 100%;
     margin: 0 auto 1.75rem;
-    font-size: 1.75rem;
+    font-size: 2.25rem;
     font-weight: 400;
     line-height: 1.5;
   }
@@ -1207,8 +1276,8 @@
 @media (pointer: fine) and (max-width: 960px) {
   .directSurface {
     padding-top: 3.0625rem;
-    padding-right: 0.875rem;
-    padding-left: 0.875rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
   }
 
   .desktopCarousel {

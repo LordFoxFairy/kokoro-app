@@ -19,15 +19,25 @@ function fail(message: string, status: 400 | 503): NextResponse {
 
 export async function GET(request: Request): Promise<NextResponse> {
   const requestUrl = new URL(request.url)
-  const productId = requestUrl.searchParams.get("product_id")?.trim()
+  const requestedProductId = requestUrl.searchParams.get("product_id")?.trim() || null
   const locale = requestUrl.searchParams.get("locale")?.trim() || "en-US"
-  const surfaceId = requestUrl.searchParams.get("surface_id")?.trim()
+  const requestedSurfaceId = requestUrl.searchParams.get("surface_id")?.trim() || null
+  // This is the Kokoro User Web BFF, not a generic manifest proxy. Optional
+  // query values are accepted only as an explicit canonical assertion; the
+  // upstream target is always fixed to this product/surface pair so a caller
+  // cannot project another product or surface through this site repository.
+  const productId = "kokoro"
+  const surfaceId = "user-web"
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const systemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL?.trim()
   const domain = configuredDomain()
   const internalSecret = process.env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
 
-  if (!productId || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$/u.test(locale)) {
+  if (
+    (requestedProductId !== null && requestedProductId !== productId)
+    || (requestedSurfaceId !== null && requestedSurfaceId !== surfaceId)
+    || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$/u.test(locale)
+  ) {
     return fail("invalid_runtime_manifest_request", 400)
   }
   if (!systemBaseUrl || domain === null) return fail("system_runtime_unavailable", 503)
@@ -40,7 +50,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const upstreamUrl = new URL("/system/runtime-manifest", systemBaseUrl)
   upstreamUrl.searchParams.set("product_id", productId)
   upstreamUrl.searchParams.set("locale", locale)
-  if (surfaceId) upstreamUrl.searchParams.set("surface_id", surfaceId)
+  upstreamUrl.searchParams.set("surface_id", surfaceId)
 
   const headers: Record<string, string> = {
     "x-kokoro-request-id": requestId,
@@ -59,7 +69,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const parsed = runtimeManifestSchema.safeParse(await upstream.json().catch(() => null))
   if (!parsed.success) return fail("invalid_runtime_manifest_response", 503)
   const manifest = parsed.data.data
-  // Product and locale are request-scoped values; tenant selection stays entirely
+  // Product/surface are fixed by this site BFF; tenant selection stays entirely
   // inside System from the server-only RFC 7239 `Forwarded` header.
   if (manifest.productId !== productId || manifest.locale !== locale) {
     return fail("invalid_runtime_manifest_response", 503)

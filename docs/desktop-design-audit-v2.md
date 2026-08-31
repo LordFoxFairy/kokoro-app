@@ -3814,7 +3814,7 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 - `src/ui/composer/use-voice-input.ts` 统一承接 `idle → listening → transcribing → idle/error`；preview 只使用确定性的合成转写文本，浏览器支持时使用 `SpeechRecognition`/`webkitSpeechRecognition`，原始音频不进入 Kokoro BFF。
 - 录音态使用同一 120px Composer 外壳，波形行固定 50px、计时器固定 40px、动作固定 32px；取消通过 `abort` 丢弃当前录音，完成后才把转写文本追加到草稿。状态切换不改变页面标题、网站胶囊、专案轨道或发送槽位。
 - 录音界面仍由 shadcn `Button` 与当前 CSS Module 组合，不增加第二套 Dialog/Popover/focus 实现；未修改手机端布局规则。
-- 共享 package 继续采用“一仓库多包”而不是“一个 package 一个子仓库”：当前 `packages/` 是首站的私有 bootstrap；第二个 Site 消费时整体迁移为兄弟仓库 `kokoro-web-shared`，再用 registry + semver + lockfile。Site 名称和部署边界保持 `kokoro` / `@kokoro/kokoro`，不把通用包反向塞回 Site 页面。
+- 共享 package 继续采用“一仓库多包”而不是“一个 package 一个子仓库”：当前 `packages/` 是首站的私有 bootstrap；第二个 Site 消费时整体迁移为兄弟仓库 `kokoro-web-shared`，再用 registry + semver + lockfile。Site 名称和部署边界保持 `kokoro` / `@kokoro/app`，不把通用包反向塞回 Site 页面。
 
 本轮真实截图证据：
 

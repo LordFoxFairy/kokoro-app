@@ -1,6 +1,7 @@
 // 侧栏会话重命名内联编辑（CONV-UX）：双击/✎ 进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
@@ -9,6 +10,11 @@ import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { act, useState } from "react"
+
+const workspaceRailCss = readFileSync(
+  "src/components/blocks/workspace-rail/workspace-rail.module.css",
+  "utf8",
+)
 
 function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   const onRenameConversation = vi.fn()
@@ -78,6 +84,32 @@ it("默认桌面导航不展示未接入能力的占位入口", () => {
   expect(screen.queryByRole("button", { name: "已排程" })).toBeNull()
   expect(screen.queryByRole("button", { name: "资料库" })).toBeNull()
   expect(screen.queryByRole("button", { name: /创建专案/ })).toBeNull()
+})
+
+it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊天或收起侧栏", async () => {
+  const onNewChat = vi.fn()
+  const onToggleCollapse = vi.fn()
+  const onCreateProject = vi.fn()
+  renderRail({
+    projectHref: "/app/project/kokoro",
+    onNewChat,
+    onToggleCollapse,
+    onCreateProject,
+  })
+
+  const before = window.location.href
+  const createProject = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(createProject, { button: 0 })
+  fireEvent.click(createProject)
+
+  await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument())
+  const createProjectEntry = screen.getByRole("menuitem", { name: "新建专案" })
+  expect(createProjectEntry).toBeInTheDocument()
+  fireEvent.click(createProjectEntry)
+  expect(onCreateProject).toHaveBeenCalledTimes(1)
+  expect(window.location.href).toBe(before)
+  expect(onNewChat).not.toHaveBeenCalled()
+  expect(onToggleCollapse).not.toHaveBeenCalled()
 })
 
 it("桌面 Rail 显示邀请入口并进入团队设置", () => {
@@ -153,6 +185,41 @@ it("收起态不复制直接会话 stop，并保留专案任务和底部账户�
   expect(screen.getByTestId("rail-utility-device")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-notifications")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-account")).toHaveAttribute("data-rail-anchor", "account")
+})
+
+it("当前专案的任务图标创建新任务，不重复导航到当前专案", () => {
+  const onNewChat = vi.fn()
+  renderRail({
+    projectHref: "/app/project/kokoro",
+    projectActive: true,
+    onNewChat,
+  })
+
+  const task = screen.getByTestId("rail-project-task")
+  expect(task.querySelector("a")).toBeNull()
+  fireEvent.click(task)
+  expect(onNewChat).toHaveBeenCalledTimes(1)
+})
+
+it("展开态账户卡左对齐，设备与通知动作保留在同一行", () => {
+  renderRail({ brandName: "Kokoro" })
+
+  const rail = document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')
+  const account = screen.getByTestId("rail-utility-account")
+  const accountStatus = rail?.querySelector(`.${railStyles.accountStatus}`)
+
+  expect(account).toHaveTextContent("Kokoro")
+  expect(account).toHaveTextContent("个人工作区")
+  expect(account).toHaveClass(railStyles.userTrigger)
+  expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeInTheDocument()
+  expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
+  // jsdom does not calculate flex layout; lock the desktop CSS contract here
+  // and verify the resulting geometry with the browser viewport check.
+  expect(workspaceRailCss).toMatch(
+    /\.rail\[data-desktop-rail="true"\] \.userTrigger \{\s*justify-content: flex-start;/,
+  )
+  expect(workspaceRailCss).toMatch(/container: workspace-rail \/ inline-size;/)
+  expect(workspaceRailCss).toMatch(/@container workspace-rail \(max-width: 12\.5rem\)/)
 })
 
 it("Manus 紧凑 stop 清单只保留一个工作区气泡入口", () => {

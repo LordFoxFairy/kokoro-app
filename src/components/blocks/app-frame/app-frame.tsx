@@ -68,6 +68,7 @@ import { useConversationList } from "@/ui/shell/use-conversation-list"
 import { stashConversationDraft, useDraft } from "@/ui/shell/use-draft"
 import { removePinned, togglePinned, usePinnedSkills } from "@/ui/shell/use-pinned-skills"
 import { WorkspaceHeader, WorkspaceNavigationTrigger } from "@/components/blocks/workspace-header/workspace-header"
+import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { AppCommandMenu, type AppCommandMenuProps } from "./app-command-menu"
 
 export type { AppCommandMenuProps }
@@ -1164,6 +1165,13 @@ export function AppFrame({
   const startNewChat = conversationsCtl.startNewChat
   const startNewChatWithUrl = useCallback(() => {
     setDeploymentIntent(null)
+    // Catalog pages share this mounted shell with the direct inbox. Starting
+    // a task from Agent/Skills/etc. must leave the catalog surface; merely
+    // clearing `conversation` keeps the catalog mounted and looks like a
+    // dead button because its landing content has no Composer.
+    if (standaloneSurface) {
+      navigateMountedSurface(chatHref)
+    }
     startNewChat()
     if (projectWorkspace) {
       // The project overview stays at `/app/project/{ref}`. A fresh task gets
@@ -1176,7 +1184,7 @@ export function AppFrame({
     }
     syncConversationUrl(null, "push")
     setConversationRouteId(null)
-  }, [engine, projectWorkspace, setDeploymentIntent, startNewChat, syncConversationUrl])
+  }, [chatHref, engine, projectWorkspace, setDeploymentIntent, standaloneSurface, startNewChat, syncConversationUrl])
   const selectConversationWithUrl = useCallback((id: string) => {
     // A creation mode is a pending action for the current direct-chat draft,
     // not a property of the conversation being opened. Clear both the shell
@@ -1206,8 +1214,18 @@ export function AppFrame({
     // hand off from; focus the fresh Composer in the same interaction instead
     // of leaving it on the document body or on a stale navigation action.
     startNewChatWithUrl()
-    focusComposer()
-  }, [focusComposer, startNewChatWithUrl])
+    if (standaloneSurface || projectWorkspace) {
+      // Catalog navigation and project-task creation both replace the empty
+      // surface in the next React commit. Let the fresh Composer mount before
+      // handing it focus; otherwise the click succeeds but focus stays on the
+      // rail (or falls back to document.body).
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => focusComposer())
+      })
+    } else {
+      focusComposer()
+    }
+  }, [focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
   const startDeploymentFromSettings = useCallback((kind: "website" | "app") => {
     // Deployment shortcuts mirror the matching welcome actions: preserve the
     // current empty workspace and hand the prompt directly to its Composer.

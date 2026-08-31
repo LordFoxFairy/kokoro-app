@@ -107,7 +107,7 @@ queued -> running -> waiting -> running -> completed
 
 | Method | Path | 用途 |
 | --- | --- | --- |
-| GET | `/api/system/runtime-manifest?surface_id=user-web&locale=...` | 站点皮肤、导航、i18n、能力投影 |
+| GET | `/api/system/runtime-manifest?locale=...` | Kokoro User Web 的站点皮肤、导航、i18n、能力投影；BFF 固定 `product_id=kokoro`、`surface_id=user-web` |
 | GET | `/api/auth/session` | 当前登录态与最小 actor projection |
 | POST | `/api/auth/logout` | 注销当前站点 session |
 | GET | `/api/settings/account` | 当前 actor 的账户、套餐摘要和登录方式 projection |

@@ -365,7 +365,11 @@
 
 /* Expanded desktop geometry. This block is deliberately separate from the
  * collapsed block so no width/height declaration is silently overridden. */
-.rail[data-desktop-rail="true"] { padding: 1rem 0.75rem 0.5rem; }
+.rail[data-desktop-rail="true"] {
+  --collapsed-track: var(--sidebar-width-icon, 52px);
+  container: workspace-rail / inline-size;
+  padding: 1rem 0.75rem 0.5rem;
+}
 .rail[data-desktop-rail="true"] .head {
     height: 2.75rem;
     min-height: 2.75rem;
@@ -400,14 +404,13 @@
   }
 .rail[data-desktop-rail="true"] .footer { gap: 0; }
 .rail[data-desktop-rail="true"] .userCard { margin: 0; height: 2rem; min-height: 2rem; padding: 0 0.125rem; }
-.rail[data-desktop-rail="true"] .userTrigger { justify-content: center; padding-left: 0.125rem; }
+.rail[data-desktop-rail="true"] .userTrigger { justify-content: flex-start; padding-left: 0.125rem; }
 
 /* One compact desktop contract. 52px is the CSS track; 36px targets are
  * centered on x=26, and the header reserves 64px so the first icon starts at
  * the same y rhythm as the reference. The footer is a 120px bottom anchor:
  * device, notifications, account at 32px/4px/32px/4px/32px. */
 .rail[data-desktop-rail="true"][data-collapsed="true"] {
-    --collapsed-track: var(--sidebar-width-icon, 52px);
     position: relative;
     align-items: stretch;
     gap: 0;
@@ -594,6 +597,90 @@
     height: 1.75rem;
     border-radius: 999px;
   }
+
+/* During expansion the outer Sidebar grows from 52px to the user's full
+ * width over 200ms. Keep the footer in its compact column until the rail has
+ * enough inline space for the account copy plus both utility actions; this
+ * prevents the row layout from shrinking the account trigger to a sliver and
+ * pushing the device/notification buttons outside the painted rail. */
+@container workspace-rail (max-width: 12.5rem) {
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .footerInvite {
+    display: none;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .footer {
+    display: flex;
+    width: var(--collapsed-track);
+    height: 7.5rem;
+    min-height: 7.5rem;
+    flex: 0 0 7.5rem;
+    align-self: flex-start;
+    align-items: stretch;
+    justify-content: center;
+    margin-top: auto;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .userCard {
+    display: flex;
+    width: 100%;
+    height: 7.5rem;
+    min-height: 7.5rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .userTrigger {
+    display: flex;
+    width: 2rem;
+    height: 2rem;
+    min-height: 2rem;
+    flex: 0 0 2rem;
+    order: 2;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .accountStatus {
+    display: flex;
+    width: 2rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.25rem;
+    order: 1;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .utilityAction {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    min-height: 2rem;
+    flex: 0 0 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    padding: 0;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .utilityAction .icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="false"] .userAvatar {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 999px;
+  }
+}
 
 /* The Sheet is the touch version of the rail. These selectors are kept
  * outside the desktop contract so mobile hit areas and layout stay unchanged. */

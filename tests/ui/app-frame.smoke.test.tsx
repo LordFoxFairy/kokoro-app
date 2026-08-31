@@ -426,7 +426,7 @@ it("切换会话使用无刷新 URL 状态，并支持新建会话清理地址",
     expect(engine.getSnapshot().store?.activeId).toBe("conv_b")
   })
 
-  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  fireEvent.click(screen.getByTestId("rail-new-task"))
   await waitFor(() => {
     expect(window.location.search).toBe("")
     expect(engine.getSnapshot().store?.activeId).not.toBe("conv_b")
@@ -1075,6 +1075,64 @@ it("侧栏新对话按钮直接把焦点交给 Composer", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
   expect(screen.getByLabelText("对话输入")).toHaveFocus()
+})
+
+it("独立目录页点击新建任务返回直接会话并挂载 Composer", async () => {
+  buildEngine()
+  mockedPathname.value = "/app/agents"
+  window.history.replaceState(window.history.state, "", "/app/agents")
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  expect(screen.getByTestId("agents-surface")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+
+  await waitFor(() => {
+    expect(window.location.pathname).toBe("/app")
+    expect(screen.queryByTestId("agents-surface")).toBeNull()
+    expect(screen.getByRole("form", { name: "消息编辑区" })).toBeInTheDocument()
+  })
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
+})
+
+it("专案页点击新建任务切换到任务视图并聚焦 Composer", async () => {
+  buildEngine()
+  function ProjectTaskProbe({ projectTask, composer }: EmptyStateProps) {
+    return (
+      <div>
+        <output data-testid="project-task-state">{projectTask ? "task" : "overview"}</output>
+        {composer}
+      </div>
+    )
+  }
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame
+          engine={engine}
+          chatHref="/app"
+          emptyState={ProjectTaskProbe}
+          emptyStateOwnsComposer
+          projectWorkspace
+          projectRef="kokoro"
+        />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.click(screen.getByTestId("rail-new-task"))
+  await waitFor(() => {
+    expect(screen.getByTestId("project-task-state")).toHaveTextContent("task")
+    expect(window.location.search).toMatch(/^\?conversation=conv_/)
+  })
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
 })
 
 it("命令菜单新建对话后立即打开设置不会被延迟焦点回收打断", async () => {
