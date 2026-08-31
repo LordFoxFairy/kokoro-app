@@ -1,0 +1,18 @@
+# User Web 文档
+
+- [User Web 技术方案 v2](./user-web-architecture-v2.md)
+- [User Web 重写执行方案 v2](./user-web-rewrite-plan-v2.md)
+- [Site 独立仓库与共享 package 方案 v2](./site-repository-architecture-v2.md)
+- [共享 package 边界与提取规则](../packages/README.md)
+- [当前源码到 package 的提取映射](./package-extraction-map.md)
+- [UI 基座规范](./ui-foundation.md)
+- [User Web API Contract v4（后端 Web Agent 当前权威契约）](./integration/user-web-api-contract-v4.md)
+- [User Web BFF Contract v3（历史版本，不作为当前实施依据）](./user-web-bff-contract-v3.md)
+- [Manus 参考审计 v2（已登录项目工作区）](./manus-reference-audit-v2.md)
+- [Manus-inspired 工作台与 API 契约 v2（历史设计依据）](./manus-inspired-workbench-contract-v2.md)
+- [桌面交互审计 v1](./desktop-interaction-audit-v1.md)
+- [CSS Modules 规范](./ui-css-modules.md)
+- [首个站点联调手册](./first-site-live-runbook.md)
+- [GitHub / Docker / Cloudflare 部署标准](./deployment.md)
+- [历史 package 方案（不可作为当前实施依据）](./site-package-architecture-v1.md)
+- [UI 验收清单](./ui-acceptance-checklist.md)

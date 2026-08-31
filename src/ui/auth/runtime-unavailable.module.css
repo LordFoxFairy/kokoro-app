@@ -1,0 +1,59 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--background);
+}
+
+.stage {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  padding: 1.25rem;
+}
+
+.card {
+  width: min(30rem, 100%);
+  border-color: var(--border);
+  background: var(--card);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.intro {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.eyebrow,
+.title {
+  margin: 0;
+}
+
+.eyebrow {
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.title {
+  color: var(--foreground);
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.content > button {
+  align-self: flex-start;
+}
+
+@media (max-width: 640px) {
+  .content > button { min-height: 2.75rem; }
+}

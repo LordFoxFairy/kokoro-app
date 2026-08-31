@@ -1,0 +1,1522 @@
+/* 设置分区内容皮肤。模态外壳由 settings-modal.module.css 负责；这里
+   只保留 Account / Appearance / Chat 三个分区实际使用的 class。 */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  padding: 1.6rem 1.75rem;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.cardContent {
+  padding: 0;
+}
+
+.generalSettings {
+  width: 100%;
+  padding-top: 1.5rem;
+}
+
+.personalization { width: 100%; padding-top: 1.5rem; }
+.personalizationTabs {
+  display: flex;
+  height: 2.5625rem;
+  align-items: flex-start;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.personalizationTabs > button {
+  position: relative;
+  width: auto;
+  height: 2.5rem;
+  min-height: 0;
+  border-radius: 0;
+  padding: 0 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3125rem;
+}
+.personalizationTabs > button:hover { background: transparent; }
+.personalizationTabs > button:focus-visible {
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
+}
+.personalizationTabs > button svg { width: 0.875rem; height: 0.875rem; color: var(--muted-foreground); }
+.personalizationTabs > button[data-active="true"] { color: var(--foreground); }
+.personalizationTabs > button:focus-visible::after,
+.personalizationTabs > button[data-active="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--foreground);
+  content: "";
+}
+.personalizationProfile { padding-top: 1.5rem; padding-bottom: 6.75rem; }
+.memoryImportCard {
+  display: flex;
+  width: 100%;
+  height: 4.6875rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+  padding: 1rem;
+  color: var(--foreground);
+  text-align: left;
+}
+.memoryImportCard > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.memoryImportCard strong { font-size: 14px; font-weight: 600; line-height: 20px; }
+.memoryImportCard small { overflow: hidden; color: var(--muted-foreground); font-size: 13px; font-weight: 400; line-height: 18px; }
+.memoryImportCard > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.memoryImportIcon { display: inline-flex; width: 2.5rem; height: 2.5rem; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 10px; }
+.memoryImportIcon svg { width: 1.125rem; height: 1.125rem; }
+.profileColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.profileColumns label,
+.profileTextarea { display: grid; gap: 0.5rem; }
+.profileColumns label > span,
+.profileTextarea > span { font-size: 14px; font-weight: 500; line-height: 20px; }
+.profileColumns input { width: 100%; height: 2.25rem; border: 0; border-radius: 8px; background: var(--muted); padding: 0.5rem 0.75rem; font-size: 0.875rem; line-height: 1.25rem; box-shadow: none; }
+.profileTextarea { margin-top: 1rem; }
+.profileTextarea textarea { width: 100%; height: 8.1875rem; min-height: 8.1875rem; resize: none; border: 0; border-radius: 0; background: var(--muted); padding: 0.75rem 1rem 1.25rem; font-size: 14px; line-height: 22px; box-shadow: none; }
+.profileHint {
+  display: block;
+  margin: 1rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.profileHint + .profileTextarea { margin-top: 2.5625rem; }
+.importMemoryButton {
+  position: fixed;
+  left: calc(13.8125rem + 1.5rem);
+  bottom: 1.5rem;
+  z-index: 1;
+  width: 5rem;
+  min-height: 0 !important;
+  height: 2.25rem;
+  margin-top: 1.5rem;
+  border-radius: 8px;
+  background: var(--background);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+  line-height: 1.25rem;
+}
+
+@media (max-width: 47.99rem) {
+  .importMemoryButton { left: 4.25rem; }
+}
+.personalizationKnowledge {
+  min-height: 25.40625rem;
+  color: var(--foreground);
+}
+.knowledgeToolbar {
+  display: flex;
+  height: 4rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+.knowledgeToolbar > button {
+  width: 4rem;
+  min-height: 0 !important;
+  height: 2rem;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.knowledgeSearch {
+  position: relative;
+  display: flex;
+  width: 12.5rem;
+  height: 2rem;
+  align-items: center;
+}
+.knowledgeSearch > svg {
+  position: absolute;
+  left: 0.75rem;
+  z-index: 1;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+.knowledgeSearch input {
+  min-height: 0 !important;
+  height: 2rem;
+  padding: 0.25rem 0.75rem 0.25rem 2.1875rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.knowledgeEmpty {
+  min-height: 24rem;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+.knowledgeEmpty :global([data-slot="empty-icon"]) {
+  margin: 0;
+}
+.knowledgeEmpty :global([data-slot="empty-icon"]) svg {
+  width: 2rem;
+  height: 2rem;
+  color: var(--muted-foreground);
+  stroke-width: 1.75;
+}
+.knowledgeEmpty :global([data-slot="empty-description"]) {
+  transform: translateY(0.125rem);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.knowledgeList {
+  display: grid;
+  gap: 0;
+}
+.knowledgeList article {
+  display: flex;
+  min-height: 3.5rem;
+  flex-direction: column;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+}
+.knowledgeList strong { font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; }
+.knowledgeList span { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.125rem; }
+
+.knowledgeDialog {
+  display: block;
+  width: min(42.5rem, calc(100vw - 2rem));
+  max-width: min(42.5rem, calc(100vw - 2rem)) !important;
+  height: 35.625rem;
+  max-height: calc(100vh - 2rem);
+  padding: 1.25rem 1.25rem 1.5rem !important;
+  border: 0;
+  border-radius: 1rem;
+}
+.knowledgeDialog > :global([data-slot="dialog-title"]) {
+  width: 37.75rem;
+  height: 1.5rem;
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.knowledgeDialog > :global([data-slot="dialog-close"]) {
+  top: 1.125rem;
+  right: 1rem;
+}
+.knowledgeForm {
+  display: flex;
+  width: calc(100% + 2.5rem);
+  margin: 1.25rem -1.25rem 0;
+  gap: 1rem;
+}
+.knowledgeForm :global([data-slot="field"]) {
+  gap: 0.5rem;
+  padding-inline: 1.5rem;
+}
+.knowledgeForm :global([data-slot="field-label"]) {
+  height: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.knowledgeForm input {
+  min-height: 0 !important;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  box-shadow: none;
+}
+.knowledgeForm input:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.knowledgeForm textarea {
+  min-height: 0 !important;
+  height: 11.25rem;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--muted);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  box-shadow: none;
+}
+.knowledgeCount {
+  display: block;
+  width: 100%;
+  height: 1.125rem;
+  margin-top: 0;
+  padding-inline: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  text-align: right;
+}
+.knowledgeFooter {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  gap: 0.5rem;
+}
+.knowledgeFooter button {
+  width: 4.5rem;
+  min-height: 0 !important;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.importMemoryDialog {
+  display: block;
+  width: min(35rem, calc(100vw - 2rem));
+  max-width: min(35rem, calc(100vw - 2rem)) !important;
+  height: 32.4375rem;
+  max-height: calc(100vh - 2rem);
+  padding: 1.25rem !important;
+  border: 0;
+  border-radius: 1rem;
+}
+.importMemoryDialog > :global([data-slot="dialog-title"]) {
+  width: 30.25rem;
+  height: 1.5rem;
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.importMemoryDialog > :global([data-slot="dialog-close"]) {
+  top: 1.125rem;
+  right: 1rem;
+}
+.importMemoryDescription {
+  width: 30.25rem;
+  height: 1.125rem;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.importMemorySteps {
+  display: flex;
+  flex-direction: column;
+  margin: 1.25rem 0.25rem 0;
+  gap: 1rem;
+}
+.importMemoryStep {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+}
+.importMemoryStep:first-child::after {
+  position: absolute;
+  top: 2rem;
+  bottom: -1rem;
+  left: 0.5625rem;
+  border-left: 1px dashed var(--border);
+  content: "";
+}
+.importStepNumber {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  margin-top: 0.125rem;
+}
+.importStepContent {
+  min-width: 0;
+  flex: 1;
+}
+.importStepHead {
+  display: flex;
+  min-height: 2.5rem;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.importStepHead strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+.importStepHead p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.importStepHead button {
+  width: 3.875rem;
+  min-height: 0 !important;
+  height: 1.75rem;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.importPrompt {
+  position: relative;
+  height: 7.5rem;
+  margin-top: 0.5rem;
+  border-radius: 0.5rem;
+  background: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.importPromptScroller {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 0.5rem;
+  outline: none;
+  scrollbar-width: thin;
+}
+.importPromptScroller:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent);
+}
+.importPrompt p {
+  margin: 0;
+  padding-inline: 0.25rem;
+  white-space: pre-wrap;
+}
+.importPromptFade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3.75rem;
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: linear-gradient(transparent, rgb(236 236 235));
+  pointer-events: none;
+}
+.importPromptScroller::-webkit-scrollbar {
+  width: 0.375rem;
+}
+.importPromptScroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border);
+}
+.importStepContent textarea {
+  width: 100%;
+  min-height: 0 !important;
+  height: 7.5rem;
+  margin-top: 0.5rem;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--muted);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  box-shadow: none;
+}
+.importMemoryFooter {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  gap: 0.5rem;
+}
+.importMemoryFooter button {
+  width: 4.5rem;
+  min-height: 0 !important;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.computerSettings { width: 100%; padding-top: 1.625rem; }
+.computerTabs {
+  display: flex;
+  height: 2.625rem;
+  align-items: flex-start;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.computerTabs > button {
+  position: relative;
+  width: auto;
+  height: 2.625rem;
+  min-height: 0;
+  border-radius: 0;
+  padding: 0 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+.computerTabs > button[data-active="true"] { color: var(--foreground); }
+.computerTabs > button[data-active="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--foreground); content: ""; }
+.computerTabs > button:focus-visible { outline: none; background: transparent; box-shadow: none; }
+.computerEmptyCard {
+  display: flex;
+  height: 5.4375rem;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.9375rem;
+  border-radius: 12px;
+  background: var(--muted);
+  padding: 1rem;
+}
+.computerVisual { display: inline-flex; width: 3.375rem; height: 3.375rem; flex: none; align-items: center; justify-content: center; border-radius: 10px; background: var(--background); }
+.computerVisual svg { width: 2rem; height: 2rem; }
+.computerEmptyCard > div { min-width: 0; flex: 1; }
+.computerEmptyCard strong { display: block; font-size: 14px; font-weight: 600; line-height: 20px; }
+.computerEmptyCard p { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 20px; }
+.computerEmptyCard > button { width: 5.75rem; height: 2rem; min-height: 2rem; border-radius: 8px; padding-inline: 0.5rem; }
+.localComputerEmpty { display: flex; min-height: 29.4375rem; flex-direction: column; align-items: center; justify-content: center; margin-top: 0.9375rem; border: 1px solid var(--border); border-radius: 12px; padding: 2rem; text-align: center; }
+.localComputerEmpty > svg { width: 2rem; height: 2rem; color: var(--muted-foreground); stroke-width: 1.8; }
+.localComputerEmpty > strong { margin-top: 0.75rem; font-size: 14px; font-weight: 600; line-height: 20px; }
+.localComputerEmpty > p { max-width: 28rem; margin: 0.25rem 0 0; color: var(--muted-foreground); font-size: 13px; line-height: 20px; }
+.localComputerEmpty a { color: var(--foreground); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+.computerCreateDialog {
+  width: 50rem;
+  height: min(42.75rem, calc(100vh - 2rem));
+  max-height: calc(100vh - 2rem);
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
+  gap: 0;
+}
+.computerCreateTitle { height: 3.75rem; flex: none; padding: 1.25rem 1.5rem 1rem; font-size: 18px; line-height: 24px; }
+.computerCreateBody { min-height: 0; flex: 1; overflow-y: auto; padding: 0 1.5rem 1rem; }
+.computerUpgradeBanner { display: flex; height: 3rem; align-items: center; gap: 0.625rem; border-radius: 10px; background: #edf6ff; padding: 0.5rem 0.75rem; }
+.computerUpgradeBanner > svg { width: 1.125rem; height: 1.125rem; color: #2f80ed; }
+.computerUpgradeBanner > span { min-width: 0; flex: 1; font-size: 13px; }
+.computerUpgradeBanner > button { height: 2rem; min-height: 2rem; min-width: 4rem; }
+.computerPlans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 1rem; }
+.computerPlan { min-width: 0; height: 23rem; overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: var(--background); padding: 1rem; color: var(--foreground); text-align: left; }
+.computerPlan[data-selected="true"] { border-color: #2f80ed; box-shadow: inset 0 0 0 1px #2f80ed; }
+.computerPlan header { display: flex; height: 1.5rem; align-items: center; justify-content: space-between; }
+.computerPlan header > strong { font-family: ui-serif, Georgia, serif; font-size: 18px; }
+.computerPlan header > span { border-radius: 999px; background: #edf6ff; padding: 0.125rem 0.375rem; color: #2f80ed; font-size: 12px; }
+.computerPrice { display: flex; height: 4.75rem; align-items: center; gap: 0.25rem; border-bottom: 1px solid var(--border); }
+.computerPrice strong { font-size: 28px; line-height: 34px; }
+.computerPrice span { color: var(--muted-foreground); font-size: 13px; }
+.computerPlan h4 { margin: 1rem 0 0; font-size: 14px; line-height: 20px; }
+.computerPlan > p { height: 2.75rem; margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.computerPlan dl { display: grid; gap: 0.5rem; margin: 1rem 0 0; padding-top: 1rem; border-top: 1px solid var(--border); }
+.computerPlan dl > div { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 12px; line-height: 18px; }
+.computerPlan dt { color: var(--muted-foreground); }
+.computerPlan dd { margin: 0; }
+.computerIncluded { margin-top: 1rem; border-radius: 12px; background: color-mix(in srgb, var(--accent) 55%, var(--background)); padding: 0.75rem; }
+.computerIncluded > span { color: var(--muted-foreground); font-size: 12px; }
+.computerIncluded > div { display: flex; gap: 2rem; margin-top: 0.5rem; }
+.computerIncluded > div span { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 12px; }
+.computerIncluded svg { width: 0.875rem; height: 0.875rem; }
+.computerConfiguration { margin-top: 1rem; padding: 0 0.75rem 1.5rem; }
+.computerLocation,
+.computerStorageHead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.computerLocation { height: 2.5rem; }
+.computerLocation > span,
+.computerStorageHead > span { color: var(--foreground); font-size: 14px; font-weight: 500; line-height: 20px; }
+.computerLocation > strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.computerStorageHead { min-height: 2.75rem; margin-top: 0.5rem; }
+.computerStorageValue { display: flex; height: 2.25rem; align-items: center; gap: 0.5rem; color: var(--muted-foreground); font-size: 13px; }
+.computerStorageValue [data-slot="input"] { width: 4.5rem; height: 2.25rem; text-align: right; }
+.computerStorageValue strong { color: var(--foreground); font-size: 14px; font-weight: 500; }
+.computerStorageSlider { margin-top: 1rem; }
+.computerStorageSlider [data-slot="slider-track"] { height: 0.25rem; }
+.computerStorageSlider [data-slot="slider-thumb"] { width: 1rem; height: 1rem; }
+.computerStoragePresets { display: grid; grid-template-columns: repeat(7, 1fr); margin-top: 0.5rem; }
+.computerStoragePresets > button { width: auto; min-width: 0; height: 2rem; min-height: 2rem; border-radius: 0; padding: 0; color: var(--muted-foreground); font-size: 12px; font-weight: 400; }
+.computerStoragePresets > button[data-active="true"] { color: var(--foreground); font-weight: 500; }
+.computerCreateFooter { height: 7.375rem; flex: none; align-items: flex-end; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border); padding: 1rem 1.5rem 1.5rem; }
+.computerCreateFooter > div { display: grid; grid-template-columns: 1fr auto; align-self: stretch; flex: 1; }
+.computerCreateFooter > div strong { font-size: 16px; }
+.computerCreateFooter > div span { font-size: 18px; font-weight: 600; }
+.computerCreateFooter > div small { grid-column: 1 / -1; align-self: end; color: var(--muted-foreground); font-size: 12px; }
+.computerCreateFooter > button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; border-radius: 8px; }
+.computerOrderDialog { width: 30rem; height: 21.25rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; border: 0; border-radius: 16px; padding: 0; }
+.computerOrderDialog [data-slot="dialog-title"] { height: 3.75rem; flex: none; padding: 1.25rem 3.5rem 1rem 1.25rem; font-size: 18px; line-height: 24px; }
+.computerOrderDescription { height: 2.25rem; margin: 0; padding: 0 1.25rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.computerOrderLines { display: flex; height: 6.75rem; flex-direction: column; gap: 0.5rem; padding: 0 1.25rem; }
+.computerOrderLines > div { display: flex; min-height: 1.5rem; align-items: center; justify-content: space-between; gap: 1rem; font-size: 13px; line-height: 20px; }
+.computerOrderLines > div:first-child { font-size: 14px; }
+.computerOrderLines > div:first-child strong { font-size: 18px; line-height: 24px; }
+.computerOrderLines em { border-radius: 6px; background: #edf6ff; padding: 0.125rem 0.375rem; color: #2f80ed; font-size: 12px; font-style: normal; }
+.computerOrderTotal { display: flex; height: 4.25rem; justify-content: space-between; gap: 1rem; margin: 0 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.computerOrderTotal > strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.computerOrderTotal > div { display: flex; flex-direction: column; align-items: flex-end; }
+.computerOrderTotal span { font-size: 14px; line-height: 20px; }
+.computerOrderTotal span::first-letter { font-size: 20px; font-weight: 600; }
+.computerOrderTotal small { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.computerOrderDialog [data-slot="dialog-footer"] { height: 4.75rem; flex: none; gap: 0.5rem; padding: 1.25rem; }
+.computerOrderDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; }
+
+.mailSettings { width: 100%; padding-top: 1.4375rem; }
+.mailTabs { display: flex; height: 2.625rem; align-items: flex-start; gap: 1.5rem; border-bottom: 1px solid var(--border); }
+.mailTabs > button { position: relative; width: auto; height: 2.625rem; min-height: 0; border-radius: 0; padding: 0 0 0.75rem; color: var(--muted-foreground); font-size: 14px; font-weight: 500; }
+.mailTabs > button:focus-visible { outline: 0; box-shadow: none; }
+.mailTabs > button[data-active="true"] { color: var(--foreground); }
+.mailTabs > button[data-active="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--foreground); content: ""; }
+.mailMailboxRow,
+.mailActionRow { display: flex; min-height: 3.75rem; align-items: center; justify-content: space-between; gap: 1rem; }
+.mailMailboxRow { margin-top: 0.875rem; }
+.mailMailboxRow > div,
+.mailActionRow > div { display: flex; min-width: 0; flex-direction: column; }
+.mailMailboxRow strong,
+.mailActionRow strong { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 14px; font-weight: 600; line-height: 20px; }
+.mailActionRow strong svg { width: 0.75rem; height: 0.75rem; color: var(--muted-foreground); }
+.mailMailboxRow small,
+.mailActionRow small { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.mailMailboxRow > button { display: inline-flex; align-items: center; gap: 0.5rem; border: 0; background: transparent; font-size: 13px; font-weight: 600; }
+.mailMailboxRow > button svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.mailActionRow > button { height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; padding: 0 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; letter-spacing: -0.015625rem; }
+.mailListRow { display: flex; height: 3rem; align-items: center; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.75rem; font-size: 13px; }
+.mailListRow > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.mailListRow > span { min-width: 0; flex: 1; }
+.mailInbox { min-height: 25rem; }
+.mailInboxHeader,
+.mailInboxRows > div { display: grid; grid-template-columns: minmax(0, 8.75rem) minmax(0, 1fr) 4.5rem 2rem; align-items: center; column-gap: 0.75rem; }
+.mailInboxHeader { height: 3.625rem; border-bottom: 1px solid var(--border); padding-inline: 0.25rem 0; color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.mailInboxHeader > button { width: 2rem; height: 2rem; min-height: 2rem; border-radius: 0.5rem; color: var(--muted-foreground); }
+.mailInboxHeader > button svg { width: 0.875rem; height: 0.875rem; }
+.mailInboxState { display: flex; height: 22.625rem; align-items: center; justify-content: center; color: var(--muted-foreground); }
+.mailInboxState p { margin: 0; font-size: 14px; line-height: 20px; }
+.mailInboxRows > div { min-height: 3.5rem; border-bottom: 1px solid var(--border); padding-inline: 0.25rem 2.75rem; font-size: 13px; }
+.mailInboxRows span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mailInboxRows time { color: var(--muted-foreground); }
+.mailIntroDialog { width: 30rem; height: 18.25rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; border: 0; border-radius: 16px; padding: 1.25rem; gap: 0; }
+.mailIntroDialog [data-slot="dialog-title"] { font-size: 18px; line-height: 24px; }
+.mailIntroDialog ol { display: grid; gap: 0.75rem; margin: 0.75rem 0 0; padding-left: 1.25rem; }
+.mailIntroDialog li { padding-left: 0.125rem; font-size: 13px; line-height: 18px; }
+.mailIntroDialog li strong { font-weight: 500; }
+.mailIntroDialog li p { margin: 0.125rem 0 0; color: var(--muted-foreground); }
+.mailIntroDialog [data-slot="dialog-footer"] { margin-top: auto; }
+.mailIntroDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2rem; min-height: 2rem; }
+.mailFormDialog { width: 30rem; height: 25.5rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; overflow: hidden; border: 0; border-radius: 16px; padding: 0; }
+.mailFormHeader { height: 3.5rem; flex: none; padding: 1.25rem 3.5rem 0.75rem 1.25rem; }
+.mailFormHeader [data-slot="dialog-title"] { font-size: 18px; line-height: 24px; }
+.mailFormBody { height: 17.5rem; flex: none; padding-inline: 1.25rem; }
+.mailFormLead { height: 1.25rem; margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 20px; }
+.mailFormFields { display: block; }
+.mailEmailField,
+.mailInstructionField { display: block; }
+.mailEmailField [data-slot="field-label"] { height: 1.25rem; margin-top: 1rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.mailFieldError { display: block; min-height: 1.125rem; color: var(--destructive); font-size: 13px; line-height: 18px; }
+.mailInstructionField [data-slot="field-label"] { height: 1.25rem; margin-top: 0.125rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.mailInstructionField [data-slot="field-description"] { height: 2.25rem; margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.mailInstructionField textarea { width: 100%; height: 5.625rem; min-height: 5.625rem; margin-top: 0.5rem; resize: none; border-radius: 10px; padding: 0.75rem 1rem; font-size: 14px; line-height: 22px; }
+.mailAddressInput { display: flex; height: 2.25rem; margin-top: 0.5rem; align-items: center; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; padding-left: 0.75rem; font-size: 13px; }
+.mailAddressInput input { min-width: 4rem; height: 1.25rem; flex: 1; border: 0; padding: 0 0.125rem; box-shadow: none; }
+.mailAddressInput b { font-weight: 400; }
+.mailFormFooter { height: 4.5rem; flex: none; gap: 0.5rem; padding: 1.25rem; }
+.mailFormFooter > button { width: 4rem; height: 2rem; min-height: 2rem; border-radius: 8px; padding-inline: 0; }
+.mailSenderDialog { width: 30rem; border: 0; border-radius: 16px; }
+.mailSenderDialog > label { display: grid; gap: 0.5rem; }
+
+.deploymentSettings { width: 100%; }
+.deploymentSection { height: 12.9375rem; border-bottom: 1px solid var(--border); padding-top: 1.5rem; }
+.deploymentSection:last-child { height: 12.375rem; border-bottom: 0; }
+.deploymentSection h2 { width: max-content; height: 1.375rem; margin: 0; color: var(--foreground); font-size: 16px; font-weight: 500; line-height: 22px; }
+.deploymentEmpty { display: flex; height: 7.5rem; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 0.75rem; }
+.deploymentEmpty > svg { width: 2rem; height: 2rem; color: var(--muted-foreground); stroke-width: 1.9; }
+.deploymentSection[data-deployment-kind="domain"] .deploymentEmpty > svg { stroke-width: 2; }
+.deploymentEmpty > span { height: 1.125rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.deploymentEmpty > button { width: 5.75rem; height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; outline: 1px solid rgb(0 0 0 / 12%); outline-offset: -1px; padding: 0 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; box-shadow: none !important; }
+
+.integrationGrid { display: grid; width: calc(100% - 0.125rem); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 1.375rem 0.0625rem 0; }
+.integrationCard { display: flex; width: 100%; min-height: 5.5rem; align-items: center; gap: 1rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 12px; background: rgb(250 250 250); padding: 1rem; color: var(--foreground); text-align: left; transition: background-color 140ms ease; }
+.integrationCard:hover { background: rgb(247 247 247); }
+.integrationCard:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.integrationLogo,
+.integrationDetailLogo { display: inline-flex; width: 2.5rem; height: 2.5rem; flex: 0 0 2.5rem; align-items: center; justify-content: center; overflow: hidden; border: 0.5px solid rgb(0 0 0 / 6%); border-radius: 8px; background: var(--background); }
+.integrationLogo img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
+.integrationCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.integrationCopy strong { color: var(--foreground); font-size: 14px; font-weight: 500; line-height: 20px; }
+.integrationCopy small { color: var(--muted-foreground); font-size: 13px; font-weight: 400; line-height: 18px; }
+.integrationCard > svg { width: 1rem; height: 1rem; flex: 0 0 1rem; color: var(--muted-foreground); }
+.telegramLogo,
+.lineLogo { display: inline-flex; width: 1.5rem; height: 1.5rem; align-items: center; justify-content: center; border-radius: 999px; }
+.telegramLogo { position: relative; background: #45aee4; }
+.telegramLogo svg { width: 0.875rem; height: 0.875rem; fill: white; }
+.lineLogo { background: transparent; }
+.lineLogo svg { width: 1.5rem; height: 1.5rem; }
+.integrationDetail { position: relative; width: calc(100% - 0.125rem); min-height: 100%; margin-inline: 0.0625rem; padding: 1.5rem 0 1rem; }
+.integrationDetailHero { display: flex; min-height: 4.625rem; align-items: center; gap: 0.75rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 12px; padding: 1rem; }
+.integrationDetailLogo { width: 2.5rem; height: 2.5rem; flex-basis: 2.5rem; border-radius: 8px; }
+.integrationDetailLogo img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
+.integrationDetailHero > div { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.integrationDetailHero p { margin: 0; font-size: 14px; font-weight: 500; line-height: 20px; }
+.integrationDetailHero span { color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.integrationDetailHero > button,
+.integrationDetailHero > a { width: auto; height: 2.25rem; min-height: 2.25rem; gap: 0.375rem; border-radius: 8px; padding-inline: 0.75rem; color: var(--primary-foreground); }
+.integrationDetail:not([data-integration="zapier"]) .integrationDetailHero > button { padding-inline: 0.625rem; }
+.integrationDetailHero > button svg,
+.integrationDetailHero > a svg { width: 1rem; height: 1rem; }
+.integrationOverview { margin-top: 1.5rem; }
+.integrationOverview h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 20px; }
+.integrationOverviewCard { min-height: 5.75rem; margin-top: 0.75rem; border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+.integrationOverviewCard p { margin: 0; color: var(--foreground); font-size: 12px; line-height: 16px; }
+.integrationOverviewCard a { display: flex; width: max-content; align-items: center; gap: 0.25rem; margin-top: 0.75rem; color: var(--muted-foreground); font-size: 12px; font-weight: 500; line-height: 16px; text-decoration: underline; }
+.integrationOverviewCard svg { width: 0.75rem; height: 0.75rem; }
+.integrationDetail[data-integration="slack"] .integrationOverviewCard { height: 11.5rem; }
+.slackTips { margin-top: 0.75rem; }
+.slackTips > strong { display: block; font-size: 12px; font-weight: 500; line-height: 16px; }
+.slackTips ul { display: flex; flex-direction: column; gap: 0.375rem; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.slackTips li { display: flex; min-height: 1rem; align-items: baseline; gap: 0.375rem; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.slackTips code { border-radius: 4px; background: rgb(55 53 47 / 6%); padding: 0 0.25rem; color: var(--foreground); font-family: var(--font-mono, monospace); font-size: 11px; line-height: 16px; }
+.zapTemplates { margin-top: 1.5rem; }
+.zapTemplates h3 { margin: 0 0 0.75rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.zapTemplates > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.zapTemplates article { display: flex; height: 7.1875rem; flex-direction: column; justify-content: space-between; gap: 1rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 12px; background: rgb(250 250 250); padding: 0.75rem 1rem; }
+.zapTemplateCopy { display: flex; flex-direction: column; }
+.zapTemplates strong { font-size: 14px; font-weight: 400; line-height: 20px; }
+.zapTemplates .zapTemplateCopy > span { margin-top: 0.25rem; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.zapTemplateFooter { display: flex; align-items: center; justify-content: space-between; }
+.zapTemplateApps { display: inline-flex; height: 2.0625rem; align-items: center; overflow: hidden; border: 0.8px solid rgb(0 0 0 / 6%); border-radius: 6.4px; background: var(--background); }
+.zapTemplateApps > span { display: inline-flex; width: 2rem; height: 2rem; align-items: center; justify-content: center; color: var(--foreground); }
+.zapTemplateApps svg,
+.zapTemplateApps img { width: 1.25rem; height: 1.25rem; object-fit: contain; }
+.zapTemplateApps > span + span svg { width: 1.2rem; height: 1.2rem; stroke-width: 1.8; }
+.zapTemplateApps [data-app="calendly"] { color: #06f; }
+.zapTemplateApps [data-app="googleForms"] { color: #7248b9; }
+.zapTemplateApps [data-app="teams"] { color: #6264a7; }
+.zapTemplateApps [data-app="outlook"] { color: #1473e6; }
+.zapTemplateApps [data-app="salesforce"] { color: #00a1e0; }
+.zapTemplateApps [data-app="shopify"] { color: #72a845; }
+.zapTemplateApps [data-app="zendesk"] { color: #17494d; }
+.zapTemplateApps [data-app="zoom"] { color: #2d8cff; }
+.zapTemplateApps > span + span { border-left: 0.8px solid rgb(0 0 0 / 6%); }
+.zapTemplates .zapTemplateFooter > a { width: 4rem; height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; padding: 0 0.5rem; font-size: 14px; line-height: 18px; }
+
+.developerSettings {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  /* ScrollArea's measurement wrapper is intrinsically sized. Derive the
+   * panel body from the settings dialog contract so the empty state owns the
+   * full remaining viewport instead of collapsing to its 130px contents. */
+  height: calc(min(48.375rem, 90vh) - 5.0625rem);
+  flex-direction: column;
+  padding: 1.5rem 0 1rem;
+}
+.developerTabs { display: flex; height: 2.5rem; flex: 0 0 2.5rem; align-items: flex-start; gap: 1.5rem; border-bottom: 1px solid var(--border); }
+.developerTabs > button { position: relative; width: auto; height: 2.5rem; min-height: 0; border-radius: 0; padding: 0 0 0.75rem; color: var(--muted-foreground); font-size: 14px; font-weight: 500; }
+.developerTabs > button[data-active="true"] { color: var(--foreground); }
+.developerTabs > button[data-active="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--foreground); content: ""; }
+.developerTabs > button:focus-visible { outline: none; background: transparent; box-shadow: none; }
+.developerInfo { display: flex; height: 2.625rem; flex: 0 0 2.625rem; align-items: center; gap: 0.5rem; margin-top: 1.0625rem; border-radius: 12px; background: rgb(55 53 47 / 4%); padding: 0.75rem 1rem; }
+.developerInfo > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.developerInfo > span { min-width: 0; flex: 1; font-size: 13px; line-height: 18px; }
+.developerInfo > a { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--muted-foreground); font-size: 13px; }
+.developerInfo > a svg { width: 0.75rem; height: 0.75rem; }
+.developerEmpty { display: flex; min-height: 0; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem; padding: 0; }
+.developerEmpty > svg { width: 2rem; height: 2rem; color: var(--muted-foreground); stroke-width: 1.8; }
+.developerEmptyCopy { display: flex; height: 2.625rem; flex-direction: column; align-items: center; }
+.developerEmptyCopy strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.developerEmptyCopy span { margin-top: 0.25rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.developerEmpty > button { width: 6.625rem; height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; padding: 0 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; }
+.developerList { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+.developerListActions { display: flex; height: 2rem; justify-content: flex-end; }
+.developerListActions > button { height: 2rem; min-height: 2rem; gap: 0.25rem; padding: 0 0.5rem; font-size: 14px; }
+.developerListRow { display: flex; height: 3.5rem; align-items: center; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.75rem; }
+.developerList strong { min-width: 0; flex: 1; font-size: 14px; }
+.developerList span { color: var(--muted-foreground); font-size: 13px; }
+.apiKeyDialog { width: 25rem; height: 17.5rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; border: 0; border-radius: 16px; padding: 0; }
+.apiKeyDialog [data-slot="dialog-title"] { height: 3.75rem; padding: 1.25rem 3.5rem 1rem 1.25rem; font-size: 18px; line-height: 24px; }
+.apiKeyDialog > [data-slot="field-group"] { height: 9rem; gap: 0.75rem; padding: 0 1.25rem; }
+.apiKeyDialog [data-slot="field"] { gap: 0.5rem; }
+.apiKeyDialog [data-slot="field-label"] { font-size: 14px; font-weight: 500; line-height: 20px; }
+.apiKeyDialog [data-slot="input"],
+.apiKeyDialog [data-slot="select-trigger"] { height: 2.25rem; min-height: 2.25rem; font-size: 14px; line-height: 20px; }
+.apiKeyDialog [data-slot="input"]:focus-visible {
+  border-color: rgb(0 0 0 / 14%);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.apiKeyDialog [data-slot="select-trigger"] {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  border: 0;
+  background: rgb(55 53 47 / 4%);
+  box-shadow: none;
+}
+.developerDialogOverlay {
+  background: rgb(0 0 0 / 30%);
+  backdrop-filter: blur(4px);
+}
+.apiKeyDialog [data-slot="dialog-footer"] { height: 4.75rem; gap: 0.5rem; padding: 1.25rem; }
+.apiKeyDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.apiSecretDialog { width: 25rem; height: 15.5rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; overflow: hidden; border: 0; border-radius: 16px; padding: 0; }
+.apiSecretDialog [data-slot="dialog-title"] { height: 3.75rem; flex: none; padding: 1.25rem 3.5rem 1rem 1.25rem; font-size: 18px; line-height: 24px; }
+.apiSecretBody { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 0.5rem; padding: 0 1.25rem; }
+.apiSecretBody > p { margin: 0 0 0.25rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.apiSecretBody > span { font-size: 13px; font-weight: 500; line-height: 18px; }
+.apiSecretValue { display: flex; height: 2.25rem; align-items: center; gap: 0.5rem; }
+.apiSecretValue code { min-width: 0; height: 2.25rem; flex: 1; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.apiSecretValue button { width: 5rem; height: 2.25rem; min-height: 2.25rem; font-size: 14px; }
+.apiSecretDialog [data-slot="dialog-footer"] { height: 4.75rem; flex: none; padding: 1.25rem; }
+.apiSecretDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; font-size: 14px; }
+.webhookDialog { width: 25rem; height: 13.625rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; border: 0; border-radius: 16px; padding: 0; }
+.webhookDialog [data-slot="dialog-title"] { height: 3.75rem; padding: 1.25rem 3.5rem 1rem 1.25rem; font-size: 18px; line-height: 24px; }
+.webhookDialog > [data-slot="field"] { height: 5.125rem; gap: 0.5rem; padding: 0.5rem 1.25rem 0; }
+.webhookDialog [data-slot="field-label"] { font-size: 14px; font-weight: 500; line-height: 20px; }
+.webhookDialog [data-slot="input"] { height: 2.25rem; font-size: 14px; line-height: 20px; }
+.webhookDialog [data-slot="input"]:focus-visible {
+  border-color: rgb(0 0 0 / 14%);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.webhookDialog [data-slot="dialog-footer"] { height: 4.75rem; gap: 0.5rem; padding: 1.25rem; }
+.webhookDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+
+.generalSection {
+  padding: 0 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.generalSection h3 {
+  margin: 0 0 1rem;
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.375rem;
+}
+
+.generalRowStackCompact {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-direction: column;
+}
+
+.generalSettings .select {
+  width: 13rem;
+  /* Settings uses the same compact desktop control as Manus. The shared
+   * Web button contract intentionally preserves a 44px touch minimum, but
+   * that minimum must not leak into this desktop dialog and push every
+   * section below the theme selector. */
+  height: 2.25rem !important;
+  min-height: 0 !important;
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(55 53 47 / 4%);
+  box-shadow: none;
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+}
+
+.generalSettings .select svg {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.generalSettings .select[data-state="open"] svg {
+  transform: rotate(180deg);
+}
+
+.languageSelectContent {
+  width: 13rem;
+  min-width: 13rem;
+  max-height: 21.875rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 24px -12px rgb(0 0 0 / 4%),
+    0 3px 3px -1.5px rgb(0 0 0 / 6%),
+    0 10px 20px 1px rgb(0 0 0 / 4%);
+}
+
+.languageSelectContent :global([data-slot="select-item"]) {
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  padding-block: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.generalRow,
+.generalRowStack {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notificationSection {
+  padding-top: 1.5rem;
+}
+
+.notificationSection h3 {
+  margin: 0 0 1rem;
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.375rem;
+}
+
+.notificationRow {
+  display: flex;
+  height: 3.875rem;
+  min-height: 3.875rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.notificationRow > div {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notificationRow strong {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.notificationRow span {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+}
+
+.notificationRow :global([data-slot="switch"]) {
+  width: 1.625rem;
+  height: 1rem;
+  flex: 0 0 1.625rem;
+  margin-top: 0.6875rem;
+}
+
+.notificationRow :global([data-slot="switch-thumb"]) {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* The advertising preference is a separate group in the reference surface:
+ * three compact rows, a quiet divider, then a 25px measured beat before the
+ * longer copy. Keeping this as a row rule avoids a second ad-hoc wrapper. */
+.notificationRow:last-child {
+  margin-top: 1.5625rem;
+}
+
+.notificationRow:last-child :global([data-slot="switch"]) {
+  margin-top: 1.25rem;
+}
+
+.generalRowStack {
+  align-items: flex-start;
+  /* Manus leaves a 20px optical beat between the language control and the
+   * theme label; 16px made the theme row and every preference section sit
+   * four pixels too high after the compact select correction. */
+  margin-top: 1.53125rem;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.themeChoices {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.themeChoice {
+  display: flex;
+  height: 3.875rem !important;
+  min-height: 0 !important;
+  min-width: 0;
+  flex: 0 0 6.875rem;
+  flex-direction: column;
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: var(--radius-md);
+  color: #4d4d4d;
+  padding: 0.75rem 0.5rem 0.5rem !important;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+}
+
+.themeChoice svg { width: 1.125rem; height: 1.125rem; }
+
+.themeChoice span {
+  margin-top: 0.125rem;
+  padding-inline: 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.generalRowStack > .rowLabel {
+  position: relative;
+  top: -0.03125rem;
+}
+
+.generalSettings .rowLabel {
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+.themeChoice[data-state="on"] {
+  height: 3.9375rem !important;
+  margin-top: -0.03125rem;
+  border-width: 1.5px;
+  border-color: var(--foreground);
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+.notificationRow :global([data-slot="switch"][data-state="checked"]) {
+  background: #0081f2;
+}
+
+.notificationRow :global([data-slot="switch-thumb"]) {
+  background: #fff;
+}
+
+.notificationRow :global([data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"]) {
+  translate: 0.625rem 0;
+  transform: none;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.accountIdentityRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.accountSettings {
+  width: 100%;
+  padding-top: 1.5rem !important;
+}
+
+.accountIdentityRow .identity { margin-bottom: 0; }
+.accountIdentityRow > button {
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  flex: 0 0 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.planCard {
+  height: 11.9375rem;
+  box-sizing: border-box;
+  margin-top: 1rem;
+  padding: 0 1rem;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 12px;
+  background: rgb(250 250 250);
+}
+
+.planHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.planHeader { height: 3.5625rem; padding: 0.75rem 0; border-bottom: 1px dashed rgb(0 0 0 / 14%); }
+.planHeader strong {
+  font-family: var(--font-serif), "Noto Serif TC", LibreBaskerville, Georgia, Cambria, ui-serif, "Times New Roman", Times, serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.375rem;
+}
+.planHeader button { width: 4rem; height: 2rem; min-height: 2rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; line-height: 1.125rem; }
+
+.planBody {
+  display: flex;
+  height: 8.25rem;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.creditGroup {
+  display: flex;
+  height: 2.625rem;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.creditTotal,
+.creditBreakdown,
+.dailyCredits {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.creditTotal { height: 1.25rem; }
+.creditTotal > span { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.creditTotal svg { width: 1rem; height: 1rem; }
+.creditTotal svg:last-child { width: 0.75rem; height: 0.75rem; color: var(--muted-foreground); }
+.creditTotal > strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.creditBreakdown { height: 1.125rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.dailyCredits { height: 2.625rem; align-items: flex-start; }
+.dailyCredits > div { display: flex; flex-direction: column; gap: 0.125rem; }
+.dailyCredits > div strong { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 14px; font-weight: 500; line-height: 20px; }
+.dailyCredits > div strong svg { width: 1rem; height: 1rem; }
+.dailyCredits > div span { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.dailyCredits > strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+
+.accountDetailRows {
+  margin-top: 0.9375rem;
+}
+
+.accountDetailRow {
+  display: flex;
+  height: 3.375rem;
+  min-height: 3.375rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.accountDetailRow > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.accountDetailRow strong {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.accountDetailRow span {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.accountDetailRow button {
+  flex: 0 0 auto;
+  min-width: 4rem;
+  height: 2rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  outline: 1px solid rgb(0 0 0 / 12%);
+  outline-offset: -1px;
+  box-shadow: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.accountDetailRow:first-child {
+  height: 3.5rem;
+  min-height: 3.5rem;
+  border-bottom: 0;
+}
+
+.accountDetailRow:nth-child(2) { border-bottom: 1px solid var(--border); }
+.accountDetailRow:nth-child(3) { height: 3.375rem; margin-top: 2rem; border-bottom: 0; }
+.accountDetailRow:nth-child(4) { height: 3.375rem; border-bottom: 0; }
+
+.dangerRow {
+  align-items: center;
+}
+
+.dangerRow button {
+  width: 5rem;
+  min-width: 5rem;
+  color: rgb(251 73 79);
+  outline-color: rgb(242 90 90 / 50%);
+}
+
+.identityAvatar {
+  display: inline-flex;
+  width: 3.75rem;
+  height: 3.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--settings-avatar, #4aa9b5);
+  color: #fff;
+  font-size: 1.875rem;
+  font-weight: 400;
+}
+
+.identityText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.identityFieldLabel {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.identityInput {
+  width: 17.5rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(55 53 47 / 4%);
+  box-shadow: none;
+  font-size: 0.88rem;
+}
+
+.loginMethods { width: 100%; padding-top: 2rem; }
+.loginProviderList { margin-top: 0; }
+.loginProvider { display: flex; height: 3.4375rem; align-items: center; gap: 1rem; margin-bottom: 0.875rem; border-bottom: 1px solid var(--border); padding: 0 0.25rem; }
+.providerMark { display: inline-flex; width: 2.5rem; height: 2.5rem; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 8px; background: var(--background); font-size: 18px; font-weight: 700; }
+.providerMark svg { width: 1.25rem; height: 1.25rem; }
+.loginProvider > div { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.loginProvider strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.loginProvider span { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.loginProvider > button {
+  min-width: 4rem;
+  height: 2rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  outline: 1px solid rgb(0 0 0 / 12%);
+  outline-offset: -1px;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.passkeyHead { position: relative; top: 0.375rem; display: flex; min-height: 4.75rem; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0; padding-inline: 0.25rem; }
+.passkeyHead > div { display: flex; flex-direction: column; }
+.passkeyHead strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.passkeyHead span { color: var(--muted-foreground); font-size: 12px; line-height: 18px; }
+.passkeyHead > button {
+  width: 6.25rem;
+  min-width: 6.25rem;
+  height: 2rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding-inline: 0;
+  outline: 1px solid rgb(0 0 0 / 12%);
+  outline-offset: -1px;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.passkeyEmpty {
+  height: 14rem;
+  min-height: 14rem;
+  justify-content: flex-start;
+  gap: 0;
+  box-sizing: border-box;
+  padding: 7.75rem 0 0;
+  border: 0;
+  border-radius: 0;
+}
+.passkeyEmpty :global([data-slot="empty-icon"]) { margin: 0 0 0.5rem; }
+.passkeyEmpty :global([data-slot="empty-icon"]) svg {
+  width: 2rem;
+  height: 2rem;
+  color: var(--muted-foreground);
+  stroke-width: 1.75;
+}
+.passkeyEmpty :global([data-slot="empty-header"]) { gap: 0.25rem; }
+.passkeyEmpty :global([data-slot="empty-title"]) {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+.passkeyEmpty :global([data-slot="empty-description"]) {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.accountEmailDialog,
+.deleteAccountDialog { width: 25rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0; border: 0; border-radius: 16px; padding: 0; }
+.accountEmailDialog { height: 18.0625rem; }
+.deleteAccountDialog { height: 26.875rem; }
+.accountEmailDialog [data-slot="dialog-title"],
+.deleteAccountDialog [data-slot="dialog-title"] { height: 3.75rem; padding: 1.25rem 3.5rem 0.5rem 1.25rem; font-size: 18px; line-height: 24px; }
+.accountDialogHint { height: 2rem; margin: 0; padding: 0 1.25rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.accountDialogHint { border-bottom: 1px solid var(--border); }
+.accountEmailDialog > [data-slot="field"] { height: 7.5625rem; gap: 0.5rem; padding: 0.8125rem 1.25rem 0; }
+.accountEmailDialog [data-slot="field-label"],
+.deleteAccountDialog [data-slot="field-label"] { font-size: 13px; font-weight: 600; line-height: 20px; }
+.accountEmailDialog [data-slot="field-description"] { min-height: 2.5rem; font-size: 13px; line-height: 20px; }
+.codeField { display: flex; height: 2.25rem; align-items: center; border: 1px solid var(--input); border-radius: 8px; background: var(--background); }
+.codeField input { height: 2.125rem; flex: 1; border: 0; box-shadow: none; }
+.codeField button { height: 2rem; min-height: 2rem; flex: none; }
+.accountEmailDialog [data-slot="dialog-footer"] { height: 4.75rem; gap: 0.5rem; padding: 1.25rem; }
+.accountEmailDialog [data-slot="dialog-footer"] button,
+.deleteAccountDialog [data-slot="dialog-footer"] button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; }
+.deleteAccountDialog [data-slot="dialog-title"] { height: 3.5rem; }
+.deleteWarnings { height: 12.625rem; margin: 0 1.25rem; border-radius: 12px; background: var(--muted); padding: 0.75rem 1rem; color: var(--foreground); font-size: 13px; line-height: 22px; }
+.deleteWarnings p { position: relative; margin: 0 0 0.75rem; padding-left: 1rem; }
+.deleteWarnings p::before { position: absolute; left: 0; content: "•"; }
+.deleteAccountDialog > [data-slot="field"] { height: 4.75rem; gap: 0.5rem; margin-top: 1.25rem; padding: 0 1.25rem; }
+.deleteAccountDialog [data-slot="dialog-footer"] { height: 4.75rem; gap: 0.5rem; padding: 1.25rem; }
+.deleteAccountDialog .codeField { height: 2.5rem; border: 0; background: var(--muted); }
+.deleteAccountDialog [data-slot="dialog-footer"] button:first-child { width: 4rem; }
+.deleteAccountDialog [data-slot="dialog-footer"] button:last-child { width: 5rem; }
+
+.identityName {
+  margin: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identityMeta {
+  margin: 0.12rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.1rem;
+}
+
+.savedBadge {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--success-border);
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.row:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.rowLabel {
+  color: var(--muted-foreground);
+  font-size: 0.92rem;
+}
+
+.cardHint {
+  margin: 0.85rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.secondaryBtn,
+.dangerBtn {
+  font-size: 0.9rem;
+}
+
+.segment {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+}
+
+.segmentBtn {
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-sm);
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.segmentBtn:hover:not([data-state="on"]) {
+  color: var(--foreground);
+}
+
+.segmentBtn[data-state="on"] {
+  background: var(--card);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.select {
+  /* Keep workspace/model defaults readable in the desktop preferences pane;
+     the mobile contract below switches this to full width. */
+  width: min(60%, 18rem);
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.select:hover {
+  border-color: var(--ring);
+}
+
+@media (max-width: 480px) {
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  /* The theme control is translated at runtime. Keep the three choices inside
+     the Settings card instead of allowing long French/German/Russian labels
+     to push the last button underneath the Dialog edge. Equal flexible cells
+     preserve the segmented-control affordance; labels may wrap when needed. */
+  .segment {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .segmentBtn {
+    min-height: 2.75rem;
+    min-width: 0;
+    flex: 1 1 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding-inline: 0.35rem;
+    line-height: 1.15;
+  }
+
+  .select {
+    width: 100%;
+  }
+}
+
+/* Manus presents keyboard shortcuts as a compact, full-width list rather
+ * than mixing them into conversation defaults. Keep each row stable while
+ * long localized labels and modifier keys remain readable. */
+.shortcutsCard { margin-top: 1.5rem; padding-top: 0; }
+.shortcutList { width: 100%; }
+.shortcutRow {
+  display: flex;
+  min-height: 4.3125rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.shortcutLabel { min-width: 0; flex: 0 0 auto; color: var(--foreground); font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; white-space: nowrap; }
+.shortcutActions { display: flex; width: 14.375rem; min-width: 10rem; height: 2.25rem; flex: 0 1 14.375rem; align-items: center; gap: 0.25rem; padding: 0 0.25rem 0 0.375rem; border: 1px solid var(--input); border-radius: var(--radius-lg); transition: background-color 120ms ease; }
+.shortcutActions:hover { background: color-mix(in srgb, var(--foreground) 3%, transparent); }
+.shortcutActions[data-recording="true"] {
+  gap: 0;
+  padding: 0;
+  border-color: #0081f2;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+.shortcutKeys { display: flex; min-width: 0; min-height: 0 !important; height: 100%; flex: 1; justify-content: flex-start; overflow: hidden; padding: 0; border-radius: 0; background: transparent !important; box-shadow: none; }
+.shortcutKeySet { display: flex; min-width: 0; align-items: center; gap: 0.25rem; overflow: hidden; color: var(--muted-foreground); font-size: 0.8125rem; }
+.shortcutKey { display: inline-flex; min-width: 1.625rem; height: 1.625rem; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); padding: 0 0.375rem; color: var(--muted-foreground); font-family: inherit; font-size: 0.8125rem; font-weight: 400; line-height: 1; }
+.shortcutEditHint { display: none; padding-left: 0.25rem; color: var(--muted-foreground); font-size: 0.8125rem; }
+.shortcutKeys:hover .shortcutKeySet:not([data-recording="true"]) { display: none; }
+.shortcutKeys:hover .shortcutEditHint { display: inline; }
+.shortcutKeys:hover .shortcutKeySet[data-recording="true"] ~ .shortcutEditHint { display: none; }
+.shortcutActions[data-recording="true"] .shortcutKeys {
+  padding-left: 0.375rem;
+  color: #0081f2;
+}
+.shortcutKeySet[data-recording="true"] {
+  padding-left: 0.25rem;
+  color: #0081f2;
+}
+.shortcutRemove { color: var(--muted-foreground); }
+.shortcutRemove svg { width: 0.875rem; height: 0.875rem; }
+.shortcutResetRow { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
+.shortcutReset {
+  display: flex;
+  width: 6.25rem;
+  min-height: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}

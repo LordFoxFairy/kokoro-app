@@ -1,0 +1,50 @@
+/* Desktop command surface skin. CommandDialog owns the overlay, portal and
+ * focus loop; this module only gives the palette the same quiet, inset search
+ * surface as the Manus/Codex workbench. Mobile geometry remains owned by the
+ * existing shadcn command/dialog contract and is intentionally untouched. */
+
+/* 768px is the User Web desktop boundary. A split/zoomed desktop window must
+ * still receive the same command palette geometry; the phone Sheet is the
+ * only surface below that boundary. */
+@media (min-width: 768px) {
+  .dialogContent {
+    width: min(38rem, calc(100vw - 3rem));
+    max-height: min(36rem, calc(100dvh - 3rem));
+    padding: 0.5rem !important;
+    border-color: var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--card);
+    box-shadow: 0 24px 70px color-mix(in srgb, var(--foreground) 20%, transparent);
+  }
+
+  .dialogContent :global([data-slot="command"]) {
+    border-radius: var(--radius-lg);
+    background: var(--card);
+  }
+
+  .dialogContent :global([data-slot="command-input-wrapper"]) {
+    height: 3.25rem;
+    margin: 0.15rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--background);
+  }
+
+  .dialogContent :global([data-slot="command-input"]) {
+    height: 3rem;
+    font-size: 0.95rem;
+  }
+
+  .dialogContent :global([data-slot="command-list"]) {
+    padding: 0.4rem;
+  }
+
+  .dialogContent :global([data-slot="command-group"]) {
+    padding: 0.25rem;
+  }
+
+  .dialogContent :global([data-slot="command-item"]) {
+    min-height: 2.6rem;
+    border-radius: var(--radius-md);
+  }
+}

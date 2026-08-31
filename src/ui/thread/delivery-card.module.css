@@ -1,0 +1,117 @@
+/* 成果区（会话流尾部）：冻结结论的强调卡——完成徽感来自 success 色微染。
+   全色走 --* 语义 token，零裸色值。 */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.heading {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.card {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius-lg);
+  background: var(--success-bg);
+  overflow: hidden;
+}
+
+.open {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+}
+
+.open:hover {
+  background: var(--accent);
+}
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  color: var(--success);
+}
+
+.body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.title {
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+
+.download {
+  flex: none;
+  padding: 0 0.85rem;
+  border-left: 1px solid var(--success-border);
+  font-size: 0.75rem;
+}
+
+.download svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.downloadError {
+  align-self: center;
+  max-width: 10rem;
+  color: var(--error-strong);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-wrap: wrap;
+  }
+
+  .download {
+    border-top: 1px solid var(--success-border);
+    border-left: 0;
+  }
+
+  .downloadError {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 960px) {
+  /* The delivery card is a primary Canvas entry point. Keep both halves of
+     the split card reachable with the same touch rhythm as the shell. */
+  .open,
+  .download { min-height: 2.75rem; }
+}

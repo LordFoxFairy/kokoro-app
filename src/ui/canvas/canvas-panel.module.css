@@ -1,0 +1,264 @@
+/* Canvas utility surface. shadcn owns controls and overlays; this module only
+ * owns the three-column layout, content density, and Kokoro's quiet skin. */
+
+.panel {
+  container: canvas-panel / inline-size;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  /* The shell-owned canvas resizer draws the only divider. Keeping a second
+   * panel border here produces two adjacent rules at the drag boundary. */
+  border-left: 0;
+  background: var(--background);
+}
+
+.panel[data-fullscreen="true"] {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  border-left: 0;
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.viewToggle { flex: 0 0 auto; }
+.heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 0.15rem; }
+.name { min-width: 0; margin: 0; overflow: hidden; color: var(--foreground); font-size: 0.875rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.meta { min-width: 0; overflow: hidden; color: var(--muted-foreground); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+.actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.15rem; margin-left: auto; }
+.action { border-radius: var(--radius-sm); font-size: 0.75rem; white-space: nowrap; }
+.fullscreenAction { min-width: 0; }
+.closeAction { width: 2rem; }
+.action svg { width: 0.9rem; height: 0.9rem; }
+.closeLabel { display: none; }
+
+.body { min-height: 0; flex: 1; overflow: auto; padding: 1rem; }
+.taskFooter {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  background: var(--background);
+}
+.timeline {
+  display: flex;
+  height: 2.4rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+}
+.timelineControls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.15rem;
+}
+.timelineButton {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+.timelineButton svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+.timelineTrack {
+  position: relative;
+  height: 0.25rem;
+  min-width: 2rem;
+  flex: 1;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 72%, var(--border) 28%);
+  overflow: hidden;
+}
+.timelineProgress {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, #7eb6ff 72%, var(--background) 28%);
+}
+.timelineNow {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #4caf50;
+}
+.timelineLabel { flex: 0 0 auto; }
+.taskSummary {
+  display: flex;
+  min-width: 0;
+  height: 3.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.25rem;
+  color: var(--foreground);
+  font-size: 0.84rem;
+}
+.taskIcon { width: 0.9rem; height: 0.9rem; flex: 0 0 auto; color: #4c9cff; }
+.taskText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.taskCount { margin-left: auto; flex: 0 0 auto; color: var(--muted-foreground); font-size: 0.78rem; }
+.downloadError { margin: 0.5rem 0 0; padding: 0.45rem 0.75rem; font-size: 0.78rem; }
+
+.listing { display: flex; flex-direction: column; gap: 0.35rem; }
+.inlineEmpty { min-height: 5rem; padding: 0.75rem; border-color: var(--border); }
+.groupHeading { margin: 0.9rem 0 0.25rem; color: var(--muted-foreground); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; }
+.tree { margin: 0; padding: 0; list-style: none; }
+.treeItem { display: flex; width: 100%; min-height: 2.35rem; align-items: center; justify-content: space-between; gap: 0.75rem; border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; color: var(--foreground); font-size: 0.8125rem; text-align: left; }
+.treeItem:hover { background: var(--accent); }
+.treeItemSelected { background: var(--accent); box-shadow: inset 2px 0 var(--primary); color: var(--accent-foreground); }
+.treeItemSelected:hover { background: var(--accent); }
+.treeName { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.treeIcon { width: 0.95rem; height: 0.95rem; flex: 0 0 auto; color: var(--primary); }
+
+.deliveryBody { display: flex; flex-direction: column; gap: 0.65rem; }
+.deliveryNote { margin: 0; padding: 0.5rem 0.65rem; border-left: 2px solid var(--primary); border-radius: var(--radius-sm); background: var(--accent); color: var(--muted-foreground); font-size: 0.8125rem; }
+.toolBody { display: flex; flex-direction: column; gap: 0.4rem; }
+.toolBlock { max-height: 50vh; overflow: auto; margin: 0; padding: 0.65rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--secondary); color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.toolBlock[data-error="true"] { border-color: var(--error-border); background: var(--error-bg); color: var(--error-strong); }
+
+/* Desktop canvas columns can be narrower than the browser viewport. At the
+ * 320px minimum, keeping every text label in the toolbar forces the title,
+ * metadata and actions onto competing rows; the panel then appears to jump
+ * as the user drags the divider. Use the same compact-control principle as
+ * the shadcn icon buttons, but only for the desktop canvas. The touch Sheet
+ * keeps its existing layout and labels below. */
+@media (min-width: 961px) {
+  .desktopPanel .head {
+    min-height: 3.25rem;
+    gap: 0.35rem;
+    padding-inline: 0.65rem;
+  }
+
+  .desktopPanel .name {
+    flex: 1 1 auto;
+  }
+
+  @container canvas-panel (max-width: 36rem) {
+    .desktopPanel .head {
+      flex-wrap: nowrap;
+    }
+
+    .desktopPanel .meta {
+      display: none;
+    }
+
+    .desktopPanel .actions {
+      flex-basis: auto;
+      gap: 0;
+    }
+
+    .desktopPanel .action {
+      width: 2rem;
+      min-width: 2rem;
+      padding-inline: 0;
+    }
+
+    .desktopPanel .actionLabel {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 960px) {
+  .panel { position: absolute; inset: 0; z-index: 40; border-left: 0; }
+  /* A desktop User Web may be hosted in a narrow browser window. Its shell
+   * has already selected the side-by-side workbench, so the viewport rule
+   * must not turn the desktop Canvas into an overlay. The fullscreen state
+   * above remains more specific and intentionally keeps its absolute layer. */
+  .panel.desktopPanel { position: static; inset: auto; z-index: auto; }
+  .panel.mobilePanel { position: static; inset: auto; z-index: auto; }
+  .head { flex-wrap: wrap; }
+  .viewToggle :global(button) { min-height: 2.75rem; }
+  .name { flex: 1 1 10rem; }
+  .actions { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
+  .action { min-height: 2.75rem; }
+  .closeAction { width: 2.75rem !important; min-width: 2.75rem; }
+  .treeItem { min-height: 2.75rem; }
+}
+
+/* The Manus Canvas takeover uses a single 56px document header: title and
+ * status stay on the left, compact actions stay on the right. Preview/list
+ * is still available in the desktop-width panel, while the takeover avoids a
+ * second toolbar row that steals the working surface. */
+@media (max-width: 960px) {
+  .desktopPanel .head {
+    height: 3.5rem;
+    min-height: 3.5rem;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .desktopPanel .viewToggle { display: none; }
+  .desktopPanel .heading { min-width: 0; flex: 1 1 auto; }
+  .desktopPanel .name { flex: 0 1 auto; font-size: 0.95rem; }
+  .desktopPanel .meta { max-width: 100%; font-size: 0.72rem; }
+  .desktopPanel .actions {
+    flex: 0 0 auto;
+    flex-basis: auto;
+    justify-content: flex-end;
+    gap: 0.1rem;
+    margin-left: auto;
+  }
+  .desktopPanel .action {
+    width: 2rem;
+    min-width: 2rem;
+    height: 2rem;
+    min-height: 2rem;
+    padding-inline: 0;
+  }
+  .desktopPanel .actionLabel { display: none; }
+}
+
+@media (max-width: 480px) {
+  .head { padding: 0.7rem 0.8rem; }
+  .head > .meta { flex-basis: 100%; }
+  .action { padding-inline: 0.5rem; font-size: 0.75rem; }
+  /* The close button exposes a short visible label on a phone. Override the
+     icon-size width so the label participates in layout instead of painting
+     outside a fixed 44px box at 390px Sheets. The <=24rem container rule
+     below intentionally returns to icon-only when the Canvas is tighter. */
+  .closeAction { width: auto !important; min-width: 2.75rem; padding-inline: 0.6rem; }
+  .closeLabel { display: inline; }
+  .body { padding: 0.8rem; }
+}
+
+/* The canvas is a third column: its available width can be narrow even when
+ * the browser viewport is wide. Container queries keep the header stable in
+ * both the resizable desktop rail and the mobile Sheet. */
+/* The mobile container rules below intentionally remain inside the frozen
+ * mobile contract. Desktop has its own compact-toolbar rules above; sharing
+ * these selectors caused the desktop Canvas to wrap while the divider was
+ * moving through narrow widths. */
+@media (max-width: 960px) {
+  @container canvas-panel (max-width: 36rem) {
+    .head { flex-wrap: wrap; }
+    .name { flex: 1 1 10rem; }
+    .actions { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
+  }
+
+  @container canvas-panel (max-width: 24rem) {
+    .meta { flex-basis: 100%; overflow: hidden; text-overflow: ellipsis; }
+    .viewToggle :global(button) { min-height: 2.75rem; }
+    .action { min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.5rem; }
+    .actionLabel, .closeLabel { display: none; }
+    .closeAction { width: 2.75rem !important; min-width: 2.75rem; }
+  }
+}

@@ -1,0 +1,521 @@
+.overlay {
+  background: rgb(0 0 0 / 42%);
+  backdrop-filter: blur(2px);
+}
+
+.dialog {
+  display: flex;
+  width: min(50rem, 95vw);
+  max-width: 95vw !important;
+  height: min(42.5rem, 95vh);
+  max-height: 95vh;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: rgb(248 248 247);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 24px -12px rgb(0 0 0 / 4%),
+    0 3px 3px -1.5px rgb(0 0 0 / 6%),
+    0 10px 20px 1px rgb(0 0 0 / 4%);
+}
+
+.dialog > :global([data-slot="dialog-close"]) {
+  width: 2rem;
+  height: 2rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+}
+
+.title {
+  flex: 0 0 auto;
+  margin: 0;
+  height: 4rem;
+  padding: 1.25rem 3.5rem 1.25rem 1.5rem;
+  color: var(--foreground);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.searchField {
+  display: flex;
+  width: calc(100% - 3rem);
+  height: 2.25rem;
+  min-height: 2.25rem;
+  margin: 0.125rem 1.5rem 0.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 4%);
+  box-shadow: none;
+}
+
+.searchField:focus-within { box-shadow: 0 0 0 1px rgb(0 0 0 / 30%); }
+.searchField > svg { width: 1rem; height: 1rem; flex: 0 0 auto; color: rgb(115 115 115); }
+
+.searchInput {
+  height: 1.3125rem;
+  min-height: 1.3125rem;
+  flex: 1;
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.3125rem;
+}
+
+.searchInput:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+
+.tabs {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  min-height: 2rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.5rem;
+}
+
+.tabList {
+  height: 2rem !important;
+  gap: 0.25rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+}
+
+.tab {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  flex: 0 0 auto !important;
+  border-radius: 0.5rem;
+  padding: 0 0.625rem;
+  border: 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  box-shadow: none;
+}
+
+.tab::after { display: none; }
+.tab[data-state="active"] { background: rgb(55 53 47 / 8%); font-weight: 500; box-shadow: none; }
+.tab:focus-visible { border: 0; box-shadow: none; outline: none; }
+
+.createMenu {
+  width: 4rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding-inline: 0.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  box-shadow: none;
+  outline: 1px solid rgb(0 0 0 / 12%);
+  outline-offset: -1px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.createDropdown {
+  width: 13.75rem;
+  padding: 0.5rem;
+}
+
+.createDropdown :global([data-slot="dropdown-menu-item"]) {
+  min-height: 2.25rem;
+  gap: 0.5rem;
+  padding-inline: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.createDropdown :global([data-slot="dropdown-menu-item"] > svg) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.betaBadge {
+  margin-left: auto;
+  padding: 0.0625rem 0.3125rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  white-space: nowrap;
+}
+
+.catalogContent {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1.5rem 1.5rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  grid-auto-rows: 4.75rem;
+}
+
+.item {
+  display: grid;
+  min-width: 0;
+  height: 4.75rem;
+  min-height: 4.75rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 1.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border-color: rgb(0 0 0 / 6%);
+  background: transparent;
+}
+
+.itemIcon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  background: var(--card);
+  color: var(--foreground);
+}
+
+.itemIcon img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
+
+.itemCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.itemCopy strong {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemCopy > span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.add {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  border-radius: 0.5rem;
+  padding: 0;
+  border-color: rgb(0 0 0 / 6%);
+  background: transparent;
+  box-shadow: none;
+}
+
+.emptyContent {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.625rem 2rem 0;
+  text-align: center;
+}
+
+.emptyContent > svg { width: 2rem; height: 2rem; color: rgb(115 115 115); }
+.emptyContent p { max-width: 28rem; margin: 0; color: rgb(115 115 115); font-size: 0.8125rem; line-height: 1.25rem; }
+
+.customApiOverlay {
+  background: rgb(0 0 0 / 28%);
+  backdrop-filter: blur(5px);
+}
+
+.customApiDialog {
+  display: flex;
+  width: min(37.5rem, 95vw);
+  max-width: 95vw !important;
+  height: min(42.75rem, 95vh);
+  max-height: 95vh;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: rgb(248 248 247);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 48px rgb(0 0 0 / 16%);
+}
+
+.customApiDialog > :global([data-slot="dialog-close"]) {
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  top: 1.125rem;
+  right: 0.75rem;
+  background: transparent;
+}
+
+.customApiTitle {
+  flex: 0 0 auto;
+  width: calc(100% - 4.75rem);
+  height: 1.5rem;
+  margin: 1.25rem 0 0 1.25rem;
+  padding: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.customApiDescription {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 1.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.customApiForm {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.customApiBody {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.customApiFields {
+  gap: 1rem;
+}
+
+.customApiField {
+  gap: 0.5rem;
+}
+
+.customApiField > :global([data-slot="field-label"]) {
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.customApiField > :global([data-slot="field-label"]) span,
+.secretLegend span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.customApiField :global(input),
+.customApiField :global(textarea) {
+  width: 100%;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.customApiField :global(input) {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.customApiField :global(textarea) {
+  height: 6.25rem;
+  min-height: 6.25rem;
+  resize: none;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  line-height: 1.375rem;
+}
+
+.secretRow .customApiField:last-of-type :global(textarea) {
+  height: 5rem;
+  min-height: 5rem;
+}
+
+.iconUploadRow {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.iconPreview {
+  display: grid;
+  width: 3.75rem;
+  height: 3.75rem;
+  flex: 0 0 3.75rem;
+  place-items: center;
+  border: 1px dashed rgb(0 0 0 / 14%);
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 3%);
+  color: var(--muted-foreground);
+}
+
+.iconPreview svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.iconUploadCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.iconUploadButton {
+  width: 4rem;
+  height: 2rem;
+  min-height: 2rem;
+  padding-inline: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.iconUploadCopy :global([data-slot="field-description"]) {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.iconUploadCopy :global([data-slot="field-description"][data-error="true"]) {
+  color: var(--destructive);
+}
+
+.hiddenFile {
+  display: none;
+}
+
+.secretSet {
+  gap: 0.5rem;
+}
+
+.secretLegend {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.secretLegend svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.secretList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 1rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 42%);
+}
+
+.secretRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.removeSecret {
+  position: absolute;
+  top: -0.375rem;
+  right: -0.375rem;
+}
+
+.addSecret {
+  width: fit-content;
+  height: 2rem;
+  min-height: 2rem;
+  margin-top: 0.8125rem;
+  justify-content: flex-start;
+  padding-inline: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.customApiActions {
+  display: flex;
+  min-height: 4.75rem;
+  flex: 0 0 4.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background: rgb(248 248 247 / 96%);
+}
+
+.customApiSubmitError {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.5rem 1.25rem 0;
+  color: var(--destructive);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.customApiActions :global(button) {
+  width: 4.5rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}

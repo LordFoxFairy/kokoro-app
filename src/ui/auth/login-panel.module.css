@@ -1,0 +1,168 @@
+/* 登录页样式（WEB-FACE 面二）：浅底全屏 + 共用顶栏 + 居中宽白卡。对标参考的卡宽/圆角/阴影、
+   大主按钮视觉重量与层级；落我们暖纸 --* token，亮暗双态随 globals.css。移动态白卡近全宽。 */
+
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--background);
+  overflow-x: hidden;
+}
+
+/* toast 归一：顶部居中浮层，暖纸卡面 + 错误语义描边。 */
+.toast {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 0.75rem 1.15rem;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+  color: var(--error-strong);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+  text-align: center;
+}
+
+.stage {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+/* 宽白卡：对标参考卡宽（~33rem）/圆角/柔和大阴影，居中。 */
+.card {
+  width: min(33rem, 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  text-align: center;
+}
+
+/* 大标题：对标参考的醒目粗标题（层级最重）。 */
+.title {
+  margin: 0 0 1.75rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 3.5vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: 0.005em;
+  color: var(--foreground);
+}
+
+.subtitle {
+  margin: -1rem 0 1.75rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+.field {
+  display: block;
+  text-align: left;
+  margin-bottom: 1rem;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+/* 大输入框：对标参考的高度/描边。 */
+.input {
+  width: 100%;
+  height: 3.25rem;
+  padding: 0 1rem;
+  border-radius: var(--radius);
+  color: var(--foreground);
+  font-size: 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* 大主按钮：对标参考 Google 按钮的视觉重量——大而醒目的实心块，本处承载「发送登录链接」。 */
+.primaryBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 3.5rem;
+  border-radius: var(--radius);
+  font-size: 1.05rem;
+  font-weight: 700;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.primaryArrow {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.primaryArrow svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* 次按钮（发送后态重发，带倒计时禁用）。 */
+.secondaryBtn {
+  width: 100%;
+  height: 3rem;
+  margin-top: 0.85rem;
+  border-radius: var(--radius);
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.secondaryBtn:disabled {
+  color: var(--muted-foreground);
+}
+
+/* 底部切换/说明行（对标参考「Don't have an account? Sign up here」）。 */
+.switchLine {
+  margin: 1.35rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.switchLink {
+  color: var(--primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.switchLink:hover {
+  text-decoration: underline;
+}
+
+/* 移动态：白卡近全宽。 */
+@media (max-width: 480px) {
+  .card {
+    width: 100%;
+    border-radius: var(--radius-xl);
+    padding: 1.6rem 1.25rem;
+  }
+
+  .toast {
+    top: 4.75rem;
+  }
+}

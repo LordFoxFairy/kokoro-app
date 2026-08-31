@@ -1,0 +1,202 @@
+/* 作品库面板：居中模态浮层（与计费/技能面板同暖纸感 token）。卡片网格 + 滚动翻页。 */
+
+
+.panel {
+  padding: 0;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  width: min(46rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: min(44rem, calc(100vh - 2rem));
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--foreground);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem 1.5rem 1.5rem;
+  scrollbar-gutter: stable;
+}
+
+.embeddedBody {
+  padding-inline: 0;
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.loadingState {
+  display: flex;
+  min-height: 12rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
+}
+
+.loadingLine,
+.loadingLineShort {
+  height: 3.5rem;
+  width: 100%;
+}
+
+.loadingLineShort {
+  width: 72%;
+}
+
+.errorState {
+  display: flex;
+  min-height: 12rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.errorState :global([data-slot="alert-description"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--secondary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.open {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+}
+
+.open:hover {
+  background: var(--accent);
+}
+
+.icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--primary);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: 0.9rem;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.downloadStatus,
+.downloadError {
+  font-size: 0.7rem;
+}
+
+.downloadStatus {
+  color: var(--primary);
+}
+
+.downloadError {
+  color: var(--error-strong);
+}
+
+.source {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--primary);
+  text-align: left;
+  border-top: 1px solid var(--border);
+}
+
+.source:hover {
+  background: var(--accent);
+}
+
+.more {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.55rem;
+  font-size: 0.85rem;
+}
+
+
+@media (max-width: 640px) {
+  .panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .head {
+    padding: 1rem;
+  }
+
+  .body {
+    padding: 1rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .open,
+  .source,
+  .more { min-height: 2.75rem; }
+}
+
+@media (max-width: 960px) {
+  /* Library cards are used from both the Settings tab and standalone Canvas
+     flows. Do not let the standalone path regress to 32px actions. */
+  .panel :global(button),
+  .panel :global(input),
+  .panel :global(textarea),
+  .panel :global(select),
+  .panel :global([role="combobox"]) { min-height: 2.75rem; }
+}

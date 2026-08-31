@@ -1,0 +1,20 @@
+/* The desktop Canvas is a direct grid item, but its semantic aside is nested
+ * one level below the grid. Give that host an explicit stretch contract so
+ * the panel owns the full workspace height instead of collapsing to the
+ * intrinsic height of a short delivery preview. */
+.desktopHost {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.desktopHost[data-state="closed"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(0.5rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktopHost { transition: none; }
+}

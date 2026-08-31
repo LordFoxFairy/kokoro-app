@@ -1,0 +1,15 @@
+# 当前是 Site 内的 package bootstrap workspace。通用包稳定并有第二个 Site 消费后，
+# packages/* 整体迁移到 kokoro-web-shared；跨仓库改用 registry + semver，不使用相对路径。
+packages:
+  - "."
+  - "packages/*"
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd

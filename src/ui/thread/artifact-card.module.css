@@ -1,0 +1,67 @@
+.media {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+.frame {
+  width: 100%;
+  height: 320px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+.code {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tableWrap {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+.table td {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.note {
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.previewError { margin-top: 0.5rem; }
+.previewErrorContent { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.chipName { font-weight: 600; }
+
+@media (max-width: 960px) {
+  /* Preview retry and file chips are primary mobile actions, not decoration.
+     Keep them on the same 44px touch rhythm as the shell and Canvas. */
+  .previewErrorContent :global(button),
+  .chip { min-height: 2.75rem; }
+}
+
+/* A desktop viewport can still produce a narrow Canvas column (for example
+ * the 961px breakpoint with the rail open). Use the Canvas container rather
+ * than the viewport breakpoint so retry remains a real-sized action there. */
+@container canvas-panel (max-width: 24rem) {
+  .previewErrorContent :global(button) { min-height: 2.75rem; }
+}

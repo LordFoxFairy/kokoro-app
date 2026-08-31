@@ -1,0 +1,894 @@
+.surface {
+  display: grid;
+  width: min(100%, 49rem);
+  min-height: 0;
+  flex: 1;
+  margin-inline: 0;
+  padding: 2rem 0.875rem 3rem;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr) 16rem;
+  column-gap: 2.25rem;
+  background: var(--background);
+}
+
+.main {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.projectIdentity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 36rem;
+}
+
+.projectMark {
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.projectMark svg { width: 1.5rem; height: 1.5rem; }
+.projectIdentity h1 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 500; line-height: 28px; }
+.conversations h2 { margin: 0; color: var(--foreground); font-size: 1rem; font-weight: 500; line-height: 19px; }
+.projectIdentity p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.conversations > p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 13px; line-height: 19.5px; }
+.projectMeta { display: flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+
+.composer {
+  width: 100%;
+  margin: 1.5rem 0 2rem;
+}
+
+.composer :global([data-slot="composer-wrap"]) { width: 100%; padding: 0; }
+.composer :global([data-slot="composer-wrap"] form) { width: 100%; min-height: 7.25rem; }
+
+.conversations { width: 100%; margin-left: 0; padding-inline: 1rem; box-sizing: border-box; }
+.emptyConversation { min-height: 24.5rem; margin-top: 0.25rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.emptyConversation [data-slot="empty-icon"] { color: var(--muted-foreground); }
+.emptyConversation [data-slot="empty-title"] { color: var(--muted-foreground); font-size: 0.86rem; font-weight: 400; }
+.emptyConversation [data-slot="empty-description"] { max-width: 18rem; font-size: 0.8rem; }
+
+/* Desktop Manus empty-task rhythm: the dashed task mark sits on the same
+ * reading axis as the Composer, with a short label beneath it. Keep this
+ * scoped to the Web surface; the phone presentation remains untouched. */
+@media (min-width: 768px), (pointer: fine) {
+  .emptyConversation {
+    justify-content: flex-start;
+    gap: 0;
+    padding: 0;
+  }
+  .emptyConversation [data-slot="empty-icon"] {
+    width: 2rem;
+    height: 2rem;
+    margin: 12rem 0 0.75rem;
+  }
+  .emptyConversation [data-slot="empty-icon"] svg {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+.conversationList { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 1rem; }
+.conversationRow { width: 100%; justify-content: flex-start; overflow: hidden; text-align: left; }
+.conversationRow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.context {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 2rem;
+  background: var(--background);
+}
+
+.contextCard { gap: 0; overflow: hidden; border-radius: var(--radius-lg); border-color: var(--border); padding-block: 0; background: var(--background); box-shadow: none; }
+.contextCard + .contextCard { margin-top: 1rem; }
+.context > .contextCard:first-child { min-height: 11.875rem; }
+.cardHeader { display: flex; min-height: 3rem; flex-direction: row; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.65rem 1rem; }
+.cardHeader > button { flex: 0 0 auto; }
+.cardTitle { color: var(--foreground); font-size: 14px; font-weight: 500; line-height: 20px; }
+.cardTitle button,
+.cardTitleAction { height: auto; min-height: 1.75rem; padding-inline: 0; font-size: inherit; font-weight: inherit; }
+.cardTitleAction { gap: 0.35rem; }
+.cardTitleText { display: block; font: inherit; line-height: inherit; }
+.cardTitleAction svg { width: 0.95rem; height: 0.95rem; color: var(--muted-foreground); }
+.cardDescription { padding: 0 1rem 0.55rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.cardEmpty { padding: 0 1rem 0.85rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
+.emptyVisual {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 1rem 0.35rem;
+  color: color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+}
+.emptyVisual svg { width: 3rem; height: 3rem; stroke-width: 1; }
+.projectEmptyArtwork {
+  display: block;
+  width: 4.6875rem;
+  height: 4rem;
+  object-fit: contain;
+}
+.connectorRow {
+  display: flex;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.45rem;
+  /* The connector control is a body row, not a continuation of the divider.
+     Give it the same breathing room above and below as the reference card. */
+  margin: 1rem 1rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--muted);
+  padding: 0 0.75rem;
+  font-size: 14px;
+  font-weight: 500;
+}
+.connectorRow > svg { color: var(--muted-foreground); }
+.connectorRow button { height: 1.75rem; min-height: 1.75rem; margin-left: auto; padding-inline: 0; font-size: 14px; font-weight: 400; }
+.cardActions { display: flex; gap: 0.5rem; padding: 0.05rem 1rem 1rem; }
+.cardActions button { min-height: 2rem; flex: 1; border-radius: 8px; font-size: 14px; font-weight: 500; }
+.cardFooter { display: flex; padding: 0.05rem 1rem 1rem; }
+.cardFooter button { min-height: 2rem; flex: 0 0 auto; border-radius: 8px; font-size: 14px; font-weight: 500; }
+.instructionAction { display: none; }
+.skillVisual { display: flex; min-height: 3.5rem; align-items: center; justify-content: flex-end; padding: 0 1rem 0.35rem; color: color-mix(in srgb, var(--muted-foreground) 24%, transparent); }
+.skillVisual svg { width: 3rem; height: 3rem; stroke-width: 1; }
+
+/* Website and scheduled-task actions live below their description in the
+ * reference workbench. The website illustration shares that body row rather
+ * than adding a second vertical block that pushes the next module away. */
+.contextCard[data-context-kind="websites"] {
+  position: relative;
+  height: 7.5625rem;
+  min-height: 7.5625rem;
+  box-sizing: border-box;
+  padding: 0;
+}
+.contextCard[data-context-kind="resources-skills"] {
+  min-height: 16.09375rem;
+}
+.contextCard[data-context-kind="websites"] .cardHeader { min-height: 2.75rem; }
+.contextCard[data-context-kind="websites"] .cardDescription {
+  position: absolute;
+  top: 2.6875rem;
+  left: 0;
+  width: 100%;
+  height: 1.125rem;
+  min-height: 1.125rem;
+  box-sizing: border-box;
+  padding: 0 5.75rem 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.contextCard[data-context-kind="websites"] .cardDescription { min-height: 2.75rem; padding-right: 5.25rem; box-sizing: border-box; }
+.contextCard[data-context-kind="websites"] .emptyVisual {
+  position: absolute;
+  top: 3.1rem;
+  right: 1rem;
+  padding: 0;
+}
+.contextCard[data-context-kind="websites"] .cardFooter { padding-bottom: 0.5rem; }
+.contextCard[data-context-kind="websites"] .cardFooter {
+  position: absolute;
+  top: 4.3125rem;
+  left: 0;
+  width: 100%;
+  height: 2rem;
+  box-sizing: border-box;
+  padding: 0 1rem;
+}
+.contextCard[data-context-kind="scheduled"] {
+  position: relative;
+  height: 7.5625rem;
+  min-height: 7.5625rem;
+  box-sizing: border-box;
+  padding: 1rem 0 0.75rem;
+}
+.contextCard[data-context-kind="scheduled"] .cardHeader {
+  height: 1.3125rem;
+  min-height: 1.3125rem;
+  padding: 0 1rem;
+}
+.contextCard[data-context-kind="scheduled"] .cardDescription {
+  position: absolute;
+  top: 2.6875rem;
+  left: 0;
+  width: 100%;
+  height: 1.125rem;
+  box-sizing: border-box;
+  padding: 0 5.75rem 0 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.contextCard[data-context-kind="scheduled"] .emptyVisual {
+  position: absolute;
+  top: 2.6875rem;
+  right: 1rem;
+  width: 4.6875rem;
+  height: 4rem;
+  padding: 0;
+}
+.contextCard[data-context-kind="scheduled"] .emptyVisual svg {
+  width: 4.6875rem;
+  height: 4rem;
+}
+.contextCard[data-context-kind="scheduled"] .cardFooter {
+  position: absolute;
+  top: 4.3125rem;
+  left: 0;
+  width: 100%;
+  height: 2rem;
+  box-sizing: border-box;
+  padding: 0 1rem;
+}
+
+@media (min-width: 768px), (pointer: fine) {
+  .composer :global([data-slot="composer-wrap"] form) {
+    height: 7.5rem;
+    min-height: 7.5rem;
+    box-sizing: border-box;
+    border-color: rgb(0 0 0 / 20%);
+    border-radius: 22px;
+  }
+  .contextCard[data-context-kind="resources-skills"] .cardEmpty { padding-bottom: 0.625rem; }
+  .contextCard[data-context-kind="instructions"] {
+    height: 149px;
+    min-height: 149px;
+    position: relative;
+  }
+  .context > .contextCard[data-context-kind="instructions"] {
+    min-height: 149px;
+  }
+  .contextCard[data-context-kind="instructions"] .cardDescription {
+    position: absolute;
+    top: 2.75rem;
+    left: 0;
+    width: 100%;
+  }
+  .contextCard[data-context-kind="instructions"] .connectorRow {
+    position: absolute;
+    top: 5.9375rem;
+    left: 1rem;
+    width: calc(100% - 2rem);
+    height: 2.25rem;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 0.75rem;
+    border-radius: var(--radius-md);
+  }
+  .contextCard[data-context-kind="instructions"] .cardHeader {
+    padding-top: 0.775rem;
+    padding-bottom: 0.525rem;
+  }
+  .contextCard[data-context-kind="resources-skills"] {
+    height: 208.5px;
+    min-height: 208.5px;
+    position: relative;
+  }
+  /* The reference resource section is a compact 120px row. The stock Card
+   * header/action padding was leaving it 5px too tall and moving every later
+   * module down. These explicit slots keep both button edges stable. */
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(1) {
+    height: 2.25rem;
+    min-height: 2.25rem;
+    align-items: flex-start;
+    padding: 1rem 1rem 0;
+    box-sizing: border-box;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(2) {
+    position: absolute;
+    top: 2.75rem;
+    left: 0;
+    width: 100%;
+    height: 1.21875rem;
+    padding: 0 1rem;
+    box-sizing: border-box;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) {
+    position: absolute;
+    top: 4.46875rem;
+    left: 0;
+    width: 100%;
+    height: 3.5rem;
+    min-height: 3.5rem;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0 1rem 1rem;
+    box-sizing: border-box;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button {
+    width: auto;
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button:first-child { width: 8.3125rem; }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(3) button:last-child { width: 9.3125rem; }
+  .actionStatusDot {
+    width: 0.25rem;
+    height: 0.25rem;
+    flex: 0 0 0.25rem;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(5) {
+    position: absolute;
+    top: 8rem;
+    right: 0;
+    width: 100%;
+    padding: 0 1rem;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) {
+    position: absolute;
+    top: 10.2rem;
+    left: 0;
+    width: 100%;
+    padding: 0 1rem;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) button { display: none; }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(4) {
+    position: absolute;
+    top: 7.71875rem;
+    left: 0;
+    width: 100%;
+    height: 5.40625rem;
+    min-height: 5.40625rem;
+    border-top: 1px solid var(--border);
+    align-items: flex-start;
+    padding: 1rem 0.75rem 1rem 1rem;
+    box-sizing: border-box;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(5) {
+    top: 10.78125rem;
+    height: 1.125rem;
+    min-height: 1.125rem;
+    padding: 0 1rem 0 2.25rem;
+    box-sizing: border-box;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(6) {
+    top: 10.78125rem;
+    left: 0;
+    right: auto;
+    width: 2.25rem;
+    height: 1.125rem;
+    min-height: 1.125rem;
+    padding: 0;
+    justify-content: center;
+  }
+  .contextCard[data-context-kind="resources-skills"] .skillVisual {
+    display: inline-flex;
+    width: 2rem;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .contextCard[data-context-kind="resources-skills"] .skillVisual svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) { display: none; }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) {
+    display: flex;
+    position: absolute;
+    top: 8.5rem;
+    right: 0.75rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+  }
+  .contextCard[data-context-kind="resources-skills"] > :nth-child(7) button {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-height: 1.75rem;
+    padding: 0;
+  }
+  .contextCard[data-context-kind="websites"] .cardFooter button,
+  .contextCard[data-context-kind="scheduled"] .cardFooter button { width: 4rem; }
+  .contextCard[data-context-kind="websites"] .emptyVisual {
+    top: 2.75rem;
+    right: 1rem;
+    width: 4.6875rem;
+    height: 4rem;
+  }
+  .contextCard[data-context-kind="resources-skills"] .cardFooter {
+    padding-bottom: 0.75rem;
+  }
+
+  /* CJK copy can match the compact one-line reference. The remaining site
+   * locales need a real second line; move the complete lower section as one
+   * track so copy never paints under the resource actions. */
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] {
+    height: 226.5px;
+    min-height: 226.5px;
+  }
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(2) {
+    height: 2.25rem;
+  }
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(3) { top: 5.59375rem; }
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(4) { top: 8.84375rem; }
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(5),
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(6) { top: 11.90625rem; }
+  .surface[data-resource-copy-lines="two"] .contextCard[data-context-kind="resources-skills"] > :nth-child(7) { top: 9.625rem; }
+  .contextCard[data-context-kind="websites"] {
+    /* Manus keeps the website module tall enough for the illustration and
+     * action row. The previous 114px slot clipped the lower artwork and
+     * created an oversized gap before scheduled tasks. */
+    height: 8.3125rem;
+    min-height: 8.3125rem;
+  }
+  .contextCard[data-context-kind="websites"] { margin-top: 1rem; }
+  .contextCard[data-context-kind="websites"] .cardFooter { padding-bottom: 0.6375rem; top: 5.75rem; }
+  .contextCard[data-context-kind="scheduled"] { margin-top: 1rem; }
+}
+
+/* The first module is one continuous Manus-style section: the connector row
+ * stays anchored to the bottom while the instruction copy remains compact. */
+.contextCard[data-context-kind="instructions"] .connectorRow { margin-top: 1.2rem; }
+
+.instructionsDialog {
+  width: 35rem;
+  height: 35rem;
+  max-width: calc(100vw - 2rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 16px;
+  padding: 1.375rem 1.5rem 1.5rem;
+}
+.instructionsDialogHeader { gap: 0.75rem; }
+.instructionsDialogHeader [data-slot="dialog-title"] { font-size: 18px; line-height: 24px; font-weight: 600; }
+.instructionsDialogHeader [data-slot="dialog-description"] { font-size: 14px; line-height: 20px; }
+.instructionsTextarea {
+  height: 23.8125rem;
+  min-height: 23.8125rem;
+  margin-top: 0.875rem;
+  resize: none;
+  border-radius: 8px;
+  background: var(--muted);
+  padding: 0.75rem;
+  font-size: 14px;
+  line-height: 20px;
+}
+.instructionsTextarea:focus-visible { border-color: var(--border); box-shadow: none; }
+.instructionsDialogFooter { align-items: center; padding-top: 1.5625rem; }
+.instructionsDialogFooter button { height: 2.25rem; min-width: 4.5rem; border-radius: 8px; padding-inline: 0.75rem; font-size: 14px; line-height: 20px; }
+.instructionsHistory { margin-right: auto; }
+.instructionsDialogFooter .instructionsHistory { width: 5rem; min-width: 5rem; }
+.instructionsFooterSpacer { flex: 1; }
+.instructionsError { margin: 0.5rem 0 0; color: var(--destructive); font-size: 13px; line-height: 18px; }
+.instructionsOverlay { background: rgb(0 0 0 / 28%); backdrop-filter: blur(4px); }
+
+.instructionsHistoryDialog {
+  display: block;
+  width: min(62.5rem, calc(100vw - 2rem));
+  height: min(42rem, calc(100dvh - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
+}
+.instructionsHistoryTitle {
+  position: absolute;
+  top: 1.375rem;
+  left: 1.5rem;
+  z-index: 1;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.instructionsHistoryLayout {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: 18.75rem minmax(0, 1fr);
+}
+.instructionsRevisionList {
+  min-width: 0;
+  margin: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 4rem 0.75rem 1rem;
+  list-style: none;
+}
+.instructionsRevisionList > li { margin: 0; padding: 0; }
+.instructionsRevision {
+  width: 100%;
+  height: auto;
+  min-height: 4.5rem;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-radius: 10px;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+}
+.instructionsRevision[data-selected="true"] { background: var(--accent); }
+.instructionsRevision small { color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.instructionsRevision strong { font-size: 14px; font-weight: 500; line-height: 20px; }
+.instructionsRevision span { display: flex; align-items: center; gap: 0.375rem; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
+.instructionsRevision i { display: inline-flex; width: 1rem; height: 1rem; align-items: center; justify-content: center; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 9px; font-style: normal; }
+.instructionsRevisionContent { overflow: auto; padding: 4rem 1.5rem 1.5rem; white-space: pre-wrap; font-size: 14px; line-height: 22px; }
+.instructionsHistoryEmpty { margin: 1rem 0; color: var(--muted-foreground); font-size: 13px; text-align: center; }
+
+.resourcesDialog {
+  width: 42.5rem;
+  height: min(42.5rem, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
+  max-width: calc(100vw - 2rem);
+  display: block;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.resourcesDialogTitle { font-size: 18px; line-height: 24px; font-weight: 600; }
+.resourcesToolbar { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.resourcesToolbar > button {
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  border-radius: 8px;
+  padding: 0;
+}
+.resourcesSearch {
+  position: relative;
+  display: block;
+  width: 13rem;
+  height: 2rem;
+}
+.resourcesSearch > svg {
+  position: absolute;
+  z-index: 1;
+  top: 0.5rem;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+.resourcesSearch input {
+  height: 2rem;
+  border-radius: 8px;
+  padding: 0 0.75rem 0 2rem;
+  font-size: 14px;
+  box-shadow: none;
+}
+.resourcesEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10.1875rem;
+  text-align: center;
+}
+.resourcesEmpty > svg { width: 2.5rem; height: 2.5rem; color: var(--muted-foreground); stroke-width: 1.5; }
+.resourcesEmpty > p { margin: 1rem 0 0; color: var(--muted-foreground); font-size: 13px; line-height: 19.5px; }
+.resourcesAddGroup { display: flex; height: 2.25rem; margin-top: 1rem; overflow: hidden; border-radius: 8px; }
+.resourcesAddGroup button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  border-radius: 0;
+  padding-inline: 0.75rem;
+  font-size: 14px;
+}
+.resourcesAddGroup button + button { width: 2.25rem; border-left: 1px solid rgb(255 255 255 / 16%); padding: 0; }
+.resourcesFileInput { display: none; }
+.resourcesAddMenu { width: 16.375rem; padding: 0.25rem; border-radius: 12px; transform: translateX(7.25rem); }
+.resourcesAddMenu [data-slot="dropdown-menu-item"],
+.resourcesAddMenu [data-slot="dropdown-menu-sub-trigger"],
+.resourcesMoreMenu [data-slot="dropdown-menu-item"] { min-height: 2.25rem; gap: 0.625rem; border-radius: 8px; font-size: 14px; }
+.resourcesMoreMenu { width: 18.75rem; padding: 0.375rem; border-radius: 12px; }
+
+.projectSkillsDialog {
+  width: 50rem;
+  height: min(42.5rem, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
+  max-width: calc(100vw - 2rem);
+  display: block;
+  box-sizing: border-box;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.projectSkillsTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.projectSkillsHint {
+  margin: 0.625rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
+}
+.projectSkillsHint > button {
+  display: inline;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.projectSkillsToolbar {
+  display: flex;
+  height: 2rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem -0.25rem 0;
+}
+.projectSkillsToolbar > button {
+  height: 2rem;
+  min-height: 2rem;
+  border-radius: 8px;
+  padding-inline: 0.75rem;
+  font-size: 14px;
+  line-height: 20px;
+}
+.projectSkillsToolbar > button:first-child,
+.projectSkillsToolbar > button:last-child {
+  width: 2rem;
+  padding: 0;
+}
+.projectSkillsToolbar > button:nth-last-child(2) { margin-left: auto; }
+.projectSkillsToolbar svg { width: 1rem; height: 1rem; }
+.projectSkillsSearch {
+  position: relative;
+  display: block;
+  width: 13rem;
+  height: 2rem;
+}
+.projectSkillsSearch > svg {
+  position: absolute;
+  z-index: 1;
+  top: 0.5rem;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+.projectSkillsSearch input {
+  height: 2rem;
+  border-radius: 8px;
+  padding: 0 0.75rem 0 2rem;
+  font-size: 14px;
+  box-shadow: none;
+}
+.projectSkillCard {
+  position: relative;
+  width: 23.375rem;
+  height: 9.1875rem;
+  box-sizing: border-box;
+  margin: 0.75rem 0 0 -0.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 12px;
+  background: rgb(250 250 250);
+  padding: 1rem 1rem 0.75rem;
+}
+.projectSkillCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.projectSkillCardTop h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.projectSkillCardTop [data-slot="switch"] {
+  width: 1.625rem;
+  height: 1rem;
+  flex: none;
+  background: var(--input);
+}
+.projectSkillCardTop [data-slot="switch"][data-state="checked"] { background: rgb(142 186 232); }
+.projectSkillCardTop [data-slot="switch-thumb"] { width: 0.875rem; height: 0.875rem; }
+.projectSkillCardTop [data-slot="switch-thumb"][data-state="checked"] { transform: translateX(10px); }
+.projectSkillDescription {
+  display: -webkit-box;
+  height: 2.4375rem;
+  margin: 0.5625rem 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 19.5px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.projectSkillFooter {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.875rem;
+  left: 1rem;
+  display: flex;
+  height: 1.125rem;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.projectSkillFooter > svg { width: 0.875rem; height: 0.875rem; }
+.projectSkillFooter > button {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  margin: -0.25rem -0.5rem -0.25rem auto;
+  padding: 0;
+}
+.projectSkillFooter > button svg { width: 1rem; height: 1rem; }
+
+.projectPickerDialog {
+  width: 30rem;
+  height: 38.25rem;
+  max-width: calc(100vw - 2rem);
+  display: block;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px;
+  padding: 1.25rem;
+}
+.projectPickerTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.projectPickerSearch {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+  margin-top: 0.75rem;
+}
+.projectPickerSearch > svg {
+  position: absolute;
+  z-index: 1;
+  top: 0.625rem;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+.projectPickerSearch input {
+  width: 100%;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--muted);
+  padding: 0 0.75rem 0 2rem;
+  font-size: 14px;
+  box-shadow: none;
+}
+.projectPickerEmpty {
+  position: absolute;
+  top: 17.875rem;
+  right: 1.25rem;
+  left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+}
+.projectPickerEmpty > svg { width: 1.875rem; height: 1.875rem; stroke-width: 1.75; }
+.projectPickerFooter {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  display: flex;
+  gap: 0.5rem;
+}
+.projectPickerFooter button { width: 4.5rem; height: 2.25rem; min-height: 2.25rem; border-radius: 8px; }
+.scheduledPickerToolbar { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.75rem; }
+.scheduledPickerToolbar .projectPickerSearch { width: 12.5rem; margin-top: 0; }
+.scheduledPickerToolbar > button { width: 6.625rem; height: 2rem; min-height: 2rem; margin-left: auto; border-radius: 8px; padding-inline: 0.5rem; font-size: 14px; }
+.scheduledPickerToolbar + .projectPickerEmpty { top: 17.6875rem; }
+
+@media (min-width: 768px), (pointer: fine) {
+  .contextCard[data-context-kind="instructions"] .connectorRow { margin-top: 0; }
+}
+
+/* Project modules follow their content height. Fixed minimums made an empty
+ * resource card push every later module below the fold and diverged from the
+ * compact Manus context flow. */
+
+/* Desktop Web stays a two-column project workbench while there is enough
+ * room for both the task axis and the context axis. Once the remaining
+ * workspace becomes narrow, the context modules join the same document flow
+ * instead of compressing the task composer into an unusable sliver. This is a
+ * Web layout mode, not the mobile shell or a compatibility rendering path. */
+@media (min-width: 768px), (pointer: fine) {
+  /* Manus keeps a readable project document rather than stretching the
+     context cards to the browser edge. The shell remains full width; this
+     surface is the bounded workbench inside it. */
+  .surface {
+    /* At 1280px Manus uses the whole remaining work area with an 18px
+     * optical gutter: 580px task axis + 44px seam + 320px context axis.
+     * The previous 784px cap squeezed both columns and made the project page
+     * read like a narrow settings panel. Keep the shell full width, then cap
+     * only very large work areas below. */
+    width: min(100%, 73rem);
+    grid-template-columns: minmax(24.375rem, 48rem) minmax(15rem, 20rem);
+    column-gap: 2.75rem;
+    margin-inline: auto;
+    padding: 2rem 1.125rem 3rem;
+  }
+  .main { padding: 0; }
+  .composer, .conversations { width: 100%; }
+  .context { padding: 0 0 2rem; }
+
+}
+
+/* The project layout responds to the actual workbench width, not the browser
+ * viewport. An expanded rail or split canvas can leave a wide browser with a
+ * narrow document; in that state Manus moves the context modules into the
+ * same reading column instead of compressing two independent scroll panes. */
+@container workspace-main (max-width: 60rem) {
+  .surface {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "identity"
+      "composer"
+      "context"
+      "conversations";
+    align-content: start;
+    overflow-y: auto;
+    padding: 2rem 1.5rem 3rem;
+  }
+
+  /* The desktop wide layout uses `.main` as the scrolling task column. In the
+   * single-column Web layout its children become direct grid items so context
+   * can sit between the Composer and the task history, matching the reading
+   * order of the reference workbench. */
+  .main { display: contents; }
+  .projectIdentity { grid-area: identity; max-width: none; }
+  .composer {
+    grid-area: composer;
+    width: 100%;
+    margin: 1.5rem 0 0;
+  }
+  .conversations {
+    grid-area: conversations;
+    width: 100%;
+    margin: 1.5rem 0 0;
+  }
+  .context {
+    grid-area: context;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow: visible;
+    border-left: 0;
+    /* Grid auto rows may otherwise resolve the zero-min-height workbench to
+     * the line box of the aside and let every Card shrink to its border. The
+     * narrow Web flow owns its document height explicitly. */
+    min-height: max-content;
+    padding: 1.5rem 0 0;
+    background: transparent;
+  }
+  .context > .contextCard,
+  .context > .contextCard:first-child {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .contextCard + .contextCard { margin-top: 0; }
+}

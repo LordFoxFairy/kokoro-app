@@ -1,0 +1,705 @@
+/* Workspace shell: shadcn SidebarProvider/SidebarInset own page geometry. */
+.shell { 
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+
+/* User Web has one continuous Manus-style command rail. Global actions,
+ * projects, tasks, and account controls are rendered by WorkspaceRail; do not
+ * introduce a second fixed icon rail beside it. */
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="default"]),
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="sm"]),
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="lg"]) {
+  /* shadcn's shared touch contract is viewport-based. A User Web shell can
+     live below that breakpoint in a desktop split view, so restore the
+     component's intrinsic height without changing the mobile primitives. */
+  min-height: 0 !important;
+}
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="icon"]) {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  min-height: 0 !important;
+}
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="icon-sm"]):not(:global([data-slot="composer-wrap"] [data-slot="button"])) {
+  width: 2rem !important;
+  height: 2rem !important;
+  min-height: 0 !important;
+}
+/* SidebarTrigger intentionally preserves its own shadcn slot for tooltip
+ * composition, so it does not carry Button's `data-slot="button"`. The
+ * desktop Web marker must still override the viewport-driven 44px touch
+ * utility when this workbench is embedded in a narrow desktop window. */
+.shell[data-desktop-web="true"] :global([data-sidebar="trigger"]:not([data-collapsed-brand="true"])) {
+  width: 2rem !important;
+  height: 2rem !important;
+  min-height: 0 !important;
+}
+.shell[data-desktop-web="true"] :global([data-slot="button"][data-size="icon-lg"]) {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  min-height: 0 !important;
+}
+.shell[data-desktop-web="true"] :global([data-slot="dropdown-menu-item"]),
+.shell[data-desktop-web="true"] :global([data-slot="dropdown-menu-checkbox-item"]),
+.shell[data-desktop-web="true"] :global([data-slot="dropdown-menu-radio-item"]),
+.shell[data-desktop-web="true"] :global([data-slot="command-item"]),
+.shell[data-desktop-web="true"] :global([data-slot="select-item"]),
+.shell[data-desktop-web="true"] :global([data-slot="toggle-group-item"]) {
+  min-height: 0 !important;
+}
+.shell[data-resizing="true"] { user-select: none; }
+/* The resizer is the single source of truth for the rail divider. The
+ * shadcn Sidebar container still supplies geometry, but its own border must
+ * be removed rather than merely made transparent: a transparent 1px border
+ * still leaves a second edge in the composited layout (most visible at the
+ * exact min/max clamp positions). */
+.shell :global([data-slot="sidebar-container"]) {
+
+  /* The stock shadcn Sidebar applies `border-r` to this fixed layer.  The
+   * shell owns the seam below; leaving even a transparent border here changes
+   * the layer's paint edge and produces a second hairline at a clamp. */
+  border: 0 !important;
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+.shell :global([data-slot="sidebar-inner"]),
+.shell :global([data-slot="sidebar-inset"]) {
+  /* Keep the custom separator the only painted edge on either side of the
+   * rail.  This is deliberately explicit because site adapters may add the
+   * Sidebar's default border utility back through className. */
+  border-left: 0 !important;
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+/* Sidebar's stock width transition is ideal for collapse/expand, but makes a
+ * pointer drag feel one frame behind the canvas. Disable it only during the
+ * live resize transaction; normal navigation transitions remain intact. */
+.shell[data-resizing="true"] :global([data-slot="sidebar-gap"]),
+.shell[data-resizing="true"] :global([data-slot="sidebar-container"]),
+.shell[data-rail-resizing="true"] :global([data-slot="sidebar-gap"]),
+.shell[data-rail-resizing="true"] :global([data-slot="sidebar-container"]) { transition: none !important; }
+.shell[data-resizing="true"] .workspace,
+.shell[data-resizing="true"] .main,
+.shell[data-resizing="true"] :global([data-slot="sidebar-inset"]),
+.shell[data-resizing="true"] :global([data-slot="context-panel"]),
+.shell[data-rail-resizing="true"] .workspace,
+.shell[data-rail-resizing="true"] .main,
+.shell[data-rail-resizing="true"] :global([data-slot="sidebar-inset"]),
+.shell[data-rail-resizing="true"] :global([data-slot="context-panel"]) {
+  /* No surface may animate behind the pointer. The divider, grid track and
+     panel must commit the same frame or the seam reads as two moving rules. */
+  transition: none !important;
+}
+.inset { min-width: 0; min-height: 0; overflow: hidden; background: var(--background); }
+
+/* Standalone Web surfaces intentionally omit WorkspaceHeader, but a hidden
+ * narrow-desktop rail still needs the same single menu affordance as the
+ * normal chat header. Keep it in the shell coordinate space so opening the
+ * rail never moves the route-owned surface underneath it. */
+.compactNavigationTrigger {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 30;
+}
+
+/* Standalone catalogs hide WorkspaceHeader but still expose the same compact
+ * desktop hamburger. Reserve its 32px control lane in the route-owned header;
+ * otherwise the trigger and the page title paint on top of one another at the
+ * narrow desktop breakpoint. This is deliberately fine-pointer only so the
+ * mobile presentation remains owned by its existing surface. */
+@media (pointer: fine) and (max-width: 48rem) {
+  .shell[data-rail-hidden="true"] .main[data-standalone-surface="true"] header {
+    padding-inline-start: 3.5rem;
+  }
+}
+
+/* SidebarContainer is fixed so the rail can animate independently. Its
+ * companion gap is what reserves the rail track in the provider flex row;
+ * keeping that gap at the collapsed 52px value left the expanded rail painted
+ * over the first 248px of every User Web surface. Mirror the actual shell
+ * state so expanded content begins at the rail edge, as it does in Manus. */
+.workspace {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+.workspaceGroup {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+.mainPanel,
+.canvasPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.mainPanel {
+  container: workspace-main / inline-size;
+}
+.mainPanel > .main {
+  flex: 1;
+  height: 100%;
+}
+.resizer {
+  position: absolute;
+  top: 0; bottom: 0; z-index: 20; width: 1px;
+  cursor: col-resize; touch-action: none;
+  /* The element itself is the one-pixel seam. The wider hit target lives in
+     `::before`, so the handle never has to center a painted line on a
+     fractional half-pixel. That was the source of the faint twin rule at
+     min/max clamps on Retina and browser zoom. */
+  box-sizing: border-box;
+  border: 0;
+  /* The handle is the only painted seam. `::before` remains hit-area only,
+     so a clamp never composites a second hairline beside the boundary. */
+  background: var(--sidebar-border);
+  /* Keep the seam hidden/shown only after the rail geometry finishes moving.
+     A shorter opacity transition exposes it at an intermediate x position. */
+  left: calc(var(--rail-seam-width, var(--sidebar-width, 20rem)) - 1px);
+  transition: left 200ms linear, opacity 0ms linear 200ms;
+}
+.resizer[data-collapsed="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+.shell[data-canvas-resizing="true"] .resizer,
+.shell[data-rail-resizing="true"] .canvasHandle {
+  pointer-events: none;
+}
+.resizer::before {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: .75rem;
+  content: "";
+  transform: translateX(-50%);
+  background: transparent;
+  pointer-events: auto;
+}
+.resizer:hover, .resizer:active {
+  /* Keep one physical rule at the seam. A thicker active rule is perceived as
+     two lines when the adjacent track lands on a device-pixel boundary. */
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.resizer:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+/* A pointer resize has a deliberately wide, invisible hit target. Never
+ * paint its keyboard focus outline during that gesture: the two outline
+ * edges sit on either side of the real 1px seam and look like a second pair
+ * of dividers when the pointer is held at min/max. Keyboard resizing still
+ * gets the normal focus-visible affordance outside a live drag. */
+.shell[data-resizing="true"] .resizer:focus-visible,
+.shell[data-rail-resizing="true"] .resizer:focus-visible,
+.shell[data-resizing="true"] .canvasHandle:focus-visible,
+.shell[data-rail-resizing="true"] .canvasHandle:focus-visible {
+  outline: none;
+}
+.shell[data-resizing="true"] .resizer,
+.shell[data-rail-resizing="true"] .resizer {
+  /* The handles have their own `left`/`right` transition. The synchronous
+   * data-* locks are set before React renders the first pointer frame, so the
+   * painted seam must stop animating from those markers too. Otherwise the
+   * grid track follows the pointer while the hit target trails behind it,
+   * which reads as two lines at either clamp edge. */
+  transition: none !important;
+}
+.canvasHandle {
+  position: relative;
+  z-index: 2;
+  width: 1px;
+  flex: 0 0 1px;
+  cursor: col-resize;
+  touch-action: none;
+  border: 0;
+  background: var(--border);
+  transition: background-color 150ms ease;
+}
+.canvasHandle::after {
+  /* The primitive owns the invisible hit target; this keeps the visual seam
+     singular while preserving a comfortable pointer target. */
+  background: transparent;
+}
+.canvasHandle:hover,
+.canvasHandle:active {
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.canvasHandle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.main {
+  position: relative; display: flex; min-width: 0; min-height: 0;
+  flex-direction: column; isolation: isolate; background: var(--background);
+}
+.main[data-desktop-web="true"] > [data-slot="workspace-header"] {
+  border-bottom: 0;
+  background: var(--background);
+  padding-inline: 1.5rem;
+}
+.main > * { position: relative; }
+.contextMenu {
+  width: 15rem;
+  padding: 0.35rem;
+}
+.contextMenu :global([data-slot="dropdown-menu-item"]) {
+  min-height: 2.35rem;
+  gap: 0.65rem;
+  font-size: 0.84rem;
+}
+.contextMenu :global([data-slot="dropdown-menu-item"] svg) {
+  color: var(--muted-foreground);
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"][data-empty-workspace]:not([data-project-workspace]) > div:last-child > :not([data-home-credits]) {
+  display: none;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"][data-empty-workspace]:not([data-project-workspace]) [data-home-credits] {
+  display: inline-flex;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-workspace-upgrade] {
+  display: none !important;
+  width: 4.125rem;
+  height: 2rem;
+  min-height: 2rem;
+  gap: 0.25rem;
+  padding-inline: 0.5rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-credits] {
+  height: 2rem;
+  min-height: 2rem;
+  border-color: var(--border);
+  border-radius: 0.7rem;
+  background: var(--background);
+  color: var(--foreground);
+  gap: 0.3rem;
+  padding-inline: 0.65rem;
+}
+.main[data-desktop-web="true"][data-web-view="welcome"] > [data-slot="workspace-header"] {
+  padding-left: 1rem;
+  padding-right: 1.5rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-credits] svg {
+  width: 1rem;
+  height: 1rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-credits] {
+  width: 4.875rem;
+  min-width: 4.875rem;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-credits]:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-workspace-share] {
+  width: 4.125rem;
+  height: 2rem;
+  min-height: 2rem;
+  gap: 0.25rem;
+  padding-inline: 0.25rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-workspace-upgrade] svg {
+  width: 1rem;
+  height: 1rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-workspace-upgrade]:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-assist] {
+  width: 3.5rem !important;
+  height: 2rem !important;
+  min-height: 2rem !important;
+  gap: 0.25rem;
+  padding-inline: 0.55rem !important;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-assist] svg {
+  width: 1rem;
+  height: 1rem;
+}
+.main[data-desktop-web="true"] [data-slot="workspace-header"] [data-home-assist]:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.main[data-desktop-web="true"] > [data-slot="mobile-header"] {
+  display: none;
+  visibility: hidden;
+}
+.main[data-desktop-web="true"] [data-web-navigation-trigger] {
+  display: none;
+}
+
+/* Desktop task handoff: the welcome Composer is replaced by the live thread
+ * Composer after the first submit. Mounting the new surfaces with one shared
+ * entrance keeps that state change readable without animating the whole page
+ * or making the rail move. Mobile remains on its existing frozen path. */
+@media (min-width: 768px) {
+  /* Manus' welcome editor is a compact 120px surface. Keep this adjustment
+     on the empty-state contract only; submitted conversations use the taller
+     thread editor below and must not shift when entering a task. */
+  .main[data-desktop-web="true"][data-web-view="welcome"] :global([data-slot="composer"] form) {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  /* Manus widens the conversation composer after the first task starts. The
+   * empty project uses the site's 576px workbench column; thread mode gets a
+   * centered 768px conversation composer with a tighter two-row rhythm. */
+  .main[data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
+    width: min(48rem, calc(100% - 3rem)) !important;
+    padding: 0.65rem 0.85rem 0.4rem;
+    gap: 0.35rem;
+  }
+  .main[data-web-view="thread"] > [data-slot="composer"] {
+    /* Composer owns its own footer copy. Keeping an additional shell floor
+       lifted the active desktop editor about 16px above the Manus baseline. */
+    padding-bottom: 0;
+  }
+  .main[data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
+    /* The thread footer is bottom-anchored by the shell. Four fewer pixels of
+       outer floor moves the progress line, editor, and disclaimer together,
+       preserving their internal rhythm while matching the reference baseline. */
+    padding-bottom: 0.75rem;
+  }
+  .main[data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] textarea {
+    min-height: 2.4rem;
+  }
+
+  .main[data-web-view="thread"] > [data-slot="workspace-header"],
+  .main[data-web-view="thread"] > .timelineStage,
+  .main[data-web-view="thread"] > [data-slot="composer"] {
+    animation: web-thread-enter 180ms var(--ease-standard) both;
+  }
+}
+
+/* A zoomed desktop still has a fine pointer. Keep the Web shell on its own
+ * desktop contract when browser zoom makes the CSS viewport narrower than
+ * Tailwind's `md` breakpoint. The compact state removes the rail track
+ * entirely and leaves one header trigger, rather than creating a second
+ * miniature navigation mode. This is deliberately scoped by the Web marker;
+ * the phone Sheet never receives these rules. */
+@media (pointer: fine) {
+  .shell[data-desktop-web="true"] :global([data-slot="sidebar"]) {
+    display: block;
+  }
+  .shell[data-desktop-web="true"] :global([data-slot="sidebar-gap"]) {
+    display: block;
+    width: var(--sidebar-width);
+  }
+  .shell[data-desktop-web="true"][data-rail-collapsed="true"] :global([data-slot="sidebar-gap"]) {
+    width: var(--sidebar-width-icon);
+  }
+  .shell[data-desktop-web="true"] :global([data-slot="sidebar-container"]) {
+    display: flex;
+  }
+
+  /* Manus treats the narrow desktop shell as a full-width canvas: the rail
+   * is not left behind as a 52px icon strip. WorkspaceHeader owns the one
+   * visible menu trigger, and the same controlled Sidebar state reopens the
+   * complete rail when requested. Keep the DOM mounted for state/focus
+   * continuity, but remove both the reserved track and fixed paint layer. */
+  .shell[data-desktop-web="true"][data-rail-hidden="true"] :global([data-slot="sidebar"]),
+  .shell[data-desktop-web="true"][data-rail-hidden="true"] :global([data-slot="sidebar-gap"]),
+  .shell[data-desktop-web="true"][data-rail-hidden="true"] :global([data-slot="sidebar-container"]) {
+    display: none;
+    width: 0;
+  }
+}
+
+@keyframes web-thread-enter {
+  from { opacity: 0; transform: translateY(0.35rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stage { flex: 1; min-height: 0; }
+.timelineStage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.timelineStage > [data-slot="conversation-timeline"] { min-height: 0; }
+.timelineStage[data-canvas-reopen="true"] > [data-slot="conversation-timeline"] [data-slot="message-scroller-viewport"] {
+  /* The reopen affordance is an overlay on the timeline, so reserve a real
+     scroll-safe footer instead of placing it over the last delivery card. */
+  padding-bottom: 4.25rem;
+}
+.canvasReopen {
+  position: absolute;
+  right: 1rem;
+  bottom: .75rem;
+  z-index: 2;
+  display: inline-flex;
+  max-width: min(16rem, calc(100% - 2rem));
+  align-items: center;
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  min-height: 2.25rem;
+  color: var(--primary);
+  font-size: .78rem;
+}
+@media (max-width: 960px) {
+  .canvasReopen { min-height: 2.75rem; }
+  /* A compact Web window remains a single-column document while the fixed
+     shadcn desktop rail stays visible and owns its own painted geometry. */
+  .shell:not([data-desktop-web="true"]) .resizer { display: none; }
+
+  /* The shared Textarea primitive carries a 4rem minimum. Manus uses a
+     single compact editor row in the welcome Composer, so the explicit Web
+     skin overrides that primitive only inside the desktop Web contract. */
+  .main[data-desktop-web="true"] :global([data-slot="composer"] textarea) {
+    height: 1.5rem !important;
+    min-height: 1.5rem !important;
+  }
+
+  /* Below shadcn's `md` visibility floor the project rail is intentionally
+     absent, but the fixed global icon rail remains. Give the main inset its
+     own column instead of letting content render underneath the fixed rail;
+     the old separator must disappear with the absent project rail. */
+  .shell[data-desktop-web="true"] .inset {
+    width: 100%;
+    margin-left: 0;
+  }
+  /* `desktopWeb` is a full desktop document even inside a narrow split
+   * window. Match Manus' thread composer edge-to-edge rhythm here; the phone
+   * path is excluded by the explicit desktop marker and keeps its frozen
+   * touch sizing. */
+  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] {
+    padding-inline: 1rem;
+    padding-bottom: 0;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
+    /* Keep the disclosure line inside the same 16px footer rhythm as Manus;
+       the previous 32px floor pushed the editor noticeably too high. */
+    padding: 0 0 0.85rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
+    width: 100% !important;
+    gap: 0.2rem;
+    /* Keep the active composer at Manus' two-row height. The welcome editor
+       remains compact; only a submitted conversation gets the taller top
+       breathing room, which also lifts the progress bar without moving the
+       controls row. */
+    padding: 1.7rem 0.85rem 0.3rem;
+  }
+  .main[data-desktop-web="true"] > [data-slot="composer"] > div > form[aria-label] textarea {
+    width: 100%;
+    /* Manus' compact Web editor keeps one quiet text row; the controls row
+       supplies the remaining height of the 98px composer surface. The shared
+       Textarea primitive defaults to 4rem, which made our narrow Web editor
+       40px taller than the reference and pushed the prompt starters down. */
+    height: 1.5rem !important;
+    min-height: 1.5rem !important;
+    /* The outer Composer already reserves the 16px document inset. Removing
+       the shared textarea's extra inner gutter aligns typed text and the
+       placeholder with the same 420px reading column as the conversation. */
+    padding-left: 0.125rem;
+  }
+}
+
+/* Narrow desktop keeps the full-width Web canvas. The rail is hidden by the
+ * pointer-fine compact contract above; this trigger is the single expansion
+ * affordance and opens the same complete rail surface as wide desktop. */
+@media (max-width: 768px) and (pointer: fine) {
+  .main[data-desktop-web="true"] [data-web-navigation-trigger] { display: inline-flex; }
+}
+
+/* A narrow User Web window still uses the full desktop header. The route is
+ * never allowed to inherit the phone-only brand header. */
+@media (max-width: 960px) {
+  .main[data-desktop-web="true"] > [data-slot="mobile-header"] { display: none; }
+  .main[data-desktop-web="true"] > [data-slot="workspace-header"] {
+    display: flex;
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+    /* The compact desktop reference starts the trigger box 16px from the
+       inset edge. Its own 8px button padding places the label on the 24px
+       reading axis without shifting the complete control to that axis. */
+    padding: 0 1.5rem 0 1rem !important;
+  }
+  .main[data-desktop-web="true"] [data-web-navigation-trigger] {
+    display: inline-flex;
+    flex: 0 0 2rem;
+  }
+  .main[data-desktop-web="true"] > [data-slot="workspace-header"] [data-sidebar="trigger"] {
+    width: 1.5rem !important;
+    height: 2rem !important;
+    min-height: 0 !important;
+  }
+  .main[data-desktop-web="true"] > [data-slot="workspace-header"] [data-slot="button"] {
+    min-height: 0;
+  }
+  .main[data-desktop-web="true"] > [data-slot="workspace-header"] [data-slot="button"][data-size="sm"] {
+    height: 2rem;
+  }
+  .main[data-desktop-web="true"] > [data-slot="workspace-header"] > div:first-child > [data-slot="dropdown-menu-trigger"] {
+    height: 2rem !important;
+    min-height: 0 !important;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .shell:not([data-desktop-web="true"]) .workspace[data-canvas-open="true"] .canvasHandle {
+    display: none;
+  }
+}
+
+/* Empty and active desktop workbenches share the same Composer primitive.
+ * Keep their editor baseline on the 32px document column without changing
+ * the phone path or the shell-owned outer card geometry. */
+.main[data-desktop-web="true"] :global([data-slot="composer"] textarea) {
+  padding-left: 0.125rem;
+}
+
+/* The desktop Web contract remains active in a narrow split window. Match
+ * Manus' conversation column rather than allowing the shared responsive
+ * padding to push the thread 7px inward. This selector is explicitly gated
+ * by the desktop marker and therefore does not alter the phone shell. */
+.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+  padding-inline: 2rem;
+  /* Manus uses a 4px breathing line below its 56px chrome before the first
+     user turn; the conversation owns all later vertical spacing. */
+  padding-top: 0.25rem;
+}
+.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-content"]) {
+  /* The scroller primitive's content wrapper sits above `.inner`; without
+     this cap it expands to the full 2K main panel and defeats the centered
+     conversation measure below. Use the exact Composer width as the shared
+     desktop reading track while narrow desktop windows naturally fill. */
+  width: min(48rem, 100%);
+  margin-inline: auto;
+  gap: 1.75rem;
+}
+.main[data-desktop-web="true"][data-web-view="thread"] :global([data-conversation-thread-inner="true"]) {
+  /* Manus keeps answers on a 736px reading line within the 768px Composer
+     and progress track, giving long responses an intentional 16px inset. */
+  width: min(46rem, 100%);
+}
+
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-item"]:first-child) {
+    /* The shadcn scroller reserves a 44px previous-item peek by default.
+       Manus leaves a smaller lead-in above the first user turn; preserve the
+       primitive's compensating negative margin while reducing only the
+       visible top offset for this desktop Web skin. */
+    margin-block-start: 0.875rem;
+    margin-block-end: -0.875rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="assistant-identity"]) {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 1.75rem;
+    color: var(--foreground);
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="task-stage"]) {
+    display: none;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="credit-note"]) {
+    display: inline-flex;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="user-message-body"]),
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="markdown-message"]) {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="assistant-identity"]) {
+    margin-top: 3.0625rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="assistant-identity-mark"]) {
+    display: inline-flex;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="assistant-actions"]) {
+    display: flex;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] [data-slot="popover-trigger"]) {
+    width: 3.25rem;
+    min-height: 0;
+    height: 2rem;
+    gap: 0.25rem;
+    padding-inline: 0.25rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"]) {
+    height: 3.5rem;
+    min-height: 3.5rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    /* The workbench chrome uses a 24px title inset, while the conversation
+       keeps its independent 32px reading inset below. Keeping the two tracks
+       explicit prevents toolbar adjustments from shifting the message column. */
+    padding-left: 1.5rem;
+    padding-right: 1.0625rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > button:first-child) {
+    height: 2rem;
+    min-height: 2rem !important;
+    gap: 0.375rem;
+    padding: 0.4375rem 0.375rem 0.4375rem 0.5rem;
+    font-size: 1.125rem;
+    line-height: 1.375rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div > [data-size="sm"][data-workspace-upgrade]) {
+    width: 4.125rem;
+    min-height: 0;
+    height: 2rem;
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div:last-child [data-slot="dropdown-menu-trigger"]) {
+    width: 2rem;
+    min-height: 0;
+    height: 2rem;
+  }
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div:last-child) {
+    margin-right: 0;
+    gap: 0.25rem;
+  }
+  /* Manus separates the usage cluster from Share, and leaves a slightly
+     wider breathing gap before the final workspace action. Keep those gaps
+     explicit instead of allowing button label widths to move the group. */
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div:last-child > :nth-child(3)) {
+    margin-left: 0.5rem;
+  }
+.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="workspace-header"] > div:last-child > :last-child) {
+  margin-left: 0.25rem;
+}
+
+/* Respect the system motion preference without changing the live-resize
+ * contract. Pointer transactions already disable transitions synchronously;
+ * this rule covers collapse/expand and canvas reopen when motion is reduced. */
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .shell .resizer,
+  .shell .canvasHandle,
+  .shell :global([data-slot="sidebar-gap"]),
+  .shell :global([data-slot="sidebar-container"]),
+  .shell :global([data-slot="sidebar-inset"]),
+  .shell :global([data-slot="context-panel"]) {
+    transition: none !important;
+  }
+  .main[data-web-view="thread"] > [data-slot="workspace-header"],
+  .main[data-web-view="thread"] > .timelineStage,
+  .main[data-web-view="thread"] > [data-slot="composer"] {
+    animation: none !important;
+  }
+}

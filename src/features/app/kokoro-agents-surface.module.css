@@ -1,0 +1,305 @@
+.surface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+  container-name: agents-surface;
+  container-type: inline-size;
+}
+
+.header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
+  height: 3.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem;
+  background: var(--background);
+}
+
+.headerTitle { font-size: 1.125rem; font-weight: 500; line-height: 1.5rem; }
+
+.scroller {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.content {
+  width: min(calc(100% - 2.5rem), 62.5rem);
+  min-width: 0;
+  margin: 0 auto;
+  /* AppFrame keeps the desktop header in the shell flow. The surface's
+     scroller begins at the viewport edge, so reserve the 56px header here to
+     keep the hero at the same baseline as the reference workspace. */
+  padding: 5rem 0 4rem;
+}
+
+.artwork {
+  position: relative;
+  width: min(22.3125rem, 100%);
+  height: 15.625rem;
+  aspect-ratio: auto;
+  margin: 0 auto 2.5rem;
+  flex: 0 0 auto;
+}
+.agentDevice {
+  position: absolute;
+  top: 5.25rem;
+  left: 4.375rem;
+  width: 11.25rem;
+  height: 9.25rem;
+  border: 0.25rem solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-bottom: 0;
+  border-radius: 1.75rem 1.75rem 0 0;
+}
+.agentCard {
+  position: absolute;
+  top: 8.8125rem;
+  left: 2.375rem;
+  z-index: 2;
+  display: flex;
+  width: 15.5rem;
+  height: 3.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 0.875rem;
+  background: var(--card);
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.agentAvatar { display: grid; width: 2.25rem; height: 2.25rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--background); color: var(--foreground); }
+.agentAvatar svg { width: 1.125rem; height: 1.125rem; }
+.agentIdentity { display: grid; min-width: 0; flex: 1; grid-template-columns: max-content 1rem; grid-template-rows: 1.25rem 0.25rem 0.25rem; align-items: center; column-gap: 0.25rem; row-gap: 0.25rem; }
+.agentIdentity strong { font-size: 0.875rem; font-weight: 600; line-height: 1.25rem; }
+.agentIdentity i { display: block; height: 0.25rem; grid-column: 1 / -1; border-radius: 999px; background: var(--secondary); }
+.agentIdentity i:last-child { width: 56%; }
+.verified { width: 0.875rem; height: 0.875rem; color: #3387f8; fill: white; stroke-width: 2.5; }
+
+.platformBubble {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.platformBubble svg { width: 1.35rem; height: 1.35rem; color: white; }
+.platformBubble span { font-size: 0.55rem; font-weight: 800; }
+.platformBubble[data-platform="telegram"] { top: 1.25rem; left: 3.75rem; background: #55a9df; }
+.platformBubble[data-platform="messenger"] { top: 0; left: 8.625rem; background: #3478f6; }
+.platformBubble[data-platform="line"] { top: 1.25rem; left: 13.5rem; background: #5acb68; }
+.platformBubble[data-platform="whatsapp"] { top: 4.625rem; left: 0.625rem; background: #59cf70; }
+.platformBubble[data-platform="slack"] { top: 4.625rem; right: 0.625rem; background: #fff; color: #735184; box-shadow: 0 0.35rem 1rem color-mix(in srgb, var(--foreground) 10%, transparent); }
+.platformBubble[data-platform="slack"] svg { color: #735184; }
+
+.heroCopy { text-align: center; }
+.heroCopy h1 { margin: 0; font-family: var(--font-serif); font-size: 1.5rem; font-weight: 600; line-height: 1.875rem; letter-spacing: 0; }
+.heroCopy h1 span { display: inline-block; min-width: 4.5rem; animation: word-in var(--motion-base) var(--ease-standard); }
+.startAction { display: flex; justify-content: center; margin-top: 2.5rem; }
+.startButton {
+  width: 9rem;
+  height: 2.5rem;
+  gap: 0.375rem;
+  border-radius: 0.625rem;
+  padding-inline: 1rem;
+  font-size: 0.875rem;
+}
+
+/* The reference keeps the launch affordance compact: three channel marks sit
+ * inside the black action, overlap by 5px, and never change the button's
+ * 144×40 desktop geometry. These are local vector primitives rather than
+ * remote brand assets, so the preview remains deterministic and portable. */
+.startPlatforms {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 1.25rem;
+}
+
+.startPlatform {
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--primary);
+}
+
+.startPlatform + .startPlatform { margin-inline-start: -0.3125rem; }
+.startPlatform svg { width: 0.75rem; height: 0.75rem; stroke-width: 2; }
+.startPlatform[data-platform="telegram"] { background: #55a9df; color: white; }
+.startPlatform[data-platform="line"] { background: #59cf70; color: white; }
+.startPlatform[data-platform="slack"] { background: white; color: #735184; }
+
+.featureList {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: minmax(7.1875rem, auto);
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+.featureCard {
+  display: flex;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 7.1875rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6875rem;
+  /* Card owns the reference hairline. The shadcn Card primitive contributes a
+     1px `border` utility, so keep this explicit to preserve the 0.5px web
+     surface line at normal desktop zoom. */
+  border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 1rem;
+}
+.featureIcon { display: grid; width: 1.5rem; height: 1.5rem; place-items: center; }
+.featureIcon svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.75; }
+.featureCard h2 { margin: 0 0 0.25rem; font-size: 0.875rem; font-weight: 500; line-height: 1.3125rem; text-wrap: balance; }
+.featureCard p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; line-height: 1.3125rem; }
+
+@container agents-surface (min-width: 48rem) {
+  .featureList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container agents-surface (min-width: 60rem) {
+  .featureList {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.comingSoon { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-top: 1.5rem; padding: 0.75rem 1.25rem; }
+.comingSoon h2 { margin: 0; color: var(--muted-foreground); font-size: 0.75rem; font-weight: 500; }
+.comingPlatforms { display: flex; gap: 1.25rem; }
+.comingPlatforms span { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--muted-foreground); font-size: 0.75rem; }
+.comingPlatforms svg { width: 0.875rem; height: 0.875rem; }
+
+.setupDialog {
+  width: 25rem;
+  max-width: 25rem;
+  height: 27.875rem;
+  min-height: 0;
+  display: block;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 22%);
+}
+.setupOverlay { background: rgb(0 0 0 / 42%); backdrop-filter: blur(4px); }
+.dialogHeader { width: 100%; height: 3.75rem; margin: 0; padding: 1.25rem 3.5rem 0.75rem 1.25rem; box-sizing: border-box; }
+.platformTabs { width: 100%; gap: 1.5rem; }
+.platformTabsList { display: flex; width: 17.65625rem; height: 2rem; margin: 0 auto; align-items: stretch; border: 1px solid rgb(0 0 0 / 8%); border-radius: 0.5rem; background: rgb(55 53 47 / 4%); padding: 0.0625rem; }
+.platformTab { width: auto; height: 1.75rem; flex: 0 0 auto; gap: 0.375rem; border-radius: 0.375rem; padding: 0 1rem; font-size: 0.8125rem; line-height: 1.125rem; }
+.platformTab[data-state="active"] { background: var(--card); }
+.platformTab svg { width: 1rem; height: 1rem; }
+.platformTab span { font-size: 0.46rem; font-weight: 800; }
+.platformPanel { display: flex; flex-direction: column; align-items: center; outline: none; }
+.qrCode { position: relative; display: grid; width: 10rem; height: 10rem; place-items: center; margin: 0; border-radius: 0.5rem; background: var(--card); padding: 0.625rem; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 8%, transparent); }
+.qrCode > svg { display: block; width: 8.75rem; height: 8.75rem; }
+.qrLoadingState { width: 8.75rem; height: 8.75rem; }
+.qrLoading { display: block; width: 100%; height: 100%; border-radius: 0.375rem; background: var(--secondary); }
+.qrError {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  text-align: center;
+}
+.qrError > svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+.qrError :global([data-slot="alert-description"]) { display: block; font-size: 0.75rem; line-height: 1rem; }
+.qrLogo { position: absolute; inset: 50% auto auto 50%; display: grid; width: 1.75rem; height: 1.75rem; place-items: center; transform: translate(-50%, -50%); border: 0.2rem solid var(--card); border-radius: 0.45rem; background: var(--foreground); color: var(--primary-foreground); }
+.qrLogo svg { width: 0.9rem; height: 0.9rem; }
+.qrLogo span { font-size: 0.4rem; font-weight: 800; }
+.dialogCopy { width: 100%; margin-top: 1.5rem; text-align: center; }
+.dialogTitle { margin: 0; font-size: 1.25rem; font-weight: 600; line-height: 1.625rem; }
+.dialogCopy p { margin: 0.25rem 0 0; color: #737373; font-size: 0.875rem; line-height: 1.25rem; }
+.continueButton { width: 22rem; height: 2.5rem; margin-top: 2rem; border-radius: 0.625rem; }
+.regenerateButton { width: 22rem; height: 2.5rem; margin-top: 0.75rem; border-radius: 0.625rem; }
+
+.connectionStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.875rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.connectionStatusDot { width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--muted-foreground); }
+.connectionStatus[data-status="connected"] { color: #27834b; }
+.connectionStatus[data-status="connected"] .connectionStatusDot { background: #27834b; }
+.connectionStatus[data-status="expired"] { color: #b54708; }
+.connectionStatus[data-status="expired"] .connectionStatusDot { background: #b54708; }
+
+/* DialogContent is portalled outside `.surface`, so use the viewport only for
+ * this desktop affordance. The mobile surface keeps its existing geometry. */
+@media (min-width: 48rem) {
+  .setupDialog {
+    width: min(25rem, calc(100vw - 2rem));
+    max-width: 25rem;
+    height: min(27.875rem, calc(100dvh - 2rem));
+    max-height: calc(100dvh - 2rem);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--background);
+    overflow: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .setupDialog > :global([data-slot="dialog-close"]) {
+    top: 0.625rem;
+    right: 0.625rem;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .dialogHeader { flex: 0 0 3.75rem; }
+  .dialogScrollArea {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+  .platformTabs { padding-bottom: 1.5rem; flex: 0 0 auto; }
+  .platformPanel { min-height: 0; }
+  .qrCode { flex: 0 0 10rem; }
+  .continueButton { width: min(22rem, calc(100% - 2rem)); min-height: 2.5rem; flex-shrink: 0; }
+}
+
+@keyframes word-in {
+  from { opacity: 0; transform: translateY(0.25rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroCopy h1 span { animation: none; }
+}

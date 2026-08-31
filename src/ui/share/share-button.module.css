@@ -1,0 +1,144 @@
+/* 会话头部分享控件：触发按钮 + 展开的链接/撤销浮层（暖纸 token）。 */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+}
+
+.trigger svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+@media (min-width: 768px) {
+  /* Manus keeps the header share action compact; anchoring its width avoids
+     shifting the upgrade and utility icons when the label is localized. */
+  .trigger {
+    width: 4.125rem;
+    height: 2rem;
+    min-height: 2rem;
+    gap: 0.25rem;
+    padding-inline: 0.25rem;
+  }
+  .trigger svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  /* Manus' share surface is a compact 400px popover. The public-link
+     implementation keeps Kokoro's own data and actions, but uses the same
+     floating geometry and breathing room as the reference surface. */
+  .popover {
+    width: 25rem;
+    min-width: 25rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+}
+
+.err {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.popover {
+  /* The rail remains a separate navigation plane in a narrow desktop split
+     view. This cap keeps an end-aligned share surface inside the main pane
+     instead of letting it cross the rail divider. */
+  width: min(19.25rem, 80vw);
+  padding: 0.9rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px -18px color-mix(in srgb, var(--foreground) 40%, transparent);
+}
+
+.hint {
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.linkRow {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.link {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
+  color: var(--foreground);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.copy {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.confirmation {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+}
+
+.confirmationHint {
+  margin: 0;
+  color: var(--error-strong);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.confirmation .actions {
+  margin-top: 0.55rem;
+}
+
+.revoke {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.dismiss {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 767px) {
+  /* Only the phone surface uses the touch grid. Compact desktop Web keeps the
+     same compact share geometry as the reference instead of switching to a
+     second interaction density at 960px. */
+  .trigger, .link, .copy, .revoke, .dismiss { min-height: 2.75rem; }
+}
+
+@media (min-width: 768px) {
+  .popover {
+    width: 25rem;
+    min-width: 25rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+}

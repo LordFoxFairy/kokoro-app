@@ -1,0 +1,166 @@
+/* 营销/登录共用顶栏样式（WEB-FACE）：暖纸皮肤，桌面横排、移动汉堡下拉。 */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 4rem;
+  /* 固定高度栏永不被 flex 容器压缩（父容器高度受限时会挤压默认 flex-shrink:1 的子项）。 */
+  flex-shrink: 0;
+  padding: 0 clamp(1rem, 4vw, 2.5rem);
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--foreground);
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.65rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.brandFallbackIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.brandLogo {
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
+  object-fit: contain;
+}
+
+.brandName {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navDesktop {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.navLink {
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.94rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.navLink:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.brand:focus-visible,
+.navLink:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.navCta {
+  margin-left: 0.35rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.navToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  color: var(--foreground);
+}
+
+.mobileSheet {
+  width: min(20rem, 86vw);
+  max-width: none;
+  gap: 0;
+  border-left-color: var(--border);
+  background: var(--card);
+  padding: 1rem;
+}
+
+.mobileSheet :global([data-slot="sheet-close"]) {
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobileHeader {
+  padding: 0 0 1rem;
+  text-align: left;
+}
+
+.navMobile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0;
+}
+
+.navMobile .navLink,
+.navMobile .navCta {
+  margin: 0;
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
+}
+
+@media (max-width: 768px) {
+  .brand {
+    min-height: 2.75rem;
+  }
+
+  .navDesktop {
+    display: none;
+  }
+
+  .navToggle {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+}

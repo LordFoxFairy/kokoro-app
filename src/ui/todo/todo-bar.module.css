@@ -1,0 +1,213 @@
+/* 计划条样式：钉在输入框上方的可收缩清单。 */
+
+.todobar {
+  flex-shrink: 0;
+  width: min(var(--content-width), 100%);
+  margin: 0 auto 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--primary) 65%, var(--foreground) 35%);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.titleIcon {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.count {
+  flex-shrink: 0;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 75%, transparent);
+  color: color-mix(in srgb, var(--primary) 72%, var(--foreground) 28%);
+  font-size: 0.7rem;
+}
+
+.separator {
+  color: color-mix(in srgb, var(--foreground) 24%, transparent);
+  font-weight: 400;
+}
+
+.activeStep {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: transform 150ms ease;
+}
+
+/* 进度条：钉在头部下沿的一条细轨，填充随完成比推进——一眼读出整体进度。 */
+.progress {
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.progressFill {
+  height: 100%;
+  background: color-mix(in srgb, var(--primary) 70%, transparent);
+  border-radius: 0 999px 999px 0;
+  transition: width 0.2s ease-out;
+}
+
+.todobar[data-state="open"] .chevron {
+  transform: rotate(180deg);
+}
+
+/* The current step is useful in the collapsed summary. Once the checklist is
+ * open, the same text is already present as a row below it; hiding the summary
+ * copy keeps the disclosure from rendering the active step twice. */
+.todobar[data-state="open"] .activeStep,
+.todobar[data-state="open"] .separator {
+  display: none;
+}
+
+/* Manus presents the active plan as a compact step bar immediately above the
+ * composer. Keep the full checklist available behind the same shadcn
+ * Collapsible, but start it closed on desktop so the composer remains the
+ * visual anchor. */
+.todobar[data-desktop-web="true"] {
+  /* Manus aligns the progress disclosure to the conversation/composer
+     measure, not to a narrow card width. The old 418px cap made the bar
+     float in the middle of a wide desktop conversation. */
+  width: min(48rem, calc(100% - 4rem));
+  margin-bottom: 0;
+  /* The active Manus row is a disclosure strip, not a card. The composer
+     owns the visible container below it; putting another rounded surface
+     here creates the stacked-pill look that made the old layout feel busy. */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.todobar[data-desktop-web="true"] .toggle {
+  min-height: 2.35rem;
+  padding-inline: 0.85rem;
+  font-size: 0.8rem;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.todobar[data-desktop-web="true"] .title {
+  min-width: 0;
+  flex: 1;
+}
+
+.todobar[data-desktop-web="true"] .count {
+  margin-left: auto;
+}
+
+.todobar[data-desktop-web="true"] .toggle:hover {
+  background: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+
+.todobar[data-desktop-web="true"] .progress {
+  display: none;
+}
+
+.listContent {
+  overflow: hidden;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  padding: 0.55rem 0.85rem 0.65rem;
+  max-height: 30vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 960px) {
+  /* The plan bar is pinned above the composer, so its disclosure control must
+     remain a full touch row rather than a small text-sized button. */
+  .toggle { min-height: 2.75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .progressFill {
+    transition: none;
+  }
+}
+
+/* todo：状态用细线图标 + 颜色区分。 */
+.todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 0.08rem;
+}
+
+.todoGlyph {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.todo[data-status="completed"] {
+  color: color-mix(in srgb, var(--foreground) 42%, var(--background) 58%);
+}
+
+.todo[data-status="completed"] .text {
+  text-decoration: line-through;
+}
+
+.todo[data-status="completed"] .todoGlyph {
+  color: color-mix(in srgb, var(--primary) 48%, var(--background) 52%);
+}
+
+.todo[data-status="in_progress"] {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.todo[data-status="in_progress"] .todoGlyph {
+  color: var(--primary);
+}
+
+.todo[data-status="pending"] {
+  color: color-mix(in srgb, var(--foreground) 60%, var(--background) 40%);
+}
+
+.todo[data-status="pending"] .todoGlyph {
+  color: color-mix(in srgb, var(--foreground) 38%, var(--background) 62%);
+}

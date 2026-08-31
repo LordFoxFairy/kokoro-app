@@ -1,0 +1,946 @@
+/* 计费面板：居中模态浮层，暖纸感（--* token）。余额卡 + 流水列表。 */
+
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  width: min(34rem, 100%);
+  max-height: min(44rem, 100%);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--foreground);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.embeddedBody {
+  padding: 1.5rem 0 1rem;
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.usageTabs {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  height: 2.5rem;
+  margin-bottom: 1.5625rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
+}
+
+.usageTab {
+  position: relative;
+  height: 2.5rem;
+  min-height: 0 !important;
+  border-radius: 0;
+  padding: 0;
+  color: var(--muted-foreground);
+  width: 1.75rem;
+  min-width: 1.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.usageTab[data-state="on"] {
+  background: transparent;
+  color: var(--foreground);
+  box-shadow: inset 0 -2px 0 var(--foreground);
+}
+
+.feedback {
+  margin: 0;
+}
+
+.emptyState {
+  min-height: 8rem;
+  padding: 1.25rem;
+}
+
+.loadingState { display: flex; flex-direction: column; gap: 0.65rem; padding: 1.25rem 0; }
+.loadingLine, .loadingLineShort { width: 100%; height: 2.5rem; }
+.loadingLineShort { width: 62%; }
+
+@media (max-width: 640px) {
+  .panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .head {
+    padding: 1rem;
+  }
+
+  .body {
+    padding: 1rem;
+  }
+
+  .lowBalance {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+}
+
+@media (max-width: 960px) {
+  /* Billing can be embedded in Settings or rendered as an independent panel;
+     both paths use the same 44px interaction contract. */
+  .panel :global(button),
+  .panel :global(input),
+  .panel :global(textarea),
+  .panel :global(select),
+  .panel :global([role="combobox"]) { min-height: 2.75rem; }
+}
+
+.balanceCard {
+  padding: 1.1rem 1.25rem;
+  background: var(--secondary);
+  border-radius: var(--radius-xl);
+}
+
+.embeddedBody .balanceCard {
+  width: 100%;
+  height: 11.9375rem;
+  min-height: 11.9375rem;
+  box-sizing: border-box;
+  padding: 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: #fafafa;
+}
+
+.embeddedBalanceContent {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.embeddedPlanHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 3.5625rem;
+  min-height: 3.5625rem;
+  gap: 1rem;
+  border-bottom: 1px dashed var(--border);
+  font-size: 1rem;
+}
+
+.embeddedPlanHeader strong {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.375rem;
+}
+
+.embeddedCreditRows {
+  display: flex;
+  height: 8.25rem;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.embeddedCreditRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  height: 2.625rem;
+  min-height: 2.625rem;
+}
+
+.embeddedCreditRow > svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  color: var(--foreground);
+  stroke-width: 1.8;
+}
+
+.embeddedCreditCopy {
+  min-width: 0;
+  flex: 1;
+}
+
+.embeddedMetric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.embeddedMetric > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+}
+
+.embeddedMetric strong {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.embeddedMetricSubrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricHelp {
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  min-height: 0 !important;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.metricHelp svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.balanceHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.balanceUpgrade {
+  min-height: 2rem;
+  border-radius: 0.5rem;
+  padding-inline: 1.125rem;
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+}
+
+.embeddedRefreshHint {
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+
+.embeddedBody .trend,
+.embeddedBody .byModel,
+.embeddedBody .lowBalance,
+.embeddedBody > .more {
+  display: none;
+}
+
+.balanceMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.balanceLabel {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.balanceValue {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.balanceHeld {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* B1c 低余额预警条：暖警示底，左文右 CTA。 */
+.lowBalance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+}
+
+.lowBalanceText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.lowBalanceTitle {
+  font-size: 0.9rem;
+  color: var(--foreground);
+}
+
+.lowBalanceBody {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.lowBalanceCta {
+  flex-shrink: 0;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 余额走势 sparkline 区。 */
+.trend {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--secondary);
+  border-radius: var(--radius-lg);
+}
+
+.trendHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.trendTitle {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.trendHint {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 2rem;
+}
+
+.sparkline polyline {
+  stroke: var(--primary);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* B1d 本月按模型消费分解：卡片内每模型一行（名+积分+占比条+对话次数）。 */
+.byModel {
+  margin-top: 0.85rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--secondary);
+  border-radius: var(--radius-lg);
+}
+
+.byModelTitle {
+  margin: 0 0 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.byModelList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.byModelRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.byModelRowHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.byModelName {
+  font-size: 0.82rem;
+  color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.byModelSpent {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.byModelBarTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.byModelBar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.byModelRuns {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+
+.ledgerHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ledgerHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.ledgerHead svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--muted-foreground);
+  stroke-width: 1.7;
+}
+
+.embeddedBody .ledgerHeadRow {
+  margin: 1.5rem 0 0;
+}
+
+.embeddedBody .ledgerHead {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+}
+
+/* 消费/入账筛选 chip 组。 */
+.filters {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  background: var(--secondary);
+  border-radius: var(--radius-md);
+}
+
+.filterChip {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  transition: color 0.12s ease;
+}
+
+.filterChip[data-state="active"] {
+  color: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+/* 按天分组：组头（日期 + 当日净额），下挂当日条目。 */
+.dayGroup {
+  margin-bottom: 0.5rem;
+}
+
+.dayHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.25rem 0.35rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dayLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+}
+
+.dayNet {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.dayNet[data-sign="positive"] {
+  color: var(--success);
+}
+
+.dayNet[data-sign="negative"] {
+  color: var(--muted-foreground);
+}
+
+.embeddedBody .dayHead {
+  position: static;
+  height: 2.28125rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0;
+}
+
+.embeddedBody .dayLabel {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.21875rem;
+  letter-spacing: 0;
+}
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.entryMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.entryReason {
+  font-size: 0.9rem;
+  color: var(--foreground);
+}
+
+/* 条目次行：时间 + run 标记。 */
+.entryMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.entryTime {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.runTag {
+  font-size: 0.68rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted-foreground);
+  background: var(--secondary);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entryDelta {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entryDelta[data-sign="positive"] {
+  color: var(--success);
+}
+
+.entryDelta[data-sign="negative"] {
+  color: var(--error);
+}
+
+.entryDelta[data-sign="zero"] {
+  color: var(--muted-foreground);
+}
+
+.embeddedBody .entry {
+  height: 2.125rem;
+  padding: 0.5rem 0;
+}
+
+.embeddedBody .entryReason,
+.embeddedBody .entryDelta {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.embeddedBody .entryReason {
+  display: inline-block;
+  max-width: 36rem;
+  overflow: hidden;
+  color: var(--foreground);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.embeddedBody .entryDelta {
+  margin: -0.25rem;
+  padding: 0.25rem;
+  color: var(--foreground);
+}
+
+.embeddedBody .entryDelta[data-sign] {
+  color: var(--foreground);
+}
+
+.scopedLoading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+}
+
+.websiteUsage {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.usageOverview {
+  height: 15.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.autoTopUpRow {
+  display: flex;
+  height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.autoTopUpRow button {
+  display: flex;
+  width: 6.5rem;
+  height: 2rem;
+  min-height: 0;
+  flex-direction: row;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  padding: 0 0.625rem;
+  line-height: 1.125rem;
+}
+
+.autoTopUpRow button strong,
+.autoTopUpRow button small { color: inherit; font-size: 0.875rem; font-weight: 500; }
+
+.usageCategoryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  height: 9.1875rem;
+}
+
+.usageCategory {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.625rem 1rem;
+  border: 0;
+  border-radius: 0.625rem;
+  background: var(--secondary);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.usageCategory strong {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.25rem;
+  margin-bottom: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.usageCategory strong .metricHelp { color: var(--muted-foreground); }
+.usageCategory span { color: var(--muted-foreground); }
+.usageCategory b { margin-bottom: 0.625rem; font-weight: 500; }
+
+.usageReset {
+  height: 2.5rem;
+  margin: 0;
+  padding-top: 0.625rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.usageDetailsHead {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 1.5rem 2.625rem;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+
+.usageDetailsHead h3 { grid-column: 1 / -1; margin: 0; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; }
+.usagePeriod {
+  display: flex;
+  width: 17.1875rem;
+  height: 2.0625rem;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  overflow: hidden;
+}
+.usageDetailsHead label { display: block; min-width: 0; flex: 1; }
+.usageDetailsHead input { width: 100%; height: 2rem; border: 0; padding: 0 0.625rem; background: transparent; color: var(--foreground); font-size: 0.8125rem; outline: 0; }
+.usageDetailsHead p { margin: 0; text-align: right; font-size: 0.8125rem; font-weight: 500; }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.websiteTableHead,
+.websiteRows li {
+  display: grid;
+  grid-template-columns: 1fr 8rem;
+  height: 2.125rem;
+  align-items: center;
+  padding: 0 0.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+
+.websiteTableHead { color: var(--muted-foreground); }
+.websiteTableHead span:last-child,
+.websiteRows li span:last-child { text-align: right; }
+
+.websiteRows { margin: -1.25rem 0 0; padding: 0; list-style: none; }
+
+.websiteEmpty,
+.computerUsage {
+  display: flex;
+  min-height: 9rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.375rem;
+  text-align: center;
+}
+
+.websiteEmpty {
+  justify-content: flex-start;
+  gap: 0;
+  padding-top: 1px;
+}
+
+.websiteEmpty > svg {
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.6875rem;
+  color: var(--muted-foreground);
+  stroke-width: 1.75;
+}
+
+.websiteEmpty strong,
+.computerUsage strong { font-size: 0.875rem; font-weight: 500; }
+.websiteEmpty strong { margin-bottom: 0.25rem; line-height: 1.25rem; }
+.websiteEmpty span,
+.computerUsage span { color: var(--muted-foreground); font-size: 0.8125rem; }
+.websiteEmpty span { line-height: 1.25rem; }
+.websiteEmpty button,
+.websiteEmpty > a,
+.computerUsage button,
+.computerUsage > a { height: 2rem; min-height: 0; margin-top: 0.5rem; font-size: 0.8125rem; }
+
+.websiteEmpty > a {
+  width: 5.75rem;
+  height: 2rem;
+  min-height: 2rem;
+  margin-top: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.computerUsage {
+  min-height: 31.3125rem;
+  margin-top: -1.25rem;
+  gap: 0;
+  padding-top: 0.625rem;
+}
+
+.computerUsage > svg {
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 1rem;
+  fill: var(--foreground);
+  stroke-width: 1.5;
+}
+
+.computerUsage strong {
+  line-height: 1.25rem;
+}
+
+.computerUsage span {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.computerUsage button,
+.computerUsage > a {
+  width: 5.75rem;
+  height: 2rem;
+  min-height: 2rem;
+  gap: 0.25rem;
+  margin-top: 1.0625rem;
+  border-radius: 0.5rem;
+  color: var(--primary-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.computerUsage button svg,
+.computerUsage > a svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.more {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.55rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  /* The balance value is one semantic number + unit. Keep it together on
+     the 280px Settings viewport instead of allowing the final CJK character
+     to fall onto a third line inside the narrow card. */
+  .balanceValue {
+    font-size: 1.5rem;
+    white-space: nowrap;
+  }
+
+  .filters {
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .filterChip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 320px) {
+  /* The embedded ledger has roughly 163px of usable width at 280px. Keep
+   * all three filters visible as one deliberate control instead of allowing
+   * the final Top-ups chip to hang outside the rounded group and clip its
+   * label. Equal tracks preserve the selected-state rhythm and still allow
+   * long locale strings to truncate inside their own button. */
+  .filters {
+    overflow: hidden;
+    justify-content: stretch;
+  }
+
+  .filterChip {
+    min-width: 0;
+    /* Preserve each label's natural readable width; equal tracks make
+     * "Spending" itself overflow at 280px even though the group fits when
+     * sized by content. */
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-inline: 0.25rem;
+    font-size: 0.75rem;
+  }
+
+  .filterChip:first-child {
+    /* Keep the short All label from collapsing into a noticeably smaller
+     * visual tile beside the two longer filters. */
+    min-width: 2rem;
+  }
+}

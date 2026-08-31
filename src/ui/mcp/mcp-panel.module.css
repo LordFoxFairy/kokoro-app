@@ -1,0 +1,1067 @@
+/* 连接面板（MCP-UX）：居中模态浮层，暖纸感（--* token）。与技能面板同族。 */
+
+
+.panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(40rem, 100%);
+  max-height: min(46rem, 100%);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--foreground);
+}
+
+.subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.tabs {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: 0.25rem;
+  padding: 0.75rem 1.5rem 0;
+}
+
+.tabList {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  min-height: 2rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* MCP is also rendered inside the vertical Settings Tabs. Scope the inner
+ * list so the outer `group/tabs` orientation cannot turn Connections/Credentials
+ * into a vertical stack. Its own active state already uses an inset underline,
+ * so suppress the inherited Radix pseudo-indicator as well. */
+.tabs[data-orientation="horizontal"] .tabList {
+  display: inline-flex;
+  width: fit-content;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tabs[data-orientation="horizontal"] .tab::after {
+  display: none;
+}
+
+.tab[data-state="active"] {
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.embeddedBody {
+  /* Settings owns the horizontal content gutter. Pulling this body across
+     that gutter shifted its search/action row left of the Manus baseline. */
+  margin-top: -1.4375rem;
+  padding: 0.75rem 1.5rem 2rem;
+  display: flex;
+  height: calc(min(48.375rem, 90vh) - 5.0625rem);
+  min-height: 0;
+  flex: none;
+  flex-direction: column;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.embeddedTabs .tabList { display: none !important; }
+.embeddedTabs { padding: 0 !important; }
+.embeddedToolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.embeddedSearchField {
+  display: flex;
+  width: 12.5rem;
+  height: 2rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: 0.5rem;
+  background: transparent;
+}
+.embeddedSearchField > svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  color: #4d4d4d;
+}
+.embeddedSearch {
+  width: auto;
+  height: 1.375rem;
+  min-height: 1.375rem;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+}
+.embeddedSearch:focus-visible { border: 0; outline: 0; box-shadow: none; }
+.embeddedActions { display: flex; align-items: center; gap: 0.5rem; }
+.browse, .create { height: 2rem; min-height: 2rem; border: 0; border-radius: 8px; background: transparent; padding-inline: 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; outline: 1px solid rgb(0 0 0 / 12%); outline-offset: -1px; box-shadow: none; }
+.embeddedActions .browse { width: 5.375rem; justify-content: center; }
+.embeddedActions .create { width: 4rem; justify-content: center; padding-inline: 0.5rem; }
+
+.hint {
+  padding: 1.5rem 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.5rem 0;
+}
+
+.loadingLine,
+.loadingLineShort {
+  height: 2.8rem;
+  width: 100%;
+}
+
+.loadingLineShort {
+  width: 70%;
+}
+
+.hintLead {
+  margin-bottom: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.retry {
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.9rem;
+}
+
+.feedback {
+  margin-bottom: 0.75rem;
+}
+
+/* —— 搜索 —— */
+.search {
+  width: 100%;
+  margin-top: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  background: var(--secondary);
+  border-radius: var(--radius-sm);
+}
+
+
+/* —— 空态引导 —— */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+.embeddedBody .emptyState {
+  /* The settings page is a continuation of the dialog canvas, not a nested
+     empty-state card. The stock shadcn Empty border is useful in standalone
+     panels but creates the visible rounded rectangle that Manus does not
+     render in this embedded state. */
+  min-height: 0;
+  flex: 1;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding: 2.5rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.emptyIcon { width: 2rem; height: 2rem; color: var(--muted-foreground); stroke-width: 2; }
+.embeddedBody .emptyState :global([data-slot="empty-header"]) { gap: 0.75rem; }
+.embeddedBody .emptyState :global([data-slot="empty-description"]) { font-size: 0.875rem; line-height: 1.3125rem; }
+.emptyCreate { width: 7.25rem; height: 2.25rem; min-height: 2.25rem; margin-top: 0; gap: 0.375rem; border-radius: 8px; padding: 0 0.75rem; font-size: 14px; font-weight: 500; line-height: 20px; box-shadow: none; }
+.emptyCreate svg { width: 1rem; height: 1rem; }
+
+.noMatch {
+  min-height: 8rem;
+  padding: 1.25rem;
+}
+
+/* —— 删除二次确认 —— */
+.confirmRow {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.confirmYes {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.confirmNo {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-lg);
+}
+
+.itemContent {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0;
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-strong);
+  border: 1px solid var(--neutral-border);
+}
+
+.badge[data-scope="official"] {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--ring);
+}
+
+.badge[data-state="on"] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.badge[data-state="off"] {
+  background: var(--neutral-bg);
+  color: var(--muted-foreground);
+}
+
+.meta {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.itemActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.toggle,
+.danger {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.dangerGhost {
+  color: var(--error);
+}
+
+.register {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  line-height: 1.2;
+}
+
+/* 注册向导 / 凭据创建 表单 */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--secondary);
+}
+
+.registerDialog {
+  display: flex;
+  width: min(37.5rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem) !important;
+  height: min(44.625rem, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--background);
+}
+
+.createDialogOverlay {
+  background: rgb(0 0 0 / 28%);
+  backdrop-filter: blur(5px);
+}
+
+.customMcpForm {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.customMcpFields {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1rem;
+  row-gap: 1rem;
+  padding: 0.75rem 1.25rem 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.customMcpField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.customMcpField > :global([data-slot="field-label"]) {
+  min-height: 1.25rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.customMcpField > :global([data-slot="field-label"]) span {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.customMcpField :global(input),
+.customMcpField :global(button[data-slot="select-trigger"]),
+.customMcpField :global(textarea) {
+  width: 100%;
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.customMcpField :global(input),
+.customMcpField :global(textarea) {
+  padding: 0.5rem 0.75rem;
+}
+
+.customMcpField :global(textarea) {
+  height: 6.25rem;
+  min-height: 6.25rem;
+  resize: none;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  line-height: 1.375rem;
+}
+
+.customMcpWide { grid-column: 1 / -1; }
+.customMcpNotes { margin-top: 0; }
+
+.iconUploadRow {
+  display: flex;
+  height: 3.75rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.iconPreview {
+  display: grid;
+  width: 3.75rem;
+  height: 3.75rem;
+  flex: 0 0 3.75rem;
+  place-items: center;
+  border: 1px dashed rgb(0 0 0 / 16%);
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 3%);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.iconPreview svg { width: 1.25rem; height: 1.25rem; }
+
+.iconUploadCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.uploadButton {
+  width: 4rem;
+  height: 2rem;
+  min-height: 2rem;
+  gap: 0.375rem;
+  padding-inline: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.uploadButton > svg:first-child { display: none; }
+.uploadButton > svg:last-child { width: 0.875rem; height: 0.875rem; }
+
+.iconUploadCopy > span {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiddenFile { display: none; }
+
+.headerRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.headerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 1.25rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.headerRow > button {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  min-height: 1.25rem;
+  padding: 0;
+  color: var(--destructive);
+}
+.headerRow > button:hover { background: transparent; color: var(--destructive); }
+.headerRow > button svg { width: 1.25rem; height: 1.25rem; }
+
+.addHeaderButton {
+  width: fit-content;
+  height: 2rem;
+  min-height: 2rem;
+  margin-top: 0;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.addHeaderButton svg { width: 0.875rem; height: 0.875rem; }
+
+.customMcpError {
+  margin: 0.5rem 1.25rem 0;
+  color: var(--destructive);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.customMcpActions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.splitSave {
+  display: flex;
+  height: 2.25rem;
+}
+
+.splitSave > button:first-child {
+  width: 4.5rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  border-radius: 0.5rem 0 0 0.5rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.splitSave > :global(button:last-child) {
+  width: 2.0625rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  border-left: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.splitSave svg { width: 0.875rem; height: 0.875rem; }
+
+.publishMenu {
+  min-width: 7.75rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+}
+
+.publishMenu :global([data-slot="dropdown-menu-item"]) {
+  min-height: 2.25rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+
+.registerDialogTitle {
+  flex: 0 0 auto;
+  width: calc(100% - 4.75rem);
+  height: 1.5rem;
+  margin: 1.25rem 0 0 1.25rem;
+  padding: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.jsonImportDialog,
+.urlMcpDialog {
+  display: flex;
+  max-width: calc(100vw - 2rem) !important;
+  gap: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--background);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 6%),
+    0 24px 48px rgb(0 0 0 / 16%);
+}
+
+.jsonImportDialog {
+  width: 37.5rem;
+  height: 28.625rem;
+}
+
+.urlMcpDialog {
+  width: 30rem;
+  height: 25.5rem;
+  transition: height 160ms ease;
+}
+
+.urlMcpDialog:has(.advancedFields) { height: 31.25rem; }
+
+.jsonImportDialog > :global([data-slot="dialog-close"]),
+.urlMcpDialog > :global([data-slot="dialog-close"]) {
+  width: 2rem;
+  height: 2rem;
+  top: 1.125rem;
+  right: 0.75rem;
+  background: transparent;
+}
+
+.jsonImportForm,
+.urlMcpForm {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+}
+
+.compactDialogTitle,
+.urlMcpTitle {
+  width: calc(100% - 4.75rem);
+  height: 1.5rem;
+  margin: 1.25rem 0 0 1.25rem;
+  padding: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.compactDialogDescription {
+  width: calc(100% - 4.75rem);
+  height: 1.125rem;
+  margin: 0 1.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.jsonImportForm > textarea {
+  width: calc(100% - 2.5rem);
+  height: 19.25rem;
+  min-height: 19.25rem;
+  margin: 0.75rem 1.25rem 0;
+  resize: none;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+
+.compactDialogError {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.75rem;
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.jsonImportActions {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1.25rem;
+}
+
+.jsonImportActions > button:last-child,
+.urlMcpActions button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.jsonImportActions > button:last-child { width: 4.5rem; }
+
+.visuallyHiddenCancel { display: none; }
+
+.urlMcpTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.urlMcpTitle > span {
+  padding: 0 0.25rem;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1rem;
+}
+
+.urlMcpField {
+  width: calc(100% - 2.5rem);
+  gap: 0.5rem;
+  margin: 1rem 1.25rem 0;
+}
+
+.urlMcpField + .urlMcpField { margin-top: 1rem; }
+
+.urlMcpField > :global([data-slot="field-label"]) {
+  height: 1.3125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.3125rem;
+}
+
+.urlMcpField > :global([data-slot="field-label"]) span { color: var(--destructive); }
+
+.urlMcpField :global(input) {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.urlInput {
+  display: flex;
+  height: 2.25rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+}
+
+.urlInput > svg { width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted-foreground); }
+.urlInput :global(input) {
+  min-width: 0;
+  height: 1.25rem;
+  min-height: 1.25rem;
+  flex: 1;
+  padding: 0;
+  background: transparent;
+}
+
+.advancedToggle {
+  display: flex;
+  height: 3rem;
+  margin: 1.5rem 1.25rem 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 0.75rem;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-align: left;
+}
+
+.advancedToggle > svg { width: 1rem; height: 1rem; }
+.advancedToggle > svg:last-child { margin-left: auto; transition: rotate 160ms ease; }
+.advancedToggle[aria-expanded="true"] > svg:last-child { rotate: 180deg; }
+.advancedToggle small { color: var(--muted-foreground); font-size: 0.8125rem; font-weight: 400; }
+
+.advancedFields {
+  display: flex;
+  width: calc(100% - 4.625rem);
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: -0.125rem 2.3125rem 0;
+}
+
+.advancedFields :global(input) {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 6%);
+  box-shadow: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.urlMcpForm:has(.advancedFields) .urlWarning { margin-top: 1.8125rem; }
+
+.urlWarning {
+  margin: 0.9375rem 1.25rem 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.21875rem;
+}
+
+.urlMcpActions {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding: 0 1.25rem 1.25rem;
+}
+
+.urlMcpActions button:last-child { gap: 0.375rem; }
+.urlMcpActions button:last-child svg { width: 0.875rem; height: 0.875rem; }
+.urlMcpActions button:first-child,
+.urlMcpActions button:nth-child(3) { width: 4.5rem; }
+
+.registerDialog .form {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  padding: 0.25rem 1.25rem 1.125rem;
+  overflow-y: auto;
+  border-radius: 0;
+  background: transparent;
+}
+
+.registerDialog .fieldGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.registerDialog .field:nth-child(n + 3),
+.registerDialog .feedback,
+.registerDialog .formActions {
+  grid-column: 1 / -1;
+}
+
+.registerDialog .submit[data-incomplete="true"] {
+  background: color-mix(in srgb, var(--foreground) 48%, var(--background));
+  color: var(--background);
+}
+
+.registerDialog .field {
+  gap: 0.375rem;
+}
+
+.registerDialog .fieldLabel {
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.registerDialog .input {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  box-shadow: none;
+}
+
+.registerDialog .formActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.formTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--foreground);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.fieldLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.fieldHint {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+  line-height: 1.35;
+}
+
+.input {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  color: var(--foreground);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-sm);
+}
+
+
+.formActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.submit {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.cancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+}
+
+.secrets {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 961px) {
+  .panel { width: min(58rem, 92vw); max-height: min(48rem, 88vh); }
+  .head { padding: 1.5rem 2rem 1.1rem; }
+  .title { font-family: var(--font-sans); font-size: 1.45rem; font-weight: 650; letter-spacing: -0.025em; }
+  .tabs { padding: 1rem 2rem 0; }
+  .body { padding: 1.35rem 2rem 2rem; }
+  .embeddedBody { padding-inline: 0; }
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .item { min-height: 7rem; padding: 1rem; border-radius: var(--radius-lg); }
+  .itemContent { min-width: 0; flex: 1; flex-direction: column; align-items: stretch; }
+  .itemMain { min-width: 0; }
+  .meta { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .itemActions { justify-content: flex-end; }
+  .form, .secrets { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .head {
+    padding: 1rem;
+  }
+
+  .body {
+    padding: 1rem;
+  }
+
+  /* Settings already supplies the mobile content gutter; avoid a second
+   * inset that makes server cards unnecessarily narrow on small screens. */
+  .tabs {
+    padding-inline: 0;
+  }
+
+  .tabList {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Embedded Settings can leave only ~196px for the connection card. Keep
+   * actions below the server identity so the URL gets a readable line box
+   * instead of a 40px metadata column, and never let the action cluster sit
+   * over the title/badges. */
+  .itemContent {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .itemMain {
+    width: 100%;
+  }
+
+  .itemHead {
+    min-width: 0;
+  }
+
+  .meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .itemActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 320px) {
+  /* Settings leaves the embedded MCP surface only ~196px wide at 280px.
+   * Two intrinsic-width tabs then leave the second label clipped at the
+   * viewport edge with no useful affordance. Stack this tiny two-item choice
+   * instead of forcing a horizontal micro-scroll; both labels remain fully
+   * readable and retain the same 44px touch rhythm. Standalone MCP dialogs
+   * keep their horizontal tab strip because they still have enough width. */
+  .embeddedTabs[data-orientation="horizontal"] .tabList {
+    display: grid;
+    width: 100%;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+  }
+
+  .embeddedTabs[data-orientation="horizontal"] .tab {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 960px) {
+  /* Keep MCP usable as a standalone mobile panel as well as inside Settings;
+     the latter already applies the same rule, so this is intentionally a
+     local contract rather than a route-specific override. */
+  .panel :global(button),
+  .panel :global(input),
+  .panel :global(textarea),
+  .panel :global(select),
+  .panel :global([role="combobox"]) { min-height: 2.75rem; }
+}

@@ -1,0 +1,1091 @@
+.directSurface {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: flex-start;
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding: 3.5rem 2rem 6rem;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+/* Manus keeps the website creation welcome state on the same 58px top track as
+ * the desktop workbench. Keep this selector more specific than the generic
+ * height-aware rule below: otherwise the old 39px override wins at 1280px and
+ * shifts the complete website composition upward by 19px. */
+@media (min-width: 768px) {
+  .directSurface[data-creation-intent="website"] {
+    padding-top: 3.625rem;
+  }
+}
+
+/* Radix locks the document while Settings is open. The workbench remains
+ * visible through the softened overlay, but its scrollbar is background
+ * chrome and must not appear on top of the modal's right edge. */
+:global(body[data-scroll-locked]) .directSurface {
+  scrollbar-color: transparent transparent;
+}
+
+:global(body[data-scroll-locked]) .directSurface::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.directContent {
+  width: min(48rem, 100%);
+  margin-inline: auto;
+}
+
+.directIntro {
+  margin: 0 0 1.5rem;
+  text-align: center;
+}
+
+.directPlan {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.1rem;
+  margin-bottom: 3.625rem;
+  border-radius: 999px;
+  background: var(--secondary);
+  padding: 0.15rem 0.2rem 0.15rem 0.8rem;
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+.directPlanAction {
+  min-height: 1.7rem;
+  border-radius: 999px;
+  color: var(--primary);
+  font-size: 0.78rem;
+}
+
+.directIntro h1 {
+  margin: 0;
+  color: var(--foreground);
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 2.5vw, 2.25rem);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.directIntro p {
+  display: none;
+}
+
+.directComposer {
+  margin: 2.75rem 0 1.3rem;
+}
+
+.directComposer :global([data-slot="composer"]),
+.directComposer :global([data-slot="composer-wrap"]),
+.directComposer :global([data-slot="composer-wrap"] form) {
+  width: 100%;
+}
+
+.directComposer :global([data-slot="composer-wrap"]) {
+  padding-inline: 0;
+  padding-bottom: 0;
+}
+
+.directComposer :global([data-slot="composer-wrap"] form) {
+  min-height: 7.1rem;
+}
+
+.draftProjectContext {
+  display: flex;
+  width: 100%;
+  height: 4.9375rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: -1.375rem;
+  border-right: 1px solid rgb(0 0 0 / 6%);
+  border-bottom: 1px solid rgb(0 0 0 / 6%);
+  border-left: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 0 0 1.375rem 1.375rem;
+  background: rgb(55 53 47 / 4%);
+  padding: 2rem 0.75rem 0.625rem;
+  box-sizing: border-box;
+}
+
+.draftProjectIcon {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 0.5rem;
+  background: var(--background);
+}
+
+.draftProjectIcon svg { width: 1rem; height: 1rem; }
+.draftProjectCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.draftProjectTitle,
+.draftProjectDescription {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.draftProjectTitle { color: rgb(77 77 77); font-weight: 500; }
+.draftProjectDescription { color: rgb(115 115 115); font-weight: 400; }
+
+.draftProjectAction {
+  height: 1.75rem;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  outline: 1px solid rgb(0 0 0 / 8%);
+  outline-offset: -1px;
+  background: transparent;
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.draftProjectAction svg { width: 0.875rem; height: 0.875rem; }
+
+.directPrompts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+}
+
+.creationOptions {
+  width: calc(100% - 2rem);
+  margin-inline: auto;
+}
+
+.creationOptionsHeader {
+  display: flex;
+  height: 1.71875rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-right: 0.5rem;
+  box-sizing: border-box;
+}
+
+.creationOptionsHeader > p {
+  margin: 0;
+  color: rgb(26 26 26);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.creationReferences { display: flex; align-items: center; gap: 0.125rem; }
+.creationReferences button {
+  height: 1.71875rem;
+  gap: 0.25rem;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  color: rgb(26 26 26);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.21875rem;
+  cursor: pointer;
+}
+.creationReferences svg { width: 0.875rem; height: 0.875rem; }
+
+.creationTypesFrame {
+  position: relative;
+  height: 2.5rem;
+  margin-top: 0.75rem;
+}
+
+.creationTypes {
+  display: flex;
+  height: 2.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.creationTypes::-webkit-scrollbar { display: none; }
+
+.creationType {
+  height: 2.5rem;
+  min-width: 0;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  gap: 0.625rem;
+  border-color: rgb(0 0 0 / 6%);
+  border-radius: 0.625rem;
+  background: transparent;
+  padding: 0.75rem 0.75rem 0.75rem 0.875rem;
+  color: rgb(77 77 77);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+
+.creationType > svg { width: 1.125rem; height: 1.125rem; }
+.creationType:first-child { width: 12.0625rem; background: rgb(250 250 250); }
+.creationType small { color: var(--muted-foreground); font-size: 0.75rem; font-weight: 400; }
+.creationBadge { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--muted-foreground); }
+.shopifyMark {
+  position: relative;
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.125rem;
+  background: rgb(149 191 71);
+  color: white;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.shopifyMark::before {
+  position: absolute;
+  top: -0.1875rem;
+  left: 0.25rem;
+  width: 0.375rem;
+  height: 0.25rem;
+  border: 1px solid rgb(149 191 71);
+  border-bottom: 0;
+  border-radius: 0.25rem 0.25rem 0 0;
+  content: "";
+}
+.creationNext {
+  position: absolute;
+  top: 0.5rem;
+  z-index: 2;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+  min-height: 1.5rem !important;
+  border-radius: 999px;
+  background: var(--background);
+  padding: 0;
+  box-shadow: 0 0 0.75rem 0.5rem var(--background);
+}
+
+.creationNext[data-direction="next"] { right: 0.5rem; }
+.creationNext[data-direction="previous"] { left: 0.5rem; }
+
+.ideaSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.ideaTitle {
+  margin: 0;
+  color: rgb(26 26 26);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.3125rem;
+}
+
+.ideaList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.ideaButton {
+  height: 2.5rem;
+  gap: 0.5rem;
+  border-color: rgb(0 0 0 / 6%);
+  border-radius: 0.625rem;
+  background: rgb(250 250 250);
+  padding: 0.75rem 0.75rem 0.75rem 0.875rem;
+  color: rgb(26 26 26);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+}
+
+.ideaButton span {
+  letter-spacing: -0.154px;
+  white-space: nowrap;
+}
+
+.ideaButton > svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgb(115 115 115);
+  stroke-width: 2;
+}
+
+.integrationPreview {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 8rem;
+  margin-top: 1.25rem;
+  border-radius: 0.75rem;
+  background: rgb(55 53 47 / 4%);
+  padding: 0 0 0 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.integrationCopy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 31.3125rem;
+  height: 7rem;
+  flex: 0 0 31.3125rem;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-block: 0.75rem;
+  box-sizing: border-box;
+}
+.integrationPreview strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: rgb(26 26 26);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.integrationPreview strong svg { width: 1rem; height: 1rem; }
+.integrationChips {
+  display: flex;
+  width: 31.3125rem;
+  max-height: 3.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  overflow: hidden;
+}
+.integrationChips span {
+  border: 0.5px solid rgb(0 0 0 / 6%);
+  border-radius: 0.5rem;
+  background: rgb(55 53 47 / 4%);
+  padding: 0.25rem 0.625rem;
+  color: rgb(115 115 115);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  white-space: nowrap;
+}
+
+.integrationArtwork {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 13.1875rem;
+  height: 8rem;
+  flex: 0 0 13.1875rem;
+}
+
+.integrationWindow,
+.integrationServicePanel {
+  position: absolute;
+  display: block;
+  border: 1px solid rgb(0 0 0 / 8%);
+  background: var(--background);
+  box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 8%);
+}
+
+.integrationWindow {
+  top: 1.53125rem;
+  left: 1.8125rem;
+  width: 8.25rem;
+  height: 6.25rem;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  padding: 1.125rem 0.625rem 0.5rem;
+}
+
+.integrationWindow > i {
+  position: absolute;
+  top: 0.375rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: rgb(55 53 47 / 22%);
+}
+
+.integrationWindow > i:nth-child(1) { left: 0.5rem; }
+.integrationWindow > i:nth-child(2) { left: 0.9rem; }
+.integrationWindow > i:nth-child(3) { left: 1.3rem; }
+.integrationWindow > i:nth-child(1) { background: rgb(255 95 86); }
+.integrationWindow > i:nth-child(2) { background: rgb(255 189 46); }
+.integrationWindow > i:nth-child(3) { background: rgb(39 201 63); }
+.integrationWindow > b { display: block; color: rgb(34 34 34); font-family: Georgia, serif; font-size: 0.625rem; line-height: 0.875rem; }
+
+.integrationChart {
+  position: relative;
+  display: block;
+  height: 3.65rem;
+  margin-top: 0.375rem;
+  border: 1px solid rgb(0 0 0 / 5%);
+  border-radius: 0.25rem;
+  background: rgb(248 250 252);
+  color: rgb(59 130 246);
+}
+
+.integrationChart::before,
+.integrationChart::after {
+  position: absolute;
+  right: 0.375rem;
+  left: 0.375rem;
+  height: 1px;
+  background: rgb(15 23 42 / 6%);
+  content: "";
+}
+
+.integrationChart::before { top: 1.5rem; }
+.integrationChart::after { top: 2.5rem; }
+.integrationChart small { position: absolute; top: 0.25rem; left: 0.375rem; color: rgb(71 85 105); font-size: 0.4375rem; line-height: 0.625rem; }
+.integrationChart svg { position: absolute; right: 0.4rem; bottom: 0.2rem; width: 4.75rem; height: 2.5rem; stroke-width: 1.5; }
+
+.integrationConnector {
+  position: absolute;
+  bottom: 1.40625rem;
+  left: 0.4375rem;
+  z-index: 2;
+  display: grid;
+  width: 2.75rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 0.3125rem;
+  background: var(--background);
+  color: rgb(100 116 139);
+  font-size: 0.5rem;
+  box-shadow: 0 0.125rem 0.375rem rgb(0 0 0 / 7%);
+}
+
+.integrationServicePanel {
+  right: 0.5rem;
+  bottom: 0;
+  z-index: 3;
+  width: 5rem;
+  height: 4.5rem;
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+}
+
+.integrationServicePanel > span { display: flex; align-items: center; gap: 0.25rem; }
+.integrationServicePanel em { display: grid; width: 0.75rem; height: 0.75rem; place-items: center; border-radius: 0.1875rem; background: rgb(99 91 255); color: white; font-size: 0.4375rem; font-style: normal; font-weight: 700; }
+.integrationServicePanel b { display: block; font-size: 0.5rem; line-height: 0.75rem; }
+.integrationServicePanel i { display: block; height: 0.25rem; margin-top: 0.5rem; border-radius: 999px; background: rgb(55 53 47 / 10%); }
+.integrationServicePanel i:nth-of-type(1) { width: 70%; }
+.integrationServicePanel i:nth-of-type(2) { width: 88%; }
+.integrationServicePanel i:nth-of-type(3) { width: 52%; }
+
+.desktopSuggestions {
+  display: none;
+}
+
+.appSuggestions {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding-inline: 0.75rem;
+}
+
+.appSuggestions button {
+  display: flex;
+  width: 100%;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.5625rem 0.75rem;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.appSuggestions button:hover {
+  border-radius: 0.625rem;
+  background: rgb(255 255 255 / 48%);
+}
+
+.appSuggestions button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: 0.625rem;
+}
+
+.appSuggestions span {
+  min-width: 0;
+  flex: 1;
+  color: rgb(77 77 77);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  text-align: left;
+}
+
+.appSuggestions svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  color: var(--muted-foreground);
+  stroke-width: 2;
+  transform: rotate(-45deg);
+}
+
+.desktopSuggestionsHeader {
+  display: flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0;
+}
+
+.desktopSuggestionsHeader h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.desktopSuggestionGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.desktopSuggestion {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 5.75rem;
+  min-height: 5.75rem;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 1rem;
+  background: transparent;
+  padding: 0;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktopSuggestion:hover {
+  background: rgb(55 53 47 / 4%);
+}
+
+.desktopSuggestion:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.desktopSuggestionCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem;
+}
+
+.desktopSuggestionTitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  letter-spacing: -0.011rem;
+}
+
+.desktopSuggestionTitle > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktopSuggestionTitle svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  color: var(--muted-foreground);
+  stroke-width: 2;
+}
+
+.desktopSuggestionDescription {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.desktopSuggestionMedia {
+  position: relative;
+  width: 6.375rem;
+  height: 100%;
+  flex: 0 0 6.375rem;
+  overflow: visible;
+}
+
+.desktopSuggestionMedia img {
+  position: absolute;
+  top: 1.25rem;
+  left: 0.625rem;
+  width: 4.25rem;
+  height: 5.625rem;
+  border: 2px solid var(--background);
+  border-radius: 0.25rem;
+  object-fit: cover;
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 16%);
+  transform: rotate(-9deg);
+  transition: top 180ms ease, left 180ms ease, transform 180ms ease;
+}
+
+.desktopSuggestion:hover .desktopSuggestionMedia img,
+.desktopSuggestion:focus-visible .desktopSuggestionMedia img {
+  top: 0.9375rem;
+  left: 0.3125rem;
+  transform: rotate(-12deg);
+}
+
+/* The welcome workbench reserves one calm promotional slot below the prompt
+ * actions, matching Manus' document rhythm without turning the empty state
+ * into a card dashboard. The illustration is CSS-only so the site adapter
+ * does not require a shared asset pipeline. */
+.desktopBanner {
+  display: flex;
+  width: min(33.75rem, 100%);
+  min-height: 6.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin: 5.7rem auto 0;
+  border-radius: 0.85rem;
+  background: var(--muted);
+  padding: 1rem 1.25rem;
+  box-sizing: border-box;
+  color: var(--foreground);
+  animation: banner-fade 180ms ease-out;
+}
+
+.desktopCarousel {
+  width: min(33.75rem, 100%);
+  margin: 5.7rem auto 0;
+}
+
+.desktopCarousel .desktopBanner { width: 100%; margin-top: 0; }
+
+.desktopBannerCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.desktopBannerCopy strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.desktopBannerCopy span {
+  max-width: 22rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.desktopBannerArtwork {
+  width: 7.5rem;
+  height: 4.5rem;
+  flex: 0 0 auto;
+  border-radius: 0.45rem;
+  object-fit: cover;
+  object-position: center;
+}
+
+.bannerDots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.bannerDots button {
+  width: 0.4rem;
+  height: 0.4rem;
+  min-height: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+  padding: 0;
+  cursor: pointer;
+}
+
+.bannerDots button[data-active="true"] { background: var(--muted-foreground); }
+.bannerDots button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+@keyframes banner-fade {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.directPrompt {
+  display: flex;
+  min-width: 0;
+  height: 2.5rem;
+  min-height: 2.5rem !important;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  border-color: var(--border);
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.directPrompt svg {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+
+/* A project overview and a new project task are different route states. The
+ * task state keeps the same calm conversation axis as Manus/Codex instead of
+ * leaving the user inside the overview's context-card grid. This block is
+ * desktop-only; the existing mobile project surface remains frozen. */
+.projectTaskSurface,
+.projectTaskContent {
+  min-width: 0;
+}
+
+.projectTaskSurface {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 6.5rem 2rem 6rem;
+}
+
+.projectTaskContent {
+  width: min(48rem, 100%);
+  margin-inline: auto;
+}
+
+.projectTaskIntro {
+  text-align: center;
+}
+
+.projectTaskIntro > span {
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+
+.projectTaskIntro h1 {
+  margin: 0.75rem 0 0;
+  color: var(--foreground);
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 2.5vw, 2.25rem);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.projectTaskIntro p {
+  margin: 0.65rem auto 0;
+  color: var(--muted-foreground);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.projectTaskComposer {
+  margin-top: 2.75rem;
+}
+
+.projectTaskComposer :global([data-slot="composer"]),
+.projectTaskComposer :global([data-slot="composer-wrap"]),
+.projectTaskComposer :global([data-slot="composer-wrap"] form) {
+  width: 100%;
+}
+
+.projectTaskComposer :global([data-slot="composer-wrap"]) {
+  padding-inline: 0;
+  padding-bottom: 0;
+}
+
+.projectTaskComposer :global([data-slot="composer-wrap"] form) {
+  min-height: 7.1rem;
+}
+
+/* Match the desktop Manus rhythm at every Web width: the welcome copy, editor,
+ * prompt row and promotional slot share one centered document axis. This is
+ * scoped to the desktop Web marker and leaves the phone surface on its
+ * existing rules. */
+@media (min-width: 768px), (pointer: fine) {
+  .directSurface {
+    /* The reference welcome page starts its document axis just below the
+     * 56px header. Do not vertically center the empty state: that makes the
+     * plan, heading and composer drift as the viewport changes. */
+    /* The reference leaves a generous 88px breathing zone below the 56px
+     * workspace header. The earlier 59px value pulled every welcome element
+     * upward by one full visual beat. */
+    padding-top: 5.4375rem;
+    padding-right: 2rem;
+    padding-left: 2rem;
+  }
+
+  .directPlan {
+    width: auto;
+    height: 1.3125rem;
+    min-height: 1.3125rem;
+    gap: 0.75rem;
+    margin: 0.46875rem 0 3.59375rem;
+    box-sizing: border-box;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    font-size: 0.875rem;
+    line-height: 1.3125rem;
+  }
+
+  .directPlan > span {
+    display: block;
+    height: 1.3125rem;
+    padding: 0;
+    border: 0;
+  }
+
+  .directPlanSeparator {
+    width: 1px;
+    height: 1rem;
+    background: rgb(0 0 0 / 14%);
+  }
+
+  .directPlanAction {
+    width: auto;
+    height: 1.3125rem;
+    min-height: 1.3125rem;
+    border-radius: 0.5rem;
+    padding: 0;
+    color: rgb(0 129 242);
+    font-size: inherit;
+    font-weight: 400;
+    line-height: inherit;
+  }
+
+  .directIntro h1 {
+    /* Manus uses a content-sized 28px headline, not a full-width 36px block.
+     * The fixed reading width is what keeps the title centered at 1x, 2K and
+     * compact desktop zoom without changing the Composer axis. */
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto 1.75rem;
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .directComposer {
+    /* The headline owns Manus' 28px handoff to the 120px editor. */
+    margin-top: 0;
+    margin-bottom: 1.25rem;
+  }
+
+  .directComposer :global([data-slot="composer-wrap"] form) {
+    height: 7.5rem;
+    min-height: 7.5rem;
+  }
+
+  .directComposer :global([data-slot="composer-wrap"] textarea) {
+    padding-left: 0.25rem !important;
+  }
+
+  .directSurface[data-has-draft="true"] .directComposer :global([data-slot="composer-wrap"] form) {
+    position: relative;
+    z-index: 1;
+  }
+
+
+  .desktopCarousel {
+    min-height: 6.125rem;
+    margin-top: 12.825rem;
+  }
+
+  .desktopBanner { height: 6.125rem; }
+
+  /* Manus uses one welcome composition at every desktop CSS width. Browser
+   * zoom and high-DPI windows can make a wide Web viewport report only
+   * 800–960px, so the welcome surface must not fall back to the old chip row
+   * or a different content hierarchy at that width. */
+  .directContent {
+    /* Manus keeps the welcome composition on a readable 768px axis even on
+     * a 1280px work area. This is also the stable 766px axis at the compact
+     * desktop width, instead of stretching the composer to the rail edge. */
+    width: min(48rem, 100%);
+    margin-inline: auto;
+  }
+
+  /* The Composer owns the capability pills. Manus starts the direct-chat
+   * welcome list immediately after the editor, so do not render a second
+   * horizontal action rail on the desktop surface. */
+  .directPrompts {
+    display: none;
+    gap: 0.5rem;
+  }
+
+  .directPrompt {
+    gap: 0.5rem;
+    border-color: rgb(0 0 0 / 6%);
+    background: transparent;
+    padding: 0.4375rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.3125rem;
+  }
+
+  .directPrompt svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+  .desktopSuggestions {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0.25rem 0.75rem 3.75rem;
+    box-sizing: border-box;
+  }
+
+  .desktopCarousel { display: none; }
+
+  .desktopCarousel {
+    /* Anchor the promotional carousel near the lower fold like Manus. Keep
+     * this as flow spacing rather than absolute positioning so it remains
+     * stable when the browser height changes. */
+    margin-top: 5.75rem;
+  }
+
+  .bannerDots { margin-top: 0.75rem; }
+}
+
+@media (pointer: fine) and (min-width: 48rem) {
+  .desktopSuggestionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .directSurface {
+    /* Manus lets the welcome document breathe on tall desktop canvases while
+     * preserving the 720px baseline. A height-aware clamp keeps the heading
+     * and Composer on the same vertical track at 2K instead of pinning them
+     * to the short-window coordinate. */
+    padding-top: clamp(3.625rem, calc(19vh - 5rem), 8.25rem);
+  }
+
+  .directContent {
+    width: min(48rem, 100%);
+  }
+
+  .directPlan {
+    margin-bottom: 3.59375rem;
+  }
+
+  .directComposer {
+    margin-top: 2.125rem;
+  }
+
+  .desktopCarousel {
+    width: min(33.75rem, 100%);
+    /* The promotional carousel hints at the next section near the lower fold.
+     * Grow only the flow gap as the desktop gets taller; no absolute
+     * positioning, and the 720px composition remains unchanged. */
+    margin-top: clamp(5.75rem, calc(100vh - 39.25rem), 26rem);
+  }
+}
+
+
+@media (max-width: 767px) {
+  .directSurface {
+    padding: 3.5rem 1rem 6rem;
+  }
+
+  .directContent {
+    width: min(48rem, 100%);
+  }
+}
+
+@media (max-width: 767px) {
+  /* Keep the pre-existing mobile project workbench untouched until it is
+   * explicitly reviewed as a separate surface. */
+  .projectTaskSurface {
+    display: none;
+  }
+}
+
+/* Manus keeps the welcome composition fluid in a compact desktop window. The
+ * old rules retained the wide-screen top offset and horizontal padding after
+ * browser zoom, moving every element down ~38px and narrowing the Composer.
+ * This is still the desktop Web surface (fine pointer), not the phone mode. */
+@media (pointer: fine) and (max-width: 960px) {
+  .directSurface {
+    padding-top: 3.0625rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .desktopCarousel {
+    margin-top: 3.75rem;
+  }
+
+  /* Preserve the reference's single-line prompt rail on narrow desktop
+   * windows, but keep the overflow inside this control instead of letting it
+   * widen the page or clip the last affordance. */
+  .directPrompts {
+    justify-content: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.15rem;
+    scrollbar-width: none;
+  }
+
+  .directPrompts::-webkit-scrollbar {
+    display: none;
+  }
+
+  .directPrompt {
+    flex: 0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .directPrompt {
+    transition: none;
+  }
+  .desktopBanner { animation: none; }
+}

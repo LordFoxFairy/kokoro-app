@@ -1,0 +1,9 @@
+{
+  "name": "@kokoro/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kokoro Web shared TypeScript baseline; extract with the shared package repository.",
+  "files": [
+    "base.json"
+  ]
+}

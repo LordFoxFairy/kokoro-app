@@ -1,0 +1,290 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Kokoro User Web design tokens.
+   shadcn semantic names are the only surface/color contract. CSS Modules may
+   compose these tokens for product-specific layout and skin, but do not create
+   a second palette. */
+:root {
+  --background: #f7f9fc;
+  --foreground: #0f1729;
+  --card: #ffffff;
+  --card-foreground: #0f1729;
+  --popover: #ffffff;
+  --popover-foreground: #0f1729;
+  --primary: #3b6cf6;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f4fa;
+  --secondary-foreground: #0f1729;
+  --muted: #f1f4fa;
+  --muted-foreground: rgba(15, 23, 41, 0.56);
+  --accent: #e9f0ff;
+  --accent-foreground: #0f1729;
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --border: #e4e8f0;
+  --input: #e4e8f0;
+  --ring: color-mix(in srgb, #3b6cf6 45%, transparent);
+
+  /* Product status tokens remain domain-specific, not a second UI palette. */
+  --success: #16a34a;
+  --success-bg: color-mix(in srgb, var(--success) 10%, var(--card));
+  --success-border: color-mix(in srgb, var(--success) 42%, transparent);
+  --warning: #d99a2b;
+  --warning-bg: color-mix(in srgb, var(--warning) 12%, var(--card));
+  --warning-border: color-mix(in srgb, var(--warning) 45%, transparent);
+  --error: #e5484d;
+  --error-strong: #b42318;
+  --error-bg: color-mix(in srgb, var(--error) 8%, var(--card));
+  --error-border: color-mix(in srgb, var(--error) 40%, transparent);
+  --neutral: #8a94a6;
+  --neutral-strong: #5b6577;
+  --neutral-bg: color-mix(in srgb, var(--neutral) 8%, var(--card));
+  --neutral-border: color-mix(in srgb, var(--neutral) 40%, transparent);
+
+  /* Illustration accents are skin tokens, not component-local palettes. */
+  --illustration-pink: #e79ebc;
+  --illustration-amber: #e0a95a;
+  --illustration-blue: #7fa8e0;
+  --illustration-green: #7aa886;
+  --marketing-footer: #131a2e;
+  --marketing-footer-deep: #0c1220;
+
+  --content-width: 48rem;
+  --radius: 0.75rem;
+  /* Keep every shadcn radius tier derived from the site skin's base token. */
+  --radius-sm: calc(var(--radius) * 0.6666667);
+  --radius-md: calc(var(--radius) * 0.8333333);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.1666667);
+  --radius-2xl: calc(var(--radius) * 1.6666667);
+  /* Keep elevation semantic and skin-owned. Components may use these tokens
+     for quiet hierarchy, but should not invent a second shadow palette. */
+  --shadow-xs: 0 1px 2px 0 color-mix(in srgb, var(--foreground) 7%, transparent);
+  --shadow-sm: 0 4px 10px -4px color-mix(in srgb, var(--foreground) 14%, transparent);
+  /* One motion scale keeps desktop rail, menus, Composer and cards from
+     feeling like unrelated products. Reduced-motion users override these
+     transitions globally below. */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  /* Match the reference Web serif stack. Keeping the stack in the shared
+     shadcn token means welcome, project, settings and detail surfaces do not
+     silently render different Chinese headline metrics. */
+  --font-serif: "Noto Serif TC", "Noto Serif TC Fallback", LibreBaskerville, Georgia,
+    Cambria, ui-serif, "Times New Roman", Times, serif;
+  /* Offline-first typography: use the same neutral sans/mono roles without a
+     build-time Google Fonts fetch, keeping local and production rendering deterministic. */
+  --font-geist-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-geist-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  color-scheme: light;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  --background: #0d1117;
+  --foreground: #e6e9f0;
+  --card: #161b24;
+  --card-foreground: #e6e9f0;
+  --popover: #161b24;
+  --popover-foreground: #e6e9f0;
+  --primary: #6b8dff;
+  --primary-foreground: #0d1117;
+  --secondary: #1d232e;
+  --secondary-foreground: #e6e9f0;
+  --muted: #1d232e;
+  --muted-foreground: rgba(230, 233, 240, 0.62);
+  --accent: #1a2136;
+  --accent-foreground: #e6e9f0;
+  --destructive: #f47171;
+  --destructive-foreground: #0d1117;
+  --border: #262d3a;
+  --input: #262d3a;
+  --ring: color-mix(in srgb, #6b8dff 52%, transparent);
+
+  --success: #56c271;
+  --warning: #e0b25a;
+  --error: #f47171;
+  --error-strong: #ffa39e;
+  --neutral: #9298a6;
+  --neutral-strong: #c3c8d4;
+  --shadow-xs: 0 1px 2px 0 color-mix(in srgb, var(--foreground) 22%, transparent);
+  --shadow-sm: 0 4px 10px -4px color-mix(in srgb, var(--foreground) 34%, transparent);
+  --illustration-pink: #e79ebc;
+  --illustration-amber: #e0a95a;
+  --illustration-blue: #7fa8e0;
+  --illustration-green: #7aa886;
+  --marketing-footer: #0b1020;
+  --marketing-footer-deep: #070b14;
+  color-scheme: dark;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+/* A site skin is selected once at the shell boundary. Components below it
+   consume these shadcn semantic tokens; they do not redefine a second palette
+   in their own CSS Modules. Keeping the skin here also makes light/dark mode
+   a single cascade instead of a global palette plus an AppFrame override. */
+[data-web-skin="kokoro"] {
+  /* Manus' desktop workbench uses a true white canvas. Keeping this at the
+     skin boundary (rather than overriding individual surfaces) prevents the
+     rail, dialog portals, and route pages from drifting into separate whites. */
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+  --card: #ffffff;
+  --card-foreground: #1a1a1a;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a1a;
+  --primary: #1a1a19;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #efefef;
+  --accent-foreground: #1a1a1a;
+  --border: #e5e7eb;
+  --input: #cececc;
+  --ring: color-mix(in srgb, #1a1a1a 42%, transparent);
+  --sidebar: #f0f0f0;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #1a1a19;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebebeb;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e4e4e4;
+  --sidebar-ring: color-mix(in srgb, #1a1a1a 42%, transparent);
+  font-family: -apple-system, "system-ui", "Segoe UI Variable Display", "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.dark [data-web-skin="kokoro"] {
+  --background: #171716;
+  --foreground: #f2f1ec;
+  --card: #20201f;
+  --card-foreground: #f2f1ec;
+  --popover: #20201f;
+  --popover-foreground: #f2f1ec;
+  --primary: #f2f1ec;
+  --primary-foreground: #20201f;
+  --secondary: #262624;
+  --secondary-foreground: #f2f1ec;
+  --muted: #262624;
+  --muted-foreground: #aaa9a4;
+  --accent: #2d2d2a;
+  --accent-foreground: #f2f1ec;
+  --border: #393936;
+  --input: #4a4a45;
+  --ring: color-mix(in srgb, #f2f1ec 42%, transparent);
+  --sidebar: #1f1f1e;
+  --sidebar-foreground: #f2f1ec;
+  --sidebar-primary: #f2f1ec;
+  --sidebar-primary-foreground: #20201f;
+  --sidebar-accent: #2d2d2a;
+  --sidebar-accent-foreground: #f2f1ec;
+  --sidebar-border: #393936;
+  --sidebar-ring: color-mix(in srgb, #f2f1ec 42%, transparent);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* shadcn's primitive contract: unqualified borders and focus outlines must
+   resolve through the semantic tokens, never fall back to currentColor. The
+   missing base rule made every Card look like a black custom component even
+   though it was using the official shadcn Card primitive. */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+a {
+  text-decoration: none;
+}
+
+a:not([data-slot="button"]) {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Dialog primitive positioning uses one physical transform instead of Radix/Tailwind
+   logical translate properties, so full-screen mobile panels can reset it predictably. */
+.dialog-content-position {
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

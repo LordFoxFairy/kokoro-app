@@ -1,0 +1,364 @@
+/* 团队面板：居中模态浮层，暖纸感（--* token），与技能/余额面板同族。 */
+
+
+.panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(42rem, 100%);
+  max-height: min(46rem, 100%);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--foreground);
+}
+
+.subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.body {
+  flex: 1;
+  /* Embedded settings renders this panel inside a narrow ScrollArea.  The
+     default flex min-width:auto otherwise follows the longest team row and
+     lets the row extend underneath the dialog's clipped edge on phones. */
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.embeddedBody {
+  padding-inline: 0;
+  flex: none;
+  min-height: auto;
+  overflow: visible;
+}
+
+.notice {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-md);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.sectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.hint {
+  padding: 1rem 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.retry {
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.9rem;
+}
+
+.feedback {
+  margin: 0.75rem 0;
+}
+
+.loadingState { display: flex; flex-direction: column; gap: 0.65rem; padding: 1rem 0; }
+.loadingLine { width: 100%; height: 2.5rem; }
+
+.teamList,
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.teamItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-lg);
+  text-align: left;
+  color: var(--foreground);
+}
+
+.teamItem:not(:disabled):hover {
+  border-color: var(--ring);
+  background: var(--accent);
+}
+
+.teamItem[data-active="true"] {
+  border-color: var(--primary);
+  background: var(--accent);
+  opacity: 1;
+  cursor: default;
+}
+
+.teamName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.teamMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.currentTag {
+  font-size: 0.72rem;
+  color: var(--primary);
+}
+
+.roleBadge {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-strong);
+  border: 1px solid var(--neutral-border);
+}
+
+.roleBadge[data-role="owner"] {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--ring);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-lg);
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--foreground);
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtle {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.itemActions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.confirmRow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.primaryBtn,
+.ghostBtn,
+.dangerBtn {
+  padding: 0.36rem 0.8rem;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
+.primaryBtn {
+  font-weight: 600;
+}
+
+.ghostBtn {
+  color: var(--muted-foreground);
+}
+
+.inviteForm {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.inviteField,
+.inviteFieldCompact {
+  min-width: 0;
+}
+
+.inviteField {
+  flex: 1 1 12rem;
+}
+
+.inviteFieldCompact {
+  flex: 0 1 8rem;
+}
+
+.inviteInput {
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  background: var(--secondary);
+  border-radius: var(--radius-sm);
+}
+
+.roleSelect {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--foreground);
+  background: var(--secondary);
+  border-radius: var(--radius-sm);
+}
+
+.pending {
+  margin-top: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pendingLabel {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.pendingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  background: var(--secondary);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 640px) {
+  .panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .head {
+    padding: 1rem;
+  }
+
+  .body {
+    padding: 1rem;
+  }
+
+  .inviteForm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inviteForm > * {
+    width: 100%;
+  }
+
+  .inviteField,
+  .inviteFieldCompact {
+    flex-basis: auto;
+  }
+
+  /* A shadcn Button carries `whitespace-nowrap` on its root.  Without an
+     explicit mobile layout that utility also makes the team name and role
+     metadata compete in one unshrinkable row inside a 280px Settings
+     viewport, so the role badge gets clipped by the panel edge. */
+  .teamItem {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: auto;
+    min-height: 2.25rem;
+    white-space: normal;
+  }
+
+  .teamName {
+    width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .teamMeta {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .itemActions {
+    width: 100%;
+  }
+}
+
+@media (max-width: 960px) {
+  /* The Team panel is also mounted outside the Settings dialog by tests and
+     future site shells. Preserve the same shadcn touch-size invariant in
+     that standalone composition. */
+  .panel :global(button),
+  .panel :global(input),
+  .panel :global(textarea),
+  .panel :global(select),
+  .panel :global([role="combobox"]) { min-height: 2.75rem; }
+}

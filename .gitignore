@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.open-next/
+cloudflare-env.d.ts
+out/
+coverage/
+output/playwright/
+.playwright-cli/
+tmp/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+!.env.*.example

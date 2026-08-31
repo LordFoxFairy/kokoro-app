@@ -1,0 +1,365 @@
+# User Web UI 验收清单
+
+这份清单用于逐页检查，不以“能渲染”作为完成标准。每个交互都要同时满足视觉层级、语义、键盘操作、响应式和数据状态。
+
+> 当前桌面 Web 契约（v11）：`>767px` 始终是完整 Web Sidebar/Workbench，包含缩放后的
+> 768–960px CSS viewport；只有 `<=767px` 才进入手机 Sheet。下方历史验收条目中出现的
+> 下方历史验收条目中的 `<=960px` 导航边界均以本条为准；当前唯一手机边界是 `<=767px`。手机布局本轮保持冻结。
+
+## 工作台 `/app` 与显式 preview transport
+
+- [x] 桌面宽度下 Sidebar 只占 rail 列，主区、Composer 和右侧 Canvas 不互相覆盖。
+- [x] 仅 `≤767px` 进入手机 Sheet；`>767px`（包括 768–960px 的浏览器缩放/分屏 Web）保持固定桌面 rail。手机 Sheet 的打开、选择导航、背幕和 Escape 均由同一 primitive 负责。
+- [x] 移动端从 Sidebar 管理入口打开 Settings 时，先等待 shadcn Sheet 关闭动画完成再交接 Dialog，避免短暂双 overlay 与双 focus trap。
+- [x] SidebarTrigger 的 `aria-expanded` 使用真实的桌面 open / 移动 openMobile 状态，不把移动 Sheet 的关闭状态误报为已展开。
+- [x] 通用 SidebarRail 接收站点调用方的本地化 `aria-label`，并同步 `title` 与 `type=button`，不再把英文默认 tooltip 泄漏到定制站点。
+- [x] 移动端删除会话时，AlertDialog 状态由 Sheet 外层持有；先关闭 Sheet 再打开确认框，避免确认框随 Sheet 卸载或形成双 focus trap。
+- [x] 移动端删除确认关闭后焦点回到稳定的移动导航触发按钮，不回收到已卸载的 Sheet 内删除按钮或 document body。
+- [x] 移动端 Canvas 预览关闭后焦点回到打开预览的触发控件，不落到 document body。
+- [x] 空项目由 site-owned project slot 渲染：Kokoro 使用 shadcn Card 展示指令、连接器、文件和资源、技能；Composer 是首要动作，卡片点击进入对应设置能力，不伪造任务记录。
+- [x] Composer 空值、可发送、流式中、错误和锁定状态都有稳定尺寸，不产生布局跳动。
+- [x] Composer 受控草稿通过场景卡、会话切换或恢复态注入时也会同步自适应高度，不依赖原生 input 事件。
+- [x] 模式/Agent/Model 选择使用 DropdownMenu，打开后 Escape、点击外部、键盘上下键行为一致。
+- [x] Composer 菜单在桌面使用起点对齐，避免 18rem 菜单跨过 Sidebar；移动端通过 `collisionPadding=12` 保留视口安全边距，菜单不贴边或横向溢出。
+- [x] 放大编辑使用 Dialog，包含可访问标题、焦点回收和移动端可用的编辑高度。
+- [x] 桌面放大编辑的焦点只由编辑面板拥有：Textarea 不再叠加第二个 shadcn ring，避免出现“框中框”；移动端样式保持冻结，待明确授权后单独复核。
+- [x] 会话线程滚动、回到最新、TodoBar、HITL 卡片和 Canvas 开关不遮挡 Composer；线程改用 shadcn `MessageScroller`，时间线、回到最新和 Canvas 重开入口都收纳在独立的 `timelineStage`，不再覆盖 Composer。
+- [x] 单轮短对话默认保留用户消息可见；MessageScroller 的短内容 spacer 不再把用户气泡滚到视口上方，用户气泡沿 shadcn `Message[align=end]` 的反向轴稳定贴右。
+- [x] Canvas 面板的文件/成果/工具三类内容、关闭后重开、会话隔离和下载 URL 由现有 smoke/store 测试覆盖；面板按钮均使用 shadcn Button/ToggleGroup；文件长路径在窄 Canvas 中以可收缩省略显示，不撑破元信息列。
+- [x] Canvas 关闭后的「打开工作区」入口会为消息滚动区预留底部安全空间；长 Composer 或成果列表场景下不再覆盖最后一张成果卡。
+- [x] Canvas 跨会话切换后继续保持关闭焦点契约；旧线程卸载后不再尝试聚焦旧触发器，关闭新 Canvas 会回到当前导航动作。
+- [x] Canvas 从成果卡、工具 pill 或文件 chip 打开后，关闭（含全屏态）都把焦点回交给原始 Canvas opener；即使 opener 未成为浏览器 activeElement，也不会落到 body。
+- [x] 同一线程存在多个成果/工具 opener 时，Canvas 关闭优先回到实际触发按钮，不按 DOM 最后一个 opener 猜测焦点目标。
+- [x] Canvas 文件/成果列表在当前内容对应的条目上保留选中态、`aria-pressed` 和左侧主色指示；切换条目后仍保持单一选中状态。
+- [x] Canvas 从文件/成果列表切回预览时，已卸载的列表按钮不会把焦点丢到 body；焦点交给稳定的预览标题，标题可继续用键盘阅读当前内容。
+- [x] Canvas 头部按面板容器宽度而不是浏览器 viewport 做响应式：第三栏变窄时标题、元信息和操作自动换行，极窄时操作切换为带 aria-label 的图标按钮；下载 Blob URL 延迟释放。
+- [x] Canvas、作品库与线程成果下载失败后，原下载按钮明确切换为本地化「重新下载」动作；失败 Alert 与按钮状态一致，不要求用户猜测是否可以再次点击。
+- [x] 作品库下载同样通过鉴权 Blob，且在浏览器排队下载后再释放 object URL；失败态可重试并以 `role="alert"` 呈现。
+- [x] 作品库初次加载、重试和游标翻页使用请求序列隔离；旧请求晚返回时不会覆盖新列表、复活旧分页状态或在面板卸载后更新 UI。
+- [x] 作品库游标翻页失败时保留已加载成果，显示独立错误提示并把「加载更多」切换为明确的重试动作，不让用户猜测是否仍可操作。
+- [x] CSV 产物预览使用引号感知解析，保留字段内逗号、双引号转义与 CRLF，不再用简单 `split(",")` 破坏表格列。
+- [x] Composer 按自身容器宽度折叠模型/Agent/模式控制；第三栏压缩主区时控件换行，不把发送键或输入焦点环挤出边界。
+- [x] 工作台内工具调用、子智能体、过程块和错误详情统一使用 shadcn Collapsible；不再依赖原生 `details/summary`，且 Trigger 的 `aria-controls` 由 primitive 指向真实 Content。
+- [x] 已升级到 Canvas 的工具 pill 不再伪装成可展开 `Collapsible`：直接使用 action button 与外开图标，`aria-expanded` 不会在实际打开工作区后仍停在 false。
+- [x] HITL 审批、问答、动态输入、结果审核卡片区分初始提问与已记录/失败状态；提交后的状态使用 `role=status` 播报，控制失败使用 `role=alert`，初始问题不误触发 live region。
+- [x] HITL 等待状态在 Composer 中明确显示“等待你的批准”，停止按钮改为“取消等待”并使用取消图标；不再把暂停中的运行伪装成“实时会话已连接/停止生成”。
+- [x] 流式助手轮在 live region 内使用 `aria-atomic=false`，只播报变化片段，不重复朗读整轮长答案。
+- [x] TodoBar 计划清单使用 shadcn Collapsible；收起时保留进度摘要，展开时只显示可滚动任务列表。
+- [x] 侧栏和 Canvas 分隔条支持鼠标拖拽及键盘方向键调整，且有可见焦点态。
+- [x] 侧栏和 Canvas 分隔条作为 shadcn shell 的真实 `separator` 控件暴露原语的范围值，并通过 `aria-valuetext` 补充 Canvas 的实际像素宽度；键盘用户能知道当前宽度范围与值。
+- [x] 侧栏和 Canvas 分隔条在 `pointerup`、`pointercancel` 和组件卸载时都清理全局监听与拖拽样式，不遗留光标/文本选择锁定。
+- [x] 实机 961×720 临界桌面验证：展开/收起侧栏与 Canvas 同时打开时，页面 `scrollWidth/scrollHeight` 仍等于视口，两个 separator 各只有 1px 实体边界；收起侧栏后 Canvas 回到 320px 最小可用宽度，Composer 仍完整可见。
+- [x] Canvas 宽度钳制基于实际 main+Canvas workspace，而不是包含左 rail 的外层 shell；临界桌面宽度会让 Canvas 让步并保留 main 的 360px 最小宽度，不把主区压到不可用宽度。
+- [x] Canvas 在移动窄视口下使用临时有效宽度，不覆盖用户的桌面宽度偏好；视口从 390px 恢复到桌面后，Canvas 回到 480px 默认宽度而不是卡在 320px 最小宽度。
+- [x] 侧栏布局基于 shadcn SidebarHeader/SidebarContent/SidebarGroup/SidebarMenu/SidebarMenuButton/SidebarFooter；CSS Modules 只保留 Kokoro 皮肤与窄态排列，不再复制导航组件的基础交互。
+
+## 公开入口
+
+- [x] 营销首页 1280×720 实机检查：顶栏、Hero Composer、能力 Tabs、FAQ Accordion 与 CTA 无横向溢出；Hero Enter/开始按钮进入登录流程并保留草稿，FAQ 展开/收起使用真实 Accordion 状态。
+- [x] 营销首页控制台无 error/warning；登录配置不可用时显示明确的 RuntimeUnavailable Alert 与重试按钮，不伪造 OAuth 或密码登录入口。
+
+## 侧栏
+
+- [x] 新对话是操作按钮；对话是实际导航链接；作品、技能、连接、余额、团队进入对应设置上下文。
+- [x] 移动端从导航 Sheet 点击新对话或切换会话时，先完成 Sheet 关闭，再执行动作；Composer 焦点不会被 Radix 的 Sheet 焦点回收抢走。
+- [x] 搜索输入打开即聚焦，Escape 关闭并清空；收起 rail 仍保留搜索入口，点击会先展开 Sidebar 再显示搜索框；搜索框由外层容器提供唯一焦点环，不出现内外双框；无结果、加载和请求失败有独立空态。
+- [x] 移动端导航 Sheet 从背幕、Escape 或导航触发器关闭时清理临时搜索态；重新打开导航不残留上一次查询，也不把会话列表留在隐式过滤状态。
+- [x] 移动端导航 Sheet 由背幕、Escape 或内部关闭动作收起后，焦点回到页头稳定的 `SidebarTrigger`；不落到 `document.body`，也不回收到已卸载的 Sheet 内容。
+- [x] 移动端导航 Sheet 宽度由 `min(18rem, 100vw - 2rem)` 约束；280px 窄屏保留可见背幕安全带，同时完整显示 Kokoro 品牌，不被 shadcn 默认 `w-3/4` 覆盖成过窄面板。
+- [x] 桌面断点下仍挂载的 site-owned 移动头部显式设为不可见，不把零尺寸的导航/命令按钮当成可交互控件；回到 `≤767px` 后两枚触发器恢复真实尺寸与可见性。
+- [x] 移动端导航在 Sheet 交接窗口内被重新打开时，取消尚未执行的新对话、设置或删除动作，避免过期回调穿透当前导航层。
+- [x] 会话条目支持选择、双击改名、Enter 提交、Escape 取消、删除确认；待审批状态有文本可读提示。
+- [x] 会话头部标题改名的 Escape 取消后，焦点回到原标题按钮，不落到 `document.body`；提交与失焦仍保持原有改名语义。
+- [x] 会话头部分享浮层与 active session 绑定；切换会话会清理旧链接，不能把旧会话链接展示或撤销到新会话。
+- [x] 分享 Popover 使用当前语言的可访问对话框名称；链接、复制、撤销和完成按钮均保留清晰的焦点与忙碌状态。
+- [x] 最近会话条目使用 shadcn SidebarMenu/SidebarMenuButton/SidebarMenuAction；改名与删除动作沿用官方 hover/focus 语义，不再手写动作显隐。
+- [x] 收起态不显示截断文字，图标按钮仍保留可访问名称和 Tooltip/原生标题；1440px 运行态确认所有导航按钮名称仍可读且文本宽度为 0；Sidebar cookie 在刷新后保持收起状态。
+- [x] 1280×720 桌面最低验证尺寸下，Rail 的 manifest 主导航（含团队）不被固定账户 Footer 覆盖；未接入的项目/排程/资料库能力不渲染为不可点击占位入口，只有已注册的最近会话进入可滚动溢出区。
+- [x] 多个 Site Web 同页嵌入时，Command、Settings、Canvas 的焦点恢复回退均限定当前 shell，不跨站点抢焦点。
+
+## 模态和管理面板
+
+- [x] Settings、Library、MCP、Billing、Pricing 使用 shadcn Dialog；Canvas 在移动断点使用 shadcn Sheet，桌面保留三栏内嵌上下文列，不自建 overlay/portal；移动 Settings 横向 tab 为 Dialog close affordance 预留安全区，最后一个 tab 不与关闭按钮重叠。
+- [x] 移动 Settings 深链或切换 tab 时，活动 tab 自动滚入安全区但不强制居中，避免 390px 视口两侧出现半截 tab 文案。
+- [x] 280px Settings 的积分余额值保持数字与单位同一行；订阅套餐网格取消桌面 `15rem` 最小列宽，卡片不会被窄面板右侧裁切。
+- [x] 280px Settings 的连接卡将身份、URL 元信息和启停/删除动作改为纵向节奏；URL 不再压成单字符列，动作不会覆盖标题和状态标签。
+- [x] CommandMenu 使用 shadcn CommandDialog；打开后输入框自动聚焦，Escape 关闭后焦点回到移动头部命令按钮，命令跳转设置时只保留一个 Dialog 和一个 overlay，并把焦点交给设置面板而不抢回触发按钮。
+- [x] Preview 默认 CommandMenu 与 Rail 使用同一组五个工作区入口（作品、技能、连接、余额、团队）；不会出现 Rail 有入口而命令菜单缺入口的导航漂移。
+- [x] CommandMenu 在 280px 移动视口保持 16px 外边距、搜索框与关闭按钮不重叠；Escape 关闭后焦点回到「打开命令菜单」触发器。
+- [x] 设置中心由外层控制开关时，关闭 Dialog 仍能把焦点交还给稳定的移动导航触发按钮，不落到已卸载内容或 document body。
+- [x] 移动端设置深链/切换到末尾 Tab 时，由真实横向导航 viewport 滚动选中项，并为右上角关闭按钮保留安全间距。
+- [x] 设置中心使用单一 Dialog 标题层级；当前分区标题使用 `h2`，不会与工作区首屏 `h1` 形成重复页面主标题。
+- [x] 桌面 Settings 打开时活动 Tab 的焦点环改为单一 inset 指示，不与活动态背景叠加第二个蓝色外框；移动端 Tab 样式保持冻结，待明确授权后单独复核。
+- [x] 每个 Dialog/Sheet 有标题（视觉隐藏也可以），关闭按钮、Escape、背幕关闭行为一致；Canvas Sheet 复用上下文列的关闭动作。
+- [x] Sheet 关闭 primitive 位于内容层之上，避免移动端 sticky header 或面板内容拦截真实点击。
+- [x] Dialog 关闭按钮位于内容层之上；Settings 的 sticky header 不得拦截关闭按钮的实际指针命中，桌面浏览器点击右上角可真实关闭。
+- [x] 表单使用 Field/Label/Select 等 shadcn 组件；可校验字段的错误挂在字段上并有 `data-invalid`/`aria-invalid`，服务端错误使用 `role=alert`。
+- [x] 主操作使用 `default`/`destructive`，次操作使用 `outline`/`secondary`，取消和低优先级操作使用 `ghost`/`link`。
+- [x] 提交中禁用重复提交并保留明确的进行中文案；成功、失败、空数据、加载中均有状态。
+- [x] 技能版本历史和所有工作台披露项使用 shadcn Collapsible，展开状态具备统一键盘与 aria 语义。
+- [x] Dialog/CommandDialog 的视觉关闭按钮统一由 shadcn primitive 渲染，屏幕阅读器标签走当前 locale，不再出现英文 `Close`。
+- [x] Dialog/Sheet 关闭按钮只在 `focus-visible` 时显示强焦点环；鼠标点击不会残留键盘专用指示，键盘导航仍保持清晰可见。
+- [x] Settings 使用 DialogContent 官方关闭 primitive，不再在内容头部重复手写关闭按钮；保留测试标识和当前 locale 的关闭标签。
+- [x] 280px Settings 的团队切换项在窄屏改为名称/角色两行布局；长团队名和 owner/current 标签不会被 shadcn Button 的 `whitespace-nowrap` 或固定高度裁切。
+- [x] Settings、作品库、技能、MCP、团队、余额与套餐面板显式清除 Dialog 基础 `p-6`，由各面板自己拥有内边距和滚动盒模型，移动端全屏不会被默认内边距撑破。
+- [x] 实机 DOM 扫描确认 Settings 九个分区均只显示对应 `tabpanel`，按钮全部有可读名称，无重复 ID；1280×720 下切换任意分区没有 document 横向/纵向溢出。
+- [x] Skills、MCP、Team、Billing、Pricing、Library 六个独立面板统一使用 DialogContent 官方关闭 primitive，移除重复的自定义 X 按钮和对应 CSS。
+- [x] Settings Account / Appearance / Chat 三个分区使用 shadcn Card/CardContent；Skills 与 MCP 的 scope/status 标签使用 shadcn Badge。
+- [x] 全局 shadcn base layer 为无额外颜色的 `border`/`outline` primitive 注入语义 token；Card、Dialog、输入控件不再因 `currentColor` 退化成黑色边框。
+- [x] Skills 与 MCP 列表条目使用 shadcn Card/CardContent，保留现有 Collapsible、Button 和状态机语义。
+- [x] Settings 内嵌 Skills/MCP/Team/Billing/Pricing/Library 时不重复叠加面板横向 gutter；390px 下卡片使用可读宽度，长 URL/名称按内容规则换行而不压缩成窄列。独立 Dialog 保留各面板自己的 gutter，嵌入 Settings 时由外层 ScrollArea 单独负责。
+- [x] Kokoro 首屏移动滚动区为场景按钮保留顶部/底部 scroll padding；键盘聚焦最后一个场景时不会被移动端 Composer 遮挡。
+- [x] 320×700 窄短屏启用紧凑首屏节奏，六个快捷动作完整落在可滚动区内，不被 Composer 截断；桌面与 390×844 保持原有节奏。
+- [x] MCP 注册与凭据表单使用 shadcn FieldGroup/Field/FieldLabel/FieldDescription；自定义 field 容器只保留间距皮肤。
+- [x] Skills 上传候选项使用 shadcn FieldSet/Field/FieldContent/FieldLabel/FieldDescription；无效候选通过 `data-invalid` 与 `aria-invalid` 显示校验反馈，确认中禁用重复选择与提交。
+- [x] Skills 上传文件选择器在预览和发布请求期间锁定，并暴露 `aria-busy`，避免用户选择新文件覆盖进行中的预览/发布流程。
+- [x] Skills、MCP、Team、Billing、Pricing 的请求失败反馈使用 shadcn Alert/AlertDescription；重试按钮保留在错误语义容器内。
+- [x] HITL 审批、问答、结果审核和动态输入在决策已暂存、控制请求尚未完成时显示 Spinner，并同步按钮 `disabled`/`aria-busy`；控制失败后恢复可重试态。
+- [x] 线程错误态的重试入口在新 run 已进入流式阶段后锁定并显示 Spinner，避免重复点击创建多个 run；计费拒绝与普通失败路径保持一致。
+- [x] 公共分享页在加载与路由参数连续切换时保持只读 loading 边界；旧分享快照会被 AbortController 取消，不会短暂串到新 URL，网络/解析失败统一落到不泄露内部细节的 404 态。
+- [x] Canvas 桌面关闭后的焦点回交定时器在重复关闭或组件卸载时会清理，避免旧 surface 在新 surface 打开后抢回焦点。
+- [x] 实机桌面审计确认成果 Canvas 的打开/退出全屏/关闭链路：关闭后焦点回到实际成果 opener，不落到 Composer 或 document body；HITL 批准后工具卡收束为已完成态，Composer 从“取消等待”恢复到发送态；Settings 关闭后焦点回到账户设置入口。
+- [x] Canvas 桌面退出动画期间 host 保留 DOM 以完成焦点回收，同时设置 `aria-hidden` 与 `inert`，隐藏面板不进入读屏和键盘顺序。
+- [x] Canvas/线程预览的 Blob 抓取在组件卸载或切换文件时取消在途请求，避免关闭预览后仍占用网络与更新已离开的 surface；下载请求继续保留独立生命周期。
+- [x] 文本、CSV、Markdown 预览与媒体预览共享同一请求取消边界；离开预览不会继续等待大文件读取或触发已卸载组件更新。
+- [x] 文本预览结果与资源 URL 绑定；切换文件时先显示新文件 loading，不会把旧文件正文短暂挂在新标题下。
+- [x] Runtime manifest 失败时不再把 mock 品牌/配置当作 live tenant 继续展示；登录、首页和工作台统一显示 shadcn Alert + 重试按钮，任务入口保持关闭。
+- [x] 未认证 `/app` 的设置中心使用本地 preview clients（技能、连接、账单、套餐、团队），不向真实 BFF 发请求；每个 fixture 仍遵守对应 client 类型契约。
+- [x] 桌面项目首页使用 Manus 式“居中欢迎 → Composer → 快捷动作”稳定轨道；2K、普通桌面和窄桌面均可滚动，不产生横向溢出。手机端仍不纳入本轮改造。
+- [x] 首站模型菜单的 RadioGroup 使用当前 locale 的可访问名称；未注入 Settings 能力时，权益/升级按钮保持稳定布局但明确禁用，不产生点击无效的假动作。
+- [x] AppFrame 不再直接依赖 Kokoro 站点组件；移动头部、命令菜单和空白工作区均通过 site-owned props 注入，shared app-frame 保留 shadcn 交互契约，站点只替换皮肤/词汇。
+- [x] shared shell 的缺省品牌为中性的 `Workspace`/`•`；Kokoro adapter 显式注入 `Kokoro`/`心`，避免通用包把首站品牌泄漏给其他 site。
+- [x] Runtime manifest 的 `radius`、`fontSans`、`fontSerif` 主题契约会映射到 shared shadcn CSS token；站点可以定制圆角和字体，不只换颜色/Logo；CSS 值拒绝声明分隔符和 block delimiter。
+- [x] Runtime brand 的空白品牌名/标记会回退默认值，超长值会被限制，避免动态站点配置破坏首屏和导航几何。
+- [x] Kokoro 桌面项目首页使用聊天优先的 shadcn Button 快捷动作；长期上下文不重复渲染为首屏设置卡片，不会把旧营销 Hero 或旧 Accordion 重新混入项目工作区。
+- [x] 未认证 `/app` 浏览器资源审计不请求 dev 调试 API，也不允许 hub/team/billing/pricing/session BFF 请求。
+- [x] Skills、MCP、Billing/Pricing 和 Canvas 的无数据/无匹配态使用 shadcn Empty/EmptyHeader/EmptyTitle/EmptyDescription，空态保留稳定最小高度。
+- [x] Skills、MCP、Billing、Pricing 与 Team 加载态使用 shadcn Skeleton，并通过 `role=status` 与本地化 `aria-label` 暴露状态，不以加载文案撑开布局。
+
+## 统一底座
+
+- [x] 颜色只来自语义 token；业务 CSS Modules 不再使用裸色值，组件焦点、overlay 和定位继续由 shadcn primitive 负责。
+- [x] `Button`、Sidebar、Tabs、Collapsible、Dialog、AlertDialog 等 shadcn primitives 默认 `type="button"`，只有明确提交意图的表单按钮才声明 `type="submit"`，避免工具栏/弹窗操作误提交外层表单。
+- [x] CSS Modules 的面板、控制器、Canvas、Settings、Composer、登录、营销与账单圆角统一引用 shadcn 语义 radius token；pill/circle 等语义形状才保留 `999px`，站点皮肤不另起一套圆角尺度。
+- [x] 通过 CSS Module 类名引用审计清理 Composer、Billing、Skills、MCP、Artifact 与 Marketing 中已脱离 JSX 的旧选择器；业务皮肤不再保留无法渲染的兼容样式。
+- [x] Settings 内容切换动画正确响应 `prefers-reduced-motion`，实际 ScrollArea viewport 不再遗漏禁用动画。
+- [x] Command menu 执行“新对话”或打开设置时抑制错误的自动焦点回收；焦点交接由目标 Composer/Settings surface 接管。
+- [x] Command menu 的“新对话”在关闭动效完成后明确聚焦 Composer；真实移动浏览器与 AppFrame 回归测试均验证焦点不会落到 body。
+- [x] Command menu 的“新对话”尚未完成焦点交接时若立即打开 Settings，会取消旧定时器；Settings 不会被延迟 Composer 聚焦抢回。
+- [x] 全局 ⇧⌘O / ⇧Ctrl O 新对话快捷键不经过 Dialog，直接把焦点交给新的 Composer；收起 rail 时也不会把焦点留在隐藏导航上。
+- [x] 桌面 rail 的「新对话」按钮与快捷键使用同一焦点交接契约；点击后不会把用户留在导航按钮上，而是直接进入可输入状态。
+- [x] 桌面 rail 折叠/展开后焦点交给新挂载的对应 SidebarTrigger，不会因按钮几何切换落到 `document.body`。
+- [x] 桌面 rail 折叠态的搜索与展开按钮改为垂直堆叠，两个 32px 命中区始终落在 55px rail 内，不再出现搜索按钮左侧被裁切。
+- [x] CommandDialog 的隐藏标题与描述位于实际 DialogContent 内，Radix 对话框的可访问名称与内容边界保持一致。
+- [x] CommandDialog → SettingsDialog 使用 220ms 关闭交接窗口，避免两个 modal overlay/focus trap 同帧叠加。
+- [x] 登录提交/重发按钮和作品库初始加载状态暴露 `aria-busy`/`role="status"`，视觉 Spinner 与辅助技术状态保持一致。
+- [x] MCP、团队、作品库的重试/提交/切换/删除异步按钮统一同步 `disabled`、Spinner 与 `aria-busy`，避免操作状态只靠视觉判断。
+- [x] Skills 停用与 MCP server 删除/启停区分具体进行中的动作；同一条目内不会把「启停中」误显示成「删除中」，每个按钮的 Spinner、`disabled` 与 `aria-busy` 都对应真实操作。
+- [x] 所有交互控件有可见 `:focus-visible`；状态文本、图标和静态布局不依赖动画才能理解。
+- [x] 收起 rail 的搜索入口保留完整 Tooltip、焦点回收和自动展开行为；图标态不出现无标签的孤立按钮。
+- [x] 390px、767px、768px、960px、1440px 的布局契约统一使用 `≤767px` 作为手机导航边界；768–960px 仍是桌面 Web，不回退到旧 Sheet/启动器壳。真实浏览器逐断点核对 `scrollWidth === innerWidth`，并确认 Composer 在视口内、无横向溢出。
+- [x] 运行时长站点名在 Settings 品牌区、营销顶栏和移动头部都使用可收缩省略，不会把站点定制文案撑破导航或遮挡操作按钮。
+- [x] 站点 Logo 属于运行时资源：加载失败时主导航、移动头部、Settings 与营销顶栏均回退到文字/站点标记，不显示破损图片。
+- [x] 命令菜单、移动导航开关和工作区分组文案在全部上线语言中独立覆盖，不会在切换语言后回退成中文。
+- [x] 全部上线语言覆盖当前 zh 源的 100% 消息键；Canvas、作品库、账单、套餐、MCP、团队和分享错误/操作态不再回退中文。
+- [x] Canvas/作品预览的文本与媒体加载失败都提供 shadcn Alert + 可操作的“重新加载预览”，重试会重新发起鉴权请求并释放旧资源。
+- [x] `/login` 运行时配置不可用态在 280px 下仍保持居中 Card、可读 Alert 和可触达 Reload 按钮，不出现水平滚动。
+- [x] Settings 移动端的 ScrollArea 内容 wrapper 不再继承 Radix 的 `display: table; min-width: 100%`，团队、技能、连接等表单在 320px 宽度下不会被右侧 Dialog 边界裁切。
+- [x] Settings 从深链打开、没有真实 DialogTrigger 时，关闭按钮、Escape 和背幕关闭仍把焦点交给 Composer，不落到 document.body。
+- [x] Settings 打开后跨越 `767px` 断点时，原移动 SidebarTrigger 变为零尺寸也不会被重新聚焦；关闭后改回当前可见 Composer。
+- [x] Settings 移动端切换语言后重新测量当前 Tab 的实际 viewport 矩形；长英文标签会避开右上角关闭按钮，并保留左右安全间距。
+- [x] Settings 外观主题 ToggleGroup 在窄屏和长译文下使用等宽可换行单元；法语、德语、葡萄牙语、俄语的最后一个主题按钮不会越过 Dialog 边界。
+- [x] Kokoro 首屏六个快捷入口在全部 9 种上线语言的 280px 窄屏下保持卡片边界、箭头操作和 Composer 安全间距；德语/俄语长文案允许卡片增高但不覆盖输入区。
+- [x] Kokoro 首屏在 561px 以上桌面容器统一使用对称三列快捷入口网格；宽桌面也不退化为单行，不出现孤立的第六个动作。
+- [x] Settings 内嵌 Skills/MCP 的业务 TabList 在窄屏使用有边界的横向滚动；激活隐藏项时自动滚入安全区，长法语 Tab 不再把注册按钮推到 Dialog 外。
+- [x] Settings 内嵌 Billing 的多语言流水筛选保持完整词语的横向滚动，不把 `Consommation` 拆成不可读的单字列。
+- [x] 导航抽屉打开时跨越 `767px` 断点不会把旧的 `openMobile` 状态带回移动端；回到手机布局后必须由用户重新打开导航。
+- [x] Composer 的模式/模型/Agent 下拉菜单由 shadcn/Radix 定位；菜单从底部控件打开时整体抬到输入区上方，且会按长草稿的实际高度追加抬升，不覆盖 textarea；280px、390px 长草稿与桌面空态均无横向溢出。
+- [x] Canvas 桌面语义只保留一个 `complementary` landmark；ContextPanel 不再套嵌重复的 `<aside>`，长元数据会省略而不挤压操作按钮。
+- [x] `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build` 均通过；测试数量以当前全量运行结果为准，每次底座改造后必须重新执行四项门禁。
+
+## 浏览器证据
+
+最近一次本地 `/app` preview 运行态截图（Playwright CLI，当前重写后的代码）：
+
+- `output/playwright/page-2026-08-23T12-20-30-163Z.png` — 390×844 移动首屏
+- `output/playwright/page-2026-08-23T12-18-08-981Z.png` — 768×900 移动首屏
+- `output/playwright/page-2026-08-23T12-19-20-266Z.png` — 960×900 移动首屏（含移动头部）
+- `output/playwright/page-2026-08-23T12-20-38-065Z.png` — 1440×900 桌面首屏
+- `output/playwright/page-2026-08-23T12-20-08-189Z.png` — 1440×900 收起 rail
+- `output/playwright/page-2026-08-23T12-21-43-043Z.png` — Settings Dialog 账户页；Escape 关闭后 URL 恢复 `/app`
+- `output/playwright/page-2026-08-23T12-35-00-000Z.png` — shadcn Sidebar 基础导航桌面态
+- `output/playwright/page-2026-08-23T12-35-20-000Z.png` — shadcn SidebarTrigger 收起态
+- `output/playwright/page-2026-08-23T12-36-00-000Z.png` — 390px Sheet 导航态
+- `output/playwright/kokoro-welcome-codex-refresh.png` — 1200px 桌面首屏；快捷动作改为 shadcn outline Button 横向带，主区回到 Codex 式空白画布
+- `output/playwright/kokoro-welcome-codex-mobile.png` — 390×844 移动首屏；快捷动作整宽排列，Composer 与页面无横向溢出
+- `output/playwright/page-2026-08-23T12-45-30-000Z.png` — Composer 放大编辑 Dialog；含本地化关闭标签
+- `output/playwright/page-2026-08-23T12-51-00-000Z.png` — Settings 使用 DialogContent 官方关闭 primitive
+- `output/playwright/page-2026-08-23T12-59-00-000Z.png` — Settings Appearance Card/Field/ToggleGroup/Select 运行态
+- `output/playwright/page-2026-08-23T13-01-00-000Z.png` — Skills 错误态、Tabs、Retry Button 运行态
+- `output/playwright/page-2026-08-23T13-13-40-skills-alert-empty.png` — Skills 上传 Tab 运行态；上传入口保持可用，错误/空态结构由 shadcn primitive 承载
+- `output/playwright/page-2026-08-23T13-15-390.png` — 390px 移动首屏；验证无横向滚动（`scrollWidth === innerWidth`）
+- `output/playwright/layout-after-timeline.png` — 1440px 空首屏；时间线层与 Composer 纵向独立，页面无横向滚动
+- `output/playwright/layout-after-message.png` — 1440px 有消息态；时间线 `y=56..752`，Composer `y=752..884`，无纵向重叠
+- `output/playwright/layout-collapsed-after-refactor.png` — 1440px 收起 rail；导航文案宽度为 0，按钮 accessible name 保留
+- `output/playwright/layout-mobile-after-refactor.png` — 390px 有消息态；`scrollWidth === innerWidth`，Composer 完整位于视口内
+- `output/playwright/codex-rail-1440.png` — 1440px Codex-style rail；默认 280px 宽，导航标签、快捷键和主画布保持稳定间距
+- `.playwright-cli/page-2026-08-23T14-10-24-862Z.png` — 1440px Kokoro site-owned welcome surface；三列场景网格、Composer 与 rail 无重叠。
+- `.playwright-cli/page-2026-08-23T14-10-42-635Z.png` — 390px welcome surface；场景列表可滚动，Composer 保持完整可见。
+- `.playwright-cli/page-2026-08-23T14-12-14-224Z.png` — 1440px 收起 rail；图标态不泄漏截断文字。
+- `.playwright-cli/page-2026-08-23T14-13-27-574Z.png` — 390px Settings Appearance；横向 tab 与移动内容区可用。
+- `output/playwright/collapsed-search.png` — 1440px 收起 rail 点击搜索后自动展开并聚焦搜索框；无隐藏搜索面板。
+- `output/playwright/settings-team-390-safe.png` — 390px Settings 深链到团队 tab；活动 tab 与右上角 Dialog close affordance 零重叠。
+- `.playwright-cli/page-2026-08-24T02-31-41-826Z.yml` — 390px 真实浏览器从设置首项切换到团队；TabList 自动滚动到 `scrollLeft=588`，团队 Tab 落在设置导航安全区内。
+- `output/playwright/settings-account-390.png` — 390px Settings 账户页；移动横向 tab、关闭按钮安全区和账户操作布局通过。
+- `output/playwright/settings-appearance-390.png` — 390px 外观与语言；ToggleGroup/Select 不撑破内容区。
+- `output/playwright/audit-locale-en-280-fixed3.png` — 280px 英文外观与语言；长的当前 Tab 在语言切换/重载后避开关闭按钮，左右安全间距可见。
+- `output/playwright/audit-breakpoint-sheet-800-closed.png` — 导航抽屉跨越桌面/移动断点后保持关闭，不出现旧 Sheet 重开。
+- `output/playwright/audit-login-280-current.png` — `/login` 运行时不可用态；Alert 与 Reload 在窄视口内完整可见。
+- `output/playwright/audit-canvas-delivery-280.png` — 280px 成果 Canvas 失败预览态；说明、失败 Alert、Reload preview 与头部操作不溢出。
+- `output/playwright/audit-locale-fr-280-fixed.png` — 280px 法语外观设置；三枚主题按钮等宽收纳在 Settings 卡片内。
+- `output/playwright/audit-welcome-locales-280.png` — 首屏快捷入口多语言窄屏最终态；按钮列与 Composer 无横向溢出。
+- `output/playwright/audit-mcp-fr-280-fixed.png` — 280px 法语连接面板；注册按钮换行收纳，MCP TabList 不撑破外层 Dialog。
+- `output/playwright/audit-skills-fr-280-fixed.png` — 280px 法语技能面板；内部筛选与技能卡按钮保持可读宽度。
+- `output/playwright/audit-credits-fr-280-fixed2.png` — 280px 法语积分面板；流水筛选完整显示词语并在容器内横向滚动。
+- `output/playwright/goal-audit-home-1440-wide.png` — 1440px 首屏；大标题与六个快捷入口保持单行，Composer 与 Rail 无重叠。
+- `output/playwright/goal-audit-home-960-grid.png` — 960px 平板首屏；快捷入口采用对称三列两行网格，页面无横向滚动。
+- `output/playwright/goal-audit-shadcn-border-390.png` — 390px Skills 面板；Card 使用 shadcn 语义边框，不再出现 currentColor 黑色描边。
+- `output/playwright/goal-audit-appearance-dark-390.png` — 390px 深色外观；ToggleGroup、Select、Settings 导航与关闭动作保持对比度和边界稳定。
+- `output/playwright/goal-audit-home-dark-1440.png` — 1440px 深色首屏；Rail、快捷入口、Composer 使用同一套 dark semantic tokens。
+- `output/playwright/goal-audit-zh-home-1440.png` / `goal-audit-zh-home-960.png` / `goal-audit-zh-home-390.png` / `goal-audit-zh-home-280.png` — 第一站中文首屏四档视口；标题、六个入口、Composer 和 Rail 均保持稳定节奏。
+- `output/playwright/goal-audit-zh-appearance-280.png` / `goal-audit-zh-credits-280.png` — 中文外观与积分 Settings 窄屏；长标签、数字单位和筛选项不产生页面横向滚动。
+- `output/playwright/goal-audit-zh-command-280.png` — 280px 中文命令菜单；搜索、工作区动作、设置入口与关闭按钮均在 Dialog 安全边界内，Escape 焦点回到命令菜单触发器。
+- `output/playwright/goal-audit-zh-send-390.png` — 390px 中文快捷入口→Composer→预览发送态；Prompt 注入后自动聚焦，Enter 清空输入并进入锁定/处理状态，消息标题、处理过程和分享动作不溢出。
+- `output/playwright/goal-audit-thread-zh-1440-right.png` / `goal-audit-thread-zh-390-fixed.png` — 中文有消息态；短轮用户消息完整可见并正确右对齐，assistant 过程与 Composer 不遮挡。
+- `output/playwright/goal-audit-process-390.png` — 390px 中文处理过程展开态；Collapsible 内容在消息流内完整展开，不推动 Composer 出界。
+- `output/playwright/goal-audit-share-390.png` — 390px 中文分享 Popover；链接输入、复制、撤销和完成动作均在视口内，Popover 不横向溢出。
+- `output/playwright/settings-chat-390.png` — 390px 对话偏好；两个 Select 纵向排列，说明文本不被固定底栏遮挡。
+- `output/playwright/settings-credits-390.png` — 390px 积分与用量；统计卡、筛选条和账单流水在同一 ScrollArea 内连续滚动。
+- `output/playwright/settings-subscription-390.png` — 390px 订阅套餐；套餐卡纵向堆叠，购买按钮保持可触达宽度。
+- `output/playwright/settings-skills-390.png` — 390px 技能；嵌入 Settings 后不重复叠加横向 gutter。
+- `output/playwright/settings-mcp-390.png` — 390px 连接；嵌入 Settings 后搜索、列表和操作按钮无横向溢出。
+- `output/playwright/settings-library-390.png` — 390px 作品；空态保持居中语义且不制造额外滚动条。
+- `output/playwright/settings-team-390-latest.png` — 390px 团队；邀请输入、角色选择和成员操作无横向溢出。
+- `output/playwright/settings-team-1440.png` — 1440px 团队；Dialog 两栏比例、内容滚动盒和桌面关闭按钮通过。
+- `output/playwright/library-390-audit.png` — 390px 作品设置深链；横向 Tab、空态和关闭按钮不溢出。
+- `output/playwright/subscription-390-audit.png` — 390px 订阅套餐；活动 Tab 自动进入安全区，套餐卡与购买动作保持可触达。
+- `output/playwright/payment-390-audit.png` — 390px 支付未开通态；错误提示、套餐卡和禁用购买按钮保持稳定布局。
+- `output/playwright/home-768-audit.png` — 768px 移动/平板临界宽度；三列场景卡完整落两行，Composer 无横向溢出。
+- `output/playwright/home-961-audit.png` — 961px 桌面临界宽度；完整 Sidebar 与三列场景卡稳定切换。
+- `output/playwright/canvas-delivery-1440-current.png` — 1440px 成果 Canvas；下载、全屏、关闭与三栏宽度通过。
+- `output/playwright/canvas-delivery-390-current.png` — 390px 成果 Canvas Sheet；操作行换行、关闭按钮和正文区域无溢出。
+- `output/playwright/canvas-list-390-current.png` — 390px Canvas 文件列表；成果分组与空工作区文件态保持可读。
+- `output/playwright/canvas-resize-viewport-recovery.png` — Canvas 从移动窄视口恢复到 1440px 后回到 480px 偏好宽度；键盘分隔条仍可继续调整。
+- `output/playwright/rail-mobile-sheet-current.png` — 390px 移动导航 Sheet；完整标签、会话操作和底部工作区信息保持在单一 Sheet 内。
+- `output/playwright/rail-mobile-search-current.png` — 390px 移动导航搜索；搜索框自动聚焦、关闭按钮和筛选结果不溢出。
+- `output/playwright/rail-mobile-search-reset-current.png` — 390px 关闭并重开导航后的干净状态；不会残留临时搜索框或旧查询。
+- `output/playwright/new-chat-mobile-focus-current.png` — 390px 从导航 Sheet 点击新对话后，Sheet 关闭且焦点稳定落到 Composer 输入框。
+- `output/playwright/rail-collapsed-1440-current.png` — 1440px 收起 rail；图标导航、Tooltip 语义和主区 Composer 不互相覆盖。
+- `output/playwright/composer-expand-390-audit.png` — 390px 放大编辑 Dialog；输入框占据主焦点，收起按钮和发送动作不挤压文本区。
+- `output/playwright/share-popover-390-audit.png` — 390px 分享浮层；链接、复制、撤销和完成动作均在视口内。
+- `output/playwright/hitl-390-deep-audit.png` — 390px HITL 审批卡；风险提示、工具参数、批准/拒绝和 Composer 均保持可操作。
+- `output/playwright/hitl-390-after-approve-audit.png` — 390px 审批提交后状态；动作收口、过程状态和运行中 Composer 不跳位。
+- `output/playwright/error-internal-390-audit.png` — 390px 内部错误态；错误说明、详情入口和重试动作不遮挡输入区。
+- `output/playwright/error-detail-390-audit.png` — 390px 展开错误详情；长错误文本在卡片内可读且无横向溢出。
+- `output/playwright/page-2026-08-23T13-12-09.png` — 1440px 桌面首屏；Sidebar 247px 独占 rail，Composer 768px 居中且无横向溢出
+- `.playwright-cli/page-2026-08-24T02-28-29-022Z.png` — 390×844 真实浏览器首屏；`scrollWidth === innerWidth`，移动 Composer 完整落在视口内。
+- `.playwright-cli/page-2026-08-24T02-28-49-884Z.png` — 768×900 真实浏览器临界态；Composer `x=20..748`、`y=752..884`，无横向滚动。
+- `.playwright-cli/page-2026-08-24T02-29-23-564Z.png` — 960×900 移动导航边界；`scrollWidth === innerWidth`，移动头部与场景区无溢出。
+- `.playwright-cli/page-2026-08-24T02-29-38-455Z.png` — 1440×900 桌面态；`scrollWidth === innerWidth`，侧栏、主区与 Composer 几何稳定。
+- `tests/ui/context-panel.test.tsx` — 390px Canvas 使用 Sheet、标题可访问、关闭动作回传通过
+- `tests/ui/context-panel.test.tsx` — 桌面 Canvas 全屏/关闭操作语义、文件 Tab 与长路径选择通过
+- `tests/ui/delivery-card.test.tsx` — 成果下载使用鉴权 Blob，并延迟释放 object URL 通过
+- Canvas 移动 Sheet 隐藏冗余的全屏按钮，桌面三栏才提供全屏切换；避免在已全屏容器内重复改变布局。
+- `tests/ui/mcp-panel.test.tsx` — 注册表单必填字段 `aria-invalid`/`FieldError` 通过
+- `tests/ui/composer.test.tsx` — 空值禁用发送、流式停止、锁定模式三类状态契约通过
+- `tests/ui/composer.test.tsx` — 放大编辑 Dialog 的 Escape 收起/草稿同步、固定技能 chip 的精确移除通过
+- `tests/ui/input-card.test.tsx` — 过程块 Collapsible Trigger 的 `aria-controls` 指向真实 `data-slot=collapsible-content`
+- `tests/ui/conversation-failure.test.tsx` — 流式助手轮使用 `aria-atomic=false`，避免长答案逐 token 重复播报
+- `src/components/ui/message-scroller.tsx` + `src/ui/thread/conversation-thread.tsx` — 使用 shadcn MessageScrollerProvider/Viewport/Content/Item/Button，接管贴底跟随、滚动锚点与回到最新
+- `src/components/ui/message.tsx` + `src/components/ui/bubble.tsx` + `src/ui/thread/message-bubble.tsx` — 用户消息改用 shadcn Message/Bubble/BubbleContent，站点 CSS 只保留宽度和文案皮肤
+- Composer/TodoBar 明确 `flex-shrink: 0`，消息滚动区才承担压缩；避免 Codex 已公开的“调整侧栏后 Composer 溢出/覆盖消息”类 flex 布局问题。
+- `tests/ui/todo-bar.test.tsx` — 计划进度条的可访问名称、完成数量和收起后的摘要语义通过。
+- `tests/ui/team-panel.test.tsx`、`tests/ui/login-panel.test.tsx` — 邀请邮箱与登录邮箱字段级校验通过
+- `tests/ui/workspace-rail.test.tsx` — 对话入口由 `chatHref` 提供，preview 不再被通用 rail 强制跳转到 `/app`
+- `tests/ui/workspace-rail.test.tsx` — 侧栏新对话、重命名、删除操作均保持 `type="button"`
+- `tests/ui/overlay-handoff.test.ts` — 普通动效等待旧 Sheet/Dialog 释放焦点，减少动效模式不额外等待关闭动画。
+- `tests/ui/delivery-card.test.tsx` — 成果下载中显示 Spinner、`aria-busy` 与禁用态，失败后明确显示本地化重试动作并可再次触发请求。
+- `tests/ui/input-card.test.tsx` — HITL enum/multi-enum 控件使用稳定的 `aria-labelledby`，字段标题与 shadcn ToggleGroup 语义绑定。
+- `tests/ui/segment-process.test.tsx` — HITL 待批时过程摘要保持展开，收起按钮禁用，批准/拒绝动作仍保持可用。
+- `output/playwright/goal-audit-delivery-1440-fixed.png` / `goal-audit-canvas-delivery-1440-fixed.png` — 中文成果链路桌面态；成果卡进入第三栏后 Canvas 由外层 grid host 与面板共同撑满 900px，主区、分隔条、Canvas 三栏没有纵向塌陷或横向滚动。
+- `output/playwright/goal-audit-canvas-delivery-390-fixed.png` — 中文成果链路移动态；Canvas 使用完整 Sheet 高度，预览/文件 Tab、下载、关闭和失败预览提示均在 390px 视口内。
+- `src/components/blocks/context-panel/context-panel.module.css` + `src/ui/canvas/canvas-panel.module.css` — 修复桌面 Canvas 直接 grid host 高度为满屏但内部 `aside` 仍按成果内容高度塌缩的问题；host 与 panel 均明确 `min-height: 0`/`height: 100%`，移动 Sheet 仍复用独立高度契约。
+- `output/playwright/audit-command-280-next.png` / `audit-menu-280-next.png` / `audit-rail-280-next.png` — 280px 中文命令菜单、Composer 模式菜单和移动导航抽屉；三类 overlay 均在视口内，搜索/命令输入自动聚焦，菜单关闭不制造横向滚动。
+- `output/playwright/audit-settings-280-next.png` — 280px 外观设置深链；九枚设置 Tab 使用横向可滚动导航，当前 Tab 避开关闭按钮安全区，主题 ToggleGroup 与语言 Select 不被内容区裁切。
+- `output/playwright/audit-rail-collapsed-1440-next.png` — 1440px 收起 rail；Sidebar 仅保留 shadcn 图标列，主区扩展至剩余宽度，搜索动作可将 rail 恢复并直接聚焦筛选框。
+- `output/playwright/audit-skills-revisions-390-next.png` — 390px 技能版本 Collapsible；展开单项版本历史后，卡片内容、滚动容器和 Settings 关闭按钮均保持在安全边界内。
+- 真实浏览器逐项检查 Settings 的账户、外观、对话偏好、积分、订阅、技能、连接、作品、团队九个 Tab；连接注册表单空提交仍使用 shadcn Field 的 `aria-invalid`/错误提示，不推动 Dialog 产生页面横向滚动。
+- `output/playwright/audit-error-390-next.png` — 390px `!fail:internal_error` 预览错误态；错误卡、详情入口、重试按钮和 Composer 保持可见且无横向溢出。
+- `output/playwright/audit-hitl-approved-390-next.png` — 390px HITL 批准后的收口态；待批按钮消失，工具折叠为已完成过程，助手完成消息出现，Composer 恢复发送。
+- `output/playwright/regression-current-1440.png` / `regression-current-960.png` / `regression-current-390.png` / `regression-current-280.png` — 同一已完成会话在桌面、平板边界、常规移动和超窄移动视口保持主区、Header、过程块与 Composer 的稳定层级；`regression-nav-280.png` 额外覆盖超窄导航 Sheet。
+- `tests/dev/preview-transport.test.ts` — HITL approve/reject 两条控制路径均验证唯一事件 id、tool.returned 结果形态和 run.completed 收口。
+- `output/playwright/settings-credits-390-current.png` / `settings-subscription-390-current.png` — 积分流水与订阅购买卡在移动设置面板内保持单列节奏，金额、筛选和操作按钮均不挤压。
+- `output/playwright/settings-mcp-390-current.png` / `settings-mcp-register-390-current.png` — 连接列表与注册表单在 390px 内保持 URL 换行、字段错误位和底部操作区可见。
+- `output/playwright/settings-library-390-current.png` — 空作品库状态使用明确标题与说明，保持设置面板垂直节奏，不出现假按钮或空白错误提示。
+- `output/playwright/settings-account-390-current.png` / `settings-appearance-390-current.png` / `settings-chat-390-current.png` — 账户操作、主题/语言选择和模型/agent 默认选择在移动面板中保持明确分组与可操作间距。
+- `output/playwright/settings-dark-390-current.png` — 暗色主题实测；设置背景、边框、选中态、Select 和关闭按钮均沿用语义 token，未出现亮色残留。
+- `output/playwright/settings-skills-390-current.png` / `settings-team-390-current.png` — 技能卡片操作组、团队切换、邀请字段、成员角色与移除动作均在 390px 内保持单列；空邮箱提交触发字段级 `aria-invalid`/错误提示。
+- `output/playwright/settings-team-1440-current.png` — 1440px 设置 Dialog 使用 shadcn 双栏布局；左侧导航、右侧团队内容、字段错误和关闭动作均保持稳定，不侵入主区 Composer。
+- `output/playwright/command-menu-1440-current.png` / `command-to-settings-1440-current.png` — `⌘/Ctrl+K` 命令菜单可聚焦、可选中，选择外观后正确完成 CommandDialog → SettingsDialog 焦点交接。
+- `output/playwright/composer-expand-1440-current.png` / `composer-mode-1440-current.png` — 放大编辑 Dialog 与模式 Menu 的输入焦点、Escape/收起、模式选择和禁用发送状态均保持稳定。
+- `output/playwright/rail-collapsed-1440-current.png` / `rail-search-expanded-1440-current.png` — 收起 rail 保留 Tooltip 语义；搜索动作先恢复 rail 再聚焦搜索框，不出现隐藏输入框。
+- `output/playwright/delete-confirm-1440-current.png` / `delete-confirmed-1440-current.png` — 删除确认使用 AlertDialog，取消/确认操作和 active 会话回退均完成。
+- `output/playwright/share-popover-1440-current.png` — 分享链接、复制、撤销和完成动作在桌面 Header 中保持单一焦点层，撤销后回到分享按钮。
+- `output/playwright/canvas-delivery-1440-current.png` / `canvas-open-1440-current.png` — `!delivery` 成果卡进入 Canvas 后，三栏布局、预览/文件切换、全屏、关闭和成果清单均可操作；预览字节由开发专用 fixture route 提供，验收不应出现 503 或控制台资源错误。
+- `output/playwright/canvas-download-error-1440-current.png` — 本地预览端点不可用时，Canvas 下载按钮进入“重新下载”错误态，错误提示和“重新加载预览”均保持在内容区内，不吞掉失败状态。
+- `output/playwright/login-390-current.png` — System/IAM runtime manifest 不可用时，登录页使用 shadcn Card + destructive Alert 呈现明确错误，并保留“重新加载”恢复动作，不启动任务。
+- `output/playwright/login-runtime-error-390-final.png` — runtime error 态进一步统一 MarketingTopBar 品牌头、卡片层级和错误说明，移除重复标题，移动端仍保持明确重试入口。
+- `src/ui/auth/runtime-unavailable.tsx` + `runtime-unavailable.module.css` — 配置不可用态复用营销顶栏和 shadcn Card/Alert/Button，登录、首页、工作区三条失败路径共享同一视觉与品牌契约。
+- `output/playwright/root-390-current.png` — 根入口按站点路由进入 `/app`，首屏仍保持 Kokoro first-site 空工作区与 Composer，不出现旧布局回退。
+- `src/dev/preview-transport.ts` + `tests/dev/preview-transport.test.ts` — HITL 续流使用 session seq 生成全局唯一 event_id；批准后真实走 `tool.returned → message.completed → run.completed`，避免重复 event_id 被 reducer 幂等去重后卡在“已记录你的决定”。
+- `output/playwright/marketing-1440-current.png` / `marketing-390-current.png` — first-site 营销首页桌面/移动首屏；Hero 输入、能力 Tabs、页内信息架构与响应式卡片保持稳定，390px 下 `scrollWidth === innerWidth`。
+- `output/playwright/marketing-nav-390-current.png` — 390px 移动导航 Sheet；汉堡按钮、导航链接、CTA、遮罩和关闭动作均在视口内。
+- `output/playwright/final-matrix-desktop.png` / `final-matrix-tablet.png` / `final-matrix-mobile.png` / `final-matrix-narrow.png` — `/app` 当前 first-site 工作台在 1440/960/390/280px 的最终矩阵；四个视口均满足 `scrollWidth === innerWidth`，Composer、场景入口和导航没有互相覆盖。
+- `src/ui/composer/composer.module.css` — User Web 桌面 Composer 的输入、控制行、模式菜单和发送状态共享稳定的 shadcn 组件几何；产品层不再维护移动端布局分支。
+- `output/playwright/settings-touch-targets-390.png` + `src/ui/settings/settings-modal.module.css` + `src/ui/settings/settings-sections.module.css` — 390px 设置中心的九枚横向 Tab、主题 ToggleGroup 均统一为 44px 触控命中区；横向导航仍可滚动，内容宽度保持在视口内。
+- `output/playwright/settings-tab-rail-280-safe.png` + `src/ui/settings/settings-modal.module.css` — 修复 280px Settings TabList 的 `justify-content:center` 造成的负起点与 close 覆盖问题；TabList 现在从左起滚动，右侧安全边界与 44px close 热区严格分离。
+- `output/playwright/action-targets-280.png` + `src/features/app/kokoro-welcome.module.css` + `src/ui/composer/composer.module.css` — 280px 极窄视口下六个首屏动作、模式选择、放大编辑和发送按钮均保持 44px 命中区；Composer 不遮挡最后一个动作，页面仍无横向溢出。
+- `src/ui/marketing/marketing-top-bar.module.css` + `src/ui/marketing/landing-page.module.css` + `src/ui/auth/runtime-unavailable.module.css` — 移动营销页/登录页的导航 Sheet 关闭、能力 Tab、Hero 开始、导航入口和运行时重试按钮统一达到 44px；Sheet 展开后的链接也保持完整触控热区。
+- `src/components/ui/dialog.tsx` + `src/components/ui/sheet.tsx` + `src/ui/composer/composer.module.css` — shadcn Dialog/Sheet 的移动关闭按钮与放大编辑收起按钮统一为 44px；Command Menu、Settings、营销导航和 Composer 共用同一 overlay/action 触控底座。
+- `output/playwright/marketing-action-targets-390.png` — 营销首站 390px 真实浏览器截图；Hero 标签、能力 Tab、CTA、页脚链接和移动导航入口均保持完整触控热区，`scrollWidth === innerWidth`。
+- `output/playwright/desktop-brand-consistency-1440.png` + `src/components/blocks/workspace-rail/workspace-rail.tsx` — 1440px 首站桌面 Rail 的产品品牌、底部身份和移动 Header 统一为 Kokoro；preview Team fixture 只用于 Settings 数据，不再污染产品壳身份。
+- `output/playwright/breakpoint-960-current.png` — 960px 断点当前首屏；移动 Header、Kokoro 品牌、三列动作网格与 Composer 形成完整平板布局，页面宽度严格收敛到视口。
+- `src/ui/marketing/marketing-top-bar.tsx` + `src/ui/marketing/landing-page.tsx` — 营销包新增 `marketingHref` 注入点；通用 package 默认使用 `/`，每个 site 可注入自己的营销入口，避免 mock/定制站点的页内锚点错误跳回根路由。
+- `src/system/use-runtime-manifest.ts` + `tests/system/runtime-manifest-hook.test.tsx` — runtime manifest 的导航与 Logo URL 只允许同源绝对路径，拒绝 `//host` 协议相对地址；非法导航项直接丢弃，避免站点配置把 UI 变成外部跳转入口。
+- `src/system/use-runtime-manifest.ts` + `tests/system/runtime-manifest-hook.test.tsx` — live manifest 的空 navigation/references 保持为空，不再把 Kokoro preview 菜单或能力卡泄漏到其他 site；preview 仍由显式 `PREVIEW_RUNTIME_MANIFEST` 提供默认内容。
+- `src/components/blocks/app-frame/app-frame.tsx` + `src/components/blocks/workspace-rail/workspace-rail.tsx` + `src/ui/auth/app-gate.tsx` — live System navigation 已接入 Rail；仅通过静态 route registry 映射 `library/skills/mcp/credits/team`，未知 route 显示禁用态，不允许 manifest 注入任意 URL 或 React 组件；preview 继续使用 site-owned 默认菜单。
+- `tests/ui/workspace-rail.test.tsx` — runtime menu 自定义文案、已注册 route 点击、未知 route disabled 三条交互契约通过。
+- `src/components/blocks/workspace-rail/workspace-rail.tsx` + `src/ui/auth/app-gate.tsx` — manifest menu 的 `featureFlag` 在 Rail 显示前完成本地白名单过滤；禁用能力不渲染，未知 route 仍只呈 disabled，不把运行时配置变成代码执行入口。
+- `src/components/blocks/app-frame/app-command-menu.tsx` + `tests/ui/command-menu.test.tsx` — Command Menu 与 Rail 共享 runtime navigation/feature flag 投影；已注册设置入口可键盘选择，未知 route 只呈 `aria-disabled`，禁用 flag 不进入菜单。
+- `src/components/blocks/workspace-rail/workspace-rail.tsx` + `tests/ui/workspace-rail.test.tsx` — manifest 中代表当前 Chat surface 的 `chat/current-surface` route 不会重复出现在产品菜单，避免产生第二个 disabled「对话」入口。
+- `src/ui/navigation/runtime-navigation-registry.ts` — Rail 与 Command Menu 共用唯一 route registry 和 featureFlag 判定，消除两套菜单映射漂移；manifest 仍只能选择已注册设置动作。
+- `src/system/runtime-navigation.ts` + `src/system/use-runtime-manifest.ts` — 浏览器侧 runtime navigation projection 不再暴露 manifest `href`；路径只用于安全校验，最终目的地只能由静态 route registry 决定。
+- `output/playwright/command-menu-390-final.png` — 390px Command Menu 真实浏览器态；焦点落在搜索框、工作区/偏好设置分组清晰、面板不溢出，Escape 关闭后返回移动头部命令按钮。
+- `src/app/preview/marketing/page.tsx` — first-site 独立本地 marketing fixture，使用与生产相同的 LandingPage/MarketingTopBar，不依赖 System/IAM，专门承接视觉与交互回归。
+- `src/components/blocks/app-frame/app-frame.tsx` + `src/components/blocks/workspace-rail/workspace-rail.tsx` — Canvas 关闭与 rail 跨布局焦点回收限定在当前 AppFrame/Rail 实例内；嵌入多个 User Web surface 时不再把焦点交给文档中的第一个匹配控件。
+- `src/ui/share/share-button.tsx` — 多个分享控件并存时，Popover 的 Done/撤销/关闭焦点始终回到触发它的同一个分享按钮。
+- `src/components/ui/message-scroller.tsx` + `src/i18n/*.ts` — “滚动到最新/开头”按钮的屏幕阅读器名称进入完整 i18n，不再残留硬编码英文。
+- `src/ui/settings/settings-sections.tsx`、`src/ui/mcp/mcp-panel.tsx`、`src/ui/team/team-panel.tsx` — 所有 SelectItem 均收纳在 shadcn SelectGroup 中，设置、连接和团队下拉菜单遵循统一 Radix 组合语义。
+- `src/ui/mcp/mcp-panel.tsx` + `tests/ui/mcp-panel.test.tsx` — 注册表单的 URL 错误态只标记 URL Field，不再错误高亮 Transport Field；Field 与控件的 `data-invalid`/`aria-invalid` 对齐。
+
+## 2026-08-25 Manus v2 参考补充
+
+- 已登录 Manus 项目页实机确认：项目上下文（指令、连接器、文件、技能、网站、定时任务）与任务 Composer 分层；空项目不伪造任务记录，Composer 保持首要动作。
+- 本地 `/shared/[id]`：网络错误、撤销、删除和不存在均收束到同一公共 404 友好态；不展示输入框、控制面、HITL 或内部错误细节；桌面无横向溢出。
+- 公共分享页品牌不再写死 Kokoro/心：复用 System runtime manifest 的公开品牌字段与安全 Logo 投影，站点域名切换后仍由当前 site 皮肤决定；manifest 失败时保留中性可读回退态。
+- 本地 `/billing/pay/[orderId]`：DEV 收银台改为 shadcn `Card` + `Badge` + `Alert` + `Button` 组合；成功、失败、支付中均有稳定的 role/disabled/`aria-busy` 语义，失败后确认动作保持可重试。
+- `tests/ui/mock-pay-panel.test.tsx` 覆盖成功与失败状态；最近一次 `pnpm check`：80 test files / 664 tests、lint、typecheck、production build 全部通过。
+- API 实现边界以 `docs/user-web-bff-contract-v3.md` 为准：统一 envelope、cursor 分页、`request_id`、显式 waiting 状态、SSE `Last-Event-ID` 和幂等；浏览器不接收或提交 `tenant_id`、`site_id`、IAM token。旧 v2 仅作设计背景。
+
+## 2026-08-30 `/app/agents` 桌面精修
+
+- `src/features/app/kokoro-agents-surface.tsx` + `kokoro-agents-surface.module.css`：保留 Kokoro 合成 Agent fixture，按 Manus 的页面轴收口为固定宽度内容列、等高能力卡和清晰的 Hero → CTA → Coming soon 层级；实际 surface 宽度在 `≥768px` 的窄桌面容器使用两列，宽桌面保持四列，手机断点不参与本轮改动。
+- Start/setup Dialog 保持 `400×446px` 的基准几何；短桌面视口使用内部纵向滚动，关闭按钮为 44px 命中区，Radix Dialog focus scope 进入时把焦点交给当前平台 Tab，Escape/关闭后回到 Start 按钮。
+- Telegram、LINE、Slack 使用 Radix Tabs 键盘循环；setup 请求按平台和请求序列隔离，二维码槽恒定 `160×160px`，loading 保留 Skeleton，error 使用 Alert + retry 且不产生假 continue 链接。
+- 验收证据：`output/playwright/agents-refined-wide-1440x900.png`、`output/playwright/agents-refined-narrow-960x900.png`、`output/playwright/agents-refined-dialog.png`、`output/playwright/agents-refined-dialog-short-768x400.png`、`output/playwright/agents-refined-dialog-error.png`；对应交互测试为 `tests/ui/kokoro-agents-surface.test.tsx`。

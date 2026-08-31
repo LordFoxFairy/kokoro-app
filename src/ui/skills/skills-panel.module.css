@@ -1,0 +1,1506 @@
+/* 技能面板：居中模态浮层，暖纸感（--* token）。移动端占满，桌面端限宽。 */
+
+
+.panel {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(40rem, 100%);
+  max-height: min(46rem, 100%);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--foreground);
+}
+
+.subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.tabs {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: 0.25rem;
+  padding: 0.75rem 1.5rem 0;
+}
+
+.tabList {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab {
+  min-height: 2rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* Make the selected view legible in both the settings dialog and the
+ * full-screen mobile sheet. The shared Tabs primitive puts its line five
+ * pixels outside the trigger; this embedded rail has no outer clipping
+ * allowance, so the indicator can disappear entirely. Keep the same visual
+ * language as MCP while using an inset line that stays inside the 36px tab
+ * hit target. */
+.tab[data-state="active"] {
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+
+/* Skills is embedded inside the vertical Settings Tabs. The shadcn Tabs
+ * primitives intentionally reuse the `group/tabs` marker, so the outer
+ * vertical group can otherwise make this inner horizontal list inherit
+ * `flex-direction: column`. Scope the direction to this local root and keep
+ * the two skill views on one compact tab rail. */
+.tabs[data-orientation="horizontal"] .tabList {
+  display: inline-flex;
+  width: fit-content;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tabs[data-orientation="horizontal"] .tab[data-state="active"]::after {
+  display: none;
+}
+
+/* Embedded Settings owns the page heading and toolbar. The pool/upload
+ * switch is an implementation detail here and must not occupy a second
+ * visible navigation row (the standalone Skills dialog still shows it). */
+.tabs.embeddedTabs[data-orientation="horizontal"] .tabList {
+  display: none;
+}
+
+.embeddedTabs {
+  padding: 0;
+}
+
+.embeddedTabs .tabList {
+  display: none;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.embeddedBody {
+  padding-inline: 0;
+  /* Settings' outer ScrollArea is the single vertical viewport. Let the
+     embedded tab content grow naturally instead of creating a nested wheel
+     target that traps scrolling inside an otherwise static settings page. */
+  flex: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: auto;
+  overflow: visible;
+}
+
+/* Settings gives every embedded panel the same 24px content lead. Keep the
+ * Skills toolbar on that shared baseline instead of letting Tabs' own box
+ * model shave a pixel off the reference axis. */
+.tabs.embeddedTabs .embeddedBody {
+  padding-top: 1.5rem;
+}
+
+.hint {
+  padding: 1.5rem 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1.5rem 0;
+}
+
+.loadingLine,
+.loadingLineShort {
+  height: 2.8rem;
+  width: 100%;
+}
+
+.loadingLineShort {
+  width: 70%;
+}
+
+.retry {
+  margin-top: 0.75rem;
+  padding: 0.4rem 0.9rem;
+}
+
+.quota {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  background: var(--secondary);
+  border-radius: var(--radius-md);
+}
+
+/* A completed GitHub import needs an anchored acknowledgement. The list is
+ * intentionally not replaced or scrolled behind the dialog: the notice stays
+ * in the same content flow, while the recent card is promoted by PoolTab so
+ * the user can immediately verify where the package landed. */
+.importNotice {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-color: color-mix(in srgb, var(--primary) 18%, var(--border));
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+  color: var(--foreground);
+}
+
+.importNotice > [data-slot="alert-description"] {
+  min-width: 0;
+  flex: 1;
+  gap: 0.125rem;
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.importNoticeRepository {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importNoticeDismiss {
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  flex: 0 0 2rem;
+  color: var(--muted-foreground);
+}
+
+.importNoticeDismiss > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* —— 搜索 + 范围筛选栏 —— */
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+/* Embedded Settings follows Manus' two-row toolbar: search + actions on the
+ * first row, scope filters on the second. Keeping this composition local to
+ * the embedded surface prevents the standalone Skills dialog from changing
+ * its existing interaction geometry. */
+.embeddedFilterLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 2rem 2.25rem;
+  column-gap: 0.75rem;
+  row-gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+/* The embedded Settings toolbar is measured against the same 32px control
+ * band as the reference surface. Keep this selector after the base filterBar
+ * rules so the compact 12px gap is not widened by the generic 16px rhythm. */
+.filterBar.embeddedFilterLayout {
+  margin-bottom: 0.75rem;
+}
+
+.embeddedSearchField {
+  grid-column: 1;
+  grid-row: 1;
+  width: 12.5rem;
+  height: 2rem;
+}
+
+.searchField {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.embeddedSearchField > svg {
+  position: absolute;
+  left: 0.75rem;
+  z-index: 1;
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.embeddedSearchField .search {
+  width: 100%;
+  height: 2rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem 0.25rem 2.125rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  box-shadow: none;
+  outline: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  outline-offset: -1px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.embeddedSkillActions {
+  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1;
+  gap: 0.5rem;
+}
+
+.embeddedBrowse,
+.embeddedCreate {
+  height: 2rem;
+  min-height: 2rem;
+  padding-inline: 0.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  box-shadow: none;
+  outline: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  outline-offset: -1px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.125rem;
+}
+
+.embeddedCreate { gap: 0.25rem; }
+.embeddedCreate > svg { width: 1rem; height: 1rem; }
+
+@media (pointer: fine) {
+  .embeddedBrowse {
+    width: 4.5rem;
+    justify-content: center;
+  }
+  .embeddedCreate {
+    width: 4rem;
+    justify-content: center;
+  }
+}
+
+.embeddedFilterSeg {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+  background: transparent;
+  padding: 0 !important;
+  gap: 0.25rem !important;
+}
+
+.embeddedFilterSeg .filterBtn {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.75rem;
+  border-radius: 999px;
+  border: 0 !important;
+  background: transparent;
+  box-shadow: none !important;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+}
+
+@media (pointer: fine) {
+  .embeddedFilterSeg { gap: 0.25rem !important; }
+  .embeddedFilterSeg .filterBtn { width: 3.25rem; justify-content: center; }
+  .embeddedFilterSeg .filterBtn:nth-child(4) { width: 4.125rem; }
+}
+
+.embeddedFilterSeg .filterBtn[data-state="on"] {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--foreground);
+  background: var(--secondary);
+  border-radius: var(--radius-md);
+}
+
+
+.filterSeg {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 0.15rem;
+  gap: 0.1rem;
+  background: var(--secondary);
+  border-radius: var(--radius-md);
+}
+
+.filterBtn {
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  border-radius: var(--radius-sm);
+}
+
+.filterBtn[data-state="on"] {
+  background: var(--accent);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* —— 空态引导 —— */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+
+.noMatch {
+  min-height: 8rem;
+  padding: 1.25rem;
+}
+
+/* —— 停用二次确认(破坏性动作前置确认) —— */
+.confirmRow {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.confirmYes {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.confirmNo {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.installedCard {
+  height: 8.4375rem;
+  min-height: 8.4375rem;
+  overflow: hidden;
+  border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: none;
+  gap: 0;
+  padding: 0 !important;
+}
+
+.installedCardContent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  padding: 0 !important;
+}
+
+.installedCardHead {
+  display: flex;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  margin-top: 0.75rem;
+  box-sizing: border-box;
+  padding: 0 0.75rem 0 1rem;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.installedCardHead :global([data-slot="switch"]),
+.catalogCardHead :global([data-slot="switch"]) {
+  width: 1.375rem;
+}
+
+.installedCardIdentity { display: flex; min-width: 0; align-items: center; gap: 0.5rem; }
+.installedCardIdentity [data-slot="badge"] { flex: 0 0 auto; }
+.installedCardWithError { height: auto; min-height: 8.4375rem; overflow: visible; }
+.installedCardError { margin-top: 0.5rem; }
+
+.installedCardHead :global([data-slot="switch"][data-state="checked"]) {
+  background: rgb(46 142 247);
+}
+
+.installedCardName {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border-radius: 0.35rem;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--card-foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installedCardName:hover {
+  background: transparent;
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.detailTrigger {
+  min-width: 0;
+  max-width: 100%;
+  justify-content: flex-start;
+  padding: 0;
+  border-radius: 0.35rem;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.detailTrigger:hover {
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.installedCardDescription,
+.catalogCardDescription {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0.25rem 1rem 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.installedCardDescription {
+  height: 3rem;
+  min-height: 3rem;
+}
+
+.catalogCardDescription {
+  height: 3rem;
+  min-height: 3rem;
+}
+
+.installedCardMeta {
+  display: flex;
+  height: 2.625rem;
+  min-height: 2.625rem;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  padding: 0.75rem 1rem 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installedCardMeta > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 0.875rem;
+}
+
+.createMenuContent { min-width: 15.75rem; padding: 0.375rem; }
+.createMenuContent :global([role="menuitem"]) { min-height: 2.25rem; gap: 0.625rem; font-size: 0.875rem; }
+.createMenuContent :global([role="menuitem"] > svg) { width: 1rem; height: 1rem; }
+
+/* GitHub follows the reference's compact single-submit dialog. Preview and
+ * import are still separate BFF operations, but the user sees one calm
+ * decision surface instead of a nested confirmation card. */
+.githubDialog {
+  display: flex;
+  width: min(25rem, calc(100vw - 2rem));
+  max-width: min(25rem, calc(100vw - 2rem)) !important;
+  height: min(21.5rem, calc(100vh - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+}
+
+/* The reference modal is a three-band surface: a 60px close affordance row,
+ * a 191px identity/form lead-in, and an 88px action footer. The shared
+ * DialogContent close button is absolutely positioned, so the header owns
+ * the otherwise-empty top band with padding rather than introducing another
+ * bespoke close control. This keeps the component shadcn/Radix-native while
+ * preserving the exact vertical rhythm at every desktop viewport. */
+.githubDialog > :global([data-slot="dialog-close"]) {
+  top: 1rem;
+  right: 1rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  opacity: 0.7;
+}
+
+.githubHeader {
+  align-items: center;
+  box-sizing: border-box;
+  height: 11.9375rem;
+  min-height: 11.9375rem;
+  gap: 0.25rem;
+  padding: 3.75rem 1.5rem 0;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.githubBrandFlow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.githubBrandIcon {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 0.4167rem 1.6667rem color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.githubBrandIcon > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.githubBrandIcon :global(img) {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.githubBrandIcon .githubKokoroIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--foreground);
+}
+
+.githubTransferIcon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted-foreground);
+}
+
+.githubHeader [data-slot="dialog-title"] {
+  font-size: 1.25rem;
+  line-height: 1.875rem;
+}
+
+.githubHeader [data-slot="dialog-description"] {
+  line-height: 1.3125rem;
+}
+
+.githubForm {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 4.0625rem;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 1.5rem;
+}
+
+.githubForm[data-invalid="true"] {
+  height: auto;
+  min-height: 5.5625rem;
+  gap: 0.25rem;
+}
+
+.githubDialog:has(.githubForm[data-invalid="true"]) {
+  height: min(23rem, calc(100vh - 1.5rem));
+}
+
+.githubBody {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
+.githubLabel {
+  display: block;
+  height: 1.3125rem;
+  min-height: 1.3125rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.githubLabel input {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  font-size: 0.875rem;
+}
+
+.githubForm > input {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  font-size: 0.875rem;
+}
+
+.githubError {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--destructive);
+  box-shadow: none;
+  font-size: 0.8125rem;
+}
+
+.githubError [data-slot="alert-description"] { color: inherit; }
+
+.githubResult {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  height: 4.0625rem;
+  min-height: 4.0625rem;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  padding: 0 1.5rem;
+}
+
+.githubSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  color: var(--success, rgb(22 163 74));
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.githubSuccess > svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.githubResultMeta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.githubResultMeta > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.githubFooter {
+  box-sizing: border-box;
+  width: 100%;
+  height: 5.5rem;
+  min-height: 5.5rem;
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 1.5rem;
+  gap: 0;
+}
+
+.githubFooter > button {
+  width: 100%;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  gap: 0.375rem;
+}
+
+.githubFooter > button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Upload is a separate first-step dialog in the reference product. Keep the
+ * settings/catalog surfaces mounted behind this small portal instead of
+ * changing their internal navigation. The dimensions intentionally stay
+ * fixed on desktop; only the viewport guard may reduce them when the browser
+ * is shorter than the reference viewport. */
+.uploadDialog {
+  display: flex;
+  box-sizing: border-box;
+  width: min(25rem, calc(100vw - 2rem));
+  max-width: min(25rem, calc(100vw - 2rem)) !important;
+  min-height: min(21.75rem, calc(100vh - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--background);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent), 0 24px 24px -12px color-mix(in srgb, var(--foreground) 14%, transparent), 0 8px 16px -8px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.uploadDialog[data-state-kind="preview"],
+.uploadDialog[data-state-kind="confirming"],
+.uploadDialog[data-state-kind="done"] {
+  height: min(30rem, calc(100vh - 1.5rem));
+}
+
+.uploadDialogHeader {
+  box-sizing: border-box;
+  height: 3.5rem;
+  min-height: 3.5rem;
+  align-items: flex-start;
+  padding: 1rem 3rem 0 1.25rem;
+  text-align: left;
+}
+
+.uploadDialogHeader [data-slot="dialog-title"] {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.uploadDialog > :global([data-slot="dialog-close"]) {
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.uploadInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.uploadDropzone {
+  box-sizing: border-box;
+  width: calc(100% - 2.5rem);
+  height: 9.5rem;
+  min-height: 9.5rem;
+  margin: 0 1.25rem 1rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px dashed color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.uploadDropzone:hover,
+.uploadDropzone[data-dragging="true"] {
+  border-color: rgb(0 129 242 / 45%);
+  background: rgb(0 129 242 / 5%);
+}
+
+.uploadDropzone > svg {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--muted-foreground);
+  stroke-width: 1.25;
+}
+
+.uploadRequirements {
+  box-sizing: border-box;
+  padding: 0 1.25rem 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.uploadRequirements h3 {
+  margin: 0 0 0.15rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.uploadRequirements ul {
+  margin: 0.1rem 0 0.6rem;
+  padding-left: 1.1rem;
+}
+
+.uploadLearn {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.3rem;
+}
+
+.uploadLearn > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.uploadLearn a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.uploadDialogError {
+  margin: 0 1.25rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.uploadDialogProgress {
+  display: flex;
+  min-height: 10rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--muted-foreground);
+}
+
+.uploadPreview {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 1.25rem 1rem;
+}
+
+.uploadPreviewHint {
+  margin: 0 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.uploadPreview .candidate {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+.uploadDone {
+  display: flex;
+  min-height: 10rem;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.uploadDone > svg {
+  width: 2rem;
+  height: 2rem;
+  color: var(--primary);
+}
+
+.uploadDone strong {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.uploadDone ul {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.uploadDialogFooter {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 1.25rem 1.25rem;
+}
+
+.uploadDialogFooter > button {
+  width: 100%;
+  min-height: 2.5rem;
+}
+
+.uploadDialogFooter > button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-lg);
+}
+
+.itemDisclosure { width: 100%; }
+
+.itemContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0;
+}
+
+.revisionContent {
+  width: 100%;
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.embeddedSwitch {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-strong);
+  border: 1px solid var(--neutral-border);
+}
+
+.badge[data-scope="official"] {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--ring);
+}
+
+.badge[data-scope="required"] {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning-border);
+}
+
+.desc {
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.itemError {
+  margin: 0;
+  color: var(--error-strong);
+  font-size: 0.78rem;
+}
+
+.itemActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* The Settings catalog follows the reference card hierarchy: identity,
+ * description, and one enable switch. Secondary actions remain available in
+ * the standalone Skills surface without crowding the embedded catalog. */
+.embeddedItemActions {
+  display: none;
+}
+
+.pin,
+.ver,
+.toggle {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.pin[data-active="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.toggle:not(:disabled):hover {
+  border-color: var(--error-border);
+  color: var(--error);
+}
+
+.revHint {
+  padding: 0.5rem 0;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.revList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border);
+}
+
+.revRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.revMeta {
+  color: var(--muted-foreground);
+}
+
+.upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.file {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.feedback {
+  margin-bottom: 0.75rem;
+}
+
+.refreshFeedback {
+  margin: -0.15rem 0 0.75rem;
+}
+
+.refreshFeedback [data-slot="alert-description"] {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.refreshFeedback button {
+  flex: 0 0 auto;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.candidateSet {
+  gap: 0.5rem;
+}
+
+.candidate {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 960px) {
+  /* Standalone Skills embeds do not inherit Settings' mobile contract. Keep
+     every interactive control reachable with the same 44px target whether
+     this panel is opened from Settings or mounted as its own surface. */
+  .panel :global(button),
+  .panel :global(input),
+  .panel :global(textarea),
+  .panel :global(select),
+  .panel :global([role="combobox"]) { min-height: 2.75rem; }
+
+  .pin,
+  .ver,
+  .toggle,
+  .publish,
+  .retry { min-height: 2.75rem; }
+  .candidate { min-height: 2.75rem; }
+}
+
+.candidate[data-valid="false"] {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+
+.candidateErrors {
+  margin: 0.2rem 0 0;
+  padding-left: 1rem;
+  color: var(--error-strong);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+/* Desktop library surface: dense two-column cards like the reference skills
+ * catalog. The card keeps identity and description together, while the
+ * existing pin/revision/disable actions remain in a stable bottom action row
+ * rather than changing card height when a long name wraps. Mobile stays on
+ * the existing single-column contract. */
+@media (min-width: 961px) {
+  .panel { width: min(58rem, 92vw); max-height: min(48rem, 88vh); }
+  .head { padding: 1.5rem 2rem 1.1rem; }
+  .title { font-family: var(--font-sans); font-size: 1.45rem; font-weight: 650; letter-spacing: -0.025em; }
+  .tabs { padding: 1rem 2rem 0; }
+  /* In Settings the outer content viewport is already centered to the
+   * Manus axis (755px at the reference dialog size). The standalone panel
+   * gutter must not be inherited by the embedded Tabs root: it shifted the
+   * toolbar from x=373 to x=405 and added a second vertical offset. */
+  .tabs.embeddedTabs { padding: 0; }
+  .body { padding: 1.35rem 2rem 2rem; }
+  .embeddedBody { padding-inline: 0; }
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .item { min-height: 8.45rem; padding: 1rem; border-radius: var(--radius-lg); }
+  .itemContent { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 0.75rem; }
+  .itemMain { min-width: 0; }
+  .name { font-size: 1rem; }
+  .desc { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .embeddedSwitch { margin-top: -0.1rem; }
+  .itemActions { grid-column: 1; min-width: 0; justify-content: flex-start; }
+  .pin, .ver, .toggle { min-height: 2.15rem; padding-inline: 0.65rem; font-size: 0.75rem; }
+  .quota { margin-bottom: 1rem; padding: 0.7rem 1rem; }
+  .filterBar { margin-bottom: 1rem; }
+}
+
+/* The same catalogue geometry must apply to a desktop browser whose CSS
+ * viewport is reduced by zoom. Settings selects the wide two-column shell by
+ * pointer capability, so Skills must use the matching card grid as well. */
+@media (pointer: fine) {
+  .embeddedBody .list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .embeddedBody .list > li {
+    min-width: 0;
+  }
+  .embeddedBody .item:not(.installedCard) {
+    min-height: 8.45rem;
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+  }
+  .embeddedBody .itemContent {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+  }
+  .embeddedBody .itemMain {
+    min-width: 0;
+  }
+  .embeddedBody .name {
+    font-size: 1rem;
+  }
+  .embeddedBody .desc {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
+.catalogDialog {
+  display: flex;
+  width: min(50rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem) !important;
+  height: min(42.5rem, calc(100vh - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--background);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent), 0 24px 24px -12px color-mix(in srgb, var(--foreground) 4%, transparent), 0 3px 3px -1.5px color-mix(in srgb, var(--foreground) 6%, transparent), 0 10px 20px 1px color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.catalogDialog > :global([data-slot="dialog-close"]) {
+  width: 2rem;
+  height: 2rem;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: transparent;
+}
+
+.catalogTitle {
+  height: 3.75rem;
+  margin: 0;
+  padding: 1.25rem 3.5rem 0.75rem 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+
+.catalogSearch {
+  position: relative;
+  display: flex;
+  width: calc(100% - 3rem);
+  height: 2rem;
+  min-height: 2rem;
+  margin: 0 1.5rem 0.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.catalogSearch > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+.catalogSearch :global(input) { height: 1.3125rem; min-height: 1.3125rem; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 0.875rem; }
+
+.catalogToolbar {
+  display: flex;
+  height: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+}
+
+.catalogFeedback { flex: 0 0 auto; margin: 0.75rem 1.5rem 0; }
+
+.catalogScope { display: flex; gap: 0.25rem; }
+.catalogScope > button { height: 2rem; min-height: 2rem; padding: 0 0.625rem; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 400; }
+.catalogScope > button[data-active="true"] { background: color-mix(in srgb, var(--foreground) 8%, transparent); font-weight: 500; }
+.catalogCreate { width: 4rem; height: 2rem; min-height: 2rem; gap: 0.25rem; padding-inline: 0.5rem; border: 0; background: transparent; box-shadow: none; outline: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent); outline-offset: -1px; }
+
+.catalogGrid {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 8.4375rem;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0.75rem 1.5rem 1.5rem;
+}
+
+.catalogSkeletonTitle,
+.catalogSkeletonDescription,
+.catalogSkeletonMeta {
+  border-radius: 0.25rem;
+}
+
+.catalogSkeletonTitle {
+  width: 58%;
+  height: 1.25rem;
+}
+
+.catalogSkeletonDescription {
+  width: 92%;
+  height: 2.25rem;
+  align-self: start;
+}
+
+.catalogSkeletonMeta {
+  width: 45%;
+  height: 1rem;
+}
+
+.catalogLoadError {
+  display: flex;
+  min-height: 12rem;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.catalogLoadError p {
+  margin: 0;
+}
+
+.catalogLoadError button {
+  min-width: 5rem;
+}
+
+.catalogEmpty { grid-column: 1 / -1; min-height: 12rem; border: 0; }
+.uploadBack { align-self: flex-start; margin-bottom: 0.5rem; padding-inline: 0; }
+
+.catalogCard { height: 8.4375rem; gap: 0; padding: 0 !important; border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-radius: 0.75rem; background: var(--card); box-shadow: none; }
+.catalogCardContent { display: flex; height: 100%; min-width: 0; flex-direction: column; padding: 0 !important; }
+.catalogCardHead { display: flex; height: 1.75rem; min-height: 1.75rem; box-sizing: border-box; margin-top: 0.75rem; padding: 0 0.75rem 0 1rem; min-width: 0; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.catalogCardHead > p { min-width: 0; margin: 0; overflow: hidden; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
+.catalogCardHead > button { width: 1.75rem; height: 1.75rem; min-height: 1.75rem; padding: 0; border-color: color-mix(in srgb, var(--foreground) 6%, transparent); background: transparent; box-shadow: none; }
+.catalogCardError { grid-column: 1 / -1; margin: 0.25rem 0 0; padding: 0; border: 0; background: transparent; color: var(--destructive); box-shadow: none; font-size: 0.75rem; }
+.catalogCardError [data-slot="alert-description"] { color: inherit; }
+
+.candidateContent {
+  min-width: 0;
+}
+
+.candidateLabel {
+  font-weight: 600;
+}
+
+.candidateMeta {
+  font-size: 0.75rem;
+}
+
+.publish {
+  align-self: flex-start;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.result {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+}
+
+.result[data-status="failed"] {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.result[data-status="published"] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+@media (max-width: 640px) {
+  /* Settings already supplies the mobile content gutter; avoid a second
+   * inset that makes skill cards unnecessarily narrow on small screens. */
+  .tabs {
+    padding-inline: 0;
+  }
+
+  .tabList {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+}
+
+/* The Settings surface remains a horizontal control row at the compact Web
+ * width used by the reference (the 2x browser capture is 447 CSS px). The
+ * previous 640px breakpoint stacked the search field and scope selector,
+ * pushing the first skill card far below the fold. Only genuinely phone-sized
+ * content stacks these controls; desktop zoom keeps the one-row composition. */
+@media (max-width: 380px) {
+  .filterBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filterSeg {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .filterBtn {
+    min-width: 0;
+    flex: 1 1 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding-inline: 0.35rem;
+    line-height: 1.15;
+  }
+}
