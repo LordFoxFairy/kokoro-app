@@ -21,7 +21,7 @@ function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   const onOpenSettings = vi.fn()
   const onOpenNotifications = vi.fn()
   const conversations: ConversationSummary[] = [{ id: "ses_1", title: "旧标题" }]
-  render(
+  const view = render(
     <ThemeProvider>
     <LocaleProvider>
       <WorkspaceRail
@@ -46,7 +46,7 @@ function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
     </LocaleProvider>
     </ThemeProvider>,
   )
-  return { onRenameConversation, onOpenSettings, onOpenNotifications }
+  return { ...view, onRenameConversation, onOpenSettings, onOpenNotifications }
 }
 
 beforeEach(() => {
@@ -340,6 +340,91 @@ it("活动导航用 aria-current 固定路由切换期间的选中语义", () =>
   })
 
   expect(screen.getByTestId("rail-agent")).toHaveAttribute("aria-current", "page")
+})
+
+it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍可重新打开", async () => {
+  const view = renderRail({
+    collapsed: true,
+    navigation: [
+      { key: "agent", label: "Agent" },
+      { key: "skills", label: "技能" },
+    ],
+    activeNavigationKey: "agent",
+  })
+
+  fireEvent.pointerMove(screen.getByTestId("rail-agent"), { pointerType: "mouse" })
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Agent")
+
+  view.rerender(
+    <ThemeProvider>
+      <LocaleProvider>
+        <WorkspaceRail
+          collapsed
+          onToggleCollapse={() => {}}
+          onNewChat={() => {}}
+          chatHref="/app"
+          navigation={[
+            { key: "agent", label: "Agent" },
+            { key: "skills", label: "技能" },
+          ]}
+          activeNavigationKey="skills"
+          conversations={[]}
+          activeId={null}
+          awaitingIds={new Set()}
+          onSelectConversation={() => {}}
+          onDeleteConversation={() => {}}
+          onRenameConversation={() => {}}
+          onOpenSettings={() => {}}
+          listLoading={false}
+          listError={false}
+          hasMore={false}
+          onLoadMore={() => {}}
+        />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull())
+
+  fireEvent.pointerMove(screen.getByTestId("rail-skills"), { pointerType: "mouse" })
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("技能")
+})
+
+it("compactDesktop 模式变化时关闭账户菜单", async () => {
+  let setCollapsed: (collapsed: boolean) => void = () => {}
+
+  function ControlledRail() {
+    const [collapsed, setCollapsedState] = useState(true)
+    setCollapsed = setCollapsedState
+    return (
+      <WorkspaceRail
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsedState((value) => !value)}
+        onNewChat={() => {}}
+        chatHref="/app"
+        conversations={[]}
+        activeId={null}
+        awaitingIds={new Set()}
+        onSelectConversation={() => {}}
+        onDeleteConversation={() => {}}
+        onRenameConversation={() => {}}
+        onOpenSettings={() => {}}
+        listLoading={false}
+        listError={false}
+        hasMore={false}
+        onLoadMore={() => {}}
+      />
+    )
+  }
+
+  render(<ThemeProvider><LocaleProvider><ControlledRail /></LocaleProvider></ThemeProvider>)
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  await waitFor(() => expect(screen.getByRole("menuitem", { name: "账户" })).toBeInTheDocument())
+
+  act(() => setCollapsed(false))
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
 })
 
 it("专案侧栏保留直接会话入口，并以专案会话作为独立列表", () => {

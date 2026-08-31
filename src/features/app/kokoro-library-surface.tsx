@@ -345,19 +345,37 @@ export function KokoroLibrarySurface({
   // Controlled fixture props are the source of truth when a host changes them
   // after mount; fetched data remains stateful for live/preview transport.
   const artifacts = fixtureSnapshot ?? loadedArtifacts
+  const isFixtureControlled = fixtureSnapshot !== undefined
 
   useEffect(() => {
-    if (fixtureSnapshot !== undefined) {
+    if (isFixtureControlled) {
+      // A fixture transition supersedes every live request, including a page
+      // request. Clear its transport state so stale pagination and errors do
+      // not leak into the controlled projection.
+      requestSeqRef.current += 1
+      loadedCursorsRef.current.clear()
+      inFlightCursorRef.current = undefined
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize local transport state with the controlled fixture boundary.
+      setLoading(false)
+      setError(false)
+      setNextCursor(undefined)
+      setLoadingMore(false)
+      setLoadMoreError(false)
       return
     }
+
     // The loading state is initialized before mount; start the live/preview
     // transport from this effect without adding a frame or microtask gate.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load updates state only after the transport settles.
+    setLoading(true)
+    setError(false)
+    setNextCursor(undefined)
+    setLoadingMore(false)
+    setLoadMoreError(false)
     void load()
     return () => {
       requestSeqRef.current += 1
     }
-  }, [fixtureSnapshot, load])
+  }, [fixtureSnapshot, isFixtureControlled, load])
 
   const filteredArtifacts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
@@ -404,6 +422,9 @@ export function KokoroLibrarySurface({
       : t("library.directEmptyTitle")
   const emptyDescription = noMatch ? t("library.noMatchDescription") : t("library.directEmptyDescription")
   const contentLabel = filteredArtifacts.length > 0 ? t("library.title") : emptyTitle
+  const showLoading = !isFixtureControlled && loading
+  const showError = !isFixtureControlled && error
+  const showPagination = !isFixtureControlled && nextCursor !== undefined
 
   const clearFilters = () => {
     setFilter("all")
@@ -482,7 +503,7 @@ export function KokoroLibrarySurface({
         </div>
       </div>
 
-      {loading ? (
+      {showLoading ? (
         <div className={cn(styles.stateRegion, styles.loadingRegion)} role="status" aria-label={t("library.loading")}>
           <div className={styles.loadingState} aria-hidden="true">
             {[0, 1].map((group) => (
@@ -507,7 +528,7 @@ export function KokoroLibrarySurface({
           </div>
         </div>
       ) : null}
-      {error ? (
+      {showError ? (
         <div className={styles.stateRegion}>
           <Alert variant="destructive" className={styles.errorState}>
             <AlertDescription>
@@ -517,7 +538,7 @@ export function KokoroLibrarySurface({
           </Alert>
         </div>
       ) : null}
-      {!loading && !error && filteredArtifacts.length === 0 ? (
+      {!showLoading && !showError && filteredArtifacts.length === 0 ? (
         <section className={styles.stateRegion} aria-labelledby="library-empty-title">
           <Empty className={styles.empty} data-testid="library-empty-state">
             <EmptyHeader>
@@ -538,7 +559,7 @@ export function KokoroLibrarySurface({
           </Empty>
         </section>
       ) : null}
-      {!loading && !error && filteredArtifacts.length > 0 ? (
+      {!showLoading && !showError && filteredArtifacts.length > 0 ? (
         <section className={view === "grid" ? styles.grid : styles.list} data-testid="library-artifacts" data-view={view} role="list" aria-label={contentLabel}>
           {filteredArtifacts.map((artifact) => {
             const kind = artifactFilter(artifact.mime, artifact.title)
@@ -591,7 +612,7 @@ export function KokoroLibrarySurface({
           })}
         </section>
       ) : null}
-      {!loading && !error && nextCursor !== undefined ? (
+      {!showLoading && !showError && showPagination ? (
         <div className={styles.pagination} data-testid="library-pagination">
           {loadMoreError ? (
             <Alert variant="destructive" className={cn(styles.errorState, styles.loadMoreError)}>

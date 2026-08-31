@@ -1184,6 +1184,23 @@ type CreationIntent = "presentation" | "website" | "design" | "game" | "app"
 
 因此当前契约不添加 `/api/capsules`、`/api/creation` 或 creation intent 字段。
 
+### 10.3 Catalog surface 到 Chat 的承接
+
+目录类页面不拥有第二套 Chat transport。资料库的“查看来源会话”先通过 mounted-surface
+导航回 `/app?conversation=SESSION_ID`，再由同一个 `AppFrame`/`SessionEngine` 选择会话；技能详情的
+“试试看”与“使用技能建立”同样回到 direct Chat，并只把本地 prompt 写入 Composer draft。上述动作都不增加 API endpoint，
+也不把 `creationIntent`、catalog state 或 UI route 写入 message body。
+
+| UI 动作 | 页面承接 | API 行为 |
+|---|---|---|
+| Library → 查看来源会话 | `/app?conversation=SESSION_ID` | 复用现有 Session 列表/snapshot；不新增 artifact-to-chat endpoint |
+| Skills → 详情 → 试试看 | `/app` direct Chat | 仅创建/切换本地 session draft；用户提交时才调用既有 `POST /api/session/sessions/{session_id}/messages` |
+| Skills → 建立技能 | `/app` direct Chat | 仅预填 skill-builder prompt；不新增 `/api/try`、`/api/skill-creator` |
+| Skills catalog → Upload/GitHub | Settings 内唯一 child Dialog | 仍使用既有 Hub skill upload/GitHub contract；父 catalog 关闭后才打开 child Dialog |
+
+上述“先回 Chat、再选会话”是浏览器呈现顺序，不是新的业务资源关系；`SESSION_ID` 仍为不透明会话引用，不能被解释为
+tenant、site 或 namespace。
+
 ## 11. 错误、缓存与回退规则
 
 ### 11.1 BFF 层错误

@@ -113,9 +113,9 @@ function formatUsage(index: number, t: (key: MessageKey, values?: Record<string,
   return t("skills.usedCount", { count: count >= 100 ? `${count.toFixed(1)}k` : `${count}k` })
 }
 
-type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings">
+type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
 
-export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Kokoro", onOpenSettings }: KokoroSkillsSurfaceProps) {
+export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const client = useMemo(() => browserHubClient({ preview }), [preview])
   const catalog = useResource<SkillCatalog>(`${CATALOG_KEY}/${preview ? "preview" : "live"}`, useCallback(() => listAllCatalog(client), [client]))
@@ -212,7 +212,7 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className={styles.createMenu}>
               <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={() => startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi() : startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => { uploadRef.current = createRef.current; setUploadOpen(true) }}><span className={styles.createMenuIcon}><Upload aria-hidden="true" /></span>{t("skills.uploadSkill")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => { githubRef.current = createRef.current; setGithubOpen(true) }}><span className={styles.createMenuIcon}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} /></span>{t("skills.importGithub")}</DropdownMenuItem>
               </DropdownMenuGroup>
@@ -298,7 +298,21 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
 
       <GithubImportDialog client={client} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
       <SkillUploadDialog client={client} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${CATALOG_KEY}/${preview ? "preview" : "live"}`)} />
-      <SkillDetailDialog skill={detailCard} brandName={brandName} open={detailCard !== null} onOpenChange={(open) => { if (!open) setDetailSkill(null) }} returnFocusRef={detailRef} onTry={(skill, prompt) => { setDetailSkill(null); startChat(prompt ?? t("skills.tryPrompt", { brand: brandName, name: skill.name })) }} />
+      <SkillDetailDialog
+        skill={detailCard}
+        brandName={brandName}
+        open={detailCard !== null}
+        onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
+        returnFocusRef={detailRef}
+        onTry={(skill, prompt) => {
+          setDetailSkill(null)
+          if (onTrySkill) {
+            onTrySkill(skill, prompt)
+          } else {
+            startChat(prompt ?? t("skills.tryPrompt", { brand: brandName, name: skill.name }))
+          }
+        }}
+      />
     </div>
   )
 }

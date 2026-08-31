@@ -366,6 +366,8 @@ function PoolTab({
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const createActionHandledRef = useRef(false)
+  const catalogHandoffRef = useRef<(() => void) | null>(null)
+  const catalogHandoffTimerRef = useRef<number | null>(null)
   const disableTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const searchRef = useRef<HTMLInputElement | null>(null)
@@ -389,6 +391,47 @@ function PoolTab({
     event.preventDefault()
     window.requestAnimationFrame(() => catalogTriggerRef.current?.focus())
   }, [])
+
+  const finishCatalogHandoff = useCallback(() => {
+    if (catalogHandoffTimerRef.current !== null) {
+      window.clearTimeout(catalogHandoffTimerRef.current)
+      catalogHandoffTimerRef.current = null
+    }
+    const handoff = catalogHandoffRef.current
+    catalogHandoffRef.current = null
+    handoff?.()
+  }, [])
+
+  const queueCatalogHandoff = useCallback((handoff: () => void) => {
+    if (catalogHandoffTimerRef.current !== null) {
+      window.clearTimeout(catalogHandoffTimerRef.current)
+    }
+    catalogHandoffRef.current = handoff
+    setCatalogOpen(false)
+    // Radix normally calls onCloseAutoFocus after the catalog's focus scope
+    // exits. A controlled, trigger-less dialog can skip that callback in a
+    // jsdom/animation-disabled environment, so retain a post-exit fallback.
+    // The 240ms guard is longer than the shared 200ms Dialog exit duration;
+    // it never opens the child in the same commit as the catalog close.
+    catalogHandoffTimerRef.current = window.setTimeout(finishCatalogHandoff, 240)
+  }, [finishCatalogHandoff])
+
+  useEffect(() => () => {
+    if (catalogHandoffTimerRef.current !== null) window.clearTimeout(catalogHandoffTimerRef.current)
+  }, [])
+
+  const handleCatalogCloseAutoFocus = (event: Event) => {
+    const handoff = catalogHandoffRef.current
+    if (handoff !== null) {
+      event.preventDefault()
+      // Radix invokes this callback from the source dialog's focus-scope
+      // unmount. Starting the child here, rather than in the menu item's
+      // event, keeps the two controlled modal lifecycles in separate stages.
+      finishCatalogHandoff()
+      return
+    }
+    restoreCatalogTriggerFocus(event)
+  }
 
   // The destructive action is replaced inline. Explicitly move focus to the
   // confirmation control so the scroll viewport never becomes the active
@@ -726,34 +769,19 @@ function PoolTab({
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false)
         }}
-        onCloseAutoFocus={restoreCatalogTriggerFocus}
+        onCloseAutoFocus={handleCatalogCloseAutoFocus}
         client={client}
         enabledOverrides={enabledOverrides}
         installedOverrides={installedOverrides}
         busy={busy}
         errorName={disableError}
         onOpenUpload={(returnFocusRef) => {
-          setCatalogOpen(false)
-          // The catalog is intentionally dismissed before the child portal
-          // opens. Its Create trigger is therefore no longer connected when
-          // the child closes; return to the still-mounted Browse trigger
-          // instead of leaving focus on the document body.
           const focusRef = catalogOpen ? catalogTriggerRef : returnFocusRef ?? catalogTriggerRef
-          // Queue after the controlled catalog close, but before the next
-          // paint. A microtask avoids a visible empty frame and is reliable in
-          // both the browser and jsdom (where animation frames are not a
-          // lifecycle guarantee).
-          queueMicrotask(() => onOpenUpload(focusRef))
+          queueCatalogHandoff(() => onOpenUpload(focusRef))
         }}
         onOpenGithub={(returnFocusRef) => {
-          setCatalogOpen(false)
-          // Do not mount two modal portals in the same React commit. Radix
-          // needs one paint to finish the catalog close lifecycle first;
-          // opening the GitHub dialog in that next frame prevents the catalog
-          // overlay from winning the focus/scroll-lock race and appearing to
-          // remain open behind the importer.
           const focusRef = catalogOpen ? catalogTriggerRef : returnFocusRef ?? catalogTriggerRef
-          queueMicrotask(() => onOpenGithub(focusRef))
+          queueCatalogHandoff(() => onOpenGithub(focusRef))
         }}
         onSetEnabled={onSetEnabled}
       />

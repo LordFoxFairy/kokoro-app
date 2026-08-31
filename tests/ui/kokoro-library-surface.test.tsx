@@ -106,6 +106,75 @@ it("注入资料库 fixture 时直接渲染，不为首屏取数排队动画帧"
   requestAnimationFrame.mockRestore()
 })
 
+it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略旧请求结果", async () => {
+  let resolveRequest: (value: ArtifactList) => void = () => {}
+  const artifactClient = {
+    listArtifacts: vi.fn(() => new Promise<ArtifactList>((resolve) => { resolveRequest = resolve })),
+  }
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient }
+  const view = render(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
+  )
+
+  expect(screen.getByRole("status", { name: "正在加载作品…" })).toBeInTheDocument()
+
+  view.rerender(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[0]]} /></LocaleProvider>,
+  )
+
+  expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(screen.queryByRole("status", { name: "正在加载作品…" })).not.toBeInTheDocument()
+
+  resolveRequest({ artifacts: [artifacts[1]], next_cursor: "stale-cursor" })
+  await waitFor(() => expect(screen.queryByText("研究摘要.pdf")).not.toBeInTheDocument())
+  expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
+})
+
+it("受控 fixture 接管失败的首屏请求时清除错误态", async () => {
+  const artifactClient = {
+    listArtifacts: vi.fn(async () => { throw new Error("BFF unavailable") }),
+  }
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient }
+  const view = render(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
+  )
+
+  await screen.findByText("作品加载失败")
+
+  view.rerender(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[0]]} /></LocaleProvider>,
+  )
+
+  expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(screen.queryByText("作品加载失败")).not.toBeInTheDocument()
+})
+
+it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", async () => {
+  let resolveMore: (value: ArtifactList) => void = () => {}
+  const listArtifacts = vi
+    .fn<(cursor?: string) => Promise<ArtifactList>>()
+    .mockResolvedValueOnce({ artifacts: [artifacts[0]], next_cursor: "cursor-2" })
+    .mockImplementationOnce(() => new Promise<ArtifactList>((resolve) => { resolveMore = resolve }))
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient: { listArtifacts } }
+  const view = render(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
+  )
+
+  await screen.findByText("季度汇报.pptx")
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(listArtifacts).toHaveBeenCalledTimes(2))
+
+  view.rerender(
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[1]]} /></LocaleProvider>,
+  )
+
+  expect(await screen.findByText("研究摘要.pdf")).toBeInTheDocument()
+  expect(screen.queryByTestId("library-pagination")).not.toBeInTheDocument()
+
+  resolveMore({ artifacts: [artifacts[0]], next_cursor: "stale-cursor" })
+  await waitFor(() => expect(screen.queryByText("季度汇报.pptx")).not.toBeInTheDocument())
+})
+
 it("无匹配筛选时给出明确空态并可一键恢复", async () => {
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())

@@ -325,6 +325,9 @@ export type EmptyStateProps = {
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
   onCreateCustomApi?: (returnTarget?: HTMLElement | null) => void
+  /** Skill catalog actions hand off to the shell-owned direct Chat session. */
+  onCreateSkillWithAi?: () => void
+  onTrySkill?: (skill: SkillCard, prompt?: string) => void
   /** Optional live model catalog for site-owned empty surfaces. */
   models?: readonly ModelCandidate[]
   selectedModel?: string | null
@@ -1230,10 +1233,19 @@ export function AppFrame({
     if (!projectWorkspace && id !== activeId) {
       setDeploymentIntent(null)
     }
+    if (standaloneSurface && typeof window !== "undefined") {
+      // Library/other catalog pages share this shell, but the conversation
+      // timeline only exists on the direct Chat route. Move the mounted
+      // surface first and carry the selected id in the canonical query so an
+      // "open source" action cannot appear to do nothing on the catalog.
+      const next = new URL(chatHref, window.location.href)
+      next.searchParams.set("conversation", id)
+      navigateMountedSurface(`${next.pathname}${next.search}${next.hash}`)
+    }
     syncConversationUrl(id, "push")
     setConversationRouteId(id)
     conversationsCtl.selectConversation(id)
-  }, [activeId, conversationsCtl, projectWorkspace, setDeploymentIntent, syncConversationUrl])
+  }, [activeId, chatHref, conversationsCtl, projectWorkspace, setDeploymentIntent, standaloneSurface, syncConversationUrl])
   // CommandDialog 的 workspace action 会抑制默认焦点回收；新对话仍需
   // 在关闭动画完成后把焦点交给 Composer，否则焦点会落到 body。
   const startNewChatFromCommand = useCallback(() => {
@@ -1288,17 +1300,17 @@ export function AppFrame({
       window.requestAnimationFrame(() => focusComposer())
     })
   }, [closeSettings, engine, focusComposer, startNewChatWithUrl, t, updateDraft])
-  const startSkillUseFromSettings = useCallback((skill: SkillCard) => {
+  const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
     // Manus' skill detail CTA is a chat handoff, not a second detail dialog:
     // keep the skill pinned, start a fresh direct session, and seed one
     // inspectable example prompt so the user can edit it before submitting.
     closeSettings()
     startNewChatWithUrl()
     if (!pinnedSkills.includes(skill.name)) togglePinned(skill.name)
-    const prompt = t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name })
+    const nextPrompt = prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name })
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
-    if (nextSessionId) stashConversationDraft(nextSessionId, prompt)
-    else updateDraft(prompt)
+    if (nextSessionId) stashConversationDraft(nextSessionId, nextPrompt)
+    else updateDraft(nextPrompt)
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => focusComposer())
     })
@@ -1567,6 +1579,8 @@ export function AppFrame({
             onOpenSettings={openSettings}
             onCreateMcp={openMcpCreate}
             onCreateCustomApi={openCustomApiCreate}
+            onCreateSkillWithAi={startSkillCreationFromSettings}
+            onTrySkill={startSkillUseFromSettings}
             models={selectors.models}
             selectedModel={selectors.selectedModel}
             onModelChange={selectors.setSelectedModel}

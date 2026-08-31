@@ -760,3 +760,17 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | `welcome.website-workflow.v212` | 选择建立网站 | 保留网站专属专案归档和类型选择轨道；不渲染模型控件或通用创作卡片 |
 
 以上 fixture 不新增后端 endpoint。`onCreationIntentSelect` 是站点壳层与空态组件之间的前端 callback；后续真实接入仍只在用户提交草稿时走既有 task/session message contract。预览模型仅验证 UI 的异步目录和选择器形状，不携带品牌、tenant、site、Cookie、token 或原始 Manus 数据。
+
+## 47. Chat/catalog handoff 与跨 surface 收口 v214
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `library.source-session.chat-handoff.v214` | 资料库卡片点击“查看来源会话” | 独立 Library surface 先回 `/app?conversation=SESSION_ID`，同一 AppFrame 选中来源会话；不把 source session 留在目录页，也不新增 artifact-to-chat API |
+| `skills.creator.chat-handoff.v214` | Skills → 建立技能 → 使用 Kokoro 建立技能 | 关闭设置 surface，打开 direct Chat 并把 skill-builder prompt 写入新会话 draft；不调用 `/api/skill-creator` |
+| `skills.detail.try.chat-handoff.v214` | Skills → 技能详情 → 试试看或 prompt 卡 | 关闭详情/设置，必要时 pin 技能，把用户可见 prompt 写入 direct Chat draft；不调用 `/api/try` |
+| `skills.catalog.child-dialog.handoff.v214` | Skills → 浏览技能 → 创建 → 上传/GitHub | catalog Dialog 先卸载，父 Settings 保持挂载，再打开唯一 child Dialog；焦点进入 URL/dropzone，父 catalog 不残留 |
+| `rail.navigation.tooltip-reset.v214` | 收起 Rail 后 hover Agent，再切换技能/排程 | active surface 变化时旧 tooltip portal 消失；新入口普通 hover 仍能重新打开 tooltip，不改变路由或 API 上下文 |
+| `rail.account.compact-reset.v214` | account menu 打开后切换 compact desktop 状态 | 账户菜单自动关闭，宽/窄布局不保留旧浮层或焦点 trap；不发送域名、tenant、site header |
+
+这些是同一 User Web 子仓库内的浏览器 fixture；Chat 仍由 `/api/session/*` 同源 BFF 承接，未来统一业务 gateway 仍是独立规划仓库，
+不作为 `kokoro-app` 子目录、workspace 依赖或前端页面代码引入。

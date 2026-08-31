@@ -4060,3 +4060,22 @@ AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !=
 验证：`tests/ui/workspace-rail.test.tsx` 增加桌面模式标记回归；真实 `1280×720` 浏览器在从 `392px` 和
 `300px` 展开宽度收起时，过渡中导航/品牌/footer 锚点均保持在左侧，最终 rail 为 `52px`，seam 数量保持 1。
 本节只覆盖桌面 Web，不覆盖手机端。
+
+## v214 Chat 承接与目录子 Dialog 收口（2026-08-31）
+
+本轮把“资料库/技能目录里点了没有反应”按真实桌面交互重新走了一遍，并把 Chat 的承接边界固定下来：
+
+- 资料库的“查看来源会话”不再停留在独立目录 surface；点击后先通过 mounted-surface 导航回 `/app?conversation=...`，再选中
+  来源会话。这样 Composer、会话时间线与项目/direct scope 都回到同一套 Chat 页面，不会出现目录仍在但内容没有变化的假响应。
+- Skills 的“建立技能”与详情“试试看”都由 AppFrame 统一承接：创建入口关闭 Settings 后启动 direct Chat 并写入技能构建提示；
+  详情 prompt 卡则关闭详情并把可见 prompt 写入新会话草稿。没有新增 `/try` 或 `/skill-creator` 专用 API。
+- Skills → 浏览技能 → 创建 → 上传/GitHub 采用单向两阶段 modal handoff：先关闭 catalog 的 Dropdown/Dialog，再打开唯一的 child Dialog；
+  Radix 正常关闭回调负责焦点与启动，动画被禁用或测试 DOM 不触发回调时由 `240ms` post-exit fallback 收口，避免父目录和子 Dialog
+  同时占用焦点/scroll lock。
+- 收起 Rail 后，导航树按 active surface 重新挂载，旧 tooltip 不会残留在新页面；普通 hover 仍可打开新 tooltip。账户菜单在 compact
+  desktop 模式发生切换时自动关闭，避免宽/窄布局之间保留过期浮层。
+
+真实桌面回归：`1280×720` 本地 `/app/skills` 完成 GitHub child Dialog handoff，截图为
+`output/playwright/chat-skills-github-handoff-v214.png`；从技能切换到排程时旧 tooltip 消失，点击“新建任务”回到
+`/app` 且 Composer 获得焦点，截图为 `output/playwright/rail-navigation-handoff-v214.png`。本轮只覆盖桌面 Web，数据均为
+Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。

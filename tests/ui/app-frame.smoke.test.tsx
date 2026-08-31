@@ -433,6 +433,40 @@ it("切换会话使用无刷新 URL 状态，并支持新建会话清理地址",
   })
 })
 
+it("独立目录打开来源会话时先回到 Chat 路由并保留 conversation 查询", async () => {
+  buildEngine({
+    activeId: "conv_a",
+    conversations: [
+      { id: "conv_a", title: "第一个会话", updatedAt: 2, mode: "fast" },
+      { id: "conv_b", title: "来源会话", updatedAt: 1, mode: "fast" },
+    ],
+  })
+  function CatalogProbe({ onOpenSession }: EmptyStateProps) {
+    return <button type="button" onClick={() => onOpenSession?.("conv_b")}>查看来源会话</button>
+  }
+
+  window.history.replaceState(window.history.state, "", "/app/library")
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame
+          engine={engine}
+          chatHref="/app"
+          emptyState={CatalogProbe}
+          standaloneSurface
+        />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.click(screen.getByRole("button", { name: "查看来源会话" }))
+  await waitFor(() => {
+    expect(window.location.pathname).toBe("/app")
+    expect(window.location.search).toBe("?conversation=conv_b")
+    expect(engine.getSnapshot().store?.activeId).toBe("conv_b")
+  })
+})
+
 it("直接会话切换时清理上一个会话的创建意图和草稿", async () => {
   buildEngine({
     activeId: "conv_a",

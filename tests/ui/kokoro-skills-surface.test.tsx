@@ -11,7 +11,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-function renderSkills(onOpenSettings = vi.fn()) {
+function renderSkills(onOpenSettings = vi.fn(), onCreateSkillWithAi = vi.fn(), onTrySkill = vi.fn()) {
   render(
     <LocaleProvider>
       <KokoroSkillsSurface
@@ -19,10 +19,12 @@ function renderSkills(onOpenSettings = vi.fn()) {
         brandName="Kokoro"
         onPrompt={vi.fn()}
         onOpenSettings={onOpenSettings}
+        onCreateSkillWithAi={onCreateSkillWithAi}
+        onTrySkill={onTrySkill}
       />
     </LocaleProvider>,
   )
-  return onOpenSettings
+  return { onOpenSettings, onCreateSkillWithAi, onTrySkill }
 }
 
 it("renders the standalone Manus-style skill catalog and filters it without replacing the page", async () => {
@@ -50,7 +52,7 @@ it("renders the standalone Manus-style skill catalog and filters it without repl
 })
 
 it("hands My Skills to the shared settings center instead of opening a second compact dialog", async () => {
-  const onOpenSettings = renderSkills()
+  const { onOpenSettings } = renderSkills()
   await screen.findByTestId("skills-catalog-grid")
 
   const trigger = screen.getByRole("button", { name: "我的技能" })
@@ -74,6 +76,33 @@ it("uses a fixed Manus-style create menu and site-owned brand copy", async () =>
   expect(menu).toHaveTextContent("从 GitHub 导入")
   expect(menu.className).toContain("createMenu")
   expect(within(menu).getAllByRole("menuitem")).toHaveLength(3)
+})
+
+it("routes the skill creator and detail Try action into the shell Chat handoff", async () => {
+  const onCreateSkillWithAi = vi.fn()
+  const onTrySkill = vi.fn()
+  const onPrompt = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroSkillsSurface
+        preview
+        brandName="Kokoro"
+        onPrompt={onPrompt}
+        onCreateSkillWithAi={onCreateSkillWithAi}
+        onTrySkill={onTrySkill}
+      />
+    </LocaleProvider>,
+  )
+  await screen.findByTestId("skills-catalog-grid")
+
+  fireEvent.pointerDown(screen.getByRole("button", { name: "建立我的专属技能" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "使用 Kokoro 建立技能" }))
+  expect(onCreateSkillWithAi).toHaveBeenCalledTimes(1)
+  expect(onPrompt).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole("button", { name: "查看技能详情 AI 影片生成器" }))
+  fireEvent.click(await screen.findByRole("button", { name: "试试看" }))
+  expect(onTrySkill).toHaveBeenCalledWith(expect.objectContaining({ name: "AI 影片生成器" }), undefined)
 })
 
 it("添加技能后保留原按钮状态并播报完成结果", async () => {

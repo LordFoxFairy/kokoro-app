@@ -181,6 +181,10 @@ function WorkspaceRailContent({
   // owns its brand trigger on wide desktop.
   const showCollapsedBrand = compactDesktop && !compactDesktopRail
   const navigationExpanded = !compactDesktop
+  // Route-owned navigation changes replace the tooltip trigger tree. Radix's
+  // uncontrolled tooltip otherwise keeps the old portal open while the
+  // pointer remains over the reused compact-rail anchor.
+  const navigationTransitionKey = `${activeNavigationKey ?? "none"}:${projectActive ? "project" : "direct"}`
 
   // The compact brand remains mounted while the rail expands. Clear a pointer
   // handoff marker left on that node before a later keyboard collapse can
@@ -484,7 +488,7 @@ function WorkspaceRailContent({
 
       <SidebarContent className={styles.content}>
       <nav className={styles.nav} aria-label={t("rail.navAria")}>
-        <SidebarMenu data-desktop-global-menu="true">
+        <SidebarMenu key={`global-${navigationTransitionKey}`} data-desktop-global-menu="true">
         {/* 新对话：带 ⇧⌘O 快捷键（AppFrame 已接入键盘）。 */}
         <SidebarMenuItem>
           <SidebarMenuButton ref={deleteDialogFallbackFocusRef} tooltip={newSessionLabel} aria-label={newSessionLabel} size="lg" className={cn(styles.navItem, "text-sidebar-primary font-semibold")} type="button" data-testid="rail-new-task" data-navigation-section="new-task" onPointerDown={markPointerFocus} onClick={() => { onNewChat(); closeNavigation() }}>
@@ -526,7 +530,7 @@ function WorkspaceRailContent({
 
         {workbenchNavigation.length > 0 ? <SidebarGroup className={styles.navGroup} data-desktop-workbench-nav="true">
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu key={`workbench-${navigationTransitionKey}`}>
               {workbenchNavigation.map(({ key, label, icon: Icon, settingsTab, href }) => {
                 const canActivate = settingsTab !== undefined || href !== undefined
                 if (href) {
@@ -594,7 +598,7 @@ function WorkspaceRailContent({
             </DropdownMenu>
           </SidebarGroupLabel> : null}
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu key={`project-${navigationTransitionKey}`}>
               <SidebarMenuItem>
                 {compactDesktop ? (
                   <DropdownMenu>
@@ -1054,6 +1058,7 @@ function UserCard({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [creditBalance, setCreditBalance] = useState("—")
   const accountSettingsFrameRef = useRef<number | null>(null)
+  const previousCompactDesktopRef = useRef(compactDesktop)
   // Preview TeamClient data must not replace the site's product brand.
   const display = preview
     ? brandName ?? "Workspace"
@@ -1076,6 +1081,18 @@ function UserCard({
       window.cancelAnimationFrame(accountSettingsFrameRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (previousCompactDesktopRef.current === compactDesktop) return
+    previousCompactDesktopRef.current = compactDesktop
+    let live = true
+    queueMicrotask(() => {
+      if (live) setAccountMenuOpen(false)
+    })
+    return () => {
+      live = false
+    }
+  }, [compactDesktop])
 
   useEffect(() => {
     let live = true

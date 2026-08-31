@@ -55,6 +55,7 @@ function renderEmbedded(client: HubClient) {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -786,6 +787,24 @@ describe("SkillsPanel", () => {
     await waitFor(() => expect(within(catalog).getByRole("searchbox", { name: "Search skills" })).toHaveFocus())
   })
 
+  it.each([
+    ["Upload a skill", "skill-upload-dialog"],
+    ["Import from GitHub", "github-import-dialog"],
+  ])("waits for the catalog to unmount before opening %s", async (menuLabel, childTestId) => {
+    renderEmbedded(makeClient())
+    await screen.findByText("brainstorming")
+
+    fireEvent.click(screen.getByRole("button", { name: "Browse skills" }))
+    const catalog = await screen.findByRole("dialog", { name: "Skills" })
+    fireEvent.pointerDown(within(catalog).getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitem", { name: menuLabel }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId(childTestId)).toBeInTheDocument()
+      expect(catalog).not.toBeInTheDocument()
+    }, { timeout: 3_000 })
+  })
+
   it("makes catalog create actions leave the catalog for the upload surface", async () => {
     renderEmbedded(makeClient())
     await screen.findByText("brainstorming")
@@ -795,7 +814,7 @@ describe("SkillsPanel", () => {
     fireEvent.pointerDown(within(catalog).getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
     fireEvent.click(await screen.findByRole("menuitem", { name: "Upload a skill" }))
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Skills" })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Skills" })).toBeNull(), { timeout: 3_000 })
     const upload = await screen.findByTestId("skill-upload-dialog")
     expect(within(upload).getByRole("heading", { name: "Upload skill" })).toBeInTheDocument()
     expect(within(upload).getByRole("button", { name: "Drag and drop or click to upload" })).toBeInTheDocument()
