@@ -15,8 +15,9 @@
 
 1. 先修改或新增 Zod schema，再同步 `docs/integration/user-web-api-contract-v4.md` 和
    `docs/integration/kokoro-gateway-boundary-v1.md` 的浏览器路径、字段、状态和错误语义。
-2. 每个新增/变更 schema 都要有 `tests/engine/`、`tests/app/` 或对应 domain test 的
-   parse/拒绝未知字段/边界用例；不要在 UI 组件中复制 JSON shape。
+2. 每个新增/变更 schema 都要有对应 domain test 的 parse/拒绝未知字段/边界用例；
+   `contract/api-contract.test.ts` 是 HTTP/SSE wire shape 的集中回归入口，engine/app 测试
+   负责状态机与页面接线；不要在 UI 组件中复制 JSON shape。
 3. Web 浏览器只调用同源 `/api/session/*`、`/api/hub/*` 等已注册 BFF 路径；内部 gateway/runtime
    URL、凭据、tenant 和服务 namespace 不进入浏览器入站身份字段。
 4. 未来若引入 OpenAPI/JSON Schema 生成流程，必须把它作为本仓库的显式工具链加入 CI，并把
@@ -26,7 +27,8 @@
 
 `kokoro-app` 保留 UI 与同源 BFF；统一业务编排的 `LordFoxFairy/kokoro-gateway` 仍是规划中的
 独立仓库。Gateway 接入时优先复用本目录 schema 和 v4 browser contract，替换 BFF 后面的
-upstream，不把 gateway 源码或 `file:` 依赖引入本产品子仓库。
+upstream，不把 gateway 源码或 `file:` 依赖引入本产品子仓库。当前浏览器仍只使用
+`/api/session/*`，不把 gateway URL、endpoint 或凭据写入本契约。
 
 完整路径、Preview/Live 状态、Forwarded 和部署边界见：
 

@@ -426,6 +426,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
   }
 
+  function cancelPendingSubmission(): void {
+    if (machine.phase !== "submitting" || !store || pendingSubmission === null) {
+      return
+    }
+    cancelledSubmissions.set(pendingSubmission.idempotencyKey, store.activeId)
+    pendingSubmission = null
+  }
+
   // snapshot-first 水合：GET /sessions/:sid → 线程状态 + 在途 run 重连（Last-Event-ID=水位）。
   function hydrate(sessionId: string): void {
     hydrateGeneration += 1
@@ -762,6 +770,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
+    // Starting a fresh chat abandons a POST whose receipt has not arrived yet.
+    // Preserve the idempotency key so a late receipt can cancel the server run.
+    cancelPendingSubmission()
     abandonActiveRun()
     const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode)
     closeStream()
@@ -813,9 +824,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
-    if (machine.phase === "submitting" && store && pendingSubmission !== null) {
-      cancelledSubmissions.set(pendingSubmission.idempotencyKey, store.activeId)
-      pendingSubmission = null
+    if (machine.phase === "submitting" && pendingSubmission !== null) {
+      cancelPendingSubmission()
       machine = transition(machine, { type: "RESET" })
       notify()
       return

@@ -2,7 +2,7 @@
 // updated_at desc、软删不出、复合游标分页）。localStorage 不再存清单——换浏览器见同一列表。
 // refreshSignal 变化即重取首页（新会话落库/删除后由 shell 触发）。
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { SessionListItem } from "@/contract/http"
 import type { SessionClient } from "@/engine/client"
@@ -42,6 +42,7 @@ function scopeKey(scope: SessionScope): string {
 
 export function useSessionList(client: Lister, refreshSignal: number, scope: SessionScope = DIRECT_SESSION_SCOPE): SessionListView {
   const [state, setState] = useState<ListState>(INITIAL)
+  const requestGenerationRef = useRef(0)
   const currentScopeKey = scopeKey(scope)
 
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
@@ -62,9 +63,10 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
   }, [client, currentScopeKey, scope])
 
   useEffect(() => {
+    const generation = ++requestGenerationRef.current
     let live = true
     void fetchFirst().then((next) => {
-      if (live) setState(next)
+      if (live && generation === requestGenerationRef.current) setState(next)
     })
     return () => {
       live = false
@@ -72,6 +74,8 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
   }, [currentScopeKey, fetchFirst, refreshSignal])
 
   const loadMore = useCallback(() => {
+    const generation = requestGenerationRef.current
+    const requestScopeKey = currentScopeKey
     setState((prev) => {
       if (prev.cursor === undefined || prev.loadingMore) {
         return prev
@@ -80,16 +84,18 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
       void client
         .listSessions(cursor, scope)
         .then((page) => {
+          if (generation !== requestGenerationRef.current) return
           setState((cur) => ({
             ...cur,
-            scopeKey: currentScopeKey,
+            scopeKey: requestScopeKey,
             entries: [...cur.entries, ...page.sessions.map(toEntry)],
             cursor: page.next_cursor,
             loadingMore: false,
           }))
         })
         .catch(() => {
-          setState((cur) => ({ ...cur, scopeKey: currentScopeKey, loadingMore: false }))
+          if (generation !== requestGenerationRef.current) return
+          setState((cur) => ({ ...cur, scopeKey: requestScopeKey, loadingMore: false }))
         })
       return { ...prev, loadingMore: true }
     })

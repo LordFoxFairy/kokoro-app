@@ -5,6 +5,7 @@ import {
   type RefObject,
   type ReactNode,
   useEffect,
+  useRef,
 } from "react"
 import { ArrowUp, AudioWaveform, ChevronDown, Lock, Mic, Monitor, Sparkles, Square, X, Zap } from "lucide-react"
 
@@ -57,7 +58,7 @@ export type ComposerProps = {
   /** Empty creation surfaces may choose a synthetic default model per workflow. */
   preferredModelSelector?: string
   selectedModel: string | null
-  onModelChange: (selector: string) => void
+  onModelChange: (selector: string | null) => void
   modelLocked: boolean
   emptyWorkspace?: boolean
   /** The route owns the task context; only its prompt copy changes. */
@@ -196,6 +197,47 @@ export function Composer({
   const currentModelTriggerTitle = currentModelNewBadgeLabel
     ? `${currentModelTriggerLabel} ${currentModelNewBadgeLabel}`
     : currentModel ? modelLabel(currentModel) : undefined
+
+  // Creation workflows can nominate a model before the first message, but
+  // the shell's model selector is the source that the engine reads when it
+  // builds the request. Bridge the workflow default into that controlled
+  // value only while it is available, and undo only the value this bridge
+  // applied when the capsule is dismissed. A user selection always wins.
+  const preferredModelAppliedRef = useRef<string | null>(null)
+  useEffect(() => {
+    const preferredAvailable = preferredModelSelector !== undefined
+      && models.some((model) => modelSelector(model) === preferredModelSelector)
+    const selectedAvailable = selectedModel !== null
+      && models.some((model) => modelSelector(model) === selectedModel)
+
+    if (
+      preferredAvailable
+      && selectedModel !== preferredModelSelector
+      && (!selectedAvailable || selectedModel === preferredModelAppliedRef.current)
+    ) {
+      preferredModelAppliedRef.current = preferredModelSelector
+      onModelChange(preferredModelSelector)
+      return
+    }
+
+    // An old settings value must not be sent after it disappeared from the
+    // catalogue; null restores the server/profile default without picking a
+    // different model on the user's behalf.
+    if (models.length > 0 && selectedModel !== null && !selectedAvailable) {
+      preferredModelAppliedRef.current = null
+      onModelChange(null)
+      return
+    }
+
+    if (
+      preferredModelSelector === undefined
+      && preferredModelAppliedRef.current !== null
+      && selectedModel === preferredModelAppliedRef.current
+    ) {
+      preferredModelAppliedRef.current = null
+      onModelChange(null)
+    }
+  }, [models, onModelChange, preferredModelSelector, selectedModel])
 
   // 当前选中 agent：selectedAgent 命中候选则用之，否则回落缺省项（is_default=general）。
   // 单候选（只有 general，无具名预设）=不渲染选择器（无可选项，隐去）。

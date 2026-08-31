@@ -86,4 +86,29 @@ describe("useSessionList", () => {
     resolveProject({ sessions: [item("project-a-task", "t2")] })
     await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a-task"]))
   })
+
+  it("scope 切换后旧 workspace 的 loadMore 回执不清空新清单", async () => {
+    let resolveDirectMore!: (value: { sessions: ReturnType<typeof item>[] }) => void
+    const directMore = new Promise<{ sessions: ReturnType<typeof item>[] }>((resolve) => {
+      resolveDirectMore = resolve
+    })
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("direct-a", "t1")], next_cursor: "direct-cursor" })
+      .mockReturnValueOnce(directMore)
+      .mockResolvedValueOnce({ sessions: [item("project-a", "t2")] })
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: typeof DIRECT_SESSION_SCOPE | { kind: "project"; projectRef: string } }) =>
+        useSessionList(client, 0, scope),
+      { initialProps: { scope: DIRECT_SESSION_SCOPE } },
+    )
+    await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["direct-a"]))
+
+    act(() => result.current.loadMore())
+    rerender({ scope: { kind: "project", projectRef: "project-a" } })
+    await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a"]))
+
+    resolveDirectMore({ sessions: [item("direct-b", "t3")] })
+    await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a"]))
+  })
 })

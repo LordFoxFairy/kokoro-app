@@ -74,6 +74,11 @@ Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已�
 | `GET` | `/api/session/agents` | 获取 Agent 预设 |
 | `GET` | `/api/session/artifacts` | 获取 Library 成果列表 |
 
+Direct Chat 与项目 Chat 共用上表中除列表 scope 外的全部 endpoint、flat response、SSE event union
+和 control body。Direct 清单使用 `scope=direct`（缺省也为 direct）；项目清单使用
+`project_ref=PROJECT_REF`。项目消息请求必须带同一 opaque `project_ref`，Direct 消息请求不带；
+snapshot、SSE envelope 和 cancel/resume body 均不重复携带该 scope。
+
 ### Message request
 
 ```json
@@ -82,7 +87,7 @@ Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已�
   "content": "用户输入内容",
   "model": "MODEL_NAME",
   "agent": "AGENT_NAME",
-  "thinking": "medium",
+  "thinking": true,
   "pinned_skills": ["SKILL_NAME"],
   "mcp_servers": ["MCP_SERVER_NAME"],
   "project_ref": "PROJECT_REF"
@@ -109,9 +114,30 @@ Session union，例如 `session.created`、`run.created`、`message.delta`、
 `tool.awaiting_approval`、`tool.returned`、`run.completed` 和 `run.failed`。网关不得把
 SSE 聚合成一次性 JSON；断线重连依靠 event watermark/Last-Event-ID 去重。
 
-需要人工控制时，Web 通过 `runs/{run_id}/control` 发出结构化 `run.cancel`、`run.resume`
-（以及当前 runtime 支持的 pause/approval 控制），而不是向页面暴露工具服务地址。HITL 的
-等待、过期和重复 resume 语义由 gateway 与 runtime 共同定义，并通过稳定错误码返回。
+当前浏览器 control schema 只有两种 body：
+
+```json
+{"kind":"run.cancel","decision_id":"DECISION_ID"}
+```
+
+```json
+{
+  "kind":"run.resume",
+  "decision_id":"DECISION_ID",
+  "decisions":[
+    {"type":"approve","tool_id":"TOOL_ID"},
+    {"type":"edit","tool_id":"TOOL_ID","args":{}},
+    {"type":"reject","tool_id":"TOOL_ID","reason":"REASON"},
+    {"type":"respond","tool_id":"TOOL_ID","response":"RESPONSE"},
+    {"type":"submit","request_id":"REQUEST_ID","value":{"field":"VALUE"}}
+  ]
+}
+```
+
+`run.resume.decisions` 至少一项；`submit.value` 是结构化 object。HITL approval/input 通过
+`run.resume` 的 decision 表达，当前不存在独立浏览器 `run.pause` 或 approval endpoint。
+等待、过期和重复 resume 的冲突会以当前 Session contract 的稳定错误语义返回，包括
+`run_not_active`、`no_pending_pause` 和 `session_deleted`；其它状态/响应仍由 BFF 原样保持。
 
 ## 4. 责任矩阵
 

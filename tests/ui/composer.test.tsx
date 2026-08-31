@@ -191,6 +191,21 @@ describe("Composer model selector", () => {
     expect(screen.getByRole("button", { name: "Switch model: GPT Image 2" })).toBeInTheDocument()
   })
 
+  it("创作工作流的首选模型在目录可用时同步到受控选择值", () => {
+    const props = renderComposer({
+      creationIntent: "design",
+      models: [
+        { provider: "kokoro", name: "standard-new", is_default: true, display_name: "Standard New" },
+        { provider: "openai", name: "gpt-image-2", is_default: false, display_name: "GPT Image 2" },
+      ],
+      preferredModelSelector: "openai:gpt-image-2",
+      selectedModel: null,
+      hideModelSelector: false,
+    })
+
+    expect(props.onModelChange).toHaveBeenCalledWith("openai:gpt-image-2")
+  })
+
   it("简报创作态使用投影片胶囊文案而不是入口文案", () => {
     renderComposer({ creationIntent: "presentation", models: [], hideModelSelector: true })
 

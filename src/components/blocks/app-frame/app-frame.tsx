@@ -209,8 +209,28 @@ function conversationIdFromLocation(): string | null {
   if (typeof window === "undefined") {
     return null
   }
-  const value = new URLSearchParams(window.location.search).get("conversation")
-  return value?.trim() || null
+  const queryValue = new URLSearchParams(window.location.search).get("conversation")
+  if (queryValue?.trim()) {
+    return queryValue.trim()
+  }
+
+  // Conversation links can also arrive from the hash router. Keep the
+  // accepted forms deliberately narrow so settings/catalog hashes remain
+  // untouched: `#conversation=ID` and `#/conversation/ID`.
+  const hash = window.location.hash.replace(/^#\/?/, "")
+  if (hash.startsWith("conversation=")) {
+    const value = new URLSearchParams(hash).get("conversation")
+    return value?.trim() || null
+  }
+  const match = hash.match(/^conversation\/([^/]+)$/)
+  if (!match) {
+    return null
+  }
+  try {
+    return decodeURIComponent(match[1]).trim() || null
+  } catch {
+    return null
+  }
 }
 
 export type AppFrameProps = {
@@ -603,10 +623,16 @@ export function AppFrame({
       return
     }
     const url = new URL(window.location.href)
+    const hashConversation = /^#\/?conversation(?:=|\/)/.test(url.hash)
     if (id === null) {
       url.searchParams.delete("conversation")
     } else {
       url.searchParams.set("conversation", id)
+    }
+    // Emit the query form as the canonical conversation URL after accepting
+    // a hash deep-link; otherwise back/forward would keep two identities.
+    if (hashConversation) {
+      url.hash = ""
     }
     const next = url.pathname + (url.search ? url.search : "") + url.hash
     const current = window.location.pathname + window.location.search + window.location.hash
@@ -873,7 +899,12 @@ export function AppFrame({
   const isStreaming = machine.phase !== "idle" && machine.phase !== "error"
   const isReconnecting = machine.phase === "reattaching"
   const hasMessages = thread.messages.length > 0
-  const showConversation = hasMessages && !standaloneSurface
+  // A mounted shell can cross from direct chat into a project overview without
+  // replacing the engine instance. The URL is authoritative for that route:
+  // never paint the direct thread while the project has no conversation route,
+  // and never paint a stale thread while a deep-link is being opened.
+  const routeOwnsConversation = !projectWorkspace || (conversationRouteId !== null && conversationRouteId === activeId)
+  const showConversation = hasMessages && !standaloneSurface && routeOwnsConversation
   // 失败双源：client/机器错误态（machine.error）与 agent 裁决的 run.failed 终态，都显式呈现。
   const hasFailed = !isStreaming && (machine.phase === "error" || thread.runStatus === "failed")
   // 402：run 被 credit_insufficient 拒——错误码由 client 从错误体取出，落在 machine.error。据此给计费

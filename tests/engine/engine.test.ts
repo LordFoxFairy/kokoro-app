@@ -379,6 +379,27 @@ describe("停止与放弃", () => {
     expect(engine.getSnapshot().machine.phase).toBe("idle")
   })
 
+  it("新建会话发生在首个 POST 回执未返回时，也会取消迟到创建的旧 run", async () => {
+    buildEngine()
+    let release!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve) => { release = resolve })
+
+    engine.submit("abandoned draft")
+    engine.newConversation()
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(engine.getSnapshot().thread.messages).toHaveLength(0)
+
+    release(makeReceipt("run_late_new_chat"))
+    await settle()
+
+    expect(client.controlCalls).toMatchObject([{
+      sessionId: "conv_1",
+      runId: "run_late_new_chat",
+      body: { kind: "run.cancel" },
+    }])
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+  })
+
   it("cancelRun：本地立即收口（结构化 cancelled）、cancel POST 带 decision_id 尽力而为", async () => {
     buildEngine()
     engine.submit("long job")

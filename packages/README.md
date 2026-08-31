@@ -57,6 +57,18 @@ web-core / i18n ───────→ web-data / web-runtime
 adapter，不直接持有产品的 BFF 地址或 tenant 事实。产品代码只能向下消费 shared package；
 shared package 不能反向 import `src/features`、Kokoro 词典、Kokoro 素材或 Next route。
 
+## Chat contract extraction boundary
+
+未来若把 Chat 能力提取到 `@kokoro/web-data`，可共享的内容只有浏览器安全的
+Session request/response types、Zod schema、SSE event names、Last-Event-ID adapter、HITL
+decision types 和错误码常量。Direct Chat 与项目 Chat 继续共用同源 `/api/session/*` contract；
+项目 `project_ref` 只是 opaque ownership reference，不是 tenant、site、namespace 或共享 package
+中的运行时身份值。
+
+当前 `kokoro-app` 仍由同源 BFF 转发到 `KOKORO_SESSION_BASE_URL`。planned gateway 不属于当前
+package、workspace 或浏览器 endpoint；shared package 不得携带 gateway URL、runtime token、
+internal secret、数据库/队列实现，也不得把 Preview fixture 描述成 Live backend。
+
 ## 当前阶段规则
 
 - 目前包仍以 `private` workspace package 形式放在本仓库，优先保证第一个产品的测试、截图

@@ -625,6 +625,25 @@ it("带 conversation 参数进入时优先恢复指定会话", async () => {
   expect(window.location.search).toBe("?conversation=conv_b")
 })
 
+it.each(["/app#conversation=conv_b", "/app#/conversation/conv_b"])("conversation hash 深链 %s 同样恢复指定会话", async (href) => {
+  window.history.replaceState(window.history.state, "", href)
+  buildEngine({
+    activeId: "conv_a",
+    conversations: [{ id: "conv_a", title: "第一个会话", updatedAt: 1, mode: "fast" }],
+  })
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(engine.getSnapshot().store?.activeId).toBe("conv_b"))
+  expect(window.location.hash).toBe(new URL(href, window.location.origin).hash)
+})
+
 it("挂载壳跨 direct/project 路由时重新应用 conversation 深链", async () => {
   buildEngine()
   render(
@@ -641,6 +660,51 @@ it("挂载壳跨 direct/project 路由时重新应用 conversation 深链", asyn
   act(() => window.dispatchEvent(new CustomEvent("kokoro:surface-navigation")))
 
   await waitFor(() => expect(engine.getSnapshot().store?.activeId).toBe("project_task"))
+})
+
+it("进入无 conversation 的项目 overview 时不承接 direct 线程", async () => {
+  buildEngine()
+  const { rerender } = render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "direct thread" } })
+  fireEvent.click(screen.getByLabelText("发送消息"))
+  await act(settle)
+  await act(async () => {
+    client.lastStream().emit([
+      makeEvent("message.completed", { segment_id: "seg_direct", content: "direct answer" }),
+      makeEvent("run.completed", { status: "completed" }),
+    ])
+    await settle()
+  })
+  await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeInTheDocument())
+
+  window.history.replaceState(window.history.state, "", "/app/project/kokoro")
+  function ProjectOverviewProbe({ composer }: EmptyStateProps) {
+    return <div data-testid="project-overview-probe">{composer}</div>
+  }
+  rerender(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame
+          engine={engine}
+          chatHref="/app"
+          projectWorkspace
+          projectRef="kokoro"
+          emptyState={ProjectOverviewProbe}
+          emptyStateOwnsComposer
+        />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId("project-overview-probe")).toBeInTheDocument())
+  expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeNull()
 })
 
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {

@@ -340,6 +340,22 @@ type MessageCreateReceipt = {
 
 同一轮重试使用同一 `idempotency_key`；已收到 run failed 后，下一次提交使用新 key。当前 capsule 的 `creationIntent` 不进入该 body。
 
+#### Direct Chat 与项目 Chat 的共用闭环
+
+两种 Chat 使用同一组 Session endpoint、flat response、SSE event union 和 Run control body；scope
+只决定会话清单与消息请求的归属，不产生第二套 Chat API：
+
+| 维度 | Direct Chat | 项目 Chat |
+|---|---|---|
+| 清单 | `GET /api/session/sessions?scope=direct`（默认 scope 也是 direct） | `GET /api/session/sessions?project_ref=PROJECT_REF` |
+| 创建/插话/重试消息 | `POST .../{session_id}/messages`，不发送 `project_ref` | 同一路径，必须发送当前项目对应的 opaque `project_ref` |
+| receipt / snapshot | 与项目 Chat 相同的 flat schema | 与 Direct Chat 相同的 flat schema |
+| SSE / cancel / HITL resume | 同一路径、同一 `SessionEvent` union、同一 control body | 同一路径、同一 `SessionEvent` union、同一 control body |
+
+项目 `project_ref` 只作为 route ownership reference 出现在列表 query 与 message body；它不是
+tenant、site 或 namespace，也不会进入 snapshot、SSE envelope 或 control body。项目 Chat 的首条提交、
+运行中插话和失败后重试都沿用同一项目 scope。
+
 #### Snapshot
 
 ```http
@@ -496,7 +512,7 @@ Content-Type: application/json
     {"type":"edit","tool_id":"TOOL_ID","args":{}},
     {"type":"reject","tool_id":"TOOL_ID","reason":"REASON"},
     {"type":"respond","tool_id":"TOOL_ID","response":"RESPONSE"},
-    {"type":"submit","request_id":"REQUEST_ID","value":"VALUE"}
+    {"type":"submit","request_id":"REQUEST_ID","value":{"field":"VALUE"}}
   ]
 }
 ```
