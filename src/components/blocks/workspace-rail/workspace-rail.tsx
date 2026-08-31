@@ -51,7 +51,6 @@ import { BrandFallback, BrandMark } from "@/components/blocks/brand-mark/brand-m
 import { useT } from "@/i18n/context"
 import { browserBillingClient, browserTeamClient } from "@/ui/shell/page-clients"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
-import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
 
 import { filterConversations, type ConversationSummary } from "@/ui/rail/rail-search"
 import { RAIL_COLLAPSED_WIDTH } from "@/ui/rail/use-rail-resize"
@@ -1016,7 +1015,7 @@ function UserCard({
   const teamName = useTeamName(preview)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [creditBalance, setCreditBalance] = useState("—")
-  const accountSettingsTimerRef = useRef<number | null>(null)
+  const accountSettingsFrameRef = useRef<number | null>(null)
   // Preview TeamClient data must not replace the site's product brand.
   const display = preview
     ? brandName ?? "Workspace"
@@ -1035,8 +1034,8 @@ function UserCard({
   )
 
   useEffect(() => () => {
-    if (accountSettingsTimerRef.current !== null) {
-      window.clearTimeout(accountSettingsTimerRef.current)
+    if (accountSettingsFrameRef.current !== null) {
+      window.cancelAnimationFrame(accountSettingsFrameRef.current)
     }
   }, [])
 
@@ -1049,24 +1048,24 @@ function UserCard({
   }, [preview])
 
   const openSettingsFromAccount = (tab: SettingsTab) => {
-    if (accountSettingsTimerRef.current !== null) {
-      window.clearTimeout(accountSettingsTimerRef.current)
+    if (accountSettingsFrameRef.current !== null) {
+      window.cancelAnimationFrame(accountSettingsFrameRef.current)
     }
-    // Close the DropdownMenu before mounting Settings. Without this handoff,
-    // Radix returns focus to the account trigger after Settings has mounted,
-    // which briefly steals focus from the new Dialog and makes the transition
-    // feel like a flicker on desktop.
+    // Close the DropdownMenu before mounting Settings. One animation frame is
+    // enough for Radix to release its focus scope; the old 180ms timeout made
+    // every account-menu action feel stalled even though no network request
+    // was involved.
     setAccountMenuOpen(false)
-    accountSettingsTimerRef.current = window.setTimeout(() => {
-      accountSettingsTimerRef.current = null
+    accountSettingsFrameRef.current = window.requestAnimationFrame(() => {
+      accountSettingsFrameRef.current = null
       onOpenSettings(tab)
-    }, overlayHandoffDelay(180))
+    })
   }
 
   const handleAccountMenuOpenChange = (open: boolean) => {
-    if (open && accountSettingsTimerRef.current !== null) {
-      window.clearTimeout(accountSettingsTimerRef.current)
-      accountSettingsTimerRef.current = null
+    if (open && accountSettingsFrameRef.current !== null) {
+      window.cancelAnimationFrame(accountSettingsFrameRef.current)
+      accountSettingsFrameRef.current = null
     }
     setAccountMenuOpen(open)
   }

@@ -848,7 +848,11 @@ export function MailSettingsCard({ brandName, preview = false }: { brandName?: s
     setInboxLoading(true)
     try {
       if (preview) {
-        await new Promise((resolve) => window.setTimeout(resolve, 240))
+        // Preview data is local and deterministic. Do not add network-shaped
+        // latency here: switching to Inbox should paint its empty state on the
+        // next microtask, while a live deployment still shows the real fetch
+        // and loading state below.
+        await Promise.resolve()
         setInboxItems([])
         return
       }

@@ -3885,3 +3885,18 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 `/api/connectors`、`/api/mcp` 等 canonical BFF path 尚未全部在本仓库提供独立 route；现有
 `/api/session/*`、`/api/hub/*` 是兼容 transport 或 preview/live client 接入面。视觉/preview 完成
 不得标记为这些 canonical API 已上线；缺口与优先级以 User Web API contract 的 canonical-path 规则为准。
+
+## v205 桌面 Web 即时交互修正（2026-08-31）
+
+本轮针对“点击后还要等待一下”的实际反馈，去掉了两个不属于产品交互的固定等待：
+
+- 侧边栏账户菜单进入设置不再等待 `180ms` 定时器；菜单先关闭，下一帧交给 Settings，确保 Radix focus scope 已释放，同时把可感知等待压缩到一个渲染帧。
+- Mail 预览收件匣不再人为等待 `240ms` 模拟网络；本地合成数据在下一个 microtask 进入空态，真实环境仍保留真实 BFF 请求与 loading/error 状态。
+
+验证证据：
+
+- `WorkspaceRail` 单元测试以 `32ms` 计时窗口验证账户菜单交接，不再接受 `180ms` 回归。
+- `1280×720`、DPR 2 的桌面浏览器中，账户菜单关闭后 Settings Dialog 已在 `40ms` 检查点可见，Dropdown 已卸载；收件匣点击后同一检查点已显示空态。
+- 截图：`output/playwright/perf-v135-account-settings-immediate.png`。
+
+本轮只修改桌面 User Web 的交互等待，不修改手机端布局；命令菜单与嵌套 Dialog 的延迟仍保留，因为它们用于释放另一个 modal focus scope，不属于无网络的普通导航等待。

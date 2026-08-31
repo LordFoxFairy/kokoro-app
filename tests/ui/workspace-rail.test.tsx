@@ -421,14 +421,14 @@ it("已排程入口导航到独立日历页面，不再回落为新建聊天", (
   expect(onNewChat).not.toHaveBeenCalled()
 })
 
-it("桌面账户菜单先释放 Dropdown 再交接 Settings", () => {
+it("桌面账户菜单在下一帧释放 Dropdown 后交接 Settings", () => {
   vi.useFakeTimers()
   try {
     const { onOpenSettings } = renderRail()
     fireEvent.pointerDown(screen.getByRole("button", { name: /工作区/ }))
     fireEvent.click(screen.getByRole("menuitem", { name: "账户" }))
     expect(onOpenSettings).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(180))
+    act(() => vi.advanceTimersByTime(32))
     expect(onOpenSettings).toHaveBeenCalledWith("account")
   } finally {
     vi.useRealTimers()
@@ -441,7 +441,7 @@ it("桌面账户菜单启用个性化入口并交接对应设置页", () => {
     const { onOpenSettings } = renderRail()
     fireEvent.pointerDown(screen.getByRole("button", { name: /工作区/ }))
     fireEvent.click(screen.getByRole("menuitem", { name: "个性化" }))
-    act(() => vi.advanceTimersByTime(180))
+    act(() => vi.advanceTimersByTime(32))
     expect(onOpenSettings).toHaveBeenCalledWith("personalization")
   } finally {
     vi.useRealTimers()
