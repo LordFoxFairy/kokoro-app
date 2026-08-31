@@ -284,6 +284,57 @@ export function KokoroScheduledSurface({
     ? !controlledTasks || onDeleteTask !== undefined
     : onDeleteTask !== undefined || client?.deleteScheduledTask !== undefined
 
+  const addPreviewTask = (draft: ScheduledTaskDraft) => {
+    setPreviewTasks((current) => {
+      let sequence = taskIdRef.current
+      do {
+        sequence += 1
+      } while (current.some((task) => task.id === `scheduled_preview_${sequence}`))
+      taskIdRef.current = sequence
+      const nextTask: ScheduledTaskRecord = {
+        id: `scheduled_preview_${sequence}`,
+        title: draft.title,
+        prompt: draft.prompt,
+        frequency: draft.frequency === "weekly" ? "weekly" : "daily",
+        time: draft.time,
+        timezone: draft.timezone,
+        nextRun: nextPreviewRun(draft.time, draft.frequency),
+        expiresAt: draft.expiresAt,
+        autoApprove: draft.autoApprove,
+        enabled: true,
+      }
+      const next = [nextTask, ...current]
+      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const updatePreviewTask = (taskId: string, draft: ScheduledTaskDraft) => {
+    setPreviewTasks((current) => {
+      const next = current.map((task) => task.id === taskId
+        ? { ...task, title: draft.title, prompt: draft.prompt, frequency: draft.frequency, time: draft.time, timezone: draft.timezone, nextRun: nextPreviewRun(draft.time, draft.frequency), expiresAt: draft.expiresAt, autoApprove: draft.autoApprove }
+        : task)
+      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const setPreviewTaskStatus = (taskId: string, status: "active" | "paused") => {
+    setPreviewTasks((current) => {
+      const next = current.map((candidate) => candidate.id === taskId ? { ...candidate, enabled: status === "active", status } : candidate)
+      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
+  const removePreviewTask = (taskId: string) => {
+    setPreviewTasks((current) => {
+      const next = current.filter((task) => task.id !== taskId)
+      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
+      return next
+    })
+  }
+
   const openEditor = (prompt = "", target: HTMLElement | null = null, task: ScheduledTaskRecord | null = null) => {
     openerRef.current = target ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
     setInitialPrompt(prompt)
@@ -316,15 +367,10 @@ export function KokoroScheduledSurface({
           expiresAt: draft.expiresAt,
           autoApprove: draft.autoApprove,
         })
-        if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        if (fixtureMode && !controlledTasks) updatePreviewTask(editingTask.id, draft)
+        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
-        setPreviewTasks((current) => {
-          const next = current.map((task) => task.id === editingTask.id
-            ? { ...task, title: draft.title, prompt: draft.prompt, frequency: draft.frequency, time: draft.time, timezone: draft.timezone, nextRun: nextPreviewRun(draft.time, draft.frequency), expiresAt: draft.expiresAt, autoApprove: draft.autoApprove }
-            : task)
-          window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-          return next
-        })
+        updatePreviewTask(editingTask.id, draft)
       } else {
         throw missingScheduledClientError()
       }
@@ -333,7 +379,8 @@ export function KokoroScheduledSurface({
     const create = onSave ?? (!fixtureMode ? client?.createScheduledTask : undefined)
     if (create) {
       await create(draft)
-      if (!fixtureMode && !controlledTasks && client) await loadTasks()
+      if (fixtureMode && !controlledTasks) addPreviewTask(draft)
+      else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       return
     }
     if (!fixtureMode) {
@@ -342,28 +389,7 @@ export function KokoroScheduledSurface({
     if (controlledTasks) {
       throw new Error("Controlled scheduled task creation is not configured")
     }
-    setPreviewTasks((current) => {
-      let sequence = taskIdRef.current
-      do {
-        sequence += 1
-      } while (current.some((task) => task.id === `scheduled_preview_${sequence}`))
-      taskIdRef.current = sequence
-      const nextTask: ScheduledTaskRecord = {
-        id: `scheduled_preview_${sequence}`,
-        title: draft.title,
-        prompt: draft.prompt,
-        frequency: draft.frequency === "weekly" ? "weekly" : "daily",
-        time: draft.time,
-        timezone: draft.timezone,
-        nextRun: nextPreviewRun(draft.time, draft.frequency),
-        expiresAt: draft.expiresAt,
-        autoApprove: draft.autoApprove,
-        enabled: true,
-      }
-      const next = [nextTask, ...current]
-      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-      return next
-    })
+    addPreviewTask(draft)
   }
 
   const setTaskEnabled = async (task: ScheduledTaskRecord, enabled: boolean) => {
@@ -374,13 +400,10 @@ export function KokoroScheduledSurface({
       const update = onUpdateTask ?? (!fixtureMode ? client?.updateScheduledTask : undefined)
       if (update) {
         await update(task.id, { enabled, status: enabled ? "active" : "paused" })
-        if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, enabled ? "active" : "paused")
+        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
-        setPreviewTasks((current) => {
-          const next = current.map((candidate) => candidate.id === task.id ? { ...candidate, enabled, status: enabled ? "active" as const : "paused" as const } : candidate)
-          window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-          return next
-        })
+        setPreviewTaskStatus(task.id, enabled ? "active" : "paused")
       } else {
         throw missingScheduledClientError()
       }
@@ -400,16 +423,14 @@ export function KokoroScheduledSurface({
       const update = onUpdateTask ?? (!fixtureMode ? client?.updateScheduledTask : undefined)
       if (retry) {
         await retry(task.id)
-        if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, "active")
+        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       } else if (update) {
         await update(task.id, { enabled: true, status: "active" })
-        if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, "active")
+        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
-        setPreviewTasks((current) => {
-          const next = current.map((candidate) => candidate.id === task.id ? { ...candidate, enabled: true, status: "active" as const } : candidate)
-          window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-          return next
-        })
+        setPreviewTaskStatus(task.id, "active")
       } else {
         throw missingScheduledClientError()
       }
@@ -430,13 +451,10 @@ export function KokoroScheduledSurface({
       const remove = onDeleteTask ?? (!fixtureMode ? client?.deleteScheduledTask : undefined)
       if (remove) {
         await remove(id)
-        if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        if (fixtureMode && !controlledTasks) removePreviewTask(id)
+        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
-        setPreviewTasks((current) => {
-          const next = current.filter((task) => task.id !== id)
-          window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-          return next
-        })
+        removePreviewTask(id)
       } else {
         throw missingScheduledClientError()
       }
@@ -597,9 +615,9 @@ export function KokoroScheduledSurface({
                   const taskMutationError = mutationError?.taskId === task.id
                   return (
                     <article key={task.id} className={styles.taskCard} role="listitem" data-status={status} aria-busy={isMutating || undefined}>
-                      <div className={styles.taskStatus} data-enabled={enabled ? "true" : "false"} aria-label={t(statusMessageKey(status))}>
+                      <span className={styles.taskStatus} data-enabled={enabled ? "true" : "false"} role="img" aria-label={t(statusMessageKey(status))}>
                         {status === "active" ? <Check aria-hidden="true" /> : <span aria-hidden="true" />}
-                      </div>
+                      </span>
                       <div className={styles.taskDetails}>
                         <strong>{task.title}</strong>
                         <span>{task.frequency === "weekly" ? t("firstSite.weekly") : t("firstSite.daily")} · {task.time} · {t(statusMessageKey(status))}</span>
@@ -640,7 +658,16 @@ export function KokoroScheduledSurface({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("firstSite.cancel")}</AlertDialogCancel>
-            <AlertDialogAction disabled={pendingMutation?.operation === "delete"} onClick={() => void removeTask()}>{pendingMutation?.operation === "delete" ? t("scheduled.deleting") : t("scheduled.delete")}</AlertDialogAction>
+            <AlertDialogAction
+              disabled={pendingMutation?.operation === "delete"}
+              aria-busy={pendingMutation?.operation === "delete" || undefined}
+              onClick={(event) => {
+                event.preventDefault()
+                void removeTask()
+              }}
+            >
+              {pendingMutation?.operation === "delete" ? t("scheduled.deleting") : t("scheduled.delete")}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

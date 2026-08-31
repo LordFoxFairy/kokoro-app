@@ -625,6 +625,24 @@ it("带 conversation 参数进入时优先恢复指定会话", async () => {
   expect(window.location.search).toBe("?conversation=conv_b")
 })
 
+it("挂载壳跨 direct/project 路由时重新应用 conversation 深链", async () => {
+  buildEngine()
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(engine.getSnapshot().store).toBeNull())
+  window.history.replaceState(window.history.state, "", "/app/project/kokoro?conversation=project_task")
+  mockedPathname.value = "/app/project/kokoro"
+  act(() => window.dispatchEvent(new CustomEvent("kokoro:surface-navigation")))
+
+  await waitFor(() => expect(engine.getSnapshot().store?.activeId).toBe("project_task"))
+})
+
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
   buildEngine()
   render(

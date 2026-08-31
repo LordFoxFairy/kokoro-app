@@ -224,7 +224,7 @@ function SetupDialog({
                     data-status={connectionStatus(setupState.setup)}
                     data-connection-status={connectionStatus(setupState.setup)}
                     role="status"
-                    aria-label={connectionStatus(setupState.setup)}
+                    aria-label={t(CONNECTION_STATUS_LABEL_KEYS[connectionStatus(setupState.setup)])}
                   >
                     <span className={styles.connectionStatusDot} aria-hidden="true" />
                     {t(CONNECTION_STATUS_LABEL_KEYS[connectionStatus(setupState.setup)])}
@@ -292,7 +292,7 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
   // client unless the caller explicitly supplies a client or preview mode.
   const fixtureMode = preview || process.env.NODE_ENV !== "production"
   const [setupOpen, setSetupOpen] = useState(false)
-  const startButtonRef = useRef<HTMLButtonElement | null>(null)
+  const setupReturnFocusRef = useRef<HTMLButtonElement | null>(null)
   const [wordIndex, setWordIndex] = useState(0)
   const words = [t("agents.dynamicSupport"), t("agents.dynamicSales"), t("agents.dynamicOperations")]
   const agentClient = useMemo(() => client ?? browserAgentClient({ preview: fixtureMode }), [client, fixtureMode])
@@ -326,7 +326,10 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
                 data-testid="agent-feature-card"
                 aria-haspopup="dialog"
                 aria-expanded={setupOpen}
-                onClick={() => setSetupOpen(true)}
+                onClick={(event) => {
+                  setupReturnFocusRef.current = event.currentTarget
+                  setSetupOpen(true)
+                }}
               >
                 <div className={styles.featureIcon}><Icon aria-hidden="true" /></div>
                 <div>
@@ -339,13 +342,16 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
 
           <div className={styles.startAction}>
             <Button
-              ref={startButtonRef}
+              ref={setupReturnFocusRef}
               type="button"
               size="lg"
               className={styles.startButton}
               aria-haspopup="dialog"
               aria-expanded={setupOpen}
-              onClick={() => setSetupOpen(true)}
+              onClick={(event) => {
+                setupReturnFocusRef.current = event.currentTarget
+                setSetupOpen(true)
+              }}
             >
               <span className={styles.startPlatforms} data-testid="agent-platform-stack" aria-hidden="true">
                 {PLATFORM_VALUES.map((platform) => (
@@ -373,7 +379,7 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
         </section>
       </div>
 
-      <SetupDialog open={setupOpen} onOpenChange={setSetupOpen} client={agentClient} returnFocusRef={startButtonRef} />
+      <SetupDialog open={setupOpen} onOpenChange={setSetupOpen} client={agentClient} returnFocusRef={setupReturnFocusRef} />
     </div>
   )
 }

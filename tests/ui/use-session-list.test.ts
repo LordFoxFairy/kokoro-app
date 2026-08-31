@@ -64,4 +64,26 @@ describe("useSessionList", () => {
     await waitFor(() => expect(result.current.error).toBe(true))
     expect(result.current.entries).toEqual([])
   })
+
+  it("scope 切换时在新清单返回前不显示上一个 workspace 的会话", async () => {
+    let resolveProject!: (value: { sessions: ReturnType<typeof item>[] }) => void
+    const projectPage = new Promise<{ sessions: ReturnType<typeof item>[] }>((resolve) => {
+      resolveProject = resolve
+    })
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("direct-a", "t1")] })
+      .mockReturnValueOnce(projectPage)
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: typeof DIRECT_SESSION_SCOPE | { kind: "project"; projectRef: string } }) =>
+        useSessionList(client, 0, scope),
+      { initialProps: { scope: DIRECT_SESSION_SCOPE } },
+    )
+    await waitFor(() => expect(result.current.entries).toHaveLength(1))
+
+    rerender({ scope: { kind: "project", projectRef: "project-a" } })
+    expect(result.current.entries).toEqual([])
+    resolveProject({ sessions: [item("project-a-task", "t2")] })
+    await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a-task"]))
+  })
 })

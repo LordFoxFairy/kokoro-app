@@ -26,6 +26,7 @@ function toEntry(item: SessionListItem): SessionListEntry {
 type Lister = Pick<SessionClient, "listSessions">
 
 type ListState = {
+  scopeKey: string
   entries: SessionListEntry[]
   cursor: string | undefined
   loading: boolean
@@ -33,16 +34,22 @@ type ListState = {
   error: boolean
 }
 
-const INITIAL: ListState = { entries: [], cursor: undefined, loading: true, loadingMore: false, error: false }
+const INITIAL: ListState = { scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false }
+
+function scopeKey(scope: SessionScope): string {
+  return scope.kind === "direct" ? "direct" : `project:${scope.projectRef}`
+}
 
 export function useSessionList(client: Lister, refreshSignal: number, scope: SessionScope = DIRECT_SESSION_SCOPE): SessionListView {
   const [state, setState] = useState<ListState>(INITIAL)
+  const currentScopeKey = scopeKey(scope)
 
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
   const fetchFirst = useCallback(async (): Promise<ListState> => {
     try {
       const page = await client.listSessions(undefined, scope)
       return {
+        scopeKey: currentScopeKey,
         entries: page.sessions.map(toEntry),
         cursor: page.next_cursor,
         loading: false,
@@ -50,9 +57,9 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
         error: false,
       }
     } catch {
-      return { entries: [], cursor: undefined, loading: false, loadingMore: false, error: true }
+      return { scopeKey: currentScopeKey, entries: [], cursor: undefined, loading: false, loadingMore: false, error: true }
     }
-  }, [client, scope])
+  }, [client, currentScopeKey, scope])
 
   useEffect(() => {
     let live = true
@@ -62,7 +69,7 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
     return () => {
       live = false
     }
-  }, [fetchFirst, refreshSignal])
+  }, [currentScopeKey, fetchFirst, refreshSignal])
 
   const loadMore = useCallback(() => {
     setState((prev) => {
@@ -75,24 +82,27 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
         .then((page) => {
           setState((cur) => ({
             ...cur,
+            scopeKey: currentScopeKey,
             entries: [...cur.entries, ...page.sessions.map(toEntry)],
             cursor: page.next_cursor,
             loadingMore: false,
           }))
         })
         .catch(() => {
-          setState((cur) => ({ ...cur, loadingMore: false }))
+          setState((cur) => ({ ...cur, scopeKey: currentScopeKey, loadingMore: false }))
         })
       return { ...prev, loadingMore: true }
     })
-  }, [client, scope])
+  }, [client, currentScopeKey, scope])
+
+  const visibleState = state.scopeKey === currentScopeKey ? state : INITIAL
 
   return {
-    entries: state.entries,
-    loading: state.loading,
-    loadingMore: state.loadingMore,
-    error: state.error,
-    hasMore: state.cursor !== undefined,
+    entries: visibleState.entries,
+    loading: visibleState.loading,
+    loadingMore: visibleState.loadingMore,
+    error: visibleState.error,
+    hasMore: visibleState.cursor !== undefined,
     loadMore,
   }
 }

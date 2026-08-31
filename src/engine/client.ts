@@ -150,20 +150,20 @@ export function createSseFrameParser(onData: (data: string) => void): (chunk: st
   let buffer = ""
   return (chunk) => {
     buffer += chunk
-    let separator = buffer.indexOf("\n\n")
-    while (separator >= 0) {
+    let separatorMatch = /\r?\n\r?\n/.exec(buffer)
+    while (separatorMatch !== null) {
+      const separator = separatorMatch.index
       const frame = buffer.slice(0, separator)
-      buffer = buffer.slice(separator + 2)
+      buffer = buffer.slice(separator + separatorMatch[0].length)
       const data = frame
-        .split("\n")
-        .map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line))
+        .split(/\r?\n/)
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice("data:".length).replace(/^ /, ""))
         .join("\n")
       if (data.length > 0) {
         onData(data)
       }
-      separator = buffer.indexOf("\n\n")
+      separatorMatch = /\r?\n\r?\n/.exec(buffer)
     }
   }
 }
@@ -345,7 +345,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         }, SSE_RETRY_MS)
       }
 
-      const parser = createSseFrameParser((data) => {
+      const consumeData = (data: string): void => {
         let raw: unknown
         try {
           raw = JSON.parse(data)
@@ -362,9 +362,13 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         }
         cursor = event.seq
         onEvent(event)
-      })
+      }
+      let parser = createSseFrameParser(consumeData)
 
       const connect = async (): Promise<void> => {
+        // Drop a partial frame from the disconnected response. The next
+        // connection replays from cursor and must start at a fresh frame.
+        parser = createSseFrameParser(consumeData)
         const headers: Record<string, string> = { accept: "text/event-stream" }
         if (cursor !== undefined) {
           headers[LAST_EVENT_ID_HEADER] = String(cursor)

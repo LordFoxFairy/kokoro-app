@@ -356,6 +356,29 @@ describe("HITL 凑帧与部分拒绝", () => {
 })
 
 describe("停止与放弃", () => {
+  it("首个 POST 回执未返回时点击停止：立即回到 idle，并在迟到回执后取消已创建 run", async () => {
+    buildEngine()
+    let release!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve) => { release = resolve })
+
+    engine.submit("pending job")
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+    engine.cancelRun()
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(client.controlCalls).toHaveLength(0)
+
+    release(makeReceipt("run_late"))
+    await settle()
+
+    expect(client.controlCalls).toMatchObject([{
+      sessionId: "conv_1",
+      runId: "run_late",
+      body: { kind: "run.cancel" },
+    }])
+    expect(client.streams).toHaveLength(0)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+  })
+
   it("cancelRun：本地立即收口（结构化 cancelled）、cancel POST 带 decision_id 尽力而为", async () => {
     buildEngine()
     engine.submit("long job")

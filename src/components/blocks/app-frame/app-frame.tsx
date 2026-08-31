@@ -657,9 +657,15 @@ export function AppFrame({
   useEffect(() => {
     const requestedConversation = conversationIdFromLocation()
     conversationUrlRef.current = requestedConversation
+    // Route leaves are intentionally empty so AppFrame stays mounted. Apply a
+    // newly entered conversation query to the newly selected scope here; the
+    // initial deep-link effect only runs once per shell mount.
+    if (requestedConversation !== null && requestedConversation !== (engine?.getSnapshot().store?.activeId ?? null)) {
+      engine?.openConversation(requestedConversation)
+    }
     const frame = window.requestAnimationFrame(() => setConversationRouteId(requestedConversation))
     return () => window.cancelAnimationFrame(frame)
-  }, [projectRef, projectWorkspace])
+  }, [engine, projectRef, projectWorkspace])
 
   // Deep links are applied after hydration so the URL wins over the locally
   // remembered active session without changing the SSR/first paint contract.

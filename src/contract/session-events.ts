@@ -1,5 +1,5 @@
-// GENERATED — DO NOT EDIT. Source: contract/spec/events.yaml
-// Regenerate: python3 contract/generate.py
+// Canonical checked-in runtime contract. Keep this Zod schema synchronized with
+// docs/integration/user-web-api-contract-v4.md and its contract tests.
 
 import { z } from "zod"
 

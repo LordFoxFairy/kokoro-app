@@ -38,6 +38,10 @@ describe("createSseFrameParser：跨 chunk 的 SSE 帧增量解析", () => {
     expect(collect(["data: {}\r\n\ndata: ok\n\n"])).toEqual(["{}", "ok"])
   })
 
+  it("标准 CRLF 空行分隔符同样派发完整 SSE 帧", () => {
+    expect(collect(['id: 3\r\nevent: message.delta\r\ndata: {"a":1}\r\n\r\n'])).toEqual(['{"a":1}'])
+  })
+
   it("未闭合的尾帧保持缓冲，不提前吐出", () => {
     const frames: string[] = []
     const feed = createSseFrameParser((data) => frames.push(data))

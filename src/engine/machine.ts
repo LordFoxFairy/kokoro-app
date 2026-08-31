@@ -227,6 +227,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const resumeInFlight = new Set<string>()
   // 最近一次未获回执的提交：POST 失败重试复用同一 idempotency_key（服务端命中即重放 receipt）。
   let pendingSubmission: { content: string; idempotencyKey: string } | null = null
+  // Stop can arrive after POST has started but before its receipt. Remember
+  // those keys so an accepted late run is cancelled instead of being
+  // resurrected by the delayed response.
+  const cancelledSubmissions = new Map<string, string>()
   let notice: NoticeSpec | null = null
   // 固定技能（UI 偏好，shell 持久化后经 setPinnedSkills 注入）：非空即随 messageCreate 上 wire。
   let pinnedSkills: string[] = []
@@ -518,6 +522,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ...(scope.kind === "project" ? { project_ref: scope.projectRef } : {}),
       })
       .then((receipt) => {
+        const cancelledSessionId = cancelledSubmissions.get(idempotencyKey)
+        if (cancelledSessionId === sessionId) {
+          cancelledSubmissions.delete(idempotencyKey)
+          void deps.client
+            .sendControl(sessionId, receipt.run_id, { kind: "run.cancel", decision_id: createId("dec") })
+            .catch(() => {
+              // Local cancellation already settled the UI; the backend cancel
+              // is best effort for a receipt that arrived after the stop.
+            })
+          return
+        }
         // 回执落地前用户已重置/切换：丢弃迟到回执，不复活旧轮。
         if (disposed || machine.phase !== "submitting" || store?.activeId !== sessionId) {
           return
@@ -529,6 +544,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         notify()
       })
       .catch((error: unknown) => {
+        cancelledSubmissions.delete(idempotencyKey)
         if (disposed || machine.phase !== "submitting") {
           return
         }
@@ -795,6 +811,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function cancelRun(): void {
     if (disposed) {
+      return
+    }
+    if (machine.phase === "submitting" && store && pendingSubmission !== null) {
+      cancelledSubmissions.set(pendingSubmission.idempotencyKey, store.activeId)
+      pendingSubmission = null
+      machine = transition(machine, { type: "RESET" })
+      notify()
       return
     }
     abandonActiveRun()

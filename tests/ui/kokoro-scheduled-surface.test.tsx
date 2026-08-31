@@ -103,6 +103,22 @@ it("预览排程保存后进入列表并持久化本地 fixture", async () => {
   ])
 })
 
+it("预览排程通过宿主保存回调成功后仍更新本地列表", async () => {
+  const onSave = vi.fn().mockResolvedValue(undefined)
+  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview onSave={onSave} /></LocaleProvider>)
+
+  fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }))
+  fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "回调每日流程" } })
+  fireEvent.change(screen.getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "执行回调流程" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存" }))
+
+  await waitFor(() => expect(screen.getByText("回调每日流程")).toBeInTheDocument())
+  expect(onSave).toHaveBeenCalledTimes(1)
+  expect(JSON.parse(window.localStorage.getItem("kokoro.preview.scheduled-tasks") ?? "[]")).toEqual([
+    expect.objectContaining({ title: "回调每日流程", prompt: "执行回调流程", enabled: true }),
+  ])
+})
+
 it("live 模式缺少注入的 client 时显示错误，不把缺失 BFF 误当成空列表", async () => {
   render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" /></LocaleProvider>)
 
@@ -144,6 +160,21 @@ it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态�
   await waitFor(() => expect(updateScheduledTask).toHaveBeenCalledWith("scheduled_live_1", { enabled: false, status: "paused" }))
   await waitFor(() => expect(card).toHaveAttribute("data-status", "paused"))
   expect(listScheduledTasks).toHaveBeenCalledTimes(2)
+})
+
+it("任务状态指示器向辅助技术暴露本地化状态名称", async () => {
+  window.history.replaceState(null, "", "/app/scheduled?tab=list")
+  render(
+    <LocaleProvider>
+      <KokoroScheduledSurface
+        brandName="Kokoro"
+        tasks={[{ id: "scheduled_status_1", title: "状态任务", frequency: "daily", time: "08:00", status: "paused" }]}
+      />
+    </LocaleProvider>,
+  )
+
+  const card = await screen.findByRole("listitem")
+  expect(within(card).getByRole("img", { name: "已暂停" })).toBeInTheDocument()
 })
 
 it("受控任务缺少 mutation handler 时禁用变更入口", async () => {
@@ -223,6 +254,31 @@ it("列表视图支持暂停、编辑和删除，并把视图写回 URL", async 
   fireEvent.click(within(confirm).getByRole("button", { name: "删除" }))
   await waitFor(() => expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Kokoro 能独立执行工作，无需您的干预"))
   expect(window.location.search).toBe("?tab=list")
+})
+
+it("删除失败时保留确认框，显示错误并允许再次提交", async () => {
+  const onDeleteTask = vi.fn().mockRejectedValue(new Error("delete unavailable"))
+  window.history.replaceState(null, "", "/app/scheduled?tab=list")
+  render(
+    <LocaleProvider>
+      <KokoroScheduledSurface
+        brandName="Kokoro"
+        tasks={[{ id: "scheduled_delete_1", title: "待删除任务", frequency: "daily", time: "08:00" }]}
+        onDeleteTask={onDeleteTask}
+      />
+    </LocaleProvider>,
+  )
+
+  const card = await screen.findByRole("listitem")
+  fireEvent.pointerDown(within(card).getByRole("button", { name: "排程任务选项 待删除任务" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "删除" }))
+  const confirm = screen.getByRole("alertdialog")
+  fireEvent.click(within(confirm).getByRole("button", { name: "删除" }))
+
+  await waitFor(() => expect(within(card).getByText("操作失败，请重试。")).toBeInTheDocument())
+  expect(screen.getByRole("alertdialog")).toBeInTheDocument()
+  expect(within(screen.getByRole("alertdialog")).getByRole("button", { name: "删除" })).toBeEnabled()
+  expect(onDeleteTask).toHaveBeenCalledTimes(1)
 })
 
 it("日历月份切换时按实际日期显示任务", () => {

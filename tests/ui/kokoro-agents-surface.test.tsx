@@ -66,6 +66,17 @@ it("能力卡是可操作的 Agent 设置入口，并保持 CTA 的展开状态"
   expect(identityCard).toHaveAttribute("aria-expanded", "false")
 })
 
+it("从能力卡打开设置后关闭时把焦点交还给实际触发卡", async () => {
+  renderAgents()
+  const identityCard = screen.getByRole("button", { name: /品牌一致性的 AI 身份/ })
+
+  fireEvent.click(identityCard)
+  const dialog = await screen.findByRole("dialog")
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
+
+  await waitFor(() => expect(identityCard).toHaveFocus())
+})
+
 it("开始体验打开连接弹窗，并可切换 Telegram、LINE 与 Slack", async () => {
   renderAgents()
   const opener = screen.getByRole("button", { name: "开始体验" })
@@ -173,6 +184,7 @@ it.each([
   const dialog = screen.getByRole("dialog")
   const status = await within(dialog).findByTestId("agent-connection-status")
   expect(status).toHaveAttribute("data-status", expectedStatus)
+  expect(status).toHaveAccessibleName(expectedStatus === "connected" ? "已连接" : expectedStatus === "expired" ? "邀请已过期。" : "待接受的邀请")
 
   if (expectedStatus === "expired") {
     expect(within(dialog).getByRole("button", { name: "在 Telegram 继续" })).toBeDisabled()
