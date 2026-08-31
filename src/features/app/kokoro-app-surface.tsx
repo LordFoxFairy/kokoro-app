@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useLayoutEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 
 import { AppFrame, type AppFrameProps } from "@/components/blocks/app-frame/app-frame"
@@ -54,7 +54,11 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
   // project task use distinct engines, list scopes, and primary actions.
   const pathname = usePathname()
   const [nativeNavigation, setNativeNavigation] = useState<NativeSurfaceNavigation | null>(null)
-  useEffect(() => {
+  // Bind before the first painted frame. The rail is intentionally interactive
+  // immediately after hydration; using a passive effect left a small window
+  // where a fast click on “New task” could update history without updating the
+  // mounted surface, making the action appear to do nothing.
+  useLayoutEffect(() => {
     const syncSurfacePathname = () => setNativeNavigation({ basePathname: pathname, pathname: window.location.pathname })
     window.addEventListener("popstate", syncSurfacePathname)
     window.addEventListener("kokoro:surface-navigation", syncSurfacePathname)
