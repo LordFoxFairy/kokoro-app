@@ -1,7 +1,6 @@
 "use client"
 
 import { useRef, type RefObject } from "react"
-import { useRouter } from "next/navigation"
 import {
   CommandDialog,
   CommandEmpty,
@@ -19,6 +18,7 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { useT } from "@/i18n/context"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
 import { isRuntimeNavigationEnabled, navigationIcon, registeredNavigationRoute } from "@/ui/navigation/runtime-navigation-registry"
+import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 
 import styles from "./app-command-menu.module.css"
 
@@ -59,7 +59,6 @@ export function AppCommandMenu({
   focusScopeRef,
 }: AppCommandMenuProps) {
   const t = useT()
-  const router = useRouter()
   // Settings opens a second modal in the same event. Let that modal perform
   // its own focus handoff instead of briefly returning focus to the command
   // trigger and stealing it back from the newly opened panel.
@@ -127,7 +126,7 @@ export function AppCommandMenu({
             <CommandShortcut>{t("rail.newChatShortcut")}</CommandShortcut>
           </CommandItem>
           {commandNavigation.map(({ key, label, tab, href, icon: Icon }) => (
-            <CommandItem key={key} disabled={!tab && !href} onSelect={() => tab ? run(() => onOpenSettings(tab), true) : href ? run(() => router.push(href), true) : undefined}>
+            <CommandItem key={key} disabled={!tab && !href} onSelect={() => tab ? run(() => onOpenSettings(tab), true) : href ? run(() => navigateMountedSurface(href), true) : undefined}>
               <Icon />
               <span>{label}</span>
             </CommandItem>

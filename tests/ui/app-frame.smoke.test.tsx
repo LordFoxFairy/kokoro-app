@@ -699,6 +699,7 @@ it("User Web 在窄桌面分屏中自动隐藏 Rail，保留全宽工作区与�
       const separator = document.querySelector<HTMLElement>('[role="separator"][aria-label="调整侧栏宽度"]')
       expect(separator).not.toBeNull()
       expect(separator).not.toHaveAttribute("aria-hidden")
+      expect(screen.getByRole("button", { name: /收起侧栏|Collapse chat navigation/ })).toHaveFocus()
     })
   } finally {
     window.matchMedia = originalMatchMedia

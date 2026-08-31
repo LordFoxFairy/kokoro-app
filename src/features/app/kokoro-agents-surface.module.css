@@ -182,13 +182,18 @@
 .featureCard h2 { margin: 0 0 0.25rem; font-size: 0.875rem; font-weight: 500; line-height: 1.3125rem; text-wrap: balance; }
 .featureCard p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; line-height: 1.3125rem; }
 
-/* Manus keeps the Agent capability cards in two columns once the desktop
- * document rail can provide roughly 672px of inline space. Keep that two-up
- * rhythm on wide desktop too: four narrow cards make the copy wrap early and
- * no longer match the landing surface's reference composition. */
+/* The landing surface owns its responsive rhythm, not the outer viewport:
+ * compact desktop stays one-up, the reference content column becomes two-up
+ * at 42rem, and genuinely wide workspaces become four-up at 60rem. */
 @container agents-surface (min-width: 42rem) {
   .featureList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container agents-surface (min-width: 60rem) {
+  .featureList {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

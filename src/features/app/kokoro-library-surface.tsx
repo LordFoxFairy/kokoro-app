@@ -62,6 +62,8 @@ type LibraryUrlState = {
 }
 
 const DEFAULT_URL_STATE: LibraryUrlState = { filter: "all", query: "", view: "grid", favoritesOnly: false }
+const FILTER_SCROLL_STEP = 192
+const SCROLL_EDGE_EPSILON = 1
 type ArtifactClient = Pick<SessionClient, "listArtifacts">
 type ArtifactDownloader = (artifact: ArtifactRecord) => Promise<boolean>
 
@@ -186,10 +188,70 @@ export function KokoroLibrarySurface({
   const [loading, setLoading] = useState(() => fixtureSnapshot === undefined)
   const [error, setError] = useState(false)
   const [downloadState, setDownloadState] = useState<Record<string, "loading" | "error">>({})
+  const [filterScrollState, setFilterScrollState] = useState({ left: false, right: false })
+  const filterViewportRef = useRef<HTMLDivElement | null>(null)
+  // Native smooth scrolling is asynchronous. Keep the last requested target
+  // so rapid keyboard presses advance from the pending position instead of
+  // repeatedly starting the same animation.
+  const filterScrollTargetRef = useRef<number | null>(null)
   const requestSeqRef = useRef(0)
   const loadedCursorsRef = useRef<Set<string>>(new Set())
   const inFlightCursorRef = useRef<string | undefined>(undefined)
   const client = useMemo<ArtifactClient>(() => artifactClient ?? browserListClient({ preview: useFixtureTransport }), [artifactClient, useFixtureTransport])
+
+  const updateFilterScrollState = useCallback(() => {
+    const viewport = filterViewportRef.current
+    if (!viewport) return
+    const max = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const next = {
+      left: max > SCROLL_EDGE_EPSILON && viewport.scrollLeft > SCROLL_EDGE_EPSILON,
+      right: max > SCROLL_EDGE_EPSILON && viewport.scrollLeft < max - SCROLL_EDGE_EPSILON,
+    }
+    setFilterScrollState((current) => current.left === next.left && current.right === next.right ? current : next)
+  }, [])
+
+  const setFilterScrollPosition = useCallback((position: number) => {
+    const viewport = filterViewportRef.current
+    if (!viewport) return
+    const max = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const next = Math.max(0, Math.min(max, position))
+    filterScrollTargetRef.current = next
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+    viewport.scrollTo({ left: next, behavior: prefersReducedMotion ? "auto" : "smooth" })
+    updateFilterScrollState()
+  }, [updateFilterScrollState])
+
+  const scrollFilters = useCallback((direction: "forward" | "backward") => {
+    const viewport = filterViewportRef.current
+    if (!viewport) return
+    const base = filterScrollTargetRef.current ?? viewport.scrollLeft
+    setFilterScrollPosition(base + (direction === "forward" ? FILTER_SCROLL_STEP : -FILTER_SCROLL_STEP))
+  }, [setFilterScrollPosition])
+
+  const handleFilterKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Leave the ToggleGroup's roving keyboard navigation intact. The region
+    // itself owns the explicit scroll shortcuts when it has focus.
+    if (event.target !== event.currentTarget) return
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return
+    event.preventDefault()
+    if (event.key === "Home") setFilterScrollPosition(0)
+    else if (event.key === "End") {
+      const viewport = filterViewportRef.current
+      setFilterScrollPosition(viewport ? viewport.scrollWidth - viewport.clientWidth : 0)
+    } else {
+      scrollFilters(event.key === "ArrowRight" ? "forward" : "backward")
+    }
+  }, [scrollFilters, setFilterScrollPosition])
+
+  useEffect(() => {
+    const viewport = filterViewportRef.current
+    if (!viewport) return
+    updateFilterScrollState()
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(updateFilterScrollState)
+    observer?.observe(viewport)
+    if (viewport.firstElementChild) observer?.observe(viewport.firstElementChild)
+    return () => observer?.disconnect()
+  }, [updateFilterScrollState])
 
   useEffect(() => {
     writeUrlState({ filter, query, view, favoritesOnly })
@@ -349,16 +411,35 @@ export function KokoroLibrarySurface({
       </header>
 
       <div className={styles.toolbar} data-testid="library-toolbar">
-        <ToggleGroup
-          type="single"
-          value={filter}
-          onValueChange={(value) => { if (value) setFilter(value as LibraryFilter) }}
-          className={styles.filters}
+        <div
+          ref={filterViewportRef}
+          className={styles.filterViewport}
+          data-testid="library-filter-scroll"
+          data-overflow-left={filterScrollState.left || undefined}
+          data-overflow-right={filterScrollState.right || undefined}
+          id="library-filter-scroll"
+          role="region"
           aria-label={t("library.filterAria")}
-          aria-orientation="horizontal"
+          aria-controls="library-filter-options"
+          tabIndex={0}
+          onPointerDown={() => { filterScrollTargetRef.current = null }}
+          onTouchStart={() => { filterScrollTargetRef.current = null }}
+          onWheel={() => { filterScrollTargetRef.current = null }}
+          onKeyDown={handleFilterKeyDown}
+          onScroll={updateFilterScrollState}
         >
-          {FILTERS.map(({ value, key }) => <ToggleGroupItem key={value} value={value} className={styles.filter}>{t(key)}</ToggleGroupItem>)}
-        </ToggleGroup>
+          <ToggleGroup
+            type="single"
+            value={filter}
+            onValueChange={(value) => { if (value) setFilter(value as LibraryFilter) }}
+            className={styles.filters}
+            id="library-filter-options"
+            aria-label={t("library.filterAria")}
+            aria-orientation="horizontal"
+          >
+            {FILTERS.map(({ value, key }) => <ToggleGroupItem key={value} value={value} className={styles.filter}>{t(key)}</ToggleGroupItem>)}
+          </ToggleGroup>
+        </div>
         <div className={styles.tools}>
           <label className={styles.search}>
             <Search aria-hidden="true" />

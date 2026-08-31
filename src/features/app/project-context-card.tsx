@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronRight, FileText, type LucideIcon } from "lucide-react"
-import type { ReactNode } from "react"
+import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +27,7 @@ export type ProjectContextSectionProps = {
   footerAction?: ContextCardAction
   emptyVisual?: ReactNode
   showChevron?: boolean
-  onClick: () => void
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void
 }
 
 type ProjectContextCardProps = ProjectContextSectionProps & {

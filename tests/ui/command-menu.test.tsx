@@ -2,15 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, expect, it, vi } from "vitest"
 import { createRef, useRef, useState } from "react"
 
-const routerPush = vi.hoisted(() => vi.fn())
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: routerPush }) }))
-
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroCommandMenu } from "@/features/app/kokoro-command-menu"
 
 afterEach(() => {
   cleanup()
-  routerPush.mockReset()
+  window.history.replaceState(window.history.state, "", "/")
 })
 
 it("CommandDialog 关闭后把焦点还给打开按钮", async () => {
@@ -230,7 +227,7 @@ it("预览命令菜单与默认 Rail 保持完整的工作区入口", () => {
   expect(screen.getByRole("option", { name: /团队|Teams/i })).toBeInTheDocument()
 })
 
-it("命令菜单把插件入口导航到一级页面", () => {
+it("命令菜单把插件入口无 RSC 导航到一级页面", () => {
   function Harness() {
     const [open, setOpen] = useState(false)
     return (
@@ -243,8 +240,8 @@ it("命令菜单把插件入口导航到一级页面", () => {
 
   render(<Harness />)
   fireEvent.click(screen.getByRole("button", { name: "打开" }))
-    fireEvent.click(screen.getByRole("option", { name: /Connections|连接|Plugins/i }))
-  expect(routerPush).toHaveBeenCalledWith("/app/plugins")
+  fireEvent.click(screen.getByRole("option", { name: /Connections|连接|Plugins/i }))
+  expect(window.location.pathname).toBe("/app/plugins")
 })
 
 it("命令菜单补齐 Agent 与排程入口，并复用导航注册表的目标", () => {
@@ -267,5 +264,6 @@ it("命令菜单补齐 Agent 与排程入口，并复用导航注册表的目标
   expect(scheduled.querySelector("svg.lucide-clock")).toBeInTheDocument()
 
   fireEvent.click(scheduled)
-  expect(routerPush).toHaveBeenCalledWith("/app/scheduled?tab=calendar")
+  expect(window.location.pathname).toBe("/app/scheduled")
+  expect(window.location.search).toBe("?tab=calendar")
 })

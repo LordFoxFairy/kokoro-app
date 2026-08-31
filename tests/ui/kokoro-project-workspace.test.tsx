@@ -63,7 +63,8 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
 
   const instructionsCard = container.querySelector<HTMLElement>('[data-context-kind="instructions"]')
   const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')
-  fireEvent.click(within(instructionsCard!).getAllByRole("button", { name: /指令/ })[0])
+  const instructionsTrigger = within(instructionsCard!).getAllByRole("button", { name: /指令/ })[0]!
+  fireEvent.click(instructionsTrigger)
   const editor = screen.getByRole("textbox", { name: "专案指令" })
   expect(editor).toHaveValue("默认先给出摘要。")
   fireEvent.change(editor, { target: { value: "所有回复先给出结论。" } })
@@ -72,9 +73,14 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
   await waitFor(() => expect(onSaveProjectInstructions).toHaveBeenCalledWith("所有回复先给出结论。"))
   expect(onPrompt).not.toHaveBeenCalled()
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  await waitFor(() => expect(instructionsTrigger).toHaveFocus())
 
-  fireEvent.click(within(resourcesCard!).getAllByRole("button", { name: /文件和资源/ })[0])
+  const resourcesTrigger = within(resourcesCard!).getAllByRole("button", { name: /文件和资源/ })[0]!
+  fireEvent.click(resourcesTrigger)
   expect(screen.getByRole("dialog")).toHaveTextContent("附加文件和网页")
+  fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }))
+  await waitFor(() => expect(resourcesTrigger).toHaveFocus())
+  fireEvent.click(resourcesTrigger)
   fireEvent.pointerDown(screen.getByRole("button", { name: "打开新增菜单" }))
   expect(await screen.findByRole("menuitem", { name: /添加本地文件/ })).toBeInTheDocument()
 

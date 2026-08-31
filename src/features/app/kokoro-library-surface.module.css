@@ -33,16 +33,54 @@
   max-width: 71.75rem;
 }
 
-.filters {
+.filterViewport {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  gap: 0.25rem;
-  padding-left: 3.125rem;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
   scrollbar-width: none;
+  touch-action: pan-x;
 }
 
-.filters::-webkit-scrollbar { display: none; }
+.filterViewport::-webkit-scrollbar { display: none; }
+
+.filterViewport::before,
+.filterViewport::after {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 1.5rem;
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease-out;
+}
+
+.filterViewport::before {
+  left: 0;
+  background: linear-gradient(to right, var(--background), transparent);
+}
+
+.filterViewport::after {
+  right: 0;
+  background: linear-gradient(to left, var(--background), transparent);
+}
+
+.filterViewport[data-overflow-left="true"]::before,
+.filterViewport[data-overflow-right="true"]::after { opacity: 1; }
+
+.filters {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  padding-left: 3.125rem;
+}
 
 .filter {
   flex: 0 0 auto;
@@ -228,4 +266,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .loadingCard [data-slot="skeleton"] { animation: none; }
+  .filterViewport { scroll-behavior: auto; }
+  .filterViewport::before,
+  .filterViewport::after { transition: none; }
 }

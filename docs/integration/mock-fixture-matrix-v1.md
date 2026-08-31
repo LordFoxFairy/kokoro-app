@@ -3,6 +3,12 @@
 目标：后端未完成时，每个 User Web 功能仍可完整演示；后端接入时只切换 Client 实现，不改组件。
 参考产品只用于观察交互和资源边界，Fixture 使用 Kokoro 自有字段、文案与不透明 ID。
 
+> **文档身份**：本文是 Preview/未来验收目标矩阵，不是当前 API 路由注册表。当前可调用的
+> 浏览器路径、请求/响应和闭环状态以 [`user-web-api-contract-v4.md`](./user-web-api-contract-v4.md)
+> 为唯一事实来源；矩阵中尚未在 v4 注册的 `/api/tasks*`、`/api/scheduled-tasks*`、
+> `/api/connectors*`、`/api/mcp*` 等路径都是目标/历史示例，当前 Web 不得直接调用。
+> Chat 的统一业务承接边界见 [`kokoro-gateway-boundary-v1.md`](./kokoro-gateway-boundary-v1.md)。
+
 ## 1. 结构
 
 ```text
@@ -17,7 +23,9 @@ src/dev/preview-clients.ts
 
 规则：Preview Client 与 HTTP Client 实现同一 interface；mutation 必须真的改变内存 projection；
 operation 使用可预测的 queued -> running -> completed 状态；ID、时间和随机值由 fixture factory 注入，
-测试不得依赖线上数据。Fixture 不生成 `X-Domain`，也不把 `KOKORO_DOMAIN` 当作浏览器输入；服务端
+测试不得依赖线上数据。当前 checkout 的 fixture 实现主要集中在 `src/dev/preview-clients.ts`、
+`src/dev/preview-transport.ts` 与测试局部 factory；`src/dev/fixtures/<domain>.ts` 是目标结构，
+尚未创建的目录不能当作当前实现引用。Fixture 不生成 `X-Domain`，也不把 `KOKORO_DOMAIN` 当作浏览器输入；服务端
 transport fixture 才能注入 deployment domain 并生成标准 RFC 7239 `Forwarded`。上游断言还必须区分
 HTTP `Host`（目标连接 authority）与 `Forwarded`（经 service auth/来源 allowlist 保护的产品上下文）。
 

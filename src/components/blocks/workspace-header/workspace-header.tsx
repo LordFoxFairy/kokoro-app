@@ -1,5 +1,6 @@
 "use client"
 
+import { useRef } from "react"
 import type { WorkspaceHeaderProps } from "./workspace-header.types"
 import { WorkspaceHeaderIdentity } from "./workspace-header-identity"
 import { WorkspaceHeaderSessionActions } from "./workspace-header-session-actions"
@@ -14,14 +15,33 @@ export function WorkspaceNavigationTrigger({ className }: { className?: string }
   const t = useT()
   const { isMobile, openMobile, state } = useSidebar()
   const expanded = isMobile ? openMobile : state === "expanded"
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  const focusVisibleNavigationTarget = () => {
+    if (isMobile) return
+    window.requestAnimationFrame(() => {
+      const candidates = [
+        ...document.querySelectorAll<HTMLElement>('[data-rail-anchor="rail-toggle"]'),
+        ...document.querySelectorAll<HTMLElement>('[data-web-navigation-trigger="true"]'),
+      ]
+      const target = candidates.find((candidate) => {
+        return candidate.getAttribute("aria-hidden") !== "true"
+          && !candidate.hasAttribute("disabled")
+          && candidate !== triggerRef.current
+      })
+      ;(target ?? triggerRef.current)?.focus({ preventScroll: true })
+    })
+  }
 
   return (
     <SidebarTrigger
+      ref={triggerRef}
       className={className}
       data-web-navigation-trigger="true"
       aria-label={expanded ? t("rail.collapseAria") : t("rail.expandAria")}
       aria-expanded={expanded}
       title={expanded ? t("rail.collapseAria") : t("rail.expandAria")}
+      onClick={focusVisibleNavigationTarget}
     >
       <Menu aria-hidden="true" />
     </SidebarTrigger>

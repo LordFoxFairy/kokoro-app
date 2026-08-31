@@ -76,6 +76,18 @@ it("uses a fixed Manus-style create menu and site-owned brand copy", async () =>
   expect(within(menu).getAllByRole("menuitem")).toHaveLength(3)
 })
 
+it("添加技能后保留原按钮状态并播报完成结果", async () => {
+  renderSkills()
+  await screen.findByTestId("skills-catalog-grid")
+
+  const addButton = screen.getByRole("button", { name: "添加 AI 影片生成器" })
+  fireEvent.click(addButton)
+
+  await waitFor(() => expect(addButton).toHaveAttribute("aria-label", "已添加 AI 影片生成器"))
+  expect(addButton).toBeDisabled()
+  expect(screen.getByTestId("skills-action-status")).toHaveTextContent("已添加 AI 影片生成器")
+})
+
 it("imports a canonical GitHub skill, closes only the child dialog, and promotes the saved fixture card", async () => {
   renderSkills()
   await screen.findByTestId("skills-catalog-grid")

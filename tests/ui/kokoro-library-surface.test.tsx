@@ -54,6 +54,33 @@ it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同�
   expect(screen.getByText("研究摘要.pdf")).toBeInTheDocument()
 })
 
+it("窄桌面分类条是明确的横向滚动区域，支持键盘滚动并显示边缘提示", () => {
+  renderLibrary()
+  const viewport = screen.getByTestId("library-filter-scroll")
+  Object.defineProperties(viewport, {
+    clientWidth: { configurable: true, value: 240 },
+    scrollWidth: { configurable: true, value: 640 },
+    scrollLeft: { configurable: true, writable: true, value: 0 },
+  })
+  const scrollTo = vi.fn(({ left }: { left: number }) => {
+    Object.defineProperty(viewport, "scrollLeft", { configurable: true, writable: true, value: left })
+    fireEvent.scroll(viewport)
+  })
+  Object.defineProperty(viewport, "scrollTo", { configurable: true, value: scrollTo })
+
+  expect(viewport).toHaveAttribute("role", "region")
+  expect(viewport).toHaveAttribute("tabindex", "0")
+  fireEvent.scroll(viewport)
+  expect(viewport).toHaveAttribute("data-overflow-right", "true")
+
+  fireEvent.keyDown(viewport, { key: "ArrowRight" })
+  expect(scrollTo).toHaveBeenLastCalledWith({ left: 192, behavior: "smooth" })
+  expect(viewport).toHaveAttribute("data-overflow-left", "true")
+
+  fireEvent.keyDown(viewport, { key: "End" })
+  expect(scrollTo).toHaveBeenLastCalledWith({ left: 400, behavior: "smooth" })
+})
+
 it("注入资料库 fixture 时直接渲染，不为首屏取数排队动画帧", () => {
   const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame")
 

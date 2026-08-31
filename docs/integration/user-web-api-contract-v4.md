@@ -5,6 +5,8 @@
 > **审计日期**：2026-08-31
 >
 > **事实来源优先级**：`src/app/api` 与运行时代码 > `src/contract`、`src/hub`、`src/agents`、`src/system` 的 schema/client > 相关 tests > `docs/integration/mock-fixture-matrix-v1.md`。mock-fixture matrix 是验收目标与测试夹具矩阵，不是当前后端路由清单。
+>
+> **状态声明**：当前链路由 `kokoro-app` 的同源 Web BFF 承接；`kokoro-gateway` 只是 planned repository，当前不在 live upstream 链路中，且本文不表示它已创建或已部署。
 
 ## 0. 状态标签与范围边界
 
@@ -26,6 +28,45 @@
 - Runtime manifest
 
 Projects、billing、team、mail、settings、shared 等其他实现只在需要说明路径别名或边界时出现，不在本文新增接口。
+
+## 0.1 Chat 的统一业务/网关承接
+
+Chat 的前端承接已经冻结为本仓库的同源 `/api/session/*` 契约。浏览器不直接访问
+Session/Agent 内部服务，也不直接携带站点、租户、工作负载 token 或内部 secret。
+
+```text
+当前：
+kokoro-app（Web UI） → 同源 /api/session/*（当前 Web BFF）
+                    → KOKORO_SESSION_BASE_URL（当前 live upstream）
+
+规划迁移（gateway 接入后）：
+kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
+                    → planned LordFoxFairy/kokoro-gateway
+                    → Session / Agent runtime
+```
+
+`LordFoxFairy/kokoro-gateway` 当前只是规划中的独立仓库名，不代表本 checkout 已包含该
+仓库、已经完成远端创建或已进入当前 upstream 链路。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
+权限、域名上下文、会话/消息/Run 生命周期、SSE 事件、HITL 控制、幂等、错误映射、审计
+request id，以及向 Session/Agent runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
+状态、同源 BFF 传输和 public projection。
+
+| 责任 | kokoro-app | gateway（规划） | Session/Agent runtime |
+|---|---|---|---|
+| 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
+| 浏览器同源路径 | `/api/session/*` | 通过网关适配上游 | 不直接暴露 |
+| 登录信封、权限上下文、域名绑定 | 不读取内部 token；仅发送同源请求 | 服务端解析并校验 | 执行 runtime 级授权 |
+| 消息、Run、SSE、暂停/恢复/取消 | 调用稳定契约并渲染状态 | 编排、幂等、错误和协议转换 | 生成模型/工具执行事件 |
+| 业务数据与跨产品规则 | 不持有 | 负责 | 负责执行侧状态 |
+
+迁移规则：未来 gateway 接入时，优先只替换当前 BFF 后面的 upstream；浏览器继续使用本版
+`/api/session/*` 路径、请求体、响应体和 SSE event name。若必须改变业务语义，先在 gateway
+提供兼容适配和版本化契约，再升级 Web，不把内部服务路径泄漏到组件中。
+
+仓库边界规则：本仓库不引入 `src/site`、其它产品的源码、跨仓库相对路径或 git submodule。
+未来共享 package 只发布浏览器安全的 TypeScript 类型、Zod schema、事件常量和 client 接口；
+业务规则、数据库、服务凭据、runtime adapter 与 gateway 实现留在各自后端仓库。这样每个
+site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约与统一网关对接。
 
 ## 1. 当前 API 路由注册表
 
@@ -100,8 +141,9 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 
 - `KOKORO_DOMAIN` 是 server-only 部署域名，经过 DNS label 校验、去掉一个末尾点并转小写。
 - 出站请求先删除浏览器可控的 `host`、`forwarded`、`x-forwarded-host`、`x-forwarded-proto`、`x-forwarded-for`、`x-domain`、`x-kokoro-tenant-id`、`x-kokoro-site-id`，再写入唯一 `Forwarded: host=<KOKORO_DOMAIN>`。
-- `Forwarded` 是路由上下文，不是认证凭据；服务身份仍由 `x-kokoro-service: web-bff` 与生产 internal secret / 等价网关 ACL 提供。
-- 浏览器请求不得携带或依赖 `tenantId`、namespace、site、internal secret、workload token、runtime JWT。
+- `Forwarded` 只存在于 BFF → upstream 的服务端 wire；BFF 的浏览器响应不暴露该 header。它是路由上下文，不是认证凭据；服务身份仍由 `x-kokoro-service: web-bff` 与生产 internal secret / 等价网关 ACL 提供。
+- Hub 的 `x-kokoro-namespace` 请求头只由 BFF 从 sealed session 派生，浏览器不能选择或覆盖；但 `namespace` 可按已声明的 Hub public response schema 出现在浏览器可见的配额/上传投影中，仅用于展示/结果投影，不是入站身份依据。
+- 浏览器请求不得携带或选择 `tenantId`、namespace、site、internal secret、workload token、runtime JWT 作为身份上下文；浏览器伪造同名 header 也不改变上游上下文。
 
 ## 3. 环境来源与 Preview/Live 选择
 
@@ -128,7 +170,7 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 
 | Surface | Preview 入口 | Live 入口 | 当前闭环状态 |
 |---|---|---|---|
-| Chat | `previewClientFromEnv()` / `createPreviewSessionClient` | `createSessionClient({baseUrl:"/api/session"})` | Preview closed；Live conditional |
+| Chat | `previewClientFromEnv()` / `createPreviewClient` | `createSessionClient({baseUrl:"/api/session"})` | Preview closed；Live conditional |
 | Agent | `createPreviewAgentClient` | `createAgentClient` | Preview closed；Live client target，但当前 BFF route 未注册 |
 | Skills/MCP | `createPreviewHubClient` | `createHubClient` → `/api/hub` | Preview closed；Live conditional |
 | Library | Preview session client 的空 artifact 列表，或显式 fixture | `/api/session/artifacts` | Preview closed；Live conditional |
@@ -170,7 +212,7 @@ Accept: application/json
 
 | 参数 | 要求 |
 |---|---|
-| `product_id` | 必填；当前 AppGate 固定为 `kokoro` |
+| `product_id` | 可选；缺省按实现补为 `kokoro`，当前 AppGate 总是显式发送 `kokoro` |
 | `locale` | 可选，默认 `en-US`；匹配 `^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$` |
 | `surface_id` | 可选；当前客户端发送 `user-web` |
 
@@ -538,7 +580,7 @@ GET /api/session/sessions/{session_id}/deliveries/{content_hash}
 
 ## 6. Agent connection setup
 
-### 6.1 Preview closed
+### 6.1 Preview closed（仅 Preview 闭环）
 
 `src/agents/preview-client.ts` 提供本地确定性结果：
 
@@ -556,7 +598,7 @@ type AgentConnectionSetup = {
 
 preview 值使用 `https://agents.fixture.test/connect?...&ticket=preview` 与对应 continue URL；不发 network request。UI 用 `expires_at` 与当前时间再次判断过期，过期时禁用 continue 并允许 retry。
 
-### 6.2 Live client target
+### 6.2 Live client target（Live not closed）
 
 `src/agents/client.ts` 的唯一 live client target 是：
 
@@ -1041,7 +1083,7 @@ type ScheduledTaskClient = {
 
 这组 type 是 UI injection contract，不是已注册 HTTP schema；`unknown` 回执不会被 surface 解析为 canonical response。
 
-### 9.2 Preview closed
+### 9.2 Preview closed（独立 surface 的 Preview 闭环）
 
 只有 `preview=true` 时，独立 surface 才使用 local fixture：
 
@@ -1054,7 +1096,7 @@ type ScheduledTaskClient = {
 - timezone 由 `Intl.DateTimeFormat().resolvedOptions().timeZone` 推导，失败时为 `UTC`
 - editor 要求非空 title/prompt；expires 开启时要求 expiry date；autoApprove 是 boolean
 
-### 9.3 Live 当前边界
+### 9.3 Live 当前边界（独立 surface 的 Live not closed）
 
 AppSurface 没有注入 `ScheduledTaskClient`。live 且没有 controlled `tasks` 时，surface 试图调用 adapter；adapter 缺失会显示 load error，动作保持不可用。当前 `src/app/api` 没有独立 scheduled list/update/retry/delete route，也没有 `ScheduledTaskClient` 的 HTTP 实现。因此不定义 `/api/scheduled-tasks*`。
 
@@ -1147,11 +1189,11 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
 | Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE | closed | conditional on auth/session | 已冻结 |
-| Agent | `/app/agents` | preview client；live client target 无 app route | closed | not closed | 明确 deferred，不伪造路由 |
+| Agent | `/app/agents` | preview client；live client target 无 app route | Preview closed | Live not closed | 独立页面/Preview setup 已闭环；Live route 未注册 |
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
 | Library | `/app/library` | `/api/session/artifacts*` | empty/download fixture | conditional on session | 已冻结 |
-| Scheduled | `/app/scheduled` | preview localStorage；project create 的 Hub catch-all | standalone closed | standalone not connected；project create only | 不定义通用 scheduled route |
+| Scheduled | `/app/scheduled` | preview localStorage；project create 的 Hub catch-all | Preview closed | Live not closed；project create only | 独立页面 Preview CRUD 已闭环；不定义通用 scheduled route |
 | Capsule | Composer | React + sessionStorage | closed | local only | 不定义 API |
 | Manifest | AppGate | preview constant；`/api/system/runtime-manifest` | closed | conditional on System | 已冻结 |
 

@@ -2,7 +2,7 @@
 
 import { Cable, ChevronDown, ChevronRight, Clock3, Cloud, Ellipsis, File, Globe2, Grid2X2, ListFilter, MessageSquare, Paperclip, Plus, Search, ShieldCheck, SlidersHorizontal, SquareCode, Upload, Wrench } from "lucide-react"
 import Image from "next/image"
-import { useRef, useState } from "react"
+import { useCallback, useRef, useState, type MouseEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -63,6 +63,24 @@ export function KokoroProjectWorkspace({
   const [websitesOpen, setWebsitesOpen] = useState(false)
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [scheduledEditorOpen, setScheduledEditorOpen] = useState(false)
+  const contextOpenerRef = useRef<HTMLButtonElement | null>(null)
+
+  const rememberContextOpener = (event: MouseEvent<HTMLButtonElement>) => {
+    contextOpenerRef.current = event.currentTarget
+  }
+
+  const restoreContextOpener = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const target = contextOpenerRef.current
+      if (!target?.isConnected || target.disabled) return
+      target.focus({ preventScroll: true })
+    })
+  }, [])
+
+  const onContextDialogChange = useCallback((setOpen: (open: boolean) => void) => (open: boolean) => {
+    setOpen(open)
+    if (!open) restoreContextOpener()
+  }, [restoreContextOpener])
 
   if (projectTask) {
     return <KokoroProjectTaskWelcome composer={composer} />
@@ -113,7 +131,8 @@ export function KokoroProjectWorkspace({
             {capabilities?.instructions ? (
               <CardHeader className={styles.cardHeader}>
                 <CardTitle className={styles.cardTitle}>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => {
+                  <Button type="button" variant="ghost" size="sm" onClick={(event) => {
+                    rememberContextOpener(event)
                     setInstructions(projectInstructions)
                     setInstructionsError(false)
                     setInstructionsOpen(true)
@@ -151,7 +170,10 @@ export function KokoroProjectWorkspace({
                   { label: t("firstSite.searchWeb"), icon: ListFilter },
                 ]}
                 showChevron
-                onClick={() => setResourcesOpen(true)}
+                onClick={(event) => {
+                  rememberContextOpener(event)
+                  setResourcesOpen(true)
+                }}
               />
             ) : null}
             {capabilities.skills ? (
@@ -164,7 +186,10 @@ export function KokoroProjectWorkspace({
                 actionIcon={Plus}
                 actionIconOnly
                 showChevron
-                onClick={() => setSkillsOpen(true)}
+                onClick={(event) => {
+                  rememberContextOpener(event)
+                  setSkillsOpen(true)
+                }}
               />
             ) : null}
           </Card>
@@ -186,7 +211,10 @@ export function KokoroProjectWorkspace({
               />
             }
             footerAction={{ label: t("firstSite.add"), icon: Plus }}
-            onClick={() => setWebsitesOpen(true)}
+            onClick={(event) => {
+              rememberContextOpener(event)
+              setWebsitesOpen(true)
+            }}
           />
         ) : null}
         {capabilities?.scheduledTasks ? (
@@ -205,12 +233,15 @@ export function KokoroProjectWorkspace({
               />
             }
             footerAction={{ label: t("firstSite.add"), icon: Plus }}
-            onClick={() => setScheduledOpen(true)}
+            onClick={(event) => {
+              rememberContextOpener(event)
+              setScheduledOpen(true)
+            }}
           />
         ) : null}
       </aside>
 
-      <Dialog open={instructionsOpen} onOpenChange={setInstructionsOpen}>
+      <Dialog open={instructionsOpen} onOpenChange={onContextDialogChange(setInstructionsOpen)}>
         <DialogContent className={styles.instructionsDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
           <DialogHeader className={styles.instructionsDialogHeader}>
             <DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle>
@@ -241,7 +272,7 @@ export function KokoroProjectWorkspace({
                 setInstructionsError(false)
                 try {
                   await onSaveProjectInstructions?.(instructions)
-                  setInstructionsOpen(false)
+                  onContextDialogChange(setInstructionsOpen)(false)
                 } catch {
                   setInstructionsError(true)
                 } finally {
@@ -296,7 +327,7 @@ export function KokoroProjectWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={resourcesOpen} onOpenChange={setResourcesOpen}>
+      <Dialog open={resourcesOpen} onOpenChange={onContextDialogChange(setResourcesOpen)}>
         <DialogContent className={styles.resourcesDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
           <div className={styles.resourcesToolbar}>
@@ -335,7 +366,7 @@ export function KokoroProjectWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={skillsOpen} onOpenChange={setSkillsOpen}>
+      <Dialog open={skillsOpen} onOpenChange={onContextDialogChange(setSkillsOpen)}>
         <DialogContent className={styles.projectSkillsDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectSkillsTitle}>{t("firstSite.projects")}{t("firstSite.skills")}</DialogTitle>
           <p className={styles.projectSkillsHint}>
@@ -372,7 +403,7 @@ export function KokoroProjectWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={websitesOpen} onOpenChange={setWebsitesOpen}>
+      <Dialog open={websitesOpen} onOpenChange={onContextDialogChange(setWebsitesOpen)}>
         <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle>
           <label className={styles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchWebsites")} placeholder={t("firstSite.searchWebsites")} /></label>
@@ -384,7 +415,7 @@ export function KokoroProjectWorkspace({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={scheduledOpen} onOpenChange={setScheduledOpen}>
+      <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
         <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.projectScheduledTasks")}</DialogTitle>
           <div className={styles.scheduledPickerToolbar}>

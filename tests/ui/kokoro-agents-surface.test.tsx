@@ -206,7 +206,7 @@ it("桌面能力卡布局由 agents-surface 容器宽度决定，而不是 point
   const css = readFileSync("src/features/app/kokoro-agents-surface.module.css", "utf8")
 
   expect(css).toContain("@container agents-surface (min-width: 42rem)")
-  expect(css).not.toContain("@container agents-surface (min-width: 60rem)")
+  expect(css).toContain("@container agents-surface (min-width: 60rem)")
   expect(css).not.toContain("(pointer: fine)")
 })
 

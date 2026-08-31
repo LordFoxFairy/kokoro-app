@@ -20,6 +20,15 @@ git push -u origin main
 GitHub Actions 的 `${{ github.repository }}`、GHCR 镜像名和 Cloudflare Builds 均以这个
 独立仓库为准，不使用父仓库 `LordFoxFairy/Kokoro` 的 workflow 或构建上下文。
 
+名称映射固定如下；本地 checkout 目录名 `kokoro` 不是发布身份，Cloudflare Worker 名称也不等于仓库或镜像名：
+
+| 范围 | canonical name | 说明 |
+| --- | --- | --- |
+| GitHub 仓库 | `kokoro-app` | `LordFoxFairy/kokoro-app` |
+| 根 package | `@kokoro/app` | package manifest 的实际名称，产品/仓库 slug 仍为 `kokoro-app` |
+| Docker 镜像 | `kokoro-app` | `ghcr.io/lordfoxfairy/kokoro-app:<VERSION>` |
+| Cloudflare Worker | `kokoro` | 由 `wrangler.jsonc` 的 `name` 固定；这是部署资源名，不是仓库名 |
+
 一个 `kokoro` 仓库就是一个产品部署。环境文件只改变部署参数，不改变 React、CSS、路由或
 构建选择。Next.js 只自动识别以下命名：
 
@@ -88,8 +97,9 @@ Composer 语音输入保持同一边界：使用浏览器 `SpeechRecognition`/`w
 原始音频不进入 Kokoro BFF、IAM 或 System；当前仓库没有独立的语音上传、转写或音频存储 endpoint。用户显式发送后，
 转写文本沿用已有会话消息契约；不为语音增加新的后端接口。
 
-其它服务端变量见仓库根目录 [`.env.example`](../.env.example)。workload token、session secret
-和内部服务地址只放部署平台 secret/variable，绝不使用 `NEXT_PUBLIC_*`。
+其它服务端变量见仓库根目录 [`.env.example`](../.env.example)。生产和 Cloudflare runtime
+至少需要 `KOKORO_INTERNAL_SECRET_WEB_BFF`；System workload token 的实际变量名是
+`KOKORO_SYSTEM_WORKLOAD_TOKEN`。两者都只放部署平台 secret/variable，绝不使用 `NEXT_PUBLIC_*`。
 
 ## 2. 发布选择
 
@@ -127,6 +137,9 @@ KOKORO_WEB_SESSION_SECRET="<secret>"
 KOKORO_USER_BASE_URL="<internal-url>"
 KOKORO_SESSION_BASE_URL="<internal-url>"
 KOKORO_SYSTEM_BASE_URL="<internal-url>"
+KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
+# 按 System 服务策略启用；变量名必须保持为 KOKORO_SYSTEM_WORKLOAD_TOKEN。
+KOKORO_SYSTEM_WORKLOAD_TOKEN="<secret>"
 ```
 
 上线检查：
@@ -162,12 +175,17 @@ KOKORO_WEB_SESSION_SECRET
 KOKORO_USER_BASE_URL
 KOKORO_SESSION_BASE_URL
 KOKORO_SYSTEM_BASE_URL
-KOKORO_*_WORKLOAD_TOKEN
+KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
+KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy
 ```
 
 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 只供手动触发的
-`.github/workflows/cloudflare.yml` 使用。这个 workflow 默认不会因 Docker tag 自动触发，
-避免一次提交同时变更两套生产环境。
+`.github/workflows/cloudflare.yml` 使用；业务运行时变量仍配置在 Cloudflare Worker
+Variables/Secrets 中。这个 workflow 默认不会因 Docker tag 自动触发，避免一次提交同时变更两套
+生产环境。它是生产 deploy workflow，不是任意 ref 的通用发布入口：在 GitHub 的
+`workflow_dispatch` 页面必须选择已存在的严格 `vMAJOR.MINOR.PATCH` tag，workflow 会在安装依赖前
+拒绝 branch、非 tag ref 和带 prerelease/build 元数据的 tag。手动预览使用本地或 Cloudflare
+preview 命令 `pnpm run cf:preview`，不调用该 deploy workflow。
 
 Cloudflare 发布验收必须包含 `pnpm run cf:preview`、BFF JSON、SSE、登录回调、RFC 7239 `Forwarded` 注入
 和桌面截图；OpenNext 适配层变更不改变产品仓库和 shared package 边界。

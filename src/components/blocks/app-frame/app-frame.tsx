@@ -1723,6 +1723,7 @@ export function AppFrame({
       {mounted && settingsTab !== null ? (
         <SettingsModal
           key={settingsTab}
+          engine={engine}
           brandName={brandName}
           initialTab={settingsTab}
           preview={preview}

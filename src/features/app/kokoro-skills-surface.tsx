@@ -128,6 +128,7 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
   const [importedSkills, setImportedSkills] = useState<SkillCatalogCard[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [errorName, setErrorName] = useState<string | null>(null)
+  const [lastAddedSkill, setLastAddedSkill] = useState<string | null>(null)
   const createRef = useRef<HTMLButtonElement | null>(null)
   const githubRef = useRef<HTMLElement | null>(null)
   const uploadRef = useRef<HTMLElement | null>(null)
@@ -172,6 +173,7 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
     setErrorName(null)
     try {
       await client.setSkillEnabled(skill.name, true, skill.scope)
+      setLastAddedSkill(skill.name)
       invalidate(`${CATALOG_KEY}/${preview ? "preview" : "live"}`)
     } catch {
       setErrorName(stateKey)
@@ -220,6 +222,11 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
       </header>
 
       <main className={styles.scroller}>
+        {lastAddedSkill ? (
+          <span className="sr-only" role="status" aria-live="polite" data-testid="skills-action-status">
+            {t("skills.added")} {lastAddedSkill}
+          </span>
+        ) : null}
         <div className={styles.content}>
           <label className={styles.searchField}>
             <Search aria-hidden="true" />

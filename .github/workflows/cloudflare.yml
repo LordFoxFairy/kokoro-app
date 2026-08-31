@@ -1,8 +1,9 @@
 name: Deploy to Cloudflare Workers
 
-# Deliberately manual: publishing a Git tag must not deploy to a second
-# production platform by accident. Cloudflare Workers Builds can also connect
-# the repository directly; see docs/deployment.md for that path.
+# Deliberately manual production deploy. It is restricted below to an existing
+# strict vMAJOR.MINOR.PATCH tag; branch dispatches are rejected before build.
+# Cloudflare Workers Builds can also connect the repository directly; see
+# docs/deployment.md for that path and for the separate preview command.
 on:
   workflow_dispatch:
 
@@ -15,6 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Require strict semver production tag
+        shell: bash
+        run: |
+          if [[ ! "${GITHUB_REF}" =~ ^refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Cloudflare production deploys require an existing vMAJOR.MINOR.PATCH tag; branches and other refs are not deployable."
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v4
 

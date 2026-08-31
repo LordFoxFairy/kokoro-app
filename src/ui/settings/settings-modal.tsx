@@ -29,6 +29,7 @@ import {
   browserTeamClient,
 } from "@/ui/shell/page-clients"
 import { togglePinned, usePinnedSkills } from "@/ui/shell/use-pinned-skills"
+import type { SessionEngine } from "@/engine/machine"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import type { SkillCard } from "@/hub/schemas"
 import { McpContent } from "@/ui/mcp/mcp-panel"
@@ -151,6 +152,8 @@ export function normalizeSettingsTab(value: string | null | undefined): Settings
 }
 
 type SettingsModalProps = {
+  /** Reuse the shell's scope-owned engine; project settings must not create a direct-chat engine. */
+  engine?: SessionEngine | null
   // 服务端按 host 解析的站点品牌名(SITE-REAL);缺省回退 Kokoro。
   brandName?: string
   preview?: boolean
@@ -169,6 +172,7 @@ type SettingsModalProps = {
 }
 
 export function SettingsModal({
+  engine,
   brandName,
   preview = false,
   initialTab,
@@ -202,7 +206,11 @@ export function SettingsModal({
   const hubClient = useMemo(() => browserHubClient({ preview }), [preview])
   // 团队切换器高亮当前 namespace:undefined=未取,null=预览/无信封,string=当前 team id。
   const [teamNs, setTeamNs] = useState<string | null | undefined>(undefined)
-  const pinnedSkills = usePinnedSkills(browserEngine({ preview }))
+  const pinnedSkillsEngine = useMemo(
+    () => engine === undefined ? browserEngine({ preview }) : engine,
+    [engine, preview],
+  )
+  const pinnedSkills = usePinnedSkills(pinnedSkillsEngine)
 
   useEffect(() => {
     const wasOpen = domainUpgradeWasOpenRef.current

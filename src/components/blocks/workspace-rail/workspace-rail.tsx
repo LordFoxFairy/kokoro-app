@@ -235,14 +235,16 @@ function WorkspaceRailContent({
     toggleFocusRef.current = null
     const target = targetMode.mode === "expanded"
       ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
-      : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
+      : compactDesktopRail
+        ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
+        : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
     if (!target || target.getAttribute("aria-hidden") === "true") return
     if (targetMode.mode === "collapsed" && targetMode.pointer) {
       target.dataset.pointerFocus = "true"
       target.addEventListener("blur", () => delete target.dataset.pointerFocus, { once: true })
     }
     target.focus({ preventScroll: true })
-  }, [visualCollapsed])
+  }, [compactDesktopRail, visualCollapsed])
 
   // 会话重命名内联编辑态（CONV-UX）：editingId 命中的条目以输入框替换标题。
   const [editingId, setEditingId] = useState<string | null>(null)
