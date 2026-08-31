@@ -20,7 +20,7 @@ import type { GithubImportResult } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 
-import styles from "./skills-panel.module.css"
+import styles from "./github-import-dialog.module.css"
 
 export { parseGithubRepository } from "@/hub/client"
 
@@ -265,7 +265,7 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={styles.githubDialog}
+        className={styles.dialog}
         overlayClassName={styles.dialogOverlay}
         closeLabel={t("skills.githubClose")}
         data-testid="github-import-dialog"
@@ -276,20 +276,20 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
           window.requestAnimationFrame(() => target.focus({ preventScroll: true }))
         }}
       >
-        <DialogHeader className={styles.githubHeader}>
-          <div className={styles.githubBrandFlow} aria-hidden="true">
-            <span className={styles.githubBrandIcon}><Image src="/assets/connectors/github.webp" alt="" width={20} height={20} /></span>
-            <ArrowLeftRight className={styles.githubTransferIcon} />
-            <span className={styles.githubBrandIcon}><BrandFallback className={styles.githubKokoroIcon} /></span>
+        <DialogHeader className={styles.header}>
+          <div className={styles.brandFlow} aria-hidden="true">
+            <span className={styles.brandIcon}><Image src="/assets/connectors/github.webp" alt="" width={20} height={20} /></span>
+            <ArrowLeftRight className={styles.transferIcon} />
+            <span className={styles.brandIcon}><BrandFallback className={styles.kokoroIcon} /></span>
           </div>
           <DialogTitle>{t("skills.importGithub")}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
 
-        <div className={styles.githubBody}>
+        <div className={styles.body}>
           {isInput ? (
-            <div className={styles.githubForm} data-invalid={error !== null || undefined}>
-              <label className={styles.githubLabel} htmlFor="github-repository-url">{copy.repositoryLabel}</label>
+            <div className={styles.form} data-invalid={error !== null || undefined}>
+              <label className={styles.label} htmlFor="github-repository-url">{copy.repositoryLabel}</label>
               <Input
                 id="github-repository-url"
                 data-testid="github-repository-input"
@@ -321,7 +321,7 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
               {isImporting ? <span className="sr-only" role="status" aria-live="polite" data-testid="github-import-status">{copy.importing}</span> : null}
               <p id="github-repository-help" className="sr-only">{copy.description}</p>
               {error ? (
-                <Alert id="github-repository-error" variant="destructive" className={styles.githubError}>
+                <Alert id="github-repository-error" variant="destructive" className={styles.error}>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
@@ -329,18 +329,18 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
           ) : null}
 
           {state.kind === "unavailable" ? (
-            <Alert variant="destructive" className={styles.githubError} data-testid="github-import-unavailable" role="status">
+            <Alert variant="destructive" className={styles.error} data-testid="github-import-unavailable" role="status">
               <AlertDescription>{copy.unavailable}</AlertDescription>
             </Alert>
           ) : null}
 
           {state.kind === "done" || state.kind === "preview" ? (
-            <div className={styles.githubResult} data-testid="github-import-complete" role="status" aria-live="polite">
-              <p className={styles.githubSuccess}>
+            <div className={styles.result} data-testid="github-import-complete" role="status" aria-live="polite">
+              <p className={styles.success}>
                 <Check aria-hidden="true" />
                 {state.kind === "preview" ? copy.previewOnly : copy.imported}
               </p>
-              <p className={styles.githubResultMeta}>
+              <p className={styles.resultMeta}>
                 <span>{state.result.skill.name}</span>
                 <span aria-hidden="true">·</span>
                 <span>{state.result.default_branch}</span>
@@ -349,7 +349,7 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
           ) : null}
         </div>
 
-        <DialogFooter className={styles.githubFooter}>
+        <DialogFooter className={styles.footer}>
           {state.kind === "done" || state.kind === "preview" || state.kind === "unavailable" ? (
             <Button type="button" onClick={() => handleOpenChange(false)} data-testid="github-import-done">
               {copy.done}

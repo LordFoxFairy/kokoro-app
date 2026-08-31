@@ -683,7 +683,7 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 | Fixture key | 触发 | 断言 |
 | --- | --- | --- |
-| `composer.creation-intent.visible-dismiss.v202` | 进入网站/应用创作态 | 胶囊保持 `68×32px`，左侧始终显示 `16×16px` X；关闭按钮始终可见、可聚焦，不依赖 hover，不提交表单；intent 清除但 draft、URL 和其他控件坐标保留 |
+| `composer.creation-intent.visible-dismiss.v202` | 进入网站/应用创作态 | 胶囊按本地化标签自适应宽度并保持 `32px` 高；左侧固定 `16×16px` 槽位静止显示类型图标、悬停/聚焦显示 X；关闭按钮始终挂载、可聚焦且可直接命中，不提交表单；intent 清除但 draft、URL 和其他控件坐标保留 |
 | `composer.voice.inline.v202` | 桌面点击麦克风 | 同一 `32×32px` 槽位在 `idle → listening → transcribing → idle` 间切换；不新增录音栏、Dialog 或 Popover，不改变 Composer 外壳几何；preview 仅追加合成文本，生产使用浏览器 SpeechRecognition |
 | `rail.narrow.hidden.v202` | fine-pointer CSS viewport `≤768px` | Web rail、gap、container 和 seam 不参与布局；主区从 `x=0` 开始，不保留 `52px` 空白轨道；Header 或独立 surface shell 仅提供一个 navigation trigger |
 | `transport.standard-forwarded.v202` | 任意浏览器同源 API 请求 | 不发送或信任 `X-Domain`、tenant/site header、浏览器 `Forwarded`；BFF 只从服务端 `KOKORO_DOMAIN` 生成单个 RFC 7239 `Forwarded`，并先通过独立 service auth/allowlist |
@@ -693,3 +693,14 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 `Forwarded`，避免“匿名分享”被误解为“匿名上游连接”。
 
 前文 `v172`、`v200` 中关于“hover 后才显示 X”或“展开录音行/完成录音”的表述均为历史记录，当前实现与验收以本节为准。
+
+## 43. Footer/胶囊与水合回归 v209
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `rail.expanded-footer-anchor.v209` | 展开 rail，分别保持 `300px` 与拖动到 `438px` | 邀请卡为 `56px` 高；账户组左对齐；设备/通知动作跟随 rail 右边界；不出现账户信息随宽度居中的跳变 |
+| `composer.creation-intent.direct-dismiss.v209` | 进入 `?qa=capsule-final`，未悬停时点击固定关闭槽位 | 关闭按钮直接命中；intent 清除、draft/URL/相邻控件不变；不存在 pointer-events 被 icon wrapper 吞掉 |
+| `shell.hydration-cookie-url.v209` | 带 sidebar cookie、settings hash 或 conversation query 首次加载 | SSR 与首个 hydrated tree 相同；不触发 hydration rebuild 或开发态 Issues 浮层；浏览器状态在首帧布局提交前恢复 |
+
+证据：`output/playwright/v217-footer-aligned-786.png`、`output/playwright/v218-rail-resize-aligned-440.png`、
+`output/playwright/v220-capsule-visible.png`。以上均为桌面 Web 合成 fixture，不访问 Manus API，不覆盖手机端。

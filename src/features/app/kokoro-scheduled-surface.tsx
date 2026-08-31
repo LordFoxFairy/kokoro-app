@@ -473,7 +473,7 @@ export function KokoroScheduledSurface({
       <main className={styles.main}>
         {!fixtureMode && !controlledTasks && loading && displayedTasks.length === 0 ? (
           <section className={styles.content} data-testid="scheduled-loading" aria-busy="true" aria-label={t("firstSite.tasksLoading")}>
-            <div className={styles.loadingCalendar} aria-hidden="true"><CalendarDays className={styles.calendarGlyph} /><div className={styles.calendarLines}>{Array.from({ length: 28 }, (_, index) => <i key={index} data-active={index === 11 ? "true" : undefined} />)}</div></div>
+            <div className={styles.loadingCalendar} aria-hidden="true"><div className={styles.calendarLines}>{Array.from({ length: 28 }, (_, index) => <i key={index} data-active={index === 11 ? "true" : undefined} />)}</div></div>
             <p className={styles.loadingMessage} role="status">{t("firstSite.tasksLoading")}</p>
           </section>
         ) : !fixtureMode && !controlledTasks && loadError && displayedTasks.length === 0 ? (
@@ -490,7 +490,6 @@ export function KokoroScheduledSurface({
         ) : displayedTasks.length === 0 ? (
           <section className={styles.content} aria-labelledby="scheduled-empty-title">
             <div className={styles.calendar} role="img" aria-label={t("scheduled.calendar")}>
-              <CalendarDays className={styles.calendarGlyph} aria-hidden="true" />
               <div className={styles.calendarLines} aria-hidden="true">
                 {Array.from({ length: 28 }, (_, index) => <i key={index} data-active={index === 11 ? "true" : undefined} />)}
               </div>

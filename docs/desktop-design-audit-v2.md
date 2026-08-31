@@ -3854,9 +3854,9 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
 
 ### 3. Composer 胶囊与语音输入当前基线 v202
 
-- 网站/应用创作胶囊固定为 `68×32px`，左侧使用独立的 `16×16px` 图标槽位；静止态显示创建类型图标，悬停
-  或键盘聚焦时在同一槽位切换为 X。X 是唯一关闭动作，关闭不提交表单、不改 URL，只清除 creation intent
-  并保留 draft。
+- 网站/应用创作胶囊按本地化标签自适应宽度、固定 `32px` 高，左侧使用独立的 `16×16px` 图标槽位；静止态显示
+  创建类型图标，悬停或键盘聚焦时在同一槽位切换为 X。关闭槽位始终挂载、可聚焦且可直接命中，关闭不提交表单、
+  不改 URL，只清除 creation intent 并保留 draft。
 - 桌面麦克风是固定 `32×32px` 的内联按钮。点击只改变按钮的无障碍状态和轻微颜色，不替换 textarea，
   不新增录音条、Dialog 或 Popover；preview 按 `listening → transcribing → idle` 追加合成文本，生产
   只使用浏览器 SpeechRecognition 结果。
@@ -3930,3 +3930,30 @@ Popover 或 Dialog，而是在同一个 Composer 内将输入行替换为波形/
   页面从中段打开导致 Composer 和网站胶囊被裁出首屏。网站模式后续两帧复位仍保留，用于抵消新增上下文轨道触发的浏览器 scroll anchoring。
 
 本轮只调整桌面 Web 的本地 QA 状态和欢迎页滚动边界，没有修改手机端布局。
+
+## v208 展开 Rail 底部锚点与宽度联动（2026-08-31）
+
+针对展开状态下“底部不像侧边栏、拖宽后内容仍挤在中间”的反馈，复核了 `300px` 默认宽度和拖到
+`438px` 的真实桌面截图。底部现在保持一个明确的纵向锚点：邀请卡、账户行、设备和通知动作属于同一
+`SidebarFooter`，不再由 shadcn Button 的默认居中规则改变账户组位置。
+
+- 邀请卡固定为 `100% × 56px`，桌面 rail 默认坐标为 `(12,570.8125,276,56)`；账户行坐标为
+  `(14,634,192.015625,32)`，设备和通知按钮分别为 `(214.8125,634,32,32)`、`(254,634,32,32)`。
+- 账户触发器显式使用 `justify-content:flex-start`：rail 从 `300px` 拖到 `438px` 后，头像和名称仍贴
+  左，设备/通知动作随右边界移动，不会在宽度变化时把账户信息推到 rail 中央。
+- 邀请图标改为站点中性的 `HandHeart`，标题/副标题为 `14px/12px`，与 Manus 的两行推广卡结构一致；
+  Kokoro 的品牌名、头像和文案仍由 runtime/i18n 提供。
+
+截图：`output/playwright/v217-footer-aligned-786.png`、`output/playwright/v218-rail-resize-aligned-440.png`，
+对照 `output/playwright/manus-786-baseline-loaded.png`。本轮只覆盖桌面 Web。
+
+## v209 水合稳定性与胶囊直接命中（2026-08-31）
+
+- rail 折叠偏好、settings/conversation URL 状态和 QA creation intent 不在 state initializer 中读取
+  `document/window`；首棵树使用服务端安全默认值，layout microtask 再合并浏览器状态，消除 returning user
+  的 hydration rebuild 与 Next 开发态 “Issues” 浮层。
+- creation capsule 的关闭槽位保持固定 `16×16px`，并在未悬停时也由透明的 close button 作为 hit-test owner；
+  悬停/聚焦仍只切换 glyph 的可见性，不改变胶囊宽高。点击 X 不提交表单、不改 URL，只清除 intent 并保留 draft。
+
+真实桌面 QA：`?qa=capsule-final` 中胶囊为 `100.78125×32px`，直接点击关闭后节点立即卸载；本地页面无
+hydration/page error。截图：`output/playwright/v220-capsule-visible.png`。

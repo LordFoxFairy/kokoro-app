@@ -44,10 +44,22 @@
 }
 
 .rail[data-desktop-web="true"] .navItem {
+  position: relative;
+  z-index: 1;
   min-height: 2.4rem;
   border-radius: 0.7rem;
   padding-inline: 0.75rem;
   color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* SVG paths must never become the hit-test owner of a rail action. The
+ * visible glyph is decorative; the shadcn button/link is the complete target.
+ * This matters at browser zoom levels where the painted glyph and the 36px
+ * control are rendered on different device-pixel boundaries. */
+.rail[data-desktop-web="true"] .navItem .icon {
+  pointer-events: none;
 }
 
 .rail[data-desktop-web="true"] .navItem:hover {
@@ -300,7 +312,7 @@
 
 .userCard:hover,
 .userCard:focus-within { background: var(--accent); }
-.userTrigger { display: flex; min-width: 0; flex: 1; align-items: center; gap: 0.55rem; overflow: hidden; border: 0; border-radius: var(--radius-sm); background: transparent; padding: 0; text-align: left; }
+.userTrigger { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-start; gap: 0.55rem; overflow: hidden; border: 0; border-radius: var(--radius-sm); background: transparent; padding: 0; text-align: left; }
 .userTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .userAvatar { display: inline-flex; width: 1.75rem; height: 1.75rem; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: 0.7rem; background: var(--primary); color: var(--primary-foreground); font-size: 0.82rem; font-weight: 700; }
 .userName { color: var(--foreground); font-size: 0.9rem; font-weight: 600; }
@@ -336,14 +348,14 @@
 
 .footer { width: 100%; min-width: 0; padding: 0; }
 .footerInvite { width: 100%; min-width: 0; margin-bottom: 0.45rem; }
-.inviteCard { display: flex; width: 100%; min-width: 0; min-height: 3.25rem; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.45rem 0.55rem; text-align: left; }
+.inviteCard { display: flex; width: 100%; min-width: 0; height: 3.5rem; min-height: 3.5rem !important; box-sizing: border-box; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.5rem 0.55rem; text-align: left; }
 .inviteCard:hover { background: var(--accent); }
-.inviteIcon { width: 1.05rem; height: 1.05rem; flex: 0 0 auto; color: var(--muted-foreground); }
+.inviteIcon { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; color: var(--muted-foreground); }
 .inviteCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.1rem; }
 .inviteCopy strong,
 .inviteCopy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inviteCopy strong { color: var(--foreground); font-size: 0.76rem; font-weight: 650; }
-.inviteCopy small { color: var(--muted-foreground); font-size: 0.68rem; }
+.inviteCopy strong { color: var(--foreground); font-size: 0.875rem; font-weight: 650; line-height: 1.25rem; }
+.inviteCopy small { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1rem; }
 .inviteChevron { width: 0.9rem; height: 0.9rem; flex: 0 0 auto; color: var(--muted-foreground); }
 .accountStatus { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.45rem; color: var(--muted-foreground); }
 .accountStatus .icon { width: 1rem; height: 1rem; }
@@ -387,6 +399,7 @@
     box-sizing: border-box;
     padding-bottom: 0.5rem;
   }
+  .rail[data-desktop-web="true"] .footer { gap: 0; }
   .rail[data-desktop-web="true"] .userCard { margin: 0; height: 2rem; min-height: 2rem; padding: 0 0.125rem; }
   .rail[data-desktop-web="true"] .userTrigger { padding-left: 0.125rem; }
 }

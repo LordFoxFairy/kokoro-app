@@ -84,15 +84,15 @@ const COMMAND_SETTINGS_HANDOFF_MS = 220
 export const COMPACT_DESKTOP_RAIL_BREAKPOINT = RAIL_COMPACT_BREAKPOINT
 const PENDING_CREATION_INTENT_KEY = "kokoro.web.pending-creation-intent"
 
-function initialRailCollapsed(defaultCollapsed: boolean): boolean {
-  if (typeof document === "undefined") return defaultCollapsed
+function readRailCollapsedCookie(): boolean | null {
+  if (typeof document === "undefined") return null
   const cookie = document.cookie
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith("sidebar_state="))
-  if (!cookie) return defaultCollapsed
+  if (!cookie) return null
   const value = cookie.slice("sidebar_state=".length)
-  return value === "true" ? false : value === "false" ? true : defaultCollapsed
+  return value === "true" ? false : value === "false" ? true : null
 }
 
 type CreationIntent = "website" | "app"
@@ -440,7 +440,28 @@ export function AppFrame({
   const mounted = useHydrated()
   const narrowWeb = useIsMobile()
   const compactDesktopRail = useCompactDesktopRail()
-  const [railCollapsed, setRailCollapsed] = useState(() => initialRailCollapsed(desktopRailCollapsed))
+  // The server cannot read the sidebar cookie. Start from the server-provided
+  // default so hydration has an identical tree, then reconcile the persisted
+  // preference in a layout effect before the first painted frame. Reading the
+  // cookie inside the state initializer made a returning user render a
+  // different rail tree on the client, triggering a hydration rebuild and the
+  // visible dev "Issues" pill.
+  const [railCollapsed, setRailCollapsed] = useState(desktopRailCollapsed)
+  useLayoutEffect(() => {
+    let active = true
+    // Queue after the layout effect so the server/client tree stays identical
+    // while still reconciling before the next user interaction. The async
+    // callback also avoids a synchronous cascading render in React's effect
+    // lint rule.
+    queueMicrotask(() => {
+      if (!active) return
+      const persistedCollapsed = readRailCollapsedCookie()
+      if (persistedCollapsed !== null) setRailCollapsed(persistedCollapsed)
+    })
+    return () => {
+      active = false
+    }
+  }, [desktopRailCollapsed])
   const [compactRailOpen, setCompactRailOpen] = useState(false)
   const resolvedRailCollapsed = compactDesktopRail ? !compactRailOpen : railCollapsed
   const railHidden = compactDesktopRail && resolvedRailCollapsed
@@ -493,15 +514,22 @@ export function AppFrame({
   // 设置中心(WEB-FACE 面三):浮在工作区之上的模态,null=关。开关态用 URL `?settings=<tab>` 同步
   // (深链/刷新/可分享),首次打开新增 history entry，切 tab 仅 replace 当前 entry；不引 useSearchParams
   // (免 Suspense 边界,也不动测试的 next/navigation mock)。rail 入口/错误恢复卡改为调 openSettings。
-  // 初值惰性读 URL(SSR 无 window→null);模态渲染再由 mounted 门控,首帧与 SSR 一致(水合安全,
-  // 不在 effect 里 setState)。深链 `/?settings=X` 即命中对应 tab。
-  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(() => {
-    if (typeof window === "undefined") {
-      return null
+  // Client URL state starts from the server-safe empty value. Read the deep
+  // link in a layout microtask so the first hydrated tree remains identical
+  // to SSR while settings/capsules still appear before the next interaction.
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null)
+  const [deploymentIntent, setDeploymentIntentState] = useState<CreationIntent | null>(null)
+  useLayoutEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      setSettingsTab(settingsTabFromLocation())
+      setDeploymentIntentState(readInitialCreationIntent())
+    })
+    return () => {
+      active = false
     }
-    return settingsTabFromLocation()
-  })
-  const [deploymentIntent, setDeploymentIntentState] = useState<CreationIntent | null>(readInitialCreationIntent)
+  }, [])
   const setDeploymentIntent = useCallback((intent: CreationIntent | null) => {
     setDeploymentIntentState(intent)
     writePendingCreationIntent(intent)
@@ -523,7 +551,16 @@ export function AppFrame({
   const initialConversationRef = useRef<string | null>(conversationIdFromLocation())
   const conversationUrlRef = useRef<string | null>(conversationIdFromLocation())
   const conversationUrlHydratedRef = useRef(false)
-  const [conversationRouteId, setConversationRouteId] = useState<string | null>(() => conversationIdFromLocation())
+  const [conversationRouteId, setConversationRouteId] = useState<string | null>(null)
+  useLayoutEffect(() => {
+    let active = true
+    queueMicrotask(() => {
+      if (active) setConversationRouteId(conversationIdFromLocation())
+    })
+    return () => {
+      active = false
+    }
+  }, [])
   const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace"): void => {
     if (typeof window === "undefined") {
       return

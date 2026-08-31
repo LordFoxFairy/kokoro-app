@@ -164,7 +164,7 @@ it("受控任务缺少 mutation handler 时禁用变更入口", async () => {
   expect(screen.getByRole("menuitem", { name: "删除" })).toHaveAttribute("aria-disabled", "true")
 })
 
-it("编辑 draft 暴露 timezone，旧 fixture 缺字段时回填浏览器时区", async () => {
+it("编辑 draft 保留隐式时区，不在编辑器中增加额外的时区控件", async () => {
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   const onUpdateTask = vi.fn().mockResolvedValue(undefined)
   render(
@@ -181,12 +181,10 @@ it("编辑 draft 暴露 timezone，旧 fixture 缺字段时回填浏览器时区
   fireEvent.pointerDown(within(card).getByRole("button", { name: "排程任务选项 Controlled" }))
   fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }))
   const dialog = screen.getByRole("dialog")
-  const timezone = within(dialog).getByRole("textbox", { name: "时区" })
-  expect(timezone).toHaveValue(Intl.DateTimeFormat().resolvedOptions().timeZone)
-  fireEvent.change(timezone, { target: { value: "America/New_York" } })
+  expect(within(dialog).queryByRole("textbox", { name: "时区" })).not.toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole("button", { name: "保存" }))
 
-  await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith("scheduled_controlled_1", expect.objectContaining({ timezone: "America/New_York" })))
+  await waitFor(() => expect(onUpdateTask).toHaveBeenCalledWith("scheduled_controlled_1", expect.objectContaining({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })))
 })
 
 it("列表视图支持暂停、编辑和删除，并把视图写回 URL", async () => {

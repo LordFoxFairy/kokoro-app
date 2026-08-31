@@ -434,8 +434,8 @@ export function KokoroLibrarySurface({
           <Empty className={styles.empty} data-testid="library-empty-state">
             <EmptyHeader>
               <EmptyMedia variant="default" className={styles.emptyMedia}><Archive aria-hidden="true" /></EmptyMedia>
-              <EmptyTitle id="library-empty-title">{emptyTitle}</EmptyTitle>
-              <EmptyDescription>{emptyDescription}</EmptyDescription>
+              <EmptyTitle id="library-empty-title" className={styles.emptyTitle}>{emptyTitle}</EmptyTitle>
+              <EmptyDescription className={styles.emptyDescription}>{emptyDescription}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button

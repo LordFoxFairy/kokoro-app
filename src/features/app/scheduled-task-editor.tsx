@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { useLocale, useT } from "@/i18n/context"
+import { useT } from "@/i18n/context"
 
 import styles from "./scheduled-task-editor.module.css"
 
@@ -78,20 +78,6 @@ function browserTimezone(): string {
   }
 }
 
-function timezoneLabel(locale: string): string {
-  switch (locale) {
-    case "zh": return "时区"
-    case "ja": return "タイムゾーン"
-    case "ko": return "시간대"
-    case "es": return "Zona horaria"
-    case "fr": return "Fuseau horaire"
-    case "de": return "Zeitzone"
-    case "pt": return "Fuso horário"
-    case "ru": return "Часовой пояс"
-    default: return "Timezone"
-  }
-}
-
 function ScheduledTaskEditorContent({
   brandName,
   initialPrompt = "",
@@ -100,13 +86,15 @@ function ScheduledTaskEditorContent({
   onSave,
   returnFocusRef,
 }: ScheduledTaskEditorContentProps) {
-  const { locale } = useLocale()
   const t = useT()
   const titleRef = useRef<HTMLInputElement | null>(null)
   const [title, setTitle] = useState(() => initialTask?.title ?? "")
   const [frequency, setFrequency] = useState<"daily" | "weekly">(() => initialTask?.frequency === "weekly" ? "weekly" : "daily")
   const [time, setTime] = useState(() => initialTask?.time ?? "08:00")
-  const [timezone, setTimezone] = useState(() => initialTask?.timezone || browserTimezone())
+  // Manus keeps timezone implicit in this editor. Preserve the API field for
+  // the backend contract, but derive it from the browser rather than exposing
+  // a second scheduling control that changes the reference geometry.
+  const timezone = initialTask?.timezone || browserTimezone()
   const [expires, setExpires] = useState(() => Boolean(initialTask?.expiresAt))
   const [expiryDate, setExpiryDate] = useState(() => initialTask?.expiresAt ?? "")
   const [prompt, setPrompt] = useState(() => initialTask?.prompt ?? initialPrompt)
@@ -117,11 +105,11 @@ function ScheduledTaskEditorContent({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!title.trim() || !prompt.trim() || !timezone.trim() || (expires && !expiryDate) || saving || !onSave) return
+    if (!title.trim() || !prompt.trim() || (expires && !expiryDate) || saving || !onSave) return
     setSaving(true)
     setSaveError(false)
     try {
-      await onSave({ title: title.trim(), prompt: prompt.trim(), frequency, time, timezone: timezone.trim(), expiresAt: expires ? expiryDate : undefined, autoApprove })
+      await onSave({ title: title.trim(), prompt: prompt.trim(), frequency, time, timezone, expiresAt: expires ? expiryDate : undefined, autoApprove })
       onClose()
     } catch {
       // Keep the editor open so a live persistence failure is recoverable and
@@ -175,10 +163,6 @@ function ScheduledTaskEditorContent({
                   <ChevronDown aria-hidden="true" />
                 </label>
               </div>
-              <Field className={styles.timezoneField}>
-                <FieldLabel htmlFor="scheduled-task-timezone">{timezoneLabel(locale)}</FieldLabel>
-                <Input id="scheduled-task-timezone" aria-label={timezoneLabel(locale)} value={timezone} onChange={(event) => setTimezone(event.target.value)} autoComplete="off" />
-              </Field>
               <Field orientation="horizontal" className={styles.expiryField}>
                 <Checkbox id="scheduled-task-expiry" checked={expires} onCheckedChange={(checked) => setExpires(checked === true)} />
                 <FieldLabel htmlFor="scheduled-task-expiry">{t("firstSite.setExpiryDate")}</FieldLabel>
@@ -205,7 +189,7 @@ function ScheduledTaskEditorContent({
         {saveError ? <p className={styles.saveError} role="alert">{t("firstSite.runtimeUnavailable")}</p> : null}
         <DialogFooter className={styles.footer}>
           <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-          <Button type="submit" disabled={!onSave || !title.trim() || !prompt.trim() || !timezone.trim() || (expires && !expiryDate) || saving} aria-busy={saving}>
+          <Button type="submit" disabled={!onSave || !title.trim() || !prompt.trim() || (expires && !expiryDate) || saving} aria-busy={saving}>
             {saving ? <Spinner aria-hidden="true" /> : null}
             {t("firstSite.save")}
           </Button>

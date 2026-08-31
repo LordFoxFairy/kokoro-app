@@ -21,7 +21,7 @@ import type { HubClient } from "@/hub/client"
 import type { UploadCandidate } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 
-import styles from "./skills-panel.module.css"
+import styles from "./skill-upload-dialog.module.css"
 
 type UploadState =
   | { kind: "idle" }
@@ -143,7 +143,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className={styles.uploadDialog}
+        className={styles.dialog}
         overlayClassName={styles.dialogOverlay}
         closeLabel={t("skills.uploadClose")}
         data-testid="skill-upload-dialog"
@@ -155,7 +155,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
           window.requestAnimationFrame(() => target.focus({ preventScroll: true }))
         }}
       >
-        <DialogHeader className={styles.uploadDialogHeader}>
+        <DialogHeader className={styles.header}>
           <DialogTitle>{t("skills.uploadTitle")}</DialogTitle>
           <DialogDescription className="sr-only">{t("skills.uploadHint")}</DialogDescription>
         </DialogHeader>
@@ -166,7 +166,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
               ref={inputRef}
               type="file"
               accept={ARCHIVE_ACCEPT}
-              className={styles.uploadInput}
+              className={styles.input}
               data-testid="skill-upload-input"
               tabIndex={-1}
               aria-hidden="true"
@@ -179,7 +179,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
             <Button
               type="button"
               variant="ghost"
-              className={styles.uploadDropzone}
+              className={styles.dropzone}
               data-dragging={dragging || undefined}
               onClick={() => inputRef.current?.click()}
               onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
@@ -194,17 +194,17 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
               <span>{t("skills.uploadDrop")}</span>
             </Button>
             {state.kind === "error" ? (
-              <Alert variant="destructive" className={styles.uploadDialogError} role="alert">
+              <Alert variant="destructive" className={styles.error} role="alert">
                 <AlertDescription>{t("skills.uploadError")}</AlertDescription>
               </Alert>
             ) : null}
-            <section className={styles.uploadRequirements} aria-labelledby="skill-upload-requirements">
+            <section className={styles.requirements} aria-labelledby="skill-upload-requirements">
               <h3 id="skill-upload-requirements">{t("skills.uploadRequirements")}</h3>
               <ul>
                 <li>{t("skills.uploadRequirementZip")}</li>
                 <li>{t("skills.uploadRequirementYaml")}</li>
               </ul>
-              <p className={styles.uploadLearn}>
+              <p className={styles.learn}>
                 <ExternalLink aria-hidden="true" />
                 <a href="https://agentskills.io/what-are-skills" target="_blank" rel="noreferrer">{t("skills.uploadLearn")}</a>
                 <span aria-hidden="true">{t("skills.uploadOr")}</span>
@@ -215,15 +215,15 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
         ) : null}
 
         {state.kind === "previewing" ? (
-          <div className={styles.uploadDialogProgress} role="status" aria-live="polite">
+          <div className={styles.progress} role="status" aria-live="polite">
             <Spinner aria-hidden="true" />
             <span>{t("skills.uploadPreviewing")}</span>
           </div>
         ) : null}
 
         {state.kind === "preview" || state.kind === "confirming" ? (
-          <div className={styles.uploadPreview}>
-            <p className={styles.uploadPreviewHint}>{t("skills.uploadChooseCandidates", { namespace: state.namespace })}</p>
+          <div className={styles.preview}>
+            <p className={styles.previewHint}>{t("skills.uploadChooseCandidates", { namespace: state.namespace })}</p>
             {state.candidates.length === 0 ? (
               <Empty className={styles.emptyState} data-testid="skill-upload-empty">
                 <EmptyHeader>
@@ -277,7 +277,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
         ) : null}
 
         {state.kind === "done" ? (
-          <div className={styles.uploadDone} role="status" aria-live="polite">
+          <div className={styles.done} role="status" aria-live="polite">
             <Upload aria-hidden="true" />
             <strong>{t("skills.uploadComplete")}</strong>
             <ul>
@@ -287,13 +287,13 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
         ) : null}
 
         {state.kind === "preview" || state.kind === "confirming" ? (
-          <DialogFooter className={styles.uploadDialogFooter}>
+          <DialogFooter className={styles.footer}>
             <Button type="button" disabled={state.kind === "confirming" || state.selected.size === 0} aria-busy={state.kind === "confirming"} onClick={() => void confirm()}>
               {state.kind === "confirming" ? <><LoaderCircle className="animate-spin" aria-hidden="true" />{t("skills.publishing")}</> : t("skills.publish")}
             </Button>
           </DialogFooter>
         ) : state.kind === "done" ? (
-          <DialogFooter className={styles.uploadDialogFooter}>
+          <DialogFooter className={styles.footer}>
             <Button type="button" onClick={() => handleOpenChange(false)}>{t("skills.uploadDone")}</Button>
           </DialogFooter>
         ) : null}
