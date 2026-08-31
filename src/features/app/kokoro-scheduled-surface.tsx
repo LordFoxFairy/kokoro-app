@@ -268,7 +268,14 @@ export function KokoroScheduledSurface({
   useEffect(() => {
     const onViewChange = () => setView(readScheduledView())
     window.addEventListener("popstate", onViewChange)
-    return () => window.removeEventListener("popstate", onViewChange)
+    // Mounted catalog surfaces navigate through the shared shell without a
+    // document reload. Keep the tab projection in sync with those same-shell
+    // history updates as well as browser back/forward.
+    window.addEventListener("kokoro:surface-navigation", onViewChange)
+    return () => {
+      window.removeEventListener("popstate", onViewChange)
+      window.removeEventListener("kokoro:surface-navigation", onViewChange)
+    }
   }, [])
 
   const canCreate = fixtureMode

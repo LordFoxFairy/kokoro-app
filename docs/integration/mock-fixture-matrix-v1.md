@@ -732,7 +732,7 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 本地开发由 AppFrame 的 `voicePreview={preview || process.env.NODE_ENV !== "production"}` 选择确定性 preview；生产默认
 使用浏览器原生识别。两条路径都不新增语音 API。只有用户显式提交已经写入 draft 的文本时，才进入既有
-`POST /api/tasks/{task_id}/messages` 会话消息契约；没有 `audio`、音频 URL、设备权限或录音 blob 字段。
+`POST /api/session/sessions/{session_id}/messages` 会话消息契约；没有 `audio`、音频 URL、设备权限或录音 blob 字段。
 
 验证：`pnpm exec vitest run tests/ui/composer.test.tsx tests/ui/use-voice-input.test.tsx`（56/56）；本节只覆盖桌面 Web
 与合成 fixture，不覆盖手机端，也不调用 Manus API。

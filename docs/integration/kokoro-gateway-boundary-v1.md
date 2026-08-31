@@ -67,7 +67,7 @@ Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已�
 | `POST` | `/api/session/sessions/{session_id}/messages` | 创建用户消息并启动/续接 Run |
 | `GET` | `/api/session/sessions/{session_id}` | 获取会话快照 |
 | `GET` | `/api/session/sessions/{session_id}/events` | 订阅 SSE 事件 |
-| `POST` | `/api/session/sessions/{session_id}/runs/{run_id}/control` | 取消、暂停或恢复 Run |
+| `POST` | `/api/session/sessions/{session_id}/runs/{run_id}/control` | 取消或恢复 HITL Run |
 | `PATCH` | `/api/session/sessions/{session_id}/title` | 修改会话标题 |
 | `DELETE` | `/api/session/sessions/{session_id}` | 删除会话 |
 | `GET` | `/api/session/models` | 获取模型列表 |
@@ -145,7 +145,7 @@ SSE 聚合成一次性 JSON；断线重连依靠 event watermark/Last-Event-ID �
 |---|---|---|---|
 | 页面、Composer、胶囊、导航、响应式 | 负责 | 不负责 | 不负责 |
 | 同源 `/api/session/*` | 暴露浏览器入口并保持契约 | 提供业务 upstream | 不直接暴露给浏览器 |
-| 登录信封与请求来源 | 只发送同源 cookie；不读内部 token | 解析受信身份并做权限/域名校验 | 执行 runtime 级授权 |
+| 登录信封与请求来源 | 只发送同源 cookie；可带关联用 request id；不读内部 token | 解析受信身份并做权限/域名校验 | 执行 runtime 级授权 |
 | 消息、Run、SSE、HITL | 调用契约并渲染状态 | 业务编排、幂等、错误映射、审计 | 模型/工具执行和事件产生 |
 | Skills/MCP/Project 业务规则 | 展示与提交 public contract | 跨产品编排和授权 | 运行时消费配置 |
 | 数据库、队列、内部凭据 | 不持有 | 负责网关侧业务存储/凭据边界 | 负责执行侧状态 |

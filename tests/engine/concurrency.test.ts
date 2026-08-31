@@ -8,7 +8,7 @@ import { SessionClientError } from "@/engine/client"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 
 import { makeEvent, makeSnapshot, resetFixtureSeq } from "../core/fixtures"
-import { createFakeClient, createMemoryStorage, settle, type FakeClient } from "./fakes"
+import { createFakeClient, createMemoryStorage, makeReceipt, settle, type FakeClient } from "./fakes"
 
 let client: FakeClient
 let storage: ReturnType<typeof createMemoryStorage<ConversationStore>>
@@ -112,6 +112,23 @@ describe("并发与跨-tab 回归（866965c）", () => {
 
     // 守卫：迟到的 steer 失败通知不得落在 conv_2 上。
     expect(engine.getSnapshot().notice?.key).not.toBe("steer.sendFailed")
+  })
+
+  it("steer 迟到成功在切走会话后到达：不把旧回执吸收到新会话", async () => {
+    buildEngine()
+    await reachStreaming()
+    let resolveSteer: (receipt: ReturnType<typeof makeReceipt>) => void = () => {}
+    client.nextCreate = () => new Promise((resolve) => { resolveSteer = resolve })
+
+    engine.submit("steer me")
+    const oldConversationId = engine.getSnapshot().store?.activeId
+    engine.newConversation()
+    resolveSteer(makeReceipt("late_steer_run"))
+    await settle()
+
+    expect(engine.getSnapshot().store?.activeId).not.toBe(oldConversationId)
+    expect(engine.getSnapshot().thread.messages).toHaveLength(0)
+    expect(engine.getSnapshot().notice).toBeNull()
   })
 
   it("steer 失败在原会话（未切走）：通知照常可见——对照,证明上面的隔离来自守卫", async () => {

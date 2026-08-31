@@ -58,8 +58,11 @@ BFF 在 service auth/allowlist 保护的上游连接上只写入单个 `Forwarde
 ## 4. 环境文件与域名
 
 ```dotenv
-# .env.local / .env.test
+# .env.local
 KOKORO_DOMAIN=dev.kokoro.localhost
+
+# .env.test
+KOKORO_DOMAIN=test.kokoro.localhost
 
 # .env.production 或 Docker/Cloudflare runtime
 KOKORO_DOMAIN=app.example.com

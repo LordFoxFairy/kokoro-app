@@ -56,7 +56,7 @@ request id，以及向 Session/Agent runtime 的服务间调用。`kokoro-app` �
 | 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
 | 浏览器同源路径 | `/api/session/*` | 通过网关适配上游 | 不直接暴露 |
 | 登录信封、权限上下文、域名绑定 | 不读取内部 token；仅发送同源请求 | 服务端解析并校验 | 执行 runtime 级授权 |
-| 消息、Run、SSE、暂停/恢复/取消 | 调用稳定契约并渲染状态 | 编排、幂等、错误和协议转换 | 生成模型/工具执行事件 |
+| 消息、Run、SSE、取消与 HITL 恢复 | 调用稳定契约并渲染状态 | 编排、幂等、错误和协议转换 | 生成模型/工具执行事件 |
 | 业务数据与跨产品规则 | 不持有 | 负责 | 负责执行侧状态 |
 
 迁移规则：未来 gateway 接入时，优先只替换当前 BFF 后面的 upstream；浏览器继续使用本版
@@ -121,7 +121,7 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 2. `POST/PUT/PATCH/DELETE` 会执行同源 Origin 检查；Origin 与请求 Host 不一致返回 `403 {"error":"forbidden_origin"}`。
 3. 从 HttpOnly `kokoro_session` cookie 读取 sealed envelope；缺失或失效返回 `401 {"error":"unauthenticated"}`。
 4. 服务端注入 `Authorization: Bearer <runtime_jwt>`、`x-kokoro-service: web-bff`、可选 `x-kokoro-internal-secret`、`x-kokoro-request-id`。
-5. 只接收浏览器的 `accept`、`content-type`、`last-event-id`；不转发 cookie。
+5. 业务头只接收并透传 `accept`、`content-type`、`last-event-id`；`x-kokoro-request-id` 可由浏览器作为可选关联值提供，缺失时由 BFF 生成，BFF 始终将其写入上游；不转发 cookie。
 6. 上游不可达返回 `502 {"error":"session_unreachable"}`；上游 HTTP 状态、JSON、SSE、二进制 body 按原状态流式回传。
 7. access/refresh 即将过期时，BFF 续签并把新的 sealed cookie 通过 `Set-Cookie` 写回浏览器。
 
@@ -133,7 +133,7 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 2. `KOKORO_HUB_BASE_URL` 缺失返回 `503 {"error":"hub_not_configured"}`。
 3. mutation 的 Origin 不匹配返回 `403 {"error":"forbidden_origin"}`；无有效 sealed session 返回 `401 {"error":"unauthenticated"}`。
 4. 服务端从 envelope 派生并覆盖身份头：`x-kokoro-namespace`、`x-kokoro-user-id`；namespace 不接受浏览器 query/body/header 选择。
-5. 注入 `x-kokoro-service: web-bff`、可选 internal secret、`x-kokoro-request-id`；只转发 `accept`、`content-type`、`idempotency-key`。
+5. 注入 `x-kokoro-service: web-bff`、可选 internal secret、`x-kokoro-request-id`；业务头只转发 `accept`、`content-type`、`idempotency-key`；`x-kokoro-request-id` 可由浏览器作为可选关联值提供，缺失时由 BFF 生成，BFF 始终将其写入上游。
 6. 上游目标固定为 `${KOKORO_HUB_BASE_URL}/hub/<path>`；上游不可达返回 `502 {"error":"hub_unreachable"}`。
 7. Hub 成功/错误体由 Hub client 解析；canonical Hub 成功包为 `{"data": ...,"requestId"?}`，canonical Hub 错误包为 `{"error":{"code":string,"message":string},"requestId"?}`。
 
@@ -282,6 +282,13 @@ Chat client 的 base 固定为 `/api/session`。Session contract 使用 flat JSO
 - 错误：`{error: string}`
 
 BFF 只负责认证、代理和流式转发；上游 session service 负责这些 flat contract 的最终返回。
+
+浏览器侧不为 Direct Chat 和项目 Chat 创建两套 transport：`/app` 与 `/app/project/{project_ref}`
+都由 `AppFrame` 挂载，`projectRef` 只用来选择 scope；`browserEngine`/`browserListClient`
+继续复用同一个 `SessionClient` 接口和 `/api/session` base。未显式启用 Preview 时，页面级 client
+是 `createSessionClient({baseUrl: "/api/session"})`；显式 Preview 才切到内存
+`createPreviewClient`。项目上下文的 `/api/hub/projects/{project_ref}/*` 请求属于 Project
+projection，不是另一套 Chat transport，也不改变 Session message/SSE/control 契约。
 
 ### 5.2 HTTP 接口
 

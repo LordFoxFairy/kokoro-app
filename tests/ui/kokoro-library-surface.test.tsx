@@ -54,6 +54,20 @@ it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同�
   expect(screen.getByText("研究摘要.pdf")).toBeInTheDocument()
 })
 
+it("已挂载时收到站内 surface 导航事件会重新读取资料库 URL 状态", async () => {
+  window.history.replaceState(null, "", "/app/library?type=slides&view=list&favorites=1&q=研究")
+  renderLibrary()
+  await waitFor(() => expect(screen.getByTestId("library-empty-state")).toBeInTheDocument())
+
+  window.history.pushState(null, "", "/app/library")
+  fireEvent(window, new Event("kokoro:surface-navigation"))
+
+  await waitFor(() => expect(screen.getByTestId("library-artifacts")).toHaveAttribute("data-view", "grid"))
+  expect(screen.getByRole("radio", { name: "全部" })).toHaveAttribute("data-state", "on")
+  expect(screen.getByRole("textbox", { name: "搜寻档案" })).toHaveValue("")
+  expect(screen.getByRole("button", { name: "仅显示收藏" })).toHaveAttribute("aria-pressed", "false")
+})
+
 it("窄桌面分类条是明确的横向滚动区域，支持键盘滚动并显示边缘提示", () => {
   renderLibrary()
   const viewport = screen.getByTestId("library-filter-scroll")

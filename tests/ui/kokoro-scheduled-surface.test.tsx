@@ -55,6 +55,26 @@ it("关闭编辑器清理 hash，再次打开时重置表单", () => {
   expect(screen.getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" })).toHaveValue("")
 })
 
+it("已挂载时收到站内 surface 导航事件会重新读取日历/任务视图", () => {
+  window.history.replaceState(null, "", "/app/scheduled?tab=list")
+  render(
+    <LocaleProvider>
+      <KokoroScheduledSurface
+        brandName="Kokoro"
+        preview
+        tasks={[{ id: "scheduled_navigation_1", title: "导航测试", frequency: "daily", time: "08:00" }]}
+      />
+    </LocaleProvider>,
+  )
+
+  expect(screen.getByRole("tab", { name: "任务" })).toHaveAttribute("aria-selected", "true")
+  window.history.pushState(null, "", "/app/scheduled?tab=calendar")
+  fireEvent(window, new Event("kokoro:surface-navigation"))
+
+  expect(screen.getByRole("tab", { name: "日历" })).toHaveAttribute("aria-selected", "true")
+  expect(screen.getByTestId("scheduled-calendar-view")).toBeInTheDocument()
+})
+
 it("填写标题后保存结构化排程数据", () => {
   const onSave = renderScheduled()
   fireEvent.click(screen.getByRole("button", { name: /将手动流程转为定时自动化管道/ }))

@@ -266,7 +266,14 @@ export function KokoroLibrarySurface({
       setFavoritesOnly(next.favoritesOnly)
     }
     window.addEventListener("popstate", applyUrlState)
-    return () => window.removeEventListener("popstate", applyUrlState)
+    // The rail uses a same-shell history event to avoid remounting AppFrame.
+    // Re-read the complete filter state so a route change cannot leave a
+    // stale type/query/view/favorites projection behind the new URL.
+    window.addEventListener("kokoro:surface-navigation", applyUrlState)
+    return () => {
+      window.removeEventListener("popstate", applyUrlState)
+      window.removeEventListener("kokoro:surface-navigation", applyUrlState)
+    }
   }, [])
 
   const load = useCallback(async () => {
