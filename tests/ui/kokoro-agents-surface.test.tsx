@@ -33,7 +33,7 @@ it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {
 
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("部署你的 Agent 用于")
   expect(screen.getByRole("button", { name: "开始体验" })).toBeInTheDocument()
-  expect(screen.getAllByRole("article")).toHaveLength(4)
+  expect(screen.getAllByTestId("agent-feature-card")).toHaveLength(4)
   expect(screen.getByRole("heading", { name: "品牌一致性的 AI 身份" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "持久的记忆与电脑" })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "自定义技能" })).toBeInTheDocument()
@@ -46,6 +46,24 @@ it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {
   expect(screen.queryByRole("link", { name: "返回工作区" })).toBeNull()
   expect(screen.queryByText("AI Agent")).toBeNull()
   expect(screen.queryByText("Always available")).toBeNull()
+})
+
+it("能力卡是可操作的 Agent 设置入口，并保持 CTA 的展开状态", async () => {
+  renderAgents()
+
+  const identityCard = screen.getByRole("button", { name: /品牌一致性的 AI 身份/ })
+  expect(identityCard).toHaveAttribute("aria-haspopup", "dialog")
+  expect(identityCard).toHaveAttribute("aria-expanded", "false")
+
+  identityCard.focus()
+  fireEvent.click(identityCard)
+
+  const dialog = await screen.findByRole("dialog")
+  expect(identityCard).toHaveAttribute("aria-expanded", "true")
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭 Agent 设置" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+  expect(identityCard).toHaveAttribute("aria-expanded", "false")
 })
 
 it("开始体验打开连接弹窗，并可切换 Telegram、LINE 与 Slack", async () => {
@@ -188,8 +206,17 @@ it("桌面能力卡布局由 agents-surface 容器宽度决定，而不是 point
   const css = readFileSync("src/features/app/kokoro-agents-surface.module.css", "utf8")
 
   expect(css).toContain("@container agents-surface (min-width: 42rem)")
-  expect(css).toContain("@container agents-surface (min-width: 60rem)")
+  expect(css).not.toContain("@container agents-surface (min-width: 60rem)")
   expect(css).not.toContain("(pointer: fine)")
+})
+
+it("连接平台面板只保留一份 TabsContent 结构", () => {
+  const source = readFileSync("src/features/app/kokoro-agents-surface.tsx", "utf8")
+  const openingTags = source.match(/<TabsContent key=\{value\} value=\{value\} className=\{styles\.platformPanel\}>/g) ?? []
+  const closingTags = source.match(/<\/TabsContent>/g) ?? []
+
+  expect(openingTags).toHaveLength(1)
+  expect(closingTags).toHaveLength(1)
 })
 
 it("prefers-reduced-motion 时不建立动态文案轮换计时器", () => {

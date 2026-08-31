@@ -165,6 +165,140 @@
   color: inherit;
 }
 
+/* Creation intent capsules share one geometry contract across Website, Slides,
+ * Design, Game, and App. The intent only changes the semantic glyph; it must
+ * never introduce a second button style or move the neighboring controls. */
+.creationIntentPill {
+  display: inline-flex;
+  width: max-content;
+  min-width: 2rem;
+  max-width: min(14rem, 100%);
+  height: 2rem;
+  min-height: 2rem;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid rgb(0 129 242 / 28%);
+  border-radius: 999px;
+  background: rgb(0 129 242 / 8%);
+  padding: 0.375rem 0.5625rem 0.375rem 0.4375rem;
+  color: rgb(0 129 242);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.3125rem;
+  letter-spacing: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.creationIntentPill[data-intent="website"],
+.creationIntentPill[data-intent="presentation"],
+.creationIntentPill[data-intent="design"],
+.creationIntentPill[data-intent="game"],
+.creationIntentPill[data-intent="app"] {
+  /* Keep the variant selector explicit so future semantic skinning cannot
+   * accidentally diverge the current shared capsule contract. */
+  border-color: rgb(0 129 242 / 28%);
+  background: rgb(0 129 242 / 8%);
+}
+
+.creationIntentPill:hover {
+  background: rgb(0 129 242 / 12%);
+  color: rgb(0 104 204);
+}
+
+.creationIntentIconSlot {
+  display: inline-flex;
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.creationIntentGlyph,
+.creationIntentCloseButton {
+  position: absolute;
+}
+
+.creationIntentGlyph {
+  inset: 0;
+  width: 1rem;
+  height: 1rem;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+
+/* The visible icon slot is 16px, while the actual close control is a centered
+ * 24px hit area. Extending four pixels on each side makes the X easy to hit
+ * without changing the capsule's measured width or the toolbar rhythm. */
+.creationIntentCloseButton {
+  top: -0.25rem;
+  left: -0.25rem;
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  padding: 0.25rem;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+  z-index: 1;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.creationIntentPill:hover .creationIntentGlyph,
+.creationIntentPill:focus-within .creationIntentGlyph {
+  opacity: 0;
+}
+
+.creationIntentPill:hover .creationIntentCloseButton,
+.creationIntentPill:focus-within .creationIntentCloseButton {
+  opacity: 1;
+}
+
+.creationIntentCloseButton:hover {
+  background: rgb(0 129 242 / 8%);
+}
+
+.creationIntentCloseButton:focus-visible {
+  outline: 2px solid rgb(0 129 242 / 58%);
+  outline-offset: 1px;
+}
+
+.creationIntentCloseIcon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  pointer-events: none;
+  stroke-width: 1.75;
+}
+
+.creationIntentLabel {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creationIntentGlyph,
+  .creationIntentCloseButton {
+    transition: none;
+  }
+}
+
 .voiceInput {
   width: 2rem;
   height: 2rem;

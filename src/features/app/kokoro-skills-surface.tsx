@@ -145,10 +145,17 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
   }, [catalog.data?.skills, category, importedSkills, query])
 
   const startChat = useCallback((prompt: string) => {
-    // Standalone catalog has no Composer slot. Persist the prompt before
-    // returning to the direct inbox, where the shared shell reads it back.
-    if (typeof window !== "undefined") {
+    // When the catalog is mounted inside the app shell, hand the prompt to
+    // the shared Composer first. Writing only the pending-draft key leaves an
+    // active conversation looking empty because its draft is keyed by id.
+    if (onPrompt) {
+      onPrompt(prompt)
+    } else if (typeof window !== "undefined") {
+      // The standalone/SSR fallback has no Composer callback, so preserve the
+      // prompt across the route transition using the existing draft store.
       stashPendingDraft(prompt)
+    }
+    if (typeof window !== "undefined") {
       navigateMountedSurface("/app")
       // The mounted AppFrame owns the draft controller. The navigation event
       // commits the chat surface synchronously; no full document reload or

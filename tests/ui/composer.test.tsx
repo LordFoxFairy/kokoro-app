@@ -1,12 +1,12 @@
 // Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（wire "provider:name"）+ 首条锁定态 + 空候选隐藏。
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { createRef, type FormEvent } from "react"
+import { createRef, type FormEvent, useState } from "react"
 
 import type { AgentCandidate, ModelCandidate } from "@/contract/http"
 import { LocaleProvider } from "@/i18n/context"
 import { Composer } from "@/ui/composer/composer"
-import { CreationIntentPill } from "@/ui/composer/creation-intent-pill"
+import { CreationIntentPill, type CreationIntent } from "@/ui/composer/creation-intent-pill"
 
 const MODELS: ModelCandidate[] = [
   { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true },
@@ -129,6 +129,9 @@ describe("Composer model selector", () => {
     const closeIcon = closeButton.querySelector('[data-testid="creation-intent-close"]')
     expect(closeIcon).toBeInTheDocument()
     expect(closeIcon).toHaveClass("lucide-x")
+    expect(closeButton).toHaveAttribute("type", "button")
+    expect(closeButton).toHaveAttribute("data-hit-area", "24")
+    expect(closeButton).toHaveAttribute("aria-keyshortcuts", "Enter Space")
 
     cleanup()
     renderComposer()
@@ -144,6 +147,31 @@ describe("Composer model selector", () => {
     expect(intent.querySelector(".lucide-smartphone")).toBeNull()
     expect(intent).toHaveAttribute("data-slot", "creation-intent")
     expect(intent).toHaveAttribute("data-intent", "app")
+  })
+
+  it.each([
+    ["website", "Websites", "creation-intent-glyph"],
+    ["presentation", "Slides", "creation-intent-glyph"],
+    ["design", "Design", "creation-intent-glyph"],
+    ["game", "Games", "creation-intent-glyph"],
+    ["app", "Develop app", "creation-intent-glyph"],
+  ] as const)("%s 变体复用同一胶囊结构和关闭命中区", (intent, label, glyphTestId) => {
+    const onDismiss = vi.fn()
+    render(<CreationIntentPill intent={intent} label={label} onDismiss={onDismiss} />)
+
+    const capsule = screen.getByTestId("creation-intent-pill")
+    const closeButton = screen.getByTestId("creation-intent-close-button")
+
+    expect(capsule).toHaveAttribute("data-intent", intent)
+    expect(capsule).toHaveAttribute("data-slot", "creation-intent")
+    expect(screen.getByTestId(glyphTestId)).toHaveAttribute("aria-hidden", "true")
+    expect(closeButton).toHaveAttribute("data-slot", "creation-intent-close")
+    expect(closeButton).toHaveAttribute("data-hit-area", "24")
+    expect(closeButton).toBeEnabled()
+
+    fireEvent.click(closeButton)
+
+    expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
   it("设计创作意图使用对应图标，并在同一工具栏显示图像模型", () => {
@@ -473,6 +501,68 @@ describe("CreationIntentPill dismissal", () => {
     fireEvent.click(closeButton)
     expect(onDismiss).toHaveBeenCalledTimes(1)
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it("五种创作类型共享统一的语义状态与 24px 关闭命中槽", () => {
+    const intents = ["website", "presentation", "design", "game", "app"] as const
+    const labels = {
+      website: "网站",
+      presentation: "投影片",
+      design: "设计",
+      game: "游戏",
+      app: "应用",
+    } as const
+
+    render(
+      <div>
+        {intents.map((intent) => (
+          <CreationIntentPill
+            key={intent}
+            intent={intent}
+            label={labels[intent]}
+            dismissLabel={`关闭${labels[intent]}`}
+            onDismiss={vi.fn()}
+          />
+        ))}
+      </div>,
+    )
+
+    const capsules = screen.getAllByTestId("creation-intent-pill")
+    expect(capsules).toHaveLength(intents.length)
+
+    capsules.forEach((capsule, index) => {
+      const closeButton = screen.getAllByTestId("creation-intent-close-button")[index]
+      expect(capsule).toHaveAttribute("data-state", "selected")
+      expect(closeButton).toHaveAttribute("type", "button")
+      expect(closeButton).toHaveAttribute("data-hit-area", "24")
+      expect(closeButton).toHaveAttribute("aria-label", `关闭${labels[intents[index]!]}`)
+      expect(closeButton).toHaveAttribute("title", `关闭${labels[intents[index]!]}`)
+      expect(closeButton.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
+    })
+  })
+
+  it("受控取消会卸载胶囊而不留下空的布局槽", () => {
+    function ControlledIntent() {
+      const [intent, setIntent] = useState<CreationIntent | null>("website")
+
+      return (
+        <div data-testid="intent-toolbar">
+          {intent ? (
+            <CreationIntentPill
+              intent={intent}
+              label="网站"
+              onDismiss={() => setIntent(null)}
+            />
+          ) : null}
+        </div>
+      )
+    }
+
+    render(<ControlledIntent />)
+    fireEvent.click(screen.getByTestId("creation-intent-close-button"))
+
+    expect(screen.queryByTestId("creation-intent-pill")).toBeNull()
+    expect(screen.getByTestId("intent-toolbar")).toBeEmptyDOMElement()
   })
 })
 

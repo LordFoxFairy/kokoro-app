@@ -255,6 +255,7 @@ canonical BFF。后端 Agent 接入时以 3.1–3.6 的路径为唯一新 Client
 | Settings | `/api/settings/*` | 有 catch-all，当前转发 Hub，需逐项 contract hardening | `/api/hub/settings/*` |
 | Projects | `/api/projects*` | route 尚未接入 | `/api/hub/projects/*` |
 | Tasks | `/api/tasks*` | route 尚未接入 | `/api/session/sessions/*` |
+| Agent connection setup | `/api/agents/connections/setup?platform=...` | Client、preview fixture 和 UI 闭环已接入；live BFF route 待后端 endpoint 接通 | `src/agents/preview-client.ts` |
 | Scheduled tasks | `/api/scheduled-tasks*` | route 尚未接入；预览页可使用 fixture/localStorage | project Hub 路径 / preview fixture |
 | Skills | `/api/skills*` | route 尚未接入 | `/api/hub/self/skills/*` |
 | Connectors | `/api/connectors*` | route 尚未接入 | `/api/hub/self/connectors/*` |
@@ -263,6 +264,50 @@ canonical BFF。后端 Agent 接入时以 3.1–3.6 的路径为唯一新 Client
 “route 尚未接入”是待实现状态，不是失败响应契约。实现顺序应先建立统一 BFF context、envelope、
 idempotency 和 error mapping，再逐组把 compatibility client 迁移到 canonical path；在迁移完成前，
 前端不得以静态数据或 preview 成功态掩盖 live BFF 的 `401/403/404/409/503`。
+
+### 3.9 Chat + Agent 闭环验收边界（当前子仓库）
+
+本节是 `kokoro` 独立 Web 子仓库的当前闭环清单。它只描述本仓库的浏览器壳层、typed client、preview
+fixture 和 BFF contract；不把其它 Web、Admin 或服务仓库的源码、路由、fixture、依赖或运行状态带入本仓库。
+
+| Flow | 浏览器入口 | 成功路径 | 当前验收事实 | live 接入边界 |
+| --- | --- | --- | --- | --- |
+| Direct Chat | `/app` Composer | 填写 draft → 显式发送 → `/app?conversation=conv_*` → timeline 显示 user/assistant projection | preview transport 已闭环，draft、URL、timeline 与 loading/error 状态均有测试 | 生产沿用 `/api/session` BFF；消息、SSE、幂等和错误 envelope 不因 preview 改变 |
+| Agent setup | `/app/agents` → Start/feature card | 打开 setup Dialog → Telegram/LINE/Slack tab → loading → QR/continue projection → Retry/close/Escape 恢复焦点 | preview client 已闭环，固定 QR 槽位、状态和 stale response 有测试 | canonical `GET /api/agents/connections/setup?platform=...`；route 接通前保留明确 live error，不伪造成功 |
+| Agent navigation | rail Agent | 点击后只进入 `/app/agents`，保持同一 AppFrame/rail，不调用 new-chat | route、active marker、stable shell 有测试 | 不产生资源 mutation；scope 由服务端 session + `Forwarded` 派生 |
+
+#### Chat/Agent wire 与测试矩阵
+
+浏览器只访问同源 `/api/*`，不携带 `X-Domain`、`KOKORO_DOMAIN`、tenant/site id、namespace、provider
+token 或其它内部身份字段。preview 使用仓库内确定性合成数据；`NEXT_PUBLIC_SESSION_PREVIEW=1` 只开启本地
+展示/transport fixture，不能作为生产成功响应。
+
+```ts
+// Direct Chat：沿用现有 session transport，不增加 preview 专属字段。
+type ChatSubmit = {
+  task_id?: string
+  message: string
+  mode?: "standard" | "thinking"
+  model?: string
+}
+
+// Agent setup：短时 setup ticket 由后端生成，浏览器只消费投影。
+type AgentConnectionSetup = {
+  platform: "telegram" | "line" | "slack"
+  status: "disconnected" | "pending" | "connected" | "expired"
+  qr_value: string
+  continue_url: string
+  expires_at: string
+}
+```
+
+最小闭环断言：
+
+1. Chat 发送必须是显式动作；preview response 只写入当前 direct/project scope，不跨路由恢复旧 surface。
+2. Agent 打开 Dialog 或切换平台只发起一次对应 GET；loading 保留 QR 槽位，错误显示 Retry，不生成假 provider 链接。
+3. Agent 关闭、Escape、切换 rail 或离开 route 后，迟到响应不得更新已卸载 Dialog；Start/入口焦点恢复。
+4. live 未配置时返回明确的 `401/503` 投影；不能以 preview fixture、Manus API 或静态 populated data 掩盖后端未接通。
+5. 所有真实 API 请求由本仓库 BFF 统一注入服务身份和 RFC 7239 `Forwarded: host=<KOKORO_DOMAIN>`；浏览器侧不实现第二套 domain header。
 
 ## 4. 缓存和异步
 

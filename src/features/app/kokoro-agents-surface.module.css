@@ -167,28 +167,28 @@
   border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   border-radius: 1rem;
   background: var(--card);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
   padding: 1rem;
+  text-align: left;
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
 }
+.featureCard:hover { border-color: color-mix(in srgb, var(--foreground) 24%, transparent); background: color-mix(in srgb, var(--card) 96%, var(--foreground)); box-shadow: 0 0.25rem 1rem color-mix(in srgb, var(--foreground) 5%, transparent); }
+.featureCard:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.featureCard:active { background: color-mix(in srgb, var(--card) 92%, var(--foreground)); }
 .featureIcon { display: grid; width: 1.5rem; height: 1.5rem; place-items: center; }
 .featureIcon svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.75; }
 .featureCard h2 { margin: 0 0 0.25rem; font-size: 0.875rem; font-weight: 500; line-height: 1.3125rem; text-wrap: balance; }
 .featureCard p { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; line-height: 1.3125rem; }
 
 /* Manus keeps the Agent capability cards in two columns once the desktop
- * document rail can provide roughly 672px of inline space.  The previous
- * 768px container threshold made a 786px Web viewport fall back to one
- * oversized card column even though the reference still shows two columns.
- * The 42rem threshold leaves the 648px compact reference in one column while
- * matching the 786px and wider desktop states. */
+ * document rail can provide roughly 672px of inline space. Keep that two-up
+ * rhythm on wide desktop too: four narrow cards make the copy wrap early and
+ * no longer match the landing surface's reference composition. */
 @container agents-surface (min-width: 42rem) {
   .featureList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container agents-surface (min-width: 60rem) {
-  .featureList {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

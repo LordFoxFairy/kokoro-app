@@ -319,13 +319,21 @@ export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, cli
 
           <div className={styles.featureList}>
             {FEATURES.map(({ title, description, icon: Icon }) => (
-              <article className={styles.featureCard} key={title}>
+              <button
+                type="button"
+                className={styles.featureCard}
+                key={title}
+                data-testid="agent-feature-card"
+                aria-haspopup="dialog"
+                aria-expanded={setupOpen}
+                onClick={() => setSetupOpen(true)}
+              >
                 <div className={styles.featureIcon}><Icon aria-hidden="true" /></div>
                 <div>
                   <h2>{t(title)}</h2>
                   <p>{t(description)}</p>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
 
