@@ -9,7 +9,7 @@
 | 子仓库 | GitHub | 职责 | 依赖边界 |
 | --- | --- | --- | --- |
 | Web | `LordFoxFairy/kokoro-app` | 桌面 User Web、Composer、胶囊、Rail、页面状态和同源 BFF | 不引入 `src/site`、Gateway 源码或父仓库相对路径 |
-| Gateway | `LordFoxFairy/kokoro-gateway` | 独立 transport gateway、bounded-context 路由、服务认证和流式透传 | 不包含 Web 页面、React 状态、fixture 或共享 workspace package |
+| Gateway | `LordFoxFairy/kokoro-gateway` | 独立统一业务接入网关、bounded-context 路由、服务认证和流式透传 | 不包含 Web 页面、React 状态、fixture 或共享 workspace package |
 
 Web 内的 `packages/i18n`、`packages/web-core`、`packages/tsconfig` 只是本仓库内部的
 workspace package。未来需要跨 site 复用时发布为版本化 registry package；当前不以

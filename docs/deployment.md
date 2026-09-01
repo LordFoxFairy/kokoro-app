@@ -121,8 +121,7 @@ KOKORO_DOMAIN="dev.kokoro.localhost"
 KOKORO_GATEWAY_SHARED_SECRET="<web-bff-gateway-secret>"
 KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
 KOKORO_SESSION_INTERNAL_SECRET="<gateway-session-secret>"
-# 可选：把其它 Web BFF 也统一接到该 Gateway。支付/独立计费使用显式 namespace，避免与
-# Session 的 `/billing/*` 兼容读面冲突。
+# Gateway 后面的领域服务地址。它们只在 kokoro-gateway 进程配置；Web 不需要看到这些地址。
 KOKORO_USER_BASE_URL="http://kokoro-user:4211"
 KOKORO_HUB_BASE_URL="http://kokoro-hub:4251"
 KOKORO_SYSTEM_BASE_URL="http://kokoro-system:4240"
@@ -136,7 +135,8 @@ local/test/prod 只通过各自 env 文件切换。Gateway 会按与 Web 相同�
 部署验收需把两份配置差异视为错误，不把域名做成浏览器 selector。
 
 这两个仓库之间没有 workspace、`file:` 依赖或 `src/site` 复制。Web BFF 继续负责
-HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责业务编排与服务间适配。
+HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责统一业务接入边界、路由编排与服务间适配，
+领域服务仍然拥有各自的业务事实和生命周期。
 Gateway 已实现 Chat/Session 的 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*`、`/billing/*`、
 `/shared/*` 兼容转发，并提供可选的 `/hub/*`、`/auth/*`、`/bff/*`、`/system/*`、`/connections/*`、
 `/payment/*`、`/billing-service/*` 业务 namespace。完成真实 Session 服务、SSE、HITL、文件流和错误
@@ -175,9 +175,7 @@ git push origin v1.0.0
 ```dotenv
 KOKORO_DOMAIN="app.example.com"
 KOKORO_WEB_SESSION_SECRET="<secret>"
-KOKORO_USER_BASE_URL="<internal-url>"
-KOKORO_SESSION_BASE_URL="<internal-url>"
-KOKORO_SYSTEM_BASE_URL="<internal-url>"
+KOKORO_GATEWAY_BASE_URL="<gateway-internal-url>"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
 # 按 System 服务策略启用；变量名必须保持为 KOKORO_SYSTEM_WORKLOAD_TOKEN。
 KOKORO_SYSTEM_WORKLOAD_TOKEN="<secret>"

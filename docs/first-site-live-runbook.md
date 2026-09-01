@@ -9,6 +9,7 @@
 ```text
 Browser
   → kokoro same-origin BFF (/api/*)
+  → kokoro-gateway (server-only unified business entry)
   → backend services (User / Session / System / Hub / Billing)
   → backend resolves tenant, auth, permission and data scope
 ```
@@ -21,13 +22,16 @@ Browser
 ```dotenv
 KOKORO_DOMAIN=dev.kokoro.localhost
 KOKORO_WEB_SESSION_SECRET=BACKEND_SECRET
-KOKORO_USER_BASE_URL=http://kokoro-user:4211
-KOKORO_SESSION_BASE_URL=http://kokoro-session:3900
-KOKORO_SYSTEM_BASE_URL=http://kokoro-system:4240
-# 按需配置能力面：
-KOKORO_HUB_BASE_URL=http://kokoro-hub:4251
-KOKORO_BILLING_BASE_URL=http://kokoro-billing:4245
+KOKORO_GATEWAY_BASE_URL=http://kokoro-gateway:8080
 KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
+
+# 只有做分阶段迁移时才覆盖单个业务面；统一部署保持以下变量为空。
+# KOKORO_USER_BASE_URL=http://kokoro-user:4211
+# KOKORO_SESSION_BASE_URL=http://kokoro-session:3900
+# KOKORO_SYSTEM_BASE_URL=http://kokoro-system:4240
+# KOKORO_HUB_BASE_URL=http://kokoro-hub:4251
+# KOKORO_AGENT_BASE_URL=http://kokoro-agent:4260
+# KOKORO_BILLING_BASE_URL=http://kokoro-billing:4245
 ```
 
 所有 secret、内部服务 URL 和 workload token 只放部署平台变量/secret，不使用 `NEXT_PUBLIC_*`。
@@ -38,7 +42,7 @@ KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
 1. 让访问域名与 `KOKORO_DOMAIN` 保持一致；本地推荐 `dev.kokoro.localhost:3000`。
 2. 访问 `/`，确认 308/307 进入 `/app`，没有第二套旧首页布局。
 3. 登录或进入 preview，检查浏览器 Network 只出现同源 `/api/*`。
-4. 检查 BFF 到 User、Session、System、Hub、Billing 的每个请求都有：
+4. 检查 BFF 到 Gateway，以及 Gateway 到 User、Session、System、Hub、Billing 的请求链路都有：
 
    ```http
    Forwarded: host=<KOKORO_DOMAIN>
@@ -49,7 +53,7 @@ KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
 6. 确认公开 JSON、URL、body、cookie、localStorage 和错误响应不出现内部隔离键。
 7. 验证登录回调、Session SSE、直接聊天、项目聊天、Skills、Library、Scheduled、Agent、设置、
    文件下载、分享和 Billing 的 loading/empty/error/forbidden 状态。
-8. 同一个邮箱在后端不同租户数据中的隔离由后端根据 RFC 7239 `Forwarded` 和会话完成，Web 不自行解析 tenant。
+8. 同一个邮箱在后端不同租户数据中的隔离由 Gateway/领域服务根据 RFC 7239 `Forwarded` 和会话完成，Web 不自行解析 tenant。
 
 ## 4. 本地回归
 
