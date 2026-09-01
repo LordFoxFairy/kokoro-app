@@ -20,6 +20,11 @@ export const sessionMetaSchema = z
     owner_id: z.string().min(1),
     created_at: z.string().min(1),
     updated_at: z.string().min(1),
+    // Session runtime may expose the server-selected product capability on
+    // newer snapshots. It is additive metadata: older Session deployments
+    // omit it, so the Web contract accepts both generations while keeping
+    // the identity and timestamp fields strict.
+    feature_key: z.string().min(1).optional(),
   })
   .strict()
 export type SessionMeta = z.infer<typeof sessionMetaSchema>

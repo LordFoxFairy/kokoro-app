@@ -93,6 +93,12 @@ Direct Chat 与项目 Chat 共用上表中除列表 scope 外的全部 endpoint�
 `project_ref=PROJECT_REF`。项目消息请求必须带同一 opaque `project_ref`，Direct 消息请求不带；
 snapshot、SSE envelope 和 cancel/resume body 均不重复携带该 scope。
 
+兼容门槛：Gateway/Session 的 live upstream 需要在消息 strict schema 中声明并持久化
+`project_ref`，并让列表实现真正的 project filter；不能只在 Web 端添加 query/body 字段而让
+upstream 忽略它。`session.feature_key` 为可选增量 snapshot metadata，Web 已同时兼容旧快照
+和带该字段的新快照。未满足前两项时，Project Chat 只能保持 preview/待联调状态，不能把
+首条消息或任务列表称为 live 闭环。
+
 `project_ref` 在 Web 路由中是一个编码后的 path segment：`kokoro-app` 先解码一次得到原始
 引用，再由链接和 `URLSearchParams` 在 wire 上编码一次。Gateway/Session 侧只接收解码语义对应的
 opaque 引用；调用方不要把已经编码的值再次交给 Web route adapter。

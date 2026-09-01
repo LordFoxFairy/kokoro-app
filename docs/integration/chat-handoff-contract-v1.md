@@ -118,6 +118,11 @@ SSE 使用 `fetch` stream，断线以 `Last-Event-ID: SEQ` 续接；HITL 使用�
 `run.resume`/`run.cancel` control body。项目 scope 不会改变 event name、snapshot shape、
 run id 或 control schema。
 
+Session runtime 兼容门槛：`session.feature_key` 是可选的增量元数据；Web 会接受有/无该字段
+的 snapshot。若启用 Project Chat，Session upstream/Gateway 必须同时接受
+`message.project_ref`、将它持久化为项目归属，并在 `GET /sessions` 按该 opaque reference
+过滤；仅接受字段但忽略过滤会把 Direct Chat 混入项目任务列表，不能标记为 live 兼容。
+
 ### 5.4 服务端边界
 
 - 浏览器只访问同源 `/api/session/*`，不读取 runtime JWT、internal secret 或 gateway 凭据。

@@ -73,6 +73,35 @@ describe("fetchSnapshot：会话不存在/已软删都优雅缺席（不 fail-lo
   })
 })
 
+describe("fetchSnapshot：兼容 Session runtime 的 feature_key 增量元数据", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("接受服务端新增的 feature_key，不把可选能力元数据当成水合错误", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        session: {
+          session_id: "ses_1",
+          title: "Chat",
+          owner_id: "user_1",
+          created_at: "2026-07-02T00:00:00Z",
+          updated_at: "2026-07-02T00:00:01Z",
+          feature_key: "chat",
+        },
+        messages: [],
+        pending_pauses: [],
+        files: [],
+        deliveries: [],
+        event_watermark: 0,
+      }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    ))
+
+    const snapshot = await createSessionClient({ baseUrl: "/api/session" }).fetchSnapshot("ses_1")
+    expect(snapshot?.session.feature_key).toBe("chat")
+  })
+})
+
 describe("listModels（MODEL-UX）：GET /models 过契约 Zod", () => {
   afterEach(() => vi.unstubAllGlobals())
 

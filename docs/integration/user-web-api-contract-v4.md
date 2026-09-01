@@ -430,6 +430,7 @@ type SessionSnapshot = {
     owner_id: string
     created_at: string
     updated_at: string
+    feature_key?: string
   }
   messages?: Array<{
     message_id: string

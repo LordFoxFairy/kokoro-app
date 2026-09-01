@@ -58,6 +58,7 @@ export function awaitingPayload(
 type SnapshotInput = {
   sessionId?: string
   title?: string
+  featureKey?: string
   messages?: SessionSnapshot["messages"]
   activeRun?: SessionSnapshot["active_run"]
   pendingPauses?: SessionSnapshot["pending_pauses"]
@@ -74,6 +75,7 @@ export function makeSnapshot(input: SnapshotInput = {}): SessionSnapshot {
       owner_id: "local-user",
       created_at: "2026-07-02T00:00:00Z",
       updated_at: "2026-07-02T00:00:01Z",
+      ...(input.featureKey !== undefined ? { feature_key: input.featureKey } : {}),
     },
     messages: input.messages ?? [],
     ...(input.activeRun !== undefined ? { active_run: input.activeRun } : {}),
