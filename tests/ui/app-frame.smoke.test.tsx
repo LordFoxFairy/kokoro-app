@@ -804,6 +804,30 @@ it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项�
   expect(screen.getByText("项目首条消息")).toBeInTheDocument()
 })
 
+it("项目侧栏的新建专案菜单会进入新的项目工作区", async () => {
+  buildEngine()
+  mockedPathname.value = "/app/project/kokoro"
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  const trigger = await screen.findByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  const entry = await screen.findByRole("menuitem", { name: "新建专案" })
+  fireEvent.click(entry)
+
+  await waitFor(() => {
+    expect(window.location.pathname).toBe("/app/project/preview-project")
+    expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
+  })
+  expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
+})
+
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
   buildEngine()
   render(

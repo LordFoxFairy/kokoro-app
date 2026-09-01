@@ -1738,6 +1738,7 @@ export function AppFrame({
         chatHref={chatHref}
         projectHref={projectRef ? `/app/project/${encodeURIComponent(projectRef)}` : "/app/project/kokoro"}
         projectActive={projectWorkspace}
+        onCreateProject={() => openProject("preview-project")}
         activeNavigationKey={activeNavigationKey}
         preview={preview}
         conversations={conversations}
