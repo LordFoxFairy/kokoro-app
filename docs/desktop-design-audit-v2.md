@@ -4151,3 +4151,14 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 - 宽桌面 Rail 收起态的第一个可见控制为 Search，第二个为 Panel-left 展开；Search 会先打开 Rail 再显示搜索输入。所有收起/展开的焦点回收均使用 `preventScroll`，只改变交互焦点，不改变页面滚动位置。
 
 验证：`workspace-rail`、`app-frame-rail`、Settings、MCP、Library、Billing、Share、Scheduled 和 Skills import 定向测试均通过；真实 `1280×800` 浏览器中提交 Chat 后可见消息、assistant preview 和新 conversation URL，未观察到 page error 或 console error。本轮仍只覆盖桌面 Web。
+
+## v220 Project Chat 窄桌面空白回归（2026-09-01）
+
+本轮复核用户反馈的“Chat 这里承接”时，发现项目任务链接在 `768px` 以下的 fine-pointer 桌面视口会命中旧的移动端隐藏规则：
+`KokoroProjectTaskWelcome` 已经挂载，但 `.projectTaskSurface` 被强制设为 `display: none`；由于项目任务态的 Composer 由该 surface 自己承接，最终表现为只剩 Header 的整页空白。
+
+- 移除该隐藏规则，项目任务 surface 在窄桌面继续保持可见并使用同一套响应式宽度/滚动容器。
+- 真实 `751×674` in-app desktop viewport 进入 `/app/project/kokoro?conversation=...` 后，任务标题、说明和 Composer 均可见；发送首条消息后继续沿用项目 scope 的 `/api/session/*` Chat 闭环。
+- coarse-pointer 手机仍由 `useIsMobile` 走既有移动项目 surface，不改变手机端布局契约。
+
+验证：真实 `751×674` 与 `1280×720` 桌面视口分别验证项目任务空态、Project Chat 首发、Direct Chat 首发和网站胶囊取消；相关组件定向测试通过。本轮只修改 Web 的项目任务 CSS，不新增 Chat API，也不引入跨仓库代码。

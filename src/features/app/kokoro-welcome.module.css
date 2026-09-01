@@ -927,8 +927,11 @@
 
 /* A project overview and a new project task are different route states. The
  * task state keeps the same calm conversation axis as Manus/Codex instead of
- * leaving the user inside the overview's context-card grid. This block is
- * desktop-only; the existing mobile project surface remains frozen. */
+ * leaving the user inside the overview's context-card grid. Keep this
+ * surface available in compact desktop windows too: the in-app browser can
+ * expose a fine-pointer viewport below 768 CSS pixels, and hiding the task
+ * surface there leaves only an empty shell because its composer is owned by
+ * this route state. */
 .projectTaskSurface,
 .projectTaskContent {
   min-width: 0;
@@ -1258,14 +1261,6 @@
 
   .directContent {
     width: min(48rem, 100%);
-  }
-}
-
-@media (max-width: 767px) {
-  /* Keep the pre-existing mobile project workbench untouched until it is
-   * explicitly reviewed as a separate surface. */
-  .projectTaskSurface {
-    display: none;
   }
 }
 
