@@ -182,10 +182,12 @@ SSE 聚合成一次性 JSON；断线重连依靠 event watermark/Last-Event-ID �
 - Gateway 只信任来自 Web BFF/受信网络路径的 `Forwarded` 和服务身份；不能信任浏览器
   自行提交的同名 header。
 - `Forwarded` 只存在于 BFF → upstream 的服务端 wire，不进入浏览器请求/响应；浏览器伪造同名
-  header 由 BFF 丢弃。`x-kokoro-namespace` 同样是服务端请求头；已声明的 Hub public response
-  可以向浏览器返回 `namespace` 展示投影，但它不能作为入站身份或 scope 选择器。Authorization、
-  runtime JWT、workload token、internal secret 和内部 tenant id 不进入浏览器响应、URL、cookie、
-  localStorage 或 shared package 的 runtime 值。
+  header 由 BFF 丢弃。`x-kokoro-namespace` 同样是服务端请求头，仅在 Hub/Agent 等声明需要
+  workspace scope 的 Gateway bounded context 中按路由 allowlist 转发；Session Chat 的
+  `/sessions/*` 默认删除这类 principal header。已声明的 Hub public response 可以向浏览器返回
+  `namespace` 展示投影，但它不能作为入站身份或 scope 选择器。Authorization、runtime JWT、
+  workload token、internal secret 和内部 tenant id 不进入浏览器响应、URL、cookie、localStorage
+  或 shared package 的 runtime 值。
 - 浏览器只携带 HttpOnly session cookie；跨服务凭据在 BFF/Gateway server-only 边界注入。
 
 ## 6. 仓库与 shared package 边界
