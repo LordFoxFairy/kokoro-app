@@ -2,8 +2,9 @@
 
 Kokoro 是一个独立的桌面 Web 产品仓库。它发布一套确定的产品页面、布局、品牌素材和交互，
 不是多个产品共用的运行时壳，也不通过 `SITE_ID`、域名分支或多站 registry 选择 React/CSS。
-通用 Web 能力由独立的 `kokoro-web-shared` package 仓库维护，当前仓库只通过版本包或本地
-bootstrap 使用它们。
+当前仓库内的 `packages/` 是首个产品的可复现 bootstrap workspace。未来出现第二个真实
+产品消费方或需要独立 semver 发布时，再整体迁移到独立的 `kokoro-web-shared` package
+仓库；当前构建不依赖那个尚未接入的外部仓库。
 
 ## 仓库边界
 
@@ -11,10 +12,10 @@ bootstrap 使用它们。
   HITL、Canvas、Library、Skills 和 UI 组装；独立构建、发布、部署、回滚。
 - `kokoro-<product-slug>/`：其它产品各自的独立 Web 仓库。它们可以复用 shared package，
   但拥有自己的页面信息架构和发布生命周期，不放进本仓库的多产品目录。
-- `kokoro-web-shared/`：唯一的共享 package 仓库，内部用一个 pnpm workspace 管理
-  `@kokoro/web-core`、`@kokoro/web-data`、`@kokoro/web-ui`、`@kokoro/web-blocks`、
-  `@kokoro/web-runtime`、`@kokoro/i18n` 和 `@kokoro/tsconfig`。不按菜单、Skills、i18n 等
-  业务能力分别建 Git 仓库。
+- `kokoro-web-shared/`：规划中的唯一共享 package 仓库，不属于当前 checkout；迁移后内部用
+  一个 pnpm workspace 管理 `@kokoro/web-core`、`@kokoro/web-data`、`@kokoro/web-ui`、
+  `@kokoro/web-blocks`、`@kokoro/web-runtime`、`@kokoro/i18n` 和 `@kokoro/tsconfig`。
+  当前 `packages/` 仍随本仓库一起构建，不按菜单、Skills、i18n 等业务能力分别建 Git 仓库。
 - `kokoro-system`：菜单、i18n、主题、产品入口和 feature manifest 的后端事实源；Web 只消费
   经过 BFF 校验的公开投影。
 - `kokoro-iam`：身份、认证、权限和服务端隔离上下文；它不承载页面布局、CSS token、营销文案
