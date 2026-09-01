@@ -22,6 +22,9 @@ Gateway 接入（浏览器路径保持不变）：
        → Session runtime
 ```
 
+Web 侧以单一 server-only `KOKORO_GATEWAY_BASE_URL` 作为推荐接入开关；未显式设置的各
+`KOKORO_*_BASE_URL` 会按 Gateway namespace 自动解析，显式服务地址可用于灰度迁移。
+
 独立仓库为 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway)。它不是当前
 checkout 的子目录、`kokoro-app` 的 workspace package 或页面代码。Gateway 已具备 Chat/Session
 兼容面及 Hub/User/System/Agent/Payment/Billing 的可选 server-only namespace；真实生产接入仍需
@@ -32,7 +35,7 @@ checkout 的子目录、`kokoro-app` 的 workspace package 或页面代码。Gat
 
 | 项目 | 状态（2026-08-31） |
 |---|---|
-| `kokoro-app` 同源 Session BFF | **current**；转发到 `KOKORO_SESSION_BASE_URL` |
+| `kokoro-app` 同源 Session BFF | **current**；转发到 `KOKORO_SESSION_BASE_URL`，未覆盖时由 `KOKORO_GATEWAY_BASE_URL` 提供默认值 |
 | `kokoro-gateway` | **compatible**；独立仓库已创建，是否接入由 Web server-only env 决定 |
 | Agent 独立 surface | Preview closed；Web 已提供 `/api/agents/connections/setup` BFF；Live conditional on Agent upstream |
 | Scheduled 独立 surface | Preview closed；Web/BFF live adapter 已注入；上游 scheduled capability pending |
@@ -40,7 +43,7 @@ checkout 的子目录、`kokoro-app` 的 workspace package 或页面代码。Gat
 ### 当前已实现
 
 - 浏览器只调用 `/api/session/*`；当前同源 BFF 将请求转发到
-  `KOKORO_SESSION_BASE_URL`。
+  `KOKORO_SESSION_BASE_URL`，或在统一配置下转发到 Gateway 的 `/sessions/*`。
 - Chat 接入 Gateway 时仍只替换 Web BFF 后面的 upstream：`/api/session/*` 对应 Gateway 的
   `/sessions/*`；不新增浏览器 `/chat/*`，Direct/Project Chat 不分叉 transport。
 - Gateway 另提供可选的 `/hub/*`、`/auth/*`、`/bff/*`、`/system/*`、`/connections/*`、
@@ -209,7 +212,7 @@ JWT/workload token、内部 URL、队列实现和部署凭据。Web 更新 share
 ## 7. 迁移验收
 
 1. **Compatibility migration**：使用 Gateway 的合成 Session upstream 先验证本文件第 3 节契约；本地 preview 仍可保持 `KOKORO_SESSION_BASE_URL` 直连或不配置。
-2. 将非生产的 `KOKORO_SESSION_BASE_URL` 指向 Gateway，保持浏览器仍访问 `/api/session/*`。
+2. 将非生产的 `KOKORO_GATEWAY_BASE_URL` 指向 Gateway；Web BFF 的 Session、Hub、System、Agent、Payment 和独立 Billing 基址会自动使用对应 Gateway namespace，保持浏览器仍访问 `/api/*`。
 3. 验证消息幂等：刷新、重复点击发送、SSE 断线重连都不产生重复 Run。
 4. 验证 `Forwarded` 只有一份且来自 `KOKORO_DOMAIN`，浏览器伪造 `X-Domain` 不生效。
 5. 验证 JSON、SSE、artifact 下载（包括 `content-length` / `content-disposition`）、billing 读取、HITL cancel/resume、401/403/409/5xx 错误保持语义；上游网络失败或超时统一为 `502 {"error":"session_unreachable"}`。

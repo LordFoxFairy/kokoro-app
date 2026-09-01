@@ -74,6 +74,12 @@ Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` �
 业务规则、数据库、服务凭据、runtime adapter 与 gateway 实现留在各自后端仓库。这样每个
 site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约与统一网关对接。
 
+统一 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 的 server-only 总入口。配置后，
+未显式设置的 `KOKORO_USER_BASE_URL`、`KOKORO_SESSION_BASE_URL`、`KOKORO_HUB_BASE_URL`、
+`KOKORO_AGENT_BASE_URL` 和 `KOKORO_SYSTEM_BASE_URL` 自动使用 Gateway 根地址；Payment 与独立
+Billing 自动使用 `/payment`、`/billing-service` 命名空间。显式的单服务地址优先，用于分阶段迁移，
+不会改变浏览器的 `/api/*` 路径。
+
 ## 1. 当前 API 路由注册表
 
 与本版相关的 `src/app/api` 实际文件如下：
@@ -119,6 +125,14 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 /api/scheduled-tasks/<path>  →  ${KOKORO_HUB_BASE_URL}/hub/scheduled-tasks/<path>
 /api/settings/<path> →  ${KOKORO_HUB_BASE_URL}/hub/settings/<path>
 /api/mail/<path>     →  ${KOKORO_HUB_BASE_URL}/hub/mail/<path>
+```
+
+当设置 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，上述基址解析为：
+
+```text
+Session/User/Hub/Agent/System → ${KOKORO_GATEWAY_BASE_URL}/<gateway namespace path>
+Payment                        → ${KOKORO_GATEWAY_BASE_URL}/payment/*
+独立 Billing                   → ${KOKORO_GATEWAY_BASE_URL}/billing-service/*
 ```
 
 BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route 为 nodejs），不把服务地址编入浏览器 bundle。
@@ -176,7 +190,7 @@ read-only upstream projections until a versioned business-gateway contract trans
 | test | `.env.test` 或测试隔离注入 | `test.kokoro.localhost` | 可启用同一 preview fixture |
 | prod | 显式 `.env.prod`、`.env.production` 或平台运行时变量 | 部署绑定域名，例如 `app.example.com` | 不启用 Preview Client |
 
-当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、`KOKORO_USER_BASE_URL`、`KOKORO_SESSION_BASE_URL`、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。
+当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、`KOKORO_GATEWAY_BASE_URL`（或显式的 User/Session 基址）、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。
 
 可选 live upstream：
 

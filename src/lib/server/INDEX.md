@@ -21,6 +21,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `domain-context.ts`
   - `configuredDomain(env?)`：只读取服务端 `KOKORO_DOMAIN`，trim 并校验 hostname 形状。
   - `forwardedHeaders(domain)`：生成服务端上游 header，不读取 Request 或浏览器状态。
+- `service-config.ts`
+  - `configuredGatewayBaseUrl(env?)`：读取服务端统一 Gateway 基址并去除尾斜杠。
+  - `gatewayNamespaceUrl(namespace, env?)`：为 payment、billing-service、system 等显式命名空间生成地址。
 - `upstream-http.ts`
   - `fetchWithDomain`：普通 JSON/下载请求，覆盖调用方的 `forwarded`。
   - `requestWithDomain`：HTTP/SSE/二进制流式代理，覆盖调用方的 `forwarded`。
@@ -36,6 +39,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。
 - route handler 使用 `runtime = "nodejs"`；SSE 与下载直接转发 Response body，不在 BFF 缓冲大响应。
+- 配置 `KOKORO_GATEWAY_BASE_URL` 后，各业务专用 `KOKORO_*_BASE_URL` 自动以 Gateway 为默认；显式服务地址优先，方便分阶段切换。
 - 原文 magic-link token、nonce、refresh token 和内部 header 绝不写入日志或浏览器响应。
 
 ## 协作边界

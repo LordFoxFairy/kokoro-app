@@ -139,12 +139,14 @@ Cloudflare workflow 的 deploy job 需要 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE
 | --- | --- |
 | `KOKORO_DOMAIN` | 每个部署的唯一规范 hostname；不带协议。由服务端用于生成上游 `Forwarded: host=<KOKORO_DOMAIN>`，不作为浏览器 selector，不进入 URL、body、localStorage 或公开响应。生产必填。 |
 | `KOKORO_WEB_SESSION_SECRET` | httpOnly 会话信封密钥；支持逗号分隔的轮换窗口。只放平台 secret/variable，生产必填。 |
-| `KOKORO_USER_BASE_URL` | BFF → User 上游地址；只在服务端使用，生产必填。 |
-| `KOKORO_SESSION_BASE_URL` | BFF → Session 上游地址；只在服务端使用，生产必填。 |
-| `KOKORO_SYSTEM_BASE_URL` | BFF → System 上游地址；runtime manifest 路径使用，生产发布应配置。 |
+| `KOKORO_GATEWAY_BASE_URL` | 统一 BFF → `kokoro-gateway` 的 server-only 根地址；推荐作为生产默认入口，显式服务基址优先。 |
+| `KOKORO_USER_BASE_URL` | BFF → User 上游地址；只在服务端使用；未设置时回退到 `KOKORO_GATEWAY_BASE_URL`。 |
+| `KOKORO_SESSION_BASE_URL` | BFF → Session 上游地址；只在服务端使用；未设置时回退到 `KOKORO_GATEWAY_BASE_URL`。 |
+| `KOKORO_SYSTEM_BASE_URL` | BFF → System 上游地址；未设置时回退到 Gateway 的 `/system` namespace。 |
 | `KOKORO_INTERNAL_SECRET_WEB_BFF` | BFF → 上游服务认证凭据；生产必填。`Forwarded` 仅作路由上下文，服务认证仍使用该凭据。 |
 | `KOKORO_SYSTEM_WORKLOAD_TOKEN` | 可选的 System workload token；按 System 服务策略配置。 |
-| `KOKORO_HUB_BASE_URL`、`KOKORO_PAYMENT_BASE_URL`、`KOKORO_BILLING_BASE_URL` | 可选上游；缺省时对应页面进入不可用态。 |
+| `KOKORO_HUB_BASE_URL`、`KOKORO_AGENT_BASE_URL` | 可选直接上游覆盖；未设置时回退到 Gateway 根地址。 |
+| `KOKORO_PAYMENT_BASE_URL`、`KOKORO_BILLING_BASE_URL` | 可选直接上游/带 namespace 覆盖；未设置时回退到 Gateway 的 `/payment`、`/billing-service` namespace。 |
 | `KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET` | 仅本地/测试 mock pay 使用；生产 env example 明确不支持。 |
 
 ### 6.2 本地、测试和容器控制变量

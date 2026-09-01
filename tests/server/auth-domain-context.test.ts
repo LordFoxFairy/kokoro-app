@@ -39,6 +39,43 @@ describe("auth BFF deployment domain context", () => {
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })
 
+  it("uses one server-only gateway base for all Web business defaults", () => {
+    const config = authConfig({
+      KOKORO_WEB_SESSION_SECRET: "secret",
+      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal/",
+      KOKORO_DOMAIN: "dev.kokoro.localhost",
+    } as unknown as NodeJS.ProcessEnv)
+
+    expect(config).toMatchObject({
+      userBaseUrl: "http://gateway.internal",
+      sessionBaseUrl: "http://gateway.internal",
+      hubBaseUrl: "http://gateway.internal",
+      agentBaseUrl: "http://gateway.internal",
+      paymentBaseUrl: "http://gateway.internal/payment",
+      billingBaseUrl: "http://gateway.internal/billing-service",
+    })
+  })
+
+  it("prefers an explicit service URL over the unified gateway default", () => {
+    const config = authConfig({
+      KOKORO_WEB_SESSION_SECRET: "secret",
+      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal",
+      KOKORO_USER_BASE_URL: "http://user.internal",
+      KOKORO_SESSION_BASE_URL: "http://session.internal",
+      KOKORO_HUB_BASE_URL: "http://hub.internal",
+      KOKORO_DOMAIN: "dev.kokoro.localhost",
+    } as unknown as NodeJS.ProcessEnv)
+
+    expect(config).toMatchObject({
+      userBaseUrl: "http://user.internal",
+      sessionBaseUrl: "http://session.internal",
+      hubBaseUrl: "http://hub.internal",
+      agentBaseUrl: "http://gateway.internal",
+      paymentBaseUrl: "http://gateway.internal/payment",
+      billingBaseUrl: "http://gateway.internal/billing-service",
+    })
+  })
+
   it("returns null in production when the web-bff internal secret is missing", () => {
     expect(authConfig({
       NODE_ENV: "production",

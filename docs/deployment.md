@@ -107,11 +107,9 @@ Chat 不在 Web 内部再复制一套业务接口。浏览器始终访问同源 
 Web BFF 的 session-compatible upstream 指向独立的 `LordFoxFairy/kokoro-gateway`：
 
 ```dotenv
-# kokoro-app（仅服务端）
-KOKORO_SESSION_BASE_URL="http://kokoro-gateway:8080"
-# Agent connection setup 使用网关的 `/connections` 能力前缀；`/agents` 保留给 Session 的
-# agent catalog，不能把两个路径混用。
-KOKORO_AGENT_BASE_URL="http://kokoro-gateway:8080"
+# kokoro-app（仅服务端）：一个 Gateway 基址即可覆盖所有 Web BFF namespace。
+KOKORO_GATEWAY_BASE_URL="http://kokoro-gateway:8080"
+# 显式 KOKORO_*_BASE_URL 仍可按 bounded context 覆盖，用于灰度/分阶段迁移。
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-gateway-secret>"
 ```
 
@@ -215,10 +213,11 @@ Cloudflare Build variables/secrets 配置：
 ```text
 KOKORO_DOMAIN
 KOKORO_WEB_SESSION_SECRET
-KOKORO_USER_BASE_URL
-KOKORO_SESSION_BASE_URL
-KOKORO_AGENT_BASE_URL                 # optional Agent connection setup upstream
-KOKORO_SYSTEM_BASE_URL
+KOKORO_GATEWAY_BASE_URL               # recommended unified server-only business/gateway entry
+KOKORO_USER_BASE_URL                  # optional direct-service override
+KOKORO_SESSION_BASE_URL               # optional direct-service override
+KOKORO_AGENT_BASE_URL                 # optional direct-service override
+KOKORO_SYSTEM_BASE_URL                # optional direct-service override
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
 KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy
 ```
