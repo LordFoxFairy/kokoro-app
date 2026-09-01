@@ -101,6 +101,32 @@ Composer 语音输入保持同一边界：使用浏览器 `SpeechRecognition`/`w
 至少需要 `KOKORO_INTERNAL_SECRET_WEB_BFF`；System workload token 的实际变量名是
 `KOKORO_SYSTEM_WORKLOAD_TOKEN`。两者都只放部署平台 secret/variable，绝不使用 `NEXT_PUBLIC_*`。
 
+### 1.1 Chat 的 Gateway 切换
+
+Chat 不在 Web 内部再复制一套业务接口。浏览器始终访问同源 `/api/session/*`；部署时只需把
+Web BFF 的 session-compatible upstream 指向独立的 `LordFoxFairy/kokoro-gateway`：
+
+```dotenv
+# kokoro-app（仅服务端）
+KOKORO_SESSION_BASE_URL="http://kokoro-gateway:8080"
+KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-gateway-secret>"
+```
+
+网关再用自己的服务端配置连接 Session：
+
+```dotenv
+# kokoro-gateway（仅服务端）
+KOKORO_DOMAIN="dev.kokoro.localhost"
+KOKORO_GATEWAY_SHARED_SECRET="<web-bff-gateway-secret>"
+KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
+KOKORO_SESSION_INTERNAL_SECRET="<gateway-session-secret>"
+```
+
+这两个仓库之间没有 workspace、`file:` 依赖或 `src/site` 复制。Web BFF 继续负责
+HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责业务编排与服务间适配。
+Gateway 已实现 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*` 的兼容转发；完成真实
+Session 服务、SSE、HITL、文件流和错误状态联调后，再将它标记为生产 live upstream。
+
 ## 2. 发布选择
 
 ### 方案 A：GitHub tag → GHCR Docker 镜像（默认）
