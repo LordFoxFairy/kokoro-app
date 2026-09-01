@@ -72,6 +72,8 @@ describe("hub client", () => {
     await createHubClient().setSkillEnabled("copy-editor", false, "personal")
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/self/skills/copy-editor/disable?scope=personal")
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-toggle:/)
   })
 
   it("posts the zip as multipart with a JSON names field on confirm", async () => {
@@ -82,6 +84,7 @@ describe("hub client", () => {
     await createHubClient().confirmUpload(new Blob(["zip"]), ["a", "b"])
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(init.method).toBe("POST")
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-upload:/)
     const form = init.body as FormData
     expect(form.get("names")).toBe('["a","b"]')
     expect(form.get("file")).toBeInstanceOf(Blob)
@@ -103,6 +106,7 @@ describe("hub client", () => {
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/skills/github/preview")
     expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
+    expect(new Headers(init.headers).get("idempotency-key")).toBeNull()
     expect(JSON.parse(init.body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
   })
 
@@ -122,6 +126,7 @@ describe("hub client", () => {
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/skills/github/import")
     expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-github-import:/)
     expect(JSON.parse(init.body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
   })
 
@@ -222,6 +227,7 @@ describe("hub client", () => {
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/mcp/servers")
     expect(init.method).toBe("POST")
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
     expect(JSON.parse(init.body as string)).toMatchObject({
       name: "svc",
       transport: "http",
@@ -289,6 +295,7 @@ describe("hub client", () => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>
     expect(path).toBe("/api/hub/self/connectors/mcp")
     expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
     expect(body).toEqual({
       name: "custom-search",
       transport: "http",
@@ -342,6 +349,7 @@ describe("hub client", () => {
       secrets: [{ name: "CRM_TOKEN", value: "WRITE_ONLY_TOKEN" }],
       enabled: true,
     })
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
     expect(body).not.toHaveProperty("tenant_id")
     expect(customApi.secret_entries[0]).not.toHaveProperty("value")
   })
@@ -359,7 +367,7 @@ describe("hub client", () => {
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/connectors/assets")
     expect(init.method).toBe("POST")
-    expect(init.headers).toBeUndefined()
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
     expect(init.body).toBeInstanceOf(FormData)
     expect((init.body as FormData).get("file")).toBeInstanceOf(File)
     expect(((init.body as FormData).get("file") as File).name).toBe("connector.png")
@@ -392,6 +400,7 @@ describe("hub client", () => {
     expect(handle).toBe("srt_00000000000000000000000000000001")
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/mcp/secrets")
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^hub-mutation:/)
     expect(JSON.parse(init.body as string)).toEqual({ name: "search-key", value: "super-secret" })
   })
 

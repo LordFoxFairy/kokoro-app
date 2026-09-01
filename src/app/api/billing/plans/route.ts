@@ -28,6 +28,16 @@ const paymentPlansEnvelopeSchema = z.object({
     ),
   }),
 })
+const bffErrorEnvelopeSchema = z.object({
+  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
+  meta: z.object({ request_id: z.string().min(1) }).passthrough(),
+}).passthrough()
+
+async function projectBffError(upstream: Response, fallback: string): Promise<Response> {
+  const parsed = bffErrorEnvelopeSchema.safeParse(await upstream.clone().json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: fallback }, { status: upstream.status })
+  return NextResponse.json({ error: parsed.data.error.message, code: parsed.data.error.code }, { status: upstream.status })
+}
 
 export async function GET(request: Request): Promise<Response> {
   const config = authConfig()
@@ -37,6 +47,29 @@ export async function GET(request: Request): Promise<Response> {
   const envelope = readEnvelope(request, config)
   if (envelope === null) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+  }
+  if (config.bffBaseUrl != null) {
+    const headers = new Headers({
+      [SERVICE_HEADER]: SERVICE_VALUE,
+      ["x-kokoro-namespace"]: envelope.namespace,
+      ["x-kokoro-user-id"]: envelope.user_id,
+      ["x-kokoro-request-id"]: request.headers.get("x-kokoro-request-id") || crypto.randomUUID(),
+    })
+    if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+    let upstream: Response
+    try {
+      upstream = await fetchWithDomain(`${config.bffBaseUrl.replace(/\/+$/, "")}/v1/billing/plans`, config.domain, { method: "GET", headers, cache: "no-store", signal: request.signal })
+    } catch {
+      return NextResponse.json({ error: "payment_unreachable" }, { status: 502 })
+    }
+    if (!upstream.ok) return projectBffError(upstream, "payment_error")
+    const raw = await upstream.json().catch(() => null)
+    const parsed = z.object({ data: z.object({ plans: z.array(z.object({
+      id: z.string().min(1), key: z.string().min(1), name: z.string().min(1), currency: z.string().min(1),
+      amount_minor: z.string().min(1), credit_micros: z.string().min(1), billing_interval: z.enum(["once", "month", "year"]),
+    }).strict()) }).strict() }).passthrough().safeParse(raw)
+    if (!parsed.success) return NextResponse.json({ error: "payment_bad_response" }, { status: 502 })
+    return NextResponse.json({ plans: parsed.data.data.plans }, { status: 200 })
   }
   const baseUrl = config.billingBaseUrl ?? config.paymentBaseUrl
   if (baseUrl === null) {

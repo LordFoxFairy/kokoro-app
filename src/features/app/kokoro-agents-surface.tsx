@@ -287,10 +287,9 @@ type KokoroAgentsSurfaceProps = Pick<EmptyStateProps, "brandName"> & {
 
 export function KokoroAgentsSurface({ brandName = "Kokoro", preview = false, client }: KokoroAgentsSurfaceProps = {}) {
   const t = useT()
-  // Keep the catalog interaction testable in a local authenticated browser
-  // before the Agents BFF route is available. Production still uses the live
-  // client unless the caller explicitly supplies a client or preview mode.
-  const fixtureMode = preview || process.env.NODE_ENV !== "production"
+  // Preview is an explicit route decision. Local development must still use
+  // the authenticated Agents BFF unless the caller opts into the fixture.
+  const fixtureMode = preview
   const [setupOpen, setSetupOpen] = useState(false)
   const setupReturnFocusRef = useRef<HTMLButtonElement | null>(null)
   const [wordIndex, setWordIndex] = useState(0)

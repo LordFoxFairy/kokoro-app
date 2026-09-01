@@ -41,21 +41,25 @@ export async function GET(
 
   const config = authConfig()
   if (config === null) return errorResponse("auth_not_configured", 503)
-  if (config.agentBaseUrl == null) return errorResponse("agent_not_configured", 503)
+  if (config.bffBaseUrl == null && config.agentBaseUrl == null) return errorResponse("agent_not_configured", 503)
 
   const resolved = await resolveSessionWithRefresh(request, config)
   if (resolved === null) return errorResponse("unauthenticated", 401)
   const { envelope, setCookie } = resolved
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
-  const target = `${config.agentBaseUrl.replace(/\/+$/, "")}/connections/setup?platform=${encodeURIComponent(platform)}`
+  const target = config.bffBaseUrl != null
+    ? `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/agents/connections/setup?platform=${encodeURIComponent(platform)}`
+    : `${config.agentBaseUrl!.replace(/\/+$/, "")}/connections/setup?platform=${encodeURIComponent(platform)}`
 
   const headers = new Headers({
-    authorization: `Bearer ${envelope.runtime_jwt}`,
     [SERVICE_HEADER]: SERVICE_VALUE,
     ["x-kokoro-namespace"]: envelope.namespace,
     ["x-kokoro-user-id"]: envelope.user_id,
     ["x-kokoro-request-id"]: requestId,
   })
+  // The business BFF authorizes the sealed identity headers itself. Only the
+  // legacy direct Agent adapter receives the runtime JWT.
+  if (config.bffBaseUrl == null) headers.set("authorization", `Bearer ${envelope.runtime_jwt}`)
   if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
   const accept = request.headers.get("accept")
   if (accept !== null) headers.set("accept", accept)
@@ -77,5 +81,12 @@ export async function GET(
     if (value !== null) responseHeaders.set(name, value)
   }
   if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
+  if (config.bffBaseUrl != null && upstream.ok) {
+    const raw = await upstream.json().catch(() => null) as { data?: unknown } | null
+    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data")) return errorResponse("invalid_agent_response", 502)
+    responseHeaders.set("content-type", "application/json")
+    responseHeaders.delete("content-length")
+    return new Response(JSON.stringify(raw.data), { status: upstream.status, headers: responseHeaders })
+  }
   return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
 }

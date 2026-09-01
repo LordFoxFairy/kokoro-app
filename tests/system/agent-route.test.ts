@@ -71,6 +71,40 @@ describe("Agent connection setup BFF", () => {
     expect(headers.get("x-kokoro-request-id")).toBe("req_1")
   })
 
+  it("routes the setup projection through the independent business BFF when configured", async () => {
+    authConfig.mockReturnValue({
+      bffBaseUrl: "http://bff.internal/",
+      agentBaseUrl: null,
+      domain: "dev.kokoro.localhost",
+      internalSecret: "web-secret",
+    })
+    resolveSessionWithRefresh.mockResolvedValue({
+      envelope: { runtime_jwt: "runtime-jwt", namespace: "ns_kokoro", user_id: "user_1" },
+      setCookie: null,
+    })
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        platform: "telegram",
+        status: "disconnected",
+        qr_value: "fixture://qr",
+        continue_url: "https://dev.kokoro.localhost/app/agents",
+        expires_at: "2099-01-01T00:00:00.000Z",
+      },
+      meta: { request_id: "req_bff" },
+    }), { status: 200, headers: { "content-type": "application/json" } }))
+
+    const response = await GET(
+      new Request("https://app.example/api/agents/connections/setup?platform=telegram"),
+      { params: Promise.resolve({ path: ["connections", "setup"] }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ platform: "telegram", status: "disconnected" })
+    const [target, , init] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
+    expect(target).toBe("http://bff.internal/v1/agents/connections/setup?platform=telegram")
+    expect(new Headers(init.headers).get("authorization")).toBeNull()
+  })
+
   it("rejects unsupported platforms and does not proxy them", async () => {
     authConfig.mockReturnValue({ agentBaseUrl: "https://agent.internal", domain: "dev.kokoro.localhost" })
 

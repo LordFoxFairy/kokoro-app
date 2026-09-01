@@ -24,12 +24,12 @@ function setup(platform: AgentPlatform, overrides: Partial<AgentConnectionSetup>
   }
 }
 
-function renderAgents(client?: AgentClient) {
-  return render(<LocaleProvider><KokoroAgentsSurface client={client} /></LocaleProvider>)
+function renderAgents(options: { client?: AgentClient; preview?: boolean } = {}) {
+  return render(<LocaleProvider><KokoroAgentsSurface client={options.client} preview={options.preview} /></LocaleProvider>)
 }
 
 it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {
-  renderAgents()
+  renderAgents({ preview: true })
 
   expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("部署你的 Agent 用于")
   expect(screen.getByRole("button", { name: "开始体验" })).toBeInTheDocument()
@@ -49,7 +49,7 @@ it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {
 })
 
 it("能力卡是可操作的 Agent 设置入口，并保持 CTA 的展开状态", async () => {
-  renderAgents()
+  renderAgents({ preview: true })
 
   const identityCard = screen.getByRole("button", { name: /品牌一致性的 AI 身份/ })
   expect(identityCard).toHaveAttribute("aria-haspopup", "dialog")
@@ -67,7 +67,7 @@ it("能力卡是可操作的 Agent 设置入口，并保持 CTA 的展开状态"
 })
 
 it("从能力卡打开设置后关闭时把焦点交还给实际触发卡", async () => {
-  renderAgents()
+  renderAgents({ preview: true })
   const identityCard = screen.getByRole("button", { name: /品牌一致性的 AI 身份/ })
 
   fireEvent.click(identityCard)
@@ -78,7 +78,7 @@ it("从能力卡打开设置后关闭时把焦点交还给实际触发卡", asyn
 })
 
 it("开始体验打开连接弹窗，并可切换 Telegram、LINE 与 Slack", async () => {
-  renderAgents()
+  renderAgents({ preview: true })
   const opener = screen.getByRole("button", { name: "开始体验" })
   expect(opener).toHaveAttribute("aria-expanded", "false")
   fireEvent.click(opener)
@@ -109,7 +109,7 @@ it("开始体验打开连接弹窗，并可切换 Telegram、LINE 与 Slack", as
 })
 
 it("平台 Tab 保持 Radix 键盘焦点顺序并随箭头键切换内容", async () => {
-  renderAgents()
+  renderAgents({ preview: true })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
 
   const dialog = screen.getByRole("dialog")
@@ -136,7 +136,7 @@ it("loading 保留稳定的二维码槽和禁用的继续入口", async () => {
   const client: AgentClient = {
     connectionSetup: vi.fn(() => new Promise<AgentConnectionSetup>((resolve) => { resolveSetup = resolve })),
   }
-  renderAgents(client)
+  renderAgents({ client })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
 
   const dialog = screen.getByRole("dialog")
@@ -157,7 +157,7 @@ it("setup 失败时显示可重试错误且不渲染假链接", async () => {
   const connectionSetup = vi.fn()
     .mockRejectedValueOnce(new Error("setup unavailable"))
     .mockResolvedValueOnce(setup("telegram"))
-  renderAgents({ connectionSetup })
+  renderAgents({ client: { connectionSetup } })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
 
   const dialog = screen.getByRole("dialog")
@@ -178,7 +178,7 @@ it.each([
   ["expired", setup("telegram", { status: "connected", expires_at: "2020-08-30T06:30:00.000Z" })],
 ] as const)("依据 status 和 expires_at 渲染 %s 连接状态", async (expectedStatus, response) => {
   const client: AgentClient = { connectionSetup: vi.fn().mockResolvedValue(response) }
-  renderAgents(client)
+  renderAgents({ client })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
 
   const dialog = screen.getByRole("dialog")
@@ -199,7 +199,7 @@ it("过期连接禁用 Continue，并通过重试重新生成可继续的连接"
   const connectionSetup = vi.fn()
     .mockResolvedValueOnce(setup("telegram", { status: "pending", expires_at: "2020-08-30T06:30:00.000Z" }))
     .mockResolvedValueOnce(setup("telegram", { status: "pending" }))
-  renderAgents({ connectionSetup })
+  renderAgents({ client: { connectionSetup } })
   fireEvent.click(screen.getByRole("button", { name: "开始体验" }))
 
   const dialog = screen.getByRole("dialog")
@@ -245,7 +245,7 @@ it("prefers-reduced-motion 时不建立动态文案轮换计时器", () => {
   }) as MediaQueryList)
 
   try {
-    renderAgents()
+    renderAgents({ preview: true })
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("客户支持")
     expect(matchMedia).toHaveBeenCalledWith("(prefers-reduced-motion: reduce)")
     expect(vi.getTimerCount()).toBe(0)
@@ -256,7 +256,7 @@ it("prefers-reduced-motion 时不建立动态文案轮换计时器", () => {
 })
 
 it("关闭按钮退出 Agent 设置弹窗并把焦点交还给开始入口", async () => {
-  renderAgents()
+  renderAgents({ preview: true })
   const opener = screen.getByRole("button", { name: "开始体验" })
   fireEvent.click(opener)
   fireEvent.click(screen.getByRole("button", { name: "关闭 Agent 设置" }))

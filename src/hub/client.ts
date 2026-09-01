@@ -225,6 +225,12 @@ function createIdempotencyKey(prefix: string, stableValue?: string): string {
   return `${prefix}:${uuid ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
 }
 
+const JSON_HEADERS = { "content-type": "application/json" } as const
+
+function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}, stableValue?: string): Record<string, string> {
+  return { ...headers, "Idempotency-Key": createIdempotencyKey(prefix, stableValue) }
+}
+
 export type HubClient = {
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
@@ -259,7 +265,7 @@ async function mutate(path: string, method: "POST" | "DELETE"): Promise<void> {
     response = await fetch(`${HUB_BASE}${path}`, {
       method,
       cache: "no-store",
-      headers: { "Idempotency-Key": createIdempotencyKey("hub-mutation") },
+      headers: idempotencyHeaders("hub-mutation"),
     })
   } catch (error) {
     throw new HubClientError("network", describeUnknown(error), null, null)
@@ -268,8 +274,6 @@ async function mutate(path: string, method: "POST" | "DELETE"): Promise<void> {
     throw await readError(response)
   }
 }
-
-const JSON_HEADERS = { "content-type": "application/json" } as const
 
 function uploadForm(zip: Blob, names: string[] | null): FormData {
   const form = new FormData()
@@ -302,7 +306,7 @@ export function createHubClient(): HubClient {
         response = await fetch(`${HUB_BASE}${path}`, {
           method: "POST",
           cache: "no-store",
-          headers: { "Idempotency-Key": createIdempotencyKey("skill-toggle") },
+          headers: idempotencyHeaders("skill-toggle"),
         })
       } catch (error) {
         throw new HubClientError("network", describeUnknown(error), null, null)
@@ -320,7 +324,7 @@ export function createHubClient(): HubClient {
     confirmUpload: (zip, names, signal) =>
       requestData(skillUploadConfirmPath, uploadConfirmSchema, {
         method: "POST",
-        headers: { "Idempotency-Key": createIdempotencyKey("skill-upload") },
+        headers: idempotencyHeaders("skill-upload"),
         signal,
         body: uploadForm(zip, names),
       }),
@@ -339,7 +343,7 @@ export function createHubClient(): HubClient {
       const body = githubImportRequestSchema.parse({ repository: canonical })
       return requestData(skillGithubImportPath, githubImportResultSchema, {
         method: "POST",
-        headers: { ...JSON_HEADERS, "Idempotency-Key": createIdempotencyKey("skill-github-import", canonical) },
+        headers: idempotencyHeaders("skill-github-import", { ...JSON_HEADERS }, canonical),
         signal,
         body: JSON.stringify(body),
       })
@@ -349,7 +353,7 @@ export function createHubClient(): HubClient {
       (
         await requestData(mcpServersPath, mcpServerRegisteredSchema, {
           method: "POST",
-          headers: JSON_HEADERS,
+          headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
           body: JSON.stringify(
             input.secret_ref === null
               ? { name: input.name, transport: input.transport, url: input.url, allowed_tools: input.allowed_tools }
@@ -367,13 +371,13 @@ export function createHubClient(): HubClient {
       (
         await requestData(customMcpConnectorsPath, mcpServerRegisteredSchema, {
           method: "POST",
-          headers: JSON_HEADERS,
+          headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
           body: JSON.stringify(input),
         })
       ).server,
     registerCustomApi: (input) => requestData(customApiConnectorsPath, customApiViewSchema, {
       method: "POST",
-      headers: JSON_HEADERS,
+      headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
       body: JSON.stringify(input),
     }),
     uploadConnectorIcon: (file) => {
@@ -381,6 +385,7 @@ export function createHubClient(): HubClient {
       form.set("file", file, file.name)
       return requestData(connectorAssetsPath, connectorAssetUploadedSchema, {
         method: "POST",
+        headers: idempotencyHeaders("hub-mutation"),
         body: form,
       })
     },
@@ -391,7 +396,7 @@ export function createHubClient(): HubClient {
       (
         await requestData(mcpSecretsPath, mcpSecretCreatedSchema, {
           method: "POST",
-          headers: JSON_HEADERS,
+          headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
           body: JSON.stringify({ name, value }),
         })
       ).handle,

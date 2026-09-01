@@ -31,6 +31,16 @@ const billingPlansSchema = z.object({ data: z.object({ plans: z.array(z.object({
 // number or a decimal string; both represent the same immutable quote value.
 const moneyMinorSchema = z.union([z.string().regex(/^\d+$/u), z.number().int().nonnegative()])
 const billingCheckoutSchema = z.object({ data: z.object({ checkoutId: z.string().min(1), status: z.string(), amountMinor: moneyMinorSchema, currency: z.string(), checkoutUrl: z.string().url().optional() }) })
+const bffErrorEnvelopeSchema = z.object({
+  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
+  meta: z.object({ request_id: z.string().min(1) }).passthrough(),
+}).passthrough()
+
+async function projectBffError(upstream: Response, fallback: string): Promise<Response> {
+  const parsed = bffErrorEnvelopeSchema.safeParse(await upstream.clone().json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: fallback }, { status: upstream.status })
+  return NextResponse.json({ error: parsed.data.error.message, code: parsed.data.error.code }, { status: upstream.status })
+}
 
 export async function POST(request: Request): Promise<Response> {
   const config = authConfig()
@@ -46,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
   const baseUrl = config.billingBaseUrl ?? config.paymentBaseUrl
-  if (baseUrl === null) {
+  if (baseUrl === null && config.bffBaseUrl == null) {
     return NextResponse.json({ error: "payment_not_configured" }, { status: 503 })
   }
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
@@ -61,6 +71,32 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 })
   }
+
+  if (config.bffBaseUrl != null) {
+    const headers = new Headers({
+      "content-type": "application/json",
+      [SERVICE_HEADER]: SERVICE_VALUE,
+      ["x-kokoro-namespace"]: envelope.namespace,
+      ["x-kokoro-user-id"]: envelope.user_id,
+      ["x-kokoro-request-id"]: request.headers.get("x-kokoro-request-id") || crypto.randomUUID(),
+      ["idempotency-key"]: request.headers.get("idempotency-key")?.trim() || `web-checkout:${envelope.user_id}:${randomUUID()}`,
+    })
+    if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+    let upstream: Response
+    try {
+      upstream = await fetchWithDomain(`${config.bffBaseUrl.replace(/\/+$/, "")}/v1/billing/checkout`, config.domain, {
+        method: "POST", headers, body: JSON.stringify(parsed.data), cache: "no-store", signal: request.signal,
+      })
+    } catch {
+      return NextResponse.json({ error: "billing_unreachable" }, { status: 502 })
+    }
+    if (!upstream.ok) return projectBffError(upstream, "checkout_failed")
+    const raw = await upstream.json().catch(() => null)
+    const checkout = z.object({ data: z.object({ checkout_url: z.string().min(1) }).strict() }).passthrough().safeParse(raw)
+    if (!checkout.success) return NextResponse.json({ error: "billing_bad_response" }, { status: 502 })
+    return NextResponse.json({ checkout_url: checkout.data.data.checkout_url }, { status: 200 })
+  }
+  if (baseUrl === null) return NextResponse.json({ error: "payment_not_configured" }, { status: 503 })
 
   const headers = new Headers()
   headers.set("content-type", "application/json")

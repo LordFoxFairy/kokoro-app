@@ -4,6 +4,7 @@
 // upstream returns a typed HTTP error and is never replaced with preview data.
 
 import { NextResponse } from "next/server"
+import { z } from "zod"
 
 import {
   authConfig,
@@ -20,9 +21,24 @@ export const dynamic = "force-dynamic"
 
 const MUTATION_METHODS = new Set(["POST", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
+const bffErrorEnvelopeSchema = z.object({
+  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
+  meta: z.object({ request_id: z.string().min(1) }).passthrough(),
+}).passthrough()
 
 function errorResponse(error: string, status: number): Response {
   return NextResponse.json({ error }, { status })
+}
+
+async function projectBffError(upstream: Response, responseHeaders: Headers): Promise<Response | null> {
+  const parsed = bffErrorEnvelopeSchema.safeParse(await upstream.clone().json().catch(() => null))
+  if (!parsed.success) return null
+  responseHeaders.set("content-type", "application/json")
+  responseHeaders.delete("content-length")
+  return new Response(JSON.stringify({ error: parsed.data.error.message, code: parsed.data.error.code }), {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }
 
 export async function proxyScheduledTaskRequest(
@@ -31,7 +47,7 @@ export async function proxyScheduledTaskRequest(
 ): Promise<Response> {
   const config = authConfig()
   if (config === null) return errorResponse("auth_not_configured", 503)
-  if (config.hubBaseUrl === null) return errorResponse("scheduled_tasks_not_configured", 503)
+  if (config.bffBaseUrl == null && config.hubBaseUrl === null) return errorResponse("scheduled_tasks_not_configured", 503)
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) return errorResponse("forbidden_origin", 403)
 
   const resolved = await resolveSessionWithRefresh(request, config)
@@ -44,7 +60,9 @@ export async function proxyScheduledTaskRequest(
 
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const suffix = path.length === 0 ? "" : `/${path.map((segment) => encodeURIComponent(segment)).join("/")}`
-  const target = `${config.hubBaseUrl.replace(/\/+$/, "")}/hub/scheduled-tasks${suffix}${new URL(request.url).search}`
+  const target = config.bffBaseUrl != null
+    ? `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/scheduled-tasks${suffix}${new URL(request.url).search}`
+    : `${config.hubBaseUrl!.replace(/\/+$/, "")}/hub/scheduled-tasks${suffix}${new URL(request.url).search}`
   const headers = new Headers({
     [SERVICE_HEADER]: SERVICE_VALUE,
     ["x-kokoro-namespace"]: envelope.namespace,
@@ -79,6 +97,17 @@ export async function proxyScheduledTaskRequest(
     if (value !== null) responseHeaders.set(name, value)
   }
   if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
+  if (config.bffBaseUrl != null && !upstream.ok) {
+    const projectedError = await projectBffError(upstream, responseHeaders)
+    if (projectedError !== null) return projectedError
+  }
+  if (config.bffBaseUrl != null && upstream.ok) {
+    const raw = await upstream.json().catch(() => null) as { data?: unknown } | null
+    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data")) return errorResponse("invalid_scheduled_tasks_response", 502)
+    responseHeaders.set("content-type", "application/json")
+    responseHeaders.delete("content-length")
+    return new Response(JSON.stringify(raw.data), { status: upstream.status, headers: responseHeaders })
+  }
   return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
 }
 

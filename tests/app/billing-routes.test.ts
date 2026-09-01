@@ -38,6 +38,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
   delete process.env.KOKORO_BILLING_BASE_URL
+  delete process.env.KOKORO_BFF_BASE_URL
   if (originalMockWebhookSecret === undefined) delete process.env.KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET
   else process.env.KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET = originalMockWebhookSecret
   for (const k of Object.keys(ENV)) delete process.env[k]
@@ -89,6 +90,39 @@ describe("GET /api/billing/plans", () => {
     expect(headers.get("forwarded")).toBe("host=dev.kokoro.localhost")
   })
 
+  it("routes the billing catalog through the independent business BFF", async () => {
+    process.env.KOKORO_BFF_BASE_URL = "http://bff.test"
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {
+      data: { plans: [{ id: "p1", key: "starter", name: "Starter", currency: "USD", amount_minor: "900", credit_micros: "1000000", billing_interval: "once" }] },
+      meta: { request_id: "bff-request" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const { GET } = await import("@/app/api/billing/plans/route")
+
+    const response = await GET(new Request("http://localhost/api/billing/plans", { headers: { cookie: sessionCookie() } }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ plans: [{ id: "p1", key: "starter", name: "Starter", currency: "USD", amount_minor: "900", credit_micros: "1000000", billing_interval: "once" }] })
+    const [target, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(target).toBe("http://bff.test/v1/billing/plans")
+    expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("team_1")
+    expect(new Headers(init.headers).get("x-kokoro-user-id")).toBe("u1")
+  })
+
+  it("preserves the BFF status and projects canonical catalog errors to the flat Web shape", async () => {
+    process.env.KOKORO_BFF_BASE_URL = "http://bff.test"
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(429, {
+      error: { code: "billing_rate_limited", message: "Too many billing requests" },
+      meta: { request_id: "bff-plans-error" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const { GET } = await import("@/app/api/billing/plans/route")
+
+    const response = await GET(new Request("http://localhost/api/billing/plans", { headers: { cookie: sessionCookie() } }))
+
+    expect(response.status).toBe(429)
+    expect(await response.json()).toEqual({ error: "Too many billing requests", code: "billing_rate_limited" })
+  })
+
   it("未登录 → 401（不触达 payment）", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
@@ -110,6 +144,47 @@ describe("GET /api/billing/plans", () => {
 })
 
 describe("POST /api/billing/checkout", () => {
+  it("routes checkout intent through the independent business BFF", async () => {
+    process.env.KOKORO_BFF_BASE_URL = "http://bff.test"
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {
+      data: { checkout_url: "/billing/mock-checkout/plan_starter" },
+      meta: { request_id: "bff-checkout" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const { POST } = await import("@/app/api/billing/checkout/route")
+
+    const response = await POST(new Request("http://localhost/api/billing/checkout", {
+      method: "POST",
+      headers: { cookie: sessionCookie(), "content-type": "application/json", origin: "http://localhost", host: "localhost", "idempotency-key": "checkout-1" },
+      body: JSON.stringify({ plan_id: "plan_starter", amountMinor: 1, teamId: "evil" }),
+    }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ checkout_url: "/billing/mock-checkout/plan_starter" })
+    const [target, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(target).toBe("http://bff.test/v1/billing/checkout")
+    expect(JSON.parse(init.body as string)).toEqual({ plan_id: "plan_starter" })
+    expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("team_1")
+  })
+
+  it("preserves the BFF status and projects canonical checkout errors to the flat Web shape", async () => {
+    process.env.KOKORO_BFF_BASE_URL = "http://bff.test"
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(409, {
+      error: { code: "checkout_conflict", message: "Checkout already exists" },
+      meta: { request_id: "bff-checkout-error" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const { POST } = await import("@/app/api/billing/checkout/route")
+
+    const response = await POST(new Request("http://localhost/api/billing/checkout", {
+      method: "POST",
+      headers: { cookie: sessionCookie(), "content-type": "application/json", origin: "http://localhost", host: "localhost" },
+      body: JSON.stringify({ plan_id: "plan_starter" }),
+    }))
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: "Checkout already exists", code: "checkout_conflict" })
+  })
+
   it("Billing 路径先解析 published offer revision，再创建 immutable quote checkout", async () => {
     process.env.KOKORO_BILLING_BASE_URL = "http://billing.test"
     const fetchMock = vi.fn()
