@@ -9,6 +9,15 @@ expect.extend(jestDomMatchers)
 
 import { __resetResourceStore } from "@/lib/query/resource-store"
 
+// Radix FocusScope schedules its unmount event with `setTimeout`. Node 22
+// exposes its own Event/CustomEvent globals, which are not accepted by a
+// jsdom element when a delayed callback crosses a test-file boundary. Keep
+// the constructors aligned with the active jsdom document so the full suite
+// remains deterministic under --no-file-parallelism as well as the default
+// worker pool.
+Object.defineProperty(globalThis, "Event", { configurable: true, writable: true, value: window.Event })
+Object.defineProperty(globalThis, "CustomEvent", { configurable: true, writable: true, value: window.CustomEvent })
+
 // 查询层模块级缓存跨用例隔离：每例后清空，避免上例数据/在飞态污染下例（与 cleanup 同级）。
 afterEach(() => {
   __resetResourceStore()

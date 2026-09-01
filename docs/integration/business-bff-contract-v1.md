@@ -9,21 +9,20 @@
 ```text
 浏览器
   → LordFoxFairy/kokoro-app（Web，同源 /api/*）
-  → LordFoxFairy/kokoro-bff（业务投影 /v1/*）
+  → LordFoxFairy/kokoro-bff（Chat + 业务投影 /v1/*）
   → 业务 API 子仓库（Projects、Skills、Scheduled、Library、Billing 等）
 
-浏览器
-  → LordFoxFairy/kokoro-app（同源 /api/session/*）
-  → kokoro-session（Chat/SSE/run/artifact 事实面）
+kokoro-bff（Chat 业务边界）
+  → kokoro-agent 内部 Run/Control/Worker 契约
 
 kokoro-agent
   → Redis run streams（执行 worker；当前没有 HTTP ingress）
 ```
 
 - `kokoro-app` 是当前唯一 Web 入口；每个 site/product 仍然是独立仓库。
-- `kokoro-bff` 是业务层，不是 Gateway。它负责面向 Web 的聚合、投影、幂等、错误归一和 Mock/Live upstream 选择。
-- `kokoro-agent` 当前是 Redis worker，BFF 不直接访问它的 Redis；第一阶段 Agent setup 使用 BFF 内置 Mock projection。
-- Chat 不迁入 BFF：Session、消息、SSE、HITL/control、文件、交付物和分享仍由 `kokoro-session` 所有。
+- `kokoro-bff` 是业务层，不是 Gateway。它负责面向 Web 的 Chat 编排、聚合、投影、幂等、错误归一和 Mock/Live upstream 选择。
+- `kokoro-bff` 的 Chat 业务边界是 Chat 的唯一 Web 业务入口；它不把 Chat 拆成新的仓库，也不把 Agent Redis 暴露给浏览器。
+- `kokoro-agent` 只负责 Redis Run/Control/Worker、事件和 outbox；BFF 通过内部 adapter 对接，不直接访问 Agent Redis。
 - `kokoro-gateway` 不在当前运行拓扑、环境默认值、CI 或部署路径中；旧 Gateway 文档只作为历史兼容记录，不是接入要求。
 
 ## 2. BFF API v1
@@ -64,6 +63,10 @@ kokoro-agent
 | GET | `/v1/library` | 资料/产物投影 |
 | GET | `/v1/billing/plans`, `/v1/billing/summary` | 套餐与用量摘要 |
 | POST | `/v1/billing/checkout` | 业务 checkout 投影 |
+| GET/POST/PATCH/DELETE | `/v1/sessions[/:id]` | Chat 会话、消息、标题和软删除 |
+| GET/POST | `/v1/sessions/:id/events`, `/v1/sessions/:id/runs/:runId/control` | Chat SSE、Run control、HITL |
+| POST/DELETE | `/v1/sessions/:id/share` | Chat 分享生命周期 |
+| GET | `/v1/models`, `/v1/agents`, `/v1/artifacts[/:hash]` | Chat 候选、成果与下载投影 |
 
 所有变更请求必须带 `Idempotency-Key`。BFF 按 namespace、方法、路径和 key 做幂等隔离；重复请求返回第一次结果。
 唯一例外是 `POST /v1/skills/github/preview` 与 `POST /v1/skills/upload/preview`：它们只做预检，不写入业务状态。
@@ -102,7 +105,9 @@ Web 保留既有浏览器路径，只在 server route 改变 upstream：
 | `/api/agents/connections/setup` | `/v1/agents/connections/setup` |
 | `/api/billing/plans`, `/api/billing/checkout` | `/v1/billing/*` |
 
-`/api/session/*` 不经过 BFF，继续直连 `KOKORO_SESSION_BASE_URL`。如果对应 BFF 或业务上游未配置，Web 返回明确 503，不能静默回到另一套 fixture。
+`/api/session/*` 是 Web 为兼容既有 `SessionClient` 保留的同源路径，不是独立服务入口；它始终由
+Web server route 转换到 `${KOKORO_BFF_BASE_URL}/v1/*`。BFF 未配置返回 `503 bff_not_configured`，
+不可达返回 `502 bff_unreachable`，不直连 Session，不回退 Gateway，也不静默切换 preview fixture。
 
 ## 4. 身份与域名
 
@@ -112,7 +117,7 @@ Web → BFF 只在服务端传入：
 x-kokoro-service: web-bff
 x-kokoro-internal-secret: <KOKORO_BFF_SHARED_SECRET>
 x-kokoro-namespace: <sealed-session namespace>
-x-kokoro-user-id: <sealed-session user id>
+x-kokoro-principal-id: <trusted principal id>
 x-kokoro-request-id: <request id>
 ```
 
@@ -126,7 +131,7 @@ Forwarded: host=dev.kokoro.localhost
 
 ## 5. Mock → Live 验收顺序
 
-1. BFF 自身先运行 `KOKORO_BFF_MODE=mock`，通过 `/healthz`、项目、Agent setup、Scheduled 和幂等测试。
+1. BFF 自身先运行 `KOKORO_BFF_MODE=mock`，通过 `/healthz`、Chat、项目、Agent setup、Scheduled 和幂等测试。
 2. Web server route 配置 `KOKORO_BFF_BASE_URL=http://127.0.0.1:4300`，验证 Web 保持原有 `/api/*` 形状并正确解包 projection。
 3. Agent 侧仅验证自身 Redis worker contract 和本文边界；没有 HTTP ingress 时不伪造 Agent live endpoint。
 4. 每个业务 API 子仓库分别提供 `/v1` 对应的版本化 live contract，再按 env 逐项替换 BFF mock upstream。

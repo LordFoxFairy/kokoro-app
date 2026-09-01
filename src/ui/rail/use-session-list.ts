@@ -24,6 +24,13 @@ function toEntry(item: SessionListItem): SessionListEntry {
 }
 
 type Lister = Pick<SessionClient, "listSessions">
+type SessionListPage = Awaited<ReturnType<Lister["listSessions"]>>
+
+// React Strict Mode and stable shell remounts can start the same first-page
+// request before the previous promise has settled. Share only the in-flight
+// promise: refreshSignal still forces a new request after a mutation, while
+// concurrent mounts no longer duplicate the network round trip.
+const firstPageInflight = new WeakMap<object, Map<string, Promise<SessionListPage>>>()
 
 type ListState = {
   scopeKey: string
@@ -40,6 +47,24 @@ function scopeKey(scope: SessionScope): string {
   return scope.kind === "direct" ? "direct" : `project:${scope.projectRef}`
 }
 
+function listFirstPage(client: Lister, key: string, scope: SessionScope): Promise<SessionListPage> {
+  let byScope = firstPageInflight.get(client)
+  if (byScope === undefined) {
+    byScope = new Map()
+    firstPageInflight.set(client, byScope)
+  }
+  const current = byScope.get(key)
+  if (current !== undefined) return current
+
+  const request = client.listSessions(undefined, scope)
+  byScope.set(key, request)
+  const clear = (): void => {
+    if (byScope?.get(key) === request) byScope.delete(key)
+  }
+  void request.then(clear, clear)
+  return request
+}
+
 export function useSessionList(client: Lister, refreshSignal: number, scope: SessionScope = DIRECT_SESSION_SCOPE): SessionListView {
   const [state, setState] = useState<ListState>(INITIAL)
   const requestGenerationRef = useRef(0)
@@ -48,7 +73,7 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
   const fetchFirst = useCallback(async (): Promise<ListState> => {
     try {
-      const page = await client.listSessions(undefined, scope)
+      const page = await listFirstPage(client, currentScopeKey, scope)
       return {
         scopeKey: currentScopeKey,
         entries: page.sessions.map(toEntry),

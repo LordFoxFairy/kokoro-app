@@ -8,9 +8,8 @@ vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }))
 
 const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",
-  KOKORO_USER_BASE_URL: "http://user.test",
-  KOKORO_SESSION_BASE_URL: "http://session.test",
-  KOKORO_GATEWAY_BASE_URL: "http://gateway.test",
+  KOKORO_IAM_BASE_URL: "http://user.test",
+  KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
@@ -39,10 +38,10 @@ afterEach(() => {
 })
 
 describe("/api/session/[...path] proxy", () => {
-  it("injects Bearer from the envelope and forwards to the real session base", async () => {
+  it("projects Chat through the BFF and unwraps the v1 response for the browser contract", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
-    requestWithDomain.mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }))
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: { sessions: [] }, meta: { request_id: "req_1" } }), { status: 200, headers: { "content-type": "application/json" } }))
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const res = await GET(
@@ -52,15 +51,17 @@ describe("/api/session/[...path] proxy", () => {
     expect(res.status).toBe(200)
 
     const [target, domain, init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string> }]
-    expect(target).toBe("http://session.test/sessions/ses_1?x=1")
+    expect(target).toBe("http://bff.test/v1/sessions/ses_1?x=1")
     expect(domain).toBe("dev.kokoro.localhost")
-    expect(new Headers(init.headers).get("authorization")).toBe("Bearer rt.jwt.sig")
     expect(new Headers(init.headers).get("x-kokoro-service")).toBe("web-bff")
     expect(new Headers(init.headers).get("x-kokoro-internal-secret")).toBe("web-bff-secret")
+    expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("team_1")
+    expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBe("u1")
+    expect(await res.json()).toEqual({ sessions: [] })
   })
 
-  it("fails closed when the direct Session base is omitted, even if Gateway is configured", async () => {
-    delete process.env.KOKORO_SESSION_BASE_URL
+  it("fails closed when the BFF base is omitted", async () => {
+    delete process.env.KOKORO_BFF_BASE_URL
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const response = await GET(
@@ -69,7 +70,7 @@ describe("/api/session/[...path] proxy", () => {
     )
 
     expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ error: "auth_not_configured" })
+    expect(await response.json()).toEqual({ error: "bff_not_configured" })
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
@@ -103,6 +104,24 @@ describe("/api/session/[...path] proxy", () => {
     const [, domain, init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string> }]
     expect(domain).toBe("dev.kokoro.localhost")
     expect(new Headers(init.headers).get("last-event-id")).toBe("42")
+  })
+
+  it("projects a BFF error envelope without leaking upstream internals", async () => {
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({
+      error: { code: "run_not_active", message: "Run is not active" },
+      meta: { request_id: "req_error" },
+    }), { status: 409, headers: { "content-type": "application/json" } }))
+    const { POST } = await import("@/app/api/session/[...path]/route")
+    const response = await POST(
+      new Request("http://localhost/api/session/sessions/ses_1/runs/run_1/control", {
+        method: "POST",
+        headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json" },
+        body: JSON.stringify({ kind: "run.cancel", decision_id: "decision_1" }),
+      }),
+      params(["sessions", "ses_1", "runs", "run_1", "control"]),
+    )
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: "Run is not active", code: "run_not_active" })
   })
 
   it("returns 401 when there is no envelope", async () => {

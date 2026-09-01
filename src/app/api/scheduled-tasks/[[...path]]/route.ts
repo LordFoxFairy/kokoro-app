@@ -47,7 +47,7 @@ export async function proxyScheduledTaskRequest(
 ): Promise<Response> {
   const config = authConfig()
   if (config === null) return errorResponse("auth_not_configured", 503)
-  if (config.bffBaseUrl == null && config.hubBaseUrl === null) return errorResponse("scheduled_tasks_not_configured", 503)
+  if (config.bffBaseUrl == null) return errorResponse("scheduled_tasks_not_configured", 503)
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) return errorResponse("forbidden_origin", 403)
 
   const resolved = await resolveSessionWithRefresh(request, config)
@@ -60,13 +60,11 @@ export async function proxyScheduledTaskRequest(
 
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const suffix = path.length === 0 ? "" : `/${path.map((segment) => encodeURIComponent(segment)).join("/")}`
-  const target = config.bffBaseUrl != null
-    ? `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/scheduled-tasks${suffix}${new URL(request.url).search}`
-    : `${config.hubBaseUrl!.replace(/\/+$/, "")}/hub/scheduled-tasks${suffix}${new URL(request.url).search}`
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/scheduled-tasks${suffix}${new URL(request.url).search}`
   const headers = new Headers({
     [SERVICE_HEADER]: SERVICE_VALUE,
     ["x-kokoro-namespace"]: envelope.namespace,
-    ["x-kokoro-user-id"]: envelope.user_id,
+    ["x-kokoro-principal-id"]: envelope.user_id,
     ["x-kokoro-request-id"]: requestId,
   })
   if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
@@ -97,11 +95,11 @@ export async function proxyScheduledTaskRequest(
     if (value !== null) responseHeaders.set(name, value)
   }
   if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
-  if (config.bffBaseUrl != null && !upstream.ok) {
+  if (!upstream.ok) {
     const projectedError = await projectBffError(upstream, responseHeaders)
     if (projectedError !== null) return projectedError
   }
-  if (config.bffBaseUrl != null && upstream.ok) {
+  if (upstream.ok) {
     const raw = await upstream.json().catch(() => null) as { data?: unknown } | null
     if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data")) return errorResponse("invalid_scheduled_tasks_response", 502)
     responseHeaders.set("content-type", "application/json")

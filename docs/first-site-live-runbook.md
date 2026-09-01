@@ -1,37 +1,36 @@
-# Kokoro User Web 发布与联调手册
+# Kokoro Web 发布与联调手册（阶段 2）
 
 ## 1. 固定边界
 
 本地 checkout `kokoro` 对应 GitHub 独立仓库 `LordFoxFairy/kokoro-app`：一套源码、一条版本线、一个部署实例。仓库内部不再引入
-运行时 Site registry、Site selector 或 Host → React/CSS 映射。其它产品使用自己的 Web 仓库，
-通用能力通过 `kokoro-web-shared` 的 semver package 复用。
+运行时 Site registry、Site selector 或 Host → React/CSS 映射。其它产品使用自己的 Web 仓库；共享能力只能通过版本化、浏览器安全的
+package 复用，不把另一个 Web 或业务仓库源码、`src/site`、workspace path 或 git submodule 带入本仓库。
 
 ```text
 Browser
   → kokoro same-origin BFF (/api/*)
-  → kokoro-gateway (server-only unified business entry)
-  → backend services (User / Session / System / Hub / Billing)
-  → backend resolves tenant, auth, permission and data scope
+  → kokoro-bff (/v1/*; Chat + business orchestration)
+  → owner repos (IAM / System / Model / Billing / Capability / Storage / Scheduler)
+  → kokoro-agent（内部 Run/Control/Worker）
 ```
 
 浏览器不发送或接收 `tenant_id`、`site_id`、内部 namespace、workload token 或 IAM JWT。登录态只
 通过 httpOnly session cookie 留在 BFF。
+
+契约入口：[`integration/business-bff-contract-v1.md`](integration/business-bff-contract-v1.md) 是当前业务 `/v1/*` 权威；[`integration/user-web-api-contract-v4.md`](integration/user-web-api-contract-v4.md) 是本仓库 `/api/*` adapter 权威；旧 Gateway/Session 说明仅从 [`integration/kokoro-gateway-boundary-v1.md`](integration/kokoro-gateway-boundary-v1.md) 作为历史资料阅读。
 
 ## 2. 服务端环境
 
 ```dotenv
 KOKORO_DOMAIN=dev.kokoro.localhost
 KOKORO_WEB_SESSION_SECRET=BACKEND_SECRET
-KOKORO_GATEWAY_BASE_URL=http://kokoro-gateway:8080
+KOKORO_BFF_BASE_URL=http://kokoro-bff:4300
 KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
+# 当前 Web 仅保留服务端认证 adapter 的显式 IAM 地址；业务 API 不从 Web 直连 owner。
+# KOKORO_IAM_BASE_URL=http://kokoro-iam:4211
 
-# 只有做分阶段迁移时才覆盖单个业务面；统一部署保持以下变量为空。
-# KOKORO_USER_BASE_URL=http://kokoro-user:4211
-# KOKORO_SESSION_BASE_URL=http://kokoro-session:3900
-# KOKORO_SYSTEM_BASE_URL=http://kokoro-system:4240
-# KOKORO_HUB_BASE_URL=http://kokoro-hub:4251
-# KOKORO_AGENT_BASE_URL=http://kokoro-agent:4260
-# KOKORO_BILLING_BASE_URL=http://kokoro-billing:4245
+# 业务 owner 的 URL、凭据和 Redis/数据库配置由 kokoro-bff 自己的部署环境管理；Web 不直连 owner repos。
+# 业务 API 目录见 ../../kokoro-bff/docs/api/v1/ 与本仓库 integration/business-bff-contract-v1.md
 ```
 
 所有 secret、内部服务 URL 和 workload token 只放部署平台变量/secret，不使用 `NEXT_PUBLIC_*`。
@@ -42,7 +41,7 @@ KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
 1. 让访问域名与 `KOKORO_DOMAIN` 保持一致；本地推荐 `dev.kokoro.localhost:3000`。
 2. 访问 `/`，确认 308/307 进入 `/app`，没有第二套旧首页布局。
 3. 登录或进入 preview，检查浏览器 Network 只出现同源 `/api/*`。
-4. 检查 BFF 到 Gateway，以及 Gateway 到 User、Session、System、Hub、Billing 的请求链路都有：
+4. 检查 Web 到业务 BFF，以及业务 BFF 到 IAM、System、Model、Billing、Capability、Storage、Scheduler 和 Agent 的请求链路都有：
 
    ```http
    Forwarded: host=<KOKORO_DOMAIN>
@@ -53,7 +52,7 @@ KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
 6. 确认公开 JSON、URL、body、cookie、localStorage 和错误响应不出现内部隔离键。
 7. 验证登录回调、Session SSE、直接聊天、项目聊天、Skills、Library、Scheduled、Agent、设置、
    文件下载、分享和 Billing 的 loading/empty/error/forbidden 状态。
-8. 同一个邮箱在后端不同租户数据中的隔离由 Gateway/领域服务根据 RFC 7239 `Forwarded` 和会话完成，Web 不自行解析 tenant。
+8. 同一个邮箱在后端不同租户数据中的隔离由业务 BFF/owner repo 根据 RFC 7239 `Forwarded` 和会话完成，Web 不自行解析 tenant。
 
 ## 4. 本地回归
 
@@ -67,7 +66,7 @@ pnpm typecheck
 pnpm build
 ```
 
-未连接后端时，`/app` 使用合成 preview fixture；preview 不代表真实业务数据，也不伪造后端响应。
+未连接后端时，`/app` 使用合成 preview fixture；preview 不代表真实业务数据，也不伪造 BFF/owner repo 响应。
 Docker Compose 使用 `cp .env.example .env`；生产容器可用 `--env-file .env.prod`，但 Next.js
 文件加载的标准生产名称是 `.env.production`。需要 Cloudflare 预览时再运行 `pnpm run cf:build`。
 
@@ -103,6 +102,6 @@ KOKORO_DOMAIN=dev.kokoro.localhost \
 pnpm smoke:first-site
 ```
 
-Smoke 应覆盖 `/` → `/app`、runtime manifest、匿名/认证态、Session BFF，以及浏览器响应不暴露
+Smoke 应覆盖 `/` → `/app`、runtime manifest、匿名/认证态、Chat/业务 BFF，以及浏览器响应不暴露
 内部身份字段。发布后记录版本 tag、容器 digest 或 Cloudflare deployment version，回滚使用上一
 个完整版本，不修改正在运行的镜像。

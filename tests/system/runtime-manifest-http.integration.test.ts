@@ -26,7 +26,6 @@ function json(response: import("node:http").ServerResponse, status: number, body
 
 describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
   const originalSystemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL
-  const originalGatewayBaseUrl = process.env.KOKORO_GATEWAY_BASE_URL
   const originalDomain = process.env.KOKORO_DOMAIN
   let system: RunningServer
   let receivedDomain = ""
@@ -60,8 +59,6 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     await new Promise<void>((resolve, reject) => system.server.close((error) => error ? reject(error) : resolve()))
     if (originalSystemBaseUrl === undefined) delete process.env.KOKORO_SYSTEM_BASE_URL
     else process.env.KOKORO_SYSTEM_BASE_URL = originalSystemBaseUrl
-    if (originalGatewayBaseUrl === undefined) delete process.env.KOKORO_GATEWAY_BASE_URL
-    else process.env.KOKORO_GATEWAY_BASE_URL = originalGatewayBaseUrl
     if (originalDomain === undefined) delete process.env.KOKORO_DOMAIN
     else process.env.KOKORO_DOMAIN = originalDomain
   })
@@ -115,11 +112,9 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     expect(secondBody.data?.theme).toEqual({ primary: "#123456", brandName: "Kokoro" })
   })
 
-  it("does not use Gateway as a hidden System fallback", async () => {
+  it("fails closed when the explicit System base is absent", async () => {
     const explicitSystemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL
-    const explicitGatewayBaseUrl = process.env.KOKORO_GATEWAY_BASE_URL
     delete process.env.KOKORO_SYSTEM_BASE_URL
-    process.env.KOKORO_GATEWAY_BASE_URL = system.baseUrl
 
     try {
       const response = await GET(new Request("https://first.example/api/system/runtime-manifest?product_id=kokoro"))
@@ -128,8 +123,6 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     } finally {
       if (explicitSystemBaseUrl === undefined) delete process.env.KOKORO_SYSTEM_BASE_URL
       else process.env.KOKORO_SYSTEM_BASE_URL = explicitSystemBaseUrl
-      if (explicitGatewayBaseUrl === undefined) delete process.env.KOKORO_GATEWAY_BASE_URL
-      else process.env.KOKORO_GATEWAY_BASE_URL = explicitGatewayBaseUrl
     }
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createPreviewClient } from "@/dev/preview-transport"
 
@@ -11,6 +11,34 @@ async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void>
 }
 
 describe("preview transport control loop", () => {
+  afterEach(() => {
+    window.localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it("defers persisted history parsing until the first transport operation", async () => {
+    const getItem = vi.spyOn(Storage.prototype, "getItem")
+    const client = createPreviewClient({ stepMs: 0 })
+
+    expect(getItem).not.toHaveBeenCalledWith("kokoro.preview.sessions.v1")
+
+    await client.listSessions()
+
+    expect(getItem).toHaveBeenCalledWith("kokoro.preview.sessions.v1")
+  })
+
+  it("coalesces one submitted turn into a single preview storage write", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem")
+    const client = createPreviewClient({ stepMs: 0 })
+
+    await client.createMessage("preview-write-session", {
+      idempotency_key: "preview-write-1",
+      content: "一次提交",
+    })
+
+    expect(setItem).toHaveBeenCalledTimes(1)
+  })
+
   it("HITL approve emits returned tool, assistant completion, and run completion", async () => {
     const client = createPreviewClient({ stepMs: 0 })
     const events: string[] = []

@@ -1,0 +1,1305 @@
+# GENERATED SOURCE — authority: contract/slice-a-contract-manifest.yaml
+openapi: 3.1.0
+info:
+  title: Kokoro Slice A Web API
+  version: 1.0.0
+  license:
+    name: Proprietary
+servers:
+- url: /
+paths:
+  /api/auth/magic-link/request:
+    post:
+      operationId: requestMagicLink
+      summary: Request magic link
+      parameters:
+      - name: Origin
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[!-~]+$
+      responses:
+        '202':
+          description: Success
+          headers:
+            Set-Cookie:
+              description: kokoro_auth_nonce=<derived>; Path=/api/auth; Max-Age=900; HttpOnly; Secure; SameSite=Lax
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestMagicLinkHttpResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '429':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestMagicLinkHttpRequest'
+  /api/auth/callback:
+    get:
+      operationId: consumeMagicLink
+      summary: Consume magic link
+      parameters:
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: kokoro_auth_nonce
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '303':
+          description: Success
+          headers:
+            Location:
+              description: /
+              schema:
+                type: string
+            Set-Cookie:
+              description: kokoro_session=<sealed>; Path=/; Max-Age=min(refresh_expires_at-now,2592000); HttpOnly; Secure;
+                SameSite=Lax | kokoro_auth_nonce=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax
+              schema:
+                type: string
+            Referrer-Policy:
+              description: no-referrer
+              schema:
+                type: string
+          x-kokoro-alternate-responses:
+            iamFailure:
+              status: 303
+              headers:
+                Location: /?auth=link_unavailable
+                Set-Cookie: kokoro_auth_nonce=; Path=/api/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax
+                Referrer-Policy: no-referrer
+              body: null
+      security: []
+  /api/auth/logout:
+    post:
+      operationId: logout
+      summary: Logout
+      parameters:
+      - name: Origin
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Success
+          headers:
+            Set-Cookie:
+              description: kokoro_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax
+              schema:
+                type: string
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+  /api/auth/session-state:
+    get:
+      operationId: getSessionState
+      summary: Get session state
+      parameters:
+      - name: kokoro_session
+        in: cookie
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStateHttpResponse'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security: []
+  /api/session/conversations:
+    post:
+      operationId: createConversation
+      summary: Create conversation
+      parameters:
+      - name: Origin
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[!-~]+$
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/kokoro.chat.v1.CreateConversationResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '409':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationHttpRequest'
+    get:
+      operationId: listConversations
+      summary: List conversations
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/kokoro.chat.v1.ListConversationsResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+  /api/session/conversations/{conversation_id}:
+    get:
+      operationId: readConversationSnapshot
+      summary: Read conversation snapshot
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/kokoro.chat.v1.ReadConversationSnapshotResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '404':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+  /api/session/conversations/{conversation_id}/messages:
+    post:
+      operationId: submitMessage
+      summary: Submit message
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Origin
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[!-~]+$
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/kokoro.chat.v1.SubmitMessageResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '404':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '409':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitMessageHttpRequest'
+  /api/session/conversations/{conversation_id}/interactions/{interaction_id}/decisions:
+    post:
+      operationId: decideInteraction
+      summary: Decide interaction
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: interaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Origin
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[!-~]+$
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/kokoro.chat.v1.DecideInteractionResponse'
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '404':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '409':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideInteractionHttpRequest'
+  /api/session/conversations/{conversation_id}/events:
+    get:
+      operationId: streamConversationEvents
+      summary: Stream conversation events
+      parameters:
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: after_seq
+        in: query
+        required: true
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: kokoro_session
+        in: cookie
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '401':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '403':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '404':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '409':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '503':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+        '500':
+          description: Kokoro error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KokoroError'
+      security:
+      - cookieAuth: []
+components:
+  schemas:
+    kokoro.chat.v1.ConversationState:
+      type: string
+      enum:
+      - unspecified
+      - active
+      - archived
+      - trashed
+    kokoro.chat.v1.InteractionStatus:
+      type: string
+      enum:
+      - unspecified
+      - pending
+      - resolved
+      - cancelled
+      - expired
+    kokoro.chat.v1.MessagePartKind:
+      type: string
+      enum:
+      - unspecified
+      - text
+      - tool_call
+      - tool_result
+      - status
+      - thinking
+      - todo
+      - subagent
+      - delivery
+    kokoro.chat.v1.MessagePartStatus:
+      type: string
+      enum:
+      - unspecified
+      - pending
+      - complete
+      - failed
+    kokoro.chat.v1.MessageRole:
+      type: string
+      enum:
+      - unspecified
+      - user
+      - assistant
+      - system
+      - tool
+    kokoro.chat.v1.MessageStatus:
+      type: string
+      enum:
+      - unspecified
+      - pending
+      - streaming
+      - completed
+      - failed
+    kokoro.chat.v1.ProjectedInteractionKind:
+      type: string
+      enum:
+      - unspecified
+      - approval
+      - question
+      - review
+      - input
+    kokoro.chat.v1.RunViewState:
+      type: string
+      enum:
+      - unspecified
+      - preparing
+      - queued
+      - running
+      - awaiting_input
+      - completed
+      - cancelled
+      - failed
+      - admission_failed
+    kokoro.chat.v1.RunViewTerminalKind:
+      type: string
+      enum:
+      - unspecified
+      - completed
+      - cancelled
+      - failed
+      - admission_failed
+    kokoro.common.v1.ControlStatus:
+      type: string
+      enum:
+      - unspecified
+      - pending
+      - persisted
+      - applied
+      - failed
+    kokoro.chat.v1.Conversation:
+      type: object
+      additionalProperties: false
+      properties:
+        conversation_id:
+          type: string
+        organization_id:
+          type: string
+        site_id:
+          type: string
+        title:
+          type: string
+        agent_namespace:
+          type: string
+        state:
+          $ref: '#/components/schemas/kokoro.chat.v1.ConversationState'
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - conversation_id
+      - organization_id
+      - site_id
+      - title
+      - agent_namespace
+      - state
+      - generation
+      - created_at
+      - updated_at
+    kokoro.chat.v1.ConversationSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        conversation_id:
+          type: string
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/kokoro.chat.v1.ConversationState'
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - conversation_id
+      - title
+      - state
+      - generation
+      - updated_at
+    kokoro.chat.v1.CreateConversationResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        conversation_id:
+          type: string
+        agent_namespace:
+          type: string
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        watermark:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        replayed:
+          type: boolean
+      required:
+      - conversation_id
+      - agent_namespace
+      - generation
+      - watermark
+      - replayed
+    kokoro.chat.v1.DecideInteractionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        control_id:
+          type: string
+        interaction_generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        control_status:
+          $ref: '#/components/schemas/kokoro.common.v1.ControlStatus'
+        watermark:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        replayed:
+          type: boolean
+      required:
+      - control_id
+      - interaction_generation
+      - control_status
+      - watermark
+      - replayed
+    kokoro.chat.v1.Interaction:
+      type: object
+      additionalProperties: false
+      properties:
+        interaction_id:
+          type: string
+        agent_run_id:
+          type: string
+        conversation_id:
+          type: string
+        kind:
+          $ref: '#/components/schemas/kokoro.chat.v1.ProjectedInteractionKind'
+        action_digest:
+          type: string
+        schema_version:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        status:
+          $ref: '#/components/schemas/kokoro.chat.v1.InteractionStatus'
+        payload_json:
+          type: object
+          additionalProperties: true
+          x-kokoro-source: canonical-json-bytes
+        expires_at:
+          type: string
+          format: date-time
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+      - interaction_id
+      - agent_run_id
+      - conversation_id
+      - kind
+      - action_digest
+      - schema_version
+      - status
+      - payload_json
+      - generation
+    kokoro.chat.v1.ListConversationsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/kokoro.chat.v1.ConversationSummary'
+        page:
+          $ref: '#/components/schemas/kokoro.common.v1.PageResult'
+      required:
+      - conversations
+      - page
+    kokoro.chat.v1.Message:
+      type: object
+      additionalProperties: false
+      properties:
+        message_id:
+          type: string
+        conversation_id:
+          type: string
+        parent_message_id:
+          type: string
+        role:
+          $ref: '#/components/schemas/kokoro.chat.v1.MessageRole'
+        status:
+          $ref: '#/components/schemas/kokoro.chat.v1.MessageStatus'
+        ordinal:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/kokoro.chat.v1.MessagePart'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - message_id
+      - conversation_id
+      - role
+      - status
+      - ordinal
+      - generation
+      - parts
+      - created_at
+      - updated_at
+    kokoro.chat.v1.MessagePart:
+      type: object
+      additionalProperties: false
+      properties:
+        part_id:
+          type: string
+        ordinal:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        kind:
+          $ref: '#/components/schemas/kokoro.chat.v1.MessagePartKind'
+        schema_version:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        payload_json:
+          type: object
+          additionalProperties: true
+          x-kokoro-source: canonical-json-bytes
+        status:
+          $ref: '#/components/schemas/kokoro.chat.v1.MessagePartStatus'
+      required:
+      - part_id
+      - ordinal
+      - kind
+      - schema_version
+      - payload_json
+      - status
+    kokoro.chat.v1.ReadConversationSnapshotResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        conversation:
+          $ref: '#/components/schemas/kokoro.chat.v1.Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/kokoro.chat.v1.Message'
+        active_run:
+          $ref: '#/components/schemas/kokoro.chat.v1.RunView'
+        pending_interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/kokoro.chat.v1.Interaction'
+        watermark:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+      - conversation
+      - messages
+      - pending_interactions
+      - watermark
+    kokoro.chat.v1.RunView:
+      type: object
+      additionalProperties: false
+      properties:
+        launch_id:
+          type: string
+        agent_run_id:
+          type: string
+        conversation_id:
+          type: string
+        epoch:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        state:
+          $ref: '#/components/schemas/kokoro.chat.v1.RunViewState'
+        received_seq:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        projected_seq:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        terminal_kind:
+          $ref: '#/components/schemas/kokoro.chat.v1.RunViewTerminalKind'
+        generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+      - launch_id
+      - conversation_id
+      - epoch
+      - state
+      - received_seq
+      - projected_seq
+      - generation
+    kokoro.chat.v1.SubmitMessageResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        launch_id:
+          type: string
+        user_message_id:
+          type: string
+        assistant_message_id:
+          type: string
+        conversation_generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        watermark:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        replayed:
+          type: boolean
+      required:
+      - launch_id
+      - user_message_id
+      - assistant_message_id
+      - conversation_generation
+      - watermark
+      - replayed
+    kokoro.common.v1.PageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        next_cursor:
+          type: string
+      required: []
+    ControlDecisionHttp:
+      oneOf:
+      - type: object
+        additionalProperties: false
+        required:
+        - kind
+        - target_id
+        - payload
+        properties:
+          kind:
+            type: string
+            const: approve
+          target_id:
+            type: string
+            minLength: 1
+          payload:
+            type: object
+            additionalProperties: false
+            properties:
+              args:
+                type: object
+                additionalProperties: true
+                x-kokoro-max-bytes: 65536
+            required: []
+      - type: object
+        additionalProperties: false
+        required:
+        - kind
+        - target_id
+        - payload
+        properties:
+          kind:
+            type: string
+            const: edit
+          target_id:
+            type: string
+            minLength: 1
+          payload:
+            type: object
+            additionalProperties: false
+            properties:
+              args:
+                type: object
+                additionalProperties: true
+                x-kokoro-max-bytes: 65536
+            required:
+            - args
+      - type: object
+        additionalProperties: false
+        required:
+        - kind
+        - target_id
+        - payload
+        properties:
+          kind:
+            type: string
+            const: reject
+          target_id:
+            type: string
+            minLength: 1
+          payload:
+            type: object
+            additionalProperties: false
+            properties:
+              reason:
+                type: string
+                maxLength: 4096
+            required: []
+      - type: object
+        additionalProperties: false
+        required:
+        - kind
+        - target_id
+        - payload
+        properties:
+          kind:
+            type: string
+            const: respond
+          target_id:
+            type: string
+            minLength: 1
+          payload:
+            type: object
+            additionalProperties: false
+            properties:
+              response:
+                type: string
+                minLength: 1
+                maxLength: 65536
+            required:
+            - response
+      - type: object
+        additionalProperties: false
+        required:
+        - kind
+        - target_id
+        - payload
+        properties:
+          kind:
+            type: string
+            const: submit
+          target_id:
+            type: string
+            minLength: 1
+          payload:
+            type: object
+            additionalProperties: false
+            properties:
+              value:
+                type: object
+                additionalProperties: true
+                x-kokoro-max-bytes: 65536
+            required:
+            - value
+      discriminator:
+        propertyName: kind
+    CreateConversationHttpRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+      - title
+    DecideInteractionHttpRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_generation:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        decisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ControlDecisionHttp'
+          minItems: 1
+          x-kokoro-unique-by: target_id
+      required:
+      - expected_generation
+      - decisions
+    RequestMagicLinkHttpRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    RequestMagicLinkHttpResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        request_id:
+          type: string
+        magic_link_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - request_id
+      - magic_link_id
+      - expires_at
+    SessionStateHttpResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        authenticated:
+          type: boolean
+        principal_id:
+          type: string
+          format: uuid
+        site_id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        auth_session_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - authenticated
+    SubmitMessageHttpRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 200000
+        requested_model_label:
+          type: string
+        requested_agent_key:
+          type: string
+      required:
+      - content
+    KokoroError:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              enum:
+              - invalid_argument
+              - unauthenticated
+              - permission_denied
+              - not_found
+              - command_digest_mismatch
+              - conflict
+              - precondition_failed
+              - stale_generation
+              - snapshot_required
+              - dependency_unavailable
+              - rate_limited
+              - internal
+              - magic_link_invalid
+              - magic_link_expired
+              - magic_link_consumed
+              - auth_session_replayed
+              - auth_session_revoked
+              - conversation_run_active
+              - conversation_scope_mismatch
+              - interaction_not_pending
+              - agent_admission_rejected
+            request_id:
+              type: string
+              minLength: 1
+              maxLength: 128
+            message:
+              type: string
+              minLength: 1
+              maxLength: 4096
+            retryable:
+              type: boolean
+            current_generation:
+              type: string
+              pattern: ^[0-9]+$
+          required:
+          - code
+          - request_id
+          - message
+          - retryable
+      required:
+      - error
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: kokoro_session

@@ -1,5 +1,5 @@
 # @kokoro/app 独立产品 Web 子仓库生产镜像。
-# 构建上下文就是本仓库根目录，不依赖 kokoro-web monorepo 的 apps/user 路径。
+# 构建上下文就是本仓库根目录，不依赖旧多产品 monorepo 的 apps/user 路径。
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 # pnpm 版本须与本地一致（11.2.2）：pnpm-workspace.yaml 的 allowBuilds 仅新版识别。

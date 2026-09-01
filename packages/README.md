@@ -65,16 +65,18 @@ decision types 和错误码常量。Direct Chat 与项目 Chat 继续共用同�
 项目 `project_ref` 只是 opaque ownership reference，不是 tenant、site、namespace 或共享 package
 中的运行时身份值。
 
-当前 `kokoro-app` 仍由同源 BFF 转发到 `KOKORO_SESSION_BASE_URL`。planned gateway 不属于当前
-package、workspace 或浏览器 endpoint；shared package 不得携带 gateway URL、runtime token、
-internal secret、数据库/队列实现，也不得把 Preview fixture 描述成 Live backend。
+当前 `kokoro-app` 的 Chat 与业务 API 都通过同源 `/api/*` route adapter 进入独立 BFF；
+浏览器端的 `sessionBaseUrl()` 只返回 `/api/session` 兼容前缀，不读取任何独立服务基址，
+也不直连 Session、Hub、Agent 或 Gateway。shared package 不得携带
+BFF URL、runtime token、internal secret、数据库/队列实现，也不得把 Preview fixture 描述成
+Live backend。
 
 ## 当前阶段规则
 
 - 目前包仍以 `private` workspace package 形式放在本仓库，优先保证第一个产品的测试、截图
   和构建可复现。
 - `@kokoro/web-core` 当前只有本仓库一个实际消费方；`@kokoro/i18n` 和 `@kokoro/tsconfig`
-  已在旧 `kokoro-web` workspace 中存在第二个消费方/重复实现，因此它们是最先应提取和去重的包。
+  曾在已归档的旧 Web workspace 中存在第二个消费方/重复实现，因此它们是未来最先应提取和去重的包。
 - 当前保留 `@kokoro/i18n` 这个稳定包名，不为增加 `web-` 前缀制造无收益的重命名；产品与旧
   workspace 完成切换后再统一由 shared repo 发布。
 - 一旦新增第二个产品消费同一包，先把 package 迁入 `kokoro-web-shared`，再把产品的

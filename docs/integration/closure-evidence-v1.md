@@ -9,7 +9,7 @@
 | 子仓库 | GitHub | 职责 | 依赖边界 |
 | --- | --- | --- | --- |
 | Web | `LordFoxFairy/kokoro-app` | 桌面 User Web、Composer、胶囊、Rail、页面状态和同源 BFF | 不引入 `src/site`、其他仓库源码或父仓库相对路径 |
-| BFF | `LordFoxFairy/kokoro-bff` | 独立业务投影、聚合、幂等、Mock/Live upstream 和业务 API 契约 | 不包含 Web 页面、Chat/SSE 事实、Agent Redis 或共享 workspace package |
+| BFF | `LordFoxFairy/kokoro-bff` | 独立 Chat 业务模块、业务投影、聚合、幂等、Mock/Live upstream 和业务 API 契约 | 不包含 Web 页面、浏览器状态或 Agent Redis；不引入其他仓库源码 |
 | Agent | `LordFoxFairy/kokoro-agent` | Redis run worker、执行身份和能力调用 | 当前无 HTTP ingress，不承接浏览器或 BFF 路由 |
 
 Web 内的 `packages/i18n`、`packages/web-core`、`packages/tsconfig` 只是本仓库内部的
@@ -22,11 +22,11 @@ workspace package。未来需要跨 site 复用时发布为版本化 registry pa
 
 | Surface | Web 同源路径 | BFF 业务路径 |
 | --- | --- | --- |
-| Direct Chat / Project Chat | `/api/session/*` | 不经过业务 BFF，直连 Session |
+| Direct Chat / Project Chat | `/api/session/*` | Web 兼容路径，统一转 `kokoro-bff/v1` Chat 业务边界 |
 | Agent connection setup | `/api/agents/connections/setup?platform=PLATFORM` | `/v1/agents/connections/setup` |
 | Skills、MCP、Projects、Settings、Mail | `/api/hub/*`、typed aliases | `/v1/skills`、`/v1/mcp`、`/v1/projects` 等 |
 | Scheduled typed BFF | `/api/scheduled-tasks*` | `/v1/scheduled-tasks*` |
-| Library | `/api/session/artifacts` | 当前仍由 Session 负责；业务资料投影为 `/v1/library` |
+| Library | `/api/session/artifacts` | Chat 兼容路径由 BFF Chat 投影承接；业务资料页仍使用 `/v1/library` |
 | Runtime manifest | `/api/system/runtime-manifest` | 直连 System，不经过业务 BFF |
 | Billing plans/checkout | `/api/billing/*` | `/v1/billing/*` |
 
@@ -40,10 +40,10 @@ Chat 的 direct/project 承接不新增 Chat API：切换项目只改变 Session
   `test.kokoro.localhost`；生产由平台注入真实部署 hostname。
 - Web BFF 从服务端 `KOKORO_DOMAIN` 生成唯一 `Forwarded: host=<KOKORO_DOMAIN>`。
   浏览器不发送或选择 `X-Domain`、tenant/site、runtime JWT、internal secret 或 BFF URL。
-- `KOKORO_BFF_BASE_URL` 是 server-only 业务入口；`KOKORO_SESSION_BASE_URL`、User、System
-  等仍是各自明确的服务地址，没有 Gateway 隐式 fallback。
-- BFF 的 principal header 按契约接收 namespace/user；Session、Chat、System 等事实面仍由各自
-  子仓库负责，不把业务规则复制到 Web。
+- `KOKORO_BFF_BASE_URL` 是 server-only 业务与 Chat 入口；User、System 等仍是各自明确的服务地址，
+  没有 Gateway 隐式 fallback，也不依赖 `KOKORO_SESSION_BASE_URL`。
+- BFF 的 principal header 按契约接收 namespace/user；Chat 业务编排在 BFF，Agent 负责 Run/Control/
+  Event/Worker 事实，不把业务规则复制到 Web。
 
 ## 4. 当前验证证据
 

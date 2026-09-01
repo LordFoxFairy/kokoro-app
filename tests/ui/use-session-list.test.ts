@@ -15,6 +15,24 @@ afterEach(() => {
 })
 
 describe("useSessionList", () => {
+  it("shares an in-flight first-page request between concurrent mounts", async () => {
+    let resolve!: (value: { sessions: ReturnType<typeof item>[], next_cursor?: string }) => void
+    const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor?: string }>((done) => {
+      resolve = done
+    })
+    const listSessions = vi.fn().mockReturnValue(firstPage)
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const first = renderHook(() => useSessionList(client, 0))
+    const second = renderHook(() => useSessionList(client, 0))
+
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    resolve({ sessions: [item("shared", "t1")] })
+    await waitFor(() => expect(first.result.current.entries).toHaveLength(1))
+    await waitFor(() => expect(second.result.current.entries).toHaveLength(1))
+    first.unmount()
+    second.unmount()
+  })
+
   it("hydrates the first page and exposes hasMore from next_cursor", async () => {
     const listSessions = vi
       .fn()

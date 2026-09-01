@@ -48,6 +48,7 @@ describe("createShare / revokeShare（SHARE-1）：POST|DELETE /sessions/{id}/sh
     const receipt = await createSessionClient({ baseUrl: "/api/session" }).createShare("ses_1")
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions/ses_1/share")
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "POST" })
+    expect(new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).get("idempotency-key")).toMatch(/^session-mutation:/)
     expect(receipt.share_id).toBe("shr_abc")
   })
 
@@ -57,6 +58,7 @@ describe("createShare / revokeShare（SHARE-1）：POST|DELETE /sessions/{id}/sh
     const receipt = await createSessionClient({ baseUrl: "/api/session" }).revokeShare("ses_1")
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions/ses_1/share")
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "DELETE" })
+    expect(new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).get("idempotency-key")).toMatch(/^session-mutation:/)
     expect(receipt.ok).toBe(true)
   })
 

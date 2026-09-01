@@ -18,30 +18,29 @@ async function listen(handler: RequestListener): Promise<RunningServer> {
   return { server, baseUrl: `http://127.0.0.1:${address.port}` }
 }
 
-describe("Scheduled BFF against a local Hub contract fixture", () => {
+describe("Scheduled BFF against a local business BFF contract fixture", () => {
   const original = { ...process.env }
-  let hub: RunningServer
+  let bff: RunningServer
   let receivedPath = ""
   let receivedNamespace = ""
   let receivedUser = ""
 
   beforeAll(async () => {
-    hub = await listen((request, response) => {
+    bff = await listen((request, response) => {
       receivedPath = request.url ?? ""
       receivedNamespace = request.headers["x-kokoro-namespace"]?.toString() ?? ""
-      receivedUser = request.headers["x-kokoro-user-id"]?.toString() ?? ""
+      receivedUser = request.headers["x-kokoro-principal-id"]?.toString() ?? ""
       response.writeHead(200, { "content-type": "application/json" })
-      response.end(JSON.stringify({ tasks: [] }))
+      response.end(JSON.stringify({ data: { tasks: [] }, meta: { request_id: "fixture-request" } }))
     })
     process.env.KOKORO_WEB_SESSION_SECRET = "integration-secret"
-    process.env.KOKORO_USER_BASE_URL = "http://user.fixture"
-    process.env.KOKORO_SESSION_BASE_URL = "http://session.fixture"
-    process.env.KOKORO_HUB_BASE_URL = hub.baseUrl
+    process.env.KOKORO_IAM_BASE_URL = "http://user.fixture"
+    process.env.KOKORO_BFF_BASE_URL = bff.baseUrl
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
   })
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => hub.server.close((error) => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => bff.server.close((error) => error ? reject(error) : resolve()))
     for (const key of Object.keys(process.env)) {
       if (!(key in original)) delete process.env[key]
     }
@@ -68,7 +67,7 @@ describe("Scheduled BFF against a local Hub contract fixture", () => {
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ tasks: [] })
-    expect(receivedPath).toBe("/hub/scheduled-tasks")
+    expect(receivedPath).toBe("/v1/scheduled-tasks")
     expect(receivedNamespace).toBe("personal")
     expect(receivedUser).toBe("user-a")
   })

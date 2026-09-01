@@ -29,9 +29,9 @@ describe("Agent connection setup BFF", () => {
     sameOriginOk.mockReturnValue(true)
   })
 
-  it("forwards the authenticated setup request through the configured agent service", async () => {
+  it("forwards the authenticated setup request through the configured business BFF", async () => {
     authConfig.mockReturnValue({
-      agentBaseUrl: "https://agent.internal/",
+      bffBaseUrl: "https://bff.internal/",
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
@@ -39,13 +39,13 @@ describe("Agent connection setup BFF", () => {
       envelope: { runtime_jwt: "runtime-jwt", namespace: "ns_kokoro", user_id: "user_1" },
       setCookie: null,
     })
-    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({
+    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: {
       platform: "telegram",
       status: "disconnected",
       qr_value: "https://agents.fixture.test/qr",
       continue_url: "https://agents.fixture.test/continue",
       expires_at: "2099-01-01T00:00:00.000Z",
-    }), {
+    } }), {
       status: 200,
       headers: { "content-type": "application/json", "cache-control": "no-store" },
     }))
@@ -60,53 +60,19 @@ describe("Agent connection setup BFF", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ platform: "telegram" })
     const [target, domain, init] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
-    expect(target).toBe("https://agent.internal/connections/setup?platform=telegram")
+    expect(target).toBe("https://bff.internal/v1/agents/connections/setup?platform=telegram")
     expect(domain).toBe("dev.kokoro.localhost")
     const headers = new Headers(init.headers)
-    expect(headers.get("authorization")).toBe("Bearer runtime-jwt")
+    expect(headers.get("authorization")).toBeNull()
     expect(headers.get("x-kokoro-service")).toBe("web-bff")
     expect(headers.get("x-kokoro-internal-secret")).toBe("web-secret")
     expect(headers.get("x-kokoro-namespace")).toBe("ns_kokoro")
-    expect(headers.get("x-kokoro-user-id")).toBe("user_1")
+    expect(headers.get("x-kokoro-principal-id")).toBe("user_1")
     expect(headers.get("x-kokoro-request-id")).toBe("req_1")
   })
 
-  it("routes the setup projection through the independent business BFF when configured", async () => {
-    authConfig.mockReturnValue({
-      bffBaseUrl: "http://bff.internal/",
-      agentBaseUrl: null,
-      domain: "dev.kokoro.localhost",
-      internalSecret: "web-secret",
-    })
-    resolveSessionWithRefresh.mockResolvedValue({
-      envelope: { runtime_jwt: "runtime-jwt", namespace: "ns_kokoro", user_id: "user_1" },
-      setCookie: null,
-    })
-    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({
-      data: {
-        platform: "telegram",
-        status: "disconnected",
-        qr_value: "fixture://qr",
-        continue_url: "https://dev.kokoro.localhost/app/agents",
-        expires_at: "2099-01-01T00:00:00.000Z",
-      },
-      meta: { request_id: "req_bff" },
-    }), { status: 200, headers: { "content-type": "application/json" } }))
-
-    const response = await GET(
-      new Request("https://app.example/api/agents/connections/setup?platform=telegram"),
-      { params: Promise.resolve({ path: ["connections", "setup"] }) },
-    )
-
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ platform: "telegram", status: "disconnected" })
-    const [target, , init] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
-    expect(target).toBe("http://bff.internal/v1/agents/connections/setup?platform=telegram")
-    expect(new Headers(init.headers).get("authorization")).toBeNull()
-  })
-
   it("rejects unsupported platforms and does not proxy them", async () => {
-    authConfig.mockReturnValue({ agentBaseUrl: "https://agent.internal", domain: "dev.kokoro.localhost" })
+    authConfig.mockReturnValue({ bffBaseUrl: "https://bff.internal", domain: "dev.kokoro.localhost" })
 
     const response = await GET(
       new Request("https://app.example/api/agents/connections/setup?platform=irc"),
@@ -120,7 +86,7 @@ describe("Agent connection setup BFF", () => {
   })
 
   it("returns a typed unavailable response when the agent service is not configured", async () => {
-    authConfig.mockReturnValue({ agentBaseUrl: null, domain: "dev.kokoro.localhost" })
+    authConfig.mockReturnValue({ bffBaseUrl: null, domain: "dev.kokoro.localhost" })
 
     const response = await GET(
       new Request("https://app.example/api/agents/connections/setup?platform=telegram"),

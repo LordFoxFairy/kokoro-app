@@ -1,4 +1,4 @@
-// 价格/购买客户端（PAY-2）：经同源 `/api/billing` BFF 代理到 kokoro-payment 的 storefront 面
+// 价格/购买客户端（PAY-2）：经同源 `/api/billing` BFF 代理到 kokoro-billing 的 storefront 面
 // （BFF 从密封信封派生 teamId，并从部署配置注入 RFC 7239 `Forwarded`）。入站过 Zod（payment 属外部边界）；
 // 失败类型化上抛。诚实态优先：checkout 未开通（provider 未配置）由后端 501 驱动，绝不放假按钮。
 

@@ -1,5 +1,5 @@
-// 团队自助面同源代理（BFF）：读信封 → 注入 web-bff caller 凭据 + user principal（x-user-id）→
-// 转发到 kokoro-user 的 /bff/*（成员/邀请读写）。user principal 从密封信封派生，浏览器无从伪造。
+// 团队自助面同源代理（BFF）：读信封 → 注入 web-bff caller 凭据 + principal（x-kokoro-principal-id）→
+// 转发到 kokoro-iam 的 /bff/*（成员/邀请读写）。user principal 从密封信封派生，浏览器无从伪造。
 // 绝不代理 /bff/auth/*（换签走专用 /api/team/switch，token 不回浏览器）；变更类请求校验同源 Origin。
 
 import { NextResponse } from "next/server"
@@ -47,7 +47,7 @@ async function proxy(
 
   const search = new URL(request.url).search
   const encodedSegments = segments.map((segment) => encodeURIComponent(segment)).join("/")
-  const target = `${config.userBaseUrl.replace(/\/+$/, "")}/bff/${encodedSegments}${search}`
+  const target = `${config.iamBaseUrl.replace(/\/+$/, "")}/bff/${encodedSegments}${search}`
 
   const headers = new Headers()
   headers.set(SERVICE_HEADER, SERVICE_VALUE)
@@ -55,7 +55,7 @@ async function proxy(
     headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
   }
   // user principal 从信封派生（web 侧解封结果），浏览器无从伪造。
-  headers.set("x-user-id", envelope.user_id)
+  headers.set("x-kokoro-principal-id", envelope.user_id)
   headers.set("x-kokoro-request-id", requestId)
 
   // 仅在确有 body 时透传 content-type：无 body 的 POST（accept/decline/remove-self）不能带

@@ -1,82 +1,48 @@
-// DEV 模拟支付 BFF：把 dev 模拟收银台的「确认支付」翻译成一条**签名的 mock 支付成功 webhook**，
-// 打到 kokoro-payment 公开 webhook（/payments/webhooks/mock）→ 验签 + 幂等 + confirmOrder → 到账。
-// 仅 dev：mockWebhookSecret 未配（生产）→ 503。真网关档由 provider 自己回调 webhook，无需此 BFF。
-// 要求登录（无信封→401）+ 同源（变更类）。签名走 x-kokoro-webhook-signature（HMAC-SHA256 over raw body）。
-
-import { createHmac, randomUUID } from "node:crypto"
+// Local mock checkout confirmation. The Web delegates to kokoro-bff so the
+// browser never signs or sends a provider webhook directly.
 
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { authConfig, readEnvelope, sameOriginOk } from "@/lib/server/auth"
+import { authConfig, INTERNAL_SECRET_HEADER, readEnvelope, sameOriginOk, SERVICE_HEADER, SERVICE_VALUE } from "@/lib/server/auth"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const MOCK_SIGNATURE_HEADER = "x-kokoro-webhook-signature"
-// 浏览器只提交 order_id；身份/金额一律后端与订单派生，浏览器无从伪造。
 const mockPayRequestSchema = z.object({ order_id: z.string().min(1) }).strip()
+const responseSchema = z.object({ data: z.object({ ok: z.boolean() }).strict() }).passthrough()
 
 export async function POST(request: Request): Promise<Response> {
   const config = authConfig()
-  if (config === null) {
-    return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
-  }
-  if (!sameOriginOk(request)) {
-    return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
-  }
+  if (config === null) return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
+  if (!sameOriginOk(request)) return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   const envelope = readEnvelope(request, config)
-  if (envelope === null) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
-  }
-  // dev-only：代码级阻断生产，即使误注入 mock secret 也不能开启模拟支付。
-  const baseUrl = config.billingBaseUrl ?? config.paymentBaseUrl
-  if (process.env.NODE_ENV === "production" || baseUrl === null || config.mockWebhookSecret === null) {
+  if (envelope === null) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+  if (process.env.NODE_ENV === "production" || config.bffBaseUrl == null) {
     return NextResponse.json({ error: "mock_pay_unavailable" }, { status: 503 })
   }
-  const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
+  const parsed = mockPayRequestSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: "invalid_body" }, { status: 400 })
 
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 })
-  }
-  const parsed = mockPayRequestSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 })
-  }
-
-  // mock 支付成功事件：eventId 唯一（每次点击一条；confirmOrder 幂等保证不双发到账）。
-  const eventBody = JSON.stringify({
-    eventId: `mock-${randomUUID()}`,
-    eventType: "payment_succeeded",
-    data: { orderId: parsed.data.order_id },
+  const headers = new Headers({
+    "content-type": "application/json",
+    [SERVICE_HEADER]: SERVICE_VALUE,
+    ["x-kokoro-namespace"]: envelope.namespace,
+    ["x-kokoro-principal-id"]: envelope.user_id,
+    ["x-kokoro-request-id"]: request.headers.get("x-kokoro-request-id") || crypto.randomUUID(),
   })
-  const signature = createHmac("sha256", config.mockWebhookSecret).update(eventBody).digest("hex")
-
-  const target = config.billingBaseUrl !== null
-    ? `${baseUrl.replace(/\/+$/, "")}/billing/webhooks/mock`
-    : `${baseUrl.replace(/\/+$/, "")}/payments/webhooks/mock`
+  if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
   let upstream: Response
   try {
-    upstream = await fetchWithDomain(target, config.domain, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [MOCK_SIGNATURE_HEADER]: signature,
-        "x-kokoro-request-id": requestId,
-      },
-      body: eventBody,
-      cache: "no-store",
-      signal: request.signal,
+    upstream = await fetchWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/billing/mock-pay`, config.domain, {
+      method: "POST", headers, body: JSON.stringify(parsed.data), cache: "no-store", signal: request.signal,
     })
   } catch {
-    return NextResponse.json({ error: "payment_unreachable" }, { status: 502 })
+    return NextResponse.json({ error: "billing_unreachable" }, { status: 502 })
   }
-  if (!upstream.ok) {
-    return NextResponse.json({ error: "mock_pay_failed" }, { status: 502 })
-  }
+  if (!upstream.ok) return NextResponse.json({ error: "mock_pay_failed" }, { status: 502 })
+  const body = responseSchema.safeParse(await upstream.json().catch(() => null))
+  if (!body.success || !body.data.data.ok) return NextResponse.json({ error: "billing_bad_response" }, { status: 502 })
   return NextResponse.json({ ok: true }, { status: 200 })
 }

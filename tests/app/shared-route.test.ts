@@ -6,8 +6,8 @@ vi.mock("@/lib/server/upstream-http", () => ({ fetchWithDomain }))
 
 const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",
-  KOKORO_USER_BASE_URL: "http://user.test",
-  KOKORO_SESSION_BASE_URL: "http://session.test",
+  KOKORO_IAM_BASE_URL: "http://user.test",
+  KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
@@ -36,7 +36,7 @@ describe("GET /api/shared/[id] proxy", () => {
 
     expect(response.status).toBe(200)
     const [target, domain, init] = fetchWithDomain.mock.calls[0] as [string, string, RequestInit]
-    expect(target).toBe("http://session.test/shared/shr_1")
+    expect(target).toBe("http://bff.test/v1/shared/shr_1")
     expect(domain).toBe("dev.kokoro.localhost")
     const headers = new Headers(init.headers)
     expect(headers.get("x-kokoro-service")).toBe("web-bff")

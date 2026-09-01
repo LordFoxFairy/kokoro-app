@@ -18,29 +18,29 @@ async function listen(handler: RequestListener): Promise<RunningServer> {
   return { server, baseUrl: `http://127.0.0.1:${address.port}` }
 }
 
-describe("Session BFF against a local session contract fixture", () => {
+describe("Chat BFF against a local BFF contract fixture", () => {
   const original = { ...process.env }
-  let session: RunningServer
+  let bff: RunningServer
   let receivedDomain = ""
   let receivedHost = ""
   let receivedAuthorization = ""
 
   beforeAll(async () => {
-    session = await listen((request, response) => {
+    bff = await listen((request, response) => {
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
       receivedAuthorization = request.headers.authorization?.toString() ?? ""
       response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" })
-      response.end("data: session-ok\n\n")
+      response.end("data: chat-ok\n\n")
     })
     process.env.KOKORO_WEB_SESSION_SECRET = "integration-secret"
-    process.env.KOKORO_USER_BASE_URL = "http://user.fixture"
-    process.env.KOKORO_SESSION_BASE_URL = session.baseUrl
+    process.env.KOKORO_IAM_BASE_URL = "http://user.fixture"
+    process.env.KOKORO_BFF_BASE_URL = bff.baseUrl
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
   })
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => session.server.close((error) => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => bff.server.close((error) => error ? reject(error) : resolve()))
     for (const key of Object.keys(process.env)) {
       if (!(key in original)) delete process.env[key]
     }
@@ -74,7 +74,7 @@ describe("Session BFF against a local session contract fixture", () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get("content-type")).toContain("text/event-stream")
-    expect(await response.text()).toContain("session-ok")
+    expect(await response.text()).toContain("chat-ok")
     expect(receivedDomain).toBe("host=dev.kokoro.localhost")
     expect(receivedHost).not.toBe("first.example")
     expect(receivedAuthorization).toBe("Bearer runtime.jwt.signature")

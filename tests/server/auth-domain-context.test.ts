@@ -6,12 +6,8 @@ describe("auth BFF deployment domain context", () => {
   it("adds the configured deployment domain to caller headers", () => {
     const headers = callerHeaders({
       sessionSecrets: ["secret"],
-      userBaseUrl: "https://user.internal",
-      sessionBaseUrl: "https://session.internal",
+      iamBaseUrl: "https://user.internal",
       domain: "dev.kokoro.localhost",
-      hubBaseUrl: null,
-      paymentBaseUrl: null,
-      billingBaseUrl: null,
       internalSecret: "web-secret",
       mockWebhookSecret: null,
       secureCookies: true,
@@ -28,14 +24,12 @@ describe("auth BFF deployment domain context", () => {
   it("uses KOKORO_DOMAIN as the only deployment context", () => {
     expect(authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_USER_BASE_URL: "https://user.internal",
-      KOKORO_SESSION_BASE_URL: "https://session.internal",
+      KOKORO_IAM_BASE_URL: "https://user.internal",
       KOKORO_DOMAIN: "  dev.kokoro.localhost  ",
     } as unknown as NodeJS.ProcessEnv)?.domain).toBe("dev.kokoro.localhost")
     expect(authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_USER_BASE_URL: "https://user.internal",
-      KOKORO_SESSION_BASE_URL: "https://session.internal",
+      KOKORO_IAM_BASE_URL: "https://user.internal",
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })
 
@@ -43,42 +37,29 @@ describe("auth BFF deployment domain context", () => {
     const config = authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
       KOKORO_BFF_BASE_URL: "http://bff.internal/",
-      KOKORO_USER_BASE_URL: "http://user.internal",
-      KOKORO_SESSION_BASE_URL: "http://session.internal",
+      KOKORO_IAM_BASE_URL: "http://user.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
       KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
       bffBaseUrl: "http://bff.internal",
-      userBaseUrl: "http://user.internal",
-      sessionBaseUrl: "http://session.internal",
-      hubBaseUrl: null,
-      agentBaseUrl: null,
-      paymentBaseUrl: null,
-      billingBaseUrl: null,
+      iamBaseUrl: "http://user.internal",
     })
   })
 
-  it("keeps explicit service URLs independent from the BFF", () => {
+  it("keeps the BFF as the only business base URL", () => {
     const config = authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
       KOKORO_BFF_BASE_URL: "http://bff.internal",
-      KOKORO_USER_BASE_URL: "http://user.internal",
-      KOKORO_SESSION_BASE_URL: "http://session.internal",
-      KOKORO_HUB_BASE_URL: "http://hub.internal",
+      KOKORO_IAM_BASE_URL: "http://user.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
       KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
-      userBaseUrl: "http://user.internal",
-      sessionBaseUrl: "http://session.internal",
-      hubBaseUrl: "http://hub.internal",
+      iamBaseUrl: "http://user.internal",
       bffBaseUrl: "http://bff.internal",
-      agentBaseUrl: null,
-      paymentBaseUrl: null,
-      billingBaseUrl: null,
     })
   })
 
@@ -86,27 +67,27 @@ describe("auth BFF deployment domain context", () => {
     expect(authConfig({
       NODE_ENV: "production",
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_USER_BASE_URL: "https://user.internal",
-      KOKORO_SESSION_BASE_URL: "https://session.internal",
+      KOKORO_IAM_BASE_URL: "https://user.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })
 
-  it("rejects a half-configured gateway-first environment in every runtime mode", () => {
-    expect(authConfig({
+  it("keeps authentication configuration valid while the optional BFF is absent", () => {
+    const config = authConfig({
       NODE_ENV: "development",
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal",
+      KOKORO_IAM_BASE_URL: "https://user.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
-    } as unknown as NodeJS.ProcessEnv)).toBeNull()
+    } as unknown as NodeJS.ProcessEnv)
+
+    expect(config).toMatchObject({ iamBaseUrl: "https://user.internal", bffBaseUrl: null })
   })
 
   it("returns the production config when the web-bff internal secret is present", () => {
     expect(authConfig({
       NODE_ENV: "production",
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_USER_BASE_URL: "https://user.internal",
-      KOKORO_SESSION_BASE_URL: "https://session.internal",
+      KOKORO_IAM_BASE_URL: "https://user.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
       KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)).toMatchObject({

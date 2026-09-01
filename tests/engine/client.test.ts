@@ -141,6 +141,7 @@ describe("renameSession（CONV-UX）：PATCH /sessions/{id}/title 过契约 Zod"
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(init.method).toBe("PATCH")
     expect(JSON.parse(init.body as string)).toEqual({ title: "新标题" })
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^session-mutation:/)
   })
 
   it("非 ok（422 超长 / 403 他人 / 404 软删）fail-loud 抛错（错误码回带）", async () => {

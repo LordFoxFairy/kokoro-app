@@ -111,16 +111,48 @@ const PREVIEW_MODELS = [
 
 export function createPreviewClient(options?: { stepMs?: number }): SessionClient {
   const stepMs = options?.stepMs ?? 40
-  const sessions = new Map<string, PreviewSession>(
-    [...readPersistedSessions()].map(([sessionId, persisted]) => [sessionId, {
-      ...persisted,
-      queued: [],
-      subscriber: null,
-      streamGeneration: 0,
-    }]),
-  )
+  // Constructing the browser client happens during AppFrame render. Do not
+  // synchronously parse the complete preview event log there: a long local
+  // history would block the first shell paint and make a refresh look like a
+  // stalled workspace. Transport operations await this one shared restore,
+  // so persistence remains deterministic without making construction costly.
+  const sessions = new Map<string, PreviewSession>()
+  let restored = false
+  let restorePromise: Promise<void> | null = null
+  const restoreSessions = (): void => {
+    for (const [sessionId, persisted] of readPersistedSessions()) {
+      if (sessions.has(sessionId)) continue
+      sessions.set(sessionId, {
+        ...persisted,
+        queued: [],
+        subscriber: null,
+        streamGeneration: 0,
+      })
+    }
+    restored = true
+  }
+  const ensureRestored = (): Promise<void> => {
+    if (restored) return Promise.resolve()
+    if (restorePromise) return restorePromise
+    restorePromise = new Promise<void>((resolve) => {
+      const run = (): void => {
+        restoreSessions()
+        resolve()
+      }
+      if (typeof window === "undefined") {
+        queueMicrotask(run)
+      } else {
+        // Give the browser a paint opportunity before parsing a potentially
+        // large localStorage event log. All transport calls share the same
+        // scheduled work and therefore never parse it more than once.
+        window.setTimeout(run, 0)
+      }
+    })
+    return restorePromise
+  }
   const timers = new Set<ReturnType<typeof setTimeout>>()
   let runCounter = 0
+  let persistScheduled = false
 
   const persistSessions = (): void => {
     const storage = previewStorage()
@@ -141,6 +173,19 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     } catch {
       // Preview remains usable when storage is unavailable or quota-limited.
     }
+  }
+
+  const schedulePersistSessions = (): void => {
+    if (persistScheduled) return
+    persistScheduled = true
+    // A single submission appends session.created, message.user and the run
+    // batch in separate reducer-shaped calls. Coalesce those writes so a
+    // growing preview history is serialized once per turn rather than once
+    // per event batch on the main thread.
+    queueMicrotask(() => {
+      persistScheduled = false
+      persistSessions()
+    })
   }
 
   const sessionFor = (sessionId: string): PreviewSession => {
@@ -188,7 +233,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
   const queueEvents = (session: PreviewSession, events: SessionEvent[]): void => {
     session.history.push(...events)
     session.queued.push(...events)
-    persistSessions()
+    schedulePersistSessions()
   }
 
   const makeEnvelope = (sessionId: string, runId: string) => {
@@ -345,13 +390,15 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // route remount does not turn an existing project Chat URL into an empty
     // shell. The values are synthetic fixtures only; production never enters
     // this client.
-    listSessions: (_cursor, scope = { kind: "direct" }) =>
-      Promise.resolve({
+    listSessions: async (_cursor, scope = { kind: "direct" }) => {
+      await ensureRestored()
+      return {
         sessions: [...sessions.entries()]
           .filter(([, s]) => s.started && (scope.kind === "project" ? s.projectRef === scope.projectRef : s.projectRef === null))
           .map(([id, s]) => ({ session_id: id, title: s.title || id, updated_at: s.updatedAt }))
           .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)),
-      }),
+      }
+    },
 
     // The preview catalog mirrors the two creation-specific model labels used
     // by the desktop reference. Neutral/Website/App states hide this control
@@ -368,18 +415,20 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     createShare: () => Promise.resolve({ share_id: "shr_preview_0000000000000000000000000000" }),
     revokeShare: () => Promise.resolve({ ok: true }),
 
-    createMessage: (sessionId, body) => {
+    createMessage: async (sessionId, body) => {
+      await ensureRestored()
       runCounter += 1
       const runId = `run_preview_${runCounter}`
       enqueueRun(sessionId, runId, body.content, body.project_ref)
-      return Promise.resolve({
+      return {
         run_id: runId,
         user_message_id: `${runId}:user`,
         assistant_message_id: `${runId}:assistant`,
-      })
+      }
     },
 
     fetchSnapshot: async (sessionId): Promise<SessionSnapshot | null> => {
+      await ensureRestored()
       const session = sessions.get(sessionId)
       if (!session?.started) return null
       const firstEvent = session.history[0]
@@ -409,7 +458,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // fixture look like a UI deadlock and prevented auditing the settled
     // approval/rejection states. Emit the normal post-control event sequence
     // through the existing SSE queue so the engine exercises its real reducer.
-    sendControl: (sessionId, runId, body) => {
+    sendControl: async (sessionId, runId, body) => {
+      await ensureRestored()
       const session = sessionFor(sessionId)
       const envelope = makeEnvelope(sessionId, runId)
       const segmentId = `${runId}:seg_1`
@@ -437,27 +487,34 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         ])
       }
       drainActive(session)
-      return Promise.resolve({ ok: true })
+      return { ok: true }
     },
     deleteSession: () => Promise.resolve({ status: "deleted" }),
     renameSession: () => Promise.resolve({ ok: true as const }),
 
     openEvents: ({ sessionId, lastEventId = 0, onEvent }): EventStreamHandle => {
-      const session = sessionFor(sessionId)
-      const generation = session.streamGeneration + 1
-      session.streamGeneration = generation
-      session.subscriber = { generation, onEvent }
-      // Rebuild pending delivery from persisted history. This lets a refreshed
-      // project deep link replay the same reducer path instead of rendering an
-      // empty shell after the in-memory preview client was recreated. The
-      // cursor is local to this stream: returning to a previous conversation
-      // must honor that call's Last-Event-ID rather than a stale cursor from a
-      // different conversation or an earlier stream.
-      session.queued = session.history.filter((event) => event.seq > lastEventId)
-      drain(session, generation)
+      let closed = false
+      let session: PreviewSession | null = null
+      let generation: number | null = null
+      void ensureRestored().then(() => {
+        if (closed) return
+        session = sessionFor(sessionId)
+        generation = session.streamGeneration + 1
+        session.streamGeneration = generation
+        session.subscriber = { generation, onEvent }
+        // Rebuild pending delivery from persisted history. This lets a refreshed
+        // project deep link replay the same reducer path instead of rendering an
+        // empty shell after the in-memory preview client was recreated. The
+        // cursor is local to this stream: returning to a previous conversation
+        // must honor that call's Last-Event-ID rather than a stale cursor from a
+        // different conversation or an earlier stream.
+        session.queued = session.history.filter((event) => event.seq > lastEventId)
+        drain(session, generation)
+      })
       return {
         close: () => {
-          if (session.subscriber?.generation === generation) {
+          closed = true
+          if (session !== null && generation !== null && session.subscriber?.generation === generation) {
             session.subscriber = null
             session.queued = []
           }

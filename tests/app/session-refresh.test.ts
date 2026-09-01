@@ -10,8 +10,7 @@ vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain: vi.fn() }))
 
 const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",
-  KOKORO_USER_BASE_URL: "http://user.test",
-  KOKORO_SESSION_BASE_URL: "http://session.test",
+  KOKORO_IAM_BASE_URL: "http://user.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
 }
 

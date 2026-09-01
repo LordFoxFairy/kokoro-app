@@ -61,6 +61,40 @@ pnpm dev
 # http://dev.kokoro.localhost:3000
 ```
 
+### 1.0.1 启动性能与缓存边界
+
+本地刷新不经过 CDN。`pnpm dev` 的首次路由编译、React hydration、Preview 会话历史恢复和
+浏览器主线程工作都发生在本机；遇到“正在加载工作区”时，先在浏览器 Network/Performance
+面板确认是编译、请求还是主线程阻塞，再处理对应层，不用 CDN 掩盖本地启动问题。
+
+当前 Web 启动链路的约束如下：
+
+| 层 | 本地行为 | 生产行为 |
+| --- | --- | --- |
+| Next dev 编译 | `pnpm dev`，首次访问/刷新可能触发按路由编译 | 不存在；使用已构建的生产产物 |
+| Preview 历史 | 首屏不在 `AppFrame` 构造阶段同步解析完整 localStorage 事件历史；首次传输操作时单次恢复 | 生产不启用 Preview Client |
+| Session list | 相同客户端和 scope 的并发首页请求共享一个 in-flight promise | 仍由 Web/BFF/Session 动态提供，前端只做内存去重 |
+| 用户/项目/会话 API | 不做 CDN 缓存 | 保持动态、私有；按契约使用 `private`/`no-store` 或 ETag 重验证 |
+| `/_next/static/*` | 由 Next dev server 管理，不配置生产缓存 | CDN 可缓存，使用不可变哈希资源的长 TTL |
+
+生产 CDN 只配置静态构建资源：
+
+```http
+Cache-Control: public, max-age=31536000, immutable
+```
+
+HTML、登录态、Chat/SSE、Workspace、Project、Skills、Library、Scheduled、Billing 和
+Runtime Manifest 不使用公共 CDN 缓存。Runtime Manifest 如需服务端短缓存，必须按部署域名、
+locale 和受信身份隔离，并保留 ETag/权限校验；这不等于把用户工作区响应放进公共缓存。
+
+本地与生产基线命令：
+
+```bash
+pnpm dev                 # 本地开发与交互调试
+pnpm build && pnpm start # 生产构建行为对比
+pnpm check               # 发布前完整门禁
+```
+
 `.env.prod` 可以给 Docker 显式使用：
 
 ```bash
@@ -80,7 +114,7 @@ KOKORO_DOMAIN="dev.kokoro.localhost"
 - 值是不带协议的 hostname；local 使用 `dev.kokoro.localhost`，test 使用 `test.kokoro.localhost`，生产替换为部署绑定的公开域名；
 - 域名变化只更新环境变量和后端绑定，不改变 React、CSS、路由或构建选择；
 - 浏览器不读取该变量，也不把它写入 URL、body、React state、localStorage 或公开响应；
-- BFF 对每个后端上游（System、User、Session、Hub、Billing 等）统一生成标准 RFC 7239 header：
+- BFF 对每个后端上游（System、User、Hub、Billing、Agent 等）统一生成标准 RFC 7239 header：
 
 ```http
 Forwarded: host=<KOKORO_DOMAIN>
@@ -103,15 +137,14 @@ Composer 语音输入保持同一边界：使用浏览器 `SpeechRecognition`/`w
 
 ### 1.1 Web、业务 BFF 与 Chat 的切换
 
-Chat 不在 Web 内部复制一套业务接口。浏览器始终访问同源 `/api/session/*`，由 Web 直连
-`kokoro-session`；Projects、Skills、Scheduled、Agent setup、Library 和 Billing 业务面走独立
+Chat 不在 Web 内部复制一套业务接口。浏览器始终访问同源 `/api/session/*`，由 Web 服务端适配到
+`kokoro-bff/v1/*`；Projects、Skills、Scheduled、Agent setup、Library 和 Billing 业务面也走独立
 `LordFoxFairy/kokoro-bff`：
 
 ```dotenv
 # kokoro-app（仅服务端）
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
-KOKORO_USER_BASE_URL="http://kokoro-user:4211"
-KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
+KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-secret>"
 
 # kokoro-bff（独立服务）
@@ -126,9 +159,14 @@ KOKORO_INTERNAL_SECRET_BFF="<bff-upstream-secret>"
 `KOKORO_*_BASE_URL`，缺失的上游返回明确 503，不静默回退 Mock。
 
 这三个仓库之间没有 workspace、`file:` 依赖、`src/site` 复制或 submodule。Web 负责 HttpOnly
-session envelope、Origin 检查和同源入口；BFF 负责业务投影、编排、幂等和 upstream 适配；
-Session 负责 Chat/SSE 事实；Agent 当前仍是 Redis worker，不被 BFF 直接访问 Redis。
+session envelope、Origin 检查和同源入口；BFF 负责业务投影、Chat 编排、幂等和 upstream 适配；
+Agent 负责执行、Run 状态、HITL 和 Redis worker，不被 Web 或 BFF 直接访问其存储。
 当前拓扑不使用 `kokoro-gateway`，旧 Gateway 只保留为历史独立仓库，不是运行、CI 或部署前置条件。
+
+阶段 1 的运行时存储只使用 PostgreSQL 与 Redis：PostgreSQL 保存会话、消息、Run、控制、HITL、
+outbox 及业务事实，Redis 负责事件流、队列、租约、唤醒和短期缓存。Web 不直接连接任一存储，
+BFF 通过业务端口对接，Agent 通过自己的 PostgreSQL/Redis 适配器对接；不新增 MySQL、MongoDB
+依赖，也不把 Redis 当作 PostgreSQL 的持久化替代品。
 
 ## 2. 发布选择
 
@@ -164,8 +202,7 @@ git push origin v1.0.0
 KOKORO_DOMAIN="app.example.com"
 KOKORO_WEB_SESSION_SECRET="<secret>"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
-KOKORO_USER_BASE_URL="http://kokoro-user:4211"
-KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
+KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
 # 按 System 服务策略启用；变量名必须保持为 KOKORO_SYSTEM_WORKLOAD_TOKEN。
 KOKORO_SYSTEM_WORKLOAD_TOKEN="<secret>"
@@ -202,9 +239,7 @@ Cloudflare Build variables/secrets 配置：
 KOKORO_DOMAIN
 KOKORO_WEB_SESSION_SECRET
 KOKORO_BFF_BASE_URL                   # independent server-only business entry
-KOKORO_USER_BASE_URL                  # explicit auth service
-KOKORO_SESSION_BASE_URL               # explicit Chat/SSE service
-KOKORO_AGENT_BASE_URL                 # optional future HTTP adapter
+KOKORO_IAM_BASE_URL                  # explicit auth service
 KOKORO_SYSTEM_BASE_URL                # explicit manifest service
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
 KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy

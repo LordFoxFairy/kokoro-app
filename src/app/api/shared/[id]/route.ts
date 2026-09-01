@@ -1,6 +1,6 @@
-// 公共分享同源代理（SHARE-1，无 auth 公共面）：转发到 kokoro-session 的 GET /shared/{id}，
+// 公共分享同源代理（SHARE-1，无 auth 公共面）：转发到 kokoro-bff 的 GET /v1/shared/{id}，
 // 绝不注入鉴权头、绝不读信封——公共只读快照面。仅 GET，仅 /shared 单段，绝不放宽其它路径。
-// share_id 不可枚举随机；撤销/软删会话由 session 侧回 404。
+// share_id 不可枚举随机；撤销/软删会话由 BFF Chat 侧回 404。
 
 import { NextResponse } from "next/server"
 
@@ -18,12 +18,15 @@ export async function GET(
   if (config === null) {
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
+  if (config.bffBaseUrl === null || config.bffBaseUrl === undefined) {
+    return NextResponse.json({ error: "bff_not_configured" }, { status: 503 })
+  }
   const { id } = await context.params
   // 单段守门：share_id 不含 '/'（路由已按 [id] 单段捕获），拒绝空段。
   if (id.length === 0) {
     return NextResponse.json({ error: "share_not_found" }, { status: 404 })
   }
-  const target = `${config.sessionBaseUrl.replace(/\/+$/, "")}/shared/${encodeURIComponent(id)}`
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/shared/${encodeURIComponent(id)}`
   const headers = new Headers({ [SERVICE_HEADER]: SERVICE_VALUE })
   if (config.internalSecret !== null) {
     headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
@@ -33,7 +36,7 @@ export async function GET(
   try {
     upstream = await fetchWithDomain(target, config.domain, { headers, cache: "no-store" })
   } catch {
-    return NextResponse.json({ error: "session_unreachable" }, { status: 502 })
+    return NextResponse.json({ error: "bff_unreachable" }, { status: 502 })
   }
 
   const responseHeaders = new Headers()

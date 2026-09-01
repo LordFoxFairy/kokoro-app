@@ -1,5 +1,5 @@
 // BFF 鉴权装配（服务端专用，勿从 client 组件 import）：配置读取、nonce、出站凭据、
-// 对 kokoro-user 的 magic-link 调用、cookie 选项。浏览器只见本层暴露的同源路由，
+// 对 kokoro-iam 的 magic-link 调用、cookie 选项。浏览器只见本层暴露的同源路由，
 // user/session 服务地址与部署域名全留服务端。
 
 import { createHash, randomBytes } from "node:crypto"
@@ -27,19 +27,13 @@ const NONCE_MAX_AGE_SECONDS = 900
 export interface AuthConfig {
   // 逗号分隔的信封密钥，[0]=current 封，全部用于解（双钥轮换）。
   sessionSecrets: string[]
-  userBaseUrl: string
-  sessionBaseUrl: string
+  iamBaseUrl: string
   /** Canonical deployment domain encoded in RFC 7239 `Forwarded`. */
   domain: string
-  // Independent business BFF; Chat remains on sessionBaseUrl.
+  // The independent business BFF owns the Web-facing Chat module as well as
+  // the other business projections.
   bffBaseUrl?: string | null
-  hubBaseUrl: string | null
-  // Agent connection setup upstream; optional until the Agent capability is deployed.
-  agentBaseUrl?: string | null
-  // payment 服务面（经网关到 kokoro-payment）；未配置=预览档（PAY-2 价格页据此降级为诚实未开通态）。
-  paymentBaseUrl: string | null
-  // billing 迁移面；配置后新契约优先，未配置时保留 payment 旧读面用于双读切换。
-  billingBaseUrl: string | null
+  // Billing 只经业务 BFF 进入 Web；未配置=预览档（PAY-2 价格页据此降级为诚实未开通态）。
   // web-bff 出站内部凭据；生产环境必须配置。
   internalSecret: string | null
   // 仅 dev：mock 支付网关 webhook 签名密钥（模拟收银台 BFF 据此签发支付成功回调驱动到账）。生产为 null。
@@ -60,22 +54,21 @@ function userPost(
   body: unknown,
   headers: Record<string, string>,
 ): Promise<Response> {
-  return requestWithDomain(new URL(path, config.userBaseUrl).toString(), config.domain, {
+  return requestWithDomain(new URL(path, config.iamBaseUrl).toString(), config.domain, {
     method: "POST",
     headers,
     body: jsonBody(body),
   })
 }
 
-// 四项齐备才算「已接 platform」；缺任一 = 预览档（纯前端），路由回 503/preview，登录闸放行。
+// 核心配置齐备才算「已接后端」；缺任一 = 预览档（纯前端），路由回 503/preview，登录闸放行。
 export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | null {
   const secretRaw = env.KOKORO_WEB_SESSION_SECRET?.trim()
-  const userBaseUrl = env.KOKORO_USER_BASE_URL?.trim()
-  const sessionBaseUrl = env.KOKORO_SESSION_BASE_URL?.trim()
+  const iamBaseUrl = env.KOKORO_IAM_BASE_URL?.trim()
   const domain = configuredDomain(env)
   const bffBaseUrl = configuredBffBaseUrl(env)
   const internalSecret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
-  if (!secretRaw || !userBaseUrl || !sessionBaseUrl || !domain) {
+  if (!secretRaw || !iamBaseUrl || !domain) {
     return null
   }
   if (env.NODE_ENV === "production" && internalSecret === null) {
@@ -90,14 +83,9 @@ export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | n
   }
   return {
     sessionSecrets,
-    userBaseUrl,
-    sessionBaseUrl,
+    iamBaseUrl,
     domain,
     bffBaseUrl,
-    hubBaseUrl: env.KOKORO_HUB_BASE_URL?.trim() || null,
-    agentBaseUrl: env.KOKORO_AGENT_BASE_URL?.trim() || null,
-    paymentBaseUrl: env.KOKORO_PAYMENT_BASE_URL?.trim() || null,
-    billingBaseUrl: env.KOKORO_BILLING_BASE_URL?.trim() || null,
     internalSecret,
     mockWebhookSecret: env.KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET?.trim() || null,
     secureCookies: env.NODE_ENV === "production",
@@ -286,7 +274,7 @@ export type TeamSessionOutcome =
   | { kind: "forbidden" }
   | { kind: "unavailable" }
 
-// 团队换签（web → user /bff/auth/team-sessions）：携 user principal（x-user-id）换目标 namespace 的
+// 团队换签（web → IAM /bff/auth/team-sessions）：携 principal（x-kokoro-principal-id）换目标 namespace 的
 // runtime token。403=非该 team 活跃成员（被移除/从未加入）；其余失败归一 unavailable。token 只在服务端
 // 重新密封进信封，绝不回给浏览器。
 export async function userIssueTeamSession(
@@ -298,7 +286,7 @@ export async function userIssueTeamSession(
     config,
     "/bff/auth/team-sessions",
     { team_id: teamId },
-    { ...callerHeaders(config), "x-user-id": userId },
+    { ...callerHeaders(config), "x-kokoro-principal-id": userId },
   ).catch(() => null)
   if (response === null) {
     return { kind: "unavailable" }

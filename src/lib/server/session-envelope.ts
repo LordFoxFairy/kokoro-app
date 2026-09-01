@@ -1,4 +1,4 @@
-// BFF 会话信封（服务端专用）：把 kokoro-user 签发结果密封进 httpOnly cookie，浏览器 JS
+// BFF 会话信封（服务端专用）：把 kokoro-iam 签发结果密封进 httpOnly cookie，浏览器 JS
 // 读不到、改不动。AES-256-GCM 认证加密（node:crypto，无外部依赖）：随机 12 字节 IV/次，
 // GCM 认证标签防篡改；密钥从 secret 经 SHA-256 派生 32 字节。双钥轮换：secrets[0] 封，读时
 // 依次尝试全部（轮换窗口内旧信封仍可解）。exp 同时封进载荷并在解封时强校验。

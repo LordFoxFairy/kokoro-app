@@ -1,4 +1,4 @@
-// magic-link 申请（BFF）：设一次性 httpOnly nonce cookie，把 nonce 哈希随邮箱交 kokoro-user。
+// magic-link 申请（BFF）：设一次性 httpOnly nonce cookie，把 nonce 哈希随邮箱交 kokoro-iam。
 // 浏览器不收 site_id/user 地址，也不收原文 token（原文只经邮件/开发链投递）。存在性不泄露：
 // 除限频外一律等价「已发送」。dev（response 投递档）把 link_token 变可点开发链回前端。
 

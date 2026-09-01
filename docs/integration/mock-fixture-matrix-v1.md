@@ -7,7 +7,7 @@
 > 浏览器路径、请求/响应和闭环状态以 [`user-web-api-contract-v4.md`](./user-web-api-contract-v4.md)
 > 为唯一事实来源；矩阵中尚未在 v4 注册的 `/api/tasks*`、`/api/scheduled-tasks*`、
 > `/api/connectors*`、`/api/mcp*` 等路径都是目标/历史示例，当前 Web 不得直接调用。
-> Chat 的统一业务承接边界见 [`kokoro-gateway-boundary-v1.md`](./kokoro-gateway-boundary-v1.md)。
+> Chat 的当前统一业务承接边界见 [`business-bff-contract-v1.md`](./business-bff-contract-v1.md) 和 [`chat-handoff-contract-v1.md`](./chat-handoff-contract-v1.md)。同目录的 [`kokoro-gateway-boundary-v1.md`](./kokoro-gateway-boundary-v1.md) 仅为历史归档，不是 fixture 的运行时依赖。
 
 ## 1. 结构
 
@@ -37,7 +37,7 @@ HTTP `Host`（目标连接 authority）与 `Forwarded`（经 service auth/来源
 - `alpha.fixture.test`、`beta.fixture.test` 是本矩阵内部的合成 deployment binding，用来驱动 tenant 隔离断言；
   它们不改变上述环境文件，也不是浏览器可以选择的域名。
 - Fixture 与 `@kokoro/app` 页面代码同属 GitHub 独立仓库 `LordFoxFairy/kokoro-app`（本地 checkout 目录为 `kokoro`）；不创建独立 fixture 仓库，仓库名也不进入
-  wire、DOM、日志或 snapshot。环境加载和发布规则以 [`../deployment.md`](../deployment.md) 为准。
+  wire、DOM、日志或 snapshot。环境加载和发布规则以 [`../deployment.md`](../deployment.md) 为准。共享 package 只允许通过已发布的浏览器安全 semver 版本复用，不把其它子仓库源码或 `src/site` 带入 Web。
 - 浏览器按 HTTP 协议发送的 `Host` 不作为 tenant 输入；BFF/transport 删除调用方控制的出站 `Host`、旧转发头和
   `X-Domain`，再由上游 URL 产生连接 authority，并只注入 `Forwarded: host=<KOKORO_DOMAIN>`。
 
@@ -773,8 +773,9 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | `rail.navigation.tooltip-reset.v214` | 收起 Rail 后 hover Agent，再切换技能/排程 | active surface 变化时旧 tooltip portal 消失；新入口普通 hover 仍能重新打开 tooltip，不改变路由或 API 上下文 |
 | `rail.account.compact-reset.v214` | account menu 打开后切换 compact desktop 状态 | 账户菜单自动关闭，宽/窄布局不保留旧浮层或焦点 trap；不发送域名、tenant、site header |
 
-这些是同一 User Web 子仓库内的浏览器 fixture；Chat 仍由 `/api/session/*` 同源 BFF 承接，统一业务 Gateway 作为独立部署仓库
-提供 `/sessions/*` 兼容面，不作为 `kokoro-app` 子目录、workspace 依赖或前端页面代码引入。
+这些是同一 User Web 子仓库内的浏览器 fixture；Chat 当前由 `/api/session/*` 同源 Web adapter 承接到
+`kokoro-bff` Chat 业务边界的 `/v1/sessions/*`。本节旧版本中提到的统一业务 Gateway 及其 `/sessions/*` 兼容面
+属于历史考古，不是独立部署仓库、workspace 依赖或前端页面代码。
 
 ## 48. Project context picker 与 Chat 承接 fixtures v215
 
@@ -796,7 +797,7 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | `rail.compact.first-paint.v217` | `768×674` fine-pointer 硬刷新 `/app` 或 catalog surface | CSS 首帧隐藏 Sidebar/gap/container；水合后 Header 唯一 trigger 可展开 `300px` rail；不出现先宽后窄的横向闪动 |
 | `rail.navigation.tooltip-local-reset.v217` | 收起 rail，打开 Agent Tooltip，再切换 Skills/排程 | SidebarMenu 容器 identity 保持；旧 Tooltip portal 消失，新入口仍可 hover 打开；active marker 和 surface 同步 |
 
-以上 fixture 仍只验证 `kokoro-app` 的桌面 Web 装配与本地合成数据；不会增加 Gateway endpoint，也不把 Chat handoff
+以上 fixture 仍只验证 `kokoro-app` 的桌面 Web 装配与本地合成数据；不会增加独立 Gateway endpoint，也不把 Chat handoff
 envelope 当成后端 project-create/link 契约。
 
 以上均为 `kokoro-app` 独立子仓库的桌面 Web 合成 fixture。网站 list/link 与 project create 尚无已冻结的 BFF wire schema；这些
@@ -823,7 +824,10 @@ Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，�
 已通过 `parseSessionEvent` 的事件历史；不包含 Cookie、token、租户、站点或原始 Manus 数据。该 fixture
 只验证 `kokoro-app` 本地 Web 行为，Live Session 仍以服务端的 `project_ref` 接收、持久化和列表过滤契约为准。
 
-## 51. Rail first control / preview stream cursor / gateway pairing v221
+## 51. Rail first control / preview stream cursor / Gateway 配对历史记录 v221
+
+> 本节保留 v221 的历史回归名称。`gateway.secret-pair.v221` 不属于当前环境矩阵；当前 Web 只配置
+> `KOKORO_BFF_BASE_URL`，服务端边界以 [`business-bff-contract-v1.md`](./business-bff-contract-v1.md) 为准。
 
 | Fixture key | 触发 | 断言 |
 | --- | --- | --- |
@@ -831,10 +835,10 @@ Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，�
 | `rail.collapsed.manus-rhythm.v221` | `1280×720` 收起 Rail | 品牌图形 `28×28px` 位于 `(12,14)`；一级导航 SVG 从 `y=73` 起每 `37px`；Project/Task 为 `y=315/353`；footer 锚点保持 `y=615/651` |
 | `chat.preview.switch-replay.v221` | 同一 preview client 完成 A，切换 B，再返回 A | `openEvents(lastEventId=0)` 只按 A 的历史重放；旧 subscriber/timer 不投递给当前 stream；A 的 user/assistant/run completed 重新出现 |
 | `http.opaque-path-segment.v221` | session/Hub/Team route 参数含 `/`, `?`, `#`, `%` | 每个动态段在 BFF/contract 边界只编码一次；层级文件路径仍按路径段编码；query/fragment 不会逃逸到 upstream URL |
-| `gateway.secret-pair.v221` | 配置 `KOKORO_GATEWAY_BASE_URL` 但未配置 BFF secret | `authConfig` 返回未配置态；纯 preview 不配置 Gateway 时仍可启动；Gateway-first 环境必须同时注入 `KOKORO_INTERNAL_SECRET_WEB_BFF` |
+| `gateway.secret-pair.v221`（历史） | 旧实现配置 `KOKORO_GATEWAY_BASE_URL` 但未配置 BFF secret | 仅用于审阅旧配置闸门；当前实现不读取 Gateway 变量，live Web 统一要求 `KOKORO_BFF_BASE_URL` 与 `KOKORO_INTERNAL_SECRET_WEB_BFF` |
 
-以上均为 `kokoro-app` 独立子仓库的桌面 Web/HTTP fixture；Gateway 的真实请求转发回归位于独立
-`kokoro-gateway` 子仓库，不把 Gateway 源码或 `site` 目录引入 Web。
+以上均为 `kokoro-app` 独立子仓库的桌面 Web/HTTP fixture；本节中 Gateway 的真实请求转发回归是历史材料，
+当前真实业务回归位于 `kokoro-bff` 与各 owner repo，不把 Gateway 源码或 `site` 目录引入 Web。
 
 ## 53. Library/Scheduled URL hydration fixture v223
 
@@ -844,8 +848,8 @@ Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，�
 | `scheduled.deep-link.location-snapshot.v223` | 硬刷新 `/app/scheduled?tab=list#scheduled-tasks/new` | 列表 tab、编辑器 hash 和本地 preview task projection 在同一个 location snapshot 中恢复；hash 关闭后清理编辑上下文 |
 | `scheduled.preview.storage-store.v223` | 预览排程创建/编辑/暂停/删除 | `localStorage` 只保存合成任务；同页通过局部事件更新当前 surface，跨 tab 使用 `storage` 订阅，不引入第二套任务 API |
 
-上述 fixture 只验证桌面 Web 的首帧状态与本地 preview 存储边界；真实 Live Scheduled 仍以冻结后的 Hub/业务 Gateway
-契约为准，不能把 localStorage 结果当作跨设备持久化证据。
+上述 fixture 只验证桌面 Web 的首帧状态与本地 preview 存储边界；真实 Live Scheduled 以 BFF `/v1/scheduled-tasks`
+和独立 `kokoro-scheduler` 的冻结契约为准，不能把 localStorage 结果当作跨设备持久化证据。
 ## 54. Project Chat hydration recovery and layout fixture v224
 
 | Fixture key | 触发 | 断言 |

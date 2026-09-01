@@ -30,7 +30,7 @@ export function formatMicros(micros: string): string {
   return negative ? `-${out}` : out
 }
 
-// 用户面单位：积分（credit）。1 积分 = 10_000 micros（与 kokoro-credit domain/amount + PRD 一致）。
+// 用户面单位：积分（credit）。1 积分 = 10_000 micros（由 kokoro-billing 的 Credit bounded context 定义）。
 // 展示按此移位（4 位小数），去尾零——整积分显示整数，含碎屑显示小数。BigInt 安全，非法回退 "0"。
 const MICROS_PER_CREDIT = BigInt(10_000)
 const CREDIT_FRACTION_DIGITS = 4

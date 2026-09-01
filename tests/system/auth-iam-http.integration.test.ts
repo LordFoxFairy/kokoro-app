@@ -43,12 +43,8 @@ describe("User auth BFF HTTP contract", () => {
   it("forwards the configured deployment domain without a browser tenant binding", async () => {
     const config: AuthConfig = {
       sessionSecrets: ["secret"],
-      userBaseUrl: user.baseUrl,
-      sessionBaseUrl: "http://session.fixture",
+      iamBaseUrl: user.baseUrl,
       domain: "dev.kokoro.localhost",
-      hubBaseUrl: null,
-      paymentBaseUrl: null,
-      billingBaseUrl: null,
       internalSecret: "web-secret",
       mockWebhookSecret: null,
       secureCookies: true,

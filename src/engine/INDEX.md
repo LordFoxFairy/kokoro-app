@@ -32,7 +32,7 @@
 - `reattach.ts`：`reattachPlanFromSnapshot`（在途 run 权威判据；有 pending 暂停直接落
   awaiting-hitl 不设时限）、`REATTACH_TIMEOUT_MS`（90s 兜底）。
 - `config.ts`：`sessionBaseUrl()`——同源 BFF 代理前缀 `/api/session`（AUTH-P0）；浏览器不再
-  直连 kokoro-session，真实地址留服务端代理，`SESSION_PROXY_BASE` 常量。
+  直连 Web 同源 BFF 的 Chat projection，真实业务服务地址留服务端代理，`SESSION_PROXY_BASE` 常量。
 - `file-fetch.ts`（client 组件）：`fileFetch`/`useFileBlob`——files/deliveries 走同源
   `/api/session` 代理，鉴权由 httpOnly 信封 cookie 自动携带（前端不持 token）；仍 fetch→blob
   →object URL 供预览/下载（结果被替换/卸载即 revoke；loading 为键控派生，无 effect 同步 setState）。

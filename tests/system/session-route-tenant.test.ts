@@ -18,7 +18,7 @@ vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }))
 
 import { GET } from "@/app/api/session/[...path]/route"
 
-describe("Session BFF deployment domain context", () => {
+describe("Chat BFF deployment domain context", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     delete process.env.KOKORO_DOMAIN
@@ -29,7 +29,7 @@ describe("Session BFF deployment domain context", () => {
 
   it("passes KOKORO_DOMAIN as an explicit transport argument, never request Host", async () => {
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
-    authConfig.mockReturnValue({ sessionBaseUrl: "https://session.internal", domain: "dev.kokoro.localhost", internalSecret: null })
+    authConfig.mockReturnValue({ bffBaseUrl: "https://bff.internal", domain: "dev.kokoro.localhost", internalSecret: null })
     resolveSessionWithRefresh.mockResolvedValue({
       envelope: { runtime_jwt: "session-jwt" },
       setCookie: null,
@@ -42,14 +42,14 @@ describe("Session BFF deployment domain context", () => {
     )
 
     expect(response.status).toBe(200)
-    const [sessionTarget, domain, sessionOptions] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
-    expect(sessionTarget).toBe("https://session.internal/sessions")
+    const [bffTarget, domain, bffOptions] = requestWithDomain.mock.calls[0] as [string, string, RequestInit]
+    expect(bffTarget).toBe("https://bff.internal/v1/sessions")
     expect(domain).toBe("dev.kokoro.localhost")
-    const sessionHeaders = new Headers(sessionOptions.headers)
-    expect(sessionHeaders.get("authorization")).toBe("Bearer session-jwt")
-    expect(sessionHeaders.get("x-kokoro-service")).toBe("web-bff")
-    expect(sessionHeaders.get("host")).toBeNull()
-    expect(sessionHeaders.get("x-kokoro-tenant-id")).toBeNull()
+    const bffHeaders = new Headers(bffOptions.headers)
+    expect(bffHeaders.get("authorization")).toBe("Bearer session-jwt")
+    expect(bffHeaders.get("x-kokoro-service")).toBe("web-bff")
+    expect(bffHeaders.get("host")).toBeNull()
+    expect(bffHeaders.get("x-kokoro-tenant-id")).toBeNull()
     expect(resolveSessionWithRefresh).toHaveBeenCalledWith(expect.any(Request), expect.anything())
   })
 })

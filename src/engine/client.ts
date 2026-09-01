@@ -130,10 +130,16 @@ async function parseJsonResponse<T>(response: Response, parse: (raw: unknown) =>
 
 async function postJson<T>(url: string, body: unknown, parse: (raw: unknown) => T): Promise<T> {
   let response: Response
+  const bodyRecord = typeof body === "object" && body !== null && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : null
+  const idempotencyKey = typeof bodyRecord?.idempotency_key === "string" && bodyRecord.idempotency_key.trim() !== ""
+    ? bodyRecord.idempotency_key.trim()
+    : `session-mutation:${crypto.randomUUID()}`
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
       body: JSON.stringify(body),
     })
   } catch (error) {
@@ -272,7 +278,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       const target = url(sharePath(sessionId))
       let response: Response
       try {
-        response = await fetch(target, { method: "DELETE" })
+        response = await fetch(target, { method: "DELETE", headers: { "idempotency-key": `session-mutation:${crypto.randomUUID()}` } })
       } catch (error) {
         throw new SessionClientError("network", describeUnknown(error))
       }
@@ -289,7 +295,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       const target = url(snapshotPath(sessionId))  // DELETE 与 snapshot 同路径（契约）
       let response: Response
       try {
-        response = await fetch(target, { method: "DELETE" })
+        response = await fetch(target, { method: "DELETE", headers: { "idempotency-key": `session-mutation:${crypto.randomUUID()}` } })
       } catch (error) {
         throw new SessionClientError("network", describeUnknown(error))
       }
@@ -305,7 +311,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       try {
         response = await fetch(target, {
           method: "PATCH",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "idempotency-key": `session-mutation:${crypto.randomUUID()}` },
           body: JSON.stringify({ title }),
         })
       } catch (error) {

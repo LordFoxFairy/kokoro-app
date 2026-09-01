@@ -3,7 +3,7 @@ import { z } from "zod"
 
 import { createPersistedStore } from "@/lib/persisted-store"
 
-const KEY = "kokoro-web.test-store"
+const KEY = "kokoro-app.test-store"
 const schema = z.object({ count: z.number(), label: z.string() }).strict()
 
 afterEach(() => {

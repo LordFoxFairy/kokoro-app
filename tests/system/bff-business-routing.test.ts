@@ -31,7 +31,6 @@ describe("Web to business BFF route projection", () => {
   it("maps Scheduled to /v1 and unwraps the BFF envelope for the existing Web client", async () => {
     authConfig.mockReturnValue({
       bffBaseUrl: "http://bff.internal/",
-      hubBaseUrl: null,
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })
@@ -55,13 +54,12 @@ describe("Web to business BFF route projection", () => {
     expect(target).toBe("http://bff.internal/v1/scheduled-tasks")
     expect(domain).toBe("dev.kokoro.localhost")
     expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("ns_test")
-    expect(new Headers(init.headers).get("x-kokoro-user-id")).toBe("user_test")
+    expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBe("user_test")
   })
 
   it("preserves the BFF error status and projects its canonical error to the flat Scheduled shape", async () => {
     authConfig.mockReturnValue({
       bffBaseUrl: "http://bff.internal",
-      hubBaseUrl: null,
       domain: "dev.kokoro.localhost",
       internalSecret: "web-secret",
     })

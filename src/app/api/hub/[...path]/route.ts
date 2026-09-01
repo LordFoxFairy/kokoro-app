@@ -2,8 +2,8 @@
 // 转发到 kokoro-hub 的 self 面。scope 恒取自密封信封的 namespace，绝不透传浏览器参数当 scope；
 // 浏览器只见同源 `/api/hub/*`，runtime 凭据与 namespace 身份全留服务端。变更类请求校验同源 Origin。
 //
-// 路径约定：浏览器调 `/api/hub/self/skills/pool` → 代理前缀 `/hub` → `${hubBaseUrl}/hub/self/skills/pool`
-// （hub 服务把 self 面挂在 `/hub/self`）。上传走 multipart：透传浏览器 content-type（含 boundary），
+// 路径约定：浏览器调 `/api/hub/self/skills/pool` → BFF `/v1/skills/pool`
+// （BFF 承接原 Hub self 面）。上传走 multipart：透传浏览器 content-type（含 boundary），
 // 不强制 application/json。
 
 import { NextResponse } from "next/server"
@@ -29,7 +29,7 @@ const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 
 // self 面的密封身份头（scope 恒取信封 namespace；userId 取信封 user_id）。
 const NAMESPACE_HEADER = "x-kokoro-namespace"
-const USER_ID_HEADER = "x-kokoro-user-id"
+const USER_ID_HEADER = "x-kokoro-principal-id"
 
 function bffBusinessPath(path: string[]): string[] {
   // Preserve the browser-facing Hub namespace and translate it only at the
@@ -43,7 +43,7 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
   if (config === null) {
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
-  if (config.bffBaseUrl == null && config.hubBaseUrl === null) {
+  if (config.bffBaseUrl == null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
@@ -59,12 +59,9 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
 
   const { path } = await context.params
   const search = new URL(request.url).search
-  const encodedPath = (path ?? []).map((segment) => encodeURIComponent(segment)).join("/")
   const businessPath = bffBusinessPath(path ?? [])
   const encodedBusinessPath = businessPath.map((segment) => encodeURIComponent(segment)).join("/")
-  const target = config.bffBaseUrl != null
-    ? `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
-    : `${config.hubBaseUrl!.replace(/\/+$/, "")}/hub/${encodedPath}${search}`
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
 
   const headers = new Headers()
   headers.set(SERVICE_HEADER, SERVICE_VALUE)

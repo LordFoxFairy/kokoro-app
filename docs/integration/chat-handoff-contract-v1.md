@@ -1,13 +1,14 @@
 # Chat 承接契约 v1
 
 > 本文只描述 `kokoro-app` 内部 Direct Chat 与 Project Chat 的浏览器承接边界。
-> 它不引入新的后端资源，也不把 `kokoro-gateway` 或任何其他子仓库的源码带入本仓库。
+> 它不引入新的后端资源，也不把 `kokoro-bff` 或任何其他子仓库的源码带入本仓库。
 
 ## 1. 一句话结论
 
 Chat 在这里承接：Direct Chat 与 Project Chat 共用一个 `AppFrame`、一个
 `SessionEngine` 和一套 `/api/session/*` transport；切换项目只改变 session scope，
-不会创建第二套 Chat API。
+不会创建第二套 Chat API。Session 是 BFF Chat 模块里的业务资源，不是独立的
+`kokoro-session` 子仓库。
 
 ```text
 浏览器
@@ -15,13 +16,13 @@ Chat 在这里承接：Direct Chat 与 Project Chat 共用一个 `AppFrame`、�
   → AppFrame / Composer
   → SessionEngine(scope)
   → /api/session/*（同源 Web BFF）
-  → KOKORO_SESSION_BASE_URL 或 KOKORO_GATEWAY_BASE_URL/sessions/*
-  → kokoro-session
+  → KOKORO_BFF_BASE_URL/v1/sessions/*
+  → kokoro-bff（Chat 业务边界）
 ```
 
-这里的 `KOKORO_GATEWAY_BASE_URL` 只填写 Gateway authority root，不带 `/sessions`。
-Web BFF 根据浏览器请求中的 Session path 生成 Gateway 的 `/sessions/*`；因此 Direct Chat
-和 Project Chat 不需要各自的 `/chat` 网关 API，也不会把 Gateway URL、token 或内部 header
+这里的 `KOKORO_BFF_BASE_URL` 只填写 BFF authority root，不带 `/v1`。
+Web BFF 根据浏览器请求中的 Session path 生成自身 `/v1/sessions/*`；因此 Direct Chat
+和 Project Chat 不需要各自的 `/chat` 服务 API，也不会把 BFF URL、token 或内部 header
 暴露给浏览器。
 
 ## 2. 路由与 scope
@@ -119,17 +120,19 @@ SSE 使用 `fetch` stream，断线以 `Last-Event-ID: SEQ` 续接；HITL 使用�
 run id 或 control schema。
 
 Session runtime 兼容门槛：`session.feature_key` 是可选的增量元数据；Web 会接受有/无该字段
-的 snapshot。若启用 Project Chat，Session upstream/Gateway 必须同时接受
-`message.project_ref`、将它持久化为项目归属，并在 `GET /sessions` 按该 opaque reference
+的 snapshot。若启用 Project Chat，BFF 的 Chat 业务边界必须同时接受
+`message.project_ref`、将它持久化为项目归属，并在 BFF `/v1/sessions` 按该 opaque reference
 过滤；仅接受字段但忽略过滤会把 Direct Chat 混入项目任务列表，不能标记为 live 兼容。
 
 ### 5.4 服务端边界
 
-- 浏览器只访问同源 `/api/session/*`，不读取 runtime JWT、internal secret 或 gateway 凭据。
+- 浏览器只访问同源 `/api/session/*`，不读取 runtime JWT、internal secret 或 BFF 凭据。
 - BFF 从 HttpOnly session envelope 派生 Authorization 与服务身份，并生成 `Forwarded`。
-- 配置 `KOKORO_GATEWAY_BASE_URL` 后，BFF 后面的 transport 可以切换到独立
-  `LordFoxFairy/kokoro-gateway`，浏览器路径和 Chat DTO 不变。
-- Gateway 是独立兼容 transport；它不包含本仓库页面、Composer 或 `src/site`。
+- Web 只配置 `KOKORO_BFF_BASE_URL`；同源 `/api/session/*` 始终适配到
+  `LordFoxFairy/kokoro-bff` 的 Chat 业务边界，浏览器路径和 Chat DTO 不变。
+- `kokoro-bff` 的 Chat 业务边界负责 Chat 的业务编排、会话/消息投影、幂等、错误归一和 SSE；它在服务端
+  通过内部契约对接 `kokoro-agent`，不把 Agent worker 或 Redis 暴露给浏览器。
+- 旧 Gateway/Session 方案只保留在 [`kokoro-gateway-boundary-v1.md`](./kokoro-gateway-boundary-v1.md)，不作为当前依赖。
 
 ## 6. 验收清单
 

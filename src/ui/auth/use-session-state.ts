@@ -25,6 +25,34 @@ function parseProbe(raw: unknown): "authenticated" | "preview" | "anonymous" {
   return "anonymous"
 }
 
+let sessionProbeInflight: Promise<ReturnType<typeof parseProbe>> | null = null
+
+function requestSessionMode(): Promise<ReturnType<typeof parseProbe>> {
+  if (sessionProbeInflight !== null) return sessionProbeInflight
+
+  // Keep the request shared across Strict Mode effect replay, focus events and
+  // concurrent shell mounts. The promise is cleared after settlement so a
+  // later visibility check still observes session expiry.
+  const request = Promise.resolve().then(async () => {
+    const response = await fetch("/api/auth/session-state", { cache: "no-store" })
+    if (!response.ok) return "anonymous" as const
+    return parseProbe(await response.json())
+  }).catch(() => "anonymous" as const)
+  sessionProbeInflight = request
+  const clear = (): void => {
+    if (sessionProbeInflight === request) sessionProbeInflight = null
+  }
+  void request.then(clear, clear)
+  return request
+}
+
+function probeFromMode(mode: ReturnType<typeof parseProbe>): SessionProbe {
+  if (mode === "anonymous") {
+    return { state: "anonymous", mode: "checking" }
+  }
+  return { state: "pass", mode }
+}
+
 export function useSessionProbe(): SessionProbe {
   const [probe, setProbe] = useState<SessionProbe>(() => EXPLICIT_PREVIEW
     ? { state: "pass", mode: "preview" }
@@ -34,15 +62,8 @@ export function useSessionProbe(): SessionProbe {
     if (EXPLICIT_PREVIEW) return
     let live = true
     const check = (): void => {
-      void fetch("/api/auth/session-state", { cache: "no-store" })
-        .then(async (res) => {
-          if (!res.ok) return { state: "anonymous" as const, mode: "checking" as const }
-          const mode = parseProbe(await res.json())
-          if (mode === "anonymous") return { state: "anonymous" as const, mode: "checking" as const }
-          return { state: "pass" as const, mode }
-        })
-        .then((resolved) => live && setProbe(resolved))
-        .catch(() => live && setProbe({ state: "anonymous", mode: "checking" }))
+      void requestSessionMode()
+        .then((resolved) => live && setProbe(probeFromMode(resolved)))
     }
     check()
     // 复检会话:信封 cookie 随 magic-link TTL 过期（默认 900s），长会话会失效。聚焦/重新可见/每 2 分钟
