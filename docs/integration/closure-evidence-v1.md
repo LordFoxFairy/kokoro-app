@@ -98,3 +98,4 @@ Web session secret、Gateway shared secret、各 upstream 地址/ACL 和服务�
 - [`kokoro-gateway-boundary-v1.md`](./kokoro-gateway-boundary-v1.md)
 - [`forwarded-context-contract-v1.md`](./forwarded-context-contract-v1.md)
 - [`kokoro-subrepo-boundary-v1.md`](./kokoro-subrepo-boundary-v1.md)
+- [`kokoro-gateway business boundary v1`](https://github.com/LordFoxFairy/kokoro-gateway/blob/main/docs/business-gateway-contract-v1.md)
