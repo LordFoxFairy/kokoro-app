@@ -793,10 +793,6 @@ it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项�
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByLabelText("对话输入")).toHaveValue("交给 Kokoro 项目继续处理")
   })
-  // The route projection is synchronous, while Radix finishes closing the
-  // portaled picker on the next interaction cycle in jsdom. Close that
-  // already-navigated picker before exercising the project toolbar.
-  fireEvent.keyDown(document, { key: "Escape" })
   await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Kokoro" })).toBeNull())
 
   fireEvent.click(screen.getByRole("button", { name: "新建任务" }))

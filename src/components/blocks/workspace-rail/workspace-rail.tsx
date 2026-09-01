@@ -224,6 +224,7 @@ function WorkspaceRailContent({
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [taskOrder, setTaskOrder] = useState<"recent" | "name">("recent")
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchToggleRef = useRef<HTMLButtonElement>(null)
   const railRootRef = useRef<HTMLDivElement | null>(null)
@@ -602,7 +603,7 @@ function WorkspaceRailContent({
             <SidebarMenu>
               <SidebarMenuItem>
                 {compactDesktop ? (
-                  <DropdownMenu>
+                  <DropdownMenu open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuButton type="button" className={styles.navItem} isActive={projectActive} tooltip={t("firstSite.projects")} tooltipKey={navigationTransitionKey} aria-label={t("firstSite.projects")} data-testid="rail-project" data-navigation-section="project" onPointerDown={markPointerFocus}>
                         <Folder className={styles.icon} />
@@ -611,7 +612,15 @@ function WorkspaceRailContent({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" sideOffset={10} className={styles.projectMenu}>
                       <DropdownMenuItem asChild>
-                        <Link href={projectHref} prefetch={mountedSurfacePrefetch} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation}>
+                        <Link
+                          href={projectHref}
+                          prefetch={mountedSurfacePrefetch}
+                          onClickCapture={(event) => {
+                            interceptMountedSurfaceNavigation(event, projectHref)
+                            setProjectPickerOpen(false)
+                          }}
+                          onClick={closeNavigation}
+                        >
                           <Folder aria-hidden="true" />
                           {brandName ?? DEFAULT_BRAND.name}
                         </Link>
