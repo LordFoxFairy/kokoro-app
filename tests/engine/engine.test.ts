@@ -579,6 +579,42 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(engine.getSnapshot().machine).toMatchObject({ phase: "error", error: "status 500" })
   })
 
+  it("外部清空 storage 发生在水合中：结束 loading 并丢弃迟到 snapshot", async () => {
+    buildEngine(null)
+    let resolveSnapshot!: (value: ReturnType<typeof makeSnapshot> | null) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+
+    engine.openConversation("conv_hydrating")
+    expect(engine.getSnapshot().hydrating).toBe(true)
+
+    storage.clear()
+    expect(engine.getSnapshot().store).toBeNull()
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+
+    resolveSnapshot(makeSnapshot({ sessionId: "conv_hydrating", eventWatermark: 3 }))
+    await settle()
+
+    expect(engine.getSnapshot().store).toBeNull()
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(client.streams).toHaveLength(0)
+  })
+
+  it("外部清空 storage 后旧水合请求失败：不污染空态错误", async () => {
+    buildEngine(null)
+    let rejectSnapshot!: (error: unknown) => void
+    client.nextSnapshot = () => new Promise((_resolve, reject) => { rejectSnapshot = reject })
+
+    engine.openConversation("conv_hydrating")
+    storage.clear()
+    rejectSnapshot(new SessionClientError("network", "late hydration failure"))
+    await settle()
+
+    expect(engine.getSnapshot().store).toBeNull()
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(engine.getSnapshot().machine).toEqual({ phase: "idle", runId: null, error: null })
+  })
+
   it("水合撞 403 session_forbidden：驱逐越权 activeId、回退空态，不 fail-loud 也不拿坏 id 开跑", async () => {
     // 陈旧/越权 activeId（跨用户切换后 localStorage 残留了他人会话 id）：hydrate 撞
     // session_forbidden。不得 fail-loud 卡死，也不得留着这个 id 供 submit 去 POST（必再 403）。
@@ -608,6 +644,32 @@ describe("snapshot-first 水合与中断恢复", () => {
     await settle()
     expect(client.createCalls.at(-1)?.sessionId).toBe(store?.activeId)
     expect(engine.getSnapshot().machine.phase).toBe("streaming")
+  })
+
+  it("连续 session_forbidden：新建本地 fallback 后收束，不继续无界水合", async () => {
+    buildEngine(SEEDED)
+    const requested: string[] = []
+    client.nextSnapshot = (sessionId) => {
+      requested.push(sessionId)
+      return requested.length <= 2
+        ? Promise.reject(new SessionClientError("http", "session_forbidden"))
+        : Promise.resolve(null)
+    }
+    engine.dispose()
+    engine = createSessionEngine({
+      client,
+      storage,
+      now: () => 1_000,
+      createId: (prefix) => `${prefix}_evict_${requested.length}`,
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(requested).toEqual(["conv_9"])
+    expect(engine.getSnapshot().store?.activeId).not.toBe("conv_9")
+    expect(engine.getSnapshot().store?.conversations).toHaveLength(1)
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(engine.getSnapshot().machine).toEqual({ phase: "idle", runId: null, error: null })
   })
 
   it("切会话即重新水合目标会话", async () => {

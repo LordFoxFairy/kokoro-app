@@ -835,3 +835,24 @@ Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，�
 
 以上均为 `kokoro-app` 独立子仓库的桌面 Web/HTTP fixture；Gateway 的真实请求转发回归位于独立
 `kokoro-gateway` 子仓库，不把 Gateway 源码或 `site` 目录引入 Web。
+
+## 53. Library/Scheduled URL hydration fixture v223
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `library.deep-link.url-snapshot.v223` | 硬刷新 `/app/library?type=slides&view=list&favorites=1&q=研究` | URL 是 SSR-safe 的唯一状态源；水合后保持投影片/列表/收藏/搜索，不先把默认值写回地址栏，也不出现默认网格闪回 |
+| `scheduled.deep-link.location-snapshot.v223` | 硬刷新 `/app/scheduled?tab=list#scheduled-tasks/new` | 列表 tab、编辑器 hash 和本地 preview task projection 在同一个 location snapshot 中恢复；hash 关闭后清理编辑上下文 |
+| `scheduled.preview.storage-store.v223` | 预览排程创建/编辑/暂停/删除 | `localStorage` 只保存合成任务；同页通过局部事件更新当前 surface，跨 tab 使用 `storage` 订阅，不引入第二套任务 API |
+
+上述 fixture 只验证桌面 Web 的首帧状态与本地 preview 存储边界；真实 Live Scheduled 仍以冻结后的 Hub/业务 Gateway
+契约为准，不能把 localStorage 结果当作跨设备持久化证据。
+## 54. Project Chat hydration recovery and layout fixture v224
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `chat.project-hydration.visible-loading.v224` | 刷新带 `conversation` 的项目 Chat | Engine 暴露 `hydrating=true`；AppFrame 显示可见加载文案、reading bars 与 composer 几何；不显示项目新任务欢迎态或空白 stage |
+| `chat.project-hydration.forbidden-recovery.v224` | snapshot 返回 `session_forbidden`/陈旧项目会话 | fallback session 水合完成后清理旧 `conversation` 查询并回到项目 overview；不永久保持 loading、不把坏 id 再用于 POST |
+| `project.overview.url-stability.v224` | 已有 direct 消息时进入无 `conversation` 的项目 overview | 项目 overview 不承接 direct timeline，也不被自动写回最近 conversation；只有显式新建/提交 task 才建立 project conversation URL |
+| `rail.compact.canvas-restore.v224` | fine-pointer 窄桌面展开 Rail 后打开/关闭 Canvas | Canvas 约束触发自动收起，关闭后恢复此前的 compact Rail 展开态；Rail/main/Canvas 不出现二次跳位 |
+
+以上 fixture 只验证 `kokoro-app` 内部状态投影和桌面几何；Project Chat Live 仍以 Session 的 scope 持久化/过滤验收为准。

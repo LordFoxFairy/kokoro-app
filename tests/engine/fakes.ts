@@ -118,12 +118,19 @@ export function createFakeClient(): FakeClient {
 
 export function createMemoryStorage<T>(initial: T | null = null): PersistedStore<T> & {
   writes: T[]
+  clear: () => void
 } {
   let value = initial
   const writes: T[] = []
   const listeners = new Set<() => void>()
   return {
     writes,
+    clear: () => {
+      value = null
+      for (const listener of listeners) {
+        listener()
+      }
+    },
     read: () => value,
     write: (next) => {
       value = next

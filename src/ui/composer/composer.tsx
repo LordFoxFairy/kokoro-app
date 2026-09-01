@@ -351,6 +351,7 @@ export function Composer({
                   type="button"
                   variant="ghost"
                   className={cn(styles.mode, styles.modelSelector, styles.modeLocked)}
+                  data-composer-control="agent"
                   disabled
                   aria-label={t("composer.agentLocked", { agent: currentAgent.name })}
                   title={`${currentAgent.name} — ${t("composer.agentLockedTitle")}`}
@@ -361,6 +362,7 @@ export function Composer({
               ) : (
                 <ComposerMenu
                   triggerClassName={cn(styles.mode, styles.modelSelector)}
+                  dataComposerControl="agent"
                   triggerLabel={t("composer.agentSwitch")}
                   triggerTitle={currentAgent.name}
                   trigger={
@@ -388,6 +390,7 @@ export function Composer({
                   type="button"
                   variant="ghost"
                   className={cn(styles.mode, styles.modeLocked)}
+                  data-composer-control="model"
                   disabled
                   aria-label={t("composer.modelLocked", { model: modelLabel(currentModel) })}
                   title={`${modelLabel(currentModel)} — ${t("composer.modelLockedTitle")}`}
@@ -398,6 +401,7 @@ export function Composer({
               ) : (
                 <ComposerMenu
                   triggerClassName={styles.mode}
+                  dataComposerControl="model"
                   triggerLabel={t("composer.modelSwitch")}
                   triggerTitle={currentModelTriggerTitle}
                   trigger={
@@ -429,6 +433,7 @@ export function Composer({
               <Button variant="ghost"
                 type="button"
                 className={cn(styles.mode, styles.modeSelect, styles.modeLocked)}
+                data-composer-control="mode"
                 disabled
                 aria-label={t("composer.modeLocked", { mode: modeLabel })}
                 title={`${modeLabel} — ${t("composer.modeLockedTitle")}`}
@@ -440,6 +445,7 @@ export function Composer({
             ) : (
               <ComposerMenu
                 triggerClassName={cn(styles.mode, styles.modeSelect)}
+                dataComposerControl="mode"
                 triggerLabel={t("composer.modeSwitch")}
                 triggerTitle={modeLabel}
                 trigger={

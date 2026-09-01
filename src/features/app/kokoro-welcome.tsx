@@ -41,6 +41,20 @@ function ShopifyMark() {
   return <span className={styles.shopifyMark} data-slot="shopify-mark" aria-hidden="true">S</span>
 }
 
+const PREVIEW_PROJECT_REF = "preview-project"
+let previewProjectFallbackSequence = 0
+
+/** Allocate an opaque project ref for the local preview instead of reusing one route. */
+export function createPreviewProjectRef(): string {
+  const randomUuid = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : null
+  if (randomUuid) return `${PREVIEW_PROJECT_REF}-${randomUuid}`
+
+  previewProjectFallbackSequence += 1
+  return `${PREVIEW_PROJECT_REF}-${Date.now().toString(36)}-${previewProjectFallbackSequence}`
+}
+
 /**
  * The direct inbox is a standalone chat surface. Project workspaces use a
  * separate component because their task list and context are persistent.
@@ -198,7 +212,7 @@ export function KokoroDirectChatWelcome({
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => {
                     setSelectedProject(t("firstSite.newProject"))
-                    onOpenProject?.("preview-project", draft)
+                    onOpenProject?.(createPreviewProjectRef(), draft)
                   }}>
                     {t("firstSite.newProject")}
                   </DropdownMenuItem>

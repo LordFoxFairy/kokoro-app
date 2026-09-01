@@ -24,6 +24,7 @@ import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation, typ
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
+import { SessionClientError } from "@/engine/client"
 
 import {
   awaitingPayload,
@@ -723,6 +724,135 @@ it("挂载壳跨 direct/project 路由时重新应用 conversation 深链", asyn
   await waitFor(() => expect(engine.getSnapshot().store?.activeId).toBe("project_task"))
 })
 
+it("项目 conversation 深链水合期间保留可见加载面，不误画空白新任务", async () => {
+  window.history.replaceState(window.history.state, "", "/app/project/kokoro?conversation=project_pending")
+  mockedPathname.value = "/app/project/kokoro"
+  buildEngine()
+
+  let resolveSnapshot: ((snapshot: ReturnType<typeof makeSnapshot> | null) => void) | undefined
+  client.nextSnapshot = () => new Promise((resolve) => {
+    resolveSnapshot = resolve
+  })
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument())
+  expect(screen.queryByTestId("project-task-welcome")).toBeNull()
+  expect(engine.getSnapshot().hydrating).toBe(true)
+
+  await act(async () => {
+    resolveSnapshot?.(null)
+    await settle()
+  })
+
+  await waitFor(() => expect(document.querySelector('[data-slot="project-task-welcome"]')).toBeInTheDocument())
+  expect(engine.getSnapshot().hydrating).toBe(false)
+})
+
+it("项目 conversation 深链被拒后回退到 overview，不永久停在 loading 面", async () => {
+  window.history.replaceState(window.history.state, "", "/app/project/kokoro?conversation=stale_project_task")
+  mockedPathname.value = "/app/project/kokoro"
+  buildEngine()
+  client.nextSnapshot = (sessionId) => sessionId === "stale_project_task"
+    ? Promise.reject(new SessionClientError("http", "session_forbidden"))
+    : Promise.resolve(null)
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument())
+  expect(window.location.pathname).toBe("/app/project/kokoro")
+  expect(window.location.search).toBe("")
+  expect(screen.queryByTestId("app-frame-loading")).toBeNull()
+})
+
+it.each([
+  {
+    label: "project snapshot 500",
+    pathname: "/app/project/kokoro?conversation=project_snapshot_failed",
+    routePathname: "/app/project/kokoro",
+    project: true,
+    reason: "http" as const,
+    detail: "snapshot_failed",
+    emptyTestId: "project-task-welcome",
+  },
+  {
+    label: "direct snapshot network error",
+    pathname: "/app?conversation=direct_snapshot_failed",
+    routePathname: "/app",
+    project: false,
+    reason: "network" as const,
+    detail: "network_down",
+    emptyTestId: "direct-chat-welcome",
+  },
+])("$label 进入可操作错误终态，重试后恢复原深链语义", async ({ pathname, routePathname, project, reason, detail, emptyTestId }) => {
+  window.history.replaceState(window.history.state, "", pathname)
+  mockedPathname.value = routePathname
+  buildEngine()
+  let attempts = 0
+  client.nextSnapshot = (sessionId) => {
+    attempts += 1
+    if (attempts === 1 && sessionId.endsWith("snapshot_failed")) {
+      return Promise.reject(new SessionClientError(reason, detail))
+    }
+    return Promise.resolve(null)
+  }
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId("app-frame-conversation-error")).toBeInTheDocument())
+  expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
+  expect(screen.getByRole("button", { name: "重试" })).toBeEnabled()
+  expect(screen.queryByTestId("project-task-welcome")).toBeNull()
+
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+
+  await waitFor(() => expect(client.snapshotCalls.filter((id) => id.endsWith("snapshot_failed"))).toHaveLength(2))
+  await waitFor(() => expect(document.querySelector(`[data-slot="${emptyTestId}"]`)).toBeInTheDocument())
+  expect(window.location.pathname).toBe(routePathname)
+  expect(window.location.search).toBe(project ? "?conversation=project_snapshot_failed" : "?conversation=direct_snapshot_failed")
+  expect(screen.queryByTestId("app-frame-conversation-error")).toBeNull()
+})
+
+it("direct conversation 深链被拒后清理 conversation URL 并回到新对话", async () => {
+  window.history.replaceState(window.history.state, "", "/app?conversation=direct_forbidden")
+  mockedPathname.value = "/app"
+  buildEngine()
+  client.nextSnapshot = (sessionId) => sessionId === "direct_forbidden"
+    ? Promise.reject(new SessionClientError("http", "session_forbidden"))
+    : Promise.resolve(null)
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  await waitFor(() => expect(document.querySelector('[data-slot="direct-chat-welcome"]')).toBeInTheDocument())
+  expect(window.location.pathname).toBe("/app")
+  expect(window.location.search).toBe("")
+  expect(screen.queryByTestId("app-frame-conversation-error")).toBeNull()
+})
+
 it("进入无 conversation 的项目 overview 时不承接 direct 线程", async () => {
   buildEngine()
   const { rerender } = render(
@@ -765,6 +895,8 @@ it("进入无 conversation 的项目 overview 时不承接 direct 线程", async
   )
 
   await waitFor(() => expect(screen.getByTestId("project-overview-probe")).toBeInTheDocument())
+  expect(window.location.pathname).toBe("/app/project/kokoro")
+  expect(window.location.search).toBe("")
   expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeNull()
 })
 
@@ -804,6 +936,33 @@ it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项�
   expect(screen.getByText("项目首条消息")).toBeInTheDocument()
 })
 
+it("项目跳转时显式草稿覆盖遗留的 pending 胶囊文案", async () => {
+  buildEngine()
+  // 模拟前一次 Website 创建模式留下的 route-neutral 草稿；本次用户输入
+  // 是跳转时的权威值，不应被旧的 placeholder-like fixture 抢回去。
+  window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ __pending__: "描述你想要建立的网站" }))
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  const input = await screen.findByLabelText("对话输入")
+  fireEvent.change(input, { target: { value: "本次项目的真实草稿" } })
+  const projectTrigger = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(projectTrigger, { button: 0 })
+  fireEvent.pointerUp(projectTrigger, { button: 0 })
+  fireEvent.click(projectTrigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+
+  await waitFor(() => {
+    expect(window.location.pathname).toMatch(/^\/app\/project\/preview-project-\d+$/)
+    expect(screen.getByLabelText("对话输入")).toHaveValue("本次项目的真实草稿")
+  })
+})
+
 it("项目侧栏的新建专案菜单会进入新的项目工作区", async () => {
   buildEngine()
   mockedPathname.value = "/app/project/kokoro"
@@ -822,7 +981,7 @@ it("项目侧栏的新建专案菜单会进入新的项目工作区", async () =
   fireEvent.click(entry)
 
   await waitFor(() => {
-    expect(window.location.pathname).toBe("/app/project/preview-project")
+    expect(window.location.pathname).toMatch(/^\/app\/project\/preview-project-\d+$/)
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
   })
   expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
@@ -845,7 +1004,7 @@ it("Direct Chat 展开侧栏后新建专案仍承接当前草稿", async () => {
   fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
 
   await waitFor(() => {
-    expect(window.location.pathname).toBe("/app/project/preview-project")
+    expect(window.location.pathname).toMatch(/^\/app\/project\/preview-project-\d+$/)
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByLabelText("对话输入")).toHaveValue("从 Chat 承接到新专案")
   })

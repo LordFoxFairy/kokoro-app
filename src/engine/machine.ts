@@ -143,6 +143,9 @@ export type EngineSnapshot = {
   pendingMode: AgentMode
   // HITL 决策暂存视图：runId → toolId → decision（供工具行渲染 decided 态）。
   staging: Record<string, Record<string, ToolDecision>>
+  // 服务端 snapshot 尚未回到当前 active session。UI 用它保留可见的
+  // loading surface，避免深链接在空线程期间误画成一个新任务。
+  hydrating: boolean
 }
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
@@ -154,6 +157,7 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   thread: EMPTY_THREAD,
   pendingMode: "fast",
   staging: {},
+  hydrating: false,
 }
 
 export type SessionEngine = {
@@ -218,6 +222,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let machine: MachineState = IDLE_MACHINE
   let store: ConversationStore | null = deps.storage.read()
   let thread: SessionStreamState = createSessionStreamState()
+  // An existing persisted session is hydrated as soon as the engine is made;
+  // expose that work in the first snapshot instead of making the shell infer
+  // it from an empty thread.
+  let hydrating = store !== null
   let pendingMode: AgentMode = "fast"
   const staging = new Map<string, StagedDecisions>()
   // resume 的幂等 decision_id：control 失败重试复用同一 id，防双击/网络重试造成二次 resume。
@@ -262,7 +270,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     for (const [runId, decisions] of staging) {
       stagingView[runId] = Object.fromEntries(decisions)
     }
-    return { machine, notice, store, thread, pendingMode, staging: stagingView }
+    return { machine, notice, store, thread, pendingMode, staging: stagingView, hydrating }
   }
 
   function notify(): void {
@@ -438,6 +446,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function hydrate(sessionId: string): void {
     hydrateGeneration += 1
     const generation = hydrateGeneration
+    if (!hydrating) {
+      hydrating = true
+      notify()
+    }
     deps.client
       .fetchSnapshot(sessionId)
       .then((sessionSnapshot) => {
@@ -446,6 +458,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         }
         if (sessionSnapshot === null) {
           // 服务端无此会话（本地新建未开聊）：空线程即真态。
+          hydrating = false
+          notify()
           return
         }
         thread = stateFromSnapshot(sessionSnapshot)
@@ -478,10 +492,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             }
           }
         }
+        hydrating = false
         notify()
       })
       .catch((error: unknown) => {
-        if (disposed || generation !== hydrateGeneration) {
+        if (disposed || generation !== hydrateGeneration || store?.activeId !== sessionId) {
           return
         }
         if (isSessionForbidden(error)) {
@@ -491,6 +506,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         // fail-loud：水合失败进状态机错误态，不渲染半真半假的本地线程。
+        hydrating = false
         machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
         notify()
       })
@@ -714,7 +730,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
-  function activateConversation(next: ConversationStore): void {
+  function activateConversation(next: ConversationStore, shouldHydrate = true): void {
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
@@ -723,19 +739,25 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeInFlight.clear()
     pendingSubmission = null
     thread = createSessionStreamState()
+    hydrating = shouldHydrate
     commitStore(next)
     notify()
-    hydrate(next.activeId)
+    if (shouldHydrate) {
+      hydrate(next.activeId)
+    }
   }
 
-  // 驱逐当前 activeId（越权/陈旧 id）：从本地索引移除并回退——余下首个或全新空会话，再照常水合。
-  // 不发 deleteSession（会话不属于当前用户，无权也不该删服务端）。递归天然收敛：新建 fallback
-  // 命服务端 404→空线程即停；余下会话若也越权，会再走一次驱逐。
+  // 驱逐当前 activeId（越权/陈旧 id）：从本地索引移除并回退。
+  // 不发 deleteSession（会话不属于当前用户，无权也不该删服务端）。没有可回退的已知会话时，
+  // removeConversation 会创建一个只存在于本地的新会话；它不需要再请求 snapshot，避免服务端
+  // 连续返回 session_forbidden 时递归生成 fallback。
   function evictActiveConversation(): void {
     if (!store) {
       return
     }
-    activateConversation(removeConversation(store, store.activeId, createId("conv"), now()))
+    const fallbackId = createId("conv")
+    const next = removeConversation(store, store.activeId, fallbackId, now())
+    activateConversation(next, next.activeId !== fallbackId)
   }
 
   function selectConversation(id: string): void {
@@ -783,6 +805,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeInFlight.clear()
     pendingSubmission = null
     thread = createSessionStreamState()
+    hydrating = false
     commitStore(next)
     notify()
     // 新会话本地新建、服务端必然不存在：不发无谓的 snapshot 请求。
@@ -887,6 +910,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // 本 tab 无激活或激活会话被别处删了：跟随外部激活并重水合（无激活则回空线程）。
     // 必须先收束在途 run（与 activateConversation 一致）：否则本 tab 正流式时被删，
     // machine 卡在旧 streaming 相位、runId 指向已删 run，hydrate 的 REATTACH 被守卫拒、不自愈。
+    // 清空 storage 没有新的 session 可供 hydrate；递增代际使旧 snapshot 的 then/catch
+    // 都失效，且必须同步结束 loading，否则旧请求永远悬挂在 hydrating=true。
+    hydrateGeneration += 1
+    hydrating = false
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })

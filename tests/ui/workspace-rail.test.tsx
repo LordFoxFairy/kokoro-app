@@ -54,7 +54,10 @@ beforeEach(() => {
   window.localStorage.setItem("kokoro.locale", "zh")
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  window.history.replaceState(window.history.state, "", "/")
+})
 
 it("按 runtime manifest 选择已注册菜单，未知 route 只呈现禁用态", () => {
   const { onOpenSettings } = renderRail({
@@ -110,6 +113,170 @@ it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊�
   expect(window.location.href).toBe(before)
   expect(onNewChat).not.toHaveBeenCalled()
   expect(onToggleCollapse).not.toHaveBeenCalled()
+})
+
+it("专案与任务使用独立清单，专案加号只创建专案，任务加号只创建任务", async () => {
+  const onCreateProject = vi.fn()
+  const onCreateTask = vi.fn()
+  renderRail({
+    projects: [
+      { id: "project_a", name: "产品规划", href: "/app/project/product", active: true },
+      { id: "project_b", name: "发布清单", href: "/app/project/release" },
+    ],
+    projectHref: "/app/project/product",
+    projectActive: true,
+    onCreateProject,
+    onCreateTask,
+    conversations: [{ id: "task_a", title: "整理需求" }],
+  })
+
+  const projects = document.querySelector('[data-project-list="true"]')
+  expect(projects).toHaveAttribute("aria-label", "专案")
+  expect(within(projects as HTMLElement).getByText("产品规划")).toBeInTheDocument()
+  expect(within(projects as HTMLElement).getByText("发布清单")).toBeInTheDocument()
+  expect(screen.getByRole("navigation", { name: "任务" })).toHaveAttribute("data-conversation-list", "project-conversation")
+  expect(screen.getByText("整理需求")).toBeInTheDocument()
+
+  const newProject = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(newProject, { button: 0 })
+  fireEvent.click(newProject)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  fireEvent.click(screen.getByTestId("rail-new-project-task"))
+  expect(onCreateProject).toHaveBeenCalledTimes(1)
+  expect(onCreateTask).toHaveBeenCalledTimes(1)
+})
+
+it("会话指针拖动只在当前清单内排序，并向宿主上报稳定顺序", () => {
+  const onReorderConversations = vi.fn()
+  renderRail({
+    conversations: [
+      { id: "conversation_a", title: "第一个" },
+      { id: "conversation_b", title: "第二个" },
+    ],
+    onReorderConversations,
+  })
+
+  const list = screen.getByRole("navigation", { name: "直接会话" })
+  const first = within(list).getByRole("button", { name: "第一个" })
+  const second = within(list).getByRole("button", { name: "第二个" })
+  const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() }
+  fireEvent.dragStart(first, { dataTransfer })
+  fireEvent.dragOver(second, { dataTransfer })
+  fireEvent.drop(second, { dataTransfer })
+
+  expect(onReorderConversations).toHaveBeenCalledWith(["conversation_b", "conversation_a"])
+  expect([...list.querySelectorAll("[data-conversation-id]")].map((node) => node.textContent)).toEqual(["第二个", "第一个"])
+  expect(first).toHaveAttribute("aria-grabbed", "false")
+})
+
+it("会话键盘拖动提供可访问的抓取、上下移动和取消", () => {
+  const onReorderConversations = vi.fn()
+  renderRail({
+    conversations: [
+      { id: "conversation_a", title: "第一个" },
+      { id: "conversation_b", title: "第二个" },
+    ],
+    onReorderConversations,
+  })
+
+  const list = screen.getByRole("navigation", { name: "直接会话" })
+  const first = within(list).getByRole("button", { name: "第一个" })
+  first.focus()
+  fireEvent.keyDown(first, { key: " " })
+  expect(first).toHaveAttribute("aria-grabbed", "true")
+  fireEvent.keyDown(first, { key: "ArrowDown" })
+  expect(onReorderConversations).toHaveBeenCalledWith(["conversation_b", "conversation_a"])
+  fireEvent.keyDown(first, { key: "Escape" })
+  expect(first).toHaveAttribute("aria-grabbed", "false")
+  expect(onReorderConversations).toHaveBeenLastCalledWith(["conversation_a", "conversation_b"])
+  expect(first).toHaveAttribute("aria-keyshortcuts", "Space ArrowUp ArrowDown Escape")
+})
+
+it("专案清单和任务清单分别支持键盘排序，不会互相移动", () => {
+  const onReorderProjects = vi.fn()
+  const onReorderTasks = vi.fn()
+  renderRail({
+    projects: [
+      { id: "project_a", name: "产品规划", href: "/app/project/product", active: true },
+      { id: "project_b", name: "发布清单", href: "/app/project/release" },
+    ],
+    projectHref: "/app/project/product",
+    projectActive: true,
+    conversations: [
+      { id: "task_a", title: "第一个任务" },
+      { id: "task_b", title: "第二个任务" },
+    ],
+    onReorderProjects,
+    onReorderTasks,
+  })
+
+  const project = screen.getByTestId("rail-project")
+  project.focus()
+  fireEvent.keyDown(project, { key: " " })
+  fireEvent.keyDown(project, { key: "ArrowDown" })
+  fireEvent.keyDown(project, { key: " " })
+  expect(onReorderProjects).toHaveBeenCalledWith(["project_b", "project_a"])
+  expect(onReorderTasks).not.toHaveBeenCalled()
+
+  const task = screen.getByRole("button", { name: "第一个任务" })
+  task.focus()
+  fireEvent.keyDown(task, { key: " " })
+  fireEvent.keyDown(task, { key: "ArrowDown" })
+  expect(onReorderTasks).toHaveBeenCalledWith(["task_b", "task_a"])
+})
+
+it("选择新建专案后完成路由与草稿承接，并把焦点留在展开态的加号", async () => {
+  function ControlledRail() {
+    const [projectActive, setProjectActive] = useState(false)
+    const directDraft = "从直接会话承接的草稿"
+    const [projectDraft, setProjectDraft] = useState("")
+
+    return (
+      <>
+        <output aria-label="当前草稿">{projectDraft}</output>
+        <WorkspaceRail
+          collapsed={false}
+          onToggleCollapse={() => {}}
+          onNewChat={() => {}}
+          chatHref="/app"
+          projectHref="/app/project/preview-project"
+          projectActive={projectActive}
+          onCreateProject={() => {
+            window.history.pushState(window.history.state, "", "/app/project/preview-project")
+            setProjectDraft(directDraft)
+            setProjectActive(true)
+          }}
+          conversations={[]}
+          activeId={null}
+          awaitingIds={new Set()}
+          onSelectConversation={() => {}}
+          onDeleteConversation={() => {}}
+          onRenameConversation={() => {}}
+          onOpenSettings={() => {}}
+          listLoading={false}
+          listError={false}
+          hasMore={false}
+          onLoadMore={() => {}}
+        />
+      </>
+    )
+  }
+
+  render(<ThemeProvider><LocaleProvider><ControlledRail /></LocaleProvider></ThemeProvider>)
+
+  const trigger = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  const entry = await screen.findByRole("menuitem", { name: "新建专案" })
+  fireEvent.click(entry)
+
+  await waitFor(() => {
+    expect(window.location.pathname).toBe("/app/project/preview-project")
+    expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
+    expect(screen.getByRole("button", { name: "新建专案" })).toHaveFocus()
+  })
+  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("从直接会话承接的草稿")
+  expect(document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')).toBeInTheDocument()
 })
 
 it("桌面 Rail 显示邀请入口并进入团队设置", () => {

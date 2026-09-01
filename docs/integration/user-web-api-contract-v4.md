@@ -6,7 +6,7 @@
 >
 > **事实来源优先级**：`src/app/api` 与运行时代码 > `src/contract`、`src/hub`、`src/agents`、`src/system` 的 schema/client > 相关 tests > `docs/integration/mock-fixture-matrix-v1.md`。mock-fixture matrix 是验收目标与测试夹具矩阵，不是当前后端路由清单。
 >
-> **状态声明**：当前浏览器链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成兼容网关骨架。Chat 的 Session 兼容路由已可接入，Hub/User/System/Agent/Payment/Billing 也有明确的可选 server-only namespace；当前 checkout 仍由各自环境变量决定是否真正切到网关，尚未宣称生产已部署。
+> **状态声明**：当前浏览器链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成可选的兼容传输骨架。Chat 的 Session 兼容路由已可接入，Hub/User/System/Agent/Payment/Billing 也有明确的可选 server-only namespace；网关不承担业务层职责，未来跨域业务编排由独立的 `kokoro-business` 服务承接。当前 checkout 仍由各自环境变量决定是否启用这些 live upstream，尚未宣称生产已部署。
 
 ## 0. 状态标签与范围边界
 
@@ -29,58 +29,71 @@
 
 Projects、team、mail、settings、shared 等其他实现只在需要说明路径别名或边界时出现。Billing
 虽然不属于本版七个 UI surface，但它复用 Session BFF 的真实 `/billing/*` upstream 路径，
-因此在 Chat/Gateway 兼容契约中登记，不另建 `/api/billing/*`。
+因此在 Chat/可选传输层兼容契约中登记，不另建 `/api/billing/*`。
 
-## 0.1 Chat 的统一业务/网关承接
+## 0.1 Chat 的 BFF 与业务服务承接
 
 Chat 的前端承接已经冻结为本仓库的同源 `/api/session/*` 契约。浏览器不直接访问
 Session/Agent 内部服务，也不直接携带站点、租户、工作负载 token 或内部 secret。
 
 ```text
-当前：
+当前（直接接 Session，适合本地与 MVP）：
 kokoro-app（Web UI） → 同源 /api/session/*（当前 Web BFF）
                     → KOKORO_SESSION_BASE_URL（当前 live upstream）
 
-接入 Gateway（配置开关打开后）：
+业务层接入（业务用例需要跨服务编排时）：
 kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
-                    → LordFoxFairy/kokoro-gateway /sessions/*
+                    → kokoro-business（server-only 业务编排）
                     → kokoro-session
+
+可选传输层（需要统一入口、路由或协议适配时）：
+kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
+                    → LordFoxFairy/kokoro-gateway（可选薄传输层）
+                    → kokoro-business 或 kokoro-session
+                    → 对应后端服务
 ```
 
-`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也不包含 Web 页面。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
-权限、域名上下文、会话/消息/Run 生命周期、SSE 事件、HITL 控制、幂等、错误映射、审计
-request id，以及向 Session/Hub/User/System/Agent/Payment/Billing runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
-状态、同源 BFF 传输和 public projection。
+`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也不包含 Web 页面。它只负责可选的
+传输/入口适配：服务间鉴权校验、路由、超时、SSE/二进制透传、Forwarded 重建、协议兼容和基础错误映射。
+它不拥有业务规则、跨产品业务编排、业务数据库或 Chat 的事实状态。
+
+`kokoro-business` 是未来独立的业务层服务（名称作为架构占位，不表示本仓库内已包含该服务）。它负责项目、技能、资料库、
+排程、Agent、计费等跨域业务用例的编排，以及需要聚合多个后端时的业务规则。它不包含 React、浏览器 cookie、页面路由或 Web
+组件。`kokoro-session` 继续拥有 Chat/session 的事实与流：会话生命周期、消息、Run、SSE、HITL、文件、交付物和分享。
+`kokoro-app` 负责桌面 UI、浏览器状态、同源 BFF、Web DTO projection 与请求边界。
 
 Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` → `SessionClient` →
-`/api/session/*` BFF → 当前 `KOKORO_SESSION_BASE_URL`；将来只替换 BFF 后面的业务网关，
-不把 Chat UI、页面路由或 gateway 源码搬进另一个子仓库。Direct Chat 与 Project Chat 共享这条
-链路，只有 scope 和项目引用不同。
+`/api/session/*` BFF →（直接或经 `kokoro-business` 编排）→ `kokoro-session`；需要时才在
+server-only 链路中加入 `kokoro-gateway`。浏览器永远不直接访问内部服务，也不把 Chat UI、页面路由或 gateway 源码搬进另一个
+子仓库。Direct Chat 与 Project Chat 共享这条链路，只有 scope 和项目引用不同。
 
-| 责任 | kokoro-app | gateway（独立兼容层） | Session/Agent runtime |
-|---|---|---|---|
-| 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
-| 浏览器同源路径 | `/api/session/*` | `/sessions/*` 兼容适配上游 | 不直接暴露 |
-| 登录信封、权限上下文、域名绑定 | 不读取内部 token；仅发送同源请求 | 服务端解析并校验 | 执行 runtime 级授权 |
-| 消息、Run、SSE、取消与 HITL 恢复 | 调用稳定契约并渲染状态 | 编排、幂等、错误和协议转换 | 生成模型/工具执行事件 |
-| 业务数据与跨产品规则 | 不持有 | 负责 | 负责执行侧状态 |
+| 责任 | kokoro-app BFF | kokoro-business（未来独立服务） | kokoro-gateway（可选薄传输层） | Session/Agent runtime |
+|---|---|---|---|---|
+| 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 | 不负责 |
+| 浏览器同源路径 | `/api/session/*` | 不暴露浏览器路径 | `/sessions/*` 等 server-only 兼容路径 | 不直接暴露 |
+| 登录信封、权限上下文、域名绑定 | 校验 Origin、读取 HttpOnly 信封并生成可信 server-only 上下文 | 接收受信任的内部身份并执行业务授权 | 校验服务身份并透传路由上下文 | 执行 runtime 级授权 |
+| 消息、Run、SSE、取消与 HITL 恢复 | 调用稳定契约、适配响应并渲染状态 | 需要时编排业务用例，不取代 Session 事实 | 路由、超时、协议转换和流透传 | 生成模型/工具执行事件并保存 Session 事实 |
+| 业务数据与跨产品规则 | 不持有跨域业务事实 | 负责业务规则、聚合和幂等边界 | 不持有业务规则或业务数据库 | 负责 Chat 执行侧状态与事实 |
 
-迁移规则：未来 gateway 接入时，优先只替换当前 BFF 后面的 upstream；浏览器继续使用本版
-`/api/session/*` 路径、请求体、响应体和 SSE event name。若必须改变业务语义，先在 gateway
-提供兼容适配和版本化契约，再升级 Web，不把内部服务路径泄漏到组件中。
+迁移规则：浏览器继续使用本版 `/api/session/*` 路径、请求体、响应体和 SSE event name。直接接
+Session、经 `kokoro-business` 编排、或在二者之间加入 `kokoro-gateway`，都只改变 server-only
+upstream 组合。若必须改变业务语义，由业务层提供版本化内部契约，由 BFF 保持浏览器兼容 projection；gateway 只做传输兼容，
+不在 gateway 中新增业务规则，也不把内部服务路径泄漏到组件中。
 
 仓库边界规则：本仓库不引入 `src/site`、其它产品的源码、跨仓库相对路径或 git submodule。
 未来共享 package 只发布浏览器安全的 TypeScript 类型、Zod schema、事件常量和 client 接口；
-业务规则、数据库、服务凭据、runtime adapter 与 gateway 实现留在各自后端仓库。这样每个
-site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约与统一网关对接。
+业务规则、数据库、服务凭据、runtime adapter、business service 与 gateway 实现留在各自后端仓库。
+这样每个 site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定的 Web API 契约与业务层对接，
+不要求每个产品都引入 gateway。
 
-统一 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 的 server-only 总入口，必须填写
-Gateway 的 authority root（例如 `http://kokoro-gateway:8080`），不要在值末尾追加
+可选 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 使用薄传输层时的 server-only
+authority root（例如 `http://kokoro-gateway:8080`），不要在值末尾追加
 `/sessions`、`/hub` 或其它 namespace。配置后，未显式设置的 `KOKORO_USER_BASE_URL`、
 `KOKORO_SESSION_BASE_URL`、`KOKORO_HUB_BASE_URL`、`KOKORO_AGENT_BASE_URL` 和
 `KOKORO_SYSTEM_BASE_URL` 使用这个根地址；各 BFF 自己在请求 path 上拼接对应的 Gateway
 namespace。Payment 与独立 Billing 由各自 adapter 使用 `/payment`、`/billing-service` 命名空间。
-显式的单服务地址优先，用于分阶段迁移，不会改变浏览器的 `/api/*` 路径。
+显式的单服务地址优先，用于分阶段迁移，不会改变浏览器的 `/api/*` 路径，也不会改变业务层与
+Session 的所有权边界。未配置该变量时，BFF 可以直接调用显式的业务/Session upstream。
 
 ## 1. 当前 API 路由注册表
 
@@ -129,7 +142,7 @@ namespace。Payment 与独立 Billing 由各自 adapter 使用 `/payment`、`/bi
 /api/mail/<path>     →  ${KOKORO_HUB_BASE_URL}/hub/mail/<path>
 ```
 
-当设置 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，实际目标 path 为：
+当设置可选的 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，实际目标 path 为：
 
 ```text
 Chat/Session   → ${KOKORO_GATEWAY_BASE_URL}/sessions/<path>
@@ -142,9 +155,11 @@ Payment        → ${KOKORO_GATEWAY_BASE_URL}/payment/<path>
 独立 Billing   → ${KOKORO_GATEWAY_BASE_URL}/billing-service/<path>
 ```
 
-因此 Chat 的承接链路是：浏览器 `/api/session/*` → Web BFF → Gateway
-`/sessions/*` → `kokoro-session`。Web BFF 仍然是同源鉴权和浏览器边界；Gateway 是
-server-only transport/业务入口；Session 继续拥有 Chat 的消息、Run、SSE、文件和分享事实。
+因此 Chat 的浏览器承接链路始终是：浏览器 `/api/session/*` → Web BFF。Web BFF 可直接调用
+`kokoro-session`，也可调用 `kokoro-business` 做业务编排；需要时再经可选 Gateway 的
+`/sessions/*` 等 server-only 兼容路径。Web BFF 仍然是同源鉴权和浏览器边界；Gateway 只做
+server-only transport/ingress；`kokoro-business` 才是跨域业务编排层；`kokoro-session` 继续拥有
+Chat 的消息、Run、SSE、文件和分享事实。
 
 BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route 为 nodejs），不把服务地址编入浏览器 bundle。
 
@@ -168,8 +183,9 @@ GET /api/session/billing/ledger
 GET /api/session/billing/by-model
 ```
 
-Gateway migration must preserve these paths and the same flat error/status behavior; they remain
-read-only upstream projections until a versioned business-gateway contract transfers ownership.
+Any optional Gateway adapter must preserve these paths and the same flat error/status behavior; they remain
+read-only upstream projections until a versioned business-layer contract transfers ownership. This document does
+not move billing ownership into the Gateway.
 
 ### 2.3 Hub BFF
 
@@ -201,7 +217,7 @@ read-only upstream projections until a versioned business-gateway contract trans
 | test | `.env.test` 或测试隔离注入 | `test.kokoro.localhost` | 可启用同一 preview fixture |
 | prod | 显式 `.env.prod`、`.env.production` 或平台运行时变量 | 部署绑定域名，例如 `app.example.com` | 不启用 Preview Client |
 
-当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、`KOKORO_GATEWAY_BASE_URL`（或显式的 User/Session 基址）、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。
+当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、显式的 User/Session 基址（可选地再配置 `KOKORO_GATEWAY_BASE_URL`）、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。未来业务层接入由独立 adapter 配置其 server-only upstream，不改变浏览器的 `/api/session/*`。
 
 可选 live upstream：
 
@@ -1298,7 +1314,7 @@ route handoff，不是 project-create API；生产接入 project create 前，�
 | Project → Scheduled → 新建/选择/保存 | 同一排程 picker + 共享编辑器 | 新建沿用已有 project scheduled create；list/link endpoint 待后端契约补齐 |
 | Direct Chat → 新增到专案 | mounted `/app/project/{project_ref}` | 不新增 Chat message；持久化 project create/link API 待接入 |
 
-因此这些交互不代表通用 gateway 已经部署。Gateway 仍只负责独立仓库的兼容边界；Web 子仓库只通过 typed adapter/BFF
+因此这些交互不代表通用 gateway 已经部署。Gateway 仍只负责独立仓库的可选传输兼容边界；跨域业务编排属于未来独立业务服务；Web 子仓库只通过 typed adapter/BFF
 调用已登记的路径。
 
 ### 10.4 Chat project handoff（v216）
@@ -1353,7 +1369,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
-| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；Gateway 接入时为 `/sessions/*` | closed（含刷新重放） | conditional on auth/session/gateway | 已冻结 |
+| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；可选 Gateway 接入时为 `/sessions/*` | closed（含刷新重放） | conditional on auth/session；若启用则再依赖 Gateway | 已冻结 |
 | Agent | `/app/agents` | `/api/agents/connections/setup` BFF + AgentClient | Preview closed | conditional on `KOKORO_AGENT_BASE_URL` | 独立页面与 setup BFF 已闭环；实际连接仍取决于 Agent upstream |
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
@@ -1382,12 +1398,14 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 ## 14. 当前闭环修正（v221）
 
-### 14.1 Gateway-first 配置成对规则
+### 14.1 可选 Gateway 配置成对规则
 
-`KOKORO_GATEWAY_BASE_URL` 表示 Web BFF 统一通过独立 `kokoro-gateway` 路由业务 namespace。只要该变量非空，
+`KOKORO_GATEWAY_BASE_URL` 表示 Web BFF 选择经独立 `kokoro-gateway` 进行传输/入口适配。只要该变量非空，
 必须同时提供 `KOKORO_INTERNAL_SECRET_WEB_BFF`；Gateway 会校验 `x-kokoro-service=web-bff` 与该内部凭据。
 `Forwarded: host=<KOKORO_DOMAIN>` 仅是服务端生成的路由上下文，不是认证方式。纯本地 preview 可以同时省略 Gateway
-与内部凭据；`.env.local`、`.env.test` 只有在切换 Gateway-first live fixture 时才填写这两个变量。
+与内部凭据；`.env.local`、`.env.test` 只有在选择该传输层的 live fixture 时才填写这两个变量。
+未配置 Gateway 时，BFF 仍可按显式的 server-only upstream 直接调用 Session 或其他后端；这不是降级为另一套浏览器 API。
+Gateway 不承接业务规则，`kokoro-business`（未来独立服务）与 `kokoro-session` 的责任边界保持不变。
 
 ### 14.2 Opaque path segment 规则
 
@@ -1421,3 +1439,111 @@ loading surface 只表达“正在建立当前视图”，不表达 session 已�
 或事件后才显示真实 `ConversationThread`。App Router 已挂载切换期间，当前 URL 的 `conversation` 直接参与 route
 projection，避免 route effect 的一帧延迟把项目任务错误显示成空白项目 overview。该修复只在 `kokoro-app` 内部，
 不引入 Gateway、Session 或其他子仓库代码，也不改变移动端 contract。
+
+## 16. Library/Scheduled URL snapshot 与本地 preview store（v223）
+
+### 16.1 URL 状态边界
+
+`/app/library` 的以下 UI 状态属于 URL projection，而不是新的后端资源：
+
+```text
+type=slides|websites|documents|spreadsheets|images|media|other
+q=<display search text>
+view=grid|list
+favorites=1
+```
+
+`/app/scheduled` 使用 `tab=calendar|list`；新建/编辑器使用既有 `#scheduled-tasks/new` hash。两个 surface 以
+SSR-safe `useSyncExternalStore` snapshot 读取 URL，服务端 snapshot 为稳定默认值，浏览器挂载后同步当前地址，
+且不会通过初始 effect 把默认值覆盖深链接。`popstate`、`hashchange` 和 mounted-surface navigation 只更新
+浏览器投影，不触发新的 BFF endpoint。
+
+### 16.2 Preview Scheduled 存储边界
+
+显式 Preview 下的任务 fixture key 为：
+
+```text
+kokoro.preview.scheduled-tasks
+```
+
+其值仅包含合成 `ScheduledTaskRecord[]`。同页创建/更新/启停/删除通过局部 store event 重新渲染；跨标签页使用
+浏览器 `storage` 事件。Live 模式不读取该 key，也不把 localStorage 结果当作 Hub/业务 Gateway 的成功写入。
+
+本次只修复首帧状态一致性和本地 fixture 订阅；不新增 `/api/library`、`/api/scheduled-preview` 或任何跨子仓库路由。
+
+## 17. Project Chat Live 发布门槛（v223）
+
+当前 Web contract 已冻结浏览器侧的项目 scope 形状，但 Live 闭环必须等待 Session 子仓库完成业务实现；
+Preview 的 `kokoro.preview.sessions.v1` 只证明 Web 本地承接，不替代服务端证据。
+
+### Web BFF 浏览器契约的已冻结形状
+
+```http
+GET /api/session/sessions?scope=project&project_ref=PROJECT_REF&cursor=CURSOR
+POST /api/session/sessions/SESSION_ID/messages
+Content-Type: application/json
+
+{
+  "content": "...",
+  "project_ref": "PROJECT_REF",
+  "idempotency_key": "IDEMPOTENCY_KEY"
+}
+```
+
+Web BFF 不根据 `project_ref` 进行领域规则判断，只执行同源鉴权、opaque path/query/body 透传、必要的 Web DTO
+projection 和标准错误映射；需要跨域业务用例时由 BFF 调用 `kokoro-business` 的 server-only 契约。
+若配置 Gateway，则 Gateway 继续保持 `/sessions/*` 原路径和 JSON/SSE 保真，不改变业务所有权。Direct Chat 不带
+`project_ref`，Project Chat 的首条消息与后续消息均必须带同一项目引用。
+
+### Session 子仓库必须提供的闭环证据
+
+在将 Live 状态标记为 closed 前，Session 必须在自己的子仓库内完成并验证：
+
+1. 严格 message schema 接收 `project_ref`，并在首条消息将其绑定到 Session；后续 message、插话、重试的
+   scope mismatch 返回稳定错误码，不允许静默改绑。
+2. Session 内部元数据/Memory/Mongo 保存 opaque `project_ref`，按 owner + project scope 做权限校验；
+   snapshot、SSE event 与 control response 仍保持当前公开 DTO，不额外暴露项目引用。
+3. Direct 列表只返回 `project_ref IS NULL`；Project 列表要求精确 `project_ref`，分页 cursor 不跨 scope
+   复用；越权、无效引用和重复幂等均有回归测试。
+4. 若启用 Gateway，由其 passthrough test 验证 query/body 原样到达；Web live integration test 验证首条消息、刷新、A→B→A
+   切换及 Direct/Project 列表隔离。
+
+因此当前矩阵中的 Project Chat 结论仍为：**Web/Preview 已闭环；若启用则 Gateway transport 已闭环；Session Live
+Chat 事实闭环待 Session 子仓库验收，跨域业务编排待独立 business service 验收**。本节不改变 Web 子仓库边界，也不把
+Session 源码、`site` 目录或共享运行时引入
+`kokoro-app`。
+## 18. Project Chat 首屏水合与失效深链回退（v224）
+
+### 18.1 UI 水合视图不是 API 状态
+
+Project Chat 的 `conversation` 仍是 opaque `SESSION_ID`，不新增 endpoint 或响应字段。Web 内部的
+`EngineSnapshot.hydrating` 只表示当前 scoped `SessionClient.fetchSnapshot()` 尚未完成，生命周期为：
+
+```text
+openConversation/activate → hydrating=true
+snapshot 200 + replay start → hydrating=false
+snapshot null（本地新 task）→ hydrating=false
+非 forbidden error → hydrating=false + machine.error
+```
+
+在 `hydrating=true` 或 URL conversation 尚未成为当前 scoped activeId 时，AppFrame 保留可见 loading surface；
+它不代表 session 存在、当前用户已授权、SSE 已连接或 run 已启动。只有解析后的 snapshot/SSE 事件才进入真实
+`ConversationThread`。Direct 与 Project 的 session scope 仍由 `project_ref` 规则决定，loading 视图不会改变请求形状。
+
+### 18.2 失效 project deep link
+
+当 SessionClient 返回稳定 forbidden 错误，engine 先驱逐本地陈旧 activeId 并创建干净 fallback session；fallback
+完成水合后，若其 activeId 仍不同于地址栏的旧 `conversation`，Web 以 `replaceState` 清理该查询并回到
+`/app/project/{project_ref}` overview。该恢复只处理浏览器 URL projection，不吞掉非 forbidden 的服务端错误；后者仍
+进入显式错误态。此逻辑完全位于 `kokoro-app`，不把 Session/Gateway 代码复制进 Web。
+
+### 18.3 Project overview URL 规则
+
+无 `conversation` 的 project URL 是稳定 overview，不自动承接 direct chat 最近会话。Project task URL 只在：
+
+1. 用户从项目页显式点击“新建任务”；
+2. 用户从项目页选择已有 task；
+3. 用户提交 project task 首条消息；
+
+时写入 `?conversation=SESSION_ID`。这使 overview、task 空态和 active timeline 三种布局边界明确，避免
+路由 effect 的一帧延迟把 project overview 画成空白或旧 direct timeline。

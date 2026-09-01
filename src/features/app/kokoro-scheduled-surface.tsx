@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, Ellipsis, ListChecks, Plus, Route, ScanSearch } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
@@ -56,11 +56,48 @@ function statusMessageKey(status: "active" | "paused" | "failed"): "scheduled.ac
 
 const EDITOR_HASH = "#scheduled-tasks/new"
 const PREVIEW_TASKS_KEY = "kokoro.preview.scheduled-tasks"
+const PREVIEW_TASKS_EVENT = "kokoro:scheduled-preview-tasks"
 type ScheduledView = "calendar" | "list"
+type ScheduledLocationState = { view: ScheduledView; editorOpen: boolean }
+const DEFAULT_SCHEDULED_LOCATION_STATE: ScheduledLocationState = { view: "calendar", editorOpen: false }
+const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = JSON.stringify(DEFAULT_SCHEDULED_LOCATION_STATE)
+const SCHEDULED_LOCATION_EVENT = "kokoro:scheduled-location"
 
 function readScheduledView(): ScheduledView {
   if (typeof window === "undefined") return "calendar"
   return new URLSearchParams(window.location.search).get("tab") === "list" ? "list" : "calendar"
+}
+
+function readScheduledLocationState(): ScheduledLocationState {
+  if (typeof window === "undefined") return DEFAULT_SCHEDULED_LOCATION_STATE
+  return {
+    view: readScheduledView(),
+    editorOpen: window.location.hash === EDITOR_HASH,
+  }
+}
+
+function readScheduledLocationSnapshot(): string {
+  return typeof window === "undefined"
+    ? DEFAULT_SCHEDULED_LOCATION_SNAPSHOT
+    : JSON.stringify(readScheduledLocationState())
+}
+
+function subscribeScheduledLocation(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {}
+  const events = ["hashchange", "popstate", "kokoro:surface-navigation", SCHEDULED_LOCATION_EVENT] as const
+  for (const event of events) window.addEventListener(event, onStoreChange)
+  return () => {
+    for (const event of events) window.removeEventListener(event, onStoreChange)
+  }
+}
+
+function useScheduledLocation(): ScheduledLocationState {
+  const snapshot = useSyncExternalStore(
+    subscribeScheduledLocation,
+    readScheduledLocationSnapshot,
+    () => DEFAULT_SCHEDULED_LOCATION_SNAPSHOT,
+  )
+  return useMemo(() => JSON.parse(snapshot) as ScheduledLocationState, [snapshot])
 }
 
 function writeScheduledView(view: ScheduledView): void {
@@ -68,6 +105,7 @@ function writeScheduledView(view: ScheduledView): void {
   const url = new URL(window.location.href)
   url.searchParams.set("tab", view)
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
 }
 
 function taskStatus(task: ScheduledTaskRecord): "active" | "paused" | "failed" {
@@ -91,6 +129,31 @@ function readPreviewTasks(): ScheduledTaskRecord[] {
   } catch {
     return []
   }
+}
+
+function readPreviewTasksSnapshot(): string {
+  return typeof window === "undefined" ? "[]" : JSON.stringify(readPreviewTasks())
+}
+
+function subscribePreviewTasks(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {}
+  window.addEventListener("storage", onStoreChange)
+  window.addEventListener(PREVIEW_TASKS_EVENT, onStoreChange)
+  return () => {
+    window.removeEventListener("storage", onStoreChange)
+    window.removeEventListener(PREVIEW_TASKS_EVENT, onStoreChange)
+  }
+}
+
+function usePreviewTasks(): ScheduledTaskRecord[] {
+  const snapshot = useSyncExternalStore(subscribePreviewTasks, readPreviewTasksSnapshot, () => "[]")
+  return useMemo(() => JSON.parse(snapshot) as ScheduledTaskRecord[], [snapshot])
+}
+
+function writePreviewTasks(tasks: readonly ScheduledTaskRecord[]): void {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(tasks))
+  window.dispatchEvent(new Event(PREVIEW_TASKS_EVENT))
 }
 
 function missingScheduledClientError(): Error {
@@ -171,13 +234,12 @@ export function KokoroScheduledSurface({
   const fixtureMode = preview
   const injectedClient = scheduledTaskClient ?? client
   const controlledTasks = tasks !== undefined
-  const [previewTasks, setPreviewTasks] = useState<ScheduledTaskRecord[]>(readPreviewTasks)
+  const previewTasks = usePreviewTasks()
   const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
   const [loading, setLoading] = useState(!fixtureMode && !controlledTasks)
   const [loadError, setLoadError] = useState(false)
-  const [editorOpen, setEditorOpen] = useState(() => typeof window !== "undefined" && window.location.hash === EDITOR_HASH)
+  const { view, editorOpen } = useScheduledLocation()
   const [initialPrompt, setInitialPrompt] = useState("")
-  const [view, setView] = useState<ScheduledView>(readScheduledView)
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ScheduledTaskRecord | null>(null)
@@ -237,37 +299,15 @@ export function KokoroScheduledSurface({
   }, [controlledTasks, fixtureMode, loadTasks])
 
   useEffect(() => {
-    const onLocationChange = () => {
-      const nextOpen = window.location.hash === EDITOR_HASH
-      setEditorOpen(nextOpen)
+    if (!editorOpen) {
       // Back/forward and a direct hash edit bypass Dialog's onOpenChange.
       // Clear the edit target on those paths too, otherwise reopening the
       // editor from history can resurrect a previously edited task.
-      if (!nextOpen) {
-        setEditingTaskId(null)
-        setInitialPrompt("")
-      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reconcile the local dialog payload with the external URL/hash store.
+      setEditingTaskId(null)
+      setInitialPrompt("")
     }
-    window.addEventListener("hashchange", onLocationChange)
-    window.addEventListener("popstate", onLocationChange)
-    return () => {
-      window.removeEventListener("hashchange", onLocationChange)
-      window.removeEventListener("popstate", onLocationChange)
-    }
-  }, [])
-
-  useEffect(() => {
-    const onViewChange = () => setView(readScheduledView())
-    window.addEventListener("popstate", onViewChange)
-    // Mounted catalog surfaces navigate through the shared shell without a
-    // document reload. Keep the tab projection in sync with those same-shell
-    // history updates as well as browser back/forward.
-    window.addEventListener("kokoro:surface-navigation", onViewChange)
-    return () => {
-      window.removeEventListener("popstate", onViewChange)
-      window.removeEventListener("kokoro:surface-navigation", onViewChange)
-    }
-  }, [])
+  }, [editorOpen])
 
   const canCreate = fixtureMode
     ? !controlledTasks || onSave !== undefined
@@ -283,54 +323,41 @@ export function KokoroScheduledSurface({
     : onDeleteTask !== undefined || injectedClient?.deleteScheduledTask !== undefined
 
   const addPreviewTask = (draft: ScheduledTaskDraft) => {
-    setPreviewTasks((current) => {
-      let sequence = taskIdRef.current
-      do {
-        sequence += 1
-      } while (current.some((task) => task.id === `scheduled_preview_${sequence}`))
-      taskIdRef.current = sequence
-      const nextTask: ScheduledTaskRecord = {
-        id: `scheduled_preview_${sequence}`,
-        title: draft.title,
-        prompt: draft.prompt,
-        frequency: draft.frequency === "weekly" ? "weekly" : "daily",
-        time: draft.time,
-        timezone: draft.timezone,
-        nextRun: nextPreviewRun(draft.time, draft.frequency),
-        expiresAt: draft.expiresAt,
-        autoApprove: draft.autoApprove,
-        enabled: true,
-      }
-      const next = [nextTask, ...current]
-      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-      return next
-    })
+    const current = readPreviewTasks()
+    let sequence = taskIdRef.current
+    do {
+      sequence += 1
+    } while (current.some((task) => task.id === `scheduled_preview_${sequence}`))
+    taskIdRef.current = sequence
+    const nextTask: ScheduledTaskRecord = {
+      id: `scheduled_preview_${sequence}`,
+      title: draft.title,
+      prompt: draft.prompt,
+      frequency: draft.frequency === "weekly" ? "weekly" : "daily",
+      time: draft.time,
+      timezone: draft.timezone,
+      nextRun: nextPreviewRun(draft.time, draft.frequency),
+      expiresAt: draft.expiresAt,
+      autoApprove: draft.autoApprove,
+      enabled: true,
+    }
+    writePreviewTasks([nextTask, ...current])
   }
 
   const updatePreviewTask = (taskId: string, draft: ScheduledTaskDraft) => {
-    setPreviewTasks((current) => {
-      const next = current.map((task) => task.id === taskId
-        ? { ...task, title: draft.title, prompt: draft.prompt, frequency: draft.frequency, time: draft.time, timezone: draft.timezone, nextRun: nextPreviewRun(draft.time, draft.frequency), expiresAt: draft.expiresAt, autoApprove: draft.autoApprove }
-        : task)
-      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-      return next
-    })
+    const next = readPreviewTasks().map((task) => task.id === taskId
+      ? { ...task, title: draft.title, prompt: draft.prompt, frequency: draft.frequency, time: draft.time, timezone: draft.timezone, nextRun: nextPreviewRun(draft.time, draft.frequency), expiresAt: draft.expiresAt, autoApprove: draft.autoApprove }
+      : task)
+    writePreviewTasks(next)
   }
 
   const setPreviewTaskStatus = (taskId: string, status: "active" | "paused") => {
-    setPreviewTasks((current) => {
-      const next = current.map((candidate) => candidate.id === taskId ? { ...candidate, enabled: status === "active", status } : candidate)
-      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-      return next
-    })
+    const next = readPreviewTasks().map((candidate) => candidate.id === taskId ? { ...candidate, enabled: status === "active", status } : candidate)
+    writePreviewTasks(next)
   }
 
   const removePreviewTask = (taskId: string) => {
-    setPreviewTasks((current) => {
-      const next = current.filter((task) => task.id !== taskId)
-      window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(next))
-      return next
-    })
+    writePreviewTasks(readPreviewTasks().filter((task) => task.id !== taskId))
   }
 
   const openEditor = (prompt = "", target: HTMLElement | null = null, task: ScheduledTaskRecord | null = null) => {
@@ -340,15 +367,15 @@ export function KokoroScheduledSurface({
     if (window.location.hash !== EDITOR_HASH) {
       window.history.pushState({ scheduledEditor: true }, "", `${window.location.pathname}${window.location.search}${EDITOR_HASH}`)
     }
-    setEditorOpen(true)
+    window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
   }
 
   const handleOpenChange = (open: boolean) => {
-    setEditorOpen(open)
     if (!open) setEditingTaskId(null)
     if (!open && window.location.hash === EDITOR_HASH) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
     }
+    if (!open) window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
   }
 
   const saveTask = async (draft: ScheduledTaskDraft) => {
@@ -467,7 +494,6 @@ export function KokoroScheduledSurface({
   const switchView = (next: string) => {
     if (next !== "calendar" && next !== "list") return
     const nextView = next as ScheduledView
-    setView(nextView)
     writeScheduledView(nextView)
   }
 

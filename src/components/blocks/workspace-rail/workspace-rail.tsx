@@ -1,4 +1,4 @@
-import { type CSSProperties, type PointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject, type SVGProps } from "react"
+import { type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject, type SVGProps } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Folder, Grid2X2, Home, ListFilter, ListTodo, LogOut, MessageSquareMore, Pencil, Plus, Search, SlidersHorizontal, Sparkles, SquarePen, UserRound, X } from "lucide-react"
 
@@ -108,6 +108,16 @@ export type WorkspaceRailProps = {
   projectActive?: boolean
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: () => void
+  /** Optional project collection. Undefined keeps the legacy single-project fixture. */
+  projects?: readonly WorkspaceRailProject[]
+  /** Receives the stable project order after a pointer/keyboard reorder. */
+  onReorderProjects?: (projectIds: string[]) => void
+  /** Optional task-specific action; falls back to onNewChat for compatibility. */
+  onCreateTask?: () => void
+  /** Receives the stable order for the currently scoped conversation list. */
+  onReorderConversations?: (conversationIds: string[]) => void
+  /** Alias for hosts that name project-scoped conversations “tasks”. */
+  onReorderTasks?: (conversationIds: string[]) => void
   /** Route-owned active state for direct and catalog destinations. */
   activeNavigationKey?: string
   conversations: ConversationSummary[]
@@ -137,6 +147,48 @@ export type WorkspaceRailProps = {
   onLoadMore: () => void
 }
 
+export type WorkspaceRailProject = {
+  id: string
+  name: string
+  href: string
+  active?: boolean
+}
+
+type RailDragKind = "project" | "conversation"
+type RailDragState = {
+  kind: RailDragKind
+  id: string
+  originOrder: string[]
+}
+type RailOrderState = {
+  scopeKey: string
+  ids: string[]
+}
+
+const DRAG_HELP_ID = "workspace-rail-drag-help"
+
+function reconcileOrder(current: string[], incoming: readonly string[]): string[] {
+  const incomingSet = new Set(incoming)
+  const kept = current.filter((id) => incomingSet.has(id))
+  const keptSet = new Set(kept)
+  return [...kept, ...incoming.filter((id) => !keptSet.has(id))]
+}
+
+function sameOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
+function orderByIds<T extends { id: string }>(items: readonly T[], order: readonly string[]): T[] {
+  if (order.length === 0) return [...items]
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const ordered = order.flatMap((id) => {
+    const item = byId.get(id)
+    return item ? [item] : []
+  })
+  const known = new Set(order)
+  return [...ordered, ...items.filter((item) => !known.has(item.id))]
+}
+
 function WorkspaceRailContent({
   compactDesktopRail = false,
   onNewChat,
@@ -149,6 +201,11 @@ function WorkspaceRailContent({
   projectHref,
   projectActive = false,
   onCreateProject,
+  projects,
+  onReorderProjects,
+  onCreateTask,
+  onReorderConversations,
+  onReorderTasks,
   activeNavigationKey,
   conversations,
   activeId,
@@ -216,6 +273,23 @@ function WorkspaceRailContent({
   const [query, setQuery] = useState("")
   const [taskOrder, setTaskOrder] = useState<"recent" | "name">("recent")
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
+  const projectItems = useMemo<WorkspaceRailProject[]>(() => {
+    if (projects !== undefined) return [...projects]
+    if (!projectHref) return []
+    return [{
+      id: projectHref,
+      name: brandName ?? DEFAULT_BRAND.name,
+      href: projectHref,
+      active: projectActive,
+    }]
+  }, [brandName, projectActive, projectHref, projects])
+  const projectIds = useMemo(() => projectItems.map((project) => project.id), [projectItems])
+  const conversationIds = useMemo(() => conversations.map((conversation) => conversation.id), [conversations])
+  const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
+  const [projectOrderState, setProjectOrderState] = useState<RailOrderState>({ scopeKey: "", ids: [] })
+  const [conversationOrderState, setConversationOrderState] = useState<RailOrderState>({ scopeKey: "", ids: [] })
+  const [dragState, setDragState] = useState<RailDragState | null>(null)
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchToggleRef = useRef<HTMLButtonElement>(null)
   const railRootRef = useRef<HTMLDivElement | null>(null)
@@ -365,6 +439,132 @@ function WorkspaceRailContent({
     window.requestAnimationFrame(() => searchToggleRef.current?.focus())
   }
 
+  const projectOrder = projectOrderState.scopeKey === "projects"
+    ? reconcileOrder(projectOrderState.ids, projectIds)
+    : projectIds
+  const conversationOrder = conversationOrderState.scopeKey === conversationScopeKey
+    ? reconcileOrder(conversationOrderState.ids, conversationIds)
+    : conversationIds
+  const orderedProjects = orderByIds(projectItems, projectOrder)
+  const scopedConversations = orderByIds(conversations, conversationOrder)
+
+  const orderFor = useCallback((kind: RailDragKind): string[] => {
+    if (kind === "project") {
+      return [...projectOrder]
+    }
+    return [...conversationOrder]
+  }, [conversationOrder, projectOrder])
+
+  const commitOrder = useCallback((kind: RailDragKind, next: string[]) => {
+    if (kind === "project") {
+      setProjectOrderState({ scopeKey: "projects", ids: next })
+      onReorderProjects?.(next)
+      return
+    }
+    setConversationOrderState({ scopeKey: conversationScopeKey, ids: next })
+    const onReorder = projectActive
+      ? onReorderTasks ?? onReorderConversations
+      : onReorderConversations ?? onReorderTasks
+    onReorder?.(next)
+  }, [conversationScopeKey, onReorderConversations, onReorderProjects, onReorderTasks, projectActive])
+
+  const moveItem = useCallback((kind: RailDragKind, sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return
+    const current = orderFor(kind)
+    const sourceIndex = current.indexOf(sourceId)
+    const targetIndex = current.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    const next = [...current]
+    next.splice(sourceIndex, 1)
+    next.splice(targetIndex, 0, sourceId)
+    commitOrder(kind, next)
+  }, [commitOrder, orderFor])
+
+  const beginKeyboardDrag = useCallback((kind: RailDragKind, id: string) => {
+    setDragState({ kind, id, originOrder: orderFor(kind) })
+  }, [orderFor])
+
+  const cancelDrag = useCallback(() => {
+    if (dragState) {
+      if (dragState.kind === "project") setProjectOrderState({ scopeKey: "projects", ids: dragState.originOrder })
+      else setConversationOrderState({ scopeKey: conversationScopeKey, ids: dragState.originOrder })
+      if (!sameOrder(orderFor(dragState.kind), dragState.originOrder)) {
+        if (dragState.kind === "project") onReorderProjects?.(dragState.originOrder)
+        else {
+          const onReorder = projectActive
+            ? onReorderTasks ?? onReorderConversations
+            : onReorderConversations ?? onReorderTasks
+          onReorder?.(dragState.originOrder)
+        }
+      }
+    }
+    setDragState(null)
+    setDragOverKey(null)
+  }, [conversationScopeKey, dragState, onReorderConversations, onReorderProjects, onReorderTasks, orderFor, projectActive])
+
+  const dragProps = useCallback((kind: RailDragKind, id: string) => ({
+    draggable: true,
+    "aria-grabbed": dragState?.kind === kind && dragState.id === id ? "true" as const : "false" as const,
+    "aria-roledescription": "可拖动项目",
+    "aria-describedby": DRAG_HELP_ID,
+    "aria-keyshortcuts": "Space ArrowUp ArrowDown Escape",
+    onDragStart: (event: DragEvent<HTMLElement>) => {
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move"
+        event.dataTransfer.setData("text/plain", `${kind}:${id}`)
+      }
+      setDragState({ kind, id, originOrder: orderFor(kind) })
+      setDragOverKey(`${kind}:${id}`)
+    },
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (dragState?.kind !== kind || dragState.id === id) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
+      setDragOverKey(`${kind}:${id}`)
+    },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      event.preventDefault()
+      if (dragState?.kind === kind && dragState.id !== id) moveItem(kind, dragState.id, id)
+      setDragState(null)
+      setDragOverKey(null)
+    },
+    onDragEnd: () => {
+      setDragState(null)
+      setDragOverKey(null)
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+      const isActive = dragState?.kind === kind && dragState.id === id
+      if (event.key === "Escape" && isActive) {
+        event.preventDefault()
+        cancelDrag()
+        return
+      }
+      // Space is the explicit grab/drop gesture. Enter remains the normal
+      // activation key for project links and conversation buttons.
+      if (event.key === " ") {
+        event.preventDefault()
+        if (isActive) {
+          setDragState(null)
+          setDragOverKey(null)
+        } else {
+          beginKeyboardDrag(kind, id)
+        }
+        return
+      }
+      if (!isActive || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
+      event.preventDefault()
+      const current = orderFor(kind)
+      const index = current.indexOf(id)
+      const nextIndex = event.key === "ArrowUp" ? index - 1 : index + 1
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return
+      const next = [...current]
+      const [item] = next.splice(index, 1)
+      next.splice(nextIndex, 0, item)
+      commitOrder(kind, next)
+      setDragOverKey(`${kind}:${id}`)
+    },
+  }), [beginKeyboardDrag, cancelDrag, commitOrder, dragState, moveItem, orderFor])
+
   // Search belongs to the expanded rail. The collapsed desktop rail has one
   // stable control—the product mark—which expands the same Sidebar context.
   const openSearch = () => {
@@ -378,7 +578,7 @@ function WorkspaceRailContent({
     onOpenSettings(tab)
   }
 
-  const filtered = filterConversations(conversations, query)
+  const filtered = filterConversations(scopedConversations, query)
   const ordered = taskOrder === "name"
     ? [...filtered].sort((left, right) => left.title.localeCompare(right.title))
     : filtered
@@ -530,6 +730,9 @@ function WorkspaceRailContent({
       ) : null}
 
       <SidebarContent className={styles.content}>
+      <span id={DRAG_HELP_ID} className={styles.visuallyHidden}>
+        使用空格开始或放置拖动，使用上下箭头重新排序，按 Escape 取消。
+      </span>
       <nav className={styles.nav} aria-label={t("rail.navAria")}>
         <SidebarMenu data-desktop-global-menu="true">
         {/* 新对话：带 ⇧⌘O 快捷键（AppFrame 已接入键盘）。 */}
@@ -618,7 +821,7 @@ function WorkspaceRailContent({
           </SidebarGroupContent>
         </SidebarGroup> : null}
 
-        {projectHref ? <SidebarGroup className={cn(styles.navGroup, styles.projectGroup)} data-desktop-projects="true">
+        {projectHref || projects !== undefined ? <SidebarGroup className={cn(styles.navGroup, styles.projectGroup)} data-desktop-projects="true">
           {!compactDesktop ? <SidebarGroupLabel className={styles.navGroupLabel}>
             <span>{t("firstSite.projects")}</span>
             <DropdownMenu>
@@ -642,68 +845,110 @@ function WorkspaceRailContent({
             </DropdownMenu>
           </SidebarGroupLabel> : null}
           <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                {compactDesktop ? (
+            {compactDesktop ? (
+              <SidebarMenu>
+                <SidebarMenuItem>
                   <DropdownMenu open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
                     <DropdownMenuTrigger asChild>
                       <SidebarMenuButton type="button" className={styles.navItem} isActive={projectActive} tooltip={t("firstSite.projects")} tooltipKey={navigationTransitionKey} aria-label={t("firstSite.projects")} data-testid="rail-project" data-navigation-section="project" onPointerDown={markPointerFocus}>
                         <Folder className={styles.icon} />
-                        {navigationExpanded ? <span className={styles.navLabel}>{brandName ?? DEFAULT_BRAND.name}</span> : null}
                       </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" sideOffset={10} className={styles.projectMenu}>
-                      <DropdownMenuItem asChild>
-                        <Link
-                          href={projectHref}
-                          prefetch={mountedSurfacePrefetch}
-                          onClickCapture={(event) => {
-                            interceptMountedSurfaceNavigation(event, projectHref)
-                            setProjectPickerOpen(false)
-                          }}
-                          onClick={closeNavigation}
-                        >
-                          <Folder aria-hidden="true" />
-                          {brandName ?? DEFAULT_BRAND.name}
-                        </Link>
-                      </DropdownMenuItem>
+                      {orderedProjects.map((project) => {
+                        const active = project.active ?? (projectActive && project.href === projectHref)
+                        return (
+                          <DropdownMenuItem key={project.id} asChild>
+                            <Link
+                              href={project.href}
+                              prefetch={mountedSurfacePrefetch}
+                              {...dragProps("project", project.id)}
+                              onPointerDown={markPointerFocus}
+                              onClickCapture={(event) => {
+                                interceptMountedSurfaceNavigation(event, project.href)
+                                setProjectPickerOpen(false)
+                              }}
+                              onClick={closeNavigation}
+                              aria-label={project.name}
+                              aria-current={active ? "page" : undefined}
+                            >
+                              <Folder aria-hidden="true" />
+                              {project.name}
+                            </Link>
+                          </DropdownMenuItem>
+                        )
+                      })}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                ) : (
-                  <SidebarMenuButton asChild type="button" className={styles.navItem} isActive={projectActive} data-testid="rail-project" data-navigation-section="project">
-                    <Link href={projectHref} prefetch={mountedSurfacePrefetch} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)} onClick={closeNavigation} aria-label={brandName ?? DEFAULT_BRAND.name} aria-current={projectActive ? "page" : undefined}>
-                      <Folder className={styles.icon} />
-                      {navigationExpanded ? <span className={styles.navLabel}>{brandName ?? DEFAULT_BRAND.name}</span> : null}
-                    </Link>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            ) : (
+              <SidebarMenu data-project-list="true" aria-label={t("firstSite.projects")}>
+                {orderedProjects.map((project) => {
+                  const active = project.active ?? (projectActive && project.href === projectHref)
+                  const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
+                  const dragging = dragState?.kind === "project" && dragState.id === project.id
+                  const dragOver = dragOverKey === `project:${project.id}`
+                  return (
+                    <SidebarMenuItem
+                      key={project.id}
+                      className={cn(styles.item, dragging && styles.itemDragging, dragOver && styles.itemDragOver)}
+                      data-project-id={project.id}
+                      data-drag-kind="project"
+                      data-dragging={dragging ? "true" : "false"}
+                      data-drag-over={dragOver ? "true" : "false"}
+                    >
+                      <SidebarMenuButton asChild type="button" className={styles.itemSelect} isActive={active}>
+                        <Link
+                          href={project.href}
+                          prefetch={mountedSurfacePrefetch}
+                          {...dragProps("project", project.id)}
+                          onPointerDown={markPointerFocus}
+                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
+                          onClick={closeNavigation}
+                          aria-label={project.name}
+                          aria-current={active ? "page" : undefined}
+                          data-testid={testId}
+                          data-navigation-section="project"
+                        >
+                          <Folder className={styles.icon} aria-hidden="true" />
+                          <span className={styles.itemTitle}>{project.name}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            )}
+            {projectActive || projectHref ? (
+              <SidebarMenu className={styles.projectTaskShortcut}>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild type="button" className={styles.navItem} data-testid="rail-project-task" data-navigation-section="project-task">
+                    {projectActive ? (
+                      <button
+                        type="button"
+                        aria-label={t("firstSite.tasks")}
+                        onPointerDown={markPointerFocus}
+                        onClick={() => { (onCreateTask ?? onNewChat)(); closeNavigation() }}
+                      >
+                        <ListTodo className={styles.icon} aria-hidden="true" />
+                      </button>
+                    ) : (
+                      <Link
+                        href={projectHref!}
+                        prefetch={mountedSurfacePrefetch}
+                        aria-label={t("firstSite.tasks")}
+                        onPointerDown={markPointerFocus}
+                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref!)}
+                        onClick={closeNavigation}
+                      >
+                        <ListTodo className={styles.icon} aria-hidden="true" />
+                      </Link>
+                    )}
                   </SidebarMenuButton>
-                )}
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild type="button" className={styles.navItem} data-testid="rail-project-task" data-navigation-section="project-task">
-                  {projectActive ? (
-                    <button
-                      type="button"
-                      aria-label={t("firstSite.tasks")}
-                      onPointerDown={markPointerFocus}
-                      onClick={() => { onNewChat(); closeNavigation() }}
-                    >
-                      <ListTodo className={styles.icon} />
-                    </button>
-                  ) : (
-                    <Link
-                      href={projectHref}
-                      prefetch={mountedSurfacePrefetch}
-                      aria-label={t("firstSite.tasks")}
-                      onPointerDown={markPointerFocus}
-                      onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}
-                      onClick={closeNavigation}
-                    >
-                      <ListTodo className={styles.icon} />
-                    </Link>
-                  )}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            ) : null}
           </SidebarGroupContent>
         </SidebarGroup> : null}
 
@@ -729,25 +974,38 @@ function WorkspaceRailContent({
                 `/app` it contains direct chats only. */}
             <p className={styles.section}>{projectActive ? t("firstSite.tasks") : t("rail.directChats")}</p>
             {projectActive ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" className={styles.sectionAction} aria-label={t("rail.taskSort")}>
-                    <ListFilter aria-hidden="true" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={4}>
-                  <DropdownMenuLabel>{t("rail.taskSort")}</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={taskOrder}
-                    onValueChange={(value) => {
-                      if (value === "recent" || value === "name") setTaskOrder(value)
-                    }}
-                  >
-                    <DropdownMenuRadioItem value="recent">{t("rail.sortRecent")}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="name">{t("rail.sortName")}</DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className={styles.sectionActions}>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className={styles.sectionAction}
+                  aria-label={t("firstSite.newTask")}
+                  data-testid="rail-new-project-task"
+                  type="button"
+                  onClick={() => { (onCreateTask ?? onNewChat)(); closeNavigation() }}
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-xs" className={styles.sectionAction} aria-label={t("rail.taskSort")}>
+                      <ListFilter aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={4}>
+                    <DropdownMenuLabel>{t("rail.taskSort")}</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup
+                      value={taskOrder}
+                      onValueChange={(value) => {
+                        if (value === "recent" || value === "name") setTaskOrder(value)
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="recent">{t("rail.sortRecent")}</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="name">{t("rail.sortName")}</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : null}
           </div>
           {listError && !hasConversations ? (
@@ -777,12 +1035,17 @@ function WorkspaceRailContent({
               {ordered.map((conversation) => {
                 const title = conversation.title || t("rail.newChat")
                 const editing = conversation.id === editingId
+                const dragging = dragState?.kind === "conversation" && dragState.id === conversation.id
+                const dragOver = dragOverKey === `conversation:${conversation.id}`
                 return (
                     <SidebarMenuItem
                     key={conversation.id}
-                    className={styles.item}
+                    className={cn(styles.item, dragging && styles.itemDragging, dragOver && styles.itemDragOver)}
                     data-active={conversation.id === activeId ? "true" : "false"}
                     data-editing={editing ? "true" : "false"}
+                    data-drag-kind="conversation"
+                    data-dragging={dragging ? "true" : "false"}
+                    data-drag-over={dragOver ? "true" : "false"}
                     >
                     {editing ? (
                       <Input
@@ -812,6 +1075,7 @@ function WorkspaceRailContent({
                           className={styles.itemSelect}
                           type="button"
                           data-conversation-id={conversation.id}
+                          {...dragProps("conversation", conversation.id)}
                           onClick={() => { onSelectConversation(conversation.id); closeNavigation() }}
                           onDoubleClick={() => startRename(conversation.id, conversation.title)}
                           aria-pressed={conversation.id === activeId}

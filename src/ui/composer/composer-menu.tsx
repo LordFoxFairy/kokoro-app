@@ -23,6 +23,8 @@ export type MenuOption = {
 
 type ComposerMenuProps = {
   triggerClassName: string
+  /** Stable semantic hook for site skins that intentionally hide a control. */
+  dataComposerControl?: "agent" | "model" | "mode"
   triggerLabel: string
   triggerTitle?: string
   trigger: ReactNode
@@ -36,6 +38,7 @@ type ComposerMenuProps = {
 // 菜单的键盘导航、Esc、焦点回收和单选语义交给 Radix。
 export function ComposerMenu({
   triggerClassName,
+  dataComposerControl,
   triggerLabel,
   triggerTitle,
   trigger,
@@ -76,6 +79,7 @@ export function ComposerMenu({
           type="button"
           variant="ghost"
           className={triggerClassName}
+          data-composer-control={dataComposerControl}
           data-composer-menu-id={menuInstanceId}
           data-composer-menu-trigger="true"
           // Keep the action and its current value in the accessible name. A

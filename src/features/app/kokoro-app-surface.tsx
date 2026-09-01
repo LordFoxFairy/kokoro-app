@@ -1,13 +1,13 @@
 "use client"
 
-import { useLayoutEffect, useMemo, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 
 import { AppFrame, type AppFrameProps } from "@/components/blocks/app-frame/app-frame"
 import type { RuntimeNavigationItem } from "@/system/runtime-navigation"
 import { useT } from "@/i18n/context"
 import { KokoroProjectWorkspace } from "./kokoro-project-workspace"
-import { KokoroDirectChatWelcome } from "./kokoro-welcome"
+import { createPreviewProjectRef, KokoroDirectChatWelcome } from "./kokoro-welcome"
 import { KokoroCommandMenu } from "./kokoro-command-menu"
 import { KokoroPluginsSurface } from "./kokoro-plugins-surface"
 import { KokoroAgentsSurface } from "./kokoro-agents-surface"
@@ -15,6 +15,7 @@ import { KokoroScheduledSurface } from "./kokoro-scheduled-surface"
 import { KokoroLibrarySurface } from "./kokoro-library-surface"
 import { KokoroSkillsSurface } from "./kokoro-skills-surface"
 import { DEFAULT_BRAND } from "@/config/brand"
+import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 
 export type KokoroAppSurfaceProps = Omit<AppFrameProps, "chatHref"> & {
   /** The adapter owns preview/live route selection; callers do not repeat it. */
@@ -27,6 +28,25 @@ export type KokoroAppRoute = {
 }
 const DIRECT_ROUTE: KokoroAppRoute = { surface: "chat" }
 type NativeSurfaceNavigation = { basePathname: string; pathname: string }
+const PREVIEW_PROJECT_REF = "preview-project"
+const PENDING_PROJECT_DRAFT_PREFIX = "kokoro.web.pending-project-draft:"
+
+function pendingProjectDraftKey(projectRef: string): string {
+  return `${PENDING_PROJECT_DRAFT_PREFIX}${encodeURIComponent(projectRef)}`
+}
+
+function movePreviewProjectDraft(projectRef: string, draft?: string): void {
+  if (typeof window === "undefined") return
+  try {
+    const storage = window.sessionStorage
+    const sourceKey = pendingProjectDraftKey(PREVIEW_PROJECT_REF)
+    const value = draft?.trim() ? draft : storage.getItem(sourceKey)
+    if (value?.trim()) storage.setItem(pendingProjectDraftKey(projectRef), value)
+    storage.removeItem(sourceKey)
+  } catch {
+    // The route remains usable when sessionStorage is unavailable.
+  }
+}
 
 function decodeProjectRef(segment: string): string | null {
   try {
@@ -67,6 +87,16 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
   // project task use distinct engines, list scopes, and primary actions.
   const pathname = usePathname()
   const [nativeNavigation, setNativeNavigation] = useState<NativeSurfaceNavigation | null>(null)
+  const onOpenProject = props.onOpenProject
+  const handleOpenProject = useCallback((projectRef: string, draft?: string) => {
+    const nextProjectRef = projectRef === PREVIEW_PROJECT_REF ? createPreviewProjectRef() : projectRef
+    if (nextProjectRef !== projectRef) movePreviewProjectDraft(nextProjectRef, draft)
+    if (onOpenProject) {
+      onOpenProject(nextProjectRef, draft)
+      return
+    }
+    navigateMountedSurface(`/app/project/${encodeURIComponent(nextProjectRef)}`)
+  }, [onOpenProject])
   // Bind before the first painted frame. The rail is intentionally interactive
   // immediately after hydration; using a passive effect left a small window
   // where a fast click on “New task” could update history without updating the
@@ -122,6 +152,7 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
       desktopRailCollapsed={props.desktopRailCollapsed ?? route.surface !== "project"}
       projectWorkspace={route.surface === "project"}
       projectRef={route.projectRef}
+      onOpenProject={handleOpenProject}
       scheduledTaskClient={props.scheduledTaskClient}
       activeNavigationKey={route.surface === "chat" ? "chat" : route.surface === "project" ? "project" : route.surface === "agents" ? "agent" : route.surface === "plugins" ? "mcp" : route.surface}
       emptyState={route.surface === "agents" ? KokoroAgentsSurface : route.surface === "plugins" ? KokoroPluginsSurface : route.surface === "scheduled" ? KokoroScheduledSurface : route.surface === "library" ? KokoroLibrarySurface : route.surface === "skills" ? KokoroSkillsSurface : route.surface === "project" ? KokoroProjectWorkspace : KokoroDirectChatWelcome}

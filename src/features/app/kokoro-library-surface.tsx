@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import {
   Archive,
   Download,
@@ -124,6 +124,27 @@ function readUrlState(): LibraryUrlState {
   }
 }
 
+const DEFAULT_URL_SNAPSHOT = JSON.stringify(DEFAULT_URL_STATE)
+const LIBRARY_URL_STATE_EVENT = "kokoro:library-url-state"
+
+function subscribeUrlState(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {}
+  const events = ["popstate", "kokoro:surface-navigation", LIBRARY_URL_STATE_EVENT] as const
+  for (const event of events) window.addEventListener(event, onStoreChange)
+  return () => {
+    for (const event of events) window.removeEventListener(event, onStoreChange)
+  }
+}
+
+function readUrlSnapshot(): string {
+  return typeof window === "undefined" ? DEFAULT_URL_SNAPSHOT : JSON.stringify(readUrlState())
+}
+
+function useLibraryUrlState(): LibraryUrlState {
+  const snapshot = useSyncExternalStore(subscribeUrlState, readUrlSnapshot, () => DEFAULT_URL_SNAPSHOT)
+  return useMemo(() => JSON.parse(snapshot) as LibraryUrlState, [snapshot])
+}
+
 function writeUrlState(state: LibraryUrlState): void {
   if (typeof window === "undefined") return
   const url = new URL(window.location.href)
@@ -136,6 +157,7 @@ function writeUrlState(state: LibraryUrlState): void {
   if (state.favoritesOnly) url.searchParams.set("favorites", "1")
   else url.searchParams.delete("favorites")
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event(LIBRARY_URL_STATE_EVENT))
 }
 
 async function defaultDownloadArtifact(artifact: ArtifactRecord): Promise<boolean> {
@@ -171,11 +193,10 @@ export function KokoroLibrarySurface({
   // production and explicit client seams always retain live semantics.
   const fixtureMode = preview || process.env.NODE_ENV !== "production"
   const useFixtureTransport = fixtureMode && !artifactClient && !fixtureArtifacts
-  const initialUrlState = useMemo(() => readUrlState(), [])
-  const [filter, setFilter] = useState<LibraryFilter>(initialUrlState.filter)
-  const [query, setQuery] = useState(initialUrlState.query)
-  const [view, setView] = useState<"grid" | "list">(initialUrlState.view)
-  const [favoritesOnly, setFavoritesOnly] = useState(initialUrlState.favoritesOnly)
+  const { filter, query, view, favoritesOnly } = useLibraryUrlState()
+  const updateUrlState = useCallback((patch: Partial<LibraryUrlState>) => {
+    writeUrlState({ ...readUrlState(), ...patch })
+  }, [])
   const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(initialFavoriteHashes))
   const fixtureSnapshot = useMemo(
     () => fixtureArtifacts === undefined ? undefined : appendUniqueArtifacts([], fixtureArtifacts),
@@ -252,29 +273,6 @@ export function KokoroLibrarySurface({
     if (viewport.firstElementChild) observer?.observe(viewport.firstElementChild)
     return () => observer?.disconnect()
   }, [updateFilterScrollState])
-
-  useEffect(() => {
-    writeUrlState({ filter, query, view, favoritesOnly })
-  }, [filter, query, view, favoritesOnly])
-
-  useEffect(() => {
-    const applyUrlState = () => {
-      const next = readUrlState()
-      setFilter(next.filter)
-      setQuery(next.query)
-      setView(next.view)
-      setFavoritesOnly(next.favoritesOnly)
-    }
-    window.addEventListener("popstate", applyUrlState)
-    // The rail uses a same-shell history event to avoid remounting AppFrame.
-    // Re-read the complete filter state so a route change cannot leave a
-    // stale type/query/view/favorites projection behind the new URL.
-    window.addEventListener("kokoro:surface-navigation", applyUrlState)
-    return () => {
-      window.removeEventListener("popstate", applyUrlState)
-      window.removeEventListener("kokoro:surface-navigation", applyUrlState)
-    }
-  }, [])
 
   const load = useCallback(async () => {
     const requestSeq = ++requestSeqRef.current
@@ -427,9 +425,7 @@ export function KokoroLibrarySurface({
   const showPagination = !isFixtureControlled && nextCursor !== undefined
 
   const clearFilters = () => {
-    setFilter("all")
-    setQuery("")
-    setFavoritesOnly(false)
+    updateUrlState({ filter: "all", query: "", favoritesOnly: false })
   }
 
   return (
@@ -459,7 +455,7 @@ export function KokoroLibrarySurface({
           <ToggleGroup
             type="single"
             value={filter}
-            onValueChange={(value) => { if (value) setFilter(value as LibraryFilter) }}
+            onValueChange={(value) => { if (value) updateUrlState({ filter: value as LibraryFilter }) }}
             className={styles.filters}
             id="library-filter-options"
             aria-label={t("library.filterAria")}
@@ -475,11 +471,11 @@ export function KokoroLibrarySurface({
               value={query}
               aria-label={t("library.search")}
               placeholder={t("library.search")}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => updateUrlState({ query: event.target.value })}
               onKeyDown={(event) => {
                 if (event.key === "Escape" && query !== "") {
                   event.preventDefault()
-                  setQuery("")
+                  updateUrlState({ query: "" })
                 }
               }}
             />
@@ -492,11 +488,11 @@ export function KokoroLibrarySurface({
             aria-label={t("library.favorites")}
             aria-pressed={favoritesOnly}
             data-state={favoritesOnly ? "on" : "off"}
-            onClick={() => setFavoritesOnly((value) => !value)}
+            onClick={() => updateUrlState({ favoritesOnly: !favoritesOnly })}
           >
             <Star aria-hidden="true" />
           </Button>
-          <ToggleGroup type="single" value={view} onValueChange={(value) => { if (value) setView(value as "grid" | "list") }} className={styles.viewToggle} aria-label={t("library.viewAria")}>
+          <ToggleGroup type="single" value={view} onValueChange={(value) => { if (value) updateUrlState({ view: value as "grid" | "list" }) }} className={styles.viewToggle} aria-label={t("library.viewAria")}>
             <ToggleGroupItem value="grid" className={styles.viewButton} aria-label={t("library.gridView")}><Grid2X2 aria-hidden="true" /></ToggleGroupItem>
             <ToggleGroupItem value="list" className={styles.viewButton} aria-label={t("library.listView")}><List aria-hidden="true" /></ToggleGroupItem>
           </ToggleGroup>

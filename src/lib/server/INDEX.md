@@ -39,7 +39,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。
 - route handler 使用 `runtime = "nodejs"`；SSE 与下载直接转发 Response body，不在 BFF 缓冲大响应。
-- 配置 `KOKORO_GATEWAY_BASE_URL` 后，各业务专用 `KOKORO_*_BASE_URL` 自动以 Gateway 为默认；显式服务地址优先，方便分阶段切换。
+- 配置 `KOKORO_GATEWAY_BASE_URL` 后，各业务专用 `KOKORO_*_BASE_URL` 可以把这个地址作为可选传输适配器默认值；显式服务地址优先，方便分阶段切换。Gateway 只负责路由/协议转发，不承载业务用例编排。
 - 原文 magic-link token、nonce、refresh token 和内部 header 绝不写入日志或浏览器响应。
 
 ## 协作边界
@@ -53,6 +53,16 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `src/app/api/billing/*`：Billing/Payment 兼容读写面。
 - `src/app/api/shared/[id]`：公共分享只读代理；不需要用户信封，但仍携带 `web-bff` service auth
   和部署 RFC 7239 `Forwarded`，因此上游不会被匿名公网直接暴露。
+
+### Chat 与业务承接
+
+- 浏览器 Chat 只调用同源 `/api/session/*`；这里是 `kokoro-app` 的站点 BFF 入口，不新增第二套
+  `/api/chat/*`。
+- BFF 负责同源 Origin、HttpOnly 信封、请求体/错误边界和 public projection；Chat 的会话事实、
+  Run、SSE、HITL 与历史仍由 `kokoro-session` 拥有。
+- Projects、Skills、Library、Scheduled、Agent setup 和 Billing 等跨服务用例，后续由独立
+  `kokoro-business` 服务（名称待定）或 BFF 内的业务 adapter 编排；不要把这些规则塞进
+  `kokoro-gateway` 传输仓库。
 
 新增上游服务时必须复用 `upstream-http.ts`，禁止在 route handler 中直接裸 `fetch`、手写 Host 或
 手写部署/租户 header。浏览器 client 只能调用同源 BFF path。

@@ -4192,3 +4192,33 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 证据：`curl` 的 project deep-link SSR HTML 包含 `data-testid="app-frame-loading"`；真实桌面
 `1280×720` 刷新 `.../app/project/kokoro?conversation=...` 后最终保持用户消息、助手预览、任务进度和
 Composer 可见，控制台无 error/warn。只覆盖桌面 Web，loading 状态不承诺后端 session 已成功。
+
+## v223 Library/Scheduled 深链接首帧状态（2026-09-01）
+
+本轮继续收口“点击/刷新后先显示默认布局，再跳到目标状态”的桌面闪动：
+
+- Library 的 `type`、`q`、`view` 和 `favorites` 由 `useSyncExternalStore` 提供 SSR-safe 的 URL snapshot。
+  服务端与水合首帧使用稳定的默认 snapshot，浏览器挂载后再同步真实 URL；用户操作通过同一 history projection
+  更新 URL 并发出局部 store 事件，不再由 effect 把默认状态写回深链接。
+- Scheduled 的 `tab` 与 `#scheduled-tasks/new` 共用 location snapshot；preview 任务列表也由可订阅的本地 fixture
+  store 读取，服务端不在 render 阶段读取 `localStorage`。创建、编辑、暂停和删除仍写回本地合成 fixture 并通知
+  当前 surface，不新增 API。
+- `popstate`、`hashchange`、`kokoro:surface-navigation` 与同页 mutation event 均在组件卸载时移除，避免跨 surface
+  导航残留监听器造成重复刷新或旧 Dialog 复现。
+
+定向证据：Library、Scheduled 与 Rail 回归测试共 84 项通过；本轮只修改 `kokoro-app` 的独立 surface 与测试，
+不改变移动端 Sheet、Gateway namespace 或未冻结的 project binding API。
+## v224 Project Chat 空白回退与窄桌面 Canvas 收口（2026-09-01）
+
+本轮针对“刷新后只剩 Header、正文像空白”和窄桌面收起状态不稳定继续收口：
+
+- SessionEngine snapshot 新增 `hydrating` 视图字段。Project Chat 深链在 snapshot/SSE 尚未完成时始终显示可见的 reading/composer loading surface，
+  不再把尚未水合的空线程误判为新任务；loading surface 同时保留明确的加载文案和稳定的 48rem 纵向几何。
+- Project scope 的旧/越权 conversation 被引擎驱逐并完成 fallback session 水合后，AppFrame 会清理失效的 `conversation` 查询并回到项目 overview，
+  不会因为 URL 与 fallback activeId 不一致而永久停在 loading 面。
+- Project overview 不再被“恢复最近 direct session”的 URL effect 改写；无 `conversation` 的项目页保持纯 overview，只有用户提交首条 project message 或显式选择 task
+  才写入 conversation URL。
+- 窄桌面 Canvas 自动收起 Rail 时记录 compact Rail 的实际展开态，关闭 Canvas 后恢复同一状态；不再只更新宽桌面 `railCollapsed` 导致图标入口继续隐藏。
+
+真实浏览器 `1280×720` 刷新 `/app/project/kokoro?conversation=...`：首帧可见 loading 文案、reading bars 与 composer 轮廓，水合后显示用户/助手时间线、进度条和 Composer；
+未知/被拒 project conversation 的 fixture 回退到 `/app/project/kokoro` overview。只覆盖桌面 Web，不改变手机端 Sheet、Gateway 或 Session 子仓库。

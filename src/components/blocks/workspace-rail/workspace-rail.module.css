@@ -87,7 +87,7 @@
 /* A wide rail exposes the scoped list, while the icon rail exposes the
  * destinations. The two compact counterparts are never duplicated. */
 .rail[data-desktop-rail="true"][data-collapsed="false"] [data-desktop-direct-chat="true"],
-.rail[data-desktop-rail="true"][data-collapsed="false"] .projectGroup [data-sidebar="menu-item"]:last-child {
+.rail[data-desktop-rail="true"][data-collapsed="false"] .projectTaskShortcut {
   display: none;
 }
 
@@ -258,14 +258,21 @@
 
 .sectionRow { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; }
 .sectionRow .section { min-width: 0; }
+.sectionActions { display: flex; align-items: center; gap: 0.125rem; }
 .sectionAction { flex: 0 0 auto; margin: 0 0.25rem 0 0.5rem; color: var(--muted-foreground); }
 .sectionAction:hover { color: var(--foreground); }
+.projectTaskShortcut { display: none; }
 .empty,
 .listNotice { margin: 0; padding: 0.4rem 0.65rem; color: var(--muted-foreground); font-size: 0.82rem; }
 .listNotice { display: grid; justify-items: start; gap: 0.45rem; }
 
-.item { display: flex; min-width: 0; align-items: center; border-radius: var(--radius-sm); }
+.item { display: flex; min-width: 0; align-items: center; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard); }
 .itemSelect { display: flex; min-width: 0; min-height: 2.1rem; flex: 1; align-items: center; gap: 0.4rem; border-radius: var(--radius-sm); padding: 0.4rem 4.2rem 0.4rem 0.55rem; font-size: 0.825rem; text-align: left; }
+.projectGroup .itemSelect { padding-right: 0.55rem; }
+.itemSelect[draggable="true"] { cursor: grab; touch-action: none; }
+.itemSelect[aria-grabbed="true"] { cursor: grabbing; }
+.itemDragging { opacity: 0.55; }
+.itemDragOver .itemSelect { box-shadow: inset 0 0 0 2px var(--ring); }
 .itemTitle { display: block; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .itemAwaiting { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 999px; background: var(--warning); }
 .itemRename,
@@ -469,6 +476,10 @@
     gap: 0.125rem;
   }
 
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .projectTaskShortcut {
+    display: flex;
+  }
+
   .rail[data-desktop-rail="true"][data-collapsed="true"] [data-sidebar="menu-item"] {
     display: flex;
     width: var(--collapsed-track);
@@ -666,6 +677,19 @@
   .rail:not([data-desktop-rail="true"]) .itemRename { right: 2.8rem; }
   .rail:not([data-desktop-rail="true"]) .itemDeleteAction { right: 0.25rem; }
   .rail:not([data-desktop-rail="true"]) .itemRenameInput { min-height: 2.75rem; }
+  .rail:not([data-desktop-rail="true"]) .projectTaskShortcut { display: flex; }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

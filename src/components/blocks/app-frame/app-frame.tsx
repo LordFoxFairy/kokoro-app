@@ -65,7 +65,7 @@ import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { useConversationList } from "@/ui/shell/use-conversation-list"
-import { stashConversationDraft, useDraft } from "@/ui/shell/use-draft"
+import { clearPendingDraft, stashConversationDraft, useDraft } from "@/ui/shell/use-draft"
 import { removePinned, togglePinned, usePinnedSkills } from "@/ui/shell/use-pinned-skills"
 import { WorkspaceHeader, WorkspaceNavigationTrigger } from "@/components/blocks/workspace-header/workspace-header"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
@@ -87,6 +87,21 @@ const COMMAND_SETTINGS_HANDOFF_MS = 220
 export const COMPACT_DESKTOP_RAIL_BREAKPOINT = RAIL_COMPACT_BREAKPOINT
 const PENDING_CREATION_INTENT_KEY = "kokoro.web.pending-creation-intent"
 const PENDING_PROJECT_DRAFT_PREFIX = "kokoro.web.pending-project-draft:"
+const PREVIEW_PROJECT_SEQUENCE_KEY = "kokoro.web.preview-project-sequence"
+let previewProjectSequence = 0
+
+function createPreviewProjectRef(): string {
+  if (typeof window === "undefined") return "preview-project-1"
+  try {
+    const persisted = Number.parseInt(window.sessionStorage.getItem(PREVIEW_PROJECT_SEQUENCE_KEY) ?? "0", 10)
+    previewProjectSequence = Number.isFinite(persisted) ? Math.max(previewProjectSequence, persisted) : previewProjectSequence
+    previewProjectSequence += 1
+    window.sessionStorage.setItem(PREVIEW_PROJECT_SEQUENCE_KEY, String(previewProjectSequence))
+  } catch {
+    previewProjectSequence += 1
+  }
+  return `preview-project-${previewProjectSequence}`
+}
 
 function pendingProjectDraftKey(projectRef: string): string {
   return `${PENDING_PROJECT_DRAFT_PREFIX}${encodeURIComponent(projectRef)}`
@@ -459,6 +474,7 @@ function AppFrameLoadingSurface() {
         <span className={styles.loadingLine} />
         <span className={styles.loadingLineShort} />
       </div>
+      <p className={styles.loadingMessage}>{t("shell.loadingApp")}</p>
       <div className={styles.loadingComposer} aria-hidden="true">
         <span className={styles.loadingComposerLine} />
         <span className={styles.loadingComposerControls}>
@@ -466,6 +482,33 @@ function AppFrameLoadingSurface() {
           <i />
           <i />
         </span>
+      </div>
+    </div>
+  )
+}
+
+function AppFrameConversationErrorSurface({
+  detail,
+  onRetry,
+}: {
+  detail: string | null
+  onRetry: () => void
+}) {
+  const t = useT()
+  return (
+    <div
+      className={styles.conversationErrorSurface}
+      data-testid="app-frame-conversation-error"
+      role="alert"
+      aria-live="assertive"
+    >
+      <div className={styles.conversationErrorCard}>
+        <h2 className={styles.conversationErrorTitle}>{t("rail.listError")}</h2>
+        <p className={styles.conversationErrorMessage}>{t("fail.generic")}</p>
+        {detail ? <p className={styles.conversationErrorDetail}>{detail}</p> : null}
+        <Button type="button" variant="outline" onClick={onRetry}>
+          {t("thread.retry")}
+        </Button>
       </div>
     </div>
   )
@@ -495,21 +538,13 @@ export function AppFrame({
   preview = false,
 }: AppFrameProps) {
   const t = useT()
-  const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
-    writePendingProjectDraft(nextProjectRef, handoffDraft)
-    if (onOpenProject) {
-      onOpenProject(nextProjectRef, handoffDraft)
-      return
-    }
-    navigateMountedSurface(`/app/project/${encodeURIComponent(nextProjectRef)}`)
-  }, [onOpenProject])
   const sessionScope = useMemo<SessionScope>(
     () => projectRef ? { kind: "project", projectRef } : DIRECT_SESSION_SCOPE,
     [projectRef],
   )
   const engine = injectedEngine !== undefined ? injectedEngine : browserEngine({ preview, scope: sessionScope })
   const snapshot = useSessionEngine(engine)
-  const { machine, store, thread, pendingMode, staging } = snapshot
+  const { machine, store, thread, pendingMode, staging, hydrating } = snapshot
   const activeId = store?.activeId ?? null
 
   // A project/direct route change replaces the scope-owned engine while this
@@ -592,6 +627,7 @@ export function AppFrame({
     }
   }, [compactDesktopRail])
   const railBeforeCanvasRef = useRef<boolean | null>(null)
+  const compactRailBeforeCanvasRef = useRef<boolean | null>(null)
   const [commandOpen, setCommandOpen] = useState(false)
   // The command palette is controlled by the shell so every entry point shares
   // one focus-return contract.
@@ -782,16 +818,18 @@ export function AppFrame({
     }
   }, [activeId, engine, mounted])
 
-  // A restored local session and a newly submitted first message both acquire
+  // A restored direct session and a newly submitted first message both acquire
   // a stable URL without adding an extra history entry on every stream event.
+  // Project overview is intentionally a URL without `conversation`; it is a
+  // workspace landing surface, not an implicit redirect to the last task.
   useEffect(() => {
-    if (!mounted || activeId === null || thread.messages.length === 0) {
+    if (!mounted || projectWorkspace || activeId === null || thread.messages.length === 0) {
       return
     }
     if (conversationIdFromLocation() === null) {
       syncConversationUrl(activeId, "replace")
     }
-  }, [activeId, mounted, syncConversationUrl, thread.messages.length])
+  }, [activeId, mounted, projectWorkspace, syncConversationUrl, thread.messages.length])
 
   // The controlled Settings Dialog can unmount before Radix emits its portal
   // close-focus callback. Keep a shell-level handoff as the authoritative
@@ -988,10 +1026,54 @@ export function AppFrame({
   // replacing the engine instance. The URL is authoritative for that route:
   // never paint the direct thread while the project has no conversation route,
   // and never paint a stale thread while a deep-link is being opened.
-  const routeOwnsConversation = !projectWorkspace || (resolvedConversationRouteId !== null && resolvedConversationRouteId === activeId)
+  const routeOwnsConversation = resolvedConversationRouteId === null
+    ? !projectWorkspace
+    : resolvedConversationRouteId === activeId
+  // A deep-linked task must not fall through to the empty project welcome
+  // while the scoped engine is still switching or fetching its snapshot. That
+  // intermediate tree was perceived as a blank page (and could briefly show
+  // a misleading “new task”); keep the shell chrome and show the explicit
+  // loading workbench until the requested conversation is authoritative.
+  const conversationHydrating = mounted
+    && resolvedConversationRouteId !== null
+    && (hydrating || !routeOwnsConversation)
+
+  // A stale/forbidden conversation can be evicted by the engine. Once its
+  // fallback session has finished hydrating, the old URL must stop owning the
+  // stage; otherwise the mismatch guard would keep the loading surface on
+  // screen forever. Direct chat returns to its fresh welcome and project chat
+  // returns to the project overview. A real hydration error keeps its URL so
+  // the error surface can retry the same conversation.
+  useEffect(() => {
+    if (
+      !mounted
+      || resolvedConversationRouteId === null
+      || hydrating
+      || activeId === null
+      || activeId === resolvedConversationRouteId
+      || machine.phase === "error"
+    ) {
+      return
+    }
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      syncConversationUrl(null, "replace")
+      setConversationRouteId(null)
+    })
+    return () => {
+      active = false
+    }
+  }, [activeId, hydrating, machine.phase, mounted, resolvedConversationRouteId, syncConversationUrl])
+
   const showConversation = hasMessages && !standaloneSurface && routeOwnsConversation
   // 失败双源：client/机器错误态（machine.error）与 agent 裁决的 run.failed 终态，都显式呈现。
   const hasFailed = !isStreaming && (machine.phase === "error" || thread.runStatus === "failed")
+  const conversationHydrationFailed = mounted
+    && resolvedConversationRouteId !== null
+    && !hydrating
+    && machine.phase === "error"
+    && !hasMessages
   // 402：run 被 credit_insufficient 拒——错误码由 client 从错误体取出，落在 machine.error。据此给计费
   // 专用说明 + 价格/联系入口（不复用通用失败文案）。
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
@@ -1031,20 +1113,73 @@ export function AppFrame({
     window.requestAnimationFrame(() => focusComposer())
   }, [engine, focusComposer])
 
+  const retryConversationHydration = useCallback(() => {
+    if (!engine || resolvedConversationRouteId === null) return
+    const current = engine.getSnapshot()
+    if (current.store?.activeId === resolvedConversationRouteId) {
+      const fallback = current.store.conversations.find(({ id }) => id !== resolvedConversationRouteId)
+      if (fallback) {
+        engine.selectConversation(fallback.id)
+      } else {
+        // The engine intentionally treats openConversation(activeId) as a
+        // no-op. Move through a local blank session so retry can re-enter the
+        // snapshot-first activation path without changing the deep-link URL.
+        engine.newConversation()
+      }
+    }
+    engine.openConversation(resolvedConversationRouteId)
+  }, [engine, resolvedConversationRouteId])
+
   // 未发送草稿（按会话持久化）与会话清单/待批/canvas 各自的 controller。
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted)
+  const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
+    // The preview adapter has no project-create endpoint. A fixed fixture ref
+    // made the rail + appear inert after the first click because the browser
+    // was already on the same route and any existing fixture draft won over
+    // the handoff. Allocate a fresh opaque ref for every explicit “new
+    // project” action; real hosts can still inject onOpenProject with their
+    // server-created ref.
+    const projectRefToOpen = nextProjectRef === "preview-project"
+      ? createPreviewProjectRef()
+      : nextProjectRef
+    writePendingProjectDraft(projectRefToOpen, handoffDraft)
+    // The direct inbox and the project overview intentionally share the
+    // pending draft key until a project-scoped session exists. Clear that
+    // source key before the mounted route transition, otherwise the project
+    // handoff effect sees the old draft and refuses to apply the one-shot
+    // project envelope. The envelope remains in sessionStorage if navigation
+    // is interrupted and is consumed by the destination route.
+    clearDraft()
+    clearPendingDraft()
+    if (onOpenProject) {
+      onOpenProject(projectRefToOpen, handoffDraft)
+      return
+    }
+    navigateMountedSurface(`/app/project/${encodeURIComponent(projectRefToOpen)}`)
+  }, [clearDraft, onOpenProject])
   const createProject = useCallback(() => {
     openProject("preview-project", draft)
   }, [draft, openProject])
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Direct Chat → project is a mounted route handoff, so the direct
     // session's draft has no stable project session id yet. Carry it through
     // a one-shot sessionStorage envelope, then let the project-scoped draft
     // controller persist it under the new session id. Existing project drafts
     // always win; a stale envelope is consumed either way.
     if (!mounted || !projectWorkspace || !projectRef) return
-    const handoffDraft = takePendingProjectDraft(projectRef)
-    if (handoffDraft !== null && draft.trim().length === 0) updateDraft(handoffDraft)
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      const handoffDraft = takePendingProjectDraft(projectRef)
+    // The one-shot envelope is the explicit source selected by the user. It
+    // must win over a stale route-neutral draft left by a previous creation
+    // capsule; otherwise a new project can reopen with the website fixture
+    // prompt instead of the text the user just entered.
+    if (handoffDraft !== null) updateDraft(handoffDraft)
+    })
+    return () => {
+      active = false
+    }
   }, [draft, mounted, projectRef, projectWorkspace, updateDraft])
   const conversationsCtl = useConversationList({ engine, preview, activeId, thread, isStreaming, focusComposer, scope: sessionScope })
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
@@ -1063,12 +1198,22 @@ export function AppFrame({
       const requiredMainAndCanvas = WORKSPACE_MAIN_MIN + CANVAS_MIN + 1
 
       if (canvas.canvasOpen && !resolvedRailCollapsed && availableMainAndCanvas < requiredMainAndCanvas) {
-        railBeforeCanvasRef.current = false
+        if (compactDesktopRail) {
+          // Compact desktop derives visibility from compactRailOpen; changing
+          // railCollapsed alone cannot restore an automatically hidden rail.
+          compactRailBeforeCanvasRef.current = true
+        } else {
+          railBeforeCanvasRef.current = false
+        }
         setRailCollapsed(true)
         setCompactRailOpen(false)
         return
       }
 
+      if (!canvas.canvasOpen && compactRailBeforeCanvasRef.current === true) {
+        compactRailBeforeCanvasRef.current = null
+        setCompactRailOpen(true)
+      }
       if (!canvas.canvasOpen && railBeforeCanvasRef.current === false) {
         railBeforeCanvasRef.current = null
         setRailCollapsed(false)
@@ -1086,7 +1231,7 @@ export function AppFrame({
       window.removeEventListener("resize", reconcileRailForCanvas)
       observer?.disconnect()
     }
-  }, [canvas.canvasOpen, railWidth, resolvedRailCollapsed, shellRef])
+  }, [canvas.canvasOpen, compactDesktopRail, railWidth, resolvedRailCollapsed, shellRef])
 
   // Canvas is controlled by the shell rather than a trigger-owned Dialog.
   // Restore focus at the shell boundary after the panel unmounts; this also
@@ -1611,6 +1756,13 @@ export function AppFrame({
       >
         {!mounted ? (
           <AppFrameLoadingSurface />
+        ) : conversationHydrating ? (
+          <AppFrameLoadingSurface />
+        ) : conversationHydrationFailed ? (
+          <AppFrameConversationErrorSurface
+            detail={machine.error}
+            onRetry={retryConversationHydration}
+          />
         ) : showConversation ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
             <ConversationThread

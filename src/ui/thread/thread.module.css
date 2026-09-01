@@ -154,12 +154,17 @@
 .creditNote {
   align-self: flex-start;
   width: fit-content;
-  margin-top: 0.1rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
+  margin-top: 0;
   border-color: color-mix(in srgb, var(--border) 88%, var(--foreground) 12%);
-  background: var(--card);
+  border-radius: 0.375rem;
+  background: transparent;
   color: var(--muted-foreground);
-  font-size: 0.78rem;
+  font-size: 0.8125rem;
   font-weight: 400;
+  line-height: 1.125rem;
+  padding-inline: 0.5rem;
 }
 
 /* 一段信息 = 正文在【上】＋ 它的过程挂在【下面】，竖直堆叠、段内小间距。 */
@@ -1238,12 +1243,6 @@
 }
 
 @media (min-width: 0px) {
-  /* The assistant identity and its cost note form one compact metadata stack
-     in Manus. Flex gap alone left a second, visibly detached row here. */
-  .thread[data-desktop-web="true"] .creditNote {
-    margin-top: -0.6rem;
-  }
-
   /* Manus gives the first user turn a quiet top breathing zone, while the
      assistant answer keeps its document position. Translate only the visual
      user capsule so the thread's scroll geometry remains stable. The task
@@ -1366,7 +1365,10 @@
 
 @keyframes kk-message-enter {
   from {
-    opacity: 0;
+    /* Route hydration must not hide a recovered message for a frame. Preserve
+       the small enter hook for callers that want to add a transform without
+       turning the conversation into a blank page. */
+    opacity: 1;
   }
   to {
     opacity: 1;
@@ -1375,7 +1377,9 @@
 
 @keyframes kk-stage-in {
   from {
-    opacity: 0;
+    /* A deep-linked project task is already useful content. Its first paint
+       stays opaque while the shell settles, eliminating the white flash. */
+    opacity: 1;
   }
   to {
     opacity: 1;

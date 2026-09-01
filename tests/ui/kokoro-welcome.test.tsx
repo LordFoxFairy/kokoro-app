@@ -246,7 +246,7 @@ it("专案菜单选择会把聊天承接到对应的专案回调", () => {
   expect(onOpenProject).toHaveBeenCalledWith("kokoro", "建立网站")
 })
 
-it("新建专案动作会生成本地预览专案引用并承接聊天", () => {
+it("新建专案动作会生成唯一的本地预览专案引用并承接聊天", () => {
   const onOpenProject = vi.fn()
   render(
     <LocaleProvider>
@@ -261,7 +261,7 @@ it("新建专案动作会生成本地预览专案引用并承接聊天", () => {
 
   fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
   fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
-  expect(onOpenProject).toHaveBeenCalledWith("preview-project", "建立网站")
+  expect(onOpenProject).toHaveBeenCalledWith(expect.stringMatching(/^preview-project-[a-z0-9-]+$/), "建立网站")
 })
 
 it("创建类型更多按钮横向浏览隐藏选项", () => {
