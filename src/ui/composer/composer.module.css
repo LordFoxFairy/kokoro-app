@@ -427,19 +427,6 @@
 /* The empty Web composer keeps the environment as a readable pill, matching
  * the reference footer. The same control is used by direct chat and project
  * task surfaces so the footer never changes shape between routes. */
-.environmentIconOnly {
-  width: 2rem;
-  height: 2rem;
-  justify-content: center;
-  border: 1px solid var(--border);
-  background: var(--card);
-  padding: 0.4rem;
-}
-
-.environmentIconOnly:hover {
-  background: var(--accent);
-}
-
 .environmentSelector[data-environment-state="static"] {
   cursor: default;
 }

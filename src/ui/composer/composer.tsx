@@ -294,6 +294,7 @@ export function Composer({
             role="status"
             aria-label={environmentLabel}
             title={environmentLabel}
+            data-slot="floating-environment"
             data-environment-state="static"
           >
             <Monitor className={styles.modeGlyph} data-icon="inline-start" aria-hidden="true" />
@@ -319,17 +320,6 @@ export function Composer({
         {/* 控件行：未接入的附件不占位；语音输入始终保留在同一 32px 槽位，避免录音状态改变布局。 */}
         <div className={styles.controls}>
           {leadingActions ? <div className={styles.leadingActions}>{leadingActions}</div> : null}
-          {projectWorkspace && environmentSelectorPlacement === "floating" ? (
-            <span
-              className={cn(styles.mode, styles.environmentSelector, styles.environmentIconOnly)}
-              role="status"
-              aria-label={environmentLabel}
-              title={environmentLabel}
-              data-environment-state="static"
-            >
-              <Monitor className={styles.modeGlyph} aria-hidden="true" />
-            </span>
-          ) : null}
           {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? (
             <span
               className={cn(styles.mode, styles.environmentSelector)}

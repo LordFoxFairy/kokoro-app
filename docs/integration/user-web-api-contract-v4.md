@@ -6,7 +6,7 @@
 >
 > **事实来源优先级**：`src/app/api` 与运行时代码 > `src/contract`、`src/hub`、`src/agents`、`src/system` 的 schema/client > 相关 tests > `docs/integration/mock-fixture-matrix-v1.md`。mock-fixture matrix 是验收目标与测试夹具矩阵，不是当前后端路由清单。
 >
-> **状态声明**：当前链路由 `kokoro-app` 的同源 Web BFF 承接；`kokoro-gateway` 只是 planned repository，当前不在 live upstream 链路中，且本文不表示它已创建或已部署。
+> **状态声明**：当前链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成兼容骨架，但当前仍不在 live upstream 链路中，尚未部署。
 
 ## 0. 状态标签与范围边界
 
@@ -41,12 +41,11 @@ kokoro-app（Web UI） → 同源 /api/session/*（当前 Web BFF）
 
 规划迁移（gateway 接入后）：
 kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
-                    → planned LordFoxFairy/kokoro-gateway
+                    → scaffolded LordFoxFairy/kokoro-gateway
                     → Session / Agent runtime
 ```
 
-`LordFoxFairy/kokoro-gateway` 当前只是规划中的独立仓库名，不代表本 checkout 已包含该
-仓库、已经完成远端创建或已进入当前 upstream 链路。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
+`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也未进入当前 upstream 链路。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
 权限、域名上下文、会话/消息/Run 生命周期、SSE 事件、HITL 控制、幂等、错误映射、审计
 request id，以及向 Session/Agent runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
 状态、同源 BFF 传输和 public projection。
@@ -81,6 +80,7 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 |---|---|---|
 | `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 的同源 BFF |
 | `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all |
+| `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；上游为 Hub scheduled capability |
 | `/api/settings/*` | `src/app/api/settings/[...path]/route.ts` | Hub 的 `settings` 前缀别名 |
 | `/api/mail/*` | `src/app/api/mail/[...path]/route.ts` | Hub 的 `mail` 前缀别名 |
 | `/api/system/runtime-manifest` | `src/app/api/system/runtime-manifest/route.ts` | Runtime manifest |
@@ -93,7 +93,6 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 
 - `/api/tasks*`
 - `/api/projects*`
-- `/api/scheduled-tasks*`
 - `/api/skills*`
 - `/api/library*`
 - `/api/artifacts*`
@@ -110,8 +109,9 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 浏览器只访问同源相对路径：
 
 ```text
-/api/session/<path>  →  ${KOKORO_SESSION_BASE_URL}/<path>
-/api/hub/<path>      →  ${KOKORO_HUB_BASE_URL}/hub/<path>
+/api/session/<path>          →  ${KOKORO_SESSION_BASE_URL}/<path>
+/api/hub/<path>              →  ${KOKORO_HUB_BASE_URL}/hub/<path>
+/api/scheduled-tasks/<path>  →  ${KOKORO_HUB_BASE_URL}/hub/scheduled-tasks/<path>
 /api/settings/<path> →  ${KOKORO_HUB_BASE_URL}/hub/settings/<path>
 /api/mail/<path>     →  ${KOKORO_HUB_BASE_URL}/hub/mail/<path>
 ```
@@ -179,7 +179,7 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 | Agent | `createPreviewAgentClient` | `createAgentClient` | Preview closed；Live client target，但当前 BFF route 未注册 |
 | Skills/MCP | `createPreviewHubClient` | `createHubClient` → `/api/hub` | Preview closed；Live conditional |
 | Library | Preview session client 的空 artifact 列表，或显式 fixture | `/api/session/artifacts` | Preview closed；Live conditional |
-| Scheduled | `preview=true` 时 localStorage | 需注入 `ScheduledTaskClient` | 独立页面 Preview closed；Live client 未接线 |
+| Scheduled | `preview=true` 时 localStorage | `browserScheduledTaskClient()` → `/api/scheduled-tasks*` BFF | 独立页面 Preview closed；Web/BFF live client 已接线，上游 capability pending |
 | Capsule | React state + `sessionStorage` | 无 live transport | Local UI only |
 | Manifest | `PREVIEW_RUNTIME_MANIFEST` | `GET /api/system/runtime-manifest` | Preview closed；Live conditional |
 
@@ -1128,9 +1128,21 @@ type ScheduledTaskClient = {
 - timezone 由 `Intl.DateTimeFormat().resolvedOptions().timeZone` 推导，失败时为 `UTC`
 - editor 要求非空 title/prompt；expires 开启时要求 expiry date；autoApprove 是 boolean
 
-### 9.3 Live 当前边界（独立 surface 的 Live not closed）
+### 9.3 Live Web contract（上游能力仍需单独验收）
 
-AppSurface 没有注入 `ScheduledTaskClient`。live 且没有 controlled `tasks` 时，surface 试图调用 adapter；adapter 缺失会显示 load error，动作保持不可用。当前 `src/app/api` 没有独立 scheduled list/update/retry/delete route，也没有 `ScheduledTaskClient` 的 HTTP 实现。因此不定义 `/api/scheduled-tasks*`。
+`AppGate` 在 authenticated/live 模式创建并显式注入 `ScheduledTaskClient`，链路为 `KokoroAppSurface → AppFrame → KokoroScheduledSurface`。Preview 不创建该 client，仍只使用 9.2 的 localStorage fixture。没有注入 client 的 live surface 继续显示 load error，动作保持不可用，不借用 preview 数据。
+
+Web 已注册严格 typed BFF 路径：
+
+```http
+GET    /api/scheduled-tasks
+POST   /api/scheduled-tasks
+PATCH  /api/scheduled-tasks/{task_id}
+POST   /api/scheduled-tasks/{task_id}/retry
+DELETE /api/scheduled-tasks/{task_id}
+```
+
+请求/响应 schema 位于 `src/contract/http.ts`，浏览器 client 位于 `src/features/app/scheduled-task-client.ts`；wire 字段使用 snake_case，成功响应分别为 `{tasks: [...]}`、`{task: {...}}` 和 `{ok:true}`，错误为严格 `{error, code?}`。BFF 将这些路径转发到 `${KOKORO_HUB_BASE_URL}/hub/scheduled-tasks*`，从密封 session 派生 namespace/user 身份并保留同源鉴权边界。未配置 Hub 返回 `503 scheduled_tasks_not_configured`，上游不可达返回 `502 scheduled_tasks_unreachable`；这条 Web/BFF contract 不表示上游 scheduled capability 已部署或已接通。
 
 ### 9.4 已存在的 project create 兼容调用
 
@@ -1242,7 +1254,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
 | Library | `/app/library` | `/api/session/artifacts*` | empty/download fixture | conditional on session | 已冻结 |
-| Scheduled | `/app/scheduled` | preview localStorage；project create 的 Hub catch-all | Preview closed | Live not closed；project create only | 独立页面 Preview CRUD 已闭环；不定义通用 scheduled route |
+| Scheduled | `/app/scheduled` | preview localStorage；`/api/scheduled-tasks*` BFF | Preview closed | Web/BFF closed；上游 capability pending | 独立页面 Preview CRUD 已闭环；Live 仍取决于 Hub scheduled contract/deployment |
 | Capsule | Composer | React + sessionStorage | closed | local only | 不定义 API |
 | Manifest | AppGate | preview constant；`/api/system/runtime-manifest` | closed | conditional on System | 已冻结 |
 
@@ -1250,13 +1262,13 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 本版契约对应的本地实现入口：
 
-- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
+- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
 - Chat types/client：`src/contract/http.ts`、`src/contract/control.ts`、`src/contract/session-events.ts`、`src/engine/client.ts`、`src/engine/machine.ts`
 - Preview Chat：`src/dev/preview-transport.ts`
 - Agent：`src/agents/client.ts`、`src/agents/preview-client.ts`
 - Hub/Skills/MCP：`src/hub/schemas.ts`、`src/hub/client.ts`、`src/dev/preview-clients.ts`
 - Library：`src/features/app/kokoro-library-surface.tsx`
-- Scheduled：`src/features/app/kokoro-scheduled-surface.tsx`、`src/features/app/scheduled-task-editor.tsx`、`src/components/blocks/app-frame/app-frame.tsx`
+- Scheduled：`src/features/app/kokoro-scheduled-surface.tsx`、`src/features/app/scheduled-task-client.ts`、`src/features/app/scheduled-task-editor.tsx`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/components/blocks/app-frame/app-frame.tsx`
 - Capsule：`src/ui/composer/creation-intent-pill.tsx`、`src/components/blocks/app-frame/app-frame.tsx`
 - Manifest：`src/system/runtime-manifest.ts`、`src/system/preview-runtime.ts`、`src/system/use-runtime-manifest.ts`
 - 身份/domain：`src/lib/server/auth.ts`、`src/lib/server/domain-context.ts`、`src/lib/server/upstream-http.ts`

@@ -10,6 +10,7 @@ import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { useSessionProbe } from "./use-session-state"
 import { RuntimeUnavailable } from "./runtime-unavailable"
 import { RuntimeLoading } from "./runtime-loading"
+import { browserScheduledTaskClient } from "@/ui/shell/page-clients"
 
 export function AppGate({ brandName }: { brandName?: string } = {}) {
   const router = useRouter()
@@ -54,6 +55,7 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
       navigation={probe.mode === "preview" ? undefined : manifest.navigation}
       featureFlags={probe.mode === "preview" ? undefined : manifest.featureFlags}
       preview={probe.mode === "preview"}
+      scheduledTaskClient={probe.mode === "authenticated" ? browserScheduledTaskClient() : undefined}
     />
   )
 }

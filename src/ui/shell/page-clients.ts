@@ -17,6 +17,7 @@ import { createTeamClient, type TeamClient } from "@/team/client"
 import { createDataManagementClient, type DataManagementClient } from "@/data-management/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
 import { createPreviewAgentClient } from "@/agents/preview-client"
+import { createScheduledTaskClient, type ScheduledTaskClient } from "@/features/app/scheduled-task-client"
 import {
   createPreviewBillingClient,
   createPreviewHubClient,
@@ -135,6 +136,14 @@ export function browserListClient(options: { preview?: boolean } = {}): ListClie
     pageListClient = createSessionClient({ baseUrl: sessionBaseUrl() })
   }
   return pageListClient
+}
+
+let pageScheduledTaskClient: ScheduledTaskClient | null = null
+
+/** Live Scheduled transport is explicit at the AppGate boundary; preview never creates it. */
+export function browserScheduledTaskClient(): ScheduledTaskClient {
+  if (!pageScheduledTaskClient) pageScheduledTaskClient = createScheduledTaskClient()
+  return pageScheduledTaskClient
 }
 
 // 整页共享一个引擎实例（含流句柄与重连计时器），仅浏览器创建，SSR 为 null。

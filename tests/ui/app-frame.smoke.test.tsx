@@ -23,6 +23,7 @@ import { resetCanvasStore } from "@/ui/canvas/canvas-store"
 import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
+import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
 
 import {
   awaitingPayload,
@@ -296,6 +297,32 @@ it("已排程路由渲染独立日历空态且不残留会话 Composer", async (
   expect(screen.getByRole("heading", { name: /能独立执行工作/, level: 2 })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "已排程" })).toHaveAttribute("href", "/app/scheduled?tab=calendar")
   expect(screen.queryByRole("form", { name: "消息编辑区" })).toBeNull()
+})
+
+it("KokoroAppSurface 将显式 ScheduledTaskClient 注入已排程 live surface", async () => {
+  buildEngine()
+  mockedPathname.value = "/app/scheduled"
+  window.history.replaceState(window.history.state, "", "/app/scheduled?tab=list")
+  const scheduledTaskClient: ScheduledTaskClient = {
+    listScheduledTasks: vi.fn().mockResolvedValue([{
+      id: "scheduled_injected_1",
+      title: "Injected live task",
+      frequency: "daily",
+      time: "08:00",
+      status: "active",
+    }]),
+  }
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} scheduledTaskClient={scheduledTaskClient} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  expect(await screen.findByText("Injected live task")).toBeInTheDocument()
+  expect(scheduledTaskClient.listScheduledTasks).toHaveBeenCalledTimes(1)
 })
 
 it("资料库路由渲染独立目录而不是设置中心弹窗", async () => {

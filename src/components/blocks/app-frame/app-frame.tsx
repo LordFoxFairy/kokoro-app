@@ -70,6 +70,7 @@ import { removePinned, togglePinned, usePinnedSkills } from "@/ui/shell/use-pinn
 import { WorkspaceHeader, WorkspaceNavigationTrigger } from "@/components/blocks/workspace-header/workspace-header"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { AppCommandMenu, type AppCommandMenuProps } from "./app-command-menu"
+import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
 
 export type { AppCommandMenuProps }
 
@@ -254,6 +255,8 @@ export type AppFrameProps = {
   chatHref: string
   /** Site-owned empty-workspace surface. The shell only supplies the prompt action. */
   emptyState?: ComponentType<EmptyStateProps>
+  /** Explicit live Scheduled adapter; the shell never guesses its transport. */
+  scheduledTaskClient?: ScheduledTaskClient
   /** Site welcome may own the empty-state composer slot without owning its logic. */
   emptyStateOwnsComposer?: boolean
   /**
@@ -279,6 +282,8 @@ export type EmptyStateProps = {
   brandName?: string
   /** Route-owned desktop surfaces use the same preview/live transport as the shell. */
   preview?: boolean
+  /** Explicit scheduled-task adapter passed through the mounted shell. */
+  scheduledTaskClient?: ScheduledTaskClient
   /** Current shell-owned draft; site surfaces may project draft-dependent layout without owning editor state. */
   draft?: string
   /** Explicit creation mode; a non-empty draft alone never selects a product workflow. */
@@ -419,6 +424,7 @@ export function AppFrame({
   workspaceCapabilities,
   chatHref,
   emptyState,
+  scheduledTaskClient,
   emptyStateOwnsComposer = false,
   standaloneSurface = false,
   desktopRailCollapsed = false,
@@ -1538,6 +1544,7 @@ export function AppFrame({
             key={activeId ?? "new-workspace"}
             brandName={brandName}
             preview={preview}
+            scheduledTaskClient={scheduledTaskClient}
             draft={draft}
             creationIntent={projectedCreationIntent ?? undefined}
             projectWorkspace={projectWorkspace}

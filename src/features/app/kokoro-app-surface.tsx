@@ -122,6 +122,7 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
       desktopRailCollapsed={props.desktopRailCollapsed ?? route.surface !== "project"}
       projectWorkspace={route.surface === "project"}
       projectRef={route.projectRef}
+      scheduledTaskClient={props.scheduledTaskClient}
       activeNavigationKey={route.surface === "chat" ? "chat" : route.surface === "project" ? "project" : route.surface === "agents" ? "agent" : route.surface === "plugins" ? "mcp" : route.surface}
       emptyState={route.surface === "agents" ? KokoroAgentsSurface : route.surface === "plugins" ? KokoroPluginsSurface : route.surface === "scheduled" ? KokoroScheduledSurface : route.surface === "library" ? KokoroLibrarySurface : route.surface === "skills" ? KokoroSkillsSurface : route.surface === "project" ? KokoroProjectWorkspace : KokoroDirectChatWelcome}
       hideWorkspaceHeader={route.surface === "plugins" || route.surface === "agents" || route.surface === "scheduled" || route.surface === "library" || route.surface === "skills"}

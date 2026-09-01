@@ -292,9 +292,9 @@ describe("Composer model selector", () => {
     })
 
     const environmentAnchors = screen.getAllByRole("status", { name: /Kokoro 桌面版/ })
-    expect(environmentAnchors).toHaveLength(2)
-    expect(environmentAnchors.some((anchor) => anchor.className.includes("floatingEnvironment"))).toBe(true)
-    expect(environmentAnchors.some((anchor) => anchor.className.includes("environmentIconOnly"))).toBe(true)
+    expect(environmentAnchors).toHaveLength(1)
+    expect(environmentAnchors[0]).toHaveAttribute("data-slot", "floating-environment")
+    expect(environmentAnchors.some((anchor) => anchor.className.includes("environmentIconOnly"))).toBe(false)
     expect(screen.queryByRole("menu")).toBeNull()
     expect(environmentAnchors.every((anchor) => anchor.getAttribute("data-environment-state") === "static")).toBe(true)
   })

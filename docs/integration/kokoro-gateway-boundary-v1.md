@@ -1,6 +1,6 @@
 # Kokoro Gateway 边界契约 v1
 
-状态：规划基线（2026-08-31）。Gateway = **planned / not current / not created or deployed**。
+状态：实施基线（2026-08-31）。Gateway = **scaffolded / not current / not deployed**。
 本文只描述 `kokoro-app` 当前已经存在的 Web 边界，以及未来统一业务/网关子仓库的拆分方式；
 当前 live upstream 仍由 `KOKORO_SESSION_BASE_URL` 配置，不是规划中的 gateway。
 
@@ -18,12 +18,12 @@ BFF 传输。Chat 的业务编排不应继续堆在页面组件，也不应让�
 规划迁移：
 浏览器 → same-origin kokoro-app: /api/session/*（保持不变）
        → server-only BFF/upstream adapter
-       → planned LordFoxFairy/kokoro-gateway
+       → scaffolded LordFoxFairy/kokoro-gateway
        → Session / Agent runtime
 ```
 
-建议仓库名暂定为 `LordFoxFairy/kokoro-gateway`。它是 proposed repository，不是当前
-checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package，也不表示远端仓库已创建。第二个真实产品接入时，
+独立仓库为 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway)。它不是当前
+checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package；当前只完成独立骨架，尚未接入生产。第二个真实产品接入时，
 由网关承接跨产品的通用业务规则；每个 Web 产品仍保留自己的 UI、路由和品牌配置。
 
 ## 2. 当前实现与目标状态
@@ -31,9 +31,9 @@ checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package�
 | 项目 | 状态（2026-08-31） |
 |---|---|
 | `kokoro-app` 同源 Session BFF | **current**；转发到 `KOKORO_SESSION_BASE_URL` |
-| `kokoro-gateway` | **planned**；未作为当前 upstream 接入 |
+| `kokoro-gateway` | **scaffolded**；已创建独立仓库，未作为当前 upstream 接入 |
 | Agent 独立 surface | Preview closed；Live not closed（client target 无 BFF route） |
-| Scheduled 独立 surface | Preview closed；Live not closed（未注入 adapter） |
+| Scheduled 独立 surface | Preview closed；Web/BFF live adapter 已注入；上游 scheduled capability pending |
 
 ### 当前已实现
 
@@ -43,7 +43,7 @@ checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package�
   `Forwarded`、允许的请求头、SSE/二进制流透传和错误状态保持。
 - `src/engine/client.ts` 使用稳定的 Session client 接口，页面不依赖内部 upstream URL。
 
-### 规划中的 gateway 接入
+### 下一阶段的 gateway 接入
 
 - 将当前 BFF 后面的业务 upstream 替换为 gateway；浏览器路径优先保持不变。
 - Gateway 统一处理跨产品认证上下文、权限、业务校验、幂等、错误码、request id、审计、
@@ -51,7 +51,7 @@ checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package�
 - Gateway 再向 Session/Agent runtime 发起受信任的服务间请求；runtime 只执行模型、工具、
   Run 和事件，不承担 Web 页面适配。
 
-未完成项必须明确标记：在 gateway 仓库尚未实现前，当前 Web 的 Preview Chat 可以闭环，
+未完成项必须明确标记：在 gateway 尚未接入当前部署前，当前 Web 的 Preview Chat 可以闭环，
 Live Chat 仍取决于 `KOKORO_SESSION_BASE_URL` 对应服务；Agent/Scheduled 的独立页面只在各自
 Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已接通。本文不把规划目标写成 Live 已完成。
 
@@ -145,7 +145,7 @@ SSE 聚合成一次性 JSON；断线重连依靠 event watermark/Last-Event-ID �
 
 ## 4. 责任矩阵
 
-| 能力 | `kokoro-app` | `kokoro-gateway`（规划） | Session/Agent runtime |
+| 能力 | `kokoro-app` | `kokoro-gateway`（scaffolded） | Session/Agent runtime |
 |---|---|---|---|
 | 页面、Composer、胶囊、导航、响应式 | 负责 | 不负责 | 不负责 |
 | 同源 `/api/session/*` | 暴露浏览器入口并保持契约 | 提供业务 upstream | 不直接暴露给浏览器 |
@@ -197,4 +197,4 @@ JWT/workload token、内部 URL、队列实现和部署凭据。Web 更新 share
 3. 验证消息幂等：刷新、重复点击发送、SSE 断线重连都不产生重复 Run。
 4. 验证 `Forwarded` 只有一份且来自 `KOKORO_DOMAIN`，浏览器伪造 `X-Domain` 不生效。
 5. 验证 JSON、SSE、artifact 下载、HITL cancel/resume、401/403/409/5xx 错误保持语义。
-6. 通过后再把 gateway 从 planned 标记为 live，并在本契约文档中记录实际版本和部署绑定。
+6. 通过后再把 gateway 从 scaffolded 标记为 live，并在本契约文档中记录实际版本和部署绑定。

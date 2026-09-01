@@ -12,7 +12,10 @@ import { useLocale, useT } from "@/i18n/context"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
 import { ScheduledTaskEditorDialog, type ScheduledTaskDraft } from "./scheduled-task-editor"
+import type { ScheduledTaskClient, ScheduledTaskPatch, ScheduledTaskRecord } from "./scheduled-task-client"
 import styles from "./kokoro-scheduled-surface.module.css"
+
+export type { ScheduledTaskClient, ScheduledTaskPatch, ScheduledTaskRecord } from "./scheduled-task-client"
 
 const SUGGESTIONS = [
   { key: "scheduled.monitor", icon: ScanSearch },
@@ -38,37 +41,13 @@ type KokoroScheduledSurfaceProps = Pick<EmptyStateProps, "brandName"> & {
    * create a second fetch client or guess a BFF route.
    */
   client?: ScheduledTaskClient
+  /** AppFrame injection name; `client` remains as a local/test compatibility seam. */
+  scheduledTaskClient?: ScheduledTaskClient
   onSave?: (task: ScheduledTaskDraft) => Promise<void> | void
   tasks?: readonly ScheduledTaskRecord[]
   onUpdateTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<void> | void
   onRetryTask?: (taskId: string) => Promise<void> | void
   onDeleteTask?: (taskId: string) => Promise<void> | void
-}
-
-/** A small route-owned projection used by the desktop fixture/list state. */
-export type ScheduledTaskRecord = {
-  id: string
-  title: string
-  prompt?: string
-  frequency: "daily" | "weekly"
-  time: string
-  /** Optional for compatibility with older preview fixtures. */
-  timezone?: string
-  nextRun?: string
-  expiresAt?: string
-  autoApprove?: boolean
-  enabled?: boolean
-  status?: "active" | "paused" | "failed"
-}
-
-export type ScheduledTaskPatch = Partial<Pick<ScheduledTaskRecord, "title" | "prompt" | "frequency" | "time" | "timezone" | "expiresAt" | "autoApprove" | "enabled" | "status">>
-
-export type ScheduledTaskClient = {
-  listScheduledTasks: () => Promise<readonly ScheduledTaskRecord[]>
-  createScheduledTask?: (draft: ScheduledTaskDraft) => Promise<unknown>
-  updateScheduledTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<unknown>
-  retryScheduledTask?: (taskId: string) => Promise<unknown>
-  deleteScheduledTask?: (taskId: string) => Promise<unknown>
 }
 
 function statusMessageKey(status: "active" | "paused" | "failed"): "scheduled.active" | "scheduled.paused" | "scheduled.failed" {
@@ -178,6 +157,7 @@ export function KokoroScheduledSurface({
   brandName = "Kokoro",
   preview = false,
   client,
+  scheduledTaskClient,
   onSave,
   tasks,
   onUpdateTask,
@@ -189,6 +169,7 @@ export function KokoroScheduledSurface({
   // Preview is explicit. A live surface with no injected scheduled client
   // stays in an honest loading/error state instead of borrowing the fixture.
   const fixtureMode = preview
+  const injectedClient = scheduledTaskClient ?? client
   const controlledTasks = tasks !== undefined
   const [previewTasks, setPreviewTasks] = useState<ScheduledTaskRecord[]>(readPreviewTasks)
   const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
@@ -216,8 +197,8 @@ export function KokoroScheduledSurface({
     setLoading(true)
     setLoadError(false)
     try {
-      if (!client) throw missingScheduledClientError()
-      const next = await client.listScheduledTasks()
+      if (!injectedClient) throw missingScheduledClientError()
+      const next = await injectedClient.listScheduledTasks()
       if (requestSeq !== requestSeqRef.current) return
       setRemoteTasks([...next])
     } catch {
@@ -226,7 +207,7 @@ export function KokoroScheduledSurface({
     } finally {
       if (requestSeq === requestSeqRef.current) setLoading(false)
     }
-  }, [client, controlledTasks, fixtureMode])
+  }, [controlledTasks, fixtureMode, injectedClient])
   const displayedTasks = useMemo(() => tasks ?? (fixtureMode ? previewTasks : remoteTasks), [fixtureMode, previewTasks, remoteTasks, tasks])
   const editingTask = editingTaskId === null ? null : displayedTasks.find((task) => task.id === editingTaskId) ?? null
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth])
@@ -280,16 +261,16 @@ export function KokoroScheduledSurface({
 
   const canCreate = fixtureMode
     ? !controlledTasks || onSave !== undefined
-    : onSave !== undefined || client?.createScheduledTask !== undefined
+    : onSave !== undefined || injectedClient?.createScheduledTask !== undefined
   const canUpdate = fixtureMode
     ? !controlledTasks || onUpdateTask !== undefined
-    : onUpdateTask !== undefined || client?.updateScheduledTask !== undefined
+    : onUpdateTask !== undefined || injectedClient?.updateScheduledTask !== undefined
   const canRetry = fixtureMode
     ? !controlledTasks || onRetryTask !== undefined || onUpdateTask !== undefined
-    : onRetryTask !== undefined || client?.retryScheduledTask !== undefined || onUpdateTask !== undefined || client?.updateScheduledTask !== undefined
+    : onRetryTask !== undefined || injectedClient?.retryScheduledTask !== undefined || onUpdateTask !== undefined || injectedClient?.updateScheduledTask !== undefined
   const canDelete = fixtureMode
     ? !controlledTasks || onDeleteTask !== undefined
-    : onDeleteTask !== undefined || client?.deleteScheduledTask !== undefined
+    : onDeleteTask !== undefined || injectedClient?.deleteScheduledTask !== undefined
 
   const addPreviewTask = (draft: ScheduledTaskDraft) => {
     setPreviewTasks((current) => {
@@ -363,7 +344,7 @@ export function KokoroScheduledSurface({
   const saveTask = async (draft: ScheduledTaskDraft) => {
     if (editingTaskId !== null) {
       if (editingTask === null) throw new Error("Scheduled task is no longer available")
-      const update = onUpdateTask ?? (!fixtureMode ? client?.updateScheduledTask : undefined)
+      const update = onUpdateTask ?? (!fixtureMode ? injectedClient?.updateScheduledTask : undefined)
       if (update) {
         await update(editingTask.id, {
           title: draft.title,
@@ -375,7 +356,7 @@ export function KokoroScheduledSurface({
           autoApprove: draft.autoApprove,
         })
         if (fixtureMode && !controlledTasks) updatePreviewTask(editingTask.id, draft)
-        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
         updatePreviewTask(editingTask.id, draft)
       } else {
@@ -383,11 +364,11 @@ export function KokoroScheduledSurface({
       }
       return
     }
-    const create = onSave ?? (!fixtureMode ? client?.createScheduledTask : undefined)
+    const create = onSave ?? (!fixtureMode ? injectedClient?.createScheduledTask : undefined)
     if (create) {
       await create(draft)
       if (fixtureMode && !controlledTasks) addPreviewTask(draft)
-      else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+      else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       return
     }
     if (!fixtureMode) {
@@ -404,11 +385,11 @@ export function KokoroScheduledSurface({
     setPendingMutation(operation)
     setMutationError(null)
     try {
-      const update = onUpdateTask ?? (!fixtureMode ? client?.updateScheduledTask : undefined)
+      const update = onUpdateTask ?? (!fixtureMode ? injectedClient?.updateScheduledTask : undefined)
       if (update) {
         await update(task.id, { enabled, status: enabled ? "active" : "paused" })
         if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, enabled ? "active" : "paused")
-        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
         setPreviewTaskStatus(task.id, enabled ? "active" : "paused")
       } else {
@@ -426,16 +407,16 @@ export function KokoroScheduledSurface({
     setPendingMutation(operation)
     setMutationError(null)
     try {
-      const retry = onRetryTask ?? (!fixtureMode ? client?.retryScheduledTask : undefined)
-      const update = onUpdateTask ?? (!fixtureMode ? client?.updateScheduledTask : undefined)
+      const retry = onRetryTask ?? (!fixtureMode ? injectedClient?.retryScheduledTask : undefined)
+      const update = onUpdateTask ?? (!fixtureMode ? injectedClient?.updateScheduledTask : undefined)
       if (retry) {
         await retry(task.id)
         if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, "active")
-        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (update) {
         await update(task.id, { enabled: true, status: "active" })
         if (fixtureMode && !controlledTasks) setPreviewTaskStatus(task.id, "active")
-        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
         setPreviewTaskStatus(task.id, "active")
       } else {
@@ -455,11 +436,11 @@ export function KokoroScheduledSurface({
     setPendingMutation(operation)
     setMutationError(null)
     try {
-      const remove = onDeleteTask ?? (!fixtureMode ? client?.deleteScheduledTask : undefined)
+      const remove = onDeleteTask ?? (!fixtureMode ? injectedClient?.deleteScheduledTask : undefined)
       if (remove) {
         await remove(id)
         if (fixtureMode && !controlledTasks) removePreviewTask(id)
-        else if (!fixtureMode && !controlledTasks && client) await loadTasks()
+        else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
         removePreviewTask(id)
       } else {
