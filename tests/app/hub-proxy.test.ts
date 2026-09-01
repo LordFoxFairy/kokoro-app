@@ -68,7 +68,7 @@ describe("/api/hub/[...path] proxy", () => {
       params(["self", "skills", "pool"]),
     )
 
-    const [target] = vi.mocked(requestWithDomain).mock.calls[0] as [string]
+    const [target] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, RequestInit]
     expect(target).toBe("http://gateway.test/hub/self/skills/pool")
   })
 
