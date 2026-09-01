@@ -8,8 +8,8 @@ Kokoro 是一个独立的桌面 Web 产品仓库。它发布一套确定的产�
 
 ## 仓库边界
 
-- `kokoro/`：当前产品 Web 的页面、布局、CSS Modules、品牌、SEO、素材、session HTTP/SSE、
-  HITL、Canvas、Library、Skills 和 UI 组装；独立构建、发布、部署、回滚。
+- `kokoro/`：当前产品 Web 的页面、布局、CSS Modules、品牌、SEO、素材、同源 session HTTP/SSE
+  adapter、HITL、Canvas、Library、Skills 和 UI 组装；独立构建、发布、部署、回滚。
 - `kokoro-<product-slug>/`：其它产品各自的独立 Web 仓库。它们可以复用 shared package，
   但拥有自己的页面信息架构和发布生命周期，不放进本仓库的多产品目录。
 - `kokoro-web-shared/`：规划中的唯一共享 package 仓库，不属于当前 checkout；迁移后内部用
@@ -44,15 +44,22 @@ git push -u origin main
 ```text
 Browser
   → same-origin User Web BFF (/api/*)
-  → BFF 读取 KOKORO_DOMAIN
-  → 每一个上游请求附加 Forwarded: host=<KOKORO_DOMAIN>
-  → IAM / System / User / Session / Hub 等后端
+  → Web server 读取 KOKORO_DOMAIN
+  → Chat/业务请求进入 kokoro-bff (/v1/*)
+  → 每一个 BFF 上游请求附加 Forwarded: host=<KOKORO_DOMAIN>
+  → IAM / System / 业务 owner repos / Agent
   → 后端自行完成身份、权限和数据隔离
 ```
 
 `KOKORO_DOMAIN` 是部署配置，不是前端选择器。BFF 必须覆盖浏览器传入的同名 header，不能
 信任客户端提供的 `Forwarded`。本地值为 `dev.kokoro.localhost`，生产值为该部署的规范域名；
 域名变化只改环境变量和后端域名绑定，不改 React/CSS，也不把域名写进 URL 或 body。
+
+当前 Web 运行边界是 BFF-only：浏览器只调用同源 `/api/*`；其中 `/api/session/*` 是兼容路径，
+由 Web server 转发到 `kokoro-bff` 的 `/v1/sessions/*`。Web 不读取或直连
+`KOKORO_SESSION_BASE_URL`、独立 Session 或 Gateway，也不存在 Gateway direct fallback。
+`kokoro-session` 与 `kokoro-gateway` 的名称只在历史/迁移资料中保留，不是当前运行、CI、部署或
+package 依赖。
 
 ## 前后端契约
 

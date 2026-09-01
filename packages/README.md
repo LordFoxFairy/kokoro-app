@@ -65,9 +65,11 @@ decision types 和错误码常量。Direct Chat 与项目 Chat 继续共用同�
 项目 `project_ref` 只是 opaque ownership reference，不是 tenant、site、namespace 或共享 package
 中的运行时身份值。
 
-当前 `kokoro-app` 的 Chat 与业务 API 都通过同源 `/api/*` route adapter 进入独立 BFF；
-浏览器端的 `sessionBaseUrl()` 只返回 `/api/session` 兼容前缀，不读取任何独立服务基址，
-也不直连 Session、Hub、Agent 或 Gateway。shared package 不得携带
+当前 `kokoro-app` 的 Chat 与业务 API 都是 BFF-only：通过同源 `/api/*` route adapter 进入独立
+`kokoro-bff`；浏览器端的 `sessionBaseUrl()` 只返回 `/api/session` 兼容前缀，不读取任何独立服务
+基址，也不直连 Session、Hub、Agent 或 Gateway。`Session` 仅是当前 BFF Chat 资源命名；独立
+`kokoro-session` 与 `kokoro-gateway` 仅保留在历史/迁移资料中，不是 workspace、运行或 fallback
+入口。shared package 不得携带
 BFF URL、runtime token、internal secret、数据库/队列实现，也不得把 Preview fixture 描述成
 Live backend。
 

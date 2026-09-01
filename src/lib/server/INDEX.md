@@ -1,4 +1,4 @@
-# lib/server — BFF 服务端边界
+# lib/server — Web BFF 服务端边界
 
 ## 职责
 
@@ -39,8 +39,10 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。
 - route handler 使用 `runtime = "nodejs"`；SSE 与下载直接转发 Response body，不在 BFF 缓冲大响应。
-- 业务面和 Chat 配置 `KOKORO_BFF_BASE_URL` 后统一进入独立 `kokoro-bff` 的 `/v1/*`；阶段 1 不依赖
-  `KOKORO_SESSION_BASE_URL`，也不通过 Gateway fallback。
+- 业务面和 Chat 是 BFF-only：统一配置 `KOKORO_BFF_BASE_URL`，由独立 `kokoro-bff` 承接 `/v1/*`；当前
+  Web 不读取 `KOKORO_SESSION_BASE_URL`，也不存在 Gateway fallback。
+- `Session` 在当前运行时只表示 BFF Chat 资源和 `/api/session/*` 兼容路径；独立 `kokoro-session` 与
+  `kokoro-gateway` 仅保留在历史/迁移资料中，不是运行、CI、部署或依赖入口。
 - 原文 magic-link token、nonce、refresh token 和内部 header 绝不写入日志或浏览器响应。
 
 ## 协作边界
