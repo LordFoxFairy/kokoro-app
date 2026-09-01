@@ -237,7 +237,17 @@ export function KokoroScheduledSurface({
   }, [controlledTasks, fixtureMode, loadTasks])
 
   useEffect(() => {
-    const onLocationChange = () => setEditorOpen(window.location.hash === EDITOR_HASH)
+    const onLocationChange = () => {
+      const nextOpen = window.location.hash === EDITOR_HASH
+      setEditorOpen(nextOpen)
+      // Back/forward and a direct hash edit bypass Dialog's onOpenChange.
+      // Clear the edit target on those paths too, otherwise reopening the
+      // editor from history can resurrect a previously edited task.
+      if (!nextOpen) {
+        setEditingTaskId(null)
+        setInitialPrompt("")
+      }
+    }
     window.addEventListener("hashchange", onLocationChange)
     window.addEventListener("popstate", onLocationChange)
     return () => {

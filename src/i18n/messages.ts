@@ -851,6 +851,7 @@ export const zh = {
   "share.projectLinkAria": "专案分享链接",
   "share.projectCopy": "复制链接",
   "share.projectCopied": "已复制",
+  "share.projectCopyFailed": "复制失败，请重试",
   "share.projectHint": "拥有链接的人可以查看此专案的公开内容。",
   "share.projectInvitePlaceholder": "输入电子邮件地址",
   "share.projectInvite": "邀请",

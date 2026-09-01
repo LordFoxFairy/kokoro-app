@@ -151,7 +151,7 @@ it("桌面 Rail 拖动把事务标记挂到真实 SidebarProvider 节点并在 p
   expect(shell).not.toHaveAttribute("data-resizing")
 })
 
-it("桌面折叠侧栏后焦点交给新的展开按钮", async () => {
+it("桌面折叠侧栏后焦点交给新的搜索入口", async () => {
   buildEngine()
   render(
     <ThemeProvider>
@@ -163,12 +163,11 @@ it("桌面折叠侧栏后焦点交给新的展开按钮", async () => {
 
   fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }))
   await waitFor(() => {
-    const trigger = screen.getByRole("button", { name: "展开侧栏" })
-    expect(trigger).toHaveFocus()
-    // TooltipTrigger must not overwrite SidebarTrigger's primitive identity
-    // when the collapsed control is composed with a tooltip.
-    expect(trigger).toHaveAttribute("data-sidebar", "trigger")
-    expect(trigger).toHaveAttribute("data-slot", "sidebar-trigger")
+    const search = screen.getByRole("button", { name: "搜索会话" })
+    expect(search).toHaveFocus()
+    expect(search).toHaveAttribute("data-collapsed-search", "true")
+    expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-sidebar", "trigger")
+    expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-slot", "sidebar-trigger")
   })
 })
 

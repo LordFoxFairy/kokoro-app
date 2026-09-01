@@ -219,7 +219,7 @@ export function SettingsModal({
     // The nested Radix focus scope restores the parent dialog first. Handoff
     // after its close animation so the deployment action, not the first rail
     // tab, becomes the final keyboard destination.
-    const timer = window.setTimeout(() => domainUpgradeReturnRef.current?.focus(), 220)
+    const timer = window.setTimeout(() => domainUpgradeReturnRef.current?.focus({ preventScroll: true }), 220)
     return () => window.clearTimeout(timer)
   }, [domainUpgradeOpen])
 
@@ -486,7 +486,7 @@ export function SettingsModal({
             return
           }
           event.preventDefault()
-          target.focus()
+          target.focus({ preventScroll: true })
         }}
       >
         <DialogTitle className={styles.desktopTitle}>{t("settings.title")}</DialogTitle>

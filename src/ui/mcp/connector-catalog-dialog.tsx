@@ -75,7 +75,7 @@ export function ConnectorCatalogDialog({
           const target = returnFocusRef?.current
           if (!target?.isConnected) return
           event.preventDefault()
-          target.focus()
+          target.focus({ preventScroll: true })
         }}
       >
         <DialogTitle className={styles.title}>{t("connectorCatalog.title")}</DialogTitle>
@@ -260,7 +260,7 @@ export function CustomApiDialog({
           const target = returnFocusRef.current
           if (!target?.isConnected) return
           event.preventDefault()
-          target.focus()
+          target.focus({ preventScroll: true })
         }}
       >
         <DialogTitle className={styles.customApiTitle}>{t("connectorCatalog.customApiCreateTitle")}</DialogTitle>

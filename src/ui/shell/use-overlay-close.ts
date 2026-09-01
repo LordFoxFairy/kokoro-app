@@ -56,7 +56,7 @@ export function useOverlayClose(onClose: () => void, durationMs = 220) {
     const target = returnFocusRef.current
     if (!focusable(target)) return
     event.preventDefault()
-    window.requestAnimationFrame(() => target.focus())
+    window.requestAnimationFrame(() => target.focus({ preventScroll: true }))
   }, [])
 
   return { open, requestClose, onCloseAutoFocus, returnFocusRef }

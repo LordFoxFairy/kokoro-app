@@ -55,6 +55,33 @@ it("关闭编辑器清理 hash，再次打开时重置表单", () => {
   expect(screen.getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" })).toHaveValue("")
 })
 
+it("通过浏览器历史关闭编辑器时清除旧任务上下文", async () => {
+  window.history.replaceState(null, "", "/app/scheduled?tab=list")
+  render(
+    <LocaleProvider>
+      <KokoroScheduledSurface
+        brandName="Kokoro"
+        tasks={[{ id: "scheduled_history_1", title: "旧任务", prompt: "旧提示", frequency: "daily", time: "08:00" }]}
+        onUpdateTask={vi.fn()}
+      />
+    </LocaleProvider>,
+  )
+
+  const card = await screen.findByRole("listitem")
+  fireEvent.pointerDown(within(card).getByRole("button", { name: "排程任务选项 旧任务" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }))
+  expect(screen.getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue("旧任务")
+
+  window.history.replaceState(null, "", "/app/scheduled?tab=list")
+  fireEvent(window, new PopStateEvent("popstate"))
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+
+  window.history.replaceState(null, "", "/app/scheduled?tab=list#scheduled-tasks/new")
+  fireEvent(window, new HashChangeEvent("hashchange"))
+  const reopened = await screen.findByRole("dialog")
+  expect(within(reopened).getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue("")
+})
+
 it("已挂载时收到站内 surface 导航事件会重新读取日历/任务视图", () => {
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(

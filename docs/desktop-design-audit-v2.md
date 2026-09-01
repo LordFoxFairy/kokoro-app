@@ -4140,3 +4140,14 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 回归测试位于 `tests/ui/app-frame-rail.test.tsx`，并与 `workspace-rail`、Sidebar primitive、rail resize
 测试一起定向运行：4 个测试文件、61 个测试通过；对应源码通过定向 ESLint。只修改 Web Rail/provider、其测试
 和本桌面契约文档，未修改 Chat composer。
+
+## v219 Chat 承接、稳定分享和收起 Rail 首控件（2026-09-01）
+
+本轮用真实桌面输入重新走通 `/app` 的首条 Chat 消息，并针对之前反馈的“点击后像没有反应、收起时闪动、页面滚动位置被吃掉”做收口：
+
+- Composer 首发仍由同一个 `SessionEngine` 创建会话并把地址同步为 `?conversation=...`；Direct Chat 与 Project Chat 不分叉页面，也不把 capsule 当作后端资源。
+- Project share 复制的是去掉 `conversation` 与 hash 的 canonical project URL；剪贴板拒绝/不可用时按钮显示可重试错误，不再静默显示成功。
+- Scheduled 的浏览器历史导航关闭编辑器时同步清除旧编辑目标，避免 Back 后再打开仍带着上一条任务标题。
+- 宽桌面 Rail 收起态的第一个可见控制为 Search，第二个为 Panel-left 展开；Search 会先打开 Rail 再显示搜索输入。所有收起/展开的焦点回收均使用 `preventScroll`，只改变交互焦点，不改变页面滚动位置。
+
+验证：`workspace-rail`、`app-frame-rail`、Settings、MCP、Library、Billing、Share、Scheduled 和 Skills import 定向测试均通过；真实 `1280×800` 浏览器中提交 Chat 后可见消息、assistant preview 和新 conversation URL，未观察到 page error 或 console error。本轮仍只覆盖桌面 Web。

@@ -114,7 +114,7 @@
   text-decoration: none;
 }
 
-.collapsedBrand {
+.collapsedSearch {
   position: absolute;
   inset: 0 auto auto 50%;
   display: inline-flex;
@@ -128,7 +128,7 @@
   transform: translateX(-50%);
 }
 
-/* A pointer collapse hands focus to the compact brand so keyboard users keep
+/* A pointer collapse hands focus to the compact Search control so keyboard users keep
  * their place. That handoff is not itself a keyboard intent, so suppress only
  * its stock shadcn ring; real Tab focus still uses the normal focus-visible
  * affordance. Scope it to the desktop pointer contract; the mobile Sheet
@@ -139,7 +139,7 @@
  * than the mobile Sheet. Keying this geometry to width keeps the collapsed
  * labels from leaking into the icon track in that case too. */
 @media (min-width: 768px), (pointer: fine) {
-  .collapsedBrand[data-pointer-focus="true"]:focus-visible {
+  .collapsedSearch[data-pointer-focus="true"]:focus-visible {
     outline: none !important;
     box-shadow: none !important;
   }
@@ -407,8 +407,8 @@
 .rail[data-desktop-rail="true"] .userTrigger { justify-content: flex-start; padding-left: 0.125rem; }
 
 /* One compact desktop contract. 52px is the CSS track; 36px targets are
- * centered on x=26, and the header reserves 64px so the first icon starts at
- * the same y rhythm as the reference. The footer is a 120px bottom anchor:
+ * centered on x=26, and the header reserves space for Search plus rail toggle
+ * at the same y rhythm as the reference. The footer is a 120px bottom anchor:
  * device, notifications, account at 32px/4px/32px/4px/32px. */
 .rail[data-desktop-rail="true"][data-collapsed="true"] {
     position: relative;
@@ -419,9 +419,9 @@
 
 .rail[data-desktop-rail="true"][data-collapsed="true"] .head {
     width: var(--collapsed-track);
-    height: 4rem;
-    min-height: 4rem;
-    flex: 0 0 4rem;
+    height: 5.75rem;
+    min-height: 5.75rem;
+    flex: 0 0 5.75rem;
     /* Keep the compact controls on the left edge for the whole 200ms
      * Sidebar transition. Centering these 52px children inside the still
      * 300px container makes every icon travel through the middle of the rail
@@ -447,7 +447,7 @@
     pointer-events: none;
   }
 
-.rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedBrand {
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedSearch {
     top: 0.625rem;
     width: 2.25rem;
     min-width: 2.25rem;
@@ -455,6 +455,27 @@
     min-height: 2.25rem;
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedSearch .icon {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .headActions {
+    position: absolute;
+    top: 3.25rem;
+    left: 0;
+    width: var(--collapsed-track);
+    justify-content: center;
+  }
+
+  .rail[data-desktop-rail="true"][data-collapsed="true"] .headActions [data-rail-anchor="rail-toggle"] {
+    width: 2.25rem;
+    min-width: 2.25rem;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.5rem;
   }
 
 .rail[data-desktop-rail="true"][data-collapsed="true"] .brandMark {

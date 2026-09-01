@@ -34,7 +34,7 @@
  * composition, so it does not carry Button's `data-slot="button"`. The
  * desktop Web marker must still override the viewport-driven 44px touch
  * utility when this workbench is embedded in a narrow desktop window. */
-.shell[data-desktop-web="true"] :global([data-sidebar="trigger"]:not([data-collapsed-brand="true"])) {
+.shell[data-desktop-web="true"] :global([data-sidebar="trigger"]) {
   width: 2rem !important;
   height: 2rem !important;
   min-height: 0 !important;

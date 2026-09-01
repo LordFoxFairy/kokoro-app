@@ -101,6 +101,43 @@ describe("ShareButton", () => {
     expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
   })
 
+  it("copies a canonical project URL without task query or hash state", async () => {
+    window.history.replaceState(null, "", "/app/project/kokoro?conversation=task_1#settings")
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+    render(
+      <WorkspaceHeader
+        activeId="task_1"
+        projectWorkspace
+        shareClient={makeClient()}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }))
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument())
+    expect(writeText).toHaveBeenCalledWith("http://localhost:3000/app/project/kokoro")
+  })
+
+  it("shows a recoverable state when project link copying is rejected", async () => {
+    window.history.replaceState(null, "", "/app/project/kokoro")
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard blocked"))
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } })
+    render(
+      <WorkspaceHeader
+        activeId="task_1"
+        projectWorkspace
+        shareClient={makeClient()}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }))
+    expect(await screen.findByRole("button", { name: "Copy failed, try again" })).toBeInTheDocument()
+  })
+
   it("creates a share and reveals the public link", async () => {
     const client = makeClient()
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })

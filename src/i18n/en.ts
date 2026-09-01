@@ -1323,6 +1323,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "share.projectLinkAria": "Project share link",
   "share.projectCopy": "Copy link",
   "share.projectCopied": "Copied",
+  "share.projectCopyFailed": "Copy failed, try again",
   "share.projectHint": "Anyone with the link can view this project’s public content.",
   "share.projectInvitePlaceholder": "Enter an email address",
   "share.projectInvite": "Invite",

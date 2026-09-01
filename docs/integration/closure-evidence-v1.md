@@ -53,7 +53,7 @@ Chat 的 direct/project 承接不新增 Chat API：切换项目只改变 Session
 
 ```text
 pnpm lint                         PASS
-pnpm test                         PASS — 109 files / 1095 tests
+pnpm test                         PASS — 109 files / 1099 tests
 pnpm typecheck                    PASS
 pnpm build                        PASS
 pnpm -r lint/test/typecheck       PASS — workspace packages included
@@ -75,7 +75,7 @@ docker build ... kokoro-app       PASS
 在 `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/kokoro-gateway`：
 
 ```text
-npm run check                    PASS — typecheck/build + 13 tests
+npm run check                    PASS — typecheck/build + 14 tests
 docker build ... kokoro-gateway  PASS
 /healthz                         200
 /readyz                          200 when Session upstream is configured
@@ -99,3 +99,11 @@ Web session secret、Gateway shared secret、各 upstream 地址/ACL 和服务�
 - [`forwarded-context-contract-v1.md`](./forwarded-context-contract-v1.md)
 - [`kokoro-subrepo-boundary-v1.md`](./kokoro-subrepo-boundary-v1.md)
 - [`kokoro-gateway business boundary v1`](https://github.com/LordFoxFairy/kokoro-gateway/blob/main/docs/business-gateway-contract-v1.md)
+
+## 6. 最近一轮闭环补丁（2026-09-01）
+
+- Project 分享只复制稳定的 `/app/project/{project_ref}` 地址，主动移除当前 conversation query/hash；剪贴板 API 不可用时走浏览器 fallback，失败会保留可重试状态。
+- Scheduled editor 通过浏览器 Back/Forward 关闭后会清空旧的 `editingTaskId` 和 prompt，重新打开不会复活上一次编辑对象。
+- 宽桌面收起 Rail 的首个控件保持为 Search，第二个控件为展开入口；点击 Search 先恢复 Rail 再聚焦搜索框，收起/展开过程不把图标移动到旧宽度中央。
+- Settings、Connector Catalog、Billing 等受控 Dialog 的关闭焦点使用 `preventScroll`，避免焦点回收把页面滚动位置拉回顶部。
+- Chat 首发承接已用真实桌面输入验证：提交后 URL 获得 `conversation`，draft 清空，消息和 Preview assistant turn 进入同一 AppFrame；Gateway 仍只承接服务端 `/sessions/*`，不在 Web 内复制 Chat 页面或状态。

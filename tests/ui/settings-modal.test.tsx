@@ -989,6 +989,25 @@ describe("SettingsModal 设置中心模态", () => {
     await waitFor(() => expect(returnFocusRef.current).toHaveFocus())
   })
 
+  it("设置关闭回收焦点时不改变页面滚动位置", async () => {
+    const returnFocusRef = createRef<HTMLButtonElement>()
+    const focus = vi.spyOn(HTMLElement.prototype, "focus")
+    function Harness() {
+      const [open, setOpen] = useState(true)
+      return (
+        <>
+          <button ref={returnFocusRef} type="button">导航</button>
+          {open ? <SettingsModal initialTab="account" onClose={() => setOpen(false)} returnFocusRef={returnFocusRef} /> : null}
+        </>
+      )
+    }
+    render(<ThemeProvider><LocaleProvider><Harness /></LocaleProvider></ThemeProvider>)
+    fireEvent.click(screen.getByTestId("settings-close"))
+    await waitFor(() => expect(returnFocusRef.current).toHaveFocus())
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true })
+    focus.mockRestore()
+  })
+
   it("深链打开且没有 return ref 时关闭也回到 Composer", async () => {
     function Harness() {
       const [open, setOpen] = useState(true)

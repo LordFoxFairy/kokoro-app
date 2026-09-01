@@ -121,13 +121,19 @@ it("800px 仍是宽桌面收起轨道，展开收起的焦点都留在实际可�
     expect(shell?.querySelector('[data-seam="rail"]')).toHaveAttribute("data-seam-visible", "true")
   })
 
-  const collapsedBrand = shell?.querySelector<HTMLButtonElement>('[data-collapsed-brand="true"]')
-  expect(collapsedBrand).toHaveAttribute("tabindex", "0")
-  fireEvent.click(collapsedBrand as HTMLButtonElement, { detail: 0 })
-  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
+  const collapsedSearch = shell?.querySelector<HTMLButtonElement>('[data-collapsed-search="true"]')
+  expect(collapsedSearch).toHaveAttribute("tabindex", "0")
+  fireEvent.click(collapsedSearch as HTMLButtonElement, { detail: 0 })
+  await waitFor(() => expect(shell).toHaveAttribute("data-rail-collapsed", "false"))
+  const searchInput = () => document.querySelector<HTMLInputElement>('input[type="search"]')
+  await waitFor(() => expect(searchInput()).toHaveFocus())
 
+  fireEvent.keyDown(searchInput()!, { key: "Escape" })
   fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }), { detail: 0 })
-  await waitFor(() => expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveFocus())
+  await waitFor(() => expect(screen.getByRole("button", { name: "搜索会话" })).toHaveFocus())
+
+  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+  await waitFor(() => expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus())
 })
 
 it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢复", async () => {
@@ -205,7 +211,7 @@ it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () 
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).not.toHaveAttribute("data-rail-hidden")
-    expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveFocus()
+    expect(screen.getByRole("button", { name: "搜索会话" })).toHaveFocus()
   })
   expect(document.cookie).toContain("sidebar_state=false")
 })
