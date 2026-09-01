@@ -768,6 +768,46 @@ it("进入无 conversation 的项目 overview 时不承接 direct 线程", async
   expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeNull()
 })
 
+it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项目 Chat", async () => {
+  buildEngine()
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "交给 Kokoro 项目继续处理" } })
+  // The direct home starts with the compact desktop rail. Open the project
+  // picker first, just as a user does, instead of reaching into its hidden
+  // expanded-only link.
+  const projectPicker = screen.getByTestId("rail-project")
+  fireEvent.pointerDown(projectPicker, { button: 0 })
+  fireEvent.pointerUp(projectPicker, { button: 0 })
+  fireEvent.click(projectPicker)
+  const projectLink = await screen.findByRole("menuitem", { name: "Kokoro" })
+  fireEvent.click(projectLink)
+
+  await waitFor(() => {
+    expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
+    expect(screen.getByLabelText("对话输入")).toHaveValue("交给 Kokoro 项目继续处理")
+  })
+  // The route projection is synchronous, while Radix finishes closing the
+  // portaled picker on the next interaction cycle in jsdom. Close that
+  // already-navigated picker before exercising the project toolbar.
+  fireEvent.keyDown(document, { key: "Escape" })
+  await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Kokoro" })).toBeNull())
+
+  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  await waitFor(() => expect(window.location.search).toMatch(/^\?conversation=conv_/))
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "项目首条消息" } })
+  fireEvent.click(screen.getByLabelText("发送消息"))
+
+  await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeInTheDocument())
+  expect(screen.getByText("项目首条消息")).toBeInTheDocument()
+})
+
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
   buildEngine()
   render(
