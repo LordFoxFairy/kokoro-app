@@ -6,6 +6,7 @@ import {
   type RunFailureCode,
   type SessionEvent,
 } from "@/contract/session-events"
+import type { SessionSnapshot } from "@/contract/http"
 import type {
   EventStreamHandle,
   OpenEventsArgs,
@@ -29,11 +30,63 @@ type PreviewSession = {
   seq: number
   started: boolean
   queued: SessionEvent[]
+  history: SessionEvent[]
+  lastDeliveredSeq: number
   subscriber: OpenEventsArgs["onEvent"] | null
   // 清单展示用：首条消息内容充当标题 + 最近活动时间（切走后会话仍留在侧栏，供 HITL 徽标走查）。
   title: string
   updatedAt: string
   projectRef: string | null
+}
+
+const PREVIEW_STORAGE_KEY = "kokoro.preview.sessions.v1"
+
+type PersistedPreviewSession = Pick<PreviewSession, "seq" | "started" | "history" | "title" | "updatedAt" | "projectRef">
+
+function previewStorage(): Storage | null {
+  if (typeof window === "undefined") return null
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+function readPersistedSessions(): Map<string, PersistedPreviewSession> {
+  const storage = previewStorage()
+  if (!storage) return new Map()
+  try {
+    const raw: unknown = JSON.parse(storage.getItem(PREVIEW_STORAGE_KEY) ?? "null")
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return new Map()
+    const restored = new Map<string, PersistedPreviewSession>()
+    for (const [sessionId, value] of Object.entries(raw)) {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) continue
+      const candidate = value as Partial<PersistedPreviewSession>
+      const history = Array.isArray(candidate.history)
+        ? candidate.history.flatMap((event) => {
+            try {
+              return [parseSessionEvent(event)]
+            } catch {
+              return []
+            }
+          })
+        : []
+      const seq = Math.max(
+        typeof candidate.seq === "number" && Number.isInteger(candidate.seq) ? candidate.seq : 0,
+        ...history.map((event) => event.seq),
+      )
+      const title = typeof candidate.title === "string" ? candidate.title : ""
+      const updatedAt = typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString()
+      const projectRef = typeof candidate.projectRef === "string" ? candidate.projectRef : null
+      const started = candidate.started === true || history.some((event) => event.kind === "session.created")
+      if (started && history.length > 0) {
+        restored.set(sessionId, { seq, started, history, title, updatedAt, projectRef })
+      }
+    }
+    return restored
+  } catch {
+    return new Map()
+  }
 }
 
 const PREVIEW_TODOS = [
@@ -58,9 +111,37 @@ const PREVIEW_MODELS = [
 
 export function createPreviewClient(options?: { stepMs?: number }): SessionClient {
   const stepMs = options?.stepMs ?? 40
-  const sessions = new Map<string, PreviewSession>()
+  const sessions = new Map<string, PreviewSession>(
+    [...readPersistedSessions()].map(([sessionId, persisted]) => [sessionId, {
+      ...persisted,
+      queued: [],
+      lastDeliveredSeq: 0,
+      subscriber: null,
+    }]),
+  )
   const timers = new Set<ReturnType<typeof setTimeout>>()
   let runCounter = 0
+
+  const persistSessions = (): void => {
+    const storage = previewStorage()
+    if (!storage) return
+    try {
+      const payload: Record<string, PersistedPreviewSession> = {}
+      for (const [sessionId, session] of sessions) {
+        payload[sessionId] = {
+          seq: session.seq,
+          started: session.started,
+          history: session.history,
+          title: session.title,
+          updatedAt: session.updatedAt,
+          projectRef: session.projectRef,
+        }
+      }
+      storage.setItem(PREVIEW_STORAGE_KEY, JSON.stringify(payload))
+    } catch {
+      // Preview remains usable when storage is unavailable or quota-limited.
+    }
+  }
 
   const sessionFor = (sessionId: string): PreviewSession => {
     const existing = sessions.get(sessionId)
@@ -71,6 +152,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       seq: 0,
       started: false,
       queued: [],
+      history: [],
+      lastDeliveredSeq: 0,
       subscriber: null,
       title: "",
       updatedAt: new Date().toISOString(),
@@ -86,6 +169,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     }
     const event = session.queued.shift()
     if (event) {
+      session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, event.seq)
       session.subscriber(event)
     }
     const timer = setTimeout(() => {
@@ -93,6 +177,12 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       drain(session)
     }, stepMs)
     timers.add(timer)
+  }
+
+  const queueEvents = (session: PreviewSession, events: SessionEvent[]): void => {
+    session.history.push(...events)
+    session.queued.push(...events)
+    persistSessions()
   }
 
   const makeEnvelope = (sessionId: string, runId: string) => {
@@ -130,14 +220,18 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     if (!session.started) {
       // 与 session 合成语义对齐：首个 run 携带 session.created（sessions 集合元数据）。
       session.started = true
-      session.queued.push(envelope("session.created", { title: content, owner_id: "local-user" }))
+      queueEvents(session, [envelope("session.created", { title: content, owner_id: "local-user" })])
     }
+    // Persist the user turn as a normal wire event. It is absorbed by the
+    // optimistic echo during the live run and reconstructs the user bubble when
+    // a refreshed preview page replays the event history.
+    queueEvents(session, [envelope("message.user", { message_id: `${runId}:user`, content })])
     // 预览待批态演练：消息以 `!hitl` 起头则合成 tool.awaiting_approval 并停在待批（不发 run.completed），
     // 供 HITL-NOTIFY 跨会话徽标/通知人工走查。仅 dev 假流内可达，不影响真实链路。
     if (content.trim().startsWith("!hitl")) {
       const toolId = `${runId}:tool_1`
       const args = { command: "rm -rf /tmp/preview-demo" }
-      session.queued.push(
+      queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在准备一次工具调用。" }),
@@ -153,7 +247,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           editable: false,
           pending_tool_ids: [toolId],
         }),
-      )
+      ])
       drain(session)
       return
     }
@@ -168,14 +262,14 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         "### 交付清单",
         "- 首页信息架构与主要行动入口\n- 页面与模块优先级\n- 内容和素材缺口\n- 上线前体验检查项",
       ].join("\n\n")
-      session.queued.push(
+      queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理网站需求结构。" }),
         envelope("message.completed", { segment_id: segmentId, content: longAnswer }),
         envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
         envelope("run.completed", { status: "completed" }),
-      )
+      ])
       drain(session)
       return
     }
@@ -184,7 +278,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // Preview Canvas fixture: exercise the delivery card and Canvas shell
     // locally without a BFF or a fake file endpoint.
     if (content.trim().startsWith("!delivery")) {
-      session.queued.push(
+      queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理一份预览成果。" }),
@@ -198,7 +292,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           note: "这是本地预览成果，用于检查 Canvas 布局与操作状态。",
         }),
         envelope("run.completed", { status: "completed" }),
-      )
+      ])
       drain(session)
       return
     }
@@ -211,7 +305,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       const code: RunFailureCode = RUN_FAILURE_CODES.includes(requestedCode as RunFailureCode)
         ? requestedCode as RunFailureCode
         : "internal_error"
-      session.queued.push(
+      queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理预览回复。" }),
@@ -220,11 +314,11 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           error_kind: "PreviewSyntheticError",
           message: `Synthetic failure for preview: ${requestedCode}${code === requestedCode ? "" : " (using internal_error)"}\n  at previewTransport.enqueueRun (dev harness)`,
         }),
-      )
+      ])
       drain(session)
       return
     }
-    session.queued.push(
+    queueEvents(session, [
       envelope("run.created", { run_id: runId }),
       envelope("todo.updated", { todos: PREVIEW_TODOS }),
       envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理预览回复。" }),
@@ -236,12 +330,15 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       }),
       envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
       envelope("run.completed", { status: "completed" }),
-    )
+    ])
     drain(session)
   }
 
   return {
-    // 假流会话只活在内存：清单来自本次会话内已开跑的会话（切走后仍留侧栏，供 HITL 徽标跨会话走查）。
+    // Preview metadata and event history are persisted locally so a refresh or
+    // route remount does not turn an existing project Chat URL into an empty
+    // shell. The values are synthetic fixtures only; production never enters
+    // this client.
     listSessions: (_cursor, scope = { kind: "direct" }) =>
       Promise.resolve({
         sessions: [...sessions.entries()]
@@ -276,8 +373,30 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       })
     },
 
-    // 假流会话只活在内存队列里：snapshot 语义上恒为「服务端无此会话」。
-    fetchSnapshot: () => Promise.resolve(null),
+    fetchSnapshot: async (sessionId): Promise<SessionSnapshot | null> => {
+      const session = sessions.get(sessionId)
+      if (!session?.started) return null
+      const firstEvent = session.history[0]
+      let activeRunId: string | null = null
+      for (const event of session.history) {
+        if (event.kind === "run.created") activeRunId = event.payload.run_id
+        if (event.kind === "run.completed" || event.kind === "run.failed") activeRunId = null
+      }
+      return {
+        session: {
+          session_id: sessionId,
+          title: session.title || sessionId,
+          owner_id: "local-user",
+          created_at: firstEvent?.timestamp ?? session.updatedAt,
+          updated_at: session.updatedAt,
+        },
+        ...(activeRunId !== null ? { active_run: { run_id: activeRunId, status: "running" } } : {}),
+        pending_pauses: [],
+        files: [],
+        deliveries: [],
+        event_watermark: session.seq,
+      }
+    },
 
     // The preview transport must close the same loop as the real session
     // service. Keeping HITL at "已记录你的决定…" forever made the visual
@@ -289,13 +408,13 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       const envelope = makeEnvelope(sessionId, runId)
       const segmentId = `${runId}:seg_1`
       if (body.kind === "run.cancel") {
-        session.queued.push(
+        queueEvents(session, [
           envelope("run.completed", { status: "cancelled" }),
-        )
+        ])
       } else if (body.kind === "run.resume") {
         const decision = body.decisions[0]
         const rejected = decision?.type === "reject"
-        session.queued.push(
+        queueEvents(session, [
           envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
           envelope("tool.returned", {
             segment_id: segmentId,
@@ -309,7 +428,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
             content: rejected ? "已拒绝这次工具调用。" : "工具调用已完成。",
           }),
           envelope("run.completed", { status: "completed" }),
-        )
+        ])
       }
       drain(session)
       return Promise.resolve({ ok: true })
@@ -320,6 +439,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     openEvents: ({ sessionId, onEvent }): EventStreamHandle => {
       const session = sessionFor(sessionId)
       session.subscriber = onEvent
+      // Rebuild pending delivery from persisted history. This lets a refreshed
+      // project deep link replay the same reducer path instead of rendering an
+      // empty shell after the in-memory preview client was recreated.
+      session.queued = session.history.filter((event) => event.seq > session.lastDeliveredSeq)
       drain(session)
       return {
         close: () => {

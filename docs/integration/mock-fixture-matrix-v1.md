@@ -801,3 +801,14 @@ envelope 当成后端 project-create/link 契约。
 
 以上均为 `kokoro-app` 独立子仓库的桌面 Web 合成 fixture。网站 list/link 与 project create 尚无已冻结的 BFF wire schema；这些
 本地交互不构成后端 endpoint 证据，真实接入时必须先补充对应 typed contract。
+
+## 50. Project Chat preview rehydration v218
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `chat.preview.persist.v218` | Preview 项目 Chat 完成一轮消息后刷新相同 `conversation` 深链 | 本地 synthetic `SessionSnapshot` 可恢复；页面重放 `session.created`、`message.user`、助手完成和 `run.completed`，不再只显示 Header 或空白时间线 |
+| `chat.preview.scope.persist.v218` | Direct Chat 与 project Chat 各完成一轮后刷新 | `project_ref` 继续保存在 preview session metadata；`listSessions` 仅返回当前 scope，不把项目会话混入 Direct Chat |
+
+Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，值只包含合成 session metadata 与
+已通过 `parseSessionEvent` 的事件历史；不包含 Cookie、token、租户、站点或原始 Manus 数据。该 fixture
+只验证 `kokoro-app` 本地 Web 行为，Live Session 仍以服务端的 `project_ref` 接收、持久化和列表过滤契约为准。

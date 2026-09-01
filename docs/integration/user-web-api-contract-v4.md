@@ -333,9 +333,16 @@ BFF 只负责认证、代理和流式转发；上游 session service 负责这�
 浏览器侧不为 Direct Chat 和项目 Chat 创建两套 transport：`/app` 与 `/app/project/{project_ref}`
 都由 `AppFrame` 挂载，`projectRef` 只用来选择 scope；`browserEngine`/`browserListClient`
 继续复用同一个 `SessionClient` 接口和 `/api/session` base。未显式启用 Preview 时，页面级 client
-是 `createSessionClient({baseUrl: "/api/session"})`；显式 Preview 才切到内存
-`createPreviewClient`。项目上下文的 `/api/hub/projects/{project_ref}/*` 请求属于 Project
+是 `createSessionClient({baseUrl: "/api/session"})`；显式 Preview 才切到本地
+`createPreviewClient` fixture（会话元数据/事件历史在浏览器本地持久化）。项目上下文的 `/api/hub/projects/{project_ref}/*` 请求属于 Project
 projection，不是另一套 Chat transport，也不改变 Session message/SSE/control 契约。
+
+Preview Chat 的会话元数据和已解析的 `SessionEvent` 历史由
+`src/dev/preview-transport.ts` 写入浏览器 `localStorage`（key：
+`kokoro.preview.sessions.v1`）。页面刷新或项目 Chat 深链重新创建 preview client 后，会先从
+该 fixture 恢复 `SessionSnapshot`，再通过 `openEvents` 重放同一批事件，因此不会把已有项目任务
+退化成只有 Header 的空壳。这里仍是浏览器本地合成数据，不是服务端持久化；清除该 key 即可重置
+本地预览会话。Live Session 不读取该 key。
 
 `project_ref` 是不透明原始引用：路由适配器从 `/app/project/{encoded_ref}` 解码一次，随后由
 `encodeURIComponent`/`URLSearchParams` 在链接和请求中各编码一次。调用方不要预先编码
@@ -1346,7 +1353,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
-| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；Gateway 接入时为 `/sessions/*` | closed | conditional on auth/session/gateway | 已冻结 |
+| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；Gateway 接入时为 `/sessions/*` | closed（含刷新重放） | conditional on auth/session/gateway | 已冻结 |
 | Agent | `/app/agents` | `/api/agents/connections/setup` BFF + AgentClient | Preview closed | conditional on `KOKORO_AGENT_BASE_URL` | 独立页面与 setup BFF 已闭环；实际连接仍取决于 Agent upstream |
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
@@ -1361,7 +1368,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 - 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/agents/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
 - Chat types/client：`src/contract/http.ts`、`src/contract/control.ts`、`src/contract/session-events.ts`、`src/engine/client.ts`、`src/engine/machine.ts`
-- Preview Chat：`src/dev/preview-transport.ts`
+- Preview Chat：`src/dev/preview-transport.ts`（本地 session metadata/event history fixture）
 - Agent：`src/agents/client.ts`、`src/agents/preview-client.ts`
 - Hub/Skills/MCP：`src/hub/schemas.ts`、`src/hub/client.ts`、`src/dev/preview-clients.ts`
 - Library：`src/features/app/kokoro-library-surface.tsx`

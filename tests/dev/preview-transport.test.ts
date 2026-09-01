@@ -97,4 +97,37 @@ describe("preview transport control loop", () => {
     })
     expect(receipt.run_id).toContain("run_")
   })
+
+  it("rehydrates a completed project preview after the client is recreated", async () => {
+    const sessionId = `preview-persist-session-${Date.now()}-${Math.random()}`
+    const firstClient = createPreviewClient({ stepMs: 0 })
+    const firstEvents: string[] = []
+
+    await firstClient.createMessage(sessionId, {
+      idempotency_key: `${sessionId}:message-1`,
+      content: "项目页刷新后仍然显示这条消息",
+      project_ref: "kokoro",
+    })
+    firstClient.openEvents({
+      sessionId,
+      onEvent: (event) => firstEvents.push(event.kind),
+      onStreamError: (error) => { throw error },
+    })
+    await waitFor(() => firstEvents.includes("run.completed"))
+
+    const secondClient = createPreviewClient({ stepMs: 0 })
+    const snapshot = await secondClient.fetchSnapshot(sessionId)
+    expect(snapshot?.session.title).toBe("项目页刷新后仍然显示这条消息")
+
+    const replayedEvents: string[] = []
+    secondClient.openEvents({
+      sessionId,
+      onEvent: (event) => replayedEvents.push(event.kind),
+      onStreamError: (error) => { throw error },
+    })
+    await waitFor(() => replayedEvents.includes("run.completed"))
+
+    expect(replayedEvents).toContain("message.user")
+    expect(replayedEvents).toContain("message.completed")
+  })
 })
