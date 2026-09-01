@@ -57,7 +57,7 @@ Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` �
 不把 Chat UI、页面路由或 gateway 源码搬进另一个子仓库。Direct Chat 与 Project Chat 共享这条
 链路，只有 scope 和项目引用不同。
 
-| 责任 | kokoro-app | gateway（规划） | Session/Agent runtime |
+| 责任 | kokoro-app | gateway（独立兼容层） | Session/Agent runtime |
 |---|---|---|---|
 | 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
 | 浏览器同源路径 | `/api/session/*` | `/sessions/*` 兼容适配上游 | 不直接暴露 |

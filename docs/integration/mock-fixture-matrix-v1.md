@@ -773,8 +773,8 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | `rail.navigation.tooltip-reset.v214` | 收起 Rail 后 hover Agent，再切换技能/排程 | active surface 变化时旧 tooltip portal 消失；新入口普通 hover 仍能重新打开 tooltip，不改变路由或 API 上下文 |
 | `rail.account.compact-reset.v214` | account menu 打开后切换 compact desktop 状态 | 账户菜单自动关闭，宽/窄布局不保留旧浮层或焦点 trap；不发送域名、tenant、site header |
 
-这些是同一 User Web 子仓库内的浏览器 fixture；Chat 仍由 `/api/session/*` 同源 BFF 承接，未来统一业务 gateway 仍是独立规划仓库，
-不作为 `kokoro-app` 子目录、workspace 依赖或前端页面代码引入。
+这些是同一 User Web 子仓库内的浏览器 fixture；Chat 仍由 `/api/session/*` 同源 BFF 承接，统一业务 Gateway 作为独立部署仓库
+提供 `/sessions/*` 兼容面，不作为 `kokoro-app` 子目录、workspace 依赖或前端页面代码引入。
 
 ## 48. Project context picker 与 Chat 承接 fixtures v215
 
