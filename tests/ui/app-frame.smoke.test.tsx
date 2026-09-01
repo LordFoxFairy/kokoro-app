@@ -828,6 +828,29 @@ it("项目侧栏的新建专案菜单会进入新的项目工作区", async () =
   expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
 })
 
+it("Direct Chat 展开侧栏后新建专案仍承接当前草稿", async () => {
+  buildEngine()
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.change(await screen.findByLabelText("对话输入"), { target: { value: "从 Chat 承接到新专案" } })
+  const trigger = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+
+  await waitFor(() => {
+    expect(window.location.pathname).toBe("/app/project/preview-project")
+    expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
+    expect(screen.getByLabelText("对话输入")).toHaveValue("从 Chat 承接到新专案")
+  })
+})
+
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
   buildEngine()
   render(

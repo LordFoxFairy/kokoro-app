@@ -42,6 +42,43 @@ it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", ()
   }
 })
 
+it("项目任务列表区分加载态和错误态，并提供重试入口", () => {
+  const onRetryProjectConversations = vi.fn()
+  const baseProps = {
+    brandName: "Kokoro",
+    composer: <div>composer</div>,
+    onPrompt: vi.fn(),
+    workspaceCapabilities: capabilities,
+  }
+
+  const { rerender } = render(
+    <LocaleProvider>
+      <KokoroProjectWorkspace
+        {...baseProps}
+        projectConversationsLoading
+      />
+    </LocaleProvider>,
+  )
+
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载任务…")
+  expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
+
+  rerender(
+    <LocaleProvider>
+      <KokoroProjectWorkspace
+        {...baseProps}
+        projectConversationsError
+        onRetryProjectConversations={onRetryProjectConversations}
+      />
+    </LocaleProvider>,
+  )
+
+  expect(screen.getByRole("alert")).toHaveTextContent("任务暂时无法加载。")
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
+})
+
 it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", async () => {
   const onPrompt = vi.fn()
   const onSaveProjectInstructions = vi.fn().mockResolvedValue(undefined)

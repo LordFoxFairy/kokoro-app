@@ -230,25 +230,77 @@ function WorkspaceRailContent({
   const railRootRef = useRef<HTMLDivElement | null>(null)
   const toggleFocusRef = useRef<{ mode: "collapsed" | "expanded"; pointer: boolean } | null>(null)
   const togglePointerRef = useRef(false)
+  const previousCompactDesktopRailRef = useRef<boolean | null>(null)
+  const responsiveFocusPendingRef = useRef(false)
+  const lastNavigationControlRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target
+      if (target instanceof HTMLElement && target.matches(
+        '[data-collapsed-brand="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
+      )) {
+        lastNavigationControlRef.current = target
+      }
+    }
+    document.addEventListener("focusin", onFocusIn)
+    return () => document.removeEventListener("focusin", onFocusIn)
+  }, [])
 
   // Focus handoff belongs to the committed provider state, not to the click
   // event's pre-toggle DOM. This prevents expansion from focusing the hidden
   // compact trigger when React has not committed the new head yet.
   useLayoutEffect(() => {
-    const targetMode = toggleFocusRef.current
-    if (targetMode === null) return
-    toggleFocusRef.current = null
-    const target = targetMode.mode === "expanded"
-      ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
-      : compactDesktopRail
-        ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
-        : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
-    if (!target || target.getAttribute("aria-hidden") === "true") return
-    if (targetMode.mode === "collapsed" && targetMode.pointer) {
-      target.dataset.pointerFocus = "true"
-      target.addEventListener("blur", () => delete target.dataset.pointerFocus, { once: true })
+    const previousCompactDesktopRail = previousCompactDesktopRailRef.current
+    previousCompactDesktopRailRef.current = compactDesktopRail
+    if (previousCompactDesktopRail !== null && previousCompactDesktopRail !== compactDesktopRail) {
+      responsiveFocusPendingRef.current = true
     }
+    const targetMode = toggleFocusRef.current
+    if (targetMode !== null) {
+      responsiveFocusPendingRef.current = false
+      toggleFocusRef.current = null
+      const target = targetMode.mode === "expanded"
+        ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
+        : compactDesktopRail
+          ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
+          : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
+      if (!target || target.getAttribute("aria-hidden") === "true") return
+      if (targetMode.mode === "collapsed" && targetMode.pointer) {
+        target.dataset.pointerFocus = "true"
+        target.addEventListener("blur", () => delete target.dataset.pointerFocus, { once: true })
+      }
+      target.focus({ preventScroll: true })
+      return
+    }
+
+    // A viewport crossing can replace the focused rail control without a
+    // click: 768px's temporary expansion becomes the persisted wide-layout
+    // collapsed state at 800px, and the inverse crossing replaces the wide
+    // brand trigger with the narrow header trigger. Preserve focus only when
+    // the responsive transition is removing one of those navigation controls;
+    // never steal focus from the Composer or a portaled dialog.
+    if (!responsiveFocusPendingRef.current) return
+    const active = document.activeElement
+    const navigationControl = active instanceof HTMLElement && active.matches(
+      '[data-collapsed-brand="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
+    )
+    const trackedNavigationControl = lastNavigationControlRef.current
+    const focusWasReplacedNavigationControl = trackedNavigationControl !== null
+      && (active === trackedNavigationControl
+        || (active === document.body && !trackedNavigationControl.isConnected))
+    if (!navigationControl && !focusWasReplacedNavigationControl) {
+      responsiveFocusPendingRef.current = false
+      return
+    }
+    const target = compactDesktopRail
+      ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
+      : visualCollapsed
+        ? railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
+        : null
+    if (!target || target === active || target.getAttribute("aria-hidden") === "true") return
     target.focus({ preventScroll: true })
+    responsiveFocusPendingRef.current = false
   }, [compactDesktopRail, visualCollapsed])
 
   // 会话重命名内联编辑态（CONV-UX）：editingId 命中的条目以输入框替换标题。

@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useLocale } from "@/i18n/context"
 
@@ -23,7 +24,7 @@ import styles from "./kokoro-project-workspace.module.css"
 
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
-  "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
+  "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
   | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResources" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
 >
 
@@ -84,6 +85,9 @@ export function KokoroProjectWorkspace({
   composer,
   onOpenSettings,
   projectConversations = [],
+  projectConversationsLoading = false,
+  projectConversationsError = false,
+  onRetryProjectConversations,
   activeProjectConversationId,
   onSelectProjectConversation,
   workspaceCapabilities,
@@ -238,7 +242,23 @@ export function KokoroProjectWorkspace({
           <section className={styles.conversations} aria-labelledby="project-conversation-heading">
             <h2 id="project-conversation-heading">{t("firstSite.tasks")}</h2>
             <p>{t("firstSite.tasksPrivate")}</p>
-            {projectConversations.length > 0 ? (
+            {projectConversationsLoading ? (
+              <div className={styles.conversationState} data-testid="project-conversations-loading" aria-busy="true">
+                <div className={styles.conversationLoadingRows} aria-hidden="true">
+                  <Skeleton className={styles.conversationLoadingRow} />
+                  <Skeleton className={styles.conversationLoadingRow} />
+                  <Skeleton className={styles.conversationLoadingRowShort} />
+                </div>
+                <p className={styles.conversationLoadingMessage} role="status">{t("firstSite.tasksLoading")}</p>
+              </div>
+            ) : projectConversationsError ? (
+              <div className={styles.conversationState} data-testid="project-conversations-error" role="alert" aria-labelledby="project-conversations-error-title">
+                <p id="project-conversations-error-title" className={styles.conversationErrorMessage}>{t("firstSite.tasksError")}</p>
+                <Button type="button" variant="outline" onClick={onRetryProjectConversations} disabled={!onRetryProjectConversations}>
+                  {t("firstSite.retry")}
+                </Button>
+              </div>
+            ) : projectConversations.length > 0 ? (
               <div className={styles.conversationList} role="list">
                 {projectConversations.map((conversation) => (
                   <Button

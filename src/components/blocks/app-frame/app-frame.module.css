@@ -170,14 +170,23 @@
   background: var(--sidebar-border);
   /* Keep the seam hidden/shown only after the rail geometry finishes moving.
      A shorter opacity transition exposes it at an intermediate x position. */
+  visibility: visible;
+  opacity: 1;
   left: calc(var(--rail-seam-width, var(--sidebar-width, 20rem)) - 1px);
   transition: left 200ms linear, opacity 0ms linear 200ms;
+}
+.resizer[data-seam-visible="true"] {
+  /* The seam remains a painted contract when the wide rail is collapsed. Do
+     not derive visibility from the interactive separator's focusability. */
+  visibility: visible;
+  opacity: 1;
 }
 .resizer[data-collapsed="true"] {
   /* The wide desktop contract keeps one visible seam at the 52px edge even
    * when the rail is collapsed. The handle is still removed from hit testing
    * and the tab order; only compact desktop removes the element entirely. */
   opacity: 1;
+  visibility: visible;
   pointer-events: none;
 }
 .shell[data-canvas-resizing="true"] .resizer,

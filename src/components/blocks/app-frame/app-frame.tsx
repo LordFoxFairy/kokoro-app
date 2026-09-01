@@ -999,6 +999,9 @@ export function AppFrame({
 
   // 未发送草稿（按会话持久化）与会话清单/待批/canvas 各自的 controller。
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted)
+  const createProject = useCallback(() => {
+    openProject("preview-project", draft)
+  }, [draft, openProject])
   useEffect(() => {
     // Direct Chat → project is a mounted route handoff, so the direct
     // session's draft has no stable project session id yet. Carry it through
@@ -1738,7 +1741,7 @@ export function AppFrame({
         chatHref={chatHref}
         projectHref={projectRef ? `/app/project/${encodeURIComponent(projectRef)}` : "/app/project/kokoro"}
         projectActive={projectWorkspace}
-        onCreateProject={() => openProject("preview-project")}
+        onCreateProject={createProject}
         activeNavigationKey={activeNavigationKey}
         preview={preview}
         conversations={conversations}
@@ -1764,6 +1767,7 @@ export function AppFrame({
         <div
             className={styles.resizer}
             data-seam="rail"
+            data-seam-visible="true"
             data-collapsed={resolvedRailCollapsed ? "true" : "false"}
             role="separator"
             aria-orientation="vertical"

@@ -137,3 +137,11 @@ tests/ui/sidebar-primitive.test.tsx
 - `output/playwright/rail-repair-1280-collapsed.png`
 - `output/playwright/rail-repair-1280-expanded.png`
 - `output/playwright/rail-repair-1280-direct-chat.png`
+
+## 9. 专案任务清单加载收口（2026-08-31）
+
+复测 `/app/project/{project_ref}` 时，`AppFrame` 已从 `useConversationList` 得到任务清单的
+`loading/error/refresh`，但 `KokoroProjectWorkspace` 之前只接收任务数组：首次请求或失败时会把
+空数组直接渲染成“新建一个任务以开始”，把加载态和失败态伪装成空态。现已补齐三态契约：加载时
+显示稳定的任务骨架与状态文案，失败时显示错误文案和“重试”，只有请求成功且确实为空时才显示
+空态；回归覆盖于 `tests/ui/kokoro-project-workspace.test.tsx`。

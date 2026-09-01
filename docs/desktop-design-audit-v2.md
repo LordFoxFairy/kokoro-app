@@ -4122,3 +4122,21 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 - 全部变更通过 `pnpm check`：109 个测试文件、1087 个测试、TypeScript 与 Next production build。
 
 本轮只覆盖桌面 Web；不修改手机端 Sheet，不引入跨仓库依赖，也不新增未经后端冻结的 Chat API。
+
+## v218 Rail seam 可见性与窄桌面偏好隔离（2026-08-31）
+
+本轮按 `1280px`、`800px` 和 `768px` fine-pointer 边界复核桌面 Rail 的真实 DOM 状态，收口两个回归：
+
+- 宽桌面（`>=769px`）收起时保留唯一的 `[data-seam="rail"]`。`--rail-seam-width` 为 `52px`，节点发布
+  `data-seam-visible="true"` 并保持可绘制；交互层仍通过 `pointer-events:none`、`aria-hidden=true`、
+  `tabindex=-1` 退出命中和 Tab 顺序，seam 的视觉可见性不再依赖分隔条的焦点状态。展开时同一节点跟随
+  `300px` 轨道恢复为可聚焦的 `role="separator"`。
+- 窄桌面（`<=768px` 且 `pointer:fine`）只把 rail 作为临时 presentation state 隐藏。其展开使用同一份
+  Sidebar context，但 `SidebarProvider` 关闭 `persistOpenState`，因此不会写入共享 `sidebar_state` cookie；
+  回到 `800px` 后恢复宽桌面的 cookie 偏好，而不是把临时展开态带入宽布局。
+- 视口跨过 `768px` 时，如果原焦点控制因布局切换被移除，焦点转移到新的可见入口；`800px` 收起/展开和
+  `768px` 临时展开均不把焦点留在隐藏触发器或 `body`。
+
+回归测试位于 `tests/ui/app-frame-rail.test.tsx`，并与 `workspace-rail`、Sidebar primitive、rail resize
+测试一起定向运行：4 个测试文件、61 个测试通过；对应源码通过定向 ESLint。只修改 Web Rail/provider、其测试
+和本桌面契约文档，未修改 Chat composer。

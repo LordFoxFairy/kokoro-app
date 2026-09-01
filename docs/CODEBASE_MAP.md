@@ -33,6 +33,7 @@
 - `src/agents/`, `src/system/`, `src/lib/`: preview/live adapters, runtime manifest, and shared utilities.
 - `src/app/api/`: local BFF/fixture routes; feature clients should keep canonical paths typed and isolated.
 - `docs/integration/`: backend Web contracts and mock-fixture matrix.
+- `docs/integration/chat-handoff-contract-v1.md`: Direct Chat ↔ Project Chat route, draft handoff, and shared Session contract.
 - `contract/README.md`: checked-in runtime contract source policy; there is no implicit generator or missing `contract/spec` dependency.
 
 ## Verification
