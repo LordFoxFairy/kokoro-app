@@ -191,14 +191,14 @@ export function KokoroDirectChatWelcome({
                 >
                   <DropdownMenuItem onSelect={() => {
                     setSelectedProject(brandName)
-                    onOpenProject?.("kokoro")
+                    onOpenProject?.("kokoro", draft)
                   }}>
                     <Folder data-icon="inline-start" aria-hidden="true" />
                     {brandName}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => {
                     setSelectedProject(t("firstSite.newProject"))
-                    onOpenProject?.("preview-project")
+                    onOpenProject?.("preview-project", draft)
                   }}>
                     {t("firstSite.newProject")}
                   </DropdownMenuItem>

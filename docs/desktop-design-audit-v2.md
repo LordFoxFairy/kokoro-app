@@ -4092,7 +4092,8 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 - Websites 和 Scheduled 不再是空壳：分别提供可搜索、可 pressed 选择、可保存的合成选项；排程共享 editor 保存后将新任务回填 picker，
   父 Dialog 保持唯一承接层，保存/取消恢复触发器焦点。
 - Direct Chat 的“新增到专案”不再只是改按钮文字：已有项目会通过 mounted-surface 进入 `/app/project/kokoro`，本地预览的新建动作进入
-  `/app/project/preview-project`。该路由 handoff 不等同 project-create API，生产持久化仍需后端契约。
+  `/app/project/preview-project`；当前未发送 draft 通过一次性的 sessionStorage handoff 保留并落到新 project session。该路由 handoff
+  不等同 project-create API，生产持久化仍需后端契约。
 
 真实桌面 QA：`1280×720` 本地项目页验证资源搜索网络、Skills 无匹配、网站搜索/选择/保存、排程列表与新建回填均无 console/page error；
 截图：`/tmp/kokoro-resources-dialog-v215.png`、`/tmp/kokoro-project-context-v215.png`。Direct Chat 新建专案承接验证 URL 为

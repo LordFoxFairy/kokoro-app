@@ -1253,8 +1253,9 @@ picker 内容写入 message body，也不会跨子仓库引入 `site` 目录。
   `POST /api/hub/projects/{project_ref}/scheduled-tasks`。列表选择/保存仍是本地 picker state，不声称已有 project list API。
 
 Direct Chat 的“新增到专案”菜单也只做明确的路由承接：选择已有 `Kokoro` 使用 `/app/project/kokoro`，本地预览的新建动作使用
-`/app/project/preview-project`。这是 mounted-surface 的 route handoff，不是 project-create API；生产接入 project create 前，不应将
-`preview-project` 当成持久化项目 ID。
+`/app/project/preview-project`。未发送的当前 draft 会通过一次性的 sessionStorage handoff envelope 交给新 project-scoped draft
+controller，再按新会话 ID 持久化；不会丢失用户刚刚输入的内容，也不会把 draft 伪装成一条已发送消息。这是 mounted-surface 的
+route handoff，不是 project-create API；生产接入 project create 前，不应将 `preview-project` 当成持久化项目 ID。
 
 | UI 动作 | 当前承接 | API 行为 |
 |---|---|---|

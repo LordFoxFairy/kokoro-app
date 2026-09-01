@@ -86,6 +86,35 @@ const COMMAND_SETTINGS_HANDOFF_MS = 220
 // track and exposes one header menu trigger instead of leaving a 52px strip.
 export const COMPACT_DESKTOP_RAIL_BREAKPOINT = RAIL_COMPACT_BREAKPOINT
 const PENDING_CREATION_INTENT_KEY = "kokoro.web.pending-creation-intent"
+const PENDING_PROJECT_DRAFT_PREFIX = "kokoro.web.pending-project-draft:"
+
+function pendingProjectDraftKey(projectRef: string): string {
+  return `${PENDING_PROJECT_DRAFT_PREFIX}${encodeURIComponent(projectRef)}`
+}
+
+function writePendingProjectDraft(projectRef: string, draft: string | undefined): void {
+  if (typeof window === "undefined") return
+  try {
+    const key = pendingProjectDraftKey(projectRef)
+    if (draft?.trim()) window.sessionStorage.setItem(key, draft)
+    else window.sessionStorage.removeItem(key)
+  } catch {
+    // The route handoff remains usable when storage is unavailable; the
+    // project shell still opens and the caller may provide its own adapter.
+  }
+}
+
+function takePendingProjectDraft(projectRef: string): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const key = pendingProjectDraftKey(projectRef)
+    const value = window.sessionStorage.getItem(key)
+    window.sessionStorage.removeItem(key)
+    return value?.trim() || null
+  } catch {
+    return null
+  }
+}
 
 function readRailCollapsedCookie(): boolean | null {
   if (typeof document === "undefined") return null
@@ -276,7 +305,7 @@ export type AppFrameProps = {
   /** Opaque project reference; absent selects the user's direct-chat inbox. */
   projectRef?: string
   /** Site-owned welcome project picker hands the draft to a mounted project route. */
-  onOpenProject?: (projectRef: string) => void
+  onOpenProject?: (projectRef: string, draft?: string) => void
   commandMenu?: ComponentType<AppCommandMenuProps>
 }
 
@@ -330,7 +359,7 @@ export type EmptyStateProps = {
   /** Site-owned welcome actions can hand off to shared workspace settings. */
   onOpenSettings?: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
   /** Project picker handoff used by the direct welcome surface. */
-  onOpenProject?: (projectRef: string) => void
+  onOpenProject?: (projectRef: string, draft?: string) => void
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
   onCreateCustomApi?: (returnTarget?: HTMLElement | null) => void
@@ -441,9 +470,10 @@ export function AppFrame({
   preview = false,
 }: AppFrameProps) {
   const t = useT()
-  const openProject = useCallback((nextProjectRef: string) => {
+  const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
+    writePendingProjectDraft(nextProjectRef, handoffDraft)
     if (onOpenProject) {
-      onOpenProject(nextProjectRef)
+      onOpenProject(nextProjectRef, handoffDraft)
       return
     }
     navigateMountedSurface(`/app/project/${encodeURIComponent(nextProjectRef)}`)
@@ -969,6 +999,16 @@ export function AppFrame({
 
   // 未发送草稿（按会话持久化）与会话清单/待批/canvas 各自的 controller。
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted)
+  useEffect(() => {
+    // Direct Chat → project is a mounted route handoff, so the direct
+    // session's draft has no stable project session id yet. Carry it through
+    // a one-shot sessionStorage envelope, then let the project-scoped draft
+    // controller persist it under the new session id. Existing project drafts
+    // always win; a stale envelope is consumed either way.
+    if (!mounted || !projectWorkspace || !projectRef) return
+    const handoffDraft = takePendingProjectDraft(projectRef)
+    if (handoffDraft !== null && draft.trim().length === 0) updateDraft(handoffDraft)
+  }, [draft, mounted, projectRef, projectWorkspace, updateDraft])
   const conversationsCtl = useConversationList({ engine, preview, activeId, thread, isStreaming, focusComposer, scope: sessionScope })
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
   const canvas = useCanvasWorkspace(activeId, thread, mounted)
