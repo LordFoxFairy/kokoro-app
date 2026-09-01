@@ -40,7 +40,8 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
 
   const { path } = await context.params
   const search = new URL(request.url).search
-  const target = `${config.sessionBaseUrl.replace(/\/+$/, "")}/${(path ?? []).join("/")}${search}`
+  const encodedPath = (path ?? []).map((segment) => encodeURIComponent(segment)).join("/")
+  const target = `${config.sessionBaseUrl.replace(/\/+$/, "")}/${encodedPath}${search}`
 
   const headers = new Headers()
   headers.set("authorization", `Bearer ${envelope.runtime_jwt}`)

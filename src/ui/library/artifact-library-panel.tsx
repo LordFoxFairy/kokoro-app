@@ -43,7 +43,7 @@ async function downloadArtifact(url: string, name: string): Promise<boolean> {
 }
 
 function artifactUrl(contentHash: string): string {
-  return `${sessionBaseUrl()}${artifactContentPath(encodeURIComponent(contentHash))}`
+  return `${sessionBaseUrl()}${artifactContentPath(contentHash)}`
 }
 
 type LibraryContentProps = {

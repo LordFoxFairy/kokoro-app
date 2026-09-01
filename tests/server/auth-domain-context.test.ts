@@ -44,6 +44,7 @@ describe("auth BFF deployment domain context", () => {
       KOKORO_WEB_SESSION_SECRET: "secret",
       KOKORO_GATEWAY_BASE_URL: "http://gateway.internal/",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
+      KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
@@ -66,6 +67,7 @@ describe("auth BFF deployment domain context", () => {
       KOKORO_SESSION_BASE_URL: "http://session.internal",
       KOKORO_HUB_BASE_URL: "http://hub.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
+      KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
@@ -84,6 +86,15 @@ describe("auth BFF deployment domain context", () => {
       KOKORO_WEB_SESSION_SECRET: "secret",
       KOKORO_USER_BASE_URL: "https://user.internal",
       KOKORO_SESSION_BASE_URL: "https://session.internal",
+      KOKORO_DOMAIN: "dev.kokoro.localhost",
+    } as unknown as NodeJS.ProcessEnv)).toBeNull()
+  })
+
+  it("rejects a half-configured gateway-first environment in every runtime mode", () => {
+    expect(authConfig({
+      NODE_ENV: "development",
+      KOKORO_WEB_SESSION_SECRET: "secret",
+      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })

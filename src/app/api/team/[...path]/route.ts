@@ -46,7 +46,8 @@ async function proxy(
   }
 
   const search = new URL(request.url).search
-  const target = `${config.userBaseUrl.replace(/\/+$/, "")}/bff/${segments.join("/")}${search}`
+  const encodedSegments = segments.map((segment) => encodeURIComponent(segment)).join("/")
+  const target = `${config.userBaseUrl.replace(/\/+$/, "")}/bff/${encodedSegments}${search}`
 
   const headers = new Headers()
   headers.set(SERVICE_HEADER, SERVICE_VALUE)

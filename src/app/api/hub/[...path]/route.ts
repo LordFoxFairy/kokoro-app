@@ -52,7 +52,8 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
 
   const { path } = await context.params
   const search = new URL(request.url).search
-  const target = `${config.hubBaseUrl.replace(/\/+$/, "")}/hub/${(path ?? []).join("/")}${search}`
+  const encodedPath = (path ?? []).map((segment) => encodeURIComponent(segment)).join("/")
+  const target = `${config.hubBaseUrl.replace(/\/+$/, "")}/hub/${encodedPath}${search}`
 
   const headers = new Headers()
   headers.set(SERVICE_HEADER, SERVICE_VALUE)

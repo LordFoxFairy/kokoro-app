@@ -108,7 +108,7 @@ function appendUniqueArtifacts(current: readonly ArtifactRecord[], additions: re
 }
 
 function artifactUrl(contentHash: string): string {
-  return `${sessionBaseUrl()}${artifactContentPath(encodeURIComponent(contentHash))}`
+  return `${sessionBaseUrl()}${artifactContentPath(contentHash)}`
 }
 
 function readUrlState(): LibraryUrlState {

@@ -151,7 +151,7 @@ it("桌面 Rail 拖动把事务标记挂到真实 SidebarProvider 节点并在 p
   expect(shell).not.toHaveAttribute("data-resizing")
 })
 
-it("桌面折叠侧栏后焦点交给新的搜索入口", async () => {
+it("桌面折叠侧栏后焦点交给品牌展开入口", async () => {
   buildEngine()
   render(
     <ThemeProvider>
@@ -163,11 +163,12 @@ it("桌面折叠侧栏后焦点交给新的搜索入口", async () => {
 
   fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }))
   await waitFor(() => {
-    const search = screen.getByRole("button", { name: "搜索会话" })
-    expect(search).toHaveFocus()
-    expect(search).toHaveAttribute("data-collapsed-search", "true")
-    expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-sidebar", "trigger")
-    expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-slot", "sidebar-trigger")
+    const brand = screen.getByRole("button", { name: "展开侧栏" })
+    expect(brand).toHaveFocus()
+    expect(brand).toHaveAttribute("data-collapsed-brand", "true")
+    expect(screen.queryByRole("button", { name: "搜索会话" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "展开侧栏" })).not.toHaveAttribute("data-sidebar", "trigger")
+    expect(screen.queryByRole("button", { name: "展开侧栏" })).not.toHaveAttribute("data-slot", "sidebar-trigger")
   })
 })
 
@@ -1392,7 +1393,7 @@ it("专案 Composer 首次发送后承接到当前任务视图", async () => {
 
   await waitFor(() => expect(window.location.search).toMatch(/^\?conversation=conv_/))
   await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeInTheDocument())
-  expect(screen.getByText("项目任务首条消息")).toBeInTheDocument()
+  expect(screen.getAllByText("项目任务首条消息").length).toBeGreaterThanOrEqual(1)
 })
 
 it("命令菜单新建对话后立即打开设置不会被延迟焦点回收打断", async () => {

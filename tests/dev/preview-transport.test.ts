@@ -130,4 +130,52 @@ describe("preview transport control loop", () => {
     expect(replayedEvents).toContain("message.user")
     expect(replayedEvents).toContain("message.completed")
   })
+
+  it("同一客户端在 A→B→A 切换后按本次游标重放旧会话", async () => {
+    const client = createPreviewClient({ stepMs: 0 })
+    const sessionA = `preview-switch-a-${Date.now()}-${Math.random()}`
+    const sessionB = `${sessionA}-b`
+
+    const firstA = await client.createMessage(sessionA, {
+      idempotency_key: `${sessionA}:message-1`,
+      content: "会话 A",
+    })
+    const firstAEvents: string[] = []
+    const firstAStream = client.openEvents({
+      sessionId: sessionA,
+      lastEventId: 0,
+      onEvent: (event) => firstAEvents.push(event.kind),
+      onStreamError: (error) => { throw error },
+    })
+    await waitFor(() => firstAEvents.includes("run.completed"))
+    firstAStream.close()
+
+    const firstB = await client.createMessage(sessionB, {
+      idempotency_key: `${sessionB}:message-1`,
+      content: "会话 B",
+    })
+    const firstBEvents: string[] = []
+    const firstBStream = client.openEvents({
+      sessionId: sessionB,
+      lastEventId: 0,
+      onEvent: (event) => firstBEvents.push(event.kind),
+      onStreamError: (error) => { throw error },
+    })
+    await waitFor(() => firstBEvents.includes("run.completed"))
+    firstBStream.close()
+
+    const replayedA: string[] = []
+    client.openEvents({
+      sessionId: sessionA,
+      lastEventId: 0,
+      onEvent: (event) => replayedA.push(event.kind),
+      onStreamError: (error) => { throw error },
+    })
+    await waitFor(() => replayedA.includes("run.completed"))
+
+    expect(firstA.run_id).not.toBe(firstB.run_id)
+    expect(replayedA).toContain("session.created")
+    expect(replayedA).toContain("message.user")
+    expect(replayedA).toContain("message.completed")
+  })
 })

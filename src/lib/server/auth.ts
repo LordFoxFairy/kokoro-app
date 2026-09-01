@@ -38,7 +38,7 @@ export interface AuthConfig {
   paymentBaseUrl: string | null
   // billing 迁移面；配置后新契约优先，未配置时保留 payment 旧读面用于双读切换。
   billingBaseUrl: string | null
-  // web-bff 出站内部凭据；非生产可省略，生产缺失时 authConfig 返回 null。
+  // web-bff 出站内部凭据；只要走统一 Gateway 就必须配置，生产直连也必须配置。
   internalSecret: string | null
   // 仅 dev：mock 支付网关 webhook 签名密钥（模拟收银台 BFF 据此签发支付成功回调驱动到账）。生产为 null。
   mockWebhookSecret: string | null
@@ -74,6 +74,12 @@ export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | n
   const domain = configuredDomain(env)
   const internalSecret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
   if (!secretRaw || !userBaseUrl || !sessionBaseUrl || !domain) {
+    return null
+  }
+  // Gateway always authenticates the Web BFF, regardless of NODE_ENV. Do not
+  // let a half-configured gateway-first deployment reach runtime and turn
+  // every request into an opaque 401 from the gateway.
+  if (gatewayBaseUrl !== null && internalSecret === null) {
     return null
   }
   if (env.NODE_ENV === "production" && internalSecret === null) {

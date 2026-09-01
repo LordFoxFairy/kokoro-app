@@ -296,7 +296,7 @@ it("收起态不保留隐藏标签或会话操作按钮", () => {
   expect(rail?.querySelectorAll('[data-sidebar="menu-action"]')).toHaveLength(0)
 })
 
-it("鼠标收起时搜索入口 focus 不挂错误 ring 标记，键盘收起不走 pointer 标记", async () => {
+it("鼠标收起时品牌入口 focus 不挂错误 ring 标记，键盘收起不走 pointer 标记", async () => {
   function ControlledRail() {
     const [collapsed, setCollapsed] = useState(false)
     return <WorkspaceRail
@@ -321,18 +321,20 @@ it("鼠标收起时搜索入口 focus 不挂错误 ring 标记，键盘收起不
   render(<ThemeProvider><LocaleProvider><ControlledRail /></LocaleProvider></ThemeProvider>)
   const collapse = screen.getByRole("button", { name: "收起侧栏" })
   fireEvent.click(collapse, { detail: 1 })
-  await waitFor(() => expect(screen.getByRole("button", { name: "搜索会话" })).toHaveFocus())
-  expect(screen.getByRole("button", { name: "搜索会话" })).toHaveAttribute("data-pointer-focus", "true")
+  await waitFor(() => expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveFocus())
+  expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-pointer-focus", "true")
 
-  fireEvent.click(screen.getByRole("button", { name: "搜索会话" }))
+  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }))
+  const search = screen.getByRole("button", { name: "搜索会话" })
+  fireEvent.click(search)
   const searchInput = await screen.findByRole("searchbox", { name: "搜索最近会话" })
   expect(searchInput).toHaveFocus()
   fireEvent.keyDown(searchInput, { key: "Escape" })
   await waitFor(() => expect(screen.getByRole("button", { name: "搜索会话" })).toHaveFocus())
   expect(screen.getByRole("button", { name: "收起侧栏" })).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "收起侧栏" }), { detail: 0 })
-  await waitFor(() => expect(screen.getByRole("button", { name: "搜索会话" })).toHaveFocus())
-  expect(screen.getByRole("button", { name: "搜索会话" })).not.toHaveAttribute("data-pointer-focus")
+  await waitFor(() => expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveFocus())
+  expect(screen.getByRole("button", { name: "展开侧栏" })).not.toHaveAttribute("data-pointer-focus")
 })
 
 it("活动导航用 aria-current 固定路由切换期间的选中语义", () => {
@@ -644,7 +646,7 @@ it("品牌入口由站点路由契约提供，而不是被 rail 写死", () => {
   expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/custom-chat")
 })
 
-it("桌面折叠态先显示搜索入口，展开后搜索仍可用", async () => {
+it("桌面折叠态只显示品牌展开入口，展开后搜索仍可用", async () => {
   function ControlledRail() {
     const [collapsed, setCollapsed] = useState(true)
     return <WorkspaceRail
@@ -666,7 +668,8 @@ it("桌面折叠态先显示搜索入口，展开后搜索仍可用", async () =
     />
   }
   render(<ThemeProvider><LocaleProvider><ControlledRail /></LocaleProvider></ThemeProvider>)
-  expect(screen.getByRole("button", { name: "搜索会话" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "展开侧栏" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "搜索会话" })).toBeNull()
 
   const expand = screen.getByRole("button", { name: "展开侧栏" })
   fireEvent.click(expand)

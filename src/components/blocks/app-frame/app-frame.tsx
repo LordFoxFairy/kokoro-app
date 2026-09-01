@@ -446,6 +446,31 @@ function DefaultEmptyState({ brandName }: EmptyStateProps) {
   )
 }
 
+function AppFrameLoadingSurface() {
+  const t = useT()
+  return (
+    <div
+      className={styles.loadingSurface}
+      data-testid="app-frame-loading"
+      role="status"
+      aria-label={t("shell.loadingApp")}
+    >
+      <div className={styles.loadingReadingTrack} aria-hidden="true">
+        <span className={styles.loadingLine} />
+        <span className={styles.loadingLineShort} />
+      </div>
+      <div className={styles.loadingComposer} aria-hidden="true">
+        <span className={styles.loadingComposerLine} />
+        <span className={styles.loadingComposerControls}>
+          <i />
+          <i />
+          <i />
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function AppFrame({
   engine: injectedEngine,
   brandName,
@@ -950,11 +975,20 @@ export function AppFrame({
   const isStreaming = machine.phase !== "idle" && machine.phase !== "error"
   const isReconnecting = machine.phase === "reattaching"
   const hasMessages = thread.messages.length > 0
+  // App Router navigation updates the address bar before the mounted shell's
+  // route effect gets a frame to publish `conversationRouteId`. Read the
+  // current URL during that already-mounted client render so a deep-linked
+  // project task never falls through to an empty stage for one or more
+  // frames. The state value remains the SSR-safe fallback and is still used
+  // by tests/injected engines before the browser has mounted.
+  const resolvedConversationRouteId = mounted
+    ? conversationIdFromLocation()
+    : conversationRouteId
   // A mounted shell can cross from direct chat into a project overview without
   // replacing the engine instance. The URL is authoritative for that route:
   // never paint the direct thread while the project has no conversation route,
   // and never paint a stale thread while a deep-link is being opened.
-  const routeOwnsConversation = !projectWorkspace || (conversationRouteId !== null && conversationRouteId === activeId)
+  const routeOwnsConversation = !projectWorkspace || (resolvedConversationRouteId !== null && resolvedConversationRouteId === activeId)
   const showConversation = hasMessages && !standaloneSurface && routeOwnsConversation
   // 失败双源：client/机器错误态（machine.error）与 agent 裁决的 run.failed 终态，都显式呈现。
   const hasFailed = !isStreaming && (machine.phase === "error" || thread.runStatus === "failed")
@@ -1431,7 +1465,7 @@ export function AppFrame({
   const conversations = conversationsCtl.conversations
   // Keep the mobile presentation untouched: the project overview remains the
   // existing mobile surface until that layout is explicitly revisited.
-  const projectTaskView = projectWorkspace && conversationRouteId !== null && !narrowWeb
+  const projectTaskView = projectWorkspace && resolvedConversationRouteId !== null && !narrowWeb
   // Creation intent belongs to the direct-chat draft. A project workspace has
   // its own website/resources capabilities and must not inherit a pending
   // homepage mode merely because both surfaces share the Composer primitive.
@@ -1576,7 +1610,7 @@ export function AppFrame({
         data-canvas-reopen={canvas.canReopenCanvas ? "true" : undefined}
       >
         {!mounted ? (
-          <div className={styles.stage} aria-hidden />
+          <AppFrameLoadingSurface />
         ) : showConversation ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
             <ConversationThread

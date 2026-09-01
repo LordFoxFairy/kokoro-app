@@ -4162,3 +4162,33 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 - coarse-pointer 手机仍由 `useIsMobile` 走既有移动项目 surface，不改变手机端布局契约。
 
 验证：真实 `751×674` 与 `1280×720` 桌面视口分别验证项目任务空态、Project Chat 首发、Direct Chat 首发和网站胶囊取消；相关组件定向测试通过。本轮只修改 Web 的项目任务 CSS，不新增 Chat API，也不引入跨仓库代码。
+
+## v221 收起 Rail 首控件与 Chat Preview 切换回放（2026-09-01）
+
+本轮纠正上一版收起 Rail 说明与实际 Manus 不一致的问题，并复核用户反馈的“点击后空白/布局跑到中间”：
+
+- 宽桌面 `52px` Rail 的首个且唯一的顶部控制现在是站点自有品牌标记，不再在收起态额外挂载 Search 与 Panel-left 两个控件；品牌标记点击后展开同一 Sidebar，展开态才显示 Search 与收起按钮。
+- 收起态 Header 固定为 `56px`，品牌标记图形为 `28×28px`、按钮命中区为 `32×32px`，主导航图标从 `y=73` 开始，随后以 `37px` 节奏排列；Project 分隔线、底部设备/通知/账户锚点与 Manus 真实 `1280×720` 坐标一致。
+- Rail 收起/展开焦点以实际存在的品牌入口与展开态 Sidebar trigger 交接，使用 `preventScroll`；中间过渡仍由 Sidebar 的宽度 transition 承担，内容列不再短暂居中或出现重复入口。
+- Preview SSE 的重放游标改为每次 `openEvents` 调用的 stream-local `lastEventId`，并用 generation 丢弃旧 subscriber；同一客户端在 A→B→A 切换时会按 A 的游标重放完整历史，不会回到空白线程。
+- Session/Hub/Team BFF 对 catch-all path 按 segment 编码；共享 HTTP contract 对 session/run/decision/hash/share 等 opaque reference 只编码一次，层级文件路径仍由文件 URL builder 逐段编码。
+- 统一 Gateway base 与 `KOKORO_INTERNAL_SECRET_WEB_BFF` 现在是成对配置；仅纯 preview 可省略二者，避免 Gateway-first 的开发/测试环境启动后才收到统一 `401`。
+
+真实桌面 QA：本地 `1280×720` 收起 Rail 的品牌图标与导航 SVG 坐标逐项对齐 Manus；点击品牌展开到 `300px`，再收起回 `52px`，无 Dialog/Popover、无 URL 变化、无横向跳位。项目深链
+`/app/project/kokoro?conversation=...` 在刷新后显示完整用户/助手时间线与 Composer。只覆盖桌面 Web，品牌图形使用 Kokoro 自有中性 fallback，不读取或复制 Manus Logo。
+
+## v222 Project Chat 首屏加载布局（2026-09-01）
+
+本轮复现用户反馈的项目 Chat “只有 Header、正文整页空白”。根因是 `useHydrated()` 在 SSR/水合首帧返回
+`false` 时，AppFrame 将整个正文替换为 `aria-hidden` 的零内容节点；项目 deep link 的会话 snapshot 又在之后
+异步打开，导致用户先看到空白，再看到完整时间线。
+
+- 水合期间改为稳定的可见 loading surface：保留阅读轨道与底部 Composer 轮廓，不再渲染零内容 stage。
+- 已挂载的 App Router 路由切换直接读取当前 `conversation` query 作为路由投影，避免 route effect 尚未提交时将
+  project task 错误落回项目 overview。
+- loading surface 复用桌面 Web 的 `48rem` reading/composer measure，不改变已挂载会话、Composer、Rail
+  或移动端 surface 的布局 contract；会话 ready 后替换为真实 timeline/Composer。
+
+证据：`curl` 的 project deep-link SSR HTML 包含 `data-testid="app-frame-loading"`；真实桌面
+`1280×720` 刷新 `.../app/project/kokoro?conversation=...` 后最终保持用户消息、助手预览、任务进度和
+Composer 可见，控制台无 error/warn。只覆盖桌面 Web，loading 状态不承诺后端 session 已成功。

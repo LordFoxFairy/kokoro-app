@@ -36,7 +36,7 @@ export function deliveryUrl(sessionId: string, contentHash: string): string {
   if (contentHash.startsWith("preview-")) {
     return `/api/dev/preview-files/${encodeURIComponent(contentHash)}`
   }
-  return `${sessionBaseUrl()}${deliveryPath(sessionId, encodeURIComponent(contentHash))}`
+  return `${sessionBaseUrl()}${deliveryPath(sessionId, contentHash)}`
 }
 
 // 下载走鉴权 fetch → blob（<a href> 直连端点鉴权开启后 401）。

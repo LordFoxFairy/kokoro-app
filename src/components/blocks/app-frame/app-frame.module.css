@@ -456,6 +456,68 @@
   to { opacity: 1; transform: translateY(0); }
 }
 .stage { flex: 1; min-height: 0; }
+.loadingSurface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  padding: 1.5rem 1rem 0.75rem;
+  background: var(--background);
+}
+.loadingReadingTrack {
+  display: flex;
+  width: min(46rem, 100%);
+  flex: 1;
+  min-height: 8rem;
+  margin-inline: auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding-top: 2rem;
+  opacity: 0.36;
+}
+.loadingLine,
+.loadingLineShort {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 18%, transparent);
+}
+.loadingLine { width: min(18rem, 68%); }
+.loadingLineShort { width: min(11rem, 42%); }
+.loadingComposer {
+  display: flex;
+  width: min(48rem, 100%);
+  min-height: 6rem;
+  margin-inline: auto;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+  border-radius: 1.45rem;
+  padding: 1rem 0.9rem 0.65rem;
+  background: var(--background);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.loadingComposerLine {
+  display: block;
+  width: min(15rem, 55%);
+  height: 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+}
+.loadingComposerControls {
+  display: flex;
+  gap: 0.55rem;
+}
+.loadingComposerControls i {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 999px;
+}
 .timelineStage {
   position: relative;
   display: flex;

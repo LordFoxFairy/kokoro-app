@@ -1379,3 +1379,45 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 - 环境说明：`docs/deployment.md`、`.env.local.example`、`.env.test.example`、`.env.prod.example`、`.env.production.example`
 
 本文件只描述当前 kokoro 子仓库能从上述实现闭环验证的接口；matrix 中尚未注册的 canonical route、跨仓 backend 假设和未接线的 client type 不在本版契约中。
+
+## 14. 当前闭环修正（v221）
+
+### 14.1 Gateway-first 配置成对规则
+
+`KOKORO_GATEWAY_BASE_URL` 表示 Web BFF 统一通过独立 `kokoro-gateway` 路由业务 namespace。只要该变量非空，
+必须同时提供 `KOKORO_INTERNAL_SECRET_WEB_BFF`；Gateway 会校验 `x-kokoro-service=web-bff` 与该内部凭据。
+`Forwarded: host=<KOKORO_DOMAIN>` 仅是服务端生成的路由上下文，不是认证方式。纯本地 preview 可以同时省略 Gateway
+与内部凭据；`.env.local`、`.env.test` 只有在切换 Gateway-first live fixture 时才填写这两个变量。
+
+### 14.2 Opaque path segment 规则
+
+以下值都是不透明引用，必须由共享 contract 或 BFF 按 URL path segment 编码：`session_id`、`run_id`、`decision_id`、
+`share_id`、`content_hash`、`project_ref` 以及动态用户/Hub route segment。编码后的值不能再次手工编码；真正的
+层级文件路径由调用方对每一段单独编码。这样 `a/b?c#d%20` 不会改变 upstream 的路由段、query 或 fragment。
+
+### 14.3 Preview stream cursor
+
+`openEvents({ sessionId, lastEventId, onEvent, onStreamError })` 的 `lastEventId` 是当前 SSE stream 的起始游标，
+不是客户端跨会话共享的确认位。Preview 与真实 SessionClient 均按 `seq > lastEventId` 续流；客户端在 A→B→A
+切换时必须按 A 当前的 snapshot watermark/本次游标重放，不得使用 B 或旧 stream 的状态。
+
+### 14.4 Project workspace 未冻结接口
+
+Project website binding、project scheduled list/link/update、持久化 project create/link 仍未登记 canonical wire schema；
+当前 Web 仅保留明确标记的 local projection。Project scheduled create 现有兼容路径的 body/response 仍需由 Hub 子仓库
+冻结后再升级为 typed adapter，不把本地 picker state 宣称为跨设备业务闭环。
+
+## 15. Project Chat 首屏 loading 与 route projection（v222）
+
+Project Chat deep link 的 `conversation` 仍是 opaque `SESSION_ID`，不新增 API。首屏 snapshot/SSE 尚未返回时，
+Web BFF/SessionClient 的请求保持既有路径，UI 由 AppFrame 提供稳定 loading surface：
+
+```text
+GET /api/session/sessions/{SESSION_ID}
+GET /api/session/sessions/{SESSION_ID}/events
+```
+
+loading surface 只表达“正在建立当前视图”，不表达 session 已存在、授权成功或任务已开始；收到可解析 snapshot
+或事件后才显示真实 `ConversationThread`。App Router 已挂载切换期间，当前 URL 的 `conversation` 直接参与 route
+projection，避免 route effect 的一帧延迟把项目任务错误显示成空白项目 overview。该修复只在 `kokoro-app` 内部，
+不引入 Gateway、Session 或其他子仓库代码，也不改变移动端 contract。

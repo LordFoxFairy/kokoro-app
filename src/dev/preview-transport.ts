@@ -31,8 +31,8 @@ type PreviewSession = {
   started: boolean
   queued: SessionEvent[]
   history: SessionEvent[]
-  lastDeliveredSeq: number
-  subscriber: OpenEventsArgs["onEvent"] | null
+  subscriber: { generation: number; onEvent: OpenEventsArgs["onEvent"] } | null
+  streamGeneration: number
   // 清单展示用：首条消息内容充当标题 + 最近活动时间（切走后会话仍留在侧栏，供 HITL 徽标走查）。
   title: string
   updatedAt: string
@@ -115,8 +115,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     [...readPersistedSessions()].map(([sessionId, persisted]) => [sessionId, {
       ...persisted,
       queued: [],
-      lastDeliveredSeq: 0,
       subscriber: null,
+      streamGeneration: 0,
     }]),
   )
   const timers = new Set<ReturnType<typeof setTimeout>>()
@@ -153,8 +153,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       started: false,
       queued: [],
       history: [],
-      lastDeliveredSeq: 0,
       subscriber: null,
+      streamGeneration: 0,
       title: "",
       updatedAt: new Date().toISOString(),
       projectRef: null,
@@ -163,20 +163,26 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     return created
   }
 
-  const drain = (session: PreviewSession): void => {
-    if (!session.subscriber || session.queued.length === 0) {
+  const drain = (session: PreviewSession, generation: number): void => {
+    const subscriber = session.subscriber
+    if (!subscriber || subscriber.generation !== generation || session.queued.length === 0) {
       return
     }
     const event = session.queued.shift()
     if (event) {
-      session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, event.seq)
-      session.subscriber(event)
+      subscriber.onEvent(event)
     }
     const timer = setTimeout(() => {
       timers.delete(timer)
-      drain(session)
+      drain(session, generation)
     }, stepMs)
     timers.add(timer)
+  }
+
+  const drainActive = (session: PreviewSession): void => {
+    const generation = session.subscriber?.generation
+    if (generation === undefined) return
+    drain(session, generation)
   }
 
   const queueEvents = (session: PreviewSession, events: SessionEvent[]): void => {
@@ -248,7 +254,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           pending_tool_ids: [toolId],
         }),
       ])
-      drain(session)
+      drainActive(session)
       return
     }
     // Long-answer fixture: keeps desktop visual QA grounded in the real
@@ -270,7 +276,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
         envelope("run.completed", { status: "completed" }),
       ])
-      drain(session)
+      drainActive(session)
       return
     }
     // 预览失败态演练：消息以 `!fail:<code>` 起头则合成对应 run.failed，供 ERROR-UX 卡片人工走查。
@@ -293,7 +299,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         }),
         envelope("run.completed", { status: "completed" }),
       ])
-      drain(session)
+      drainActive(session)
       return
     }
     const failMatch = /^!fail:([a-z_]+)/.exec(content.trim())
@@ -315,7 +321,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           message: `Synthetic failure for preview: ${requestedCode}${code === requestedCode ? "" : " (using internal_error)"}\n  at previewTransport.enqueueRun (dev harness)`,
         }),
       ])
-      drain(session)
+      drainActive(session)
       return
     }
     queueEvents(session, [
@@ -331,7 +337,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
       envelope("run.completed", { status: "completed" }),
     ])
-    drain(session)
+    drainActive(session)
   }
 
   return {
@@ -430,24 +436,30 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           envelope("run.completed", { status: "completed" }),
         ])
       }
-      drain(session)
+      drainActive(session)
       return Promise.resolve({ ok: true })
     },
     deleteSession: () => Promise.resolve({ status: "deleted" }),
     renameSession: () => Promise.resolve({ ok: true as const }),
 
-    openEvents: ({ sessionId, onEvent }): EventStreamHandle => {
+    openEvents: ({ sessionId, lastEventId = 0, onEvent }): EventStreamHandle => {
       const session = sessionFor(sessionId)
-      session.subscriber = onEvent
+      const generation = session.streamGeneration + 1
+      session.streamGeneration = generation
+      session.subscriber = { generation, onEvent }
       // Rebuild pending delivery from persisted history. This lets a refreshed
       // project deep link replay the same reducer path instead of rendering an
-      // empty shell after the in-memory preview client was recreated.
-      session.queued = session.history.filter((event) => event.seq > session.lastDeliveredSeq)
-      drain(session)
+      // empty shell after the in-memory preview client was recreated. The
+      // cursor is local to this stream: returning to a previous conversation
+      // must honor that call's Last-Event-ID rather than a stale cursor from a
+      // different conversation or an earlier stream.
+      session.queued = session.history.filter((event) => event.seq > lastEventId)
+      drain(session, generation)
       return {
         close: () => {
-          if (session.subscriber === onEvent) {
+          if (session.subscriber?.generation === generation) {
             session.subscriber = null
+            session.queued = []
           }
         },
       }

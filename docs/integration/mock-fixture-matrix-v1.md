@@ -802,6 +802,16 @@ envelope 当成后端 project-create/link 契约。
 以上均为 `kokoro-app` 独立子仓库的桌面 Web 合成 fixture。网站 list/link 与 project create 尚无已冻结的 BFF wire schema；这些
 本地交互不构成后端 endpoint 证据，真实接入时必须先补充对应 typed contract。
 
+## 52. Project Chat hydration loading fixture v222
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `chat.project-hydration.loading.v222` | 刷新 `/app/project/{project_ref}?conversation={SESSION_ID}` | snapshot/SSE 尚未完成时显示可见的 reading/composer loading surface；不显示 header-only 空白 stage |
+| `chat.project-hydration.route-projection.v222` | 已挂载 shell 从 `/app` 切换到 project conversation deep link | 当前 URL 的 `conversation` 立即参与 surface projection；route effect 延迟期间不回退到错误的项目 overview |
+
+这两个 fixture 只验证 `kokoro-app` 桌面 Web 的水合与路由投影；loading surface 不是 Session API 成功响应，
+真实 timeline 仍需等 typed SessionClient 的 snapshot/SSE 事件。移动端不在本 fixture 范围内。
+
 ## 50. Project Chat preview rehydration v218
 
 | Fixture key | 触发 | 断言 |
@@ -812,3 +822,16 @@ envelope 当成后端 project-create/link 契约。
 Preview persistence 的唯一浏览器 key 是 `kokoro.preview.sessions.v1`，值只包含合成 session metadata 与
 已通过 `parseSessionEvent` 的事件历史；不包含 Cookie、token、租户、站点或原始 Manus 数据。该 fixture
 只验证 `kokoro-app` 本地 Web 行为，Live Session 仍以服务端的 `project_ref` 接收、持久化和列表过滤契约为准。
+
+## 51. Rail first control / preview stream cursor / gateway pairing v221
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `rail.collapsed.brand-expand.v221` | 宽桌面 `>=769px` 收起 Rail | 顶部只挂载一个 `32×32px` 品牌展开按钮；Search 与 Panel-left 不在收起态 DOM 中；点击后恢复同一 `300px` Rail |
+| `rail.collapsed.manus-rhythm.v221` | `1280×720` 收起 Rail | 品牌图形 `28×28px` 位于 `(12,14)`；一级导航 SVG 从 `y=73` 起每 `37px`；Project/Task 为 `y=315/353`；footer 锚点保持 `y=615/651` |
+| `chat.preview.switch-replay.v221` | 同一 preview client 完成 A，切换 B，再返回 A | `openEvents(lastEventId=0)` 只按 A 的历史重放；旧 subscriber/timer 不投递给当前 stream；A 的 user/assistant/run completed 重新出现 |
+| `http.opaque-path-segment.v221` | session/Hub/Team route 参数含 `/`, `?`, `#`, `%` | 每个动态段在 BFF/contract 边界只编码一次；层级文件路径仍按路径段编码；query/fragment 不会逃逸到 upstream URL |
+| `gateway.secret-pair.v221` | 配置 `KOKORO_GATEWAY_BASE_URL` 但未配置 BFF secret | `authConfig` 返回未配置态；纯 preview 不配置 Gateway 时仍可启动；Gateway-first 环境必须同时注入 `KOKORO_INTERNAL_SECRET_WEB_BFF` |
+
+以上均为 `kokoro-app` 独立子仓库的桌面 Web/HTTP fixture；Gateway 的真实请求转发回归位于独立
+`kokoro-gateway` 子仓库，不把 Gateway 源码或 `site` 目录引入 Web。

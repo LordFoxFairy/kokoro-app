@@ -177,24 +177,15 @@ function WorkspaceRailContent({
   // touch Sheet's native Link behavior unchanged.
   const mountedSurfacePrefetch = isMobile ? undefined : false
   // The narrow desktop shell removes the rail from layout altogether. Keep
-  // only the header menu reachable in that state; the normal 52px rail still
-  // owns its Search and rail-toggle controls on wide desktop.
-  const showCollapsedSearch = compactDesktop && !compactDesktopRail
+  // only the header menu reachable in that state; the normal 52px rail uses
+  // the product mark itself as the single expand affordance, matching Manus.
+  const showCollapsedBrand = compactDesktop && !compactDesktopRail
   const navigationExpanded = !compactDesktop
   // Route-owned navigation changes replace the tooltip trigger tree. Radix's
   // uncontrolled tooltip otherwise keeps the old portal open while the
   // pointer remains over the reused compact-rail anchor.
   const navigationTransitionKey = `${activeNavigationKey ?? "none"}:${projectActive ? "project" : "direct"}`
 
-  // The compact Search control remains mounted while the rail expands. Clear
-  // a pointer handoff marker left on that node before a later keyboard collapse can
-  // inherit stale styling; this is focus bookkeeping, not tooltip state.
-  useEffect(() => {
-    if (!isMobile && !compactDesktop) {
-      const collapsedSearch = railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-search="true"]')
-      if (collapsedSearch) delete collapsedSearch.dataset.pointerFocus
-    }
-  }, [compactDesktop, isMobile])
   const closeNavigation = useCallback(() => {
     if (isMobile) setOpenMobile(false)
   }, [isMobile, setOpenMobile])
@@ -238,7 +229,7 @@ function WorkspaceRailContent({
     const onFocusIn = (event: FocusEvent) => {
       const target = event.target
       if (target instanceof HTMLElement && target.matches(
-        '[data-collapsed-search="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
+        '[data-collapsed-brand="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
       )) {
         lastNavigationControlRef.current = target
       }
@@ -263,8 +254,8 @@ function WorkspaceRailContent({
       const target = targetMode.mode === "expanded"
         ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
         : compactDesktopRail
-          ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
-          : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-search="true"]')
+        ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
+          : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
       if (!target || target.getAttribute("aria-hidden") === "true") return
       if (targetMode.mode === "collapsed" && targetMode.pointer) {
         target.dataset.pointerFocus = "true"
@@ -283,7 +274,7 @@ function WorkspaceRailContent({
     if (!responsiveFocusPendingRef.current) return
     const active = document.activeElement
     const navigationControl = active instanceof HTMLElement && active.matches(
-      '[data-collapsed-search="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
+      '[data-collapsed-brand="true"], [data-rail-anchor="rail-toggle"], [data-web-navigation-trigger="true"]',
     )
     const trackedNavigationControl = lastNavigationControlRef.current
     const focusWasReplacedNavigationControl = trackedNavigationControl !== null
@@ -296,7 +287,7 @@ function WorkspaceRailContent({
     const target = compactDesktopRail
       ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
       : visualCollapsed
-        ? railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-search="true"]')
+        ? railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
         : null
     if (!target || target === active || target.getAttribute("aria-hidden") === "true") return
     target.focus({ preventScroll: true })
@@ -315,10 +306,8 @@ function WorkspaceRailContent({
     if (!searchOpen) {
       return
     }
-    // Collapsed desktop search first asks the shadcn provider to expand the
-    // rail. Focus after the layout commit, and repeat when visualCollapsed
-    // changes, so the first focus attempt never gets stranded on a hidden
-    // input during the width transition.
+    // Focus after the layout commit, and repeat when visualCollapsed changes,
+    // so the first focus attempt never gets stranded during the width transition.
     searchInputRef.current?.focus()
     const frame = window.requestAnimationFrame(() => {
       searchInputRef.current?.focus()
@@ -376,9 +365,8 @@ function WorkspaceRailContent({
     window.requestAnimationFrame(() => searchToggleRef.current?.focus())
   }
 
-  // The collapsed desktop rail still exposes search as a first-class action.
-  // Expand the shadcn sidebar before revealing the field so the control never
-  // opens into an invisible panel or leaves the user in an ambiguous state.
+  // Search belongs to the expanded rail. The collapsed desktop rail has one
+  // stable control—the product mark—which expands the same Sidebar context.
   const openSearch = () => {
     if (compactDesktop) {
       setOpen(true)
@@ -413,24 +401,31 @@ function WorkspaceRailContent({
         data-desktop-rail={!isMobile ? "true" : undefined}
       >
       <SidebarHeader className={styles.head}>
-        {showCollapsedSearch ? <Button
-          className={styles.collapsedSearch}
-          data-collapsed-search="true"
-          data-rail-anchor="collapsed-search"
+        {showCollapsedBrand ? <Button
+          className={styles.collapsedBrand}
+          data-collapsed-brand="true"
+          data-rail-anchor="collapsed-brand"
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={t("rail.searchAria")}
-          title={t("rail.searchAria")}
-          aria-expanded={searchOpen}
-          aria-pressed={searchOpen}
-          tabIndex={showCollapsedSearch ? 0 : -1}
+          aria-label={t("rail.expandAria")}
+          title={t("rail.expandAria")}
+          aria-expanded={false}
           onPointerDown={(event) => {
+            const pointerType = event.pointerType as string
+            togglePointerRef.current = pointerType === "mouse" || pointerType === "pen" || pointerType === ""
             markPointerFocus(event)
           }}
-          onClick={openSearch}
+          onClick={(event) => {
+            const pointerActivation = togglePointerRef.current || event.detail > 0
+            toggleFocusRef.current = { mode: "expanded", pointer: pointerActivation }
+            togglePointerRef.current = false
+            setOpen(true)
+          }}
         >
-          <Search className={styles.icon} aria-hidden="true" />
+          <span className={styles.brandMark} aria-hidden="true">
+            <BrandMark logoUrl={brandLogoUrl} imageClassName={styles.brandLogo} fallback={fallbackBrandMark} />
+          </span>
         </Button> : null}
         {!compactDesktop ? <Link
           className={styles.brand}
@@ -449,7 +444,7 @@ function WorkspaceRailContent({
         </Link> : null}
 
         <div className={styles.headActions}>
-          {/* 搜索切换：仅过滤本地「最近」列表，故收起态（列表已隐藏）不显此键。 */}
+          {/* 搜索切换：仅过滤本地「最近」列表，故只在展开态显示。 */}
           {!compactDesktop ? <Button variant="ghost"
             size="icon-sm"
             className={cn(styles.headBtn, styles.searchToggle)}
@@ -466,7 +461,7 @@ function WorkspaceRailContent({
               shadcn focus ring. Wrapping it in Tooltip makes the post-click
               focus handoff open a label over the page exactly when the rail
               collapses, obscuring the project identity. */}
-          <SidebarTrigger
+          {!compactDesktop ? <SidebarTrigger
             size="icon-sm"
             className={styles.headBtn}
             type="button"
@@ -501,7 +496,7 @@ function WorkspaceRailContent({
               // compact trigger while expanding leaves a stale focus ring and
               // can make a tooltip appear during the width handoff.
             }}
-          />
+          /> : null}
         </div>
       </SidebarHeader>
 

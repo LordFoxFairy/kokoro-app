@@ -358,26 +358,34 @@ export type ScheduledTaskError = z.infer<typeof scheduledTaskErrorSchema>
 export const SESSION_RUN_ACTIVE = "session_run_active"
 export const LAST_EVENT_ID_HEADER = "last-event-id"
 
+// IDs and hashes are opaque path segments. Encode them at the shared contract
+// boundary so a value containing `/`, `?`, `#`, or `%` cannot change the
+// upstream route shape. Hierarchical file paths are encoded by their caller
+// one segment at a time and remain intentionally separate from this helper.
+function opaquePathSegment(value: string): string {
+  return encodeURIComponent(value)
+}
+
 export function messagesPath(sessionId: string): string {
-  return `/sessions/${sessionId}/messages`
+  return `/sessions/${opaquePathSegment(sessionId)}/messages`
 }
 export function snapshotPath(sessionId: string): string {
-  return `/sessions/${sessionId}`
+  return `/sessions/${opaquePathSegment(sessionId)}`
 }
 export function eventsPath(sessionId: string): string {
-  return `/sessions/${sessionId}/events`
+  return `/sessions/${opaquePathSegment(sessionId)}/events`
 }
 export function filePath(sessionId: string, path: string): string {
-  return `/sessions/${sessionId}/files/${path}`
+  return `/sessions/${opaquePathSegment(sessionId)}/files/${path}`
 }
 export function deliveryPath(sessionId: string, contentHash: string): string {
-  return `/sessions/${sessionId}/deliveries/${contentHash}`
+  return `/sessions/${opaquePathSegment(sessionId)}/deliveries/${opaquePathSegment(contentHash)}`
 }
 export function controlPath(sessionId: string, runId: string): string {
-  return `/sessions/${sessionId}/runs/${runId}/control`
+  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control`
 }
 export function controlReceiptPath(sessionId: string, runId: string, decisionId: string): string {
-  return `/sessions/${sessionId}/runs/${runId}/control/${decisionId}`
+  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control/${opaquePathSegment(decisionId)}`
 }
 export function sessionsPath(): string {
   return `/sessions`
@@ -401,16 +409,16 @@ export function artifactsPath(): string {
   return `/artifacts`
 }
 export function artifactContentPath(contentHash: string): string {
-  return `/artifacts/${contentHash}`
+  return `/artifacts/${opaquePathSegment(contentHash)}`
 }
 export function sharePath(sessionId: string): string {
-  return `/sessions/${sessionId}/share`
+  return `/sessions/${opaquePathSegment(sessionId)}/share`
 }
 export function sharedSnapshotPath(shareId: string): string {
-  return `/shared/${shareId}`
+  return `/shared/${opaquePathSegment(shareId)}`
 }
 export function renameSessionPath(sessionId: string): string {
-  return `/sessions/${sessionId}/title`
+  return `/sessions/${opaquePathSegment(sessionId)}/title`
 }
 export function scheduledTasksPath(): string {
   return "/api/scheduled-tasks"
