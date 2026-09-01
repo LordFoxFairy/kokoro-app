@@ -116,6 +116,24 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   })
 })
 
+it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () => {
+  document.cookie = "sidebar_state=false; path=/"
+  setFinePointerMedia(true)
+  mountFrame()
+
+  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const compactTrigger = await waitFor(() => {
+    const target = shell?.querySelector<HTMLButtonElement>('[data-web-navigation-trigger="true"]')
+    expect(target).not.toBeNull()
+    return target as HTMLButtonElement
+  })
+  expect(shell).toHaveAttribute("data-rail-hidden", "true")
+
+  fireEvent.click(compactTrigger)
+  await waitFor(() => expect(shell).not.toHaveAttribute("data-rail-hidden"))
+  expect(document.cookie).toContain("sidebar_state=false")
+})
+
 it("桌面直接会话使用 scoped inbox，不复制 primary rail stop", () => {
   mountFrame({ desktopRailCollapsed: true })
 

@@ -174,7 +174,10 @@
   transition: left 200ms linear, opacity 0ms linear 200ms;
 }
 .resizer[data-collapsed="true"] {
-  opacity: 0;
+  /* The wide desktop contract keeps one visible seam at the 52px edge even
+   * when the rail is collapsed. The handle is still removed from hit testing
+   * and the tab order; only compact desktop removes the element entirely. */
+  opacity: 1;
   pointer-events: none;
 }
 .shell[data-canvas-resizing="true"] .resizer,

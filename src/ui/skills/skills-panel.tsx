@@ -416,6 +416,17 @@ function PoolTab({
     catalogHandoffTimerRef.current = window.setTimeout(finishCatalogHandoff, 240)
   }, [finishCatalogHandoff])
 
+  useEffect(() => {
+    if (catalogOpen || catalogHandoffRef.current === null) return
+    // The close callback is driven by Radix's Presence and is not guaranteed
+    // to fire when a controlled dialog is opened without a DialogTrigger.
+    // React's committed `catalogOpen=false` is the reliable lifecycle point;
+    // finish on the next frame and retain the timer above as a slow-render
+    // fallback.
+    const frame = window.requestAnimationFrame(finishCatalogHandoff)
+    return () => window.cancelAnimationFrame(frame)
+  }, [catalogOpen, finishCatalogHandoff])
+
   useEffect(() => () => {
     if (catalogHandoffTimerRef.current !== null) window.clearTimeout(catalogHandoffTimerRef.current)
   }, [])
@@ -775,12 +786,15 @@ function PoolTab({
         installedOverrides={installedOverrides}
         busy={busy}
         errorName={disableError}
-        onOpenUpload={(returnFocusRef) => {
-          const focusRef = catalogOpen ? catalogTriggerRef : returnFocusRef ?? catalogTriggerRef
+        onOpenUpload={() => {
+          // The outer Browse trigger is the only stable focus target after the
+          // catalog portal unmounts. The catalog's own Create trigger is
+          // intentionally not reused because it is about to disconnect.
+          const focusRef = catalogTriggerRef
           queueCatalogHandoff(() => onOpenUpload(focusRef))
         }}
-        onOpenGithub={(returnFocusRef) => {
-          const focusRef = catalogOpen ? catalogTriggerRef : returnFocusRef ?? catalogTriggerRef
+        onOpenGithub={() => {
+          const focusRef = catalogTriggerRef
           queueCatalogHandoff(() => onOpenGithub(focusRef))
         }}
         onSetEnabled={onSetEnabled}

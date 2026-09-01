@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar"
@@ -7,9 +7,24 @@ const originalInnerWidth = window.innerWidth
 const originalMatchMedia = window.matchMedia
 
 afterEach(() => {
+  cleanup()
   vi.restoreAllMocks()
   Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth })
   Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia })
+})
+
+it("can keep compact desktop toggles out of the wide-layout preference cookie", () => {
+  document.cookie = "sidebar_state=; Max-Age=0; path=/"
+  render(
+    <SidebarProvider persistOpenState={false}>
+      <SidebarTrigger aria-label="打开导航" />
+      <Sidebar><div>导航内容</div></Sidebar>
+    </SidebarProvider>,
+  )
+
+  fireEvent.click(screen.getByRole("button", { name: "打开导航" }))
+
+  expect(document.cookie).not.toContain("sidebar_state=")
 })
 
 it("SidebarRail 继承调用方标签并同步 tooltip title", () => {

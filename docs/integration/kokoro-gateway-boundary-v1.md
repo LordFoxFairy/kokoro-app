@@ -1,6 +1,6 @@
 # Kokoro Gateway 边界契约 v1
 
-状态：实施基线（2026-08-31）。Gateway = **scaffolded / not current / not deployed**。
+状态：实施基线（2026-08-31）。Gateway = **compatible scaffold / not current / not deployed**。
 本文只描述 `kokoro-app` 当前已经存在的 Web 边界，以及未来统一业务/网关子仓库的拆分方式；
 当前 live upstream 仍由 `KOKORO_SESSION_BASE_URL` 配置，不是规划中的 gateway。
 
@@ -73,6 +73,9 @@ Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已�
 | `GET` | `/api/session/models` | 获取模型列表 |
 | `GET` | `/api/session/agents` | 获取 Agent 预设 |
 | `GET` | `/api/session/artifacts` | 获取 Library 成果列表 |
+| `GET` | `/api/session/billing/summary` | 获取计费摘要（与 Chat 共用 Session BFF 基址） |
+| `GET` | `/api/session/billing/ledger` | 获取计费流水 |
+| `GET` | `/api/session/billing/by-model` | 获取模型维度用量 |
 
 Direct Chat 与项目 Chat 共用上表中除列表 scope 外的全部 endpoint、flat response、SSE event union
 和 control body。Direct 清单使用 `scope=direct`（缺省也为 direct）；项目清单使用
@@ -82,6 +85,10 @@ snapshot、SSE envelope 和 cancel/resume body 均不重复携带该 scope。
 `project_ref` 在 Web 路由中是一个编码后的 path segment：`kokoro-app` 先解码一次得到原始
 引用，再由链接和 `URLSearchParams` 在 wire 上编码一次。Gateway/Session 侧只接收解码语义对应的
 opaque 引用；调用方不要把已经编码的值再次交给 Web route adapter。
+
+Gateway 兼容阶段必须注册 `/billing/*`，因为 Web 的 billing client 通过同一个
+`/api/session` BFF 发起上述三个读取请求。Gateway 只转发这些读取，不在本阶段复制计费事实或
+业务规则。
 
 ### Message request
 
@@ -196,5 +203,5 @@ JWT/workload token、内部 URL、队列实现和部署凭据。Web 更新 share
 2. 将 `KOKORO_SESSION_BASE_URL` 指向 gateway，保持浏览器仍访问 `/api/session/*`。
 3. 验证消息幂等：刷新、重复点击发送、SSE 断线重连都不产生重复 Run。
 4. 验证 `Forwarded` 只有一份且来自 `KOKORO_DOMAIN`，浏览器伪造 `X-Domain` 不生效。
-5. 验证 JSON、SSE、artifact 下载、HITL cancel/resume、401/403/409/5xx 错误保持语义。
+5. 验证 JSON、SSE、artifact 下载（包括 `content-length` / `content-disposition`）、billing 读取、HITL cancel/resume、401/403/409/5xx 错误保持语义；上游网络失败或超时统一为 `502 {"error":"session_unreachable"}`。
 6. 通过后再把 gateway 从 scaffolded 标记为 live，并在本契约文档中记录实际版本和部署绑定。

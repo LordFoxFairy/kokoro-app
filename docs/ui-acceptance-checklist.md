@@ -2,14 +2,14 @@
 
 这份清单用于逐页检查，不以“能渲染”作为完成标准。每个交互都要同时满足视觉层级、语义、键盘操作、响应式和数据状态。
 
-> 当前桌面 Web 契约（v11）：`>767px` 始终是完整 Web Sidebar/Workbench，包含缩放后的
-> 768–960px CSS viewport；只有 `<=767px` 才进入手机 Sheet。下方历史验收条目中出现的
-> 下方历史验收条目中的 `<=960px` 导航边界均以本条为准；当前唯一手机边界是 `<=767px`。手机布局本轮保持冻结。
+> 当前桌面 Web 契约（v12）：fine-pointer 且 `<=768px` 时进入窄桌面模式，隐藏 rail、gap、container
+> 与 seam，只保留 Header 的单一导航触发器；`>=769px` 使用完整 Web Sidebar/Workbench。手机 Sheet
+> 仍只由 `useIsMobile` 的 coarse-pointer 条件决定，手机布局本轮保持冻结。下方历史条目中的旧断点以本条为准。
 
 ## 工作台 `/app` 与显式 preview transport
 
 - [x] 桌面宽度下 Sidebar 只占 rail 列，主区、Composer 和右侧 Canvas 不互相覆盖。
-- [x] 仅 `≤767px` 进入手机 Sheet；`>767px`（包括 768–960px 的浏览器缩放/分屏 Web）保持固定桌面 rail。手机 Sheet 的打开、选择导航、背幕和 Escape 均由同一 primitive 负责。
+- [x] fine-pointer 且 `≤768px` 时隐藏窄桌面 rail 并由 Header trigger 打开同一份导航；`≥769px` 保持固定桌面 rail。coarse-pointer 手机仍由同一 primitive 负责 Sheet 的打开、选择导航、背幕和 Escape。
 - [x] 移动端从 Sidebar 管理入口打开 Settings 时，先等待 shadcn Sheet 关闭动画完成再交接 Dialog，避免短暂双 overlay 与双 focus trap。
 - [x] SidebarTrigger 的 `aria-expanded` 使用真实的桌面 open / 移动 openMobile 状态，不把移动 Sheet 的关闭状态误报为已展开。
 - [x] 通用 SidebarRail 接收站点调用方的本地化 `aria-label`，并同步 `title` 与 `type=button`，不再把英文默认 tooltip 泄漏到定制站点。

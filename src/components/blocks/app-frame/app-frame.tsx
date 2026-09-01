@@ -1039,13 +1039,25 @@ export function AppFrame({
     }
     // 流式中提交=运行中插话（engine 识别活跃相位走 steer，不打断本轮）。
     engine.submit(content)
+    if (projectWorkspace) {
+      // A first project message creates its opaque conversation in the shared
+      // engine before the next render. Update both URL and route projection at
+      // the user action boundary; replaceState alone does not notify App
+      // Router, so waiting for a route effect would leave the overview painted
+      // beside a newly-created task.
+      const projectConversationId = engine.getSnapshot().store?.activeId ?? null
+      if (projectConversationId !== null) {
+        syncConversationUrl(projectConversationId, "replace")
+        setConversationRouteId(projectConversationId)
+      }
+    }
     clearDraft()
     // Creation intent belongs to the empty composer only. Clear its persisted
     // projection as soon as the user commits the first message so a later
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [clearDraft, draft, engine, focusComposer, setDeploymentIntent])
+  }, [clearDraft, draft, engine, focusComposer, projectWorkspace, setDeploymentIntent, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1647,6 +1659,7 @@ export function AppFrame({
         } as CSSProperties
       }
       open={!resolvedRailCollapsed}
+      persistOpenState={!compactDesktopRail}
       onOpenChange={(open) => {
         if (compactDesktopRail) setCompactRailOpen(open)
         else setRailCollapsed(!open)

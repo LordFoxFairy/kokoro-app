@@ -1279,6 +1279,40 @@ it("专案页点击新建任务切换到任务视图并聚焦 Composer", async (
   await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
 })
 
+it("专案 Composer 首次发送后承接到当前任务视图", async () => {
+  buildEngine()
+  function ProjectTaskProbe({ projectTask, composer }: EmptyStateProps) {
+    return (
+      <div>
+        <output data-testid="project-task-state">{projectTask ? "task" : "overview"}</output>
+        {composer}
+      </div>
+    )
+  }
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame
+          engine={engine}
+          chatHref="/app"
+          emptyState={ProjectTaskProbe}
+          emptyStateOwnsComposer
+          projectWorkspace
+          projectRef="kokoro"
+        />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "项目任务首条消息" } })
+  fireEvent.click(screen.getByLabelText("发送消息"))
+
+  await waitFor(() => expect(window.location.search).toMatch(/^\?conversation=conv_/))
+  await waitFor(() => expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeInTheDocument())
+  expect(screen.getByText("项目任务首条消息")).toBeInTheDocument()
+})
+
 it("命令菜单新建对话后立即打开设置不会被延迟焦点回收打断", async () => {
   try {
     buildEngine()

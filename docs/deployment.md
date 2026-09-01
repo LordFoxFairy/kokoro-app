@@ -122,9 +122,13 @@ KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
 KOKORO_SESSION_INTERNAL_SECRET="<gateway-session-secret>"
 ```
 
+同一部署里 Web 与 Gateway 的 `KOKORO_DOMAIN` 必须填写同一个不带端口的规范 hostname；
+local/test/prod 只通过各自 env 文件切换。Gateway 会按与 Web 相同的 DNS label 规则规范化该值，
+部署验收需把两份配置差异视为错误，不把域名做成浏览器 selector。
+
 这两个仓库之间没有 workspace、`file:` 依赖或 `src/site` 复制。Web BFF 继续负责
 HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责业务编排与服务间适配。
-Gateway 已实现 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*` 的兼容转发；完成真实
+Gateway 已实现 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*`、`/billing/*` 的兼容转发；完成真实
 Session 服务、SSE、HITL、文件流和错误状态联调后，再将它标记为生产 live upstream。
 
 ## 2. 发布选择

@@ -27,7 +27,9 @@
 - Capsule
 - Runtime manifest
 
-Projects、billing、team、mail、settings、shared 等其他实现只在需要说明路径别名或边界时出现，不在本文新增接口。
+Projects、team、mail、settings、shared 等其他实现只在需要说明路径别名或边界时出现。Billing
+虽然不属于本版七个 UI surface，但它复用 Session BFF 的真实 `/billing/*` upstream 路径，
+因此在 Chat/Gateway 兼容契约中登记，不另建 `/api/billing/*`。
 
 ## 0.1 Chat 的统一业务/网关承接
 
@@ -78,7 +80,7 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 
 | 浏览器路径 | 实际实现 | 本版用途 |
 |---|---|---|
-| `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 的同源 BFF |
+| `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 与 billing 的同源 BFF |
 | `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all |
 | `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；上游为 Hub scheduled capability |
 | `/api/settings/*` | `src/app/api/settings/[...path]/route.ts` | Hub 的 `settings` 前缀别名 |
@@ -87,7 +89,8 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 | `/api/auth/session-state` | `src/app/api/auth/session-state/route.ts` | Preview/authenticated/anonymous 闸门 |
 | `/api/dev/preview-files/preview-delivery-report` | `src/app/api/dev/preview-files/[key]/route.ts` | 非 production 的单一 delivery PDF 夹具 |
 
-同一目录还注册了 auth callback/logout/magic-link、billing、shared、team 等其他路由；它们不属于本版七个 surface。
+同一目录还注册了 auth callback/logout/magic-link、shared、team 等其他路由；billing 的浏览器
+读取不在 `/api/billing/*` 暴露，而是沿用 `/api/session/billing/*`。
 
 当前路由树中**没有**下列独立路由，因此本文不把它们写成 canonical API：
 
@@ -129,6 +132,17 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 5. 业务头只接收并透传 `accept`、`content-type`、`last-event-id`；`x-kokoro-request-id` 可由浏览器作为可选关联值提供，缺失时由 BFF 生成，BFF 始终将其写入上游；不转发 cookie。
 6. 上游不可达返回 `502 {"error":"session_unreachable"}`；上游 HTTP 状态、JSON、SSE、二进制 body 按原状态流式回传。
 7. access/refresh 即将过期时，BFF 续签并把新的 sealed cookie 通过 `Set-Cookie` 写回浏览器。
+
+Billing compatibility paths used by the same client:
+
+```http
+GET /api/session/billing/summary
+GET /api/session/billing/ledger
+GET /api/session/billing/by-model
+```
+
+Gateway migration must preserve these paths and the same flat error/status behavior; they remain
+read-only upstream projections until a versioned business-gateway contract transfers ownership.
 
 ### 2.3 Hub BFF
 

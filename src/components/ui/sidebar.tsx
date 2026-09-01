@@ -58,6 +58,7 @@ function SidebarProvider({
   open: openProp,
   onOpenChange: setOpenProp,
   forceDesktop = false,
+  persistOpenState = true,
   className,
   style,
   ref: refProp,
@@ -68,6 +69,9 @@ function SidebarProvider({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   forceDesktop?: boolean
+  /** Keep a user's desktop preference in the shared cookie. Compact desktop
+   * expansion is intentionally session-local and opts out at the shell. */
+  persistOpenState?: boolean
 }) {
   const isMobile = useIsMobile() && !forceDesktop
   const [openMobile, setOpenMobile] = React.useState(false)
@@ -91,10 +95,14 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      // Compact desktop expansion is a temporary fit-to-window state. Its
+      // trigger still uses the shared Sidebar context, but must not overwrite
+      // the user's preferred wide-layout rail state in the cookie.
+      if (persistOpenState) {
+        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      }
     },
-    [setOpenProp, open]
+    [setOpenProp, open, persistOpenState]
   )
 
   // Helper to toggle the sidebar.

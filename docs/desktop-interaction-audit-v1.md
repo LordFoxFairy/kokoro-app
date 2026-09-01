@@ -100,9 +100,8 @@ Settings 九个 Tab、会话删除取消、Canvas 成果打开/关闭、任务�
 
 ### 收起、resize 与导航
 
-- 细指针桌面仅在 `<= 767px` 自动收起；`768px` 以上保持完整桌面轨道，超过阈值恢复用户的展开状态。
-  `<= 767px` 的手机边界仍只由
-  `useIsMobile` 决定，不将手机 Sheet 误判为桌面 rail。
+- fine-pointer 且 `<= 768px` 自动进入窄桌面模式，隐藏 rail、gap、container 和 seam；`>= 769px` 保持完整桌面轨道，超过阈值恢复宽桌面偏好。
+  手机边界仍只由 `useIsMobile` 的 coarse-pointer 条件决定，不将手机 Sheet 误判为桌面 rail。
 - shadcn Sidebar container/inner/inset 不绘制边框；唯一可见 rail seam 是 `data-seam="rail"` 的
   `1px` resizer，位置始终按 `--rail-seam-width - 1px` 跟随同一条轨道。拖拽仍使用 rail 的 DPR
   对齐、最小/最大宽度和 Canvas reserve 约束。
