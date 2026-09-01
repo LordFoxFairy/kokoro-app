@@ -559,6 +559,25 @@
   font-size: 14px;
   box-shadow: none;
 }
+.resourceList {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.resourceRow {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgb(0 0 0 / 7%);
+  border-radius: 10px;
+  background: var(--background);
+  padding: 0.625rem 0.75rem;
+}
+.resourceRow > svg { width: 1.125rem; height: 1.125rem; color: var(--muted-foreground); stroke-width: 1.75; }
+.resourceRow > span { display: grid; min-width: 0; gap: 0.125rem; }
+.resourceRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
+.resourceRow small { overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .resourcesEmpty {
   display: flex;
   flex-direction: column;
@@ -728,6 +747,16 @@
   padding: 0;
 }
 .projectSkillFooter > button svg { width: 1rem; height: 1rem; }
+.projectSkillsEmpty {
+  display: grid;
+  min-height: 9.1875rem;
+  place-items: center;
+  margin-top: 0.75rem;
+  border: 1px dashed rgb(0 0 0 / 10%);
+  border-radius: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 
 .projectPickerDialog {
   width: 30rem;
@@ -787,6 +816,31 @@
   text-align: center;
 }
 .projectPickerEmpty > svg { width: 1.875rem; height: 1.875rem; stroke-width: 1.75; }
+.projectPickerList {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.projectPickerRow {
+  display: flex;
+  width: 100%;
+  min-height: 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 10px;
+  background: var(--background);
+  padding: 0.625rem 0.75rem;
+  color: inherit;
+  text-align: left;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.projectPickerRow:hover { background: var(--muted); }
+.projectPickerRow[data-selected="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--background)); }
+.projectPickerRow > svg { width: 1.125rem; height: 1.125rem; color: var(--muted-foreground); stroke-width: 1.75; }
+.projectPickerRow > span { display: grid; min-width: 0; gap: 0.125rem; }
+.projectPickerRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; line-height: 20px; }
+.projectPickerRow small { overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .projectPickerFooter {
   position: absolute;
   right: 1.25rem;

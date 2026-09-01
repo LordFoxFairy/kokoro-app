@@ -1236,6 +1236,37 @@ type CreationIntent = "presentation" | "website" | "design" | "game" | "app"
 上述“先回 Chat、再选会话”是浏览器呈现顺序，不是新的业务资源关系；`SESSION_ID` 仍为不透明会话引用，不能被解释为
 tenant、site 或 namespace。
 
+### 10.4 Project context picker 与 Chat 承接（v215）
+
+项目页的资源、技能、网站和排程入口属于同一个 `kokoro-app` Web surface。它们不会挂载第二套 Chat、不会把
+picker 内容写入 message body，也不会跨子仓库引入 `site` 目录。
+
+当前预览夹具使用确定性的合成数据：
+
+- 资源：`研究简报.md` 与 `Kokoro 产品网站`；搜索网络动作直接打开资源 Dialog 并选中网页筛选，上传动作打开同一 Dialog
+  的本地文件选择器；上传成功后只更新本地预览列表并调用已有 `onUploadProjectResources` adapter。
+- 技能：`skill-builder`；搜索、官方筛选、启用开关和更多菜单均作用于当前项目页的本地 projection。启用状态继续沿用已有
+  `PATCH /api/hub/projects/{project_ref}/skills/{skill}` 兼容路径。
+- 网站：`Kokoro 产品网站` 与 `产品发布页`；选择并保存只更新当前 mounted workspace 的 linked projection。当前没有伪造
+  网站绑定 BFF，因此不新增 `/api/websites` 或隐式跨站写入。
+- 排程：`每日简报`；新建编辑器沿用排程 draft schema，保存后先更新本地列表，再调用已有的
+  `POST /api/hub/projects/{project_ref}/scheduled-tasks`。列表选择/保存仍是本地 picker state，不声称已有 project list API。
+
+Direct Chat 的“新增到专案”菜单也只做明确的路由承接：选择已有 `Kokoro` 使用 `/app/project/kokoro`，本地预览的新建动作使用
+`/app/project/preview-project`。这是 mounted-surface 的 route handoff，不是 project-create API；生产接入 project create 前，不应将
+`preview-project` 当成持久化项目 ID。
+
+| UI 动作 | 当前承接 | API 行为 |
+|---|---|---|
+| Project → 文件和资源 → 上传/搜索网络 | 同一资源 Dialog，不切换 Chat | 上传沿用现有 resources adapter；搜索网络为本地筛选，不发新 API |
+| Project → Skills → 搜索/筛选/更多 | 同一技能 Dialog | 开关沿用 project skill PATCH；其余为本地 projection |
+| Project → Websites → 选择/保存 | 同一网站 picker | 当前 preview local state；网站绑定 endpoint 待后端契约补齐 |
+| Project → Scheduled → 新建/选择/保存 | 同一排程 picker + 共享编辑器 | 新建沿用已有 project scheduled create；list/link endpoint 待后端契约补齐 |
+| Direct Chat → 新增到专案 | mounted `/app/project/{project_ref}` | 不新增 Chat message；持久化 project create/link API 待接入 |
+
+因此这些交互不代表通用 gateway 已经部署。Gateway 仍只负责独立仓库的兼容边界；Web 子仓库只通过 typed adapter/BFF
+调用已登记的路径。
+
 ## 11. 错误、缓存与回退规则
 
 ### 11.1 BFF 层错误

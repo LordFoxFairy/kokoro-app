@@ -95,6 +95,11 @@ const composerFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const firstSiteFallback: Partial<Record<MessageKey, string>> = {
+  "firstSite.webResource": "Web",
+  "firstSite.noMatchingResources": "No matching resources",
+  "firstSite.manageSkills": "Manage skills",
+  "firstSite.enableSkill": "Enable skill",
+  "firstSite.disableSkill": "Disable skill",
   "firstSite.getStarted": "Get started",
   "firstSite.presentationPlaceholder": "Describe your presentation topic",
   "firstSite.presentationSelected": "Slides",

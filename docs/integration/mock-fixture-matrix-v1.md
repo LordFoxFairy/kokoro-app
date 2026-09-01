@@ -775,3 +775,17 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 
 这些是同一 User Web 子仓库内的浏览器 fixture；Chat 仍由 `/api/session/*` 同源 BFF 承接，未来统一业务 gateway 仍是独立规划仓库，
 不作为 `kokoro-app` 子目录、workspace 依赖或前端页面代码引入。
+
+## 48. Project context picker 与 Chat 承接 fixtures v215
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `project.resources.action-split.v215` | 点击资源卡“上传”或“搜索网络” | 两个按钮不再共用无动作 handler；上传打开本地文件选择器，搜索网络打开同一 Dialog 并仅显示网页资源 |
+| `project.resources.filter-search.v215` | 资源 Dialog 中使用筛选/搜索 | 全部、文件、网页筛选和文本搜索作用于确定性合成列表；无匹配时保留 Dialog 几何和可恢复的新增入口 |
+| `project.skills.filter-menu.v215` | Skills Dialog 使用筛选、搜索、更多 | 官方筛选、技能搜索、启用/停用和管理入口均有可观察状态变化；无匹配显示空状态，不产生隐藏的第二 Dialog |
+| `project.websites.picker-save.v215` | Websites → 新增 → 搜索/选择/保存 | `Kokoro 产品网站` 与 `产品发布页` 可搜索、选择、回显 pressed 状态并启用保存；当前只更新本地 linked projection |
+| `project.scheduled.picker-save.v215` | Scheduled → 新增 → 选择/保存或建立新项目 | `每日简报` 可选择；共享 editor 保存后回到唯一 picker，并将新任务插入本地列表；project create 仍走已登记 adapter |
+| `chat.project-picker.handoff.v215` | Direct Chat → 网站创作 → 新增到专案 | 已有项目进入 `/app/project/kokoro`；本地预览新建进入 `/app/project/preview-project`；mounted shell 承接，不把 picker 伪装成 message/API |
+
+以上均为 `kokoro-app` 独立子仓库的桌面 Web 合成 fixture。网站 list/link 与 project create 尚无已冻结的 BFF wire schema；这些
+本地交互不构成后端 endpoint 证据，真实接入时必须先补充对应 typed contract。

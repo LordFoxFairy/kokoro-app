@@ -45,7 +45,7 @@ function ShopifyMark() {
  * The direct inbox is a standalone chat surface. Project workspaces use a
  * separate component because their task list and context are persistent.
  */
-type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings" | "onCreationIntentSelect"> & {
+type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings" | "onCreationIntentSelect" | "onOpenProject"> & {
   onPrompt?: EmptyStateProps["onPrompt"]
 }
 
@@ -57,6 +57,7 @@ export function KokoroDirectChatWelcome({
   onPrompt,
   onCreationIntentSelect,
   onOpenSettings,
+  onOpenProject,
 }: DirectChatWelcomeProps = {}) {
   const t = useT()
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
@@ -188,11 +189,17 @@ export function KokoroDirectChatWelcome({
                   side="bottom"
                   sideOffset={6}
                 >
-                  <DropdownMenuItem onSelect={() => setSelectedProject(brandName)}>
+                  <DropdownMenuItem onSelect={() => {
+                    setSelectedProject(brandName)
+                    onOpenProject?.("kokoro")
+                  }}>
                     <Folder data-icon="inline-start" aria-hidden="true" />
                     {brandName}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setSelectedProject(t("firstSite.newProject"))}>
+                  <DropdownMenuItem onSelect={() => {
+                    setSelectedProject(t("firstSite.newProject"))
+                    onOpenProject?.("preview-project")
+                  }}>
                     {t("firstSite.newProject")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>

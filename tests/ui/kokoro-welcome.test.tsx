@@ -228,6 +228,42 @@ it("专案归档入口使用菜单选择并回显目标专案", () => {
   expect(screen.getByRole("button", { name: "Kokoro" })).toBeInTheDocument()
 })
 
+it("专案菜单选择会把聊天承接到对应的专案回调", () => {
+  const onOpenProject = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome
+        brandName="Kokoro"
+        draft="建立网站"
+        creationIntent="website"
+        onOpenProject={onOpenProject}
+      />
+    </LocaleProvider>,
+  )
+
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "Kokoro" }))
+  expect(onOpenProject).toHaveBeenCalledWith("kokoro")
+})
+
+it("新建专案动作会生成本地预览专案引用并承接聊天", () => {
+  const onOpenProject = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome
+        brandName="Kokoro"
+        draft="建立网站"
+        creationIntent="website"
+        onOpenProject={onOpenProject}
+      />
+    </LocaleProvider>,
+  )
+
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
+  expect(onOpenProject).toHaveBeenCalledWith("preview-project")
+})
+
 it("创建类型更多按钮横向浏览隐藏选项", () => {
   const scrollTo = vi.fn()
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo })

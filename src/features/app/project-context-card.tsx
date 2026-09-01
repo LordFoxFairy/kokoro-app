@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import styles from "./kokoro-project-workspace.module.css"
 
 type ContextCardAction = {
+  id?: string
   label: string
   icon: LucideIcon
   trailingIcon?: LucideIcon
@@ -28,6 +29,7 @@ export type ProjectContextSectionProps = {
   emptyVisual?: ReactNode
   showChevron?: boolean
   onClick: (event: MouseEvent<HTMLButtonElement>) => void
+  onAction?: (id: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
 type ProjectContextCardProps = ProjectContextSectionProps & {
@@ -47,6 +49,7 @@ export function ProjectContextSection({
   emptyVisual,
   showChevron = false,
   onClick,
+  onAction,
 }: ProjectContextSectionProps) {
   const ActionIcon = actionIcon ?? Icon
   const FooterIcon = footerAction?.icon
@@ -85,8 +88,17 @@ export function ProjectContextSection({
       {emptyVisual ? <div className={styles.emptyVisual}>{emptyVisual}</div> : null}
       {actions ? (
         <CardFooter className={styles.cardActions}>
-          {actions.map(({ label, icon: ActionIcon, trailingIcon: TrailingIcon, statusDot }) => (
-            <Button key={label} type="button" variant="outline" size="sm" onClick={onClick}>
+          {actions.map(({ id, label, icon: ActionIcon, trailingIcon: TrailingIcon, statusDot }) => (
+            <Button
+              key={id ?? label}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={(event) => {
+                if (onAction) onAction(id ?? label, event)
+                else onClick(event)
+              }}
+            >
               <ActionIcon data-icon="inline-start" aria-hidden="true" />
               {label}
               {statusDot ? <span className={styles.actionStatusDot} aria-hidden="true" /> : null}

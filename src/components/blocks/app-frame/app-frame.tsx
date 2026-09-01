@@ -275,6 +275,8 @@ export type AppFrameProps = {
   activeNavigationKey?: string
   /** Opaque project reference; absent selects the user's direct-chat inbox. */
   projectRef?: string
+  /** Site-owned welcome project picker hands the draft to a mounted project route. */
+  onOpenProject?: (projectRef: string) => void
   commandMenu?: ComponentType<AppCommandMenuProps>
 }
 
@@ -327,6 +329,8 @@ export type EmptyStateProps = {
   }) => Promise<void>
   /** Site-owned welcome actions can hand off to shared workspace settings. */
   onOpenSettings?: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
+  /** Project picker handoff used by the direct welcome surface. */
+  onOpenProject?: (projectRef: string) => void
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
   onCreateCustomApi?: (returnTarget?: HTMLElement | null) => void
@@ -431,11 +435,19 @@ export function AppFrame({
   hideWorkspaceHeader = false,
   projectWorkspace = false,
   projectRef,
+  onOpenProject,
   activeNavigationKey,
   commandMenu: CommandMenu = AppCommandMenu,
   preview = false,
 }: AppFrameProps) {
   const t = useT()
+  const openProject = useCallback((nextProjectRef: string) => {
+    if (onOpenProject) {
+      onOpenProject(nextProjectRef)
+      return
+    }
+    navigateMountedSurface(`/app/project/${encodeURIComponent(nextProjectRef)}`)
+  }, [onOpenProject])
   const sessionScope = useMemo<SessionScope>(
     () => projectRef ? { kind: "project", projectRef } : DIRECT_SESSION_SCOPE,
     [projectRef],
@@ -1596,6 +1608,7 @@ export function AppFrame({
             onCreateProjectScheduledTask={createProjectScheduledTask}
             projectTask={projectTaskView}
             onOpenSettings={openSettings}
+            onOpenProject={openProject}
             onCreateMcp={openMcpCreate}
             onCreateCustomApi={openCustomApiCreate}
             onCreateSkillWithAi={startSkillCreationFromSettings}

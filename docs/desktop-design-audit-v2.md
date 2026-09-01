@@ -4079,3 +4079,21 @@ AppFrame 在本地开发通过 `voicePreview={preview || process.env.NODE_ENV !=
 `output/playwright/chat-skills-github-handoff-v214.png`；从技能切换到排程时旧 tooltip 消失，点击“新建任务”回到
 `/app` 且 Composer 获得焦点，截图为 `output/playwright/rail-navigation-handoff-v214.png`。本轮只覆盖桌面 Web，数据均为
 Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
+
+## v215 Project context picker 与 Chat 承接（2026-08-31）
+
+本轮回归项目页四个上下文模块与 Direct Chat 的“新增到专案”承接。重点不是增加新的卡片，而是让每一个现有可见入口都有独立
+的状态路径，避免资源卡的“上传/搜索网络”、Skills 的筛选/更多、网站 picker 和排程 picker 共用一个点击后无动作的 handler。
+
+- 资源卡 actions 现在有显式 `id`：上传打开同一个资源 Dialog 的文件选择器；搜索网络打开同一 Dialog、聚焦搜索框并切换到网页筛选。
+  Dialog 内的全部/文件/网页筛选、文本搜索和上传后的本地合成行都保持在资源 surface 内，不创建第二个 Chat。
+- Skills Dialog 的筛选、搜索和更多菜单均可观察：搜索无匹配显示空态，官方筛选保持当前卡片 projection，更多菜单提供管理与启用/停用动作；
+  skill switch 的 live PATCH 失败仍回滚。
+- Websites 和 Scheduled 不再是空壳：分别提供可搜索、可 pressed 选择、可保存的合成选项；排程共享 editor 保存后将新任务回填 picker，
+  父 Dialog 保持唯一承接层，保存/取消恢复触发器焦点。
+- Direct Chat 的“新增到专案”不再只是改按钮文字：已有项目会通过 mounted-surface 进入 `/app/project/kokoro`，本地预览的新建动作进入
+  `/app/project/preview-project`。该路由 handoff 不等同 project-create API，生产持久化仍需后端契约。
+
+真实桌面 QA：`1280×720` 本地项目页验证资源搜索网络、Skills 无匹配、网站搜索/选择/保存、排程列表与新建回填均无 console/page error；
+截图：`/tmp/kokoro-resources-dialog-v215.png`、`/tmp/kokoro-project-context-v215.png`。Direct Chat 新建专案承接验证 URL 为
+`http://127.0.0.1:3000/app/project/preview-project`，project surface 正常挂载且无 console/page error。桌面之外的手机端未调整。
