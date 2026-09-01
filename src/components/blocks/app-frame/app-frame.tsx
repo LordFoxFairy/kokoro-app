@@ -1377,13 +1377,19 @@ export function AppFrame({
           fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/instruction-revisions`, { cache: "no-store" }),
         ])
         if (!response.ok) return
-        const payload = await response.json() as { instruction?: unknown; project?: { instruction?: unknown } }
-        const value = payload.instruction ?? payload.project?.instruction
+        const payload = await response.json() as {
+          data?: { instruction?: unknown; project?: { instruction?: unknown } }
+          instruction?: unknown
+          project?: { instruction?: unknown }
+        }
+        const projection = payload.data ?? payload
+        const value = projection.instruction ?? projection.project?.instruction
         if (active && typeof value === "string") setProjectInstructions(value)
         if (historyResponse.ok) {
-          const historyPayload = await historyResponse.json() as { items?: unknown }
-          if (active && Array.isArray(historyPayload.items)) {
-            setProjectInstructionHistory(historyPayload.items as NonNullable<EmptyStateProps["projectInstructionHistory"]>)
+          const historyPayload = await historyResponse.json() as { data?: { items?: unknown }; items?: unknown }
+          const historyProjection = historyPayload.data ?? historyPayload
+          if (active && Array.isArray(historyProjection.items)) {
+            setProjectInstructionHistory(historyProjection.items as NonNullable<EmptyStateProps["projectInstructionHistory"]>)
           }
         }
       } catch {
@@ -1412,7 +1418,7 @@ export function AppFrame({
     }
     const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "Idempotency-Key": `project-instructions:${projectRef}:${crypto.randomUUID()}` },
       body: JSON.stringify({ instruction: instructions }),
     })
     if (!response.ok) throw new Error(`project_instruction_update_failed:${response.status}`)
@@ -1424,14 +1430,18 @@ export function AppFrame({
     if (!projectRef || files.length === 0) return
     const body = new FormData()
     for (const file of Array.from(files)) body.append("files", file)
-    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/resources`, { method: "POST", body })
+    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/resources`, {
+      method: "POST",
+      headers: { "Idempotency-Key": `project-resources:${projectRef}:${crypto.randomUUID()}` },
+      body,
+    })
     if (!response.ok) throw new Error(`project_resource_upload_failed:${response.status}`)
   }, [projectRef])
   const setProjectSkillEnabled = useCallback(async (skill: string, enabled: boolean) => {
     if (!projectRef) return
     const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/skills/${encodeURIComponent(skill)}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "Idempotency-Key": `project-skill:${projectRef}:${skill}:${crypto.randomUUID()}` },
       body: JSON.stringify({ enabled }),
     })
     if (!response.ok) throw new Error(`project_skill_update_failed:${response.status}`)
@@ -1447,8 +1457,15 @@ export function AppFrame({
     if (!projectRef) return
     const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/scheduled-tasks`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(task),
+      headers: { "content-type": "application/json", "Idempotency-Key": `project-scheduled:${projectRef}:${crypto.randomUUID()}` },
+      body: JSON.stringify({
+        title: task.title,
+        prompt: task.prompt,
+        frequency: task.frequency,
+        time: task.time,
+        expires_at: task.expiresAt,
+        auto_approve: task.autoApprove,
+      }),
     })
     if (!response.ok) throw new Error(`project_scheduled_task_create_failed:${response.status}`)
   }, [projectRef])

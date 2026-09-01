@@ -112,6 +112,11 @@ function patchBody(patch: ScheduledTaskPatch) {
   }))
 }
 
+function idempotencyKey(prefix: string, taskId?: string): string {
+  const entropy = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return `${prefix}:${taskId ?? entropy}:${entropy}`
+}
+
 async function readHttpError(response: Response): Promise<ScheduledTaskClientError> {
   let message = `scheduled task request failed with status ${response.status}`
   let code: string | null = null
@@ -152,7 +157,7 @@ export function createScheduledTaskClient(fetcher: typeof fetch = fetch): Schedu
     createScheduledTask: async (draft) => {
       const response = await request(fetcher, scheduledTasksPath(), scheduledTaskMutationResponseSchema, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey("scheduled-create") },
         body: JSON.stringify(createBody(draft)),
       })
       return toRecord(response.task)
@@ -160,7 +165,7 @@ export function createScheduledTaskClient(fetcher: typeof fetch = fetch): Schedu
     updateScheduledTask: async (taskId, patch) => {
       const response = await request(fetcher, scheduledTaskPath(taskId), scheduledTaskMutationResponseSchema, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey("scheduled-update", taskId) },
         body: JSON.stringify(patchBody(patch)),
       })
       return toRecord(response.task)
@@ -168,9 +173,13 @@ export function createScheduledTaskClient(fetcher: typeof fetch = fetch): Schedu
     retryScheduledTask: async (taskId) => {
       const response = await request(fetcher, scheduledTaskRetryPath(taskId), scheduledTaskMutationResponseSchema, {
         method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey("scheduled-retry", taskId) },
       })
       return toRecord(response.task)
     },
-    deleteScheduledTask: (taskId) => request(fetcher, scheduledTaskPath(taskId), scheduledTaskDeleteResponseSchema, { method: "DELETE" }),
+    deleteScheduledTask: (taskId) => request(fetcher, scheduledTaskPath(taskId), scheduledTaskDeleteResponseSchema, {
+      method: "DELETE",
+      headers: { "Idempotency-Key": idempotencyKey("scheduled-delete", taskId) },
+    }),
   }
 }

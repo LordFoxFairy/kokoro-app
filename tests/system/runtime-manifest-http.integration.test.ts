@@ -115,7 +115,7 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     expect(secondBody.data?.theme).toEqual({ primary: "#123456", brandName: "Kokoro" })
   })
 
-  it("uses the unified gateway base for the system namespace when no override is set", async () => {
+  it("does not use Gateway as a hidden System fallback", async () => {
     const explicitSystemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL
     const explicitGatewayBaseUrl = process.env.KOKORO_GATEWAY_BASE_URL
     delete process.env.KOKORO_SYSTEM_BASE_URL
@@ -123,8 +123,8 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
 
     try {
       const response = await GET(new Request("https://first.example/api/system/runtime-manifest?product_id=kokoro"))
-      expect(response.status).toBe(200)
-      expect(response.headers.get("content-type")).toContain("application/json")
+      expect(response.status).toBe(503)
+      expect(await response.json()).toEqual({ error: "system_runtime_unavailable" })
     } finally {
       if (explicitSystemBaseUrl === undefined) delete process.env.KOKORO_SYSTEM_BASE_URL
       else process.env.KOKORO_SYSTEM_BASE_URL = explicitSystemBaseUrl

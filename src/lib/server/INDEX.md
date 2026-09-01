@@ -22,8 +22,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   - `configuredDomain(env?)`：只读取服务端 `KOKORO_DOMAIN`，trim 并校验 hostname 形状。
   - `forwardedHeaders(domain)`：生成服务端上游 header，不读取 Request 或浏览器状态。
 - `service-config.ts`
-  - `configuredGatewayBaseUrl(env?)`：读取服务端统一 Gateway 基址并去除尾斜杠。
-  - `gatewayNamespaceUrl(namespace, env?)`：为 payment、billing-service、system 等显式命名空间生成地址。
+  - `configuredBffBaseUrl(env?)`：读取独立业务 BFF 基址并去除尾斜杠。
+  - `bffPathUrl(path, env?)`：生成版本化业务 BFF 地址。
 - `upstream-http.ts`
   - `fetchWithDomain`：普通 JSON/下载请求，覆盖调用方的 `forwarded`。
   - `requestWithDomain`：HTTP/SSE/二进制流式代理，覆盖调用方的 `forwarded`。
@@ -39,7 +39,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。
 - route handler 使用 `runtime = "nodejs"`；SSE 与下载直接转发 Response body，不在 BFF 缓冲大响应。
-- 配置 `KOKORO_GATEWAY_BASE_URL` 后，各业务专用 `KOKORO_*_BASE_URL` 可以把这个地址作为可选传输适配器默认值；显式服务地址优先，方便分阶段切换。Gateway 只负责路由/协议转发，不承载业务用例编排。
+- 业务面配置 `KOKORO_BFF_BASE_URL` 后由独立 `kokoro-bff` 承接 `/v1/*`；Chat 必须使用显式 `KOKORO_SESSION_BASE_URL`，不通过 Gateway 隐式 fallback。
 - 原文 magic-link token、nonce、refresh token 和内部 header 绝不写入日志或浏览器响应。
 
 ## 协作边界
@@ -60,9 +60,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   `/api/chat/*`。
 - BFF 负责同源 Origin、HttpOnly 信封、请求体/错误边界和 public projection；Chat 的会话事实、
   Run、SSE、HITL 与历史仍由 `kokoro-session` 拥有。
-- Projects、Skills、Library、Scheduled、Agent setup 和 Billing 等跨服务用例，后续由独立
-  `kokoro-business` 服务（名称待定）或 BFF 内的业务 adapter 编排；不要把这些规则塞进
-  `kokoro-gateway` 传输仓库。
+- Projects、Skills、Library、Scheduled、Agent setup 和 Billing 等跨服务用例，由独立
+  `kokoro-bff` 的业务 adapter 编排；不要把这些规则塞回 Web，也不把 BFF 依赖塞入
+  `kokoro-agent` 或 `kokoro-session`。
 
 新增上游服务时必须复用 `upstream-http.ts`，禁止在 route handler 中直接裸 `fetch`、手写 Host 或
 手写部署/租户 header。浏览器 client 只能调用同源 BFF path。

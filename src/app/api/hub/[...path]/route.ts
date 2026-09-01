@@ -31,12 +31,19 @@ const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 const NAMESPACE_HEADER = "x-kokoro-namespace"
 const USER_ID_HEADER = "x-kokoro-user-id"
 
+function bffBusinessPath(path: string[]): string[] {
+  // Preserve the browser-facing Hub namespace and translate it only at the
+  // Web-to-BFF boundary. The BFF owns the business path after this point.
+  if (path[0] === "self" && path[1] !== undefined) return path.slice(1)
+  return path
+}
+
 export async function proxyHubRequest(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const config = authConfig()
   if (config === null) {
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
-  if (config.hubBaseUrl === null) {
+  if (config.bffBaseUrl == null && config.hubBaseUrl === null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
@@ -53,7 +60,11 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
   const { path } = await context.params
   const search = new URL(request.url).search
   const encodedPath = (path ?? []).map((segment) => encodeURIComponent(segment)).join("/")
-  const target = `${config.hubBaseUrl.replace(/\/+$/, "")}/hub/${encodedPath}${search}`
+  const businessPath = bffBusinessPath(path ?? [])
+  const encodedBusinessPath = businessPath.map((segment) => encodeURIComponent(segment)).join("/")
+  const target = config.bffBaseUrl != null
+    ? `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
+    : `${config.hubBaseUrl!.replace(/\/+$/, "")}/hub/${encodedPath}${search}`
 
   const headers = new Headers()
   headers.set(SERVICE_HEADER, SERVICE_VALUE)

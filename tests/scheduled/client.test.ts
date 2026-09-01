@@ -59,7 +59,7 @@ describe("scheduled task HTTP client", () => {
 
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/scheduled-tasks", expect.objectContaining({
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: expect.objectContaining({ "content-type": "application/json", "Idempotency-Key": expect.any(String) }),
       body: JSON.stringify({
         title: "Daily digest",
         prompt: "Run the digest",

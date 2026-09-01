@@ -8,7 +8,7 @@ import { z } from "zod"
 import { openEnvelope, sealEnvelope, type EnvelopePayload } from "./session-envelope"
 import { requestWithDomain } from "./upstream-http"
 import { configuredDomain, forwardedHeaders } from "./domain-context"
-import { configuredGatewayBaseUrl, gatewayNamespaceUrl } from "./service-config"
+import { configuredBffBaseUrl } from "./service-config"
 
 // 信封 cookie（httpOnly，浏览器 JS 读不到）与一次性 nonce cookie（绑定申请设备）。
 export const SESSION_COOKIE = "kokoro_session"
@@ -31,6 +31,8 @@ export interface AuthConfig {
   sessionBaseUrl: string
   /** Canonical deployment domain encoded in RFC 7239 `Forwarded`. */
   domain: string
+  // Independent business BFF; Chat remains on sessionBaseUrl.
+  bffBaseUrl?: string | null
   hubBaseUrl: string | null
   // Agent connection setup upstream; optional until the Agent capability is deployed.
   agentBaseUrl?: string | null
@@ -38,7 +40,7 @@ export interface AuthConfig {
   paymentBaseUrl: string | null
   // billing 迁移面；配置后新契约优先，未配置时保留 payment 旧读面用于双读切换。
   billingBaseUrl: string | null
-  // web-bff 出站内部凭据；只要走统一 Gateway 就必须配置，生产直连也必须配置。
+  // web-bff 出站内部凭据；生产环境必须配置。
   internalSecret: string | null
   // 仅 dev：mock 支付网关 webhook 签名密钥（模拟收银台 BFF 据此签发支付成功回调驱动到账）。生产为 null。
   mockWebhookSecret: string | null
@@ -68,18 +70,12 @@ function userPost(
 // 四项齐备才算「已接 platform」；缺任一 = 预览档（纯前端），路由回 503/preview，登录闸放行。
 export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | null {
   const secretRaw = env.KOKORO_WEB_SESSION_SECRET?.trim()
-  const gatewayBaseUrl = configuredGatewayBaseUrl(env)
-  const userBaseUrl = env.KOKORO_USER_BASE_URL?.trim() || gatewayBaseUrl
-  const sessionBaseUrl = env.KOKORO_SESSION_BASE_URL?.trim() || gatewayBaseUrl
+  const userBaseUrl = env.KOKORO_USER_BASE_URL?.trim()
+  const sessionBaseUrl = env.KOKORO_SESSION_BASE_URL?.trim()
   const domain = configuredDomain(env)
+  const bffBaseUrl = configuredBffBaseUrl(env)
   const internalSecret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
   if (!secretRaw || !userBaseUrl || !sessionBaseUrl || !domain) {
-    return null
-  }
-  // Gateway always authenticates the Web BFF, regardless of NODE_ENV. Do not
-  // let a half-configured gateway-first deployment reach runtime and turn
-  // every request into an opaque 401 from the gateway.
-  if (gatewayBaseUrl !== null && internalSecret === null) {
     return null
   }
   if (env.NODE_ENV === "production" && internalSecret === null) {
@@ -97,10 +93,11 @@ export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | n
     userBaseUrl,
     sessionBaseUrl,
     domain,
-    hubBaseUrl: env.KOKORO_HUB_BASE_URL?.trim() || gatewayBaseUrl,
-    agentBaseUrl: env.KOKORO_AGENT_BASE_URL?.trim() || gatewayBaseUrl,
-    paymentBaseUrl: env.KOKORO_PAYMENT_BASE_URL?.trim() || gatewayNamespaceUrl("payment", env),
-    billingBaseUrl: env.KOKORO_BILLING_BASE_URL?.trim() || gatewayNamespaceUrl("billing-service", env),
+    bffBaseUrl,
+    hubBaseUrl: env.KOKORO_HUB_BASE_URL?.trim() || null,
+    agentBaseUrl: env.KOKORO_AGENT_BASE_URL?.trim() || null,
+    paymentBaseUrl: env.KOKORO_PAYMENT_BASE_URL?.trim() || null,
+    billingBaseUrl: env.KOKORO_BILLING_BASE_URL?.trim() || null,
     internalSecret,
     mockWebhookSecret: env.KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET?.trim() || null,
     secureCookies: env.NODE_ENV === "production",

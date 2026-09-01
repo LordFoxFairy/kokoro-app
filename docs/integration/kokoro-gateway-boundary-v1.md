@@ -1,4 +1,6 @@
-# Kokoro Gateway 边界契约 v1
+# Kokoro Gateway 边界契约 v1（Archived）
+
+> 历史兼容记录。当前 Kokoro 运行、CI 和部署不使用 Gateway；业务层以 [`business-bff-contract-v1.md`](./business-bff-contract-v1.md) 为准。本文不再作为当前接入说明。
 
 状态：实施基线（2026-08-31）。Gateway = **independent compatible service / deployment optional**。
 本文描述 `kokoro-app` 当前 Web 边界、独立统一业务网关的承接方式和实际迁移开关；当前 checkout

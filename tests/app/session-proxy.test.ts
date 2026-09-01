@@ -59,18 +59,18 @@ describe("/api/session/[...path] proxy", () => {
     expect(new Headers(init.headers).get("x-kokoro-internal-secret")).toBe("web-bff-secret")
   })
 
-  it("maps Chat to the Gateway /sessions namespace when the direct Session base is omitted", async () => {
+  it("fails closed when the direct Session base is omitted, even if Gateway is configured", async () => {
     delete process.env.KOKORO_SESSION_BASE_URL
-    requestWithDomain.mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }))
     const { GET } = await import("@/app/api/session/[...path]/route")
 
-    await GET(
+    const response = await GET(
       new Request("http://localhost/api/session/sessions/ses_1/messages", { headers: { cookie: sessionCookie() } }),
       params(["sessions", "ses_1", "messages"]),
     )
 
-    const [target] = requestWithDomain.mock.calls[0] as [string]
-    expect(target).toBe("http://gateway.test/sessions/ses_1/messages")
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "auth_not_configured" })
+    expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
   it("streams an SSE response through unchanged (content-type + body)", async () => {

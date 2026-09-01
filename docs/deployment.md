@@ -101,46 +101,34 @@ Composer 语音输入保持同一边界：使用浏览器 `SpeechRecognition`/`w
 至少需要 `KOKORO_INTERNAL_SECRET_WEB_BFF`；System workload token 的实际变量名是
 `KOKORO_SYSTEM_WORKLOAD_TOKEN`。两者都只放部署平台 secret/variable，绝不使用 `NEXT_PUBLIC_*`。
 
-### 1.1 Chat 的 Gateway 切换
+### 1.1 Web、业务 BFF 与 Chat 的切换
 
-Chat 不在 Web 内部再复制一套业务接口。浏览器始终访问同源 `/api/session/*`；部署时只需把
-Web BFF 的 session-compatible upstream 指向独立的 `LordFoxFairy/kokoro-gateway`：
-
-```dotenv
-# kokoro-app（仅服务端）：一个 Gateway 基址即可覆盖所有 Web BFF namespace。
-KOKORO_GATEWAY_BASE_URL="http://kokoro-gateway:8080"
-# 显式 KOKORO_*_BASE_URL 仍可按 bounded context 覆盖，用于灰度/分阶段迁移。
-KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-gateway-secret>"
-```
-
-网关再用自己的服务端配置连接 Session：
+Chat 不在 Web 内部复制一套业务接口。浏览器始终访问同源 `/api/session/*`，由 Web 直连
+`kokoro-session`；Projects、Skills、Scheduled、Agent setup、Library 和 Billing 业务面走独立
+`LordFoxFairy/kokoro-bff`：
 
 ```dotenv
-# kokoro-gateway（仅服务端）
-KOKORO_DOMAIN="dev.kokoro.localhost"
-KOKORO_GATEWAY_SHARED_SECRET="<web-bff-gateway-secret>"
-KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
-KOKORO_SESSION_INTERNAL_SECRET="<gateway-session-secret>"
-# Gateway 后面的领域服务地址。它们只在 kokoro-gateway 进程配置；Web 不需要看到这些地址。
+# kokoro-app（仅服务端）
+KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
 KOKORO_USER_BASE_URL="http://kokoro-user:4211"
-KOKORO_HUB_BASE_URL="http://kokoro-hub:4251"
-KOKORO_SYSTEM_BASE_URL="http://kokoro-system:4240"
-KOKORO_AGENT_BASE_URL="http://kokoro-agent:4260"
-KOKORO_PAYMENT_BASE_URL="http://kokoro-payment:4241"
-KOKORO_BILLING_BASE_URL="http://kokoro-billing:4245"
+KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
+KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-secret>"
+
+# kokoro-bff（独立服务）
+KOKORO_DOMAIN="dev.kokoro.localhost"
+KOKORO_BFF_MODE="mock" # live 部署时改为 live
+KOKORO_BFF_SHARED_SECRET="<web-bff-secret>"
+KOKORO_INTERNAL_SECRET_BFF="<bff-upstream-secret>"
 ```
 
-同一部署里 Web 与 Gateway 的 `KOKORO_DOMAIN` 必须填写同一个不带端口的规范 hostname；
-local/test/prod 只通过各自 env 文件切换。Gateway 会按与 Web 相同的 DNS label 规则规范化该值，
-部署验收需把两份配置差异视为错误，不把域名做成浏览器 selector。
+本地第一阶段将 `KOKORO_BFF_MODE` 保持为 `mock`，Web 仍只通过 server route 调用 BFF；浏览器
+不访问 4300 端口，也不持有 BFF secret。生产切换到 `live` 后，为每个业务子仓库配置独立的
+`KOKORO_*_BASE_URL`，缺失的上游返回明确 503，不静默回退 Mock。
 
-这两个仓库之间没有 workspace、`file:` 依赖或 `src/site` 复制。Web BFF 继续负责
-HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责统一业务接入边界、路由编排与服务间适配，
-领域服务仍然拥有各自的业务事实和生命周期。
-Gateway 已实现 Chat/Session 的 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*`、`/billing/*`、
-`/shared/*` 兼容转发，并提供可选的 `/hub/*`、`/auth/*`、`/bff/*`、`/system/*`、`/connections/*`、
-`/payment/*`、`/billing-service/*` 业务 namespace。完成真实 Session 服务、SSE、HITL、文件流和错误
-状态联调后，再将对应环境标记为生产 live upstream；本地 preview 不伪装成已联调。
+这三个仓库之间没有 workspace、`file:` 依赖、`src/site` 复制或 submodule。Web 负责 HttpOnly
+session envelope、Origin 检查和同源入口；BFF 负责业务投影、编排、幂等和 upstream 适配；
+Session 负责 Chat/SSE 事实；Agent 当前仍是 Redis worker，不被 BFF 直接访问 Redis。
+当前拓扑不使用 `kokoro-gateway`，旧 Gateway 只保留为历史独立仓库，不是运行、CI 或部署前置条件。
 
 ## 2. 发布选择
 
@@ -175,7 +163,9 @@ git push origin v1.0.0
 ```dotenv
 KOKORO_DOMAIN="app.example.com"
 KOKORO_WEB_SESSION_SECRET="<secret>"
-KOKORO_GATEWAY_BASE_URL="<gateway-internal-url>"
+KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
+KOKORO_USER_BASE_URL="http://kokoro-user:4211"
+KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
 # 按 System 服务策略启用；变量名必须保持为 KOKORO_SYSTEM_WORKLOAD_TOKEN。
 KOKORO_SYSTEM_WORKLOAD_TOKEN="<secret>"
@@ -211,11 +201,11 @@ Cloudflare Build variables/secrets 配置：
 ```text
 KOKORO_DOMAIN
 KOKORO_WEB_SESSION_SECRET
-KOKORO_GATEWAY_BASE_URL               # recommended unified server-only business/gateway entry
-KOKORO_USER_BASE_URL                  # optional direct-service override
-KOKORO_SESSION_BASE_URL               # optional direct-service override
-KOKORO_AGENT_BASE_URL                 # optional direct-service override
-KOKORO_SYSTEM_BASE_URL                # optional direct-service override
+KOKORO_BFF_BASE_URL                   # independent server-only business entry
+KOKORO_USER_BASE_URL                  # explicit auth service
+KOKORO_SESSION_BASE_URL               # explicit Chat/SSE service
+KOKORO_AGENT_BASE_URL                 # optional future HTTP adapter
+KOKORO_SYSTEM_BASE_URL                # explicit manifest service
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
 KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy
 ```

@@ -6,7 +6,7 @@
 >
 > **事实来源优先级**：`src/app/api` 与运行时代码 > `src/contract`、`src/hub`、`src/agents`、`src/system` 的 schema/client > 相关 tests > `docs/integration/mock-fixture-matrix-v1.md`。mock-fixture matrix 是验收目标与测试夹具矩阵，不是当前后端路由清单。
 >
-> **状态声明**：当前浏览器链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成可选的兼容传输骨架。Chat 的 Session 兼容路由已可接入，Hub/User/System/Agent/Payment/Billing 也有明确的可选 server-only namespace；网关不承担业务层职责，未来跨域业务编排由独立的 `kokoro-business` 服务承接。当前 checkout 仍由各自环境变量决定是否启用这些 live upstream，尚未宣称生产已部署。
+> **状态声明**：当前浏览器链路由 `kokoro-app` 的同源 Web BFF 承接；业务 API 统一经独立仓库 `LordFoxFairy/kokoro-bff` 的 `/v1/*` 版本化契约。Chat 的 `/api/session/*` 仍直连 `kokoro-session`，Agent 当前仍是 Redis worker。`kokoro-gateway` 不在当前运行、CI 或部署拓扑中；旧 Gateway 说明仅保留为历史兼容记录。当前 checkout 仍由各自环境变量决定是否启用 live upstream，尚未宣称生产已部署。
 
 ## 0. 状态标签与范围边界
 
@@ -28,72 +28,30 @@
 - Runtime manifest
 
 Projects、team、mail、settings、shared 等其他实现只在需要说明路径别名或边界时出现。Billing
-虽然不属于本版七个 UI surface，但它复用 Session BFF 的真实 `/billing/*` upstream 路径，
-因此在 Chat/可选传输层兼容契约中登记，不另建 `/api/billing/*`。
+虽不属于本版七个 UI surface，但当前 `/api/billing/*` 由 Web 适配到业务 BFF 的 `/v1/billing/*`。
 
-## 0.1 Chat 的 BFF 与业务服务承接
+## 0.1 当前承接拓扑
 
-Chat 的前端承接已经冻结为本仓库的同源 `/api/session/*` 契约。浏览器不直接访问
-Session/Agent 内部服务，也不直接携带站点、租户、工作负载 token 或内部 secret。
+业务层和 Chat 事实面分开：
 
 ```text
-当前（直接接 Session，适合本地与 MVP）：
-kokoro-app（Web UI） → 同源 /api/session/*（当前 Web BFF）
-                    → KOKORO_SESSION_BASE_URL（当前 live upstream）
+浏览器 → kokoro-app（同源 /api/*）
+       → kokoro-bff（Projects / Skills / Scheduled / Agent setup / Library / Billing）
+       → 对应业务 API 子仓库
 
-业务层接入（业务用例需要跨服务编排时）：
-kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
-                    → kokoro-business（server-only 业务编排）
-                    → kokoro-session
+浏览器 → kokoro-app（同源 /api/session/*）
+       → kokoro-session（Chat / SSE / Run / artifact 事实面）
 
-可选传输层（需要统一入口、路由或协议适配时）：
-kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
-                    → LordFoxFairy/kokoro-gateway（可选薄传输层）
-                    → kokoro-business 或 kokoro-session
-                    → 对应后端服务
+kokoro-agent → Redis run streams（执行 worker，无 HTTP ingress）
 ```
 
-`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也不包含 Web 页面。它只负责可选的
-传输/入口适配：服务间鉴权校验、路由、超时、SSE/二进制透传、Forwarded 重建、协议兼容和基础错误映射。
-它不拥有业务规则、跨产品业务编排、业务数据库或 Chat 的事实状态。
+`kokoro-bff` 是独立业务适配子仓库，负责业务投影、跨服务聚合、幂等、错误归一和 Mock/Live 切换；它不包含 React、浏览器 cookie、Chat/SSE 事实，也不直接访问 Agent Redis。第一阶段使用 BFF 自己仓库内的确定性 Mock upstream，后续按 `/v1` 契约逐个替换为业务 API 子仓库。
 
-`kokoro-business` 是未来独立的业务层服务（名称作为架构占位，不表示本仓库内已包含该服务）。它负责项目、技能、资料库、
-排程、Agent、计费等跨域业务用例的编排，以及需要聚合多个后端时的业务规则。它不包含 React、浏览器 cookie、页面路由或 Web
-组件。`kokoro-session` 继续拥有 Chat/session 的事实与流：会话生命周期、消息、Run、SSE、HITL、文件、交付物和分享。
-`kokoro-app` 负责桌面 UI、浏览器状态、同源 BFF、Web DTO projection 与请求边界。
+Web 保持既有浏览器路径，只在 server route 选择 BFF upstream：`/api/hub/self/skills/*` → `/v1/skills/*`，`/api/scheduled-tasks*` → `/v1/scheduled-tasks*`，`/api/agents/connections/setup` → `/v1/agents/connections/setup`，`/api/billing/*` → `/v1/billing/*`。`/api/session/*` 不经过业务 BFF。
 
-Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` → `SessionClient` →
-`/api/session/*` BFF →（直接或经 `kokoro-business` 编排）→ `kokoro-session`；需要时才在
-server-only 链路中加入 `kokoro-gateway`。浏览器永远不直接访问内部服务，也不把 Chat UI、页面路由或 gateway 源码搬进另一个
-子仓库。Direct Chat 与 Project Chat 共享这条链路，只有 scope 和项目引用不同。
+三个仓库之间只通过版本化 HTTP/Redis 契约、环境变量和独立 CI/deploy 对接，不引入对方源码、`src/site`、workspace package、`file:` 依赖或 git submodule。
 
-| 责任 | kokoro-app BFF | kokoro-business（未来独立服务） | kokoro-gateway（可选薄传输层） | Session/Agent runtime |
-|---|---|---|---|---|
-| 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 | 不负责 |
-| 浏览器同源路径 | `/api/session/*` | 不暴露浏览器路径 | `/sessions/*` 等 server-only 兼容路径 | 不直接暴露 |
-| 登录信封、权限上下文、域名绑定 | 校验 Origin、读取 HttpOnly 信封并生成可信 server-only 上下文 | 接收受信任的内部身份并执行业务授权 | 校验服务身份并透传路由上下文 | 执行 runtime 级授权 |
-| 消息、Run、SSE、取消与 HITL 恢复 | 调用稳定契约、适配响应并渲染状态 | 需要时编排业务用例，不取代 Session 事实 | 路由、超时、协议转换和流透传 | 生成模型/工具执行事件并保存 Session 事实 |
-| 业务数据与跨产品规则 | 不持有跨域业务事实 | 负责业务规则、聚合和幂等边界 | 不持有业务规则或业务数据库 | 负责 Chat 执行侧状态与事实 |
-
-迁移规则：浏览器继续使用本版 `/api/session/*` 路径、请求体、响应体和 SSE event name。直接接
-Session、经 `kokoro-business` 编排、或在二者之间加入 `kokoro-gateway`，都只改变 server-only
-upstream 组合。若必须改变业务语义，由业务层提供版本化内部契约，由 BFF 保持浏览器兼容 projection；gateway 只做传输兼容，
-不在 gateway 中新增业务规则，也不把内部服务路径泄漏到组件中。
-
-仓库边界规则：本仓库不引入 `src/site`、其它产品的源码、跨仓库相对路径或 git submodule。
-未来共享 package 只发布浏览器安全的 TypeScript 类型、Zod schema、事件常量和 client 接口；
-业务规则、数据库、服务凭据、runtime adapter、business service 与 gateway 实现留在各自后端仓库。
-这样每个 site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定的 Web API 契约与业务层对接，
-不要求每个产品都引入 gateway。
-
-可选 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 使用薄传输层时的 server-only
-authority root（例如 `http://kokoro-gateway:8080`），不要在值末尾追加
-`/sessions`、`/hub` 或其它 namespace。配置后，未显式设置的 `KOKORO_USER_BASE_URL`、
-`KOKORO_SESSION_BASE_URL`、`KOKORO_HUB_BASE_URL`、`KOKORO_AGENT_BASE_URL` 和
-`KOKORO_SYSTEM_BASE_URL` 使用这个根地址；各 BFF 自己在请求 path 上拼接对应的 Gateway
-namespace。Payment 与独立 Billing 由各自 adapter 使用 `/payment`、`/billing-service` 命名空间。
-显式的单服务地址优先，用于分阶段迁移，不会改变浏览器的 `/api/*` 路径，也不会改变业务层与
-Session 的所有权边界。未配置该变量时，BFF 可以直接调用显式的业务/Session upstream。
+详细 BFF 契约见 [`business-bff-contract-v1.md`](./business-bff-contract-v1.md)。
 
 ## 1. 当前 API 路由注册表
 
@@ -101,18 +59,18 @@ Session 的所有权边界。未配置该变量时，BFF 可以直接调用显�
 
 | 浏览器路径 | 实际实现 | 本版用途 |
 |---|---|---|
-| `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 与 billing 的同源 BFF |
+| `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 的同源 BFF；不经过业务 BFF |
 | `/api/agents/*` | `src/app/api/agents/[...path]/route.ts` | Agent connection setup 的窄面同源 BFF |
-| `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all |
-| `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；上游为 Hub scheduled capability |
+| `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all；配置 BFF 时转 `/v1/*` |
+| `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；配置 BFF 时转 `/v1/scheduled-tasks*` |
 | `/api/settings/*` | `src/app/api/settings/[...path]/route.ts` | Hub 的 `settings` 前缀别名 |
 | `/api/mail/*` | `src/app/api/mail/[...path]/route.ts` | Hub 的 `mail` 前缀别名 |
 | `/api/system/runtime-manifest` | `src/app/api/system/runtime-manifest/route.ts` | Runtime manifest |
 | `/api/auth/session-state` | `src/app/api/auth/session-state/route.ts` | Preview/authenticated/anonymous 闸门 |
 | `/api/dev/preview-files/preview-delivery-report` | `src/app/api/dev/preview-files/[key]/route.ts` | 非 production 的单一 delivery PDF 夹具 |
 
-同一目录还注册了 auth callback/logout/magic-link、shared、team 等其他路由；billing 的浏览器
-读取不在 `/api/billing/*` 暴露，而是沿用 `/api/session/billing/*`。
+同一目录还注册了 auth callback/logout/magic-link、shared、team 等其他路由；Billing 的 plans/checkout
+使用 `/api/billing/*`，并在配置 BFF 时转为 `/v1/billing/*`。
 
 当前路由树中**没有**下列独立路由，因此本文不把它们写成 canonical API：
 
@@ -133,33 +91,26 @@ Session 的所有权边界。未配置该变量时，BFF 可以直接调用显�
 浏览器只访问同源相对路径：
 
 ```text
-/api/session/<path>          →  ${KOKORO_SESSION_BASE_URL}/<path>
+/api/session/<path>          →  ${KOKORO_SESSION_BASE_URL}/<path>（Chat 事实面，直连 Session）
 /api/agents/connections/setup?platform=PLATFORM
-                             →  ${KOKORO_AGENT_BASE_URL}/connections/setup?platform=PLATFORM
-/api/hub/<path>              →  ${KOKORO_HUB_BASE_URL}/hub/<path>
-/api/scheduled-tasks/<path>  →  ${KOKORO_HUB_BASE_URL}/hub/scheduled-tasks/<path>
-/api/settings/<path> →  ${KOKORO_HUB_BASE_URL}/hub/settings/<path>
+                             →  ${KOKORO_BFF_BASE_URL}/v1/agents/connections/setup?platform=PLATFORM
+/api/hub/self/skills/<path>  →  ${KOKORO_BFF_BASE_URL}/v1/skills/<path>
+/api/hub/self/mcp/<path>     →  ${KOKORO_BFF_BASE_URL}/v1/mcp/<path>
+/api/hub/projects/<path>     →  ${KOKORO_BFF_BASE_URL}/v1/projects/<path>
+/api/scheduled-tasks/<path>  →  ${KOKORO_BFF_BASE_URL}/v1/scheduled-tasks/<path>
+/api/billing/<path>          →  ${KOKORO_BFF_BASE_URL}/v1/billing/<path>
 /api/mail/<path>     →  ${KOKORO_HUB_BASE_URL}/hub/mail/<path>
 ```
 
-当设置可选的 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，实际目标 path 为：
+当前不存在统一 Gateway fallback。每个上游都必须由自己的 server-only 环境变量显式配置：业务面使用
+`KOKORO_BFF_BASE_URL`，Chat 使用 `KOKORO_SESSION_BASE_URL`，认证使用 `KOKORO_USER_BASE_URL`；
+缺少对应配置时 route 明确返回 `*_not_configured`，不会隐式改走另一个仓库。
 
-```text
-Chat/Session   → ${KOKORO_GATEWAY_BASE_URL}/sessions/<path>
-User auth      → ${KOKORO_GATEWAY_BASE_URL}/auth/*
-Team BFF       → ${KOKORO_GATEWAY_BASE_URL}/bff/*
-Hub            → ${KOKORO_GATEWAY_BASE_URL}/hub/<path>
-Agent setup    → ${KOKORO_GATEWAY_BASE_URL}/connections/setup
-System         → ${KOKORO_GATEWAY_BASE_URL}/system/runtime-manifest
-Payment        → ${KOKORO_GATEWAY_BASE_URL}/payment/<path>
-独立 Billing   → ${KOKORO_GATEWAY_BASE_URL}/billing-service/<path>
-```
-
-因此 Chat 的浏览器承接链路始终是：浏览器 `/api/session/*` → Web BFF。Web BFF 可直接调用
-`kokoro-session`，也可调用 `kokoro-business` 做业务编排；需要时再经可选 Gateway 的
-`/sessions/*` 等 server-only 兼容路径。Web BFF 仍然是同源鉴权和浏览器边界；Gateway 只做
-server-only transport/ingress；`kokoro-business` 才是跨域业务编排层；`kokoro-session` 继续拥有
-Chat 的消息、Run、SSE、文件和分享事实。
+因此 Chat 的浏览器承接链路始终是：浏览器 `/api/session/*` → Web BFF → `kokoro-session`。
+业务链路始终是：浏览器 `/api/*` → Web BFF → `kokoro-bff` → 具体业务 API 子仓库。
+`kokoro-bff` 才是 Projects/Skills/Scheduled/Agent setup/Library/Billing 的业务适配和编排层；
+`kokoro-session` 继续拥有 Chat 的消息、Run、SSE、文件和分享事实。旧 Gateway 文档仅作为历史记录，
+不参与当前开发、CI 或部署。
 
 BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route 为 nodejs），不把服务地址编入浏览器 bundle。
 
@@ -183,21 +134,25 @@ GET /api/session/billing/ledger
 GET /api/session/billing/by-model
 ```
 
-Any optional Gateway adapter must preserve these paths and the same flat error/status behavior; they remain
-read-only upstream projections until a versioned business-layer contract transfers ownership. This document does
-not move billing ownership into the Gateway.
+这些路径保持只读上游投影，直到版本化业务契约转移其所有权；当前不通过 Gateway，也不把 billing
+所有权放入 Web 或 Session。
 
 ### 2.3 Hub BFF
 
 `/api/hub/*` 的真实行为：
 
 1. `authConfig()` 缺少基础配置返回 `503 {"error":"auth_not_configured"}`。
-2. `KOKORO_HUB_BASE_URL` 缺失返回 `503 {"error":"hub_not_configured"}`。
+2. `KOKORO_BFF_BASE_URL` 与直接兼容的 `KOKORO_HUB_BASE_URL` 都缺失时返回
+   `503 {"error":"hub_not_configured"}`。
 3. mutation 的 Origin 不匹配返回 `403 {"error":"forbidden_origin"}`；无有效 sealed session 返回 `401 {"error":"unauthenticated"}`。
 4. 服务端从 envelope 派生并覆盖身份头：`x-kokoro-namespace`、`x-kokoro-user-id`；namespace 不接受浏览器 query/body/header 选择。
 5. 注入 `x-kokoro-service: web-bff`、可选 internal secret、`x-kokoro-request-id`；业务头只转发 `accept`、`content-type`、`idempotency-key`；`x-kokoro-request-id` 可由浏览器作为可选关联值提供，缺失时由 BFF 生成，BFF 始终将其写入上游。
-6. 上游目标固定为 `${KOKORO_HUB_BASE_URL}/hub/<path>`；上游不可达返回 `502 {"error":"hub_unreachable"}`。
-7. Hub 成功/错误体由 Hub client 解析；canonical Hub 成功包为 `{"data": ...,"requestId"?}`，canonical Hub 错误包为 `{"error":{"code":string,"message":string},"requestId"?}`。
+6. 配置 BFF 时目标固定为 `${KOKORO_BFF_BASE_URL}/v1/<business-path>`；只有未配置 BFF 时才允许
+   明确的 `KOKORO_HUB_BASE_URL` 兼容直连，目标为 `${KOKORO_HUB_BASE_URL}/hub/<path>`；上游不可达
+   返回 `502 {"error":"hub_unreachable"}`。
+7. BFF canonical 成功包为 `{"data": ..., "meta":{"request_id":string}}`，由 Web route 在
+   Scheduled/Agent/Billing typed surface 做 DTO projection；Hub client 对业务成功包解析 `data`，
+   canonical 错误包为 `{"error":{"code":string,"message":string},"meta":...}`。
 
 ### 2.4 Domain / Forwarded
 
@@ -217,7 +172,7 @@ not move billing ownership into the Gateway.
 | test | `.env.test` 或测试隔离注入 | `test.kokoro.localhost` | 可启用同一 preview fixture |
 | prod | 显式 `.env.prod`、`.env.production` 或平台运行时变量 | 部署绑定域名，例如 `app.example.com` | 不启用 Preview Client |
 
-当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、显式的 User/Session 基址（可选地再配置 `KOKORO_GATEWAY_BASE_URL`）、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。未来业务层接入由独立 adapter 配置其 server-only upstream，不改变浏览器的 `/api/session/*`。
+当前 checkout 的 `.env.local` 使用 `NEXT_PUBLIC_SESSION_PREVIEW=1`，所以本地默认是 preview。取消 preview 后，必须填入 server-only 的 `KOKORO_WEB_SESSION_SECRET`、显式的 User/Session 基址、业务 BFF 基址（如使用业务 live/mock BFF）、合法 `KOKORO_DOMAIN`；production 还要求 `KOKORO_INTERNAL_SECRET_WEB_BFF`。业务层接入由独立 BFF 配置其 server-only upstream，不改变浏览器的 `/api/session/*`。
 
 可选 live upstream：
 
@@ -1314,8 +1269,8 @@ route handoff，不是 project-create API；生产接入 project create 前，�
 | Project → Scheduled → 新建/选择/保存 | 同一排程 picker + 共享编辑器 | 新建沿用已有 project scheduled create；list/link endpoint 待后端契约补齐 |
 | Direct Chat → 新增到专案 | mounted `/app/project/{project_ref}` | 不新增 Chat message；持久化 project create/link API 待接入 |
 
-因此这些交互不代表通用 gateway 已经部署。Gateway 仍只负责独立仓库的可选传输兼容边界；跨域业务编排属于未来独立业务服务；Web 子仓库只通过 typed adapter/BFF
-调用已登记的路径。
+因此这些交互不代表通用 Gateway 已经部署。跨域业务编排属于独立 `kokoro-bff`；Web 子仓库只通过
+typed adapter/BFF 调用已登记的路径。
 
 ### 10.4 Chat project handoff（v216）
 
@@ -1327,7 +1282,7 @@ kokoro.web.pending-project-draft:{encodeURIComponent(project_ref)} → unsent dr
 ```
 
 进入 `/app/project/{project_ref}` 后，由项目作用域的 draft controller 消费并删除该值；只有当前项目 draft 为空时才写入，
-已有项目 draft 优先。该 envelope 不进入 API body、URL、localStorage、cookie 或 Gateway；用户随后点击发送，才沿用既有
+已有项目 draft 优先。该 envelope 不进入 API body、URL、localStorage、cookie 或其他服务；用户随后点击发送，才沿用既有
 `POST /api/session/sessions/{session_id}/messages` 契约。`preview-project` 仅是本地 preview route，不能当成持久化 project id。
 
 项目页“新建任务”会创建新的 project-scoped conversation 并把 `conversation` 查询同步到地址栏；直接 `/app` 的新任务不会读取
@@ -1369,12 +1324,12 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
-| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；可选 Gateway 接入时为 `/sessions/*` | closed（含刷新重放） | conditional on auth/session；若启用则再依赖 Gateway | 已冻结 |
-| Agent | `/app/agents` | `/api/agents/connections/setup` BFF + AgentClient | Preview closed | conditional on `KOKORO_AGENT_BASE_URL` | 独立页面与 setup BFF 已闭环；实际连接仍取决于 Agent upstream |
-| Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
+| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE，直连 Session | closed（含刷新重放） | conditional on auth/session | 已冻结 |
+| Agent | `/app/agents` | `/api/agents/connections/setup` → BFF `/v1/agents/connections/setup` | Preview closed | BFF mock closed；真实 Agent 仍是 Redis worker | 独立页面与 setup 投影已闭环 |
+| Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` → BFF `/v1/skills/*` | closed | conditional on BFF/skills upstream | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
 | Library | `/app/library` | `/api/session/artifacts*` | empty/download fixture | conditional on session | 已冻结 |
-| Scheduled | `/app/scheduled` | preview localStorage；`/api/scheduled-tasks*` BFF | Preview closed | Web/BFF closed；上游 capability pending | 独立页面 Preview CRUD 已闭环；Live 仍取决于 Hub scheduled contract/deployment |
+| Scheduled | `/app/scheduled` | preview localStorage；`/api/scheduled-tasks*` → BFF `/v1/scheduled-tasks*` | Preview closed | BFF mock closed；live 上游 pending | 独立页面 Preview CRUD 已闭环 |
 | Capsule | Composer | React + sessionStorage | closed | local only | 不定义 API |
 | Manifest | AppGate | preview constant；`/api/system/runtime-manifest` | closed | conditional on System | 已冻结 |
 
@@ -1398,14 +1353,11 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 ## 14. 当前闭环修正（v221）
 
-### 14.1 可选 Gateway 配置成对规则
+### 14.1 Active business BFF 配置
 
-`KOKORO_GATEWAY_BASE_URL` 表示 Web BFF 选择经独立 `kokoro-gateway` 进行传输/入口适配。只要该变量非空，
-必须同时提供 `KOKORO_INTERNAL_SECRET_WEB_BFF`；Gateway 会校验 `x-kokoro-service=web-bff` 与该内部凭据。
-`Forwarded: host=<KOKORO_DOMAIN>` 仅是服务端生成的路由上下文，不是认证方式。纯本地 preview 可以同时省略 Gateway
-与内部凭据；`.env.local`、`.env.test` 只有在选择该传输层的 live fixture 时才填写这两个变量。
-未配置 Gateway 时，BFF 仍可按显式的 server-only upstream 直接调用 Session 或其他后端；这不是降级为另一套浏览器 API。
-Gateway 不承接业务规则，`kokoro-business`（未来独立服务）与 `kokoro-session` 的责任边界保持不变。
+当前业务入口只使用 `KOKORO_BFF_BASE_URL`：Web server route 将业务请求映射到 BFF `/v1/*`，BFF 再按自己的 `KOKORO_BFF_MODE` 和 `KOKORO_*_BASE_URL` 选择 Mock 或业务 API upstream。`KOKORO_DOMAIN` 只由服务端生成标准 `Forwarded: host=<KOKORO_DOMAIN>`。
+
+`KOKORO_GATEWAY_BASE_URL` 不再是有效配置；设置它不会激活任何当前 route。Chat 必须配置显式 `KOKORO_SESSION_BASE_URL`，业务面必须配置 `KOKORO_BFF_BASE_URL`。
 
 ### 14.2 Opaque path segment 规则
 
@@ -1491,9 +1443,9 @@ Content-Type: application/json
 ```
 
 Web BFF 不根据 `project_ref` 进行领域规则判断，只执行同源鉴权、opaque path/query/body 透传、必要的 Web DTO
-projection 和标准错误映射；需要跨域业务用例时由 BFF 调用 `kokoro-business` 的 server-only 契约。
-若配置 Gateway，则 Gateway 继续保持 `/sessions/*` 原路径和 JSON/SSE 保真，不改变业务所有权。Direct Chat 不带
-`project_ref`，Project Chat 的首条消息与后续消息均必须带同一项目引用。
+projection 和标准错误映射；需要跨域业务用例时由独立 BFF 调用已登记的 server-only 契约。Direct Chat 不带
+`project_ref`，Project Chat 的首条消息与后续消息均必须带同一项目引用；Session 由自己的版本化契约处理 JSON/SSE，
+不依赖 Gateway。
 
 ### Session 子仓库必须提供的闭环证据
 
@@ -1505,11 +1457,11 @@ projection 和标准错误映射；需要跨域业务用例时由 BFF 调用 `ko
    snapshot、SSE event 与 control response 仍保持当前公开 DTO，不额外暴露项目引用。
 3. Direct 列表只返回 `project_ref IS NULL`；Project 列表要求精确 `project_ref`，分页 cursor 不跨 scope
    复用；越权、无效引用和重复幂等均有回归测试。
-4. 若启用 Gateway，由其 passthrough test 验证 query/body 原样到达；Web live integration test 验证首条消息、刷新、A→B→A
-   切换及 Direct/Project 列表隔离。
+4. Web live integration test 验证首条消息、刷新、A→B→A 切换及 Direct/Project 列表隔离；Session 子仓库独立验证
+   JSON/SSE 的 query/body 保真。
 
-因此当前矩阵中的 Project Chat 结论仍为：**Web/Preview 已闭环；若启用则 Gateway transport 已闭环；Session Live
-Chat 事实闭环待 Session 子仓库验收，跨域业务编排待独立 business service 验收**。本节不改变 Web 子仓库边界，也不把
+因此当前矩阵中的 Project Chat 结论仍为：**Web/Preview 已闭环；Session Live Chat 事实闭环待 Session 子仓库验收，
+跨域业务编排待独立 BFF 验收**。本节不改变 Web 子仓库边界，也不把
 Session 源码、`site` 目录或共享运行时引入
 `kokoro-app`。
 ## 18. Project Chat 首屏水合与失效深链回退（v224）

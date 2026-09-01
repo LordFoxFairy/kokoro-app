@@ -9,7 +9,6 @@ import {
   SERVICE_VALUE,
 } from "@/lib/server/auth"
 import { configuredDomain } from "@/lib/server/domain-context"
-import { gatewayNamespaceUrl } from "@/lib/server/service-config"
 import { runtimeManifestSchema, toPublicRuntimeManifest } from "@/system/runtime-manifest"
 
 export const runtime = "nodejs"
@@ -30,7 +29,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const productId = "kokoro"
   const surfaceId = "user-web"
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
-  const systemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL?.trim() || gatewayNamespaceUrl("system")
+  const systemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL?.trim() || null
   const domain = configuredDomain()
   const internalSecret = process.env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
 

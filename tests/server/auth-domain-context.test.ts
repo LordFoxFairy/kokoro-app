@@ -39,30 +39,31 @@ describe("auth BFF deployment domain context", () => {
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })
 
-  it("uses one server-only gateway root for all Web business defaults", () => {
+  it("uses the independent business BFF without activating Gateway", () => {
     const config = authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal/",
+      KOKORO_BFF_BASE_URL: "http://bff.internal/",
+      KOKORO_USER_BASE_URL: "http://user.internal",
+      KOKORO_SESSION_BASE_URL: "http://session.internal",
       KOKORO_DOMAIN: "dev.kokoro.localhost",
       KOKORO_INTERNAL_SECRET_WEB_BFF: "web-secret",
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
-      // Session, Hub, User, and Agent BFFs append their own gateway namespace
-      // to the request path; the configured base itself stays at the root.
-      userBaseUrl: "http://gateway.internal",
-      sessionBaseUrl: "http://gateway.internal",
-      hubBaseUrl: "http://gateway.internal",
-      agentBaseUrl: "http://gateway.internal",
-      paymentBaseUrl: "http://gateway.internal/payment",
-      billingBaseUrl: "http://gateway.internal/billing-service",
+      bffBaseUrl: "http://bff.internal",
+      userBaseUrl: "http://user.internal",
+      sessionBaseUrl: "http://session.internal",
+      hubBaseUrl: null,
+      agentBaseUrl: null,
+      paymentBaseUrl: null,
+      billingBaseUrl: null,
     })
   })
 
-  it("prefers an explicit service URL over the unified gateway default", () => {
+  it("keeps explicit service URLs independent from the BFF", () => {
     const config = authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
-      KOKORO_GATEWAY_BASE_URL: "http://gateway.internal",
+      KOKORO_BFF_BASE_URL: "http://bff.internal",
       KOKORO_USER_BASE_URL: "http://user.internal",
       KOKORO_SESSION_BASE_URL: "http://session.internal",
       KOKORO_HUB_BASE_URL: "http://hub.internal",
@@ -74,9 +75,10 @@ describe("auth BFF deployment domain context", () => {
       userBaseUrl: "http://user.internal",
       sessionBaseUrl: "http://session.internal",
       hubBaseUrl: "http://hub.internal",
-      agentBaseUrl: "http://gateway.internal",
-      paymentBaseUrl: "http://gateway.internal/payment",
-      billingBaseUrl: "http://gateway.internal/billing-service",
+      bffBaseUrl: "http://bff.internal",
+      agentBaseUrl: null,
+      paymentBaseUrl: null,
+      billingBaseUrl: null,
     })
   })
 

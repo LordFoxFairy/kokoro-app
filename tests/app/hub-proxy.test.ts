@@ -30,11 +30,13 @@ function params(path: string[]): { params: Promise<{ path: string[] }> } {
 }
 
 beforeEach(() => {
+  delete process.env.KOKORO_BFF_BASE_URL
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v
   vi.mocked(requestWithDomain).mockReset()
 })
 afterEach(() => {
   vi.unstubAllGlobals()
+  delete process.env.KOKORO_BFF_BASE_URL
   for (const k of Object.keys(ENV)) delete process.env[k]
 })
 
@@ -58,18 +60,36 @@ describe("/api/hub/[...path] proxy", () => {
     expect(init.headers["x-kokoro-user-id"]).toBe("u1")
   })
 
-  it("maps Hub requests to the Gateway /hub namespace when the direct Hub base is omitted", async () => {
+  it("translates the browser Hub namespace to the independent business BFF", async () => {
+    process.env.KOKORO_BFF_BASE_URL = "http://bff.test"
     delete process.env.KOKORO_HUB_BASE_URL
     vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"data":{"skills":[]}}', { status: 200, headers: { "content-type": "application/json" } }))
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
-    await GET(
+    const response = await GET(
       new Request("http://localhost/api/hub/self/skills/pool", { headers: { cookie: sessionCookie() } }),
       params(["self", "skills", "pool"]),
     )
 
-    const [target] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, RequestInit]
-    expect(target).toBe("http://gateway.test/hub/self/skills/pool")
+    expect(response.status).toBe(200)
+    const [target, domain, init] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, { headers: Record<string, string> }]
+    expect(target).toBe("http://bff.test/v1/skills/pool")
+    expect(domain).toBe("dev.kokoro.localhost")
+    expect(init.headers["x-kokoro-service"]).toBe("web-bff")
+  })
+
+  it("fails closed when the direct Hub base is omitted, even if Gateway is configured", async () => {
+    delete process.env.KOKORO_HUB_BASE_URL
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+
+    const response = await GET(
+      new Request("http://localhost/api/hub/self/skills/pool", { headers: { cookie: sessionCookie() } }),
+      params(["self", "skills", "pool"]),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "hub_not_configured" })
+    expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
   it("never forwards a browser-supplied scope header (identity from envelope only)", async () => {
