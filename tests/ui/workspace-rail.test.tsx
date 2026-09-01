@@ -354,6 +354,8 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
 
   fireEvent.pointerMove(screen.getByTestId("rail-agent"), { pointerType: "mouse" })
   expect(await screen.findByRole("tooltip")).toHaveTextContent("Agent")
+  const workbenchMenu = screen.getByTestId("rail-agent").closest('[data-slot="sidebar-menu"]')
+  expect(workbenchMenu).not.toBeNull()
 
   view.rerender(
     <ThemeProvider>
@@ -385,6 +387,7 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
   )
 
   await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull())
+  expect(screen.getByTestId("rail-skills").closest('[data-slot="sidebar-menu"]')).toBe(workbenchMenu)
 
   fireEvent.pointerMove(screen.getByTestId("rail-skills"), { pointerType: "mouse" })
   expect(await screen.findByRole("tooltip")).toHaveTextContent("技能")

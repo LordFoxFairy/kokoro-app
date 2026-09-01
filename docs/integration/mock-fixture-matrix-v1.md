@@ -787,5 +787,17 @@ v191 继续只使用本地合成 GitHub 仓库与技能数据，不访问 Manus 
 | `project.scheduled.picker-save.v215` | Scheduled → 新增 → 选择/保存或建立新项目 | `每日简报` 可选择；共享 editor 保存后回到唯一 picker，并将新任务插入本地列表；project create 仍走已登记 adapter |
 | `chat.project-picker.handoff.v215` | Direct Chat → 网站创作 → 新增到专案 | 已有项目进入 `/app/project/kokoro`；本地预览新建进入 `/app/project/preview-project`，当前未发送 draft 通过一次性 handoff 保留；mounted shell 承接，不把 picker 伪装成 message/API |
 
+## 49. Chat handoff and rail first-paint fixtures v217
+
+| Fixture key | 触发 | 断言 |
+| --- | --- | --- |
+| `chat.project-draft-handoff.v217` | Direct Chat 输入未发送文本，选择“新增到专案” | 一次性 project-scoped `sessionStorage` handoff 保留文本；项目已有 draft 优先；不创建 message、不写 URL/body/cookie |
+| `project.new-task.conversation-route.v217` | 项目 overview 点击“新建任务” | 新 project-scoped conversation 获得 opaque id，URL 带 `conversation`，任务 Composer 可输入；direct conversation 列表不被污染 |
+| `rail.compact.first-paint.v217` | `768×674` fine-pointer 硬刷新 `/app` 或 catalog surface | CSS 首帧隐藏 Sidebar/gap/container；水合后 Header 唯一 trigger 可展开 `300px` rail；不出现先宽后窄的横向闪动 |
+| `rail.navigation.tooltip-local-reset.v217` | 收起 rail，打开 Agent Tooltip，再切换 Skills/排程 | SidebarMenu 容器 identity 保持；旧 Tooltip portal 消失，新入口仍可 hover 打开；active marker 和 surface 同步 |
+
+以上 fixture 仍只验证 `kokoro-app` 的桌面 Web 装配与本地合成数据；不会增加 Gateway endpoint，也不把 Chat handoff
+envelope 当成后端 project-create/link 契约。
+
 以上均为 `kokoro-app` 独立子仓库的桌面 Web 合成 fixture。网站 list/link 与 project create 尚无已冻结的 BFF wire schema；这些
 本地交互不构成后端 endpoint 证据，真实接入时必须先补充对应 typed contract。

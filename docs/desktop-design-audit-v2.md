@@ -4098,3 +4098,27 @@ Kokoro 合成 fixture，不访问 Manus API 或复制受保护资源。
 真实桌面 QA：`1280×720` 本地项目页验证资源搜索网络、Skills 无匹配、网站搜索/选择/保存、排程列表与新建回填均无 console/page error；
 截图：`/tmp/kokoro-resources-dialog-v215.png`、`/tmp/kokoro-project-context-v215.png`。Direct Chat 新建专案承接验证 URL 为
 `http://127.0.0.1:3000/app/project/preview-project`，project surface 正常挂载且无 console/page error。桌面之外的手机端未调整。
+
+## v217 Chat 承接与窄桌面首帧稳定（2026-08-31）
+
+本轮继续验证“Chat 这里承接”的实际路径，并处理两个容易被误认为页面卡死或侧栏闪动的边界：
+
+- Direct Chat 的“新增到专案”先写入一次性 project draft handoff，再通过 mounted surface 进入
+  `/app/project/{project_ref}`；项目页只在当前项目草稿为空时消费该 handoff，已有项目草稿优先，避免输入内容被覆盖或丢失。
+  新建预览项目仍明确使用 `preview-project`，不把本地 fixture 当成生产 project-create 结果。
+- 项目页点击“新建任务”会创建项目作用域的新 conversation，地址栏同步为
+  `/app/project/{project_ref}?conversation={conversation_id}`，显示项目任务 Composer；直接 Chat 则回到 `/app` 并清除
+  conversation 查询。两条路径共用 AppFrame/SessionEngine，但 direct 与 project scope 不混用会话列表。
+- `768px` 及以下的 fine-pointer 窄桌面在 CSS 首帧就隐藏 rail、gap 和 container；React 水合后再由
+  `data-compact-desktop/data-rail-hidden` 接管可展开状态，硬刷新不会先绘制 `300px` 或 `52px` rail 再横向收回。
+- 一级导航不再通过给整棵 `SidebarMenu` 改 key 来关闭旧 Tooltip。菜单容器保持挂载，只重置紧凑 Tooltip 边界；点击
+  Agent、Skills、排程或资料库时 active marker 与主 surface 同步更新，避免导航图标整棵树闪动。
+
+真实浏览器验证：
+
+- `768×674` fine-pointer：DOMContentLoaded、首个 rAF 与水合前均为 rail `display:none`；水合后 Header 唯一导航触发器可打开完整
+  `300px` rail，seam 为单个 `1px`。
+- `1420×900`：Direct Chat 首屏显示 Composer、能力胶囊和推广位；项目页新建任务点击后 URL、任务 Composer 和项目作用域均更新。
+- 全部变更通过 `pnpm check`：109 个测试文件、1087 个测试、TypeScript 与 Next production build。
+
+本轮只覆盖桌面 Web；不修改手机端 Sheet，不引入跨仓库依赖，也不新增未经后端冻结的 Chat API。

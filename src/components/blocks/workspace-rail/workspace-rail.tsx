@@ -488,10 +488,10 @@ function WorkspaceRailContent({
 
       <SidebarContent className={styles.content}>
       <nav className={styles.nav} aria-label={t("rail.navAria")}>
-        <SidebarMenu key={`global-${navigationTransitionKey}`} data-desktop-global-menu="true">
+        <SidebarMenu data-desktop-global-menu="true">
         {/* 新对话：带 ⇧⌘O 快捷键（AppFrame 已接入键盘）。 */}
         <SidebarMenuItem>
-          <SidebarMenuButton ref={deleteDialogFallbackFocusRef} tooltip={newSessionLabel} aria-label={newSessionLabel} size="lg" className={cn(styles.navItem, "text-sidebar-primary font-semibold")} type="button" data-testid="rail-new-task" data-navigation-section="new-task" onPointerDown={markPointerFocus} onClick={() => { onNewChat(); closeNavigation() }}>
+          <SidebarMenuButton ref={deleteDialogFallbackFocusRef} tooltip={newSessionLabel} tooltipKey={navigationTransitionKey} aria-label={newSessionLabel} size="lg" className={cn(styles.navItem, "text-sidebar-primary font-semibold")} type="button" data-testid="rail-new-task" data-navigation-section="new-task" onPointerDown={markPointerFocus} onClick={() => { onNewChat(); closeNavigation() }}>
             <SquarePen className={styles.icon} />
             {navigationExpanded ? <span className={styles.navLabel}>{newSessionLabel}</span> : null}
             {navigationExpanded ? (
@@ -509,7 +509,7 @@ function WorkspaceRailContent({
             inbox has no compact icon counterpart. */}
         {isMobile ? (
           <SidebarMenuItem data-desktop-direct-chat="true">
-            <SidebarMenuButton asChild tooltip={t("rail.directChats")} className={styles.navItem} isActive={activeNavigationKey === "chat"}>
+            <SidebarMenuButton asChild tooltip={t("rail.directChats")} tooltipKey={navigationTransitionKey} className={styles.navItem} isActive={activeNavigationKey === "chat"}>
               <Link
                 href={chatHref}
                 prefetch={mountedSurfacePrefetch}
@@ -530,13 +530,13 @@ function WorkspaceRailContent({
 
         {workbenchNavigation.length > 0 ? <SidebarGroup className={styles.navGroup} data-desktop-workbench-nav="true">
           <SidebarGroupContent>
-            <SidebarMenu key={`workbench-${navigationTransitionKey}`}>
+            <SidebarMenu>
               {workbenchNavigation.map(({ key, label, icon: Icon, settingsTab, href }) => {
                 const canActivate = settingsTab !== undefined || href !== undefined
                 if (href) {
                   return (
                     <SidebarMenuItem key={key}>
-                      <SidebarMenuButton asChild tooltip={label} className={styles.navItem} data-testid={`rail-${key}`} data-navigation-section={key} isActive={activeNavigationKey === key}>
+                      <SidebarMenuButton asChild tooltip={label} tooltipKey={navigationTransitionKey} className={styles.navItem} data-testid={`rail-${key}`} data-navigation-section={key} isActive={activeNavigationKey === key}>
                         <Link href={href} prefetch={mountedSurfacePrefetch} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-label={label} aria-current={activeNavigationKey === key ? "page" : undefined}>
                           <Icon className={styles.icon} />
                           {navigationExpanded ? <span className={styles.navLabel}>{label}</span> : null}
@@ -549,6 +549,7 @@ function WorkspaceRailContent({
                   <SidebarMenuItem key={key}>
                     <SidebarMenuButton
                       tooltip={settingsTab || canActivate ? label : `${label} · ${t("firstSite.unavailable")}`}
+                      tooltipKey={navigationTransitionKey}
                       aria-label={label}
                       type="button"
                       className={styles.navItem}
@@ -598,12 +599,12 @@ function WorkspaceRailContent({
             </DropdownMenu>
           </SidebarGroupLabel> : null}
           <SidebarGroupContent>
-            <SidebarMenu key={`project-${navigationTransitionKey}`}>
+            <SidebarMenu>
               <SidebarMenuItem>
                 {compactDesktop ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <SidebarMenuButton type="button" className={styles.navItem} isActive={projectActive} tooltip={t("firstSite.projects")} aria-label={t("firstSite.projects")} data-testid="rail-project" data-navigation-section="project" onPointerDown={markPointerFocus}>
+                      <SidebarMenuButton type="button" className={styles.navItem} isActive={projectActive} tooltip={t("firstSite.projects")} tooltipKey={navigationTransitionKey} aria-label={t("firstSite.projects")} data-testid="rail-project" data-navigation-section="project" onPointerDown={markPointerFocus}>
                         <Folder className={styles.icon} />
                         {navigationExpanded ? <span className={styles.navLabel}>{brandName ?? DEFAULT_BRAND.name}</span> : null}
                       </SidebarMenuButton>

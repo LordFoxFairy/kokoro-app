@@ -529,6 +529,7 @@ function SidebarMenuButton({
   variant = "default",
   size = "default",
   tooltip,
+  tooltipKey,
   className,
   type,
   ...props
@@ -536,6 +537,8 @@ function SidebarMenuButton({
   asChild?: boolean
   isActive?: boolean
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
+  /** Reset a compact tooltip without remounting the navigation subtree. */
+  tooltipKey?: string
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
   const { state, isMobile } = useSidebar()
@@ -566,8 +569,11 @@ function SidebarMenuButton({
     }
   }
 
+  // Key only the compact tooltip boundary. The surrounding SidebarMenu
+  // remains mounted during route changes, avoiding a full-rail flash while
+  // still dismissing a portal that was opened for the previous surface.
   return (
-    <Tooltip>
+    <Tooltip key={tooltipKey}>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent
         side="right"

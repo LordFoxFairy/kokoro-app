@@ -400,6 +400,21 @@
  * miniature navigation mode. This is deliberately scoped by the Web marker;
  * the phone Sheet never receives these rules. */
 @media (pointer: fine) {
+  /* Match the compact fine-pointer layout from the very first browser paint.
+   * `useCompactDesktopRail()` cannot know the client media query during SSR,
+   * so without this selector a hard refresh at 768px briefly paints the full
+   * rail and then removes it after hydration. The data attribute becomes the
+   * authoritative override as soon as React is mounted; an expanded compact
+   * rail therefore remains visible after the user explicitly opens it. */
+  @media (max-width: 48rem) {
+    .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar"]),
+    .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar-gap"]),
+    .shell[data-desktop-web="true"]:not([data-compact-desktop="true"]) :global([data-slot="sidebar-container"]) {
+      display: none;
+      width: 0;
+    }
+  }
+
   .shell[data-desktop-web="true"] :global([data-slot="sidebar"]) {
     display: block;
   }

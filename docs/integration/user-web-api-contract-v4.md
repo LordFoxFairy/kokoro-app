@@ -1268,6 +1268,22 @@ route handoff，不是 project-create API；生产接入 project create 前，�
 因此这些交互不代表通用 gateway 已经部署。Gateway 仍只负责独立仓库的兼容边界；Web 子仓库只通过 typed adapter/BFF
 调用已登记的路径。
 
+### 10.4 Chat project handoff（v216）
+
+Direct Chat 到项目页的承接不是新消息，也不是让浏览器直接调用 project service。Web 壳层使用一次性、项目引用隔离的
+`sessionStorage` envelope：
+
+```text
+kokoro.web.pending-project-draft:{encodeURIComponent(project_ref)} → unsent draft text
+```
+
+进入 `/app/project/{project_ref}` 后，由项目作用域的 draft controller 消费并删除该值；只有当前项目 draft 为空时才写入，
+已有项目 draft 优先。该 envelope 不进入 API body、URL、localStorage、cookie 或 Gateway；用户随后点击发送，才沿用既有
+`POST /api/session/sessions/{session_id}/messages` 契约。`preview-project` 仅是本地 preview route，不能当成持久化 project id。
+
+项目页“新建任务”会创建新的 project-scoped conversation 并把 `conversation` 查询同步到地址栏；直接 `/app` 的新任务不会读取
+项目会话列表。两者仍由同一 AppFrame 装配，但 `SessionScope`、列表查询和 draft key 分开。
+
 ## 11. 错误、缓存与回退规则
 
 ### 11.1 BFF 层错误
