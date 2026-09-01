@@ -109,8 +109,9 @@ Web BFF 的 session-compatible upstream 指向独立的 `LordFoxFairy/kokoro-gat
 ```dotenv
 # kokoro-app（仅服务端）
 KOKORO_SESSION_BASE_URL="http://kokoro-gateway:8080"
-# Agent connection setup 可复用同一网关的 `/agents` 能力前缀。
-KOKORO_AGENT_BASE_URL="http://kokoro-gateway:8080/agents"
+# Agent connection setup 使用网关的 `/connections` 能力前缀；`/agents` 保留给 Session 的
+# agent catalog，不能把两个路径混用。
+KOKORO_AGENT_BASE_URL="http://kokoro-gateway:8080"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-gateway-secret>"
 ```
 
@@ -122,6 +123,14 @@ KOKORO_DOMAIN="dev.kokoro.localhost"
 KOKORO_GATEWAY_SHARED_SECRET="<web-bff-gateway-secret>"
 KOKORO_SESSION_BASE_URL="http://kokoro-session:3900"
 KOKORO_SESSION_INTERNAL_SECRET="<gateway-session-secret>"
+# 可选：把其它 Web BFF 也统一接到该 Gateway。支付/独立计费使用显式 namespace，避免与
+# Session 的 `/billing/*` 兼容读面冲突。
+KOKORO_USER_BASE_URL="http://kokoro-user:4211"
+KOKORO_HUB_BASE_URL="http://kokoro-hub:4251"
+KOKORO_SYSTEM_BASE_URL="http://kokoro-system:4240"
+KOKORO_AGENT_BASE_URL="http://kokoro-agent:4260"
+KOKORO_PAYMENT_BASE_URL="http://kokoro-payment:4241"
+KOKORO_BILLING_BASE_URL="http://kokoro-billing:4245"
 ```
 
 同一部署里 Web 与 Gateway 的 `KOKORO_DOMAIN` 必须填写同一个不带端口的规范 hostname；
@@ -130,8 +139,10 @@ local/test/prod 只通过各自 env 文件切换。Gateway 会按与 Web 相同�
 
 这两个仓库之间没有 workspace、`file:` 依赖或 `src/site` 复制。Web BFF 继续负责
 HttpOnly session envelope、Origin 检查和浏览器同源入口；Gateway 负责业务编排与服务间适配。
-Gateway 已实现 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*`、`/billing/*` 的兼容转发；完成真实
-Session 服务、SSE、HITL、文件流和错误状态联调后，再将它标记为生产 live upstream。
+Gateway 已实现 Chat/Session 的 `/sessions/*`、`/models/*`、`/agents/*`、`/artifacts/*`、`/billing/*`、
+`/shared/*` 兼容转发，并提供可选的 `/hub/*`、`/auth/*`、`/bff/*`、`/system/*`、`/connections/*`、
+`/payment/*`、`/billing-service/*` 业务 namespace。完成真实 Session 服务、SSE、HITL、文件流和错误
+状态联调后，再将对应环境标记为生产 live upstream；本地 preview 不伪装成已联调。
 
 ## 2. 发布选择
 

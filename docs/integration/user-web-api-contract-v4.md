@@ -6,7 +6,7 @@
 >
 > **事实来源优先级**：`src/app/api` 与运行时代码 > `src/contract`、`src/hub`、`src/agents`、`src/system` 的 schema/client > 相关 tests > `docs/integration/mock-fixture-matrix-v1.md`。mock-fixture matrix 是验收目标与测试夹具矩阵，不是当前后端路由清单。
 >
-> **状态声明**：当前链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成兼容骨架，但当前仍不在 live upstream 链路中，尚未部署。
+> **状态声明**：当前浏览器链路由 `kokoro-app` 的同源 Web BFF 承接；独立仓库 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway) 已创建并完成兼容网关骨架。Chat 的 Session 兼容路由已可接入，Hub/User/System/Agent/Payment/Billing 也有明确的可选 server-only namespace；当前 checkout 仍由各自环境变量决定是否真正切到网关，尚未宣称生产已部署。
 
 ## 0. 状态标签与范围边界
 
@@ -41,15 +41,15 @@ Session/Agent 内部服务，也不直接携带站点、租户、工作负载 to
 kokoro-app（Web UI） → 同源 /api/session/*（当前 Web BFF）
                     → KOKORO_SESSION_BASE_URL（当前 live upstream）
 
-规划迁移（gateway 接入后）：
+接入 Gateway（配置开关打开后）：
 kokoro-app（Web UI） → 同源 /api/session/*（保持不变）
-                    → scaffolded LordFoxFairy/kokoro-gateway
-                    → Session / Agent runtime
+                    → LordFoxFairy/kokoro-gateway /sessions/*
+                    → kokoro-session
 ```
 
-`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也未进入当前 upstream 链路。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
+`LordFoxFairy/kokoro-gateway` 是已创建的独立仓库，但不属于本 checkout，也不包含 Web 页面。它的职责是承接跨产品的业务编排，而不是承接 Web 页面：认证与
 权限、域名上下文、会话/消息/Run 生命周期、SSE 事件、HITL 控制、幂等、错误映射、审计
-request id，以及向 Session/Agent runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
+request id，以及向 Session/Hub/User/System/Agent/Payment/Billing runtime 的服务间调用。`kokoro-app` 只负责桌面 UI、浏览器
 状态、同源 BFF 传输和 public projection。
 
 Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` → `SessionClient` →
@@ -60,7 +60,7 @@ Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` �
 | 责任 | kokoro-app | gateway（规划） | Session/Agent runtime |
 |---|---|---|---|
 | 页面、Composer、胶囊与交互 | 负责 | 不负责 | 不负责 |
-| 浏览器同源路径 | `/api/session/*` | 通过网关适配上游 | 不直接暴露 |
+| 浏览器同源路径 | `/api/session/*` | `/sessions/*` 兼容适配上游 | 不直接暴露 |
 | 登录信封、权限上下文、域名绑定 | 不读取内部 token；仅发送同源请求 | 服务端解析并校验 | 执行 runtime 级授权 |
 | 消息、Run、SSE、取消与 HITL 恢复 | 调用稳定契约并渲染状态 | 编排、幂等、错误和协议转换 | 生成模型/工具执行事件 |
 | 业务数据与跨产品规则 | 不持有 | 负责 | 负责执行侧状态 |
@@ -1320,7 +1320,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
-| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE | closed | conditional on auth/session | 已冻结 |
+| Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE；Gateway 接入时为 `/sessions/*` | closed | conditional on auth/session/gateway | 已冻结 |
 | Agent | `/app/agents` | `/api/agents/connections/setup` BFF + AgentClient | Preview closed | conditional on `KOKORO_AGENT_BASE_URL` | 独立页面与 setup BFF 已闭环；实际连接仍取决于 Agent upstream |
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
