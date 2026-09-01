@@ -81,6 +81,7 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 | 浏览器路径 | 实际实现 | 本版用途 |
 |---|---|---|
 | `/api/session/*` | `src/app/api/session/[...path]/route.ts` | Chat、artifact/library、文件、delivery、share 与 billing 的同源 BFF |
+| `/api/agents/*` | `src/app/api/agents/[...path]/route.ts` | Agent connection setup 的窄面同源 BFF |
 | `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all |
 | `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；上游为 Hub scheduled capability |
 | `/api/settings/*` | `src/app/api/settings/[...path]/route.ts` | Hub 的 `settings` 前缀别名 |
@@ -99,7 +100,6 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 - `/api/skills*`
 - `/api/library*`
 - `/api/artifacts*`
-- `/api/agents/connections/setup`
 - `/api/capsules*`
 - `/api/manifest*`
 
@@ -113,6 +113,8 @@ site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约�
 
 ```text
 /api/session/<path>          →  ${KOKORO_SESSION_BASE_URL}/<path>
+/api/agents/connections/setup?platform=PLATFORM
+                             →  ${KOKORO_AGENT_BASE_URL}/connections/setup?platform=PLATFORM
 /api/hub/<path>              →  ${KOKORO_HUB_BASE_URL}/hub/<path>
 /api/scheduled-tasks/<path>  →  ${KOKORO_HUB_BASE_URL}/hub/scheduled-tasks/<path>
 /api/settings/<path> →  ${KOKORO_HUB_BASE_URL}/hub/settings/<path>
@@ -180,6 +182,7 @@ read-only upstream projections until a versioned business-gateway contract trans
 
 - `KOKORO_SYSTEM_BASE_URL`
 - `KOKORO_HUB_BASE_URL`
+- `KOKORO_AGENT_BASE_URL`
 - `KOKORO_SYSTEM_WORKLOAD_TOKEN`
 - payment/billing 变量不属于本版七个 surface。
 
@@ -190,7 +193,7 @@ read-only upstream projections until a versioned business-gateway contract trans
 | Surface | Preview 入口 | Live 入口 | 当前闭环状态 |
 |---|---|---|---|
 | Chat | `previewClientFromEnv()` / `createPreviewClient` | `createSessionClient({baseUrl:"/api/session"})` | Preview closed；Live conditional |
-| Agent | `createPreviewAgentClient` | `createAgentClient` | Preview closed；Live client target，但当前 BFF route 未注册 |
+| Agent | `createPreviewAgentClient` | `createAgentClient` → `/api/agents/connections/setup` | Preview closed；Live conditional on Agent upstream |
 | Skills/MCP | `createPreviewHubClient` | `createHubClient` → `/api/hub` | Preview closed；Live conditional |
 | Library | Preview session client 的空 artifact 列表，或显式 fixture | `/api/session/artifacts` | Preview closed；Live conditional |
 | Scheduled | `preview=true` 时 localStorage | `browserScheduledTaskClient()` → `/api/scheduled-tasks*` BFF | 独立页面 Preview closed；Web/BFF live client 已接线，上游 capability pending |
@@ -644,7 +647,7 @@ type AgentConnectionSetup = {
 
 preview 值使用 `https://agents.fixture.test/connect?...&ticket=preview` 与对应 continue URL；不发 network request。UI 用 `expires_at` 与当前时间再次判断过期，过期时禁用 continue 并允许 retry。
 
-### 6.2 Live client target（Live not closed）
+### 6.2 Live BFF contract（Live conditional）
 
 `src/agents/client.ts` 的唯一 live client target 是：
 
@@ -654,7 +657,13 @@ GET /api/agents/connections/setup?platform=telegram|line|slack
 
 响应要求是上面的 flat `AgentConnectionSetup`，不是 `{data:...}`。
 
-**当前路由事实**：`src/app/api` 没有 `agents/connections/setup` 文件或 catch-all。因而该路径当前只属于 client target/test target，不属于已接通的 live API；调用方会收到非 2xx 并转为 `AgentClientError(status)`。本版不添加 `/api/agents/*` 路由，也不虚构 `KOKORO_AGENT_BASE_URL` 或上游 response。
+Web 已提供窄面的 `src/app/api/agents/[...path]/route.ts`。它只接受
+`connections/setup` 与单个 `platform=telegram|line|slack`，读取 HttpOnly session envelope，向
+`${KOKORO_AGENT_BASE_URL}/connections/setup` 注入 runtime Bearer、`x-kokoro-service: web-bff`、
+namespace/user/request id 和服务端 `Forwarded: host=<KOKORO_DOMAIN>`，再把 flat JSON/status 回传。
+未配置 `KOKORO_AGENT_BASE_URL` 返回 `503 {"error":"agent_not_configured"}`；上游不可达返回
+`502 {"error":"agent_unreachable"}`；缺少有效 session 返回 `401`。浏览器提供的 query/header
+不能选择 namespace、部署域名或内部凭据。
 
 ## 7. Skills 与 Hub / MCP / library-adjacent connectors
 
@@ -1264,7 +1273,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 | Surface | 浏览器入口 | 当前真实接口/本地来源 | Preview | Live | 本版结论 |
 |---|---|---|---|---|---|
 | Chat | `/app`、`/app/project/{ref}` | `/api/session/*` catch-all + SessionClient/SSE | closed | conditional on auth/session | 已冻结 |
-| Agent | `/app/agents` | preview client；live client target 无 app route | Preview closed | Live not closed | 独立页面/Preview setup 已闭环；Live route 未注册 |
+| Agent | `/app/agents` | `/api/agents/connections/setup` BFF + AgentClient | Preview closed | conditional on `KOKORO_AGENT_BASE_URL` | 独立页面与 setup BFF 已闭环；实际连接仍取决于 Agent upstream |
 | Skills | `/app/skills`、settings Skills | `/api/hub/self/skills/*` | closed | conditional on hub | 已冻结 |
 | MCP/connectors | settings / skills-adjacent | `/api/hub/self/mcp/*`、`/connectors/*` | closed | conditional on hub | 已冻结 |
 | Library | `/app/library` | `/api/session/artifacts*` | empty/download fixture | conditional on session | 已冻结 |
@@ -1276,7 +1285,7 @@ BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原�
 
 本版契约对应的本地实现入口：
 
-- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
+- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/agents/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
 - Chat types/client：`src/contract/http.ts`、`src/contract/control.ts`、`src/contract/session-events.ts`、`src/engine/client.ts`、`src/engine/machine.ts`
 - Preview Chat：`src/dev/preview-transport.ts`
 - Agent：`src/agents/client.ts`、`src/agents/preview-client.ts`

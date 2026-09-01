@@ -12,7 +12,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   - `openEnvelope(token, secrets, nowSec)`：解封并校验 exp；结构错、篡改、过期或全钥失败均返回 null。
   - `EnvelopePayload`：`{runtime_jwt, user_id, namespace, exp}`；部署域名不进入 cookie 信封。
 - `auth.ts`（Next 感知装配）
-  - `authConfig(env?)`：读取会话密钥、User/Session 上游地址和当前部署的 `KOKORO_DOMAIN`；配置不完整时返回 null。
+  - `authConfig(env?)`：读取会话密钥、User/Session 上游地址、可选 Agent/Hub 能力地址和当前部署的 `KOKORO_DOMAIN`；核心配置不完整时返回 null。
   - cookie：`SESSION_COOKIE`/`NONCE_COOKIE`、cookie options、`readCookie`/`readEnvelope`。
   - nonce：`newNonce`/`hashNonce`；`decodeJwtExp` 只解码不验签。
   - `callerHeaders`：组装 web-bff caller 凭据与服务端 RFC 7239 `Forwarded`。
@@ -30,7 +30,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 
 - `KOKORO_DOMAIN` 是独立产品部署的唯一域名上下文，部署时从环境注入；它不是 React prop、URL、body、
   localStorage 或用户可编辑字段。
-- 所有 BFF → User、Session、System、Hub、Billing、Shared 上游请求都经 `upstream-http.ts` 或
+- 所有 BFF → User、Session、Agent、System、Hub、Billing、Shared 上游请求都经 `upstream-http.ts` 或
   `callerHeaders`，服务端统一附加 `Forwarded: host=<KOKORO_DOMAIN>`。
 - 浏览器提供的 `Host`、RFC 7239 `Forwarded`、tenant/site 字段不参与后端上下文选择；上游后端根据 RFC 7239 `Forwarded`
   完成租户解析、认证授权和数据隔离。
@@ -42,6 +42,7 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 
 - `src/app/api/auth/*`：认证和会话 cookie。
 - `src/app/api/session/[...path]`：Session HTTP/SSE 代理。
+- `src/app/api/agents/[...path]`：Agent connection setup 的窄面 GET 代理。
 - `src/app/api/team/*`：User team BFF；namespace 与 actor 从密封信封派生。
 - `src/app/api/hub/*`、`settings/*`、`mail/*`：Hub 能力代理。
 - `src/app/api/system/runtime-manifest`：System 公开 manifest 投影。

@@ -231,9 +231,10 @@ Preview clock 固定为 `2026-08-30T12:00:00Z`，timezone 使用 `America/New_Yo
 | `agent.setup.line` | LINE 200 | 切 tab 后 QR、链接和可见文案同步更新 |
 | `agent.setup.slack` | Slack 200 | 授权说明与 Slack allowlisted URL，不复用 Telegram ticket |
 | `agent.setup.loading` | delayed | 保留 `160×160px` QR 槽和 `400×446px` Dialog，不发生布局跳动 |
-| `agent.setup.not-configured` | 501 | 不渲染假链接，允许关闭 Dialog |
+| `agent.setup.not-configured` | BFF 503 `agent_not_configured` | 不渲染假链接，允许关闭 Dialog |
 | `agent.setup.retryable` | 503 | 不泄漏响应 details，重试签发新 ticket |
 | `agent.setup.expired` | ticket 过期 | 继续入口失效并重新请求 setup，不在前端续签 |
+| `agent.setup.live-bff` | `GET /api/agents/connections/setup?platform=...` | 只接受 allowlisted platform；服务端注入 runtime/session identity 与 `Forwarded`，额外 query/header 不扩大 scope |
 
 固定 preview payload 只使用 `https://agents.fixture.test`：
 

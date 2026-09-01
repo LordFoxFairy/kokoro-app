@@ -32,7 +32,7 @@ checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package�
 |---|---|
 | `kokoro-app` 同源 Session BFF | **current**；转发到 `KOKORO_SESSION_BASE_URL` |
 | `kokoro-gateway` | **scaffolded**；已创建独立仓库，未作为当前 upstream 接入 |
-| Agent 独立 surface | Preview closed；Live not closed（client target 无 BFF route） |
+| Agent 独立 surface | Preview closed；Web 已提供 `/api/agents/connections/setup` BFF；Live conditional on Agent upstream |
 | Scheduled 独立 surface | Preview closed；Web/BFF live adapter 已注入；上游 scheduled capability pending |
 
 ### 当前已实现
@@ -52,8 +52,9 @@ checkout 的子目录、当前 upstream 或 `kokoro-app` 的 workspace package�
   Run 和事件，不承担 Web 页面适配。
 
 未完成项必须明确标记：在 gateway 尚未接入当前部署前，当前 Web 的 Preview Chat 可以闭环，
-Live Chat 仍取决于 `KOKORO_SESSION_BASE_URL` 对应服务；Agent/Scheduled 的独立页面只在各自
-Preview fixture 下闭环，不能把该 Preview 闭环写成 Live backend 已接通。本文不把规划目标写成 Live 已完成。
+Live Chat 仍取决于 `KOKORO_SESSION_BASE_URL` 对应服务；Agent setup 的 Web BFF 已存在但实际连接
+仍取决于 `KOKORO_AGENT_BASE_URL`，Scheduled live 仍取决于 Hub scheduled capability。本文不把
+Web/BFF 接线写成 backend 已部署。
 
 ## 3. Chat 浏览器契约
 

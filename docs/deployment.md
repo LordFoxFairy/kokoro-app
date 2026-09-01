@@ -109,6 +109,8 @@ Web BFF 的 session-compatible upstream 指向独立的 `LordFoxFairy/kokoro-gat
 ```dotenv
 # kokoro-app（仅服务端）
 KOKORO_SESSION_BASE_URL="http://kokoro-gateway:8080"
+# Agent connection setup 可复用同一网关的 `/agents` 能力前缀。
+KOKORO_AGENT_BASE_URL="http://kokoro-gateway:8080/agents"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-gateway-secret>"
 ```
 
@@ -204,6 +206,7 @@ KOKORO_DOMAIN
 KOKORO_WEB_SESSION_SECRET
 KOKORO_USER_BASE_URL
 KOKORO_SESSION_BASE_URL
+KOKORO_AGENT_BASE_URL                 # optional Agent connection setup upstream
 KOKORO_SYSTEM_BASE_URL
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
 KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy

@@ -31,6 +31,8 @@ export interface AuthConfig {
   /** Canonical deployment domain encoded in RFC 7239 `Forwarded`. */
   domain: string
   hubBaseUrl: string | null
+  // Agent connection setup upstream; optional until the Agent capability is deployed.
+  agentBaseUrl?: string | null
   // payment 服务面（经网关到 kokoro-payment）；未配置=预览档（PAY-2 价格页据此降级为诚实未开通态）。
   paymentBaseUrl: string | null
   // billing 迁移面；配置后新契约优先，未配置时保留 payment 旧读面用于双读切换。
@@ -88,6 +90,7 @@ export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig | n
     sessionBaseUrl,
     domain,
     hubBaseUrl: env.KOKORO_HUB_BASE_URL?.trim() || null,
+    agentBaseUrl: env.KOKORO_AGENT_BASE_URL?.trim() || null,
     paymentBaseUrl: env.KOKORO_PAYMENT_BASE_URL?.trim() || null,
     billingBaseUrl: env.KOKORO_BILLING_BASE_URL?.trim() || null,
     internalSecret,
