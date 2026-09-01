@@ -2,6 +2,8 @@
 
 状态：当前业务层实施基线（2026-09-01）。本文件优先于旧的 Gateway 兼容说明。
 
+资源级 API 文档和机器可读契约以独立 BFF 子仓库为准：[`LordFoxFairy/kokoro-bff/docs/api/v1`](https://github.com/LordFoxFairy/kokoro-bff/tree/main/docs/api/v1)。本 Web 文档只记录浏览器 `/api/*` 到 BFF `/v1/*` 的适配关系，不复制 BFF 的业务实现。
+
 ## 1. 三个独立子仓库
 
 ```text
