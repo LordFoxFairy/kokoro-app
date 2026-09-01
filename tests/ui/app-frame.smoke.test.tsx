@@ -817,12 +817,17 @@ it.each([
     </ThemeProvider>,
   )
 
-  await waitFor(() => expect(screen.getByTestId("app-frame-conversation-error")).toBeInTheDocument())
-  expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
-  expect(screen.getByRole("button", { name: "重试" })).toBeEnabled()
+  const conversationError = await waitFor(() => {
+    const surface = screen.getByTestId("app-frame-conversation-error")
+    expect(surface).toBeInTheDocument()
+    return surface
+  })
+  // 会话列表和当前会话可能同时出现错误提示，断言必须限定在当前会话错误面板内。
+  expect(conversationError).toHaveTextContent("会话列表加载失败")
+  expect(within(conversationError).getByRole("button", { name: "重试" })).toBeEnabled()
   expect(screen.queryByTestId("project-task-welcome")).toBeNull()
 
-  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  fireEvent.click(within(conversationError).getByRole("button", { name: "重试" }))
 
   await waitFor(() => expect(client.snapshotCalls.filter((id) => id.endsWith("snapshot_failed"))).toHaveLength(2))
   await waitFor(() => expect(document.querySelector(`[data-slot="${emptyTestId}"]`)).toBeInTheDocument())
