@@ -74,11 +74,13 @@ Chat 的“承接”边界因此是：`AppFrame`/Composer → `SessionEngine` �
 业务规则、数据库、服务凭据、runtime adapter 与 gateway 实现留在各自后端仓库。这样每个
 site/product 仍是一套独立 Web 子仓库，Chat 只通过稳定 API 契约与统一网关对接。
 
-统一 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 的 server-only 总入口。配置后，
-未显式设置的 `KOKORO_USER_BASE_URL`、`KOKORO_SESSION_BASE_URL`、`KOKORO_HUB_BASE_URL`、
-`KOKORO_AGENT_BASE_URL` 和 `KOKORO_SYSTEM_BASE_URL` 自动使用 Gateway 根地址；Payment 与独立
-Billing 自动使用 `/payment`、`/billing-service` 命名空间。显式的单服务地址优先，用于分阶段迁移，
-不会改变浏览器的 `/api/*` 路径。
+统一 Gateway 配置：`KOKORO_GATEWAY_BASE_URL` 是 Web BFF 的 server-only 总入口，必须填写
+Gateway 的 authority root（例如 `http://kokoro-gateway:8080`），不要在值末尾追加
+`/sessions`、`/hub` 或其它 namespace。配置后，未显式设置的 `KOKORO_USER_BASE_URL`、
+`KOKORO_SESSION_BASE_URL`、`KOKORO_HUB_BASE_URL`、`KOKORO_AGENT_BASE_URL` 和
+`KOKORO_SYSTEM_BASE_URL` 使用这个根地址；各 BFF 自己在请求 path 上拼接对应的 Gateway
+namespace。Payment 与独立 Billing 由各自 adapter 使用 `/payment`、`/billing-service` 命名空间。
+显式的单服务地址优先，用于分阶段迁移，不会改变浏览器的 `/api/*` 路径。
 
 ## 1. 当前 API 路由注册表
 
@@ -127,13 +129,22 @@ Billing 自动使用 `/payment`、`/billing-service` 命名空间。显式的单
 /api/mail/<path>     →  ${KOKORO_HUB_BASE_URL}/hub/mail/<path>
 ```
 
-当设置 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，上述基址解析为：
+当设置 `KOKORO_GATEWAY_BASE_URL` 且没有对应显式覆盖时，实际目标 path 为：
 
 ```text
-Session/User/Hub/Agent/System → ${KOKORO_GATEWAY_BASE_URL}/<gateway namespace path>
-Payment                        → ${KOKORO_GATEWAY_BASE_URL}/payment/*
-独立 Billing                   → ${KOKORO_GATEWAY_BASE_URL}/billing-service/*
+Chat/Session   → ${KOKORO_GATEWAY_BASE_URL}/sessions/<path>
+User auth      → ${KOKORO_GATEWAY_BASE_URL}/auth/*
+Team BFF       → ${KOKORO_GATEWAY_BASE_URL}/bff/*
+Hub            → ${KOKORO_GATEWAY_BASE_URL}/hub/<path>
+Agent setup    → ${KOKORO_GATEWAY_BASE_URL}/connections/setup
+System         → ${KOKORO_GATEWAY_BASE_URL}/system/runtime-manifest
+Payment        → ${KOKORO_GATEWAY_BASE_URL}/payment/<path>
+独立 Billing   → ${KOKORO_GATEWAY_BASE_URL}/billing-service/<path>
 ```
+
+因此 Chat 的承接链路是：浏览器 `/api/session/*` → Web BFF → Gateway
+`/sessions/*` → `kokoro-session`。Web BFF 仍然是同源鉴权和浏览器边界；Gateway 是
+server-only transport/业务入口；Session 继续拥有 Chat 的消息、Run、SSE、文件和分享事实。
 
 BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route 为 nodejs），不把服务地址编入浏览器 bundle。
 

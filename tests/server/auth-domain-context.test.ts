@@ -39,7 +39,7 @@ describe("auth BFF deployment domain context", () => {
     } as unknown as NodeJS.ProcessEnv)).toBeNull()
   })
 
-  it("uses one server-only gateway base for all Web business defaults", () => {
+  it("uses one server-only gateway root for all Web business defaults", () => {
     const config = authConfig({
       KOKORO_WEB_SESSION_SECRET: "secret",
       KOKORO_GATEWAY_BASE_URL: "http://gateway.internal/",
@@ -47,6 +47,8 @@ describe("auth BFF deployment domain context", () => {
     } as unknown as NodeJS.ProcessEnv)
 
     expect(config).toMatchObject({
+      // Session, Hub, User, and Agent BFFs append their own gateway namespace
+      // to the request path; the configured base itself stays at the root.
       userBaseUrl: "http://gateway.internal",
       sessionBaseUrl: "http://gateway.internal",
       hubBaseUrl: "http://gateway.internal",

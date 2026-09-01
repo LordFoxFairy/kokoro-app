@@ -15,8 +15,14 @@ Chat 在这里承接：Direct Chat 与 Project Chat 共用一个 `AppFrame`、�
   → AppFrame / Composer
   → SessionEngine(scope)
   → /api/session/*（同源 Web BFF）
-  → KOKORO_SESSION_BASE_URL 或 KOKORO_GATEWAY_BASE_URL
+  → KOKORO_SESSION_BASE_URL 或 KOKORO_GATEWAY_BASE_URL/sessions/*
+  → kokoro-session
 ```
+
+这里的 `KOKORO_GATEWAY_BASE_URL` 只填写 Gateway authority root，不带 `/sessions`。
+Web BFF 根据浏览器请求中的 Session path 生成 Gateway 的 `/sessions/*`；因此 Direct Chat
+和 Project Chat 不需要各自的 `/chat` 网关 API，也不会把 Gateway URL、token 或内部 header
+暴露给浏览器。
 
 ## 2. 路由与 scope
 

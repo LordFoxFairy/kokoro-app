@@ -10,6 +10,7 @@ const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",
   KOKORO_USER_BASE_URL: "http://user.test",
   KOKORO_SESSION_BASE_URL: "http://session.test",
+  KOKORO_GATEWAY_BASE_URL: "http://gateway.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
@@ -56,6 +57,20 @@ describe("/api/session/[...path] proxy", () => {
     expect(new Headers(init.headers).get("authorization")).toBe("Bearer rt.jwt.sig")
     expect(new Headers(init.headers).get("x-kokoro-service")).toBe("web-bff")
     expect(new Headers(init.headers).get("x-kokoro-internal-secret")).toBe("web-bff-secret")
+  })
+
+  it("maps Chat to the Gateway /sessions namespace when the direct Session base is omitted", async () => {
+    delete process.env.KOKORO_SESSION_BASE_URL
+    requestWithDomain.mockResolvedValue(new Response("{}", { status: 200, headers: { "content-type": "application/json" } }))
+    const { GET } = await import("@/app/api/session/[...path]/route")
+
+    await GET(
+      new Request("http://localhost/api/session/sessions/ses_1/messages", { headers: { cookie: sessionCookie() } }),
+      params(["sessions", "ses_1", "messages"]),
+    )
+
+    const [target] = requestWithDomain.mock.calls[0] as [string]
+    expect(target).toBe("http://gateway.test/sessions/ses_1/messages")
   })
 
   it("streams an SSE response through unchanged (content-type + body)", async () => {

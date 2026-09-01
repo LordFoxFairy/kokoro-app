@@ -10,6 +10,7 @@ const ENV = {
   KOKORO_USER_BASE_URL: "http://user.test",
   KOKORO_SESSION_BASE_URL: "http://session.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
+  KOKORO_GATEWAY_BASE_URL: "http://gateway.test",
   KOKORO_HUB_BASE_URL: "http://hub.test",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "svc-secret",
 }
@@ -57,6 +58,20 @@ describe("/api/hub/[...path] proxy", () => {
     expect(init.headers["x-kokoro-user-id"]).toBe("u1")
   })
 
+  it("maps Hub requests to the Gateway /hub namespace when the direct Hub base is omitted", async () => {
+    delete process.env.KOKORO_HUB_BASE_URL
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"data":{"skills":[]}}', { status: 200, headers: { "content-type": "application/json" } }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+
+    await GET(
+      new Request("http://localhost/api/hub/self/skills/pool", { headers: { cookie: sessionCookie() } }),
+      params(["self", "skills", "pool"]),
+    )
+
+    const [target] = vi.mocked(requestWithDomain).mock.calls[0] as [string]
+    expect(target).toBe("http://gateway.test/hub/self/skills/pool")
+  })
+
   it("never forwards a browser-supplied scope header (identity from envelope only)", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"data":{"skills":[]}}', { status: 200, headers: { "content-type": "application/json" } }))
     const { GET } = await import("@/app/api/hub/[...path]/route")
@@ -97,6 +112,7 @@ describe("/api/hub/[...path] proxy", () => {
 
   it("returns 503 when hub base url is not configured (preview build)", async () => {
     delete process.env.KOKORO_HUB_BASE_URL
+    delete process.env.KOKORO_GATEWAY_BASE_URL
     vi.stubGlobal("fetch", vi.fn())
     const { GET } = await import("@/app/api/hub/[...path]/route")
     const res = await GET(

@@ -22,8 +22,9 @@ Gateway 接入（浏览器路径保持不变）：
        → Session runtime
 ```
 
-Web 侧以单一 server-only `KOKORO_GATEWAY_BASE_URL` 作为推荐接入开关；未显式设置的各
-`KOKORO_*_BASE_URL` 会按 Gateway namespace 自动解析，显式服务地址可用于灰度迁移。
+Web 侧以单一 server-only `KOKORO_GATEWAY_BASE_URL` 作为推荐接入开关；该值是 Gateway
+authority root，不包含 `/sessions` 等 namespace。未显式设置的各 `KOKORO_*_BASE_URL` 使用
+这个 root，由 Web BFF 在 path 上拼接 Gateway namespace；显式服务地址可用于灰度迁移。
 
 独立仓库为 [`LordFoxFairy/kokoro-gateway`](https://github.com/LordFoxFairy/kokoro-gateway)。它不是当前
 checkout 的子目录、`kokoro-app` 的 workspace package 或页面代码。Gateway 已具备 Chat/Session
