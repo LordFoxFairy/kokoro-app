@@ -398,13 +398,28 @@ function PoolTab({
     setCatalogHandoffVersion((version) => version + 1)
   }, [])
 
-  useLayoutEffect(() => {
-    if (catalogOpen) return
+  const finishCatalogHandoff = useCallback((event?: Event) => {
     const handoff = catalogHandoffRef.current
-    if (handoff === null) return
+    if (handoff === null) return false
+    event?.preventDefault()
     catalogHandoffRef.current = null
     handoff()
-  }, [catalogOpen, catalogHandoffVersion])
+    return true
+  }, [])
+
+  useLayoutEffect(() => {
+    if (catalogOpen) return
+    // Controlled Radix dialogs normally call onCloseAutoFocus after the
+    // portal exits. The committed state is the fallback for environments
+    // where Presence skips that callback (notably jsdom under load).
+    const frame = window.requestAnimationFrame(() => finishCatalogHandoff())
+    return () => window.cancelAnimationFrame(frame)
+  }, [catalogOpen, catalogHandoffVersion, finishCatalogHandoff])
+
+  const handleCatalogCloseAutoFocus = useCallback((event: Event) => {
+    if (finishCatalogHandoff(event)) return
+    restoreCatalogTriggerFocus(event)
+  }, [finishCatalogHandoff, restoreCatalogTriggerFocus])
 
   // The destructive action is replaced inline. Explicitly move focus to the
   // confirmation control so the scroll viewport never becomes the active
@@ -742,7 +757,7 @@ function PoolTab({
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false)
         }}
-        onCloseAutoFocus={restoreCatalogTriggerFocus}
+        onCloseAutoFocus={handleCatalogCloseAutoFocus}
         client={client}
         enabledOverrides={enabledOverrides}
         installedOverrides={installedOverrides}
@@ -965,8 +980,18 @@ function SkillCatalogDialog({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={(event) => selectCreateAction(() => onOpenUpload(catalogCreateTriggerRef), event)}><Upload aria-hidden="true" />{t("skills.uploadSkill")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={(event) => selectCreateAction(() => onOpenGithub(catalogCreateTriggerRef), event)}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} />{t("skills.importGithub")}</DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => selectCreateAction(() => onOpenUpload(catalogCreateTriggerRef), event)}
+                  onClick={() => selectCreateAction(() => onOpenUpload(catalogCreateTriggerRef))}
+                >
+                  <Upload aria-hidden="true" />{t("skills.uploadSkill")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => selectCreateAction(() => onOpenGithub(catalogCreateTriggerRef), event)}
+                  onClick={() => selectCreateAction(() => onOpenGithub(catalogCreateTriggerRef))}
+                >
+                  <Image src="/assets/connectors/github.webp" alt="" width={16} height={16} />{t("skills.importGithub")}
+                </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
