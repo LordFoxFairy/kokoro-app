@@ -50,7 +50,9 @@
 - 三重代际守卫（stream/hydrate/filesSync）：关流/切会话后迟到回调一律丢弃。
 - run 收尾对账吸收 snapshot.files 与 snapshot.deliveries（成果整表替换，contentHash 同形）。
 - 事件微任务窗口批量折叠一次（replay 洪峰不逐事件快照）。
-- resume 的 decision_id 与提交 idempotency_key 复用语义是幂等前提，重试不得换新 id。
+- control body 不携带旧的 `decision_id`；cancel/resume/steer 均通过 `Idempotency-Key` 传递
+  稳定 command identity。resume 重试不得换新 command id；body 保持
+  `{kind, session_id, decisions}`（cancel 为 `{kind, session_id}`，steer 另带 message/content）。
 - control 撞 STALE 冲突码（run_not_active/no_pending_pause/session_deleted）→ 清暂存 +
   snapshot 对账重水合，绝不把用户卡死在 awaiting-hitl。
 - awaiting-hitl 与已见 live 事件的 streaming 撤 90s 兜底；仅 reattaching 持 TIMEOUT 计时。

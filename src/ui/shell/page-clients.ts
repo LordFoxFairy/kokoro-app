@@ -14,7 +14,6 @@ import { createBillingClient, type BillingClient } from "@/billing/client"
 import { createPricingClient, type PricingClient } from "@/billing/pricing"
 import { createHubClient, type HubClient } from "@/hub/client"
 import { createTeamClient, type TeamClient } from "@/team/client"
-import { createDataManagementClient, type DataManagementClient } from "@/data-management/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
 import { createPreviewAgentClient } from "@/agents/preview-client"
 import { createScheduledTaskClient, type ScheduledTaskClient } from "@/features/app/scheduled-task-client"
@@ -23,7 +22,6 @@ import {
   createPreviewHubClient,
   createPreviewPricingClient,
   createPreviewTeamClient,
-  createPreviewDataManagementClient,
 } from "@/dev/preview-clients"
 
 const STORAGE_KEY = "kokoro.web.conversations"
@@ -84,17 +82,6 @@ export function browserTeamClient(options: { preview?: boolean } = {}): TeamClie
     pageTeamClient = createTeamClient()
   }
   return pageTeamClient
-}
-
-let pageDataManagementClient: DataManagementClient | null = null
-let pagePreviewDataManagementClient: DataManagementClient | null = null
-export function browserDataManagementClient(options: { preview?: boolean } = {}): DataManagementClient {
-  if (options.preview === true) {
-    if (!pagePreviewDataManagementClient) pagePreviewDataManagementClient = createPreviewDataManagementClient()
-    return pagePreviewDataManagementClient
-  }
-  if (!pageDataManagementClient) pageDataManagementClient = createDataManagementClient()
-  return pageDataManagementClient
 }
 
 let pageAgentClient: AgentClient | null = null

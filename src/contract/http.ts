@@ -178,26 +178,6 @@ export const billingSummarySchema = z
   .strict()
 export type BillingSummary = z.infer<typeof billingSummarySchema>
 
-export const websiteUsageCategorySchema = z.object({
-  key: z.enum(["cloud", "ai", "integration"]),
-  label: z.string().min(1),
-  free_used_minor: z.string().min(1),
-  free_limit_minor: z.string().min(1),
-  paid_minor: z.string().min(1),
-}).strict()
-
-export const billingUsageSchema = z.object({
-  auto_top_up_enabled: z.boolean(),
-  reset_at: z.string().datetime().nullable(),
-  period_start: z.string().datetime(),
-  period_end: z.string().datetime(),
-  total_cost_minor: z.string().min(1),
-  categories: z.array(websiteUsageCategorySchema),
-  websites: z.array(z.object({ id: z.string().min(1), name: z.string().min(1), cost_minor: z.string().min(1) }).strict()),
-  computers: z.array(z.object({ id: z.string().min(1), name: z.string().min(1), status: z.string().min(1) }).strict()),
-}).strict()
-export type BillingUsage = z.infer<typeof billingUsageSchema>
-
 export const billingLedgerEntrySchema = z
   .object({
     entry_id: z.string().min(1),
@@ -281,13 +261,24 @@ export const messageCreateReceiptSchema = z
 export type MessageCreateReceipt = z.infer<typeof messageCreateReceiptSchema>
 
 export const runControlBodySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("run.cancel"), decision_id: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("run.resume"), decision_id: z.string().min(1), decisions: z.array(resumeDecisionSchema).min(1) }).strict(),
+  z.object({ kind: z.literal("run.cancel"), session_id: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("run.resume"), session_id: z.string().min(1), decisions: z.array(resumeDecisionSchema).min(1) }).strict(),
+  z.object({ kind: z.literal("run.steer"), session_id: z.string().min(1), message_id: z.string().min(1), content: z.string().min(1) }).strict(),
 ])
 export type RunControlBody = z.infer<typeof runControlBodySchema>
 
-export const runControlReceiptSchema = z.object({ ok: z.literal(true) }).strict()
+export const runControlReceiptSchema = z.object({
+  run_id: z.string().min(1),
+  command_id: z.string().min(1),
+  request_digest: z.string().min(1),
+  status: z.enum(["pending", "succeeded", "failed"]),
+  error_code: z.string().min(1).nullable().optional(),
+  replayed: z.boolean(),
+}).strict()
 export type RunControlReceipt = z.infer<typeof runControlReceiptSchema>
+
+export const mutationReceiptSchema = z.object({ ok: z.literal(true) }).strict()
+export type MutationReceipt = z.infer<typeof mutationReceiptSchema>
 
 export const renameSessionBodySchema = z.object({ title: z.string().min(1) }).strict()
 export type RenameSessionBody = z.infer<typeof renameSessionBodySchema>
@@ -297,7 +288,7 @@ export type RenameSessionReceipt = z.infer<typeof renameSessionReceiptSchema>
 export const shareReceiptSchema = z.object({ share_id: z.string().min(1) }).strict()
 export type ShareReceipt = z.infer<typeof shareReceiptSchema>
 
-export const controlReceiptViewSchema = z.object({ decision_id: z.string().min(1), status: z.enum(["pending", "persisted", "applied", "failed"]) }).strict()
+export const controlReceiptViewSchema = z.object({ command_id: z.string().min(1), status: z.enum(["pending", "succeeded", "failed"]), replayed: z.boolean().optional() }).strict()
 export type ControlReceiptView = z.infer<typeof controlReceiptViewSchema>
 
 export const deleteSessionReceiptSchema = z.object({ status: z.string().min(1) }).strict()
@@ -384,8 +375,8 @@ export function deliveryPath(sessionId: string, contentHash: string): string {
 export function controlPath(sessionId: string, runId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control`
 }
-export function controlReceiptPath(sessionId: string, runId: string, decisionId: string): string {
-  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control/${opaquePathSegment(decisionId)}`
+export function controlReceiptPath(sessionId: string, runId: string, commandId: string): string {
+  return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control/${opaquePathSegment(commandId)}`
 }
 export function sessionsPath(): string {
   return `/sessions`

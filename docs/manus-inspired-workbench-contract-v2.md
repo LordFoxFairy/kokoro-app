@@ -43,7 +43,7 @@ Manus v2 的公开 API 将 `task`、`project`、`file`、`webhook` 分成独立�
 | 新消息/新运行 | `/api/session/sessions/{id}/messages` | `/sessions/{id}/messages` | body `idempotency_key`，失败重试复用同键 |
 | 会话快照 | `/api/session/sessions/{id}` | `/sessions/{id}` | 只读 |
 | 增量事件 | `/api/session/sessions/{id}/events` | `/sessions/{id}/events` | `Last-Event-ID` 续流 |
-| HITL 控制 | `/api/session/sessions/{id}/runs/{run}/control` | 同路径 | 控制 body 带 `decision_id` |
+| HITL 控制 | `/api/session/sessions/{id}/runs/{run}/control` | 同路径 | 使用 `Idempotency-Key` 返回异步 control receipt |
 | 分享/撤销 | `/api/session/sessions/{id}/share` | 同路径 | 活跃分享重复创建返回同 `share_id` |
 | 作品库 | `/api/session/artifacts?cursor=` | `/artifacts` | 只读游标分页 |
 

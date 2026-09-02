@@ -196,11 +196,9 @@ tenant/site header 都不能改变结果。
 
 ## 9. 当前迁移顺序
 
-1. 新建 `ProjectClient` 和 `DeveloperClient`，替换项目空态与 Developer 组件内 fetch。
-2. 新建 `ConnectorClient`，统一普通连接器、MCP 与 integrations 的 catalog/installation 语义。
-3. 新建 `ExecutionResourceClient`，承接 computer/deployment/domain operation。
-4. 新建 `UserSettingsClient`，承接 account/preferences/personalization/mail。
-5. 为 `/api/settings/[...path]` 与 `/api/hub/[...path]` 增加路径 allowlist 和 method matrix。
+1. 完成 `ProjectClient`、`ConnectorClient` 与 `ExecutionResourceClient` 的正式 BFF 接线。
+2. 将仍属 v1 的 account/preferences/personalization 等业务面按实际 owner 接入 BFF；未接线面保持明确禁用，不添加浏览器直连或死路由。
+3. 为现有 `/api/hub/[...path]`、`/api/agents/[...path]` 与 `/api/session/[...path]` 保持路径 allowlist 和 method matrix，并以 v4 contract test 锁定。
 
 ## 10. 独立排程日历 Fixtures
 

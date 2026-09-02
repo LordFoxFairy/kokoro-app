@@ -21,7 +21,6 @@ import type {
   UploadPreview,
 } from "@/hub/schemas"
 import type { TeamClient, TeamDetail, TeamSummary } from "@/team/client"
-import type { DataManagementClient } from "@/data-management/client"
 
 const previewUpdatedAt = Date.UTC(2026, 7, 28)
 const previewSkills: SkillCard[] = [
@@ -309,20 +308,6 @@ export function createPreviewBillingClient(): BillingClient {
     summary: () => Promise.resolve({ balance_micros: "10000000", held_micros: "0", quota_micros: null, quota_period: null, plan_label: "Free", free_credit_micros: "10000000", daily_refresh_micros: "3000000", daily_refresh_time: "00:00" }),
     ledger: () => Promise.resolve(ledger),
     byModel: (): Promise<BillingByModel> => Promise.resolve({ period_start: new Date().toISOString(), items: [{ model_binding_id: null, model_name: "Preview model", spent_micros: "125000", run_count: 1 }] }),
-    usage: () => Promise.resolve({
-      auto_top_up_enabled: false,
-      reset_at: "2026-09-01T00:00:00.000Z",
-      period_start: "2026-08-01T00:00:00.000Z",
-      period_end: "2026-08-29T23:59:59.000Z",
-      total_cost_minor: "0",
-      categories: [
-        { key: "cloud", label: "Cloud services", free_used_minor: "0", free_limit_minor: "1000", paid_minor: "0" },
-        { key: "ai", label: "Artificial intelligence", free_used_minor: "0", free_limit_minor: "100", paid_minor: "0" },
-        { key: "integration", label: "Integrations", free_used_minor: "0", free_limit_minor: "100", paid_minor: "0" },
-      ],
-      websites: [],
-      computers: [],
-    }),
   }
 }
 
@@ -356,24 +341,5 @@ export function createPreviewTeamClient(): TeamClient {
     changeRole: () => Promise.resolve(),
     removeMember: () => Promise.resolve(),
     switchTeam: (teamId) => Promise.resolve(teamId),
-  }
-}
-
-export function createPreviewDataManagementClient(): DataManagementClient {
-  let persistSignIn = false
-  return {
-    summary: () => Promise.resolve({
-      sharedTasks: [],
-      sharedFiles: [],
-      archivedTasks: [],
-      authorizedApps: [],
-      cloudBrowser: { persistSignIn, sites: [] },
-    }),
-    setCloudBrowserPersistence: (enabled) => {
-      persistSignIn = enabled
-      return Promise.resolve({ persistSignIn })
-    },
-    revokeAuthorizedApp: () => Promise.resolve(),
-    removeCloudBrowserSite: () => Promise.resolve(),
   }
 }

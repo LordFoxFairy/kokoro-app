@@ -11,6 +11,7 @@ import {
   messagesPath,
   parseSessionSnapshot,
   runControlReceiptSchema,
+  mutationReceiptSchema,
   sessionListSchema,
   sessionsPath,
   sharePath,
@@ -26,6 +27,7 @@ import {
   type ModelCandidateList,
   type RunControlBody,
   type RunControlReceipt,
+  type MutationReceipt,
   type SessionList,
   type SessionSnapshot,
   type ShareReceipt,
@@ -73,6 +75,7 @@ export type SessionClient = {
     sessionId: string,
     runId: string,
     body: RunControlBody,
+    commandId: string,
   ) => Promise<RunControlReceipt>
   // 软删除（technical/16）：服务端打状态位；幂等（不存在/已删除同为 202）。
   deleteSession: (sessionId: string) => Promise<DeleteSessionReceipt>
@@ -86,7 +89,7 @@ export type SessionClient = {
   listArtifacts: (cursor?: string) => Promise<ArtifactList>
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
   createShare: (sessionId: string) => Promise<ShareReceipt>
-  revokeShare: (sessionId: string) => Promise<RunControlReceipt>
+  revokeShare: (sessionId: string) => Promise<MutationReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
 }
 
@@ -133,14 +136,21 @@ async function parseJsonResponse<T>(response: Response, parse: (raw: unknown) =>
   }
 }
 
-async function postJson<T>(url: string, body: unknown, parse: (raw: unknown) => T): Promise<T> {
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  parse: (raw: unknown) => T,
+  commandId?: string,
+): Promise<T> {
   let response: Response
   const bodyRecord = typeof body === "object" && body !== null && !Array.isArray(body)
     ? body as Record<string, unknown>
     : null
-  const idempotencyKey = typeof bodyRecord?.idempotency_key === "string" && bodyRecord.idempotency_key.trim() !== ""
-    ? bodyRecord.idempotency_key.trim()
-    : `session-mutation:${crypto.randomUUID()}`
+  const idempotencyKey = commandId?.trim() || (
+    typeof bodyRecord?.idempotency_key === "string" && bodyRecord.idempotency_key.trim() !== ""
+      ? bodyRecord.idempotency_key.trim()
+      : `session-mutation:${crypto.randomUUID()}`
+  )
   try {
     response = await fetch(url, {
       method: "POST",
@@ -290,11 +300,11 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       if (!response.ok) {
         throw await httpError("DELETE", target, response)
       }
-      return parseJsonResponse(response, (raw) => runControlReceiptSchema.parse(raw))
+      return parseJsonResponse(response, (raw) => mutationReceiptSchema.parse(raw))
     },
 
-    sendControl: (sessionId, runId, body) =>
-      postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw)),
+    sendControl: (sessionId, runId, body, commandId) =>
+      postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw), commandId),
 
     deleteSession: async (sessionId) => {
       const target = url(snapshotPath(sessionId))  // DELETE 与 snapshot 同路径（契约）

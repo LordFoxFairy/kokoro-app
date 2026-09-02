@@ -1,5 +1,5 @@
 "use client"
-import { AppWindow, CalendarDays, CalendarSync, CircleHelp, Monitor, Plus, Sparkles } from "lucide-react"
+import { CalendarDays, CalendarSync, CircleHelp, Sparkles } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -17,8 +17,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { BillingByModel, BillingLedgerEntry, BillingSummary, BillingUsage } from "@/contract/http"
-import { creditsToNumber, formatCredits, formatMinor, formatSignedCredits, microSign } from "@/billing/format"
+import type { BillingByModel, BillingLedgerEntry, BillingSummary } from "@/contract/http"
+import { creditsToNumber, formatCredits, formatSignedCredits, microSign } from "@/billing/format"
 import type { BillingClient } from "@/billing/client"
 import { useLocale, useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
@@ -46,12 +46,6 @@ type LedgerState =
   | { kind: "loading" }
   | { kind: "error" }
   | { kind: "ready"; entries: BillingLedgerEntry[]; cursor: string | undefined; loadingMore: boolean }
-
-type UsageState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "ready"; usage: BillingUsage }
 
 // 流水筛选：全部 / 仅消费（delta<0）/ 仅入账（delta>0）。
 type LedgerFilter = "all" | "spend" | "credit"
@@ -180,42 +174,6 @@ function MetricHelp({ label }: { label: string }) {
   )
 }
 
-function formatMinorCompact(value: string): string {
-  return formatMinor(value).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")
-}
-
-function usageCategoryLabel(key: string, fallback: string, t: ReturnType<typeof useT>): string {
-  if (key === "cloud") return t("billing.cloudServices")
-  if (key === "ai") return t("billing.artificialIntelligence")
-  if (key === "integration" || key === "integrations") return t("billing.integrations")
-  return fallback
-}
-
-function WebsiteUsageContent({ state, localeTag, onOpenPricing }: { state: UsageState; localeTag: string; onOpenPricing?: () => void }) {
-  const t = useT()
-  if (state.kind === "loading" || state.kind === "idle") return <div className={styles.scopedLoading}><Skeleton className={styles.loadingLine} /><Skeleton className={styles.loadingLine} /></div>
-  if (state.kind === "error") return <Alert variant="destructive" className={styles.feedback}><AlertDescription>{t("billing.loadError")}</AlertDescription></Alert>
-  const { usage } = state
-  const date = (value: string) => new Date(value).toLocaleDateString(localeTag, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })
-  return <div className={styles.websiteUsage} data-testid="billing-website-usage">
-    <section className={styles.usageOverview}>
-      <div className={styles.autoTopUpRow}><span>{t("billing.websiteKeepRunning")}</span><Button type="button" onClick={onOpenPricing} disabled={!onOpenPricing}><strong>{t("billing.enable")}</strong><small>{t("billing.autoTopUp")}</small></Button></div>
-      <div className={styles.usageCategoryGrid}>{usage.categories.map((category) => <section key={category.key} className={styles.usageCategory}><strong>{usageCategoryLabel(category.key, category.label, t)} <MetricHelp label={usageCategoryLabel(category.key, category.label, t)} /></strong><span>{t("billing.freeUsageConsumed")}</span><b>${formatMinorCompact(category.free_used_minor)} / ${formatMinorCompact(category.free_limit_minor)}</b><span>{t("billing.paid")}</span><b>{category.paid_minor === "0" ? "-" : `$${formatMinorCompact(category.paid_minor)}`}</b></section>)}</div>
-      {usage.reset_at ? <p className={styles.usageReset}>{t("billing.monthlyReset", { date: date(usage.reset_at) })}</p> : null}
-    </section>
-    <div className={styles.usageDetailsHead}><h3>{t("billing.usageDetails")}</h3><div className={styles.usagePeriod}><label><span className={styles.srOnly}>{t("billing.startDate")}</span><input aria-label={t("billing.startDate")} readOnly value={date(usage.period_start)} /></label><span>—</span><label><span className={styles.srOnly}>{t("billing.endDate")}</span><input aria-label={t("billing.endDate")} readOnly value={date(usage.period_end)} /></label></div><p>{t("billing.totalCost", { amount: formatMinor(usage.total_cost_minor) })}</p></div>
-    <div className={styles.websiteTableHead}><span>{t("billing.website")}</span><span>{t("billing.cost")}</span></div>
-    {usage.websites.length === 0 ? <div className={styles.websiteEmpty}><AppWindow aria-hidden="true" /><strong>{t("billing.noWebsites")}</strong><span>{t("billing.noWebsitesHint")}</span><Button asChild type="button" variant="outline"><Link href="/app?intent=website">{t("billing.createWebsite")}</Link></Button></div> : <ul className={styles.websiteRows}>{usage.websites.map(site => <li key={site.id}><span>{site.name}</span><span>${formatMinor(site.cost_minor)}</span></li>)}</ul>}
-  </div>
-}
-
-function ComputerUsageContent({ state }: { state: UsageState }) {
-  const t = useT()
-  if (state.kind === "loading" || state.kind === "idle") return <div className={styles.scopedLoading}><Skeleton className={styles.loadingLine} /></div>
-  if (state.kind === "error") return <Alert variant="destructive" className={styles.feedback}><AlertDescription>{t("billing.loadError")}</AlertDescription></Alert>
-  return <div className={styles.computerUsage} data-testid="billing-computer-usage"><Monitor aria-hidden="true" /><strong>{t("billing.cloudComputer")}</strong><span>{t("billing.cloudComputerHint")}</span><Button asChild type="button"><Link href="/app#/account/settings/computer"><Plus aria-hidden="true" />{t("billing.createNow")}</Link></Button></div>
-}
-
 export function BillingContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
   const t = useT()
   const { locale } = useLocale()
@@ -228,8 +186,6 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
   }
   const [ledger, setLedger] = useState<LedgerState>({ kind: "loading" })
   const [filter, setFilter] = useState<LedgerFilter>("all")
-  const [usageScope, setUsageScope] = useState<"tasks" | "websites" | "computer">("tasks")
-  const [scopedUsage, setScopedUsage] = useState<UsageState>({ kind: "idle" })
   const [retrying, setRetrying] = useState(false)
   const ledgerRequestSeqRef = useRef(0)
 
@@ -284,15 +240,6 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
     })
   }, [loadLedger])
 
-  useEffect(() => {
-    if (usageScope === "tasks") return
-    let current = true
-    void client.usage(usageScope)
-      .then((usage) => { if (current) setScopedUsage({ kind: "ready", usage }) })
-      .catch(() => { if (current) setScopedUsage({ kind: "error" }) })
-    return () => { current = false }
-  }, [client, usageScope])
-
   const loadMore = useCallback(async () => {
     if (retrying || ledger.kind !== "ready" || ledger.cursor === undefined || ledger.loadingMore) {
       return
@@ -337,29 +284,6 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
   if (embedded) {
     return (
       <div className={cn(styles.body, styles.embeddedBody)} data-embedded="billing">
-        <ToggleGroup
-          type="single"
-          value={usageScope}
-          onValueChange={(value) => {
-            if (!value) return
-            const nextScope = value as typeof usageScope
-            if (nextScope !== "tasks") setScopedUsage({ kind: "loading" })
-            setUsageScope(nextScope)
-          }}
-          className={styles.usageTabs}
-          aria-label={t("billing.title")}
-        >
-          <ToggleGroupItem value="tasks" className={styles.usageTab}>{t("firstSite.tasks")}</ToggleGroupItem>
-          <ToggleGroupItem value="websites" className={styles.usageTab}>{t("firstSite.websites")}</ToggleGroupItem>
-          <ToggleGroupItem value="computer" className={styles.usageTab}>{t("billing.computerScope")}</ToggleGroupItem>
-        </ToggleGroup>
-
-        {usageScope === "websites" ? (
-          <WebsiteUsageContent state={scopedUsage} localeTag={localeTag} onOpenPricing={onOpenPricing} />
-        ) : usageScope === "computer" ? (
-          <ComputerUsageContent state={scopedUsage} />
-        ) : <>
-
         <section className={styles.balanceCard} data-testid="billing-balance">
           {summary.kind === "loading" ? (
             <div className={styles.loadingState} role="status" aria-label={t("billing.loading")}><Skeleton className={styles.loadingLine} /><Skeleton className={styles.loadingLineShort} /></div>
@@ -416,7 +340,6 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
             {ledger.cursor !== undefined ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} onClick={loadMore}>{ledger.loadingMore ? t("billing.loading") : t("billing.loadMore")}</Button> : null}
           </>
         )}
-        </>}
       </div>
     )
   }

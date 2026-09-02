@@ -109,7 +109,8 @@ export const runResumeSchema = z
     kind: z.literal("run.resume"),
     run_id: z.string().min(1),
     thread_id: z.string().min(1),
-    decision_id: z.string().min(1),
+    session_id: z.string().min(1),
+    command_id: z.string().min(1),
     decisions: z.array(resumeDecisionSchema).min(1),
   })
   .strict()
@@ -120,7 +121,8 @@ export const runCancelSchema = z
     kind: z.literal("run.cancel"),
     run_id: z.string().min(1),
     thread_id: z.string().min(1),
-    decision_id: z.string().min(1),
+    session_id: z.string().min(1),
+    command_id: z.string().min(1),
   })
   .strict()
 export type RunCancel = z.infer<typeof runCancelSchema>
@@ -130,6 +132,8 @@ export const runSteerSchema = z
     kind: z.literal("run.steer"),
     run_id: z.string().min(1),
     thread_id: z.string().min(1),
+    session_id: z.string().min(1),
+    command_id: z.string().min(1),
     message_id: z.string().min(1),
     content: z.string().min(1),
   })

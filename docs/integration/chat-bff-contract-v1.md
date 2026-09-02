@@ -114,8 +114,9 @@ POST /v1/sessions/{SESSION_ID}/runs/{RUN_ID}/control
 ```
 
 SSE 使用既有 `SessionEvent` union；客户端通过 `Last-Event-ID` 发送最近确认的 `seq`，
-BFF 不重排、不丢弃已持久化事件。Control body 使用 `run.cancel` 或 `run.resume`，并通过
-`decision_id` 幂等。BFF 校验 `session_id` 与 `run_id` 的绑定后才调用 Agent adapter。
+BFF 不重排、不丢弃已持久化事件。Control body 使用 `run.cancel`、`run.resume` 或 `run.steer`，
+通过标准 `Idempotency-Key` 幂等，成功返回 `202 Accepted` 和异步 control receipt。BFF 校验
+`session_id` 与 `run_id` 的绑定后才调用 Agent adapter，并把外部 command identity 传入 Agent。
 
 ### 4.4 生命周期和只读投影
 

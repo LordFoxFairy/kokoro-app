@@ -121,13 +121,13 @@ describe("checked-in HTTP request and response contracts", () => {
 
     for (const decision of decisions) {
       expect(resumeDecisionSchema.safeParse(decision).success).toBe(true)
-      expect(runControlBodySchema.safeParse({ kind: "run.resume", decision_id: "decision_1", decisions: [decision] }).success).toBe(true)
+      expect(runControlBodySchema.safeParse({ kind: "run.resume", session_id: "session_1", decisions: [decision] }).success).toBe(true)
     }
-    expect(runControlBodySchema.safeParse({ kind: "run.cancel", decision_id: "decision_1" }).success).toBe(true)
-    expect(runControlBodySchema.safeParse({ kind: "run.resume", decision_id: "decision_1", decisions: [] }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ kind: "run.cancel", session_id: "session_1" }).success).toBe(true)
+    expect(runControlBodySchema.safeParse({ kind: "run.resume", session_id: "session_1", decisions: [] }).success).toBe(false)
     expect(resumeDecisionSchema.safeParse({ type: "submit", request_id: "request_1", value: "yes" }).success).toBe(false)
-    expect(runControlBodySchema.safeParse({ kind: "run.pause", decision_id: "decision_1" }).success).toBe(false)
-    expect(runControlBodySchema.safeParse({ kind: "run.cancel", decision_id: "decision_1", tenant_id: "tenant_1" }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ kind: "run.pause", session_id: "session_1" }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ kind: "run.cancel", session_id: "session_1", tenant_id: "tenant_1" }).success).toBe(false)
   })
 
   it("accepts flat session/artifact responses and rejects envelope or unknown-field drift", () => {
@@ -135,7 +135,13 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(sessionListSchema.parse({ sessions: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
     expect(artifactListSchema.parse({ artifacts: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
     expect(messageCreateReceiptSchema.parse({ run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" })).toBeTruthy()
-    expect(runControlReceiptSchema.parse({ ok: true })).toEqual({ ok: true })
+    expect(runControlReceiptSchema.parse({
+      run_id: "run_1",
+      command_id: "command_1",
+      request_digest: "sha256:abc",
+      status: "succeeded",
+      replayed: false,
+    })).toMatchObject({ run_id: "run_1", command_id: "command_1", status: "succeeded" })
 
     expect(sessionSnapshotSchema.safeParse({ ...sessionSnapshot, data: {} }).success).toBe(false)
     expect(sessionListSchema.safeParse({ sessions: [], next_cursor: null }).success).toBe(false)
@@ -189,8 +195,8 @@ describe("cursor pagination and same-origin client paths", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run_1", command_id: "cancel_1", request_digest: "sha256:cancel", status: "succeeded", replayed: false }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run_2", command_id: "resume_1", request_digest: "sha256:resume", status: "succeeded", replayed: false }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
 
     const client = createSessionClient({ baseUrl: "/api/session" })
@@ -202,12 +208,12 @@ describe("cursor pagination and same-origin client paths", () => {
       content: "project task",
       project_ref: "project/1",
     })
-    await client.sendControl("direct_session", "run_1", { kind: "run.cancel", decision_id: "cancel_1" })
+    await client.sendControl("direct_session", "run_1", { kind: "run.cancel", session_id: "direct_session" }, "cancel_1")
     await client.sendControl("project_session", "run_2", {
       kind: "run.resume",
-      decision_id: "resume_1",
+      session_id: "project_session",
       decisions: [{ type: "submit", request_id: "tool_1", value: { answer: "yes" } }],
-    })
+    }, "resume_1")
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions?scope=direct")
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/sessions?project_ref=project%2F1")
@@ -217,12 +223,14 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/session/sessions/project_session/runs/run_2/control")
     expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).not.toHaveProperty("project_ref")
     expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toMatchObject({ project_ref: "project/1" })
-    expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel", decision_id: "cancel_1" })
+    expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel", session_id: "direct_session" })
+    expect(new Headers((fetchMock.mock.calls[4]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("cancel_1")
     expect(JSON.parse((fetchMock.mock.calls[5]?.[1] as RequestInit).body as string)).toEqual({
       kind: "run.resume",
-      decision_id: "resume_1",
+      session_id: "project_session",
       decisions: [{ type: "submit", request_id: "tool_1", value: { answer: "yes" } }],
     })
+    expect(new Headers((fetchMock.mock.calls[5]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("resume_1")
   })
 
   it("uses the same resumable SSE wire for a project Chat session", async () => {

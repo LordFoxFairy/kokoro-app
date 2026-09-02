@@ -6,7 +6,7 @@ import {
   type RunFailureCode,
   type SessionEvent,
 } from "@/contract/session-events"
-import type { SessionSnapshot } from "@/contract/http"
+import type { RunControlReceipt, SessionSnapshot } from "@/contract/http"
 import type {
   EventStreamHandle,
   OpenEventsArgs,
@@ -413,7 +413,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // interaction tests inject explicit fixtureArtifacts when they need cards.
     listArtifacts: () => Promise.resolve({ artifacts: [] }),
     createShare: () => Promise.resolve({ share_id: "shr_preview_0000000000000000000000000000" }),
-    revokeShare: () => Promise.resolve({ ok: true }),
+    revokeShare: () => Promise.resolve({ ok: true as const }),
 
     createMessage: async (sessionId, body) => {
       await ensureRestored()
@@ -458,7 +458,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // fixture look like a UI deadlock and prevented auditing the settled
     // approval/rejection states. Emit the normal post-control event sequence
     // through the existing SSE queue so the engine exercises its real reducer.
-    sendControl: async (sessionId, runId, body) => {
+    sendControl: async (sessionId, runId, body, commandId): Promise<RunControlReceipt> => {
       await ensureRestored()
       const session = sessionFor(sessionId)
       const envelope = makeEnvelope(sessionId, runId)
@@ -487,7 +487,13 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         ])
       }
       drainActive(session)
-      return { ok: true }
+      return {
+        run_id: runId,
+        command_id: commandId,
+        request_digest: `preview:${runId}:${commandId}:${body.kind}`,
+        status: "succeeded",
+        replayed: false,
+      }
     },
     deleteSession: () => Promise.resolve({ status: "deleted" }),
     renameSession: () => Promise.resolve({ ok: true as const }),

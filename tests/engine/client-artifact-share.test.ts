@@ -52,7 +52,7 @@ describe("createShare / revokeShare（SHARE-1）：POST|DELETE /sessions/{id}/sh
     expect(receipt.share_id).toBe("shr_abc")
   })
 
-  it("revokeShare：DELETE 命中 share 路径，返回 {ok:true}", async () => {
+  it("revokeShare：DELETE 命中 share 路径，返回成功 receipt", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
     vi.stubGlobal("fetch", fetchMock)
     const receipt = await createSessionClient({ baseUrl: "/api/session" }).revokeShare("ses_1")

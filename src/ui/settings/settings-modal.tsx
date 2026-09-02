@@ -18,11 +18,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Cable, Check, ChevronRight, ChevronsUpDown, CircleHelp, CodeXml, CreditCard, Globe, Keyboard, Monitor, MoreHorizontal, Plug, Puzzle, Search, Settings2, Shapes, Sparkles, UserRound, Users, createLucideIcon } from "lucide-react"
+import { Cable, Check, ChevronRight, ChevronsUpDown, CircleHelp, CreditCard, Globe, Keyboard, Monitor, MoreHorizontal, Plug, Puzzle, Search, Settings2, Shapes, Sparkles, UserRound, Users } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   browserBillingClient,
-  browserDataManagementClient,
   browserEngine,
   browserHubClient,
   browserPricingClient,
@@ -35,26 +34,11 @@ import type { SkillCard } from "@/hub/schemas"
 import { McpContent } from "@/ui/mcp/mcp-panel"
 import { BillingContent } from "@/ui/billing/billing-panel"
 import { PricingContent } from "@/ui/billing/pricing-panel"
-import { DataManagementContent, dataManagementViewFromHash, syncDataManagementViewHash, type DataManagementView } from "@/ui/data-management/data-management-panel"
 import { TeamContent } from "@/ui/team/team-panel"
 
-import { AccountCard, AppearanceCard, ChatPrefsCard, DeploymentSettingsCard, DeveloperSettingsCard, IntegrationSettingsCard, MailSettingsCard, MyComputerCard, PersonalizationCard, ShortcutsCard } from "./settings-sections"
+import { AccountCard, AppearanceCard, ChatPrefsCard, DeploymentSettingsCard, IntegrationSettingsCard, MyComputerCard, PersonalizationCard, ShortcutsCard } from "./settings-sections"
 import styles from "./settings-modal.module.css"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
-
-const MailSparkles = createLucideIcon("MailSparkles", [
-  ["path", { d: "M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8", key: "mail-shell" }],
-  ["path", { d: "m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7", key: "mail-fold" }],
-  ["path", { d: "m19 14 .7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7Z", fill: "currentColor", stroke: "none", key: "mail-sparkle" }],
-])
-
-const DatabaseSettings = createLucideIcon("DatabaseSettings", [
-  ["ellipse", { cx: "10", cy: "5", rx: "7", ry: "3", key: "database-top" }],
-  ["path", { d: "M3 5v10c0 1.66 3.13 3 7 3", key: "database-side" }],
-  ["path", { d: "M17 5v3", key: "database-back" }],
-  ["circle", { cx: "16", cy: "15", r: "2.5", key: "settings-core" }],
-  ["path", { d: "M16 11.5v1M16 17.5v1M12.5 15h1M18.5 15h1M13.5 12.5l.7.7M17.8 16.8l.7.7M18.5 12.5l-.7.7M14.2 16.8l-.7.7", key: "settings-teeth" }],
-])
 
 const DeploymentNavIcon = forwardRef<SVGSVGElement, LucideProps>(function DeploymentNavIcon(
   props,
@@ -75,17 +59,14 @@ export type SettingsTab =
   | "appearance"
   | "personalization"
   | "computer"
-  | "mail"
   | "deployment"
   | "integration"
-  | "developer"
   | "chat"
   | "shortcuts"
   | "credits"
   | "subscription"
   | "skills"
   | "mcp"
-  | "library"
   | "team"
 
 const SETTINGS_TABS: readonly SettingsTab[] = [
@@ -93,21 +74,18 @@ const SETTINGS_TABS: readonly SettingsTab[] = [
   "appearance",
   "personalization",
   "computer",
-  "mail",
   "deployment",
   "integration",
-  "developer",
   "chat",
   "shortcuts",
   "credits",
   "subscription",
   "skills",
   "mcp",
-  "library",
   "team",
 ]
 
-type SettingsNavKey = SettingsTab | "data" | "help"
+type SettingsNavKey = SettingsTab | "help"
 type SettingsIntegrationId = "zapier" | "slack" | "telegram" | "line"
 
 const SETTINGS_INTEGRATIONS: readonly SettingsIntegrationId[] = ["zapier", "slack", "telegram", "line"]
@@ -144,9 +122,6 @@ function isFocusTargetAvailable(target: HTMLElement | null): target is HTMLEleme
 export function normalizeSettingsTab(value: string | null | undefined): SettingsTab {
   if (value === "general") {
     return "appearance"
-  }
-  if (value === "developers") {
-    return "developer"
   }
   return SETTINGS_TABS.find((key) => key === value) ?? "account"
 }
@@ -190,7 +165,6 @@ export function SettingsModal({
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [navQuery, setNavQuery] = useState("")
   const [integrationId, setIntegrationId] = useState<SettingsIntegrationId | null>(() => initialTab === "integration" ? integrationIdFromLocation() : null)
-  const [dataManagementView, setDataManagementView] = useState<DataManagementView>(() => initialTab === "library" ? dataManagementViewFromHash() : "summary")
   const [accountLoginMethods, setAccountLoginMethods] = useState(false)
   const [domainUpgradeOpen, setDomainUpgradeOpen] = useState(false)
   const domainUpgradeReturnRef = useRef<HTMLElement | null>(null)
@@ -244,7 +218,6 @@ export function SettingsModal({
       setTeamNs(undefined) // 每次进团队重取 ns(切换后回来反映新态)。
     }
     if (next !== "integration") setIntegrationId(null)
-    if (next !== "library") setDataManagementView("summary")
     if (next !== "account") setAccountLoginMethods(false)
     onTabChange?.(next)
   }
@@ -258,11 +231,6 @@ export function SettingsModal({
       ? "#/account/settings/integration"
       : `#/account/settings/integration/${next}`
     window.history.replaceState(window.history.state, "", url)
-  }
-
-  const selectDataManagementView = (next: DataManagementView): void => {
-    setDataManagementView(next)
-    syncDataManagementViewHash(next)
   }
 
   const nav: { key: SettingsNavKey; label: string; icon: LucideIcon; available?: boolean }[] = [
@@ -280,12 +248,9 @@ export function SettingsModal({
     { key: "subscription", label: t("settings.subTitle"), icon: CreditCard },
     { key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { key: "skills", label: t("rail.navSkills"), icon: Puzzle },
-    { key: "mail", label: t("settings.mailTitle"), icon: MailSparkles },
     { key: "computer", label: t("settings.computerTitle"), icon: Monitor },
-    { key: "library", label: t("settings.dataManagementTitle"), icon: DatabaseSettings },
     { key: "deployment", label: t("settings.deploymentTitle"), icon: DeploymentNavIcon },
     { key: "integration", label: t("settings.integrationTitle"), icon: Plug },
-    { key: "developer", label: t("settings.developerTitle"), icon: CodeXml },
     { key: "team", label: t("rail.navTeams"), icon: Users },
     { key: "help", label: t("settings.helpTitle"), icon: CircleHelp, available: false },
   ]
@@ -376,10 +341,9 @@ export function SettingsModal({
   const renderPanel = (panelTab: SettingsTab) => (
     <>
       {panelTab === "account" ? <AccountCard brandName={brandName} preview={preview} loginMethodsOpen={accountLoginMethods} onLoginMethodsChange={setAccountLoginMethods} /> : null}
-      {panelTab === "appearance" ? <AppearanceCard brandName={brandName} preview={preview} /> : null}
+      {panelTab === "appearance" ? <AppearanceCard brandName={brandName} /> : null}
       {panelTab === "personalization" ? <PersonalizationCard preview={preview} /> : null}
       {panelTab === "computer" ? <MyComputerCard brandName={brandName} preview={preview} /> : null}
-      {panelTab === "mail" ? <MailSettingsCard brandName={brandName} preview={preview} /> : null}
       {panelTab === "deployment" ? (
         <DeploymentSettingsCard
           onStart={onStartDeployment}
@@ -390,7 +354,6 @@ export function SettingsModal({
         />
       ) : null}
       {panelTab === "integration" ? <IntegrationSettingsCard brandName={brandName} preview={preview} selected={integrationId} onSelect={selectIntegration} /> : null}
-      {panelTab === "developer" ? <DeveloperSettingsCard brandName={brandName} preview={preview} /> : null}
       {panelTab === "chat" ? <ChatPrefsCard preview={preview} /> : null}
       {panelTab === "shortcuts" ? <ShortcutsCard /> : null}
       {panelTab === "credits" ? (
@@ -413,9 +376,6 @@ export function SettingsModal({
         />
       ) : null}
       {panelTab === "mcp" ? <McpContent client={hubClient} embedded brandName={brandName} /> : null}
-      {panelTab === "library" ? (
-        <DataManagementContent client={browserDataManagementClient({ preview })} view={dataManagementView} onViewChange={setDataManagementView} />
-      ) : null}
       {panelTab === "team" ? (
         <TeamContent
           client={browserTeamClient({ preview })}
@@ -529,9 +489,7 @@ export function SettingsModal({
                     ? t("settings.groupGeneral")
                     : key === "personalization"
                       ? t("settings.groupFeatures")
-                      : key === "library"
-                        ? t("settings.groupData")
-                        : null
+                    : null
                   return (
                     <Fragment key={key}>
                       {groupLabel ? <div className={styles.sectionLabel} aria-hidden="true">{groupLabel}</div> : null}
@@ -609,7 +567,7 @@ export function SettingsModal({
                   <header
                     className={styles.panelHeader}
                     data-panel={panelTab}
-                    data-with-description={panelTab === "shortcuts" || panelTab === "personalization" || panelTab === "mail" || (panelTab === "integration" && integrationId === null) || undefined}
+                    data-with-description={panelTab === "shortcuts" || panelTab === "personalization" || (panelTab === "integration" && integrationId === null) || undefined}
                   >
                     <h1 className={styles.panelTitle}>
                       {panelTab === "account" && accountLoginMethods ? (
@@ -626,13 +584,6 @@ export function SettingsModal({
                           </button>
                           <span>{integrationId === "line" ? "LINE" : t(`settings.integration.${integrationId}.name`)}</span>
                         </>
-                      ) : panelTab === "library" && dataManagementView !== "summary" ? (
-                        <>
-                          <button type="button" className={styles.panelBack} onClick={() => selectDataManagementView("summary")} aria-label={t("settings.dataManagementTitle") }>
-                            <ChevronRight aria-hidden="true" />
-                          </button>
-                          <span>{dataManagementView === "authorized-apps" ? t("dataManagement.authorizedApps") : t("dataManagement.cloudBrowserDetailTitle")}</span>
-                        </>
                       ) : panelTab === "mcp"
                         ? t("mcp.title")
                         : panelTab === "appearance"
@@ -648,8 +599,6 @@ export function SettingsModal({
                       <p className={styles.panelDescription}>{t("settings.shortcutsDescription")}</p>
                     ) : panelTab === "personalization" ? (
                       <p className={styles.panelDescription}>{t("settings.personalizationDescription")}</p>
-                    ) : panelTab === "mail" ? (
-                      <p className={styles.panelDescription}>{t("settings.mailDescription")} <a href="/docs">{t("settings.learnMore")}</a></p>
                     ) : panelTab === "integration" && integrationId === null ? (
                       <p className={styles.panelDescription}>{t("settings.integrationDescription")}</p>
                     ) : null}

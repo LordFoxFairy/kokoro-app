@@ -121,7 +121,7 @@ describe("/api/session/[...path] proxy", () => {
       new Request("http://localhost/api/session/sessions/ses_1/runs/run_1/control", {
         method: "POST",
         headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json" },
-        body: JSON.stringify({ kind: "run.cancel", decision_id: "decision_1" }),
+        body: JSON.stringify({ kind: "run.cancel", session_id: "ses_1" }),
       }),
       params(["sessions", "ses_1", "runs", "run_1", "control"]),
     )

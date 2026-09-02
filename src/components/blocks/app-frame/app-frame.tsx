@@ -25,7 +25,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react"
-import { Cable, FilePlus2, Plus, Sparkles } from "lucide-react"
+import { Cable, Plus, Sparkles } from "lucide-react"
 
 import { activeMode } from "@/core/conversations"
 import type { ModelCandidate } from "@/contract/http"
@@ -723,7 +723,7 @@ export function AppFrame({
       // accepted on input, but emit one canonical URL so tab changes do not
       // alternate between two address-bar formats.
       url.searchParams.delete("settings")
-      const routeTab = tab === "appearance" ? "general" : tab === "developer" ? "developers" : tab
+      const routeTab = tab === "appearance" ? "general" : tab
       url.hash = `#/account/settings/${routeTab}`
     }
     const write = mode === "push" ? window.history.pushState : window.history.replaceState
@@ -1703,10 +1703,6 @@ export function AppFrame({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className={styles.contextMenu} align="start" side="top" sideOffset={84}>
-                <DropdownMenuItem onSelect={() => openSettings("library", composerResourcesTriggerRef.current)}>
-                  <FilePlus2 data-icon="inline-start" />
-                  {t("firstSite.filesAndResources")}
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => openSettings("skills", composerResourcesTriggerRef.current)}>
                   <Sparkles data-icon="inline-start" />
                   {t("rail.navSkills")}

@@ -59,9 +59,9 @@ describe("preview transport control loop", () => {
 
     await client.sendControl("preview-session", receipt.run_id, {
       kind: "run.resume",
-      decision_id: "decision-preview-1",
+      session_id: "preview-session",
       decisions: [{ type: "approve", tool_id: `${receipt.run_id}:tool_1` }],
-    })
+    }, "preview-command-1")
     await waitFor(() => events.includes("run.completed"))
 
     expect(events).toContain("tool.returned")
@@ -93,9 +93,9 @@ describe("preview transport control loop", () => {
     await waitFor(() => awaiting)
     await client.sendControl("preview-reject-session", receipt.run_id, {
       kind: "run.resume",
-      decision_id: "decision-preview-reject-1",
+      session_id: "preview-reject-session",
       decisions: [{ type: "reject", tool_id: `${receipt.run_id}:tool_1` }],
-    })
+    }, "preview-command-2")
     await waitFor(() => completed.length === 1)
 
     expect(returned).toEqual([{ is_error: true, result: "预览工具已拒绝。" }])

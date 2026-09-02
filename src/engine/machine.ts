@@ -228,8 +228,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let hydrating = store !== null
   let pendingMode: AgentMode = "fast"
   const staging = new Map<string, StagedDecisions>()
-  // resume 的幂等 decision_id：control 失败重试复用同一 id，防双击/网络重试造成二次 resume。
-  const resumeDecisionIds = new Map<string, string>()
+  // resume 的幂等 command_id：control 失败重试复用同一 id，防双击/网络重试造成二次 resume。
+  const resumeCommandIds = new Map<string, string>()
   // React 的 disabled 是渲染态，连续点击可能在一次提交前同时进入 engine。
   // 以 run 为粒度加同步闸门，保证同一暂停帧始终只有一个 resume 请求在途。
   const resumeInFlight = new Set<string>()
@@ -370,7 +370,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (settledRunId !== null) {
       // 本轮终态收束：关流、清该 run 的决策暂存与幂等 id。
       staging.delete(settledRunId)
-      resumeDecisionIds.delete(settledRunId)
+      resumeCommandIds.delete(settledRunId)
       resumeInFlight.delete(settledRunId)
       closeStream()
       clearReattachTimer()
@@ -422,13 +422,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     closeStream()
     clearReattachTimer()
     staging.delete(runId)
-    resumeDecisionIds.delete(runId)
+    resumeCommandIds.delete(runId)
     resumeInFlight.delete(runId)
     machine = transition(machine, { type: "RESET" })
     thread = markRunCancelled(thread, runId)
     syncActiveEntry()
     deps.client
-      .sendControl(sessionId, runId, { kind: "run.cancel", decision_id: createId("dec") })
+      .sendControl(sessionId, runId, { kind: "run.cancel", session_id: sessionId }, createId("command"))
       .catch(() => {
         // 后端取消失败不回滚本地停止：终态收口与租约回收负责最终一致。
       })
@@ -550,7 +550,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         if (cancelledSessionId === sessionId) {
           cancelledSubmissions.delete(idempotencyKey)
           void deps.client
-            .sendControl(sessionId, receipt.run_id, { kind: "run.cancel", decision_id: createId("dec") })
+            .sendControl(sessionId, receipt.run_id, { kind: "run.cancel", session_id: sessionId }, createId("command"))
             .catch(() => {
               // Local cancellation already settled the UI; the backend cancel
               // is best effort for a receipt that arrived after the stop.
@@ -684,12 +684,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       // 同帧仍有工具未决：等凑齐后统一提交一条 resume。
       return
     }
-    // 同一帧的重试复用同一 decision_id：服务端据此幂等，双击/网络重试不会二次 resume。
-    const decisionId = resumeDecisionIds.get(runId) ?? createId("dec")
-    resumeDecisionIds.set(runId, decisionId)
+    // 同一帧的重试复用同一 command_id：服务端据此幂等，双击/网络重试不会二次 resume。
+    const commandId = resumeCommandIds.get(runId) ?? createId("command")
+    resumeCommandIds.set(runId, commandId)
     resumeInFlight.add(runId)
     deps.client
-      .sendControl(sessionId, runId, { kind: "run.resume", decision_id: decisionId, decisions })
+      .sendControl(sessionId, runId, { kind: "run.resume", session_id: sessionId, decisions }, commandId)
       .then(() => {
         if (disposed) {
           return
@@ -700,7 +700,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           thread = markToolRejected(thread, runId, rejected)
         }
         staging.delete(runId)
-        resumeDecisionIds.delete(runId)
+        resumeCommandIds.delete(runId)
         resumeInFlight.delete(runId)
         notify()
       })
@@ -715,7 +715,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         // 对账重建真态并清暂存，绝不把用户卡死在 awaiting-hitl（审计缺口④）。
         if (STALE_CONTROL_ERRORS.has(detail) && store) {
           staging.delete(runId)
-          resumeDecisionIds.delete(runId)
+          resumeCommandIds.delete(runId)
           closeStream()
           clearReattachTimer()
           machine = transition(machine, { type: "RESET" })
@@ -735,7 +735,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
     staging.clear()
-    resumeDecisionIds.clear()
+    resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
     thread = createSessionStreamState()
@@ -801,7 +801,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
     staging.clear()
-    resumeDecisionIds.clear()
+    resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
     thread = createSessionStreamState()
@@ -918,7 +918,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
     staging.clear()
-    resumeDecisionIds.clear()
+    resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
     thread = createSessionStreamState()

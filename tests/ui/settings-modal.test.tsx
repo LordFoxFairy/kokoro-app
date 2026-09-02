@@ -1,4 +1,4 @@
-// 设置中心模态（WEB-FACE 面三）：默认账户 tab、9 tab 导航、tab 切换单显、对话偏好就地存 localStorage，
+// 设置中心模态（WEB-FACE 面三）：v1 设置导航、tab 切换单显、对话偏好就地存 localStorage，
 // 关闭出口(× / Esc / 背幕点击)均触发 onClose。会话态由 shell 保证,模态本身不再自持匿名闸。
 // page-clients 均注入 mock（不打网络）。
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
@@ -66,25 +66,13 @@ vi.mock("@/ui/shell/page-clients", () => ({
     uploadConnectorIcon,
   }),
   browserPricingClient: () => ({}),
-  browserDataManagementClient: () => ({
-    summary: vi.fn().mockResolvedValue({
-      sharedTasks: [],
-      sharedFiles: [],
-      archivedTasks: [],
-      authorizedApps: [],
-      cloudBrowser: { persistSignIn: false, sites: [] },
-    }),
-    setCloudBrowserPersistence: vi.fn(),
-    revokeAuthorizedApp: vi.fn(),
-    removeCloudBrowserSite: vi.fn(),
-  }),
   browserEngine: () => null,
 }))
 
 // import 顺延到 mock 之后。
 import { normalizeSettingsTab, SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal"
 
-const TAB_KEYS = ["account", "appearance", "personalization", "computer", "mail", "deployment", "integration", "developer", "chat", "shortcuts", "credits", "subscription", "skills", "mcp", "library", "team"]
+const TAB_KEYS = ["account", "appearance", "personalization", "computer", "deployment", "integration", "chat", "shortcuts", "credits", "subscription", "skills", "mcp", "team"]
 
 function renderSettings(
   onClose: () => void = () => {},
@@ -138,11 +126,12 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("textbox", { name: "搜索" })).toHaveAttribute("placeholder", "搜索")
   })
 
-  it("设置导航使用与参考语义一致的 Mail、数据管理和部署图标", () => {
+  it("设置导航不暴露已退役的 Mail、数据管理和开发人员入口", () => {
     renderSettings()
 
-    expect(screen.getByTestId("settings-tab-mail").querySelector("svg")).toHaveClass("lucide-mail-sparkles")
-    expect(screen.getByTestId("settings-tab-library").querySelector("svg")).toHaveClass("lucide-database-settings")
+    expect(screen.queryByTestId("settings-tab-mail")).toBeNull()
+    expect(screen.queryByTestId("settings-tab-library")).toBeNull()
+    expect(screen.queryByTestId("settings-tab-developer")).toBeNull()
     expect(screen.getByTestId("settings-tab-deployment").querySelector("svg")).toHaveAttribute("viewBox", "0 0 13.333 14.667")
   })
 
@@ -163,21 +152,6 @@ describe("SettingsModal 设置中心模态", () => {
     await waitFor(() => expect(screen.queryByTestId("github-import-dialog")).not.toBeInTheDocument())
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument()
     expect(screen.getByTestId("settings-tab-skills")).toHaveAttribute("data-state", "active")
-  })
-
-  it("数据管理二级页面同步替换标题栏并可返回首屏", async () => {
-    renderSettings(() => {}, undefined, true, undefined, "library")
-    const manageButtons = await screen.findAllByRole("button", { name: "管理" })
-
-    fireEvent.click(manageButtons[0]!)
-    const detailHeading = screen.getByRole("heading", { name: /授权应用/, level: 1 })
-    expect(within(detailHeading).getByRole("button", { name: "数据管理" })).toBeInTheDocument()
-    expect(window.location.hash).toBe("#/account/settings/library/authorized-apps")
-
-    fireEvent.click(within(detailHeading).getByRole("button", { name: "数据管理" }))
-    expect(await screen.findByRole("heading", { name: "共享的任务", level: 2 })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "数据管理", level: 1 })).toBeInTheDocument()
-    expect(window.location.hash).toBe("#/account/settings/library")
   })
 
   it("预览态账户身份沿用 site brand，不把 fixture team 名泄漏到站点壳层", async () => {
@@ -261,36 +235,15 @@ describe("SettingsModal 设置中心模态", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("live 常规设置读取服务端 projection，并仅 PATCH 变化的偏好字段", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url === "/api/settings/preferences" && init?.method === "PATCH") {
-        return new Response(null, { status: 204 })
-      }
-      if (url === "/api/settings/preferences") {
-        return Response.json({ data: {
-          browser_notifications: true,
-          sound_notifications: false,
-          product_updates: false,
-          brand_ads: true,
-        } })
-      }
-      return Response.json({ data: null })
-    })
+  it("live 常规设置只使用本地状态，不调用已退役的 settings API", async () => {
+    const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     renderSettings()
     fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), { key: "Enter" })
 
-    await waitFor(() => expect(screen.getByRole("switch", { name: "浏览器通知" })).toBeChecked())
     fireEvent.click(screen.getByRole("switch", { name: "声音提醒" }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/settings/preferences",
-      expect.objectContaining({ method: "PATCH" }),
-    ))
-    const patchCall = fetchMock.mock.calls.find(([url, init]) => String(url) === "/api/settings/preferences" && init?.method === "PATCH")
-    expect(patchCall).toBeTruthy()
-    expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({ sound_notifications: true })
-    expect(JSON.parse(String(patchCall?.[1]?.body))).not.toHaveProperty("tenant_id")
+    expect(screen.getByRole("switch", { name: "声音提醒" })).toBeChecked()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("个性化 tab 提供资料、知识切换和可持久化字段", async () => {
@@ -421,50 +374,6 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("button", { name: "立即建立" })).toBeInTheDocument()
   })
 
-  it("Mail 页面可建立工作流邮箱和授权发件人", async () => {
-    renderSettings(() => {}, undefined, true)
-    fireEvent.keyDown(screen.getByTestId("settings-tab-mail"), { key: "Enter" })
-    expect(screen.getByTestId("settings-mail")).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Mail Kokoro", level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "acme@kokoro.bot" })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "新增工作流电子邮件" }))
-    expect(screen.getByRole("dialog", { name: "如何使用工作流电子邮件？" })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "立即新增" }))
-    const workflowDialog = screen.getByRole("dialog", { name: "新增工作流电子邮件" })
-    fireEvent.change(within(workflowDialog).getByRole("textbox", { name: "电子邮件地址" }), { target: { value: "newsletter" } })
-    fireEvent.change(within(workflowDialog).getByRole("textbox", { name: "指令" }), { target: { value: "整理每日简报" } })
-    fireEvent.click(within(workflowDialog).getByRole("button", { name: "保存" }))
-    expect(await screen.findByText("acme-newsletter@kokoro.bot")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "新增授权发件人" }))
-    const senderDialog = screen.getByRole("dialog", { name: "新增授权发件人" })
-    fireEvent.change(within(senderDialog).getByRole("textbox"), { target: { value: "owner@example.com" } })
-    fireEvent.click(within(senderDialog).getByRole("button", { name: "保存" }))
-    expect(await screen.findByText("owner@example.com")).toBeInTheDocument()
-  })
-
-  it("Mail 收件匣提供可切换的加载、空态与刷新交互", async () => {
-    renderSettings(() => {}, undefined, true)
-    fireEvent.keyDown(screen.getByTestId("settings-tab-mail"), { key: "Enter" })
-
-    const setupTab = screen.getByRole("tab", { name: "设定" })
-    const inboxTab = screen.getByRole("tab", { name: "收件匣" })
-    expect(setupTab).toHaveAttribute("aria-selected", "true")
-    fireEvent.click(inboxTab)
-    expect(inboxTab).toHaveAttribute("aria-selected", "true")
-    expect(screen.getByRole("columnheader", { name: "寄件人" })).toBeInTheDocument()
-    expect(screen.getByRole("columnheader", { name: "内容" })).toBeInTheDocument()
-    expect(screen.getByRole("columnheader", { name: "日期" })).toBeInTheDocument()
-    expect(screen.getByRole("status", { name: "正在载入收件匣" })).toBeInTheDocument()
-    expect(await screen.findByText("没有资料")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "刷新收件匣" }))
-    expect(screen.getByRole("status", { name: "正在载入收件匣" })).toBeInTheDocument()
-    fireEvent.click(setupTab)
-    expect(screen.getByText("Acme 的邮箱")).toBeInTheDocument()
-  })
-
   it("部署页面提供网站、应用和域名三个真实入口", async () => {
     const onStartDeployment = vi.fn()
     const onTabChange = vi.fn()
@@ -558,54 +467,6 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByTestId("settings-integration-detail")).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Zapier", level: 1 })).toBeInTheDocument()
     expect(screen.getAllByRole("link", { name: /试试看/ })).toHaveLength(9)
-  })
-
-  it("开发人员页面可建立 API 密钥记录和 Webhook", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
-    renderSettings(() => {}, undefined, true)
-    fireEvent.keyDown(screen.getByTestId("settings-tab-developer"), { key: "Enter" })
-    expect(screen.getByTestId("settings-developer")).toBeInTheDocument()
-    expect(screen.getByText("尚未有 API 密钥")).toBeInTheDocument()
-    const developerEmpty = screen.getByTestId("settings-developer-empty")
-    expect(developerEmpty.children).toHaveLength(3)
-    expect(developerEmpty.querySelector(":scope > svg")).toHaveClass("lucide-file-text")
-    expect(within(screen.getByTestId("settings-developer-empty-copy")).getByText("使用 API 密钥进行身份验证并存取 API。")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "建立新项目" }))
-    const keyDialog = screen.getByRole("dialog", { name: "建立 API 密钥" })
-    await waitFor(() => expect(within(keyDialog).getByRole("textbox", { name: "为您的密钥命名" })).toHaveFocus())
-    const developerOverlays = document.querySelectorAll('[data-slot="dialog-overlay"][data-state="open"]')
-    expect(developerOverlays[developerOverlays.length - 1]?.className).toContain("developerDialogOverlay")
-    expect(within(keyDialog).getByRole("button", { name: "关闭对话框" })).toBeInTheDocument()
-    expect(within(keyDialog).getByRole("button", { name: "取消" })).toBeInTheDocument()
-    fireEvent.change(within(keyDialog).getByRole("textbox", { name: "为您的密钥命名" }), { target: { value: "CI key" } })
-    fireEvent.click(within(keyDialog).getByRole("button", { name: "建立" }))
-    const secretDialog = await screen.findByRole("dialog", { name: "API 密钥已建立" })
-    const secret = within(secretDialog).getByText(/^kk_preview_.+_demo_secret$/).textContent ?? ""
-    fireEvent.click(within(secretDialog).getByRole("button", { name: "复制" }))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(secret))
-    expect(within(secretDialog).getByRole("button", { name: "已复制" })).toBeInTheDocument()
-    expect(within(secretDialog).getByRole("button", { name: "关闭对话框" })).toBeInTheDocument()
-    fireEvent.click(within(secretDialog).getByRole("button", { name: "完成" }))
-    await waitFor(() => expect(screen.queryByText(secret)).not.toBeInTheDocument())
-    expect(await screen.findByText("CI key")).toBeInTheDocument()
-    expect(screen.getByText("kk_preview…")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "建立新项目" })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("tab", { name: "Webhooks" }))
-    expect(screen.getByText("尚无 Webhook")).toBeInTheDocument()
-    expect(screen.getByTestId("settings-developer-empty").querySelector(":scope > svg")).toHaveClass("lucide-file-text")
-    fireEvent.click(screen.getByRole("button", { name: "建立新项目" }))
-    const webhookDialog = screen.getByRole("dialog", { name: "配置 Webhook" })
-    await waitFor(() => expect(within(webhookDialog).getByRole("textbox", { name: "URL" })).toHaveFocus())
-    expect(within(webhookDialog).getByRole("button", { name: "关闭对话框" })).toBeInTheDocument()
-    expect(within(webhookDialog).getByRole("button", { name: "取消" })).toBeInTheDocument()
-    fireEvent.change(within(webhookDialog).getByRole("textbox", { name: "URL" }), { target: { value: "https://example.com/hooks/kokoro" } })
-    fireEvent.click(within(webhookDialog).getByRole("button", { name: "保存" }))
-    expect(await screen.findByText("https://example.com/hooks/kokoro")).toBeInTheDocument()
-    expect(screen.getByText("启用中")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "建立新项目" })).toBeInTheDocument()
   })
 
   it("快捷键 tab 独立于对话偏好并呈现 Manus 风格快捷键行", () => {

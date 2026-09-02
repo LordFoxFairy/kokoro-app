@@ -60,8 +60,6 @@ Web 保持既有浏览器路径，只在 server route 选择 BFF upstream：`/ap
 | `/api/agents/*` | `src/app/api/agents/[...path]/route.ts` | Agent connection setup 的窄面同源 BFF |
 | `/api/hub/*` | `src/app/api/hub/[...path]/route.ts` | Skills、MCP、connectors，以及现有 project catch-all；配置 BFF 时转 `/v1/*` |
 | `/api/scheduled-tasks*` | `src/app/api/scheduled-tasks/[[...path]]/route.ts` | Scheduled 独立页面的 typed BFF；配置 BFF 时转 `/v1/scheduled-tasks*` |
-| `/api/settings/*` | `src/app/api/settings/[...path]/route.ts` | Hub 的 `settings` 前缀别名 |
-| `/api/mail/*` | `src/app/api/mail/[...path]/route.ts` | Hub 的 `mail` 前缀别名 |
 | `/api/system/runtime-manifest` | `src/app/api/system/runtime-manifest/route.ts` | Runtime manifest |
 | `/api/auth/session-state` | `src/app/api/auth/session-state/route.ts` | Preview/authenticated/anonymous 闸门 |
 | `/api/dev/preview-files/preview-delivery-report` | `src/app/api/dev/preview-files/[key]/route.ts` | 非 production 的单一 delivery PDF 夹具 |
@@ -96,7 +94,6 @@ Web 保持既有浏览器路径，只在 server route 选择 BFF upstream：`/ap
 /api/hub/projects/<path>     →  ${KOKORO_BFF_BASE_URL}/v1/projects/<path>
 /api/scheduled-tasks/<path>  →  ${KOKORO_BFF_BASE_URL}/v1/scheduled-tasks/<path>
 /api/billing/<path>          →  ${KOKORO_BFF_BASE_URL}/v1/billing/<path>
-/api/mail/<path>     →  BFF mail surface（当前未列入 BFF v1 canonical registry；保持 Client target，不直连 Hub）
 ```
 
 当前不存在统一 Gateway fallback。每个上游都必须由自己的 server-only 环境变量显式配置：业务面和 Chat 使用
@@ -542,12 +539,13 @@ type SessionEvent = {
 ```http
 POST /api/session/sessions/{session_id}/runs/{run_id}/control
 Content-Type: application/json
+Idempotency-Key: COMMAND_ID
 ```
 
 取消：
 
 ```json
-{"kind":"run.cancel","decision_id":"DECISION_ID"}
+{"kind":"run.cancel","session_id":"SESSION_ID"}
 ```
 
 恢复 HITL：
@@ -555,7 +553,7 @@ Content-Type: application/json
 ```json
 {
   "kind": "run.resume",
-  "decision_id": "DECISION_ID",
+  "session_id": "SESSION_ID",
   "decisions": [
     {"type":"approve","tool_id":"TOOL_ID"},
     {"type":"edit","tool_id":"TOOL_ID","args":{}},
@@ -568,8 +566,8 @@ Content-Type: application/json
 
 - `run.resume.decisions` 至少一项。
 - `approve` 可带 `args?`；`edit` 要求 `args`；`reject` 可带 `reason?`；`respond` 要求 `response`；`submit` 使用 `request_id/value`。
-- 成功回执：`{"ok":true}`。
-- 当前状态机按同一 pause stage 聚合 `pending_tool_ids`，一次发送一个 `run.resume`；相同 `decision_id` 可重试。 `run_not_active`、`no_pending_pause`、`session_deleted` 触发 snapshot 对账。
+- 成功响应为 `202 Accepted`，回执包含 `run_id`、`command_id`、`request_digest`、`status` 和 `replayed`；失败命令还会带 `error_code`。
+- 当前状态机按同一 pause stage 聚合 `pending_tool_ids`，一次发送一个 `run.resume`；相同 `Idempotency-Key` 可安全重试并返回同一回执。 `run_not_active`、`no_pending_pause`、`session_deleted` 触发 snapshot 对账。
 
 #### 会话变更
 
@@ -1364,7 +1362,7 @@ BFF route 自身错误与 BFF upstream 错误统一使用：
 
 本版契约对应的本地实现入口：
 
-- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/agents/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/settings/[...path]/route.ts`、`src/app/api/mail/[...path]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
+- 路由：`src/app/api/session/[...path]/route.ts`、`src/app/api/agents/[...path]/route.ts`、`src/app/api/hub/[...path]/route.ts`、`src/app/api/scheduled-tasks/[[...path]]/route.ts`、`src/app/api/system/runtime-manifest/route.ts`
 - Chat types/client：`src/contract/http.ts`、`src/contract/control.ts`、`src/contract/session-events.ts`、`src/engine/client.ts`、`src/engine/machine.ts`
 - Preview Chat：`src/dev/preview-transport.ts`（本地 session metadata/event history fixture）
 - Agent：`src/agents/client.ts`、`src/agents/preview-client.ts`
@@ -1389,7 +1387,7 @@ BFF route 自身错误与 BFF upstream 错误统一使用：
 
 ### 14.2 Opaque path segment 规则
 
-以下值都是不透明引用，必须由共享 contract 或 BFF 按 URL path segment 编码：`session_id`、`run_id`、`decision_id`、
+以下值都是不透明引用，必须由共享 contract 或 BFF 按 URL path segment 编码：`session_id`、`run_id`、`command_id`、
 `share_id`、`content_hash`、`project_ref` 以及动态用户/Hub route segment。编码后的值不能再次手工编码；真正的
 层级文件路径由调用方对每一段单独编码。这样 `a/b?c#d%20` 不会改变 upstream 的路由段、query 或 fragment。
 

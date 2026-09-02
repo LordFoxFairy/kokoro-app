@@ -5,7 +5,7 @@
 
 ## 公开件
 - `AppFrame`（`src/components/blocks/app-frame/app-frame.tsx`）：User Web 唯一工作区入口。props `engine?`（测试注入缝）/ `brandName?` / `brandMark?` / `brandLogoUrl?`。AppGate 统一消费 runtime manifest，确保第一个 site 的主题和品牌跨登录、工作台、设置一致。
-- `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient` / `browserDataManagementClient`）。仅浏览器构造，SSR 为 null。
+- `page-clients.ts`：页面级单例客户端/引擎（`browserEngine` / `browserListClient` / `browserHubClient` / `browserBillingClient` / `browserPricingClient` / `browserTeamClient`）。仅浏览器构造，SSR 为 null。
 - 域 controller hooks（各自持查询/store/回调）：`useComposerSelectors` / `usePinnedSkills`(+`togglePinned`/`removePinned`) / `useDraft` / `useConversationList` / `useAwaitingNotify` / `useCanvasWorkspace`。
 
 ## 协作者

@@ -97,7 +97,6 @@ describe("ShareButton", () => {
 
     expect(document.querySelector('[data-workspace-upgrade="true"]')).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Credits & usage" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Library" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "More settings sections" })).toBeInTheDocument()
   })
 

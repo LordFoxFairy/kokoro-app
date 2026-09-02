@@ -20,7 +20,7 @@ import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { resetCanvasStore } from "@/ui/canvas/canvas-store"
-import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
@@ -54,22 +54,6 @@ beforeEach(() => {
 afterEach(() => {
   engine.dispose()
   cleanup()
-})
-
-it("数据管理子视图 hash 刷新后仍解析为设置页", () => {
-  buildEngine()
-  window.history.replaceState(null, "", "/app#/account/settings/library/cloud-browser")
-  expect(settingsTabFromLocation()).toBe("library")
-  window.history.replaceState(null, "", "/app#/account/settings/library/authorized-apps")
-  expect(settingsTabFromLocation()).toBe("library")
-})
-
-it("开发人员复数深链和参考嵌套路由都恢复到开发人员页", () => {
-  buildEngine()
-  window.history.replaceState(null, "", "/app#/account/settings/developers")
-  expect(settingsTabFromLocation()).toBe("developer")
-  window.history.replaceState(null, "", "/app#/account/general/developers/settings/developers")
-  expect(settingsTabFromLocation()).toBe("developer")
 })
 
 function buildEngine(initial: ConversationStore | null = null) {
@@ -1383,7 +1367,7 @@ it("Composer 资源菜单只展示真实入口且设置关闭后焦点回到原�
   fireEvent.click(resources)
 
   const menu = await screen.findByRole("menu", { name: "文件和资源" })
-  expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["文件和资源", "技能"])
+  expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["技能"])
 
   fireEvent.click(within(menu).getByRole("menuitem", { name: "技能" }))
   await waitFor(() => expect(screen.getByTestId("settings-panel-skills")).toBeVisible())
@@ -1637,7 +1621,7 @@ it("主路径：发送 → 流式 → HITL 批准 → 完成收束", async () =>
   expect(screen.getByRole("button", { name: "工具调用待批准" })).toBeInTheDocument()
   expect(screen.queryByText("正在整理回答")).not.toBeInTheDocument()
 
-  // HITL：点批准 → 单帧凑齐即发一条带 decision_id 的 run.resume。
+  // HITL：点批准 → 单帧凑齐即发一条带 command identity 的 run.resume。
   fireEvent.click(screen.getByRole("button", { name: "批准" }))
   expect(
     within(screen.getByRole("group", { name: "工具调用待批准" })).getByRole("status"),

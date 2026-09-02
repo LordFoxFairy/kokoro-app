@@ -2,12 +2,12 @@
 
 // 设置分区内容（账户 / 外观与语言 / 对话偏好 / 订阅与余额 / 能力入口）：从设置分区层抽出，
 // 供设置中心各 tab 复用，单一真源。每卡就地保存或即时生效。
-// 账户资料和登录方式来自同源 settings projection；不从 session 信封或团队名推断个人资料。
+// 当前 v1 contract 不包含个人资料 projection；live 状态保持为空，预览态使用 fixture。
 
 import { useEffect, useRef, useState, type SVGProps } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { ArrowUpRight, CalendarSync, ChevronRight, CircleHelp, Contrast, Copy, Ellipsis, FileText, FolderPlus, Gift, Globe, Globe2, KeyRound, LayoutGrid, LogOut, Mail, Moon, Pencil, Plus, RefreshCw, Search, Server, Sparkles, Sun, Wifi, X } from "lucide-react"
+import { ArrowUpRight, CalendarSync, ChevronRight, CircleHelp, Contrast, Copy, FolderPlus, Gift, Globe, Globe2, KeyRound, LayoutGrid, LogOut, Moon, Plus, Search, Server, Sparkles, Sun, Wifi, X } from "lucide-react"
 
 import type { AgentCandidate, ModelCandidate } from "@/contract/http"
 import { useLocale, useT } from "@/i18n/context"
@@ -96,9 +96,8 @@ export function AccountCard({
   const t = useT()
   const router = useRouter()
   const previewAccount = makePreviewAccount(t)
-  const [loadedAccount, setLoadedAccount] = useState<AccountProjection | null>(null)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
-  const account = preview ? { ...previewAccount, ...previewAccountEdits } : loadedAccount
+  const account = preview ? { ...previewAccount, ...previewAccountEdits } : null
   const [loggingOut, setLoggingOut] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
@@ -110,22 +109,6 @@ export function AccountCard({
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [loginMethodBusy, setLoginMethodBusy] = useState<AccountProjection["loginMethods"][number]["id"] | null>(null)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (preview) return
-    let live = true
-    void fetch("/api/settings/account", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`account_load_failed:${response.status}`)
-        const payload = await response.json() as { data?: AccountProjection } | AccountProjection
-        return "data" in payload && payload.data ? payload.data : payload as AccountProjection
-      })
-      .then((value) => live && setLoadedAccount(value))
-      .catch(() => live && setLoadedAccount(null))
-    return () => {
-      live = false
-    }
-  }, [preview])
 
   const logout = async (): Promise<void> => {
     setLoggingOut(true)
@@ -144,16 +127,12 @@ export function AccountCard({
   const displayName = account?.displayName ?? "—"
   const initial = (displayName.trim().charAt(0) || "K").toUpperCase()
   const saveName = async (name: string): Promise<void> => {
-    if (!account || !name.trim() || name.trim() === account.displayName) return
-    if (preview) setPreviewAccountEdits((current) => ({ ...current, displayName: name.trim() }))
-    else setLoadedAccount({ ...account, displayName: name.trim() })
-    if (!preview) await fetch("/api/settings/account", { method: "PATCH", headers: mutationHeaders({ "content-type": "application/json" }), body: JSON.stringify({ display_name: name.trim() }) })
+    if (!preview || !account || !name.trim() || name.trim() === account.displayName) return
+    setPreviewAccountEdits((current) => ({ ...current, displayName: name.trim() }))
   }
   const saveEmail = async (): Promise<void> => {
-    if (!account || !newEmail.includes("@")) return
-    if (!preview) await fetch("/api/settings/account/email", { method: "PATCH", headers: mutationHeaders({ "content-type": "application/json" }), body: JSON.stringify({ verification_code: verificationCode, email: newEmail.trim() }) })
-    if (preview) setPreviewAccountEdits((current) => ({ ...current, email: newEmail.trim() }))
-    else setLoadedAccount({ ...account, email: newEmail.trim() })
+    if (!preview || !account || !newEmail.includes("@")) return
+    setPreviewAccountEdits((current) => ({ ...current, email: newEmail.trim() }))
     setEmailOpen(false)
     setEmailStep("verify")
     setVerificationCode("")
@@ -164,14 +143,7 @@ export function AccountCard({
     if (loginMethodBusy) return
     setLoginMethodBusy(method.id)
     try {
-      if (!preview) {
-        const suffix = method.connected ? "" : "/connect"
-        const response = await fetch(`/api/settings/account/login-methods/${method.id}${suffix}`, {
-          method: method.connected ? "DELETE" : "POST",
-          headers: mutationHeaders(),
-        })
-        if (!response.ok) return
-      }
+      if (!preview) return
       const source = account?.loginMethods ?? previewAccount.loginMethods
       const nextMethods = source.map((entry) => entry.id === method.id
         ? {
@@ -180,8 +152,7 @@ export function AccountCard({
             account: entry.connected ? null : (account?.email ?? previewAccount.email),
           }
         : entry)
-      if (preview) setPreviewAccountEdits((current) => ({ ...current, loginMethods: nextMethods }))
-      else if (account) setLoadedAccount({ ...account, loginMethods: nextMethods })
+      setPreviewAccountEdits((current) => ({ ...current, loginMethods: nextMethods }))
     } finally {
       setLoginMethodBusy(null)
     }
@@ -191,10 +162,7 @@ export function AccountCard({
     if (verificationBusy) return
     setVerificationBusy(kind)
     try {
-      if (!preview) {
-        const endpoint = kind === "email" ? "email-verifications" : "deletion-verifications"
-        await fetch(`/api/settings/account/${endpoint}`, { method: "POST", headers: mutationHeaders() })
-      }
+      if (!preview) return
     } finally {
       setVerificationBusy(null)
     }
@@ -204,18 +172,9 @@ export function AccountCard({
     if (!deleteCode.trim() || deletingAccount) return
     setDeletingAccount(true)
     try {
-      if (!preview) {
-        const response = await fetch("/api/settings/account", {
-          method: "DELETE",
-          headers: mutationHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ verification_code: deleteCode.trim() }),
-        })
-        if (!response.ok) return
-        router.replace("/login")
-      } else {
-        setDeleteOpen(false)
-        setDeleteCode("")
-      }
+      if (!preview) return
+      setDeleteOpen(false)
+      setDeleteCode("")
     } finally {
       setDeletingAccount(false)
     }
@@ -255,7 +214,7 @@ export function AccountCard({
           <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
-            <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} />
+          <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} disabled={!preview} />
           </div>
         </div>
         <Button variant="outline" size="icon-sm" type="button" aria-label={t("settings.logout")} data-testid="settings-logout" onClick={() => void logout()} disabled={loggingOut}>
@@ -297,14 +256,14 @@ export function AccountCard({
             <strong>{t("settings.loginMethod")}</strong>
             <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)}>{t("settings.manage")}</Button>
+          <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
         </div>
         <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
           <div>
             <strong>{t("settings.deleteAccount")}</strong>
             <span>{t("settings.deleteAccountHint")}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)}>{t("settings.deleteAccount")}</Button>
+          <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
         </div>
       </div>
 
@@ -343,62 +302,15 @@ const previewPreferences: PreferenceProjection = {
   brand_ads: true,
 }
 
-function readPreferenceProjection(payload: unknown): PreferenceProjection | null {
-  if (typeof payload !== "object" || payload === null) return null
-  const candidate = "data" in payload && typeof payload.data === "object" && payload.data !== null
-    ? payload.data
-    : payload
-  if (
-    !("browser_notifications" in candidate) || typeof candidate.browser_notifications !== "boolean" ||
-    !("sound_notifications" in candidate) || typeof candidate.sound_notifications !== "boolean" ||
-    !("product_updates" in candidate) || typeof candidate.product_updates !== "boolean" ||
-    !("brand_ads" in candidate) || typeof candidate.brand_ads !== "boolean"
-  ) return null
-  return {
-    browser_notifications: candidate.browser_notifications,
-    sound_notifications: candidate.sound_notifications,
-    product_updates: candidate.product_updates,
-    brand_ads: candidate.brand_ads,
-  }
-}
-
 // —— 卡二：外观与语言 —— 主题三档（WEB-THEME）/ 语言（i18n）即时生效。
-export function AppearanceCard({ brandName = "Kokoro", preview = false }: { brandName?: string; preview?: boolean }) {
+export function AppearanceCard({ brandName = "Kokoro" }: { brandName?: string }) {
   const t = useT()
   const { mode, setMode } = useTheme()
   const { locale, setLocale } = useLocale()
   const [preferences, setPreferences] = useState<PreferenceProjection>(previewPreferences)
 
-  useEffect(() => {
-    if (preview) return
-    const controller = new AbortController()
-    void fetch("/api/settings/preferences", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`preferences_load_failed:${response.status}`)
-        const projection = readPreferenceProjection(await response.json())
-        if (projection === null) throw new Error("preferences_payload_invalid")
-        setPreferences(projection)
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) setPreferences(previewPreferences)
-      })
-    return () => controller.abort()
-  }, [preview])
-
-  const updatePreference = async (key: keyof PreferenceProjection, checked: boolean): Promise<void> => {
-    const previous = preferences
+  const updatePreference = (key: keyof PreferenceProjection, checked: boolean): void => {
     setPreferences((current) => ({ ...current, [key]: checked }))
-    if (preview) return
-    try {
-      const response = await fetch("/api/settings/preferences", {
-        method: "PATCH",
-        headers: mutationHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ [key]: checked }),
-      })
-      if (!response.ok) throw new Error(`preferences_save_failed:${response.status}`)
-    } catch {
-      setPreferences(previous)
-    }
   }
 
   const themeOptions: { value: ThemeMode; label: string }[] = [
@@ -455,7 +367,7 @@ export function AppearanceCard({ brandName = "Kokoro", preview = false }: { bran
             <Switch
               size="sm"
               checked={preferences[key]}
-              onCheckedChange={(checked) => void updatePreference(key, checked)}
+              onCheckedChange={(checked) => updatePreference(key, checked)}
               aria-label={t(label).replaceAll("Kokoro", brandName)}
             />
           </div>
@@ -832,131 +744,6 @@ export function MyComputerCard({ brandName, preview = false }: { brandName?: str
   )
 }
 
-export function MailSettingsCard({ brandName, preview = false }: { brandName?: string; preview?: boolean }) {
-  const t = useT()
-  const mailboxPrefix = (brandName ?? "kokoro").toLocaleLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "kokoro"
-  const [mailMode, setMailMode] = useState<"setup" | "inbox">("setup")
-  const [inboxLoading, setInboxLoading] = useState(false)
-  const [inboxItems, setInboxItems] = useState<{ id: string; sender: string; subject: string; receivedAt: string }[]>([])
-  const [workflowStage, setWorkflowStage] = useState<"closed" | "intro" | "form">("closed")
-  const [workflowSlug, setWorkflowSlug] = useState("")
-  const [workflowInstruction, setWorkflowInstruction] = useState("")
-  const [workflowEmails, setWorkflowEmails] = useState<string[]>([])
-  const [senderOpen, setSenderOpen] = useState(false)
-  const [sender, setSender] = useState("")
-  const [authorizedSenders, setAuthorizedSenders] = useState<string[]>([])
-
-  const loadInbox = async (): Promise<void> => {
-    setInboxLoading(true)
-    try {
-      if (preview) {
-        // Preview data is local and deterministic. Do not add network-shaped
-        // latency here: switching to Inbox should paint its empty state on the
-        // next microtask, while a live deployment still shows the real fetch
-        // and loading state below.
-        await Promise.resolve()
-        setInboxItems([])
-        return
-      }
-      const response = await fetch("/api/mail/inbox", { cache: "no-store" })
-      if (!response.ok) throw new Error(`mail_inbox_load_failed:${response.status}`)
-      const payload = await response.json() as { data?: { id: string; sender: string; subject: string; received_at: string }[] }
-      setInboxItems((payload.data ?? []).map((item) => ({ ...item, receivedAt: item.received_at })))
-    } finally {
-      setInboxLoading(false)
-    }
-  }
-
-  const selectMailMode = (mode: "setup" | "inbox") => {
-    setMailMode(mode)
-    if (mode === "inbox") void loadInbox()
-  }
-
-  const saveWorkflow = async (): Promise<void> => {
-    const address = `${mailboxPrefix}-${workflowSlug.trim()}@kokoro.bot`
-    if (!preview) {
-      const response = await fetch("/api/mail/workflows", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ slug: workflowSlug.trim(), instruction: workflowInstruction.trim() }) })
-      if (!response.ok) throw new Error(`mail_workflow_create_failed:${response.status}`)
-    }
-    setWorkflowEmails((items) => [...items, address])
-    setWorkflowStage("closed")
-  }
-  const saveSender = async (): Promise<void> => {
-    if (!preview) {
-      const response = await fetch("/api/mail/senders", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ email: sender.trim() }) })
-      if (!response.ok) throw new Error(`mail_sender_create_failed:${response.status}`)
-    }
-    setAuthorizedSenders((items) => [...items, sender.trim()])
-    setSenderOpen(false)
-  }
-
-  return (
-    <div className={styles.mailSettings} data-testid="settings-mail">
-      <div className={styles.mailTabs} role="tablist" aria-label={t("settings.mailTitle")}>
-        <Button type="button" variant="ghost" role="tab" aria-selected={mailMode === "setup"} data-active={mailMode === "setup"} onClick={() => selectMailMode("setup")}>{t("settings.setup")}</Button>
-        <Button type="button" variant="ghost" role="tab" aria-selected={mailMode === "inbox"} data-active={mailMode === "inbox"} onClick={() => selectMailMode("inbox")}>{t("settings.inbox")}</Button>
-      </div>
-      {mailMode === "setup" ? (
-        <div role="tabpanel" aria-label={t("settings.setup")}>
-          <section className={styles.mailMailboxRow}><div><strong>{t("settings.kokoroMailbox", { brand: brandName ?? "Kokoro" })}</strong><small>{t("settings.mailboxHint")}</small></div><button type="button" aria-label={`${mailboxPrefix}@kokoro.bot`}><span>{mailboxPrefix}@kokoro.bot</span><Pencil aria-hidden="true" /></button></section>
-          <section className={styles.mailActionRow}><div><strong>{t("settings.workflowEmail")}<CircleHelp aria-hidden="true" /></strong><small>{t("settings.workflowEmailHint")}</small></div><Button type="button" variant="outline" onClick={() => setWorkflowStage("intro")}><Plus />{t("settings.addWorkflowEmail")}</Button></section>
-          {workflowEmails.map((email) => <div className={styles.mailListRow} key={email}><Mail /><span>{email}</span><Button variant="ghost" size="icon-sm"><Ellipsis /></Button></div>)}
-          <section className={styles.mailActionRow}><div><strong>{t("settings.authorizedSenders")}</strong><small>{t("settings.authorizedSendersHint")}</small></div><Button type="button" variant="outline" onClick={() => setSenderOpen(true)}><Plus />{t("settings.addAuthorizedSender")}</Button></section>
-          {authorizedSenders.map((email) => <div className={styles.mailListRow} key={email}><Mail /><span>{email}</span><Button variant="ghost" size="icon-sm"><Ellipsis /></Button></div>)}
-        </div>
-      ) : (
-        <div className={styles.mailInbox} role="tabpanel" aria-label={t("settings.inbox")} aria-busy={inboxLoading}>
-          <div className={styles.mailInboxHeader} role="row">
-            <span role="columnheader">{t("settings.mailSender")}</span>
-            <span role="columnheader">{t("settings.mailContent")}</span>
-            <span role="columnheader">{t("settings.mailDate")}</span>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("settings.refreshInbox")} disabled={inboxLoading} onClick={() => void loadInbox()}><RefreshCw aria-hidden="true" /></Button>
-          </div>
-          {inboxLoading ? <div className={styles.mailInboxState}><Spinner aria-label={t("settings.loadingInbox")} /></div> : inboxItems.length === 0 ? <div className={styles.mailInboxState}><p>{t("settings.noMailData")}</p></div> : (
-            <div className={styles.mailInboxRows} role="rowgroup">{inboxItems.map((item) => <div key={item.id} role="row"><span role="cell">{item.sender}</span><span role="cell">{item.subject}</span><time role="cell">{item.receivedAt}</time></div>)}</div>
-          )}
-        </div>
-      )}
-
-      <Dialog open={workflowStage !== "closed"} onOpenChange={(open) => { if (!open) setWorkflowStage("closed") }}>
-        {workflowStage === "intro" ? <DialogContent className={styles.mailIntroDialog} closeLabel={t("shell.closeDialog")}><DialogTitle>{t("settings.workflowIntroTitle")}</DialogTitle><ol><li><strong>{t("settings.workflowIntroOne")}</strong><p>{t("settings.workflowIntroOneHint")}</p></li><li><strong>{t("settings.workflowIntroTwo")}</strong><p>{t("settings.workflowIntroTwoHint")}</p></li><li><strong>{t("settings.workflowIntroThree")}</strong><p>{t("settings.workflowIntroThreeHint")}</p></li></ol><DialogFooter><Button type="button" onClick={() => setWorkflowStage("form")}>{t("settings.addNow")}</Button></DialogFooter></DialogContent> : null}
-        {workflowStage === "form" ? (
-          <DialogContent className={styles.mailFormDialog} closeLabel={t("shell.closeDialog")}>
-            <header className={styles.mailFormHeader}>
-              <DialogTitle>{t("settings.addWorkflowEmail")}</DialogTitle>
-            </header>
-            <div className={styles.mailFormBody}>
-              <p className={styles.mailFormLead}>{t("settings.workflowFormHint")}</p>
-              <FieldGroup className={styles.mailFormFields}>
-                <Field className={styles.mailEmailField}>
-                  <FieldLabel htmlFor="mail-workflow-slug">{t("settings.emailAddress")}</FieldLabel>
-                  <span className={styles.mailAddressInput}>
-                    <b>{mailboxPrefix}-</b>
-                    <Input id="mail-workflow-slug" aria-label={t("settings.emailAddress")} placeholder="newsletter" value={workflowSlug} onChange={(event) => setWorkflowSlug(event.target.value)} />
-                    <b>@kokoro.bot</b>
-                  </span>
-                  <span className={styles.mailFieldError} aria-live="polite" />
-                </Field>
-                <Field className={styles.mailInstructionField}>
-                  <FieldLabel htmlFor="mail-workflow-instruction">{t("firstSite.instructions")}</FieldLabel>
-                  <FieldDescription>{t("settings.workflowInstructionHint", { address: `${mailboxPrefix}-${workflowSlug}@kokoro.bot` })}</FieldDescription>
-                  <Textarea id="mail-workflow-instruction" aria-label={t("firstSite.instructions")} placeholder={t("settings.workflowInstructionPlaceholder")} value={workflowInstruction} onChange={(event) => setWorkflowInstruction(event.target.value)} />
-                </Field>
-              </FieldGroup>
-            </div>
-            <DialogFooter className={styles.mailFormFooter}>
-              <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-              <Button type="button" disabled={!workflowSlug.trim() || !workflowInstruction.trim()} onClick={() => void saveWorkflow()}>{t("firstSite.save")}</Button>
-            </DialogFooter>
-          </DialogContent>
-        ) : null}
-      </Dialog>
-
-      <Dialog open={senderOpen} onOpenChange={setSenderOpen}><DialogContent className={styles.mailSenderDialog} closeLabel={t("shell.closeDialog")}><DialogTitle>{t("settings.addAuthorizedSender")}</DialogTitle><label><span>{t("settings.emailAddress")}</span><Input type="email" value={sender} placeholder="name@example.com" onChange={(event) => setSender(event.target.value)} /></label><DialogFooter><DialogClose asChild><Button variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button disabled={!sender.includes("@") || !sender.includes(".")} onClick={() => void saveSender()}>{t("firstSite.save")}</Button></DialogFooter></DialogContent></Dialog>
-    </div>
-  )
-}
-
 function DeploymentWebsiteIcon() {
   return (
     <svg viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
@@ -1196,130 +983,6 @@ export function IntegrationSettingsCard({
           </button>
         )
       })}
-    </div>
-  )
-}
-
-export function DeveloperSettingsCard({ brandName, preview = false }: { brandName?: string; preview?: boolean }) {
-  const t = useT()
-  const brand = brandName ?? "Kokoro"
-  const [section, setSection] = useState<"keys" | "webhooks">("keys")
-  const [createOpen, setCreateOpen] = useState(false)
-  const [keyName, setKeyName] = useState("")
-  const [expiresIn, setExpiresIn] = useState("never")
-  const [webhookUrl, setWebhookUrl] = useState("")
-  const [creating, setCreating] = useState(false)
-  const [apiKeys, setApiKeys] = useState<{ id: string; name: string; prefix: string }[]>([])
-  const [webhooks, setWebhooks] = useState<{ id: string; url: string }[]>([])
-  const [createdSecret, setCreatedSecret] = useState<{ name: string; secret: string } | null>(null)
-  const [secretCopied, setSecretCopied] = useState(false)
-
-  const createApiKey = async (): Promise<void> => {
-    setCreating(true)
-    try {
-      let item: { id: string; name: string; prefix: string; secret?: string } = {
-        id: `preview-key-${Date.now()}`,
-        name: keyName.trim(),
-        prefix: "kk_preview…",
-        secret: `kk_preview_${Date.now().toString(36)}_demo_secret`,
-      }
-      if (!preview) {
-        const response = await fetch("/api/settings/developer/api-keys", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ name: keyName.trim(), expires_in: expiresIn }) })
-        if (!response.ok) throw new Error(`api_key_create_failed:${response.status}`)
-        item = await response.json() as typeof item
-      }
-      setApiKeys((items) => [...items, { id: item.id, name: item.name, prefix: item.prefix }])
-      setCreateOpen(false)
-      if (item.secret) {
-        setSecretCopied(false)
-        setCreatedSecret({ name: item.name, secret: item.secret })
-      }
-      setKeyName("")
-    } finally {
-      setCreating(false)
-    }
-  }
-  const createWebhook = async (): Promise<void> => {
-    setCreating(true)
-    try {
-      let item = { id: `preview-webhook-${Date.now()}`, url: webhookUrl.trim() }
-      if (!preview) {
-        const response = await fetch("/api/settings/developer/webhooks", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ url: webhookUrl.trim() }) })
-        if (!response.ok) throw new Error(`webhook_create_failed:${response.status}`)
-        item = await response.json() as typeof item
-      }
-      setWebhooks((items) => [...items, item])
-      setCreateOpen(false)
-      setWebhookUrl("")
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const items = section === "keys" ? apiKeys : webhooks
-  return (
-    <div className={styles.developerSettings} data-testid="settings-developer">
-      <div className={styles.developerTabs} role="tablist" aria-label={t("settings.developerTitle")}>
-        <Button type="button" variant="ghost" role="tab" aria-selected={section === "keys"} data-active={section === "keys"} onClick={() => setSection("keys")}>{t("settings.apiKeys")}</Button>
-        <Button type="button" variant="ghost" role="tab" aria-selected={section === "webhooks"} data-active={section === "webhooks"} onClick={() => setSection("webhooks")}>{t("settings.webhooks")}</Button>
-      </div>
-      <div className={styles.developerInfo}>
-        <FileText aria-hidden="true" />
-        <span>{section === "keys" ? t("settings.apiKeysDescription", { brand }) : t("settings.webhooksDescription")}</span>
-        <a href={section === "keys" ? "/docs/api" : "/docs/webhooks"}>{t("settings.documentation")}<ArrowUpRight /></a>
-      </div>
-      {items.length === 0 ? (
-        <div className={styles.developerEmpty} data-testid="settings-developer-empty">
-          <FileText aria-hidden="true" />
-          <div className={styles.developerEmptyCopy} data-testid="settings-developer-empty-copy">
-            <strong>{section === "keys" ? t("settings.noApiKeys") : t("settings.noWebhooks")}</strong>
-            <span>{section === "keys" ? t("settings.noApiKeysHint") : t("settings.noWebhooksHint", { brand })}</span>
-          </div>
-          <Button type="button" variant="outline" onClick={() => setCreateOpen(true)}><Plus />{t("settings.createNewItem")}</Button>
-        </div>
-      ) : (
-        <div className={styles.developerList}>
-          <div className={styles.developerListActions}>
-            <Button type="button" variant="outline" onClick={() => setCreateOpen(true)}><Plus data-icon="inline-start" />{t("settings.createNewItem")}</Button>
-          </div>
-          {items.map((item) => <div className={styles.developerListRow} key={item.id}><strong>{"name" in item ? item.name : item.url}</strong><span>{"prefix" in item ? item.prefix : t("settings.webhookActive")}</span><Button variant="ghost" size="icon-sm"><Ellipsis /></Button></div>)}
-        </div>
-      )}
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        {section === "keys" ? (
-          <DialogContent className={styles.apiKeyDialog} overlayClassName={styles.developerDialogOverlay} closeLabel={t("shell.closeDialog")}>
-            <DialogTitle>{t("settings.createApiKey")}</DialogTitle>
-            <FieldGroup>
-              <Field><FieldLabel htmlFor="api-key-name">{t("settings.apiKeyName")}</FieldLabel><Input id="api-key-name" aria-label={t("settings.apiKeyName")} placeholder={t("settings.apiKeyPlaceholder")} value={keyName} onChange={(event) => setKeyName(event.target.value)} /></Field>
-              <Field><FieldLabel>{t("settings.expiresAt")}</FieldLabel><Select value={expiresIn} onValueChange={setExpiresIn}><SelectTrigger aria-label={t("settings.expiresAt")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{(["never", "30d", "90d", "1y"] as const).map((value) => <SelectItem key={value} value={value}>{t(`settings.expiry.${value}`)}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
-            </FieldGroup>
-            <DialogFooter><DialogClose asChild><Button variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button disabled={!keyName.trim() || creating} onClick={() => void createApiKey()}>{t("settings.create")}</Button></DialogFooter>
-          </DialogContent>
-        ) : (
-          <DialogContent className={styles.webhookDialog} overlayClassName={styles.developerDialogOverlay} closeLabel={t("shell.closeDialog")}>
-            <DialogTitle>{t("settings.configureWebhook")}</DialogTitle>
-            <Field><FieldLabel htmlFor="webhook-url">URL</FieldLabel><Input id="webhook-url" aria-label="URL" placeholder={t("settings.webhookPlaceholder")} value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} /></Field>
-            <DialogFooter><DialogClose asChild><Button variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button disabled={!/^https:\/\//.test(webhookUrl) || creating} onClick={() => void createWebhook()}>{t("firstSite.save")}</Button></DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
-      <Dialog open={createdSecret !== null} onOpenChange={(open) => { if (!open) { setCreatedSecret(null); setSecretCopied(false) } }}>
-        <DialogContent className={styles.apiSecretDialog} overlayClassName={styles.developerDialogOverlay} closeLabel={t("shell.closeDialog")}>
-          <DialogTitle>{t("settings.apiKeyCreatedTitle")}</DialogTitle>
-          <div className={styles.apiSecretBody}>
-            <p>{t("settings.apiKeyCreatedHint")}</p>
-            <span>{t("settings.apiKeySecretLabel")}</span>
-            <div className={styles.apiSecretValue}>
-              <code>{createdSecret?.secret}</code>
-              <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(createdSecret?.secret ?? "").then(() => setSecretCopied(true))}>
-                <Copy data-icon="inline-start" aria-hidden="true" />{secretCopied ? t("settings.copied") : t("settings.copyUserId")}
-              </Button>
-            </div>
-          </div>
-          <DialogFooter><Button type="button" onClick={() => { setCreatedSecret(null); setSecretCopied(false) }}>{t("share.done")}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

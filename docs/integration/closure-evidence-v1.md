@@ -24,7 +24,7 @@ workspace package。未来需要跨 site 复用时发布为版本化 registry pa
 | --- | --- | --- |
 | Direct Chat / Project Chat | `/api/session/*` | Web 兼容路径，统一转 `kokoro-bff/v1` Chat 业务边界 |
 | Agent connection setup | `/api/agents/connections/setup?platform=PLATFORM` | `/v1/agents/connections/setup` |
-| Skills、MCP、Projects、Settings、Mail | `/api/hub/*`、typed aliases | `/v1/skills`、`/v1/mcp`、`/v1/projects` 等 |
+| Skills、MCP、Projects | `/api/hub/*`、typed aliases | `/v1/skills`、`/v1/mcp`、`/v1/projects` |
 | Scheduled typed BFF | `/api/scheduled-tasks*` | `/v1/scheduled-tasks*` |
 | Library | `/api/session/artifacts` | Chat 兼容路径由 BFF Chat 投影承接；业务资料页仍使用 `/v1/library` |
 | Runtime manifest | `/api/system/runtime-manifest` | 直连 System，不经过业务 BFF |

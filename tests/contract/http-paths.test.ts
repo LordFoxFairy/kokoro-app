@@ -14,10 +14,10 @@ import {
 } from "@/contract/http"
 
 describe("opaque HTTP path segments", () => {
-  it("encodes session, run, decision, hash, and share references exactly once", () => {
+  it("encodes session, run, command, hash, and share references exactly once", () => {
     const sessionId = "session/a?b#c%20"
     const runId = "run/a?b#c%20"
-    const decisionId = "decision/a?b#c%20"
+    const commandId = "command/a?b#c%20"
     const hash = "sha256/a?b#c%20"
 
     expect(messagesPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/messages")
@@ -26,7 +26,7 @@ describe("opaque HTTP path segments", () => {
     expect(renameSessionPath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/title")
     expect(deliveryPath(sessionId, hash)).toBe("/sessions/session%2Fa%3Fb%23c%2520/deliveries/sha256%2Fa%3Fb%23c%2520")
     expect(controlPath(sessionId, runId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control")
-    expect(controlReceiptPath(sessionId, runId, decisionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control/decision%2Fa%3Fb%23c%2520")
+    expect(controlReceiptPath(sessionId, runId, commandId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control/command%2Fa%3Fb%23c%2520")
     expect(sharePath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/share")
     expect(sharedSnapshotPath("share/a?b#c%20")).toBe("/shared/share%2Fa%3Fb%23c%2520")
     expect(artifactContentPath(hash)).toBe("/artifacts/sha256%2Fa%3Fb%23c%2520")

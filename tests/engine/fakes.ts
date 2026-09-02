@@ -5,6 +5,7 @@ import type {
   SessionSnapshot,
   MessageCreateParams,
   MessageCreateReceipt,
+  RunControlReceipt,
 } from "@/contract/http"
 import type { SessionEvent } from "@/contract/session-events"
 import type { OpenEventsArgs, SessionClient, SessionClientError } from "@/engine/client"
@@ -20,15 +21,15 @@ export type FakeStream = {
 
 export type FakeClient = SessionClient & {
   createCalls: { sessionId: string; body: MessageCreateParams }[]
-  controlCalls: { sessionId: string; runId: string; body: RunControlBody }[]
+  controlCalls: { sessionId: string; runId: string; body: RunControlBody; commandId: string }[]
   snapshotCalls: string[]
   deleteCalls: string[]
   renameCalls: { sessionId: string; title: string }[]
-  // 默认成功 {ok:true}；测试可重写为 reject 以驱动失败回滚路径。
+  // 默认成功 receipt；测试可重写为 reject 以驱动失败回滚路径。
   nextRename: (sessionId: string, title: string) => Promise<{ ok: true }>
   streams: FakeStream[]
   nextCreate: (sessionId: string, body: MessageCreateParams) => Promise<MessageCreateReceipt>
-  nextControl: () => Promise<{ ok: true }>
+  nextControl: () => Promise<RunControlReceipt>
   // 默认 null（服务端无此会话）；测试可按会话编程 snapshot。
   nextSnapshot: (sessionId: string) => Promise<SessionSnapshot | null>
   lastStream: () => FakeStream
@@ -53,7 +54,13 @@ export function createFakeClient(): FakeClient {
       runCounter += 1
       return Promise.resolve(makeReceipt(`run_${runCounter}`))
     },
-    nextControl: () => Promise.resolve({ ok: true }),
+    nextControl: () => Promise.resolve({
+      run_id: "run_control",
+      command_id: "command_control",
+      request_digest: "sha256:preview-control",
+      status: "succeeded",
+      replayed: false,
+    }),
     nextSnapshot: () => Promise.resolve(null),
     lastStream: () => {
       const stream = client.streams.at(-1)
@@ -87,8 +94,8 @@ export function createFakeClient(): FakeClient {
       client.renameCalls.push({ sessionId, title })
       return client.nextRename(sessionId, title)
     },
-    sendControl: (sessionId, runId, body) => {
-      client.controlCalls.push({ sessionId, runId, body })
+    sendControl: (sessionId, runId, body, commandId) => {
+      client.controlCalls.push({ sessionId, runId, body, commandId })
       return client.nextControl()
     },
     openEvents: (args: OpenEventsArgs) => {

@@ -9,12 +9,11 @@
 - `chat-prefs.ts`：对话偏好本地 store（localStorage `kokoro.web.chat-prefs`）。`readChatModel`/`readChatAgent`/`writeChatModel`/`writeChatAgent`；null=跟随空间缺省（不上 wire）。
 
 ## 协作者
-上游：`@/components/blocks/app-frame/app-frame`（第一个 site 工作区入口，持模态开关态 + `#/account/settings/` URL 同步（兼容旧 query 深链））。下游：shadcn Dialog/Tabs/Avatar primitives、`@/ui/theme`（主题）、`@/i18n`（语言 + settings.* 文案）、`@/ui/shell/page-clients`（team/billing/data-management 客户端）、`@/billing/format`。
+上游：`@/components/blocks/app-frame/app-frame`（第一个 site 工作区入口，持模态开关态 + `#/account/settings/` URL 同步（兼容旧 query 深链））。下游：shadcn Dialog/Tabs/Avatar primitives、`@/ui/theme`（主题）、`@/i18n`（语言 + settings.* 文案）、`@/ui/shell/page-clients`（team/billing 客户端）、`@/billing/format`。
 `chat-prefs` 被 `@/ui/shell/use-composer-selectors` 读作选择器初值（新对话首帧预填，会话级锁语义不变）。
 
 ## 陷阱
-- 账户页从同源 `/api/settings/account` 读取 actor projection；email、登录方式和 Passkey 不从 session 信封猜测。预览态只使用 `.test` fixture，浏览器不接收可信 tenant 轴。
+- 当前 BFF v1 没有个人资料 projection；账户卡在 live 保留信息架构但不渲染未接线的读写动作，预览态只使用 `.test` fixture，浏览器不接收可信 tenant 轴。
 - 账户卡当前团队由 `currentNamespace()` + `listMyTeams()` 解析名；预览/无信封显“预览模式”。
-- 技能/连接/数据管理/团队/账单/定价内容使用独立 `XxxContent`（`@/ui/skills`、`@/ui/mcp`、`@/ui/data-management`、`@/ui/team`、`@/ui/billing`），设置中心直接装配。`数据管理` 不复用 `@/ui/library`：成果库属于 Session/Artifact 业务面，数据管理属于账户设置 projection。
-- 数据管理子视图使用 `#/account/settings/library/authorized-apps` 与 `#/account/settings/library/cloud-browser`；AppFrame 必须接受后缀深链，刷新不能关闭设置窗。
+- 技能/连接/团队/账单/定价内容使用独立 `XxxContent`（`@/ui/skills`、`@/ui/mcp`、`@/ui/team`、`@/ui/billing`），设置中心直接装配。成果库属于独立的 Session/Artifact 业务面，不再作为账户设置入口重复装配。
 - `settings-sections.tsx`（账户/外观/对话/订阅卡）+ `settings-sections.module.css`（sections 卡片/行/segment/select 皮肤）；账户/外观/对话为 sections，订阅=`BillingContent`+`PricingContent`。模态内两栏布局在 `settings-modal.module.css`。

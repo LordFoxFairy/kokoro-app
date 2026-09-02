@@ -7,7 +7,6 @@ import { ZodError } from "zod"
 import {
   billingByModelPath,
   billingByModelSchema,
-  billingUsageSchema,
   billingLedgerPath,
   billingLedgerSchema,
   billingSummaryPath,
@@ -15,7 +14,6 @@ import {
   type BillingByModel,
   type BillingLedger,
   type BillingSummary,
-  type BillingUsage,
 } from "@/contract/http"
 import { SESSION_PROXY_BASE } from "@/engine/config"
 
@@ -67,28 +65,12 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T): Promise<T> 
   }
 }
 
-async function getSettingsJson<T>(path: string, parse: (raw: unknown) => T): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(`/api/settings/${path}`, { cache: "no-store" })
-  } catch (error) {
-    throw new BillingClientError("network", describeUnknown(error), null)
-  }
-  if (!response.ok) throw new BillingClientError("http", `settings request failed with status ${response.status}`, response.status)
-  try {
-    return parse(await response.json())
-  } catch (error) {
-    throw new BillingClientError("parse", describeUnknown(error), response.status)
-  }
-}
-
 export type BillingClient = {
   summary: () => Promise<BillingSummary>
   // 分页：cursor 缺省=首页；服务端回 next_cursor（无=到底）。
   ledger: (cursor?: string) => Promise<BillingLedger>
   // 本周期按模型消费分解（B1d）：无账户/off 档→空清单。
   byModel: () => Promise<BillingByModel>
-  usage: (scope: "websites" | "computer") => Promise<BillingUsage>
 }
 
 export function createBillingClient(): BillingClient {
@@ -99,6 +81,5 @@ export function createBillingClient(): BillingClient {
       return getJson(`${billingLedgerPath()}${query}`, (raw) => billingLedgerSchema.parse(raw))
     },
     byModel: () => getJson(billingByModelPath(), (raw) => billingByModelSchema.parse(raw)),
-    usage: (scope) => getSettingsJson(`usage?scope=${encodeURIComponent(scope)}&period=current`, (raw) => billingUsageSchema.parse(raw)),
   }
 }

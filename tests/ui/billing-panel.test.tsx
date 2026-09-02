@@ -26,7 +26,6 @@ function makeClient(overrides: Partial<BillingClient> = {}): BillingClient {
       next_cursor: "cur_2",
     }),
     byModel: vi.fn().mockResolvedValue({ period_start: "2026-07-01T00:00:00.000Z", items: [] }),
-    usage: vi.fn().mockResolvedValue({ auto_top_up_enabled: false, reset_at: null, period_start: "2026-08-01T00:00:00.000Z", period_end: "2026-08-29T23:59:59.000Z", total_cost_minor: "0", categories: [], websites: [], computers: [] }),
     ...overrides,
   }
 }
@@ -54,7 +53,6 @@ describe("BillingPanel", () => {
 
     await screen.findByTestId("billing-balance")
     expect(screen.getByTestId("billing-balance")).toHaveTextContent("1,000")
-    expect(screen.getByText("Computer")).toBeTruthy()
     expect(screen.getByText("Credit history")).toBeTruthy()
     expect(screen.getByText("Free credits")).toBeTruthy()
     expect(screen.getByText("Refreshes to 300 every day at 00:00")).toBeTruthy()
@@ -63,36 +61,6 @@ describe("BillingPanel", () => {
     expect(screen.queryByTestId("billing-filter-spend")).toBeNull()
     expect(screen.queryByTestId("billing-trend")).toBeNull()
     expect(screen.queryByTestId("billing-by-model")).toBeNull()
-  })
-
-  it("switches embedded website and computer tabs to their own usage surfaces", async () => {
-    const usage = vi.fn().mockResolvedValue({
-      auto_top_up_enabled: false,
-      reset_at: "2026-09-01T00:00:00.000Z",
-      period_start: "2026-08-01T00:00:00.000Z",
-      period_end: "2026-08-29T23:59:59.000Z",
-      total_cost_minor: "0",
-      categories: [
-        { key: "cloud", label: "Cloud services", free_used_minor: "0", free_limit_minor: "1000", paid_minor: "0" },
-        { key: "ai", label: "Artificial intelligence", free_used_minor: "0", free_limit_minor: "100", paid_minor: "0" },
-        { key: "integration", label: "Integrations", free_used_minor: "0", free_limit_minor: "100", paid_minor: "0" },
-      ],
-      websites: [],
-      computers: [],
-    })
-    render(<BillingContent client={makeClient({ usage })} embedded />, { wrapper: LocaleProvider })
-
-    fireEvent.click(screen.getByRole("radio", { name: "Websites" }))
-    expect(await screen.findByTestId("billing-website-usage")).toBeInTheDocument()
-    expect(screen.getByText("Cloud services")).toBeInTheDocument()
-    expect(screen.getByText("No websites yet")).toBeInTheDocument()
-    expect(screen.queryByTestId("billing-balance")).toBeNull()
-    expect(usage).toHaveBeenCalledWith("websites")
-
-    fireEvent.click(screen.getByRole("radio", { name: "Computer" }))
-    expect(await screen.findByTestId("billing-computer-usage")).toBeInTheDocument()
-    expect(screen.getByText("Cloud computer")).toBeInTheDocument()
-    expect(usage).toHaveBeenCalledWith("computer")
   })
 
   it("clears the base Dialog padding so the panel owns its shell geometry", () => {

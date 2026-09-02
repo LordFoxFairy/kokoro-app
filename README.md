@@ -61,6 +61,9 @@ Browser
 `kokoro-session` 与 `kokoro-gateway` 的名称只在历史/迁移资料中保留，不是当前运行、CI、部署或
 package 依赖。
 
+Settings 只保留已接入 v1 BFF 的业务面；历史 Mail、Data Management、Developer 和 account/preferences
+代理入口已从 Web 路由与设置导航移除，未接线的账户展示动作在 live 保持禁用，不产生死链请求。
+
 ## 前后端契约
 
 - 当前仓库边界：[`docs/site-repository-architecture-v2.md`](docs/site-repository-architecture-v2.md)

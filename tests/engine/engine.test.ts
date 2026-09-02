@@ -4,6 +4,7 @@ import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
+import type { RunControlReceipt } from "@/contract/http"
 
 import {
   awaitingPayload,
@@ -234,7 +235,7 @@ describe("HITL 凑帧与部分拒绝", () => {
     expect(engine.getSnapshot().machine.phase).toBe("awaiting-hitl")
   }
 
-  it("未凑齐不提交；凑齐后一次 resume 携带 decision_id 与同帧全部决策", async () => {
+  it("未凑齐不提交；凑齐后一次 resume 携带 command identity 与同帧全部决策", async () => {
     await enterAwaitingFrame()
     engine.stageToolDecision("run_1", "tool_1", { type: "approve" })
     await settle()
@@ -255,8 +256,8 @@ describe("HITL 凑帧与部分拒绝", () => {
         ],
       },
     })
-    const body = client.controlCalls[0]?.body
-    expect(body?.kind === "run.resume" && body.decision_id.length > 0).toBe(true)
+    expect(client.controlCalls[0]?.commandId.length).toBeGreaterThan(0)
+    expect(client.controlCalls[0]?.body).toMatchObject({ kind: "run.resume", session_id: "conv_1" })
     // 部分拒绝：被拒工具本地置 rejected（防回流翻绿勾），批准的保持 awaiting 等 agent 恢复。
     const steps = thread().stepsByRun["run_1"] ?? []
     const statusById = new Map(
@@ -281,7 +282,7 @@ describe("HITL 凑帧与部分拒绝", () => {
     expect(client.snapshotCalls.length).toBeGreaterThan(snapshotsBefore)
   })
 
-  it("resume POST 失败：暂存保留可重试，重试复用同一 decision_id", async () => {
+  it("resume POST 失败：暂存保留可重试，重试复用同一 command identity", async () => {
     await enterAwaitingFrame()
     client.nextControl = () => Promise.reject(new SessionClientError("http", "status 502"))
     engine.stageToolDecision("run_1", "tool_1", { type: "approve" })
@@ -296,8 +297,14 @@ describe("HITL 凑帧与部分拒绝", () => {
       tool_2: { type: "respond", message: "use plan b" },
     })
 
-    client.nextControl = () => Promise.resolve({ ok: true })
-    // 重试：重按同一决策（暂存仍在），第二次提交必须复用同一 decision_id（幂等）。
+    client.nextControl = () => Promise.resolve({
+      run_id: "run_1",
+      command_id: "command_retry",
+      request_digest: "sha256:control-retry",
+      status: "succeeded",
+      replayed: false,
+    })
+    // 重试：重按同一决策（暂存仍在），第二次提交必须复用同一 command identity（幂等）。
     engine.stageToolDecision("run_1", "tool_2", { type: "respond", message: "use plan b" })
     await settle()
     expect(client.controlCalls).toHaveLength(2)
@@ -305,13 +312,13 @@ describe("HITL 凑帧与部分拒绝", () => {
     if (first?.body.kind !== "run.resume" || second?.body.kind !== "run.resume") {
       throw new Error("expected two resume calls")
     }
-    expect(second.body.decision_id).toBe(first.body.decision_id)
+    expect(second.commandId).toBe(first.commandId)
     expect(engine.getSnapshot().machine.phase).toBe("streaming")
   })
 
   it("resume 在途时忽略迟到/重复点击，不覆盖已提交的决策", async () => {
     await enterAwaitingFrame()
-    let resolveControl: ((value: { ok: true }) => void) | undefined
+    let resolveControl: ((value: RunControlReceipt) => void) | undefined
     client.nextControl = () => new Promise((resolve) => {
       resolveControl = resolve
     })
@@ -328,7 +335,13 @@ describe("HITL 凑帧与部分拒绝", () => {
       tool_2: { type: "reject" },
     })
 
-    resolveControl?.({ ok: true })
+    resolveControl?.({
+      run_id: "run_1",
+      command_id: "command_in_flight",
+      request_digest: "sha256:control-in-flight",
+      status: "succeeded",
+      replayed: false,
+    })
     await settle()
     expect(engine.getSnapshot().machine.phase).toBe("streaming")
   })
@@ -400,7 +413,7 @@ describe("停止与放弃", () => {
     expect(engine.getSnapshot().machine.phase).toBe("idle")
   })
 
-  it("cancelRun：本地立即收口（结构化 cancelled）、cancel POST 带 decision_id 尽力而为", async () => {
+  it("cancelRun：本地立即收口（结构化 cancelled）、cancel POST 带 command identity 尽力而为", async () => {
     buildEngine()
     engine.submit("long job")
     await settle()
@@ -417,8 +430,8 @@ describe("停止与放弃", () => {
       runId: "run_1",
       body: { kind: "run.cancel" },
     })
-    const body = client.controlCalls[0]?.body
-    expect(body?.kind === "run.cancel" && body.decision_id.length > 0).toBe(true)
+    expect(client.controlCalls[0]?.commandId.length).toBeGreaterThan(0)
+    expect(client.controlCalls[0]?.body).toEqual({ kind: "run.cancel", session_id: "conv_1" })
     expect(engine.getSnapshot().machine.phase).toBe("idle")
     const step = (thread().stepsByRun["run_1"] ?? [])[0]
     expect(step?.kind === "tool" ? step.tool.status : null).toBe("cancelled")
