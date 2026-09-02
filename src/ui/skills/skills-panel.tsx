@@ -18,7 +18,7 @@ import { Spinner } from "@/components/ui/spinner"
 // scope 恒由 BFF 从信封 namespace 派生，前端不碰身份轴。池只含「有效可用」项（official 上架∧
 // 用户未关 + 自有包）；required 官方技能拒关由 hub 409 hub.skill_required 反射为锁定态。
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react"
 import { Check, ChevronDown, Plus, Search, ShieldCheck, SquarePen, Upload, X } from "lucide-react"
 
 import { useT } from "@/i18n/context"
@@ -367,7 +367,7 @@ function PoolTab({
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const createActionHandledRef = useRef(false)
   const catalogHandoffRef = useRef<(() => void) | null>(null)
-  const catalogHandoffTimerRef = useRef<number | null>(null)
+  const [catalogHandoffVersion, setCatalogHandoffVersion] = useState(0)
   const disableTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const searchRef = useRef<HTMLInputElement | null>(null)
@@ -392,57 +392,19 @@ function PoolTab({
     window.requestAnimationFrame(() => catalogTriggerRef.current?.focus())
   }, [])
 
-  const finishCatalogHandoff = useCallback(() => {
-    if (catalogHandoffTimerRef.current !== null) {
-      window.clearTimeout(catalogHandoffTimerRef.current)
-      catalogHandoffTimerRef.current = null
-    }
-    const handoff = catalogHandoffRef.current
-    catalogHandoffRef.current = null
-    handoff?.()
-  }, [])
-
   const queueCatalogHandoff = useCallback((handoff: () => void) => {
-    if (catalogHandoffTimerRef.current !== null) {
-      window.clearTimeout(catalogHandoffTimerRef.current)
-    }
     catalogHandoffRef.current = handoff
     setCatalogOpen(false)
-    // Radix normally calls onCloseAutoFocus after the catalog's focus scope
-    // exits. A controlled, trigger-less dialog can skip that callback in a
-    // jsdom/animation-disabled environment, so retain a post-exit fallback.
-    // The 240ms guard is longer than the shared 200ms Dialog exit duration;
-    // it never opens the child in the same commit as the catalog close.
-    catalogHandoffTimerRef.current = window.setTimeout(finishCatalogHandoff, 240)
-  }, [finishCatalogHandoff])
-
-  useEffect(() => {
-    if (catalogOpen || catalogHandoffRef.current === null) return
-    // The close callback is driven by Radix's Presence and is not guaranteed
-    // to fire when a controlled dialog is opened without a DialogTrigger.
-    // React's committed `catalogOpen=false` is the reliable lifecycle point;
-    // finish on the next frame and retain the timer above as a slow-render
-    // fallback.
-    const frame = window.requestAnimationFrame(finishCatalogHandoff)
-    return () => window.cancelAnimationFrame(frame)
-  }, [catalogOpen, finishCatalogHandoff])
-
-  useEffect(() => () => {
-    if (catalogHandoffTimerRef.current !== null) window.clearTimeout(catalogHandoffTimerRef.current)
+    setCatalogHandoffVersion((version) => version + 1)
   }, [])
 
-  const handleCatalogCloseAutoFocus = (event: Event) => {
+  useLayoutEffect(() => {
+    if (catalogOpen) return
     const handoff = catalogHandoffRef.current
-    if (handoff !== null) {
-      event.preventDefault()
-      // Radix invokes this callback from the source dialog's focus-scope
-      // unmount. Starting the child here, rather than in the menu item's
-      // event, keeps the two controlled modal lifecycles in separate stages.
-      finishCatalogHandoff()
-      return
-    }
-    restoreCatalogTriggerFocus(event)
-  }
+    if (handoff === null) return
+    catalogHandoffRef.current = null
+    handoff()
+  }, [catalogOpen, catalogHandoffVersion])
 
   // The destructive action is replaced inline. Explicitly move focus to the
   // confirmation control so the scroll viewport never becomes the active
@@ -780,7 +742,7 @@ function PoolTab({
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false)
         }}
-        onCloseAutoFocus={handleCatalogCloseAutoFocus}
+        onCloseAutoFocus={restoreCatalogTriggerFocus}
         client={client}
         enabledOverrides={enabledOverrides}
         installedOverrides={installedOverrides}
