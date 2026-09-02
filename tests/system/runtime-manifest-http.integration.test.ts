@@ -37,16 +37,16 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
       receivedHost = request.headers.host?.toString() ?? ""
       json(response, 200, {
         data: {
-          tenantId: "backend-resolved-tenant",
-          productId: "kokoro",
+          tenant_id: "backend-resolved-tenant",
+          product_id: "kokoro",
           locale: "en-US",
           navigation: [{ key: "chat", label: "Chat", href: "/app", featureFlag: "chat" }],
-          localeNamespaces: ["common"],
+          locale_namespaces: ["common"],
           theme: { primary: "#123456", brandName: "Kokoro" },
-          featureFlags: [{ key: "chat", enabled: true }],
+          feature_flags: [{ key: "chat", enabled: true }],
           references: [],
-          configVersion: "1",
-          releaseId: null,
+          config_version: "1",
+          release_id: null,
           digest: "integration-digest",
         },
         meta: { request_id: "runtime-integration" },

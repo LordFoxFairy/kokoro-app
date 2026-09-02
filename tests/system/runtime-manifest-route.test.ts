@@ -47,16 +47,16 @@ describe("System Runtime Manifest BFF", () => {
     process.env.KOKORO_INTERNAL_SECRET_WEB_BFF = "web-bff-secret"
     getJsonWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({
       data: {
-        tenantId: "backend-resolved-tenant",
-        productId: "kokoro",
+        tenant_id: "backend-resolved-tenant",
+        product_id: "kokoro",
         locale: "en-US",
         navigation: [{ key: "chat", label: "Chat", icon: "⌁" }],
-        localeNamespaces: ["common"],
+        locale_namespaces: ["common"],
         theme: {},
-        featureFlags: [],
+        feature_flags: [],
         references: [],
-        configVersion: "1",
-        releaseId: null,
+        config_version: "1",
+        release_id: null,
         digest: "abc",
       },
       meta: { request_id: "runtime-request" },
@@ -85,11 +85,11 @@ describe("System Runtime Manifest BFF", () => {
     process.env.KOKORO_BFF_BASE_URL = "https://bff.internal"
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
     getJsonWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ data: {
-      tenantId: "any-backend-tenant",
-      productId: "kokoro",
+      tenant_id: "any-backend-tenant",
+      product_id: "kokoro",
       locale: "en-US",
-      navigation: [], localeNamespaces: [], theme: {}, featureFlags: [], references: [],
-      configVersion: "1", releaseId: null, digest: "abc",
+      navigation: [], locale_namespaces: [], theme: {}, feature_flags: [], references: [],
+      config_version: "1", release_id: null, digest: "abc",
     }, meta: { request_id: "runtime-request" } }), { status: 200 }))
 
     const response = await GET(new Request("https://app.example/api/system/runtime-manifest?product_id=kokoro"))
@@ -101,11 +101,11 @@ describe("System Runtime Manifest BFF", () => {
     process.env.KOKORO_BFF_BASE_URL = "https://bff.internal"
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
     getJsonWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ data: {
-      tenantId: "any-backend-tenant",
-      productId: "kokoro",
+      tenant_id: "any-backend-tenant",
+      product_id: "kokoro",
       locale: "en-US",
-      navigation: [], localeNamespaces: [], theme: {}, featureFlags: [], references: [],
-      configVersion: "1", releaseId: null, digest: "abc",
+      navigation: [], locale_namespaces: [], theme: {}, feature_flags: [], references: [],
+      config_version: "1", release_id: null, digest: "abc",
     }, meta: { request_id: "runtime-request" } }), { status: 200 }))
 
     const response = await GET(new Request("https://app.example/api/system/runtime-manifest"))

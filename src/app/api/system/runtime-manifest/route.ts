@@ -18,11 +18,15 @@ import {
 } from "@/lib/server/auth"
 import { configuredDomain } from "@/lib/server/domain-context"
 import { configuredBffBaseUrl } from "@/lib/server/service-config"
-import { runtimeManifestSchema, toPublicRuntimeManifest } from "@/system/runtime-manifest"
+import {
+  bffRuntimeManifestSchema,
+  fromBffRuntimeManifest,
+  toPublicRuntimeManifest,
+} from "@/system/runtime-manifest"
 
 export const runtime = "nodejs"
 
-const runtimeManifestResponseSchema = bffSuccessEnvelopeSchema(runtimeManifestSchema.shape.data)
+const runtimeManifestResponseSchema = bffSuccessEnvelopeSchema(bffRuntimeManifestSchema)
 
 function fail(message: string, status: 400 | 503, requestId: string): NextResponse {
   return webErrorResponse(message, status, requestId)
@@ -82,7 +86,7 @@ export async function GET(request: Request): Promise<Response> {
   }
   const parsed = runtimeManifestResponseSchema.safeParse(raw)
   if (!parsed.success) return fail("invalid_runtime_manifest_response", 503, requestId)
-  const manifest = parsed.data.data
+  const manifest = fromBffRuntimeManifest(parsed.data.data)
   // Product/surface are fixed by this site BFF; tenant selection stays entirely
   // inside System from the server-only RFC 7239 `Forwarded` header.
   if (manifest.productId !== productId || manifest.locale !== locale) {
