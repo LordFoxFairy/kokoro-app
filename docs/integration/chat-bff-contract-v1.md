@@ -17,8 +17,9 @@
 
 - `kokoro` 只负责页面、Composer、SessionEngine、SSE 消费和同源安全边界。
 - `kokoro-bff` 的 Chat 业务边界负责 Chat 业务编排、身份投影、幂等、错误归一、Mock/Live
-  选择和向 Agent 的内部适配；当前实现集中在 BFF 的 `src/main.ts`、`src/store.ts` 与
-  `src/contracts.ts`，不是一个跨仓目录。
+  选择和向 Agent 的内部适配；组合根只负责启动和分发，具体实现位于 BFF 的
+  `src/http/routes/agent.ts`、`src/contracts/chat.ts`、`src/application/projections.ts` 与
+  `src/adapters/agent.ts`，不是一个跨仓目录。
 - `kokoro-agent` 只负责 Run、Control、HITL、事件、outbox 和 worker 执行，不暴露浏览器 HTTP API。
 - `kokoro-gateway` 不在阶段 1 链路中；不新增独立 `kokoro-session` 或 `kokoro-chat` 仓库。
 - Web、BFF、Agent 均不把另一个仓库的源码复制进来；跨仓只通过本契约和各自的内部 adapter。
