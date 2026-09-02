@@ -40,6 +40,7 @@ import {
   type RenameSessionReceipt,
 } from "@/contract/http"
 import { parseSessionEvent, type SessionEvent } from "@/contract/session-events"
+import { parseAgUiEvent } from "@/contract/agui-events"
 import type { SessionScope } from "./session-scope"
 
 export type ClientFailureReason = "network" | "http" | "parse"
@@ -376,7 +377,11 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         }
         let event: SessionEvent
         try {
-          event = parseSessionEvent(raw)
+          try {
+            event = parseSessionEvent(raw)
+          } catch {
+            event = parseAgUiEvent(raw)
+          }
         } catch {
           fail(new SessionClientError("parse", "SSE payload rejected by contract"))
           return
