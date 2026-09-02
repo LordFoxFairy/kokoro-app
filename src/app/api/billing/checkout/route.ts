@@ -13,38 +13,34 @@ import {
   SERVICE_HEADER,
   SERVICE_VALUE,
 } from "@/lib/server/auth"
+import {
+  bffErrorEnvelopeSchema,
+  bffErrorResponse,
+  bffSuccessEnvelopeSchema,
+  requestIdForRequest,
+  upstreamResponseHeaders,
+  webErrorResponse,
+} from "@/lib/server/bff-response"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const checkoutRequestSchema = z.object({ plan_id: z.string().min(1) }).strip()
-const bffErrorEnvelopeSchema = z.object({
-  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
-  meta: z.object({ request_id: z.string().min(1) }).passthrough(),
-}).passthrough()
-const checkoutResponseSchema = z.object({
-  data: z.object({ checkout_url: z.string().min(1) }).strict(),
-}).passthrough()
-
-async function projectBffError(upstream: Response, fallback: string): Promise<Response> {
-  const parsed = bffErrorEnvelopeSchema.safeParse(await upstream.clone().json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: fallback }, { status: upstream.status })
-  return NextResponse.json({ error: parsed.data.error.message, code: parsed.data.error.code }, { status: upstream.status })
-}
+const checkoutResponseSchema = bffSuccessEnvelopeSchema(z.object({ checkout_url: z.string().min(1) }).strict())
 
 export async function POST(request: Request): Promise<Response> {
+  const requestId = requestIdForRequest(request)
   const config = authConfig()
-  if (config === null) return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
-  if (!sameOriginOk(request)) return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
+  if (config === null) return webErrorResponse("auth_not_configured", 503, requestId)
+  if (!sameOriginOk(request)) return webErrorResponse("forbidden_origin", 403, requestId)
   const envelope = readEnvelope(request, config)
-  if (envelope === null) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
-  if (config.bffBaseUrl == null) return NextResponse.json({ error: "business_bff_not_configured" }, { status: 503 })
+  if (envelope === null) return webErrorResponse("unauthenticated", 401, requestId)
+  if (config.bffBaseUrl == null) return webErrorResponse("business_bff_not_configured", 503, requestId)
 
   const parsed = checkoutRequestSchema.safeParse(await request.json().catch(() => null))
-  if (!parsed.success) return NextResponse.json({ error: "invalid_body" }, { status: 400 })
+  if (!parsed.success) return webErrorResponse("invalid_body", 400, requestId)
 
-  const requestId = request.headers.get("x-kokoro-request-id") || randomUUID()
   const headers = new Headers({
     "content-type": "application/json",
     [SERVICE_HEADER]: SERVICE_VALUE,
@@ -61,10 +57,16 @@ export async function POST(request: Request): Promise<Response> {
       method: "POST", headers, body: JSON.stringify(parsed.data), cache: "no-store", signal: request.signal,
     })
   } catch {
-    return NextResponse.json({ error: "billing_unreachable" }, { status: 502 })
+    return webErrorResponse("billing_unreachable", 502, requestId)
   }
-  if (!upstream.ok) return projectBffError(upstream, "checkout_failed")
-  const checkout = checkoutResponseSchema.safeParse(await upstream.json().catch(() => null))
-  if (!checkout.success) return NextResponse.json({ error: "billing_bad_response" }, { status: 502 })
-  return NextResponse.json({ checkout_url: checkout.data.data.checkout_url }, { status: 200 })
+  const raw: unknown = await upstream.json().catch(() => null)
+  if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) {
+    return bffErrorResponse(upstream, raw, "checkout_failed", requestId, upstreamResponseHeaders(upstream, requestId))
+  }
+  const checkout = checkoutResponseSchema.safeParse(raw)
+  if (!checkout.success) return webErrorResponse("billing_bad_response", 502, requestId)
+  return NextResponse.json({ checkout_url: checkout.data.data.checkout_url }, {
+    status: 200,
+    headers: upstreamResponseHeaders(upstream, checkout.data.meta.request_id),
+  })
 }

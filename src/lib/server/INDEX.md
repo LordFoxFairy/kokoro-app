@@ -21,6 +21,11 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `domain-context.ts`
   - `configuredDomain(env?)`：只读取服务端 `KOKORO_DOMAIN`，trim 并校验 hostname 形状。
   - `forwardedHeaders(domain)`：生成服务端上游 header，不读取 Request 或浏览器状态。
+- `bff-response.ts`
+  - `requestIdForRequest`、`bffSuccessEnvelopeSchema`、`bffErrorEnvelopeSchema`：统一 BFF
+    envelope 和 request id 解析。
+  - `webErrorResponse`、`bffErrorResponse`：输出嵌套 `error`/`meta` 错误包络，并将
+    `meta.request_id` 映射为公开 `x-request-id` 响应头；仅保留 allowlist 的上游响应头。
 - `service-config.ts`
   - `configuredBffBaseUrl(env?)`：读取独立业务 BFF 基址并去除尾斜杠。
   - `bffPathUrl(path, env?)`：生成版本化业务 BFF 地址。

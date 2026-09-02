@@ -43,8 +43,15 @@
 }
 ```
 
-`request_id` 由 Web 生成或继承入站值，BFF 必须原样回传并写入日志。Web 同源适配层只对
-浏览器保留的 flat Chat DTO 解包 `data`，不把 BFF 的 `meta` 暴露为业务字段。
+`request_id` 由 Web 生成或继承入站值，BFF 必须原样回传并写入日志。Web 同源适配层只对成功响应
+解包 `data` 为浏览器保留的 flat Chat DTO，并把 BFF `meta.request_id` 映射到公开的
+`x-request-id` 响应头。错误响应不再 flatten：Web 必须保留 `error.code`、`error.message` 和
+`meta.request_id` 的嵌套形状，并使用同一个 `x-request-id` 响应头。
+
+Web route 自身产生的错误也使用同一错误包络：`message` 在没有更具体文案时等于稳定 `code`。
+上游 BFF 的 HTTP 状态在 `400+` 时原样返回；`2xx` 携带错误包络或响应不符合成功契约时统一为
+`502`；JSON 成功投影保持既有资源状态语义，Billing/Manifest 成功投影固定返回 `200`。429 等响应的
+`Retry-After` 头按 allowlist 透传。
 
 ## 3. 身份和部署域名
 

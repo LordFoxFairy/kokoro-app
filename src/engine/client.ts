@@ -102,8 +102,13 @@ async function httpError(method: string, url: string, response: Response): Promi
   let detail = `${method} ${url} failed with status ${response.status}`
   try {
     const raw: unknown = await response.json()
-    if (typeof raw === "object" && raw !== null && "error" in raw && typeof raw.error === "string") {
-      detail = raw.error
+    if (typeof raw === "object" && raw !== null && "error" in raw) {
+      const error = raw.error
+      if (typeof error === "string") {
+        detail = error
+      } else if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+        detail = error.message
+      }
     }
   } catch {
     // 无 JSON 错误体：保留状态码描述。

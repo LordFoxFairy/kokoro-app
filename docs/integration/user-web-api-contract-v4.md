@@ -115,13 +115,15 @@ BFF 统一使用 `runtime: nodejs` 与 `dynamic: force-dynamic`（manifest route
 
 `/api/session/*` 的真实行为：
 
-1. `authConfig()` 缺少必需配置时返回 `503 {"error":"auth_not_configured"}`；缺少 BFF 地址时返回 `503 {"error":"bff_not_configured"}`。
-2. `POST/PUT/PATCH/DELETE` 会执行同源 Origin 检查；Origin 与请求 Host 不一致返回 `403 {"error":"forbidden_origin"}`。
-3. 从 HttpOnly `kokoro_session` cookie 读取 sealed envelope；缺失或失效返回 `401 {"error":"unauthenticated"}`。
+1. `authConfig()` 缺少必需配置时返回 `503` canonical error `auth_not_configured`；缺少 BFF 地址时返回 `503` canonical error `bff_not_configured`。
+2. `POST/PUT/PATCH/DELETE` 会执行同源 Origin 检查；Origin 与请求 Host 不一致返回 `403` canonical error `forbidden_origin`。
+3. 从 HttpOnly `kokoro_session` cookie 读取 sealed envelope；缺失或失效返回 `401` canonical error `unauthenticated`。
 4. 服务端注入 `Authorization: Bearer <runtime_jwt>`、`x-kokoro-service: web-bff`、sealed session 派生的 namespace/user、可选 `x-kokoro-internal-secret` 和 `x-kokoro-request-id`。
 5. 业务头只接收并透传 `accept`、`content-type`、`last-event-id`、`idempotency-key`；消息体中的 `idempotency_key` 会在 Web 边界提升为标准 HTTP 幂等头；不转发 cookie。
-6. BFF v1 JSON 成功包络在 Web 边界解包为既有 flat Chat DTO；SSE/二进制 body 保持流式，不整体缓冲。
-7. BFF 不可达返回 `502 {"error":"bff_unreachable"}`；上游 HTTP 状态、JSON、SSE、二进制 body 按 BFF 契约回传。
+6. BFF v1 JSON 成功包络在 Web 边界解包为既有 flat Chat DTO，并把 `meta.request_id` 映射到
+   `x-request-id` 响应头；SSE/二进制 body 保持流式，不整体缓冲，并从上游 request id 头或本次请求 ID 回传。
+7. BFF 错误保持 `{ "error": { "code", "message" }, "meta": { "request_id" } }`，不 flatten、
+   不丢 request ID；BFF 不可达返回同形 `502 bff_unreachable`，上游 `400+` 状态原样保留。
 8. access/refresh 即将过期时，BFF 续签并把新的 sealed cookie 通过 `Set-Cookie` 写回浏览器。
 
 Billing compatibility paths used by the same client:
@@ -142,17 +144,18 @@ GET /api/session/billing/by-model
 
 `/api/hub/*` 的真实行为：
 
-1. `authConfig()` 缺少基础配置返回 `503 {"error":"auth_not_configured"}`。
-2. `KOKORO_BFF_BASE_URL` 缺失时返回 `503 {"error":"bff_not_configured"}`；不读取或回退到
+1. `authConfig()` 缺少基础配置返回 `503` canonical error `auth_not_configured`。
+2. `KOKORO_BFF_BASE_URL` 缺失时返回 `503` canonical error `bff_not_configured`；不读取或回退到
    `KOKORO_HUB_BASE_URL`。
-3. mutation 的 Origin 不匹配返回 `403 {"error":"forbidden_origin"}`；无有效 sealed session 返回 `401 {"error":"unauthenticated"}`。
+3. mutation 的 Origin 不匹配返回 `403` canonical error `forbidden_origin`；无有效 sealed session 返回 `401` canonical error `unauthenticated`。
 4. 服务端从 envelope 派生并覆盖身份头：`x-kokoro-namespace`、`x-kokoro-principal-id`；namespace 不接受浏览器 query/body/header 选择。
 5. 注入 `x-kokoro-service: web-bff`、可选 internal secret、`x-kokoro-request-id`；业务头只转发 `accept`、`content-type`、`idempotency-key`；`x-kokoro-request-id` 可由浏览器作为可选关联值提供，缺失时由 BFF 生成，BFF 始终将其写入上游。
 6. 目标固定为 `${KOKORO_BFF_BASE_URL}/v1/<business-path>`；历史 `KOKORO_HUB_BASE_URL` 不再作为
-   Web 配置或兼容直连；BFF 不可达返回 `502 {"error":"bff_unreachable"}`。
+   Web 配置或兼容直连；BFF 不可达返回 `502` canonical error `bff_unreachable`。
 7. BFF canonical 成功包为 `{"data": ..., "meta":{"request_id":string}}`，由 Web route 在
    Scheduled/Agent/Billing typed surface 做 DTO projection；Hub client 对业务成功包解析 `data`，
-   canonical 错误包为 `{"error":{"code":string,"message":string},"meta":...}`。
+   canonical 错误包为 `{"error":{"code":string,"message":string},"meta":{"request_id":string}}`，
+   Web 统一将其原形回传，并将 `meta.request_id` 写入 `x-request-id` 响应头。
 
 ### 2.4 Domain / Forwarded
 
@@ -272,18 +275,23 @@ BFF 只返回 public projection，移除 `tenantId`：
 }
 ```
 
-实际 response schema 对 `data` 以上字段做 Zod 校验；`productId`、`locale` 必须与请求参数一致。响应带 `Cache-Control: private, no-store`。
+实际 response schema 对 `data` 以上字段和 `meta.request_id` 做 Zod 校验；`productId`、`locale` 必须与请求参数一致。
+成功响应带 `Cache-Control: private, no-store` 和 `x-request-id: <meta.request_id>`。
 
 BFF 出站会发送：
 
 - `x-kokoro-service: web-bff`
 - `x-kokoro-request-id`
 - 非 production/已配置时的 `x-kokoro-internal-secret`
-- 可选 `x-kokoro-actor-id`（从 sealed envelope 的 `user_id` 派生）
-- 可选 `Authorization: Bearer <KOKORO_SYSTEM_WORKLOAD_TOKEN>`
+- 可选 `x-kokoro-principal-id`（从 sealed envelope 的 `user_id` 派生）
+- BFF → System 的 owner service credential（由 `kokoro-bff` 部署环境管理，Web 不持有）
 - 由 `KOKORO_DOMAIN` 生成的 `Forwarded`
 
-不提供 system base/domain 或 production 缺 internal secret 时，返回 `503 {"error":"system_runtime_unavailable"}`；请求参数非法返回 `400 {"error":"invalid_runtime_manifest_request"}`；上游不匹配 schema 或 product/locale 时返回 `503 {"error":"invalid_runtime_manifest_response"}`。
+不提供 BFF/domain 或 production 缺 internal secret 时，返回统一 `503` 错误包络
+`{ "error": { "code": "system_runtime_unavailable", "message": "system_runtime_unavailable" }, "meta": { "request_id": "..." } }`；
+请求参数非法返回同形 `400 invalid_runtime_manifest_request`；上游不匹配 schema 或 product/locale
+时返回同形 `503 invalid_runtime_manifest_response`。BFF 返回的 canonical error 保留原 `code`、`message`、
+`meta.request_id` 和 `400+` HTTP 状态。
 
 ### 4.3 UI 边界
 
@@ -299,10 +307,11 @@ Chat client 的浏览器 base 固定为 `/api/session`，但 canonical server co
 - 列表：`{sessions, next_cursor?}`
 - snapshot：`{session, messages?, active_run?, pending_pauses, files, deliveries, event_watermark}`
 - receipt：各自的 flat object
-- 错误：`{error: string}`
+- 错误：`{error: {code: string, message: string}, meta: {request_id: string}}`，并带 `x-request-id` 响应头。
 
 BFF Chat 模块负责业务编排、身份边界、幂等、错误归一和 Agent adapter；Web 不直接调用 Session
-服务或 Gateway。Flat DTO 只属于 Web 兼容适配层，不是 BFF v1 的公开包络。
+服务或 Gateway。Flat DTO 只属于 Web 成功响应的兼容适配层，不是 BFF v1 的公开包络；错误包络保持
+BFF v1 的嵌套 `error` 与 `meta`。
 
 浏览器侧不为 Direct Chat 和项目 Chat 创建两套 transport：`/app` 与 `/app/project/{project_ref}`
 都由 `AppFrame` 挂载，`projectRef` 只用来选择 scope；`browserEngine`/`browserListClient`
@@ -1307,9 +1316,20 @@ kokoro.web.pending-project-draft:{encodeURIComponent(project_ref)} → unsent dr
 | Chat/BFF | BFF upstream 不可达 | 502 `bff_unreachable` |
 | Capability/BFF | BFF 或 capability adapter 缺失 | 503 `bff_not_configured` |
 | Capability/BFF | BFF 或 capability upstream 不可达 | 502 `bff_unreachable` |
-| Manifest | system/domain 或生产认证配置缺失 | 503 `system_runtime_unavailable` |
+| Manifest | BFF/domain 或生产认证配置缺失 | 503 `system_runtime_unavailable` |
 
-BFF 自身错误使用 flat `{"error": string}`；upstream 的 body/status 原样或按对应 client contract 处理，两种 envelope 保持分离。
+BFF route 自身错误与 BFF upstream 错误统一使用：
+
+```json
+{
+  "error": { "code": "bff_not_configured", "message": "bff_not_configured" },
+  "meta": { "request_id": "REQUEST_ID" }
+}
+```
+
+`meta.request_id` 同时映射为 `x-request-id` 响应头。成功投影同样使用 BFF 成功包的
+`meta.request_id` 设置该响应头；Billing/Manifest JSON 成功投影固定返回 `200`，Chat 兼容响应保留既有
+资源状态语义；上游 `400+` 状态保留，`2xx` 错误包和无效响应归一为 `502`。
 
 ### 11.2 Client 层错误
 

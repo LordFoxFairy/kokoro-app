@@ -132,8 +132,8 @@ Composer 语音输入保持同一边界：使用浏览器 `SpeechRecognition`/`w
 转写文本沿用已有会话消息契约；不为语音增加新的后端接口。
 
 其它服务端变量见仓库根目录 [`.env.example`](../.env.example)。生产和 Cloudflare runtime
-至少需要 `KOKORO_INTERNAL_SECRET_WEB_BFF`；System workload token 的实际变量名是
-`KOKORO_SYSTEM_WORKLOAD_TOKEN`。两者都只放部署平台 secret/variable，绝不使用 `NEXT_PUBLIC_*`。
+至少需要 `KOKORO_INTERNAL_SECRET_WEB_BFF`；System owner 的地址、凭据和 IAM tenant binding
+由独立 `kokoro-bff` 部署环境管理，Web 不持有 System workload token，绝不使用 `NEXT_PUBLIC_*`。
 
 ### 1.1 Web、业务 BFF 与 Chat 的切换
 
@@ -204,8 +204,7 @@ KOKORO_WEB_SESSION_SECRET="<secret>"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
 KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
-# 按 System 服务策略启用；变量名必须保持为 KOKORO_SYSTEM_WORKLOAD_TOKEN。
-KOKORO_SYSTEM_WORKLOAD_TOKEN="<secret>"
+# System owner 地址和凭据由 kokoro-bff 注入；Web 不直连 System。
 ```
 
 上线检查：
@@ -240,9 +239,8 @@ KOKORO_DOMAIN
 KOKORO_WEB_SESSION_SECRET
 KOKORO_BFF_BASE_URL                   # independent server-only business entry
 KOKORO_IAM_BASE_URL                  # explicit auth service
-KOKORO_SYSTEM_BASE_URL                # explicit manifest service
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
-KOKORO_SYSTEM_WORKLOAD_TOKEN           # exact System workload-token name; if enabled by System policy
+# System address/credential and IAM tenant binding are configured in kokoro-bff.
 ```
 
 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 只供手动触发的

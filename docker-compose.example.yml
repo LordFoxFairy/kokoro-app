@@ -21,5 +21,7 @@ services:
       retries: 6
       start_period: 20s
 
-# 本仓库是一个独立产品 Web 部署。IAM、System、User、Session 等是外部服务，地址和凭据由 .env 注入。
+# 本仓库是一个独立产品 Web 部署。IAM 等 owner 服务的地址和凭据由 .env 注入；Chat 的 Session 资源
+# 由 kokoro-bff 承接，`/api/session/*` 只是 Web 兼容路径，不是独立 Session 服务入口。
+# 历史 kokoro-session/Gateway 仅保留在迁移资料中，不属于当前 compose 运行时。
 # 浏览器不选择产品/租户；BFF 对每个上游请求统一覆盖并附加 Forwarded: host=<KOKORO_DOMAIN>。

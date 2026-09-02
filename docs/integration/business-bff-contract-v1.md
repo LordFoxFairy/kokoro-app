@@ -107,7 +107,27 @@ Web 保留既有浏览器路径，只在 server route 改变 upstream：
 
 `/api/session/*` 是 Web 为兼容既有 `SessionClient` 保留的同源路径，不是独立服务入口；它始终由
 Web server route 转换到 `${KOKORO_BFF_BASE_URL}/v1/*`。BFF 未配置返回 `503 bff_not_configured`，
-不可达返回 `502 bff_unreachable`，不直连 Session，不回退 Gateway，也不静默切换 preview fixture。
+不可达返回 `502 bff_unreachable`；上述状态均使用带 `error.code`、`error.message`、
+`meta.request_id` 和 `x-request-id` 响应头的 canonical error envelope。不直连 Session，
+不回退 Gateway，也不静默切换 preview fixture。
+
+### 3.1 Web 对响应的统一投影
+
+Web route 只对成功包投影业务 `data`（保持浏览器已有的 flat DTO 或 typed DTO），同时把
+`meta.request_id` 映射为 `x-request-id` 响应头。BFF 错误包在 Web 边界保持以下形状，不得改写为
+`{ error: message, code }` 或丢弃 `meta.request_id`：
+
+```json
+{
+  "error": { "code": "project_not_found", "message": "Project was not found" },
+  "meta": { "request_id": "req_..." }
+}
+```
+
+当 Web route 自身返回配置、鉴权、输入或连通性错误时，也使用同一 `error`/`meta` 包络，并以
+`x-request-id` 回传本次请求的关联 ID。BFF 返回的 `400+` 状态码保持不变；带错误包络的 `2xx`
+响应或不符合成功契约的响应归一为 `502`；成功投影固定返回 `200`。`Retry-After` 等公开 allowlist 响应头可被保留，其余
+内部响应头不向浏览器透传。
 
 ## 4. 身份与域名
 

@@ -57,6 +57,7 @@ describe("/api/session/[...path] proxy", () => {
     expect(new Headers(init.headers).get("x-kokoro-internal-secret")).toBe("web-bff-secret")
     expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("team_1")
     expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBe("u1")
+    expect(res.headers.get("x-request-id")).toBe("req_1")
     expect(await res.json()).toEqual({ sessions: [] })
   })
 
@@ -65,12 +66,16 @@ describe("/api/session/[...path] proxy", () => {
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const response = await GET(
-      new Request("http://localhost/api/session/sessions/ses_1/messages", { headers: { cookie: sessionCookie() } }),
+      new Request("http://localhost/api/session/sessions/ses_1/messages", { headers: { cookie: sessionCookie(), "x-kokoro-request-id": "request-local" } }),
       params(["sessions", "ses_1", "messages"]),
     )
 
     expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ error: "bff_not_configured" })
+    expect(response.headers.get("x-request-id")).toBe("request-local")
+    expect(await response.json()).toEqual({
+      error: { code: "bff_not_configured", message: "bff_not_configured" },
+      meta: { request_id: "request-local" },
+    })
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
@@ -121,7 +126,11 @@ describe("/api/session/[...path] proxy", () => {
       params(["sessions", "ses_1", "runs", "run_1", "control"]),
     )
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: "Run is not active", code: "run_not_active" })
+    expect(response.headers.get("x-request-id")).toBe("req_error")
+    expect(await response.json()).toEqual({
+      error: { code: "run_not_active", message: "Run is not active" },
+      meta: { request_id: "req_error" },
+    })
   })
 
   it("returns 401 when there is no envelope", async () => {

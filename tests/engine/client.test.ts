@@ -148,7 +148,10 @@ describe("renameSession（CONV-UX）：PATCH /sessions/{id}/title 过契约 Zod"
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: "title_too_long" }), {
+        new Response(JSON.stringify({
+          error: { code: "title_too_long", message: "Title is too long" },
+          meta: { request_id: "request-title" },
+        }), {
           status: 422,
           headers: { "content-type": "application/json" },
         }),
@@ -156,6 +159,6 @@ describe("renameSession（CONV-UX）：PATCH /sessions/{id}/title 过契约 Zod"
     )
     await expect(
       createSessionClient({ baseUrl: "/api/session" }).renameSession("ses_1", "x"),
-    ).rejects.toThrow("title_too_long")
+    ).rejects.toThrow("Title is too long")
   })
 })

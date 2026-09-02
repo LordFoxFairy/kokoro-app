@@ -3,8 +3,17 @@
 // Session、Gateway 或任意业务子仓库。HTTP/SSE/二进制一律流式转发，大 JSON 仅在
 // BFF envelope 适配时解包。变更类请求校验同源 Origin。
 
-import { NextResponse } from "next/server"
+import { z } from "zod"
 
+import {
+  bffErrorEnvelopeSchema,
+  bffErrorResponse,
+  bffSuccessEnvelopeSchema,
+  requestIdForRequest,
+  requestIdFromResponse,
+  responseHeadersWithRequestId,
+  webErrorResponse,
+} from "@/lib/server/bff-response"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 import {
   authConfig,
@@ -25,22 +34,22 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
 
 async function proxy(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  const requestId = requestIdForRequest(request)
   const config = authConfig()
   if (config === null) {
-    return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
+    return webErrorResponse("auth_not_configured", 503, requestId)
   }
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
-    return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
+    return webErrorResponse("forbidden_origin", 403, requestId)
   }
-  const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const resolved = await resolveSessionWithRefresh(request, config)
   if (resolved === null) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+    return webErrorResponse("unauthenticated", 401, requestId)
   }
   const { envelope, setCookie } = resolved
 
   if (config.bffBaseUrl === null || config.bffBaseUrl === undefined) {
-    return NextResponse.json({ error: "bff_not_configured" }, { status: 503 })
+    return webErrorResponse("bff_not_configured", 503, requestId)
   }
 
   const { path } = await context.params
@@ -95,41 +104,50 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
       signal: request.signal,
     })
   } catch {
-    return NextResponse.json({ error: "bff_unreachable" }, { status: 502 })
+    return webErrorResponse("bff_unreachable", 502, requestId)
   }
 
   const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? ""
   // SSE and binary bodies must remain streaming and opaque to this adapter.
   if (!contentType.includes("application/json")) {
+    if (!upstream.ok) {
+      const errorHeaders = new Headers()
+      const retryAfter = upstream.headers.get("retry-after")
+      if (retryAfter !== null) errorHeaders.set("retry-after", retryAfter)
+      if (setCookie !== null) errorHeaders.append("set-cookie", setCookie)
+      return bffErrorResponse(upstream, null, "bff_error", requestId, errorHeaders)
+    }
+    const responseRequestId = requestIdFromResponse(upstream, requestId)
     const responseHeaders = new Headers()
     for (const name of ["content-type", "cache-control", "content-disposition", "content-length"]) {
       const value = upstream.headers.get(name)
       if (value !== null) responseHeaders.set(name, value)
     }
+    responseHeaders.set("x-request-id", responseRequestId)
     if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
     return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
   }
 
   const raw: unknown = await upstream.json().catch(() => null)
-  if (typeof raw !== "object" || raw === null) {
-    return NextResponse.json({ error: "bff_bad_response" }, { status: 502 })
+  if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) {
+    const errorHeaders = new Headers()
+    const retryAfter = upstream.headers.get("retry-after")
+    if (retryAfter !== null) errorHeaders.set("retry-after", retryAfter)
+    if (setCookie !== null) errorHeaders.append("set-cookie", setCookie)
+    return bffErrorResponse(upstream, raw, "bff_error", requestId, errorHeaders)
   }
-  if ("error" in raw) {
-    const error = raw as { error?: { code?: unknown; message?: unknown } }
-    const code = typeof error.error?.code === "string" ? error.error.code : "bff_error"
-    const message = typeof error.error?.message === "string" ? error.error.message : code
-    return NextResponse.json({ error: message, code }, { status: upstream.status })
-  }
-  if (!("data" in raw)) {
-    return NextResponse.json({ error: "bff_bad_response" }, { status: 502 })
-  }
+  const parsed = bffSuccessEnvelopeSchema(z.unknown()).safeParse(raw)
+  if (!parsed.success) return webErrorResponse("bff_bad_response", 502, requestId)
 
   // The browser SessionClient intentionally keeps the established flat Chat
   // DTOs. Only the Web adapter unwraps the BFF v1 envelope; BFF and upstream
   // business APIs remain envelope-first and independently versioned.
-  const responseHeaders = new Headers({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+  const responseHeaders = responseHeadersWithRequestId(parsed.data.meta.request_id, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  })
   if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
-  return new Response(JSON.stringify((raw as { data: unknown }).data), { status: upstream.status, headers: responseHeaders })
+  return new Response(JSON.stringify(parsed.data.data), { status: upstream.status, headers: responseHeaders })
 }
 
 export const GET = proxy

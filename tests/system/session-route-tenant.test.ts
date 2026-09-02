@@ -34,7 +34,7 @@ describe("Chat BFF deployment domain context", () => {
       envelope: { runtime_jwt: "session-jwt" },
       setCookie: null,
     })
-    requestWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }))
+    requestWithDomain.mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok", meta: { request_id: "request-bff" } }), { status: 200 }))
 
     const response = await GET(
       new Request("https://app.example/api/session/sessions", { headers: { host: "spoofed.example" } }),

@@ -25,14 +25,14 @@ function json(response: import("node:http").ServerResponse, status: number, body
 }
 
 describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
-  const originalSystemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL
+  const originalBffBaseUrl = process.env.KOKORO_BFF_BASE_URL
   const originalDomain = process.env.KOKORO_DOMAIN
-  let system: RunningServer
+  let bff: RunningServer
   let receivedDomain = ""
   let receivedHost = ""
 
   beforeAll(async () => {
-    system = await listen((request, response) => {
+    bff = await listen((request, response) => {
       receivedDomain = request.headers.forwarded?.toString() ?? ""
       receivedHost = request.headers.host?.toString() ?? ""
       json(response, 200, {
@@ -49,16 +49,17 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
           releaseId: null,
           digest: "integration-digest",
         },
+        meta: { request_id: "runtime-integration" },
       })
     })
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
-    process.env.KOKORO_SYSTEM_BASE_URL = system.baseUrl
+    process.env.KOKORO_BFF_BASE_URL = bff.baseUrl
   })
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => system.server.close((error) => error ? reject(error) : resolve()))
-    if (originalSystemBaseUrl === undefined) delete process.env.KOKORO_SYSTEM_BASE_URL
-    else process.env.KOKORO_SYSTEM_BASE_URL = originalSystemBaseUrl
+    await new Promise<void>((resolve, reject) => bff.server.close((error) => error ? reject(error) : resolve()))
+    if (originalBffBaseUrl === undefined) delete process.env.KOKORO_BFF_BASE_URL
+    else process.env.KOKORO_BFF_BASE_URL = originalBffBaseUrl
     if (originalDomain === undefined) delete process.env.KOKORO_DOMAIN
     else process.env.KOKORO_DOMAIN = originalDomain
   })
@@ -74,6 +75,7 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     expect(receivedHost).not.toBe("first.example")
     expect(body.data?.tenantId).toBeUndefined()
     expect(body.data?.productId).toBe("kokoro")
+    expect(response.headers.get("x-request-id")).toBe("runtime-integration")
   })
 
   it("keeps the transport streaming-capable without forwarding a caller-supplied Host", async () => {
@@ -112,17 +114,20 @@ describe("Runtime Manifest BFF against local HTTP contract fixtures", () => {
     expect(secondBody.data?.theme).toEqual({ primary: "#123456", brandName: "Kokoro" })
   })
 
-  it("fails closed when the explicit System base is absent", async () => {
-    const explicitSystemBaseUrl = process.env.KOKORO_SYSTEM_BASE_URL
-    delete process.env.KOKORO_SYSTEM_BASE_URL
+  it("fails closed when the business BFF base is absent", async () => {
+    const explicitBffBaseUrl = process.env.KOKORO_BFF_BASE_URL
+    delete process.env.KOKORO_BFF_BASE_URL
 
     try {
       const response = await GET(new Request("https://first.example/api/system/runtime-manifest?product_id=kokoro"))
       expect(response.status).toBe(503)
-      expect(await response.json()).toEqual({ error: "system_runtime_unavailable" })
+      expect(await response.json()).toMatchObject({
+        error: { code: "system_runtime_unavailable", message: "system_runtime_unavailable" },
+        meta: { request_id: expect.any(String) },
+      })
     } finally {
-      if (explicitSystemBaseUrl === undefined) delete process.env.KOKORO_SYSTEM_BASE_URL
-      else process.env.KOKORO_SYSTEM_BASE_URL = explicitSystemBaseUrl
+      if (explicitBffBaseUrl === undefined) delete process.env.KOKORO_BFF_BASE_URL
+      else process.env.KOKORO_BFF_BASE_URL = explicitBffBaseUrl
     }
   })
 })

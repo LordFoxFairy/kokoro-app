@@ -54,6 +54,7 @@ describe("GET /api/billing/plans", () => {
     expect(headers.get("x-kokoro-namespace")).toBe("team_1")
     expect(headers.get("x-kokoro-principal-id")).toBe("u1")
     expect(headers.get("forwarded")).toBe("host=dev.kokoro.localhost")
+    expect(response.headers.get("x-request-id")).toBe("bff-request")
   })
 
   it("preserves the BFF status and projects its canonical error", async () => {
@@ -65,7 +66,11 @@ describe("GET /api/billing/plans", () => {
     const { GET } = await import("@/app/api/billing/plans/route")
     const response = await GET(new Request("http://localhost/api/billing/plans", { headers: { cookie: sessionCookie() } }))
     expect(response.status).toBe(429)
-    expect(await response.json()).toEqual({ error: "Too many billing requests", code: "billing_rate_limited" })
+    expect(response.headers.get("x-request-id")).toBe("bff-plans-error")
+    expect(await response.json()).toEqual({
+      error: { code: "billing_rate_limited", message: "Too many billing requests" },
+      meta: { request_id: "bff-plans-error" },
+    })
   })
 
   it("returns an honest unavailable state when BFF is not configured", async () => {
@@ -73,9 +78,13 @@ describe("GET /api/billing/plans", () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     const { GET } = await import("@/app/api/billing/plans/route")
-    const response = await GET(new Request("http://localhost/api/billing/plans", { headers: { cookie: sessionCookie() } }))
+    const response = await GET(new Request("http://localhost/api/billing/plans", { headers: { cookie: sessionCookie(), "x-kokoro-request-id": "request-local" } }))
     expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ error: "business_bff_not_configured" })
+    expect(response.headers.get("x-request-id")).toBe("request-local")
+    expect(await response.json()).toEqual({
+      error: { code: "business_bff_not_configured", message: "business_bff_not_configured" },
+      meta: { request_id: "request-local" },
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -104,6 +113,7 @@ describe("POST /api/billing/checkout", () => {
     }))
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ checkout_url: "/billing/mock-checkout/plan_starter" })
+    expect(response.headers.get("x-request-id")).toBe("bff-checkout")
     const [target, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(target).toBe("http://bff.test/v1/billing/checkout")
     expect(JSON.parse(init.body as string)).toEqual({ plan_id: "plan_starter" })
@@ -123,7 +133,11 @@ describe("POST /api/billing/checkout", () => {
       body: JSON.stringify({ plan_id: "plan_starter" }),
     }))
     expect(response.status).toBe(409)
-    expect(await response.json()).toEqual({ error: "Checkout already exists", code: "checkout_conflict" })
+    expect(response.headers.get("x-request-id")).toBe("bff-checkout-error")
+    expect(await response.json()).toEqual({
+      error: { code: "checkout_conflict", message: "Checkout already exists" },
+      meta: { request_id: "bff-checkout-error" },
+    })
   })
 })
 
