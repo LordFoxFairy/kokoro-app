@@ -190,6 +190,19 @@ export function createSseFrameParser(onData: (data: string) => void): (chunk: st
   }
 }
 
+/**
+ * A single Agent Chat fact may expand into multiple AG-UI frames. Advance the
+ * source cursor only after the frame that completes that projection, otherwise
+ * a disconnect between START and CONTENT could skip the remaining content on
+ * replay.
+ */
+export function shouldAdvanceSseCursor(input: unknown): boolean {
+  if (typeof input !== "object" || input === null || !("type" in input)) return true
+  const type = input.type
+  if (typeof type !== "string") return true
+  return type !== "TEXT_MESSAGE_START" && type !== "TOOL_CALL_START" && type !== "TOOL_CALL_END"
+}
+
 export function createSessionClient(options: { baseUrl: string }): SessionClient {
   // 契约路径以 `/` 打头，故 base+path 直接拼接（非 new URL——那会丢掉 `/api/session` 前缀）。
   // baseUrl 可为绝对源（`http://host`）或同源相对前缀（`/api/session`）。
@@ -386,7 +399,9 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
           fail(new SessionClientError("parse", "SSE payload rejected by contract"))
           return
         }
-        cursor = event.seq
+        if (shouldAdvanceSseCursor(raw)) {
+          cursor = event.seq
+        }
         onEvent(event)
       }
       let parser = createSseFrameParser(consumeData)

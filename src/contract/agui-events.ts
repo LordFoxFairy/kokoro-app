@@ -23,7 +23,7 @@ export const agUiEventSchema = z.discriminatedUnion("type", [
   base.extend({ type: z.literal(EventType.RUN_FINISHED), threadId: z.string().min(1), runId: z.string().min(1), usage: z.array(z.record(z.unknown())).optional() }),
   base.extend({ type: z.literal(EventType.RUN_ERROR), message: z.string().min(1), code: z.string().min(1).optional() }),
   base.extend({ type: z.literal(EventType.TEXT_MESSAGE_START), messageId: z.string().min(1), role: z.literal("assistant") }),
-  base.extend({ type: z.literal(EventType.TEXT_MESSAGE_CONTENT), messageId: z.string().min(1), delta: z.string().min(1) }),
+  base.extend({ type: z.literal(EventType.TEXT_MESSAGE_CONTENT), messageId: z.string().min(1), delta: z.string() }),
   base.extend({ type: z.literal(EventType.TEXT_MESSAGE_END), messageId: z.string().min(1) }),
   base.extend({ type: z.literal(EventType.TOOL_CALL_START), toolCallId: z.string().min(1), toolCallName: z.string().min(1), parentMessageId: z.string().min(1).optional() }),
   base.extend({ type: z.literal(EventType.TOOL_CALL_ARGS), toolCallId: z.string().min(1), delta: z.string() }),

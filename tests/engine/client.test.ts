@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createSessionClient, createSseFrameParser } from "@/engine/client"
+import { createSessionClient, createSseFrameParser, shouldAdvanceSseCursor } from "@/engine/client"
 
 function collect(chunks: string[]): string[] {
   const frames: string[] = []
@@ -49,6 +49,22 @@ describe("createSseFrameParser：跨 chunk 的 SSE 帧增量解析", () => {
     expect(frames).toEqual([])
     feed("\n\n")
     expect(frames).toEqual(["pending"])
+  })
+})
+
+describe("shouldAdvanceSseCursor", () => {
+  it("keeps the source cursor until an expanded AG-UI fact is complete", () => {
+    expect(shouldAdvanceSseCursor({ type: "TEXT_MESSAGE_START" })).toBe(false)
+    expect(shouldAdvanceSseCursor({ type: "TEXT_MESSAGE_CONTENT", delta: "" })).toBe(true)
+    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_START" })).toBe(false)
+    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_ARGS", delta: "{}" })).toBe(true)
+    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_END" })).toBe(false)
+    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_RESULT", content: "ok" })).toBe(true)
+  })
+
+  it("keeps legacy internal events and single-frame AG-UI events unchanged", () => {
+    expect(shouldAdvanceSseCursor({ kind: "message.delta", seq: 4 })).toBe(true)
+    expect(shouldAdvanceSseCursor({ type: "RUN_FINISHED" })).toBe(true)
   })
 })
 
