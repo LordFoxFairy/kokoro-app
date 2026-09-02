@@ -12,6 +12,7 @@ import { ArrowUpRight, CalendarSync, ChevronRight, CircleHelp, Contrast, Copy, E
 import type { AgentCandidate, ModelCandidate } from "@/contract/http"
 import { useLocale, useT } from "@/i18n/context"
 import { useTheme, type ThemeMode } from "@/ui/theme/theme-context"
+import { mutationHeaders } from "@/lib/client/mutation"
 import { LOCALES, LOCALE_NAMES, type Locale } from "@/i18n/messages"
 import { browserListClient } from "@/ui/shell/page-clients"
 import { Button } from "@/components/ui/button"
@@ -146,11 +147,11 @@ export function AccountCard({
     if (!account || !name.trim() || name.trim() === account.displayName) return
     if (preview) setPreviewAccountEdits((current) => ({ ...current, displayName: name.trim() }))
     else setLoadedAccount({ ...account, displayName: name.trim() })
-    if (!preview) await fetch("/api/settings/account", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: name.trim() }) })
+    if (!preview) await fetch("/api/settings/account", { method: "PATCH", headers: mutationHeaders({ "content-type": "application/json" }), body: JSON.stringify({ display_name: name.trim() }) })
   }
   const saveEmail = async (): Promise<void> => {
     if (!account || !newEmail.includes("@")) return
-    if (!preview) await fetch("/api/settings/account/email", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ verification_code: verificationCode, email: newEmail.trim() }) })
+    if (!preview) await fetch("/api/settings/account/email", { method: "PATCH", headers: mutationHeaders({ "content-type": "application/json" }), body: JSON.stringify({ verification_code: verificationCode, email: newEmail.trim() }) })
     if (preview) setPreviewAccountEdits((current) => ({ ...current, email: newEmail.trim() }))
     else setLoadedAccount({ ...account, email: newEmail.trim() })
     setEmailOpen(false)
@@ -167,6 +168,7 @@ export function AccountCard({
         const suffix = method.connected ? "" : "/connect"
         const response = await fetch(`/api/settings/account/login-methods/${method.id}${suffix}`, {
           method: method.connected ? "DELETE" : "POST",
+          headers: mutationHeaders(),
         })
         if (!response.ok) return
       }
@@ -191,7 +193,7 @@ export function AccountCard({
     try {
       if (!preview) {
         const endpoint = kind === "email" ? "email-verifications" : "deletion-verifications"
-        await fetch(`/api/settings/account/${endpoint}`, { method: "POST" })
+        await fetch(`/api/settings/account/${endpoint}`, { method: "POST", headers: mutationHeaders() })
       }
     } finally {
       setVerificationBusy(null)
@@ -205,7 +207,7 @@ export function AccountCard({
       if (!preview) {
         const response = await fetch("/api/settings/account", {
           method: "DELETE",
-          headers: { "content-type": "application/json" },
+          headers: mutationHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ verification_code: deleteCode.trim() }),
         })
         if (!response.ok) return
@@ -390,7 +392,7 @@ export function AppearanceCard({ brandName = "Kokoro", preview = false }: { bran
     try {
       const response = await fetch("/api/settings/preferences", {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: mutationHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ [key]: checked }),
       })
       if (!response.ok) throw new Error(`preferences_save_failed:${response.status}`)
@@ -505,7 +507,7 @@ export function PersonalizationCard({ preview = false }: { preview?: boolean }) 
     try {
       await fetch("/api/hub/preferences/personalization", {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: mutationHeaders({ "content-type": "application/json" }),
         body: JSON.stringify(payload),
       })
     } catch {
@@ -526,7 +528,7 @@ export function PersonalizationCard({ preview = false }: { preview?: boolean }) 
       if (!preview) {
         const response = await fetch("/api/hub/preferences/knowledge", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: mutationHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ name: entry.name, usage_context: entry.when, content: entry.content }),
         })
         if (!response.ok) return
@@ -548,7 +550,7 @@ export function PersonalizationCard({ preview = false }: { preview?: boolean }) 
       if (!preview) {
         const response = await fetch("/api/hub/preferences/personalization/imports", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: mutationHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ content: importText.trim() }),
         })
         if (!response.ok) return
@@ -725,7 +727,7 @@ export function MyComputerCard({ brandName, preview = false }: { brandName?: str
       if (!preview) {
         const response = await fetch("/api/hub/cloud-computers", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: mutationHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ plan: plan.id, name: `${brandName ?? "Kokoro"} Computer`, region: "us-east", storage_gb: storageGb }),
         })
         if (!response.ok) throw new Error(`cloud_computer_create_failed:${response.status}`)
@@ -1096,7 +1098,7 @@ export function IntegrationSettingsCard({
     setConnecting(id)
     try {
       if (!preview) {
-        const response = await fetch(`/api/hub/integrations/${id}/connect`, { method: "POST" })
+        const response = await fetch(`/api/hub/integrations/${id}/connect`, { method: "POST", headers: mutationHeaders() })
         if (!response.ok) throw new Error(`integration_connect_failed:${response.status}`)
         const result = await response.json() as { authorization_url?: string }
         if (result.authorization_url) {
