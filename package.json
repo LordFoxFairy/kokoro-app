@@ -16,9 +16,11 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "contract": "vitest run contract tests/contract",
+    "test:architecture": "vitest run tests/architecture",
     "test": "vitest run",
     "smoke:first-site": "node scripts/first-site-smoke.mjs",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm contract && pnpm test:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",
