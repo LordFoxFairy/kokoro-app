@@ -89,6 +89,32 @@ describe("ScheduledTask feature boundaries", () => {
     expect(violations).toEqual([])
   })
 
+  it("keeps every ScheduledTask React module below the component review budget", () => {
+    const violations = sourceFiles(uiRoot)
+      .filter((filePath) => filePath.endsWith(".tsx"))
+      .map((filePath) => ({
+        file: path.relative(root, filePath),
+        lines: readFileSync(filePath, "utf8").split(/\r?\n/u).length,
+      }))
+      .filter(({ lines }) => lines > 300)
+
+    expect(violations).toEqual([])
+  })
+
+  it("exposes one complete live ScheduledTask client instead of optional operation aliases", () => {
+    const modelSource = readFileSync(path.join(modelRoot, "scheduled-task.ts"), "utf8")
+    for (const operation of [
+      "listScheduledTasks",
+      "createScheduledTask",
+      "updateScheduledTask",
+      "retryScheduledTask",
+      "deleteScheduledTask",
+    ]) {
+      expect(modelSource).toMatch(new RegExp(`\\b${operation}:`, "u"))
+      expect(modelSource).not.toMatch(new RegExp(`\\b${operation}\\?:`, "u"))
+    }
+  })
+
   it("keeps model imports inside the pure model layer", () => {
     const modelFiles = sourceFiles(modelRoot)
     expect(modelFiles.length, "feature model layer has no TypeScript source").toBeGreaterThan(0)

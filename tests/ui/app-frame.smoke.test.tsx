@@ -296,6 +296,10 @@ it("KokoroAppSurface 将显式 ScheduledTaskClient 注入已排程 live surface"
       time: "08:00",
       status: "active",
     }]),
+    createScheduledTask: vi.fn(),
+    updateScheduledTask: vi.fn(),
+    retryScheduledTask: vi.fn(),
+    deleteScheduledTask: vi.fn(),
   }
 
   render(

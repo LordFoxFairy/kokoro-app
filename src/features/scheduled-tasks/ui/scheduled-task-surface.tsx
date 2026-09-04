@@ -1,29 +1,25 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useLocale } from "@/i18n/context"
 
-import { nextPreviewRun, scheduledDateKey, startOfMonth } from "../model/calendar"
-import type { ScheduledTaskClient, ScheduledTaskDraft, ScheduledTaskPatch, ScheduledTaskRecord } from "../model/scheduled-task"
-import { readPreviewTasks, usePreviewTasks, writePreviewTasks } from "./preview-task-store"
+import { scheduledDateKey, startOfMonth } from "../model/calendar"
+import type { ScheduledTaskDraft, ScheduledTaskPatch, ScheduledTaskRecord } from "../model/scheduled-task"
+import {
+  insertPreviewTask,
+  readPreviewTasks,
+  removePreviewTask,
+  replacePreviewTask,
+  setPreviewTaskStatus,
+} from "./preview-task-store"
 import { ScheduledTaskContent } from "./scheduled-task-content"
-import { ScheduledTaskEditorDialog } from "./scheduled-task-editor"
+import { ScheduledTaskDialogs } from "./scheduled-task-dialogs"
 import { EDITOR_HASH, SCHEDULED_LOCATION_EVENT, useScheduledLocation, writeScheduledView } from "./scheduled-task-location"
 import type { ScheduledMutation } from "./scheduled-task-presentation"
+import type { ScheduledTaskSurfaceProps } from "./scheduled-task-surface.types"
+import { useScheduledTaskSource } from "./use-scheduled-task-source"
 import styles from "./scheduled-task-surface.module.css"
-
-export type ScheduledTaskSurfaceProps = {
-  brandName?: string
-  preview?: boolean
-  scheduledTaskClient?: ScheduledTaskClient
-  onSave?: (task: ScheduledTaskDraft) => Promise<void> | void
-  tasks?: readonly ScheduledTaskRecord[]
-  onUpdateTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<void> | void
-  onRetryTask?: (taskId: string) => Promise<void> | void
-  onDeleteTask?: (taskId: string) => Promise<void> | void
-}
 
 function missingScheduledClientError(): Error {
   return new Error("Scheduled task client is not configured")
@@ -45,10 +41,11 @@ export function ScheduledTaskSurface({
   const fixtureMode = preview
   const injectedClient = scheduledTaskClient
   const controlledTasks = tasks !== undefined
-  const previewTasks = usePreviewTasks()
-  const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
-  const [loading, setLoading] = useState(!fixtureMode && !controlledTasks)
-  const [loadError, setLoadError] = useState(false)
+  const { displayedTasks, loading, loadError, loadTasks } = useScheduledTaskSource({
+    fixtureMode,
+    ...(tasks === undefined ? {} : { controlledTasks: tasks }),
+    ...(injectedClient === undefined ? {} : { client: injectedClient }),
+  })
   const { view, editorOpen } = useScheduledLocation()
   const [initialPrompt, setInitialPrompt] = useState("")
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()))
@@ -58,30 +55,6 @@ export function ScheduledTaskSurface({
   const [mutationError, setMutationError] = useState<ScheduledMutation | null>(null)
   const openerRef = useRef<HTMLElement | null>(null)
   const taskIdRef = useRef(0)
-  const requestSeqRef = useRef(0)
-  const loadTasks = useCallback(async () => {
-    if (fixtureMode || controlledTasks) return
-    const requestSeq = ++requestSeqRef.current
-    // Yield before changing local state so the initial effect only starts an
-    // external request; this also gives an immediately unmounted surface a
-    // chance to invalidate the sequence without a cascading render.
-    await Promise.resolve()
-    if (requestSeq !== requestSeqRef.current) return
-    setLoading(true)
-    setLoadError(false)
-    try {
-      if (!injectedClient) throw missingScheduledClientError()
-      const next = await injectedClient.listScheduledTasks()
-      if (requestSeq !== requestSeqRef.current) return
-      setRemoteTasks([...next])
-    } catch {
-      if (requestSeq !== requestSeqRef.current) return
-      setLoadError(true)
-    } finally {
-      if (requestSeq === requestSeqRef.current) setLoading(false)
-    }
-  }, [controlledTasks, fixtureMode, injectedClient])
-  const displayedTasks = useMemo(() => tasks ?? (fixtureMode ? previewTasks : remoteTasks), [fixtureMode, previewTasks, remoteTasks, tasks])
   const editingTask = editingTaskId === null ? null : displayedTasks.find((task) => task.id === editingTaskId) ?? null
   const calendarTasks = useMemo(() => {
     const grouped = new Map<string, ScheduledTaskRecord[]>()
@@ -94,19 +67,6 @@ export function ScheduledTaskSurface({
     }
     return grouped
   }, [displayedTasks])
-
-  useEffect(() => {
-    if (fixtureMode || controlledTasks) {
-      requestSeqRef.current += 1
-      return
-    }
-    queueMicrotask(() => {
-      void loadTasks()
-    })
-    return () => {
-      requestSeqRef.current += 1
-    }
-  }, [controlledTasks, fixtureMode, loadTasks])
 
   useEffect(() => {
     if (!editorOpen) {
@@ -139,48 +99,7 @@ export function ScheduledTaskSurface({
       sequence += 1
     } while (current.some((task) => task.id === `scheduled_preview_${sequence}`))
     taskIdRef.current = sequence
-    const nextTask: ScheduledTaskRecord = {
-      id: `scheduled_preview_${sequence}`,
-      title: draft.title,
-      prompt: draft.prompt,
-      frequency: draft.frequency === "weekly" ? "weekly" : "daily",
-      time: draft.time,
-      timezone: draft.timezone,
-      nextRun: nextPreviewRun(draft.time, draft.frequency),
-      autoApprove: draft.autoApprove,
-      enabled: true,
-      ...(draft.expiresAt === undefined ? {} : { expiresAt: draft.expiresAt }),
-    }
-    writePreviewTasks([nextTask, ...current])
-  }
-
-  const updatePreviewTask = (taskId: string, draft: ScheduledTaskDraft) => {
-    const next = readPreviewTasks().map((task) => {
-      if (task.id !== taskId) return task
-      const updated: ScheduledTaskRecord = {
-        ...task,
-        title: draft.title,
-        prompt: draft.prompt,
-        frequency: draft.frequency,
-        time: draft.time,
-        timezone: draft.timezone,
-        nextRun: nextPreviewRun(draft.time, draft.frequency),
-        autoApprove: draft.autoApprove,
-      }
-      if (draft.expiresAt === undefined) delete updated.expiresAt
-      else updated.expiresAt = draft.expiresAt
-      return updated
-    })
-    writePreviewTasks(next)
-  }
-
-  const setPreviewTaskStatus = (taskId: string, status: "active" | "paused") => {
-    const next = readPreviewTasks().map((candidate) => candidate.id === taskId ? { ...candidate, enabled: status === "active", status } : candidate)
-    writePreviewTasks(next)
-  }
-
-  const removePreviewTask = (taskId: string) => {
-    writePreviewTasks(readPreviewTasks().filter((task) => task.id !== taskId))
+    insertPreviewTask(`scheduled_preview_${sequence}`, draft)
   }
 
   const openEditor = (prompt = "", target: HTMLElement | null = null, task: ScheduledTaskRecord | null = null) => {
@@ -216,10 +135,10 @@ export function ScheduledTaskSurface({
         }
         if (draft.expiresAt !== undefined) patch.expiresAt = draft.expiresAt
         await update(editingTask.id, patch)
-        if (fixtureMode && !controlledTasks) updatePreviewTask(editingTask.id, draft)
+        if (fixtureMode && !controlledTasks) replacePreviewTask(editingTask.id, draft)
         else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
-        updatePreviewTask(editingTask.id, draft)
+        replacePreviewTask(editingTask.id, draft)
       } else {
         throw missingScheduledClientError()
       }
@@ -360,36 +279,20 @@ export function ScheduledTaskSurface({
         retryTask={retryTask}
         setTaskEnabled={setTaskEnabled}
       />
-      <ScheduledTaskEditorDialog
-        open={editorOpen}
-        onOpenChange={handleOpenChange}
+      <ScheduledTaskDialogs
         brandName={brandName}
+        editorOpen={editorOpen}
+        onEditorOpenChange={handleOpenChange}
         initialPrompt={initialPrompt}
-        {...((editingTask !== null ? canUpdate : canCreate) ? { onSave: saveTask } : {})}
-        initialTask={editingTask}
+        editingTask={editingTask}
+        canSave={editingTask !== null ? canUpdate : canCreate}
+        onSave={saveTask}
         returnFocusRef={openerRef}
+        deleteTarget={deleteTarget}
+        setDeleteTarget={setDeleteTarget}
+        deleting={pendingMutation?.operation === "delete"}
+        onDelete={removeTask}
       />
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("scheduled.deleteConfirm")}</AlertDialogTitle>
-            <AlertDialogDescription>{deleteTarget?.title}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("firstSite.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={pendingMutation?.operation === "delete"}
-              aria-busy={pendingMutation?.operation === "delete" || undefined}
-              onClick={(event) => {
-                event.preventDefault()
-                void removeTask()
-              }}
-            >
-              {pendingMutation?.operation === "delete" ? t("scheduled.deleting") : t("scheduled.delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

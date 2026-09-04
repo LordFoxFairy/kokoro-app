@@ -36,10 +36,10 @@ export type ScheduledTaskPatch = Partial<Pick<
 
 export type ScheduledTaskClient = {
   listScheduledTasks: () => Promise<readonly ScheduledTaskRecord[]>
-  createScheduledTask?: (draft: ScheduledTaskDraft) => Promise<ScheduledTaskRecord>
-  updateScheduledTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<ScheduledTaskRecord>
-  retryScheduledTask?: (taskId: string) => Promise<ScheduledTaskRecord>
-  deleteScheduledTask?: (taskId: string) => Promise<{ ok: true }>
+  createScheduledTask: (draft: ScheduledTaskDraft) => Promise<ScheduledTaskRecord>
+  updateScheduledTask: (taskId: string, patch: ScheduledTaskPatch) => Promise<ScheduledTaskRecord>
+  retryScheduledTask: (taskId: string) => Promise<ScheduledTaskRecord>
+  deleteScheduledTask: (taskId: string) => Promise<{ ok: true }>
 }
 
 export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRecord {

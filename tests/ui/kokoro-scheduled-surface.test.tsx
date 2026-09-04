@@ -20,6 +20,18 @@ function renderScheduled(onSave = vi.fn()) {
   return onSave
 }
 
+function scheduledTaskClient(overrides: Partial<ScheduledTaskClient>): ScheduledTaskClient {
+  const unavailable = async (): Promise<never> => { throw new Error("ScheduledTask test operation is not configured") }
+  return {
+    listScheduledTasks: unavailable,
+    createScheduledTask: unavailable,
+    updateScheduledTask: unavailable,
+    retryScheduledTask: unavailable,
+    deleteScheduledTask: unavailable,
+    ...overrides,
+  }
+}
+
 it("呈现排程空态、三项建议和建立按钮", () => {
   renderScheduled()
 
@@ -179,7 +191,7 @@ it("live 模式先呈现 loading，GET 列表失败可用原请求重试并保�
   const listScheduledTasks = vi.fn()
     .mockRejectedValueOnce(new Error("BFF unavailable"))
     .mockResolvedValueOnce([task])
-  const client: ScheduledTaskClient = { listScheduledTasks }
+  const client = scheduledTaskClient({ listScheduledTasks })
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={client} /></LocaleProvider>)
 
@@ -195,8 +207,8 @@ it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态�
   const activeTask = { id: "scheduled_live_1", title: "Live digest", frequency: "daily" as const, time: "08:00", enabled: true }
   const pausedTask = { ...activeTask, enabled: false, status: "paused" as const }
   const listScheduledTasks = vi.fn().mockResolvedValueOnce([activeTask]).mockResolvedValueOnce([pausedTask])
-  const updateScheduledTask = vi.fn().mockResolvedValue(undefined)
-  const client: ScheduledTaskClient = { listScheduledTasks, updateScheduledTask }
+  const updateScheduledTask = vi.fn().mockResolvedValue(pausedTask)
+  const client = scheduledTaskClient({ listScheduledTasks, updateScheduledTask })
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={client} /></LocaleProvider>)
 

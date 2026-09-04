@@ -2,7 +2,13 @@
 
 import { useMemo, useSyncExternalStore } from "react"
 
-import { isScheduledTaskRecord, type ScheduledTaskRecord } from "../model/scheduled-task"
+import { nextPreviewRun } from "../model/calendar"
+import {
+  isScheduledTaskRecord,
+  type ScheduledTaskDraft,
+  type ScheduledTaskRecord,
+  type ScheduledTaskStatus,
+} from "../model/scheduled-task"
 
 const PREVIEW_TASKS_KEY = "kokoro.preview.scheduled-tasks"
 const PREVIEW_TASKS_EVENT = "kokoro:scheduled-preview-tasks"
@@ -44,4 +50,49 @@ export function writePreviewTasks(tasks: readonly ScheduledTaskRecord[]): void {
   if (typeof window === "undefined") return
   window.localStorage.setItem(PREVIEW_TASKS_KEY, JSON.stringify(tasks))
   window.dispatchEvent(new Event(PREVIEW_TASKS_EVENT))
+}
+
+export function insertPreviewTask(taskId: string, draft: ScheduledTaskDraft): void {
+  const nextTask: ScheduledTaskRecord = {
+    id: taskId,
+    title: draft.title,
+    prompt: draft.prompt,
+    frequency: draft.frequency,
+    time: draft.time,
+    timezone: draft.timezone,
+    nextRun: nextPreviewRun(draft.time, draft.frequency),
+    autoApprove: draft.autoApprove,
+    enabled: true,
+    ...(draft.expiresAt === undefined ? {} : { expiresAt: draft.expiresAt }),
+  }
+  writePreviewTasks([nextTask, ...readPreviewTasks()])
+}
+
+export function replacePreviewTask(taskId: string, draft: ScheduledTaskDraft): void {
+  writePreviewTasks(readPreviewTasks().map((task) => {
+    if (task.id !== taskId) return task
+    const updated: ScheduledTaskRecord = {
+      ...task,
+      title: draft.title,
+      prompt: draft.prompt,
+      frequency: draft.frequency,
+      time: draft.time,
+      timezone: draft.timezone,
+      nextRun: nextPreviewRun(draft.time, draft.frequency),
+      autoApprove: draft.autoApprove,
+    }
+    if (draft.expiresAt === undefined) delete updated.expiresAt
+    else updated.expiresAt = draft.expiresAt
+    return updated
+  }))
+}
+
+export function setPreviewTaskStatus(taskId: string, status: Extract<ScheduledTaskStatus, "active" | "paused">): void {
+  writePreviewTasks(readPreviewTasks().map((task) => task.id === taskId
+    ? { ...task, enabled: status === "active", status }
+    : task))
+}
+
+export function removePreviewTask(taskId: string): void {
+  writePreviewTasks(readPreviewTasks().filter((task) => task.id !== taskId))
 }

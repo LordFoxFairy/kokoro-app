@@ -46,7 +46,7 @@ describe("scheduled task HTTP client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: { ...wireTask, enabled: false, status: "paused" } }), { status: 200 }))
     const client = createScheduledTaskClient(fetcher)
 
-    await client.createScheduledTask?.({
+    await client.createScheduledTask({
       title: "Daily digest",
       prompt: "Run the digest",
       frequency: "daily",
@@ -55,7 +55,7 @@ describe("scheduled task HTTP client", () => {
       expiresAt: "2026-09-30",
       autoApprove: true,
     })
-    await client.updateScheduledTask?.("scheduled_1", { enabled: false, status: "paused" })
+    await client.updateScheduledTask("scheduled_1", { enabled: false, status: "paused" })
 
     expect(fetcher).toHaveBeenNthCalledWith(1, "/api/scheduled-tasks", expect.objectContaining({
       method: "POST",
@@ -83,9 +83,9 @@ describe("scheduled task HTTP client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "resource.version_conflict", code: "resource.version_conflict" }), { status: 409 }))
     const client = createScheduledTaskClient(fetcher)
 
-    await client.retryScheduledTask?.("scheduled_1")
-    await client.deleteScheduledTask?.("scheduled_1")
-    await expect(client.updateScheduledTask?.("scheduled_1", { enabled: false })).rejects.toMatchObject({
+    await client.retryScheduledTask("scheduled_1")
+    await client.deleteScheduledTask("scheduled_1")
+    await expect(client.updateScheduledTask("scheduled_1", { enabled: false })).rejects.toMatchObject({
       reason: "http",
       status: 409,
       code: "resource.version_conflict",
@@ -104,7 +104,7 @@ describe("scheduled task HTTP client", () => {
   it("reports invalid mutation input as a typed parse error before making a request", async () => {
     const fetcher = vi.fn()
 
-    await expect(createScheduledTaskClient(fetcher).createScheduledTask?.({
+    await expect(createScheduledTaskClient(fetcher).createScheduledTask({
       title: "",
       prompt: "Run the digest",
       frequency: "daily",
