@@ -235,7 +235,10 @@ function PresentationWorkflow({ onPrompt }: Pick<CreationWorkflowSurfaceProps, "
               data-testid="presentation-template"
               onClick={() => onPrompt?.(t(prompt), "presentation")}
             >
-              <PresentationTemplatePreview image={image} images={images} />
+              <PresentationTemplatePreview
+                {...(image === undefined ? {} : { image })}
+                {...(images === undefined ? {} : { images })}
+              />
               <span>{t(label)}</span>
             </Button>
           ))}
@@ -279,6 +282,12 @@ function CardWorkflow({ cards, intent, onPrompt }: { cards: ReadonlyArray<Workfl
 }
 
 export function CreationWorkflowSurface({ intent, onPrompt }: CreationWorkflowSurfaceProps) {
-  if (intent === "presentation") return <PresentationWorkflow onPrompt={onPrompt} />
-  return <CardWorkflow cards={intent === "design" ? designCards : gameCards} intent={intent} onPrompt={onPrompt} />
+  if (intent === "presentation") {
+    return <PresentationWorkflow {...(onPrompt === undefined ? {} : { onPrompt })} />
+  }
+  return <CardWorkflow
+    cards={intent === "design" ? designCards : gameCards}
+    intent={intent}
+    {...(onPrompt === undefined ? {} : { onPrompt })}
+  />
 }

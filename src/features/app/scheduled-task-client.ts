@@ -62,19 +62,20 @@ function describeUnknown(error: unknown): string {
 }
 
 function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
-  return {
+  const record: ScheduledTaskRecord = {
     id: task.id,
     title: task.title,
-    prompt: task.prompt,
     frequency: task.frequency,
     time: task.time,
-    timezone: task.timezone,
-    nextRun: task.next_run_at,
-    expiresAt: task.expires_at,
-    autoApprove: task.auto_approve,
-    enabled: task.enabled,
-    status: task.status,
   }
+  if (task.prompt !== undefined) record.prompt = task.prompt
+  if (task.timezone !== undefined) record.timezone = task.timezone
+  if (task.next_run_at !== undefined) record.nextRun = task.next_run_at
+  if (task.expires_at !== undefined) record.expiresAt = task.expires_at
+  if (task.auto_approve !== undefined) record.autoApprove = task.auto_approve
+  if (task.enabled !== undefined) record.enabled = task.enabled
+  if (task.status !== undefined) record.status = task.status
+  return record
 }
 
 function parseRequest<T>(parse: () => T): T {

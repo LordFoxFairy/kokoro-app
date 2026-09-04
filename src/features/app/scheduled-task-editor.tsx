@@ -40,6 +40,15 @@ type ScheduledTaskEditorDialogProps = {
   returnFocusRef?: RefObject<HTMLElement | null>
 }
 
+type ScheduledTaskEditorContentProps = {
+  brandName: string
+  initialPrompt: string
+  initialTask: ScheduledTaskInitial | null
+  onSave: ScheduledTaskEditorDialogProps["onSave"]
+  onClose: () => void
+  returnFocusRef?: RefObject<HTMLElement | null>
+}
+
 export function ScheduledTaskEditorDialog({
   open,
   onOpenChange,
@@ -58,16 +67,11 @@ export function ScheduledTaskEditorDialog({
           initialTask={initialTask}
           onClose={() => onOpenChange(false)}
           onSave={onSave}
-          returnFocusRef={returnFocusRef}
+          {...(returnFocusRef === undefined ? {} : { returnFocusRef })}
         />
       ) : null}
     </Dialog>
   )
-}
-
-type ScheduledTaskEditorContentProps = Pick<ScheduledTaskEditorDialogProps, "brandName" | "initialPrompt" | "initialTask" | "onSave"> & {
-  onClose: () => void
-  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
 function browserTimezone(): string {
@@ -109,7 +113,15 @@ function ScheduledTaskEditorContent({
     setSaving(true)
     setSaveError(false)
     try {
-      await onSave({ title: title.trim(), prompt: prompt.trim(), frequency, time, timezone, expiresAt: expires ? expiryDate : undefined, autoApprove })
+      await onSave({
+        title: title.trim(),
+        prompt: prompt.trim(),
+        frequency,
+        time,
+        timezone,
+        autoApprove,
+        ...(expires ? { expiresAt: expiryDate } : {}),
+      })
       onClose()
     } catch {
       // Keep the editor open so a live persistence failure is recoverable and
@@ -123,7 +135,7 @@ function ScheduledTaskEditorContent({
   return (
     <DialogContent
       className={styles.dialog}
-      overlayClassName={styles.overlay}
+      overlayClassName={styles.overlay ?? ""}
       closeLabel={t("shell.closeDialog")}
       onOpenAutoFocus={(event) => {
         event.preventDefault()

@@ -74,7 +74,7 @@ async function loadCatalogScope(client: HubClient, scope: "official" | "third_pa
   const cursors = new Set<string>()
   let cursor: string | undefined
   for (let page = 0; ; page += 1) {
-    const result = await client.listSkillCatalog({ scope, cursor })
+    const result = await client.listSkillCatalog(cursor === undefined ? { scope } : { scope, cursor })
     pages.push(result)
     const next = result.next_cursor
     if (!next || cursors.has(next)) return pages
@@ -109,7 +109,7 @@ function asSkillCard(skill: SkillCatalogCard): SkillCard {
 }
 
 function formatUsage(index: number, t: (key: MessageKey, values?: Record<string, string | number>) => string): string {
-  const count = [96, 30.3, 221.2, 29.1, 107.2, 9.8, 76.7, 46.1][index % 8]
+  const count = [96, 30.3, 221.2, 29.1, 107.2, 9.8, 76.7, 46.1][index % 8] ?? 0
   return t("skills.usedCount", { count: count >= 100 ? `${count.toFixed(1)}k` : `${count}k` })
 }
 
@@ -263,7 +263,7 @@ export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Ko
                 const installed = skill.installed
                 const actionPending = busy === stateKey
                 const categoryValues = skillCategories(skill)
-                const categoryValue = categoryValues[0]
+                const categoryValue = categoryValues[0] ?? "coding"
                 const Icon = artIcon(categoryValue)
                 return (
                   <Card className={styles.card} key={stateKey}>

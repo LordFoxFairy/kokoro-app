@@ -234,7 +234,7 @@ export function KokoroProjectWorkspace({
       aria-label={t("firstSite.projects")}
     >
       <div className={styles.main}>
-        <ProjectIdentity brandName={brandName} />
+        <ProjectIdentity {...(brandName === undefined ? {} : { brandName })} />
 
         <div className={styles.composer}>{composer}</div>
 
@@ -407,7 +407,7 @@ export function KokoroProjectWorkspace({
       </aside>
 
       <Dialog open={instructionsOpen} onOpenChange={onContextDialogChange(setInstructionsOpen)}>
-        <DialogContent className={styles.instructionsDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.instructionsDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
           <DialogHeader className={styles.instructionsDialogHeader}>
             <DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle>
             <DialogDescription>{t("firstSite.projectInstructionsDescription")}</DialogDescription>
@@ -454,7 +454,7 @@ export function KokoroProjectWorkspace({
           ref={instructionsHistoryDialogRef}
           tabIndex={-1}
           className={styles.instructionsHistoryDialog}
-          overlayClassName={styles.instructionsOverlay}
+          overlayClassName={styles.instructionsOverlay ?? ""}
           closeLabel={t("shell.closeDialog")}
           onOpenAutoFocus={(event) => {
             event.preventDefault()
@@ -493,7 +493,7 @@ export function KokoroProjectWorkspace({
       </Dialog>
 
       <Dialog open={resourcesOpen} onOpenChange={onContextDialogChange(setResourcesOpen)}>
-        <DialogContent className={styles.resourcesDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.resourcesDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
           <div className={styles.resourcesToolbar}>
             <DropdownMenu>
@@ -568,7 +568,7 @@ export function KokoroProjectWorkspace({
       </Dialog>
 
       <Dialog open={skillsOpen} onOpenChange={onContextDialogChange(setSkillsOpen)}>
-        <DialogContent className={styles.projectSkillsDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.projectSkillsDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectSkillsTitle}>{t("firstSite.projects")}{t("firstSite.skills")}</DialogTitle>
           <p className={styles.projectSkillsHint}>
             <span>{t("firstSite.projectSkillsHint")}</span>
@@ -642,7 +642,7 @@ export function KokoroProjectWorkspace({
       </Dialog>
 
       <Dialog open={websitesOpen} onOpenChange={onContextDialogChange(setWebsitesOpen)}>
-        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle>
           <label className={styles.projectPickerSearch}>
             <Search aria-hidden="true" />
@@ -688,7 +688,7 @@ export function KokoroProjectWorkspace({
       </Dialog>
 
       <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
-        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay} closeLabel={t("shell.closeDialog")}>
+        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
           <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.projectScheduledTasks")}</DialogTitle>
           <div className={styles.scheduledPickerToolbar}>
             <label className={styles.projectPickerSearch}>

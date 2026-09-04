@@ -145,7 +145,7 @@ export function KokoroDirectChatWelcome({
     surfaceRef.current.scrollTop = Math.min(12.5, maxScrollTop)
   }, [selectedCreationType, websiteCreation])
 
-  const activeBanner = desktopBanners[bannerIndex]
+  const activeBanner = desktopBanners[bannerIndex] ?? desktopBanners[0]
 
   return (
     <section
@@ -431,7 +431,7 @@ export function KokoroDirectChatWelcome({
           </div>
         ) : null}
 
-        {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} onPrompt={onPrompt} /> : null}
+        {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} {...(onPrompt === undefined ? {} : { onPrompt })} /> : null}
 
         {!hasDraft && !creationIntent ? <div
           className={styles.desktopCarousel}

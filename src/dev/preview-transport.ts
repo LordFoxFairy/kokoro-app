@@ -364,6 +364,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     const failMatch = /^!fail:([a-z_]+)/.exec(content.trim())
     if (failMatch) {
       const requestedCode = failMatch[1]
+      if (requestedCode === undefined) return
       // Keep the preview command forgiving: a typo must exercise the normal
       // error card, not throw from parseChatProjectionEvent inside a timer callback.
       // Real SSE payloads remain strict and are rejected by engine/client.ts.

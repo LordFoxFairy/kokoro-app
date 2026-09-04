@@ -183,7 +183,7 @@ function scheduledDateKey(nextRun: string | undefined): string | null {
 function nextPreviewRun(time: string, frequency: ScheduledTaskDraft["frequency"]): string {
   const now = new Date()
   const next = new Date(now)
-  const [hours, minutes] = time.split(":").map(Number)
+  const [hours = 8, minutes = 0] = time.split(":").map(Number)
   next.setHours(Number.isFinite(hours) ? hours : 8, Number.isFinite(minutes) ? minutes : 0, 0, 0)
   if (frequency === "weekly" || next <= now) next.setDate(next.getDate() + (frequency === "weekly" ? 7 : 1))
   return next.toISOString()
@@ -337,17 +337,30 @@ export function KokoroScheduledSurface({
       time: draft.time,
       timezone: draft.timezone,
       nextRun: nextPreviewRun(draft.time, draft.frequency),
-      expiresAt: draft.expiresAt,
       autoApprove: draft.autoApprove,
       enabled: true,
+      ...(draft.expiresAt === undefined ? {} : { expiresAt: draft.expiresAt }),
     }
     writePreviewTasks([nextTask, ...current])
   }
 
   const updatePreviewTask = (taskId: string, draft: ScheduledTaskDraft) => {
-    const next = readPreviewTasks().map((task) => task.id === taskId
-      ? { ...task, title: draft.title, prompt: draft.prompt, frequency: draft.frequency, time: draft.time, timezone: draft.timezone, nextRun: nextPreviewRun(draft.time, draft.frequency), expiresAt: draft.expiresAt, autoApprove: draft.autoApprove }
-      : task)
+    const next = readPreviewTasks().map((task) => {
+      if (task.id !== taskId) return task
+      const updated: ScheduledTaskRecord = {
+        ...task,
+        title: draft.title,
+        prompt: draft.prompt,
+        frequency: draft.frequency,
+        time: draft.time,
+        timezone: draft.timezone,
+        nextRun: nextPreviewRun(draft.time, draft.frequency),
+        autoApprove: draft.autoApprove,
+      }
+      if (draft.expiresAt === undefined) delete updated.expiresAt
+      else updated.expiresAt = draft.expiresAt
+      return updated
+    })
     writePreviewTasks(next)
   }
 
@@ -383,15 +396,16 @@ export function KokoroScheduledSurface({
       if (editingTask === null) throw new Error("Scheduled task is no longer available")
       const update = onUpdateTask ?? (!fixtureMode ? injectedClient?.updateScheduledTask : undefined)
       if (update) {
-        await update(editingTask.id, {
+        const patch: ScheduledTaskPatch = {
           title: draft.title,
           prompt: draft.prompt,
           frequency: draft.frequency,
           time: draft.time,
           timezone: draft.timezone,
-          expiresAt: draft.expiresAt,
           autoApprove: draft.autoApprove,
-        })
+        }
+        if (draft.expiresAt !== undefined) patch.expiresAt = draft.expiresAt
+        await update(editingTask.id, patch)
         if (fixtureMode && !controlledTasks) updatePreviewTask(editingTask.id, draft)
         else if (!fixtureMode && !controlledTasks && injectedClient) await loadTasks()
       } else if (fixtureMode && !controlledTasks) {
@@ -670,7 +684,7 @@ export function KokoroScheduledSurface({
         onOpenChange={handleOpenChange}
         brandName={brandName}
         initialPrompt={initialPrompt}
-        onSave={editingTask !== null ? (canUpdate ? saveTask : undefined) : (canCreate ? saveTask : undefined)}
+        {...((editingTask !== null ? canUpdate : canCreate) ? { onSave: saveTask } : {})}
         initialTask={editingTask}
         returnFocusRef={openerRef}
       />

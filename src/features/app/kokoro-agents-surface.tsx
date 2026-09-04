@@ -144,7 +144,7 @@ function SetupDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={styles.setupDialog}
-        overlayClassName={styles.setupOverlay}
+        overlayClassName={styles.setupOverlay ?? ""}
         data-web-skin="kokoro"
         showCloseButton
         closeLabel={t("agents.closeSetup")}
