@@ -72,8 +72,8 @@ function createBody(draft: ScheduledTaskDraft) {
     frequency: draft.frequency,
     time: draft.time,
     timezone: draft.timezone,
-    expires_at: draft.expiresAt,
     auto_approve: draft.autoApprove,
+    ...(draft.expiresAt === undefined ? {} : { expires_at: draft.expiresAt }),
   }))
 }
 
@@ -91,9 +91,13 @@ function patchBody(patch: ScheduledTaskPatch) {
   }))
 }
 
-function idempotencyKey(prefix: string, taskId?: string): string {
+function createIdempotencyKey(prefix: string, taskId?: string): string {
   const entropy = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
   return `${prefix}:${taskId ?? entropy}:${entropy}`
+}
+
+function isUnknownMutationResult(error: unknown): boolean {
+  return error instanceof ScheduledTaskClientError && (error.reason === "network" || error.reason === "parse")
 }
 
 async function readHttpError(response: Response): Promise<ScheduledTaskClientError> {
@@ -127,38 +131,84 @@ async function request<T>(fetcher: typeof fetch, url: string, schema: { parse: (
   }
 }
 
+type MutationRequest<T> = {
+  operation: "create" | "update" | "retry" | "delete"
+  taskId?: string
+  body?: unknown
+  url: string
+  method: "POST" | "PATCH" | "DELETE"
+  schema: { parse: (value: unknown) => T }
+}
+
+async function requestMutation<T>(
+  fetcher: typeof fetch,
+  identities: Map<string, string>,
+  mutation: MutationRequest<T>,
+): Promise<T> {
+  const serializedBody = mutation.body === undefined ? "" : JSON.stringify(mutation.body)
+  const fingerprint = `${mutation.operation}:${mutation.taskId ?? "new"}:${serializedBody}`
+  const identity = identities.get(fingerprint) ?? createIdempotencyKey(`scheduled-${mutation.operation}`, mutation.taskId)
+  identities.set(fingerprint, identity)
+  const headers: Record<string, string> = { "Idempotency-Key": identity }
+  if (mutation.body !== undefined) headers["content-type"] = "application/json"
+  try {
+    const response = await request(fetcher, mutation.url, mutation.schema, {
+      method: mutation.method,
+      headers,
+      ...(mutation.body === undefined ? {} : { body: serializedBody }),
+    })
+    identities.delete(fingerprint)
+    return response
+  } catch (error) {
+    if (!isUnknownMutationResult(error)) identities.delete(fingerprint)
+    throw error
+  }
+}
+
 export function createScheduledTaskClient(fetcher: typeof fetch = fetch): ScheduledTaskClient {
+  const commandIdentities = new Map<string, string>()
   return {
     listScheduledTasks: async () => {
       const response = await request(fetcher, scheduledTasksPath(), scheduledTaskListResponseSchema)
       return response.tasks.map(toRecord)
     },
     createScheduledTask: async (draft) => {
-      const response = await request(fetcher, scheduledTasksPath(), scheduledTaskMutationResponseSchema, {
+      const response = await requestMutation(fetcher, commandIdentities, {
+        operation: "create",
+        url: scheduledTasksPath(),
         method: "POST",
-        headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey("scheduled-create") },
-        body: JSON.stringify(createBody(draft)),
+        schema: scheduledTaskMutationResponseSchema,
+        body: createBody(draft),
       })
       return toRecord(response.task)
     },
     updateScheduledTask: async (taskId, patch) => {
-      const response = await request(fetcher, scheduledTaskPath(taskId), scheduledTaskMutationResponseSchema, {
+      const response = await requestMutation(fetcher, commandIdentities, {
+        operation: "update",
+        taskId,
+        url: scheduledTaskPath(taskId),
         method: "PATCH",
-        headers: { "content-type": "application/json", "Idempotency-Key": idempotencyKey("scheduled-update", taskId) },
-        body: JSON.stringify(patchBody(patch)),
+        schema: scheduledTaskMutationResponseSchema,
+        body: patchBody(patch),
       })
       return toRecord(response.task)
     },
     retryScheduledTask: async (taskId) => {
-      const response = await request(fetcher, scheduledTaskRetryPath(taskId), scheduledTaskMutationResponseSchema, {
+      const response = await requestMutation(fetcher, commandIdentities, {
+        operation: "retry",
+        taskId,
+        url: scheduledTaskRetryPath(taskId),
         method: "POST",
-        headers: { "Idempotency-Key": idempotencyKey("scheduled-retry", taskId) },
+        schema: scheduledTaskMutationResponseSchema,
       })
       return toRecord(response.task)
     },
-    deleteScheduledTask: (taskId) => request(fetcher, scheduledTaskPath(taskId), scheduledTaskDeleteResponseSchema, {
+    deleteScheduledTask: (taskId) => requestMutation(fetcher, commandIdentities, {
+      operation: "delete",
+      taskId,
+      url: scheduledTaskPath(taskId),
       method: "DELETE",
-      headers: { "Idempotency-Key": idempotencyKey("scheduled-delete", taskId) },
+      schema: scheduledTaskDeleteResponseSchema,
     }),
   }
 }

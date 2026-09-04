@@ -2,15 +2,27 @@
 
 import { z } from "zod"
 
+function isIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format()
+    return true
+  } catch {
+    return false
+  }
+}
+
+const utcInstantSchema = z.string().datetime({ offset: false })
+const ianaTimezoneSchema = z.string().min(1).refine(isIanaTimezone, "Invalid IANA timezone")
+
 export const scheduledTaskRecordSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   prompt: z.string().optional(),
   frequency: z.enum(["daily", "weekly"]),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  timezone: z.string().min(1).optional(),
-  next_run_at: z.string().min(1).optional(),
-  expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  timezone: ianaTimezoneSchema.optional(),
+  next_run_at: utcInstantSchema.optional(),
+  expires_at: utcInstantSchema.optional(),
   auto_approve: z.boolean().optional(),
   enabled: z.boolean().optional(),
   status: z.enum(["active", "paused", "failed"]).optional(),
@@ -25,13 +37,14 @@ export const scheduledTaskCreateRequestSchema = z.object({
   prompt: z.string().min(1),
   frequency: z.enum(["daily", "weekly"]),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  timezone: z.string().min(1),
-  expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  timezone: ianaTimezoneSchema,
+  expires_at: utcInstantSchema.optional(),
   auto_approve: z.boolean(),
 }).strict()
 export type ScheduledTaskCreateRequest = z.infer<typeof scheduledTaskCreateRequestSchema>
 
 export const scheduledTaskPatchRequestSchema = scheduledTaskCreateRequestSchema.partial().extend({
+  expires_at: utcInstantSchema.nullable().optional(),
   enabled: z.boolean().optional(),
   status: z.enum(["active", "paused", "failed"]).optional(),
 }).strict()
