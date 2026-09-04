@@ -19,6 +19,7 @@ export function HomeGate({ brandName }: { brandName?: string }) {
   const t = useT()
   const state = useSessionState()
   const { manifest, source, retry, retrying = false } = useRuntimeManifest()
+  const brandLogoUrl = manifest.brand.logoUrl
 
   useEffect(() => {
     if (state === "pass") router.replace("/app")
@@ -34,7 +35,7 @@ export function HomeGate({ brandName }: { brandName?: string }) {
         retrying={retrying}
         brandName={brandName ?? manifest.brand.name}
         brandMark={manifest.brand.mark}
-        brandLogoUrl={manifest.brand.logoUrl}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       />
     )
   }
@@ -43,7 +44,7 @@ export function HomeGate({ brandName }: { brandName?: string }) {
       <LandingPage
         brandName={brandName ?? manifest.brand.name}
         brandMark={manifest.brand.mark}
-        brandLogoUrl={manifest.brand.logoUrl}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       />
     )
   }

@@ -27,7 +27,11 @@ export function RuntimeUnavailable({
 
   return (
     <main className={styles.screen} aria-labelledby="runtime-unavailable-title">
-      <MarketingTopBar brandName={brandName} brandMark={brandMark} brandLogoUrl={brandLogoUrl} />
+      <MarketingTopBar
+        {...(brandName === undefined ? {} : { brandName })}
+        {...(brandMark === undefined ? {} : { brandMark })}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
+      />
       <div className={styles.stage}>
         <Card className={styles.card}>
           <CardContent className={styles.content}>

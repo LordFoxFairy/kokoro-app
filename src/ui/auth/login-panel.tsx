@@ -39,6 +39,7 @@ export function LoginPanel({ brandName }: { brandName?: string }) {
   const t = useT()
   const { manifest, source, retry, retrying = false } = useRuntimeManifest()
   const brand = brandName ?? manifest.brand.name
+  const brandLogoUrl = manifest.brand.logoUrl
   const [phase, setPhase] = useState<Phase>("idle")
   const [email, setEmail] = useState("")
   const [busy, setBusy] = useState(false)
@@ -145,7 +146,7 @@ export function LoginPanel({ brandName }: { brandName?: string }) {
         retrying={retrying}
         brandName={brand}
         brandMark={manifest.brand.mark}
-        brandLogoUrl={manifest.brand.logoUrl}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       />
     )
   }
@@ -155,7 +156,7 @@ export function LoginPanel({ brandName }: { brandName?: string }) {
       <MarketingTopBar
         brandName={brand}
         brandMark={manifest.brand.mark}
-        brandLogoUrl={manifest.brand.logoUrl}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       />
 
       {/* toast 归一（限频 429 / 签发失败 / 链接失效）：卡外浮层，不在表单内联报错。 */}

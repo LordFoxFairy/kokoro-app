@@ -25,6 +25,7 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
   // the server explicitly confirms authentication, the hook flips to live
   // mode and fetches the deployment-scoped manifest.
   const { manifest, source, retry } = useRuntimeManifest({ preview: probe.mode !== "authenticated" })
+  const brandLogoUrl = manifest.brand.logoUrl
   const state = probe.state
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
         onRetry={retry}
         brandName={brandName ?? manifest.brand.name}
         brandMark={manifest.brand.mark}
-        brandLogoUrl={manifest.brand.logoUrl}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       />
     )
   }
@@ -51,11 +52,11 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
     <KokoroAppSurface
       brandName={brandName ?? manifest.brand.name}
       brandMark={manifest.brand.mark}
-      brandLogoUrl={manifest.brand.logoUrl}
-      navigation={probe.mode === "preview" ? undefined : manifest.navigation}
-      featureFlags={probe.mode === "preview" ? undefined : manifest.featureFlags}
+      {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
+      {...(probe.mode === "preview" ? {} : { navigation: manifest.navigation })}
+      {...(probe.mode === "preview" ? {} : { featureFlags: manifest.featureFlags })}
       preview={probe.mode === "preview"}
-      scheduledTaskClient={probe.mode === "authenticated" ? browserScheduledTaskClient() : undefined}
+      {...(probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
     />
   )
 }
