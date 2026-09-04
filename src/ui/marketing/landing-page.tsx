@@ -353,9 +353,9 @@ export function LandingPage({
     <div className={styles.page}>
       <MarketingTopBar
         brandName={brand}
-        brandMark={brandMark}
-        brandLogoUrl={brandLogoUrl}
-        marketingHref={marketingHref}
+        {...(brandMark === undefined ? {} : { brandMark })}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
+        {...(marketingHref === undefined ? {} : { marketingHref })}
       />
 
       <main className={styles.main}>

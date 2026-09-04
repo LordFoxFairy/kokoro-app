@@ -144,7 +144,7 @@ export function SkillUploadDialog({ client, open, onOpenChange, onPublished, ret
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={styles.dialog}
-        overlayClassName={styles.dialogOverlay}
+        overlayClassName={styles.dialogOverlay ?? ""}
         closeLabel={t("skills.uploadClose")}
         data-testid="skill-upload-dialog"
         data-state-kind={state.kind}

@@ -208,6 +208,10 @@ async function requestData<T extends ZodTypeAny>(
   return parseData(response, inner)
 }
 
+function withOptionalSignal(init: RequestInit, signal: AbortSignal | undefined): RequestInit {
+  return signal === undefined ? init : { ...init, signal }
+}
+
 function createIdempotencyKey(prefix: string, stableValue?: string): string {
   if (stableValue !== undefined) {
     // GitHub import is a resource operation: repeating the same canonical
@@ -316,37 +320,49 @@ export function createHubClient(): HubClient {
       }
     },
     previewUpload: (zip, signal) =>
-      requestData(skillUploadPreviewPath, uploadPreviewSchema, {
-        method: "POST",
-        signal,
-        body: uploadForm(zip, null),
-      }),
+      requestData(
+        skillUploadPreviewPath,
+        uploadPreviewSchema,
+        withOptionalSignal({
+          method: "POST",
+          body: uploadForm(zip, null),
+        }, signal),
+      ),
     confirmUpload: (zip, names, signal) =>
-      requestData(skillUploadConfirmPath, uploadConfirmSchema, {
-        method: "POST",
-        headers: idempotencyHeaders("skill-upload"),
-        signal,
-        body: uploadForm(zip, names),
-      }),
+      requestData(
+        skillUploadConfirmPath,
+        uploadConfirmSchema,
+        withOptionalSignal({
+          method: "POST",
+          headers: idempotencyHeaders("skill-upload"),
+          body: uploadForm(zip, names),
+        }, signal),
+      ),
     previewGithub: async (repository, signal) => {
       const canonical = canonicalGithubRepository(repository)
       const body = githubImportRequestSchema.parse({ repository: canonical })
-      return requestData(skillGithubPreviewPath, githubImportResultSchema, {
-        method: "POST",
-        headers: JSON_HEADERS,
-        signal,
-        body: JSON.stringify(body),
-      })
+      return requestData(
+        skillGithubPreviewPath,
+        githubImportResultSchema,
+        withOptionalSignal({
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(body),
+        }, signal),
+      )
     },
     importGithub: async (repository, signal) => {
       const canonical = canonicalGithubRepository(repository)
       const body = githubImportRequestSchema.parse({ repository: canonical })
-      return requestData(skillGithubImportPath, githubImportResultSchema, {
-        method: "POST",
-        headers: idempotencyHeaders("skill-github-import", { ...JSON_HEADERS }, canonical),
-        signal,
-        body: JSON.stringify(body),
-      })
+      return requestData(
+        skillGithubImportPath,
+        githubImportResultSchema,
+        withOptionalSignal({
+          method: "POST",
+          headers: idempotencyHeaders("skill-github-import", { ...JSON_HEADERS }, canonical),
+          body: JSON.stringify(body),
+        }, signal),
+      )
     },
     listMcpServers: async () => (await requestData(mcpServersPath, mcpServerPoolSchema)).servers,
     registerMcpServer: async (input) =>

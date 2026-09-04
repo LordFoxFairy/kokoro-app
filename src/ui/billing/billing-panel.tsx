@@ -326,17 +326,21 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
           <Empty className={styles.emptyState}><EmptyDescription>{t("billing.ledgerEmpty")}</EmptyDescription></Empty>
         ) : (
           <>
-            {days.map((day) => (
-              <div key={day.key} className={styles.dayGroup}>
-                <div className={styles.dayHead} data-testid="billing-day"><span className={styles.dayLabel}>{new Date(day.entries[0].created_at).toLocaleDateString(localeTag, { weekday: "short" })}</span></div>
-                <ul className={styles.ledger}>
-                  {day.entries.map((entry) => {
-                    const label = entry.title ?? (reasonKey(entry.reason) ? t(reasonKey(entry.reason) as MessageKey) : entry.reason)
-                    return <li key={entry.entry_id} className={styles.entry}><div className={styles.entryMain}>{entry.conversation_id ? <Link className={styles.entryReason} href={`/app?conversation=${encodeURIComponent(entry.conversation_id)}`}>{label}</Link> : <span className={styles.entryReason}>{label}</span>}</div><span className={styles.entryDelta} data-sign={microSign(entry.delta_micros)}>{formatEmbeddedSignedCredits(entry.delta_micros)}</span></li>
-                  })}
-                </ul>
-              </div>
-            ))}
+            {days.map((day) => {
+              const firstEntry = day.entries[0]
+              if (firstEntry === undefined) return null
+              return (
+                <div key={day.key} className={styles.dayGroup}>
+                  <div className={styles.dayHead} data-testid="billing-day"><span className={styles.dayLabel}>{new Date(firstEntry.created_at).toLocaleDateString(localeTag, { weekday: "short" })}</span></div>
+                  <ul className={styles.ledger}>
+                    {day.entries.map((entry) => {
+                      const label = entry.title ?? (reasonKey(entry.reason) ? t(reasonKey(entry.reason) as MessageKey) : entry.reason)
+                      return <li key={entry.entry_id} className={styles.entry}><div className={styles.entryMain}>{entry.conversation_id ? <Link className={styles.entryReason} href={`/app?conversation=${encodeURIComponent(entry.conversation_id)}`}>{label}</Link> : <span className={styles.entryReason}>{label}</span>}</div><span className={styles.entryDelta} data-sign={microSign(entry.delta_micros)}>{formatEmbeddedSignedCredits(entry.delta_micros)}</span></li>
+                    })}
+                  </ul>
+                </div>
+              )
+            })}
             {ledger.cursor !== undefined ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} onClick={loadMore}>{ledger.loadingMore ? t("billing.loading") : t("billing.loadMore")}</Button> : null}
           </>
         )}
@@ -633,7 +637,7 @@ export function BillingPanel({ client, onClose, onOpenPricing }: BillingPanelPro
           <h2 className={styles.title}>{t("billing.title")}</h2>
         </header>
 
-        <BillingContent client={client} onOpenPricing={onOpenPricing} />
+        <BillingContent client={client} {...(onOpenPricing === undefined ? {} : { onOpenPricing })} />
       </DialogContent>
     </Dialog>
   )

@@ -101,7 +101,7 @@ export function McpPanel({ client, onClose, brandName }: McpPanelProps) {
             <p className={styles.subtitle}>{t("mcp.subtitle")}</p>
           </div>
         </header>
-        <McpContent client={client} brandName={brandName} />
+        <McpContent client={client} {...(brandName === undefined ? {} : { brandName })} />
       </DialogContent>
     </Dialog>
   )
@@ -231,7 +231,7 @@ export function McpCreateDialog({
           "p-0 box-border",
         )}
         closeLabel={t("mcp.cancel")}
-        overlayClassName={styles.createDialogOverlay}
+        overlayClassName={styles.createDialogOverlay ?? ""}
         onOpenAutoFocus={(event) => {
           if (mode !== "form") return
           event.preventDefault()
@@ -559,7 +559,7 @@ function ServersTab({
             "p-0 box-border",
           )}
           closeLabel={t("mcp.cancel")}
-          overlayClassName={styles.createDialogOverlay}
+          overlayClassName={styles.createDialogOverlay ?? ""}
           onOpenAutoFocus={(event) => event.preventDefault()}
         >
           {registerMode === "json" ? (

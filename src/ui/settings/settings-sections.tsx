@@ -1146,7 +1146,9 @@ export function ShortcutsCard() {
     <Card className={`${styles.card} ${styles.shortcutsCard}`} data-settings-card data-testid="settings-shortcuts">
       <CardContent className={styles.cardContent}>
         <div className={styles.shortcutList}>
-          {shortcuts.map((shortcut) => (
+          {shortcuts.map((shortcut) => {
+            const recordedKeys = shortcutKeys[shortcut.id]
+            return (
             <div className={styles.shortcutRow} key={shortcut.label}>
               <div className={styles.shortcutLabel}>{shortcut.label}</div>
               <div className={styles.shortcutActions} data-recording={recording === shortcut.id || undefined}>
@@ -1160,8 +1162,8 @@ export function ShortcutsCard() {
                   <span className={styles.shortcutKeySet} data-recording={recording === shortcut.id || undefined}>
                     {recording === shortcut.id
                       ? t("settings.shortcutRecording")
-                      : shortcutKeys[shortcut.id]?.length
-                        ? shortcutKeys[shortcut.id].map((key) => <kbd className={styles.shortcutKey} key={key}>{key}</kbd>)
+                      : recordedKeys?.length
+                        ? recordedKeys.map((key) => <kbd className={styles.shortcutKey} key={key}>{key}</kbd>)
                         : t("settings.shortcutUnset")}
                   </span>
                   <span className={styles.shortcutEditHint}>{t("settings.shortcutClickEdit")}</span>
@@ -1184,7 +1186,8 @@ export function ShortcutsCard() {
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
         <div className={styles.shortcutResetRow}>
           {reset ? <span className={styles.savedBadge} role="status" aria-label={t("settings.saved")}>{t("settings.saved")}</span> : null}

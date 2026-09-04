@@ -85,9 +85,9 @@ export function MarketingTopBar({
         <Link ref={brandRef} className={styles.brand} href={marketingHref} aria-label={brand}>
           <span className={styles.brandMark} aria-hidden>
             <BrandMark
-              logoUrl={brandLogoUrl}
-              imageClassName={styles.brandLogo}
-              fallback={<BrandFallback mark={brandMark} className={styles.brandFallbackIcon} />}
+              {...(brandLogoUrl === undefined ? {} : { logoUrl: brandLogoUrl })}
+              imageClassName={styles.brandLogo ?? ""}
+              fallback={<BrandFallback {...(brandMark === undefined ? {} : { mark: brandMark })} className={styles.brandFallbackIcon ?? ""} />}
             />
           </span>
           <span className={styles.brandName}>{brand}</span>

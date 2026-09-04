@@ -266,7 +266,7 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={styles.dialog}
-        overlayClassName={styles.dialogOverlay}
+        overlayClassName={styles.dialogOverlay ?? ""}
         closeLabel={t("skills.githubClose")}
         data-testid="github-import-dialog"
         onCloseAutoFocus={(event) => {
@@ -280,7 +280,7 @@ export function GithubImportDialog({ client, open, onOpenChange, onImported, ret
           <div className={styles.brandFlow} aria-hidden="true">
             <span className={styles.brandIcon}><Image src="/assets/connectors/github.webp" alt="" width={20} height={20} /></span>
             <ArrowLeftRight className={styles.transferIcon} />
-            <span className={styles.brandIcon}><BrandFallback className={styles.kokoroIcon} /></span>
+            <span className={styles.brandIcon}><BrandFallback className={styles.kokoroIcon ?? ""} /></span>
           </div>
           <DialogTitle>{t("skills.importGithub")}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>

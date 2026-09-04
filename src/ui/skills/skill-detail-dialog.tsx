@@ -141,7 +141,7 @@ export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenCha
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={expanded ? `${styles.dialog} ${styles.dialogExpanded}` : styles.dialog}
-        overlayClassName={styles.dialogOverlay}
+        overlayClassName={styles.dialogOverlay ?? ""}
         data-testid="skill-detail-dialog"
         closeLabel={t("skills.detailClose")}
         onOpenAutoFocus={(event) => {

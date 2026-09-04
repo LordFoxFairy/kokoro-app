@@ -210,19 +210,19 @@ export function AssistantTurn({
               ) : null}
               <SegmentProcess
                 sessionId={sessionId}
-                onOpenFile={onOpenFile}
-                onOpenTool={onOpenTool}
+                {...(onOpenFile === undefined ? {} : { onOpenFile })}
+                {...(onOpenTool === undefined ? {} : { onOpenTool })}
                 segmentId={segment.segmentId}
                 thinking={segment.thinking}
                 tools={segment.tools}
                 subagents={segment.subagents}
                 live={liveSegment}
-                mode={mode}
+                {...(mode === undefined ? {} : { mode })}
                 stagedDecisions={stagedDecisions}
                 hitlActive={hitlActive}
                 controlError={controlError}
-                onToolDecision={onToolDecision}
-                onCancelRun={onCancelRun}
+                {...(onToolDecision === undefined ? {} : { onToolDecision })}
+                {...(onCancelRun === undefined ? {} : { onCancelRun })}
               />
             </div>
           )

@@ -35,7 +35,7 @@ export function SharedThread({ snapshot, brandName }: { snapshot: SessionSnapsho
   const thread = stateFromPublicSnapshot(snapshot)
   return (
     <ConversationThread
-      brandName={brandName}
+      {...(brandName === undefined ? {} : { brandName })}
       // sessionId=null：成果/文件下载面不开放公共读，DeliverySection 据此收起。
       sessionId={null}
       thread={thread}

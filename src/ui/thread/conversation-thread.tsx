@@ -217,12 +217,10 @@ function ConversationThreadSurface({
               <MessageBubble message={item.message} />
             ) : (
               <AssistantTurn
-                brandName={brandName}
+                {...(brandName === undefined ? {} : { brandName })}
                 sessionId={sessionId}
-                onOpenFile={onOpenFile}
-                onOpenTool={
-                  onOpenTool ? (tool) => onOpenTool(item.runId, tool) : undefined
-                }
+                {...(onOpenFile === undefined ? {} : { onOpenFile })}
+                {...(onOpenTool === undefined ? {} : { onOpenTool: (tool: SessionToolCall) => onOpenTool(item.runId, tool) })}
                 steps={item.steps}
                 messagesById={item.messagesById}
                 isLive={item.runId === liveRunId}
@@ -231,15 +229,11 @@ function ConversationThreadSurface({
                 stagedDecisions={stagingByRun[item.runId] ?? NO_DECISIONS}
                 hitlActive={item.runId === hitlRunId}
                 controlError={item.runId === hitlRunId ? controlError : null}
-                onToolDecision={
-                  onToolDecision
-                    ? (toolId, decision) => onToolDecision(item.runId, toolId, decision)
-                    : undefined
-                }
-                onCancelRun={item.runId === hitlRunId ? onCancelRun : undefined}
+                {...(onToolDecision === undefined ? {} : { onToolDecision: (toolId: string, decision: ToolDecision) => onToolDecision(item.runId, toolId, decision) })}
+                {...(onCancelRun === undefined || item.runId !== hitlRunId ? {} : { onCancelRun })}
                 taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
-                  ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content
-                  : undefined}
+                  ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
+                  : ""}
               />
             )}
           </MessageScrollerItem>
@@ -248,7 +242,7 @@ function ConversationThreadSurface({
         {showScaffoldTurn ? (
           <MessageScrollerItem messageId="live-scaffold" scrollAnchor>
             <AssistantTurn
-              brandName={brandName}
+              {...(brandName === undefined ? {} : { brandName })}
               sessionId={sessionId}
               steps={[]}
               messagesById={{}}

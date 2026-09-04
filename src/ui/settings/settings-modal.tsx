@@ -160,6 +160,7 @@ export function SettingsModal({
   onTrySkill,
 }: SettingsModalProps) {
   const { t } = useLocale()
+  const resolvedBrandName = brandName ?? "Kokoro"
   // 内部自持选中 tab,初值取 initialTab。shell 主动开到不同 tab 时以 key 重挂载本组件重置初值
   // (故此处无需 effect 同步 initialTab);内部切 tab 不改 shell 态、不重挂,选中态自然保持。
   const [tab, setTab] = useState<SettingsTab>(initialTab)
@@ -340,20 +341,20 @@ export function SettingsModal({
 
   const renderPanel = (panelTab: SettingsTab) => (
     <>
-      {panelTab === "account" ? <AccountCard brandName={brandName} preview={preview} loginMethodsOpen={accountLoginMethods} onLoginMethodsChange={setAccountLoginMethods} /> : null}
-      {panelTab === "appearance" ? <AppearanceCard brandName={brandName} /> : null}
+      {panelTab === "account" ? <AccountCard brandName={resolvedBrandName} preview={preview} loginMethodsOpen={accountLoginMethods} onLoginMethodsChange={setAccountLoginMethods} /> : null}
+      {panelTab === "appearance" ? <AppearanceCard brandName={resolvedBrandName} /> : null}
       {panelTab === "personalization" ? <PersonalizationCard preview={preview} /> : null}
-      {panelTab === "computer" ? <MyComputerCard brandName={brandName} preview={preview} /> : null}
+      {panelTab === "computer" ? <MyComputerCard brandName={resolvedBrandName} preview={preview} /> : null}
       {panelTab === "deployment" ? (
         <DeploymentSettingsCard
-          onStart={onStartDeployment}
+          {...(onStartDeployment === undefined ? {} : { onStart: onStartDeployment })}
           onBuyDomain={() => {
             domainUpgradeReturnRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
             setDomainUpgradeOpen(true)
           }}
         />
       ) : null}
-      {panelTab === "integration" ? <IntegrationSettingsCard brandName={brandName} preview={preview} selected={integrationId} onSelect={selectIntegration} /> : null}
+      {panelTab === "integration" ? <IntegrationSettingsCard brandName={resolvedBrandName} preview={preview} selected={integrationId} onSelect={selectIntegration} /> : null}
       {panelTab === "chat" ? <ChatPrefsCard preview={preview} /> : null}
       {panelTab === "shortcuts" ? <ShortcutsCard /> : null}
       {panelTab === "credits" ? (
@@ -367,15 +368,15 @@ export function SettingsModal({
       {panelTab === "skills" ? (
         <SkillsContent
           client={hubClient}
-          brandName={brandName}
+          brandName={resolvedBrandName}
           pinned={pinnedSkills}
           onTogglePin={togglePinned}
-          onTrySkill={onTrySkill}
-          onCreateWithAi={onCreateSkillWithAi}
+          {...(onTrySkill === undefined ? {} : { onTrySkill })}
+          {...(onCreateSkillWithAi === undefined ? {} : { onCreateWithAi: onCreateSkillWithAi })}
           embedded
         />
       ) : null}
-      {panelTab === "mcp" ? <McpContent client={hubClient} embedded brandName={brandName} /> : null}
+      {panelTab === "mcp" ? <McpContent client={hubClient} embedded {...(brandName === undefined ? {} : { brandName })} /> : null}
       {panelTab === "team" ? (
         <TeamContent
           client={browserTeamClient({ preview })}
@@ -395,7 +396,7 @@ export function SettingsModal({
         data-testid="settings-modal"
         closeLabel={t("settings.close")}
         closeButtonTestId="settings-close"
-        overlayClassName={styles.settingsOverlay}
+        overlayClassName={styles.settingsOverlay ?? ""}
         onPointerDownOutside={(event) => {
           // Skills, connector and import dialogs are portalled outside this
           // content. Treat their content/overlay as an owned nested surface;
@@ -624,7 +625,7 @@ export function SettingsModal({
       ) : null}
       <DialogContent
         className={styles.domainUpgradeDialog}
-        overlayClassName={styles.domainUpgradeOverlay}
+        overlayClassName={styles.domainUpgradeOverlay ?? ""}
         closeLabel={t("shell.closeDialog")}
         onOpenAutoFocus={(event) => {
           event.preventDefault()

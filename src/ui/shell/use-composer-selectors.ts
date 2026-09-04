@@ -22,20 +22,21 @@ export type ComposerSelectors = {
 }
 
 export function useComposerSelectors(engine: SessionEngine | null, options: { preview?: boolean } = {}): ComposerSelectors {
+  const preview = options.preview ?? false
   const [models, setModels] = useState<readonly ModelCandidate[]>([])
   // 选中模型 wire 选择子（"provider:name"）：null=用 profile 缺省，不上 wire。初值取 settings 缺省偏好
   // （WEB-FACE 面三）——新对话首帧预填，开跑后 modeLocked 锁定，会话级锁语义不变。
   const [selectedModel, setSelectedModel] = useState<string | null>(() => readChatModel())
   useEffect(() => {
     let live = true
-    void browserListClient({ preview: options.preview })
+    void browserListClient({ preview })
       .listModels()
       .then((list) => live && setModels(list.models))
       .catch(() => live && setModels([]))
     return () => {
       live = false
     }
-  }, [options.preview])
+  }, [preview])
   useEffect(() => {
     engine?.setModel(selectedModel)
   }, [engine, selectedModel])
@@ -45,14 +46,14 @@ export function useComposerSelectors(engine: SessionEngine | null, options: { pr
   const [selectedAgent, setSelectedAgent] = useState<string | null>(() => readChatAgent())
   useEffect(() => {
     let live = true
-    void browserListClient({ preview: options.preview })
+    void browserListClient({ preview })
       .listAgents()
       .then((list) => live && setAgents(list.agents))
       .catch(() => live && setAgents([]))
     return () => {
       live = false
     }
-  }, [options.preview])
+  }, [preview])
   useEffect(() => {
     engine?.setAgent(selectedAgent)
   }, [engine, selectedAgent])

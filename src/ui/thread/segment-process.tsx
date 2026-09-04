@@ -193,20 +193,23 @@ export function SegmentProcess({
                     {t("thread.awaitingBatch", { count: awaitingCount })}
                   </p>
                 ) : null}
-                {tools.map((tool) => (
-                  <ToolCallRow
-                    sessionId={sessionId}
-                    onOpenFile={onOpenFile}
-                    onOpenDetail={onOpenTool ? () => onOpenTool(tool) : undefined}
-                    key={tool.id}
-                    tool={tool}
-                    staged={stagedDecisions[tool.id]}
-                    hitlActive={hitlActive}
-                    controlError={controlError}
-                    onDecision={onToolDecision}
-                    onCancelRun={onCancelRun}
-                  />
-                ))}
+                {tools.map((tool) => {
+                  const staged = stagedDecisions[tool.id]
+                  return (
+                    <ToolCallRow
+                      sessionId={sessionId}
+                      {...(onOpenFile === undefined ? {} : { onOpenFile })}
+                      {...(onOpenTool === undefined ? {} : { onOpenDetail: () => onOpenTool(tool) })}
+                      key={tool.id}
+                      tool={tool}
+                      {...(staged === undefined ? {} : { staged })}
+                      hitlActive={hitlActive}
+                      controlError={controlError}
+                      {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })}
+                      {...(onCancelRun === undefined ? {} : { onCancelRun })}
+                    />
+                  )
+                })}
               </div>
             ) : null}
 

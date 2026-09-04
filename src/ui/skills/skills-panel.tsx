@@ -110,7 +110,13 @@ export function SkillsPanel({ client, brandName, onClose, pinned, onTogglePin, o
             <p className={styles.subtitle}>{t("skills.subtitle")}</p>
           </div>
         </header>
-        <SkillsContent client={client} brandName={brandName} pinned={pinned} onTogglePin={onTogglePin} onTrySkill={onTrySkill} />
+        <SkillsContent
+          client={client}
+          {...(brandName === undefined ? {} : { brandName })}
+          pinned={pinned}
+          onTogglePin={onTogglePin}
+          {...(onTrySkill === undefined ? {} : { onTrySkill })}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -192,7 +198,7 @@ export function SkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
       // 池内项恒为「已启用」：唯一动作是停用（停用后离池）。required 撞 409 → 锁定回滚。
       setBusy(stateKey)
       setDisableError(null)
-      const outcome = await enabledAction.run({ name, enabled, scope })
+      const outcome = await enabledAction.run(scope === undefined ? { name, enabled } : { name, enabled, scope })
       if (!mountedRef.current || attempt !== mutationAttemptRef.current) return
       setBusy(null)
       if (outcome.ok) {
@@ -247,7 +253,7 @@ export function SkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
             githubImportNotice={githubImportNotice}
             recentSkillKey={recentSkillKey}
             onDismissGithubImportNotice={() => setGithubImportNotice(null)}
-            onCreateWithAi={onCreateWithAi}
+            {...(onCreateWithAi === undefined ? {} : { onCreateWithAi })}
             onOpenDetail={(skill, source) => {
               detailReturnFocusRef.current = source
               setDetailSkill(skill)
@@ -273,7 +279,7 @@ export function SkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
       />
       <SkillDetailDialog
         skill={detailSkill}
-        brandName={brandName}
+        {...(brandName === undefined ? {} : { brandName })}
         open={detailSkill !== null}
         onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
         returnFocusRef={detailReturnFocusRef}
@@ -887,7 +893,7 @@ function SkillCatalogDialog({
       let cursor: string | undefined
       const seenCursors = new Set<string>()
       for (let page = 0; ; page += 1) {
-        const current = await client.listSkillCatalog({ scope, query, cursor })
+        const current = await client.listSkillCatalog(cursor === undefined ? { scope, query } : { scope, query, cursor })
         pages.push(current)
         const next = current.next_cursor ?? null
         if (next === null || seenCursors.has(next)) break

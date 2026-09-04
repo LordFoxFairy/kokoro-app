@@ -70,7 +70,7 @@ export function ConnectorCatalogDialog({
       <DialogContent
         className={`${styles.dialog} p-0 box-border`}
         closeLabel={t("connectorCatalog.close")}
-        overlayClassName={styles.overlay}
+        overlayClassName={styles.overlay ?? ""}
         onCloseAutoFocus={(event) => {
           const target = returnFocusRef?.current
           if (!target?.isConnected) return
@@ -251,7 +251,7 @@ export function CustomApiDialog({
       <DialogContent
         className={`${styles.customApiDialog} p-0 box-border`}
         closeLabel={t("connectorCatalog.customApiClose")}
-        overlayClassName={styles.customApiOverlay}
+        overlayClassName={styles.customApiOverlay ?? ""}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           window.requestAnimationFrame(() => document.getElementById("custom-api-name")?.focus())

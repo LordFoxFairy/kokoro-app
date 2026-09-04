@@ -196,7 +196,7 @@ export function Composer({
   const currentModelNewBadgeLabel = currentModel ? modelNewBadgeLabel(currentModel) : null
   const currentModelTriggerTitle = currentModelNewBadgeLabel
     ? `${currentModelTriggerLabel} ${currentModelNewBadgeLabel}`
-    : currentModel ? modelLabel(currentModel) : undefined
+    : currentModel ? modelLabel(currentModel) : ""
 
   // Creation workflows can nominate a model before the first message, but
   // the shell's model selector is the source that the engine reads when it
@@ -243,7 +243,7 @@ export function Composer({
   // 单候选（只有 general，无具名预设）=不渲染选择器（无可选项，隐去）。
   const defaultAgent = agents.find((a) => a.is_default) ?? agents[0]
   const currentAgent = agents.find((a) => a.name === selectedAgent) ?? defaultAgent
-  const currentAgentName = currentAgent?.name
+  const currentAgentName = currentAgent?.name ?? ""
 
   // The draft is controlled by the shell and can change without an input
   // event (scenario cards, conversation switching, restored drafts). Keep
@@ -400,7 +400,7 @@ export function Composer({
                 </Button>
               ) : (
                 <ComposerMenu
-                  triggerClassName={styles.mode}
+                  triggerClassName={styles.mode ?? ""}
                   dataComposerControl="model"
                   triggerLabel={t("composer.modelSwitch")}
                   triggerTitle={currentModelTriggerTitle}
@@ -422,7 +422,7 @@ export function Composer({
                     </>
                   }
                   options={models.map((m) => ({ key: modelSelector(m), label: modelLabel(m) }))}
-                  selectedKey={currentSelector}
+                  selectedKey={currentSelector ?? ""}
                   onSelect={onModelChange}
                   align="start"
                 />

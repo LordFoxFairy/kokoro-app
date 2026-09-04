@@ -224,35 +224,35 @@ export function ToolCallRow({
           tool.awaitingKind === "ask_user_question" ? (
             <AskUserCard
               tool={tool}
-              staged={staged}
+              {...(staged === undefined ? {} : { staged })}
               hitlActive={hitlActive}
               controlError={controlError}
-              onDecision={onDecision}
-              onCancelRun={onCancelRun}
+              {...(onDecision === undefined ? {} : { onDecision })}
+              {...(onCancelRun === undefined ? {} : { onCancelRun })}
             />
           ) : tool.awaitingKind === "result_review" ? (
             <ReviewCard
               tool={tool}
-              staged={staged}
+              {...(staged === undefined ? {} : { staged })}
               hitlActive={hitlActive}
               controlError={controlError}
-              onDecision={onDecision}
+              {...(onDecision === undefined ? {} : { onDecision })}
             />
           ) : tool.awaitingKind === "input" ? (
             <InputCard
               tool={tool}
-              staged={staged}
+              {...(staged === undefined ? {} : { staged })}
               hitlActive={hitlActive}
               controlError={controlError}
-              onDecision={onDecision}
+              {...(onDecision === undefined ? {} : { onDecision })}
             />
           ) : (
             <ApprovalCard
               tool={tool}
-              staged={staged}
+              {...(staged === undefined ? {} : { staged })}
               hitlActive={hitlActive}
               controlError={controlError}
-              onDecision={onDecision}
+              {...(onDecision === undefined ? {} : { onDecision })}
             />
           )
         ) : null}

@@ -18,7 +18,7 @@ type CreationIntentPillProps = {
   dismissLabel?: string
 }
 
-function IntentGlyph({ intent, className }: { intent: CreationIntent; className?: string }) {
+function IntentGlyph({ intent, className }: { intent: CreationIntent; className: string | undefined }) {
   const Glyph = intent === "presentation"
     ? Presentation
     : intent === "design"
