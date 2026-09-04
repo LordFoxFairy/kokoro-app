@@ -1,0 +1,164 @@
+/* CTA 与页脚责任：深色行动区、多列页脚和窄屏触控布局。 */
+/* 用固定暖近黑（不用会随暗档翻转成浅色的 --ink），保证亮暗两档都是深底 + 反白文字高对比。 */
+.ctaBlock {
+  background: linear-gradient(135deg, var(--marketing-footer) 0%, var(--foreground) 55%, var(--accent) 100%);
+  padding: clamp(3rem, 7vw, 5rem) clamp(1rem, 4vw, 2.5rem);
+}
+
+.ctaInner {
+  max-width: 46rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.ctaTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--primary-foreground);
+}
+
+.ctaBody {
+  margin: 1rem auto 0;
+  max-width: 40ch;
+  font-size: 1.08rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--primary-foreground) 78%, transparent);
+}
+
+.ctaButton {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.95rem 2.4rem;
+  border-radius: var(--radius-lg);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* —— 深色多列页脚 —— */
+/* 固定暖近黑（比 CTA 更深），亮暗两档一致深底。 */
+.footer {
+  background: var(--marketing-footer-deep);
+  color: color-mix(in srgb, var(--primary-foreground) 82%, transparent);
+  padding: clamp(2.75rem, 5vw, 3.75rem) clamp(1rem, 4vw, 2.5rem) 2rem;
+}
+
+.footInner {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: clamp(1.5rem, 5vw, 3rem);
+  align-items: start;
+  max-width: 70rem;
+  margin: 0 auto;
+}
+
+.footBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--primary-foreground);
+}
+
+.footBrandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 40%, transparent);
+  color: var(--primary-foreground);
+}
+
+.footBrandMark svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.footBrandName {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.footBrandCol {
+  max-width: 26rem;
+}
+
+.footTagline {
+  margin: 0.9rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--primary-foreground) 60%, transparent);
+}
+
+.footCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.footColHead {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.footLink {
+  /* 热区收窄到文字宽（原为 flex 拉伸的整列宽隐形热区）并加纵向 padding 到 ~31px 可点高度。 */
+  align-self: flex-start;
+  padding: 0.45rem 0;
+  font-size: 0.94rem;
+  color: color-mix(in srgb, var(--primary-foreground) 78%, transparent);
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.footLink:hover {
+  color: var(--primary-foreground);
+}
+
+.footRights {
+  max-width: 70rem;
+  margin: clamp(2rem, 4vw, 2.75rem) auto 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--primary-foreground) 14%, transparent);
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--primary-foreground) 45%, transparent);
+}
+.footLink:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* —— Footer narrow-screen layout and touch targets —— */
+@media (max-width: 768px) {
+  .footLink {
+    display: inline-flex;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ctaButton {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .footInner {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footLink {
+    transition: none;
+  }
+}

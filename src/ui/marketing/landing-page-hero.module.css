@@ -1,0 +1,181 @@
+/* 营销 Hero 责任：柔和 pastel 光晕、大标题、prompt 输入和能力 chip 行。 */
+.hero {
+  position: relative;
+  text-align: center;
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(2rem, 5vw, 3.25rem);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  /* 横向不外溢（原 -25% 左右 bleed 会撑出全页横向滚动条）；纵向氛围 bleed 保留。 */
+  inset: -12% 0 24%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 40% at 20% 0%, color-mix(in srgb, var(--illustration-blue) 28%, transparent), transparent 72%),
+    radial-gradient(44% 42% at 55% -6%, color-mix(in srgb, var(--primary) 20%, var(--illustration-blue) 80%), transparent 74%),
+    radial-gradient(48% 44% at 84% 0%, color-mix(in srgb, var(--illustration-blue) 26%, transparent), transparent 74%);
+}
+
+.heroTitle,
+.heroSubtitle,
+.heroNote {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitle {
+  margin: 0 auto;
+  max-width: 20ch;
+  font-family: var(--font-serif);
+  font-size: clamp(2.4rem, 5.8vw, 4rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  /* 暖色渐变文字：ink→暖木，给大标题视觉重量（亮暗双档都保对比）。 */
+  background: linear-gradient(120deg, var(--foreground) 55%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.heroSubtitle {
+  margin: 1.2rem auto 0;
+  max-width: 40ch;
+  font-size: clamp(1.02rem, 2vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* 巨型输入卡：对标参考的焦点输入——大卡 + 内置底栏（能力标签 + 圆形发送键）+ 大投影。 */
+.heroInputCard {
+  position: relative;
+  z-index: 1;
+  max-width: 42rem;
+  margin: 2.5rem auto 0;
+  padding: 1rem 1rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  box-shadow: 0 24px 60px -16px color-mix(in srgb, var(--foreground) 16%, transparent), 0 2px 8px color-mix(in srgb, var(--foreground) 4%, transparent);
+  text-align: left;
+  transition: box-shadow var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
+}
+
+/* 输入卡作视觉焦点：聚焦即抬升 + 品牌焦点环。 */
+.heroInputCard:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 28px 70px -16px color-mix(in srgb, var(--primary) 28%, transparent), 0 0 0 4px var(--ring);
+  transform: translateY(-1px);
+}
+
+.heroInput {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  resize: none;
+  min-height: 3.2rem;
+}
+
+.heroInput:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.heroInput::placeholder {
+  color: var(--muted-foreground);
+}
+
+.heroInputBar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.heroInputTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.heroTag {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
+}
+
+.heroTag:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--accent);
+}
+
+.heroTag:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.heroSend {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  font-size: 1.2rem;
+  box-shadow: 0 6px 16px -3px color-mix(in srgb, var(--primary) 50%, transparent);
+  transition: background var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.heroSend:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -3px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+.heroNote {
+  margin: 1.5rem auto 0;
+  max-width: 38ch;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+/* —— Hero touch targets and narrow-screen rhythm —— */
+@media (max-width: 768px) {
+  .heroTag {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+  }
+
+  .heroSend {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .heroInputCard {
+    margin-top: 1.75rem;
+    border-radius: var(--radius-xl);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroInputCard,
+  .heroTag,
+  .heroSend {
+    transition: none;
+  }
+}

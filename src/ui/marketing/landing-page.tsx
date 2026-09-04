@@ -19,7 +19,21 @@ import type { MessageKey } from "@/i18n/messages"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 
 import { MarketingTopBar } from "./marketing-top-bar"
-import styles from "./landing-page.module.css"
+import baseStyles from "./landing-page.module.css"
+import heroStyles from "./landing-page-hero.module.css"
+import showcaseStyles from "./landing-page-showcase.module.css"
+import capabilityArtStyles from "./landing-page-capability-art.module.css"
+import faqStyles from "./landing-page-faq.module.css"
+import footerStyles from "./landing-page-footer.module.css"
+
+const styles = {
+  ...baseStyles,
+  ...heroStyles,
+  ...showcaseStyles,
+  ...capabilityArtStyles,
+  ...faqStyles,
+  ...footerStyles,
+}
 
 // 能力区原创插画（成套，每张模拟一段真实界面片段，一眼看懂对应能力）：暖纸风 + 品牌木色 +
 // 柔和 pastel accent + 柔和投影，多层次。本仓自绘 SVG，非任何第三方素材。variant 决定场景。

@@ -1,0 +1,187 @@
+/* —— Capability illustration SVG paint —— */
+
+.capArt {
+  width: 100%;
+  height: 100%;
+}
+
+/* 场景底：柔和暖纸晕染，随主题切色（每张背景微差，避免死板）。 */
+.capScene {
+  fill: color-mix(in srgb, var(--accent) 55%, var(--card));
+}
+
+/* pastel accent 晕（decorative 背景色块，营造色彩层次）。 */
+.capBlobPink {
+  fill: color-mix(in srgb, var(--illustration-pink) 50%, transparent);
+}
+.capBlobAmber {
+  fill: color-mix(in srgb, var(--illustration-amber) 50%, transparent);
+}
+.capBlobBlue {
+  fill: color-mix(in srgb, var(--illustration-blue) 50%, transparent);
+}
+.capBlobGreen {
+  fill: color-mix(in srgb, var(--illustration-green) 45%, transparent);
+}
+
+/* 白卡与内容条。 */
+.capCard {
+  fill: var(--card);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.capMuted {
+  fill: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.capInk {
+  fill: var(--primary);
+}
+.capOn {
+  fill: var(--primary-foreground);
+}
+.capOnDot {
+  fill: var(--primary-foreground);
+}
+
+/* pastel 实心填充块（图标/卡）。 */
+.capAccentPinkFill {
+  fill: var(--illustration-pink);
+}
+.capAccentAmberFill {
+  fill: var(--illustration-amber);
+}
+.capAccentGreenFill {
+  fill: var(--illustration-green);
+}
+
+/* 头像。 */
+.capAvatarInk {
+  fill: var(--primary);
+  stroke: var(--card);
+  stroke-width: 3;
+}
+.capAvatarAmber {
+  fill: var(--illustration-amber);
+  stroke: var(--card);
+  stroke-width: 3;
+}
+.capAvatarPink {
+  fill: var(--illustration-pink);
+  stroke: var(--card);
+  stroke-width: 3;
+}
+
+/* 描边连接线。 */
+.capLink {
+  fill: none;
+  stroke: color-mix(in srgb, var(--primary) 55%, transparent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* 柔和投影：给主卡/节点/按钮组多一层深度。 */
+.capElevated {
+  filter: drop-shadow(0 3px 7px color-mix(in srgb, var(--foreground) 14%, transparent));
+}
+
+/* 更浅的内容条（次级信息）。 */
+.capMutedSoft {
+  fill: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* 审批按钮组。 */
+.capBtnGreen {
+  fill: var(--success);
+}
+.capBtnGlyphOn {
+  fill: none;
+  stroke: var(--primary-foreground);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.capBtnOutline {
+  fill: var(--card);
+  stroke: var(--ring);
+  stroke-width: 1.5;
+}
+.capBtnGlyphInk {
+  fill: none;
+  stroke: color-mix(in srgb, var(--primary) 60%, transparent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* 列表行（技能/模型）：激活态品牌软底，闲置态浅底。 */
+.capRowActive {
+  fill: var(--accent);
+  stroke: color-mix(in srgb, var(--primary) 30%, transparent);
+  stroke-width: 1.5;
+}
+.capRowIdle {
+  fill: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+
+/* 行内图标 tile。 */
+.capIconInk {
+  fill: var(--primary);
+}
+.capIconAmber {
+  fill: var(--illustration-amber);
+}
+.capIconBlue {
+  fill: var(--illustration-blue);
+}
+
+/* 固定/新增描边符号。 */
+.capPin {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* 服务在线状态点。 */
+.capStatusDot {
+  fill: var(--success);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+
+/* 分享按钮 + 分享连线。 */
+.capShareBtn {
+  fill: var(--primary);
+}
+.capShareLink {
+  fill: none;
+  stroke: var(--primary-foreground);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* 品牌软底小 chip。 */
+.capChipBrand {
+  fill: var(--primary);
+}
+
+/* 团队「+更多」头像 + 加号。 */
+.capAvatarPlus {
+  fill: var(--accent);
+  stroke: var(--card);
+  stroke-width: 3;
+}
+.capPlus {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* 模型选中勾。 */
+.capCheckBrand {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

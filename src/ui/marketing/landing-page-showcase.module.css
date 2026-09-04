@@ -1,0 +1,181 @@
+/* 能力展示责任：区块间距、Tabs 滚动窗口、面板交叉淡入和响应式排列。 */
+.caps {
+  padding: clamp(3rem, 7vw, 5rem) 0;
+}
+
+/* —— 能力展示轮播（滚动窗口）：tab 行 + 大展示台（交叉淡入）+ 自动进度条 —— */
+.showcase {
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.showTabs {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+/* TabsList 的 shadcn 默认是 w-fit；营销页需要把它收进主列，移动端再作为独立横向轨道滚动。 */
+.showTabList {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.showTabList::-webkit-scrollbar {
+  display: none;
+}
+
+.showTab {
+  position: relative;
+  overflow: hidden;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color var(--motion-base) var(--ease-standard), border-color var(--motion-base) var(--ease-standard), background var(--motion-base) var(--ease-standard);
+}
+
+.showTab:hover {
+  color: var(--foreground);
+  border-color: var(--ring);
+}
+
+.showTab[data-state="active"] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* 自动切换进度条：从左到右填充满即切下一 tab；悬停暂停时定住。 */
+.showTabBar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  transform-origin: left;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  animation: showTabFill 4.2s linear forwards;
+}
+
+.showTabBar[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+@keyframes showTabFill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.showStage {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  box-shadow: 0 24px 60px -24px color-mix(in srgb, var(--foreground) 14%, transparent);
+  overflow: hidden;
+  min-height: 22rem;
+}
+
+.showPanel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  padding: clamp(1.75rem, 4vw, 3rem);
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity var(--motion-relaxed) var(--ease-standard), transform var(--motion-relaxed) var(--ease-standard);
+}
+
+.showPanel[data-active="true"] {
+  position: relative;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.showIndex {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  margin-bottom: 0.75rem;
+}
+
+.showTitle {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+.showBody {
+  margin: 0.9rem 0 0;
+  font-size: clamp(1rem, 1.6vw, 1.1rem);
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+
+.showArt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  border-radius: 1.15rem;
+  background: var(--secondary);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+/* —— Showcase narrow-screen layout —— */
+@media (max-width: 768px) {
+  .showTab {
+    min-height: 2.75rem;
+  }
+
+  .showTabList {
+    justify-content: flex-start;
+  }
+
+  .showPanel {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .showStage {
+    min-height: 30rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showTab,
+  .showPanel {
+    transition: none;
+  }
+
+  .showTabBar,
+  .showPanel {
+    animation: none;
+  }
+}
