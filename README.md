@@ -1,140 +1,83 @@
-# kokoro
+# Kokoro User Web
 
-Kokoro 是一个独立的桌面 Web 产品仓库。它发布一套确定的产品页面、布局、品牌素材和交互，
-不是多个产品共用的运行时壳，也不通过 `SITE_ID`、域名分支或多站 registry 选择 React/CSS。
-当前仓库内的 `packages/` 是首个产品的可复现 bootstrap workspace。未来出现第二个真实
-产品消费方或需要独立 semver 发布时，再整体迁移到独立的 `kokoro-web-shared` package
-仓库；当前构建不依赖那个尚未接入的外部仓库。
+`kokoro`（发布仓库名 `kokoro-app`，package `@kokoro/app`）是 Kokoro 的正式 User Web。
+它拥有页面、浏览器交互状态、HttpOnly 会话信封和同源 HTTP adapter；不拥有 Conversation、
+Message、Project、Run、Billing、Capability 等服务端业务事实，也不拥有 PostgreSQL 或 Redis。
 
-## 仓库边界
-
-- `kokoro/`：当前产品 Web 的页面、布局、CSS Modules、品牌、SEO、素材、同源 session HTTP/SSE
-  adapter、HITL、Canvas、Library、Skills 和 UI 组装；独立构建、发布、部署、回滚。
-- `kokoro-<product-slug>/`：其它产品各自的独立 Web 仓库。它们可以复用 shared package，
-  但拥有自己的页面信息架构和发布生命周期，不放进本仓库的多产品目录。
-- `kokoro-web-shared/`：规划中的唯一共享 package 仓库，不属于当前 checkout；迁移后内部用
-  一个 pnpm workspace 管理 `@kokoro/web-core`、`@kokoro/web-data`、`@kokoro/web-ui`、
-  `@kokoro/web-blocks`、`@kokoro/web-runtime`、`@kokoro/i18n` 和 `@kokoro/tsconfig`。
-  当前 `packages/` 仍随本仓库一起构建，不按菜单、Skills、i18n 等业务能力分别建 Git 仓库。
-- `kokoro-system`：菜单、i18n、主题、产品入口和 feature manifest 的后端事实源；Web 只消费
-  经过 BFF 校验的公开投影。
-- `kokoro-iam`：身份、认证、权限和服务端隔离上下文；它不承载页面布局、CSS token、营销文案
-  或 Skills 业务资源。
-- User Web 不直连 IAM/System/Agent、数据库、Redis 或内部 RPC；Admin Web 不属于本仓库。
-
-## GitHub 身份
-
-当前本地子仓库已经绑定到正式 GitHub remote：
-`https://github.com/LordFoxFairy/kokoro-app.git`。GitHub 仓库名为 `kokoro-app`，本地产品子仓库目录仍为 `kokoro`。
-首次在一台新工作机绑定时使用：
-
-```bash
-git remote add origin https://github.com/LordFoxFairy/kokoro-app.git
-git push -u origin main
-```
-
-当前子仓库的 GitHub 发布身份是 `LordFoxFairy/kokoro-app`，不使用父仓库
-`LordFoxFairy/Kokoro` 的 workflow 或构建上下文；父仓库只保留总仓文档和其它子仓边界。
-
-## 请求上下文：只在 BFF 处理部署域名
-
-浏览器只请求同源 `/api/*`。前端的 React state、URL、请求 body、localStorage 和公开响应中
-不出现 Site、tenant 或内部隔离键。
+## 边界
 
 ```text
 Browser
-  → same-origin User Web BFF (/api/*)
-  → Web server 读取 KOKORO_DOMAIN
-  → Chat/业务请求进入 kokoro-bff (/v1/*)
-  → 每一个 BFF 上游请求附加 Forwarded: host=<KOKORO_DOMAIN>
-  → IAM / System / 业务 owner repos / Agent
-  → 后端自行完成身份、权限和数据隔离
+  -> kokoro same-origin /api/*                 browser-private
+  -> kokoro-bff /v1/*                          public Product API / aggregation owner
+  -> internal owner APIs, Agent and Scheduler  internal-owner
 ```
 
-`KOKORO_DOMAIN` 是部署配置，不是前端选择器。BFF 必须覆盖浏览器传入的同名 header，不能
-信任客户端提供的 `Forwarded`。本地值为 `dev.kokoro.localhost`，生产值为该部署的规范域名；
-域名变化只改环境变量和后端域名绑定，不改 React/CSS，也不把域名写进 URL 或 body。
+- 浏览器只访问当前站点的 `/api/*`，不持有服务地址、workload token、runtime JWT、tenant/site
+  选择器或内部凭据。
+- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文，并从 HttpOnly session envelope
+  派生用户上下文。
+- Web 的同源 API 是 `browser-private` surface，只服务当前 Web，不进入 Developer API 门户。
+  对外 Product API 只由 `kokoro-bff` 的 `public` contract 发布。
+- Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`SessionEvent` 只能作为 Web 内部 reducer
+  投影；Vercel AI SDK 的 `ChatTransport`/`UIMessage` 也只能是 Web 内部状态与渲染适配，不能形成
+  第二条网络流或第二个 cursor 事实源。
 
-当前 Web 运行边界是 BFF-only：浏览器只调用同源 `/api/*`；其中 `/api/session/*` 是兼容路径，
-由 Web server 转发到 `kokoro-bff` 的 `/v1/sessions/*`。Web 不读取或直连
-`KOKORO_SESSION_BASE_URL`、独立 Session 或 Gateway，也不存在 Gateway direct fallback。
-`kokoro-session` 与 `kokoro-gateway` 的名称只在历史/迁移资料中保留，不是当前运行、CI、部署或
-package 依赖。
+当前实现仍处于协议收敛期：AG-UI parser 已存在，但 live SSE client 仍兼容读取旧
+`SessionEvent`，且仓内尚未实现 `AgUiChatTransport`/`UIMessage` 适配。准确状态和缺口见
+[`docs/CURRENT.md`](docs/CURRENT.md)。
 
-Settings 只保留已接入 v1 BFF 的业务面；历史 Mail、Data Management、Developer 和 account/preferences
-代理入口已从 Web 路由与设置导航移除，未接线的账户展示动作在 live 保持禁用，不产生死链请求。
+## 代码地图
 
-## 前后端契约
+| 路径 | 职责 |
+| --- | --- |
+| `src/app/` | Next.js 页面与同源 `/api/*` route adapter |
+| `src/lib/server/` | session envelope、受信上下文、上游 HTTP 与错误映射 |
+| `src/contract/` | 当前运行时 Zod contract 与路径 helper |
+| `src/engine/`、`src/core/` | Chat 状态机、重连和纯 reducer 投影 |
+| `src/features/`、`src/ui/`、`src/components/` | 产品 surface 与 UI；本阶段不修改 |
+| `src/dev/` | local/test preview fixture；不属于 live 事实源 |
+| `src/generated/proto/` | 冻结的历史 consumer snapshot；不是当前可再生 contract source |
+| `contract/` | 契约治理说明和集中 contract 回归测试 |
+| `tests/` | unit、route、contract、architecture 与 UI 测试 |
 
-- 当前仓库边界：[`docs/site-repository-architecture-v2.md`](docs/site-repository-architecture-v2.md)
-- Web 前端架构：[`docs/user-web-architecture-v2.md`](docs/user-web-architecture-v2.md)
-- package 提取映射：[`docs/package-extraction-map.md`](docs/package-extraction-map.md)
-- IAM Web Contract v2：`kokoro-iam/docs/integration/backend-web-contract-v2.md`
-- System Web Contract v1：`kokoro-system/docs/backend-web-contract-v1.md`
-- 首个产品真实联调手册：`docs/first-site-live-runbook.md`
+完整入口见 [`INDEX.md`](INDEX.md) 和 [`docs/INDEX.md`](docs/INDEX.md)。
 
-标准转发上下文的后端信任边界和解析规则见
-[`docs/integration/forwarded-context-contract-v1.md`](docs/integration/forwarded-context-contract-v1.md)。
+## 五分钟启动
 
-BFF 对所有上游请求统一处理 RFC 7239 `Forwarded`、认证、request id、幂等、错误映射和缓存隔离。
-浏览器只看到业务需要的公开数据，不接触 workload token、IAM JWT、内部 header 或后端隔离键。
-
-## UI 基座
-
-```text
-src/components/ui/   shadcn/ui primitives
-src/components/blocks/ 跨页面组合块
-src/ui/              产品领域组件
-src/core/            纯状态 reducer / projection / persistence
-src/engine/          session / SSE / HITL / reconnect
-src/app/             Next.js routes and same-origin BFF
-```
-
-基础组件只消费语义 CSS variables，不读取后端隔离信息。Dialog、Sheet、Popover、Dropdown、
-Tabs、Tooltip、ScrollArea 和 Resizable 一律使用 shadcn/Radix primitive；产品页面只负责组合和
-品牌差异。
-
-## 本地运行
+要求：Node.js 22、Corepack，以及仓库当前锁定的 `pnpm@11.2.2`。Root 规范要求迁移到
+`pnpm@11.25.0`，该工具链升级尚未在本阶段执行，见 `docs/CURRENT.md`。
 
 ```bash
+corepack enable
 cp .env.local.example .env.local
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-建议通过 `http://dev.kokoro.localhost:3000` 访问本地桌面 Web；`*.localhost` 解析到 loopback，
-无需修改 hosts。`KOKORO_DOMAIN` 使用不带协议的规范域名，并与访问域名保持一致。
-
-环境文件职责固定为：`.env.local` 是 Next 开发覆盖，`.env.test` 是测试 fixture，`.env.production`
-是 Next 的生产文件名；`.env.prod` 只作为 Docker/运维文件名，必须通过 `--env-file` 显式传入。
-模板分别见 [`.env.local.example`](.env.local.example)、[`.env.test.example`](.env.test.example)、
-[`.env.production.example`](.env.production.example) 和 [`.env.prod.example`](.env.prod.example)。
-
-第一个产品工作区位于 `/app`。本地模板默认启用确定性预览；启用真实认证但后端不可用时显示
-配置不可用态并禁用真实提交，不把 fixture 冒充后端数据。
+默认访问 `http://dev.kokoro.localhost:3000`。`.env.local.example` 默认面向确定性 preview；
+live 模式必须配置 Web session、IAM 登录入口、BFF 地址、内部服务凭据和部署域名。浏览器端代码
+不得读取这些 server-only 值。
 
 ## 验证
 
 ```bash
-pnpm check
+pnpm contract
+pnpm test:architecture
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-CI 在 `main` push、Pull Request 和手动触发时执行桌面 Web 门禁：`lint → test → typecheck → build`。
-正式 `vMAJOR.MINOR.PATCH` tag 会复用门禁并发布 GHCR 镜像；不打 tag 不发布生产镜像。
+`pnpm test` 会包含 contract 与 architecture 测试；独立命令用于快速定位治理失败。当前尚无
+`test:e2e` script，Playwright/axe/视觉回归和真实 BFF 联调仍是发布缺口，不能由 unit test 或
+preview fixture 替代。
 
 ## 部署
 
-部署选择、GHCR 回滚、Cloudflare Workers 直连 GitHub、所需 secrets 和 RFC 7239 `Forwarded` 检查清单见
-[`docs/deployment.md`](docs/deployment.md)。Cloudflare workflow 默认手动触发，不会因 Docker tag
-自动触发第二套生产发布。
-
-### Docker 快速启动
-
-```bash
-docker build -t kokoro-app:local .
-docker run --rm -p 3000:3000 --env-file .env kokoro-app:local
-docker compose -f docker-compose.example.yml up -d --build
-```
-
-容器只接收运行时环境变量；内部服务地址和凭据不会写入前端 bundle。镜像本身不包含域名、
-品牌切换器或隔离键，部署时由 `KOKORO_DOMAIN` 和 BFF 的 RFC 7239 `Forwarded` 出站策略决定请求上下文。
+- Docker 与 Cloudflare 入口见 [`docs/deployment.md`](docs/deployment.md)。
+- 生产配置与故障处置见 [`docs/RUNBOOK.md`](docs/RUNBOOK.md)。
+- 发布验收矩阵见 [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)。
+- 当前 Docker/CI 供应链与 health/ready 缺口记录在 [`docs/CURRENT.md`](docs/CURRENT.md)，历史报告
+  不作为生产证据。
