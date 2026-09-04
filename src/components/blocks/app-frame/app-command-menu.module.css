@@ -7,10 +7,10 @@
  * still receive the same command palette geometry; the phone Sheet is the
  * only surface below that boundary. */
 @media (min-width: 768px) {
-  .dialogContent {
+  .dialogContent[data-slot="dialog-content"] {
     width: min(38rem, calc(100vw - 3rem));
     max-height: min(36rem, calc(100dvh - 3rem));
-    padding: 0.5rem !important;
+    padding: 0.5rem;
     border-color: var(--border);
     border-radius: var(--radius-xl);
     background: var(--card);

@@ -6,7 +6,7 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
 }
 
 .desktopHost[data-state="closed"] {

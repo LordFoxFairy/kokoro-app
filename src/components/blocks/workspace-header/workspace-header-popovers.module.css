@@ -1,9 +1,9 @@
-.agentTrigger {
+.agentTrigger[data-slot="button"] {
   height: 2rem;
   min-height: 2rem;
   gap: 0.25rem;
   border-radius: 0.5rem;
-  padding: 0.4375rem 0.5rem !important;
+  padding: 0.4375rem 0.5rem;
   font-size: 1.125rem;
   font-weight: 500;
   line-height: 1.375rem;
@@ -46,10 +46,14 @@
   text-align: left;
 }
 
-.agentOption:hover,
+.agentOption:hover {
+  background: var(--accent);
+}
+
 .agentOption:focus-visible {
   background: var(--accent);
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .agentOptionTitle {
@@ -184,10 +188,14 @@
   font-weight: 600;
 }
 
-.usageLink:hover,
+.usageLink:hover {
+  color: var(--muted-foreground);
+}
+
 .usageLink:focus-visible {
   color: var(--muted-foreground);
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .usageLink svg {

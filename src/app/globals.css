@@ -65,10 +65,11 @@
   --shadow-sm: 0 4px 10px -4px color-mix(in srgb, var(--foreground) 14%, transparent);
   /* One motion scale keeps desktop rail, menus, Composer and cards from
      feeling like unrelated products. Reduced-motion users override these
-     transitions globally below. */
+     tokens globally below. */
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --motion-slow: 240ms;
+  --motion-relaxed: 500ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   /* Match the reference Web serif stack. Keeping the stack in the shared
      shadcn token means welcome, project, settings and detail surfaces do not
@@ -280,11 +281,10 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  :root {
+    --motion-fast: 0s;
+    --motion-base: 0s;
+    --motion-slow: 0s;
+    --motion-relaxed: 0s;
   }
 }

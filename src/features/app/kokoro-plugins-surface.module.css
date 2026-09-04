@@ -82,10 +82,10 @@
   justify-content: center;
 }
 
-.createMenuIcon svg {
+.createMenu :global([data-slot="dropdown-menu-item"]) .createMenuIcon > svg {
   width: 1rem;
   height: 1rem;
-  color: var(--foreground) !important;
+  color: var(--foreground);
 }
 
 .createMenuCopy {
@@ -118,7 +118,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: contain;
-  outline: none;
   scroll-behavior: smooth;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
@@ -180,7 +179,11 @@
 }
 .search > svg { width: 1rem; height: 1rem; color: var(--muted-foreground); }
 .search input { height: 100%; padding: 0; border: 0; border-radius: 0; box-shadow: none; font-size: 0.875rem; }
-.search input:focus-visible { box-shadow: none; }
+.search input:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 
 .section { margin: 0; }
 .sectionHeader { display: flex; box-sizing: border-box; height: 4.96875rem; align-items: flex-end; justify-content: space-between; gap: 0.5rem; padding: 1.5rem 0 0.75rem; }
@@ -210,9 +213,13 @@
 .itemCopy { min-width: 0; }
 .itemCopy strong { display: block; overflow: hidden; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
 .itemCopy p { display: -webkit-box; margin: 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1rem; }
-.page[data-testid="plugins-page"] .catalogItem > :global([data-slot="button"][data-size="icon-sm"]) { width: 1.75rem !important; height: 1.75rem !important; min-height: 1.75rem !important; border: 1px solid rgb(0 0 0 / 6%); border-radius: 0.5rem; background: transparent; }
-.page[data-testid="plugins-page"] .catalogItem > :global([data-slot="button"][data-size="icon-sm"]) svg { width: 0.875rem !important; height: 0.875rem !important; }
+.page[data-testid="plugins-page"] .catalogItem > :global([data-slot="button"][data-size="icon-sm"]) { width: 1.75rem; height: 1.75rem; min-height: 1.75rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 0.5rem; background: transparent; }
+.page[data-testid="plugins-page"] .catalogItem > :global([data-slot="button"][data-size="icon-sm"]) > svg { width: 0.875rem; height: 0.875rem; }
 .catalogItem > button[data-added="true"] { background: var(--foreground); color: var(--background); }
+
+@media (prefers-reduced-motion: reduce) {
+  .featuredViewport { scroll-behavior: auto; }
+}
 
 .sectionEmpty,
 .noResults {

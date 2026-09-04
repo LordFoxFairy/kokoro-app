@@ -72,12 +72,12 @@
   color: var(--foreground);
 }
 
-/* Pointer navigation should not leave a focus ring around the selected icon;
- * the active surface already supplies the state cue. Keyboard focus still
- * uses the stock shadcn ring because keyboard users never receive this mark. */
+/* Pointer navigation keeps the active-surface cue, while keyboard navigation
+ * retains a dedicated ring so the selected icon never loses focus visibility. */
 .rail[data-desktop-rail="true"] .navItem[data-pointer-focus="true"]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .rail[data-desktop-rail="true"] .navShortcut {
@@ -202,9 +202,14 @@
 }
 
 .searchGlyph { width: 0.95rem; height: 0.95rem; flex: 0 0 auto; color: var(--muted-foreground); }
-.searchInput { min-width: 0; flex: 1; border: 0; background: transparent; outline: 0; color: var(--foreground); font-size: 0.85rem; }
-.searchInput:focus,
-.searchInput:focus-visible { border-color: transparent !important; box-shadow: none !important; outline: none !important; }
+.searchInput { min-width: 0; flex: 1; border: 0; background: transparent; color: var(--foreground); font-size: 0.85rem; }
+.searchInput:focus { border-color: transparent; box-shadow: none; }
+.searchInput:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 .searchInput::placeholder { color: var(--muted-foreground); }
 .searchInput::-webkit-search-cancel-button { appearance: none; }
 .searchClose { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; }
@@ -319,10 +324,10 @@
 .accountMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); }
 .accountMenu :global([data-slot="dropdown-menu-item"] > span:not([data-slot])) { min-width: 0; }
 .accountCreditLabel { display: inline-flex; align-items: center; gap: 0.25rem; }
-.accountCreditLabel svg { width: 0.75rem !important; height: 0.75rem !important; }
+.accountMenu .accountCreditLabel > svg { width: 0.75rem; height: 0.75rem; }
 .accountCreditValue { display: inline-flex; align-items: center; gap: 0.25rem; }
-.accountCreditValue svg { width: 0.875rem !important; height: 0.875rem !important; }
-.accountLinkArrow { width: 0.875rem !important; height: 0.875rem !important; margin-left: auto; }
+.accountMenu .accountCreditValue > svg { width: 0.875rem; height: 0.875rem; }
+.accountMenu .accountLinkArrow { width: 0.875rem; height: 0.875rem; margin-left: auto; }
 .accountUpgrade { width: 3.5rem; height: 1.75rem; min-height: 1.75rem; border-radius: 0.5rem; padding: 0 0.5rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.125rem; }
 .accountPlan :global([data-slot="button"]) { background: var(--foreground); color: var(--background); }
 .accountPlan :global([data-slot="button"]:hover) { background: color-mix(in srgb, var(--foreground) 88%, var(--background)); color: var(--background); }
@@ -331,7 +336,7 @@
 
 .footer { width: 100%; min-width: 0; padding: 0; }
 .footerInvite { width: 100%; min-width: 0; margin-bottom: 0.45rem; }
-.inviteCard { display: flex; width: 100%; min-width: 0; height: 3.5rem; min-height: 3.5rem !important; box-sizing: border-box; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.5rem 0.55rem; text-align: left; }
+.inviteCard[data-slot="button"] { display: flex; width: 100%; min-width: 0; height: 3.5rem; min-height: 3.5rem; box-sizing: border-box; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.5rem 0.55rem; text-align: left; }
 .inviteCard:hover { background: var(--accent); }
 .inviteIcon { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; color: var(--muted-foreground); }
 .inviteCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.1rem; }
@@ -423,8 +428,9 @@
   }
 
   .rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedBrand[data-pointer-focus="true"]:focus-visible {
-    outline: none !important;
-    box-shadow: none !important;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: none;
   }
 
   .rail[data-desktop-rail="true"][data-collapsed="true"] .collapsedBrand .brandMark {

@@ -266,13 +266,13 @@
   border-radius: 0.25rem 0.25rem 0 0;
   content: "";
 }
-.creationNext {
+.creationNext[data-slot="button"] {
   position: absolute;
   top: 0.5rem;
   z-index: 2;
-  width: 1.5rem !important;
-  height: 1.5rem !important;
-  min-height: 1.5rem !important;
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
   border-radius: 999px;
   background: var(--background);
   padding: 0;
@@ -782,7 +782,7 @@
   object-fit: cover;
   box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 16%);
   transform: rotate(-9deg);
-  transition: top 180ms ease, left 180ms ease, transform 180ms ease;
+  transition: top var(--motion-base) var(--ease-standard), left var(--motion-base) var(--ease-standard), transform var(--motion-base) var(--ease-standard);
 }
 
 .desktopSuggestion:hover .desktopSuggestionMedia img,
@@ -904,11 +904,11 @@
   to { opacity: 1; }
 }
 
-.directPrompt {
+.directPrompt[data-slot="button"] {
   display: flex;
   min-width: 0;
   height: 2.5rem;
-  min-height: 2.5rem !important;
+  min-height: 2.5rem;
   flex: 0 1 auto;
   align-items: center;
   justify-content: flex-start;
@@ -1144,7 +1144,7 @@
   }
 
   .directComposer :global([data-slot="composer-wrap"] textarea) {
-    padding-left: 0.25rem !important;
+    padding-left: 0.25rem;
   }
 
   .directSurface[data-has-draft="true"] .directComposer :global([data-slot="composer-wrap"] form) {
@@ -1303,7 +1303,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .directPrompt {
+  .directPrompt[data-slot="button"],
+  .desktopSuggestionMedia img {
     transition: none;
   }
   .desktopBanner { animation: none; }

@@ -518,7 +518,7 @@
 .nextRun { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.25rem; }
 .nextRun { white-space: nowrap; }
 .mutationStatus { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1rem; }
-.mutationError { color: var(--destructive) !important; font-size: 0.75rem; line-height: 1rem; }
+.mutationError { color: var(--destructive); font-size: 0.75rem; line-height: 1rem; }
 .taskCard[aria-busy="true"] { opacity: 0.78; }
 
 @media (max-height: 40rem) and (min-width: 40rem) {
@@ -537,5 +537,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .inlineSpinner { animation: none; }
   .suggestion { transition: none; }
 }
