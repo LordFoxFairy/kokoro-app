@@ -8,14 +8,24 @@
 ## 公开 API
 
 - `machine.ts`
-  - `transition(state, event)`：纯状态机（idle/submitting/streaming/reattaching/
-    awaiting-hitl/error）；非法迁移返回入参 state（引用相等=被守卫拒绝，双发守卫据此实现）；
+  - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
+    steer POST，不动状态机）/ retry（未回执重试复用 idempotency_key）/ cancelRun /
+    stageToolDecision / selectConversation / newConversation / deleteConversation / setMode /
+    dispose。
+  - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。
+- `machine-state.ts`
+  - `transition(state, event)` 与 `MachineState`：纯状态机（idle/submitting/streaming/
+    reattaching/awaiting-hitl/error）；非法迁移返回入参 state（引用相等=被守卫拒绝），
     runId 锚定——只有本轮 run 的事件能推动相位。
-  - `createSessionEngine(deps) → SessionEngine`：submit（运行中插话转 steer POST，不动
-    状态机）/ retry（未回执重试复用 idempotency_key）/ cancelRun / stageToolDecision /
-    selectConversation / newConversation / deleteConversation / setMode / dispose。
-  - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`（SSR 首帧一致性）
-    （瞬态通知发 i18n key 不落文案）。
+- `event-reducer.ts`
+  - `reduceProjectionEvents`：把一批已校验的 AG-UI 投影事件交给 core reducer，并返回
+    本轮终态收束标记；`reconcileUserMessageId`：对齐本地 echo 与服务端回执。
+- `execution-adapter.ts`
+  - 集中构造 message/control wire；管理流句柄、代际守卫和微任务批处理，向 machine 只交付
+    cursor、事件批次和错误。
+- `engine-types.ts`
+  - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`、`SessionEngine`、`EngineDeps`（SSR 首帧和
+    引擎依赖契约）；瞬态通知发 i18n key 不落文案。
 - `client.ts`：`createSessionClient({baseUrl}) → SessionClient`——全部入站过
   contract zod，失败以 `SessionClientError`（network/http/parse）上抛零静默降级；
   baseUrl+path 直接拼接（非 new URL，保住 `/api/session` 前缀）；AUTH-P0 起客户端不持

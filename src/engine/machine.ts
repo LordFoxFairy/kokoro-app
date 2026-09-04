@@ -1,10 +1,8 @@
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
-import type { ChatProjectionEventKind } from "@/core/chat-projection-event"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { EventCursor } from "@/contract/agui-events"
-import type { MessageKey } from "@/i18n/messages"
 
-type NoticeSpec = { key: MessageKey; vars?: Readonly<Record<string, string | number>> }
 import {
   activeMode,
   addConversation,
@@ -18,17 +16,26 @@ import {
 } from "@/core/conversations"
 import { deliveryFromSnapshot, stateFromSnapshot } from "@/core/hydration"
 import {
-  applyChatProjectionEvents,
   appendUserMessage,
   markRunCancelled,
   markToolRejected,
 } from "@/core/reducer"
 import { createSessionStreamState, type SessionStreamState } from "@/core/state"
-import type { ChatProjectionEvent } from "@/core/chat-projection-event"
-import type { PersistedStore } from "@/lib/persisted-store"
 
-import { SessionClientError, type SessionClient, type EventStreamHandle } from "./client"
-import { DIRECT_SESSION_SCOPE, type SessionScope } from "./session-scope"
+import { SessionClientError } from "./client"
+import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
+import {
+  createExecutionAdapter,
+  type MessageExecutionOptions,
+} from "./execution-adapter"
+import {
+  type EngineDeps,
+  type EngineSnapshot,
+  type NoticeSpec,
+  type SessionEngine,
+} from "./engine-types"
+import { IDLE_MACHINE, transition, type MachineState } from "./machine-state"
+import { DIRECT_SESSION_SCOPE } from "./session-scope"
 import {
   buildResumeDecisions,
   pendingToolIdsOf,
@@ -39,160 +46,22 @@ import {
 } from "./hitl-staging"
 import { REATTACH_TIMEOUT_MS, reattachPlanFromSnapshot } from "./reattach"
 
-// —— 纯状态机（规格测试主战场）——
-
-type MachinePhase =
-  | "idle"
-  | "submitting"
-  | "streaming"
-  | "reattaching"
-  | "awaiting-hitl"
-  | "error"
-
-export type MachineState = {
-  phase: MachinePhase
-  // 本轮锚定 run：只有它的事件能推动相位（历史 run 的终态不收束本轮）。
-  runId: string | null
-  error: string | null
-}
-
-export const IDLE_MACHINE: MachineState = { phase: "idle", runId: null, error: null }
-
-export type MachineEvent =
-  | { type: "SUBMIT" }
-  | { type: "RECEIPT"; runId: string }
-  // awaiting=true：snapshot 带 pending 暂停点，直接落 awaiting-hitl（审批卡即刻可操作）。
-  | { type: "REATTACH"; runId: string; awaiting?: boolean }
-  | { type: "STREAM_EVENT"; runId: string; kind: ChatProjectionEventKind }
-  | { type: "RESUME_SENT" }
-  | { type: "CONTROL_FAILED"; error: string }
-  | { type: "RESET" }
-  | { type: "TIMEOUT" }
-  | { type: "FAIL"; error: string }
-
-const ACTIVE_PHASES: readonly MachinePhase[] = ["streaming", "reattaching", "awaiting-hitl"]
-
-// 非法迁移一律返回入参 state（引用相等即「被守卫拒绝」），调用方据此实现同步双发守卫。
-export function transition(state: MachineState, event: MachineEvent): MachineState {
-  switch (event.type) {
-    case "SUBMIT":
-      return state.phase === "idle" || state.phase === "error"
-        ? { phase: "submitting", runId: null, error: null }
-        : state
-    case "RECEIPT":
-      return state.phase === "submitting"
-        ? { phase: "streaming", runId: event.runId, error: null }
-        : state
-    case "REATTACH":
-      return state.phase === "idle" || state.phase === "error"
-        ? {
-            phase: event.awaiting === true ? "awaiting-hitl" : "reattaching",
-            runId: event.runId,
-            error: null,
-          }
-        : state
-    case "STREAM_EVENT": {
-      if (event.runId !== state.runId || !ACTIVE_PHASES.includes(state.phase)) {
-        return state
-      }
-      if (event.kind === "run.completed" || event.kind === "run.failed") {
-        return { phase: "idle", runId: null, error: null }
-      }
-      if (event.kind === "tool.awaiting_approval") {
-        return state.phase === "awaiting-hitl"
-          ? state
-          : { phase: "awaiting-hitl", runId: state.runId, error: null }
-      }
-      // 重连后首个本轮事件：退出「重连中」，转为普通流式。
-      return state.phase === "reattaching"
-        ? { phase: "streaming", runId: state.runId, error: null }
-        : state
-    }
-    case "RESUME_SENT":
-      return state.phase === "awaiting-hitl"
-        ? { phase: "streaming", runId: state.runId, error: null }
-        : state
-    case "CONTROL_FAILED":
-      // control POST 失败不换相位：暂存保留可重试，仅记录错误供 UI 呈现。
-      return { ...state, error: event.error }
-    case "RESET":
-      return state.phase === "idle" && state.runId === null && state.error === null
-        ? state
-        : { ...IDLE_MACHINE }
-    case "TIMEOUT":
-      return ACTIVE_PHASES.includes(state.phase) ? { ...IDLE_MACHINE } : state
-    case "FAIL":
-      return { phase: "error", runId: null, error: event.error }
-    default: {
-      const _exhaustive: never = event
-      return _exhaustive
-    }
-  }
-}
+// 状态机实现位于独立纯模块；这里保留原入口 re-export，避免下游 UI/test 改变 import 契约。
+export {
+  IDLE_MACHINE,
+  transition,
+  type MachineEvent,
+  type MachinePhase,
+  type MachineState,
+} from "./machine-state"
+export {
+  SERVER_ENGINE_SNAPSHOT,
+  type EngineDeps,
+  type EngineSnapshot,
+  type SessionEngine,
+} from "./engine-types"
 
 // —— 引擎（浏览器 I/O 唯一编排者，framework-free）——
-
-export type EngineSnapshot = {
-  machine: MachineState
-  // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
-  // 引擎发 i18n key + 参数（不落具体文案）；UI 层 t() 解析——与 run.failed code 同模式。
-  notice: NoticeSpec | null
-  store: ConversationStore | null
-  // 活跃会话线程：snapshot 水合 + 事件折叠的内存态（不落盘，服务端是真源）。
-  thread: SessionStreamState
-  // 空首屏（尚无会话）时选好的模式：首条消息创建首个会话时承接它。
-  pendingMode: AgentMode
-  // HITL 决策暂存视图：runId → toolId → decision（供工具行渲染 decided 态）。
-  staging: Record<string, Record<string, ToolDecision>>
-  // 服务端 snapshot 尚未回到当前 active session。UI 用它保留可见的
-  // loading surface，避免深链接在空线程期间误画成一个新任务。
-  hydrating: boolean
-}
-
-const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
-
-export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
-  machine: IDLE_MACHINE,
-  notice: null,
-  store: null,
-  thread: EMPTY_THREAD,
-  pendingMode: "fast",
-  staging: {},
-  hydrating: false,
-}
-
-export type SessionEngine = {
-  getSnapshot: () => EngineSnapshot
-  subscribe: (listener: () => void) => () => void
-  submit: (content: string) => void
-  // 失败后重试：按最后一条用户消息原文重新开跑，不追加重复的用户气泡。
-  retry: () => void
-  cancelRun: () => void
-  stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void
-  selectConversation: (id: string) => void
-  // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
-  openConversation: (id: string) => void
-  newConversation: () => void
-  deleteConversation: (id: string) => void
-  setMode: (mode: AgentMode) => void
-  // 输入框固定技能（UI 偏好）：随每次开跑/插话上 wire 为 messageCreate.pinned_skills。
-  setPinnedSkills: (names: readonly string[]) => void
-  // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model（null=用 profile 缺省，不上 wire）。
-  setModel: (model: string | null) => void
-  // 选中 agent（AGENT-PRESET）：首条消息上 wire 为 messageCreate.agent（null=用 profile 缺省 general，不上 wire）。
-  setAgent: (agent: string | null) => void
-  dispose: () => void
-}
-
-export type EngineDeps = {
-  client: SessionClient
-  storage: PersistedStore<ConversationStore>
-  /** Direct inbox and project workbenches never share a persisted session index. */
-  scope?: SessionScope
-  now?: () => number
-  createId?: (prefix: string) => string
-  reattachTimeoutMs?: number
-}
 
 function defaultCreateId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`
@@ -219,6 +88,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const createId = deps.createId ?? defaultCreateId
   const reattachTimeoutMs = deps.reattachTimeoutMs ?? REATTACH_TIMEOUT_MS
   const scope = deps.scope ?? DIRECT_SESSION_SCOPE
+  const execution = createExecutionAdapter({ client: deps.client, scope })
 
   let machine: MachineState = IDLE_MACHINE
   let store: ConversationStore | null = deps.storage.read()
@@ -249,15 +119,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // （null=用 profile 缺省 general，不上 wire；首条锁语义与 model 同在 UI 层）。
   let selectedAgent: string | null = null
 
-  let handle: EventStreamHandle | null = null
-  // 流代际守卫：关流后迟到的回调（旧代际）一律忽略，防止旧流事件折进新会话。
-  let streamGeneration = 0
   // 水合代际守卫：切会话后迟到的 snapshot 一律丢弃。
   let hydrateGeneration = 0
   // 文件同步代际守卫：同会话连续 run 收尾的乱序 snapshot 回来，只认最新一次。
   let filesSyncGeneration = 0
-  let buffer: ChatProjectionEvent[] = []
-  let flushScheduled = false
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
@@ -303,83 +168,26 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function closeStream(): void {
-    streamGeneration += 1
-    buffer = []
-    handle?.close()
-    handle = null
+    execution.closeStream()
   }
 
-  function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
-    closeStream()
-    const generation = streamGeneration
-    handle = deps.client.openEvents({
-      sessionId,
-      resumeCursor,
-      onCursor: (cursor) => {
-        if (disposed || generation !== streamGeneration) {
-          return
-        }
-        // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
-        // Preserve it even when a partial tool-args frame has no projection.
-        thread = { ...thread, resumeCursor: cursor }
-      },
-      onEvent: (event) => {
-        if (disposed || generation !== streamGeneration) {
-          return
-        }
-        buffer.push(event)
-        if (!flushScheduled) {
-          flushScheduled = true
-          // 微任务窗口内的事件批量折叠一次（replay 洪峰不逐事件快照）。
-          queueMicrotask(flush)
-        }
-      },
-      onStreamError: (error) => {
-        if (disposed || generation !== streamGeneration) {
-          return
-        }
-        closeStream()
-        clearReattachTimer()
-        machine = transition(machine, { type: "FAIL", error: error.message })
-        notify()
-      },
-    })
-  }
-
-  function flush(): void {
-    flushScheduled = false
-    if (disposed || buffer.length === 0) {
-      buffer = []
+  function handleStreamEvents(events: readonly ChatProjectionEvent[]): void {
+    if (disposed) {
       return
     }
-    const events = buffer
-    buffer = []
-
-    thread = applyChatProjectionEvents(thread, events)
-
-    let settledRunId: string | null = null
-    for (const event of events) {
-      const before = machine
-      machine = transition(machine, {
-        type: "STREAM_EVENT",
-        runId: event.run_id,
-        kind: event.kind,
-      })
-      if (before.phase !== "idle" && machine.phase === "idle") {
-        settledRunId = event.run_id
-      }
-    }
-
+    const reduction = reduceProjectionEvents({ thread, machine, events })
+    thread = reduction.thread
+    machine = reduction.machine
     if (machine.phase === "awaiting-hitl" || machine.phase === "streaming") {
       // 待批帧：用户决策不设时限；streaming：reattach 已收到 live 事件即证明 run 活着。
       // 两者都撤 90s 兜底——否则长 run（>90s 工具执行）会被 TIMEOUT 误切流，UI 与真态撕裂。
       clearReattachTimer()
     }
-    if (settledRunId !== null) {
+    if (reduction.settledRunId !== null) {
       // 本轮终态收束：关流、清该 run 的决策暂存与幂等 id。
-      staging.delete(settledRunId)
-      resumeCommandIds.delete(settledRunId)
-      resumeInFlight.delete(settledRunId)
+      staging.delete(reduction.settledRunId)
+      resumeCommandIds.delete(reduction.settledRunId)
+      resumeInFlight.delete(reduction.settledRunId)
       closeStream()
       clearReattachTimer()
       // 活工作区（Manus 心智）：run 收尾即重读工作区文件清单，任何工具建的文件都进文件树，免手动刷新。
@@ -391,12 +199,34 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     notify()
   }
 
+  function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
+    execution.openStream(sessionId, resumeCursor, {
+      onCursor: (cursor) => {
+        if (disposed) {
+          return
+        }
+        // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
+        // Preserve it even when a partial tool-args frame has no projection.
+        thread = { ...thread, resumeCursor: cursor }
+      },
+      onEvents: handleStreamEvents,
+      onStreamError: (error) => {
+        if (disposed) {
+          return
+        }
+        clearReattachTimer()
+        machine = transition(machine, { type: "FAIL", error: error.message })
+        notify()
+      },
+    })
+  }
+
   // run 收尾后重同步文件/成果面：只吸收 snapshot.files 与 snapshot.deliveries（线程已由
   // 事件流实时构好，不重建），读的是工作区真相 → 覆盖一切建文件/deliver 的工具，非只认某个工具事件。
   function syncWorkspaceFiles(sessionId: string): void {
     filesSyncGeneration += 1
     const generation = filesSyncGeneration
-    deps.client
+    execution
       .fetchSnapshot(sessionId)
       .then((sessionSnapshot) => {
         if (
@@ -435,8 +265,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     machine = transition(machine, { type: "RESET" })
     thread = markRunCancelled(thread, runId)
     syncActiveEntry()
-    deps.client
-      .sendControl(sessionId, runId, { kind: "run.cancel", session_id: sessionId }, createId("command"))
+    execution
+      .cancelRun({ sessionId, runId, commandId: createId("command") })
       .catch(() => {
         // 后端取消失败不回滚本地停止：终态收口与租约回收负责最终一致。
       })
@@ -458,7 +288,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       hydrating = true
       notify()
     }
-    deps.client
+    execution
       .fetchSnapshot(sessionId)
       .then((sessionSnapshot) => {
         if (disposed || generation !== hydrateGeneration || store?.activeId !== sessionId) {
@@ -520,22 +350,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
   }
 
-  // 本地 echo 与事件史对齐：receipt 的 user_message_id 覆盖最后一条本地临时 id（usr_ 前缀）。
-  // SSE 的 message.user 可能先于 receipt 到达并已吸收/新建同 id 条——此时本地 echo 是多余
-  // 副本，删除而非改名（同 id 双条会撕裂 React key 唯一性）。
-  function adoptUserMessageId(serverId: string): void {
-    const index = thread.messages.findLastIndex(
-      (m) => m.role === "user" && m.id.startsWith("usr_"),
-    )
-    const existing = index >= 0 ? thread.messages[index] : undefined
-    if (existing === undefined) return
-    const messages = [...thread.messages]
-    if (messages.some((m) => m.id === serverId)) {
-      messages.splice(index, 1)
-    } else {
-      messages[index] = { ...existing, id: serverId }
+  function messageExecutionOptions(mode: AgentMode): MessageExecutionOptions {
+    return {
+      mode,
+      model: selectedModel,
+      agent: selectedAgent,
+      pinnedSkills,
     }
-    thread = { ...thread, messages }
   }
 
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
@@ -543,22 +364,23 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSubmission = { content, idempotencyKey }
     // 模式意图上 wire：thinking 档=true（后端各 provider 翻成原生推理开关），fast=false 显式关。
     const mode = store ? activeMode(store) : pendingMode
-    deps.client
-      .createMessage(sessionId, {
-        idempotency_key: idempotencyKey,
+    execution
+      .createMessage({
+        sessionId,
         content,
-        thinking: mode === "thinking",
-        ...(selectedModel !== null ? { model: selectedModel } : {}),
-        ...(selectedAgent !== null ? { agent: selectedAgent } : {}),
-        ...(pinnedSkills.length > 0 ? { pinned_skills: [...pinnedSkills] } : {}),
-        ...(scope.kind === "project" ? { project_ref: scope.projectRef } : {}),
+        idempotencyKey,
+        options: messageExecutionOptions(mode),
       })
       .then((receipt) => {
         const cancelledSessionId = cancelledSubmissions.get(idempotencyKey)
         if (cancelledSessionId === sessionId) {
           cancelledSubmissions.delete(idempotencyKey)
-          void deps.client
-            .sendControl(sessionId, receipt.run_id, { kind: "run.cancel", session_id: sessionId }, createId("command"))
+          void execution
+            .cancelRun({
+              sessionId,
+              runId: receipt.run_id,
+              commandId: createId("command"),
+            })
             .catch(() => {
               // Local cancellation already settled the UI; the backend cancel
               // is best effort for a receipt that arrived after the stop.
@@ -570,7 +392,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         pendingSubmission = null
-        adoptUserMessageId(receipt.user_message_id)
+        thread = reconcileUserMessageId(thread, receipt.user_message_id)
         machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
         openStream(sessionId, thread.resumeCursor)
         notify()
@@ -604,21 +426,18 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       // 回执/失败必须锚回发起时的会话：POST 在途时切走 → 迟到回调不得落在别的会话线程上
       // （否则 adopt 会改/删 T 的乐观气泡、notice 串到 T）。与 beginRun 回执守卫对齐。
       const steerSessionId = store.activeId
-      deps.client
-        .createMessage(steerSessionId, {
-          idempotency_key: createId("idem"),
+      execution
+        .createMessage({
+          sessionId: steerSessionId,
           content: trimmed,
-          thinking: activeMode(store) === "thinking",
-          ...(selectedModel !== null ? { model: selectedModel } : {}),
-          ...(selectedAgent !== null ? { agent: selectedAgent } : {}),
-          ...(pinnedSkills.length > 0 ? { pinned_skills: [...pinnedSkills] } : {}),
-          ...(scope.kind === "project" ? { project_ref: scope.projectRef } : {}),
+          idempotencyKey: createId("idem"),
+          options: messageExecutionOptions(activeMode(store)),
         })
         .then((receipt) => {
           if (disposed || store?.activeId !== steerSessionId) {
             return
           }
-          adoptUserMessageId(receipt.user_message_id)
+          thread = reconcileUserMessageId(thread, receipt.user_message_id)
           notify()
         })
         .catch((error: unknown) => {
@@ -696,8 +515,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const commandId = resumeCommandIds.get(runId) ?? createId("command")
     resumeCommandIds.set(runId, commandId)
     resumeInFlight.add(runId)
-    deps.client
-      .sendControl(sessionId, runId, { kind: "run.resume", session_id: sessionId, decisions }, commandId)
+    execution
+      .resumeRun({ sessionId, runId, decisions, commandId })
       .then(() => {
         if (disposed) {
           return
@@ -828,7 +647,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     // 服务端软删除 fire-and-forget：本地移除不等网络（失败仅记日志；
     // 服务端残留由 P1 会话列表服务端化对账——technical/16 入册边界）。
-    void deps.client.deleteSession(id).catch((error: unknown) => {
+    void execution.deleteSession(id).catch((error: unknown) => {
       console.error("session soft-delete failed", id, error)
     })
     activateConversation(removeConversation(store, id, createId("conv"), now()))
