@@ -32,6 +32,7 @@ export function WorkspaceHeaderIdentity({
   ]
 
   const selected = options.find((option) => option.key === tier) ?? options[2]
+  const selectedLabel = selected?.label ?? `${brandName} 1.6 Lite`
 
   return (
     <div className="flex min-w-0 items-center gap-1">
@@ -43,7 +44,7 @@ export function WorkspaceHeaderIdentity({
             className={styles.agentTrigger}
             aria-label={`${brandName} ${t("settings.accountSpaceLabel")}`}
           >
-            <span>{selected.label}</span>
+            <span>{selectedLabel}</span>
             <ChevronDown data-icon="inline-end" aria-hidden="true" />
           </Button>
         </PopoverTrigger>

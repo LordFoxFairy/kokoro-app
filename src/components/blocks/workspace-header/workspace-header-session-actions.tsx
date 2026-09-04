@@ -24,7 +24,10 @@ export function WorkspaceHeaderSessionActions({
     return (
       <>
         {!emptyWorkspace ? (
-          <WorkspaceHeaderUpgradeAction emptyWorkspace={false} onOpenSettings={onOpenSettings} />
+          <WorkspaceHeaderUpgradeAction
+            emptyWorkspace={false}
+            {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+          />
         ) : null}
         <WorkspaceHeaderProjectShare />
         {!emptyWorkspace ? (
@@ -41,18 +44,28 @@ export function WorkspaceHeaderSessionActions({
             </Button>
           </>
         ) : null}
-        <WorkspaceHeaderProjectMenu onOpenSettings={onOpenSettings} />
+        <WorkspaceHeaderProjectMenu
+          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+        />
       </>
     )
   }
 
   if (emptyWorkspace) {
-    return <WorkspaceHeaderUpgradeAction emptyWorkspace onOpenSettings={onOpenSettings} />
+    return (
+      <WorkspaceHeaderUpgradeAction
+        emptyWorkspace
+        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+      />
+    )
   }
 
   return (
     <>
-      <WorkspaceHeaderUpgradeAction emptyWorkspace={false} onOpenSettings={onOpenSettings} />
+      <WorkspaceHeaderUpgradeAction
+        emptyWorkspace={false}
+        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+      />
       {activeId !== null ? <ShareButton key={activeId} client={shareClient} sessionId={activeId} /> : null}
       <Button
         type="button"

@@ -51,8 +51,8 @@ function CommandDialog({
       <DialogContent
         className={cn("overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
-        closeLabel={closeLabel}
-        onCloseAutoFocus={onCloseAutoFocus}
+        {...(closeLabel === undefined ? {} : { closeLabel })}
+        {...(onCloseAutoFocus === undefined ? {} : { onCloseAutoFocus })}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>{title}</DialogTitle>

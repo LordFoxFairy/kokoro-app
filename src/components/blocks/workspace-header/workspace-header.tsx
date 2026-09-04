@@ -63,7 +63,7 @@ export function WorkspaceHeader({
         {showNavigationTrigger ? <WorkspaceNavigationTrigger /> : null}
         <WorkspaceHeaderIdentity
           brandName={brandName}
-          onOpenSettings={onOpenSettings}
+          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
         />
       </div>
       {/* A share popover belongs to one conversation. Remounting on switch
@@ -73,7 +73,7 @@ export function WorkspaceHeader({
         <WorkspaceHeaderSessionActions
           activeId={activeId}
           emptyWorkspace={emptyWorkspace}
-          onOpenSettings={onOpenSettings}
+          {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
           projectWorkspace={projectWorkspace}
           shareClient={shareClient}
         />

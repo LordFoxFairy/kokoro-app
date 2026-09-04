@@ -28,12 +28,12 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
-      defaultValue={defaultValue}
-      value={value}
+      {...(defaultValue === undefined ? {} : { defaultValue })}
+      {...(value === undefined ? {} : { value })}
       min={min}
       max={max}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
+      {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
+      {...(ariaLabelledBy === undefined ? {} : { "aria-labelledby": ariaLabelledBy })}
       className={cn(
         "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
         className
@@ -57,8 +57,8 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
-          aria-label={ariaLabel}
-          aria-labelledby={ariaLabelledBy}
+          {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
+          {...(ariaLabelledBy === undefined ? {} : { "aria-labelledby": ariaLabelledBy })}
           className="block size-4 shrink-0 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

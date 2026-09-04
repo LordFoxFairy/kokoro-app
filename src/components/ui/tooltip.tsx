@@ -39,7 +39,7 @@ function TooltipTrigger({
     <TooltipPrimitive.Trigger
       {...(asChild ? {} : { "data-slot": "tooltip-trigger" })}
       type={type ?? "button"}
-      asChild={asChild}
+      {...(asChild === undefined ? {} : { asChild })}
       {...props}
     />
   )

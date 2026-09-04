@@ -256,7 +256,12 @@ function WorkspaceRailContent({
   // Runtime tenant marks and uploaded logos remain authoritative. The local
   // fallback is a neutral product glyph, not the old Manus-like hand or a
   // language-specific character, so the lockup works across site locales.
-  const fallbackBrandMark = <BrandFallback mark={brandMark} className={styles.brandFallbackIcon} />
+  const fallbackBrandMark = (
+    <BrandFallback
+      {...(brandMark === undefined ? {} : { mark: brandMark })}
+      {...(styles.brandFallbackIcon === undefined ? {} : { className: styles.brandFallbackIcon })}
+    />
+  )
   const enabledNavigation = navigation?.filter((item) => isRuntimeNavigationEnabled(item, featureFlags))
   const workbenchNavigation = (enabledNavigation ?? []).map((item) => ({
     key: item.key,
@@ -559,6 +564,7 @@ function WorkspaceRailContent({
       if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return
       const next = [...current]
       const [item] = next.splice(index, 1)
+      if (item === undefined) return
       next.splice(nextIndex, 0, item)
       commitOrder(kind, next)
       setDragOverKey(`${kind}:${id}`)
@@ -624,19 +630,27 @@ function WorkspaceRailContent({
           }}
         >
           <span className={styles.brandMark} aria-hidden="true">
-            <BrandMark logoUrl={brandLogoUrl} imageClassName={styles.brandLogo} fallback={fallbackBrandMark} />
+            <BrandMark
+              {...(brandLogoUrl === undefined ? {} : { logoUrl: brandLogoUrl })}
+              imageClassName={styles.brandLogo ?? ""}
+              fallback={fallbackBrandMark}
+            />
           </span>
         </Button> : null}
         {!compactDesktop ? <Link
           className={styles.brand}
           href={chatHref}
-          prefetch={mountedSurfacePrefetch}
+          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
           aria-label={brandName ?? "Workspace"}
           tabIndex={0}
           onClickCapture={(event) => interceptMountedSurfaceNavigation(event, chatHref)}
         >
           <span className={styles.brandMark} aria-hidden="true">
-            <BrandMark logoUrl={brandLogoUrl} imageClassName={styles.brandLogo} fallback={fallbackBrandMark} />
+            <BrandMark
+              {...(brandLogoUrl === undefined ? {} : { logoUrl: brandLogoUrl })}
+              imageClassName={styles.brandLogo ?? ""}
+              fallback={fallbackBrandMark}
+            />
           </span>
           <div className={styles.brandText}>
             <p className={styles.brandTitle}>{brandName ?? "Workspace"}</p>
@@ -758,7 +772,7 @@ function WorkspaceRailContent({
             <SidebarMenuButton asChild tooltip={t("rail.directChats")} tooltipKey={navigationTransitionKey} className={styles.navItem} isActive={activeNavigationKey === "chat"}>
               <Link
                 href={chatHref}
-                prefetch={mountedSurfacePrefetch}
+                {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
                 onClickCapture={(event) => interceptMountedSurfaceNavigation(event, chatHref)}
                 onClick={closeNavigation}
                 data-testid="rail-direct-chat"
@@ -783,7 +797,7 @@ function WorkspaceRailContent({
                   return (
                     <SidebarMenuItem key={key}>
                       <SidebarMenuButton asChild tooltip={label} tooltipKey={navigationTransitionKey} className={styles.navItem} data-testid={`rail-${key}`} data-navigation-section={key} isActive={activeNavigationKey === key}>
-                        <Link href={href} prefetch={mountedSurfacePrefetch} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-label={label} aria-current={activeNavigationKey === key ? "page" : undefined}>
+                        <Link href={href} {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })} onPointerDown={markPointerFocus} onClickCapture={(event) => interceptMountedSurfaceNavigation(event, href)} onClick={closeNavigation} aria-label={label} aria-current={activeNavigationKey === key ? "page" : undefined}>
                           <Icon className={styles.icon} />
                           {navigationExpanded ? <span className={styles.navLabel}>{label}</span> : null}
                         </Link>
@@ -837,7 +851,9 @@ function WorkspaceRailContent({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className={styles.projectMenu}>
-                <DropdownMenuItem onSelect={onCreateProject}>
+                <DropdownMenuItem
+                  {...(onCreateProject === undefined ? {} : { onSelect: () => onCreateProject() })}
+                >
                   <Folder aria-hidden="true" />
                   {t("firstSite.newProject")}
                 </DropdownMenuItem>
@@ -861,7 +877,7 @@ function WorkspaceRailContent({
                           <DropdownMenuItem key={project.id} asChild>
                             <Link
                               href={project.href}
-                              prefetch={mountedSurfacePrefetch}
+                              {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
                               {...dragProps("project", project.id)}
                               onPointerDown={markPointerFocus}
                               onClickCapture={(event) => {
@@ -901,7 +917,7 @@ function WorkspaceRailContent({
                       <SidebarMenuButton asChild type="button" className={styles.itemSelect} isActive={active}>
                         <Link
                           href={project.href}
-                          prefetch={mountedSurfacePrefetch}
+                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
                           {...dragProps("project", project.id)}
                           onPointerDown={markPointerFocus}
                           onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
@@ -933,18 +949,18 @@ function WorkspaceRailContent({
                       >
                         <ListTodo className={styles.icon} aria-hidden="true" />
                       </button>
-                    ) : (
+                    ) : projectHref !== undefined ? (
                       <Link
-                        href={projectHref!}
-                        prefetch={mountedSurfacePrefetch}
+                        href={projectHref}
+                        {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
                         aria-label={t("firstSite.tasks")}
                         onPointerDown={markPointerFocus}
-                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref!)}
+                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}
                         onClick={closeNavigation}
                       >
                         <ListTodo className={styles.icon} aria-hidden="true" />
                       </Link>
-                    )}
+                    ) : null}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -1148,12 +1164,12 @@ function WorkspaceRailContent({
           </div>
         ) : null}
         <UserCard
-          brandName={brandName}
+          {...(brandName === undefined ? {} : { brandName })}
           preview={preview}
           compactDesktop={compactDesktop}
           onOpenSettings={openSettings}
-          onOpenNotifications={onOpenNotifications}
-          accountTriggerRef={accountTriggerRef}
+          {...(onOpenNotifications === undefined ? {} : { onOpenNotifications })}
+          {...(accountTriggerRef === undefined ? {} : { accountTriggerRef })}
         />
       </SidebarFooter>
       </div>

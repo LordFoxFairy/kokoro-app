@@ -82,9 +82,14 @@ export default function SharedPage() {
           <EmptyHeader>
             <EmptyMedia variant="icon" aria-hidden="true">
               <BrandMark
-                logoUrl={manifest.brand.logoUrl}
-                fallback={<BrandFallback mark={manifest.brand.mark} className={styles.brandFallbackIcon} />}
-                imageClassName={styles.emptyLogo}
+                {...(manifest.brand.logoUrl === undefined ? {} : { logoUrl: manifest.brand.logoUrl })}
+                fallback={
+                  <BrandFallback
+                    mark={manifest.brand.mark}
+                    {...(styles.brandFallbackIcon === undefined ? {} : { className: styles.brandFallbackIcon })}
+                  />
+                }
+                imageClassName={styles.emptyLogo ?? ""}
               />
             </EmptyMedia>
             <p className={styles.emptyBrand}>{manifest.brand.name}</p>
@@ -106,9 +111,14 @@ export default function SharedPage() {
       <header className={styles.header}>
         <div className={styles.brand}>
           <BrandMark
-            logoUrl={manifest.brand.logoUrl}
-            fallback={<BrandFallback mark={manifest.brand.mark} className={styles.brandFallbackIcon} />}
-            imageClassName={styles.brandLogo}
+            {...(manifest.brand.logoUrl === undefined ? {} : { logoUrl: manifest.brand.logoUrl })}
+            fallback={
+              <BrandFallback
+                mark={manifest.brand.mark}
+                {...(styles.brandFallbackIcon === undefined ? {} : { className: styles.brandFallbackIcon })}
+              />
+            }
+            imageClassName={styles.brandLogo ?? ""}
           />
         </div>
         <div className={styles.headText}>

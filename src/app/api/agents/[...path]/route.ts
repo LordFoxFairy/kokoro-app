@@ -34,7 +34,7 @@ export async function GET(
 
   const url = new URL(request.url)
   const platforms = url.searchParams.getAll("platform")
-  const platform = platforms.length === 1 ? platforms[0] : null
+  const platform = platforms.length === 1 ? platforms[0] ?? null : null
   if (platform === null || !PLATFORMS.has(platform)) {
     return errorResponse("invalid_agent_platform", 400)
   }

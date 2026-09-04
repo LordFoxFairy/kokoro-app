@@ -271,8 +271,10 @@ function conversationIdFromLocation(): string | null {
   if (!match) {
     return null
   }
+  const encodedId = match[1]
+  if (encodedId === undefined) return null
   try {
-    return decodeURIComponent(match[1]).trim() || null
+    return decodeURIComponent(encodedId).trim() || null
   } catch {
     return null
   }
@@ -1668,7 +1670,7 @@ export function AppFrame({
       onStop={() => engine?.cancelRun()}
       composerRef={composerRef}
       emptyWorkspace={!hasMessages}
-      placeholder={creationPlaceholder}
+      {...(creationPlaceholder === undefined ? {} : { placeholder: creationPlaceholder })}
       mode={mode}
       onModeChange={(next) => engine?.setMode(next)}
       modeLocked={modeLocked}
@@ -1678,7 +1680,7 @@ export function AppFrame({
       // Neutral and Website/App creation surfaces keep the reference's quiet
       // toolbar. Presentation/Design/Game expose their workflow model inline.
       hideModelSelector={!hasMessages && (!projectedCreationIntent || projectedCreationIntent === "website" || projectedCreationIntent === "app")}
-      preferredModelSelector={preferredCreationModel}
+      {...(preferredCreationModel === undefined ? {} : { preferredModelSelector: preferredCreationModel })}
       selectedModel={selectors.selectedModel}
       onModelChange={selectors.setSelectedModel}
       modelLocked={modeLocked}
@@ -1724,7 +1726,9 @@ export function AppFrame({
           ) : null}
         </>
       }
-      creationIntent={!hasMessages ? projectedCreationIntent ?? undefined : undefined}
+      {...(!hasMessages && projectedCreationIntent !== null
+        ? { creationIntent: projectedCreationIntent }
+        : {})}
       onCreationIntentDismiss={dismissCreationIntent}
       environmentLabel={t("settings.desktopApp", { brand: brandName ?? "Kokoro" })}
       projectWorkspace={projectWorkspace}
@@ -1754,7 +1758,7 @@ export function AppFrame({
           activeId={activeId}
           shareClient={browserListClient({ preview })}
           onOpenSettings={openSettings}
-          brandName={brandName}
+          {...(brandName === undefined ? {} : { brandName })}
           emptyWorkspace={!showConversation}
           projectWorkspace={projectWorkspace}
           // The header owns the only menu trigger while the compact rail is
@@ -1779,7 +1783,7 @@ export function AppFrame({
         ) : showConversation ? (
           <div data-slot="conversation-timeline" className="min-h-0 flex-1">
             <ConversationThread
-            brandName={brandName}
+            {...(brandName === undefined ? {} : { brandName })}
             sessionId={activeId}
             thread={thread}
             isStreaming={isStreaming}
@@ -1808,11 +1812,11 @@ export function AppFrame({
             // the previous welcome surface. Keying by its session restores the
             // canvas scroll and site-local empty-state controls together.
             key={activeId ?? "new-workspace"}
-            brandName={brandName}
+            {...(brandName === undefined ? {} : { brandName })}
             preview={preview}
-            scheduledTaskClient={scheduledTaskClient}
+            {...(scheduledTaskClient === undefined ? {} : { scheduledTaskClient })}
             draft={draft}
-            creationIntent={projectedCreationIntent ?? undefined}
+            {...(projectedCreationIntent === null ? {} : { creationIntent: projectedCreationIntent })}
             projectWorkspace={projectWorkspace}
             onPrompt={handlePrompt}
             onCreationIntentSelect={handleCreationIntentSelect}
@@ -1921,7 +1925,9 @@ export function AppFrame({
       }}
     >
       {compactDesktopRail && hideWorkspaceHeader && railHidden ? (
-        <WorkspaceNavigationTrigger className={styles.compactNavigationTrigger} />
+        <WorkspaceNavigationTrigger
+          {...(styles.compactNavigationTrigger === undefined ? {} : { className: styles.compactNavigationTrigger })}
+        />
       ) : null}
       <WorkspaceRail
         withinProvider
@@ -1932,16 +1938,16 @@ export function AppFrame({
           else setRailCollapsed((value) => !value)
         }}
         onNewChat={startNewChatAndFocus}
-        brandName={brandName}
-        brandMark={brandMark}
-        brandLogoUrl={brandLogoUrl}
-        navigation={navigation}
-        featureFlags={featureFlags}
+        {...(brandName === undefined ? {} : { brandName })}
+        {...(brandMark === undefined ? {} : { brandMark })}
+        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
+        {...(navigation === undefined ? {} : { navigation })}
+        {...(featureFlags === undefined ? {} : { featureFlags })}
         chatHref={chatHref}
         projectHref={projectRef ? `/app/project/${encodeURIComponent(projectRef)}` : "/app/project/kokoro"}
         projectActive={projectWorkspace}
         onCreateProject={createProject}
-        activeNavigationKey={activeNavigationKey}
+        {...(activeNavigationKey === undefined ? {} : { activeNavigationKey })}
         preview={preview}
         conversations={conversations}
         activeId={activeId}
@@ -2052,7 +2058,7 @@ export function AppFrame({
         <SettingsModal
           key={settingsTab}
           engine={engine}
-          brandName={brandName}
+          {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
           preview={preview}
           onClose={closeSettings}
@@ -2089,8 +2095,8 @@ export function AppFrame({
         onOpenChange={setCommandOpen}
         onNewChat={startNewChatFromCommand}
         onOpenSettings={openSettings}
-        navigation={navigation}
-        featureFlags={featureFlags}
+        {...(navigation === undefined ? {} : { navigation })}
+        {...(featureFlags === undefined ? {} : { featureFlags })}
         projectWorkspace={projectWorkspace}
         returnFocusRef={commandReturnFocusRef}
         focusScopeRef={shellRef}
