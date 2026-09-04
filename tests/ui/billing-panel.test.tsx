@@ -68,6 +68,12 @@ describe("BillingPanel", () => {
     expect(screen.getByTestId("billing-panel")).toHaveClass("p-0", "box-border")
   })
 
+  it("keeps balance and ledger as independently addressable sections", async () => {
+    renderPanel(makeClient())
+    expect(await screen.findByTestId("billing-balance")).toHaveAttribute("data-slot", "billing-balance-card")
+    expect(screen.getByTestId("billing-ledger")).toHaveAttribute("data-slot", "billing-ledger")
+  })
+
   it("renders balance and held in credits (1 积分 = 10000 micros)", async () => {
     renderPanel(makeClient())
     const balance = await screen.findByTestId("billing-balance")

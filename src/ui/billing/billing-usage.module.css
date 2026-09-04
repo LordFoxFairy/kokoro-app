@@ -1,0 +1,17 @@
+.trend { margin-top: 0.85rem; padding: 0.75rem 0.9rem; background: var(--secondary); border-radius: var(--radius-lg); }
+.trendHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+.trendTitle { font-size: 0.82rem; font-weight: 600; color: var(--muted-foreground); }
+.trendHint { font-size: 0.72rem; color: var(--muted-foreground); }
+.sparkline { display: block; width: 100%; height: 2rem; }
+.sparkline polyline { stroke: var(--primary); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.byModel { margin-top: 0.85rem; padding: 0.75rem 0.9rem; background: var(--secondary); border-radius: var(--radius-lg); }
+.byModelTitle { margin: 0 0 0.55rem; font-size: 0.82rem; font-weight: 600; color: var(--muted-foreground); }
+.byModelList { display: flex; flex-direction: column; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.byModelRow { display: flex; flex-direction: column; gap: 0.25rem; }
+.byModelRowHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.byModelName { font-size: 0.82rem; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.byModelSpent { flex-shrink: 0; font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--foreground); }
+.byModelBarTrack { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.byModelBar { height: 100%; border-radius: 999px; background: var(--primary); transition: width var(--motion-slow) var(--ease-standard); }
+.byModelRuns { font-size: 0.72rem; color: var(--muted-foreground); }
+.more { width: 100%; margin-top: 1rem; padding: 0.55rem; font-size: 0.85rem; }

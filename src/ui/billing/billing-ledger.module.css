@@ -1,0 +1,40 @@
+.ledgerHeadRow { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin: 1.5rem 0 0.75rem; flex-wrap: wrap; }
+.ledgerHead { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.95rem; font-weight: 600; color: var(--foreground); }
+.ledgerHead svg { width: 0.875rem; height: 0.875rem; color: var(--muted-foreground); stroke-width: 1.7; }
+[data-embedded="billing"] .ledgerHeadRow { margin: 1.5rem 0 0; }
+[data-embedded="billing"] .ledgerHead { font-size: 1rem; font-weight: 500; line-height: 1.5rem; }
+.filters { display: inline-flex; gap: 0.25rem; padding: 0.2rem; background: var(--secondary); border-radius: var(--radius-md); }
+.filterChip { padding: 0.3rem 0.65rem; font-size: 0.78rem; transition: color var(--motion-fast) var(--ease-standard); }
+.filterChip[data-state="active"] { color: var(--foreground); box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent); }
+.dayGroup { margin-bottom: 0.5rem; }
+.dayHead { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; padding: 0.55rem 0.25rem 0.35rem; position: sticky; top: 0; z-index: 1; }
+.dayLabel { font-size: 0.78rem; font-weight: 600; color: var(--muted-foreground); letter-spacing: 0.02em; }
+.dayNet { font-size: 0.78rem; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.dayNet[data-sign="positive"] { color: var(--success); }
+.dayNet[data-sign="negative"] { color: var(--muted-foreground); }
+[data-embedded="billing"] .dayHead { position: static; height: 2.28125rem; margin-top: 0.25rem; padding: 0.5rem 0; }
+[data-embedded="billing"] .dayLabel { font-size: 0.8125rem; font-weight: 400; line-height: 1.21875rem; letter-spacing: 0; }
+.ledger { display: flex; flex-direction: column; }
+.entry { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.7rem 0.25rem; border-bottom: 1px solid var(--border); }
+.entryMain { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.entryReason { font-size: 0.9rem; color: var(--foreground); }
+.entryMeta { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.entryTime { font-size: 0.75rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.runTag { font-size: 0.68rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted-foreground); background: var(--secondary); padding: 0.05rem 0.35rem; border-radius: var(--radius-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entryDelta { font-size: 0.95rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.entryDelta[data-sign="positive"] { color: var(--success); }
+.entryDelta[data-sign="negative"] { color: var(--error); }
+.entryDelta[data-sign="zero"] { color: var(--muted-foreground); }
+[data-embedded="billing"] .entry { height: 2.125rem; padding: 0.5rem 0; }
+[data-embedded="billing"] .entryReason, [data-embedded="billing"] .entryDelta { font-size: 0.8125rem; font-weight: 500; line-height: 1.125rem; }
+[data-embedded="billing"] .entryReason { display: inline-block; max-width: 36rem; overflow: hidden; color: var(--foreground); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+[data-embedded="billing"] .entryDelta, [data-embedded="billing"] .entryDelta[data-sign] { margin: -0.25rem; padding: 0.25rem; color: var(--foreground); }
+@media (max-width: 640px) {
+  .filters { width: 100%; max-width: 100%; justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; }
+  .filterChip { flex: 0 0 auto; white-space: nowrap; padding-inline: 0.5rem; }
+}
+@media (max-width: 320px) {
+  .filters { overflow: hidden; justify-content: stretch; }
+  .filterChip { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; padding-inline: 0.25rem; font-size: 0.75rem; }
+  .filterChip:first-child { min-width: 2rem; }
+}

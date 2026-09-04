@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 
-import styles from "./composer.module.css"
+import styles from "./composer-controls.module.css"
 
 export type MenuOption = {
   key: string

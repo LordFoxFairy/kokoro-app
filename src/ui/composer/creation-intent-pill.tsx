@@ -2,7 +2,7 @@ import { Gamepad2, Presentation, Sparkles, X } from "lucide-react"
 
 import { CodeWindowIcon } from "@/components/icons/code-window-icon"
 
-import styles from "./composer.module.css"
+import styles from "./composer-intent.module.css"
 
 export type CreationIntent = "presentation" | "website" | "design" | "game" | "app"
 

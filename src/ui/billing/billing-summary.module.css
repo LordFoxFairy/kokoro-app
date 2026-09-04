@@ -1,0 +1,31 @@
+.balanceCard { padding: 1.1rem 1.25rem; background: var(--secondary); border-radius: var(--radius-xl); }
+[data-embedded="billing"] .balanceCard { width: 100%; height: 11.9375rem; min-height: 11.9375rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: #fafafa; }
+.embeddedBalanceContent { display: flex; height: 100%; min-height: 0; flex-direction: column; }
+.embeddedPlanHeader { display: flex; align-items: center; justify-content: space-between; height: 3.5625rem; min-height: 3.5625rem; gap: 1rem; border-bottom: 1px dashed var(--border); font-size: 1rem; }
+.embeddedPlanHeader strong { font-family: var(--font-serif); font-size: 1rem; font-weight: 700; line-height: 1.375rem; }
+.embeddedCreditRows { display: flex; height: 8.25rem; flex-direction: column; gap: 1rem; padding: 1rem 0; }
+.embeddedCreditRow { display: flex; align-items: flex-start; gap: 0.375rem; height: 2.625rem; min-height: 2.625rem; }
+.embeddedCreditRow > svg { width: 1.25rem; height: 1.25rem; flex: 0 0 1.25rem; color: var(--foreground); stroke-width: 1.8; }
+.embeddedCreditCopy { min-width: 0; flex: 1; }
+.embeddedMetric { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; font-size: 0.875rem; line-height: 1.25rem; }
+.embeddedMetric > span:first-child { display: inline-flex; align-items: center; gap: 0.25rem; font-weight: 500; }
+.embeddedMetric strong { font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; font-variant-numeric: tabular-nums; }
+.embeddedMetricSubrow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.25rem; color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.125rem; font-variant-numeric: tabular-nums; }
+.embeddedRefreshHint { margin: 0.25rem 0 0; color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.125rem; }
+.metricHelp[type="button"] { display: inline-flex; width: 0.875rem; height: 0.875rem; min-height: 0; align-items: center; justify-content: center; border: 0; padding: 0; background: transparent; color: var(--muted-foreground); }
+.metricHelp svg { width: 0.875rem; height: 0.875rem; }
+.balanceHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.balanceUpgrade { min-height: 2rem; border-radius: 0.5rem; padding-inline: 1.125rem; font-size: 0.875rem; line-height: 1.125rem; }
+.balanceMain { display: flex; flex-direction: column; gap: 0.2rem; }
+.balanceLabel { font-size: 0.8rem; color: var(--muted-foreground); }
+.balanceValue { font-family: var(--font-serif); font-size: 2rem; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.balanceHeld { display: flex; justify-content: space-between; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); font-size: 0.85rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.lowBalance { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; padding: 0.85rem 1rem; background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: var(--radius-lg); }
+.lowBalanceText { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.lowBalanceTitle { font-size: 0.9rem; color: var(--foreground); }
+.lowBalanceBody { font-size: 0.8rem; color: var(--muted-foreground); }
+.lowBalanceCta { flex-shrink: 0; padding: 0.45rem 0.9rem; font-size: 0.83rem; font-weight: 600; white-space: nowrap; }
+@media (max-width: 640px) {
+  .lowBalance { align-items: flex-start; flex-direction: column; }
+  .balanceValue { font-size: 1.5rem; white-space: nowrap; }
+}

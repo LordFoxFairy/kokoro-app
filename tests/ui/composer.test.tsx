@@ -649,6 +649,8 @@ describe("Composer 状态契约", () => {
   it("空值保持发送按钮禁用，且保留固定的编辑区", () => {
     renderComposer({ draft: "", canSend: false })
       expect(screen.getByRole("form", { name: "Message editor" })).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("data-slot", "composer-input")
+    expect(screen.getByTestId("composer-controls")).toHaveAttribute("data-slot", "composer-controls")
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
     expect(screen.queryByRole("status")).toBeNull()
   })
