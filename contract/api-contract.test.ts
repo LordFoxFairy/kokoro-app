@@ -11,7 +11,7 @@ import {
   sessionSnapshotSchema,
 } from "@/contract/http"
 import { resumeDecisionSchema } from "@/contract/control"
-import { RUN_FAILURE_CODES, sessionEventSchema } from "@/contract/session-events"
+import { RUN_FAILURE_CODES, chatProjectionEventSchema } from "@/core/chat-projection-event"
 import { createSessionClient } from "@/engine/client"
 
 const eventEnvelope = {
@@ -21,6 +21,9 @@ const eventEnvelope = {
   run_id: "run_1",
   timestamp: "2026-08-31T12:00:00.000Z",
 }
+
+const EVENT_CURSOR = "agui_0000000000000000000000000000002a"
+const NEXT_EVENT_CURSOR = "agui_0000000000000000000000000000002b"
 
 const eventFixtures: Array<[string, Record<string, unknown>]> = [
   ["session.created", { title: "New session", owner_id: "user_1" }],
@@ -88,7 +91,7 @@ const sessionSnapshot = {
   pending_pauses: [],
   files: [],
   deliveries: [],
-  event_watermark: 0,
+  event_watermark: EVENT_CURSOR,
 }
 
 describe("checked-in HTTP request and response contracts", () => {
@@ -131,7 +134,7 @@ describe("checked-in HTTP request and response contracts", () => {
   })
 
   it("accepts flat session/artifact responses and rejects envelope or unknown-field drift", () => {
-    expect(sessionSnapshotSchema.parse(sessionSnapshot).event_watermark).toBe(0)
+    expect(sessionSnapshotSchema.parse(sessionSnapshot).event_watermark).toBe(EVENT_CURSOR)
     expect(sessionListSchema.parse({ sessions: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
     expect(artifactListSchema.parse({ artifacts: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
     expect(messageCreateReceiptSchema.parse({ run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" })).toBeTruthy()
@@ -159,14 +162,14 @@ describe("checked-in HTTP request and response contracts", () => {
 
 describe("checked-in SSE event union", () => {
   it.each(eventFixtures)("accepts %s with its payload shape", (kind, payload) => {
-    const parsed = sessionEventSchema.parse({ ...eventEnvelope, kind, payload })
+    const parsed = chatProjectionEventSchema.parse({ ...eventEnvelope, kind, payload })
     expect(parsed.kind).toBe(kind)
   })
 
   it("rejects negative watermarks, unknown event fields, and unstable failure codes", () => {
-    expect(sessionEventSchema.safeParse({ ...eventEnvelope, seq: -1, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
-    expect(sessionEventSchema.safeParse({ ...eventEnvelope, extra: true, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
-    expect(sessionEventSchema.safeParse({ ...eventEnvelope, kind: "run.failed", payload: { code: "unknown_failure", error_kind: "Error", message: "failed" } }).success).toBe(false)
+    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, seq: -1, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
+    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, extra: true, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
+    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, kind: "run.failed", payload: { code: "unknown_failure", error_kind: "Error", message: "failed" } }).success).toBe(false)
     expect(RUN_FAILURE_CODES).toContain("contract_incompatible")
   })
 })
@@ -234,21 +237,40 @@ describe("cursor pagination and same-origin client paths", () => {
   })
 
   it("uses the same resumable SSE wire for a project Chat session", async () => {
-    const event = { ...eventEnvelope, seq: 43, kind: "run.completed", payload: { status: "completed" } }
+    const event = {
+      type: "RUN_FINISHED",
+      timestamp: Date.parse("2026-08-31T12:00:01.000Z"),
+      threadId: "project_session",
+      runId: "run_1",
+      metadata: {
+        kokoro: {
+          event_id: "evt_43",
+          seq: 43,
+          session_id: "project_session",
+          run_id: "run_1",
+          timestamp: "2026-08-31T12:00:01.000Z",
+        },
+      },
+    }
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+        controller.enqueue(new TextEncoder().encode(`id: ${NEXT_EVENT_CURSOR}\ndata: ${JSON.stringify(event)}\n\n`))
         controller.close()
       },
     })
-    const fetchMock = vi.fn().mockResolvedValue(new Response(body, { status: 200 }))
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }))
     vi.stubGlobal("fetch", fetchMock)
     const onEvent = vi.fn()
+    const onCursor = vi.fn()
     const onStreamError = vi.fn()
     const client = createSessionClient({ baseUrl: "/api/session" })
     const stream = client.openEvents({
       sessionId: "project_session",
-      lastEventId: 42,
+      resumeCursor: EVENT_CURSOR,
+      onCursor,
       onEvent,
       onStreamError,
     })
@@ -257,8 +279,9 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions/project_session/events")
     const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
     expect(headers.get("accept")).toBe("text/event-stream")
-    expect(headers.get("last-event-id")).toBe("42")
+    expect(headers.get("last-event-id")).toBe(EVENT_CURSOR)
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ seq: 43, kind: "run.completed" }))
+    expect(onCursor).toHaveBeenCalledWith(NEXT_EVENT_CURSOR)
     expect(onStreamError).not.toHaveBeenCalled()
     stream.close()
   })

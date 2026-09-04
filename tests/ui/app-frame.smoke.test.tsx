@@ -1678,7 +1678,7 @@ it("刷新场景：带 pending pause 的 snapshot 水合后审批卡直接可操
         pendingPauses: [
           makePendingPause({ run_id: "run_9", tool_id: "tool_1", tool_name: "write_file" }),
         ],
-        eventWatermark: 20,
+        eventWatermark: "agui_00000000000000000000000000000014",
       }),
     )
   // 引擎在构造时水合：重建一次以套用编程后的 snapshot。

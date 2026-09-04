@@ -22,7 +22,7 @@ function snapshot(): SessionSnapshot {
     pending_pauses: [],
     files: [],
     deliveries: [],
-    event_watermark: 2,
+    event_watermark: "agui_00000000000000000000000000000002",
   }
 }
 

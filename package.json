@@ -24,10 +24,12 @@
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",
+    "@ai-sdk/react": "4.0.95",
     "@bufbuild/protobuf": "2.14.0",
     "@kokoro/i18n": "workspace:*",
     "@kokoro/web-core": "workspace:*",
     "@shadcn/react": "^0.3.0",
+    "ai": "7.0.92",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.33.0",

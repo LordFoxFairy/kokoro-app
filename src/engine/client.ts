@@ -7,7 +7,6 @@ import {
   artifactsPath,
   controlPath,
   eventsPath,
-  LAST_EVENT_ID_HEADER,
   messagesPath,
   parseSessionSnapshot,
   runControlReceiptSchema,
@@ -39,29 +38,23 @@ import {
   renameSessionReceiptSchema,
   type RenameSessionReceipt,
 } from "@/contract/http"
-import { parseSessionEvent, type SessionEvent } from "@/contract/session-events"
-import { parseAgUiEvent } from "@/contract/agui-events"
+import type { EventCursor } from "@/contract/agui-events"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
+import { AgUiChatTransport } from "./agui-chat-transport"
+import { SessionClientError, type ClientFailureReason } from "./client-error"
 import type { SessionScope } from "./session-scope"
 
-export type ClientFailureReason = "network" | "http" | "parse"
-
-export class SessionClientError extends Error {
-  readonly reason: ClientFailureReason
-
-  constructor(reason: ClientFailureReason, message: string) {
-    super(message)
-    this.name = "SessionClientError"
-    this.reason = reason
-  }
-}
+export { SessionClientError }
+export type { ClientFailureReason }
 
 export type EventStreamHandle = { close: () => void }
 
 export type OpenEventsArgs = {
   sessionId: string
-  // 续流水位（snapshot event_watermark 或已折叠的最大 seq）：作为 Last-Event-ID 请求头上送。
-  lastEventId?: number
-  onEvent: (event: SessionEvent) => void
+  // BFF durable AG-UI ledger 的 opaque cursor；null 表示从当前 snapshot 之前没有可续点。
+  resumeCursor: EventCursor | null
+  onCursor: (cursor: EventCursor) => void
+  onEvent: (event: ChatProjectionEvent) => void
   // 入站载荷未过契约或流已不可恢复：交状态机转错误态。
   onStreamError: (error: SessionClientError) => void
 }
@@ -93,9 +86,6 @@ export type SessionClient = {
   revokeShare: (sessionId: string) => Promise<MutationReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
 }
-
-// 断流重连间隔：对齐 EventSource 的默认重试节奏，按最后 seq 续连不重放。
-const SSE_RETRY_MS = 2_000
 
 function describeUnknown(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -142,6 +132,7 @@ async function postJson<T>(
   body: unknown,
   parse: (raw: unknown) => T,
   commandId?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
   let response: Response
   const bodyRecord = typeof body === "object" && body !== null && !Array.isArray(body)
@@ -157,6 +148,7 @@ async function postJson<T>(
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
       body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
     })
   } catch (error) {
     throw new SessionClientError("network", describeUnknown(error))
@@ -167,47 +159,23 @@ async function postJson<T>(
   return parseJsonResponse(response, parse)
 }
 
-// SSE 帧增量解析（纯函数）：跨 chunk 累积，按空行切帧，帧内 data 行拼接后回调。
-export function createSseFrameParser(onData: (data: string) => void): (chunk: string) => void {
-  let buffer = ""
-  return (chunk) => {
-    buffer += chunk
-    let separatorMatch = /\r?\n\r?\n/.exec(buffer)
-    while (separatorMatch !== null) {
-      const separator = separatorMatch.index
-      const frame = buffer.slice(0, separator)
-      buffer = buffer.slice(separator + separatorMatch[0].length)
-      const data = frame
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice("data:".length).replace(/^ /, ""))
-        .join("\n")
-      if (data.length > 0) {
-        onData(data)
-      }
-      separatorMatch = /\r?\n\r?\n/.exec(buffer)
-    }
-  }
-}
-
-/**
- * A single Agent Chat fact may expand into multiple AG-UI frames. Advance the
- * source cursor only after the frame that completes that projection, otherwise
- * a disconnect between START and CONTENT could skip the remaining content on
- * replay.
- */
-export function shouldAdvanceSseCursor(input: unknown): boolean {
-  if (typeof input !== "object" || input === null || !("type" in input)) return true
-  const type = input.type
-  if (typeof type !== "string") return true
-  return type !== "TEXT_MESSAGE_START" && type !== "TOOL_CALL_START" && type !== "TOOL_CALL_END"
-}
-
 export function createSessionClient(options: { baseUrl: string }): SessionClient {
   // 契约路径以 `/` 打头，故 base+path 直接拼接（非 new URL——那会丢掉 `/api/session` 前缀）。
   // baseUrl 可为绝对源（`http://host`）或同源相对前缀（`/api/session`）。
   const base = options.baseUrl.replace(/\/+$/, "")
   const url = (path: string): string => `${base}${path}`
+  const agUiTransport = new AgUiChatTransport({
+    eventsUrl: (sessionId) => url(eventsPath(sessionId)),
+    submitMessage: async ({ chatId, content, abortSignal }) => {
+      await postJson(
+        url(messagesPath(chatId)),
+        { idempotency_key: `ai-chat:${crypto.randomUUID()}`, content },
+        (raw) => messageCreateReceiptSchema.parse(raw),
+        undefined,
+        abortSignal,
+      )
+    },
+  })
   // 鉴权（AUTH-P0）：同源 BFF 代理注入 Bearer；浏览器不持 token，靠 httpOnly 信封 cookie
   // 同源自动携带，客户端不加任何 Authorization 头。
 
@@ -352,118 +320,19 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => renameSessionReceiptSchema.parse(raw))
     },
 
-    // fetch 流式 SSE（非 EventSource）：首连即可携带 Last-Event-ID 头（契约续流轴 = seq），
-    // 断流按最后已见 seq 自动重连；契约拒绝或 HTTP 错误 fail-loud 收口，不静默降级。
-    openEvents: ({ sessionId, lastEventId, onEvent, onStreamError }) => {
-      const target = url(eventsPath(sessionId))
-      const controller = new AbortController()
-      let retryTimer: ReturnType<typeof setTimeout> | null = null
-      let closed = false
-      let cursor = lastEventId
-
-      const fail = (error: SessionClientError): void => {
-        if (closed) {
-          return
-        }
-        closed = true
-        controller.abort()
-        onStreamError(error)
-      }
-
-      const scheduleRetry = (): void => {
-        if (closed) {
-          return
-        }
-        retryTimer = setTimeout(() => {
-          retryTimer = null
-          void connect()
-        }, SSE_RETRY_MS)
-      }
-
-      const consumeData = (data: string): void => {
-        let raw: unknown
-        try {
-          raw = JSON.parse(data)
-        } catch (error) {
-          fail(new SessionClientError("parse", describeUnknown(error)))
-          return
-        }
-        let event: SessionEvent
-        try {
-          try {
-            event = parseSessionEvent(raw)
-          } catch {
-            event = parseAgUiEvent(raw)
+    // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are
+    // centralized in AgUiChatTransport; no reducer-shaped wire fallback exists.
+    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }) =>
+      agUiTransport.openProjectionEvents({
+        chatId: sessionId,
+        resumeCursor,
+        onFrame: (frame) => {
+          onCursor(frame.cursor)
+          if (frame.projectionEvent !== null) {
+            onEvent(frame.projectionEvent)
           }
-        } catch {
-          fail(new SessionClientError("parse", "SSE payload rejected by contract"))
-          return
-        }
-        if (shouldAdvanceSseCursor(raw)) {
-          cursor = event.seq
-        }
-        onEvent(event)
-      }
-      let parser = createSseFrameParser(consumeData)
-
-      const connect = async (): Promise<void> => {
-        // Drop a partial frame from the disconnected response. The next
-        // connection replays from cursor and must start at a fresh frame.
-        parser = createSseFrameParser(consumeData)
-        const headers: Record<string, string> = { accept: "text/event-stream" }
-        if (cursor !== undefined) {
-          headers[LAST_EVENT_ID_HEADER] = String(cursor)
-        }
-        let response: Response
-        try {
-          response = await fetch(target, {
-            headers,
-            cache: "no-store",
-            signal: controller.signal,
-          })
-        } catch {
-          // 网络失败（含 abort）：close 时静默退出，否则按 cursor 定时重连。
-          scheduleRetry()
-          return
-        }
-        if (closed) {
-          return
-        }
-        if (!response.ok || response.body === null) {
-          fail(new SessionClientError("http", `GET ${target} failed with status ${response.status}`))
-          return
-        }
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        try {
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) {
-              break
-            }
-            parser(decoder.decode(value, { stream: true }))
-            if (closed) {
-              return
-            }
-          }
-        } catch {
-          // 读取中断（网络/abort）：与连接失败同路径处理。
-        }
-        scheduleRetry()
-      }
-
-      void connect()
-
-      return {
-        close: () => {
-          closed = true
-          if (retryTimer !== null) {
-            clearTimeout(retryTimer)
-            retryTimer = null
-          }
-          controller.abort()
         },
-      }
-    },
+        onStreamError,
+      }),
   }
 }

@@ -49,6 +49,8 @@ describe("preview transport control loop", () => {
     })
     client.openEvents({
       sessionId: "preview-session",
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => {
         events.push(event.kind)
         eventIds.push(event.event_id)
@@ -80,6 +82,8 @@ describe("preview transport control loop", () => {
     })
     client.openEvents({
       sessionId: "preview-reject-session",
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => {
         if (event.kind === "tool.awaiting_approval") awaiting = true
         if (event.kind === "tool.returned") {
@@ -111,6 +115,8 @@ describe("preview transport control loop", () => {
     })
     client.openEvents({
       sessionId: "preview-invalid-failure-session",
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => {
         if (event.kind === "run.failed") failures.push(event.payload)
       },
@@ -138,6 +144,8 @@ describe("preview transport control loop", () => {
     })
     firstClient.openEvents({
       sessionId,
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => firstEvents.push(event.kind),
       onStreamError: (error) => { throw error },
     })
@@ -150,6 +158,8 @@ describe("preview transport control loop", () => {
     const replayedEvents: string[] = []
     secondClient.openEvents({
       sessionId,
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => replayedEvents.push(event.kind),
       onStreamError: (error) => { throw error },
     })
@@ -171,7 +181,8 @@ describe("preview transport control loop", () => {
     const firstAEvents: string[] = []
     const firstAStream = client.openEvents({
       sessionId: sessionA,
-      lastEventId: 0,
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => firstAEvents.push(event.kind),
       onStreamError: (error) => { throw error },
     })
@@ -185,7 +196,8 @@ describe("preview transport control loop", () => {
     const firstBEvents: string[] = []
     const firstBStream = client.openEvents({
       sessionId: sessionB,
-      lastEventId: 0,
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => firstBEvents.push(event.kind),
       onStreamError: (error) => { throw error },
     })
@@ -195,7 +207,8 @@ describe("preview transport control loop", () => {
     const replayedA: string[] = []
     client.openEvents({
       sessionId: sessionA,
-      lastEventId: 0,
+      resumeCursor: null,
+      onCursor: () => {},
       onEvent: (event) => replayedA.push(event.kind),
       onStreamError: (error) => { throw error },
     })

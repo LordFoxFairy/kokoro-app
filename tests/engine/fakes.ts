@@ -7,15 +7,16 @@ import type {
   MessageCreateReceipt,
   RunControlReceipt,
 } from "@/contract/http"
-import type { SessionEvent } from "@/contract/session-events"
+import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { OpenEventsArgs, SessionClient, SessionClientError } from "@/engine/client"
 import type { PersistedStore } from "@/lib/persisted-store"
 
 export type FakeStream = {
   sessionId: string
-  lastEventId: number | undefined
+  resumeCursor: EventCursor | null
   closed: boolean
-  emit: (events: SessionEvent[]) => void
+  emit: (events: ChatProjectionEvent[], cursors?: readonly EventCursor[]) => void
   fail: (error: SessionClientError) => void
 }
 
@@ -41,6 +42,10 @@ export function makeReceipt(runId: string): MessageCreateReceipt {
     user_message_id: `${runId}:user`,
     assistant_message_id: `${runId}:assistant`,
   }
+}
+
+function cursorForSequence(sequence: number): EventCursor {
+  return eventCursorSchema.parse(`agui_${sequence.toString(16).padStart(32, "0")}`)
 }
 
 export function createFakeClient(): FakeClient {
@@ -101,10 +106,11 @@ export function createFakeClient(): FakeClient {
     openEvents: (args: OpenEventsArgs) => {
       const stream: FakeStream = {
         sessionId: args.sessionId,
-        lastEventId: args.lastEventId,
+        resumeCursor: args.resumeCursor,
         closed: false,
-        emit: (events) => {
-          for (const event of events) {
+        emit: (events, cursors = []) => {
+          for (const [index, event] of events.entries()) {
+            args.onCursor(cursors[index] ?? cursorForSequence(event.seq))
             args.onEvent(event)
           }
         },

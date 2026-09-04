@@ -1,8 +1,9 @@
-// 纯状态模型：零 I/O 零 React；词汇直接取自 contract（z.infer 即领域类型）。
+// 纯状态模型：零 I/O 零 React；内部投影类型与 AG-UI wire DTO 分离。
 
-import type { SessionEvent } from "@/contract/session-events"
+import type { EventCursor } from "@/contract/agui-events"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 
-type EventOf<K extends SessionEvent["kind"]> = Extract<SessionEvent, { kind: K }>
+type EventOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEvent, { kind: K }>
 
 export type SessionTodo = EventOf<"todo.updated">["payload"]["todos"][number]
 type AllowedDecision =
@@ -111,8 +112,11 @@ export type SessionStreamState = {
   runError: { code: RunErrorCode; message: string } | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
   activeRunId: string | null
-  // 已折叠到的最大 seq（snapshot 水位起步）：续流时过滤重放，非业务排序 cursor。
+  // Internal source order is retained for deterministic projection only; it is
+  // never sent as Last-Event-ID.
   lastSeq: number
+  // Durable BFF AG-UI cursor. This is the sole network resume position.
+  resumeCursor: EventCursor | null
   meta: SessionMeta | null
 }
 
@@ -128,6 +132,7 @@ export function createSessionStreamState(): SessionStreamState {
     runError: null,
     activeRunId: null,
     lastSeq: 0,
+    resumeCursor: null,
     meta: null,
   }
 }

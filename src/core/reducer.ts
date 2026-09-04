@@ -1,6 +1,6 @@
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
-import type { SessionEvent } from "@/contract/session-events"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 
 import type {
   SessionStep,
@@ -9,7 +9,7 @@ import type {
   ToolStatus,
 } from "./state"
 
-type EventOf<K extends SessionEvent["kind"]> = Extract<SessionEvent, { kind: K }>
+type EventOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEvent, { kind: K }>
 
 // 批内草稿：seenEventIds/messages/stepsByRun 顶层已复制；每个 run 的步骤数组首次触碰时复制一次。
 type Draft = {
@@ -300,7 +300,7 @@ function applyRunTerminal(
   }
 }
 
-function applyEvent(draft: Draft, event: SessionEvent): void {
+function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
   switch (event.kind) {
     case "session.created":
       // sessions 集合真实元数据投影：标题真源在服务端。
@@ -432,9 +432,9 @@ function applyEvent(draft: Draft, event: SessionEvent): void {
 
 // 批量折叠：整批只做一次顶层快照，逐事件在可变草稿上折叠（修 replay O(n²)）；
 // 全部重复（event_id 已见）时原样返回入参 state，保证幂等判定可用引用相等表达。
-export function applySessionEvents(
+export function applyChatProjectionEvents(
   state: SessionStreamState,
-  events: readonly SessionEvent[],
+  events: readonly ChatProjectionEvent[],
 ): SessionStreamState {
   let draft: Draft | null = null
   for (const event of events) {
@@ -455,6 +455,7 @@ export function applySessionEvents(
           runError: state.runError,
           activeRunId: state.activeRunId,
           lastSeq: state.lastSeq,
+          resumeCursor: state.resumeCursor,
           meta: state.meta,
         },
         touchedRuns: new Set(),
@@ -469,11 +470,11 @@ export function applySessionEvents(
   return draft?.state ?? state
 }
 
-export function applySessionEvent(
+export function applyChatProjectionEvent(
   state: SessionStreamState,
-  event: SessionEvent,
+  event: ChatProjectionEvent,
 ): SessionStreamState {
-  return applySessionEvents(state, [event])
+  return applyChatProjectionEvents(state, [event])
 }
 
 // —— 本地命令（非事件折叠）：用户动作驱动的纯状态迁移 ——

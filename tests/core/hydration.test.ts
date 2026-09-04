@@ -1,4 +1,4 @@
-// snapshot 水合规格：只供 meta/files——线程内容由事件史全量回放重建（lastSeq=0 开流）。
+// snapshot 水合规格：当前读模型 + opaque AG-UI watermark 组成一致续流起点。
 import { describe, expect, it } from "vitest"
 
 import { stateFromSnapshot } from "@/core/hydration"
@@ -6,7 +6,8 @@ import { stateFromSnapshot } from "@/core/hydration"
 import { makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
 
 describe("stateFromSnapshot", () => {
-  it("线程内容不直投：messages/steps 空、lastSeq=0（回放起点）", () => {
+  it("hydrates messages, pending approval, and the opaque resume cursor", () => {
+    const cursor = "agui_0000000000000000000000000000002a"
     const state = stateFromSnapshot(
       makeSnapshot({
         messages: [
@@ -14,12 +15,19 @@ describe("stateFromSnapshot", () => {
           { message_id: "m2", role: "assistant", content: "yo", status: "completed", created_at: "2026-07-02T00:00:01Z" },
         ],
         pendingPauses: [makePendingPause()],
-        eventWatermark: 42,
+        eventWatermark: cursor,
       }),
     )
-    expect(state.messages).toEqual([])
-    expect(state.stepsByRun).toEqual({})
+    expect(state.messages.map((message) => [message.role, message.content])).toEqual([
+      ["user", "hi"],
+      ["assistant", "yo"],
+    ])
+    expect(state.stepsByRun.run_1?.[0]).toMatchObject({
+      kind: "tool",
+      tool: { id: "tool_1", status: "awaiting" },
+    })
     expect(state.lastSeq).toBe(0)
+    expect(state.resumeCursor).toBe(cursor)
   })
 
   it("meta 与 files 透传", () => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { buildThreadItems, groupSegments } from "@/core/projections"
-import { applySessionEvents, appendUserMessage } from "@/core/reducer"
+import { applyChatProjectionEvents, appendUserMessage } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
 
 import { makeEvent, resetFixtureSeq } from "./fixtures"
@@ -11,7 +11,7 @@ beforeEach(resetFixtureSeq)
 describe("buildThreadItems", () => {
   it("用户消息单独成项，连续同 run assistant 段归并为一个 turn", () => {
     let state = appendUserMessage(createSessionStreamState(), { id: "usr_1", content: "hi" })
-    state = applySessionEvents(state, [
+    state = applyChatProjectionEvents(state, [
       makeEvent("message.delta", { segment_id: "seg_1", delta: "a" }, { run_id: "run_1" }),
       makeEvent("message.delta", { segment_id: "seg_2", delta: "b" }, { run_id: "run_1" }),
     ])
@@ -25,7 +25,7 @@ describe("buildThreadItems", () => {
   })
 
   it("仅有过程步骤、尚无文本的 run 作为无文本成形 turn", () => {
-    const state = applySessionEvents(createSessionStreamState(), [
+    const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("thinking.delta", { segment_id: "seg_1", delta: "plan" }, { run_id: "run_x" }),
     ])
     const items = buildThreadItems(state)
@@ -34,7 +34,7 @@ describe("buildThreadItems", () => {
   })
 
   it("持久化快照缺 text 步骤时按 message 合成渲染锚点", () => {
-    let state = applySessionEvents(createSessionStreamState(), [
+    let state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("message.completed", { segment_id: "seg_1", content: "answer" }),
     ])
     // 模拟旧落盘丢失 text 步骤。

@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { applySessionEvent } from "@/core/reducer"
+import { applyChatProjectionEvent } from "@/core/reducer"
 import { createSessionStreamState } from "@/core/state"
 import {
   canvasSlot,
@@ -93,7 +93,7 @@ describe("resolveCanvasContent（引用 → 线程活数据）", () => {
   })
 
   it("delivery：按 contentHash 命中；缺位返回 null（不渲染悬空面板）", () => {
-    const thread = applySessionEvent(
+    const thread = applyChatProjectionEvent(
       createSessionStreamState(),
       makeEvent("delivery.created", {
         path: "out/report.md",
@@ -115,7 +115,7 @@ describe("resolveCanvasContent（引用 → 线程活数据）", () => {
       args: { path: "/tmp/a" },
       status: "running",
     } as const
-    let thread = applySessionEvent(
+    let thread = applyChatProjectionEvent(
       createSessionStreamState(),
       makeEvent("tool.invoked", {
         segment_id: "seg_1",
@@ -124,7 +124,7 @@ describe("resolveCanvasContent（引用 → 线程活数据）", () => {
         args: { path: "/tmp/a" },
       }),
     )
-    thread = applySessionEvent(
+    thread = applyChatProjectionEvent(
       thread,
       makeEvent("tool.returned", {
         segment_id: "seg_1",

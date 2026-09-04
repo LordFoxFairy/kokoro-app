@@ -8,6 +8,11 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   workerd: true
+minimumReleaseAgeExclude:
+  - '@ai-sdk/gateway@4.0.74'
+  - '@ai-sdk/mcp@2.0.44'
+  - '@ai-sdk/react@4.0.95'
+  - ai@7.0.92
 onlyBuiltDependencies:
   - esbuild
   - sharp

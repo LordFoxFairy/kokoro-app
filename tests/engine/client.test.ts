@@ -1,72 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createSessionClient, createSseFrameParser, shouldAdvanceSseCursor } from "@/engine/client"
-
-function collect(chunks: string[]): string[] {
-  const frames: string[] = []
-  const feed = createSseFrameParser((data) => frames.push(data))
-  for (const chunk of chunks) {
-    feed(chunk)
-  }
-  return frames
-}
-
-describe("createSseFrameParser：跨 chunk 的 SSE 帧增量解析", () => {
-  it("单 chunk 完整帧：取 data 行（忽略 id/event 行）", () => {
-    expect(collect(['id: 3\nevent: message.delta\ndata: {"a":1}\n\n'])).toEqual(['{"a":1}'])
-  })
-
-  it("帧被任意切开也能拼回（含跨 chunk 的分隔空行）", () => {
-    expect(
-      collect(["id: 3\nevent: x\nda", 'ta: {"a"', ":1}\n", "\nid: 4\ndata: {}\n\n"]),
-    ).toEqual(['{"a":1}', "{}"])
-  })
-
-  it("多 data 行按 SSE 语义以换行拼接", () => {
-    expect(collect(["data: line1\ndata: line2\n\n"])).toEqual(["line1\nline2"])
-  })
-
-  it.each([
-    ["空帧（心跳注释）", [":keep-alive\n\n"]],
-    ["无 data 行的帧", ["id: 1\nevent: ping\n\n"]],
-    ["空输入", [""]],
-  ])("%s 不产出回调", (_label, chunks) => {
-    expect(collect(chunks)).toEqual([])
-  })
-
-  it("CRLF 行尾同样解析", () => {
-    expect(collect(["data: {}\r\n\ndata: ok\n\n"])).toEqual(["{}", "ok"])
-  })
-
-  it("标准 CRLF 空行分隔符同样派发完整 SSE 帧", () => {
-    expect(collect(['id: 3\r\nevent: message.delta\r\ndata: {"a":1}\r\n\r\n'])).toEqual(['{"a":1}'])
-  })
-
-  it("未闭合的尾帧保持缓冲，不提前吐出", () => {
-    const frames: string[] = []
-    const feed = createSseFrameParser((data) => frames.push(data))
-    feed("data: pending")
-    expect(frames).toEqual([])
-    feed("\n\n")
-    expect(frames).toEqual(["pending"])
-  })
-})
-
-describe("shouldAdvanceSseCursor", () => {
-  it("keeps the source cursor until an expanded AG-UI fact is complete", () => {
-    expect(shouldAdvanceSseCursor({ type: "TEXT_MESSAGE_START" })).toBe(false)
-    expect(shouldAdvanceSseCursor({ type: "TEXT_MESSAGE_CONTENT", delta: "" })).toBe(true)
-    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_START" })).toBe(false)
-    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_ARGS", delta: "{}" })).toBe(true)
-    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_END" })).toBe(false)
-    expect(shouldAdvanceSseCursor({ type: "TOOL_CALL_RESULT", content: "ok" })).toBe(true)
-  })
-
-  it("keeps legacy internal events and single-frame AG-UI events unchanged", () => {
-    expect(shouldAdvanceSseCursor({ kind: "message.delta", seq: 4 })).toBe(true)
-    expect(shouldAdvanceSseCursor({ type: "RUN_FINISHED" })).toBe(true)
-  })
-})
+import { createSessionClient } from "@/engine/client"
 
 describe("fetchSnapshot：会话不存在/已软删都优雅缺席（不 fail-loud）", () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -107,7 +41,7 @@ describe("fetchSnapshot：兼容 Session runtime 的 feature_key 增量元数据
         pending_pauses: [],
         files: [],
         deliveries: [],
-        event_watermark: 0,
+        event_watermark: null,
       }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),

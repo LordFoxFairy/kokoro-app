@@ -1,6 +1,7 @@
 // 显式会话状态机 + 引擎：snapshot-first 水合 / 流句柄 / in-flight 守卫 / runId 锚定收束单点持有。
 
-import type { SessionEventKind } from "@/contract/session-events"
+import type { ChatProjectionEventKind } from "@/core/chat-projection-event"
+import type { EventCursor } from "@/contract/agui-events"
 import type { MessageKey } from "@/i18n/messages"
 
 type NoticeSpec = { key: MessageKey; vars?: Readonly<Record<string, string | number>> }
@@ -17,13 +18,13 @@ import {
 } from "@/core/conversations"
 import { deliveryFromSnapshot, stateFromSnapshot } from "@/core/hydration"
 import {
-  applySessionEvents,
+  applyChatProjectionEvents,
   appendUserMessage,
   markRunCancelled,
   markToolRejected,
 } from "@/core/reducer"
 import { createSessionStreamState, type SessionStreamState } from "@/core/state"
-import type { SessionEvent } from "@/contract/session-events"
+import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { PersistedStore } from "@/lib/persisted-store"
 
 import { SessionClientError, type SessionClient, type EventStreamHandle } from "./client"
@@ -62,7 +63,7 @@ export type MachineEvent =
   | { type: "RECEIPT"; runId: string }
   // awaiting=true：snapshot 带 pending 暂停点，直接落 awaiting-hitl（审批卡即刻可操作）。
   | { type: "REATTACH"; runId: string; awaiting?: boolean }
-  | { type: "STREAM_EVENT"; runId: string; kind: SessionEventKind }
+  | { type: "STREAM_EVENT"; runId: string; kind: ChatProjectionEventKind }
   | { type: "RESUME_SENT" }
   | { type: "CONTROL_FAILED"; error: string }
   | { type: "RESET" }
@@ -255,7 +256,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let hydrateGeneration = 0
   // 文件同步代际守卫：同会话连续 run 收尾的乱序 snapshot 回来，只认最新一次。
   let filesSyncGeneration = 0
-  let buffer: SessionEvent[] = []
+  let buffer: ChatProjectionEvent[] = []
   let flushScheduled = false
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
@@ -308,13 +309,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     handle = null
   }
 
-  function openStream(sessionId: string, lastEventId: number): void {
+  function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
     closeStream()
     const generation = streamGeneration
     handle = deps.client.openEvents({
       sessionId,
-      // 0 = 无水位（全量），照常上送：服务端把 0 当续点等价于从头。
-      lastEventId,
+      resumeCursor,
+      onCursor: (cursor) => {
+        if (disposed || generation !== streamGeneration) {
+          return
+        }
+        // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
+        // Preserve it even when a partial tool-args frame has no projection.
+        thread = { ...thread, resumeCursor: cursor }
+      },
       onEvent: (event) => {
         if (disposed || generation !== streamGeneration) {
           return
@@ -347,7 +355,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const events = buffer
     buffer = []
 
-    thread = applySessionEvents(thread, events)
+    thread = applyChatProjectionEvents(thread, events)
 
     let settledRunId: string | null = null
     for (const event of events) {
@@ -442,7 +450,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSubmission = null
   }
 
-  // snapshot-first 水合：GET /sessions/:sid → 线程状态 + 在途 run 重连（Last-Event-ID=水位）。
+  // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string): void {
     hydrateGeneration += 1
     const generation = hydrateGeneration
@@ -464,9 +472,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         }
         thread = stateFromSnapshot(sessionSnapshot)
         syncActiveEntry()
-        // 线程内容=事件史全量回放（水合 lastSeq=0）：历史过程/文本/审批帧全部重建，
-        // 无在途 run 也开流（回放完即挂 live tail）。
-        openStream(sessionId, thread.lastSeq)
+        // Snapshot 与 event_watermark 同事务视图；只续 watermark 之后的 durable
+        // AG-UI frame，避免刷新时双读完整事件史。
+        openStream(sessionId, thread.resumeCursor)
         const plan = reattachPlanFromSnapshot(sessionSnapshot)
         if (plan) {
           const before = machine
@@ -564,7 +572,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         pendingSubmission = null
         adoptUserMessageId(receipt.user_message_id)
         machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
-        openStream(sessionId, thread.lastSeq)
+        openStream(sessionId, thread.resumeCursor)
         notify()
       })
       .catch((error: unknown) => {

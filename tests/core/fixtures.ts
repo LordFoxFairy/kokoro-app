@@ -1,9 +1,10 @@
 // 事件/快照工厂：经契约 parse 构造，天然验证与 wire 同形（零类型断言）。
 
 import { parseSessionSnapshot, type SessionSnapshot } from "@/contract/http"
-import { parseSessionEvent, type SessionEvent } from "@/contract/session-events"
+import type { EventCursor } from "@/contract/agui-events"
+import { parseChatProjectionEvent, type ChatProjectionEvent } from "@/core/chat-projection-event"
 
-type PayloadOf<K extends SessionEvent["kind"]> = Extract<SessionEvent, { kind: K }>["payload"]
+type PayloadOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEvent, { kind: K }>["payload"]
 
 export type EnvelopeOverrides = Partial<{
   event_id: string
@@ -19,13 +20,13 @@ export function resetFixtureSeq(): void {
   autoSeq = 0
 }
 
-export function makeEvent<K extends SessionEvent["kind"]>(
+export function makeEvent<K extends ChatProjectionEvent["kind"]>(
   kind: K,
   payload: PayloadOf<K>,
   overrides: EnvelopeOverrides = {},
-): SessionEvent {
+): ChatProjectionEvent {
   const seq = overrides.seq ?? (autoSeq += 1)
-  return parseSessionEvent({
+  return parseChatProjectionEvent({
     kind,
     payload,
     event_id: overrides.event_id ?? `evt_${kind}_${seq}`,
@@ -64,7 +65,7 @@ type SnapshotInput = {
   pendingPauses?: SessionSnapshot["pending_pauses"]
   files?: SessionSnapshot["files"]
   deliveries?: SessionSnapshot["deliveries"]
-  eventWatermark?: number
+  eventWatermark?: EventCursor | null
 }
 
 export function makeSnapshot(input: SnapshotInput = {}): SessionSnapshot {
@@ -82,7 +83,7 @@ export function makeSnapshot(input: SnapshotInput = {}): SessionSnapshot {
     pending_pauses: input.pendingPauses ?? [],
     files: input.files ?? [],
     deliveries: input.deliveries ?? [],
-    event_watermark: input.eventWatermark ?? 0,
+    event_watermark: input.eventWatermark ?? null,
   })
 }
 

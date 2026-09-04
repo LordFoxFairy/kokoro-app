@@ -20,8 +20,12 @@
   contract zod，失败以 `SessionClientError`（network/http/parse）上抛零静默降级；
   baseUrl+path 直接拼接（非 new URL，保住 `/api/session` 前缀）；AUTH-P0 起客户端不持
   token，鉴权由同源 BFF 代理注入 Bearer、httpOnly 信封 cookie 同源自动携带；
-  `openEvents` 用 fetch 流式 SSE（非 EventSource，首连即可带 Last-Event-ID=seq），断流按
-  最后 seq 定时重连；`fetchSnapshot` 404/410 返 null（空线程即真态）；`createSseFrameParser`。
+  `openEvents` 只委托 `AgUiChatTransport`；`fetchSnapshot` 404/410 返 null（空线程即真态）。
+- `agui-chat-transport.ts`：仓内唯一 AG-UI network adapter，实现 Vercel AI SDK
+  `ChatTransport<KokoroUiMessage>`；负责 SSE framing、严格 runtime schema、opaque
+  `Last-Event-ID`、断线重连与 frame cursor 去重，拒绝 reducer-shaped legacy wire。
+- `agui-event-mapper.ts`：把已校验 AG-UI frame 分别映射成 AI SDK `UIMessageChunk` 与
+  `ChatProjectionEvent`；wire DTO 不进入 core/UI model。
 - `session-scope.ts`：`SessionScope` 将用户直接会话与一个 opaque `projectRef` 的专案任务
   分开。浏览器仅发送 `scope=direct` 或 `project_ref`；部署上下文一律由 BFF 从服务端
   `KOKORO_DOMAIN` 生成的受信 `Forwarded` 与 httpOnly 信封派生。每个 scope 使用独立引擎与

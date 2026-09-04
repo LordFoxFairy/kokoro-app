@@ -32,7 +32,7 @@ const snapshot = {
   pending_pauses: [],
   files: [],
   deliveries: [],
-  event_watermark: 0,
+  event_watermark: null,
 }
 
 afterEach(() => {

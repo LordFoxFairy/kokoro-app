@@ -1,6 +1,7 @@
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
+import { eventCursorSchema } from "./agui-events"
 import { resumeDecisionSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
 
@@ -95,7 +96,7 @@ export const sessionSnapshotSchema = z
     pending_pauses: z.array(pendingPauseSchema),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
-    event_watermark: z.number().int(),
+    event_watermark: eventCursorSchema.nullable(),
   })
   .strict()
 export type SessionSnapshot = z.infer<typeof sessionSnapshotSchema>

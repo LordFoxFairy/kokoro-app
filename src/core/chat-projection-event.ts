@@ -1,5 +1,5 @@
-// Canonical checked-in runtime contract. Keep this Zod schema synchronized with
-// docs/integration/user-web-api-contract-v4.md and its contract tests.
+// Runtime-validated engine projection. This is an internal reducer input, not
+// the Web ↔ BFF wire DTO; canonical AG-UI frames are validated before mapping.
 
 import { z } from "zod"
 
@@ -254,7 +254,7 @@ const envelope = z
   })
   .strict()
 
-export const sessionEventSchema = z.discriminatedUnion("kind", [
+export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("session.created"), payload: sessionCreatedPayload }),
   envelope.extend({ kind: z.literal("run.created"), payload: runCreatedPayload }),
   envelope.extend({ kind: z.literal("message.user"), payload: messageUserPayload }),
@@ -278,9 +278,9 @@ export const sessionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("run.failed"), payload: runFailedPayload }),
 ])
 
-export type SessionEvent = z.infer<typeof sessionEventSchema>
-export type SessionEventKind = SessionEvent["kind"]
+export type ChatProjectionEvent = z.infer<typeof chatProjectionEventSchema>
+export type ChatProjectionEventKind = ChatProjectionEvent["kind"]
 
-export function parseSessionEvent(input: unknown): SessionEvent {
-  return sessionEventSchema.parse(input)
+export function parseChatProjectionEvent(input: unknown): ChatProjectionEvent {
+  return chatProjectionEventSchema.parse(input)
 }

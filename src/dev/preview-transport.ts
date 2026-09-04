@@ -1,18 +1,19 @@
 // 显式开发模式假流：与 SessionClient 同接口，只经 env 开关注入，永不作运行时兜底。
 
 import {
-  parseSessionEvent,
+  parseChatProjectionEvent,
   RUN_FAILURE_CODES,
   type RunFailureCode,
-  type SessionEvent,
-} from "@/contract/session-events"
+  type ChatProjectionEvent,
+} from "@/core/chat-projection-event"
+import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
 import type { RunControlReceipt, SessionSnapshot } from "@/contract/http"
-import type {
-  EventStreamHandle,
-  OpenEventsArgs,
-  SessionClient,
+import {
+  type EventStreamHandle,
+  type OpenEventsArgs,
+  type SessionClient,
 } from "@/engine/client"
-
+import { SessionClientError } from "@/engine/client-error"
 // 仅当显式设置 NEXT_PUBLIC_SESSION_PREVIEW=1 时提供假流客户端；否则返回 null（走真实链路）。
 // 单例缓存：清单客户端与引擎客户端共享同一份内存会话（否则各持一份 Map，侧栏永远看不到已开会话）。
 let previewSingleton: SessionClient | null = null
@@ -29,9 +30,13 @@ export function previewClientFromEnv(): SessionClient | null {
 type PreviewSession = {
   seq: number
   started: boolean
-  queued: SessionEvent[]
-  history: SessionEvent[]
-  subscriber: { generation: number; onEvent: OpenEventsArgs["onEvent"] } | null
+  queued: ChatProjectionEvent[]
+  history: ChatProjectionEvent[]
+  subscriber: {
+    generation: number
+    onCursor: OpenEventsArgs["onCursor"]
+    onEvent: OpenEventsArgs["onEvent"]
+  } | null
   streamGeneration: number
   // 清单展示用：首条消息内容充当标题 + 最近活动时间（切走后会话仍留在侧栏，供 HITL 徽标走查）。
   title: string
@@ -61,24 +66,24 @@ function readPersistedSessions(): Map<string, PersistedPreviewSession> {
     const restored = new Map<string, PersistedPreviewSession>()
     for (const [sessionId, value] of Object.entries(raw)) {
       if (typeof value !== "object" || value === null || Array.isArray(value)) continue
-      const candidate = value as Partial<PersistedPreviewSession>
-      const history = Array.isArray(candidate.history)
-        ? candidate.history.flatMap((event) => {
+      const historyInput = "history" in value ? value.history : null
+      const history = Array.isArray(historyInput)
+        ? historyInput.flatMap((event) => {
             try {
-              return [parseSessionEvent(event)]
+              return [parseChatProjectionEvent(event)]
             } catch {
               return []
             }
           })
         : []
       const seq = Math.max(
-        typeof candidate.seq === "number" && Number.isInteger(candidate.seq) ? candidate.seq : 0,
+        "seq" in value && typeof value.seq === "number" && Number.isInteger(value.seq) ? value.seq : 0,
         ...history.map((event) => event.seq),
       )
-      const title = typeof candidate.title === "string" ? candidate.title : ""
-      const updatedAt = typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString()
-      const projectRef = typeof candidate.projectRef === "string" ? candidate.projectRef : null
-      const started = candidate.started === true || history.some((event) => event.kind === "session.created")
+      const title = "title" in value && typeof value.title === "string" ? value.title : ""
+      const updatedAt = "updatedAt" in value && typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString()
+      const projectRef = "projectRef" in value && typeof value.projectRef === "string" ? value.projectRef : null
+      const started = ("started" in value && value.started === true) || history.some((event) => event.kind === "session.created")
       if (started && history.length > 0) {
         restored.set(sessionId, { seq, started, history, title, updatedAt, projectRef })
       }
@@ -99,6 +104,14 @@ const COMPLETED_PREVIEW_TODOS = PREVIEW_TODOS.map((todo) => ({
   ...todo,
   status: "completed" as const,
 }))
+
+function previewCursor(sequence: number): EventCursor {
+  return eventCursorSchema.parse(`agui_${sequence.toString(16).padStart(32, "0")}`)
+}
+
+function isRunFailureCode(value: string): value is RunFailureCode {
+  return RUN_FAILURE_CODES.some((code) => code === value)
+}
 
 // Keep the local catalogue small and deterministic, while still projecting
 // the model affordances visible in Manus' creation workflows. The site shell
@@ -215,6 +228,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     }
     const event = session.queued.shift()
     if (event) {
+      subscriber.onCursor(previewCursor(event.seq))
       subscriber.onEvent(event)
     }
     const timer = setTimeout(() => {
@@ -230,18 +244,18 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     drain(session, generation)
   }
 
-  const queueEvents = (session: PreviewSession, events: SessionEvent[]): void => {
+  const queueEvents = (session: PreviewSession, events: ChatProjectionEvent[]): void => {
     session.history.push(...events)
     session.queued.push(...events)
     schedulePersistSessions()
   }
 
   const makeEnvelope = (sessionId: string, runId: string) => {
-    return (kind: SessionEvent["kind"], payload: unknown): SessionEvent => {
+    return (kind: ChatProjectionEvent["kind"], payload: unknown): ChatProjectionEvent => {
       const session = sessionFor(sessionId)
       session.seq += 1
-      // 假流同样过契约 parse：既保证 preview 与真实 wire 同形，也免去任何类型断言。
-      return parseSessionEvent({
+      // 假流只构造 reducer 的内部投影；真实 Web ↔ BFF wire 仍唯一为 AG-UI。
+      return parseChatProjectionEvent({
         // 事件可能分批生成（例如 HITL 决策后的续流），因此不能让每次
         // makeEnvelope 都从 1 开始，否则续流会被 seenEventIds 当成首批事件去重。
         event_id: `${runId}:${session.seq}`,
@@ -351,10 +365,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     if (failMatch) {
       const requestedCode = failMatch[1]
       // Keep the preview command forgiving: a typo must exercise the normal
-      // error card, not throw from parseSessionEvent inside a timer callback.
+      // error card, not throw from parseChatProjectionEvent inside a timer callback.
       // Real SSE payloads remain strict and are rejected by engine/client.ts.
-      const code: RunFailureCode = RUN_FAILURE_CODES.includes(requestedCode as RunFailureCode)
-        ? requestedCode as RunFailureCode
+      const code: RunFailureCode = isRunFailureCode(requestedCode)
+        ? requestedCode
         : "internal_error"
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
@@ -449,7 +463,9 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         pending_pauses: [],
         files: [],
         deliveries: [],
-        event_watermark: session.seq,
+        // Preview has no independently materialized message snapshot, so a
+        // refresh deliberately replays its local projection history.
+        event_watermark: null,
       }
     },
 
@@ -498,7 +514,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     deleteSession: () => Promise.resolve({ status: "deleted" }),
     renameSession: () => Promise.resolve({ ok: true as const }),
 
-    openEvents: ({ sessionId, lastEventId = 0, onEvent }): EventStreamHandle => {
+    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }): EventStreamHandle => {
       let closed = false
       let session: PreviewSession | null = null
       let generation: number | null = null
@@ -507,14 +523,21 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         session = sessionFor(sessionId)
         generation = session.streamGeneration + 1
         session.streamGeneration = generation
-        session.subscriber = { generation, onEvent }
+        session.subscriber = { generation, onCursor, onEvent }
         // Rebuild pending delivery from persisted history. This lets a refreshed
         // project deep link replay the same reducer path instead of rendering an
         // empty shell after the in-memory preview client was recreated. The
         // cursor is local to this stream: returning to a previous conversation
         // must honor that call's Last-Event-ID rather than a stale cursor from a
         // different conversation or an earlier stream.
-        session.queued = session.history.filter((event) => event.seq > lastEventId)
+        const resumeIndex = resumeCursor === null
+          ? -1
+          : session.history.findIndex((event) => previewCursor(event.seq) === resumeCursor)
+        if (resumeCursor !== null && resumeIndex < 0) {
+          onStreamError(new SessionClientError("parse", "preview AG-UI cursor does not belong to this Chat"))
+          return
+        }
+        session.queued = session.history.slice(resumeIndex + 1)
         drain(session, generation)
       })
       return {
