@@ -4,7 +4,7 @@
 import type { ChatRequestOptions, ChatTransport, UIMessageChunk } from "ai"
 
 import { LAST_EVENT_ID_HEADER } from "@/contract/http"
-import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
+import { eventCursorSchema, parseAgUiEvent, type EventCursor } from "@/contract/agui-events"
 import { SessionClientError } from "./client-error"
 import {
   AgUiEventMapper,
@@ -56,7 +56,11 @@ function describeUnknown(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function parseFrameData(frame: SseFrame, mapper: AgUiEventMapper): AgUiTransportFrame {
+function parseFrameData(
+  frame: SseFrame,
+  mapper: AgUiEventMapper,
+  expectedSessionId: string,
+): AgUiTransportFrame {
   if (frame.id === null || frame.id.length === 0) {
     throw new SessionClientError("parse", "AG-UI SSE frame is missing its opaque id")
   }
@@ -67,7 +71,14 @@ function parseFrameData(frame: SseFrame, mapper: AgUiEventMapper): AgUiTransport
     throw new SessionClientError("parse", `AG-UI SSE data is not JSON: ${describeUnknown(error)}`)
   }
   try {
-    return mapper.map(frame.id, input)
+    const event = parseAgUiEvent(input)
+    if (event.metadata.kokoro.session_id !== expectedSessionId) {
+      throw new Error("AG-UI frame session does not match the requested Chat")
+    }
+    // Validate the session before handing the event to the stateful mapper. A
+    // partial TOOL_CALL_ARGS frame intentionally has no projection event, so
+    // session admission cannot be derived from the mapped projection.
+    return mapper.map(frame.id, event)
   } catch (error) {
     throw new SessionClientError("parse", `AG-UI SSE frame rejected: ${describeUnknown(error)}`)
   }
@@ -192,10 +203,7 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
       if (seenCursors.has(cursor)) {
         return
       }
-      const mapped = parseFrameData(frame, mapper)
-      if (mapped.projectionEvent?.session_id !== args.chatId) {
-        throw new SessionClientError("parse", "AG-UI frame session does not match the requested Chat")
-      }
+      const mapped = parseFrameData(frame, mapper, args.chatId)
       seenCursors.add(cursor)
       this.#cursorByChat.set(args.chatId, cursor)
       args.onFrame(mapped)

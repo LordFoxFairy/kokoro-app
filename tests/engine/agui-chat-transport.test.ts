@@ -8,6 +8,7 @@ import {
 
 const CURSOR = "agui_00000000000000000000000000000001"
 const TERMINAL_CURSOR = "agui_00000000000000000000000000000002"
+const PARTIAL_TERMINAL_CURSOR = "agui_00000000000000000000000000000004"
 
 function metadata(eventId: string, seq: number) {
   return {
@@ -95,6 +96,72 @@ describe("AgUiChatTransport", () => {
     expect(accepted.map((frame) => frame.cursor)).toEqual([CURSOR, TERMINAL_CURSOR])
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("last-event-id")).toBe(CURSOR)
+  })
+
+  it("accepts a partial tool-args frame without treating its null projection as a foreign session", async () => {
+    const runStarted = {
+      type: "RUN_STARTED",
+      timestamp: 1,
+      threadId: "session-1",
+      runId: "run-1",
+      metadata: metadata("agent-run", 1),
+    }
+    const toolStarted = {
+      type: "TOOL_CALL_START",
+      timestamp: 2,
+      toolCallId: "tool-1",
+      toolCallName: "search",
+      metadata: metadata("agent-tool", 2),
+    }
+    const partialToolArgs = {
+      type: "TOOL_CALL_ARGS",
+      timestamp: 3,
+      toolCallId: "tool-1",
+      delta: '{"query":',
+      metadata: metadata("agent-tool", 3),
+    }
+    const runFinished = {
+      type: "RUN_FINISHED",
+      timestamp: 4,
+      threadId: "session-1",
+      runId: "run-1",
+      metadata: metadata("agent-terminal", 4),
+    }
+    const fetchMock = vi.fn().mockResolvedValueOnce(response([
+      sse(CURSOR, runStarted),
+      sse("agui_00000000000000000000000000000002", toolStarted),
+      sse("agui_00000000000000000000000000000003", partialToolArgs),
+      sse(PARTIAL_TERMINAL_CURSOR, runFinished),
+    ].join("")))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const accepted: AgUiTransportFrame[] = []
+    let handle: { close: () => void } | null = null
+    await new Promise<void>((resolve, reject) => {
+      handle = new AgUiChatTransport({
+        eventsUrl: (chatId) => `/api/session/sessions/${chatId}/events`,
+        retryMs: 0,
+      }).openProjectionEvents({
+        chatId: "session-1",
+        resumeCursor: null,
+        onFrame: (frame) => {
+          accepted.push(frame)
+          if (frame.terminal) {
+            handle?.close()
+            resolve()
+          }
+        },
+        onStreamError: reject,
+      })
+    })
+
+    expect(accepted.map((frame) => frame.cursor)).toEqual([
+      CURSOR,
+      "agui_00000000000000000000000000000002",
+      "agui_00000000000000000000000000000003",
+      PARTIAL_TERMINAL_CURSOR,
+    ])
+    expect(accepted[2]?.projectionEvent).toBeNull()
   })
 
   it("implements AI SDK ChatTransport submission and emits UIMessage chunks through terminal", async () => {

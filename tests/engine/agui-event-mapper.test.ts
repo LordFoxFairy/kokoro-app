@@ -10,12 +10,17 @@ const CURSORS = {
   terminal: "agui_00000000000000000000000000000005",
 } as const
 
-function metadata(eventId: string, seq: number, runId: string | null = "run-1") {
+function metadata(
+  eventId: string,
+  seq: number,
+  runId: string | null = "run-1",
+  sessionId = "session-1",
+) {
   return {
     kokoro: {
       event_id: eventId,
       seq,
-      session_id: "session-1",
+      session_id: sessionId,
       run_id: runId,
       timestamp: "2026-09-02T12:00:00.000Z",
     },
@@ -126,6 +131,170 @@ describe("AgUiEventMapper", () => {
       { type: "finish-step" },
       { type: "finish", finishReason: "stop", messageMetadata: expect.objectContaining({ cursor: CURSORS.terminal }) },
     ])
+  })
+
+  it("bootstraps tool input when replay starts at an args, end, or result cursor", () => {
+    const partialArgs = new AgUiEventMapper().map(CURSORS.args, {
+      type: "TOOL_CALL_ARGS",
+      timestamp: 2,
+      toolCallId: "tool-replay-args",
+      delta: '{"query":',
+      metadata: metadata("agent-replay-args", 2),
+    })
+    expect(partialArgs.projectionEvent).toBeNull()
+    expect(partialArgs.uiMessageChunks).toEqual([
+      {
+        type: "tool-input-start",
+        toolCallId: "tool-replay-args",
+        toolName: "tool",
+        dynamic: true,
+      },
+      {
+        type: "tool-input-delta",
+        toolCallId: "tool-replay-args",
+        inputTextDelta: '{"query":',
+      },
+    ])
+
+    const end = new AgUiEventMapper().map(CURSORS.end, {
+      type: "TOOL_CALL_END",
+      timestamp: 3,
+      toolCallId: "tool-replay-end",
+      metadata: metadata("agent-replay-end", 3),
+    })
+    expect(end.projectionEvent).toMatchObject({
+      kind: "tool.invoked",
+      payload: { tool_id: "tool-replay-end", name: "tool", args: {} },
+    })
+    expect(end.uiMessageChunks).toEqual([
+      {
+        type: "tool-input-start",
+        toolCallId: "tool-replay-end",
+        toolName: "tool",
+        dynamic: true,
+      },
+      {
+        type: "tool-input-available",
+        toolCallId: "tool-replay-end",
+        toolName: "tool",
+        input: {},
+        dynamic: true,
+      },
+    ])
+
+    const result = new AgUiEventMapper().map(CURSORS.result, {
+      type: "TOOL_CALL_RESULT",
+      timestamp: 4,
+      messageId: "message-replay-result",
+      toolCallId: "tool-replay-result",
+      role: "tool",
+      content: "replayed",
+      metadata: metadata("agent-replay-result", 4),
+    })
+    expect(result.projectionEvent).toMatchObject({
+      kind: "tool.returned",
+      payload: { tool_id: "tool-replay-result", name: "tool", result: "replayed", is_error: false },
+    })
+    expect(result.uiMessageChunks).toEqual([
+      {
+        type: "tool-input-start",
+        toolCallId: "tool-replay-result",
+        toolName: "tool",
+        dynamic: true,
+      },
+      {
+        type: "tool-input-available",
+        toolCallId: "tool-replay-result",
+        toolName: "tool",
+        input: {},
+        dynamic: true,
+      },
+      {
+        type: "tool-output-available",
+        toolCallId: "tool-replay-result",
+        output: "replayed",
+        dynamic: true,
+      },
+    ])
+  })
+
+  it("scopes bootstrap state by session and run instead of reusing a stale tool id", () => {
+    const mapper = new AgUiEventMapper()
+    mapper.map(CURSORS.start, {
+      type: "TOOL_CALL_START",
+      timestamp: 1,
+      toolCallId: "reused-tool",
+      toolCallName: "old-tool",
+      metadata: metadata("agent-old", 1, "run-old"),
+    })
+
+    const mapped = mapper.map(CURSORS.args, {
+      type: "TOOL_CALL_ARGS",
+      timestamp: 2,
+      toolCallId: "reused-tool",
+      delta: "{}",
+      metadata: metadata("agent-new", 2, "run-new", "session-new"),
+    })
+
+    expect(mapped.projectionEvent).toMatchObject({
+      session_id: "session-new",
+      run_id: "run-new",
+      payload: { tool_id: "reused-tool", name: "tool", args: {} },
+    })
+    expect(mapped.uiMessageChunks).toContainEqual({
+      type: "tool-input-start",
+      toolCallId: "reused-tool",
+      toolName: "tool",
+      dynamic: true,
+    })
+  })
+
+  it("maps a canonical cancelled run error to run.completed with cancelled status", () => {
+    const mapped = new AgUiEventMapper().map(CURSORS.terminal, {
+      type: "RUN_ERROR",
+      timestamp: 5,
+      code: "cancelled",
+      message: "Run cancelled",
+      metadata: metadata("agent-cancelled", 10),
+    })
+
+    expect(mapped.terminal).toBe(true)
+    expect(mapped.projectionEvent).toMatchObject({
+      kind: "run.completed",
+      payload: { status: "cancelled" },
+    })
+    expect(mapped.uiMessageChunks).toEqual([
+      { type: "finish-step" },
+      { type: "finish", finishReason: "other", messageMetadata: expect.objectContaining({ cursor: CURSORS.terminal }) },
+    ])
+  })
+
+  it("marks open tool output as an error when the run terminates with an error", () => {
+    const mapper = new AgUiEventMapper()
+    mapper.map(CURSORS.start, {
+      type: "TOOL_CALL_START",
+      timestamp: 1,
+      toolCallId: "tool-failed",
+      toolCallName: "search",
+      metadata: metadata("agent-tool-failed", 1),
+    })
+
+    const mapped = mapper.map(CURSORS.terminal, {
+      type: "RUN_ERROR",
+      timestamp: 5,
+      code: "internal_error",
+      message: "Tool execution failed",
+      metadata: metadata("agent-error", 10),
+    })
+
+    expect(mapped.projectionEvent).toMatchObject({ kind: "run.failed" })
+    expect(mapped.uiMessageChunks).toContainEqual({
+      type: "tool-output-error",
+      toolCallId: "tool-failed",
+      errorText: "Tool execution failed",
+      dynamic: true,
+    })
+    expect(mapped.uiMessageChunks).not.toContainEqual(expect.objectContaining({ type: "tool-output-available" }))
   })
 
   it("fails closed when a custom payload does not satisfy its local projection schema", () => {

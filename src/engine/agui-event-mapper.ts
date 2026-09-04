@@ -47,9 +47,65 @@ export type AgUiMappedFrame = {
 }
 
 type ToolCallState = {
+  sessionId: string
+  runId: string
+  toolCallId: string
   name: string
   segmentId: string
   argumentsText: string
+  inputCompleted: boolean
+}
+
+type ToolCallLookup = {
+  key: string
+  tool: ToolCallState
+  bootstrapped: boolean
+}
+
+const BOOTSTRAPPED_TOOL_NAME = "tool"
+
+function toolKey(sessionId: string, runId: string, toolCallId: string): string {
+  return JSON.stringify([sessionId, runId, toolCallId])
+}
+
+function toolInputStartChunk(tool: ToolCallState): KokoroUiMessageChunk {
+  return {
+    type: "tool-input-start",
+    toolCallId: tool.toolCallId,
+    toolName: tool.name,
+    dynamic: true,
+  }
+}
+
+function toolInputAvailableChunk(
+  tool: ToolCallState,
+  input: Record<string, unknown>,
+): KokoroUiMessageChunk {
+  return {
+    type: "tool-input-available",
+    toolCallId: tool.toolCallId,
+    toolName: tool.name,
+    input,
+    dynamic: true,
+  }
+}
+
+function toolInputErrorChunk(
+  tool: ToolCallState,
+  errorText: string,
+): KokoroUiMessageChunk {
+  return {
+    type: "tool-input-error",
+    toolCallId: tool.toolCallId,
+    toolName: tool.name,
+    input: {},
+    errorText,
+    dynamic: true,
+  }
+}
+
+function toolArguments(tool: ToolCallState): Record<string, unknown> | null {
+  return tool.argumentsText.length === 0 ? {} : jsonRecord(tool.argumentsText)
 }
 
 function uiMetadata(cursor: EventCursor, metadata: KokoroAgUiMetadata): KokoroUiMessageMetadata {
@@ -129,6 +185,39 @@ function customProjection(
 export class AgUiEventMapper {
   readonly #toolCalls = new Map<string, ToolCallState>()
 
+  #toolLookup(event: AgUiEvent, toolCallId: string): ToolCallLookup {
+    const runId = requiredRunId(event)
+    const sessionId = event.metadata.kokoro.session_id
+    const key = toolKey(sessionId, runId, toolCallId)
+    const existing = this.#toolCalls.get(key)
+    if (existing !== undefined) {
+      return { key, tool: existing, bootstrapped: false }
+    }
+    const tool: ToolCallState = {
+      sessionId,
+      runId,
+      toolCallId,
+      name: BOOTSTRAPPED_TOOL_NAME,
+      segmentId: toolCallId,
+      argumentsText: "",
+      inputCompleted: false,
+    }
+    this.#toolCalls.set(key, tool)
+    return { key, tool, bootstrapped: true }
+  }
+
+  #clearRun(sessionId: string, runId: string): ToolCallState[] {
+    const cleared: ToolCallState[] = []
+    for (const [key, tool] of this.#toolCalls) {
+      if (tool.sessionId !== sessionId || tool.runId !== runId) {
+        continue
+      }
+      this.#toolCalls.delete(key)
+      cleared.push(tool)
+    }
+    return cleared
+  }
+
   map(cursorInput: unknown, input: unknown): AgUiMappedFrame {
     const cursor = eventCursorSchema.parse(cursorInput)
     const event = parseAgUiEvent(input)
@@ -137,6 +226,7 @@ export class AgUiEventMapper {
 
     switch (event.type) {
       case EventType.RUN_STARTED: {
+        this.#clearRun(metadata.session_id, event.runId)
         const projectionEvent = projectionEnvelope(cursor, event, "run.created", {
           run_id: event.runId,
         })
@@ -151,6 +241,7 @@ export class AgUiEventMapper {
         }
       }
       case EventType.RUN_FINISHED: {
+        this.#clearRun(metadata.session_id, event.runId)
         const usage = event.usage?.[0]
         const inputTokens = usage?.inputTokens
         const outputTokens = usage?.outputTokens
@@ -172,7 +263,23 @@ export class AgUiEventMapper {
         }
       }
       case EventType.RUN_ERROR: {
-        requiredRunId(event)
+        const runId = requiredRunId(event)
+        const openTools = this.#clearRun(metadata.session_id, runId)
+        if (event.code === "cancelled") {
+          const projectionEvent = projectionEnvelope(cursor, event, "run.completed", {
+            status: "cancelled",
+            token_usage: null,
+          })
+          return {
+            cursor,
+            projectionEvent,
+            uiMessageChunks: [
+              { type: "finish-step" },
+              { type: "finish", finishReason: "other", messageMetadata },
+            ],
+            terminal: true,
+          }
+        }
         const projectionEvent = projectionEnvelope(cursor, event, "run.failed", {
           code: event.code ?? "internal_error",
           error_kind: "agent_error",
@@ -182,6 +289,12 @@ export class AgUiEventMapper {
           cursor,
           projectionEvent,
           uiMessageChunks: [
+            ...openTools.map((tool) => ({
+              type: "tool-output-error" as const,
+              toolCallId: tool.toolCallId,
+              errorText: event.message,
+              dynamic: true,
+            })),
             { type: "error", errorText: event.message },
             { type: "finish", finishReason: "error", messageMetadata },
           ],
@@ -222,13 +335,19 @@ export class AgUiEventMapper {
           terminal: false,
         }
       case EventType.TOOL_CALL_START: {
-        requiredRunId(event)
-        const tool = {
+        const runId = requiredRunId(event)
+        const sessionId = metadata.session_id
+        const key = toolKey(sessionId, runId, event.toolCallId)
+        const tool: ToolCallState = {
+          sessionId,
+          runId,
+          toolCallId: event.toolCallId,
           name: event.toolCallName,
           segmentId: event.parentMessageId ?? event.toolCallId,
           argumentsText: "",
+          inputCompleted: false,
         }
-        this.#toolCalls.set(event.toolCallId, tool)
+        this.#toolCalls.set(key, tool)
         return {
           cursor,
           projectionEvent: projectionEnvelope(cursor, event, "tool.invoked", {
@@ -237,21 +356,12 @@ export class AgUiEventMapper {
             name: tool.name,
             args: {},
           }),
-          uiMessageChunks: [{
-            type: "tool-input-start",
-            toolCallId: event.toolCallId,
-            toolName: tool.name,
-            dynamic: true,
-          }],
+          uiMessageChunks: [toolInputStartChunk(tool)],
           terminal: false,
         }
       }
       case EventType.TOOL_CALL_ARGS: {
-        requiredRunId(event)
-        const tool = this.#toolCalls.get(event.toolCallId)
-        if (tool === undefined) {
-          throw new Error(`TOOL_CALL_ARGS received before TOOL_CALL_START: ${event.toolCallId}`)
-        }
+        const { tool, bootstrapped } = this.#toolLookup(event, event.toolCallId)
         tool.argumentsText += event.delta
         const args = jsonRecord(tool.argumentsText)
         return {
@@ -265,24 +375,24 @@ export class AgUiEventMapper {
                   name: tool.name,
                   args,
                 }),
-          uiMessageChunks: [{
-            type: "tool-input-delta",
-            toolCallId: event.toolCallId,
-            inputTextDelta: event.delta,
-          }],
+          uiMessageChunks: [
+            ...(bootstrapped ? [toolInputStartChunk(tool)] : []),
+            {
+              type: "tool-input-delta",
+              toolCallId: event.toolCallId,
+              inputTextDelta: event.delta,
+            },
+          ],
           terminal: false,
         }
       }
       case EventType.TOOL_CALL_END: {
-        requiredRunId(event)
-        const tool = this.#toolCalls.get(event.toolCallId)
-        if (tool === undefined) {
-          throw new Error(`TOOL_CALL_END received before TOOL_CALL_START: ${event.toolCallId}`)
-        }
-        const args = jsonRecord(tool.argumentsText)
+        const { tool, bootstrapped } = this.#toolLookup(event, event.toolCallId)
+        const args = toolArguments(tool)
         if (args === null) {
           throw new Error(`TOOL_CALL_END contains invalid object arguments: ${event.toolCallId}`)
         }
+        tool.inputCompleted = true
         return {
           cursor,
           projectionEvent: projectionEnvelope(cursor, event, "tool.invoked", {
@@ -291,23 +401,33 @@ export class AgUiEventMapper {
             name: tool.name,
             args,
           }),
-          uiMessageChunks: [{
-            type: "tool-input-available",
-            toolCallId: event.toolCallId,
-            toolName: tool.name,
-            input: args,
-            dynamic: true,
-          }],
+          uiMessageChunks: [
+            ...(bootstrapped ? [toolInputStartChunk(tool)] : []),
+            toolInputAvailableChunk(tool, args),
+          ],
           terminal: false,
         }
       }
       case EventType.TOOL_CALL_RESULT: {
-        requiredRunId(event)
-        const tool = this.#toolCalls.get(event.toolCallId)
-        if (tool === undefined) {
-          throw new Error(`TOOL_CALL_RESULT received before TOOL_CALL_START: ${event.toolCallId}`)
+        const { key, tool, bootstrapped } = this.#toolLookup(event, event.toolCallId)
+        const uiMessageChunks: KokoroUiMessageChunk[] = []
+        if (!tool.inputCompleted) {
+          const args = toolArguments(tool)
+          uiMessageChunks.push(...(bootstrapped ? [toolInputStartChunk(tool)] : []))
+          if (args === null) {
+            uiMessageChunks.push(toolInputErrorChunk(tool, "Tool input was incomplete"))
+          } else {
+            uiMessageChunks.push(toolInputAvailableChunk(tool, args))
+          }
+          tool.inputCompleted = true
         }
-        this.#toolCalls.delete(event.toolCallId)
+        this.#toolCalls.delete(key)
+        uiMessageChunks.push({
+          type: "tool-output-available",
+          toolCallId: event.toolCallId,
+          output: event.content,
+          dynamic: true,
+        })
         return {
           cursor,
           projectionEvent: projectionEnvelope(cursor, event, "tool.returned", {
@@ -317,12 +437,7 @@ export class AgUiEventMapper {
             result: event.content,
             is_error: false,
           }),
-          uiMessageChunks: [{
-            type: "tool-output-available",
-            toolCallId: event.toolCallId,
-            output: event.content,
-            dynamic: true,
-          }],
+          uiMessageChunks,
           terminal: false,
         }
       }
