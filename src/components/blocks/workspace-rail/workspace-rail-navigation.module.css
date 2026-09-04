@@ -1,0 +1,191 @@
+/* WorkspaceRail navigation responsibility: header affordances, primary
+ * destinations, project picker, and their compact/mobile presentation. */
+
+.collapsedBrand {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.collapsedBrand[data-pointer-focus="true"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.collapsedBrand [data-rail-brand-mark="true"] {
+  width: 2rem;
+  height: 2rem;
+  flex-basis: 2rem;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.collapsedBrand [data-rail-brand-mark="true"] img,
+.collapsedBrand [data-rail-brand-mark="true"] svg { width: 1.75rem; height: 1.75rem; }
+
+.searchToggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-foreground); }
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.searchBox:focus-within {
+  border-color: var(--ring);
+  outline: 2px solid color-mix(in srgb, var(--ring) 25%, transparent);
+  outline-offset: 1px;
+}
+.searchGlyph { width: 0.95rem; height: 0.95rem; flex: 0 0 auto; color: var(--muted-foreground); }
+.searchInput { min-width: 0; flex: 1; border: 0; background: transparent; color: var(--foreground); font-size: 0.85rem; }
+.searchInput:focus { border-color: transparent; box-shadow: none; }
+.searchInput:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.searchInput::placeholder { color: var(--muted-foreground); }
+.searchInput::-webkit-search-cancel-button { appearance: none; }
+.searchClose { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; }
+
+.nav,
+.navGroup { display: flex; flex-direction: column; gap: 0.15rem; }
+.navGroup { margin-top: 0.55rem; }
+.navGroupLabel {
+  margin: 0;
+  padding: 0.55rem 0.65rem 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.projectGroup :global([data-slot="sidebar-group-label"]) { display: flex; align-items: center; justify-content: space-between; }
+.projectGroup :global([data-slot="sidebar-group-label"] button) { margin: -0.2rem -0.35rem 0 0; }
+
+.navItem {
+  display: flex;
+  width: 100%;
+  min-height: 2.35rem;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.95rem;
+  text-align: left;
+  text-decoration: none;
+}
+.navItem > svg { pointer-events: none; }
+.navLabel { flex: 1; text-overflow: ellipsis; }
+.navShortcut { flex: 0 0 auto; color: var(--muted-foreground); font-size: 0.72rem; letter-spacing: 0.04em; }
+.projectMenu { min-width: 18.75rem; padding: 0.35rem; }
+.projectMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.25rem; gap: 0.55rem; font-size: 0.85rem; }
+.projectMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1rem; height: 1rem; color: var(--muted-foreground); }
+
+/* SVG paths are decorative; the shadcn control remains the complete hit
+ * target at every browser zoom level. */
+[data-desktop-rail="true"] .navItem > svg { pointer-events: none; }
+:global([data-desktop-rail="true"]) .nav,
+:global([data-desktop-rail="true"]) .navGroup { gap: 0.0625rem; margin-top: 0; padding: 0; }
+:global([data-desktop-rail="true"]) .nav :global([data-sidebar="menu"]),
+:global([data-desktop-rail="true"]) .navGroup :global([data-sidebar="menu"]) {
+  gap: 0.0625rem;
+  padding: 0;
+}
+[data-desktop-rail="true"] .navItem {
+  position: relative;
+  z-index: 1;
+  min-height: 2.4rem;
+  border-radius: 0.7rem;
+  padding-inline: 0.75rem;
+  color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+[data-desktop-rail="true"] .navItem:hover { background: color-mix(in srgb, var(--accent) 70%, var(--card)); }
+[data-desktop-rail="true"] .navItem[data-active="true"],
+[data-desktop-rail="true"] .navItem[aria-current="page"] { background: var(--sidebar-accent); color: var(--foreground); }
+[data-desktop-rail="true"] .navItem[data-pointer-focus="true"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+[data-desktop-rail="true"] .navShortcut { display: none; }
+:global([data-desktop-rail="true"][data-collapsed="false"]) .nav :global([data-desktop-direct-chat="true"]) { display: none; }
+
+/* Expanded desktop rhythm. */
+[data-desktop-rail="true"] .navItem { height: 2.25rem; min-height: 2.25rem; }
+[data-desktop-rail="true"] .nav { gap: 0.0625rem; }
+[data-desktop-rail="true"] .navGroup { margin-top: 0; }
+[data-desktop-rail="true"] .navGroupLabel {
+  padding-inline: 0.75rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+[data-desktop-rail="true"] .projectGroup { margin-top: 0.6875rem; }
+[data-desktop-rail="true"] .projectGroup .navGroupLabel {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  box-sizing: border-box;
+  padding-bottom: 0.5rem;
+}
+
+/* One compact desktop track: the product mark is the header affordance and
+ * the project/task destinations remain centered on the icon rail. */
+[data-desktop-rail="true"][data-collapsed="true"] .collapsedBrand {
+  display: inline-flex;
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  flex: 0 0 2rem;
+}
+[data-desktop-rail="true"][data-collapsed="true"] .nav,
+[data-desktop-rail="true"][data-collapsed="true"] .navGroup {
+  width: var(--collapsed-track);
+  align-items: center;
+  gap: 0.0625rem;
+  margin: 0;
+  padding: 0;
+}
+[data-desktop-rail="true"][data-collapsed="true"] .projectGroup {
+  margin-top: 1.125rem;
+  border-top: 1px solid var(--sidebar-border);
+  padding-top: 0.0625rem;
+}
+:global([data-desktop-rail="true"][data-collapsed="true"]) .nav :global([data-sidebar="menu-item"]),
+:global([data-desktop-rail="true"][data-collapsed="true"]) .navGroup :global([data-sidebar="menu-item"]) {
+  display: flex;
+  width: var(--collapsed-track);
+  justify-content: center;
+}
+:global([data-desktop-rail="true"][data-collapsed="true"]) .projectGroup :global([data-sidebar="menu"]) { gap: 0.125rem; }
+[data-desktop-rail="true"][data-collapsed="true"] .navItem {
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  flex: 0 0 2.25rem;
+  justify-content: center;
+  gap: 0;
+  margin-inline: auto;
+  border-radius: 0.625rem;
+  padding: 0.5rem;
+}
+[data-desktop-rail="true"][data-collapsed="true"] .navItem > svg { width: 1.125rem; height: 1.125rem; }
+
+/* The Sheet is the touch version of the rail; its larger hit targets stay
+ * independent from the desktop compact track. */
+@media (max-width: 960px) {
+  .headerControl,
+  .searchClose { width: 2.75rem; height: 2.75rem; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .navItem { min-height: 2.75rem; padding-inline: 0.75rem; font-size: 0.95rem; }
+}

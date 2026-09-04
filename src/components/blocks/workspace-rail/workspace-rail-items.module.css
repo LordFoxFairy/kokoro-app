@@ -1,0 +1,73 @@
+/* WorkspaceRail session/list responsibility: scoped lists, rows, and item actions. */
+
+.list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  overflow-y: auto;
+  margin: 0.35rem 0 0.4rem;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+.sectionRow { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; }
+.sectionRow .section { min-width: 0; }
+.section { margin: 0; padding: 0.55rem 0.65rem 0.35rem; color: var(--muted-foreground); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; }
+.sectionActions { display: flex; align-items: center; gap: 0.125rem; }
+.sectionAction { flex: 0 0 auto; margin: 0 0.25rem 0 0.5rem; color: var(--muted-foreground); }
+.sectionAction:hover { color: var(--foreground); }
+.projectTaskShortcut { display: none; }
+.emptyDirectList { display: flex; }
+.empty,
+.listNotice { margin: 0; padding: 0.4rem 0.65rem; color: var(--muted-foreground); font-size: 0.82rem; }
+.listNotice { display: grid; justify-items: start; gap: 0.45rem; }
+
+.item { display: flex; min-width: 0; align-items: center; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard); }
+.itemSelect { display: flex; min-width: 0; min-height: 2.1rem; flex: 1; align-items: center; gap: 0.4rem; border-radius: var(--radius-sm); padding: 0.4rem 4.2rem 0.4rem 0.55rem; font-size: 0.825rem; text-align: left; }
+.itemSelect[draggable="true"] { cursor: grab; touch-action: none; }
+.itemSelect[aria-grabbed="true"] { cursor: grabbing; }
+.itemDragging { opacity: 0.55; }
+.itemDragOver .itemSelect { box-shadow: inset 0 0 0 2px var(--ring); }
+.itemTitle { display: block; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itemAwaiting { width: 0.45rem; height: 0.45rem; flex: 0 0 auto; border-radius: 999px; background: var(--warning); }
+.itemRename,
+.itemDelete { width: 2rem; height: 2rem; flex: 0 0 auto; padding: 0; color: var(--muted-foreground); }
+.itemRename:hover,
+.itemDelete:hover { color: var(--foreground); }
+.itemRenameInput { min-width: 0; flex: 1; margin: 0.2rem 0.35rem; border-color: var(--ring); border-radius: var(--radius-sm); font-size: 0.85rem; }
+.itemRename svg,
+.itemDelete svg { width: 0.9rem; height: 0.9rem; }
+.loadMore { width: calc(100% - 1.3rem); margin: 0.35rem 0.65rem 0.2rem; border-radius: var(--radius-sm); font-size: 0.8rem; }
+
+/* A wide desktop rail shows its scoped list; compact navigation owns the
+ * project/task shortcuts instead. Stable data attributes keep this rule
+ * independent from the CSS module that renders the navigation shell. */
+[data-desktop-rail="true"][data-collapsed="false"] .projectTaskShortcut,
+[data-desktop-rail="true"][data-collapsed="false"] .emptyDirectList { display: none; }
+[data-navigation-section="project"] .itemSelect { padding-right: 0.55rem; }
+
+[data-desktop-rail="true"] .item { position: relative; z-index: 1; }
+[data-desktop-rail="true"] .itemSelect { touch-action: manipulation; }
+
+/* The compact track centers every menu item on the shared 52px column. */
+:global([data-desktop-rail="true"][data-collapsed="true"]) .item {
+  display: flex;
+  width: var(--collapsed-track);
+  justify-content: center;
+}
+
+@media (max-width: 960px) {
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemSelect { min-height: 2.75rem; padding-right: 6rem; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRename,
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemDelete { top: 50%; width: 2.75rem; height: 2.75rem; transform: translateY(-50%); }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRename { right: 2.8rem; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemDeleteAction { right: 0.25rem; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRenameInput { min-height: 2.75rem; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectTaskShortcut { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item { transition: none; }
+}

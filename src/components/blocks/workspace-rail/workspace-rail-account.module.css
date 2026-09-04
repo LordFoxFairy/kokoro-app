@@ -1,0 +1,41 @@
+/* WorkspaceRail account responsibility: portaled account menu and invite card. */
+
+.accountMenu { width: 17.75rem; padding: 0.25rem; border: 0; }
+.accountSummary { display: flex; box-sizing: border-box; height: 3.5rem; align-items: flex-start; gap: 0.5rem; padding: 0.5rem; }
+.accountSummary > span:nth-child(2) { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0; }
+.accountSummary strong,
+.accountSummary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.accountSummary strong { color: var(--foreground); font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; }
+.accountSummary small { color: var(--muted-foreground); font-size: 0.75rem; font-weight: 400; line-height: 1rem; }
+.accountLargeAvatar { display: inline-flex; width: 1.75rem; height: 1.75rem; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 0.85rem; font-weight: 700; }
+.accountSwitcher { width: 0.875rem; height: 0.875rem; flex: none; color: var(--muted-foreground); }
+.accountPlanGroup { display: flex; flex-direction: column; gap: 0.25rem; }
+.accountPlan { display: flex; height: 2.75rem; min-height: 2.75rem; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.5rem 0.5rem 0.75rem; border-radius: 0.5rem; background: transparent; }
+.accountPlan > span { display: flex; min-width: 0; flex-direction: column; gap: 0.1rem; }
+.accountPlan strong { font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif; font-size: 0.875rem; font-weight: 700; line-height: 1.25rem; }
+.accountPlan small { display: none; }
+.accountMenu :global([data-slot="dropdown-menu-item"]) { height: 2.25rem; min-height: 2.25rem; gap: 0.25rem; border-radius: 0.5rem; padding: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; }
+.accountMenu :global([data-slot="dropdown-menu-item"] svg) { width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); }
+.accountMenu :global([data-slot="dropdown-menu-item"] > span:not([data-slot])) { min-width: 0; }
+.accountCreditLabel { display: inline-flex; align-items: center; gap: 0.25rem; }
+.accountMenu .accountCreditLabel > svg { width: 0.75rem; height: 0.75rem; }
+.accountCreditValue { display: inline-flex; align-items: center; gap: 0.25rem; }
+.accountMenu .accountCreditValue > svg { width: 0.875rem; height: 0.875rem; }
+.accountMenu .accountLinkArrow { width: 0.875rem; height: 0.875rem; margin-left: auto; }
+.accountUpgrade { width: 3.5rem; height: 1.75rem; min-height: 1.75rem; border-radius: 0.5rem; padding: 0 0.5rem; font-size: 0.8125rem; font-weight: 500; line-height: 1.125rem; }
+.accountPlan :global([data-slot="button"]) { background: var(--foreground); color: var(--background); }
+.accountPlan :global([data-slot="button"]:hover) { background: color-mix(in srgb, var(--foreground) 88%, var(--background)); color: var(--background); }
+.accountMenu :global([data-slot="dropdown-menu-item"][data-variant="destructive"]),
+.accountMenu :global([data-slot="dropdown-menu-item"][data-variant="destructive"] svg) { color: rgb(251 73 79); }
+
+.inviteCard[data-slot="button"] { display: flex; width: 100%; min-width: 0; height: 3.5rem; min-height: 3.5rem; box-sizing: border-box; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.5rem 0.55rem; text-align: left; }
+.inviteCard:hover { background: var(--accent); }
+.inviteIcon { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; color: var(--muted-foreground); }
+.inviteCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.1rem; }
+.inviteCopy strong,
+.inviteCopy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inviteCopy strong { color: var(--foreground); font-size: 0.875rem; font-weight: 650; line-height: 1.25rem; }
+.inviteCopy small { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1rem; }
+.inviteChevron { width: 0.9rem; height: 0.9rem; flex: 0 0 auto; color: var(--muted-foreground); }
+
+.accountStatus .icon { width: 1rem; height: 1rem; }
