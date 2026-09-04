@@ -1,0 +1,164 @@
+@keyframes web-thread-enter {
+  from { opacity: 1; transform: translateY(0.35rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stage { flex: 1; min-height: 0; }
+.loadingSurface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1.25rem;
+  padding: 1.5rem 1rem 0.75rem;
+  background: var(--background);
+}
+.loadingReadingTrack {
+  display: flex;
+  width: min(46rem, 100%);
+  flex: 1;
+  min-height: 8rem;
+  margin-inline: auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding-top: 2rem;
+  opacity: 0.58;
+}
+.loadingLine,
+.loadingLineShort {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+}
+.loadingLine { width: min(18rem, 68%); }
+.loadingLineShort { width: min(11rem, 42%); }
+.loadingMessage {
+  width: min(48rem, 100%);
+  margin: 0 auto;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: center;
+}
+.conversationErrorSurface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--background);
+}
+.conversationErrorCard {
+  display: flex;
+  width: min(32rem, 100%);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--destructive) 4%, var(--background));
+}
+.conversationErrorTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.conversationErrorMessage,
+.conversationErrorDetail {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.conversationErrorDetail {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.72rem;
+}
+.loadingComposer {
+  display: flex;
+  width: min(48rem, 100%);
+  min-height: 6rem;
+  margin-inline: auto;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+  border-radius: 1.45rem;
+  padding: 1rem 0.9rem 0.65rem;
+  background: var(--background);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.loadingComposerLine {
+  display: block;
+  width: min(15rem, 55%);
+  height: 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 20%, transparent);
+}
+.loadingComposerControls {
+  display: flex;
+  gap: 0.55rem;
+}
+.loadingComposerControls i {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 999px;
+}
+.timelineStage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.timelineStage > [data-slot="conversation-timeline"] { min-height: 0; }
+.timelineStage[data-canvas-reopen="true"] > [data-slot="conversation-timeline"] [data-slot="message-scroller-viewport"] {
+  /* The reopen affordance is an overlay on the timeline, so reserve a real
+     scroll-safe footer instead of placing it over the last delivery card. */
+  padding-bottom: 4.25rem;
+}
+.canvasReopen {
+  position: absolute;
+  right: 1rem;
+  bottom: .75rem;
+  z-index: 2;
+  display: inline-flex;
+  max-width: min(16rem, calc(100% - 2rem));
+  align-items: center;
+  border-radius: 999px;
+  padding: .3rem .75rem;
+  min-height: 2.25rem;
+  color: var(--primary);
+  font-size: .78rem;
+}
+
+@media (max-width: 960px) {
+  .canvasReopen { min-height: 2.75rem; }
+}
+
+/* The stage, header, and Composer enter as one non-blocking desktop handoff. */
+@media (min-width: 768px) {
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
+    animation: web-thread-enter var(--motion-fast) var(--ease-standard) both;
+  }
+}
+
+/* Respect reduced motion without changing the live resize transaction. */
+@media (prefers-reduced-motion: reduce) {
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
+  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
+    animation: none;
+  }
+}
