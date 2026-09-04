@@ -26,8 +26,33 @@ afterEach(cleanup)
 
 type LibraryProps = React.ComponentProps<typeof KokoroLibrarySurface>
 
-function renderLibrary(props: Partial<LibraryProps> = {}) {
-  const completeProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: artifacts, ...props }
+type LibraryRenderProps = Omit<Partial<LibraryProps>, "fixtureArtifacts"> & {
+  fixtureArtifacts?: LibraryProps["fixtureArtifacts"] | undefined
+}
+
+function artifactAt(index: number): ArtifactRecord {
+  const artifact = artifacts.at(index)
+  if (artifact === undefined) {
+    throw new Error(`Expected fixture artifact at index ${index}`)
+  }
+  return artifact
+}
+
+function listItemAt(index: number): HTMLElement {
+  const item = screen.getAllByRole("listitem").at(index)
+  if (item === undefined) {
+    throw new Error(`Expected library list item at index ${index}`)
+  }
+  return item
+}
+
+function renderLibrary(props: LibraryRenderProps = {}) {
+  const { fixtureArtifacts, ...rest } = props
+  const commonProps: Omit<LibraryProps, "fixtureArtifacts"> = { onPrompt: vi.fn(), ...rest }
+  const hasFixtureOverride = Object.prototype.hasOwnProperty.call(props, "fixtureArtifacts")
+  const completeProps: LibraryProps = hasFixtureOverride
+    ? fixtureArtifacts === undefined ? commonProps : { ...commonProps, fixtureArtifacts }
+    : { ...commonProps, fixtureArtifacts: artifacts }
   render(<LocaleProvider><KokoroLibrarySurface {...completeProps} /></LocaleProvider>)
 }
 
@@ -111,7 +136,7 @@ it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略�
   const artifactClient = {
     listArtifacts: vi.fn(() => new Promise<ArtifactList>((resolve) => { resolveRequest = resolve })),
   }
-  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient }
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), artifactClient }
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
@@ -119,13 +144,13 @@ it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略�
   expect(screen.getByRole("status", { name: "正在加载作品…" })).toBeInTheDocument()
 
   view.rerender(
-    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[0]]} /></LocaleProvider>,
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifactAt(0)]} /></LocaleProvider>,
   )
 
   expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
   expect(screen.queryByRole("status", { name: "正在加载作品…" })).not.toBeInTheDocument()
 
-  resolveRequest({ artifacts: [artifacts[1]], next_cursor: "stale-cursor" })
+  resolveRequest({ artifacts: [artifactAt(1)], next_cursor: "stale-cursor" })
   await waitFor(() => expect(screen.queryByText("研究摘要.pdf")).not.toBeInTheDocument())
   expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
 })
@@ -134,7 +159,7 @@ it("受控 fixture 接管失败的首屏请求时清除错误态", async () => {
   const artifactClient = {
     listArtifacts: vi.fn(async () => { throw new Error("BFF unavailable") }),
   }
-  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient }
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), artifactClient }
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
@@ -142,7 +167,7 @@ it("受控 fixture 接管失败的首屏请求时清除错误态", async () => {
   await screen.findByText("作品加载失败")
 
   view.rerender(
-    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[0]]} /></LocaleProvider>,
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifactAt(0)]} /></LocaleProvider>,
   )
 
   expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
@@ -153,9 +178,9 @@ it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", a
   let resolveMore: (value: ArtifactList) => void = () => {}
   const listArtifacts = vi
     .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifacts[0]], next_cursor: "cursor-2" })
+    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
     .mockImplementationOnce(() => new Promise<ArtifactList>((resolve) => { resolveMore = resolve }))
-  const initialProps: LibraryProps = { onPrompt: vi.fn(), fixtureArtifacts: undefined, artifactClient: { listArtifacts } }
+  const initialProps: LibraryProps = { onPrompt: vi.fn(), artifactClient: { listArtifacts } }
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
   )
@@ -165,13 +190,13 @@ it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", a
   await waitFor(() => expect(listArtifacts).toHaveBeenCalledTimes(2))
 
   view.rerender(
-    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifacts[1]]} /></LocaleProvider>,
+    <LocaleProvider><KokoroLibrarySurface {...initialProps} fixtureArtifacts={[artifactAt(1)]} /></LocaleProvider>,
   )
 
   expect(await screen.findByText("研究摘要.pdf")).toBeInTheDocument()
   expect(screen.queryByTestId("library-pagination")).not.toBeInTheDocument()
 
-  resolveMore({ artifacts: [artifacts[0]], next_cursor: "stale-cursor" })
+  resolveMore({ artifacts: [artifactAt(0)], next_cursor: "stale-cursor" })
   await waitFor(() => expect(screen.queryByText("季度汇报.pptx")).not.toBeInTheDocument())
 })
 
@@ -196,23 +221,23 @@ it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态"
   renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
-  const card = screen.getAllByRole("listitem")[0]
+  const card = listItemAt(0)
   fireEvent.click(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" }))
-  expect(onFavoriteChange).toHaveBeenCalledWith(artifacts[0], expect.any(Set))
+  expect(onFavoriteChange).toHaveBeenCalledWith(artifactAt(0), expect.any(Set))
   expect(within(card).getByRole("button", { name: "仅显示收藏: 季度汇报.pptx" })).toHaveAttribute("aria-pressed", "true")
   fireEvent.click(within(card).getByRole("button", { name: "查看来源会话" }))
   expect(onOpenSession).toHaveBeenCalledWith("session-1")
 
   fireEvent.click(within(card).getByRole("button", { name: "下载 季度汇报.pptx" }))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("下载失败"))
-  expect(downloadArtifact).toHaveBeenCalledWith(artifacts[0])
+  expect(downloadArtifact).toHaveBeenCalledWith(artifactAt(0))
 })
 
 it("卡片使用独立内容和动作布局，避免继承 Card 的空壳间距", async () => {
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
-  const card = screen.getAllByRole("listitem")[0]
+  const card = listItemAt(0)
   expect(card.querySelector('[data-slot="card-content"]')).toHaveClass(/cardContent/)
   expect(card.querySelector('[data-slot="card-content"]')).toHaveClass("p-0")
   expect(card.querySelector('[class*="cardActionRow"]')).toBeInTheDocument()
@@ -252,8 +277,8 @@ it("加载中保持与目录相同的三列卡片骨架，不用低高度横线�
 it("通过 next_cursor 加载下一页，并在服务端重复游标时停止重复请求", async () => {
   const listArtifacts = vi
     .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifacts[0]], next_cursor: "cursor-2" })
-    .mockResolvedValueOnce({ artifacts: [artifacts[1]], next_cursor: "cursor-2" })
+    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
+    .mockResolvedValueOnce({ artifacts: [artifactAt(1)], next_cursor: "cursor-2" })
   renderLibrary({ fixtureArtifacts: undefined, artifactClient: { listArtifacts } })
 
   await screen.findByText("季度汇报.pptx")
@@ -269,9 +294,9 @@ it("通过 next_cursor 加载下一页，并在服务端重复游标时停止重
 it("翻页失败时保留当前成果并提供明确的重试入口", async () => {
   const listArtifacts = vi
     .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifacts[0]], next_cursor: "cursor-2" })
+    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
     .mockRejectedValueOnce(new Error("offline"))
-    .mockResolvedValueOnce({ artifacts: [artifacts[1]] })
+    .mockResolvedValueOnce({ artifacts: [artifactAt(1)] })
   renderLibrary({ fixtureArtifacts: undefined, artifactClient: { listArtifacts } })
 
   await screen.findByText("季度汇报.pptx")

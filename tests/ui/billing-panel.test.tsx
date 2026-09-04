@@ -171,6 +171,10 @@ describe("BillingPanel", () => {
     const dayHeads = screen.getAllByTestId("billing-day")
     expect(dayHeads).toHaveLength(2)
     // 每个组头带当日净额（data-sign 标注）。
-    expect(dayHeads[0].querySelector("[data-sign]")).toBeTruthy()
+    const firstDayHead = dayHeads.at(0)
+    if (firstDayHead === undefined) {
+      throw new Error("Expected at least one billing day")
+    }
+    expect(firstDayHead.querySelector("[data-sign]")).toBeTruthy()
   })
 })

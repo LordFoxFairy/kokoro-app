@@ -14,6 +14,24 @@ const capabilities = {
   scheduledTasks: true,
 }
 
+function requireValue<T>(value: T | null | undefined, description: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(`Expected ${description}`)
+  }
+  return value
+}
+
+function at<T>(values: readonly T[], index: number, description: string): T {
+  return requireValue(values.at(index), description)
+}
+
+function contextCard(container: HTMLElement, kind: string): HTMLElement {
+  return requireValue(
+    container.querySelector<HTMLElement>(`[data-context-kind="${kind}"]`),
+    `${kind} context card`,
+  )
+}
+
 beforeEach(() => window.localStorage.setItem("kokoro.locale", "zh"))
 afterEach(cleanup)
 
@@ -98,9 +116,13 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
     </LocaleProvider>,
   )
 
-  const instructionsCard = container.querySelector<HTMLElement>('[data-context-kind="instructions"]')
-  const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')
-  const instructionsTrigger = within(instructionsCard!).getAllByRole("button", { name: /指令/ })[0]!
+  const instructionsCard = contextCard(container, "instructions")
+  const resourcesCard = contextCard(container, "resources-skills")
+  const instructionsTrigger = at(
+    within(instructionsCard).getAllByRole("button", { name: /指令/ }),
+    0,
+    "instructions trigger",
+  )
   fireEvent.click(instructionsTrigger)
   const editor = screen.getByRole("textbox", { name: "专案指令" })
   expect(editor).toHaveValue("默认先给出摘要。")
@@ -112,7 +134,11 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   await waitFor(() => expect(instructionsTrigger).toHaveFocus())
 
-  const resourcesTrigger = within(resourcesCard!).getAllByRole("button", { name: /文件和资源/ })[0]!
+  const resourcesTrigger = at(
+    within(resourcesCard).getAllByRole("button", { name: /文件和资源/ }),
+    0,
+    "resources trigger",
+  )
   fireEvent.click(resourcesTrigger)
   expect(screen.getByRole("dialog")).toHaveTextContent("研究简报.md")
   fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }))
@@ -144,8 +170,12 @@ it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {
     </LocaleProvider>,
   )
 
-  const instructionsCard = container.querySelector<HTMLElement>('[data-context-kind="instructions"]')
-  fireEvent.click(within(instructionsCard!).getAllByRole("button", { name: /指令/ })[0])
+  const instructionsCard = contextCard(container, "instructions")
+  fireEvent.click(at(
+    within(instructionsCard).getAllByRole("button", { name: /指令/ }),
+    0,
+    "instructions history trigger",
+  ))
   fireEvent.click(screen.getByRole("button", { name: "历史记录" }))
 
   const historyDialog = screen.getByRole("dialog", { name: "专案指令历史" })
@@ -153,7 +183,7 @@ it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {
   expect(historyDialog).toHaveTextContent("当前规则")
   const revisions = within(within(historyDialog).getByRole("list")).getAllByRole("button")
   expect(revisions).toHaveLength(2)
-  fireEvent.click(revisions[1])
+  fireEvent.click(at(revisions, 1, "previous instruction revision"))
   expect(historyDialog).toHaveTextContent("上一版规则")
 })
 
@@ -174,8 +204,12 @@ it("在项目页内打开独立技能 Dialog，并持久化技能启用状态", 
     </LocaleProvider>,
   )
 
-  const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')
-  fireEvent.click(within(resourcesCard!).getAllByRole("button", { name: /^技能$/ })[0])
+  const resourcesCard = contextCard(container, "resources-skills")
+  fireEvent.click(at(
+    within(resourcesCard).getAllByRole("button", { name: /^技能$/ }),
+    0,
+    "skills trigger",
+  ))
 
   const dialog = screen.getByRole("dialog")
   expect(dialog).toHaveTextContent("专案技能")
@@ -201,7 +235,7 @@ it("资源卡的上传与搜索网络动作分别进入对应状态", async () =
     </LocaleProvider>,
   )
 
-  const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')!
+  const resourcesCard = contextCard(container, "resources-skills")
   fireEvent.click(within(resourcesCard).getByRole("button", { name: "搜索网络" }))
 
   const dialog = screen.getByRole("dialog", { name: "文件和资源" })
@@ -227,7 +261,7 @@ it("资源筛选与技能搜索会实际过滤本地预览数据", () => {
     </LocaleProvider>,
   )
 
-  const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')!
+  const resourcesCard = contextCard(container, "resources-skills")
   fireEvent.click(within(resourcesCard).getByRole("button", { name: /文件和资源/ }))
   const resourcesDialog = screen.getByRole("dialog", { name: "文件和资源" })
   fireEvent.pointerDown(within(resourcesDialog).getByRole("button", { name: "筛选" }))
@@ -258,8 +292,12 @@ it("技能启用状态保存失败时回滚视觉状态", async () => {
     </LocaleProvider>,
   )
 
-  const resourcesCard = container.querySelector<HTMLElement>('[data-context-kind="resources-skills"]')
-  fireEvent.click(within(resourcesCard!).getAllByRole("button", { name: /^技能$/ })[0])
+  const resourcesCard = contextCard(container, "resources-skills")
+  fireEvent.click(at(
+    within(resourcesCard).getAllByRole("button", { name: /^技能$/ }),
+    0,
+    "skills failure trigger",
+  ))
   const skillSwitch = screen.getByRole("switch", { name: "技能构建器" })
   fireEvent.click(skillSwitch)
 
@@ -276,7 +314,7 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
   )
 
   const addButtons = screen.getAllByRole("button", { name: "新增" })
-  fireEvent.click(addButtons[addButtons.length - 2])
+  fireEvent.click(at(addButtons, -2, "website add button"))
 
   expect(screen.getByRole("dialog", { name: "新增网站至当前专案" })).toBeInTheDocument()
   expect(screen.getByRole("textbox", { name: "搜索网站" })).toBeInTheDocument()
@@ -291,7 +329,7 @@ it("网站选择器可以搜索、选择并保存合成网站", async () => {
   )
 
   const addButtons = screen.getAllByRole("button", { name: "新增" })
-  fireEvent.click(addButtons[addButtons.length - 2])
+  fireEvent.click(at(addButtons, -2, "website add button"))
   const dialog = screen.getByRole("dialog", { name: "新增网站至当前专案" })
   const search = within(dialog).getByRole("textbox", { name: "搜索网站" })
   fireEvent.change(search, { target: { value: "Kokoro" } })
@@ -319,11 +357,11 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
   )
 
   const addButtons = screen.getAllByRole("button", { name: "新增" })
-  fireEvent.click(addButtons[addButtons.length - 1])
+  fireEvent.click(at(addButtons, -1, "scheduled task add button"))
   fireEvent.click(screen.getByRole("button", { name: "建立新项目" }))
 
   const dialogs = screen.getAllByRole("dialog")
-  const editor = dialogs[dialogs.length - 1]
+  const editor = at(dialogs, -1, "scheduled task editor")
   fireEvent.change(within(editor).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "每日简报" } })
   fireEvent.change(within(editor).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "汇总今天的重要消息" } })
   fireEvent.click(within(editor).getByRole("button", { name: "保存" }))

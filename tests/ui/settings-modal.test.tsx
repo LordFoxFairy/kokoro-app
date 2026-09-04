@@ -4,6 +4,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createRef, useState } from "react"
+import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -83,10 +84,19 @@ function renderSettings(
   onCreateSkillWithAi?: () => void,
 ) {
   window.localStorage.setItem("kokoro.locale", "zh")
+  const props: ComponentProps<typeof SettingsModal> = {
+    brandName: "Acme",
+    preview,
+    initialTab,
+    onClose,
+  }
+  if (onTabChange !== undefined) props.onTabChange = onTabChange
+  if (onStartDeployment !== undefined) props.onStartDeployment = onStartDeployment
+  if (onCreateSkillWithAi !== undefined) props.onCreateSkillWithAi = onCreateSkillWithAi
   return render(
     <ThemeProvider>
       <LocaleProvider>
-      <SettingsModal brandName="Acme" preview={preview} initialTab={initialTab} onClose={onClose} onTabChange={onTabChange} onStartDeployment={onStartDeployment} onCreateSkillWithAi={onCreateSkillWithAi} />
+      <SettingsModal {...props} />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -260,7 +270,12 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.click(importMemoryTrigger)
     expect(screen.getByRole("dialog", { name: "匯入记忆" })).toBeInTheDocument()
     expect(screen.getByRole("textbox", { name: "粘贴回应内容" })).toBeInTheDocument()
-    fireEvent.click(screen.getAllByRole("button", { name: "取消" })[0])
+    const cancelButtons = screen.getAllByRole("button", { name: "取消" })
+    const cancelButton = cancelButtons.at(0)
+    if (cancelButton === undefined) {
+      throw new Error("Expected the memory import cancel button")
+    }
+    fireEvent.click(cancelButton)
     expect(screen.getByRole("textbox", { name: "昵称" })).toHaveValue("小可")
     await waitFor(() => expect(importMemoryTrigger).toHaveFocus())
   })
@@ -350,7 +365,12 @@ describe("SettingsModal 设置中心模态", () => {
     expect(orderDialog).toHaveTextContent("$48 /每月")
     expect(within(orderDialog).getByRole("button", { name: "支付" })).toBeInTheDocument()
     expect(screen.getByTestId("computer-create-dialog")).toBeInTheDocument()
-    fireEvent.click(within(orderDialog).getAllByRole("button", { name: "取消" })[0])
+    const orderCancelButtons = within(orderDialog).getAllByRole("button", { name: "取消" })
+    const orderCancelButton = orderCancelButtons.at(0)
+    if (orderCancelButton === undefined) {
+      throw new Error("Expected the order dialog cancel button")
+    }
+    fireEvent.click(orderCancelButton)
     expect(screen.queryByRole("dialog", { name: "确认您的订单" })).toBeNull()
     expect(screen.getByRole("dialog", { name: "建立云端电脑" })).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole("button", { name: "下一步" }))
@@ -392,8 +412,13 @@ describe("SettingsModal 设置中心模态", () => {
     expect(domainIcon).toHaveClass("lucide-globe")
 
     const createButtons = screen.getAllByRole("button", { name: "立即建立" })
-    fireEvent.click(createButtons[0])
-    fireEvent.click(createButtons[1])
+    const websiteCreateButton = createButtons.at(0)
+    const appCreateButton = createButtons.at(1)
+    if (websiteCreateButton === undefined || appCreateButton === undefined) {
+      throw new Error("Expected website and app deployment buttons")
+    }
+    fireEvent.click(websiteCreateButton)
+    fireEvent.click(appCreateButton)
     expect(onStartDeployment).toHaveBeenNthCalledWith(1, "website")
     expect(onStartDeployment).toHaveBeenNthCalledWith(2, "app")
 
@@ -436,9 +461,14 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("heading", { name: "Zapier", level: 1 })).toBeInTheDocument()
     const zapierLinks = screen.getAllByRole("link", { name: /试试看/ })
     expect(zapierLinks).toHaveLength(9)
-    expect(zapierLinks[0]).toHaveAttribute("href", "https://zapier.com/apps/manus/integrations")
-    expect(zapierLinks[1]).toHaveAttribute("href", "https://zapier.com/webintent/create-zap?template=255666880")
-    expect(zapierLinks[1].getAttribute("href")).not.toContain("sign_up_email")
+    const firstZapierLink = zapierLinks.at(0)
+    const secondZapierLink = zapierLinks.at(1)
+    if (firstZapierLink === undefined || secondZapierLink === undefined) {
+      throw new Error("Expected the first two Zapier links")
+    }
+    expect(firstZapierLink).toHaveAttribute("href", "https://zapier.com/apps/manus/integrations")
+    expect(secondZapierLink).toHaveAttribute("href", "https://zapier.com/webintent/create-zap?template=255666880")
+    expect(secondZapierLink.getAttribute("href")).not.toContain("sign_up_email")
     expect(window.location.hash).toBe("#/account/settings/integration/zapier")
     fireEvent.click(screen.getByRole("button", { name: "返回整合" }))
     expect(window.location.hash).toBe("#/account/settings/integration")

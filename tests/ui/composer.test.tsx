@@ -547,11 +547,15 @@ describe("CreationIntentPill dismissal", () => {
 
     capsules.forEach((capsule, index) => {
       const closeButton = screen.getAllByTestId("creation-intent-close-button")[index]
+      const intent = intents[index]
+      if (closeButton === undefined || intent === undefined) {
+        throw new Error("Expected a close button for every creation intent")
+      }
       expect(capsule).toHaveAttribute("data-state", "selected")
       expect(closeButton).toHaveAttribute("type", "button")
       expect(closeButton).toHaveAttribute("data-hit-area", "24")
-      expect(closeButton).toHaveAttribute("aria-label", `关闭${labels[intents[index]!]}`)
-      expect(closeButton).toHaveAttribute("title", `关闭${labels[intents[index]!]}`)
+      expect(closeButton).toHaveAttribute("aria-label", `关闭${labels[intent]}`)
+      expect(closeButton).toHaveAttribute("title", `关闭${labels[intent]}`)
       expect(closeButton.querySelector("svg")).toHaveAttribute("aria-hidden", "true")
     })
   })

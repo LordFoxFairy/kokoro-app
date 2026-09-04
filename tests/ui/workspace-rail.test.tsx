@@ -374,10 +374,14 @@ it("展开态账户卡左对齐，设备与通知动作保留在同一行", () =
   const rail = document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')
   const account = screen.getByTestId("rail-utility-account")
   const accountStatus = rail?.querySelector(`.${railStyles.accountStatus}`)
+  const userTriggerClass = railStyles.userTrigger
+  if (userTriggerClass === undefined) {
+    throw new Error("Expected the workspace rail user trigger style")
+  }
 
   expect(account).toHaveTextContent("Kokoro")
   expect(account).toHaveTextContent("个人工作区")
-  expect(account).toHaveClass(railStyles.userTrigger)
+  expect(account).toHaveClass(userTriggerClass)
   expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeInTheDocument()
   expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
   // jsdom does not calculate flex layout; lock the desktop CSS contract here

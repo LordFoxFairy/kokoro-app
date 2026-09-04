@@ -1,6 +1,7 @@
 // 营销落地页组件测试（WEB-FACE 面一）：品牌注入、能力区/FAQ 齐全、hero 输入暂存草稿并跳 /login。
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { LandingPage } from "@/ui/marketing/landing-page"
@@ -13,7 +14,10 @@ vi.mock("next/navigation", () => ({
 function renderLanding(brandName?: string, marketingHref?: string) {
   // 固定中文源：jsdom 的 navigator.languages 会协商到 en，显式落 zh 以断言源文案。
   window.localStorage.setItem("kokoro.locale", "zh")
-  return render(<LandingPage brandName={brandName} marketingHref={marketingHref} />, { wrapper: LocaleProvider })
+  const props: ComponentProps<typeof LandingPage> = {}
+  if (brandName !== undefined) props.brandName = brandName
+  if (marketingHref !== undefined) props.marketingHref = marketingHref
+  return render(<LandingPage {...props} />, { wrapper: LocaleProvider })
 }
 
 afterEach(() => {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
+import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroAgentsSurface } from "@/features/app/kokoro-agents-surface"
@@ -25,7 +26,10 @@ function setup(platform: AgentPlatform, overrides: Partial<AgentConnectionSetup>
 }
 
 function renderAgents(options: { client?: AgentClient; preview?: boolean } = {}) {
-  return render(<LocaleProvider><KokoroAgentsSurface client={options.client} preview={options.preview} /></LocaleProvider>)
+  const props: ComponentProps<typeof KokoroAgentsSurface> = {}
+  if (options.client !== undefined) props.client = options.client
+  if (options.preview !== undefined) props.preview = options.preview
+  return render(<LocaleProvider><KokoroAgentsSurface {...props} /></LocaleProvider>)
 }
 
 it("Agent 首页呈现 Hero、四项能力和即将上线平台", () => {

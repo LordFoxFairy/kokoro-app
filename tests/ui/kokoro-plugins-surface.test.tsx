@@ -101,7 +101,10 @@ it("搜索无结果时给出明确的空状态，且不会留下空白分区", (
 
 it("过滤后分页不会停留在已经不存在的页码", () => {
   renderPlugins()
-  const next = screen.getAllByRole("button", { name: "下一页" })[0]
+  const next = screen.getAllByRole("button", { name: "下一页" }).at(0)
+  if (next === undefined) {
+    throw new Error("Expected a next-page button")
+  }
   fireEvent.click(next)
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索连接器、资料来源" }), { target: { value: "Gmail" } })
 

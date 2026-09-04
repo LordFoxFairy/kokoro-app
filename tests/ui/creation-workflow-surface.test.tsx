@@ -21,7 +21,12 @@ describe("creation workflow surface", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "12 - 16" }))
     expect(screen.getByRole("button", { name: "Slide count: 12 - 16" })).toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByTestId("presentation-template")[3])
+    const templates = screen.getAllByTestId("presentation-template")
+    const fourthTemplate = templates.at(3)
+    if (fourthTemplate === undefined) {
+      throw new Error("Expected four presentation templates")
+    }
+    fireEvent.click(fourthTemplate)
     expect(onPrompt).toHaveBeenCalledWith("Quarterly business review", "presentation")
   })
 })
