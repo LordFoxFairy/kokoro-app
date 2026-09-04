@@ -5,8 +5,10 @@ import type { MouseEvent, ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 
 import styles from "./kokoro-project-workspace.module.css"
+import layoutStyles from "./project-workspace-layout.module.css"
 
 type ContextCardAction = {
   id?: string
@@ -121,7 +123,7 @@ export function ProjectContextSection({
 
 export function ProjectContextCard({ kind, ...section }: ProjectContextCardProps) {
   return (
-    <Card className={styles.contextCard} data-context-kind={kind}>
+    <Card className={cn(styles.contextCard, layoutStyles.contextCard)} data-context-kind={kind}>
       <ProjectContextSection {...section} />
     </Card>
   )

@@ -1,79 +1,30 @@
 "use client"
 
-import { Cable, ChevronDown, ChevronRight, Clock3, Cloud, Ellipsis, File, Globe2, Grid2X2, ListFilter, MessageSquare, Paperclip, Plus, Search, ShieldCheck, SlidersHorizontal, SquareCode, Upload, Wrench } from "lucide-react"
+import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload, Wrench } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useRef, useState, type MouseEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useLocale } from "@/i18n/context"
+import { cn } from "@/lib/utils"
 
 import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
 import { ProjectTaskEmpty } from "./project-task-empty"
 import { KokoroProjectTaskWelcome } from "./kokoro-project-task-welcome"
-import { ScheduledTaskEditorDialog } from "./scheduled-task-editor"
+import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
+import { previewResources, previewScheduledTasks, previewWebsites, type ProjectResourcePreview, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import styles from "./kokoro-project-workspace.module.css"
+import layoutStyles from "./project-workspace-layout.module.css"
 
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
   | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResources" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
 >
-
-type ResourceKind = "all" | "file" | "web"
-
-type ProjectResourcePreview = {
-  id: string
-  name: string
-  kind: Exclude<ResourceKind, "all">
-  detail: string
-}
-
-type ProjectWebsitePreview = {
-  id: string
-  name: string
-  detail: string
-}
-
-type ProjectScheduledPreview = {
-  id: string
-  title: string
-  prompt: string
-  frequency: "daily" | "weekly"
-  time: string
-  timezone: string
-  autoApprove: boolean
-}
-
-const previewResources: readonly ProjectResourcePreview[] = [
-  { id: "research-brief", name: "研究简报.md", kind: "file", detail: "Markdown · 4 KB" },
-  { id: "kokoro-product-site", name: "Kokoro 产品网站", kind: "web", detail: "网页参考" },
-]
-
-const previewWebsites: readonly ProjectWebsitePreview[] = [
-  { id: "kokoro-product-site", name: "Kokoro 产品网站", detail: "kokoro.miaokit.cloud" },
-  { id: "launch-notes-site", name: "产品发布页", detail: "launch.example.test" },
-]
-
-const previewScheduledTasks: readonly ProjectScheduledPreview[] = [
-  {
-    id: "daily-briefing",
-    title: "每日简报",
-    prompt: "汇总今天的重要消息",
-    frequency: "daily",
-    time: "08:00",
-    timezone: "UTC",
-    autoApprove: false,
-  },
-]
 
 /**
  * A project is a persistent workspace, not a renamed direct-chat screen.
@@ -107,7 +58,6 @@ export function KokoroProjectWorkspace({
   const [instructionsError, setInstructionsError] = useState(false)
   const [instructionsHistoryOpen, setInstructionsHistoryOpen] = useState(false)
   const [selectedInstructionRevision, setSelectedInstructionRevision] = useState<string | null>(null)
-  const instructionsHistoryDialogRef = useRef<HTMLDivElement | null>(null)
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
@@ -227,19 +177,19 @@ export function KokoroProjectWorkspace({
 
   return (
     <section
-      className={styles.surface}
+      className={cn(styles.surface, layoutStyles.surface)}
       data-slot="project-workspace"
       data-locale={locale}
       data-resource-copy-lines={locale === "zh" || locale === "ko" ? "one" : "two"}
       aria-label={t("firstSite.projects")}
     >
-      <div className={styles.main}>
+      <div className={cn(styles.main, layoutStyles.main)}>
         <ProjectIdentity {...(brandName === undefined ? {} : { brandName })} />
 
-        <div className={styles.composer}>{composer}</div>
+        <div className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
 
         {capabilities?.projectConversations ? (
-          <section className={styles.conversations} aria-labelledby="project-conversation-heading">
+          <section className={cn(styles.conversations, layoutStyles.conversations)} aria-labelledby="project-conversation-heading">
             <h2 id="project-conversation-heading">{t("firstSite.tasks")}</h2>
             <p>{t("firstSite.tasksPrivate")}</p>
             {projectConversationsLoading ? (
@@ -280,7 +230,7 @@ export function KokoroProjectWorkspace({
         ) : null}
       </div>
 
-      <aside className={styles.context} aria-label={t("firstSite.workspaceStatus")}>
+      <aside className={cn(styles.context, layoutStyles.context)} aria-label={t("firstSite.workspaceStatus")}>
         {(capabilities?.instructions || capabilities?.connectors) ? (
           <Card className={styles.contextCard} data-context-kind="instructions">
             {capabilities?.instructions ? (
@@ -406,341 +356,63 @@ export function KokoroProjectWorkspace({
         ) : null}
       </aside>
 
-      <Dialog open={instructionsOpen} onOpenChange={onContextDialogChange(setInstructionsOpen)}>
-        <DialogContent className={styles.instructionsDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-          <DialogHeader className={styles.instructionsDialogHeader}>
-            <DialogTitle>{t("firstSite.projectInstructionsTitle")}</DialogTitle>
-            <DialogDescription>{t("firstSite.projectInstructionsDescription")}</DialogDescription>
-          </DialogHeader>
-          <Textarea
-            className={styles.instructionsTextarea}
-            aria-label={t("firstSite.projectInstructionsTitle")}
-            value={instructions}
-            onChange={(event) => {
-              setInstructions(event.target.value)
-              setInstructionsError(false)
-            }}
-          />
-          {instructionsError ? <p className={styles.instructionsError}>{t("firstSite.projectInstructionsSaveError")}</p> : null}
-          <DialogFooter className={styles.instructionsDialogFooter}>
-            <Button type="button" variant="outline" className={styles.instructionsHistory} onClick={() => {
-              setSelectedInstructionRevision(projectInstructionHistory[0]?.id ?? null)
-              setInstructionsHistoryOpen(true)
-            }}>{t("firstSite.history")}</Button>
-            <span className={styles.instructionsFooterSpacer} />
-            <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-            <Button
-              type="button"
-              disabled={instructionsSaving}
-              onClick={async () => {
-                setInstructionsSaving(true)
-                setInstructionsError(false)
-                try {
-                  await onSaveProjectInstructions?.(instructions)
-                  onContextDialogChange(setInstructionsOpen)(false)
-                } catch {
-                  setInstructionsError(true)
-                } finally {
-                  setInstructionsSaving(false)
-                }
-              }}
-            >{t("firstSite.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={instructionsHistoryOpen} onOpenChange={setInstructionsHistoryOpen}>
-        <DialogContent
-          ref={instructionsHistoryDialogRef}
-          tabIndex={-1}
-          className={styles.instructionsHistoryDialog}
-          overlayClassName={styles.instructionsOverlay ?? ""}
-          closeLabel={t("shell.closeDialog")}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault()
-            instructionsHistoryDialogRef.current?.focus()
-          }}
-        >
-          <DialogTitle className={styles.instructionsHistoryTitle}>{t("firstSite.projectInstructionsHistory")}</DialogTitle>
-          <div className={styles.instructionsHistoryLayout}>
-            <ul className={styles.instructionsRevisionList}>
-              {projectInstructionHistory.length > 0 ? projectInstructionHistory.map((revision, index) => {
-                const selected = (selectedInstructionRevision ?? projectInstructionHistory[0]?.id) === revision.id
-                const date = new Intl.DateTimeFormat(locale, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(revision.updatedAt)
-                return (
-                  <li key={revision.id}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={styles.instructionsRevision}
-                      data-selected={selected || undefined}
-                      aria-pressed={selected}
-                      onClick={() => setSelectedInstructionRevision(revision.id)}
-                    >
-                      {revision.current || index === 0 ? <small>{t("firstSite.currentVersion")}</small> : null}
-                      <strong>{date}</strong>
-                      <span><i aria-hidden="true">{revision.actorName.slice(0, 1).toUpperCase()}</i>{revision.actorName}</span>
-                    </Button>
-                  </li>
-                )
-              }) : <p className={styles.instructionsHistoryEmpty}>{t("firstSite.noInstructionHistory")}</p>}
-            </ul>
-            <div className={styles.instructionsRevisionContent}>
-              {projectInstructionHistory.find((revision) => revision.id === (selectedInstructionRevision ?? projectInstructionHistory[0]?.id))?.instruction ?? ""}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={resourcesOpen} onOpenChange={onContextDialogChange(setResourcesOpen)}>
-        <DialogContent className={styles.resourcesDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-          <DialogTitle className={styles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
-          <div className={styles.resourcesToolbar}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={4}>
-                <DropdownMenuItem onSelect={() => setResourceKind("all")}>{t("library.filterAll")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setResourceKind("file")}>{t("library.filterDocuments")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setResourceKind("web")}>{t("firstSite.webResource")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <label className={styles.resourcesSearch}>
-              <Search aria-hidden="true" />
-              <Input
-                ref={resourceSearchRef}
-                aria-label={t("firstSite.searchResources")}
-                placeholder={t("firstSite.searchResources")}
-                value={resourceQuery}
-                onChange={(event) => setResourceQuery(event.target.value)}
-              />
-            </label>
-          </div>
-          {filteredResources.length > 0 ? (
-            <div className={styles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>
-              {filteredResources.map((resource) => (
-                <div key={resource.id} className={styles.resourceRow} role="listitem">
-                  {resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}
-                  <span><strong>{resource.name}</strong><small>{resource.detail}</small></span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className={styles.resourcesEmpty}>
-              <File aria-hidden="true" />
-              <p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.filesHint")}</p>
-            </div>
-          )}
-          <div className={styles.resourcesAddGroup}>
-            <input
-              ref={resourceInputRef}
-              id="project-resource-upload"
-              className={styles.resourcesFileInput}
-              type="file"
-              multiple
-              onChange={(event) => {
-                if (event.currentTarget.files) void handleResourceFiles(event.currentTarget.files)
-                event.currentTarget.value = ""
-              }}
-            />
-            <Button type="button" onClick={() => resourceInputRef.current?.click()}><Plus />{t("firstSite.add")}</Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button type="button" size="icon-sm" aria-label={t("firstSite.addMenu")}><ChevronDown /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent className={styles.resourcesAddMenu} align="end" sideOffset={4}>
-                <DropdownMenuItem onSelect={() => resourceInputRef.current?.click()}><Paperclip />{t("firstSite.addLocalFile")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => {
-                  setResourceKind("web")
-                  window.requestAnimationFrame(() => resourceSearchRef.current?.focus())
-                }}><Globe2 />{t("firstSite.searchWeb")}</DropdownMenuItem>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger><Grid2X2 />{t("firstSite.more")}</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className={styles.resourcesMoreMenu} sideOffset={4}>
-                    <DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromGoogleDrive")}</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDrivePersonal")}</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDriveWork")}</DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={skillsOpen} onOpenChange={onContextDialogChange(setSkillsOpen)}>
-        <DialogContent className={styles.projectSkillsDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-          <DialogTitle className={styles.projectSkillsTitle}>{t("firstSite.projects")}{t("firstSite.skills")}</DialogTitle>
-          <p className={styles.projectSkillsHint}>
-            <span>{t("firstSite.projectSkillsHint")}</span>
-            <span aria-hidden="true"> · </span>
-            <Button type="button" variant="link" onClick={() => onOpenSettings?.("skills")}>{t("firstSite.viewMySkills")}</Button>
-          </p>
-          <div className={styles.projectSkillsToolbar}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" sideOffset={4}>
-                <DropdownMenuItem onSelect={() => setSkillFilter("all")}>{t("library.filterAll")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setSkillFilter("official")}>{t("skills.official")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <label className={styles.projectSkillsSearch}>
-              <Search />
-              <Input
-                aria-label={t("skills.searchPlaceholder")}
-                placeholder={t("skills.searchPlaceholder")}
-                value={skillQuery}
-                onChange={(event) => setSkillQuery(event.target.value)}
-              />
-            </label>
-            <Button type="button" variant="outline" onClick={() => onOpenSettings?.("skills")}><Plus />{t("firstSite.add")}<ChevronDown /></Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.more")}><Ellipsis /></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={4}>
-                <DropdownMenuItem onSelect={() => onOpenSettings?.("skills")}>{t("firstSite.manageSkills")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setSkillBuilderEnabled((enabled) => !enabled)}>
-                  {skillBuilderEnabled ? t("firstSite.disableSkill") : t("firstSite.enableSkill")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          {skillVisible ? (
-            <article className={styles.projectSkillCard}>
-              <div className={styles.projectSkillCardTop}>
-                <h3>{t("firstSite.skillBuilder")}</h3>
-                <Switch
-                  checked={skillBuilderEnabled}
-                  aria-label={t("firstSite.skillBuilder")}
-                  onCheckedChange={async (enabled) => {
-                    const previous = skillBuilderEnabled
-                    setSkillBuilderEnabled(enabled)
-                    try { await onSetProjectSkillEnabled?.("skill-builder", enabled) }
-                    catch { setSkillBuilderEnabled(previous) }
-                  }}
-                />
-              </div>
-              <p className={styles.projectSkillDescription}>{t("firstSite.skillBuilderDescription", { brand: brandName ?? "Kokoro" })}</p>
-              <footer className={styles.projectSkillFooter}>
-                <ShieldCheck /><span>{t("skills.official")}</span><span aria-hidden="true">·</span><span>{t("skills.updatedAt", { date: t("firstSite.updatedToday") })}</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label={t("firstSite.more")}><Ellipsis /></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={4}>
-                    <DropdownMenuItem onSelect={() => onOpenSettings?.("skills")}>{t("firstSite.manageSkills")}</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </footer>
-            </article>
-          ) : (
-            <div className={styles.projectSkillsEmpty}>{t("firstSite.noSkills")}</div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={websitesOpen} onOpenChange={onContextDialogChange(setWebsitesOpen)}>
-        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-          <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle>
-          <label className={styles.projectPickerSearch}>
-            <Search aria-hidden="true" />
-            <Input
-              aria-label={t("firstSite.searchWebsites")}
-              placeholder={t("firstSite.searchWebsites")}
-              value={websiteQuery}
-              onChange={(event) => setWebsiteQuery(event.target.value)}
-            />
-          </label>
-          {filteredWebsites.length > 0 ? (
-            <div className={styles.projectPickerList} role="list" aria-label={t("firstSite.searchWebsites")}>
-              {filteredWebsites.map((website) => {
-                const selected = selectedWebsiteId === website.id || linkedWebsiteId === website.id
-                return (
-                  <button
-                    key={website.id}
-                    type="button"
-                    className={styles.projectPickerRow}
-                    aria-pressed={selected}
-                    data-selected={selected || undefined}
-                    onClick={() => setSelectedWebsiteId(website.id)}
-                  >
-                    <SquareCode aria-hidden="true" />
-                    <span><strong>{website.name}</strong><small>{website.detail}</small></span>
-                  </button>
-                )
-              })}
-            </div>
-          ) : <div className={styles.projectPickerEmpty}><SquareCode aria-hidden="true" /><span>{t("firstSite.noWebsites")}</span></div>}
-          <DialogFooter className={styles.projectPickerFooter}>
-            <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-            <Button
-              type="button"
-              disabled={!selectedWebsiteId}
-              onClick={() => {
-                setLinkedWebsiteId(selectedWebsiteId)
-                onContextDialogChange(setWebsitesOpen)(false)
-              }}
-            >{t("firstSite.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
-        <DialogContent className={styles.projectPickerDialog} overlayClassName={styles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
-          <DialogTitle className={styles.projectPickerTitle}>{t("firstSite.projectScheduledTasks")}</DialogTitle>
-          <div className={styles.scheduledPickerToolbar}>
-            <label className={styles.projectPickerSearch}>
-              <Search aria-hidden="true" />
-              <Input
-                aria-label={t("firstSite.searchScheduledTasks")}
-                placeholder={t("firstSite.searchScheduledTasks")}
-                value={scheduledQuery}
-                onChange={(event) => setScheduledQuery(event.target.value)}
-              />
-            </label>
-            <Button type="button" variant="outline" onClick={() => setScheduledEditorOpen(true)}><Plus />{t("firstSite.createNewItem")}</Button>
-          </div>
-          {filteredScheduledTasks.length > 0 ? (
-            <div className={styles.projectPickerList} role="list" aria-label={t("firstSite.searchScheduledTasks")}>
-              {filteredScheduledTasks.map((task) => {
-                const selected = selectedScheduledId === task.id || linkedScheduledId === task.id
-                return (
-                  <button
-                    key={task.id}
-                    type="button"
-                    className={styles.projectPickerRow}
-                    aria-pressed={selected}
-                    data-selected={selected || undefined}
-                    onClick={() => setSelectedScheduledId(task.id)}
-                  >
-                    <Clock3 aria-hidden="true" />
-                    <span><strong>{task.title}</strong><small>{task.time} · {task.prompt}</small></span>
-                  </button>
-                )
-              })}
-            </div>
-          ) : <div className={styles.projectPickerEmpty}><Clock3 aria-hidden="true" /><span>{t("firstSite.noScheduledTasks")}</span></div>}
-          <DialogFooter className={styles.projectPickerFooter}>
-            <DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose>
-            <Button
-              type="button"
-              disabled={!selectedScheduledId}
-              onClick={() => {
-                setLinkedScheduledId(selectedScheduledId)
-                onContextDialogChange(setScheduledOpen)(false)
-              }}
-            >{t("firstSite.save")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ScheduledTaskEditorDialog
-        open={scheduledEditorOpen}
-        onOpenChange={setScheduledEditorOpen}
-        brandName={brandName ?? "Kokoro"}
-        onSave={handleScheduledTaskSave}
+      <ProjectWorkspaceDialogs
+        {...(brandName === undefined ? {} : { brandName })}
+        instructionsOpen={instructionsOpen}
+        setInstructionsOpen={setInstructionsOpen}
+        instructions={instructions}
+        setInstructions={setInstructions}
+        instructionsSaving={instructionsSaving}
+        setInstructionsSaving={setInstructionsSaving}
+        instructionsError={instructionsError}
+        setInstructionsError={setInstructionsError}
+        instructionsHistoryOpen={instructionsHistoryOpen}
+        setInstructionsHistoryOpen={setInstructionsHistoryOpen}
+        selectedInstructionRevision={selectedInstructionRevision}
+        setSelectedInstructionRevision={setSelectedInstructionRevision}
+        projectInstructionHistory={projectInstructionHistory}
+        {...(onSaveProjectInstructions === undefined ? {} : { onSaveProjectInstructions })}
+        resourcesOpen={resourcesOpen}
+        setResourcesOpen={setResourcesOpen}
+        resourceQuery={resourceQuery}
+        setResourceQuery={setResourceQuery}
+        setResourceKind={setResourceKind}
+        resourceSearchRef={resourceSearchRef}
+        resourceInputRef={resourceInputRef}
+        filteredResources={filteredResources}
+        handleResourceFiles={handleResourceFiles}
+        skillsOpen={skillsOpen}
+        setSkillsOpen={setSkillsOpen}
+        skillQuery={skillQuery}
+        setSkillQuery={setSkillQuery}
+        setSkillFilter={setSkillFilter}
+        skillBuilderEnabled={skillBuilderEnabled}
+        setSkillBuilderEnabled={setSkillBuilderEnabled}
+        skillVisible={skillVisible}
+        {...(onSetProjectSkillEnabled === undefined ? {} : { onSetProjectSkillEnabled })}
+        websitesOpen={websitesOpen}
+        setWebsitesOpen={setWebsitesOpen}
+        websiteQuery={websiteQuery}
+        setWebsiteQuery={setWebsiteQuery}
+        selectedWebsiteId={selectedWebsiteId}
+        setSelectedWebsiteId={setSelectedWebsiteId}
+        linkedWebsiteId={linkedWebsiteId}
+        setLinkedWebsiteId={setLinkedWebsiteId}
+        filteredWebsites={filteredWebsites}
+        scheduledOpen={scheduledOpen}
+        setScheduledOpen={setScheduledOpen}
+        scheduledQuery={scheduledQuery}
+        setScheduledQuery={setScheduledQuery}
+        selectedScheduledId={selectedScheduledId}
+        setSelectedScheduledId={setSelectedScheduledId}
+        linkedScheduledId={linkedScheduledId}
+        setLinkedScheduledId={setLinkedScheduledId}
+        filteredScheduledTasks={filteredScheduledTasks}
+        scheduledEditorOpen={scheduledEditorOpen}
+        setScheduledEditorOpen={setScheduledEditorOpen}
+        onCreateProjectScheduledTask={handleScheduledTaskSave}
+        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
+        onContextDialogChange={onContextDialogChange}
       />
     </section>
   )

@@ -1,0 +1,184 @@
+.appSuggestions {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding-inline: 0.75rem;
+}
+
+.appSuggestions button {
+  display: flex;
+  width: 100%;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.5625rem 0.75rem;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.appSuggestions button:hover {
+  border-radius: 0.625rem;
+  background: rgb(255 255 255 / 48%);
+}
+
+.appSuggestions button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: 0.625rem;
+}
+
+.appSuggestions span {
+  min-width: 0;
+  flex: 1;
+  color: rgb(77 77 77);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.125rem;
+  text-align: left;
+}
+
+.appSuggestions svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  color: var(--muted-foreground);
+  stroke-width: 2;
+  transform: rotate(-45deg);
+}
+
+/* The welcome workbench reserves one calm promotional slot below the prompt
+ * actions, matching Manus' document rhythm without turning the empty state
+ * into a card dashboard. The illustration is CSS-only so the site adapter
+ * does not require a shared asset pipeline. */
+.desktopBanner {
+  display: flex;
+  width: min(33.75rem, 100%);
+  min-height: 6.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin: 5.7rem auto 0;
+  border-radius: 0.85rem;
+  background: var(--muted);
+  padding: 1rem 1.25rem;
+  box-sizing: border-box;
+  color: var(--foreground);
+  animation: banner-fade 180ms ease-out;
+}
+
+.desktopCarousel {
+  width: min(33.75rem, 100%);
+  margin: 5.7rem auto 0;
+}
+
+.desktopCarousel .desktopBanner { width: 100%; margin-top: 0; }
+
+.desktopBannerCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.desktopBannerCopy strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.desktopBannerCopy span {
+  max-width: 22rem;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.desktopBannerArtwork {
+  position: relative;
+  overflow: hidden;
+  width: 7.5rem;
+  height: 4.5rem;
+  flex: 0 0 auto;
+}
+
+.desktopBannerWindow {
+  position: absolute;
+  right: 0.05rem;
+  bottom: 0.25rem;
+  display: block;
+  width: 6.95rem;
+  height: 4.15rem;
+  overflow: hidden;
+  border: 1px solid rgb(55 53 47 / 14%);
+  border-radius: 0.45rem;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 0.25rem 0.75rem rgb(55 53 47 / 14%);
+  transform: perspective(12rem) rotateY(-8deg);
+}
+.desktopBannerWindowBar { display: flex; gap: 0.2rem; height: 0.65rem; align-items: center; padding-inline: 0.4rem; background: rgb(245 246 248); }
+.desktopBannerWindowBar i { display: block; width: 0.22rem; height: 0.22rem; border-radius: 50%; background: rgb(255 95 86); }
+.desktopBannerWindowBar i:nth-child(2) { background: rgb(255 189 46); }
+.desktopBannerWindowBar i:nth-child(3) { background: rgb(39 201 63); }
+.desktopBannerWindow b { display: block; margin: 0.35rem 0.45rem 0.2rem; color: rgb(55 53 47 / 78%); font-size: 0.48rem; line-height: 0.65rem; }
+.desktopBannerChart { position: relative; display: block; height: 1.75rem; margin: 0 0.45rem; border: 1px solid rgb(55 53 47 / 8%); border-radius: 0.2rem; background: rgb(248 250 252); }
+.desktopBannerChart::before { position: absolute; right: 0.25rem; bottom: 0.35rem; left: 0.25rem; height: 0.8rem; border-bottom: 0.12rem solid rgb(0 129 242 / 58%); border-radius: 45% 55% 35% 60%; content: ""; transform: skewY(-12deg); }
+.desktopBannerChart i { position: absolute; right: 0.2rem; left: 0.2rem; height: 1px; background: rgb(55 53 47 / 8%); }
+.desktopBannerChart i:nth-child(1) { top: 0.55rem; }
+.desktopBannerChart i:nth-child(2) { top: 1.05rem; }
+.desktopBannerChart i:nth-child(3) { top: 1.45rem; }
+.desktopBannerService { position: absolute; right: -0.45rem; bottom: 0.15rem; display: inline-flex; width: 3.75rem; height: 1.2rem; align-items: center; gap: 0.2rem; border: 1px solid rgb(55 53 47 / 12%); border-radius: 0.3rem; background: var(--background); padding-inline: 0.25rem; color: rgb(55 53 47 / 70%); font-size: 0.42rem; box-shadow: 0 0.125rem 0.3rem rgb(55 53 47 / 12%); }
+.desktopBannerService i { display: block; width: 0.42rem; height: 0.42rem; border-radius: 0.1rem; background: rgb(0 129 242 / 76%); }
+.desktopBannerStand { position: absolute; right: 2.25rem; bottom: -0.2rem; width: 2.5rem; height: 0.28rem; border-radius: 999px; background: rgb(55 53 47 / 70%); }
+.desktopBannerArtwork[data-banner-kind="schedule"] .desktopBannerChart::before { border-color: rgb(149 191 71 / 70%); }
+.desktopBannerArtwork[data-banner-kind="integration"] .desktopBannerChart::before { border-color: rgb(255 111 54 / 68%); }
+
+.bannerDots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.bannerDots button {
+  width: 0.4rem;
+  height: 0.4rem;
+  min-height: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 24%, transparent);
+  padding: 0;
+  cursor: pointer;
+}
+
+.bannerDots button[data-active="true"] { background: var(--muted-foreground); }
+.bannerDots button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+@keyframes banner-fade {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+.directPrompt[data-slot="button"] {
+  display: flex;
+  min-width: 0;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  border-color: var(--border);
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.directPrompt svg {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
