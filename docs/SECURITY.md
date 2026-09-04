@@ -1,0 +1,125 @@
+# Kokoro User Web 安全设计
+
+状态：当前控制与目标缺口，2026-09-03。
+
+## 1. Trust boundary
+
+```text
+Untrusted browser input
+  -> kokoro same-origin route (cookie/origin/schema/header boundary)
+  -> authenticated Web service call
+  -> kokoro-bff authorization and tenant isolation
+  -> internal owner
+```
+
+- Browser、URL、body、localStorage 和 browser-provided header 均不可信。
+- `Forwarded` 只由 Web server 根据 `KOKORO_DOMAIN` 重建；它是部署路由上下文，不是认证凭据。
+- user/namespace 来自已密封 session envelope，但 BFF/owner 仍需执行权限与 tenant 检查。
+- UI 中的 disabled/hidden 状态只改善交互，不构成授权。
+
+## 2. 已实现控制
+
+### 2.1 Session 与 secret
+
+- `kokoro_session` 使用 AES-256-GCM 认证加密；每次随机 IV，tag 防篡改。
+- 当前密钥用于加密，多把密钥用于解密，支持轮换窗口。
+- session 与 nonce cookie 为 HttpOnly、SameSite=Lax；production 设置 Secure。
+- runtime/refresh credential 留在 server cookie envelope，不返回浏览器 JavaScript。
+- production 缺 `KOKORO_INTERNAL_SECRET_WEB_BFF` 时 `authConfig()` 不进入 live authenticated 模式。
+
+### 2.2 请求边界
+
+- 主要 mutation route 执行 Origin/Host 同源比对。
+- session route 只转发 `accept`、`content-type`、`last-event-id`、`idempotency-key`，不转发 cookie。
+- 上游 transport 删除 browser-provided `host`、`forwarded`、`x-forwarded-*`、`x-domain`、
+  `x-kokoro-tenant-id` 和 `x-kokoro-site-id` 后写入受信 `Forwarded`。
+- 外部 JSON 主要使用 Zod 解析；非法 AG-UI frame 会使 event stream 进入错误路径。
+- 多个身份相关响应使用 `no-store` 并传播 request id。
+
+### 2.3 Preview 隔离
+
+- preview 由显式非 production 配置选择。
+- live 网络错误不应静默切换 fixture。
+- dev preview file route 必须保持 production 关闭；fixture 不含真实 token、cookie 或受保护资产。
+
+## 3. Secret 与配置清单
+
+| 变量 | 位置 | 浏览器可见 | 说明 |
+| --- | --- | --- | --- |
+| `KOKORO_WEB_SESSION_SECRET` | Web server secret | 否 | session envelope 密钥；支持逗号分隔轮换 |
+| `KOKORO_INTERNAL_SECRET_WEB_BFF` | Web server secret | 否 | Web→BFF service credential |
+| `KOKORO_BFF_BASE_URL` | Web server config | 否 | 业务与 Chat 上游 |
+| `KOKORO_IAM_BASE_URL` | 当前 Web server config | 否 | 当前直连缺口；目标移到 BFF |
+| `KOKORO_DOMAIN` | Web server config | 否 | canonical deployment hostname |
+| `KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET` | 非 production | 否 | mock payment；production 禁用 |
+
+任何真实值不得提交到 `.env*`、日志、测试 fixture、截图或前端 bundle。Git 只保留 `.example` 模板。
+
+## 4. 已知风险与阻断项
+
+| 优先级 | 风险 | 当前状态/所需动作 |
+| --- | --- | --- |
+| P0 | Web 仍直接调用 IAM | 将 auth/team owner call 收口到 BFF；删除 `KOKORO_IAM_BASE_URL` Web runtime 依赖 |
+| P0 | 上游无 connect/read/overall timeout 与响应大小上限 | 在公共 server transport 实施并测试 abort、slow body 和 oversized body |
+| P0 | 部分 route 返回 flat error/request id/cache policy 不一致 | 统一使用安全 BFF envelope mapper |
+| P0 | 无全局 CSP/frame/referrer/permissions policy | 在 Next/edge 配置并以 route/browser test 阻断回归 |
+| P0 | mutation 缺失 Origin 时当前允许 | 明确可信非浏览器调用策略，结合 Fetch Metadata/CSRF token；不能只依赖 SameSite |
+| P1 | localStorage 可能保留 draft/preview 内容 | 建立数据清理、容量、敏感内容和 shared-device 策略 |
+| P1 | 缺 dependency/source/secret scan | CI 增加阻断式扫描并记录处置 owner |
+| P1 | Actions/Base image 未固定不可变 digest | 固定完整 SHA/digest，保留可读版本注释 |
+| P1 | release 缺候选镜像扫描与 SBOM | push 前本地构建、扫描、smoke，再产出 SBOM/provenance/signature |
+| P1 | 无专用 health/ready 与统一 telemetry | 增加不泄密探针、结构化日志、metrics 与告警 |
+
+这些风险没有在本阶段通过文档“视为解决”；发布判断以 [`ACCEPTANCE.md`](ACCEPTANCE.md) 为准。
+
+## 5. Header 与响应策略目标
+
+所有动态 browser-private 响应应至少满足：
+
+- `Cache-Control: private, no-store`（或更严格）；
+- `X-Content-Type-Options: nosniff`；
+- `Referrer-Policy: no-referrer` 或按明确页面需求收紧；
+- `Content-Security-Policy` 禁止任意 script/style/frame source，并为需要的连接建立明确 allowlist；
+- `frame-ancestors 'none'` 或等价 `X-Frame-Options`；
+- 最小 `Permissions-Policy`；
+- error body 只有稳定 code、安全 message、request id，不含内部诊断。
+
+SSE 需要允许正确 content type/streaming，但不豁免鉴权、no-store、request id 和连接限制。
+
+## 6. 认证与授权检查
+
+1. Web 校验 session envelope 的结构、认证 tag 和 expiry。
+2. Web 不信任 browser tenant/site/user header。
+3. BFF 校验 Web service identity、session identity、permission 和资源 owner。
+4. Owner 以受信 tenant context 查询；Web 不接触数据库。
+5. 对 401/403 不泄漏资源是否存在、tenant、内部 endpoint 或上游原文。
+
+团队切换、分享、支付、HITL 和工具执行需要各自的业务权限；Web 只能呈现后端返回的允许动作。
+
+## 7. 安全验证
+
+发布前至少执行：
+
+- browser header 注入与 tenant/site spoof 测试；
+- cross-origin mutation、缺失/错误 Origin 与 Fetch Metadata 测试；
+- cookie flags、rotation、tamper、expiry、logout/revoke 测试；
+- AG-UI unknown event、oversized frame、cursor 篡改与断线测试；
+- JSON/body/response size、timeout、slowloris 与 abort 测试；
+- dependency、source、secret、container 和 IaC scan；
+- 浏览器 bundle 搜索 server-only env、token、internal URL；
+- CSP、clickjacking、referrer 和缓存泄漏测试。
+
+当前测试覆盖其中一部分 route/cookie/header contract；完整 production security acceptance 尚未闭环。
+
+## 8. 事件响应
+
+怀疑 credential/session 泄漏时：
+
+1. 停止相关发布并保存 request id、版本、时间范围和脱敏日志；
+2. 轮换 Web→BFF secret；将新值先部署到校验方，再部署 caller，最后撤销旧值；
+3. 轮换 session envelope key 时把新 key 放首位、旧 key保留短窗口，随后删除旧 key；
+4. 通过 IAM 吊销 refresh/session；不要只清一个浏览器 cookie；
+5. 检查 Developer API/catalog、前端 bundle、日志和 artifact 是否误含 browser-private/secret；
+6. 完成范围确认、恢复验证和事故记录。
+
+操作细节见 [`RUNBOOK.md`](RUNBOOK.md)。
