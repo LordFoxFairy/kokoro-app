@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createScheduledTaskClient } from "@/features/app/scheduled-task-client"
+import { createScheduledTaskClient } from "@/features/scheduled-tasks"
 
 const wireTask = {
   id: "scheduled_1",

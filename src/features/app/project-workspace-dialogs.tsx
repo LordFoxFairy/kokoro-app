@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import { ScheduledTaskEditorDialog } from "@/features/scheduled-tasks"
 import { useLocale } from "@/i18n/context"
 
 import type { ProjectResourcePreview, ProjectScheduledPreview, ProjectWebsitePreview, ResourceKind } from "./project-workspace-model"
-import { ScheduledTaskEditorDialog } from "./scheduled-task-editor"
 import dialogStyles from "./project-workspace-dialogs.module.css"
 
 type Revision = NonNullable<EmptyStateProps["projectInstructionHistory"]>[number]

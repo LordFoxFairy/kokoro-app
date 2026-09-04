@@ -4,6 +4,7 @@ import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 
 import { AppFrame, type AppFrameProps } from "@/components/blocks/app-frame/app-frame"
+import { ScheduledTaskSurface } from "@/features/scheduled-tasks"
 import type { RuntimeNavigationItem } from "@/system/runtime-navigation"
 import { useT } from "@/i18n/context"
 import { KokoroProjectWorkspace } from "./kokoro-project-workspace"
@@ -11,7 +12,6 @@ import { createPreviewProjectRef, KokoroDirectChatWelcome } from "./kokoro-welco
 import { KokoroCommandMenu } from "./kokoro-command-menu"
 import { KokoroPluginsSurface } from "./kokoro-plugins-surface"
 import { KokoroAgentsSurface } from "./kokoro-agents-surface"
-import { KokoroScheduledSurface } from "./kokoro-scheduled-surface"
 import { KokoroLibrarySurface } from "./kokoro-library-surface"
 import { KokoroSkillsSurface } from "./kokoro-skills-surface"
 import { DEFAULT_BRAND } from "@/config/brand"
@@ -154,7 +154,7 @@ export function KokoroAppSurface(props: KokoroAppSurfaceProps) {
       {...(route.projectRef === undefined ? {} : { projectRef: route.projectRef })}
       onOpenProject={handleOpenProject}
       activeNavigationKey={route.surface === "chat" ? "chat" : route.surface === "project" ? "project" : route.surface === "agents" ? "agent" : route.surface === "plugins" ? "mcp" : route.surface}
-      emptyState={route.surface === "agents" ? KokoroAgentsSurface : route.surface === "plugins" ? KokoroPluginsSurface : route.surface === "scheduled" ? KokoroScheduledSurface : route.surface === "library" ? KokoroLibrarySurface : route.surface === "skills" ? KokoroSkillsSurface : route.surface === "project" ? KokoroProjectWorkspace : KokoroDirectChatWelcome}
+      emptyState={route.surface === "agents" ? KokoroAgentsSurface : route.surface === "plugins" ? KokoroPluginsSurface : route.surface === "scheduled" ? ScheduledTaskSurface : route.surface === "library" ? KokoroLibrarySurface : route.surface === "skills" ? KokoroSkillsSurface : route.surface === "project" ? KokoroProjectWorkspace : KokoroDirectChatWelcome}
       hideWorkspaceHeader={route.surface === "plugins" || route.surface === "agents" || route.surface === "scheduled" || route.surface === "library" || route.surface === "skills"}
       // A direct chat is a standalone conversation. A project is a workspace:
       // its Composer creates a scoped task while context modules stay beside

@@ -16,7 +16,7 @@ import { createHubClient, type HubClient } from "@/hub/client"
 import { createTeamClient, type TeamClient } from "@/team/client"
 import { createAgentClient, type AgentClient } from "@/agents/client"
 import { createPreviewAgentClient } from "@/agents/preview-client"
-import { createScheduledTaskClient, type ScheduledTaskClient } from "@/features/app/scheduled-task-client"
+import { createScheduledTaskClient, type ScheduledTaskClient } from "@/features/scheduled-tasks"
 import {
   createPreviewBillingClient,
   createPreviewHubClient,

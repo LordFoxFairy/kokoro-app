@@ -9,8 +9,9 @@ import type { McpCreateMode } from "@/ui/mcp/mcp-panel"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
 
+import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
+
 import type { AppCommandMenuProps } from "./app-command-menu"
-import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
 
 export type ProjectConversationStatus = "queued" | "running" | "waiting" | "completed" | "failed"
 

@@ -5,30 +5,45 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useLocale } from "@/i18n/context"
 
-import { ScheduledTaskEditorDialog, type ScheduledTaskDraft } from "./scheduled-task-editor"
-import type { ScheduledTaskPatch, ScheduledTaskRecord } from "./scheduled-task-client"
-import { ScheduledSurfaceContent } from "./kokoro-scheduled-content"
-import { EDITOR_HASH, missingScheduledClientError, nextPreviewRun, readPreviewTasks, SCHEDULED_LOCATION_EVENT, scheduledDateKey, startOfMonth, usePreviewTasks, useScheduledLocation, writePreviewTasks, writeScheduledView, type KokoroScheduledSurfaceProps, type ScheduledMutation, type ScheduledView } from "./kokoro-scheduled-model"
-export type { ScheduledTaskClient, ScheduledTaskPatch, ScheduledTaskRecord } from "./kokoro-scheduled-model"
-import styles from "./kokoro-scheduled-surface.module.css"
+import { nextPreviewRun, scheduledDateKey, startOfMonth } from "../model/calendar"
+import type { ScheduledTaskClient, ScheduledTaskDraft, ScheduledTaskPatch, ScheduledTaskRecord } from "../model/scheduled-task"
+import { readPreviewTasks, usePreviewTasks, writePreviewTasks } from "./preview-task-store"
+import { ScheduledTaskContent } from "./scheduled-task-content"
+import { ScheduledTaskEditorDialog } from "./scheduled-task-editor"
+import { EDITOR_HASH, SCHEDULED_LOCATION_EVENT, useScheduledLocation, writeScheduledView } from "./scheduled-task-location"
+import type { ScheduledMutation } from "./scheduled-task-presentation"
+import styles from "./scheduled-task-surface.module.css"
 
+export type ScheduledTaskSurfaceProps = {
+  brandName?: string
+  preview?: boolean
+  scheduledTaskClient?: ScheduledTaskClient
+  onSave?: (task: ScheduledTaskDraft) => Promise<void> | void
+  tasks?: readonly ScheduledTaskRecord[]
+  onUpdateTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<void> | void
+  onRetryTask?: (taskId: string) => Promise<void> | void
+  onDeleteTask?: (taskId: string) => Promise<void> | void
+}
 
-export function KokoroScheduledSurface({
+function missingScheduledClientError(): Error {
+  return new Error("Scheduled task client is not configured")
+}
+
+export function ScheduledTaskSurface({
   brandName = "Kokoro",
   preview = false,
-  client,
   scheduledTaskClient,
   onSave,
   tasks,
   onUpdateTask,
   onRetryTask,
   onDeleteTask,
-}: KokoroScheduledSurfaceProps = {}) {
+}: ScheduledTaskSurfaceProps = {}) {
   const { t } = useLocale()
   // Preview is explicit. A live surface with no injected scheduled client
   // stays in an honest loading/error state instead of borrowing the fixture.
   const fixtureMode = preview
-  const injectedClient = scheduledTaskClient ?? client
+  const injectedClient = scheduledTaskClient
   const controlledTasks = tasks !== undefined
   const previewTasks = usePreviewTasks()
   const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
@@ -302,8 +317,7 @@ export function KokoroScheduledSurface({
 
   const switchView = (next: string) => {
     if (next !== "calendar" && next !== "list") return
-    const nextView = next as ScheduledView
-    writeScheduledView(nextView)
+    writeScheduledView(next)
   }
 
   const shiftCalendarMonth = (offset: number) => {
@@ -321,7 +335,7 @@ export function KokoroScheduledSurface({
       <header className={styles.header}>
         <h1>{t("rail.navScheduled")}</h1>
       </header>
-      <ScheduledSurfaceContent
+      <ScheduledTaskContent
         brandName={brandName}
         fixtureMode={fixtureMode}
         controlledTasks={controlledTasks}

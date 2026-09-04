@@ -12,34 +12,12 @@ import {
   scheduledTasksPath,
   type ScheduledTaskRecordResponse,
 } from "@/contract/http"
-import type { ScheduledTaskDraft } from "./scheduled-task-editor"
-
-export type ScheduledTaskRecord = {
-  id: string
-  title: string
-  prompt?: string
-  frequency: "daily" | "weekly"
-  time: string
-  timezone?: string
-  nextRun?: string
-  expiresAt?: string
-  autoApprove?: boolean
-  enabled?: boolean
-  status?: "active" | "paused" | "failed"
-}
-
-export type ScheduledTaskPatch = Partial<Pick<
+import type {
+  ScheduledTaskClient,
+  ScheduledTaskDraft,
+  ScheduledTaskPatch,
   ScheduledTaskRecord,
-  "title" | "prompt" | "frequency" | "time" | "timezone" | "expiresAt" | "autoApprove" | "enabled" | "status"
->>
-
-export type ScheduledTaskClient = {
-  listScheduledTasks: () => Promise<readonly ScheduledTaskRecord[]>
-  createScheduledTask?: (draft: ScheduledTaskDraft) => Promise<ScheduledTaskRecord>
-  updateScheduledTask?: (taskId: string, patch: ScheduledTaskPatch) => Promise<ScheduledTaskRecord>
-  retryScheduledTask?: (taskId: string) => Promise<ScheduledTaskRecord>
-  deleteScheduledTask?: (taskId: string) => Promise<{ ok: true }>
-}
+} from "../model/scheduled-task"
 
 export type ScheduledTaskClientFailureReason = "network" | "http" | "parse"
 

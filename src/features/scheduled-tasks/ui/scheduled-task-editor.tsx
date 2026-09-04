@@ -14,21 +14,8 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n/context"
 
+import type { ScheduledTaskDraft, ScheduledTaskInitial } from "../model/scheduled-task"
 import styles from "./scheduled-task-editor.module.css"
-
-export type ScheduledTaskDraft = {
-  title: string
-  prompt: string
-  frequency: "daily" | "weekly"
-  time: string
-  timezone: string
-  expiresAt?: string
-  autoApprove: boolean
-}
-
-export type ScheduledTaskInitial = Partial<ScheduledTaskDraft> & {
-  title: string
-}
 
 type ScheduledTaskEditorDialogProps = {
   open: boolean

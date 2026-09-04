@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
-import { KokoroScheduledSurface, type ScheduledTaskClient } from "@/features/app/kokoro-scheduled-surface"
+import { ScheduledTaskSurface, type ScheduledTaskClient } from "@/features/scheduled-tasks"
 
 beforeEach(() => {
   window.localStorage.setItem("kokoro.locale", "zh")
@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 function renderScheduled(onSave = vi.fn()) {
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview onSave={onSave} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview onSave={onSave} /></LocaleProvider>)
   return onSave
 }
 
@@ -59,7 +59,7 @@ it("通过浏览器历史关闭编辑器时清除旧任务上下文", async () =
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_history_1", title: "旧任务", prompt: "旧提示", frequency: "daily", time: "08:00" }]}
         onUpdateTask={vi.fn()}
@@ -86,7 +86,7 @@ it("已挂载时收到站内 surface 导航事件会重新读取日历/任务视
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         preview
         tasks={[{ id: "scheduled_navigation_1", title: "导航测试", frequency: "daily", time: "08:00" }]}
@@ -136,7 +136,7 @@ it("勾选到期日期后必须先填写日期，短视口也不会把保存区�
 })
 
 it("预览排程保存后进入列表并持久化本地 fixture", async () => {
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
 
   fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }))
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "每日流程" } })
@@ -152,7 +152,7 @@ it("预览排程保存后进入列表并持久化本地 fixture", async () => {
 
 it("预览排程通过宿主保存回调成功后仍更新本地列表", async () => {
   const onSave = vi.fn().mockResolvedValue(undefined)
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview onSave={onSave} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview onSave={onSave} /></LocaleProvider>)
 
   fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }))
   fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "回调每日流程" } })
@@ -167,7 +167,7 @@ it("预览排程通过宿主保存回调成功后仍更新本地列表", async (
 })
 
 it("live 模式缺少注入的 client 时显示错误，不把缺失 BFF 误当成空列表", async () => {
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" /></LocaleProvider>)
 
   await waitFor(() => expect(screen.getByTestId("scheduled-load-error")).toBeInTheDocument())
   expect(screen.queryByTestId("scheduled-task-list")).not.toBeInTheDocument()
@@ -181,7 +181,7 @@ it("live 模式先呈现 loading，GET 列表失败可用原请求重试并保�
     .mockResolvedValueOnce([task])
   const client: ScheduledTaskClient = { listScheduledTasks }
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" client={client} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={client} /></LocaleProvider>)
 
   expect(screen.getByTestId("scheduled-loading")).toBeInTheDocument()
   await waitFor(() => expect(screen.getByTestId("scheduled-load-error")).toBeInTheDocument())
@@ -198,7 +198,7 @@ it("live client mutation 成功后重新 GET 投影，不靠 optimistic 状态�
   const updateScheduledTask = vi.fn().mockResolvedValue(undefined)
   const client: ScheduledTaskClient = { listScheduledTasks, updateScheduledTask }
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" client={client} /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={client} /></LocaleProvider>)
 
   const card = await screen.findByRole("listitem")
   fireEvent.pointerDown(within(card).getByRole("button", { name: "排程任务选项 Live digest" }))
@@ -213,7 +213,7 @@ it("任务状态指示器向辅助技术暴露本地化状态名称", async () =
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_status_1", title: "状态任务", frequency: "daily", time: "08:00", status: "paused" }]}
       />
@@ -228,7 +228,7 @@ it("受控任务缺少 mutation handler 时禁用变更入口", async () => {
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_controlled_1", title: "Controlled", frequency: "daily", time: "08:00", enabled: true }]}
       />
@@ -247,7 +247,7 @@ it("编辑 draft 保留隐式时区，不在编辑器中增加额外的时区控
   const onUpdateTask = vi.fn().mockResolvedValue(undefined)
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_controlled_1", title: "Controlled", prompt: "Run it", frequency: "daily", time: "08:00" }]}
         onUpdateTask={onUpdateTask}
@@ -275,7 +275,7 @@ it("列表视图支持暂停、编辑和删除，并把视图写回 URL", async 
     enabled: true,
   }]))
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
 
   await waitFor(() => expect(screen.getByTestId("scheduled-task-list")).toBeInTheDocument())
   expect(screen.getByRole("tab", { name: "任务" })).toHaveAttribute("aria-selected", "true")
@@ -308,7 +308,7 @@ it("删除失败时保留确认框，显示错误并允许再次提交", async (
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_delete_1", title: "待删除任务", frequency: "daily", time: "08:00" }]}
         onDeleteTask={onDeleteTask}
@@ -332,7 +332,7 @@ it("日历月份切换时按实际日期显示任务", () => {
   vi.useFakeTimers({ now: new Date(2026, 8, 15, 12, 0, 0) })
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{
           id: "scheduled_failed_1",
@@ -372,7 +372,7 @@ it("失败任务在列表操作中支持 retry，并在本地 fixture 中恢复�
     status: "failed",
   }]))
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
-  render(<LocaleProvider><KokoroScheduledSurface brandName="Kokoro" preview /></LocaleProvider>)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
 
   const card = await screen.findByRole("listitem")
   expect(card).toHaveAttribute("data-status", "failed")
@@ -392,7 +392,7 @@ it("失败任务 retry 交给宿主 mutation，外部任务源未更新前不伪
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_failed_1", title: "失败任务", frequency: "daily", time: "08:00", status: "failed" }]}
         onRetryTask={onRetryTask}
@@ -412,7 +412,7 @@ it("列表使用可读的本地化下一次运行时间，而不是把 ISO 字�
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_1", title: "每日摘要", frequency: "daily", time: "08:00", nextRun: "2026-09-15T08:00:00.000Z" }]}
       />
@@ -433,7 +433,7 @@ it("排程 mutation 期间锁住操作入口，失败后保留可恢复的错误
   window.history.replaceState(null, "", "/app/scheduled?tab=list")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_1", title: "每日摘要", frequency: "daily", time: "08:00", enabled: true }]}
         onUpdateTask={onUpdateTask}
@@ -456,7 +456,7 @@ it("排程 mutation 期间锁住操作入口，失败后保留可恢复的错误
   cleanup()
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_1", title: "每日摘要", frequency: "daily", time: "08:00", enabled: true }]}
         onUpdateTask={onFailedUpdate}
@@ -475,7 +475,7 @@ it("日历星期标题跟随当前界面语言", async () => {
   window.localStorage.setItem("kokoro.locale", "en")
   render(
     <LocaleProvider>
-      <KokoroScheduledSurface
+      <ScheduledTaskSurface
         brandName="Kokoro"
         tasks={[{ id: "scheduled_1", title: "Daily digest", frequency: "daily", time: "08:00" }]}
       />

@@ -9,10 +9,12 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLocale, useT } from "@/i18n/context"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
-import { buildCalendarDays, mutationMessageKey, padDatePart, SUGGESTIONS, statusMessageKey, WEEKDAY_KEYS, taskStatus, type ScheduledMutation, type ScheduledView } from "./kokoro-scheduled-model"
-import type { ScheduledTaskRecord } from "./scheduled-task-client"
-import styles from "./kokoro-scheduled-surface.module.css"
-import calendarStyles from "./kokoro-scheduled-calendar.module.css"
+import { buildCalendarDays, padDatePart } from "../model/calendar"
+import { taskStatus, type ScheduledTaskRecord } from "../model/scheduled-task"
+import type { ScheduledView } from "./scheduled-task-location"
+import { mutationMessageKey, SUGGESTIONS, statusMessageKey, WEEKDAY_KEYS, type ScheduledMutation } from "./scheduled-task-presentation"
+import styles from "./scheduled-task-surface.module.css"
+import calendarStyles from "./scheduled-task-calendar.module.css"
 
 type ScheduledSurfaceContentProps = {
   brandName: string
@@ -40,7 +42,7 @@ type ScheduledSurfaceContentProps = {
   setTaskEnabled: (task: ScheduledTaskRecord, enabled: boolean) => Promise<void>
 }
 
-export function ScheduledSurfaceContent({ brandName, fixtureMode, controlledTasks, loading, loadError, displayedTasks, view, calendarMonth, calendarTasks, pendingMutation, mutationError, canCreate, canUpdate, canRetry, canDelete, loadTasks, openEditor, switchView, shiftCalendarMonth, resetCalendarMonth, setDeleteTarget, retryTask, setTaskEnabled }: ScheduledSurfaceContentProps) {
+export function ScheduledTaskContent({ brandName, fixtureMode, controlledTasks, loading, loadError, displayedTasks, view, calendarMonth, calendarTasks, pendingMutation, mutationError, canCreate, canUpdate, canRetry, canDelete, loadTasks, openEditor, switchView, shiftCalendarMonth, resetCalendarMonth, setDeleteTarget, retryTask, setTaskEnabled }: ScheduledSurfaceContentProps) {
   const { locale } = useLocale()
   const t = useT()
   const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth])

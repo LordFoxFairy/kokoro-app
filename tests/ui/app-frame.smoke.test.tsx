@@ -23,7 +23,7 @@ import { resetCanvasStore } from "@/ui/canvas/canvas-store"
 import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, type EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
-import type { ScheduledTaskClient } from "@/features/app/scheduled-task-client"
+import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
 import { SessionClientError } from "@/engine/client"
 
 import {
