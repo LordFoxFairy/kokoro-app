@@ -321,23 +321,23 @@
   }
 }
 
-.embeddedFilterSeg {
+.embeddedFilterSeg[data-slot="toggle-group"] {
   grid-column: 1 / -1;
   grid-row: 2;
   justify-self: start;
   background: transparent;
-  padding: 0 !important;
-  gap: 0.25rem !important;
+  padding: 0;
+  gap: 0.25rem;
 }
 
-.embeddedFilterSeg .filterBtn {
+.embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"] {
   height: 2.25rem;
   min-height: 2.25rem;
   padding-inline: 0.75rem;
   border-radius: 999px;
-  border: 0 !important;
+  border: 0;
   background: transparent;
-  box-shadow: none !important;
+  box-shadow: none;
   color: var(--muted-foreground);
   font-size: 0.875rem;
   font-weight: 400;
@@ -345,9 +345,9 @@
 }
 
 @media (pointer: fine) {
-  .embeddedFilterSeg { gap: 0.25rem !important; }
-  .embeddedFilterSeg .filterBtn { width: 3.25rem; justify-content: center; }
-  .embeddedFilterSeg .filterBtn:nth-child(4) { width: 4.125rem; }
+  .embeddedFilterSeg[data-slot="toggle-group"] { gap: 0.25rem; }
+  .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"] { width: 3.25rem; justify-content: center; }
+  .embeddedFilterSeg[data-slot="toggle-group"] .filterBtn[data-slot="toggle-group-item"]:nth-child(4) { width: 4.125rem; }
 }
 
 .embeddedFilterSeg .filterBtn[data-state="on"] {
@@ -427,7 +427,7 @@
   gap: 0.6rem;
 }
 
-.installedCard {
+.installedCard[data-slot="card"] {
   height: 8.4375rem;
   min-height: 8.4375rem;
   overflow: hidden;
@@ -436,15 +436,15 @@
   background: var(--card);
   box-shadow: none;
   gap: 0;
-  padding: 0 !important;
+  padding: 0;
 }
 
-.installedCardContent {
+.installedCardContent[data-slot="card-content"] {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  padding: 0 !important;
+  padding: 0;
 }
 
 .installedCardHead {
@@ -569,10 +569,10 @@
 /* GitHub follows the reference's compact single-submit dialog. Preview and
  * import are still separate BFF operations, but the user sees one calm
  * decision surface instead of a nested confirmation card. */
-.githubDialog {
+.githubDialog[data-slot="dialog-content"] {
   display: flex;
   width: min(25rem, calc(100vw - 2rem));
-  max-width: min(25rem, calc(100vw - 2rem)) !important;
+  max-width: min(25rem, calc(100vw - 2rem));
   height: min(21.5rem, calc(100vh - 1.5rem));
   max-height: calc(100vh - 1.5rem);
   flex-direction: column;
@@ -580,7 +580,7 @@
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0;
   border-radius: 1rem;
 }
@@ -803,18 +803,18 @@
  * changing their internal navigation. The dimensions intentionally stay
  * fixed on desktop; only the viewport guard may reduce them when the browser
  * is shorter than the reference viewport. */
-.uploadDialog {
+.uploadDialog[data-slot="dialog-content"] {
   display: flex;
   box-sizing: border-box;
   width: min(25rem, calc(100vw - 2rem));
-  max-width: min(25rem, calc(100vw - 2rem)) !important;
+  max-width: min(25rem, calc(100vw - 2rem));
   min-height: min(21.75rem, calc(100vh - 1.5rem));
   max-height: calc(100vh - 1.5rem);
   flex-direction: column;
   gap: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0;
   border-radius: 1rem;
   background: var(--background);
@@ -1290,16 +1290,16 @@
   }
 }
 
-.catalogDialog {
+.catalogDialog[data-slot="dialog-content"] {
   display: flex;
   width: min(50rem, calc(100vw - 2rem));
-  max-width: calc(100vw - 2rem) !important;
+  max-width: calc(100vw - 2rem);
   height: min(42.5rem, calc(100vh - 2.5rem));
   max-height: calc(100vh - 2.5rem);
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0;
   border-radius: 1rem;
   background: var(--background);
@@ -1412,8 +1412,8 @@
 .catalogEmpty { grid-column: 1 / -1; min-height: 12rem; border: 0; }
 .uploadBack { align-self: flex-start; margin-bottom: 0.5rem; padding-inline: 0; }
 
-.catalogCard { height: 8.4375rem; gap: 0; padding: 0 !important; border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-radius: 0.75rem; background: var(--card); box-shadow: none; }
-.catalogCardContent { display: flex; height: 100%; min-width: 0; flex-direction: column; padding: 0 !important; }
+.catalogCard[data-slot="card"] { height: 8.4375rem; gap: 0; padding: 0; border: 0.5px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-radius: 0.75rem; background: var(--card); box-shadow: none; }
+.catalogCardContent[data-slot="card-content"] { display: flex; height: 100%; min-width: 0; flex-direction: column; padding: 0; }
 .catalogCardHead { display: flex; height: 1.75rem; min-height: 1.75rem; box-sizing: border-box; margin-top: 0.75rem; padding: 0 0.75rem 0 1rem; min-width: 0; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .catalogCardHead > p { min-width: 0; margin: 0; overflow: hidden; font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
 .catalogCardHead > button { width: 1.75rem; height: 1.75rem; min-height: 1.75rem; padding: 0; border-color: color-mix(in srgb, var(--foreground) 6%, transparent); background: transparent; box-shadow: none; }

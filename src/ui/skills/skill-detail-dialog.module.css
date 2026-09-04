@@ -1,13 +1,13 @@
-.dialog {
+.dialog[data-slot="dialog-content"] {
   display: flex;
   width: min(50rem, calc(100vw - 2rem));
-  max-width: min(50rem, calc(100vw - 2rem)) !important;
+  max-width: min(50rem, calc(100vw - 2rem));
   height: min(40.5rem, calc(100vh - 2rem));
   max-height: calc(100vh - 2rem);
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0;
   border-radius: 1rem;
   background: var(--background);
@@ -30,8 +30,9 @@
   gap: 0.25rem;
 }
 
-.actionBar:focus {
-  outline: none;
+.actionBar:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .actionButton {
@@ -72,9 +73,9 @@
   border-radius: 9999px;
 }
 
-.dialogExpanded {
+.dialog.dialogExpanded[data-slot="dialog-content"] {
   width: 100vw;
-  max-width: none !important;
+  max-width: none;
   height: 100dvh;
   max-height: none;
   border-radius: 0;
@@ -311,7 +312,7 @@
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
 }
 
 .promptCard > svg {

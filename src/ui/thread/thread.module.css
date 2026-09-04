@@ -318,7 +318,8 @@
 
 /* 键盘焦点：暖木 inset 环，不被父盒 overflow 裁掉；圆角对齐顶角避免方角焦点框。 */
 .processSummary:focus-visible {
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
   box-shadow: inset 0 0 0 2px var(--primary);
   border-radius: var(--radius-sm);
 }
@@ -343,7 +344,7 @@
   margin-left: auto;
   flex-shrink: 0;
   opacity: 0.65;
-  transition: transform 150ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .process[data-open="true"] .processChevron {
@@ -355,7 +356,7 @@
 .processReveal {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 220ms ease;
+  transition: grid-template-rows var(--motion-base) var(--ease-standard);
 }
 
 .process[data-open="true"] .processReveal {
@@ -550,8 +551,8 @@
   font: inherit;
   text-align: left;
   transition:
-    background-color 0.16s ease-out,
-    border-color 0.16s ease-out;
+    background-color var(--motion-base) var(--ease-standard),
+    border-color var(--motion-base) var(--ease-standard);
 }
 
 .toolSummary:hover {
@@ -568,7 +569,8 @@
 }
 
 .toolSummary:focus-visible {
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
   border-color: var(--primary);
   box-shadow: 0 0 0 2px var(--ring);
 }
@@ -666,7 +668,7 @@
   height: 0.7rem;
   flex-shrink: 0;
   opacity: 0.5;
-  transition: transform 150ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 /* 工具详情已升级到 Canvas 时是一次性 action，不显示 disclosure chevron。 */
@@ -1213,7 +1215,7 @@
 .errorDetailTrigger svg {
   width: 0.75rem;
   height: 0.75rem;
-  transition: transform 150ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .errorDetail[data-state="open"] .errorDetailTrigger svg {
@@ -1420,8 +1422,18 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .processLive i {
+  .processLive i,
+  .spinner,
+  .actstateAwaiting {
     animation: none;
+  }
+
+  .processChevron,
+  .processReveal,
+  .toolChevron,
+  .subagentChevron,
+  .errorDetailTrigger svg {
+    transition: none;
   }
 }
 

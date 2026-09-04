@@ -26,7 +26,7 @@
   gap: 1.5rem;
   border-bottom: 1px solid var(--border);
 }
-.personalizationTabs > button {
+.personalizationTabs > button[data-slot="button"] {
   position: relative;
   width: auto;
   height: 2.5rem;
@@ -39,15 +39,16 @@
   line-height: 1.3125rem;
 }
 .personalizationTabs > button:hover { background: transparent; }
-.personalizationTabs > button:focus-visible {
+.personalizationTabs > button[data-slot="button"]:focus-visible {
   border-color: transparent;
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
   box-shadow: none;
 }
-.personalizationTabs > button svg { width: 0.875rem; height: 0.875rem; color: var(--muted-foreground); }
-.personalizationTabs > button[data-active="true"] { color: var(--foreground); }
-.personalizationTabs > button:focus-visible::after,
-.personalizationTabs > button[data-active="true"]::after {
+.personalizationTabs > button[data-slot="button"] svg { width: 0.875rem; height: 0.875rem; color: var(--muted-foreground); }
+.personalizationTabs > button[data-slot="button"][data-active="true"] { color: var(--foreground); }
+.personalizationTabs > button[data-slot="button"]:focus-visible::after,
+.personalizationTabs > button[data-slot="button"][data-active="true"]::after {
   position: absolute;
   right: 0;
   bottom: -1px;
@@ -92,13 +93,13 @@
   line-height: 1.125rem;
 }
 .profileHint + .profileTextarea { margin-top: 2.5625rem; }
-.importMemoryButton {
+.importMemoryButton[data-slot="button"] {
   position: fixed;
   left: calc(13.8125rem + 1.5rem);
   bottom: 1.5rem;
   z-index: 1;
   width: 5rem;
-  min-height: 0 !important;
+  min-height: 0;
   height: 2.25rem;
   margin-top: 1.5rem;
   border-radius: 8px;
@@ -125,9 +126,9 @@
   gap: 1rem;
   padding-top: 1rem;
 }
-.knowledgeToolbar > button {
+.knowledgeToolbar > button[data-slot="button"] {
   width: 4rem;
-  min-height: 0 !important;
+  min-height: 0;
   height: 2rem;
   gap: 0.25rem;
   padding: 0 0.5rem;
@@ -151,8 +152,8 @@
   color: var(--muted-foreground);
   pointer-events: none;
 }
-.knowledgeSearch input {
-  min-height: 0 !important;
+.knowledgeSearch input[data-slot="input"] {
+  min-height: 0;
   height: 2rem;
   padding: 0.25rem 0.75rem 0.25rem 2.1875rem;
   border-radius: 0.5rem;
@@ -195,13 +196,13 @@
 .knowledgeList strong { font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; }
 .knowledgeList span { color: var(--muted-foreground); font-size: 0.8125rem; line-height: 1.125rem; }
 
-.knowledgeDialog {
+.knowledgeDialog[data-slot="dialog-content"] {
   display: block;
   width: min(42.5rem, calc(100vw - 2rem));
-  max-width: min(42.5rem, calc(100vw - 2rem)) !important;
+  max-width: min(42.5rem, calc(100vw - 2rem));
   height: 35.625rem;
   max-height: calc(100vh - 2rem);
-  padding: 1.25rem 1.25rem 1.5rem !important;
+  padding: 1.25rem 1.25rem 1.5rem;
   border: 0;
   border-radius: 1rem;
 }
@@ -233,8 +234,8 @@
   font-weight: 500;
   line-height: 1.25rem;
 }
-.knowledgeForm input {
-  min-height: 0 !important;
+.knowledgeForm input[data-slot="input"] {
+  min-height: 0;
   height: 2.25rem;
   border: 0;
   border-radius: 0.5rem;
@@ -244,11 +245,14 @@
   line-height: 1.25rem;
   box-shadow: none;
 }
-.knowledgeForm input:focus-visible {
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+.knowledgeForm input[data-slot="input"]:focus-visible,
+.knowledgeForm textarea[data-slot="textarea"]:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
-.knowledgeForm textarea {
-  min-height: 0 !important;
+.knowledgeForm textarea[data-slot="textarea"] {
+  min-height: 0;
   height: 11.25rem;
   resize: none;
   border: 0;
@@ -276,9 +280,9 @@
   bottom: 1.5rem;
   gap: 0.5rem;
 }
-.knowledgeFooter button {
+.knowledgeFooter button[data-slot="button"] {
   width: 4.5rem;
-  min-height: 0 !important;
+  min-height: 0;
   height: 2.25rem;
   padding: 0 0.75rem;
   border-radius: 0.5rem;
@@ -287,13 +291,13 @@
   line-height: 1.25rem;
 }
 
-.importMemoryDialog {
+.importMemoryDialog[data-slot="dialog-content"] {
   display: block;
   width: min(35rem, calc(100vw - 2rem));
-  max-width: min(35rem, calc(100vw - 2rem)) !important;
+  max-width: min(35rem, calc(100vw - 2rem));
   height: 32.4375rem;
   max-height: calc(100vh - 2rem);
-  padding: 1.25rem !important;
+  padding: 1.25rem;
   border: 0;
   border-radius: 1rem;
 }
@@ -372,9 +376,9 @@
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
-.importStepHead button {
+.importStepHead button[data-slot="button"] {
   width: 3.875rem;
-  min-height: 0 !important;
+  min-height: 0;
   height: 1.75rem;
   gap: 0.25rem;
   padding: 0 0.5rem;
@@ -396,10 +400,11 @@
   height: 100%;
   overflow-y: auto;
   padding: 0.5rem;
-  outline: none;
   scrollbar-width: thin;
 }
 .importPromptScroller:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent);
 }
 .importPrompt p {
@@ -424,9 +429,9 @@
   border-radius: 999px;
   background: var(--border);
 }
-.importStepContent textarea {
+.importStepContent textarea[data-slot="textarea"] {
   width: 100%;
-  min-height: 0 !important;
+  min-height: 0;
   height: 7.5rem;
   margin-top: 0.5rem;
   resize: none;
@@ -444,9 +449,9 @@
   bottom: 1.5rem;
   gap: 0.5rem;
 }
-.importMemoryFooter button {
+.importMemoryFooter button[data-slot="button"] {
   width: 4.5rem;
-  min-height: 0 !important;
+  min-height: 0;
   height: 2.25rem;
   padding: 0 0.75rem;
   border-radius: 0.5rem;
@@ -463,7 +468,7 @@
   gap: 1.5rem;
   border-bottom: 1px solid var(--border);
 }
-.computerTabs > button {
+.computerTabs > button[data-slot="button"] {
   position: relative;
   width: auto;
   height: 2.625rem;
@@ -474,9 +479,9 @@
   font-size: 14px;
   font-weight: 500;
 }
-.computerTabs > button[data-active="true"] { color: var(--foreground); }
-.computerTabs > button[data-active="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--foreground); content: ""; }
-.computerTabs > button:focus-visible { outline: none; background: transparent; box-shadow: none; }
+.computerTabs > button[data-slot="button"][data-active="true"] { color: var(--foreground); }
+.computerTabs > button[data-slot="button"][data-active="true"]::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--foreground); content: ""; }
+.computerTabs > button[data-slot="button"]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; background: transparent; box-shadow: none; }
 .computerEmptyCard {
   display: flex;
   height: 5.4375rem;
@@ -585,10 +590,11 @@
 .deploymentEmpty > svg { width: 2rem; height: 2rem; color: var(--muted-foreground); stroke-width: 1.9; }
 .deploymentSection[data-deployment-kind="domain"] .deploymentEmpty > svg { stroke-width: 2; }
 .deploymentEmpty > span { height: 1.125rem; color: var(--muted-foreground); font-size: 13px; line-height: 18px; }
-.deploymentEmpty > button { width: 5.75rem; height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; outline: 1px solid rgb(0 0 0 / 12%); outline-offset: -1px; padding: 0 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; box-shadow: none !important; }
+.deploymentEmpty > button { width: 5.75rem; height: 2rem; min-height: 2rem; gap: 0.25rem; border-radius: 8px; outline: 1px solid rgb(0 0 0 / 12%); outline-offset: -1px; padding: 0 0.5rem; font-size: 14px; font-weight: 500; line-height: 18px; box-shadow: none; }
+.deploymentEmpty > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; box-shadow: none; }
 
 .integrationGrid { display: grid; width: calc(100% - 0.125rem); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 1.375rem 0.0625rem 0; }
-.integrationCard { display: flex; width: 100%; min-height: 5.5rem; align-items: center; gap: 1rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 12px; background: rgb(250 250 250); padding: 1rem; color: var(--foreground); text-align: left; transition: background-color 140ms ease; }
+.integrationCard { display: flex; width: 100%; min-height: 5.5rem; align-items: center; gap: 1rem; border: 1px solid rgb(0 0 0 / 6%); border-radius: 12px; background: rgb(250 250 250); padding: 1rem; color: var(--foreground); text-align: left; transition: background-color var(--motion-fast) var(--ease-standard); }
 .integrationCard:hover { background: rgb(247 247 247); }
 .integrationCard:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .integrationLogo,
@@ -659,7 +665,8 @@
 .webhookDialog [data-slot="input"] { height: 2.25rem; font-size: 14px; line-height: 20px; }
 .webhookDialog [data-slot="input"]:focus-visible {
   border-color: rgb(0 0 0 / 14%);
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
 }
 .webhookDialog [data-slot="dialog-footer"] { height: 4.75rem; gap: 0.5rem; padding: 1.25rem; }
@@ -685,14 +692,14 @@
   flex-direction: column;
 }
 
-.generalSettings .select {
+.generalSettings .select[data-slot="select-trigger"] {
   width: 13rem;
   /* Settings uses the same compact desktop control as Manus. The shared
    * Web button contract intentionally preserves a 44px touch minimum, but
    * that minimum must not leak into this desktop dialog and push every
    * section below the theme selector. */
-  height: 2.25rem !important;
-  min-height: 0 !important;
+  height: 2.25rem;
+  min-height: 0;
   border-color: rgb(255 255 255 / 20%);
   background: rgb(55 53 47 / 4%);
   box-shadow: none;
@@ -825,10 +832,10 @@
   gap: 0.5rem;
 }
 
-.themeChoice {
+.themeChoices .themeChoice[data-slot="toggle-group-item"] {
   display: flex;
-  height: 3.875rem !important;
-  min-height: 0 !important;
+  height: 3.875rem;
+  min-height: 0;
   min-width: 0;
   flex: 0 0 6.875rem;
   flex-direction: column;
@@ -838,7 +845,7 @@
   border: 1px solid rgb(0 0 0 / 12%);
   border-radius: var(--radius-md);
   color: #4d4d4d;
-  padding: 0.75rem 0.5rem 0.5rem !important;
+  padding: 0.75rem 0.5rem 0.5rem;
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.5rem;
@@ -864,8 +871,8 @@
   font-size: 1rem;
   line-height: 1.5rem;
 }
-.themeChoice[data-state="on"] {
-  height: 3.9375rem !important;
+.themeChoices .themeChoice[data-slot="toggle-group-item"][data-state="on"] {
+  height: 3.9375rem;
   margin-top: -0.03125rem;
   border-width: 1.5px;
   border-color: var(--foreground);
@@ -901,9 +908,9 @@
   gap: 1rem;
 }
 
-.accountSettings {
+.accountSettings[data-settings-card] {
   width: 100%;
-  padding-top: 1.5rem !important;
+  padding-top: 1.5rem;
 }
 
 .accountIdentityRow .identity { margin-bottom: 0; }
@@ -1300,7 +1307,7 @@
   color: var(--foreground);
   font-size: 0.92rem;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .select:hover {
@@ -1352,7 +1359,7 @@
   border-bottom: 1px solid var(--border);
 }
 .shortcutLabel { min-width: 0; flex: 0 0 auto; color: var(--foreground); font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; white-space: nowrap; }
-.shortcutActions { display: flex; width: 14.375rem; min-width: 10rem; height: 2.25rem; flex: 0 1 14.375rem; align-items: center; gap: 0.25rem; padding: 0 0.25rem 0 0.375rem; border: 1px solid var(--input); border-radius: var(--radius-lg); transition: background-color 120ms ease; }
+.shortcutActions { display: flex; width: 14.375rem; min-width: 10rem; height: 2.25rem; flex: 0 1 14.375rem; align-items: center; gap: 0.25rem; padding: 0 0.25rem 0 0.375rem; border: 1px solid var(--input); border-radius: var(--radius-lg); transition: background-color var(--motion-fast) var(--ease-standard); }
 .shortcutActions:hover { background: color-mix(in srgb, var(--foreground) 3%, transparent); }
 .shortcutActions[data-recording="true"] {
   gap: 0;
@@ -1361,7 +1368,7 @@
   border-radius: 0.5rem;
   background: transparent;
 }
-.shortcutKeys { display: flex; min-width: 0; min-height: 0 !important; height: 100%; flex: 1; justify-content: flex-start; overflow: hidden; padding: 0; border-radius: 0; background: transparent !important; box-shadow: none; }
+.shortcutActions .shortcutKeys[data-slot="button"] { display: flex; min-width: 0; min-height: 0; height: 100%; flex: 1; justify-content: flex-start; overflow: hidden; padding: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .shortcutKeySet { display: flex; min-width: 0; align-items: center; gap: 0.25rem; overflow: hidden; color: var(--muted-foreground); font-size: 0.8125rem; }
 .shortcutKey { display: inline-flex; min-width: 1.625rem; height: 1.625rem; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); padding: 0 0.375rem; color: var(--muted-foreground); font-family: inherit; font-size: 0.8125rem; font-weight: 400; line-height: 1; }
 .shortcutEditHint { display: none; padding-left: 0.25rem; color: var(--muted-foreground); font-size: 0.8125rem; }

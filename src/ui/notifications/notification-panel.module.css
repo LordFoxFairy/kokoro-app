@@ -1,11 +1,11 @@
-.notificationsPopover {
+.notificationsPopover[data-slot="popover-content"] {
   z-index: 60;
   width: 400px;
   height: 600px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
   overflow: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0.5px solid var(--border);
   border-radius: 12px;
   background: var(--background);

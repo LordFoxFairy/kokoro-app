@@ -64,7 +64,7 @@
   height: 0.8rem;
   flex-shrink: 0;
   opacity: 0.7;
-  transition: transform 150ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 /* 进度条：钉在头部下沿的一条细轨，填充随完成比推进——一眼读出整体进度。 */
@@ -77,7 +77,7 @@
   height: 100%;
   background: color-mix(in srgb, var(--primary) 70%, transparent);
   border-radius: 0 999px 999px 0;
-  transition: width 0.2s ease-out;
+  transition: width var(--motion-base) var(--ease-standard);
 }
 
 .todobar[data-state="open"] .chevron {

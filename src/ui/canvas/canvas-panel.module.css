@@ -189,7 +189,7 @@
   .name { flex: 1 1 10rem; }
   .actions { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
   .action { min-height: 2.75rem; }
-  .closeAction { width: 2.75rem !important; min-width: 2.75rem; }
+  .closeAction { width: 2.75rem; min-width: 2.75rem; }
   .treeItem { min-height: 2.75rem; }
 }
 
@@ -224,6 +224,7 @@
     min-height: 2rem;
     padding-inline: 0;
   }
+  .desktopPanel .closeAction { width: 2.75rem; min-width: 2.75rem; }
   .desktopPanel .actionLabel { display: none; }
 }
 
@@ -235,7 +236,8 @@
      icon-size width so the label participates in layout instead of painting
      outside a fixed 44px box at 390px Sheets. The <=24rem container rule
      below intentionally returns to icon-only when the Canvas is tighter. */
-  .closeAction { width: auto !important; min-width: 2.75rem; padding-inline: 0.6rem; }
+  .closeAction { width: auto; min-width: 2.75rem; padding-inline: 0.6rem; }
+  .desktopPanel .closeAction { width: auto; }
   .closeLabel { display: inline; }
   .body { padding: 0.8rem; }
 }
@@ -259,6 +261,7 @@
     .viewToggle :global(button) { min-height: 2.75rem; }
     .action { min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.5rem; }
     .actionLabel, .closeLabel { display: none; }
-    .closeAction { width: 2.75rem !important; min-width: 2.75rem; }
+    .closeAction { width: 2.75rem; min-width: 2.75rem; }
+    .desktopPanel .closeAction { width: 2.75rem; }
   }
 }

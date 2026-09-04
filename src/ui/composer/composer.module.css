@@ -146,8 +146,8 @@
 }
 
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] .send {
-  width: 2rem !important;
-  height: 2rem !important;
+  width: 2rem;
+  height: 2rem;
 }
 
 .wrap[data-desktop-web="true"] .leadingActions button:hover {
@@ -229,7 +229,7 @@
   height: 1rem;
   pointer-events: none;
   opacity: 1;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 /* The visible icon slot is 16px, while the actual close control is a centered
@@ -253,7 +253,7 @@
   opacity: 0;
   pointer-events: auto;
   z-index: 1;
-  transition: opacity 120ms ease, background-color 120ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
 }
 
 .creationIntentPill:hover .creationIntentGlyph,
@@ -306,7 +306,7 @@
   border-radius: 999px;
   background: transparent;
   color: rgb(55 53 47 / 62%);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .voiceInput svg {
@@ -321,8 +321,9 @@
 }
 
 .voiceInput[data-pointer-focus="true"]:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .voiceInput[data-state="transcribing"] {
@@ -385,13 +386,18 @@
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
-/* 输入框本身不画内框：聚焦指示交给整框 :focus-within，避免框中框。 */
-.input:focus,
-.input:focus-visible {
-  outline: none;
+/* The editor keeps a quiet resting state; keyboard focus adds an explicit
+ * ring inside the Composer's outer focus-within treatment. */
+.input:focus {
   /* Textarea primitive has its own ring; the composer owns the single focus ring. */
-  border-color: transparent !important;
-  box-shadow: none !important;
+  border-color: transparent;
+  box-shadow: none;
+}
+.input:focus-visible {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--ring);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
 .input:disabled {
@@ -417,7 +423,7 @@
   font-size: 0.9rem;
   color: color-mix(in srgb, var(--foreground) 80%, var(--primary) 20%);
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard);
 }
 
 .mode:hover {
@@ -579,10 +585,10 @@
   border-radius: 999px;
   font-size: 1rem;
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
 /* 可发送时悬停略加深木色并加阴影；禁用态不响应——仅改色与阴影，尺寸不变。 */
@@ -598,11 +604,15 @@
   font-size: 0.78rem;
 }
 
-.sendStop:hover,
+.sendStop:hover {
+  background: color-mix(in srgb, var(--accent) 80%, var(--card) 20%);
+  box-shadow: inset 0 0 0 1.5px var(--primary);
+}
 .sendStop:focus-visible {
   background: color-mix(in srgb, var(--accent) 80%, var(--card) 20%);
   box-shadow: inset 0 0 0 1.5px var(--primary);
-  outline: none;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* Manus uses a solid dark stop control while a run is active. Keep the
@@ -707,12 +717,12 @@
   /* Textarea is a shadcn primitive, but Composer is its owning surface.
      Reset every painted primitive layer here so the editor cannot become a
      second rounded panel inside the Composer frame. */
-  .input {
+  .wrap .input {
     min-height: 3.1rem;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     font-size: 1rem;
   }
 
@@ -721,7 +731,7 @@
      explicit for every desktop draft state instead of inheriting asymmetric
      utility padding from the primitive. */
   .wrap[data-desktop-web="true"] .input {
-    padding: 0.0625rem 0.5rem 0 1rem !important;
+    padding: 0.0625rem 0.5rem 0 1rem;
   }
 
   .controls { min-height: 2rem; }

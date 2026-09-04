@@ -3,10 +3,10 @@
   backdrop-filter: blur(4px);
 }
 
-.dialog {
+.dialog[data-slot="dialog-content"] {
   display: flex;
   width: min(25rem, calc(100vw - 2rem));
-  max-width: min(25rem, calc(100vw - 2rem)) !important;
+  max-width: min(25rem, calc(100vw - 2rem));
   height: min(21.5rem, calc(100vh - 1.5rem));
   max-height: calc(100vh - 1.5rem);
   flex-direction: column;
@@ -14,7 +14,7 @@
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
-  padding: 0 !important;
+  padding: 0;
   border: 0;
   border-radius: 1rem;
 }
