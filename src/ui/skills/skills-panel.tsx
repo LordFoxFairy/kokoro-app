@@ -922,7 +922,7 @@ function SkillCatalogDialog({
 
   const focusCatalogSearch = (event: Event) => {
     event.preventDefault()
-    window.requestAnimationFrame(() => catalogSearchRef.current?.focus({ preventScroll: true }))
+    catalogSearchRef.current?.focus({ preventScroll: true })
   }
   const normalized = query.trim().toLocaleLowerCase()
   const skills = catalog.data?.skills ?? []

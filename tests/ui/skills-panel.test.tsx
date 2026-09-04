@@ -1,6 +1,6 @@
 // 技能面板组件测试：池渲染（official/own 徽标）+ 停用成功后离池 + required 撞 409 锁定 +
 // 固定回调 + 上传 preview→confirm 两段 + GitHub 单提交导入。hub 客户端为注入 fake（不打网络）。
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useRef, useState } from "react"
 
@@ -822,6 +822,41 @@ describe("SkillsPanel", () => {
     // The Settings content remains the background surface; upload is a
     // dedicated portal and must not resurrect the old inline upload tab.
     expect(screen.getByText("brainstorming")).toBeInTheDocument()
+  })
+
+  it("keeps catalog Create actions selectable while autofocus settles", async () => {
+    const frames: FrameRequestCallback[] = []
+    const animationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    let animationFrameMocked = true
+
+    try {
+      renderEmbedded(makeClient())
+      await screen.findByText("brainstorming")
+
+      fireEvent.click(screen.getByRole("button", { name: "Browse skills" }))
+      const catalog = await screen.findByRole("dialog", { name: "Skills" })
+      fireEvent.pointerDown(within(catalog).getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
+      const uploadAction = await screen.findByRole("menuitem", { name: "Upload a skill" })
+
+      act(() => {
+        uploadAction.focus()
+        for (const callback of frames.splice(0)) callback(performance.now())
+      })
+
+      expect(uploadAction).toBeInTheDocument()
+      animationFrame.mockRestore()
+      animationFrameMocked = false
+      fireEvent.click(uploadAction)
+      await waitFor(() => {
+        expect(screen.getByTestId("skill-upload-dialog")).toBeInTheDocument()
+        expect(catalog).not.toBeInTheDocument()
+      })
+    } finally {
+      if (animationFrameMocked) animationFrame.mockRestore()
+    }
   })
 
   it("previews .skill archives in the dedicated upload dialog and publishes selected candidates", async () => {
