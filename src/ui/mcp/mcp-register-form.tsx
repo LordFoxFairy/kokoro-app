@@ -99,7 +99,7 @@ function LegacyRegisterForm({
 
   return (
     <form
-      className={styles.legacyForm}
+      className={styles.serverEditorForm}
       data-testid="mcp-register-form"
       onSubmit={(e) => {
         e.preventDefault()
@@ -120,26 +120,26 @@ function LegacyRegisterForm({
         if (!submitting) void onSubmit()
       }}
     >
-      <FieldGroup className={styles.legacyFieldGroup}>
-      <Field className={styles.legacyField} data-invalid={nameInvalid || undefined}>
-        <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-server-name">{t("mcp.fieldName")}</FieldLabel>
+      <FieldGroup className={styles.serverEditorFieldGroup}>
+      <Field className={styles.serverEditorField} data-invalid={nameInvalid || undefined}>
+        <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-server-name">{t("mcp.fieldName")}</FieldLabel>
         <Input
           ref={nameRef}
           id="mcp-server-name"
-          className={styles.legacyInput}
+          className={styles.serverEditorInput}
           value={name}
           aria-invalid={nameInvalid || undefined}
           placeholder={t("mcp.fieldNamePlaceholder")}
           onChange={(e) => setName(e.target.value)}
         />
-        <FieldDescription className={styles.legacyFieldHint}>{t("mcp.fieldNameHint")}</FieldDescription>
+        <FieldDescription className={styles.serverEditorHint}>{t("mcp.fieldNameHint")}</FieldDescription>
         {nameInvalid ? <FieldError>{t("mcp.required")}</FieldError> : null}
       </Field>
 
-      <Field className={styles.legacyField}>
-        <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-transport">{t("mcp.fieldTransport")}</FieldLabel>
+      <Field className={styles.serverEditorField}>
+        <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-transport">{t("mcp.fieldTransport")}</FieldLabel>
         <Select value={transport} onValueChange={(value) => setTransport(value as McpTransport)}>
-          <SelectTrigger id="mcp-transport" className={styles.legacyInput} aria-label={t("mcp.fieldTransport")}>
+          <SelectTrigger id="mcp-transport" className={styles.serverEditorInput} aria-label={t("mcp.fieldTransport")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -154,37 +154,37 @@ function LegacyRegisterForm({
         </Select>
       </Field>
 
-      <Field className={styles.legacyField} data-invalid={urlInvalid || undefined}>
-        <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-server-url">{t("mcp.fieldUrl")}</FieldLabel>
+      <Field className={styles.serverEditorField} data-invalid={urlInvalid || undefined}>
+        <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-server-url">{t("mcp.fieldUrl")}</FieldLabel>
         <Input
           ref={urlRef}
           id="mcp-server-url"
-          className={styles.legacyInput}
+          className={styles.serverEditorInput}
           value={url}
           aria-invalid={urlInvalid || undefined}
           placeholder={t("mcp.fieldUrlPlaceholder")}
           onChange={(e) => setUrl(e.target.value)}
         />
-        <FieldDescription className={styles.legacyFieldHint}>{t("mcp.fieldUrlHint")}</FieldDescription>
+        <FieldDescription className={styles.serverEditorHint}>{t("mcp.fieldUrlHint")}</FieldDescription>
         {urlInvalid ? <FieldError>{t("mcp.required")}</FieldError> : null}
       </Field>
 
-      <Field className={styles.legacyField}>
-        <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-tools">{t("mcp.fieldTools")}</FieldLabel>
+      <Field className={styles.serverEditorField}>
+        <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-tools">{t("mcp.fieldTools")}</FieldLabel>
         <Input
           id="mcp-tools"
-          className={styles.legacyInput}
+          className={styles.serverEditorInput}
           value={tools}
           placeholder={t("mcp.fieldToolsPlaceholder")}
           onChange={(e) => setTools(e.target.value)}
         />
-        <FieldDescription className={styles.legacyFieldHint}>{t("mcp.fieldToolsHint")}</FieldDescription>
+        <FieldDescription className={styles.serverEditorHint}>{t("mcp.fieldToolsHint")}</FieldDescription>
       </Field>
 
-      <Field className={styles.legacyField}>
-        <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-secret-choice">{t("mcp.fieldSecret")}</FieldLabel>
+      <Field className={styles.serverEditorField}>
+        <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-secret-choice">{t("mcp.fieldSecret")}</FieldLabel>
         <Select value={secretChoice} onValueChange={setSecretChoice}>
-          <SelectTrigger id="mcp-secret-choice" className={styles.legacyInput} aria-label={t("mcp.fieldSecret")}>
+          <SelectTrigger id="mcp-secret-choice" className={styles.serverEditorInput} aria-label={t("mcp.fieldSecret")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -203,12 +203,12 @@ function LegacyRegisterForm({
 
       {secretChoice === "new" ? (
         <>
-          <Field className={styles.legacyField} data-invalid={newSecretNameInvalid || undefined}>
-            <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-new-secret-name">{t("mcp.secretName")}</FieldLabel>
+          <Field className={styles.serverEditorField} data-invalid={newSecretNameInvalid || undefined}>
+            <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-new-secret-name">{t("mcp.secretName")}</FieldLabel>
             <Input
               ref={newSecretNameRef}
               id="mcp-new-secret-name"
-              className={styles.legacyInput}
+              className={styles.serverEditorInput}
               value={newSecretName}
               aria-invalid={newSecretNameInvalid || undefined}
               placeholder={t("mcp.secretNamePlaceholder")}
@@ -216,19 +216,19 @@ function LegacyRegisterForm({
             />
             {newSecretNameInvalid ? <FieldError>{t("mcp.required")}</FieldError> : null}
           </Field>
-          <Field className={styles.legacyField} data-invalid={newSecretValueInvalid || undefined}>
-            <FieldLabel className={styles.legacyFieldLabel} htmlFor="mcp-new-secret-value">{t("mcp.secretValue")}</FieldLabel>
+          <Field className={styles.serverEditorField} data-invalid={newSecretValueInvalid || undefined}>
+            <FieldLabel className={styles.serverEditorLabel} htmlFor="mcp-new-secret-value">{t("mcp.secretValue")}</FieldLabel>
             <Input
               ref={newSecretValueRef}
               id="mcp-new-secret-value"
-              className={styles.legacyInput}
+              className={styles.serverEditorInput}
               type="password"
               value={newSecretValue}
               aria-invalid={newSecretValueInvalid || undefined}
               placeholder={t("mcp.secretValuePlaceholder")}
               onChange={(e) => setNewSecretValue(e.target.value)}
             />
-            <FieldDescription className={styles.legacyFieldHint}>{t("mcp.secretValueHint")}</FieldDescription>
+            <FieldDescription className={styles.serverEditorHint}>{t("mcp.secretValueHint")}</FieldDescription>
             {newSecretValueInvalid ? <FieldError>{t("mcp.required")}</FieldError> : null}
           </Field>
         </>
@@ -236,23 +236,23 @@ function LegacyRegisterForm({
       </FieldGroup>
 
       {error ? (
-        <Alert variant="destructive" className={styles.legacyFeedback}>
+        <Alert variant="destructive" className={styles.serverEditorFeedback}>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
-      <div className={styles.legacyFormActions}>
+      <div className={styles.serverEditorActions}>
         <Button
           variant="default"
           type="submit"
-          className={styles.legacySubmit}
+          className={styles.serverEditorSubmit}
           disabled={submitting}
           aria-busy={submitting}
           data-incomplete={!canSubmit || undefined}
         >
           {submitting ? <><Spinner aria-hidden="true" />{t("mcp.submitting")}</> : t("mcp.save")}
         </Button>
-        <Button variant="outline" type="button" className={styles.legacyCancel} onClick={onCancel} disabled={submitting}>
+        <Button variant="outline" type="button" className={styles.serverEditorCancel} onClick={onCancel} disabled={submitting}>
           {t("mcp.cancel")}
         </Button>
       </div>
