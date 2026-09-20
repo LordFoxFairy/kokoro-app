@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import type { Dispatch, RefObject, SetStateAction } from "react"
+import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import {
   AlertDialog,
@@ -11,26 +11,31 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { useLocale } from "@/i18n/context"
+} from "@/components/ui/alert-dialog";
+import { useLocale } from "@/i18n/context";
 
-import type { ScheduledTaskDraft, ScheduledTaskInitial, ScheduledTaskRecord } from "../model/scheduled-task"
-import { ScheduledTaskEditorDialog } from "./scheduled-task-editor"
+import type {
+  ScheduledTaskEditorValue,
+  ScheduledTaskInitial,
+  ScheduledTaskRecord,
+} from "../model/scheduled-task";
+import { ScheduledTaskEditorDialog } from "./scheduled-task-editor";
 
 type ScheduledTaskDialogsProps = {
-  brandName: string
-  editorOpen: boolean
-  onEditorOpenChange: (open: boolean) => void
-  initialPrompt: string
-  editingTask: ScheduledTaskInitial | null
-  canSave: boolean
-  onSave: (draft: ScheduledTaskDraft) => Promise<void>
-  returnFocusRef: RefObject<HTMLElement | null>
-  deleteTarget: ScheduledTaskRecord | null
-  setDeleteTarget: Dispatch<SetStateAction<ScheduledTaskRecord | null>>
-  deleting: boolean
-  onDelete: () => Promise<void>
-}
+  brandName: string;
+  editorOpen: boolean;
+  onEditorOpenChange: (open: boolean) => void;
+  initialPrompt: string;
+  editingTask: ScheduledTaskInitial | null;
+  canSave: boolean;
+  onSave: (draft: ScheduledTaskEditorValue) => Promise<void>;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  deleteTarget: ScheduledTaskRecord | null;
+  setDeleteTarget: Dispatch<SetStateAction<ScheduledTaskRecord | null>>;
+  deleting: boolean;
+  deleteError: boolean;
+  onDelete: () => Promise<void>;
+};
 
 export function ScheduledTaskDialogs({
   brandName,
@@ -44,9 +49,10 @@ export function ScheduledTaskDialogs({
   deleteTarget,
   setDeleteTarget,
   deleting,
+  deleteError,
   onDelete,
 }: ScheduledTaskDialogsProps) {
-  const { t } = useLocale()
+  const { t } = useLocale();
   return (
     <>
       <ScheduledTaskEditorDialog
@@ -58,11 +64,21 @@ export function ScheduledTaskDialogs({
         initialTask={editingTask}
         returnFocusRef={returnFocusRef}
       />
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("scheduled.deleteConfirm")}</AlertDialogTitle>
-            <AlertDialogDescription>{deleteTarget?.title}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {deleteTarget ? `「${deleteTarget.title}」` : null}
+            </AlertDialogDescription>
+            {deleteError ? (
+              <p role="alert">{t("scheduled.updateFailed")}</p>
+            ) : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("firstSite.cancel")}</AlertDialogCancel>
@@ -70,8 +86,8 @@ export function ScheduledTaskDialogs({
               disabled={deleting}
               aria-busy={deleting || undefined}
               onClick={(event) => {
-                event.preventDefault()
-                void onDelete()
+                event.preventDefault();
+                void onDelete();
               }}
             >
               {deleting ? t("scheduled.deleting") : t("scheduled.delete")}
@@ -80,5 +96,5 @@ export function ScheduledTaskDialogs({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
+  );
 }

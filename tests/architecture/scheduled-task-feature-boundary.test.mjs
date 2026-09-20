@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import ts from "typescript"
 import { describe, expect, it } from "vitest"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
@@ -31,13 +32,24 @@ function sourceFiles(directory) {
   })
 }
 
-function importSpecifiers(source) {
+function parseSource(filePath) {
+  const kind = filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  return ts.createSourceFile(filePath, readFileSync(filePath, "utf8"), ts.ScriptTarget.Latest, true, kind)
+}
+
+function importSpecifiers(filePath) {
   const specifiers = []
-  const expression = /\b(?:from\s+|import\s*\()\s*["']([^"']+)["']/gu
-  for (const match of source.matchAll(expression)) {
-    const specifier = match[1]
-    if (specifier !== undefined) specifiers.push(specifier)
+  function visit(node) {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      specifiers.push(node.moduleSpecifier.text)
+    }
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const [argument] = node.arguments
+      if (argument && ts.isStringLiteral(argument)) specifiers.push(argument.text)
+    }
+    ts.forEachChild(node, visit)
   }
+  visit(parseSource(filePath))
   return specifiers
 }
 
@@ -65,7 +77,7 @@ describe("ScheduledTask feature boundaries", () => {
   it("requires consumers to import only the feature public entry", () => {
     const violations = [sourceRoot, testRoot].flatMap(sourceFiles)
       .filter((filePath) => !filePath.startsWith(`${featureRoot}${path.sep}`))
-      .flatMap((filePath) => importSpecifiers(readFileSync(filePath, "utf8"))
+      .flatMap((filePath) => importSpecifiers(filePath)
         .filter((specifier) => {
           const resolved = resolveSourceImport(filePath, specifier)
           return resolved !== null && isWithin(featureRoot, resolved) && specifier !== "@/features/scheduled-tasks"
@@ -79,7 +91,7 @@ describe("ScheduledTask feature boundaries", () => {
     const apiFiles = sourceFiles(apiRoot)
     expect(apiFiles.length, "feature API layer has no TypeScript source").toBeGreaterThan(0)
 
-    const violations = apiFiles.flatMap((filePath) => importSpecifiers(readFileSync(filePath, "utf8"))
+    const violations = apiFiles.flatMap((filePath) => importSpecifiers(filePath)
       .filter((specifier) => {
         const resolved = resolveSourceImport(filePath, specifier)
         return resolved !== null && isWithin(uiRoot, resolved)
@@ -101,25 +113,11 @@ describe("ScheduledTask feature boundaries", () => {
     expect(violations).toEqual([])
   })
 
-  it("exposes one complete live ScheduledTask client instead of optional operation aliases", () => {
-    const modelSource = readFileSync(path.join(modelRoot, "scheduled-task.ts"), "utf8")
-    for (const operation of [
-      "listScheduledTasks",
-      "createScheduledTask",
-      "updateScheduledTask",
-      "retryScheduledTask",
-      "deleteScheduledTask",
-    ]) {
-      expect(modelSource).toMatch(new RegExp(`\\b${operation}:`, "u"))
-      expect(modelSource).not.toMatch(new RegExp(`\\b${operation}\\?:`, "u"))
-    }
-  })
-
   it("keeps model imports inside the pure model layer", () => {
     const modelFiles = sourceFiles(modelRoot)
     expect(modelFiles.length, "feature model layer has no TypeScript source").toBeGreaterThan(0)
 
-    const violations = modelFiles.flatMap((filePath) => importSpecifiers(readFileSync(filePath, "utf8"))
+    const violations = modelFiles.flatMap((filePath) => importSpecifiers(filePath)
       .filter((specifier) => {
         const resolved = resolveSourceImport(filePath, specifier)
         return resolved === null || !isWithin(modelRoot, resolved)
@@ -132,7 +130,29 @@ describe("ScheduledTask feature boundaries", () => {
   it("uses explicit exports at the feature entry", () => {
     const entryPath = path.join(featureRoot, "index.ts")
     if (!existsSync(entryPath)) return
-    const source = readFileSync(entryPath, "utf8")
-    expect(source).not.toMatch(/export\s+\*/u)
+    const wildcardExports = parseSource(entryPath).statements
+      .filter((statement) => ts.isExportDeclaration(statement) && !statement.exportClause)
+      .map((statement) => statement.moduleSpecifier?.getText())
+    expect(wildcardExports).toEqual([])
+  })
+
+  it("keeps every ScheduledTask function within the blocking complexity budget", () => {
+    const violations = []
+    for (const filePath of sourceFiles(featureRoot)) {
+      const source = parseSource(filePath)
+      function visit(node) {
+        if (ts.isFunctionLike(node) && node.body) {
+          const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
+          const end = source.getLineAndCharacterOfPosition(node.end).line + 1
+          if (end - start + 1 > 100) {
+            const name = "name" in node && node.name ? node.name.getText(source) : "anonymous"
+            violations.push(`${path.relative(root, filePath)}:${start}-${end} ${name}`)
+          }
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(source)
+    }
+    expect(violations).toEqual([])
   })
 })

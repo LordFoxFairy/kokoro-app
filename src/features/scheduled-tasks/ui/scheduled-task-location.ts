@@ -9,6 +9,7 @@ export type ScheduledView = "calendar" | "list"
 export type ScheduledLocationState = { view: ScheduledView; editorOpen: boolean }
 
 const DEFAULT_SCHEDULED_LOCATION_SNAPSHOT = "calendar:closed"
+const EDITOR_HISTORY_KEY = "scheduledTaskEditor"
 
 function readScheduledView(): ScheduledView {
   if (typeof window === "undefined") return "calendar"
@@ -48,4 +49,36 @@ export function writeScheduledView(view: ScheduledView): void {
   url.searchParams.set("tab", view)
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
   window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
+}
+
+function isHistoryRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function locationWithoutHash(): string {
+  return `${window.location.pathname}${window.location.search}`
+}
+
+export function openScheduledEditor(): void {
+  if (typeof window === "undefined") return
+  if (window.location.hash !== EDITOR_HASH) {
+    const currentState: unknown = window.history.state
+    const nextState = isHistoryRecord(currentState)
+      ? { ...currentState, [EDITOR_HISTORY_KEY]: true }
+      : { [EDITOR_HISTORY_KEY]: true }
+    window.history.pushState(nextState, "", `${locationWithoutHash()}${EDITOR_HASH}`)
+  }
+  window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
+}
+
+export function closeScheduledEditor(): void {
+  if (typeof window === "undefined" || window.location.hash !== EDITOR_HASH) return
+  const currentState: unknown = window.history.state
+  const openedBySurface = isHistoryRecord(currentState) && currentState[EDITOR_HISTORY_KEY] === true
+  const preservedState = openedBySurface
+    ? Object.fromEntries(Object.entries(currentState).filter(([key]) => key !== EDITOR_HISTORY_KEY))
+    : currentState
+  window.history.replaceState(preservedState, "", locationWithoutHash())
+  window.dispatchEvent(new Event(SCHEDULED_LOCATION_EVENT))
+  if (openedBySurface) window.history.back()
 }

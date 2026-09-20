@@ -2,17 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { ScheduledTaskClient, ScheduledTaskRecord } from "../model/scheduled-task"
+import type { ScheduledTaskRecord } from "../model/scheduled-task"
 import { usePreviewTasks } from "./preview-task-store"
+import type { ScheduledTaskRuntime } from "./scheduled-task-mode"
 
-type ScheduledTaskSourceOptions = {
-  fixtureMode: boolean
-  controlledTasks?: readonly ScheduledTaskRecord[]
-  client?: ScheduledTaskClient
-}
-
-export function useScheduledTaskSource({ fixtureMode, controlledTasks, client }: ScheduledTaskSourceOptions) {
-  const previewTasks = usePreviewTasks()
+export function useScheduledTaskSource(runtime: ScheduledTaskRuntime) {
+  const fixtureMode = runtime.mode === "preview"
+  const controlledTasks = runtime.mode === "controlled" ? runtime.tasks : undefined
+  const client = runtime.mode === "live" ? runtime.client : undefined
+  const previewTasks = usePreviewTasks(fixtureMode)
   const [remoteTasks, setRemoteTasks] = useState<ScheduledTaskRecord[]>([])
   const [loading, setLoading] = useState(!fixtureMode && controlledTasks === undefined)
   const [loadError, setLoadError] = useState(false)
@@ -26,7 +24,7 @@ export function useScheduledTaskSource({ fixtureMode, controlledTasks, client }:
     setLoading(true)
     setLoadError(false)
     try {
-      if (client === undefined) throw new Error("Scheduled task client is not configured")
+      if (client === undefined || client === null) throw new Error("Scheduled task client is not configured")
       const next = await client.listScheduledTasks()
       if (sequence === requestSequence.current) setRemoteTasks([...next])
     } catch {

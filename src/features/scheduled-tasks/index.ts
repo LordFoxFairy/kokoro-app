@@ -8,6 +8,7 @@ export type { ScheduledTaskSurfaceProps } from "./ui/scheduled-task-surface.type
 export type {
   ScheduledTaskClient,
   ScheduledTaskDraft,
+  ScheduledTaskEditorValue,
   ScheduledTaskFrequency,
   ScheduledTaskInitial,
   ScheduledTaskPatch,

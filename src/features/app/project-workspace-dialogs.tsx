@@ -10,7 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
-import { ScheduledTaskEditorDialog } from "@/features/scheduled-tasks"
+import {
+  ScheduledTaskEditorDialog,
+  type ScheduledTaskEditorValue,
+} from "@/features/scheduled-tasks"
 import { useLocale } from "@/i18n/context"
 
 import type { ProjectResourcePreview, ProjectScheduledPreview, ProjectWebsitePreview, ResourceKind } from "./project-workspace-model"
@@ -147,5 +150,11 @@ type ScheduledTaskEditorDialogBridgeProps = { open: boolean; onOpenChange: Dispa
 function ScheduledTaskEditorDialogBridge({ open, onOpenChange, brandName, onSave }: ScheduledTaskEditorDialogBridgeProps) {
   // The editor remains a feature-local boundary; keeping its adapter here avoids
   // coupling the workspace orchestrator to the dialog assembly.
-  return <ScheduledTaskEditorDialog open={open} onOpenChange={onOpenChange} brandName={brandName} {...(onSave === undefined ? {} : { onSave })} />
+  const save = onSave === undefined
+    ? undefined
+    : async (value: ScheduledTaskEditorValue): Promise<void> => {
+      const { expiresAt, ...draft } = value
+      await onSave({ ...draft, ...(typeof expiresAt === "string" ? { expiresAt } : {}) })
+    }
+  return <ScheduledTaskEditorDialog open={open} onOpenChange={onOpenChange} brandName={brandName} {...(save === undefined ? {} : { onSave: save })} />
 }

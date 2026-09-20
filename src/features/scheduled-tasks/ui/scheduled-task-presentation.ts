@@ -30,3 +30,13 @@ export function statusMessageKey(status: ScheduledTaskStatus): "scheduled.active
 export function mutationMessageKey(operation: ScheduledMutation["operation"]): "scheduled.updating" | "scheduled.deleting" {
   return operation === "delete" ? "scheduled.deleting" : "scheduled.updating"
 }
+
+export function formatScheduledInstant(value: string, locale: string, displayTimezone: string): string {
+  const instant = new Date(value)
+  if (Number.isNaN(instant.getTime())) return value
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: displayTimezone,
+  }).format(instant)
+}

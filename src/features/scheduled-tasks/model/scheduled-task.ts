@@ -25,6 +25,10 @@ export type ScheduledTaskDraft = {
   autoApprove: boolean
 }
 
+export type ScheduledTaskEditorValue = Omit<ScheduledTaskDraft, "expiresAt"> & {
+  expiresAt: string | null | undefined
+}
+
 export type ScheduledTaskInitial = Partial<ScheduledTaskDraft> & {
   title: string
 }
