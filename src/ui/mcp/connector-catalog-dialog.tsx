@@ -29,7 +29,8 @@ import { useT } from "@/i18n/context"
 import type { HubClient } from "@/hub/client"
 
 import { API_CONNECTORS, APP_CONNECTORS, type ConnectorCatalogItem } from "./connector-catalog-data"
-import styles from "./connector-catalog-dialog.module.css"
+import catalogStyles from "./connector-catalog-dialog.module.css"
+import customApiStyles from "./custom-api-dialog.module.css"
 
 type CatalogTab = "apps" | "api" | "mcp" | "projects"
 
@@ -68,9 +69,9 @@ export function ConnectorCatalogDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={`${styles.dialog} p-0 box-border`}
+        className={`${catalogStyles.dialog} p-0 box-border`}
         closeLabel={t("connectorCatalog.close")}
-        overlayClassName={styles.overlay ?? ""}
+        overlayClassName={catalogStyles.overlay ?? ""}
         onCloseAutoFocus={(event) => {
           const target = returnFocusRef?.current
           if (!target?.isConnected) return
@@ -78,11 +79,11 @@ export function ConnectorCatalogDialog({
           target.focus({ preventScroll: true })
         }}
       >
-        <DialogTitle className={styles.title}>{t("connectorCatalog.title")}</DialogTitle>
-        <div className={styles.searchField}>
+        <DialogTitle className={catalogStyles.title}>{t("connectorCatalog.title")}</DialogTitle>
+        <div className={catalogStyles.searchField}>
           <Search aria-hidden="true" />
           <Input
-            className={styles.searchInput}
+            className={catalogStyles.searchInput}
             value={query}
             type="search"
             aria-label={t("connectorCatalog.search")}
@@ -90,22 +91,22 @@ export function ConnectorCatalogDialog({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <Tabs value={tab} onValueChange={(value) => setTab(value as CatalogTab)} className={styles.tabs}>
-          <div className={styles.toolbar}>
-            <TabsList className={styles.tabList}>
-              <TabsTrigger className={styles.tab} value="apps">{t("connectorCatalog.apps")}</TabsTrigger>
-              <TabsTrigger className={styles.tab} value="api">{t("connectorCatalog.customApi")}</TabsTrigger>
-              <TabsTrigger className={styles.tab} value="mcp">{t("connectorCatalog.customMcp")}</TabsTrigger>
-              <TabsTrigger className={styles.tab} value="projects">{t("connectorCatalog.projects")}</TabsTrigger>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as CatalogTab)} className={catalogStyles.tabs}>
+          <div className={catalogStyles.toolbar}>
+            <TabsList className={catalogStyles.tabList}>
+              <TabsTrigger className={catalogStyles.tab} value="apps">{t("connectorCatalog.apps")}</TabsTrigger>
+              <TabsTrigger className={catalogStyles.tab} value="api">{t("connectorCatalog.customApi")}</TabsTrigger>
+              <TabsTrigger className={catalogStyles.tab} value="mcp">{t("connectorCatalog.customMcp")}</TabsTrigger>
+              <TabsTrigger className={catalogStyles.tab} value="projects">{t("connectorCatalog.projects")}</TabsTrigger>
             </TabsList>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button ref={createRef} variant="outline" className={styles.createMenu}>
+                <Button ref={createRef} variant="outline" className={catalogStyles.createMenu}>
                   {t("connectorCatalog.create")}
                   <ChevronDown aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className={styles.createDropdown}>
+              <DropdownMenuContent align="end" className={catalogStyles.createDropdown}>
                 <DropdownMenuItem onSelect={() => setCustomApiOpen(true)}><KeyRound aria-hidden="true" />{t("connectorCatalog.customApi")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={openCustomMcp}><Server aria-hidden="true" />{t("connectorCatalog.customMcp")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onCustomMcp("json")}><Braces aria-hidden="true" />{t("connectorCatalog.importMcpJson")}</DropdownMenuItem>
@@ -113,14 +114,14 @@ export function ConnectorCatalogDialog({
                 <DropdownMenuItem onSelect={() => onCustomMcp("url")}>
                   <Globe2 aria-hidden="true" />
                   <span>{t("connectorCatalog.addMcpUrl")}</span>
-                  <span className={styles.betaBadge}>{t("connectorCatalog.beta")}</span>
+                  <span className={catalogStyles.betaBadge}>{t("connectorCatalog.beta")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
           {(["apps", "api"] as const).map((value) => (
-            <TabsContent className={styles.catalogContent} value={value} key={value}>
+            <TabsContent className={catalogStyles.catalogContent} value={value} key={value}>
               <ConnectorGrid
                 items={items}
                 added={added}
@@ -134,11 +135,11 @@ export function ConnectorCatalogDialog({
             </TabsContent>
           ))}
 
-          <TabsContent className={styles.emptyContent} value="mcp">
+          <TabsContent className={catalogStyles.emptyContent} value="mcp">
             <Cable aria-hidden="true" />
             <p>{t("connectorCatalog.customMcpDescription")}</p>
           </TabsContent>
-          <TabsContent className={styles.emptyContent} value="projects">
+          <TabsContent className={catalogStyles.emptyContent} value="projects">
             <Cable aria-hidden="true" />
             <p>{t("connectorCatalog.projectsDescription")}</p>
           </TabsContent>
@@ -249,9 +250,9 @@ export function CustomApiDialog({
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) close() }}>
       <DialogContent
-        className={`${styles.customApiDialog} p-0 box-border`}
+        className={`${customApiStyles.customApiDialog} p-0 box-border`}
         closeLabel={t("connectorCatalog.customApiClose")}
-        overlayClassName={styles.customApiOverlay ?? ""}
+        overlayClassName={customApiStyles.customApiOverlay ?? ""}
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           window.requestAnimationFrame(() => document.getElementById("custom-api-name")?.focus())
@@ -263,12 +264,12 @@ export function CustomApiDialog({
           target.focus({ preventScroll: true })
         }}
       >
-        <DialogTitle className={styles.customApiTitle}>{t("connectorCatalog.customApiCreateTitle")}</DialogTitle>
-        <p className={styles.customApiDescription}>{t("connectorCatalog.customApiCreateDescription")}</p>
-        <form className={styles.customApiForm} onSubmit={(event) => void submit(event)}>
-          <div className={styles.customApiBody}>
-            <FieldGroup className={styles.customApiFields}>
-              <Field className={styles.customApiField}>
+        <DialogTitle className={customApiStyles.customApiTitle}>{t("connectorCatalog.customApiCreateTitle")}</DialogTitle>
+        <p className={customApiStyles.customApiDescription}>{t("connectorCatalog.customApiCreateDescription")}</p>
+        <form className={customApiStyles.customApiForm} onSubmit={(event) => void submit(event)}>
+          <div className={customApiStyles.customApiBody}>
+            <FieldGroup className={customApiStyles.customApiFields}>
+              <Field className={customApiStyles.customApiField}>
                 <FieldLabel htmlFor="custom-api-name">{t("connectorCatalog.name")}</FieldLabel>
                 <Input
                   id="custom-api-name"
@@ -278,14 +279,14 @@ export function CustomApiDialog({
                 />
               </Field>
 
-              <Field className={styles.customApiField}>
+              <Field className={customApiStyles.customApiField}>
                 <FieldLabel>{t("connectorCatalog.icon")}</FieldLabel>
-                <div className={styles.iconUploadRow}>
-                  <button type="button" className={styles.iconPreview} onClick={() => fileRef.current?.click()} aria-label={t("connectorCatalog.uploadIcon")}>
+                <div className={customApiStyles.iconUploadRow}>
+                  <button type="button" className={customApiStyles.iconPreview} onClick={() => fileRef.current?.click()} aria-label={t("connectorCatalog.uploadIcon")}>
                     <ImageIcon aria-hidden="true" />
                   </button>
-                  <div className={styles.iconUploadCopy}>
-                    <Button type="button" variant="outline" className={styles.iconUploadButton} onClick={() => fileRef.current?.click()}>
+                  <div className={customApiStyles.iconUploadCopy}>
+                    <Button type="button" variant="outline" className={customApiStyles.iconUploadButton} onClick={() => fileRef.current?.click()}>
                       {t("connectorCatalog.upload")}
                       <ChevronDown data-icon="inline-end" aria-hidden="true" />
                     </Button>
@@ -295,7 +296,7 @@ export function CustomApiDialog({
                   </div>
                   <input
                     ref={fileRef}
-                    className={styles.hiddenFile}
+                    className={customApiStyles.hiddenFile}
                     type="file"
                     accept="image/png,image/jpeg"
                     onChange={selectIcon}
@@ -303,7 +304,7 @@ export function CustomApiDialog({
                 </div>
               </Field>
 
-              <Field className={styles.customApiField}>
+              <Field className={customApiStyles.customApiField}>
                 <FieldLabel htmlFor="custom-api-notes">
                   {t("connectorCatalog.notes")}
                   <span>{t("connectorCatalog.optional")}</span>
@@ -316,16 +317,16 @@ export function CustomApiDialog({
                 />
               </Field>
 
-              <FieldSet className={styles.secretSet}>
-                <FieldLegend className={styles.secretLegend}>
+              <FieldSet className={customApiStyles.secretSet}>
+                <FieldLegend className={customApiStyles.secretLegend}>
                   {t("connectorCatalog.secrets")}
                   <span>{t("connectorCatalog.environmentVariables")}</span>
                   <Info aria-hidden="true" />
                 </FieldLegend>
-                <div className={styles.secretList}>
+                <div className={customApiStyles.secretList}>
                   {secrets.map((secret, index) => (
-                    <div className={styles.secretRow} key={secret.id}>
-                      <Field className={styles.customApiField}>
+                    <div className={customApiStyles.secretRow} key={secret.id}>
+                      <Field className={customApiStyles.customApiField}>
                         <FieldLabel htmlFor={`custom-api-secret-name-${secret.id}`}>{t("connectorCatalog.secretName")}</FieldLabel>
                         <Input
                           id={`custom-api-secret-name-${secret.id}`}
@@ -334,7 +335,7 @@ export function CustomApiDialog({
                           onChange={(event) => updateSecret(secret.id, "name", event.target.value)}
                         />
                       </Field>
-                      <Field className={styles.customApiField}>
+                      <Field className={customApiStyles.customApiField}>
                         <FieldLabel htmlFor={`custom-api-secret-value-${secret.id}`}>{t("connectorCatalog.secretValue")}</FieldLabel>
                         <Textarea
                           id={`custom-api-secret-value-${secret.id}`}
@@ -349,7 +350,7 @@ export function CustomApiDialog({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          className={styles.removeSecret}
+                          className={customApiStyles.removeSecret}
                           aria-label={t("connectorCatalog.removeSecret")}
                           onClick={() => setSecrets((current) => current.filter((entry) => entry.id !== secret.id))}
                         >
@@ -362,7 +363,7 @@ export function CustomApiDialog({
                 <Button
                   type="button"
                   variant="ghost"
-                  className={styles.addSecret}
+                  className={customApiStyles.addSecret}
                   onClick={() => {
                     const id = nextSecretId.current++
                     setSecrets((current) => [...current, { id, name: "", value: "" }])
@@ -374,8 +375,8 @@ export function CustomApiDialog({
               </FieldSet>
             </FieldGroup>
           </div>
-          {submitError ? <p className={styles.customApiSubmitError} role="alert">{submitError}</p> : null}
-          <div className={styles.customApiActions}>
+          {submitError ? <p className={customApiStyles.customApiSubmitError} role="alert">{submitError}</p> : null}
+          <div className={customApiStyles.customApiActions}>
             <Button type="button" variant="outline" disabled={submitting} onClick={close}>{t("mcp.cancel")}</Button>
             <Button type="submit" disabled={!complete} aria-busy={submitting}>
               {submitting ? <Spinner aria-hidden="true" /> : null}
@@ -399,24 +400,24 @@ function ConnectorGrid({
 }) {
   const t = useT()
   return (
-    <div className={styles.grid}>
+    <div className={catalogStyles.grid}>
       {items.map((item) => {
         const isAdded = added.has(item.id)
         return (
-          <article className={styles.item} key={item.id}>
-            <span className={styles.itemIcon}>
+          <article className={catalogStyles.item} key={item.id}>
+            <span className={catalogStyles.itemIcon}>
               {item.iconUrl
                 ? <Image src={item.iconUrl} alt={item.name} width={24} height={24} />
                 : <span role="img" aria-label={item.name}>{item.iconText ?? item.name.slice(0, 2)}</span>}
             </span>
-            <span className={styles.itemCopy}>
+            <span className={catalogStyles.itemCopy}>
               <strong>{item.name}</strong>
               <span>{t(item.description)}</span>
             </span>
             <Button
               variant="outline"
               size="icon-sm"
-              className={styles.add}
+              className={catalogStyles.add}
               aria-label={t(isAdded ? "connectorCatalog.addedLabel" : "connectorCatalog.addLabel", { name: item.name })}
               onClick={() => onToggle(item.id)}
             >

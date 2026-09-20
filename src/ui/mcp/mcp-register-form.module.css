@@ -1,0 +1,144 @@
+/* Standalone MCP registration and credential form responsibility. */
+
+.registerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 0.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--secondary);
+}
+
+.registerField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.registerFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.registerFieldLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.registerFieldHint {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+  line-height: 1.35;
+}
+
+.registerInput {
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.88rem;
+  color: var(--foreground);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-sm);
+}
+
+.registerFormActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.registerSubmit {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.registerCancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+}
+
+.registerFeedback {
+  margin-bottom: 0.75rem;
+}
+
+/* The standalone dialog uses a two-column editor while the embedded secret form
+ * keeps the compact stacked geometry above. These classes stay local to the form
+ * so CSS-module hashes cannot make descendant selectors miss after the split. */
+.legacyForm {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  padding: 0.25rem 1.25rem 1.125rem;
+  overflow-y: auto;
+  border-radius: 0;
+  background: transparent;
+}
+
+.legacyFieldGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.legacyFieldGroup > .legacyField:nth-child(n + 3),
+.legacyFeedback,
+.legacyFormActions {
+  grid-column: 1 / -1;
+}
+
+.legacySubmit[data-incomplete="true"] {
+  background: color-mix(in srgb, var(--foreground) 48%, var(--background));
+  color: var(--background);
+}
+
+.legacyField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.legacyFieldLabel {
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.legacyInput {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.65rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--background));
+  box-shadow: none;
+}
+
+.legacyFieldHint {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+  line-height: 1.35;
+}
+
+.legacyFeedback {
+  margin-bottom: 0.75rem;
+}
+
+.legacyFormActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.legacySubmit {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.legacyCancel {
+  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+}

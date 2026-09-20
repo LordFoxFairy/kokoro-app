@@ -1,0 +1,163 @@
+/* MCP server and secret list responsibility. */
+
+/* —— 删除二次确认 —— */
+.confirmRow {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.confirmYes {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.confirmNo {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-lg);
+}
+
+.itemContent {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0;
+}
+
+.itemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.name {
+  font-weight: 600;
+  color: var(--foreground);
+  font-size: 0.95rem;
+}
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-strong);
+  border: 1px solid var(--neutral-border);
+}
+
+.badge[data-scope="official"] {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--ring);
+}
+
+.badge[data-state="on"] {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.badge[data-state="off"] {
+  background: var(--neutral-bg);
+  color: var(--muted-foreground);
+}
+
+.meta {
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.itemActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.toggle,
+.danger {
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.dangerGhost {
+  color: var(--error);
+}
+
+.register {
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  line-height: 1.2;
+}
+
+@media (min-width: 961px) {
+  .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+  .item { min-height: 7rem; padding: 1rem; border-radius: var(--radius-lg); }
+  .itemContent { min-width: 0; flex: 1; flex-direction: column; align-items: stretch; }
+  .itemMain { min-width: 0; }
+  .meta { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .itemActions { justify-content: flex-end; }
+  .form, .secrets { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  /* Embedded Settings can leave only ~196px for the connection card. Keep
+   * actions below the server identity so the URL gets a readable line box
+   * instead of a 40px metadata column, and never let the action cluster sit
+   * over the title/badges. */
+  .itemContent {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .itemMain {
+    width: 100%;
+  }
+
+  .itemHead {
+    min-width: 0;
+  }
+
+  .meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .itemActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
