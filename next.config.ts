@@ -13,6 +13,20 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   // 生产镜像：standalone 产物自带精简 node_modules + server.js，容器只需 node server.js。
   output: "standalone",
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },
+          { key: "X-DNS-Prefetch-Control", value: "off" },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

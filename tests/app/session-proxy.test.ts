@@ -4,7 +4,10 @@ import { sealEnvelope } from "@/lib/server/session-envelope"
 
 const { requestWithDomain } = vi.hoisted(() => ({ requestWithDomain: vi.fn() }))
 
-vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain }))
+vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/upstream-http")>()),
+  requestWithDomain,
+}))
 
 const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",

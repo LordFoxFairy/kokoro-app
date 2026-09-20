@@ -1,9 +1,8 @@
 services:
   kokoro:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: kokoro-app:${KOKORO_IMAGE_TAG:-local}
+    # This file is a release-image example. Local development runs from source
+    # with `pnpm dev`; build candidates explicitly with `docker build` in CI.
+    image: ${KOKORO_IMAGE_REF:-ghcr.io/thefoxfairy/kokoro:local}
     env_file:
       - .env
     environment:

@@ -1,87 +1,26 @@
 # Kokoro User Web 当前状态
 
-状态日期：2026-09-03。范围：当前 `kokoro` 子仓 checkout。本文把“已实现”“已接受目标”和
-“未闭合缺口”分开；历史报告、preview fixture、旧截图和 Agent 自报不构成当前 commit 的生产证据。
+状态日期：2026-09-19。范围：`kokoro-app` 独立子仓。本文只陈述当前提交可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
-## 1. 已实现
+## 1. 当前边界
 
-### 仓库与运行边界
+- 浏览器只访问同源 `/api/*`；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、Redis、ORM、migration 或任意 owner 数据库事实。
+- Session cookie 使用 AES-256-GCM 信封，设置为 `HttpOnly`、`SameSite=Lax`，生产环境额外设置 `Secure`。浏览器 cookie 不透传给业务上游。
+- 每个上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。
+- `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: no-store` 与 `Vary: Cookie`。
+- `kokoro-app` 是 Web remote 名；主控仓中的对应 submodule 路径是 `apps/kokoro-app`，不使用歧义的 `kokoro/` 名称。
 
-- 独立 Next.js User Web，浏览器入口位于 `src/app/`。
-- 浏览器业务请求使用同源 `/api/*`；Chat 的 `/api/session/*` 会转到
-  `${KOKORO_BFF_BASE_URL}/v1/*`。
-- Runtime Manifest、Skills/MCP、Agent setup、Scheduled 和 Billing 的主要 route 已以 BFF 地址
-  作为业务上游。
-- mutation route 的主要路径具有 Origin 比对；session route 不把浏览器 cookie 转发给 BFF。
-- `KOKORO_DOMAIN` 仅在服务端读取；出站 transport 删除浏览器可控的 forwarding/tenant/site
-  header 后重建 `Forwarded: host=<deployment-domain>`。
-- session envelope 使用 AES-256-GCM 密封，cookie 为 HttpOnly、SameSite=Lax，production 启用 Secure。
+## 2. 已落地的质量门
 
-### Chat 与契约
+- 单仓工具链固定 Node `>=22 <23`、`pnpm@11.25.0`，`.npmrc` 启用严格 engine、精确版本和 peer dependency 检查。
+- `pnpm check` 依次执行 contract、架构、lint、typecheck、unit/integration test 与 production build；Playwright/axe 浏览器门禁单独使用 `pnpm test:e2e`。
+- Scheduled Tasks 与 MCP configuration 已按 feature/职责拆分；scheduled feature 的 AST 架构测试约束 React 入口与函数体量，测试归 Web 子仓所有，不迁入主控仓。
+- CI 固定 Action 的完整 SHA，执行文件系统 dependency/misconfiguration/secret 扫描、浏览器 accessibility/responsive smoke 和镜像候选构建。发布流在推送前扫描候选镜像、验证 health/隐私响应头，并生成 SBOM、provenance 与 digest 签名。
+- 生产 Dockerfile 固定 Node base image digest，并提供非 root 运行与 `HEALTHCHECK`；本地开发仍从源码 `pnpm dev` 运行，compose 示例只引用已构建镜像。
 
-- `@ag-ui/core@0.0.59` 已锁定；`src/contract/agui-events.ts` 会先通过 AG-UI schema 校验，再投影到
-  当前 reducer event shape。
-- `src/engine/client.ts` 使用 fetch stream 消费 SSE，支持 `Last-Event-ID`、断流重连和 source cursor。
-- JSON 输入/输出主要由 `src/contract/*.ts` 的 Zod schema 校验。
-- `contract/api-contract.test.ts` 与 `tests/contract/` 覆盖路径、DTO、AG-UI parse 和部分边界。
-- `src/generated/proto/` 保留一份带 digest/source commit 的冻结历史 consumer snapshot；当前运行时
-  没有 import 它。
+## 3. 当前验证证据
 
-### 数据边界
-
-- 本仓没有 `database/`、canonical schema、migration、ORM、PostgreSQL client 或 Redis client。
-- browser storage 只承载 UI preference、draft、preview fixture 和本地投影；live 业务事实从 BFF 获取。
-
-## 2. 已接受目标
-
-- 唯一调用方向是 `Browser -> Web same-origin adapter -> kokoro-bff -> owner/Agent/Scheduler`。
-- `/api/*` 的 visibility 固定为 `browser-private`；不发布到 Developer API。
-- Web↔BFF 的 Agent 网络事件只使用 AG-UI；不保留 legacy `SessionEvent` wire、双读或 fallback。
-- 仓内 `AgUiChatTransport` 将 AG-UI 映射为 Vercel AI SDK `UIMessage`/parts；AI SDK 只负责 Web 内部
-  React 状态和渲染，不拥有网络协议、replay cursor 或 durable ledger。
-- BFF 拥有 durable AG-UI projection 与公共 cursor；Web 只消费 snapshot/receipt/event 并执行
-  reconciliation。
-- Web 不直连 IAM/System/Agent 或其他 owner；认证也应经 BFF 的明确 owner adapter。
-
-## 3. 未闭合缺口
-
-### P0：架构与协议
-
-1. `src/engine/client.ts` 目前先解析 legacy `SessionEvent`，失败后才解析 AG-UI，仍是双读网络路径。
-2. `src/contract/session-events.ts` 和多处 engine/core 类型仍名为 `SessionEvent`；在网络双读删除前，
-   其“仅内部投影”边界尚未由代码门禁保证。
-3. `ai`、`@ai-sdk/react` 尚未安装，`AgUiChatTransport` 与 `UIMessage` 映射尚不存在。
-4. Engine phase 目前是 `idle/submitting/streaming/reattaching/awaiting-hitl/error`，尚未完整显式建模
-   `queued/resuming/cancelling/reconnecting/completed/failed` 的目标状态集合。
-5. `src/lib/server/auth.ts` 仍直接使用 `KOKORO_IAM_BASE_URL` 调 IAM；这不符合最终 BFF-only 调用方向。
-
-### P0：安全与可靠性
-
-1. 上游 HTTP transport 传播 `AbortSignal`，但没有独立 connect/read/overall timeout 或响应大小上限。
-2. route 的成功/错误 envelope、request id 和 `Cache-Control` 尚未全部统一；部分 route 仍返回
-   `{error: string}` 或自行 flatten BFF 错误。
-3. `next.config.ts` 没有全局 CSP、frame、referrer 和 permissions policy 响应头配置。
-4. 没有专用 `/healthz`、`/readyz`；Dockerfile 本身也没有 `HEALTHCHECK`。
-5. 缺少生产 telemetry：当前没有满足 `service/operation/request_id/trace_id/result/duration_ms` 的统一日志、
-   SLI 采集和 burn-rate 告警证据。
-
-### P1：质量与交付
-
-1. `packageManager`/CI/Docker 仍固定 `pnpm@11.2.2`，Root 基线是 `pnpm@11.25.0`。
-2. TypeScript 目前只有 `strict` 的基础配置；`useUnknownInCatchVariables` 已由 strict 生效并在本阶段
-   显式固定，其余 `noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`、`noImplicitOverride`、
-   `noImplicitReturns`、`noUnusedLocals`、`noUnusedParameters` 尚未开启，避免本阶段触发运行时代码修复。
-3. 没有 `test:e2e`、Playwright/axe/视觉回归和 bundle budget 阻断门禁。
-4. 多个 React/CSS 文件超过 Root 体量上限，且存在未登记 `!important`；留给独立 UI 重构阶段。
-5. GitHub Actions 未固定完整 commit SHA；CI 无 dependency/source/secret scan；release 无候选镜像
-   先扫描、SBOM 和漏洞扫描；基础镜像未固定 digest。
-6. `docker-compose.example.yml` 会构建应用镜像，不符合 Root 的源码本地运行规则。
-7. 冻结的 `src/generated/proto/` snapshot 来源位于已不在本仓的旧 Root contract；没有可运行的本仓
-   generator，也没有 visibility extensions，不能作为当前 canonical 或公开 contract。
-
-## 4. 当前验证口径
-
-本仓自动化入口：
+在本次 Web 收敛提交上执行：
 
 ```bash
 pnpm contract
@@ -90,21 +29,21 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:e2e
 ```
 
-Root 静态审计：
+已获得的本地结果：130 个 Vitest test files / 1,221 个测试通过；Playwright desktop + mobile 共 6 个浏览器、可访问性与 viewport smoke 通过；Next production build 通过。该证据不等价于 live BFF、真实外部存储、生产 telemetry/SLO 或镜像发布验收。
 
-```bash
-cd /Users/nako/WebstormProjects/github/thefoxfairy/Kokoro
-python3 scripts/verify-ten-repository-standard.py --format json
-```
+## 4. 尚未闭合的边界
 
-Root 审计是十仓 work queue；本阶段只评估 `repository == "kokoro"` 的切片。即使本仓 unit/build
-通过，也不等价于 live BFF、浏览器 E2E、生产发布或 SLO 已验收。
+1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
+2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；必须待 BFF 提供并发布 owner contract 后，才可一次性迁移为 BFF-only 路径。
+3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
+4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
+5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。
 
-## 5. 下一阶段顺序
+## 5. 后续顺序
 
-1. 在不改变页面视觉的协议变更中删除 legacy SSE 双读，建立 `AgUiChatTransport`/`UIMessage` 单一路径。
-2. 将 IAM 认证调用收口到 BFF，并统一所有同源 route 的 envelope、request id、timeout 与大小限制。
-3. 单独执行 UI/CSS/React 拆分、可访问性和视觉回归工作。
-4. 收敛 pnpm/CI/container 供应链与 health/ready/telemetry，再进行 live release acceptance。
+1. 由 BFF owner 先发布 auth adapter contract，再删除 Web→IAM 直连与 legacy Chat 双读。
+2. 统一 route envelope、request/trace ID、日志与 telemetry，并补 health/ready 与生产观测证据。
+3. 独立完成遗留 UI/CSS 切片、视觉回归、bundle budget 与 live release acceptance。

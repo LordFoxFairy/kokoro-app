@@ -162,6 +162,10 @@
   to { opacity: 1; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .desktopBanner { animation: none; }
+}
+
 .directPrompt[data-slot="button"] {
   display: flex;
   min-width: 0;

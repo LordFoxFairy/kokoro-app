@@ -14,7 +14,7 @@ import {
   responseHeadersWithRequestId,
   webErrorResponse,
 } from "@/lib/server/bff-response"
-import { requestWithDomain } from "@/lib/server/upstream-http"
+import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 import {
   authConfig,
   INTERNAL_SECRET_HEADER,
@@ -74,10 +74,18 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
 
   // JSON body 体积小，缓冲即可；GET/DELETE 无体。SSE 是 GET，走响应流式。
-  const body =
-    request.method === "GET" || request.method === "HEAD" || request.method === "DELETE"
-      ? undefined
-      : await request.arrayBuffer()
+  let body: ArrayBuffer | undefined
+  if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
+    try {
+      body = await readBoundedRequestBody(request)
+    } catch (error) {
+      return webErrorResponse(
+        error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
+        error instanceof UpstreamRequestTooLargeError ? 413 : 400,
+        requestId,
+      )
+    }
+  }
 
   // The browser Chat client carries its stable message key in the JSON body
   // for the flat legacy contract. Promote it to the standard HTTP

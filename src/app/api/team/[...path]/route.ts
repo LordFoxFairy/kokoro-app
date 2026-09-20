@@ -12,7 +12,7 @@ import {
   SERVICE_HEADER,
   SERVICE_VALUE,
 } from "@/lib/server/auth"
-import { requestWithDomain } from "@/lib/server/upstream-http"
+import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -60,8 +60,17 @@ async function proxy(
 
   // 仅在确有 body 时透传 content-type：无 body 的 POST（accept/decline/remove-self）不能带
   // application/json，否则上游 fastify 对空体报 FST_ERR_CTP_EMPTY_JSON_BODY(400)。
-  const rawBody =
-    request.method === "GET" || request.method === "HEAD" ? "" : await request.text()
+  let rawBody = ""
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    try {
+      rawBody = new TextDecoder().decode(await readBoundedRequestBody(request))
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable" },
+        { status: error instanceof UpstreamRequestTooLargeError ? 413 : 400 },
+      )
+    }
+  }
   const bodyBytes = rawBody.length > 0 ? new TextEncoder().encode(rawBody) : null
   const body = bodyBytes === null
     ? undefined

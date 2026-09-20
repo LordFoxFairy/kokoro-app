@@ -2,7 +2,14 @@ import { createServer, type Server } from "node:http"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import { fetchWithDomain, requestWithDomain } from "@/lib/server/upstream-http"
+import {
+  fetchWithDomain,
+  readBoundedRequestBody,
+  requestWithDomain,
+  UpstreamRequestTooLargeError,
+  UpstreamResponseTooLargeError,
+  UpstreamTimeoutError,
+} from "@/lib/server/upstream-http"
 
 async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
@@ -102,5 +109,63 @@ describe("server upstream transport", () => {
     expect(response.status).toBe(200)
     expect(receivedForwarded).toBe("host=dev.kokoro.localhost")
     expect(await response.text()).toContain("data: two")
+  })
+
+  it("rejects an oversized request before opening the upstream connection", async () => {
+    let received = false
+    const server = createServer(() => {
+      received = true
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    await expect(requestWithDomain(`http://127.0.0.1:${address.port}/large`, "dev.kokoro.localhost", {
+      method: "POST",
+      body: new Uint8Array(4).buffer,
+      maxRequestBytes: 3,
+    })).rejects.toBeInstanceOf(UpstreamRequestTooLargeError)
+    expect(received).toBe(false)
+  })
+
+  it("rejects a response whose declared length exceeds the limit", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-length": "8" })
+      response.end("12345678")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    await expect(requestWithDomain(`http://127.0.0.1:${address.port}/large`, "dev.kokoro.localhost", {
+      method: "GET",
+      maxResponseBytes: 4,
+    })).rejects.toBeInstanceOf(UpstreamResponseTooLargeError)
+  })
+
+  it("aborts an upstream that exceeds its overall deadline", async () => {
+    const server = createServer(() => {
+      // Keep the socket open until the transport aborts it.
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    await expect(requestWithDomain(`http://127.0.0.1:${address.port}/slow`, "dev.kokoro.localhost", {
+      method: "GET",
+      timeoutMs: 20,
+    })).rejects.toBeInstanceOf(UpstreamTimeoutError)
+  })
+
+  it("bounds a streamed incoming request body", async () => {
+    const request = new Request("http://web.local", {
+      method: "POST",
+      body: "12345",
+      headers: { "content-type": "text/plain" },
+    })
+    await expect(readBoundedRequestBody(request, 4)).rejects.toBeInstanceOf(UpstreamRequestTooLargeError)
   })
 })

@@ -14,7 +14,7 @@ import {
   SERVICE_HEADER,
   SERVICE_VALUE,
 } from "@/lib/server/auth"
-import { requestWithDomain } from "@/lib/server/upstream-http"
+import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -73,9 +73,17 @@ export async function proxyScheduledTaskRequest(
     if (value !== null) headers.set(name, value)
   }
 
-  const body = request.method === "GET" || request.method === "HEAD" || request.method === "DELETE"
-    ? undefined
-    : await request.arrayBuffer()
+  let body: ArrayBuffer | undefined
+  if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
+    try {
+      body = await readBoundedRequestBody(request)
+    } catch (error) {
+      return errorResponse(
+        error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
+        error instanceof UpstreamRequestTooLargeError ? 413 : 400,
+      )
+    }
+  }
 
   let upstream: Response
   try {
