@@ -9,6 +9,7 @@ import { createClient } from "redis"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { iamCsrfKeyPrefix } from "@/lib/server/iam-interaction-csrf"
+import { issuerCookieAfter, prepareInteraction } from "@/lib/server/iam-interaction-route"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
 
@@ -34,9 +35,10 @@ function rawHttp(
   requestPath: string,
   host = `localhost:${port}`,
   chunkedBody?: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<HttpResult> {
   return new Promise<HttpResult>((resolve, reject) => {
-    const headers: Record<string, string> = { host }
+    const headers: Record<string, string> = { host, ...extraHeaders }
     if (chunkedBody !== undefined) headers["transfer-encoding"] = "chunked"
     const request = httpRequest({ hostname: "127.0.0.1", port, path: requestPath, headers }, (response) => {
       const chunks: Buffer[] = []
@@ -50,6 +52,46 @@ function rawHttp(
     request.once("error", reject)
     request.end(chunkedBody)
   })
+}
+
+function rawMethod(port: number, requestPath: string, method: "HEAD" | "OPTIONS"): Promise<HttpResult> {
+  return new Promise<HttpResult>((resolve, reject) => {
+    const request = httpRequest({ hostname: "127.0.0.1", port, path: requestPath, method,
+      headers: { host: `localhost:${port}` } }, (response) => {
+      const chunks: Buffer[] = []
+      response.on("data", (chunk: Buffer) => chunks.push(chunk))
+      response.once("end", () => resolve({ status: response.statusCode ?? 0, headers: response.headers,
+        body: Buffer.concat(chunks).toString("utf8") }))
+    })
+    request.once("error", reject)
+    request.end()
+  })
+}
+
+function pathCookieJar() {
+  const entries = new Map<string, { value: string; path: string }>()
+  return {
+    absorb(response: HttpResult): void {
+      for (const cookie of response.headers["set-cookie"] as string[] | undefined ?? []) {
+        const pair = cookie.split(";")[0] ?? ""
+        const name = pair.slice(0, pair.indexOf("="))
+        const path = cookie.match(/(?:^|;)\s*Path=([^;]+)/iu)?.[1] ?? "/"
+        const key = `${name}\u0000${path}`
+        const maxAge = cookie.match(/(?:^|;)\s*Max-Age=(-?[0-9]+)/iu)?.[1]
+        const expires = cookie.match(/(?:^|;)\s*Expires=([^;]+)/iu)?.[1]
+        const expired = maxAge !== undefined ? Number(maxAge) <= 0 :
+          expires !== undefined && Number.isFinite(Date.parse(expires)) && Date.parse(expires) <= Date.now()
+        if (expired) entries.delete(key)
+        else entries.set(key, { value: pair, path })
+      }
+    },
+    headerFor(target: string): string {
+      const pathname = new URL(target, "http://localhost").pathname
+      return [...entries.values()].filter((entry) => pathname === entry.path ||
+        (pathname.startsWith(entry.path) && (entry.path.endsWith("/") || pathname[entry.path.length] === "/")))
+        .map((entry) => entry.value).join("; ")
+    },
+  }
 }
 
 async function waitForNext(port: number, diagnostics: () => string): Promise<void> {
@@ -138,7 +180,42 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let continueLocation = "/auth/select-tenant?sig=%2BAb"
   let continueSetCookies: string[] = []
   let continuePayload: unknown = { redirect: true, url: "" }
+  let tenantListStatus = 200
+  let tenantListPayload: unknown = [{ id: "tenant-one", name: "Tenant One", status: "active" }]
+  let tenantListCookies: string[] = []
+  let setActiveStatus = 200
+  let setActiveLocation = "/auth/consent?sig=%2BAb&scope=openid"
+  let setActivePayload: unknown = { redirect: true, url: "" }
+  let setActiveCookies: string[] = []
+  let consentStatus = 200
+  let consentLocation = "/auth/select-tenant?sig=%2BAb"
+  let consentPayload: unknown = { redirect: true, url: "" }
+  let consentCookies: string[] = []
+  let sessionRequired = false
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
+
+  async function ownCsrfKeys(): Promise<string[]> {
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        (async () => {
+          await client.connect()
+          const prefix = iamCsrfKeyPrefix(`http://localhost:${nextPort}`)
+          const keys: string[] = []
+          for await (const batch of client.scanIterator({ MATCH: `${prefix}*`, COUNT: 100 })) keys.push(...batch)
+          return keys.sort()
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis read deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+  }
 
   async function cleanupResources(): Promise<void> {
     const errors: unknown[] = []
@@ -180,6 +257,40 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       fixtureRoot = await createIsolatedNextFixture(projectRoot)
       bff = createServer((request, response) => {
         receivedPaths.push(request.url ?? "")
+        if (request.url === "/iam/organization/list") {
+          if (sessionRequired && !request.headers.cookie?.includes("kokoro-issuer.session_token=opaque")) {
+            response.writeHead(401, { "content-type": "application/json" })
+            response.end('{"secret":"missing-owner-session"}')
+            return
+          }
+          const payload = tenantListStatus === 200 ? JSON.stringify(tenantListPayload) : '{"secret":"sensitive-marker-must-not-reach-browser"}'
+          response.writeHead(tenantListStatus, { "content-type": "application/json", "set-cookie": tenantListCookies })
+          response.end(payload)
+          return
+        }
+        if (request.url === "/iam/organization/set-active" || request.url === "/iam/oauth2/consent") {
+          if (sessionRequired && !request.headers.cookie?.includes("kokoro-issuer.session_token=opaque")) {
+            response.writeHead(401, { "content-type": "application/json" })
+            response.end('{"secret":"missing-owner-session"}')
+            return
+          }
+          const isTenant = request.url === "/iam/organization/set-active"
+          const status = isTenant ? setActiveStatus : consentStatus
+          const location = isTenant ? setActiveLocation : consentLocation
+          const payload = isTenant ? setActivePayload : consentPayload
+          const cookies = isTenant ? setActiveCookies : consentCookies
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            receivedBodies.push(Buffer.concat(chunks).toString("utf8"))
+            response.writeHead(status, {
+              ...(status === 302 ? { location } : { "content-type": "application/json" }),
+              "set-cookie": cookies,
+            })
+            response.end(status === 302 ? "" : status === 200 ? JSON.stringify(payload) : '{"secret":"sensitive-marker-must-not-reach-browser"}')
+          })
+          return
+        }
         if (request.url === "/iam/sign-in/email" || request.url === "/iam/oauth2/continue") {
           const chunks: Buffer[] = []
           request.on("data", (chunk: Buffer) => chunks.push(chunk))
@@ -222,6 +333,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       bffPort = await listen(bff)
       nextPort = await unusedPort()
       continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
+      setActivePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid` }
+      consentPayload = { redirect: true, url: `http://localhost:${nextPort}/api/auth/callback/kokoro-iam?code=secret-code` }
       const nextBin = path.resolve(projectRoot, "node_modules/next/dist/bin/next")
       next = spawn(
         process.execPath,
@@ -260,6 +373,18 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     continueLocation = "/auth/select-tenant?sig=%2BAb"
     continueSetCookies = []
     continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
+    tenantListStatus = 200
+    tenantListPayload = [{ id: "tenant-one", name: "Tenant One", status: "active" }]
+    tenantListCookies = []
+    setActiveStatus = 200
+    setActiveLocation = "/auth/consent?sig=%2BAb&scope=openid"
+    setActivePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid` }
+    setActiveCookies = []
+    consentStatus = 200
+    consentLocation = "/auth/select-tenant?sig=%2BAb"
+    consentPayload = { redirect: true, url: `http://localhost:${nextPort}/api/auth/callback/kokoro-iam?code=secret-code` }
+    consentCookies = []
+    sessionRequired = false
   })
 
   afterAll(cleanupResources)
@@ -279,6 +404,16 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     return rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie,
     })
+  }
+
+  async function interactionProof(path: string): Promise<{ page: HttpResult; token: string; cookie: string; tenantIds: string }> {
+    const page = await rawHttp(nextPort, path)
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.find((value) => value.startsWith("kokoro_iam_csrf="))?.split(";")[0]
+    const tenantIds = page.body.match(/name="tenant_ids" value="([^"]*)"/u)?.[1] ?? ""
+    if (token === undefined || cookie === undefined) throw new Error(`interaction proof missing for ${path}: ${page.status}`)
+    issuedCsrfTokens.add(token)
+    return { page, token, cookie, tenantIds }
   }
 
   it("relays the canonical GET and rejects an untrusted Host without relying on Origin", async () => {
@@ -409,6 +544,401 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(result.headers.location).toBeUndefined()
     expect((result.headers["set-cookie"] as string[] | undefined)?.some((value) => value.includes("kokoro-issuer"))).not.toBe(true)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+  })
+
+  it("serves the tenant and consent interaction routes instead of falling through to Next 404", async () => {
+    const tenant = await interactionProof("/iam/interactions/select-tenant?sig=%2BAb")
+    const consent = await interactionProof("/iam/interactions/consent?sig=%2BAb&scope=openid")
+    expect(tenant.page.status).toBe(200)
+    expect(tenant.page.body).toContain("Tenant One")
+    expect(consent.page.status).toBe(200)
+    expect(consent.page.body).toContain("openid")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list"])
+  })
+
+  it("carries Path=/iam issuer cookies through outer redirects into both real interaction pages", async () => {
+    sessionRequired = true
+    const outerTenantPost = await rawPost(nextPort, "/auth/select-tenant?sig=%2BAb", "organization_id=tenant-one", {
+      origin: `http://localhost:${nextPort}`,
+    })
+    const outerConsentPost = await rawPost(nextPort, "/auth/consent?sig=%2BAb&scope=openid", "decision=agree", {
+      origin: `http://localhost:${nextPort}`,
+    })
+    const directTenantPost = await rawPost(nextPort, "/iam/organization/set-active", "organizationId=tenant-one", {
+      origin: `http://localhost:${nextPort}`,
+    })
+    const directConsentPost = await rawPost(nextPort, "/iam/oauth2/consent", "accept=true", {
+      origin: `http://localhost:${nextPort}`,
+    })
+    expect([outerTenantPost.status, outerConsentPost.status, directTenantPost.status, directConsentPost.status]).toEqual([405, 405, 405, 405])
+    expect(receivedPaths).toEqual([])
+    const jar = pathCookieJar()
+    const signIn = await signInPage()
+    jar.absorb(signIn)
+    const signInToken = signIn.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const signedIn = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in"),
+    })
+    expect(signedIn.status).toBe(303)
+    jar.absorb(signedIn)
+    expect(jar.headerFor("/auth/select-tenant")).not.toContain("kokoro-issuer")
+    const outerTenant = await rawHttp(nextPort, "/auth/select-tenant?sig=%2BAb", undefined, undefined, {
+      cookie: jar.headerFor("/auth/select-tenant"),
+    })
+    expect(outerTenant.status).toBe(302)
+    expect(outerTenant.headers.location).toBe("/iam/interactions/select-tenant?sig=%2BAb")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+    const innerTenant = await rawHttp(nextPort, outerTenant.headers.location as string, undefined, undefined, {
+      cookie: jar.headerFor(outerTenant.headers.location as string),
+    })
+    expect(innerTenant.status).toBe(200)
+    expect(innerTenant.body).toContain("Tenant One")
+    const tenantToken = innerTenant.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const tenantIds = innerTenant.body.match(/name="tenant_ids" value="([^"]*)"/u)?.[1]
+    expect(tenantToken).toBeDefined()
+    expect(tenantIds).toBe("tenant-one")
+    if (tenantToken !== undefined) issuedCsrfTokens.add(tenantToken)
+    jar.absorb(innerTenant)
+    const selected = await rawPost(nextPort, "/iam/interactions/select-tenant?sig=%2BAb",
+      `csrf_token=${tenantToken}&tenant_ids=${tenantIds}&organization_id=tenant-one`, {
+        origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/iam/interactions/select-tenant"),
+      })
+    expect(selected.status).toBe(303)
+    expect(selected.headers.location).toBe(`http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid`)
+    jar.absorb(selected)
+    expect(jar.headerFor("/auth/consent")).not.toContain("kokoro-issuer")
+    const beforeOuterConsent = receivedPaths.length
+    const outerConsent = await rawHttp(nextPort, "/auth/consent?sig=%2BAb&scope=openid", undefined, undefined, {
+      cookie: jar.headerFor("/auth/consent"),
+    })
+    expect(outerConsent.status).toBe(302)
+    expect(outerConsent.headers.location).toBe("/iam/interactions/consent?sig=%2BAb&scope=openid")
+    expect(receivedPaths).toHaveLength(beforeOuterConsent)
+    const innerConsent = await rawHttp(nextPort, outerConsent.headers.location as string, undefined, undefined, {
+      cookie: jar.headerFor(outerConsent.headers.location as string),
+    })
+    expect(innerConsent.status).toBe(200)
+    const consentToken = innerConsent.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    expect(consentToken).toBeDefined()
+    if (consentToken !== undefined) issuedCsrfTokens.add(consentToken)
+    jar.absorb(innerConsent)
+    const consented = await rawPost(nextPort, "/iam/interactions/consent?sig=%2BAb&scope=openid",
+      `csrf_token=${consentToken}&decision=agree`, {
+        origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/iam/interactions/consent"),
+      })
+    expect(consented.status).toBe(503)
+    expect(JSON.parse(consented.body)).toMatchObject({ error: { code: "rp_callback_unavailable" } })
+    expect(receivedPaths.splice(0)).toEqual([
+      "/iam/organization/list", "/iam/organization/list", "/iam/organization/set-active", "/iam/oauth2/consent",
+    ])
+  })
+
+  it("rejects malformed outer interaction redirects without reaching the BFF", async () => {
+    const badHost = await rawHttp(nextPort, "/auth/select-tenant?sig=%2BAb", "evil.example")
+    const badOrigin = await rawHttp(nextPort, "/auth/consent?sig=%2BAb&scope=openid", undefined, undefined, {
+      origin: "https://evil.example",
+    })
+    const missingSignature = await rawHttp(nextPort, "/auth/select-tenant?scope=openid")
+    const body = await rawHttp(nextPort, "/auth/consent?sig=%2BAb&scope=openid", undefined, "unexpected")
+    expect([badHost.status, badOrigin.status, missingSignature.status, body.status]).toEqual([403, 403, 404, 400])
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("rejects HEAD and OPTIONS on all four interaction routes without BFF or Redis writes", async () => {
+    const paths = [
+      "/auth/select-tenant?sig=%2BAb",
+      "/auth/consent?sig=%2BAb&scope=openid",
+      "/iam/interactions/select-tenant?sig=%2BAb",
+      "/iam/interactions/consent?sig=%2BAb&scope=openid",
+    ]
+    const keysBefore = await ownCsrfKeys()
+    for (const path of paths) for (const method of ["HEAD", "OPTIONS"] as const) {
+      const result = await rawMethod(nextPort, path, method)
+      expect(result.status, `${method} ${path}`).toBe(405)
+      expect(result.headers["set-cookie"]).toBeUndefined()
+      expect(result.body).toBe("")
+    }
+    expect(receivedPaths).toEqual([])
+    expect(await ownCsrfKeys()).toEqual(keysBefore)
+
+    const bypass = prepareInteraction(new Request("https://web.example/iam/interactions/consent?sig=proof", {
+      method: "HEAD",
+    }), "/iam/interactions/consent", "GET")
+    expect(bypass).toBeInstanceOf(Response)
+    expect((bypass as Response).status).toBe(405)
+  })
+
+  it.each([
+    "Max-Age=0",
+    "Expires=Wed, 01 Jan 2020 00:00:00 GMT",
+  ])("retains the valid issuer session when IAM deletes session_data with %s", async (expiry) => {
+    sessionRequired = true
+    tenantListCookies = [`kokoro-issuer.session_data=; Path=/iam; HttpOnly; SameSite=Lax; ${expiry}`]
+    const jar = pathCookieJar()
+    const signIn = await signInPage()
+    jar.absorb(signIn)
+    const signInToken = signIn.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const signedIn = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${signInToken}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie: jar.headerFor("/auth/sign-in"),
+    })
+    expect(signedIn.status).toBe(303)
+    jar.absorb(signedIn)
+    expect(jar.headerFor("/iam/interactions/select-tenant")).toContain("kokoro-issuer.session_data=opaque-data")
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    const page = await rawHttp(nextPort, path, undefined, undefined, { cookie: jar.headerFor(path) })
+    expect(page.status).toBe(200)
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const tenantIds = page.body.match(/name="tenant_ids" value="([^"]*)"/u)?.[1]
+    if (token !== undefined) issuedCsrfTokens.add(token)
+    jar.absorb(page)
+    expect(jar.headerFor(path)).toContain("kokoro-issuer.session_token=opaque")
+    expect(jar.headerFor(path)).not.toContain("kokoro-issuer.session_data")
+    const selected = await rawPost(nextPort, path, `csrf_token=${token}&tenant_ids=${tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`, cookie: jar.headerFor(path),
+    })
+    expect(selected.status).toBe(303)
+    expect(receivedPaths.splice(0)).toEqual([
+      "/iam/sign-in/email", "/iam/oauth2/continue", "/iam/organization/list",
+      "/iam/organization/list", "/iam/organization/set-active",
+    ])
+  })
+
+  it("honors Max-Age precedence over an expired Expires when computing issuer binding", () => {
+    const previous = "kokoro-issuer.session_token=opaque; kokoro-issuer.session_data=old"
+    expect(issuerCookieAfter(previous, [
+      "kokoro-issuer.session_data=new; Path=/iam; HttpOnly; SameSite=Lax; Max-Age=60; Expires=Wed, 01 Jan 2020 00:00:00 GMT",
+    ])).toBe("kokoro-issuer.session_token=opaque; kokoro-issuer.session_data=new")
+  })
+
+  it("selects only an owner-listed tenant and consumes its exact CSRF/query proof", async () => {
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    const { token, cookie, tenantIds } = await interactionProof(path)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list"])
+    const headers = { origin: `http://localhost:${nextPort}`, cookie }
+    const body = `csrf_token=${token}&tenant_ids=${tenantIds}&organization_id=tenant-one`
+    const crossTenant = await rawPost(nextPort, path, `csrf_token=${token}&tenant_ids=${tenantIds}&organization_id=tenant-other`, headers)
+    expect(crossTenant.status).toBe(400)
+    const wrongQuery = await rawPost(nextPort, "/iam/interactions/select-tenant?sig=+Ab", body, headers)
+    expect(wrongQuery.status).toBe(403)
+    const evilOrigin = await rawPost(nextPort, path, body, { ...headers, origin: "https://evil.example" })
+    expect(evilOrigin.status).toBe(403)
+    const noOrigin = await rawPost(nextPort, path, body, { cookie })
+    expect(noOrigin.status).toBe(403)
+    const noProof = await rawPost(nextPort, path, body, { origin: headers.origin })
+    expect(noProof.status).toBe(403)
+    const oversized = await rawPost(nextPort, path, `${body}&padding=${"x".repeat(65_536)}`, headers)
+    expect(oversized.status).toBe(400)
+    expect(receivedPaths).toEqual([])
+    const fresh = await interactionProof(path)
+    receivedPaths.length = 0
+    const accepted = await rawPost(nextPort, path, `csrf_token=${fresh.token}&tenant_ids=${fresh.tenantIds}&organization_id=tenant-one`, {
+      origin: headers.origin, cookie: fresh.cookie,
+    })
+    expect(accepted.status).toBe(303)
+    expect(accepted.headers.location).toBe(`http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid`)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list", "/iam/organization/set-active"])
+    expect(JSON.parse(receivedBodies.at(-1) ?? "{}")).toEqual({ organizationId: "tenant-one", oauth_query: "sig=%2BAb" })
+    const replay = await rawPost(nextPort, path, `csrf_token=${fresh.token}&tenant_ids=${fresh.tenantIds}&organization_id=tenant-one`, {
+      origin: headers.origin, cookie: fresh.cookie,
+    })
+    expect(replay.status).toBe(403)
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("rechecks tenant membership before mutation and sanitizes owner list failures", async () => {
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    const proof = await interactionProof(path)
+    receivedPaths.length = 0
+    tenantListPayload = []
+    const changed = await rawPost(nextPort, path, `csrf_token=${proof.token}&tenant_ids=${proof.tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(changed.status).toBe(403)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list"])
+    tenantListStatus = 401
+    const denied = await rawHttp(nextPort, path)
+    expect(denied.status).toBe(401)
+    expect(denied.body).not.toContain("sensitive-marker")
+    expect(denied.headers["set-cookie"]).toBeUndefined()
+  })
+
+  it("preserves a valid native tenant 302 and all issuer cookies, but rejects an evil Location", async () => {
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    setActiveStatus = 302
+    setActiveCookies = [
+      "kokoro-issuer.session_data=updated; Path=/iam; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.dont_remember=one; Path=/iam; HttpOnly; SameSite=Lax",
+    ]
+    const first = await interactionProof(path)
+    const result = await rawPost(nextPort, path, `csrf_token=${first.token}&tenant_ids=${first.tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`, cookie: first.cookie,
+    })
+    expect(result.status).toBe(302)
+    expect(result.headers.location).toBe(setActiveLocation)
+    expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_data=updated;"),
+      expect.stringContaining("kokoro-issuer.dont_remember=one;"),
+    ]))
+    receivedPaths.length = 0
+    setActiveLocation = "https://evil.example/auth/consent?sig=%2BAb"
+    const second = await interactionProof(path)
+    receivedPaths.length = 0
+    const rejected = await rawPost(nextPort, path, `csrf_token=${second.token}&tenant_ids=${second.tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`, cookie: second.cookie,
+    })
+    expect(rejected.status).toBe(502)
+    expect(rejected.headers.location).toBeUndefined()
+    expect(rejected.headers["set-cookie"]).toBeUndefined()
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list", "/iam/organization/set-active"])
+  })
+
+  it("binds tenant CSRF to an owner-refreshed issuer cookie and keeps that cookie after continuation", async () => {
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    tenantListCookies = ["kokoro-issuer.session_data=refreshed; Path=/iam; HttpOnly; SameSite=Lax"]
+    const proof = await interactionProof(path)
+    expect(proof.page.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_data=refreshed;"),
+    ]))
+    const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&tenant_ids=${proof.tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`,
+      cookie: `${proof.cookie}; kokoro-issuer.session_data=refreshed`,
+    })
+    expect(result.status).toBe(303)
+    expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_data=refreshed;"),
+    ]))
+  })
+
+  it("requires explicit consent and binds its unverified scope preview to the signed query", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid+profile"
+    const { page, token, cookie } = await interactionProof(path)
+    expect(page.body).toContain("identity provider validates")
+    expect(page.body).toContain("<li>openid</li><li>profile</li>")
+    expect(receivedPaths).toEqual([])
+    const headers = { origin: `http://localhost:${nextPort}`, cookie }
+    const denied = await rawPost(nextPort, path, `csrf_token=${token}&decision=decline`, headers)
+    expect(denied.status).toBe(403)
+    const altered = await rawPost(nextPort, "/iam/interactions/consent?sig=%2BAb&scope=openid", `csrf_token=${token}&decision=agree`, headers)
+    expect(altered.status).toBe(403)
+    const evil = await rawPost(nextPort, path, `csrf_token=${token}&decision=agree`, { ...headers, origin: "https://evil.example" })
+    expect(evil.status).toBe(403)
+    const noOrigin = await rawPost(nextPort, path, `csrf_token=${token}&decision=agree`, { cookie })
+    expect(noOrigin.status).toBe(403)
+    expect(receivedPaths).toEqual([])
+    const fresh = await interactionProof(path)
+    const accepted = await rawPost(nextPort, path, `csrf_token=${fresh.token}&decision=agree`, {
+      origin: headers.origin, cookie: fresh.cookie,
+    })
+    expect(accepted.status).toBe(503)
+    expect(JSON.parse(accepted.body)).toMatchObject({ error: { code: "rp_callback_unavailable" } })
+    expect(accepted.body).not.toContain("secret-code")
+    expect(accepted.headers.location).toBeUndefined()
+    expect(accepted.headers["set-cookie"]).toBeUndefined()
+    expect(receivedPaths.splice(0)).toEqual(["/iam/oauth2/consent"])
+    expect(JSON.parse(receivedBodies.at(-1) ?? "{}")).toEqual({ accept: true, scope: "openid profile", oauth_query: "sig=%2BAb&scope=openid+profile" })
+    const replay = await rawPost(nextPort, path, `csrf_token=${fresh.token}&decision=agree`, {
+      origin: headers.origin, cookie: fresh.cookie,
+    })
+    expect(replay.status).toBe(403)
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("sanitizes IAM consent signature rejection and unsafe continuation", async () => {
+    const path = "/iam/interactions/consent?sig=forged&scope=openid"
+    consentStatus = 401
+    consentCookies = ["kokoro-issuer.session_data=sensitive; Path=/iam; HttpOnly; SameSite=Lax"]
+    const first = await interactionProof(path)
+    const rejected = await rawPost(nextPort, path, `csrf_token=${first.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: first.cookie,
+    })
+    expect(rejected.status).toBe(401)
+    expect(rejected.body).not.toContain("sensitive-marker")
+    expect(rejected.headers["set-cookie"]).toBeUndefined()
+    receivedPaths.length = 0
+    consentStatus = 302
+    consentLocation = "https://evil.example/auth/select-tenant?sig=forged"
+    const second = await interactionProof(path)
+    const unsafe = await rawPost(nextPort, path, `csrf_token=${second.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: second.cookie,
+    })
+    expect(unsafe.status).toBe(502)
+    expect(unsafe.headers.location).toBeUndefined()
+    expect(unsafe.headers["set-cookie"]).toBeUndefined()
+  })
+
+  it("preserves an allowed native consent 302 with multiple issuer cookies", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    consentStatus = 302
+    consentLocation = "/auth/select-tenant?sig=%2BAb"
+    consentCookies = [
+      "kokoro-issuer.session_data=updated; Path=/iam; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.dont_remember=one; Path=/iam; HttpOnly; SameSite=Lax",
+    ]
+    const proof = await interactionProof(path)
+    const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(result.status).toBe(302)
+    expect(result.headers.location).toBe(consentLocation)
+    expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_data=updated;"),
+      expect.stringContaining("kokoro-issuer.dont_remember=one;"),
+    ]))
+    expect(receivedPaths.splice(0)).toEqual(["/iam/oauth2/consent"])
+  })
+
+  it("withholds even a native 302 to the not-yet-installed fixed RP callback", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    consentStatus = 302
+    consentLocation = "/api/auth/callback/kokoro-iam?code=secret-code"
+    consentCookies = ["kokoro-issuer.session_data=secret; Path=/iam; HttpOnly; SameSite=Lax"]
+    const proof = await interactionProof(path)
+    const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(result.status).toBe(503)
+    expect(JSON.parse(result.body)).toMatchObject({ error: { code: "rp_callback_unavailable" } })
+    expect(result.body).not.toContain("secret-code")
+    expect(result.headers.location).toBeUndefined()
+    expect(result.headers["set-cookie"]).toBeUndefined()
+  })
+
+  it.each([401, 429, 503])("sanitizes consent owner %i without response body or issuer cookies", async (status) => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    consentStatus = status
+    consentCookies = ["kokoro-issuer.session_data=secret; Path=/iam; HttpOnly; SameSite=Lax"]
+    const proof = await interactionProof(path)
+    const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(result.status).toBe(status)
+    expect(result.body).not.toContain("sensitive-marker")
+    expect(result.headers["set-cookie"]).toBeUndefined()
+  })
+
+  it("rejects malformed consent scope and direct IAM mutation before any BFF socket", async () => {
+    const absent = await rawHttp(nextPort, "/iam/interactions/consent?sig=abc")
+    const repeated = await rawHttp(nextPort, "/iam/interactions/consent?sig=abc&scope=openid&scope=profile")
+    const injected = await rawHttp(nextPort, "/iam/interactions/consent?sig=abc&scope=%3Cscript%3E")
+    expect([absent.status, repeated.status, injected.status]).toEqual([400, 400, 400])
+    const direct = await rawPost(nextPort, "/iam/oauth2/consent", "accept=true", { origin: `http://localhost:${nextPort}` })
+    expect(direct.status).toBe(405)
+    expect(receivedPaths).toEqual([])
+  })
+
+  it.each([401, 429, 503])("sanitizes tenant mutation %i without upstream body or issuer cookies", async (status) => {
+    const path = "/iam/interactions/select-tenant?sig=%2BAb"
+    const proof = await interactionProof(path)
+    receivedPaths.length = 0
+    setActiveStatus = status
+    setActiveCookies = ["kokoro-issuer.session_data=secret; Path=/iam; HttpOnly; SameSite=Lax"]
+    const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&tenant_ids=${proof.tenantIds}&organization_id=tenant-one`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(result.status).toBe(status)
+    expect(result.body).not.toContain("sensitive-marker")
+    expect(result.headers["set-cookie"]).toBeUndefined()
+    expect(receivedPaths.splice(0)).toEqual(["/iam/organization/list", "/iam/organization/set-active"])
   })
 
   it.each([

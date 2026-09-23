@@ -85,6 +85,27 @@ describe("Web IAM interaction CSRF", () => {
     expect(await consumeIamInteractionCsrf({ ...base, method: "POST" })).toBe(false)
   })
 
+  it("binds tenant choice evidence to the tenant path and owner-listed ids", async () => {
+    const issued = await issue({
+      redisUrl, webOrigin, path: "/iam/interactions/select-tenant", method: "POST", query: "?sig=tenant",
+      issuerCookie, context: "tenant-one,tenant-two", secureCookies: false,
+    })
+    expect(issued.cookie).toContain("Path=/iam/interactions/select-tenant")
+    const input = { redisUrl, webOrigin, path: "/iam/interactions/select-tenant" as const, method: "POST" as const,
+      query: "?sig=tenant", issuerCookie, context: "tenant-one,tenant-two",
+      cookieToken: issued.token, formToken: issued.token }
+    expect(await consumeIamInteractionCsrf({ ...input, context: "tenant-other" })).toBe(false)
+    expect(await consumeIamInteractionCsrf(input)).toBe(false)
+    const second = await issue({
+      redisUrl, webOrigin, path: "/iam/interactions/consent", method: "POST", query: "?sig=tenant&scope=openid",
+      issuerCookie, secureCookies: false,
+    })
+    expect(second.cookie).toContain("Path=/iam/interactions/consent")
+    expect(await consumeIamInteractionCsrf({ redisUrl, webOrigin, path: "/iam/interactions/consent", method: "POST",
+      query: "?sig=tenant&scope=openid", issuerCookie,
+      cookieToken: second.token, formToken: second.token })).toBe(true)
+  })
+
   it("deletes only issued keys and leaves a pre-existing key in the same namespace", async () => {
     const sentinelKey = `${prefix}preexisting-${randomUUID()}`
     await withTestRedis(redisUrl, async (client) => { await client.set(sentinelKey, "other-owner", { EX: 60 }) })

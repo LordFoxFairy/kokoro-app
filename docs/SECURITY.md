@@ -63,8 +63,10 @@ Untrusted browser input
   框架事实，不把不可见原始路径冒充应用层拒绝，也不扩张 allowlist 或身份。
 - GET 不接受请求体：非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或可观察 Request body 均在
   BFF socket 前返回 400；真实 Next HTTP 测试覆盖无 Content-Length 的 chunked body。
-- policy 保留的 `/auth/sign-in|select-tenant|consent` 只是 W1C-2B Location 目标；页面在 2A 未安装，
-  authorize 跳转会落到 404，当前只读 relay 不等于登录闭环。
+- policy 保留的 `/auth/sign-in|select-tenant|consent` 在 2A 发布时只是后续 Location 目标；
+  2B-1 已安装 sign-in，2B-2 候选把后两条 `/auth/*` 限为无状态 GET 引导，真正带 IAM
+  `Path=/iam` issuer cookie 的页面位于静态 `/iam/interactions/*`。Auth.js RP 尚未安装，
+  consent 最终 callback 受控 503，不能据此声称登录闭环。
 
 ## 3. Secret 与配置清单
 

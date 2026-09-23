@@ -2,11 +2,17 @@
 
 状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；目标尚未实现/验收。
 
-W1C-2B-1 工作树只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
+已发布的 W1C-2B-1 只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
 保存目标路径、POST method、原始签名 query、issuer-cookie 组合摘要，TTL 300 秒；`GETDEL` 是一次性消费原子边界。
 随机 token 仅见 HttpOnly `Path=/auth/sign-in` cookie 与隐藏字段，不存 Redis 明文；Redis 故障
 fail closed。测试只清理本次生成 token 的精确 key，不扫描同前缀的其他 key。Product Session generation、CAS、
 tombstone 与 Auth.js transaction 仍未实现，Web 仍无 SQL schema。
+
+W1C-2B-2 将同一 token 机制扩展到内层 `Path=/iam/interactions/select-tenant` 与
+`Path=/iam/interactions/consent`；IAM issuer cookie 仍保持 `Path=/iam`，因此原始
+`/auth/select-tenant|consent` 外层只有无状态 GET 302 引导，绝不承载 cookie mutation。Tenant 选择时
+绑定 owner GET 返回的 active ID 候选串，POST 在消耗 token 后再次从 owner 列表确认当前资格。
+Redis 只保存 token 摘要与绑定摘要，不存候选组织名、scope 明文、IAM session 或授权事实。
 
 ## W1C-2：Web Product Session 数据与事务边界
 
@@ -16,9 +22,9 @@ tombstone 与 Auth.js transaction 仍未实现，Web 仍无 SQL schema。
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`cd1c2600ea2a6e0716b07628822a49653964675a` 已 pin IAM
-`b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`，policy SHA-256
-`457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；W1C-2A 已固定消费该只读
+`a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87` 已 pin IAM
+`6bc9b190c359b8109238626ff689ce9839e858b5`，policy SHA-256
+`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`；W1C-2A 已固定消费该只读
 artifact 与 provenance，真实 Web→BFF→IAM 及 Auth.js 验收仍待完成。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨

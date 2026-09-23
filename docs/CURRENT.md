@@ -15,23 +15,40 @@
   `KOKORO_WEB_ORIGIN` 同时约束请求 URL origin、Host、可选 Origin 与响应 Location，缺失或不匹配即
   fail closed，不从浏览器 Host 推导。真实 Next HTTP 探针记录 dot/encoded-dot 在 handler 前成为同一
   canonical route、双斜线返回 308、编码 route 名返回 404，并证明无 Content-Length 的 chunked GET body
-  在连接 BFF 前返回 400；这些行为不扩张固定 allowlist。policy 中三个 `/auth/*` Location 仅为 W1C-2B
-  保留，页面当前未安装，W1C-2A 不构成可用登录流。专用 transport
+  在连接 BFF 前返回 400；这些行为不扩张固定 allowlist。policy 中三个 `/auth/*` Location 在
+  W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
   保持原生 status/header/body 与多个
   `Set-Cookie`，并实施 issuer-cookie 白名单、16 KiB header、1 MiB response、5 s deadline 与取消传播。
-- 只读 snapshot 固定 BFF `cd1c2600ea2a6e0716b07628822a49653964675a`、IAM
-  `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec` 和 policy SHA-256
-  `457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；Web 不编辑 owner policy，
+- 只读 snapshot 固定 BFF `a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`、IAM
+  `6bc9b190c359b8109238626ff689ce9839e858b5` 和 policy SHA-256
+  `ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
-- W1C-2B-1 工作树新增唯一 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
+- 已发布的 W1C-2B-1 新增 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
   5 分钟一次性 CSRF 摘要/目标 POST method/issuer-cookie 绑定，POST 必须精确同源 Origin、Cookie+hidden token 与原始 query
   匹配，Redis `GETDEL` 原子消费后才向 BFF 的 `/iam/sign-in/email` 与 `/iam/oauth2/continue` 发起两个有界原生
   POST；IAM 签名仍由 IAM owner 验证。中间 sign-in 响应中的 session token JSON 不返回浏览器；最终继续响应
   对 IAM 实际 200 `{redirect:true,url}` 严格校验固定 Web origin/允许交互路径后返回 303/Location 与多个
   issuer `Set-Cookie`；中间 sign-in 失败仅受控 401/429/503 且不调用 continue。直接 browser `/iam/*` POST
-  仍全部拒绝，select-tenant、
-  consent 页面及 Auth.js/Product Session 尚未实现，因此此工作树不构成完整登录流。Redis 依赖精确固定
+  仍全部拒绝；Auth.js/Product Session 尚未实现，因此此工作树不构成完整登录流。Redis 依赖精确固定
   `redis@5.12.1`，`KOKORO_WEB_REDIS_URL` 缺失或 Redis 故障时交互 fail closed，Web 不清理共享 Redis。
+- W1C-2B-2 新增 `/auth/select-tenant` 与 `/auth/consent` 严格 GET 外层，引导至
+  `/iam/interactions/select-tenant|consent` 真正的 Web-owned GET/POST；外层 POST 405。IAM issuer
+  cookie 原生 `Path=/iam`，真实浏览器不会将其发送至 `/auth/*`，故外层不得直接呈现需要会话的表单。
+  静态内层路由优先于 `/iam/[...path]` catch-all，仍不开放直接 owner mutation。Tenant GET 经固定 BFF
+  `/iam/organization/list` 取 owner 返回的 active 组织，候选 ID 摘要与一次性 CSRF/原始 query/issuer
+  cookie 绑定；POST 先验证所见候选，再重读当前 owner 列表，只有仍在列表内才调用
+  `/iam/organization/set-active`。Consent GET 只从 IAM 跳转 query 的唯一受限 `scope` 展示**未验签预览**，
+  并未由 Web 确认签名/权限；POST 不接收浏览器自报 scope，仅在明确 Agree 后将该 query 的 scope 与原始
+  `oauth_query` 送 `/iam/oauth2/consent`，由 IAM 最终验签并核 scope 子集。伪造 query 的 401/错误响应
+  受控清洗。两页的 CSRF cookie/digest/form/clear 均绑定 `/iam/interactions/*`，复用 Redis 原子 CSRF、
+  严格 Origin、固定 relay、原生多 issuer cookie 与交互 Location
+  白名单；直接 `/iam` 浏览器 POST 仍拒绝。IAM 成功最终跳到固定未来
+  `/api/auth/callback/kokoro-iam` 时，因本片未安装 Auth.js RP，Web 返回不泄露 code/cookie/Location 的
+  `503 rp_callback_unavailable`，不假装浏览器登录闭环。Next16 dev HTTP 对 `%20` 可能正规化成 `+`；
+  IAM 以参数规范化验签，Web 不自行解码再重签或改变已进入 handler 的 query。
+  四条新外/内层 route 的 HEAD/OPTIONS 显式 405，零 BFF/CSRF Redis 写入；当 IAM 对
+  `session_data` 下发 `Max-Age=0` 或已过期 `Expires` 删除时，Web 的后续 CSRF issuer 绑定与
+  浏览器 CookieJar 一致，只保留有效 `session_token`，且有效 `Max-Age` 优先于旧 `Expires`。
 
 ## 2. 已落地的质量门
 
@@ -76,11 +93,25 @@ typecheck、全量 Vitest 135 files/1,295 tests、production build 均通过；`
 该测试的 BFF 是本地 HTTP fixture，**不是 IAM owner 的签名验证证据**。测试后 Web 自有 Redis CSRF key、
 Next 临时目录和进程均为零；GitHub Actions runner、真实 IAM 组合仍待 Root 验收。
 
+W1C-2B-2 以 Web main `d619f2c06951cb2decdb1eeac48547e3bcf40361` 为基线，使用 Node
+`22.22.2` 跑聚焦 policy contract+真实 Next HTTP+Redis 3 files/52 tests、`pnpm lint`、`pnpm typecheck`、
+`pnpm contract` 6 files/52 tests、`pnpm test:architecture` 4 files/32 tests、`pnpm test`
+135 files/1,320 tests、`pnpm build` 与 `pnpm test:e2e` 6/6 均通过。真实 Next fixture
+使用遵守 `Path` 的 CookieJar 与要求 issuer session token 的 BFF HTTP stub，证明外层无 cookie、
+内层有 cookie、静态路由优先、两次交互继续和直接 owner POST 405/零 BFF；未假称真实 IAM 签名/RP 闭环。
+BFF 仍是 HTTP fixture，
+未做真实 IAM/RP 闭环或 GitHub Actions runner 验证。测试覆盖 tenant 列表信任、重核/越界、
+签名 query 变化、Origin/CSRF/重放、consent 拒绝/伪造 query owner 401、恶意导航、native
+302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。本片仅机械 re-pin BFF policy
+`a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`/IAM
+`6bc9b190c359b8109238626ff689ce9839e858b5`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
+语义与前 pin 相同。
+
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；W1C-2B-1 的 sign-in POST/CSRF 不等于 Auth.js
-   Code+S256、server-only token/userinfo/end-session、select-tenant/consent 或 Product Session 已完成，这些必须在
+2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；已装三页的 POST/CSRF 不等于 Auth.js
+   Code+S256、server-only token/userinfo/end-session、可信 GET consent 签名确认或 Product Session 已完成，这些必须在
    后续切片替换旧路径。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。

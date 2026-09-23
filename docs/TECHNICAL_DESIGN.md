@@ -1,9 +1,9 @@
 # Kokoro User Web 技术设计
 
-状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay 已发布；W1C-2B-1
-仅首个 sign-in 交互切片在工作树，Auth.js、其余交互 POST、Product Session 与完整组合验收尚未完成。
+状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
+已发布；W1C-2B-2 tenant/consent 已实现，Auth.js RP、Product Session 与完整组合验收尚未完成。
 
-W1C-2B-1 当前工作树仅新增 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
+W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
 自有 Redis key 保存随机 token 摘要对应的目标 POST method/原始 query/issuer-cookie 绑定摘要，TTL 300 秒；POST
 精确 Origin、Host、URL、Cookie/hidden token 配对后以 `GETDEL` 原子消耗，Redis 故障拒绝。
@@ -13,8 +13,9 @@ W1C-2B-1 当前工作树仅新增 `/auth/sign-in` 的受控表单与两步 IAM s
 中间 sign-in 失败仅返回受控 401/429/503，不透传原文 body/cookie，也不调用 continue。成功的
 continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,url}` 必须通过精确 shape、
 固定 Web origin 与允许交互路径校验，再转成无 body 的浏览器 303 导航，合法多 issuer cookie 保留。
-测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。select-tenant/consent、
-Auth.js RP、Product Session 仍属下一切片。
+测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。2B-2 候选新增
+`/auth/*` 外层引导与 `/iam/interactions/*` 真正 tenant/consent 表单；Auth.js RP、Product Session
+仍属后续切片。
 
 ## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
 
@@ -25,10 +26,10 @@ Auth.js RP、Product Session 仍属下一切片。
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `cd1c2600ea2a6e0716b07628822a49653964675a`，其
+BFF relay 固定policy来源 commit `a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；policy version `1.0.0`
-固定 IAM owner commit `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`。该 pin 已随 IAM test-only
+`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`；policy version `1.0.0`
+固定 IAM owner commit `6bc9b190c359b8109238626ff689ce9839e858b5`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
 但真实 Web→BFF→IAM 链与 Auth.js 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
 digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
@@ -48,7 +49,9 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   provider/RP、受限 server-side token exchange；`oidc-token.ts` 只处理 refresh/revoke；
   `product-session.ts` 与 `product-session-store.ts` 分离请求态 cookie 与 Redis CAS/tombstone；
   `src/app/iam/[...path]/route.ts` 只按固定 BFF policy 代理原生 IAM 协议；
-  `src/app/auth/{sign-in,select-tenant,consent}/page.tsx` 处理 IAM 原生交互页及已签 query 的续接。
+  `src/app/auth/sign-in/route.ts` 处理首个交互，`src/app/auth/{select-tenant,consent}/route.ts`
+  只做外层引导，`src/app/iam/interactions/{select-tenant,consent}/route.ts` 在 issuer cookie
+  `Path=/iam` 下处理其余原生交互页及已签 query 续接。
   普通 BFF adapter 仍归现有 `src/app/api/**/route.ts`，由共享 server-only 凭据读取边界注入 Bearer。
   不建 Web DB 模块、万能上游代理或第二套 IAM client。
 - 上述放置优于把凭据放进 `src/contract/`（会污染 browser wire/schema）或 UI feature（会把 secret
@@ -112,7 +115,8 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   userinfo Bearer 也只由 Web server 使用，不能让浏览器任选 token。
 - 所有同源 cookie mutation，包括 `/iam` 交互 POST、Auth.js action、logout 与业务 `/api/*`，均要求
   精确同源 Origin 加框架/应用 CSRF 证据；缺失、`null` 或错误 Origin fail closed。Web 的
-  `/auth/sign-in|select-tenant|consent` server-rendered 表单在 GET 时为该 IAM 交互、目标 POST path 和短 TTL
+  `/auth/sign-in` 与静态 `/iam/interactions/{select-tenant,consent}` server-rendered 表单在 GET
+  时为该 IAM 交互、目标 POST path 和短 TTL
   生成 Web 自有随机 CSRF token，放入 HttpOnly、SameSite=Lax、Secure（生产）cookie 与隐藏表单字段，
   token 摘要/交互绑定以短 TTL 存 Web Redis namespace，原子一次性消费，Redis down 即拒绝；
   浏览器 POST 到 Web-owned Server Action/Route Handler，Web 在发 BFF socket 前核对 Origin、cookie/字段、
@@ -125,6 +129,20 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   token 校验并叠加 Web Origin；普通业务 mutation 使用 Web 自有 CSRF 防护。仅可信 server-to-server
   token/revoke 调用走独立 server-only 凭据路径，不借浏览器请求例外。BFF 还独立验证 Web service 身份
   与 relay Origin；Web 不把 `Forwarded` 当身份。
+
+W1C-2B-2 的 IAM 固定外层 `/auth/select-tenant|consent` 只安装严格 GET，无状态 302 到静态
+`/iam/interactions/select-tenant|consent` 并保持签名 query；POST 405。IAM issuer cookie 仍为
+`Path=/iam`，因此真正 Web-owned GET/POST 表单位于该路径内，静态路由优先于 `/iam/[...path]`
+只读 catch-all，但不开放直接 owner mutation。Tenant 候选从 BFF 固定 `/iam/organization/list` 取 active 组织，
+候选 ID 串参加 Web CSRF 摘要绑定；POST 对用户所选 ID 先比对已呈现候选，再向 owner 重读当前
+列表并确认资格，随后才向 `/iam/organization/set-active` 发送 IAM 原生 body。Consent 的 scope
+来自跳转 query 的唯一受限字段，在 GET 页面只标为**未验签预览**，不构成 Web 授权判断；POST
+不接受任何浏览器 scope 字段，只在明确 Agree 且一次性 CSRF/原始 query 匹配后提交
+`{accept:true,scope,oauth_query}`，由 IAM 对完整 query 的签名、到期和 scope 子集作最终判定。
+两路中间 200 `{redirect:true,url}`/302 限定固定 Web origin 的三条交互路径，合法多 issuer
+`Set-Cookie` 原生保留，错误 body/cookie 一律清洗。IAM 最终指向未来固定
+`/api/auth/callback/kokoro-iam` 时，当前没有 Auth.js RP，Web 只回受控 503，不泄露 code、
+Location、Set-Cookie；回调导航待 RP 切片安装和验证后才开放。
 - `/api/{session,hub,agents,scheduled-tasks,billing,team,...}` 的受保护 BFF `/v1` 路由统一从 Product
   Session 提取**单一** access Bearer，另加 Web service identity；删去 `x-kokoro-namespace`、
   `x-kokoro-principal-id`、浏览器 Authorization/cookie 透传。service-only runtime manifest 与公开 Share

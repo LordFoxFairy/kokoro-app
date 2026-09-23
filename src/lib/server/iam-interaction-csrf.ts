@@ -9,10 +9,11 @@ const COOKIE_NAME = "kokoro_iam_csrf"
 type Binding = Readonly<{
   redisUrl: string
   webOrigin: string
-  path: "/auth/sign-in"
+  path: "/auth/sign-in" | "/iam/interactions/select-tenant" | "/iam/interactions/consent"
   method: "GET" | "POST"
   query: string
   issuerCookie: string
+  context?: string
 }>
 
 function sha256(value: string): string {
@@ -24,7 +25,7 @@ export function iamCsrfKeyPrefix(webOrigin: string): string {
 }
 
 function bindingDigest(input: Binding): string {
-  return sha256(JSON.stringify([input.path, input.method, input.query, input.issuerCookie]))
+  return sha256(JSON.stringify([input.path, input.method, input.query, input.issuerCookie, input.context ?? ""]))
 }
 
 function validRedisUrl(value: string): boolean {
@@ -93,6 +94,6 @@ export function iamCsrfCookieName(): string {
   return COOKIE_NAME
 }
 
-export function clearIamCsrfCookie(path: "/auth/sign-in", secureCookies: boolean): string {
+export function clearIamCsrfCookie(path: Binding["path"], secureCookies: boolean): string {
   return `${COOKIE_NAME}=; Path=${path}; Max-Age=0; HttpOnly; SameSite=Lax${secureCookies ? "; Secure" : ""}`
 }

@@ -1,19 +1,19 @@
 # Kokoro User Web API 契约策略
 
-状态：browser-private 治理基线与 W1C-2 目标契约，2026-09-23；W1C-2A 只读 GET relay 已在工作树实现
-并待 Root 验收，W1C-2B 仍是目标。
+状态：browser-private 治理基线与 W1C-2 目标契约，2026-09-23；W1C-2A 只读 GET relay 与
+W1C-2B-1 sign-in 已发布，W1C-2B-2 tenant/consent 已实现；Auth.js RP 仍是目标。
 
-## W1C-2：同源 IAM 与 Product Session 契约（2A 当前 / 2B 目标）
+## W1C-2：同源 IAM 与 Product Session 契约（2A/2B-1 已发布，2B-2 候选）
 
 ### 版本、来源和可见性
 
-当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 仍有 IAM magic-link/
-team-session 直连和旧 sealed session；W1C-2A 只读 GET `/iam` 已在当前工作树实现，待 Root 验收发布；
-Auth.js Code+S256、POST 交互与完整 Web→BFF→IAM 仍是目标。
-BFF relay 固定policy来源 `cd1c2600ea2a6e0716b07628822a49653964675a`，其
+当前 Web main 基线 `d619f2c06951cb2decdb1eeac48547e3bcf40361` 仍有 IAM magic-link/
+team-session 直连和旧 sealed session；2A 只读 `/iam` 与 2B-1 sign-in POST 已发布，2B-2 的
+静态 `/iam/interactions/*` POST 是本次候选；Auth.js Code+S256 与完整 Web→BFF→IAM 仍是目标。
+BFF relay 固定policy来源 `a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`，
-引用 IAM owner `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`、allowlist SHA-256
+`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`，
+引用 IAM owner `6bc9b190c359b8109238626ff689ce9839e858b5`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始
@@ -22,8 +22,9 @@ BFF commit blob 比对同一字节，Web 仓不把本地副本自比冒充源 co
 Auth.js 仍待后续验收。Web 不重建/维护 IAM OpenAPI、BFF Product OpenAPI 或 BFF policy 的第二事实源。
 
 `/iam/*` 是 Web 拥有的 `browser-private` **原生 OAuth/OIDC 传输边界**，不是 BFF `/v1`
-Product API，也不进入 Developer API。`/api/auth/[...nextauth]` 是 Auth.js RP transaction/callback
-入口；`/auth/{sign-in,select-tenant,consent}` 是 Web 交互页。普通 `/api/*` 是 Web 的 browser-private
+Product API，也不进入 Developer API。`/api/auth/[...nextauth]` 是尚未安装的目标 Auth.js RP transaction/callback
+入口；`/auth/sign-in` 是 Web 表单，`/auth/{select-tenant,consent}` 是 IAM 外层引导，真正表单位于
+`/iam/interactions/*`。普通 `/api/*` 是 Web 的 browser-private
 Product projection，最终请求 BFF `/v1/*`；IAM 所有 endpoint 语义、字段、OAuth 错误和 cookie 仍由 IAM
 发布的协议定义，Web/BFF 不包装成 `{data}`/`{error}`。Web 本地准入拒绝可以使用安全机器码和
 `x-request-id`，不得泄露 token/secret/原始 provider body。
@@ -46,10 +47,24 @@ policy 的 relative path，不扩张为任意 catch-all：
 | `/get-session`、`/organization/list` | GET | issuer cookie；仅 IAM 交互状态，不是 Product Session 授权 |
 | `/organization/set-active`、`/oauth2/consent`、`/oauth2/continue` | POST | issuer cookie；同源 CSRF |
 
-上表是 W1C-2B 的完整固定 policy。W1C-2A 当前 Route Handler 只安装 GET
+W1C-2B-2 的 `/auth/select-tenant|consent` 只准严格同源 GET 且保持原签名 query，302 引导到
+Web-owned 静态 `/iam/interactions/select-tenant|consent`；外层 POST 405。issuer cookie 的 IAM
+原生 `Path=/iam` 在内层才被浏览器携带；CSRF cookie 与 POST form 也只绑定内层路径。
+四条交互 route 显式拒绝 HEAD/OPTIONS 为 405，不生成 CSRF cookie/Redis nonce，不触达 BFF；
+真实入站 method 还在共用 guard 与 handler 预期 method 精确比较，不能借框架派发复用 GET/POST。
+内层 select-tenant GET 只把受信 BFF `/iam/organization/list` 的 active
+组织作为候选，POST 绑定候选集并重核，调用固定 `/iam/organization/set-active`；内层 consent GET
+仅展示未验签的 signed-query `scope` 预览，POST 无浏览器 `scope` 字段，仅明确 Agree 后将 query
+原样交 IAM `/iam/oauth2/consent`，签名与 scope 子集由 IAM 验证。两页的 200 redirect JSON/302
+仅转成白名单交互 Location 与合规 issuer cookie；401/429/5xx body/cookie 不透出。最终 callback
+`/api/auth/callback/kokoro-iam` 尚未安装，匹配该目标返回受控 `503 rp_callback_unavailable`，不把
+authorization code、Location 或 issuer cookie 返回浏览器；这不是完成的 RP 登录契约。
+
+上表是 W1C-2B 的完整固定 policy。已发布的 W1C-2A `/iam/[...path]` Route Handler 只安装 GET
 `/.well-known/openid-configuration`、`/.well-known/oauth-authorization-server`、`/jwks`、
-`/oauth2/authorize`、`/get-session`、`/organization/list`；所有 POST、userinfo Bearer、end-session 和
-其他路由都在 Web 本地 fail closed，尚未安装 callback/post-logout 传输。
+`/oauth2/authorize`、`/get-session`、`/organization/list`；直接 owner POST、userinfo Bearer、end-session 和
+其他动态路由都在 Web 本地 fail closed。本片静态 `/iam/interactions/*` 是 Web 自有表单而非 BFF
+catch-all 例外；callback/post-logout 传输仍未安装。
 
 W1C-2A 拒绝 magic-link alias、任意 `/internal/v1`/admin/dynamic-client CRUD、未知方法，以及 handler
 可见的大小写/encoded route alias；本地拒绝不得开启 BFF/IAM socket。真实 Next HTTP 探针证明 dot 与
@@ -64,10 +79,10 @@ production 使用 `__Secure-kokoro-issuer.` 前缀。普通 cookie `Path=/iam`�
 
 代理保持 IAM 原生 status/body、合法 Location、Cache-Control、Content-Type、429 Retry-After、logout
 Content-Security-Policy/X-Content-Type-Options/Pragma 和精确 Set-Cookie，不自动跟随 redirect。W1C-2A
-Location 只允许固定 `KOKORO_WEB_ORIGIN` 下已安装的只读 `/iam` route，或 policy 为 W1C-2B 保留的
-`/auth/{sign-in,select-tenant,consent}` 目标路径；三个交互页面当前尚未安装，因此 W1C-2A authorize
-若跳转到这些路径会得到 Web 404，不能据此宣称登录可用。callback 与 post-logout Location 也尚未允许，
-待 W1C-2B 的页面、RP route 与精确 URI 一并安装。合法 IAM 已签 query 只作为 opaque continuation 保留，
+Location 只允许固定 `KOKORO_WEB_ORIGIN` 下已安装的只读 `/iam` route，或固定的
+`/auth/{sign-in,select-tenant,consent}` 目标路径；后两者现在先经无状态同源 302 到静态
+`/iam/interactions/*`，浏览器才会携带 IAM `Path=/iam` issuer cookie。callback 与 post-logout
+Location 尚未允许，待 RP route 与精确 URI 一并安装。合法 IAM 已签 query 只作为 opaque continuation 保留，
 不当作 Web 自报授权。不可信 Location/Set-Cookie 必须在输出前拒绝。policy 最大
 query 8192 B、request body 65536 B、header 16384 B、response 1048576 B、duration 5000 ms；
 Web 限额不得高于这些值，并传递取消。`KOKORO_WEB_ORIGIN` 是 server-only 固定 HTTP(S) origin，缺失或
@@ -75,7 +90,8 @@ Web 限额不得高于这些值，并传递取消。`KOKORO_WEB_ORIGIN` 是 serv
 W1C-2A 的 GET 必须无 body：非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或 Fetch Request 可观察
 body 均在连 BFF 前返回 400；真实 Next HTTP 测试覆盖无 Content-Length 的 chunked GET body。
 所有浏览器 cookie mutation
-缺失/`null`/错误 Origin 或 CSRF 证据都拒绝。Web-rendered `/auth/sign-in|select-tenant|consent` GET
+缺失/`null`/错误 Origin 或 CSRF 证据都拒绝。Web-rendered `/auth/sign-in` 以及静态
+`/iam/interactions/{select-tenant,consent}` GET
 为目标 POST path、IAM 交互和短 TTL 生成随机 CSRF 值，分别放入 Web HttpOnly cookie 和隐藏 form 字段；
 其摘要/绑定存 Web Redis 短 TTL key，POST 时原子一次性消费，Redis unavailable 拒绝；
 浏览器表单 POST Web-owned Server Action/Route Handler 时，Web 在连 BFF 前验证 Origin、双值、
@@ -175,7 +191,7 @@ Browser /api/*                         browser-private
 | `/api/shared/*` | 公开 share 投影 | `kokoro-bff` owner route |
 | `/api/auth/magic-link/request`、旧 `/api/auth/callback`、旧 `/api/auth/logout`、`/api/auth/session-state` | 当前 magic-link、sealed session 登录/退出/状态 | W1C-2 删除，不保留 alias；Auth.js 专用 `/api/auth/[...nextauth]` 接管 RP action/callback；Product Session 展示状态按新 browser-private contract 单独定义 |
 | `/api/team/*` | 当前 team context/switch 与旧 IAM team-session 路径 | 旧 team-session、switch/context alias 删除；仍有产品需要的 tenant 选择由 `/auth/select-tenant` + `/iam/organization/*` IAM 原生交互承担，不复制 team-session |
-| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam/*` 直接 browser POST 仍全拒绝；W1C-2B-1 工作树仅有 `/auth/sign-in` 的 Web-owned GET/POST CSRF 表单与签名 query 原样继续，另两页未安装 | 后续补齐固定 BFF relay 的 server-only/交互路径；不是任意 `/v1` proxy |
+| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam` owner mutation 直接 browser POST 全拒绝；`/auth/sign-in` 是 GET/POST，另两个 `/auth/*` 仅 GET 引导；静态 `/iam/interactions/*` 是带 issuer cookie 的 Web-owned GET/POST，consent 最终 RP callback 仍受控 503 | 后续 Auth.js RP 安装固定 callback 并验收；不是任意 `/v1` proxy |
 | `/api/dev/*` | 非 production preview fixture | 无 live upstream；不得在 production 启用 |
 
 Catch-all route 不表示浏览器可以任意代理 `/v1`；允许路径必须由 client/schema/route test 明确冻结。
