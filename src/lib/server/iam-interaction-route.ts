@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { clearIamCsrfCookie } from "./iam-interaction-csrf"
 import { IAM_RELAY_POLICY, filterIssuerCookies } from "./iam-relay-policy"
-import { iamRelayConfig, type IamRelayConfig } from "./iam-relay-config"
+import { iamRelayConfig, matchesCanonicalWebRequest, type IamRelayConfig } from "./iam-relay-config"
 import { nativeIamResponse, validIamInteractionNavigation } from "./iam-relay-response"
 import type { IamRelayUpstream } from "./iam-relay-transport"
 
@@ -57,11 +57,7 @@ export function prepareInteraction(request: Request, path: InteractionPath, meth
   const config = iamRelayConfig(process.env)
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL
   if (config === null || !redisUrl) return interactionError(503, "iam_interaction_unavailable", id)
-  if (
-    new URL(request.url).origin !== config.webOrigin || request.headers.get("host") !== config.webHost ||
-    (method === "POST" ? request.headers.get("origin") !== config.webOrigin :
-      request.headers.has("origin") && request.headers.get("origin") !== config.webOrigin)
-  ) return interactionError(403, "iam_interaction_origin_rejected", id)
+  if (!matchesCanonicalWebRequest(request, config, method)) return interactionError(403, "iam_interaction_origin_rejected", id)
   const query = rawQuery(request, path)
   if (query === null) return interactionError(404, "iam_interaction_not_found", id)
   if (request.headers.has("authorization")) return interactionError(403, "iam_interaction_credential_rejected", id)

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { iamRelayConfig } from "@/lib/server/iam-relay-config"
+import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
@@ -46,7 +46,6 @@ function rawPathAndQuery(absoluteUrl: string): string | null {
 
 export async function GET(request: Request, context: RouteContext): Promise<Response> {
   const id = requestId(request)
-  const url = new URL(request.url)
   const { path } = await context.params
   const expectedPath = `/iam/${path.join("/")}`
   const rawTarget = rawPathAndQuery(request.url)
@@ -62,10 +61,8 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (request.headers.has("authorization")) return errorResponse("iam_relay_credential_rejected", 403, id)
   const config = iamRelayConfig(process.env)
   if (config === null) return errorResponse("iam_relay_unavailable", 503, id)
-  if (url.origin !== config.webOrigin) return errorResponse("iam_relay_origin_rejected", 403, id)
-  if (request.headers.get("host") !== config.webHost) return errorResponse("iam_relay_origin_rejected", 403, id)
+  if (!matchesCanonicalWebRequest(request, config, "GET")) return errorResponse("iam_relay_origin_rejected", 403, id)
   const origin = request.headers.get("origin")
-  if (origin !== null && origin !== config.webOrigin) return errorResponse("iam_relay_origin_rejected", 403, id)
   const contentLength = request.headers.get("content-length")
   if (
     request.headers.has("transfer-encoding") || request.body !== null ||

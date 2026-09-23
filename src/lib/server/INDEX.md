@@ -50,7 +50,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   localStorage 或用户可编辑字段。
 - Product Web server → BFF 上游请求经 `upstream-http.ts` 或 `callerHeaders`。`/iam` 是固定 policy 的
   BFF-only 原生协议例外，使用 `iam-relay-transport.ts` 保持多 cookie，不读取 IAM URL；其公开边界只从
-  server-only `KOKORO_WEB_ORIGIN` 读取，并据此校验 request URL、Host、可选 Origin 与 Location。
+  server-only `KOKORO_WEB_ORIGIN` 读取，并据此校验入站 Host、GET 可选/POST 必需 Origin 与 Location；
+  反代后 Next 重建的 request URL authority 和 `X-Forwarded-*` 不作公开 origin 判据。
 - 浏览器提供的 `Host`、RFC 7239 `Forwarded`、tenant/site 字段不参与后端上下文选择；上游后端根据 RFC 7239 `Forwarded`
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。

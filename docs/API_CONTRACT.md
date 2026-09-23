@@ -105,7 +105,9 @@ Location 在已发布 2B-2 基线尚未允许；本 2C 工作树仅允许安装�
 不当作 Web 自报授权。不可信 Location/Set-Cookie 必须在输出前拒绝。policy 最大
 query 8192 B、request body 65536 B、header 16384 B、response 1048576 B、duration 5000 ms；
 Web 限额不得高于这些值，并传递取消。`KOKORO_WEB_ORIGIN` 是 server-only 固定 HTTP(S) origin，缺失或
-非精确 origin 时 relay 503；请求 URL origin、Host 与可选 Origin 必须精确匹配，否则在连 BFF 前 403。
+非精确 origin 时 relay 503；入站 Host 必须精确等于配置 host，GET 若有 Origin 必须等于配置 origin，
+POST 必须携精确 Origin，否则在连 BFF 前 403。反代后的 Next handler URL authority 可为内部
+`localhost:<port>`，不作为公开 origin 判据；不采信 `Forwarded`/`X-Forwarded-*` 作为替代身份。
 W1C-2A 的 GET 必须无 body：非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或 Fetch Request 可观察
 body 均在连 BFF 前返回 400；真实 Next HTTP 测试覆盖无 Content-Length 的 chunked GET body。
 所有浏览器 cookie mutation

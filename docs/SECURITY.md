@@ -61,9 +61,10 @@ Untrusted browser input
 
 - `/iam/[...path]` 仅安装固定 BFF policy 中无需 browser Bearer 的 GET 子集；所有 mutation、userinfo、
   end-session 和未知 route fail closed，使用专用 transport 保持原生多个 `Set-Cookie`。
-- `KOKORO_WEB_ORIGIN` 是 server-only 精确 HTTP(S) origin。缺失/非法配置返回 503；request URL origin、
-  Host 和可选 Origin 不匹配返回 403，且两者都不打开 BFF socket。Location 只相对固定 origin 验证，
-  不从浏览器 Host 推导。
+- `KOKORO_WEB_ORIGIN` 是 server-only 精确 HTTP(S) origin。缺失/非法配置返回 503；入站 Host 与配置
+  host 不匹配、GET 所带 Origin 或 POST 必需 Origin 不等于配置 origin 时返回 403，且不打开 BFF socket。
+  反代后的 Next handler URL origin 可能是内部 localhost，不将其视为公开 origin；也不采信
+  `Forwarded`/`X-Forwarded-*` 替代 Host/Origin。Location 只相对固定 origin 验证。
 - handler 可见的编码 route alias 与不安全上游 Location 被拒绝。Next 在 handler 前对 dot/encoded-dot
   规范化为同一个 canonical route、对双斜线返回 308、对编码 route 名返回 404；真实 HTTP 测试冻结这些
   框架事实，不把不可见原始路径冒充应用层拒绝，也不扩张 allowlist 或身份。

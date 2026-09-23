@@ -114,7 +114,8 @@ KOKORO_WEB_ORIGIN="http://dev.kokoro.localhost:3000"
 
 - 值是不带协议的 hostname；local 使用 `dev.kokoro.localhost`，test 使用 `test.kokoro.localhost`，生产替换为部署绑定的公开域名；
 - `KOKORO_WEB_ORIGIN` 是 `/iam` 的精确公开 HTTP(S) origin，包含 scheme、同一 hostname 和可选 port，
-  不含尾斜杠、路径、query 或 fragment；它校验 request URL、Host、可选 Origin 与 Location；
+  不含尾斜杠、路径、query 或 fragment；它校验入站 Host、GET 可选/POST 必需 Origin 与 Location，
+  不以反代后 Next 重建的 request URL authority 或 `X-Forwarded-*` 判定公开 origin；
 - 域名变化只更新环境变量和后端绑定，不改变 React、CSS、路由或构建选择；
 - 浏览器不读取该变量，也不把它写入 URL、body、React state、localStorage 或公开响应；
 - BFF 对每个后端上游（System、User、Hub、Billing、Agent 等）统一生成标准 RFC 7239 header：

@@ -12,8 +12,10 @@
 - W1C-2A 已新增 BFF-only 的同源 `/iam/[...path]` 只读入口：只允许固定 policy 中无需 browser Bearer 的
   discovery、JWKS、authorize、issuer session 与 organization GET；浏览器 POST、userinfo、end-session、
   Authorization 和 handler 可见的未知/编码 route alias 均在连接 BFF 前拒绝。固定 server-only
-  `KOKORO_WEB_ORIGIN` 同时约束请求 URL origin、Host、可选 Origin 与响应 Location，缺失或不匹配即
-  fail closed，不从浏览器 Host 推导。真实 Next HTTP 探针记录 dot/encoded-dot 在 handler 前成为同一
+  `KOKORO_WEB_ORIGIN` 固定公开 authority：入站 Host 必须精确匹配，GET 如携 Origin 也须匹配，POST
+  必须携精确 Origin；响应 Location 仍只相对该固定 origin 验证。Next 在反代后可能把 handler 的
+  `request.url`/`nextUrl.origin` 重建为内部 `https://localhost:<port>`，因此不以它作公开 origin
+  校验，也不信任浏览器可控的 `Forwarded`/`X-Forwarded-*`。真实 Next HTTP 探针记录 dot/encoded-dot 在 handler 前成为同一
   canonical route、双斜线返回 308、编码 route 名返回 404，并证明无 Content-Length 的 chunked GET body
   在连接 BFF 前返回 400；这些行为不扩张固定 allowlist。policy 中三个 `/auth/*` Location 在
   W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
@@ -50,7 +52,7 @@
   `session_data` 下发 `Max-Age=0` 或已过期 `Expires` 删除时，Web 的后续 CSRF issuer 绑定与
   浏览器 CookieJar 一致，只保留有效 `session_token`，且有效 `Max-Age` 优先于旧 `Expires`。
 - 本工作树 W1C-2C RP-only **候选未发布**：固定 `/api/auth/[...nextauth]` 只开放 CSRF GET、
-  `kokoro-iam` signin POST 与 callback GET；精确 Origin/Host、Auth.js CSRF、固定 issuer/client/
+  `kokoro-iam` signin POST 与 callback GET；固定 Host/按方法精确 Origin、Auth.js CSRF、固定 issuer/client/
   callback/resource、S256/state/nonce 与 300 秒 Redis `SET NX`/`GETDEL` 绑定。签名算法显式 pin
   EdDSA；自定义 token request 调用验证型 `openid-client` callback，server-only Basic token、
   Bearer userinfo 与 JWKS 仅走固定 BFF backchannel，每次独立 agent 限制绝对 5 秒、响应头/正文

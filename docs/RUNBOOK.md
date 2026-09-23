@@ -71,8 +71,9 @@ preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连�
 
 ### 4.2 登录循环、401 或 session refresh 失败
 
-1. 检查公开 hostname 与 `KOKORO_DOMAIN` 一致，并核对 `/iam` 请求 URL origin、Host 和可选 Origin 与
-   `KOKORO_WEB_ORIGIN` 精确一致；后者缺失/非法会返回 503，不匹配会返回 403。HTTPS 下 cookie 带 Secure。
+1. 检查公开 hostname 与 `KOKORO_DOMAIN` 一致，并核对入站 Host、GET 可选/POST 必需 Origin 与固定
+   `KOKORO_WEB_ORIGIN` 精确一致；后者缺失/非法会返回 503，不匹配会返回 403。反代后 Next 重建的
+   request URL authority 和 `X-Forwarded-*` 不作公开 origin 判据；HTTPS 下 cookie 带 Secure。
 2. 检查 session/nonce cookie 的 Path、SameSite、expiry；不要读取或粘贴值。
 3. 关联 Web request id 与 BFF/IAM 记录，区分 envelope invalid、access expired、refresh revoke 和 service auth。
 4. 多 tab refresh race 不应立即踢出仍有效 access；确认是否发生重复 rotation。

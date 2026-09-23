@@ -29,3 +29,9 @@ export function iamRelayConfig(env: NodeJS.ProcessEnv): IamRelayConfig | null {
   if (bffOrigin === null || webOrigin === null || !secret) return null
   return { bffOrigin, webOrigin, webHost: new URL(webOrigin).host, secret, secureCookies: env.NODE_ENV === "production" }
 }
+
+export function matchesCanonicalWebRequest(request: Request, config: IamRelayConfig, method: "GET" | "POST"): boolean {
+  if (request.method !== method || request.headers.get("host") !== config.webHost) return false
+  const origin = request.headers.get("origin")
+  return method === "POST" ? origin === config.webOrigin : origin === null || origin === config.webOrigin
+}

@@ -112,8 +112,10 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
 
 - Web 从最终固定 BFF policy 的 path+method 白名单判定 `/iam/*`；`/.well-known/*`、`/jwks` 等 issuer
   路由只能作为 `/iam` 下的原生协议路由。W1C-2A 的固定 server-only `KOKORO_WEB_ORIGIN` 必须是精确
-  HTTP(S) origin（scheme、host、可选 port，无尾斜杠/路径/query/fragment）；请求 URL origin、Host 与可选
-  Origin 均须和它匹配，Location 也只相对该固定 origin 验证，不从浏览器 Host 推导。handler 可见的未知、
+  HTTP(S) origin（scheme、host、可选 port，无尾斜杠/路径/query/fragment）；入站 Host 精确等于配置
+  host，GET 如带 Origin 则精确匹配，POST 必须带精确 Origin；Location 只相对固定 origin 验证。
+  Next 反代后重建的 handler URL origin 可能是内部 localhost，不能代表浏览器公开 authority；也不从
+  `Forwarded`/`X-Forwarded-*` 推导公开 origin。handler 可见的未知、
   大小写、编码 route alias，以及上游 Location 中的 `%`、dot segment、双斜线、backslash 均拒绝；真实
   Next HTTP 边界会在 handler 前把 dot/encoded-dot 输入规范化成同一个 canonical route，并对双斜线返回
   308、编码 route 名返回 404，因此文档不把框架前不可见的原始输入冒称为 handler 拒绝。任一情况都不扩张

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamCsrfCookieName, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
-import { iamRelayConfig } from "@/lib/server/iam-relay-config"
+import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
@@ -148,8 +148,7 @@ export async function GET(request: Request): Promise<Response> {
   const query = rawQuery(request)
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL
   if (config === null || !redisUrl) return errorResponse(503, "iam_interaction_unavailable", id)
-  if (new URL(request.url).origin !== config.webOrigin || request.headers.get("host") !== config.webHost ||
-    (request.headers.has("origin") && request.headers.get("origin") !== config.webOrigin)) return errorResponse(403, "iam_interaction_origin_rejected", id)
+  if (!matchesCanonicalWebRequest(request, config, "GET")) return errorResponse(403, "iam_interaction_origin_rejected", id)
   if (query === null) return errorResponse(404, "iam_interaction_not_found", id)
   if (headerBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes || request.body !== null) return errorResponse(413, "iam_interaction_request_too_large", id)
   const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
@@ -170,7 +169,7 @@ export async function POST(request: Request): Promise<Response> {
   const query = rawQuery(request)
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL
   if (config === null || !redisUrl) return errorResponse(503, "iam_interaction_unavailable", id)
-  if (new URL(request.url).origin !== config.webOrigin || request.headers.get("host") !== config.webHost || request.headers.get("origin") !== config.webOrigin) return errorResponse(403, "iam_interaction_origin_rejected", id)
+  if (!matchesCanonicalWebRequest(request, config, "POST")) return errorResponse(403, "iam_interaction_origin_rejected", id)
   if (query === null) return errorResponse(404, "iam_interaction_not_found", id)
   if (request.headers.has("authorization")) return errorResponse(403, "iam_interaction_credential_rejected", id)
   if (headerBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) return errorResponse(413, "iam_interaction_request_too_large", id)

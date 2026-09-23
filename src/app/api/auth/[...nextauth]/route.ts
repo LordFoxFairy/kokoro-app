@@ -4,6 +4,7 @@ import NextAuth from "next-auth"
 import { NextRequest } from "next/server"
 
 import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
+import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE } from "@/lib/server/oidc-provider"
 import { consumeOidcState, issueOidcState, rpCleanupCookies } from "@/lib/server/oidc-rp-transaction"
@@ -64,9 +65,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
-  if (url.origin !== config.relay.webOrigin || url.pathname !== expectedPath || request.headers.get("host") !== config.relay.webHost ||
-    (method === "POST" ? request.headers.get("origin") !== config.relay.webOrigin :
-      request.headers.has("origin") && request.headers.get("origin") !== config.relay.webOrigin)) {
+  if (url.pathname !== expectedPath || !matchesCanonicalWebRequest(request, config.relay, method)) {
     return errorResponse(403, "rp_origin_rejected")
   }
   if (request.headers.has("authorization") || request.headers.has("x-kokoro-service") || request.headers.has("x-kokoro-internal-secret")) {
