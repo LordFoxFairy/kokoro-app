@@ -33,13 +33,18 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   - `fetchWithDomain`：普通 JSON/下载请求，覆盖调用方的 `forwarded`。
   - `requestWithDomain`：HTTP/SSE/二进制流式代理，覆盖调用方的 `forwarded`。
   - `getJsonWithDomain`：System manifest 的 JSON 请求变体。
+- `iam-relay-policy.ts`：固定 BFF policy provenance、只读 browser GET 子集与 issuer cookie 入站过滤。
+- `iam-relay-transport.ts`：IAM 原生 HTTP 专用 transport，保持多个 `Set-Cookie`，实施 deadline、取消和
+  header/body 限额；不复用会合并 cookie 的 Product transport。
+- `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
 
 ## 运行时规则
 
 - `KOKORO_DOMAIN` 是独立产品部署的唯一域名上下文，部署时从环境注入；它不是 React prop、URL、body、
   localStorage 或用户可编辑字段。
-- 所有 Web server → User、BFF、System、Billing、Shared 上游请求都经 `upstream-http.ts` 或
-  `callerHeaders`，服务端统一附加 `Forwarded: host=<KOKORO_DOMAIN>`。
+- Product Web server → BFF 上游请求经 `upstream-http.ts` 或 `callerHeaders`。`/iam` 是固定 policy 的
+  BFF-only 原生协议例外，使用 `iam-relay-transport.ts` 保持多 cookie，不读取 IAM URL；其公开边界只从
+  server-only `KOKORO_WEB_ORIGIN` 读取，并据此校验 request URL、Host、可选 Origin 与 Location。
 - 浏览器提供的 `Host`、RFC 7239 `Forwarded`、tenant/site 字段不参与后端上下文选择；上游后端根据 RFC 7239 `Forwarded`
   完成租户解析、认证授权和数据隔离。
 - 认证信封只保存 runtime JWT、refresh token、用户和 namespace；不保存部署域名或内部 tenant id。
@@ -61,6 +66,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `src/app/api/billing/*`：Billing/Payment 兼容读写面。
 - `src/app/api/shared/[id]`：公共分享只读代理；不需要用户信封，但仍携带 `web-bff` service auth
   和部署 RFC 7239 `Forwarded`，因此上游不会被匿名公网直接暴露。
+- `src/app/iam/[...path]`：只读 browser GET relay；browser POST、userinfo、end-session 与未知路由
+  fail closed，后续 Auth.js/server-only 凭据和交互 CSRF 不在本切片实现。
 
 ### Chat 与业务承接
 
@@ -71,5 +78,6 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - Projects、Skills、Library、Scheduled、Agent setup 和 Billing 等跨服务用例，由独立
   `kokoro-bff` 的业务 adapter 编排；不要把这些规则塞回 Web，也不把 BFF 依赖塞入 `kokoro-agent`。
 
-新增上游服务时必须复用 `upstream-http.ts`，禁止在 route handler 中直接裸 `fetch`、手写 Host 或
-手写部署/租户 header。浏览器 client 只能调用同源 BFF path。
+新增 Product 上游服务时必须复用 `upstream-http.ts`；固定 policy 的 IAM 原生 relay 是唯一已批准例外，
+只能复用 `iam-relay-transport.ts`，不得扩成通用代理。route handler 禁止直接裸 `fetch`、手写 Host 或
+手写部署/租户 header；浏览器 client 只能调用同源 BFF path。

@@ -1,6 +1,6 @@
 # Kokoro User Web 仓库索引
 
-状态：当前代码与治理入口，更新于 2026-09-03。
+状态：当前代码与治理入口，更新于 2026-09-23。
 
 ## 1. Owner 与非 Owner
 
@@ -9,6 +9,7 @@
 - User Web 页面与浏览器交互状态；
 - 当前站点的 HttpOnly session envelope 与同源请求边界；
 - `/api/*` browser-private adapter；
+- 固定 BFF policy 约束的 `/iam/*` 原生 OAuth/OIDC 同源传输边界；
 - AG-UI 到 Web 内部 view state 的适配职责。
 
 本仓不拥有：
@@ -31,6 +32,7 @@
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
+| `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；其他方法与 server-only 凭据路由拒绝 |
 
 ## 3. Chat 与契约入口
 
@@ -57,9 +59,14 @@
 | `src/lib/server/auth.ts` | session cookie、nonce、session refresh 与当前 IAM client |
 | `src/lib/server/session-envelope.ts` | AES-256-GCM sealed envelope |
 | `src/lib/server/domain-context.ts` | server-only `KOKORO_DOMAIN` 与 `Forwarded` |
+| `src/app/iam/[...path]/route.ts` | server-only `KOKORO_WEB_ORIGIN`、固定 GET allowlist 与请求准入 |
 | `src/lib/server/service-config.ts` | BFF 地址读取 |
 | `src/lib/server/upstream-http.ts` | 上游 header 清洗与流式 transport |
 | `src/lib/server/bff-response.ts` | BFF envelope、request id 与 no-store 响应 |
+| `src/generated/iam-relay-policy.json` | 固定 BFF commit 的只读 policy snapshot |
+| `src/lib/server/iam-relay-policy.ts` | snapshot provenance、只读 GET 子集、issuer cookie 入站过滤 |
+| `src/lib/server/iam-relay-transport.ts` | `/iam` 专用原生 HTTP transport；保持多 `Set-Cookie`、限额、deadline 与取消 |
+| `src/lib/server/iam-relay-response.ts` | 原生 status/header/Location/issuer `Set-Cookie` 出站校验 |
 
 ## 5. Browser-only 状态
 

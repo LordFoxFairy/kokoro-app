@@ -1,6 +1,6 @@
 # Kokoro User Web 运行手册
 
-状态：当前可执行诊断与目标恢复步骤，2026-09-03。
+状态：当前可执行诊断与目标恢复步骤，2026-09-23。
 
 ## 1. 准备信息
 
@@ -50,6 +50,7 @@ preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连�
 | --- | --- |
 | `NODE_ENV` | production deployment 为 `production` |
 | `KOKORO_DOMAIN` | 不带协议/路径的 canonical hostname |
+| `KOKORO_WEB_ORIGIN` | `/iam` 公开入口的精确 HTTP(S) origin；含 scheme/hostname/可选 port，无尾斜杠/路径/query/fragment |
 | `KOKORO_WEB_SESSION_SECRET` | 已注入；轮换时当前 key 在首位 |
 | `KOKORO_INTERNAL_SECRET_WEB_BFF` | production 必需 |
 | `KOKORO_BFF_BASE_URL` | server-only BFF URL |
@@ -70,7 +71,8 @@ preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连�
 
 ### 4.2 登录循环、401 或 session refresh 失败
 
-1. 检查公开 hostname 与 `KOKORO_DOMAIN` 一致，HTTPS 下 cookie 带 Secure。
+1. 检查公开 hostname 与 `KOKORO_DOMAIN` 一致，并核对 `/iam` 请求 URL origin、Host 和可选 Origin 与
+   `KOKORO_WEB_ORIGIN` 精确一致；后者缺失/非法会返回 503，不匹配会返回 403。HTTPS 下 cookie 带 Secure。
 2. 检查 session/nonce cookie 的 Path、SameSite、expiry；不要读取或粘贴值。
 3. 关联 Web request id 与 BFF/IAM 记录，区分 envelope invalid、access expired、refresh revoke 和 service auth。
 4. 多 tab refresh race 不应立即踢出仍有效 access；确认是否发生重复 rotation。

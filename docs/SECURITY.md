@@ -1,6 +1,6 @@
 # Kokoro User Web 安全设计
 
-状态：当前控制与目标缺口，2026-09-03。
+状态：当前控制与目标缺口，2026-09-23。
 
 ## 1. Trust boundary
 
@@ -42,6 +42,21 @@ Untrusted browser input
 - live 网络错误不应静默切换 fixture。
 - dev preview file route 必须保持 production 关闭；fixture 不含真实 token、cookie 或受保护资产。
 
+### 2.4 W1C-2A IAM 只读 relay
+
+- `/iam/[...path]` 仅安装固定 BFF policy 中无需 browser Bearer 的 GET 子集；所有 mutation、userinfo、
+  end-session 和未知 route fail closed，使用专用 transport 保持原生多个 `Set-Cookie`。
+- `KOKORO_WEB_ORIGIN` 是 server-only 精确 HTTP(S) origin。缺失/非法配置返回 503；request URL origin、
+  Host 和可选 Origin 不匹配返回 403，且两者都不打开 BFF socket。Location 只相对固定 origin 验证，
+  不从浏览器 Host 推导。
+- handler 可见的编码 route alias 与不安全上游 Location 被拒绝。Next 在 handler 前对 dot/encoded-dot
+  规范化为同一个 canonical route、对双斜线返回 308、对编码 route 名返回 404；真实 HTTP 测试冻结这些
+  框架事实，不把不可见原始路径冒充应用层拒绝，也不扩张 allowlist 或身份。
+- GET 不接受请求体：非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或可观察 Request body 均在
+  BFF socket 前返回 400；真实 Next HTTP 测试覆盖无 Content-Length 的 chunked body。
+- policy 保留的 `/auth/sign-in|select-tenant|consent` 只是 W1C-2B Location 目标；页面在 2A 未安装，
+  authorize 跳转会落到 404，当前只读 relay 不等于登录闭环。
+
 ## 3. Secret 与配置清单
 
 | 变量 | 位置 | 浏览器可见 | 说明 |
@@ -49,6 +64,7 @@ Untrusted browser input
 | `KOKORO_WEB_SESSION_SECRET` | Web server secret | 否 | session envelope 密钥；支持逗号分隔轮换 |
 | `KOKORO_INTERNAL_SECRET_WEB_BFF` | Web server secret | 否 | Web→BFF service credential |
 | `KOKORO_BFF_BASE_URL` | Web server config | 否 | 业务与 Chat 上游 |
+| `KOKORO_WEB_ORIGIN` | Web server config | 否 | `/iam` 的固定公开 HTTP(S) origin；精确 scheme/host/port，无尾斜杠或路径 |
 | `KOKORO_IAM_BASE_URL` | 当前 Web server config | 否 | 当前直连缺口；目标移到 BFF |
 | `KOKORO_DOMAIN` | Web server config | 否 | canonical deployment hostname |
 | `KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET` | 非 production | 否 | mock payment；production 禁用 |

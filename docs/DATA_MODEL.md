@@ -10,10 +10,10 @@
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`1fae01e309aed26439ae5f172a70551621107222` 已 pin IAM
-`c9a277213ade41b9225ab0f158b89092d1869a83`，policy SHA-256
-`cbb62a48c8c7cfa1b9feff38694f76ad5da433d094780fcc6be282495d580fe0`；Web 尚未消费该 artifact，
-真实 Web→BFF→IAM 验收待完成。
+`cd1c2600ea2a6e0716b07628822a49653964675a` 已 pin IAM
+`b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`，policy SHA-256
+`457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；W1C-2A 已固定消费该只读
+artifact 与 provenance，真实 Web→BFF→IAM 及 Auth.js 验收仍待完成。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
 owner JOIN 或 `db:apply-schema`。Root 现行**目标态**是本地/CI 共用一个物理开发 PostgreSQL database、一套应用

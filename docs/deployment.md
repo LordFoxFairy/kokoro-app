@@ -40,13 +40,13 @@ GitHub Actions 的 `${{ github.repository }}`、GHCR 镜像名和 Cloudflare Bui
 | `.env.production` | Next.js 生产文件名 | 否，优先用平台运行时注入 |
 | `.env.prod` | Docker/运维约定名，不是 Next.js 自动加载名 | 否 |
 
-环境选择固定如下；不要把 `KOKORO_DOMAIN` 做成浏览器或构建期 selector：
+环境选择固定如下；不要把 `KOKORO_DOMAIN` 或 `KOKORO_WEB_ORIGIN` 做成浏览器或构建期 selector：
 
-| 环境 | 入口 | `KOKORO_DOMAIN` 示例 | Preview/Mock | `NODE_ENV` |
+| 环境 | 入口 | `KOKORO_DOMAIN` / `KOKORO_WEB_ORIGIN` 示例 | Preview/Mock | `NODE_ENV` |
 | --- | --- | --- | --- | --- |
-| local | `.env.local` | `dev.kokoro.localhost` | `NEXT_PUBLIC_SESSION_PREVIEW=1` 可用 | `development` |
-| test | `.env.test` | `test.kokoro.localhost` | `NEXT_PUBLIC_SESSION_PREVIEW=1` 可用；测试可注入隔离值 | `test` |
-| prod | `.env.prod` 显式传给 Docker，或 `.env.production`/平台运行时 | `app.example.com` 等部署绑定 hostname | 不使用；`production` 路径不启用 Preview Client | `production` |
+| local | `.env.local` | `dev.kokoro.localhost` / `http://dev.kokoro.localhost:3000` | `NEXT_PUBLIC_SESSION_PREVIEW=1` 可用 | `development` |
+| test | `.env.test` | `test.kokoro.localhost` / `http://test.kokoro.localhost:3000` | `NEXT_PUBLIC_SESSION_PREVIEW=1` 可用；测试可注入隔离值 | `test` |
+| prod | `.env.prod` 显式传给 Docker，或 `.env.production`/平台运行时 | `app.example.com` / `https://app.example.com` | 不使用；`production` 路径不启用 Preview Client | `production` |
 
 `alpha.fixture.test`、`beta.fixture.test` 是 integration fixture 使用的合成 deployment binding，不是第三套环境，
 也不从浏览器传入。Mock/Preview fixture 只属于 local/test 运行面；生产发布只切换到真实 BFF Client，不能在网络错误时
@@ -109,9 +109,12 @@ Variables/Secrets。不要把真实 secret 提交到任何 env 文件。
 
 ```dotenv
 KOKORO_DOMAIN="dev.kokoro.localhost"
+KOKORO_WEB_ORIGIN="http://dev.kokoro.localhost:3000"
 ```
 
 - 值是不带协议的 hostname；local 使用 `dev.kokoro.localhost`，test 使用 `test.kokoro.localhost`，生产替换为部署绑定的公开域名；
+- `KOKORO_WEB_ORIGIN` 是 `/iam` 的精确公开 HTTP(S) origin，包含 scheme、同一 hostname 和可选 port，
+  不含尾斜杠、路径、query 或 fragment；它校验 request URL、Host、可选 Origin 与 Location；
 - 域名变化只更新环境变量和后端绑定，不改变 React、CSS、路由或构建选择；
 - 浏览器不读取该变量，也不把它写入 URL、body、React state、localStorage 或公开响应；
 - BFF 对每个后端上游（System、User、Hub、Billing、Agent 等）统一生成标准 RFC 7239 header：
@@ -143,6 +146,7 @@ Chat 不在 Web 内部复制一套业务接口。浏览器始终访问同源 `/a
 
 ```dotenv
 # kokoro-app（仅服务端）
+KOKORO_WEB_ORIGIN="http://dev.kokoro.localhost:3000"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
 KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-secret>"
@@ -200,6 +204,7 @@ git push origin v1.0.0
 
 ```dotenv
 KOKORO_DOMAIN="app.example.com"
+KOKORO_WEB_ORIGIN="https://app.example.com"
 KOKORO_WEB_SESSION_SECRET="<secret>"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
 KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
@@ -236,6 +241,7 @@ Cloudflare Build variables/secrets 配置：
 
 ```text
 KOKORO_DOMAIN
+KOKORO_WEB_ORIGIN                  # exact public origin for /iam admission and Location
 KOKORO_WEB_SESSION_SECRET
 KOKORO_BFF_BASE_URL                   # independent server-only business entry
 KOKORO_IAM_BASE_URL                  # explicit auth service

@@ -1,6 +1,7 @@
 # Kokoro User Web 技术设计
 
-状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2 仅完成设计门，源码与组合验收尚未完成。
+状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay 已在工作树实现并待 Root
+验收；W1C-2B Auth.js、交互 POST、Product Session 与完整组合验收尚未完成。
 
 ## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
 
@@ -11,13 +12,13 @@
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 最新已发布 commit `1fae01e309aed26439ae5f172a70551621107222`，其
+BFF relay 最新已发布 commit `cd1c2600ea2a6e0716b07628822a49653964675a`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`cbb62a48c8c7cfa1b9feff38694f76ad5da433d094780fcc6be282495d580fe0`；policy version `1.0.0`
-固定 IAM owner commit `c9a277213ade41b9225ab0f158b89092d1869a83`。该 pin 已随 IAM test-only
-fixture 更新，但 Web 尚未 vendor policy snapshot 或通过 consumer drift/真实 Web→BFF→IAM 链。
-实现时以 Root 最终集成选定的 BFF commit、policy blob digest、IAM allowlist/snapshot digest 锁定
-只读 snapshot；若上游再发布须重新核验，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
+`457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；policy version `1.0.0`
+固定 IAM owner commit `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`。该 pin 已随 IAM test-only
+fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
+但真实 Web→BFF→IAM 链与 Auth.js 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
+digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
 
 ### Owner、组件与调用方向
 
@@ -76,11 +77,20 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
 ### `/iam` 和业务代理的安全边界
 
 - Web 从最终固定 BFF policy 的 path+method 白名单判定 `/iam/*`；`/.well-known/*`、`/jwks` 等 issuer
-  路由只能作为 `/iam` 下的原生协议路由。拒绝未知/大小写/编码/双斜线 alias、任意 Host/Location、
-  CRLF、超限 query/header/body；不自动跟随 redirect。Web 原样保留合法 status、Location、
+  路由只能作为 `/iam` 下的原生协议路由。W1C-2A 的固定 server-only `KOKORO_WEB_ORIGIN` 必须是精确
+  HTTP(S) origin（scheme、host、可选 port，无尾斜杠/路径/query/fragment）；请求 URL origin、Host 与可选
+  Origin 均须和它匹配，Location 也只相对该固定 origin 验证，不从浏览器 Host 推导。handler 可见的未知、
+  大小写、编码 route alias，以及上游 Location 中的 `%`、dot segment、双斜线、backslash 均拒绝；真实
+  Next HTTP 边界会在 handler 前把 dot/encoded-dot 输入规范化成同一个 canonical route，并对双斜线返回
+  308、编码 route 名返回 404，因此文档不把框架前不可见的原始输入冒称为 handler 拒绝。任一情况都不扩张
+  固定 allowlist、身份或响应内容。CRLF、超限 query/header/body 同样拒绝；不自动跟随 redirect。Web 原样
+  保留合法 status、Location、
   Cache-Control、Content-Type、Retry-After、logout 安全 header 和多个 `Set-Cookie`，不把 OAuth 协议
   包进 Product `{data}`/`{error}` envelope。BFF policy 限制的 8 KiB query、64 KiB request、
   16 KiB header、1 MiB response、5 s duration 是 Web 不得放宽的上限；浏览器取消传播到 BFF。
+  W1C-2A GET 不承载请求体；非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或可观察 Request body
+  都在 BFF socket 前拒绝。policy 保留的三个 `/auth/*` 交互 Location 只是 2B 目标，页面在 2A 尚未安装，
+  authorize 跳转可能得到 Web 404，不能将 relay 可达冒充登录可用。
 - 入站浏览器的 Cookie 仅逐名保留 IAM 发布 snapshot 的 `kokoro-issuer.*` 与 production
   `__Secure-kokoro-issuer.*`；出站 `Set-Cookie` 再按同一 snapshot 与精确 `Path=/iam` 校验，logout
   confirmation cookie 只允许 `Path=/iam/oauth2/end-session/confirm`。Product Session/Auth.js cookie、
@@ -118,7 +128,9 @@ token/session 权威事实；业务事务、幂等 receipt 与 durable AG-UI cur
 与业务 mutation 不做猜测性重试。错误映射不得泄露 authorization code、token、secret、cookie、IAM 原文堆栈；日志只含
 request_id、operation、result、duration 等非敏感字段。
 
-实施与验收顺序：先核验 BFF policy 最终 commit/blob digest、Web vendor snapshot 和 drift/负例；再做
+实施与验收顺序：W1C-2A 已用 Web contract test 核验 vendor snapshot 的固定 digest、provenance、结构
+不变量与篡改负例，并用真实 Next HTTP 测试记录 canonicalization；Root 仍负责从固定 BFF commit blob
+复核源字节。后续再做
 `tests/server/{oidc-provider,product-session-store}`、`tests/system/{iam-relay-http,auth-browser-login}`、现有
 proxy/architecture/UI/Playwright 回归；执行 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、
 `pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm test:e2e`，最后由 Root 在隔离 fixture 进行真实
