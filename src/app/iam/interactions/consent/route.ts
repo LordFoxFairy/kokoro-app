@@ -4,6 +4,7 @@ import {
   interactionMethodNotAllowed, interactionNavigation, interactionUpstreamHeaders, prepareInteraction,
 } from "@/lib/server/iam-interaction-route"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
+import { validIamRpCallbackNavigation } from "@/lib/server/iam-relay-response"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -46,7 +47,7 @@ function unavailableCallback(upstream: IamRelayUpstream, webOrigin: string): boo
       location = fields.url
     } catch { return false }
   }
-  return typeof location === "string" &&
+  return typeof location === "string" && !validIamRpCallbackNavigation(location, webOrigin) &&
     (location.startsWith(`${webOrigin}/api/auth/callback/kokoro-iam?`) ||
       location.startsWith("/api/auth/callback/kokoro-iam?")) &&
     !location.includes("#") && !location.includes("\\") && Buffer.byteLength(location) <= IAM_RELAY_POLICY.maxQueryBytes

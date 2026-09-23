@@ -40,6 +40,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `iam-relay-transport.ts`：IAM 原生 HTTP 专用 transport，保持多个 `Set-Cookie`，实施 deadline、取消和
   header/body 限额；仅受控交互使用 POST，不复用会合并 cookie 的 Product transport。
 - `iam-relay-response.ts`：原生 status/header/body、Location 与 issuer `Set-Cookie` 的出站校验。
+- `oidc-provider.ts`：W1C-2C RP-only 固定 provider/EdDSA、验证型 `client.callback` 与 server-only Basic/Bearer backchannel；不建立 Product Session。
+- `oidc-rp-transaction.ts`：300 秒 Redis state 摘要、RP cookie 绑定、原子一次消费及回调清理。
+- `oidc-bff-agent.ts`：token/userinfo/JWKS 每请求独立 5 秒绝对 deadline、响应头/正文 1 MiB 上限与浏览器 abort 连接取消。
 
 ## 运行时规则
 
@@ -70,8 +73,8 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
 - `src/app/api/shared/[id]`：公共分享只读代理；不需要用户信封，但仍携带 `web-bff` service auth
   和部署 RFC 7239 `Forwarded`，因此上游不会被匿名公网直接暴露。
 - `src/app/iam/[...path]`：只读 browser GET relay；直接 browser POST、userinfo、end-session 与未知路由
-  fail closed。`src/app/auth/sign-in/route.ts` 是唯一已接线 Web-owned sign-in POST + CSRF；select-tenant、
-  consent、Auth.js/server-only 凭据和 Product Session 不在 W1C-2B-1 实现。
+  fail closed。`src/app/auth/sign-in/route.ts` 与静态 `/iam/interactions/*` 已接线 Web-owned 表单；
+  本工作树 `/api/auth/[...nextauth]` 仅 RP transaction/callback，不签发 Product Session。
 
 ### Chat 与业务承接
 

@@ -887,20 +887,21 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths.splice(0)).toEqual(["/iam/oauth2/consent"])
   })
 
-  it("withholds even a native 302 to the not-yet-installed fixed RP callback", async () => {
+  it("forwards a native 302 only to the installed fixed RP callback with issuer cookies", async () => {
     const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
     consentStatus = 302
-    consentLocation = "/api/auth/callback/kokoro-iam?code=secret-code"
+    consentLocation = "/api/auth/callback/kokoro-iam?code=secret-code&state=secret-state-123456"
     consentCookies = ["kokoro-issuer.session_data=secret; Path=/iam; HttpOnly; SameSite=Lax"]
     const proof = await interactionProof(path)
     const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
       origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
     })
-    expect(result.status).toBe(503)
-    expect(JSON.parse(result.body)).toMatchObject({ error: { code: "rp_callback_unavailable" } })
+    expect(result.status).toBe(302)
     expect(result.body).not.toContain("secret-code")
-    expect(result.headers.location).toBeUndefined()
-    expect(result.headers["set-cookie"]).toBeUndefined()
+    expect(result.headers.location).toBe(consentLocation)
+    expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_data=secret;"),
+    ]))
   })
 
   it.each([401, 429, 503])("sanitizes consent owner %i without response body or issuer cookies", async (status) => {

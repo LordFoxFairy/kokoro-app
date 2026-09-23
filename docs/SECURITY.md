@@ -3,13 +3,19 @@
 状态：当前控制与目标缺口，2026-09-23。
 
 W1C-2B-1 依赖决策：精确固定 `redis@5.12.1`，只由 server-only
-`src/lib/server/iam-interaction-csrf.ts` 使用；`KOKORO_WEB_REDIS_URL` 不带 `NEXT_PUBLIC_`，
+`src/lib/server/iam-interaction-csrf.ts` 与本工作树 2C RP transaction 的 `oidc-rp-transaction.ts` 使用；`KOKORO_WEB_REDIS_URL` 不带 `NEXT_PUBLIC_`，
 只存 Web sign-in CSRF token 摘要与目标 POST method/交互绑定摘要、短 TTL，一次性 `GETDEL`，故障拒绝。
 `/auth/sign-in` POST 精确 Origin、Host、Cookie/hidden token/签名 query 后才连接 BFF；直接 `/iam/*`
 browser POST 仍拒绝。Web 不读写 IAM/BFF Redis key，不清空共享实例。中间 IAM sign-in JSON token
 不发浏览器；sign-in 失败的原始 body/issuer cookie 也不透传。IAM 200 JSON continuation 只在精确
-redirect shape/同源允许路径校验后转成 303，合法 issuer cookies 保持多个 Set-Cookie。tenant/consent、RP/Product Session 与旧
-IAM 直连尚未切换，不以本片宣称登录安全闭环。
+redirect shape/同源允许路径校验后转成 303，合法 issuer cookies 保持多个 Set-Cookie。2B-2 tenant/consent 已发布；
+本工作树 2C 仅 RP 验证候选，Product Session 与旧 IAM 直连尚未切换，不宣称登录安全闭环。
+
+2C RP-only 候选精确固定 issuer/client/callback/resource、EdDSA ID token 算法，Redis 300 秒 state
+摘要一次消费并绑定 HttpOnly state/PKCE/nonce cookie；BFF token/userinfo/JWKS 每请求独立 5 秒绝对
+deadline、响应头/正文 1 MiB 限额，超限销毁连接。验证成功也只报 `503 product_session_unavailable`，
+清除 RP cookie，不发可用 session/token。`NEXTAUTH_URL` 必须精确等于固定 Web origin 加 `/api/auth`；
+`KOKORO_OIDC_CLIENT_SECRET` 与 `KOKORO_WEB_AUTH_SECRET` 只在 server 读取，禁止 `NEXT_PUBLIC_` 前缀。
 
 ## 1. Trust boundary
 

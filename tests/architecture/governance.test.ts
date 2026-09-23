@@ -50,7 +50,7 @@ describe("Web governance boundary", () => {
     expect(await exists("contract/openapi")).toBe(false)
   })
 
-  it("keeps Web free of database ownership and restricts Redis to IAM CSRF coordination", async () => {
+  it("keeps Web free of database ownership and restricts Redis to server-only IAM/RP transaction coordination", async () => {
     const packageSchema = z.object({
       dependencies: z.record(z.string()).optional(),
       devDependencies: z.record(z.string()).optional(),
@@ -64,6 +64,8 @@ describe("Web governance boundary", () => {
       expect(dependencies).not.toHaveProperty(dependency)
     }
     expect(parsed.dependencies?.redis).toBe("5.12.1")
+    expect(parsed.dependencies?.["next-auth"]).toBe("4.24.15")
+    expect(parsed.dependencies?.["openid-client"]).toBe("5.7.1")
     const sourceRoot = path.join(root, "src")
     const entries = await readdir(sourceRoot, { recursive: true })
     const redisImports: string[] = []
@@ -72,8 +74,13 @@ describe("Web governance boundary", () => {
       const source = await readFile(path.join(sourceRoot, entry), "utf8")
       if (/\b(?:from\s*["']redis["']|(?:import|require)\s*\(\s*["']redis["'])/u.test(source)) redisImports.push(entry)
     }
-    expect(redisImports).toEqual([path.join("lib", "server", "iam-interaction-csrf.ts")])
-    expect(await readFile(path.join(sourceRoot, redisImports[0] ?? ""), "utf8")).not.toContain('"use client"')
+    expect(redisImports.sort()).toEqual([
+      path.join("lib", "server", "iam-interaction-csrf.ts"),
+      path.join("lib", "server", "oidc-rp-transaction.ts"),
+    ])
+    for (const entry of redisImports) {
+      expect(await readFile(path.join(sourceRoot, entry), "utf8")).not.toContain('"use client"')
+    }
   })
 
   it("pins the safe TypeScript catch boundary explicitly", async () => {

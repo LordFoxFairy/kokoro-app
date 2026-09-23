@@ -1,27 +1,45 @@
 # Kokoro User Web 技术设计
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
-已发布；W1C-2B-2 tenant/consent 已实现，Auth.js RP、Product Session 与完整组合验收尚未完成。
+已发布；W1C-2B-2 tenant/consent 已发布。本工作树 W1C-2C RP-only 候选已实现，Product Session 与真实 IAM 组合验收尚未完成。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
 自有 Redis key 保存随机 token 摘要对应的目标 POST method/原始 query/issuer-cookie 绑定摘要，TTL 300 秒；POST
 精确 Origin、Host、URL、Cookie/hidden token 配对后以 `GETDEL` 原子消耗，Redis 故障拒绝。
 `redis@5.12.1` 与本组合 BFF 版本对齐并固定在 manifest/lockfile；仅 server-only
-`src/lib/server/iam-interaction-csrf.ts` 静态引入，架构测试限制 browser/import 越界。
+`src/lib/server/iam-interaction-csrf.ts` 与 2C 的 `oidc-rp-transaction.ts` 静态引入，架构测试限制 browser/import 越界。
 `KOKORO_WEB_REDIS_URL` 仅服务端读取，Web origin 哈希隔离 key 前缀。不重签/归一化 IAM query，
 中间 sign-in 失败仅返回受控 401/429/503，不透传原文 body/cookie，也不调用 continue。成功的
 continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,url}` 必须通过精确 shape、
 固定 Web origin 与允许交互路径校验，再转成无 body 的浏览器 303 导航，合法多 issuer cookie 保留。
-测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。2B-2 候选新增
-`/auth/*` 外层引导与 `/iam/interactions/*` 真正 tenant/consent 表单；Auth.js RP、Product Session
-仍属后续切片。
+测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。已发布的 2B-2 新增
+`/auth/*` 外层引导与 `/iam/interactions/*` 真正 tenant/consent 表单；Product Session 仍属后续切片。
+
+W1C-2C 第一切片的**当前候选实现**仅安装 RP transaction、callback、经固定 BFF relay 的 server-only token/userinfo。
+Code+S256、state、nonce、固定 issuer/client/redirect URI/resource 验证成功后，因 Product Session
+尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；不建立可用 Auth.js JWT 或旧 sealed session，
+不把 token、code、userinfo 正文或上游错误返回浏览器。Redis 仅保存一次性 RP state 摘要与短期事务绑定，
+不保存 token/PII；刷新、退出、普通 BFF Bearer 代理及旧路径删除留后续切片。
+受控入口拒绝浏览器覆盖 `resource`、`scope`、`client_id`、`redirect_uri`、`callbackUrl`（含重复键），
+固定 Web origin、`${KOKORO_WEB_ORIGIN}/iam` issuer、单 provider `kokoro-iam` 与唯一
+`resource=https://kokoro.dev/resources/iam-internal`。Auth.js v4 自定义 `token.request` 必须
+调用验证型 `openid-client` `client.callback(..., checks, {exchangeBody:{resource}})`；仅直接构造
+`TokenSet` 不执行 ID token 签名/issuer/audience/nonce 校验。token Basic 与 userinfo Bearer 仅在
+server-only BFF backchannel 加入，userinfo `sub` 与已验证 ID token `sub` 一致；浏览器直打
+`/iam/oauth2/token|userinfo` 仍拒绝。Auth.js CSRF 与精确 Origin 叠加，Redis state `SET NX`
+登记、`GETDEL` 一次消费，失联拒绝；回调/code 重放、错误与超时均不建会话。
+IAM 实际 ID token 签名算法固定为 EdDSA；Auth.js client metadata 显式 pin `id_token_signed_response_alg=EdDSA`，
+真实 Next fixture 同时提供 Ed25519 与 RSA JWK，RS256 即使签名正确也拒绝。token、userinfo、JWKS
+分别经独立受限 Node Agent，绝对 5 秒和响应头/正文累计 1 MiB 上限，超限/慢滴流销毁 socket；
+Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器中断时当前 BFF socket 即销毁、
+后续 backchannel 不发起；不改 `openid-client` 全局默认或绕开验证型 callback。
 
 ## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
 
 ### 当前事实与发布前置
 
-当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 的 `src/lib/server/auth.ts` 仍直接调用
+当前 Web 基线 `14e23e602a5631009584d84f58871e51d32b821c` 的 `src/lib/server/auth.ts` 仍直接调用
 `KOKORO_IAM_BASE_URL` 的 magic-link/refresh/team-session；`session-envelope.ts` 保存旧 sealed session，
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
@@ -67,7 +85,7 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    `client_secret_basic`、`require_pkce=true`、`enable_end_session=true`、精确 Web callback/post-logout URI、
    `openid profile email offline_access iam:session-authorization.verify` scopes 和 internal resource binding。
    issuer/discovery、`IAM_ISSUER_URL` 与 Web origin 必须精确匹配；不从浏览器 Host 推导 issuer。
-2. Auth.js v4（计划候选 `4.24.15`，安装前重核 Node 22/Next 16 兼容与 lockfile）执行 Authorization Code
+2. Auth.js v4（本工作树精确固定 `next-auth@4.24.15`、`openid-client@5.7.1`，Node 22/Next 16 构建与真实 Next HTTP 已验证）执行 Authorization Code
    + S256 PKCE，保存并验证 state/nonce/PKCE；登录页、租户选择页、同意页承接 IAM 原生带签名 query，
    不消费、不重签 IAM 参数。callback code 单次使用并换取 token；失败清理 RP transaction 且不建立会话。
 3. authorize、token、refresh 请求均发送**恰好一个**
@@ -75,7 +93,7 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    Auth.js v4 默认 callback 不保证 token request 带 resource，须以受限 `token.request`/OIDC client
    `exchangeBody` 和真实 wire 测试证明；refresh 由 Web server 显式 POST，使用 Basic 与唯一 resource。
    Bearer 的 audience、issuer、scope、subject/session 由 IAM/BFF 验证，不以 Web 解码结果授权。
-4. callback 成功后 Web 建立 server-only Product Session：Auth.js 加密 HttpOnly JWT cookie 内可承载
+4. **后续 Product Session 切片**在 callback 成功后建立 server-only Product Session：Auth.js 加密 HttpOnly JWT cookie 内可承载
    server-only access/refresh token，但公开 `session` callback 只输出非敏感展示字段；Redis 记录当前
    generation。请求先检查 Redis 当前 generation/tombstone，再对 BFF 传唯一 Bearer。并发 refresh 使用
    `active(g) → refreshing(g,reservation) → active(g+1)` 两次受限 CAS：先预留唯一 refresh 权，再请求 IAM，
@@ -105,8 +123,8 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   包进 Product `{data}`/`{error}` envelope。BFF policy 限制的 8 KiB query、64 KiB request、
   16 KiB header、1 MiB response、5 s duration 是 Web 不得放宽的上限；浏览器取消传播到 BFF。
   W1C-2A GET 不承载请求体；非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或可观察 Request body
-  都在 BFF socket 前拒绝。policy 保留的三个 `/auth/*` 交互 Location 只是 2B 目标，页面在 2A 尚未安装，
-  authorize 跳转可能得到 Web 404，不能将 relay 可达冒充登录可用。
+  都在 BFF socket 前拒绝。policy 保留的三个 `/auth/*` 交互 Location 在 2A 尚未安装；
+  2B-1/2B-2 现已安装三页，但 RP callback 在 2C 前仍受控 503，不能将 relay 可达冒充登录可用。
 - 入站浏览器的 Cookie 仅逐名保留 IAM 发布 snapshot 的 `kokoro-issuer.*` 与 production
   `__Secure-kokoro-issuer.*`；出站 `Set-Cookie` 再按同一 snapshot 与精确 `Path=/iam` 校验，logout
   confirmation cookie 只允许 `Path=/iam/oauth2/end-session/confirm`。Product Session/Auth.js cookie、
@@ -140,8 +158,8 @@ W1C-2B-2 的 IAM 固定外层 `/auth/select-tenant|consent` 只安装严格 GET�
 不接受任何浏览器 scope 字段，只在明确 Agree 且一次性 CSRF/原始 query 匹配后提交
 `{accept:true,scope,oauth_query}`，由 IAM 对完整 query 的签名、到期和 scope 子集作最终判定。
 两路中间 200 `{redirect:true,url}`/302 限定固定 Web origin 的三条交互路径，合法多 issuer
-`Set-Cookie` 原生保留，错误 body/cookie 一律清洗。IAM 最终指向未来固定
-`/api/auth/callback/kokoro-iam` 时，当前没有 Auth.js RP，Web 只回受控 503，不泄露 code、
+`Set-Cookie` 原生保留，错误 body/cookie 一律清洗。IAM 最终指向固定
+`/api/auth/callback/kokoro-iam` 时，2C 前没有 Auth.js RP，Web 只回受控 503，不泄露 code、
 Location、Set-Cookie；回调导航待 RP 切片安装和验证后才开放。
 - `/api/{session,hub,agents,scheduled-tasks,billing,team,...}` 的受保护 BFF `/v1` 路由统一从 Product
   Session 提取**单一** access Bearer，另加 Web service identity；删去 `x-kokoro-namespace`、

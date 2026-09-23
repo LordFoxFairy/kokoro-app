@@ -4,7 +4,7 @@
 
 ## 1. 当前边界
 
-- 浏览器只访问同源 `/api/*`；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、Redis、ORM、migration 或任意 owner 数据库事实。
+- 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；仅在共享 Redis 自有 namespace 保存短期 CSRF/RP 事务摘要。
 - Session cookie 使用 AES-256-GCM 信封，设置为 `HttpOnly`、`SameSite=Lax`，生产环境额外设置 `Secure`。浏览器 cookie 不透传给业务上游。
 - Product 上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。W1C-2A `/iam` 原生协议例外使用独立 transport，避免合并多个 `Set-Cookie`。
 - `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: no-store` 与 `Vary: Cookie`。
@@ -49,6 +49,17 @@
   四条新外/内层 route 的 HEAD/OPTIONS 显式 405，零 BFF/CSRF Redis 写入；当 IAM 对
   `session_data` 下发 `Max-Age=0` 或已过期 `Expires` 删除时，Web 的后续 CSRF issuer 绑定与
   浏览器 CookieJar 一致，只保留有效 `session_token`，且有效 `Max-Age` 优先于旧 `Expires`。
+- 本工作树 W1C-2C RP-only **候选未发布**：固定 `/api/auth/[...nextauth]` 只开放 CSRF GET、
+  `kokoro-iam` signin POST 与 callback GET；精确 Origin/Host、Auth.js CSRF、固定 issuer/client/
+  callback/resource、S256/state/nonce 与 300 秒 Redis `SET NX`/`GETDEL` 绑定。签名算法显式 pin
+  EdDSA；自定义 token request 调用验证型 `openid-client` callback，server-only Basic token、
+  Bearer userinfo 与 JWKS 仅走固定 BFF backchannel，每次独立 agent 限制绝对 5 秒、响应头/正文
+  1 MiB，并传播浏览器 `request.signal`：callback 断连销毁当前 BFF socket 且不继续后续 backchannel。
+  真实 Next+BFF fixture 覆盖签名/issuer/audience/nonce/过期/算法、userinfo sub、CSRF、
+  竞态重放、body/响应超限与慢滴流；验证成功仍只返回受控
+  `503 product_session_unavailable`，清 RP cookie，不签发可用 Auth.js/旧 Product Session。
+  旧 magic-link、refresh、logout 与普通 `/v1` Bearer 代理仍未迁移；该 fixture 不是 IAM owner 签名
+  组合验收，更不是首次登录完成。
 
 ## 2. 已落地的质量门
 

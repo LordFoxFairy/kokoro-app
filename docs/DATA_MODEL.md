@@ -1,12 +1,12 @@
 # Kokoro User Web 数据模型与 Owner
 
-状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；目标尚未实现/验收。
+状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 为本工作树候选，Product Session 尚未实现/验收。
 
 已发布的 W1C-2B-1 只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
 保存目标路径、POST method、原始签名 query、issuer-cookie 组合摘要，TTL 300 秒；`GETDEL` 是一次性消费原子边界。
 随机 token 仅见 HttpOnly `Path=/auth/sign-in` cookie 与隐藏字段，不存 Redis 明文；Redis 故障
 fail closed。测试只清理本次生成 token 的精确 key，不扫描同前缀的其他 key。Product Session generation、CAS、
-tombstone 与 Auth.js transaction 仍未实现，Web 仍无 SQL schema。
+tombstone 在本片仍未实现，Web 仍无 SQL schema。
 
 W1C-2B-2 将同一 token 机制扩展到内层 `Path=/iam/interactions/select-tenant` 与
 `Path=/iam/interactions/consent`；IAM issuer cookie 仍保持 `Path=/iam`，因此原始
@@ -14,11 +14,19 @@ W1C-2B-2 将同一 token 机制扩展到内层 `Path=/iam/interactions/select-te
 绑定 owner GET 返回的 active ID 候选串，POST 在消耗 token 后再次从 owner 列表确认当前资格。
 Redis 只保存 token 摘要与绑定摘要，不存候选组织名、scope 明文、IAM session 或授权事实。
 
+W1C-2C 第一切片**当前候选实现**另用 Web 自有 `kokoro:web:oidc-state:<Web-origin-hash>:<state-sha256>`
+短 TTL key 原子登记/消费 RP state，绑定固定 provider、callback 与 RP transaction cookie 摘要；
+Redis 不保存 code、access/refresh/ID token、client secret、userinfo 或 PII。Auth.js 的 HttpOnly
+state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；Product Session 与其 generation/
+tombstone 尚未安装，验证成功回调也不建立可用 session。
+固定 TTL 300 秒；`SET NX` 防 state 碰撞，`GETDEL` 保证同 state 并发最多一次 code exchange。
+Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合摘要，无 token 或明文 userinfo。
+
 ## W1C-2：Web Product Session 数据与事务边界
 
 ### 当前态与目标 owner
 
-当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 使用 `kokoro_session`
+当前 Web 基线 `14e23e602a5631009584d84f58871e51d32b821c` 使用 `kokoro_session`
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
@@ -61,7 +69,8 @@ Web cookie 加密材料只在 server-only 配置，轮换时仍须 Redis 当前 
 ### 状态转换、并发与恢复
 
 ```text
-OIDC transaction pending ──valid code/state/nonce/PKCE──> Product Session active(g)
+OIDC transaction pending ──valid code/state/nonce/PKCE + userinfo（2C）──> RP verified / no Product Session / controlled 503（终态，丢弃 token）
+后续新的 OIDC transaction ──同等验证 + 会话协调成功──> Product Session active(g)
 active(g) ──reservation CAS──> refreshing(g,reservation)
 refreshing(g,reservation) ──IAM exchange success + finalize CAS──> active(g+1)
 refreshing(g,reservation) ──error/deadline/unknown/finalize failure──> revoked

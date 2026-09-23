@@ -21,6 +21,19 @@ function rawLocationPath(value: string): string | null {
   return value.slice(pathStart, queryStart < 0 ? undefined : queryStart)
 }
 
+export function validIamRpCallbackNavigation(value: string, webOrigin: string): boolean {
+  if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
+  if (rawLocationPath(value) !== "/api/auth/callback/kokoro-iam") return false
+  try {
+    const target = new URL(value, webOrigin)
+    if (target.origin !== webOrigin || target.username !== "" || target.password !== "") return false
+    const query = target.searchParams
+    return [...query.keys()].length === 2 && query.getAll("code").length === 1 && query.getAll("state").length === 1 &&
+      /^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "") &&
+      /^[A-Za-z0-9_-]{16,256}$/u.test(query.get("state") ?? "")
+  } catch { return false }
+}
+
 function allowedLocation(value: string, webOrigin: string): boolean {
   if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
   const rawPath = rawLocationPath(value)
@@ -37,6 +50,7 @@ function allowedLocation(value: string, webOrigin: string): boolean {
       target.hash !== "" || target.pathname.includes("%")
     ) return false
     if (IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)) return true
+    if (validIamRpCallbackNavigation(value, webOrigin)) return true
     return resolveBrowserIamGet(`${target.pathname}${target.search}`, "GET") !== null
   } catch {
     return false
@@ -47,7 +61,8 @@ export function validIamInteractionNavigation(value: string, webOrigin: string):
   if (!/^https?:\/\//u.test(value) || !allowedLocation(value, webOrigin)) return false
   try {
     const target = new URL(value)
-    return IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname) && target.search.length > 1
+    return (IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname) && target.search.length > 1) ||
+      validIamRpCallbackNavigation(value, webOrigin)
   } catch {
     return false
   }
