@@ -21,9 +21,9 @@
   W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
   保持原生 status/header/body 与多个
   `Set-Cookie`，并实施 issuer-cookie 白名单、16 KiB header、1 MiB response、5 s deadline 与取消传播。
-- 只读 snapshot 固定 BFF `2d951e1a56b5720431963d728b74f662e2379999`、IAM
-  `606d9090c2282e13370e17a20379a32629df9722` 和 policy SHA-256
-  `b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`；Web 不编辑 owner policy，
+- 只读 snapshot 固定 BFF `eb7ded2386efd9a10905843a7a5aedff9ac72df6`、IAM
+  `65b0fd969989d4044fae640a8414d9c2dcf41c3b` 和 policy SHA-256
+  `05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
 - 已发布的 W1C-2B-1 新增 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
   5 分钟一次性 CSRF 摘要/目标 POST method/issuer-cookie 绑定，POST 必须精确同源 Origin、Cookie+hidden token 与原始 query
@@ -119,8 +119,8 @@ BFF 仍是 HTTP fixture，
 未做真实 IAM/RP 闭环或 GitHub Actions runner 验证。测试覆盖 tenant 列表信任、重核/越界、
 签名 query 变化、Origin/CSRF/重放、consent 拒绝/伪造 query owner 401、恶意导航、native
 302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。本片仅机械 re-pin BFF policy
-`2d951e1a56b5720431963d728b74f662e2379999`/IAM
-`606d9090c2282e13370e17a20379a32629df9722`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
+`eb7ded2386efd9a10905843a7a5aedff9ac72df6`/IAM
+`65b0fd969989d4044fae640a8414d9c2dcf41c3b`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
 语义与前 pin 相同。
 
 ## 4. 尚未闭合的边界

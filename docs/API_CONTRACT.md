@@ -8,10 +8,10 @@ W1C-2B-1 sign-in、W1C-2B-2 tenant/consent 与 2C RP-only 已发布；真实 IAM
 ### 版本、来源和可见性
 
 当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST 与 2C Auth.js Code+S256 RP-only 均已发布；完整 Web→BFF→IAM 与 Product Session 仍待验收。
-BFF relay 固定policy来源 `2d951e1a56b5720431963d728b74f662e2379999`，其
+BFF relay 固定policy来源 `eb7ded2386efd9a10905843a7a5aedff9ac72df6`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`，
-引用 IAM owner `606d9090c2282e13370e17a20379a32629df9722`、allowlist SHA-256
+`05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`，
+引用 IAM owner `65b0fd969989d4044fae640a8414d9c2dcf41c3b`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始

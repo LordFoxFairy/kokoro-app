@@ -46,10 +46,10 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `2d951e1a56b5720431963d728b74f662e2379999`，其
+BFF relay 固定policy来源 commit `eb7ded2386efd9a10905843a7a5aedff9ac72df6`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`；policy version `1.0.0`
-固定 IAM owner commit `606d9090c2282e13370e17a20379a32629df9722`。该 pin 已随 IAM test-only
+`05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`；policy version `1.0.0`
+固定 IAM owner commit `65b0fd969989d4044fae640a8414d9c2dcf41c3b`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
 但真实 Web→BFF→IAM 链与 Product Session 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
 digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
