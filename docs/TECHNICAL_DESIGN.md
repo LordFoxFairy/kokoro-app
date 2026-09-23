@@ -11,10 +11,10 @@
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 最新已发布 commit `804a5832c066ce60dde9f4592856ac40ce20f402`，其
+BFF relay 最新已发布 commit `1fae01e309aed26439ae5f172a70551621107222`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`8f57df32a43fbb63e9a515166cf9d7e78b6f810f29aad74432d101f399656053`；policy version `1.0.0`
-固定 IAM owner commit `f0bb18e6fee8f4b1ee9a1c2d9e7aa2eb4621e614`。该 pin 已随 IAM test-only
+`cbb62a48c8c7cfa1b9feff38694f76ad5da433d094780fcc6be282495d580fe0`；policy version `1.0.0`
+固定 IAM owner commit `c9a277213ade41b9225ab0f158b89092d1869a83`。该 pin 已随 IAM test-only
 fixture 更新，但 Web 尚未 vendor policy snapshot 或通过 consumer drift/真实 Web→BFF→IAM 链。
 实现时以 Root 最终集成选定的 BFF commit、policy blob digest、IAM allowlist/snapshot digest 锁定
 只读 snapshot；若上游再发布须重新核验，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。

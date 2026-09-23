@@ -8,10 +8,10 @@
 
 当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 仍有 IAM magic-link/
 team-session 直连和旧 sealed session；下面的 Code+S256 与 `/iam` 是目标，不是当前可用 API。
-BFF relay 最新已发布 `804a5832c066ce60dde9f4592856ac40ce20f402`，其
+BFF relay 最新已发布 `1fae01e309aed26439ae5f172a70551621107222`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`8f57df32a43fbb63e9a515166cf9d7e78b6f810f29aad74432d101f399656053`，
-引用 IAM owner `f0bb18e6fee8f4b1ee9a1c2d9e7aa2eb4621e614`、allowlist SHA-256
+`cbb62a48c8c7cfa1b9feff38694f76ad5da433d094780fcc6be282495d580fe0`，
+引用 IAM owner `c9a277213ade41b9225ab0f158b89092d1869a83`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；Root 选定最终集成 commit/digest 后 Web 才 vendor **只读** policy
