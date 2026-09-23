@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises"
+import { access, readFile, readdir } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
@@ -50,7 +50,7 @@ describe("Web governance boundary", () => {
     expect(await exists("contract/openapi")).toBe(false)
   })
 
-  it("keeps Web free of database and Redis ownership", async () => {
+  it("keeps Web free of database ownership and restricts Redis to IAM CSRF coordination", async () => {
     const packageSchema = z.object({
       dependencies: z.record(z.string()).optional(),
       devDependencies: z.record(z.string()).optional(),
@@ -60,15 +60,37 @@ describe("Web governance boundary", () => {
     const dependencies = { ...parsed.dependencies, ...parsed.devDependencies }
 
     expect(await exists("database")).toBe(false)
-    for (const dependency of ["pg", "postgres", "ioredis", "redis", "prisma", "@prisma/client"] as const) {
+    for (const dependency of ["pg", "postgres", "ioredis", "prisma", "@prisma/client"] as const) {
       expect(dependencies).not.toHaveProperty(dependency)
     }
+    expect(parsed.dependencies?.redis).toBe("5.12.1")
+    const sourceRoot = path.join(root, "src")
+    const entries = await readdir(sourceRoot, { recursive: true })
+    const redisImports: string[] = []
+    for (const entry of entries) {
+      if (!/\.tsx?$/u.test(entry)) continue
+      const source = await readFile(path.join(sourceRoot, entry), "utf8")
+      if (/\b(?:from\s*["']redis["']|(?:import|require)\s*\(\s*["']redis["'])/u.test(source)) redisImports.push(entry)
+    }
+    expect(redisImports).toEqual([path.join("lib", "server", "iam-interaction-csrf.ts")])
+    expect(await readFile(path.join(sourceRoot, redisImports[0] ?? ""), "utf8")).not.toContain('"use client"')
   })
 
   it("pins the safe TypeScript catch boundary explicitly", async () => {
     const source = await readFile(path.join(root, "tsconfig.json"), "utf8")
     expect(source).toMatch(/"strict"\s*:\s*true/u)
     expect(source).toMatch(/"useUnknownInCatchVariables"\s*:\s*true/u)
+  })
+
+  it.each(["ci.yml", "cloudflare.yml", "release-image.yml"])("runs %s tests with isolated Redis service", async (name) => {
+    const workflow = await readFile(path.join(root, ".github", "workflows", name), "utf8")
+    const verify = workflow.split(/\n  verify:\n/u)[1]?.split(/\n  (?:deploy|publish):\n/u)[0]
+    expect(verify).toBeDefined()
+    expect(verify).toContain("redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf")
+    expect(verify).toContain("56379:6379")
+    expect(verify).toContain("--health-cmd=\"redis-cli ping\"")
+    expect(verify).toContain("KOKORO_WEB_REDIS_URL: redis://127.0.0.1:56379/9")
+    expect(verify).toContain("pnpm test")
   })
 
   it("provides focused contract and architecture scripts", async () => {

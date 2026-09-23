@@ -23,6 +23,15 @@
   `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec` 和 policy SHA-256
   `457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
+- W1C-2B-1 工作树新增唯一 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
+  5 分钟一次性 CSRF 摘要/目标 POST method/issuer-cookie 绑定，POST 必须精确同源 Origin、Cookie+hidden token 与原始 query
+  匹配，Redis `GETDEL` 原子消费后才向 BFF 的 `/iam/sign-in/email` 与 `/iam/oauth2/continue` 发起两个有界原生
+  POST；IAM 签名仍由 IAM owner 验证。中间 sign-in 响应中的 session token JSON 不返回浏览器；最终继续响应
+  对 IAM 实际 200 `{redirect:true,url}` 严格校验固定 Web origin/允许交互路径后返回 303/Location 与多个
+  issuer `Set-Cookie`；中间 sign-in 失败仅受控 401/429/503 且不调用 continue。直接 browser `/iam/*` POST
+  仍全部拒绝，select-tenant、
+  consent 页面及 Auth.js/Product Session 尚未实现，因此此工作树不构成完整登录流。Redis 依赖精确固定
+  `redis@5.12.1`，`KOKORO_WEB_REDIS_URL` 缺失或 Redis 故障时交互 fail closed，Web 不清理共享 Redis。
 
 ## 2. 已落地的质量门
 
@@ -57,11 +66,22 @@ HTTP 边界的系统测试；它验证 canonical path、evil Host、chunked GET 
 HTTP fixture。全量 Vitest 仍输出既有 jsdom `Not implemented: navigation to another Document` 提示但退出 0；
 本切片未宣称真实 Browser→Web→BFF→IAM 登录闭环。
 
+W1C-2B-1 在基线 `85b4bad25769efcca8f417e0232fdaa6c485bf01` 的未提交工作树使用 Node
+`22.22.2` 执行 `pnpm check`：contract 6 files/52 tests、architecture 4 files/32 tests、lint、
+typecheck、全量 Vitest 135 files/1,295 tests、production build 均通过；`pnpm test:e2e` 原有 6/6
+通过。聚焦真实 Next HTTP 17/17 验证恶意/缺失 Origin、缺失 CSRF、签名 query 变化、重放、错 path 和超限
+均零 BFF socket，正向保留原始 query 至 BFF `oauth2/continue` 并将 IAM 实际 200 JSON 转为
+303/Location/多 Set-Cookie；evil URL/错 shape 以及 sign-in 401/429/503 的敏感 body/cookie 均拒绝透传，
+后者不调用 continue。Redis 测试仅删本次随机 token 的精确 key，预存同前缀 key 不误删，失联清理有限退出。
+该测试的 BFF 是本地 HTTP fixture，**不是 IAM owner 的签名验证证据**。测试后 Web 自有 Redis CSRF key、
+Next 临时目录和进程均为零；GitHub Actions runner、真实 IAM 组合仍待 Root 验收。
+
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；W1C-2A 的只读 GET relay 不等于 Auth.js Code+S256、
-   server-only token/userinfo/end-session、交互 POST CSRF 或 Product Session 已完成，这些必须在后续切片一次性替换旧路径。
+2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；W1C-2B-1 的 sign-in POST/CSRF 不等于 Auth.js
+   Code+S256、server-only token/userinfo/end-session、select-tenant/consent 或 Product Session 已完成，这些必须在
+   后续切片替换旧路径。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
 5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。

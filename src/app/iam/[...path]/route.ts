@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { iamRelayConfig } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
@@ -43,37 +44,6 @@ function rawPathAndQuery(absoluteUrl: string): string | null {
   return pathStart < 0 ? "/" : absoluteUrl.slice(pathStart)
 }
 
-function configuredOrigin(raw: string | undefined, requireCanonicalSpelling: boolean): string | null {
-  const value = raw?.trim()
-  if (!value) return null
-  try {
-    const parsed = new URL(value)
-    if (
-      (parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.username !== "" ||
-      parsed.password !== "" || parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "" ||
-      (requireCanonicalSpelling && value !== parsed.origin)
-    ) return null
-    return parsed.origin
-  } catch {
-    return null
-  }
-}
-
-function relayConfig(env: NodeJS.ProcessEnv): Readonly<{
-  bffOrigin: string
-  webOrigin: string
-  webHost: string
-  secret: string
-  secureCookies: boolean
-}> | null {
-  const rawBase = env.KOKORO_BFF_BASE_URL?.trim()
-  const secret = env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim()
-  const bffOrigin = configuredOrigin(rawBase, false)
-  const webOrigin = configuredOrigin(env.KOKORO_WEB_ORIGIN, true)
-  if (bffOrigin === null || webOrigin === null || !secret) return null
-  return { bffOrigin, webOrigin, webHost: new URL(webOrigin).host, secret, secureCookies: env.NODE_ENV === "production" }
-}
-
 export async function GET(request: Request, context: RouteContext): Promise<Response> {
   const id = requestId(request)
   const url = new URL(request.url)
@@ -90,7 +60,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     return errorResponse("iam_relay_request_too_large", 413, id)
   }
   if (request.headers.has("authorization")) return errorResponse("iam_relay_credential_rejected", 403, id)
-  const config = relayConfig(process.env)
+  const config = iamRelayConfig(process.env)
   if (config === null) return errorResponse("iam_relay_unavailable", 503, id)
   if (url.origin !== config.webOrigin) return errorResponse("iam_relay_origin_rejected", 403, id)
   if (request.headers.get("host") !== config.webHost) return errorResponse("iam_relay_origin_rejected", 403, id)

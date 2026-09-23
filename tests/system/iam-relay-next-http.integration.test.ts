@@ -1,10 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process"
+import { createHash } from "node:crypto"
 import { cp, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { createClient } from "redis"
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+
+import { iamCsrfKeyPrefix } from "@/lib/server/iam-interaction-csrf"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
 
@@ -49,7 +53,7 @@ function rawHttp(
 }
 
 async function waitForNext(port: number, diagnostics: () => string): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       const response = await rawHttp(port, "/iam/jwks")
       if (response.status === 200) return
@@ -88,6 +92,21 @@ async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }
 
+function rawPost(port: number, requestPath: string, body: string, headers: Record<string, string> = {}): Promise<HttpResult> {
+  return new Promise<HttpResult>((resolve, reject) => {
+    const request = httpRequest({
+      hostname: "127.0.0.1", port, path: requestPath, method: "POST",
+      headers: { host: `localhost:${port}`, "content-type": "application/x-www-form-urlencoded", ...headers },
+    }, (response) => {
+      const chunks: Buffer[] = []
+      response.on("data", (chunk: Buffer) => chunks.push(chunk))
+      response.once("end", () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks).toString("utf8") }))
+    })
+    request.once("error", reject)
+    request.end(body)
+  })
+}
+
 async function createIsolatedNextFixture(projectRoot: string): Promise<string> {
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), "kokoro-iam-relay-next-"))
   try {
@@ -112,6 +131,14 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let nextOutput = ""
   let fixtureRoot: string | undefined
   const receivedPaths: string[] = []
+  const receivedBodies: string[] = []
+  const issuedCsrfTokens = new Set<string>()
+  let signInStatus = 200
+  let continueStatus = 200
+  let continueLocation = "/auth/select-tenant?sig=%2BAb"
+  let continueSetCookies: string[] = []
+  let continuePayload: unknown = { redirect: true, url: "" }
+  const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
 
   async function cleanupResources(): Promise<void> {
     const errors: unknown[] = []
@@ -130,6 +157,20 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       fixtureRoot = undefined
       try { await rm(directory, { recursive: true, force: true }) } catch (error) { errors.push(error) }
     }
+    if (nextPort !== 0 && issuedCsrfTokens.size > 0) {
+      const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+      client.on("error", () => undefined)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const prefix = iamCsrfKeyPrefix(`http://localhost:${nextPort}`)
+        const keys = [...issuedCsrfTokens].map((token) => `${prefix}${createHash("sha256").update(token).digest("hex")}`)
+        await Promise.race([
+          (async () => { await client.connect(); await client.del(keys) })(),
+          new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("test Redis cleanup deadline")), 2_000) }),
+        ])
+      } catch (error) { errors.push(error) }
+      finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
+    }
     if (errors.length > 0) throw new AggregateError(errors, "failed to clean IAM relay Next fixture")
   }
 
@@ -139,6 +180,36 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       fixtureRoot = await createIsolatedNextFixture(projectRoot)
       bff = createServer((request, response) => {
         receivedPaths.push(request.url ?? "")
+        if (request.url === "/iam/sign-in/email" || request.url === "/iam/oauth2/continue") {
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            receivedBodies.push(Buffer.concat(chunks).toString("utf8"))
+            if (request.url === "/iam/sign-in/email") {
+              response.writeHead(signInStatus, {
+                "content-type": "application/json",
+                "set-cookie": [
+                  "kokoro-issuer.session_token=opaque; Path=/iam; HttpOnly; SameSite=Lax",
+                  "kokoro-issuer.session_data=opaque-data; Path=/iam; HttpOnly; SameSite=Lax",
+                ],
+              })
+              response.end(signInStatus === 200 ? '{"token":"must-not-reach-browser"}' : '{"error":"sensitive-marker-must-not-reach-browser"}')
+            } else {
+              if (continueStatus === 302) {
+                response.writeHead(302, {
+                  location: continueLocation,
+                  "cache-control": "no-store",
+                  "set-cookie": continueSetCookies,
+                })
+                response.end()
+              } else {
+                response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+                response.end(JSON.stringify(continuePayload))
+              }
+            }
+          })
+          return
+        }
         const payload = JSON.stringify({ keys: [] })
         response.writeHead(200, {
           "content-type": "application/json",
@@ -150,6 +221,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       })
       bffPort = await listen(bff)
       nextPort = await unusedPort()
+      continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
       const nextBin = path.resolve(projectRoot, "node_modules/next/dist/bin/next")
       next = spawn(
         process.execPath,
@@ -161,6 +233,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
             KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
             KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
             KOKORO_INTERNAL_SECRET_WEB_BFF: "next-http-secret",
+            KOKORO_WEB_REDIS_URL: redisUrl,
             NEXT_PUBLIC_SESSION_PREVIEW: "1",
           },
           stdio: ["ignore", "pipe", "pipe"],
@@ -177,11 +250,36 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       }
       throw error
     }
+  }, 60_000)
+
+  beforeEach(() => {
+    receivedPaths.length = 0
+    receivedBodies.length = 0
+    signInStatus = 200
+    continueStatus = 200
+    continueLocation = "/auth/select-tenant?sig=%2BAb"
+    continueSetCookies = []
+    continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
   })
 
-  beforeEach(() => { receivedPaths.length = 0 })
-
   afterAll(cleanupResources)
+
+  async function signInPage(): Promise<HttpResult> {
+    const page = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb")
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    if (token !== undefined) issuedCsrfTokens.add(token)
+    return page
+  }
+
+  async function submitValidSignIn(): Promise<HttpResult> {
+    const page = await signInPage()
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    if (token === undefined || cookie === undefined) throw new Error("sign-in fixture CSRF proof missing")
+    return rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie,
+    })
+  }
 
   it("relays the canonical GET and rejects an untrusted Host without relying on Origin", async () => {
     const canonical = await rawHttp(nextPort, "/iam/jwks")
@@ -220,5 +318,122 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const encodedName = await rawHttp(nextPort, "/iam/oauth2/%61uthorize")
     expect(encodedName.status).toBe(404)
     expect(receivedPaths).toEqual([])
+  })
+
+  it("rejects forged POSTs before the BFF socket and consumes a valid one-time proof", async () => {
+    const signedQuery = "?sig=%2BAb"
+    const page = await signInPage()
+    expect(page.status).toBe(200)
+    expect(receivedPaths).toEqual([])
+    const csrf = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    expect(csrf).toBeDefined()
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    expect(cookie).toBeDefined()
+    const form = `csrf_token=${csrf}&email=user%40example.test&password=secret`
+    const validHeaders = { origin: `http://localhost:${nextPort}`, cookie: cookie ?? "" }
+
+    const evil = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { ...validHeaders, origin: "https://evil.example" })
+    expect(evil.status).toBe(403)
+    const noOrigin = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { cookie: validHeaders.cookie })
+    expect(noOrigin.status).toBe(403)
+    const missing = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, form, { origin: validHeaders.origin })
+    expect(missing.status).toBe(403)
+    const wrongQuery = await rawPost(nextPort, "/auth/sign-in?sig=+Ab", form, validHeaders)
+    expect(wrongQuery.status).toBe(403)
+    const wrongPath = await rawPost(nextPort, "/iam/sign-in/email", form, validHeaders)
+    expect(wrongPath.status).toBe(405)
+    const oversized = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, `${form}&padding=${"x".repeat(65_536)}`, validHeaders)
+    expect(oversized.status).toBe(400)
+    expect(receivedPaths).toEqual([])
+
+    const freshPage = await signInPage()
+    const freshCsrf = freshPage.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const freshCookie = (freshPage.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    expect(freshCsrf).toBeDefined()
+    expect(freshCookie).toBeDefined()
+    const freshForm = `csrf_token=${freshCsrf}&email=user%40example.test&password=secret`
+    const freshHeaders = { origin: validHeaders.origin, cookie: freshCookie ?? "" }
+    const accepted = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, freshForm, freshHeaders)
+    expect(accepted.status).toBe(303)
+    expect(accepted.headers.location).toBe(`http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb`)
+    expect(accepted.body).not.toContain("must-not-reach-browser")
+    expect((accepted.headers["set-cookie"] as string[] | undefined)?.length).toBe(3)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+    expect(JSON.parse(receivedBodies[1] ?? "{}")).toEqual({ postLogin: true, oauth_query: "sig=%2BAb" })
+    const replay = await rawPost(nextPort, `/auth/sign-in${signedQuery}`, freshForm, freshHeaders)
+    expect(replay.status).toBe(403)
+    expect(receivedPaths).toEqual([])
+  })
+
+  it.each([401, 429, 503])("sanitizes sign-in %i before any continuation", async (status) => {
+    signInStatus = status
+    const page = await signInPage()
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie: cookie ?? "",
+    })
+    expect(result.status).toBe(status === 503 ? 503 : status)
+    expect(result.body).not.toContain("sensitive-marker-must-not-reach-browser")
+    expect(result.body).not.toContain("must-not-reach-browser")
+    expect(result.headers["set-cookie"]).toEqual(expect.not.arrayContaining([expect.stringContaining("kokoro-issuer")]))
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
+  })
+
+  it("preserves a native 302 continuation with multiple issuer cookies", async () => {
+    continueStatus = 302
+    continueSetCookies = [
+      "kokoro-issuer.session_data=updated; Path=/iam; HttpOnly; SameSite=Lax",
+      "kokoro-issuer.dont_remember=one; Path=/iam; HttpOnly; SameSite=Lax",
+    ]
+    const result = await submitValidSignIn()
+    expect(result.status).toBe(302)
+    expect(result.headers.location).toBe("/auth/select-tenant?sig=%2BAb")
+    const cookies = result.headers["set-cookie"] as string[] | undefined
+    expect(cookies).toEqual(expect.arrayContaining([
+      expect.stringContaining("kokoro-issuer.session_token=opaque;"),
+      expect.stringContaining("kokoro-issuer.session_data=updated;"),
+      expect.stringContaining("kokoro-issuer.dont_remember=one;"),
+    ]))
+    expect(cookies).toHaveLength(4)
+    expect(result.body).toBe("")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+  })
+
+  it("rejects a native 302 continuation with an unsafe Location without issuer cookies", async () => {
+    continueStatus = 302
+    continueLocation = "https://evil.example/auth/select-tenant?sig=%2BAb"
+    continueSetCookies = ["kokoro-issuer.dont_remember=one; Path=/iam; HttpOnly; SameSite=Lax"]
+    const result = await submitValidSignIn()
+    expect(result.status).toBe(502)
+    expect(result.headers.location).toBeUndefined()
+    expect((result.headers["set-cookie"] as string[] | undefined)?.some((value) => value.includes("kokoro-issuer"))).not.toBe(true)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+  })
+
+  it.each([
+    { redirect: true, url: "https://evil.example/auth/select-tenant?sig=%2BAb" },
+    { redirect: true, url: "http://localhost.evil.example/auth/select-tenant?sig=%2BAb" },
+    { redirect: true, url: "/auth/select-tenant?sig=%2BAb" },
+    { redirect: true, url: "http://localhost:PORT/unknown?sig=%2BAb" },
+    { redirect: true, url: "http://localhost:PORT/auth/%73elect-tenant?sig=%2BAb" },
+    { redirect: true, url: "http://localhost:PORT/auth/../auth/consent?sig=%2BAb" },
+    { redirect: true, url: "http://localhost:PORT/auth/select-tenant" },
+    { redirect: true, url: "http://localhost:PORT/auth/select-tenant?sig=%2BAb#fragment" },
+    { redirect: false, url: "http://localhost:PORT/auth/select-tenant?sig=%2BAb" },
+    { redirect: true, url: "http://localhost:PORT/auth/select-tenant?sig=%2BAb", extra: "drift" },
+  ])("rejects unsafe or drifting continuation JSON %#", async (payload) => {
+    continuePayload = { ...payload, url: payload.url.replace("PORT", String(nextPort)) }
+    const page = await signInPage()
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie: cookie ?? "",
+    })
+    expect(result.status).toBe(502)
+    expect(result.headers.location).toBeUndefined()
+    expect(result.body).not.toContain("must-not-reach-browser")
+    expect((result.headers["set-cookie"] as string[] | undefined)?.some((value) => value.includes("kokoro-issuer"))).not.toBe(true)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
   })
 })

@@ -32,7 +32,8 @@
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
-| `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；其他方法与 server-only 凭据路由拒绝 |
+| `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；直接 browser POST 与 server-only 凭据路由拒绝 |
+| `src/app/auth/sign-in/route.ts` | W1C-2B-1 原始签名 query 的 sign-in 页面与 Web-owned CSRF POST；tenant/consent/RP 未接线 |
 
 ## 3. Chat 与契约入口
 
@@ -65,6 +66,8 @@
 | `src/lib/server/bff-response.ts` | BFF envelope、request id 与 no-store 响应 |
 | `src/generated/iam-relay-policy.json` | 固定 BFF commit 的只读 policy snapshot |
 | `src/lib/server/iam-relay-policy.ts` | snapshot provenance、只读 GET 子集、issuer cookie 入站过滤 |
+| `src/lib/server/iam-relay-config.ts` | `/iam` 与 sign-in 共用的固定 Web origin/BFF/service-secret 配置解析 |
+| `src/lib/server/iam-interaction-csrf.ts` | Redis 原子一次性 CSRF 摘要/交互绑定；唯一允许 Redis import 的 server-only 文件 |
 | `src/lib/server/iam-relay-transport.ts` | `/iam` 专用原生 HTTP transport；保持多 `Set-Cookie`、限额、deadline 与取消 |
 | `src/lib/server/iam-relay-response.ts` | 原生 status/header/Location/issuer `Set-Cookie` 出站校验 |
 

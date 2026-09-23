@@ -32,9 +32,12 @@ function declaredLength(headers: Headers): number | null {
 
 export async function requestIamRelay(input: Readonly<{
   url: string
+  method?: "GET" | "POST"
+  body?: Uint8Array
   headers: Headers
   signal: AbortSignal
   timeoutMs: number
+  maxRequestBytes?: number
   maxResponseBytes: number
   maxHeaderBytes: number
 }>): Promise<IamRelayUpstream> {
@@ -52,10 +55,19 @@ export async function requestIamRelay(input: Readonly<{
       (target.protocol !== "http:" && target.protocol !== "https:") ||
       target.username !== "" || target.password !== "" || target.hash !== ""
     ) throw new IamRelayTransportError()
+    const method = input.method ?? "GET"
+    if (
+      (method === "GET" && input.body !== undefined) ||
+      (method === "POST" && (input.body === undefined || input.body.byteLength > Math.min(
+        input.maxRequestBytes ?? IAM_RELAY_POLICY.maxRequestBodyBytes,
+        IAM_RELAY_POLICY.maxRequestBodyBytes,
+      )))
+    ) throw new IamRelayTransportError()
     if (controller.signal.aborted) throw new IamRelayTransportError()
 
     const response = await fetch(target, {
-      method: "GET",
+      method,
+      ...(input.body === undefined ? {} : { body: Buffer.from(input.body) }),
       headers: input.headers,
       redirect: "manual",
       signal: controller.signal,

@@ -15,6 +15,18 @@ jobs:
     name: Verify Cloudflare release source
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 56379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=2s
+          --health-timeout=2s
+          --health-retries=15
+    env:
+      KOKORO_WEB_REDIS_URL: redis://127.0.0.1:56379/9
     steps:
       - name: Require strict semver production tag
         shell: bash

@@ -10,7 +10,7 @@
 当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 仍有 IAM magic-link/
 team-session 直连和旧 sealed session；W1C-2A 只读 GET `/iam` 已在当前工作树实现，待 Root 验收发布；
 Auth.js Code+S256、POST 交互与完整 Web→BFF→IAM 仍是目标。
-BFF relay 最新已发布 `cd1c2600ea2a6e0716b07628822a49653964675a`，其
+BFF relay 固定policy来源 `cd1c2600ea2a6e0716b07628822a49653964675a`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
 `457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`，
 引用 IAM owner `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`、allowlist SHA-256
@@ -175,7 +175,7 @@ Browser /api/*                         browser-private
 | `/api/shared/*` | 公开 share 投影 | `kokoro-bff` owner route |
 | `/api/auth/magic-link/request`、旧 `/api/auth/callback`、旧 `/api/auth/logout`、`/api/auth/session-state` | 当前 magic-link、sealed session 登录/退出/状态 | W1C-2 删除，不保留 alias；Auth.js 专用 `/api/auth/[...nextauth]` 接管 RP action/callback；Product Session 展示状态按新 browser-private contract 单独定义 |
 | `/api/team/*` | 当前 team context/switch 与旧 IAM team-session 路径 | 旧 team-session、switch/context alias 删除；仍有产品需要的 tenant 选择由 `/auth/select-tenant` + `/iam/organization/*` IAM 原生交互承担，不复制 team-session |
-| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam/*` 已有 W1C-2A 只读 GET 子集；三个交互页尚未安装 | W1C-2B 补齐固定 BFF relay 的 server-only/交互路径；不是任意 `/v1` proxy |
+| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam/*` 直接 browser POST 仍全拒绝；W1C-2B-1 工作树仅有 `/auth/sign-in` 的 Web-owned GET/POST CSRF 表单与签名 query 原样继续，另两页未安装 | 后续补齐固定 BFF relay 的 server-only/交互路径；不是任意 `/v1` proxy |
 | `/api/dev/*` | 非 production preview fixture | 无 live upstream；不得在 production 启用 |
 
 Catch-all route 不表示浏览器可以任意代理 `/v1`；允许路径必须由 client/schema/route test 明确冻结。

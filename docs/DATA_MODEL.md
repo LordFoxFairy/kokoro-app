@@ -2,6 +2,12 @@
 
 状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；目标尚未实现/验收。
 
+W1C-2B-1 工作树只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
+保存目标路径、POST method、原始签名 query、issuer-cookie 组合摘要，TTL 300 秒；`GETDEL` 是一次性消费原子边界。
+随机 token 仅见 HttpOnly `Path=/auth/sign-in` cookie 与隐藏字段，不存 Redis 明文；Redis 故障
+fail closed。测试只清理本次生成 token 的精确 key，不扫描同前缀的其他 key。Product Session generation、CAS、
+tombstone 与 Auth.js transaction 仍未实现，Web 仍无 SQL schema。
+
 ## W1C-2：Web Product Session 数据与事务边界
 
 ### 当前态与目标 owner

@@ -43,6 +43,16 @@ function allowedLocation(value: string, webOrigin: string): boolean {
   }
 }
 
+export function validIamInteractionNavigation(value: string, webOrigin: string): boolean {
+  if (!/^https?:\/\//u.test(value) || !allowedLocation(value, webOrigin)) return false
+  try {
+    const target = new URL(value)
+    return IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname) && target.search.length > 1
+  } catch {
+    return false
+  }
+}
+
 function validSetCookieName(value: string, secure: boolean): string | null {
   if (!safeHeaderValue(value, 8192)) return null
   const parts = value.split(";").map((part) => part.trim())

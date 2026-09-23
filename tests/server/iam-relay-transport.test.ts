@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { IamRelayTransportError, requestIamRelay } from "@/lib/server/iam-relay-transport"
+import { validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
 
 async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
@@ -49,6 +50,44 @@ describe("native IAM relay transport", () => {
       "kokoro-issuer.session_data=two; Path=/iam; HttpOnly; SameSite=Lax",
     ])
     expect(new TextDecoder().decode(result.body)).toBe("redirect")
+  })
+
+  it("sends a bounded native POST body without following redirects", async () => {
+    let received = ""
+    const server = createServer((request, response) => {
+      expect(request.method).toBe("POST")
+      expect(request.headers["content-type"]).toBe("application/json")
+      request.on("data", (chunk: Buffer) => { received += chunk.toString("utf8") })
+      request.on("end", () => {
+        response.writeHead(302, {
+          location: "/auth/select-tenant?sig=opaque",
+          "set-cookie": [
+            "kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax",
+            "kokoro-issuer.session_data=two; Path=/iam; HttpOnly; SameSite=Lax",
+          ],
+        })
+        response.end()
+      })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const result = await requestIamRelay({
+      url: `http://127.0.0.1:${address.port}/iam/sign-in/email`,
+      method: "POST",
+      body: new TextEncoder().encode('{"email":"a@example.test","password":"secret"}'),
+      headers: new Headers({ "content-type": "application/json" }),
+      signal: new AbortController().signal,
+      timeoutMs: 1_000,
+      maxRequestBytes: 65_536,
+      maxResponseBytes: 1024,
+      maxHeaderBytes: 4096,
+    })
+    expect(received).toBe('{"email":"a@example.test","password":"secret"}')
+    expect(result.status).toBe(302)
+    expect(result.headers.get("location")).toBe("/auth/select-tenant?sig=opaque")
+    expect(result.setCookies).toHaveLength(2)
   })
 
   it("cancels an oversized upstream body before rejecting", async () => {
@@ -114,5 +153,31 @@ describe("native IAM relay transport", () => {
       maxHeaderBytes: 4096,
     })).rejects.toBeInstanceOf(IamRelayTransportError)
     expect(upstreamSignal?.aborted).toBe(true)
+  })
+})
+
+describe("IAM interaction navigation allowlist", () => {
+  const origin = "https://web.example.test"
+
+  it.each([
+    "https://web.example.test/auth/sign-in?sig=%2BAb",
+    "https://web.example.test/auth/select-tenant?sig=%2BAb",
+    "https://web.example.test/auth/consent?sig=%2BAb",
+  ])("accepts an exact Web interaction URL %s", (url) => {
+    expect(validIamInteractionNavigation(url, origin)).toBe(true)
+  })
+
+  it.each([
+    "/auth/select-tenant?sig=%2BAb",
+    "https://evil.example/auth/select-tenant?sig=%2BAb",
+    "https://web.example.test.evil.example/auth/select-tenant?sig=%2BAb",
+    "https://web.example.test/auth/select-tenant",
+    "https://web.example.test/auth/%73elect-tenant?sig=%2BAb",
+    "https://web.example.test/auth/../auth/consent?sig=%2BAb",
+    "https://web.example.test/unknown?sig=%2BAb",
+    "https://web.example.test/auth/select-tenant?sig=%2BAb#fragment",
+    "javascript:alert(1)",
+  ])("rejects an unsafe or unsupported continuation URL %s", (url) => {
+    expect(validIamInteractionNavigation(url, origin)).toBe(false)
   })
 })

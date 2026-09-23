@@ -1,7 +1,20 @@
 # Kokoro User Web 技术设计
 
-状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay 已在工作树实现并待 Root
-验收；W1C-2B Auth.js、交互 POST、Product Session 与完整组合验收尚未完成。
+状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay 已发布；W1C-2B-1
+仅首个 sign-in 交互切片在工作树，Auth.js、其余交互 POST、Product Session 与完整组合验收尚未完成。
+
+W1C-2B-1 当前工作树仅新增 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
+`/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
+自有 Redis key 保存随机 token 摘要对应的目标 POST method/原始 query/issuer-cookie 绑定摘要，TTL 300 秒；POST
+精确 Origin、Host、URL、Cookie/hidden token 配对后以 `GETDEL` 原子消耗，Redis 故障拒绝。
+`redis@5.12.1` 与本组合 BFF 版本对齐并固定在 manifest/lockfile；仅 server-only
+`src/lib/server/iam-interaction-csrf.ts` 静态引入，架构测试限制 browser/import 越界。
+`KOKORO_WEB_REDIS_URL` 仅服务端读取，Web origin 哈希隔离 key 前缀。不重签/归一化 IAM query，
+中间 sign-in 失败仅返回受控 401/429/503，不透传原文 body/cookie，也不调用 continue。成功的
+continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,url}` 必须通过精确 shape、
+固定 Web origin 与允许交互路径校验，再转成无 body 的浏览器 303 导航，合法多 issuer cookie 保留。
+测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。select-tenant/consent、
+Auth.js RP、Product Session 仍属下一切片。
 
 ## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
 
@@ -12,7 +25,7 @@
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 最新已发布 commit `cd1c2600ea2a6e0716b07628822a49653964675a`，其
+BFF relay 固定policy来源 commit `cd1c2600ea2a6e0716b07628822a49653964675a`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
 `457909cd8c6ce77d59ca4cb929f22b439ebf00154256381a0cc3d6a32c2e8fb2`；policy version `1.0.0`
 固定 IAM owner commit `b838853a81ff34bd0f7a079ccc75ba6abd61d1ec`。该 pin 已随 IAM test-only
