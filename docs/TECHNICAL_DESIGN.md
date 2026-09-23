@@ -95,19 +95,25 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    Auth.js v4 默认 callback 不保证 token request 带 resource，须以受限 `token.request`/OIDC client
    `exchangeBody` 和真实 wire 测试证明；refresh 由 Web server 显式 POST，使用 Basic 与唯一 resource。
    Bearer 的 audience、issuer、scope、subject/session 由 IAM/BFF 验证，不以 Web 解码结果授权。
-4. **后续 Product Session 切片**在 callback 成功后建立 server-only Product Session：Auth.js 加密 HttpOnly JWT cookie 内可承载
-   server-only access/refresh token，但公开 `session` callback 只输出非敏感展示字段；Redis 记录当前
-   generation。请求先检查 Redis 当前 generation/tombstone，再对 BFF 传唯一 Bearer。并发 refresh 使用
-   `active(g) → refreshing(g,reservation) → active(g+1)` 两次受限 CAS：先预留唯一 refresh 权，再请求 IAM，
-   只有成功收到新 token 且 reservation 未变才原子 finalize 并设置新 cookie；pending 期间旧 g 不可代理。
-   IAM 失败、deadline、finalize 失败或结果未知时将 handle 撤销，失败者不得再次使用旧 refresh token；
-   previous generation 重放均 fail closed，不能从旧 cookie 单独恢复身份。
-   Redis 丢失/不可用也 fail closed，不回退 sealed envelope。cookie 的 `Path=/`、`SameSite=Lax`、
-   `HttpOnly`、production `Secure` 与 issuer namespace cookie 分离。
-5. logout 在请求内读取 server-only token 后先 tombstone 当前 Product Session，再经固定 relay**单次有界**
-   尝试 IAM revoke/end-session 并清 Web cookie；不为远端失败建立补偿存储，也不声称清 cookie 后还能重试。
-   IAM 失联时本地 tombstone 仍使旧 Product cookie 无效，远端 IAM session/token 仅靠其 owner TTL 到期兜底；
-   UI 只能报告“本设备已退出，远端撤销未确认”，不能宣称全端退出。
+4. **后续 Product Session 切片**在 callback 成功后建立 server-only Product Session：Auth.js 加密 HttpOnly
+   cookie 只携随机 session ID、generation、当前 access 与必要 RP 退出提示，绝不放 refresh；公开 `session`
+   callback 不输出 token。Web Redis 隔离记录 `active(g)`、`refreshing(g,reservation,deadline)` 或 `revoked`、
+   固定到期及由 Web server-only 密钥加密的**当前** refresh；key、日志和公开响应无 token。请求先在线
+   比对 Redis 当前 generation/tombstone，再向普通 BFF `/v1` 传唯一 Bearer。双阶段 CAS 从 `active(g)`
+   原子预留，只有赢家向 IAM 发起**一次**固定 Basic/resource 的 refresh；收到新 token 后必须在
+   reservation、deadline、未撤销条件下原子提交新加密 refresh 与 `active(g+1)`，才发送新 cookie。
+   竞争败者仅拒绝本请求，不撤销赢家、不清赢家 cookie，也不再次请求 IAM。pending、旧 generation、
+   结果未知、Redis 故障均 fail closed；未决 reservation 到期只撤销，绝不恢复旧 active。finalize 成功
+   但新 cookie 交付未知时旧 g 仍拒绝，用户重新登录；不依赖 IAM 的 replay 窗口恢复败者。
+   cookie 的 `Path=/`、`SameSite=Lax`、`HttpOnly`、production `Secure` 与 issuer cookie 分离。
+5. logout 从可信解封的 cookie 取得 session ID；不要求请求 generation 仍是最新。单次 Redis 原子操作
+   tombstone 当前记录；**仅在记录为 active 时** take 已确认当前的加密 refresh，经固定 BFF relay 单次
+   有界尝试 IAM revoke/end-session。若记录为 refreshing/pending，旧 refresh 可能已轮换，故只
+   tombstone，不 take/发送旧 refresh 到 IAM，并报告远端撤销未确认。缺失记录也建立覆盖最大会话/在途
+   窗口的 tombstone，迟到 finalize 不可复活；重复 logout 不重复远端 revoke。清 Web cookie；
+   active 状态的远端失败也准确报告未确认；若 tombstone 写入 ACK 未知，清 cookie 仅表示本浏览器
+   清除，不能报告服务端已撤销，也不在清 cookie 后声称可补偿重试。IAM 失联时远端 token/session
+   仅靠 IAM owner TTL 兜底；UI 区分本地退出与远端未确认，不宣称全端退出。
    失效/撤销/tenant 切换后的 BFF 401/403 不得仅靠 Web 缓存视为已授权。
 
 ### `/iam` 和业务代理的安全边界

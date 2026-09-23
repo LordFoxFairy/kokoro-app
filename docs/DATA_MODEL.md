@@ -16,7 +16,8 @@ Redis 只保存 token 摘要与绑定摘要，不存候选组织名、scope 明�
 
 W1C-2C 第一切片**当前 RP-only 实现**另用 Web 自有 `kokoro:web:oidc-state:<Web-origin-hash>:<state-sha256>`
 短 TTL key 原子登记/消费 RP state，绑定固定 provider、callback 与 RP transaction cookie 摘要；
-Redis 不保存 code、access/refresh/ID token、client secret、userinfo 或 PII。Auth.js 的 HttpOnly
+当前 RP-only Redis 不保存 code、access/refresh/ID token、client secret、userinfo 或 PII；后续 Product
+Session 唯一例外是隔离 record value 中由 Web 密钥加密的当前 refresh，见下节。Auth.js 的 HttpOnly
 state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；Product Session 与其 generation/
 tombstone 尚未安装，验证成功回调也不建立可用 session。
 固定 TTL 300 秒；`SET NX` 防 state 碰撞，`GETDEL` 保证同 state 并发最多一次 code exchange。
@@ -54,13 +55,14 @@ Redis logical DB”的过宽说法：Web 可按 Root namespace/logical DB 决策
 | IAM issuer cookie | IAM；浏览器 `/iam` path | IAM 原生 session/interaction；IAM 决定 TTL/撤销 | 仅精确 `kokoro-issuer.*` 或 production `__Secure-kokoro-issuer.*` snapshot；常规 `Path=/iam`，logout-confirmation 精确子路径；Web 不解析为 Product 权限 |
 | Auth.js RP transaction cookie | Web；浏览器 HttpOnly | state/nonce/S256 verifier 与回调相关短期事务 | 用后清除，callback/code 重放拒绝；不向 BFF/IAM 转发该 cookie |
 | Web 交互 CSRF cookie/record | Web；浏览器 HttpOnly cookie + 隔离 Redis namespace | 随机 token 的摘要、目标 POST path、IAM 交互绑定与短 TTL | hidden form 字段配对；原子一次性消费；不把 Web CSRF 字段送 IAM；Redis 不可用即拒绝 |
-| Product Session cookie | Web；浏览器 HttpOnly 加密 JWT | server-only access/refresh token、opaque session handle、generation、绝对/idle 到期依据 | `Path=/`、`SameSite=Lax`、production `Secure`；公开 session callback 不回 token；浏览器脚本/localStorage 不读取 |
-| generation/state key | Web Redis 隔离 namespace | opaque session handle → `active(g)`、`refreshing(g,reservation,deadline)` 或 `revoked` 与到期时间；两次受限 CAS 协调 refresh | TTL 不长于会话与 refresh 有效期；每请求在线核验；缺失/Redis down fail closed；pending 不允许旧 g 代理 |
-| tombstone key | Web Redis 隔离 namespace | logout/revocation 的 opaque handle 阻断记录 | TTL 覆盖尚可能重放的 Product cookie/refresh 窗口；先写 tombstone 再清 cookie/上游 revoke；不可被旧 generation 覆盖 |
+| Product Session cookie | Web；浏览器 HttpOnly 加密 JWT | 随机 session ID、generation、server-only 当前 access、必要 RP 退出提示；**无 refresh** | `Path=/`、`SameSite=Lax`、production `Secure`；公开 session callback 不回 token；浏览器脚本/localStorage 不读取 |
+| generation/state record | Web Redis 隔离 namespace | 随机 session ID → `active(g)`、`refreshing(g,reservation,deadline)` 或 `revoked`、固定到期、Web 密钥加密的**当前** refresh；双阶段 CAS 协调 refresh | TTL 不长于会话与 refresh 有效期；每请求在线核验；缺失/Redis down fail closed；pending 不允许旧 g 代理；refresh 不写入 key/log/公开响应 |
+| tombstone | Web Redis 隔离 namespace | logout/revocation 的 session ID 阻断记录；仅 active 时原子 take 已确认当前的加密 refresh，refreshing/pending 时不 take | TTL 覆盖最大 Product 会话/在途窗口；记录缺失也建立；先写 tombstone 再清 cookie/上游 revoke；不可被旧 generation 覆盖 |
 | UI preference/draft | Web browser storage | 非敏感临时体验状态 | 不含 token、tenant 选择器、service URL；不是任何会话/授权证据 |
 
-Redis key 只使用随机不透明 handle、版本/generation、必要到期瞬时点与最少协调字段；不把 access/
-refresh token、IAM session cookie、密码或用户 PII 放进 Redis key/value/log。key 名加 Web namespace
+Redis key 只使用随机不透明 session ID、版本/generation、必要到期瞬时点与最少协调字段；Redis **value**
+仅在 Web 隔离 session record 保存以 Web server-only 密钥加密的当前 refresh，不保存 access/ID token、
+IAM session cookie、密码或用户 PII；key、日志、公开 session 与浏览器存储均无 refresh。key 名加 Web namespace
 与环境前缀，TTL 与 clock skew 在实现测试中固定；无索引、无跨 owner 查询、无 schema install。
 Web cookie 加密材料只在 server-only 配置，轮换时仍须 Redis 当前 generation；旧密钥能解封不意味着
 旧 generation 可授权。Redis 不能成为 IAM token 是否有效的最终判断，BFF 每个受保护 `/v1` 请求
@@ -74,24 +76,30 @@ OIDC transaction pending ──valid code/state/nonce/PKCE + userinfo（2C）─
 active(g) ──reservation CAS──> refreshing(g,reservation)
 refreshing(g,reservation) ──IAM exchange success + finalize CAS──> active(g+1)
 refreshing(g,reservation) ──error/deadline/unknown/finalize failure──> revoked
-active(g) ──logout/tombstone──> revoked
+active(g) ──logout/tombstone + take已确认当前refresh──> revoked
+refreshing(g,reservation) ──logout/tombstone，不take旧refresh──> revoked
 active(g) ──expiry/IAM reject/Redis unavailable──> fail closed
 previous generation / tombstoned handle ──replay──> reject
 ```
 
 - callback 仅在 IAM code exchange 与 claims/audience 验证成功后创建 Product Session；callback 重放
   不二次建 session。Web 不自行签发 IAM access token。
-- refresh 首先以 handle/generation 的 reservation CAS 从 `active(g)` 进入 `refreshing(g,nonce,deadline)`，
-  只允许一个赢家请求 IAM。pending 状态时旧 g 的普通代理和第二次 refresh 均拒绝；赢家收到新 token 后
-  仅在 nonce/deadline 匹配且未 tombstone 时 finalize CAS 为 `active(g+1)`，随后才发送新 cookie。
-  IAM 错误、deadline、结果未知或 finalize 失败都使会话 `revoked`/fail closed；任何未决 reservation 到期
-  也只转为 `revoked`，绝不回退 `active(g)`。若 Redis 故障导致无法写 revoked，所有在线检查继续拒绝，
-  key 缺失也拒绝；不能用旧 refresh token 猜测重试。成功 finalize 后若新 cookie 送达未知，旧 g
-  仍拒绝，用户重新登录。不得以进程锁或 localStorage 代替跨实例 CAS。
-- logout 在请求内读取 server-only token 后先写本地 tombstone，再通过 BFF 固定 relay**单次有界**
-  尝试 IAM revoke/end-session 并清 Web cookie。远端失败不创建补偿存储/后台重试；清 cookie 后无远端
-  凭据可补偿，只能由 IAM owner token/session TTL 到期兜底，并向 UI 明确“本设备已退出，远端撤销
-  未确认”。清理只删本 Web session keys，不重置共享 Redis。
+- refresh 首先以 session ID/generation 的 reservation CAS 从 `active(g)` 进入
+  `refreshing(g,reservation,deadline)`，仅赢家向 IAM 发起**一次**固定 Basic/resource exchange。pending
+  状态的普通代理和第二次 refresh 均拒绝；败者只拒绝本请求，不撤销赢家、不清赢家 cookie。赢家收到
+  新 token 后，仅在 reservation/deadline 匹配且未 tombstone 时以第二 CAS 同时写新加密 refresh、
+  `active(g+1)`，随后才发送新 cookie。IAM 错误、deadline、结果未知或 finalize 失败使记录 revoked/
+  fail closed；未决 reservation 到期也只撤销，不回退 active。Redis 故障使在线检查拒绝，不以旧 refresh
+  猜测重试；不依赖 issuer 的 replay 窗口恢复败者。finalize 成功但新 cookie 交付未知时旧 g 拒绝，
+  用户重新登录。不得以进程锁或 localStorage 代替跨实例 CAS。
+- logout 从可信解封 cookie 取得 session ID，不要求 cookie generation 当前；原子 tombstone 当前 record，
+  **仅 active 状态**同时 take 已确认当前的加密 refresh，经 BFF 固定 relay 单次有界尝试 IAM
+  revoke/end-session。refreshing/pending 时可能已轮换，故不 take/发送旧 refresh，报告远端撤销未确认。
+  记录缺失也建立覆盖最大会话/在途窗口的 tombstone；迟到 finalize 不可复活，重复 logout 不重复远端
+  revoke。清 Web cookie。旧 refresh 的 revoke 可能扩及同 client/user family 且返回 400，不能当作
+  幂等/单设备撤销。active 状态的远端失败明确未确认；tombstone 写入 ACK
+  未知时清 cookie 只代表本浏览器清除，不能报告服务端撤销。无补偿存储/后台重试，远端未确认只能由
+  IAM owner TTL 兜底。清理只删本 Web session keys，不重置共享 Redis。
 - retention：Product cookie/Redis generation 不长于 IAM refresh/session 有效性；tombstone 覆盖
   cookie 及可能重放窗口；RP transaction 到期清除。具体 TTL、key 结构和 CAS 原子脚本须在实现
   前以 IAM owner 实际 token policy 与测试 fixture 固定，不虚构当前精确秒数。数据删除由到期、

@@ -134,15 +134,24 @@ internal resource binding。`IAM_ISSUER_URL` 与 discovery issuer 精确相同�
 均须恰好一个 `resource=https://kokoro.dev/resources/iam-internal`；浏览器参数不能覆盖它。Auth.js v4
 默认 token request 不视为已覆盖，此点须在真实 HTTP 检查请求体/Bearer audience/BFF admission。
 
-Product Session 是 Web server-only：Auth.js 加密 HttpOnly cookie 不经公开 session callback 输出
-access/refresh token；Redis `active(g) → refreshing(g,reservation) → active(g+1)` 双阶段 CAS 与 logout
-tombstone 先于授权：预留者独占 IAM refresh，成功且 reservation 匹配才 finalize/设新 cookie；pending
-期间旧 g 不可代理，失败/超时/结果未知或 finalize 失败使 handle 失效，不回到旧 active。旧 generation、replay、
-Redis unavailable 一律 401/明确失败，不回退旧 sealed cookie。普通受保护 BFF `/v1` 代理只注入从当前
+Product Session 是 Web server-only：Auth.js 加密 HttpOnly cookie 只含随机 session ID、generation、
+当前 access 与必要 RP 退出提示，**不含 refresh**；公开 session callback 不输出 token。Web Redis 隔离
+record 保留 Web 密钥加密的当前 refresh、固定到期及 `active(g)`/`refreshing(g,reservation,deadline)`/
+`revoked`。每请求先在线比对 generation/tombstone。refresh 的第一 CAS 只允许一位赢家从 active 预留，
+由赢家向 IAM 发起至多一次固定 Basic/resource exchange；第二 CAS 仅在 reservation、deadline、未撤销
+仍成立时提交新加密 refresh 与 `active(g+1)`，随后才发新 cookie。败者只拒绝本请求，不撤销赢家、
+不清其 cookie、不请求 IAM；pending、旧 generation、replay、结果未知、Redis unavailable 均明确拒绝，
+不回退旧 active/sealed cookie，也不依赖 issuer replay 窗口。未决 reservation 到期仅撤销。finalize
+成功但新 cookie 交付未知时旧 g 拒绝，须重新登录。普通受保护 BFF `/v1` 代理只注入从当前
 Product Session 读取的**一个** `Authorization: Bearer` 与 Web service identity；不再发送
 `x-kokoro-namespace`/`x-kokoro-principal-id`，也不相信 body/query/header 中的 tenant/actor。
-logout 先在请求内读取 server-only token、tombstone 本地 session，单次有界尝试 IAM revoke/end-session
-并清 cookie；远端失败无持久补偿队列，本轮只靠 IAM owner TTL 兜底，并向 UI 区分本地退出与远端未确认。
+logout 以可信解封的 session ID 原子 tombstone，不要求请求 cookie generation 最新；**仅 active 记录**
+同时 take 已确认当前的加密 refresh，并单次有界尝试 IAM revoke/end-session。refreshing/pending 记录
+只 tombstone，绝不 take/发送可能已轮换的旧 refresh；报告远端撤销未确认。记录缺失也建覆盖最大会话/
+在途窗口的 tombstone，迟到 finalize 不可复活；重复 logout 不重复远端 revoke。清 cookie；active
+状态的远端失败报告未确认，写入 ACK 未知则清 cookie 只能报告本浏览器清除，不能报告服务端撤销。
+不把旧 refresh 的 revoke 当作幂等或单设备操作；其可能影响同 client/user family 且返回 400。
+无持久补偿队列，远端未确认仅靠 IAM owner TTL 兜底。
 service-only runtime manifest 与公开 Share 按 BFF owner 明确边界运行，不伪造用户凭据。BFF 自己验证
 IAM admission、resource/tenant 业务授权；Web session UI 不构成 owner 授权。
 
