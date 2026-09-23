@@ -50,7 +50,7 @@ describe("Web governance boundary", () => {
     expect(await exists("contract/openapi")).toBe(false)
   })
 
-  it("keeps Web free of database ownership and restricts Redis to server-only IAM/RP transaction coordination", async () => {
+  it("keeps Web free of database ownership and restricts Redis to server-only IAM/RP and Product Session coordination", async () => {
     const packageSchema = z.object({
       dependencies: z.record(z.string()).optional(),
       devDependencies: z.record(z.string()).optional(),
@@ -77,6 +77,7 @@ describe("Web governance boundary", () => {
     expect(redisImports.sort()).toEqual([
       path.join("lib", "server", "iam-interaction-csrf.ts"),
       path.join("lib", "server", "oidc-rp-transaction.ts"),
+      path.join("lib", "server", "product-session-store.ts"),
     ])
     for (const entry of redisImports) {
       expect(await readFile(path.join(sourceRoot, entry), "utf8")).not.toContain('"use client"')

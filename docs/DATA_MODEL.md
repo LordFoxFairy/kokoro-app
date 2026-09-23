@@ -1,12 +1,13 @@
 # Kokoro User Web 数据模型与 Owner
 
-状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 已发布，Product Session 尚未实现/验收。
+状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 已发布，S1 未提交工作树已实现
+Product Session 在线协调，真实三仓 IAM 组合尚未验收；普通代理与旧认证路径未切换。
 
 已发布的 W1C-2B-1 只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
 保存目标路径、POST method、原始签名 query、issuer-cookie 组合摘要，TTL 300 秒；`GETDEL` 是一次性消费原子边界。
 随机 token 仅见 HttpOnly `Path=/auth/sign-in` cookie 与隐藏字段，不存 Redis 明文；Redis 故障
-fail closed。测试只清理本次生成 token 的精确 key，不扫描同前缀的其他 key。Product Session generation、CAS、
-tombstone 在本片仍未实现，Web 仍无 SQL schema。
+fail closed。测试只清理本次生成 token 的精确 key，不扫描同前缀的其他 key。S1 工作树另使用隔离的
+Product Session record/generation/双 CAS/tombstone；Web 仍无 SQL schema。
 
 W1C-2B-2 将同一 token 机制扩展到内层 `Path=/iam/interactions/select-tenant` 与
 `Path=/iam/interactions/consent`；IAM issuer cookie 仍保持 `Path=/iam`，因此原始
@@ -18,8 +19,8 @@ W1C-2C 第一切片**当前 RP-only 实现**另用 Web 自有 `kokoro:web:oidc-s
 短 TTL key 原子登记/消费 RP state，绑定固定 provider、callback 与 RP transaction cookie 摘要；
 当前 RP-only Redis 不保存 code、access/refresh/ID token、client secret、userinfo 或 PII；后续 Product
 Session 唯一例外是隔离 record value 中由 Web 密钥加密的当前 refresh，见下节。Auth.js 的 HttpOnly
-state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；Product Session 与其 generation/
-tombstone 尚未安装，验证成功回调也不建立可用 session。
+state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；这是已发布 2C 基线的事实，S1 工作树
+已在有效回调后建立独立的加密 Product Session cookie 与在线 generation/tombstone。
 固定 TTL 300 秒；`SET NX` 防 state 碰撞，`GETDEL` 保证同 state 并发最多一次 code exchange。
 Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合摘要，无 token 或明文 userinfo。
 
@@ -31,9 +32,9 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`eb7ded2386efd9a10905843a7a5aedff9ac72df6` 已 pin IAM
-`65b0fd969989d4044fae640a8414d9c2dcf41c3b`，policy SHA-256
-`05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`；W1C-2A 已固定消费该只读
+`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71` 已 pin IAM
+`f240bd7d5f542bb152c7eb929074c96b6c290ea8`，policy SHA-256
+`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；W1C-2A 已固定消费该只读
 artifact 与 provenance，真实 Web→BFF→IAM 及 Product Session 验收仍待完成。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
@@ -75,7 +76,7 @@ OIDC transaction pending ──valid code/state/nonce/PKCE + userinfo（2C）─
 后续新的 OIDC transaction ──同等验证 + 会话协调成功──> Product Session active(g)
 active(g) ──reservation CAS──> refreshing(g,reservation)
 refreshing(g,reservation) ──IAM exchange success + finalize CAS──> active(g+1)
-refreshing(g,reservation) ──error/deadline/unknown/finalize failure──> revoked
+refreshing(g,reservation) ──error/deadline/unknown/finalize failure/AAD decrypt failure──> revoked
 active(g) ──logout/tombstone + take已确认当前refresh──> revoked
 refreshing(g,reservation) ──logout/tombstone，不take旧refresh──> revoked
 active(g) ──expiry/IAM reject/Redis unavailable──> fail closed
@@ -87,22 +88,24 @@ previous generation / tombstoned handle ──replay──> reject
 - refresh 首先以 session ID/generation 的 reservation CAS 从 `active(g)` 进入
   `refreshing(g,reservation,deadline)`，仅赢家向 IAM 发起**一次**固定 Basic/resource exchange。pending
   状态的普通代理和第二次 refresh 均拒绝；败者只拒绝本请求，不撤销赢家、不清赢家 cookie。赢家收到
-  新 token 后，仅在 reservation/deadline 匹配且未 tombstone 时以第二 CAS 同时写新加密 refresh、
+  新 token 后，先检 token UTF-8 长度、期限与完整 Product Cookie ≤4096 B；仅在 reservation/deadline 匹配且未 tombstone 时以第二 CAS 同时写新加密 refresh、
   `active(g+1)`，随后才发送新 cookie。IAM 错误、deadline、结果未知或 finalize 失败使记录 revoked/
   fail closed；未决 reservation 到期也只撤销，不回退 active。Redis 故障使在线检查拒绝，不以旧 refresh
-  猜测重试；不依赖 issuer 的 replay 窗口恢复败者。finalize 成功但新 cookie 交付未知时旧 g 拒绝，
-  用户重新登录。不得以进程锁或 localStorage 代替跨实例 CAS。
+  猜测重试；不依赖 issuer 的 replay 窗口恢复败者。finalize 成功但新 cookie 交付未知，或 Redis
+  finalize ACK 未知时不发送新 cookie；即使记录已是 `active(g+1)`，旧 g 仍拒绝，用户重新登录，
+  无客户端可达的 active record 由固定 TTL 回收。不得以进程锁或 localStorage 代替跨实例 CAS。
 - logout 从可信解封 cookie 取得 session ID，不要求 cookie generation 当前；原子 tombstone 当前 record，
   **仅 active 状态**同时 take 已确认当前的加密 refresh，经 BFF 固定 relay 单次有界尝试 IAM
-  revoke/end-session。refreshing/pending 时可能已轮换，故不 take/发送旧 refresh，报告远端撤销未确认。
+  revoke。issuer end-session 是浏览器原生确认流程，不由 Web Redis refresh take 代替；refreshing/pending 时可能已轮换，故不 take/发送旧 refresh，报告远端撤销未确认。
   记录缺失也建立覆盖最大会话/在途窗口的 tombstone；迟到 finalize 不可复活，重复 logout 不重复远端
   revoke。清 Web cookie。旧 refresh 的 revoke 可能扩及同 client/user family 且返回 400，不能当作
   幂等/单设备撤销。active 状态的远端失败明确未确认；tombstone 写入 ACK
   未知时清 cookie 只代表本浏览器清除，不能报告服务端撤销。无补偿存储/后台重试，远端未确认只能由
   IAM owner TTL 兜底。清理只删本 Web session keys，不重置共享 Redis。
 - retention：Product cookie/Redis generation 不长于 IAM refresh/session 有效性；tombstone 覆盖
-  cookie 及可能重放窗口；RP transaction 到期清除。具体 TTL、key 结构和 CAS 原子脚本须在实现
-  前以 IAM owner 实际 token policy 与测试 fixture 固定，不虚构当前精确秒数。数据删除由到期、
+  cookie 及可能重放窗口；S1 实现另设 Web 本地最长 1 小时会话上限和再加 60 秒的 tombstone 窗口，
+  不是 IAM issuer refresh TTL 声明；RP transaction 到期清除。后续真实 IAM 组合须核对 IAM owner
+  实际 token policy 与 clock skew，不能凭 Web 上限宣称 grant 生命周期。数据删除由到期、
   logout 和针对性 key 清理完成；无 SQL 软删/物理删、索引、fresh-install 或 schema drift 门。
 
 ### 契约与验证

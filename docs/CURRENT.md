@@ -2,15 +2,29 @@
 
 状态日期：2026-09-23。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
+W1C-2F-S1 当前未提交工作树在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
+以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh）和 Web Redis 加密
+refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
+执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅 active 时 take 已确认当前 refresh，
+pending 时只 tombstone。signout 仅返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。旧普通 BFF adapter、legacy magic-link/team 路径仍是**待切换旧态**；本切片不声称
+它们已改为 Bearer，也不声称真实三仓 IAM 组合通过。固定 BFF relay policy 已重钉
+`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`/IAM `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，
+SHA-256 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；仅来源 metadata 变化。
+本地 Node `22.22.2` 在 Web 基线 `5da730426faaca54a9f0003fa1e7fd99f4db6f00` 加本未提交工作树执行：
+`pnpm contract` 6 files/52 tests、`pnpm test:architecture` 4/32、`pnpm lint`、`pnpm typecheck`、
+`pnpm test` 138/1366、`pnpm build`、`pnpm test:e2e` 6/6 均通过。RP-only 固定 503 的成功断言先
+反转获 RED，再在当前工作树获得 GREEN；真实 Web→BFF→IAM 三仓 runner、普通 `/v1` Bearer adapter、
+Team、GitHub runner 与上线验收仍未执行/完成。
+
 ## 1. 当前边界
 
-- 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；仅在共享 Redis 自有 namespace 保存短期 CSRF/RP 事务摘要。
+- 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要，并在 S1 工作树保存 Product Session 在线协调 record。
 - Session cookie 使用 AES-256-GCM 信封，设置为 `HttpOnly`、`SameSite=Lax`，生产环境额外设置 `Secure`。浏览器 cookie 不透传给业务上游。
 - Product 上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。W1C-2A `/iam` 原生协议例外使用独立 transport，避免合并多个 `Set-Cookie`。
 - `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: no-store` 与 `Vary: Cookie`。
 - `kokoro-app` 是 Web remote 名；主控仓中的对应 submodule 路径是 `apps/kokoro-app`，不使用歧义的 `kokoro/` 名称。
 - W1C-2A 已新增 BFF-only 的同源 `/iam/[...path]` 只读入口：只允许固定 policy 中无需 browser Bearer 的
-  discovery、JWKS、authorize、issuer session 与 organization GET；浏览器 POST、userinfo、end-session、
+  discovery、JWKS、authorize、issuer session、organization 与固定参数 end-session GET；仅 logout-confirm POST 通过专用窄路由，其他浏览器 POST、userinfo、
   Authorization 和 handler 可见的未知/编码 route alias 均在连接 BFF 前拒绝。固定 server-only
   `KOKORO_WEB_ORIGIN` 固定公开 authority：入站 Host 必须精确匹配，GET 如携 Origin 也须匹配，POST
   必须携精确 Origin；响应 Location 仍只相对该固定 origin 验证。Next 在反代后可能把 handler 的
@@ -21,9 +35,9 @@
   W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
   保持原生 status/header/body 与多个
   `Set-Cookie`，并实施 issuer-cookie 白名单、16 KiB header、1 MiB response、5 s deadline 与取消传播。
-- 只读 snapshot 固定 BFF `eb7ded2386efd9a10905843a7a5aedff9ac72df6`、IAM
-  `65b0fd969989d4044fae640a8414d9c2dcf41c3b` 和 policy SHA-256
-  `05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`；Web 不编辑 owner policy，
+- 只读 snapshot 固定 BFF `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`、IAM
+  `f240bd7d5f542bb152c7eb929074c96b6c290ea8` 和 policy SHA-256
+  `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
 - 已发布的 W1C-2B-1 新增 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
   5 分钟一次性 CSRF 摘要/目标 POST method/issuer-cookie 绑定，POST 必须精确同源 Origin、Cookie+hidden token 与原始 query
@@ -119,15 +133,15 @@ BFF 仍是 HTTP fixture，
 未做真实 IAM/RP 闭环或 GitHub Actions runner 验证。测试覆盖 tenant 列表信任、重核/越界、
 签名 query 变化、Origin/CSRF/重放、consent 拒绝/伪造 query owner 401、恶意导航、native
 302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。本片仅机械 re-pin BFF policy
-`eb7ded2386efd9a10905843a7a5aedff9ac72df6`/IAM
-`65b0fd969989d4044fae640a8414d9c2dcf41c3b`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
+`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`/IAM
+`f240bd7d5f542bb152c7eb929074c96b6c290ea8`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
 语义与前 pin 相同。
 
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
 2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；已装三页的 POST/CSRF 不等于 Auth.js
-   Code+S256、server-only token/userinfo/end-session、可信 GET consent 签名确认或 Product Session 已完成，这些必须在
+   Code+S256、server-only token/userinfo、可信 GET consent 签名确认或 Product Session 已完成，这些必须在
    后续切片替换旧路径。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。

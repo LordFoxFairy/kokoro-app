@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "eb7ded2386efd9a10905843a7a5aedff9ac72df6",
-  policySha256: "05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10",
+  ownerCommit: "1d1f42775e0fa4464de6b08ee9d2b9cd82911a71",
+  policySha256: "bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -25,12 +25,13 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "65b0fd969989d4044fae640a8414d9c2dcf41c3b"
+const EXPECTED_IAM_COMMIT = "f240bd7d5f542bb152c7eb929074c96b6c290ea8"
 const BROWSER_GET_PATHS = new Set([
   "/.well-known/openid-configuration",
   "/.well-known/oauth-authorization-server",
   "/jwks",
   "/oauth2/authorize",
+  "/oauth2/end-session",
   "/get-session",
   "/organization/list",
 ])
@@ -84,7 +85,7 @@ function allowedCookieName(name: string, secure: boolean): boolean {
   return IAM_RELAY_POLICY.cookieNames.includes(name.slice(prefix.length))
 }
 
-export function filterIssuerCookies(raw: string | null, secure: boolean): string | null {
+export function filterIssuerCookies(raw: string | null, secure: boolean, includeLogoutConfirmation = false): string | null {
   if (raw === null || raw === "") return ""
   const seen = new Set<string>()
   const kept: string[] = []
@@ -96,7 +97,7 @@ export function filterIssuerCookies(raw: string | null, secure: boolean): string
     if (!allowedCookieName(name, secure)) continue
     if (seen.has(name)) return null
     seen.add(name)
-    if (name.endsWith(".oauth_logout_confirmation")) continue
+    if (name.endsWith(".oauth_logout_confirmation") && !includeLogoutConfirmation) continue
     kept.push(pair)
   }
   return kept.join("; ")

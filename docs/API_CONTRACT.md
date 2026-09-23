@@ -1,17 +1,18 @@
 # Kokoro User Web API 契约策略
 
 状态：browser-private 治理基线与 W1C-2 目标契约，2026-09-23；W1C-2A 只读 GET relay 与
-W1C-2B-1 sign-in、W1C-2B-2 tenant/consent 与 2C RP-only 已发布；真实 IAM 组合与 Product Session 待验。
+W1C-2B-1 sign-in、W1C-2B-2 tenant/consent 与 2C RP-only 已发布；S1 未提交工作树已接入 Web
+Product Session 基础，真实三仓 IAM 组合待 Root 验收，普通 `/v1` Bearer adapter 与旧路径删除未实施。
 
-## W1C-2：同源 IAM 与 Product Session 契约（RP-only 已发布，Product Session 待实现）
+## W1C-2：同源 IAM 与 Product Session 契约（RP-only 已发布，S1 Product Session 工作树待验）
 
 ### 版本、来源和可见性
 
-当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST 与 2C Auth.js Code+S256 RP-only 均已发布；完整 Web→BFF→IAM 与 Product Session 仍待验收。
-BFF relay 固定policy来源 `eb7ded2386efd9a10905843a7a5aedff9ac72df6`，其
+当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST 与 2C Auth.js Code+S256 RP-only 均已发布。S1 当前工作树新增成功 callback 后在线 Product Session、标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF，普通 BFF `/v1` adapter 仍沿旧路径。完整真实三仓链仍待验收。
+BFF relay 固定policy来源 `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`，
-引用 IAM owner `65b0fd969989d4044fae640a8414d9c2dcf41c3b`、allowlist SHA-256
+`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`，
+引用 IAM owner `f240bd7d5f542bb152c7eb929074c96b6c290ea8`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始
@@ -77,8 +78,7 @@ Web-owned 静态 `/iam/interactions/select-tenant|consent`；外层 POST 405。i
 
 上表是 W1C-2B 的完整固定 policy。已发布的 W1C-2A `/iam/[...path]` Route Handler 只安装 GET
 `/.well-known/openid-configuration`、`/.well-known/oauth-authorization-server`、`/jwks`、
-`/oauth2/authorize`、`/get-session`、`/organization/list`；直接 owner POST、userinfo Bearer、end-session 和
-其他动态路由都在 Web 本地 fail closed。本片静态 `/iam/interactions/*` 是 Web 自有表单而非 BFF
+`/oauth2/authorize`、`/get-session`、`/organization/list`；S1 另安装固定 `client_id`/`post_logout_redirect_uri` 的 `/oauth2/end-session` GET，以及只接收 `action=confirm`、精确同源 Origin、IAM 签名 confirmation cookie 的 `/oauth2/end-session/confirm` POST。直接 owner POST、浏览器 userinfo Bearer 和其他动态路由仍在 Web 本地 fail closed。本片静态 `/iam/interactions/*` 是 Web 自有表单而非 BFF
 catch-all 例外；callback/post-logout 传输在 2B-2 尚未安装。2C 只在 RP callback 真正安装并通过
 严格 Location/签名交互与 code 测试后，将 consent 的固定 callback Location 交给浏览器；
 post-logout 仍关闭，callback 验证成功只报 `product_session_unavailable`。
@@ -119,8 +119,9 @@ body 均在连 BFF 前返回 400；真实 Next HTTP 测试覆盖无 Content-Leng
 交互绑定与一次性消费，按 IAM 机器契约构造 `/iam/sign-in/email|organization/set-active|
 oauth2/consent|oauth2/continue` 原生 body，Web CSRF 字段不传 IAM；IAM 已签 query 与 issuer cookie
 原样续接。浏览器直 POST 上述 `/iam` 路由无 action 证明则拒绝。其余允许的浏览器 `/iam` POST
-（authorize、sign-out、end-session/confirm）须
+（authorize、sign-out）须
 有等价 Web 表单证据，或经真实 wire 证明 IAM 原生 CSRF 生成/携带/校验，再叠加 Web Origin；否则拒绝。
+`end-session/confirm` 已单独核对 Better Auth 1.7.3 原生 signed confirmation cookie、session/TTL 绑定；Web 再限制精确 Origin/Host、固定 form 与 cookie 路径，不作为通用 POST 例外。
 Auth.js 自身 action 的 CSRF token 与同源 Origin 叠加校验；普通业务 cookie mutation 使用 Web 自有
 CSRF 防护。server-only token/revoke 路径的 Basic 只来自 Web 受信代码；
 BFF 验 Web service 身份但不假设同一 secret 能判断 Basic 最初是否来自浏览器。
@@ -140,18 +141,19 @@ record 保留 Web 密钥加密的当前 refresh、固定到期及 `active(g)`/`r
 `revoked`。每请求先在线比对 generation/tombstone。refresh 的第一 CAS 只允许一位赢家从 active 预留，
 由赢家向 IAM 发起至多一次固定 Basic/resource exchange；第二 CAS 仅在 reservation、deadline、未撤销
 仍成立时提交新加密 refresh 与 `active(g+1)`，随后才发新 cookie。败者只拒绝本请求，不撤销赢家、
-不清其 cookie、不请求 IAM；pending、旧 generation、replay、结果未知、Redis unavailable 均明确拒绝，
-不回退旧 active/sealed cookie，也不依赖 issuer replay 窗口。未决 reservation 到期仅撤销。finalize
-成功但新 cookie 交付未知时旧 g 拒绝，须重新登录。普通受保护 BFF `/v1` 代理只注入从当前
+不清其 cookie、不请求 IAM；pending、旧 generation、replay、结果未知、Redis unavailable 均明确拒绝；reserve 后密文 AAD 解密损坏尽力按 reservation tombstone，Redis 故障仍 fail closed；
+不回退旧 active/sealed cookie，也不依赖 issuer replay 窗口。未决 reservation 到期仅撤销。refresh wire 对 access UTF-8 ≤2048 B、refresh ≤8192 B、整数 `expires_in` 1–3600 s 校验；Product JWE Set-Cookie 完整字节 ≤4096 B，callback 在 Redis 创建前、refresh 在 finalize 前预检，超限不推进 generation。Product 成功 GET/refresh/signout 带随机 UUID `x-request-id`。finalize
+成功但新 cookie 交付未知，或 finalize ACK 未知时不发送新 cookie；即使 Redis 已提交新 generation，
+旧 g 仍拒绝，须重新登录，无客户端可达的 active record 由 TTL 回收。普通受保护 BFF `/v1` 代理只注入从当前
 Product Session 读取的**一个** `Authorization: Bearer` 与 Web service identity；不再发送
 `x-kokoro-namespace`/`x-kokoro-principal-id`，也不相信 body/query/header 中的 tenant/actor。
 logout 以可信解封的 session ID 原子 tombstone，不要求请求 cookie generation 最新；**仅 active 记录**
-同时 take 已确认当前的加密 refresh，并单次有界尝试 IAM revoke/end-session。refreshing/pending 记录
+同时 take 已确认当前的加密 refresh，并单次有界尝试 IAM revoke；issuer end-session 是单独的浏览器确认流程，不由 refresh revoke 代替。refreshing/pending 记录
 只 tombstone，绝不 take/发送可能已轮换的旧 refresh；报告远端撤销未确认。记录缺失也建覆盖最大会话/
 在途窗口的 tombstone，迟到 finalize 不可复活；重复 logout 不重复远端 revoke。清 cookie；active
 状态的远端失败报告未确认，写入 ACK 未知则清 cookie 只能报告本浏览器清除，不能报告服务端撤销。
 不把旧 refresh 的 revoke 当作幂等或单设备操作；其可能影响同 client/user family 且返回 400。
-无持久补偿队列，远端未确认仅靠 IAM owner TTL 兜底。
+无持久补偿队列，远端未确认仅靠 IAM owner TTL 兜底。 `POST /api/auth/signout` 返回 `issuer_session=pending_browser_confirmation` 与固定同源 `issuer_end_session_url`，URL 仅含注册的 `client_id` 和 `post_logout_redirect_uri`，无 ID/access/refresh token；该响应不表示 IAM issuer 已退出。浏览器 GET 确认页取得 IAM 签名、限定 `Path=/iam/oauth2/end-session/confirm` 的 confirmation cookie，随后以精确 Origin 和 `action=confirm` POST 专用路由，IAM 验签及 TTL/session 绑定后清除 issuer session 并重定向 `/auth/sign-in`。confirmation cookie 不透传其他 GET/POST；错误 Origin、额外参数、错误 form 或非法重定向在 Web 拒绝。确认表单限 1024 B、应用读取 5 秒硬截止；Next 在 body 未到齐前的缓冲不算 handler 已响应。
 service-only runtime manifest 与公开 Share 按 BFF owner 明确边界运行，不伪造用户凭据。BFF 自己验证
 IAM admission、resource/tenant 业务授权；Web session UI 不构成 owner 授权。
 

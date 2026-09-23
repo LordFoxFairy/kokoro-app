@@ -19,10 +19,10 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "eb7ded2386efd9a10905843a7a5aedff9ac72df6",
-      policySha256: "05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10",
+      ownerCommit: "1d1f42775e0fa4464de6b08ee9d2b9cd82911a71",
+      policySha256: "bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819",
     })
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("65b0fd969989d4044fae640a8414d9c2dcf41c3b")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("f240bd7d5f542bb152c7eb929074c96b6c290ea8")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
   })
@@ -38,12 +38,13 @@ describe("fixed BFF IAM relay policy consumer", () => {
     })).toThrow("IAM relay policy is missing a browser GET route")
   })
 
-  it("admits only the read-only browser GET subset", () => {
+  it("admits the fixed browser GET subset including issuer logout confirmation entry", () => {
     for (const path of [
       "/iam/.well-known/openid-configuration",
       "/iam/.well-known/oauth-authorization-server",
       "/iam/jwks",
       "/iam/oauth2/authorize?client_id=web",
+      "/iam/oauth2/end-session?client_id=web",
       "/iam/get-session",
       "/iam/organization/list",
     ]) {
@@ -52,7 +53,7 @@ describe("fixed BFF IAM relay policy consumer", () => {
 
     for (const [path, method] of [
       ["/iam/oauth2/userinfo", "GET"],
-      ["/iam/oauth2/end-session", "GET"],
+      ["/iam/oauth2/end-session/confirm", "GET"],
       ["/iam/oauth2/authorize", "POST"],
       ["/iam/jwks", "POST"],
       ["/iam/unknown", "GET"],
@@ -81,6 +82,9 @@ describe("fixed BFF IAM relay policy consumer", () => {
       false,
     )).toBeNull()
     expect(filterIssuerCookies("kokoro-issuer.unknown=value", false)).toBe("")
+    expect(filterIssuerCookies("kokoro-issuer.session_token.oauth_logout_confirmation=signed", false)).toBe("")
+    expect(filterIssuerCookies("kokoro-issuer.session_token.oauth_logout_confirmation=signed", false, true))
+      .toBe("kokoro-issuer.session_token.oauth_logout_confirmation=signed")
     expect(filterIssuerCookies("kokoro-issuer.session_token=ok\u0001bad", false)).toBeNull()
   })
 })

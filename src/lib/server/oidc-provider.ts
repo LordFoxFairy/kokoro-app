@@ -4,9 +4,12 @@ import type { OAuthConfig } from "next-auth/providers/oauth"
 
 import { boundedOidcBffAgent } from "./oidc-bff-agent"
 import { iamRelayConfig, type IamRelayConfig } from "./iam-relay-config"
+import { validAccessCredential } from "./product-session"
+import { validRefreshCredential } from "./product-session-store"
 
 export const OIDC_RESOURCE = "https://kokoro.dev/resources/iam-internal"
 export const OIDC_SCOPE = "openid profile email offline_access iam:session-authorization.verify"
+export const MAX_TOKEN_LIFETIME_SECONDS = 60 * 60
 const PROVIDER_ID = "kokoro-iam"
 
 export type OidcRpConfig = Readonly<{
@@ -17,6 +20,13 @@ export type OidcRpConfig = Readonly<{
   redisUrl: string
   issuer: string
   callbackUrl: string
+}>
+
+export type VerifiedOidcTokens = Readonly<{
+  subject: string
+  access: string
+  refresh: string
+  accessExpiresAt: number
 }>
 
 export function oidcRpConfig(env: NodeJS.ProcessEnv): OidcRpConfig | null {
@@ -62,7 +72,7 @@ function allowBffEndpoint(client: Client, config: OidcRpConfig, endpoint: "token
   }
 }
 
-export function oidcAuthOptions(config: OidcRpConfig, onVerified: () => void, signal: AbortSignal): AuthOptions {
+export function oidcAuthOptions(config: OidcRpConfig, onVerified: (tokens: VerifiedOidcTokens) => void, signal: AbortSignal): AuthOptions {
   const provider: OAuthConfig<{ sub: string; name?: string; email?: string }> = {
     id: PROVIDER_ID,
     name: "Kokoro IAM",
@@ -109,8 +119,14 @@ export function oidcAuthOptions(config: OidcRpConfig, onVerified: () => void, si
     useSecureCookies: config.relay.secureCookies,
     session: { strategy: "jwt" },
     callbacks: {
-      signIn() {
-        onVerified()
+      signIn({ account }) {
+        if (account?.provider !== PROVIDER_ID || typeof account.providerAccountId !== "string" ||
+          !validAccessCredential(account.access_token) || !validRefreshCredential(account.refresh_token) ||
+          typeof account.expires_at !== "number" || !Number.isSafeInteger(account.expires_at) ||
+          account.expires_at * 1_000 <= Date.now() ||
+          account.expires_at * 1_000 > Date.now() + MAX_TOKEN_LIFETIME_SECONDS * 1_000) return false
+        onVerified({ subject: account.providerAccountId, access: account.access_token,
+          refresh: account.refresh_token, accessExpiresAt: account.expires_at * 1_000 })
         return false
       },
       session() {

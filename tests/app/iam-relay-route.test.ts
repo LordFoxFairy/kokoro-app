@@ -11,6 +11,7 @@ const ENV = {
   KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
   KOKORO_WEB_ORIGIN: "https://web.example.test",
+  KOKORO_OIDC_CLIENT_ID: "web-client",
 }
 
 function params(path: string[]): { params: Promise<{ path: string[] }> } {
@@ -109,9 +110,71 @@ describe("/iam/[...path] read-only relay", () => {
     expect(await response.text()).toBe("redirect")
   })
 
+  it("relays only the fixed issuer logout URL and strips confirmation cookie from GET", async () => {
+    requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "text/html; charset=utf-8" },
+      setCookies: ["kokoro-issuer.session_token.oauth_logout_confirmation=signed; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax"], body: "confirm" }))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const target = "https://web.example.test/iam/oauth2/end-session?client_id=web-client&post_logout_redirect_uri=https%3A%2F%2Fweb.example.test%2Fauth%2Fsign-in"
+    const response = await GET(browserRequest(target, { headers: { cookie:
+      "kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=old; kokoro_product_session=product" } }),
+    params(["oauth2", "end-session"]))
+    expect(response.status).toBe(200)
+    expect(requestIamRelay.mock.calls[0]?.[0].headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer")
+    expect(response.headers.getSetCookie()).toHaveLength(1)
+    for (const bad of [
+      "?client_id=web-client&post_logout_redirect_uri=https%3A%2F%2Fevil.test%2Fauth%2Fsign-in",
+      "?client_id=evil&post_logout_redirect_uri=https%3A%2F%2Fweb.example.test%2Fauth%2Fsign-in",
+      "?client_id=web-client&post_logout_redirect_uri=https%3A%2F%2Fweb.example.test%2Fauth%2Fsign-in&state=x",
+    ]) {
+      const rejected = await GET(browserRequest(`https://web.example.test/iam/oauth2/end-session${bad}`),
+        params(["oauth2", "end-session"]))
+      expect(rejected.status).toBe(400)
+    }
+    expect(requestIamRelay).toHaveBeenCalledTimes(1)
+  })
+
+  it("posts only signed logout confirmation with exact Origin and form to BFF", async () => {
+    requestIamRelay.mockResolvedValue(upstream({ status: 302, headers: { location: "/auth/sign-in" },
+      setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"] }))
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const target = "https://web.example.test/iam/oauth2/end-session/confirm"
+    const cookie = "kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=signed; kokoro_product_session=product"
+    const good = () => browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test",
+      "content-type": "application/x-www-form-urlencoded", cookie }, body: "action=confirm" })
+    const response = await POST(good(), params(["oauth2", "end-session", "confirm"]))
+    expect(response.status).toBe(302)
+    expect(response.headers.get("location")).toBe("/auth/sign-in")
+    const call = requestIamRelay.mock.calls[0]?.[0]
+    expect(call.url).toBe("http://bff.test/iam/oauth2/end-session/confirm")
+    expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=signed")
+    expect(call.headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
+    expect(new TextDecoder().decode(call.body)).toBe("action=confirm")
+    for (const invalid of [
+      browserRequest(target, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", cookie }, body: "action=confirm" }),
+      browserRequest(target, { method: "POST", headers: { origin: "https://evil.test", "content-type": "application/x-www-form-urlencoded", cookie }, body: "action=confirm" }),
+      browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded", cookie }, body: "action=cancel" }),
+      browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded", cookie: "kokoro-issuer.session_token=issuer" }, body: "action=confirm" }),
+    ]) expect((await POST(invalid, params(["oauth2", "end-session", "confirm"]))).status).toBeGreaterThanOrEqual(400)
+    expect(requestIamRelay).toHaveBeenCalledTimes(1)
+  })
+
+  it("cuts off an application-visible slow confirmation stream within five seconds without opening BFF", async () => {
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const url = "https://web.example.test/iam/oauth2/end-session/confirm"
+    const body = new ReadableStream<Uint8Array>({ start(controller) {
+      controller.enqueue(new TextEncoder().encode("action="))
+    } })
+    const request = browserRequest(url, { method: "POST", headers: { origin: "https://web.example.test",
+      "content-type": "application/x-www-form-urlencoded" }, body, duplex: "half" } as RequestInit)
+    const started = Date.now()
+    const response = await POST(request, params(["oauth2", "end-session", "confirm"]))
+    expect(response.status).toBe(400)
+    expect(Date.now() - started).toBeLessThan(6_000)
+    expect(requestIamRelay).not.toHaveBeenCalled()
+  }, 8_000)
+
   it.each([
     ["GET", "https://web.example.test/iam/oauth2/userinfo", ["oauth2", "userinfo"]],
-    ["GET", "https://web.example.test/iam/oauth2/end-session", ["oauth2", "end-session"]],
     ["GET", "https://web.example.test/iam/unknown", ["unknown"]],
     ["GET", "https://web.example.test/iam/%6awks", ["jwks"]],
   ])("rejects %s %s before opening BFF", async (method, url, path) => {
@@ -127,7 +190,7 @@ describe("/iam/[...path] read-only relay", () => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const) {
       const handler = route[method]
       expect(handler, `${method} handler`).toBeTypeOf("function")
-      const response = handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }))
+      const response = await handler(browserRequest("https://web.example.test/iam/oauth2/authorize", { method }))
       expect(response.status, method).toBe(405)
       expect(response.headers.get("allow"), method).toBe("GET")
     }

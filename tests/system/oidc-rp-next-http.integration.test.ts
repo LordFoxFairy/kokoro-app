@@ -6,12 +6,17 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { createClient } from "redis"
+import { decode } from "next-auth/jwt"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
 
 function oidcStateKeyPrefix(webOrigin: string): string {
   return `kokoro:web:oidc-state:${createHash("sha256").update(webOrigin).digest("hex")}:`
+}
+
+function productSessionKeyPrefix(webOrigin: string): string {
+  return `kokoro:web:product-session:${createHash("sha256").update(webOrigin).digest("hex")}:`
 }
 
 async function listen(server: Server): Promise<number> {
@@ -139,6 +144,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   const publicJwk = { ...keys.publicKey.export({ format: "jwk" }), kid: "fixture-key", use: "sig", alg: "EdDSA" }
   const rsaJwk = { ...rsaKeys.publicKey.export({ format: "jwk" }), kid: "rsa-key", use: "sig", alg: "RS256" }
   const issuedStates = new Set<string>()
+  const productIds = new Set<string>()
+  const authSecret = randomBytes(32).toString("hex")
   const paths: string[] = []
   let root: string | undefined
   let bff: Server | undefined
@@ -147,10 +154,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let nonce = ""
   let invalidIdToken: "none" | "nonce" | "issuer" | "audience" | "signature" | "algorithm" | "expired" = "none"
   let invalidUserinfoSubject = false
+  let oversizedRefreshCredential = false
+  let oversizedAccessCredential = false
+  let oversizedSubject = false
+  let refreshResponseOverride: object | undefined
   let oversizedResponse: "none" | "token" | "userinfo" | "jwks" = "none"
   let slowResponse: "none" | "token" | "userinfo" = "none"
   let onTokenStarted: (() => void) | undefined
   let onTokenClosed: (() => void) | undefined
+  let onRefreshStarted: (() => void) | undefined
+  let releaseRefresh: (() => void) | undefined
+  let holdRefresh = false
+  let issuerSessionActive = false
   let output = ""
 
   function sendJson(response: import("node:http").ServerResponse, endpoint: "token" | "userinfo" | "jwks", body: object): void {
@@ -170,14 +185,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     if (next !== undefined) { const child = next; next = undefined; await stop(child) }
     if (bff !== undefined) { const server = bff; bff = undefined; await close(server) }
     if (root !== undefined) { const directory = root; root = undefined; await rm(directory, { recursive: true, force: true }) }
-    if (issuedStates.size > 0 && nextPort !== 0) {
+    if ((issuedStates.size > 0 || productIds.size > 0) && nextPort !== 0) {
       const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
       client.on("error", () => undefined)
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
         await Promise.race([
-          (async () => { await client.connect(); await client.del([...issuedStates].map((state) =>
-            `${oidcStateKeyPrefix(`http://localhost:${nextPort}`)}${createHash("sha256").update(state).digest("hex")}`)) })(),
+          (async () => { await client.connect(); await client.del([
+            ...[...issuedStates].map((state) =>
+              `${oidcStateKeyPrefix(`http://localhost:${nextPort}`)}${createHash("sha256").update(state).digest("hex")}`),
+            ...[...productIds].flatMap((id) => [`${productSessionKeyPrefix(`http://localhost:${nextPort}`)}${id}`,
+              `${productSessionKeyPrefix(`http://localhost:${nextPort}`)}${id}:tombstone`]),
+          ]) })(),
           new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("RP Redis cleanup deadline")), 2_000) }),
         ])
       } finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
@@ -208,37 +227,91 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             expect(request.headers.authorization).toBe(`Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`)
             expect(request.headers.cookie).toBeUndefined()
             expect(body.getAll("resource")).toEqual(["https://kokoro.dev/resources/iam-internal"])
+            if (body.get("grant_type") === "refresh_token") {
+              expect(body.get("refresh_token")).toBe("refresh-opaque")
+              expect(body.get("code_verifier")).toBeNull()
+              const send = (): void => sendJson(response, "token", refreshResponseOverride ??
+                { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 600 })
+              if (holdRefresh) { releaseRefresh = send; onRefreshStarted?.() }
+              else send()
+              return
+            }
             expect(body.getAll("code_verifier")).toHaveLength(1)
             expect(body.get("redirect_uri")).toBe(`http://localhost:${nextPort}/api/auth/callback/kokoro-iam`)
             const now = Math.floor(Date.now() / 1000)
             const idToken = jwt(invalidIdToken === "algorithm" ? rsaKeys.privateKey : invalidIdToken === "signature" ? wrongKeys.privateKey : keys.privateKey,
               { iss: invalidIdToken === "issuer" ? "https://evil.example/iam" : `http://localhost:${nextPort}/iam`,
-                aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: "user-one",
+                aud: invalidIdToken === "audience" ? "wrong-client" : clientId, sub: oversizedSubject ? "s".repeat(257) : "user-one",
                 nonce: invalidIdToken === "nonce" ? "wrong-nonce" : nonce,
                 iat: invalidIdToken === "expired" ? now - 1_200 : now,
                 exp: invalidIdToken === "expired" ? now - 600 : now + 600 },
               invalidIdToken === "algorithm" ? "RS256" : "EdDSA")
             if (onTokenClosed !== undefined) response.once("close", onTokenClosed)
-            sendJson(response, "token", { access_token: "access-opaque", refresh_token: "refresh-opaque",
+            sendJson(response, "token", { access_token: oversizedAccessCredential ? "a".repeat(2049) : "access-opaque", refresh_token: oversizedRefreshCredential ? "r".repeat(9_000) : "refresh-opaque",
               id_token: idToken, token_type: "Bearer", expires_in: 600 })
             onTokenStarted?.()
           })
           return
         }
+        if (request.url === "/iam/oauth2/revoke") {
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            const body = new URLSearchParams(Buffer.concat(chunks).toString("utf8"))
+            expect(["refresh-opaque", "refresh-rotated"]).toContain(body.get("token"))
+            expect(request.headers.authorization).toBe(`Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`)
+            response.writeHead(200); response.end()
+          })
+          return
+        }
         if (request.url === "/iam/oauth2/userinfo") {
           expect(request.method).toBe("GET")
-          expect(request.headers.authorization).toBe("Bearer access-opaque")
+          expect(request.headers.authorization).toBe(`Bearer ${oversizedAccessCredential ? "a".repeat(2049) : "access-opaque"}`)
           expect(request.headers.cookie).toBeUndefined()
           expect(request.headers["x-kokoro-service"]).toBe("web-bff")
-          sendJson(response, "userinfo", { sub: invalidUserinfoSubject ? "different-user" : "user-one",
+          sendJson(response, "userinfo", { sub: invalidUserinfoSubject ? "different-user" : oversizedSubject ? "s".repeat(257) : "user-one",
             name: "Fixture User", email: "fixture@example.test" })
           return
         }
         if (request.url?.startsWith("/iam/oauth2/authorize?")) {
           const url = new URL(request.url, `http://localhost:${nextPort}`)
           nonce = url.searchParams.get("nonce") ?? ""
-          response.writeHead(302, { location: `/api/auth/callback/kokoro-iam?code=fixture-code&state=${url.searchParams.get("state")}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}` })
+          issuerSessionActive = true
+          response.writeHead(302, { location: `/api/auth/callback/kokoro-iam?code=fixture-code&state=${url.searchParams.get("state")}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`,
+            "set-cookie": "kokoro-issuer.session_token=issuer-fixture; Path=/iam; HttpOnly; SameSite=Lax" })
           response.end()
+          return
+        }
+        if (request.url?.startsWith("/iam/oauth2/end-session?")) {
+          const query = new URL(request.url, `http://localhost:${nextPort}`)
+          expect(query.searchParams.get("client_id")).toBe(clientId)
+          expect(query.searchParams.get("post_logout_redirect_uri")).toBe(`http://localhost:${nextPort}/auth/sign-in`)
+          expect(request.headers.cookie).toBe("kokoro-issuer.session_token=issuer-fixture")
+          response.writeHead(200, { "content-type": "text/html; charset=utf-8", "set-cookie":
+            "kokoro-issuer.session_token.oauth_logout_confirmation=signed-fixture; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax" })
+          response.end(`<form method="post" action="http://localhost:${nextPort}/iam/oauth2/end-session/confirm"><button name="action" value="confirm">Confirm</button></form>`)
+          return
+        }
+        if (request.url === "/iam/oauth2/end-session/confirm") {
+          expect(request.method).toBe("POST")
+          expect(request.headers.origin).toBe(`http://localhost:${nextPort}`)
+          expect(request.headers.cookie).toBe("kokoro-issuer.session_token=issuer-fixture; kokoro-issuer.session_token.oauth_logout_confirmation=signed-fixture")
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            expect(Buffer.concat(chunks).toString("utf8")).toBe("action=confirm")
+            issuerSessionActive = false
+            response.writeHead(302, { location: "/auth/sign-in", "set-cookie": [
+              "kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax",
+              "kokoro-issuer.session_token.oauth_logout_confirmation=; Path=/iam/oauth2/end-session/confirm; Max-Age=0; HttpOnly; SameSite=Lax",
+            ] })
+            response.end()
+          })
+          return
+        }
+        if (request.url === "/iam/get-session") {
+          const present = request.headers.cookie?.includes("kokoro-issuer.session_token=issuer-fixture") && issuerSessionActive
+          sendJson(response, "userinfo", present ? { session: { userId: "user-one" } } : { session: null })
           return
         }
         response.writeHead(404)
@@ -252,7 +325,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         env: { ...process.env, KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
           KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`, KOKORO_INTERNAL_SECRET_WEB_BFF: "rp-bff-secret",
           KOKORO_WEB_REDIS_URL: redisUrl, KOKORO_OIDC_CLIENT_ID: clientId, KOKORO_OIDC_CLIENT_SECRET: clientSecret,
-          KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` },
+          KOKORO_WEB_AUTH_SECRET: authSecret, NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` },
         stdio: ["ignore", "pipe", "pipe"],
       })
       next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
@@ -271,7 +344,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   afterAll(cleanup)
 
-  async function start(): Promise<{ signin: HttpResult; jar: string; location: string; state: string }> {
+  async function start(): Promise<{ csrf: HttpResult; signin: HttpResult; jar: string; location: string; state: string }> {
     const csrf = await http(nextPort, "/api/auth/csrf")
     expect(csrf.status).toBe(200)
     const token = (JSON.parse(csrf.body) as { csrfToken: string }).csrfToken
@@ -281,21 +354,54 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const location = signin.headers.location as string
     const state = new URL(location).searchParams.get("state") ?? ""
     issuedStates.add(state)
-    return { signin, jar: cookieHeader(csrf, signin), location, state }
+    return { csrf, signin, jar: cookieHeader(csrf, signin), location, state }
   }
 
-  it("keeps code exchange and userinfo server-only, then returns no usable session", async () => {
+  async function recordProduct(response: HttpResult): Promise<void> {
+    const cookie = (response.headers["set-cookie"] as string[] | undefined ?? [])
+      .find((item) => item.startsWith("kokoro_product_session="))
+    if (cookie === undefined) return
+    const token = cookie.split(";")[0]?.slice("kokoro_product_session=".length)
+    if (token === undefined) return
+    const claims = await decode({ token, secret: authSecret, salt: "kokoro-product-session-v1" })
+    if (typeof claims?.id === "string") productIds.add(claims.id)
+  }
+
+  async function productRecordCount(): Promise<number> {
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    try {
+      await client.connect()
+      let count = 0
+      for await (const key of client.scanIterator({ MATCH: `${productSessionKeyPrefix(`http://localhost:${nextPort}`)}*` })) {
+        if (key !== undefined) count += 1
+      }
+      return count
+    } finally { client.destroy() }
+  }
+
+  it("keeps code exchange and userinfo server-only, then establishes an encrypted Product Session", async () => {
     const { signin, jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     expect(authorize.status).toBe(302)
     const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
-    expect(callback.status).toBe(503)
-    expect(JSON.parse(callback.body)).toMatchObject({ error: { code: "product_session_unavailable" } })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    expect(callback.headers.location).toBe("/app")
     expect(callback.body).not.toContain("access-opaque")
     expect(callback.body).not.toContain("refresh-opaque")
     expect(callback.body).not.toContain("fixture-code")
-    expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
-      !cookie.includes("session-token=") || cookie.includes("Max-Age=0"))).toBe(true)
+    expect((callback.headers["set-cookie"] as string[]).some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(true)
+    expect(Buffer.byteLength((callback.headers["set-cookie"] as string[]).find((cookie) =>
+      cookie.startsWith("kokoro_product_session="))!, "utf8"))
+      .toBeLessThanOrEqual(4096)
+    const productJar = cookieHeader(signin, callback)
+    const projection = await http(nextPort, "/api/auth/session", "GET", "", { cookie: productJar })
+    expect(projection.status).toBe(200)
+    expect(projection.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)
+    expect(JSON.parse(projection.body)).toMatchObject({ authenticated: true, subject: "user-one" })
+    expect(projection.body).not.toContain("access-opaque")
+    expect(projection.body).not.toContain("refresh-opaque")
     expect((callback.headers["set-cookie"] as string[]).every((cookie) =>
       !cookie.includes("kokoro_session="))).toBe(true)
     expect(paths).toContain("/iam/oauth2/token")
@@ -305,6 +411,180 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const replay = await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`, "GET", "", { cookie: jar })
     expect(replay.status).toBe(403)
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(tokenCalls)
+  })
+
+  it("rotates once across concurrent refresh POSTs and rejects old generation before active logout", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const oldJar = cookieHeader(csrf, signin, callback)
+    const csrfToken = (JSON.parse(csrf.body) as { csrfToken: string }).csrfToken
+    const form = `csrfToken=${csrfToken}`
+    const before = paths.filter((item) => item === "/iam/oauth2/token").length
+    const results = await Promise.all([0, 1].map(() => http(nextPort, "/api/auth/session", "POST", form,
+      { origin: `http://localhost:${nextPort}`, cookie: oldJar })))
+    expect(results.filter((item) => item.status === 200)).toHaveLength(1)
+    expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(before + 1)
+    const winner = results.find((item) => item.status === 200)!
+    expect(winner.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)
+    await recordProduct(winner)
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).body).toContain('"authenticated":false')
+    const newJar = cookieHeader(csrf, signin, callback, winner)
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":true')
+    const signout = await http(nextPort, "/api/auth/signout", "POST", form,
+      { origin: `http://localhost:${nextPort}`, cookie: newJar })
+    expect(signout.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)
+    expect(signout.body).toContain('"remote_revocation":"confirmed"')
+    expect(paths).toContain("/iam/oauth2/revoke")
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":false')
+  })
+
+  it("hands browser a token-free issuer logout URL and ends issuer session only after GET confirmation plus POST", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const productJar = cookieHeader(csrf, signin, callback)
+    const issuerCookie = cookieHeader(authorize)
+    expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerCookie })).body)
+      .toContain('"userId":"user-one"')
+    const token = (JSON.parse(csrf.body) as { csrfToken: string }).csrfToken
+    const signout = await http(nextPort, "/api/auth/signout", "POST", `csrfToken=${token}`,
+      { origin: `http://localhost:${nextPort}`, cookie: productJar })
+    expect(signout.status).toBe(200)
+    const handoff = JSON.parse(signout.body) as { issuer_session: string; issuer_end_session_url: string }
+    expect(handoff.issuer_session).toBe("pending_browser_confirmation")
+    expect(handoff.issuer_end_session_url).toMatch(/^\/iam\/oauth2\/end-session\?/u)
+    expect(handoff.issuer_end_session_url).not.toMatch(/access|refresh|id_token|secret/u)
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: productJar })).body)
+      .toContain('"authenticated":false')
+    expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerCookie })).body)
+      .toContain('"userId":"user-one"')
+    const get = await http(nextPort, handoff.issuer_end_session_url, "GET", "", { cookie: issuerCookie,
+      accept: "text/html" })
+    expect(get.status).toBe(200)
+    expect(get.body).toContain("/iam/oauth2/end-session/confirm")
+    const confirmationCookie = cookieHeader(get)
+    const rejected = await http(nextPort, "/iam/oauth2/end-session/confirm", "POST", "action=confirm",
+      { cookie: `${issuerCookie}; ${confirmationCookie}` })
+    expect(rejected.status).toBe(403)
+    const confirmed = await http(nextPort, "/iam/oauth2/end-session/confirm", "POST", "action=confirm",
+      { origin: `http://localhost:${nextPort}`, cookie: `${issuerCookie}; ${confirmationCookie}` })
+    expect(confirmed.status).toBe(302)
+    expect(confirmed.headers.location).toBe("/auth/sign-in")
+    const issuerAfter = cookieHeader(authorize, get, confirmed)
+    expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerAfter })).body)
+      .toContain('"session":null')
+  })
+
+  it("keeps BFF untouched while real Next has not received a complete slow confirmation body", async () => {
+    const before = paths.length
+    let sawResponse = false
+    await new Promise<void>((resolve) => {
+      const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort,
+        path: "/iam/oauth2/end-session/confirm", method: "POST",
+        headers: { host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`,
+          "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } }, (reply) => {
+        sawResponse = true
+        reply.resume()
+      })
+      browser.on("error", () => undefined)
+      browser.write("action=")
+      setTimeout(() => { browser.destroy(); resolve() }, 5_500)
+    })
+    expect(sawResponse).toBe(false)
+    expect(paths).toHaveLength(before)
+  }, 8_000)
+
+  it("does not relay a browser-disconnected logout confirmation form", async () => {
+    const before = paths.length
+    const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort,
+      path: "/iam/oauth2/end-session/confirm", method: "POST",
+      headers: { host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`,
+        "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } })
+    browser.on("error", () => undefined)
+    browser.write("action=")
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    browser.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(paths).toHaveLength(before)
+  })
+
+  it("tombstones a pending refresh without sending its stale credential to revoke", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
+    const started = new Promise<void>((resolve) => { onRefreshStarted = resolve })
+    holdRefresh = true
+    try {
+      const refreshing = http(nextPort, "/api/auth/session", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      await started
+      const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
+      const signout = await http(nextPort, "/api/auth/signout", "POST", form,
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(signout.status).toBe(200)
+      expect(JSON.parse(signout.body)).toMatchObject({ remote_revocation: "unconfirmed" })
+      expect(paths.filter((item) => item === "/iam/oauth2/revoke")).toHaveLength(revokesBefore)
+      releaseRefresh?.()
+      releaseRefresh = undefined
+      expect((await refreshing).status).toBe(409)
+      expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":false')
+    } finally { holdRefresh = false; releaseRefresh?.(); releaseRefresh = undefined; onRefreshStarted = undefined }
+  })
+
+  it.each([
+    { access_token: "a".repeat(2049), refresh_token: "refresh-next", expires_in: 600 },
+    { access_token: "access-next", refresh_token: "r".repeat(8193), expires_in: 600 },
+    { access_token: "access-next", refresh_token: "refresh-next", expires_in: 3601 },
+    { access_token: "access-next", refresh_token: "refresh-next", expires_in: 0.5 },
+  ])("rejects malformed rotated token credentials before a generation change: %#", async (invalid) => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const oldJar = cookieHeader(csrf, signin, callback)
+    refreshResponseOverride = { ...invalid, token_type: "Bearer" }
+    try {
+      const before = paths.filter((item) => item === "/iam/oauth2/token").length
+      const result = await http(nextPort, "/api/auth/session", "POST",
+        `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`,
+        { origin: `http://localhost:${nextPort}`, cookie: oldJar })
+      expect(result.status).toBe(503)
+      expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(before + 1)
+      expect((result.headers["set-cookie"] as string[] | undefined ?? [])
+        .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(false)
+      expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).body)
+        .toContain('"authenticated":false')
+    } finally { refreshResponseOverride = undefined }
+  })
+
+  it("rejects refresh and signout mutations without matching Origin and Auth.js CSRF", async () => {
+    const { csrf, signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    expect(callback.status).toBe(303)
+    await recordProduct(callback)
+    const cookie = cookieHeader(csrf, signin, callback)
+    const before = paths.length
+    for (const action of ["session", "signout"]) {
+      const path = `/api/auth/${action}`
+      const noOrigin = await http(nextPort, path, "POST", "csrfToken=wrong", { cookie })
+      expect(noOrigin.status).toBe(403)
+      const badCsrf = await http(nextPort, path, "POST", "csrfToken=wrong",
+        { origin: `http://localhost:${nextPort}`, cookie })
+      expect(badCsrf.status).toBe(403)
+    }
+    expect(paths).toHaveLength(before)
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie })).body).toContain('"authenticated":true')
   })
 
   it("rejects browser overrides and wrong state before any token socket", async () => {
@@ -328,6 +608,51 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths.slice(initial).filter((item) => item === "/iam/oauth2/token")).toHaveLength(0)
   })
 
+  it("rejects an oversized initial refresh before Product Session creation, without a cookie", async () => {
+    const { jar, location, state } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    oversizedRefreshCredential = true
+    try {
+      const callbackPath = authorize.headers.location as string
+      const callback = await http(nextPort, callbackPath, "GET", "", { cookie: jar })
+      expect(callback.status).toBe(403)
+      expect(JSON.parse(callback.body)).toMatchObject({ error: { code: "rp_callback_rejected" } })
+      expect(callback.body).not.toContain("r".repeat(100))
+      expect((callback.headers["set-cookie"] as string[] | undefined ?? []).every((cookie) =>
+        !cookie.startsWith("kokoro_product_session="))).toBe(true)
+      const replay = await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`,
+        "GET", "", { cookie: jar })
+      expect(replay.status).toBe(403)
+    } finally { oversizedRefreshCredential = false }
+  })
+
+  it("returns controlled 503 without creating a Redis record when Product cookie preflight rejects claims", async () => {
+    const { jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    oversizedSubject = true
+    try {
+      const before = await productRecordCount()
+      const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+      expect(callback.status).toBe(503)
+      expect(JSON.parse(callback.body)).toMatchObject({ error: { code: "product_session_unavailable" } })
+      expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
+        .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(false)
+      expect(await productRecordCount()).toBe(before)
+    } finally { oversizedSubject = false }
+  })
+
+  it("rejects an oversized initial access credential before Redis session creation or a browser cookie", async () => {
+    const { jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    oversizedAccessCredential = true
+    try {
+      const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+      expect(callback.status).toBe(403)
+      expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
+        .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(false)
+    } finally { oversizedAccessCredential = false }
+  })
+
   it("rejects a wrong Auth.js CSRF proof before issuing RP state or opening BFF", async () => {
     const csrf = await http(nextPort, "/api/auth/csrf")
     const before = paths.length
@@ -349,7 +674,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       http(nextPort, callbackPath, "GET", "", { cookie: jar }),
       http(nextPort, callbackPath, "GET", "", { cookie: jar }),
     ])
-    expect([first.status, second.status].sort()).toEqual([403, 503])
+    expect([first.status, second.status].sort()).toEqual([303, 403])
+    await recordProduct(first)
+    await recordProduct(second)
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(before + 1)
     expect((await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`, "GET", "", { cookie: jar })).status).toBe(403)
   })

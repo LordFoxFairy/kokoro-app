@@ -1,7 +1,8 @@
 # Kokoro User Web 技术设计
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
-已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布，Product Session 与真实 IAM 组合验收尚未完成。
+已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 当前未提交工作树实现
+Product Session 基础、Web Redis 双 CAS 与标准 session/signout route，真实三仓 IAM 组合仍待 Root 验收。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
@@ -16,11 +17,12 @@ continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,u
 测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。已发布的 2B-2 新增
 `/auth/*` 外层引导与 `/iam/interactions/*` 真正 tenant/consent 表单；Product Session 仍属后续切片。
 
-W1C-2C 第一切片的**当前 RP-only 实现**仅安装 RP transaction、callback、经固定 BFF relay 的 server-only token/userinfo。
+W1C-2C 已发布的**RP-only 基线**仅安装 RP transaction、callback、经固定 BFF relay 的 server-only token/userinfo。
 Code+S256、state、nonce、固定 issuer/client/redirect URI/resource 验证成功后，因 Product Session
-尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；不建立可用 Auth.js JWT 或旧 sealed session，
+当时尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；S1 工作树成功回调改为建
+Web 在线 Product Session、清 RP cookie 后 303 到 `/app`，失败/重放仍按原受控拒绝；不建立旧 sealed session，
 不把 token、code、userinfo 正文或上游错误返回浏览器。Redis 仅保存一次性 RP state 摘要与短期事务绑定，
-不保存 token/PII；刷新、退出、普通 BFF Bearer 代理及旧路径删除留后续切片。
+不保存 token/PII；S1 仅实现自身刷新/退出，普通 BFF Bearer 代理及旧路径删除留后续切片。
 IAM consent 成功的 callback 实际带唯一 `code`、`state`、`iss`；relay 和 RP 都只接收这三键且
 `iss=${KOKORO_WEB_ORIGIN}/iam`，随后将完整 query 交 `openid-client` 再验证 issuer。
 受控入口拒绝浏览器覆盖 `resource`、`scope`、`client_id`、`redirect_uri`、`callbackUrl`（含重复键），
@@ -46,10 +48,10 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `eb7ded2386efd9a10905843a7a5aedff9ac72df6`，其
+BFF relay 固定policy来源 commit `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`05e2068376ef79b6aba8eff0f170a3a2bd0a0a5b31bc6836b3de9f682ff86a10`；policy version `1.0.0`
-固定 IAM owner commit `65b0fd969989d4044fae640a8414d9c2dcf41c3b`。该 pin 已随 IAM test-only
+`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；policy version `1.0.0`
+固定 IAM owner commit `f240bd7d5f542bb152c7eb929074c96b6c290ea8`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
 但真实 Web→BFF→IAM 链与 Product Session 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
 digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
@@ -102,18 +104,19 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    比对 Redis 当前 generation/tombstone，再向普通 BFF `/v1` 传唯一 Bearer。双阶段 CAS 从 `active(g)`
    原子预留，只有赢家向 IAM 发起**一次**固定 Basic/resource 的 refresh；收到新 token 后必须在
    reservation、deadline、未撤销条件下原子提交新加密 refresh 与 `active(g+1)`，才发送新 cookie。
-   竞争败者仅拒绝本请求，不撤销赢家、不清赢家 cookie，也不再次请求 IAM。pending、旧 generation、
+   reserve 后 AAD 解密失败尽力按 reservation tombstone，Redis 不可用仍 fail closed；access UTF-8 ≤2048 B、refresh ≤8192 B、整数 `expires_in` 1–3600 s 且完整 Product Set-Cookie ≤4096 B，在 callback 建 Redis 前和 refresh finalize 前验证。竞争败者仅拒绝本请求，不撤销赢家、不清赢家 cookie，也不再次请求 IAM。pending、旧 generation、
    结果未知、Redis 故障均 fail closed；未决 reservation 到期只撤销，绝不恢复旧 active。finalize 成功
-   但新 cookie 交付未知时旧 g 仍拒绝，用户重新登录；不依赖 IAM 的 replay 窗口恢复败者。
+   或 Redis finalize ACK 未知时不发送新 cookie；即使 Redis 已提交 `active(g+1)`，旧 g 仍拒绝、用户
+   重新登录，无客户端可达的 active record 按固定 TTL 回收；不依赖 IAM 的 replay 窗口恢复败者。
    cookie 的 `Path=/`、`SameSite=Lax`、`HttpOnly`、production `Secure` 与 issuer cookie 分离。
 5. logout 从可信解封的 cookie 取得 session ID；不要求请求 generation 仍是最新。单次 Redis 原子操作
    tombstone 当前记录；**仅在记录为 active 时** take 已确认当前的加密 refresh，经固定 BFF relay 单次
-   有界尝试 IAM revoke/end-session。若记录为 refreshing/pending，旧 refresh 可能已轮换，故只
+   有界尝试 IAM revoke；issuer end-session 必须另由浏览器确认，refresh revoke 不等于 issuer cookie 清除。若记录为 refreshing/pending，旧 refresh 可能已轮换，故只
    tombstone，不 take/发送旧 refresh 到 IAM，并报告远端撤销未确认。缺失记录也建立覆盖最大会话/在途
    窗口的 tombstone，迟到 finalize 不可复活；重复 logout 不重复远端 revoke。清 Web cookie；
    active 状态的远端失败也准确报告未确认；若 tombstone 写入 ACK 未知，清 cookie 仅表示本浏览器
    清除，不能报告服务端已撤销，也不在清 cookie 后声称可补偿重试。IAM 失联时远端 token/session
-   仅靠 IAM owner TTL 兜底；UI 区分本地退出与远端未确认，不宣称全端退出。
+   仅靠 IAM owner TTL 兜底；UI 区分本地退出与远端未确认，不宣称全端退出。 S1 signout JSON 另返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器 GET IAM 原生确认页后，POST `action=confirm` 到固定 `/iam/oauth2/end-session/confirm`，仅该路径透传 IAM 签名 confirmation cookie，Web 校验精确 Origin、Host、form 与固定参数，IAM 再验 cookie 的 session/TTL 并删除 issuer session。确认 POST 成功前不宣称 issuer 已退出；URL 不含任何 token。
    失效/撤销/tenant 切换后的 BFF 401/403 不得仅靠 Web 缓存视为已授权。
 
 ### `/iam` 和业务代理的安全边界
@@ -151,9 +154,9 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   交互绑定及一次性消费，按 IAM 当前机器契约构造 `/iam/sign-in/email|organization/set-active|
   oauth2/consent|oauth2/continue` 的原生 body（Web CSRF 字段不入 IAM），原样携带 IAM 已签 query 与
   issuer cookie。浏览器直接 POST 这些 `/iam` 路由而没有 Web action 证明一律拒绝。其他允许的
-  browser `/iam` POST（authorize、sign-out、end-session/confirm）
+  browser `/iam` POST（authorize、sign-out）
   也必须由 Web 呈现并核验等价 token，或证明 IAM 自带原生 CSRF 的生成/携带/校验且再加精确 Origin；
-  两者均无证据时拒绝，不能因为在 relay allowlist 就免除 CSRF。Auth.js action 使用其自身 CSRF
+  两者均无证据时拒绝，不能因为在 relay allowlist 就免除 CSRF。`end-session/confirm` 是已验证的窄例外：Better Auth 1.7.3 GET 签发限时签名 confirmation cookie，IAM POST 验签并绑定 session；Web 仅放行 `action=confirm`、精确 Origin/Host 与该路径 cookie，不放行通用 POST；确认表单读取限 1024 B 且应用层硬截止 5 秒，超时/断连不向 BFF 发起请求。真实 Next 在请求 body 尚未收齐时可能先于 handler 缓冲，HTTP 慢滴流只据实证明未触发 BFF，不冒称 handler 已返回超时。Auth.js action 使用其自身 CSRF
   token 校验并叠加 Web Origin；普通业务 mutation 使用 Web 自有 CSRF 防护。仅可信 server-to-server
   token/revoke 调用走独立 server-only 凭据路径，不借浏览器请求例外。BFF 还独立验证 Web service 身份
   与 relay Origin；Web 不把 `Forwarded` 当身份。
