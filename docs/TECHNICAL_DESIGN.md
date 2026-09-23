@@ -1,6 +1,131 @@
 # Kokoro User Web 技术设计
 
-状态：当前架构与目标收敛设计，2026-09-03。
+状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2 仅完成设计门，源码与组合验收尚未完成。
+
+## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
+
+### 当前事实与发布前置
+
+当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 的 `src/lib/server/auth.ts` 仍直接调用
+`KOKORO_IAM_BASE_URL` 的 magic-link/refresh/team-session；`session-envelope.ts` 保存旧 sealed session，
+`/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
+`sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
+
+BFF relay 最新已发布 commit `804a5832c066ce60dde9f4592856ac40ce20f402`，其
+`contract/iam-relay-policy.json` 当前 SHA-256 为
+`8f57df32a43fbb63e9a515166cf9d7e78b6f810f29aad74432d101f399656053`；policy version `1.0.0`
+固定 IAM owner commit `f0bb18e6fee8f4b1ee9a1c2d9e7aa2eb4621e614`。该 pin 已随 IAM test-only
+fixture 更新，但 Web 尚未 vendor policy snapshot 或通过 consumer drift/真实 Web→BFF→IAM 链。
+实现时以 Root 最终集成选定的 BFF commit、policy blob digest、IAM allowlist/snapshot digest 锁定
+只读 snapshot；若上游再发布须重新核验，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
+
+### Owner、组件与调用方向
+
+```text
+Browser ──同源 cookie──> Web Route Handler/Auth.js RP
+  ├─ /iam/* ──Web service identity──> BFF 固定 IAM relay ──> IAM issuer
+  └─ /api/* ──Web service identity + 单一 user Bearer──> BFF /v1/*
+```
+
+- IAM 独占 identity、issuer、OAuth client provisioning、access/refresh token、授权和撤销事实；BFF 独占
+  `/iam` 准入 policy、普通 `/v1` admission 和 Product API；Web 独占 Auth.js RP、HttpOnly Product Session、
+  browser-private 同源入口与 Web Redis 协调 key。Web 不访问 IAM URL、数据库或其他 owner 服务。
+- `src/app/api/auth/[...nextauth]/route.ts` 只挂 Auth.js；`src/lib/server/oidc-provider.ts` 只定义
+  provider/RP、受限 server-side token exchange；`oidc-token.ts` 只处理 refresh/revoke；
+  `product-session.ts` 与 `product-session-store.ts` 分离请求态 cookie 与 Redis CAS/tombstone；
+  `src/app/iam/[...path]/route.ts` 只按固定 BFF policy 代理原生 IAM 协议；
+  `src/app/auth/{sign-in,select-tenant,consent}/page.tsx` 处理 IAM 原生交互页及已签 query 的续接。
+  普通 BFF adapter 仍归现有 `src/app/api/**/route.ts`，由共享 server-only 凭据读取边界注入 Bearer。
+  不建 Web DB 模块、万能上游代理或第二套 IAM client。
+- 上述放置优于把凭据放进 `src/contract/`（会污染 browser wire/schema）或 UI feature（会把 secret
+  带入客户端）。现有 `src/lib/server/` 与 Next Route Handler 是稳定边界；RP、token、store、relay 分文件是
+  因变更原因、运行权限和测试面不同，而不是模板式分层。
+- Next 16.2.6 本地 `node_modules/next/dist/docs/01-app/` 的 Route Handler、authentication、cookies 指南
+  已核对：handler 属于 `app/`，`cookies()` 是异步 request-time API，写/删 cookie 必须在 Route Handler 或
+  Server Function 且 streaming 前完成；动态认证响应显式 `no-store`，Route Handler 与同 segment page 不并存。
+
+### 登录、租户、刷新、退出状态机
+
+1. IAM operator/provisioning 先创建并 readback `user_delegated` confidential client：
+   `client_secret_basic`、`require_pkce=true`、`enable_end_session=true`、精确 Web callback/post-logout URI、
+   `openid profile email offline_access iam:session-authorization.verify` scopes 和 internal resource binding。
+   issuer/discovery、`IAM_ISSUER_URL` 与 Web origin 必须精确匹配；不从浏览器 Host 推导 issuer。
+2. Auth.js v4（计划候选 `4.24.15`，安装前重核 Node 22/Next 16 兼容与 lockfile）执行 Authorization Code
+   + S256 PKCE，保存并验证 state/nonce/PKCE；登录页、租户选择页、同意页承接 IAM 原生带签名 query，
+   不消费、不重签 IAM 参数。callback code 单次使用并换取 token；失败清理 RP transaction 且不建立会话。
+3. authorize、token、refresh 请求均发送**恰好一个**
+   `resource=https://kokoro.dev/resources/iam-internal`。Web 入口拒绝或清除浏览器自报 `resource`；
+   Auth.js v4 默认 callback 不保证 token request 带 resource，须以受限 `token.request`/OIDC client
+   `exchangeBody` 和真实 wire 测试证明；refresh 由 Web server 显式 POST，使用 Basic 与唯一 resource。
+   Bearer 的 audience、issuer、scope、subject/session 由 IAM/BFF 验证，不以 Web 解码结果授权。
+4. callback 成功后 Web 建立 server-only Product Session：Auth.js 加密 HttpOnly JWT cookie 内可承载
+   server-only access/refresh token，但公开 `session` callback 只输出非敏感展示字段；Redis 记录当前
+   generation。请求先检查 Redis 当前 generation/tombstone，再对 BFF 传唯一 Bearer。并发 refresh 使用
+   `active(g) → refreshing(g,reservation) → active(g+1)` 两次受限 CAS：先预留唯一 refresh 权，再请求 IAM，
+   只有成功收到新 token 且 reservation 未变才原子 finalize 并设置新 cookie；pending 期间旧 g 不可代理。
+   IAM 失败、deadline、finalize 失败或结果未知时将 handle 撤销，失败者不得再次使用旧 refresh token；
+   previous generation 重放均 fail closed，不能从旧 cookie 单独恢复身份。
+   Redis 丢失/不可用也 fail closed，不回退 sealed envelope。cookie 的 `Path=/`、`SameSite=Lax`、
+   `HttpOnly`、production `Secure` 与 issuer namespace cookie 分离。
+5. logout 在请求内读取 server-only token 后先 tombstone 当前 Product Session，再经固定 relay**单次有界**
+   尝试 IAM revoke/end-session 并清 Web cookie；不为远端失败建立补偿存储，也不声称清 cookie 后还能重试。
+   IAM 失联时本地 tombstone 仍使旧 Product cookie 无效，远端 IAM session/token 仅靠其 owner TTL 到期兜底；
+   UI 只能报告“本设备已退出，远端撤销未确认”，不能宣称全端退出。
+   失效/撤销/tenant 切换后的 BFF 401/403 不得仅靠 Web 缓存视为已授权。
+
+### `/iam` 和业务代理的安全边界
+
+- Web 从最终固定 BFF policy 的 path+method 白名单判定 `/iam/*`；`/.well-known/*`、`/jwks` 等 issuer
+  路由只能作为 `/iam` 下的原生协议路由。拒绝未知/大小写/编码/双斜线 alias、任意 Host/Location、
+  CRLF、超限 query/header/body；不自动跟随 redirect。Web 原样保留合法 status、Location、
+  Cache-Control、Content-Type、Retry-After、logout 安全 header 和多个 `Set-Cookie`，不把 OAuth 协议
+  包进 Product `{data}`/`{error}` envelope。BFF policy 限制的 8 KiB query、64 KiB request、
+  16 KiB header、1 MiB response、5 s duration 是 Web 不得放宽的上限；浏览器取消传播到 BFF。
+- 入站浏览器的 Cookie 仅逐名保留 IAM 发布 snapshot 的 `kokoro-issuer.*` 与 production
+  `__Secure-kokoro-issuer.*`；出站 `Set-Cookie` 再按同一 snapshot 与精确 `Path=/iam` 校验，logout
+  confirmation cookie 只允许 `Path=/iam/oauth2/end-session/confirm`。Product Session/Auth.js cookie、
+  浏览器自带 Basic/Bearer、任意 `Authorization`、内部 service secret 均不能进入 IAM；BFF service
+  identity 只在 Web→BFF 跳使用。`/iam/oauth2/token`/revoke 的 Basic 只由受信 Web server 生成；
+  userinfo Bearer 也只由 Web server 使用，不能让浏览器任选 token。
+- 所有同源 cookie mutation，包括 `/iam` 交互 POST、Auth.js action、logout 与业务 `/api/*`，均要求
+  精确同源 Origin 加框架/应用 CSRF 证据；缺失、`null` 或错误 Origin fail closed。Web 的
+  `/auth/sign-in|select-tenant|consent` server-rendered 表单在 GET 时为该 IAM 交互、目标 POST path 和短 TTL
+  生成 Web 自有随机 CSRF token，放入 HttpOnly、SameSite=Lax、Secure（生产）cookie 与隐藏表单字段，
+  token 摘要/交互绑定以短 TTL 存 Web Redis namespace，原子一次性消费，Redis down 即拒绝；
+  浏览器 POST 到 Web-owned Server Action/Route Handler，Web 在发 BFF socket 前核对 Origin、cookie/字段、
+  交互绑定及一次性消费，按 IAM 当前机器契约构造 `/iam/sign-in/email|organization/set-active|
+  oauth2/consent|oauth2/continue` 的原生 body（Web CSRF 字段不入 IAM），原样携带 IAM 已签 query 与
+  issuer cookie。浏览器直接 POST 这些 `/iam` 路由而没有 Web action 证明一律拒绝。其他允许的
+  browser `/iam` POST（authorize、sign-out、end-session/confirm）
+  也必须由 Web 呈现并核验等价 token，或证明 IAM 自带原生 CSRF 的生成/携带/校验且再加精确 Origin；
+  两者均无证据时拒绝，不能因为在 relay allowlist 就免除 CSRF。Auth.js action 使用其自身 CSRF
+  token 校验并叠加 Web Origin；普通业务 mutation 使用 Web 自有 CSRF 防护。仅可信 server-to-server
+  token/revoke 调用走独立 server-only 凭据路径，不借浏览器请求例外。BFF 还独立验证 Web service 身份
+  与 relay Origin；Web 不把 `Forwarded` 当身份。
+- `/api/{session,hub,agents,scheduled-tasks,billing,team,...}` 的受保护 BFF `/v1` 路由统一从 Product
+  Session 提取**单一** access Bearer，另加 Web service identity；删去 `x-kokoro-namespace`、
+  `x-kokoro-principal-id`、浏览器 Authorization/cookie 透传。service-only runtime manifest 与公开 Share
+  按 BFF 明确例外各自测试，不伪造 user Bearer 或把 public route 变成登录依赖。
+- `src/lib/server/auth.ts`、`session-envelope.ts`、旧 `/api/auth/{magic-link/request,callback,logout,session-state}`、
+  `/api/team/*` 的 magic-link/team-session 路径及旧 `/auth/refresh` 必须逐调用点删除或按新职责替换；
+  不保留旧 endpoint alias、旧环境变量读取、双轨 cookie/refresh 或 IAM 直连 fallback。
+
+### 失败恢复、契约与门禁
+
+Web 本片不新增 SQL 表、migration 或数据库事务。Redis CAS 是 Web 会话协调的原子边界，IAM 仍拥有
+token/session 权威事实；业务事务、幂等 receipt 与 durable AG-UI cursor 仍在 BFF。受控代理的连接、读取、
+总体 deadline 和 body cap 必须覆盖慢请求；只有 BFF owner 明确标为安全的幂等操作才重试，token exchange
+与业务 mutation 不做猜测性重试。错误映射不得泄露 authorization code、token、secret、cookie、IAM 原文堆栈；日志只含
+request_id、operation、result、duration 等非敏感字段。
+
+实施与验收顺序：先核验 BFF policy 最终 commit/blob digest、Web vendor snapshot 和 drift/负例；再做
+`tests/server/{oidc-provider,product-session-store}`、`tests/system/{iam-relay-http,auth-browser-login}`、现有
+proxy/architecture/UI/Playwright 回归；执行 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、
+`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm test:e2e`，最后由 Root 在隔离 fixture 进行真实
+Web→BFF→IAM 首次登录、tenant/consent、callback、refresh 竞争、logout/revoke、越权、异常/超时与
+浏览器 cookie/header 泄漏组合测试。虽 IAM fixture 与 BFF repin 已发布，Web consumer 与真实组合证据未完成前，
+本设计不构成 W1C 验收。Product OpenAPI generated consumer/AG-UI 单一 transport 属后续 W1D，
+不得因本登录链可用而激活整个 EDGE-WEB-BFF。
 
 ## 1. 目标与范围
 
@@ -89,7 +214,7 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 ## 5. 身份与安全
 
 1. 浏览器仅自动携带同源 cookie。
-2. Web 解封 HttpOnly session envelope，获得 server-side runtime credential 与用户上下文。
+2. 当前 Web 解封旧 HttpOnly session envelope；W1C-2 目标改为 Auth.js Product Session 加 Redis 在线 generation 核验后取得 server-only access Bearer。
 3. mutation 执行同源检查；上游 header 从 allowlist 重建。
 4. Web 注入 service identity、request id 和部署域名上下文。
 5. BFF 重新执行认证、授权、tenant isolation 和 owner 调用；Web 的展示状态不构成授权。
@@ -112,7 +237,8 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 - Node 22 standalone Docker image 或 OpenNext/Cloudflare Worker。
 - 一个仓库对应一个产品发布单元；域名由运行时环境注入，不在 React/CSS 中分支。
 - 本地应用从 `pnpm dev` 启动；容器用于 release candidate/smoke，不替代源码验证。
-- 当前 Docker/CI 仍缺 digest pin、Dockerfile HEALTHCHECK、候选镜像扫描、SBOM 和完整 action SHA pin。
+- 当前 Docker/CI 已按 [`CURRENT.md`](CURRENT.md) 固定 base image digest、非 root/HEALTHCHECK、完整 action SHA、
+  候选镜像扫描、SBOM/provenance 与 digest 签名；这些仓内配置不等于本轮镜像已发布或生产 SLO 已实测。
 
 ## 8. 变更顺序
 

@@ -1,14 +1,105 @@
 # Kokoro User Web 数据模型与 Owner
 
-状态：当前数据边界，2026-09-03。
+状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；目标尚未实现/验收。
+
+## W1C-2：Web Product Session 数据与事务边界
+
+### 当前态与目标 owner
+
+当前 Web commit `ce4e466c960c4b40a87a7be38b5a56f265f7a12f` 使用 `kokoro_session`
+AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
+principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
+Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
+`804a5832c066ce60dde9f4592856ac40ce20f402` 已 pin IAM
+`f0bb18e6fee8f4b1ee9a1c2d9e7aa2eb4621e614`，policy SHA-256
+`8f57df32a43fbb63e9a515166cf9d7e78b6f810f29aad74432d101f399656053`；Web 尚未消费该 artifact，
+真实 Web→BFF→IAM 验收待完成。
+
+Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
+owner JOIN 或 `db:apply-schema`。Root 现行**目标态**是本地/CI 共用一个物理开发 PostgreSQL database、一套应用
+credential，同时每个数据 owner 使用**独立 schema 与独立连接 URL**。表前缀仅是命名规则，不能替代
+schema 隔离；代码、查询、事务和 schema apply 仍禁止跨 owner 表访问/JOIN。这不是“各 owner 当前
+installer/URL 已支持同库”的声明：现有 owner 可能假定 `public` schema 或空数据库安装，连接 URL、
+search_path、安装器及 drift gate 须逐仓核验、改造并留证，不能由本 Web 文档冒称已跑通。
+Web 当前与目标均无 PostgreSQL 连接。Web 自有 Redis
+namespace 仅是在线 Product Session 的临时协调状态，不是 IAM identity/session/token 权威库、BFF
+业务事实或 durable ledger；不引入独立 Redis 进程、清库动作或跨 owner key。这里修正旧文“Web 不拥有
+Redis logical DB”的过宽说法：Web 可按 Root namespace/logical DB 决策使用**隔离会话 keyspace**，
+但不拥有 Redis 业务事实或任意后端 owner 的 DB。
+
+### 目标数据清单
+
+| 数据 | owner/位置 | 内容与生命周期 | 约束 |
+| --- | --- | --- | --- |
+| IAM issuer cookie | IAM；浏览器 `/iam` path | IAM 原生 session/interaction；IAM 决定 TTL/撤销 | 仅精确 `kokoro-issuer.*` 或 production `__Secure-kokoro-issuer.*` snapshot；常规 `Path=/iam`，logout-confirmation 精确子路径；Web 不解析为 Product 权限 |
+| Auth.js RP transaction cookie | Web；浏览器 HttpOnly | state/nonce/S256 verifier 与回调相关短期事务 | 用后清除，callback/code 重放拒绝；不向 BFF/IAM 转发该 cookie |
+| Web 交互 CSRF cookie/record | Web；浏览器 HttpOnly cookie + 隔离 Redis namespace | 随机 token 的摘要、目标 POST path、IAM 交互绑定与短 TTL | hidden form 字段配对；原子一次性消费；不把 Web CSRF 字段送 IAM；Redis 不可用即拒绝 |
+| Product Session cookie | Web；浏览器 HttpOnly 加密 JWT | server-only access/refresh token、opaque session handle、generation、绝对/idle 到期依据 | `Path=/`、`SameSite=Lax`、production `Secure`；公开 session callback 不回 token；浏览器脚本/localStorage 不读取 |
+| generation/state key | Web Redis 隔离 namespace | opaque session handle → `active(g)`、`refreshing(g,reservation,deadline)` 或 `revoked` 与到期时间；两次受限 CAS 协调 refresh | TTL 不长于会话与 refresh 有效期；每请求在线核验；缺失/Redis down fail closed；pending 不允许旧 g 代理 |
+| tombstone key | Web Redis 隔离 namespace | logout/revocation 的 opaque handle 阻断记录 | TTL 覆盖尚可能重放的 Product cookie/refresh 窗口；先写 tombstone 再清 cookie/上游 revoke；不可被旧 generation 覆盖 |
+| UI preference/draft | Web browser storage | 非敏感临时体验状态 | 不含 token、tenant 选择器、service URL；不是任何会话/授权证据 |
+
+Redis key 只使用随机不透明 handle、版本/generation、必要到期瞬时点与最少协调字段；不把 access/
+refresh token、IAM session cookie、密码或用户 PII 放进 Redis key/value/log。key 名加 Web namespace
+与环境前缀，TTL 与 clock skew 在实现测试中固定；无索引、无跨 owner 查询、无 schema install。
+Web cookie 加密材料只在 server-only 配置，轮换时仍须 Redis 当前 generation；旧密钥能解封不意味着
+旧 generation 可授权。Redis 不能成为 IAM token 是否有效的最终判断，BFF 每个受保护 `/v1` 请求
+仍在线 IAM admission。
+
+### 状态转换、并发与恢复
+
+```text
+OIDC transaction pending ──valid code/state/nonce/PKCE──> Product Session active(g)
+active(g) ──reservation CAS──> refreshing(g,reservation)
+refreshing(g,reservation) ──IAM exchange success + finalize CAS──> active(g+1)
+refreshing(g,reservation) ──error/deadline/unknown/finalize failure──> revoked
+active(g) ──logout/tombstone──> revoked
+active(g) ──expiry/IAM reject/Redis unavailable──> fail closed
+previous generation / tombstoned handle ──replay──> reject
+```
+
+- callback 仅在 IAM code exchange 与 claims/audience 验证成功后创建 Product Session；callback 重放
+  不二次建 session。Web 不自行签发 IAM access token。
+- refresh 首先以 handle/generation 的 reservation CAS 从 `active(g)` 进入 `refreshing(g,nonce,deadline)`，
+  只允许一个赢家请求 IAM。pending 状态时旧 g 的普通代理和第二次 refresh 均拒绝；赢家收到新 token 后
+  仅在 nonce/deadline 匹配且未 tombstone 时 finalize CAS 为 `active(g+1)`，随后才发送新 cookie。
+  IAM 错误、deadline、结果未知或 finalize 失败都使会话 `revoked`/fail closed；任何未决 reservation 到期
+  也只转为 `revoked`，绝不回退 `active(g)`。若 Redis 故障导致无法写 revoked，所有在线检查继续拒绝，
+  key 缺失也拒绝；不能用旧 refresh token 猜测重试。成功 finalize 后若新 cookie 送达未知，旧 g
+  仍拒绝，用户重新登录。不得以进程锁或 localStorage 代替跨实例 CAS。
+- logout 在请求内读取 server-only token 后先写本地 tombstone，再通过 BFF 固定 relay**单次有界**
+  尝试 IAM revoke/end-session 并清 Web cookie。远端失败不创建补偿存储/后台重试；清 cookie 后无远端
+  凭据可补偿，只能由 IAM owner token/session TTL 到期兜底，并向 UI 明确“本设备已退出，远端撤销
+  未确认”。清理只删本 Web session keys，不重置共享 Redis。
+- retention：Product cookie/Redis generation 不长于 IAM refresh/session 有效性；tombstone 覆盖
+  cookie 及可能重放窗口；RP transaction 到期清除。具体 TTL、key 结构和 CAS 原子脚本须在实现
+  前以 IAM owner 实际 token policy 与测试 fixture 固定，不虚构当前精确秒数。数据删除由到期、
+  logout 和针对性 key 清理完成；无 SQL 软删/物理删、索引、fresh-install 或 schema drift 门。
+
+### 契约与验证
+
+`/iam` 原生响应/cookie 由 IAM 事实源、BFF 固定 relay policy 与 Web 同源过滤共同约束；Web
+Product Session cookie 与 Redis key 是 Web 内部状态，不作为 public API 字段。普通 `/api/*` 代理
+只向 BFF 发送当前 generation 的单一 user Bearer 与 Web service identity，不把 cookie、namespace/
+principal 自报 header、Redis key 或 refresh token 传给 BFF；公开 session projection 仅给 UI 非敏感
+状态。service-only manifest、公开 Share 边界另按 BFF contract 验证。详见
+[`TECHNICAL_DESIGN.md`](TECHNICAL_DESIGN.md) 与 [`API_CONTRACT.md`](API_CONTRACT.md)。
+
+实施测试须覆盖 CAS 双请求竞争、previous-generation replay、logout tombstone、Redis 丢失/超时、
+cookie 到期/密钥轮换、callback 重放、IAM revoke 失败、同租户其他用户/跨租户拒绝与服务重启。
+`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、
+`pnpm build`、`pnpm test:e2e` 与 Root 隔离真实 Web→BFF→IAM 组合是目标门；本次文档更新
+未运行这些行为门，不宣称三文档门之后的实现、contract artifact 或 schema 验收。
 
 ## 1. Web 无业务数据库 Owner
 
-`kokoro` 不拥有业务数据库、数据库 schema、migration、ORM entity、Redis logical DB 或服务端
-repository。本仓没有 `database/` 目录，也不应新增 `db:apply-schema`。
+`kokoro` 不拥有业务数据库、数据库 schema、migration、ORM entity 或服务端业务 repository。
+本仓没有 `database/` 目录，也不应新增 `db:apply-schema`。W1C-2 目标仅新增隔离的 Web Redis
+会话协调 namespace；它不是业务持久化 owner。
 
-Web 只拥有展示和浏览器交互状态。任何需要跨浏览器、跨设备、审计、恢复、授权或服务端并发控制的
-事实都必须由后端 owner 持久化，并通过版本化 contract 返回 Web。
+Web 拥有展示、浏览器交互状态和自身的 HttpOnly Product Session/临时 Redis 协调；身份与业务授权
+事实仍由 IAM/BFF 判断。任何业务资源若需要跨浏览器、跨设备、审计、恢复、授权或服务端并发控制，
+必须由对应后端 owner 持久化，并通过版本化 contract 返回 Web。
 
 | 事实 | Owner |
 | --- | --- |
@@ -30,12 +121,12 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 
 | 名称 | 内容与用途 | 生命周期 | 安全属性 |
 | --- | --- | --- | --- |
-| `kokoro_session` | AES-256-GCM sealed envelope；含 runtime credential、refresh token、user/namespace 和过期时间 | 对齐 refresh expiry；支持多密钥解封轮换 | HttpOnly、SameSite=Lax、Path=/；production Secure |
-| `kokoro_auth_nonce` | magic-link 请求与消费设备绑定 nonce | 当前实现 900 秒 | HttpOnly、SameSite=Lax；production Secure |
+| `kokoro_session`（当前旧态，W1C-2 删除） | AES-256-GCM sealed envelope；含 runtime credential、refresh token、user/namespace 和过期时间 | 当前对齐 refresh expiry；旧密钥可解封 | HttpOnly、SameSite=Lax、Path=/；production Secure；不作为目标在线授权 |
+| `kokoro_auth_nonce`（当前旧态，W1C-2 删除） | magic-link 请求与消费设备绑定 nonce | 当前实现 900 秒 | HttpOnly、SameSite=Lax；production Secure |
 | `sidebar_state` | 非敏感 Rail 展开偏好 | 当前实现 7 天 | 浏览器可读 UI cookie，不是身份依据 |
 
-`kokoro_session` 中的 namespace/user 只在 Web server 解封后用于构造上游受信上下文；浏览器脚本不能
-读取。它是 Web session transport，不改变 IAM/BFF 对认证与授权事实的 owner 地位。
+当前 `kokoro_session` 的 namespace/user 由 Web server 解封后用于构造旧上游上下文；W1C-2
+必须删除这一自报身份通道。目标 Product Session 的非敏感展示字段不替代 IAM/BFF 授权。
 
 ### 2.2 localStorage
 
@@ -93,7 +184,7 @@ BFF snapshot + command receipt + durable AG-UI events
 | 数据 | Retention owner | Web 行为 |
 | --- | --- | --- |
 | 服务端业务事实/事件 | 对应后端 owner | 发出删除/撤销 command，并依据 receipt/event 更新 UI |
-| HttpOnly session | IAM/Web session policy | logout 清 cookie并请求服务端吊销；失败需要记录并靠 expiry 兜底 |
+| HttpOnly Product Session | Web 本地 tombstone/cookie；IAM 远端 token/session policy | logout 本地先失效、单次有界远端撤销；失败明确未确认并靠 IAM TTL 到期兜底，无清 cookie 后补偿重试 |
 | UI preference/draft | Web | 用户清除浏览器数据或产品提供的清理动作 |
 | Preview fixture | Web local/test | 可直接删除对应 browser key；不得作为 live 删除证据 |
 
