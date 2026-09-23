@@ -1,35 +1,33 @@
 # Kokoro User Web API 契约策略
 
 状态：browser-private 治理基线与 W1C-2 目标契约，2026-09-23；W1C-2A 只读 GET relay 与
-W1C-2B-1 sign-in 与 W1C-2B-2 tenant/consent 已发布；本工作树 2C RP-only 是待 Root 验收候选。
+W1C-2B-1 sign-in、W1C-2B-2 tenant/consent 与 2C RP-only 已发布；真实 IAM 组合与 Product Session 待验。
 
-## W1C-2：同源 IAM 与 Product Session 契约（2A/2B-1/2B-2 已发布，2C RP-only 候选）
+## W1C-2：同源 IAM 与 Product Session 契约（RP-only 已发布，Product Session 待实现）
 
 ### 版本、来源和可见性
 
-当前 Web main 基线 `14e23e602a5631009584d84f58871e51d32b821c` 仍有 IAM magic-link/
-team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST 与 2B-2 的
-静态 `/iam/interactions/*` POST 均已发布；Auth.js Code+S256 与完整 Web→BFF→IAM 仍是目标。
-BFF relay 固定policy来源 `a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`，其
+当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST 与 2C Auth.js Code+S256 RP-only 均已发布；完整 Web→BFF→IAM 与 Product Session 仍待验收。
+BFF relay 固定policy来源 `2d951e1a56b5720431963d728b74f662e2379999`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`，
-引用 IAM owner `6bc9b190c359b8109238626ff689ce9839e858b5`、allowlist SHA-256
+`b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`，
+引用 IAM owner `606d9090c2282e13370e17a20379a32629df9722`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始
 字节计算固定 digest，并校验 provenance、只读路由子集、结构不变量与篡改负例；Root 的跨仓门另从固定
 BFF commit blob 比对同一字节，Web 仓不把本地副本自比冒充源 commit 证明。真实 Web→BFF→IAM 与
-Auth.js 仍待后续验收。Web 不重建/维护 IAM OpenAPI、BFF Product OpenAPI 或 BFF policy 的第二事实源。
+Auth.js 真实 IAM 组合仍待后续验收。Web 不重建/维护 IAM OpenAPI、BFF Product OpenAPI 或 BFF policy 的第二事实源。
 
 `/iam/*` 是 Web 拥有的 `browser-private` **原生 OAuth/OIDC 传输边界**，不是 BFF `/v1`
-Product API，也不进入 Developer API。`/api/auth/[...nextauth]` 是本工作树已安装但尚未发布的 Auth.js RP transaction/callback
+Product API，也不进入 Developer API。`/api/auth/[...nextauth]` 是已发布的 Auth.js RP-only transaction/callback
 入口；`/auth/sign-in` 是 Web 表单，`/auth/{select-tenant,consent}` 是 IAM 外层引导，真正表单位于
 `/iam/interactions/*`。普通 `/api/*` 是 Web 的 browser-private
 Product projection，最终请求 BFF `/v1/*`；IAM 所有 endpoint 语义、字段、OAuth 错误和 cookie 仍由 IAM
 发布的协议定义，Web/BFF 不包装成 `{data}`/`{error}`。Web 本地准入拒绝可以使用安全机器码和
 `x-request-id`，不得泄露 token/secret/原始 provider body。
 
-W1C-2C 第一切片的**当前候选契约**：RP callback 即使完成 code、ID token 与 userinfo 验证，也只返回受控
+W1C-2C 第一切片的**当前 RP-only 契约**：RP callback 即使完成 code、ID token 与 userinfo 验证，也只返回受控
 `503 product_session_unavailable` 并清除 RP 事务；不签发可用 Auth.js/Product Session cookie，
 不透出 token、userinfo 或 callback code。这不是首次登录完成。server-only Basic token POST 与
 Bearer userinfo GET 只能经固定 BFF `/iam` relay；浏览器直打仍本地拒绝。Product Session、refresh、

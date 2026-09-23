@@ -1,7 +1,7 @@
 # Kokoro User Web 技术设计
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
-已发布；W1C-2B-2 tenant/consent 已发布。本工作树 W1C-2C RP-only 候选已实现，Product Session 与真实 IAM 组合验收尚未完成。
+已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布，Product Session 与真实 IAM 组合验收尚未完成。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
@@ -16,7 +16,7 @@ continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,u
 测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。已发布的 2B-2 新增
 `/auth/*` 外层引导与 `/iam/interactions/*` 真正 tenant/consent 表单；Product Session 仍属后续切片。
 
-W1C-2C 第一切片的**当前候选实现**仅安装 RP transaction、callback、经固定 BFF relay 的 server-only token/userinfo。
+W1C-2C 第一切片的**当前 RP-only 实现**仅安装 RP transaction、callback、经固定 BFF relay 的 server-only token/userinfo。
 Code+S256、state、nonce、固定 issuer/client/redirect URI/resource 验证成功后，因 Product Session
 尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；不建立可用 Auth.js JWT 或旧 sealed session，
 不把 token、code、userinfo 正文或上游错误返回浏览器。Redis 仅保存一次性 RP state 摘要与短期事务绑定，
@@ -41,17 +41,17 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 
 ### 当前事实与发布前置
 
-当前 Web 基线 `14e23e602a5631009584d84f58871e51d32b821c` 的 `src/lib/server/auth.ts` 仍直接调用
+当前 Web 的 `src/lib/server/auth.ts` 仍直接调用
 `KOKORO_IAM_BASE_URL` 的 magic-link/refresh/team-session；`session-envelope.ts` 保存旧 sealed session，
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87`，其
+BFF relay 固定policy来源 commit `2d951e1a56b5720431963d728b74f662e2379999`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`；policy version `1.0.0`
-固定 IAM owner commit `6bc9b190c359b8109238626ff689ce9839e858b5`。该 pin 已随 IAM test-only
+`b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`；policy version `1.0.0`
+固定 IAM owner commit `606d9090c2282e13370e17a20379a32629df9722`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
-但真实 Web→BFF→IAM 链与 Auth.js 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
+但真实 Web→BFF→IAM 链与 Product Session 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
 digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
 
 ### Owner、组件与调用方向

@@ -1,6 +1,6 @@
 # Kokoro User Web 数据模型与 Owner
 
-状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 为本工作树候选，Product Session 尚未实现/验收。
+状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 已发布，Product Session 尚未实现/验收。
 
 已发布的 W1C-2B-1 只实现 Web 交互 CSRF：Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>`
 保存目标路径、POST method、原始签名 query、issuer-cookie 组合摘要，TTL 300 秒；`GETDEL` 是一次性消费原子边界。
@@ -14,7 +14,7 @@ W1C-2B-2 将同一 token 机制扩展到内层 `Path=/iam/interactions/select-te
 绑定 owner GET 返回的 active ID 候选串，POST 在消耗 token 后再次从 owner 列表确认当前资格。
 Redis 只保存 token 摘要与绑定摘要，不存候选组织名、scope 明文、IAM session 或授权事实。
 
-W1C-2C 第一切片**当前候选实现**另用 Web 自有 `kokoro:web:oidc-state:<Web-origin-hash>:<state-sha256>`
+W1C-2C 第一切片**当前 RP-only 实现**另用 Web 自有 `kokoro:web:oidc-state:<Web-origin-hash>:<state-sha256>`
 短 TTL key 原子登记/消费 RP state，绑定固定 provider、callback 与 RP transaction cookie 摘要；
 Redis 不保存 code、access/refresh/ID token、client secret、userinfo 或 PII。Auth.js 的 HttpOnly
 state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；Product Session 与其 generation/
@@ -26,14 +26,14 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 
 ### 当前态与目标 owner
 
-当前 Web 基线 `14e23e602a5631009584d84f58871e51d32b821c` 使用 `kokoro_session`
+当前 Web 使用 `kokoro_session`
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`a4dbc3339448c7ee8763b0f82d1c0ae4c213bf87` 已 pin IAM
-`6bc9b190c359b8109238626ff689ce9839e858b5`，policy SHA-256
-`ba1e63083b4b2ed0f3eb42308e632bc502cb4f07fcb99a2ea04586f7faa123ad`；W1C-2A 已固定消费该只读
-artifact 与 provenance，真实 Web→BFF→IAM 及 Auth.js 验收仍待完成。
+`2d951e1a56b5720431963d728b74f662e2379999` 已 pin IAM
+`606d9090c2282e13370e17a20379a32629df9722`，policy SHA-256
+`b2a3cd952da08b1f8cfc0f43db858f35ba3757b928324f56d094bff8f631c17e`；W1C-2A 已固定消费该只读
+artifact 与 provenance，真实 Web→BFF→IAM 及 Product Session 验收仍待完成。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
 owner JOIN 或 `db:apply-schema`。Root 现行**目标态**是本地/CI 共用一个物理开发 PostgreSQL database、一套应用
