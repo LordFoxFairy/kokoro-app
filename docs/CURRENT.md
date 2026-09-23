@@ -60,6 +60,9 @@
   真实 Next+BFF fixture 覆盖签名/issuer/audience/nonce/过期/算法、userinfo sub、CSRF、
   竞态重放、body/响应超限与慢滴流；验证成功仍只返回受控
   `503 product_session_unavailable`，清 RP cookie，不签发可用 Auth.js/旧 Product Session。
+  W1C-2D 将 IAM consent 实际成功响应的唯一 `code`、`state`、`iss` 三参数严格准入，
+  `iss` 必须等于固定 `${KOKORO_WEB_ORIGIN}/iam`；完整 query 交验证型 `openid-client` 再核 issuer。
+  缺失、重复、错误 issuer 或额外参数在 relay/RP 边界拒绝，不把 2B-2 的受控 503 误判当成功。
   旧 magic-link、refresh、logout 与普通 `/v1` Bearer 代理仍未迁移；该 fixture 不是 IAM owner 签名
   组合验收，更不是首次登录完成。
 

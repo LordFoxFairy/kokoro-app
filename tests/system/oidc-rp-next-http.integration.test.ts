@@ -237,7 +237,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         if (request.url?.startsWith("/iam/oauth2/authorize?")) {
           const url = new URL(request.url, `http://localhost:${nextPort}`)
           nonce = url.searchParams.get("nonce") ?? ""
-          response.writeHead(302, { location: `/api/auth/callback/kokoro-iam?code=fixture-code&state=${url.searchParams.get("state")}` })
+          response.writeHead(302, { location: `/api/auth/callback/kokoro-iam?code=fixture-code&state=${url.searchParams.get("state")}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}` })
           response.end()
           return
         }
@@ -302,7 +302,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(paths).toContain("/iam/oauth2/userinfo")
     expect(signin.headers["set-cookie"]).toBeDefined()
     const tokenCalls = paths.filter((item) => item === "/iam/oauth2/token").length
-    const replay = await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}`, "GET", "", { cookie: jar })
+    const replay = await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`, "GET", "", { cookie: jar })
     expect(replay.status).toBe(403)
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(tokenCalls)
   })
@@ -316,8 +316,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         { origin: `http://localhost:${nextPort}`, cookie: cookieHeader(csrf) })
       expect(rejected.status).toBe(400)
     }
-    const { jar } = await start()
-    const rejected = await http(nextPort, "/api/auth/callback/kokoro-iam?code=fixture-code&state=wrong-state-123456", "GET", "", { cookie: jar })
+    const { jar, state } = await start()
+    const callback = `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}`
+    const issuer = encodeURIComponent(`http://localhost:${nextPort}/iam`)
+    for (const path of [callback, `${callback}&iss=${encodeURIComponent("https://evil.example/iam")}`,
+      `${callback}&iss=${issuer}&iss=${issuer}`, `${callback}&iss=${issuer}&extra=1`]) {
+      expect((await http(nextPort, path, "GET", "", { cookie: jar })).status).toBe(400)
+    }
+    const rejected = await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=wrong-state-123456&iss=${issuer}`, "GET", "", { cookie: jar })
     expect(rejected.status).toBe(403)
     expect(paths.slice(initial).filter((item) => item === "/iam/oauth2/token")).toHaveLength(0)
   })
@@ -345,7 +351,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     ])
     expect([first.status, second.status].sort()).toEqual([403, 503])
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(before + 1)
-    expect((await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}`, "GET", "", { cookie: jar })).status).toBe(403)
+    expect((await http(nextPort, `/api/auth/callback/kokoro-iam?code=fixture-code&state=${state}&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`, "GET", "", { cookie: jar })).status).toBe(403)
   })
 
   it("rejects a chunked oversized signin before BFF or Redis state issue", async () => {

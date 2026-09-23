@@ -118,8 +118,9 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
 
   const cleanup = rpCleanupCookies(config.relay.secureCookies)
   const query = url.searchParams
-  if ([...query.keys()].length !== 2 || parameterOnlyOnce(query, "code") === null ||
+  if ([...query.keys()].length !== 3 || parameterOnlyOnce(query, "code") === null ||
     parameterOnlyOnce(query, "state") === null ||
+    parameterOnlyOnce(query, "iss") !== config.issuer ||
     !/^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "")) {
     return errorResponse(400, "rp_callback_rejected", cleanup)
   }

@@ -28,7 +28,8 @@ export function validIamRpCallbackNavigation(value: string, webOrigin: string): 
     const target = new URL(value, webOrigin)
     if (target.origin !== webOrigin || target.username !== "" || target.password !== "") return false
     const query = target.searchParams
-    return [...query.keys()].length === 2 && query.getAll("code").length === 1 && query.getAll("state").length === 1 &&
+    return [...query.keys()].length === 3 && query.getAll("code").length === 1 && query.getAll("state").length === 1 &&
+      query.getAll("iss").length === 1 && query.get("iss") === `${webOrigin}/iam` &&
       /^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "") &&
       /^[A-Za-z0-9_-]{16,256}$/u.test(query.get("state") ?? "")
   } catch { return false }

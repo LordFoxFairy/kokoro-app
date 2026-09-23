@@ -890,7 +890,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   it("forwards a native 302 only to the installed fixed RP callback with issuer cookies", async () => {
     const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
     consentStatus = 302
-    consentLocation = "/api/auth/callback/kokoro-iam?code=secret-code&state=secret-state-123456"
+    consentLocation = `/api/auth/callback/kokoro-iam?code=secret-code&state=secret-state-123456&iss=${encodeURIComponent(`http://localhost:${nextPort}/iam`)}`
     consentCookies = ["kokoro-issuer.session_data=secret; Path=/iam; HttpOnly; SameSite=Lax"]
     const proof = await interactionProof(path)
     const result = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
@@ -902,6 +902,30 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(result.headers["set-cookie"]).toEqual(expect.arrayContaining([
       expect.stringContaining("kokoro-issuer.session_data=secret;"),
     ]))
+  })
+
+  it("forwards IAM's JSON consent callback only with its exact issuer response parameter", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    const callback = `http://localhost:${nextPort}/api/auth/callback/kokoro-iam?code=secret-code&state=secret-state-123456`
+    const issuer = encodeURIComponent(`http://localhost:${nextPort}/iam`)
+    consentPayload = { redirect: true, url: `${callback}&iss=${issuer}` }
+    const proof = await interactionProof(path)
+    const accepted = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      origin: `http://localhost:${nextPort}`, cookie: proof.cookie,
+    })
+    expect(accepted.status).toBe(303)
+    expect(accepted.headers.location).toBe(`${callback}&iss=${issuer}`)
+    for (const url of [callback, `${callback}&iss=${encodeURIComponent("https://evil.example/iam")}`,
+      `${callback}&iss=${issuer}&iss=${issuer}`, `${callback}&iss=${issuer}&extra=1`]) {
+      consentPayload = { redirect: true, url }
+      const invalidProof = await interactionProof(path)
+      const rejected = await rawPost(nextPort, path, `csrf_token=${invalidProof.token}&decision=agree`, {
+        origin: `http://localhost:${nextPort}`, cookie: invalidProof.cookie,
+      })
+      expect(rejected.status).toBe(503)
+      expect(JSON.parse(rejected.body)).toMatchObject({ error: { code: "rp_callback_unavailable" } })
+      expect(rejected.headers.location).toBeUndefined()
+    }
   })
 
   it.each([401, 429, 503])("sanitizes consent owner %i without response body or issuer cookies", async (status) => {

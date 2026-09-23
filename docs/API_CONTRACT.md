@@ -72,8 +72,9 @@ Web-owned 静态 `/iam/interactions/select-tenant|consent`；外层 POST 405。i
 仅展示未验签的 signed-query `scope` 预览，POST 无浏览器 `scope` 字段，仅明确 Agree 后将 query
 原样交 IAM `/iam/oauth2/consent`，签名与 scope 子集由 IAM 验证。两页的 200 redirect JSON/302
 仅转成白名单交互 Location 与合规 issuer cookie；401/429/5xx body/cookie 不透出。最终 callback
-在已发布的 2B-2 基线上，`/api/auth/callback/kokoro-iam` 尚未安装，匹配该目标返回受控 `503 rp_callback_unavailable`；
-本 2C 工作树已安装固定 callback，仅将严格同源、唯一 code/state 的 Location 交给浏览器，后续 RP
+在 2B-2 基线上，`/api/auth/callback/kokoro-iam` 尚未安装，匹配该目标返回受控 `503 rp_callback_unavailable`；
+当前已安装固定 callback；按 IAM 实际成功响应仅将严格同源、唯一 `code/state/iss`
+且 `iss=${KOKORO_WEB_ORIGIN}/iam` 的 Location 交给浏览器，完整 query 由 RP 验证型 callback 再核 issuer。后续 RP
 验证成功仍只报 `503 product_session_unavailable`，不把 token 或可用 session 发给浏览器。这不是完成的登录契约。
 
 上表是 W1C-2B 的完整固定 policy。已发布的 W1C-2A `/iam/[...path]` Route Handler 只安装 GET
@@ -100,7 +101,8 @@ Content-Security-Policy/X-Content-Type-Options/Pragma 和精确 Set-Cookie，不
 Location 只允许固定 `KOKORO_WEB_ORIGIN` 下已安装的只读 `/iam` route，或固定的
 `/auth/{sign-in,select-tenant,consent}` 目标路径；后两者现在先经无状态同源 302 到静态
 `/iam/interactions/*`，浏览器才会携带 IAM `Path=/iam` issuer cookie。callback 与 post-logout
-Location 在已发布 2B-2 基线尚未允许；本 2C 工作树仅允许安装后的固定 callback URI/唯一 code+state。
+Location 在 2B-2 基线尚未允许；当前仅允许安装后的固定 callback URI/唯一
+`code/state/iss`，其中 `iss` 精确等于固定 Web issuer；缺失、重复、错误或额外键拒绝。
 合法 IAM 已签 query 只作为 opaque continuation 保留，
 不当作 Web 自报授权。不可信 Location/Set-Cookie 必须在输出前拒绝。policy 最大
 query 8192 B、request body 65536 B、header 16384 B、response 1048576 B、duration 5000 ms；

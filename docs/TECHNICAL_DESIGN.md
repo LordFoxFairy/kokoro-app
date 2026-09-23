@@ -21,6 +21,8 @@ Code+S256、state、nonce、固定 issuer/client/redirect URI/resource 验证成
 尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；不建立可用 Auth.js JWT 或旧 sealed session，
 不把 token、code、userinfo 正文或上游错误返回浏览器。Redis 仅保存一次性 RP state 摘要与短期事务绑定，
 不保存 token/PII；刷新、退出、普通 BFF Bearer 代理及旧路径删除留后续切片。
+IAM consent 成功的 callback 实际带唯一 `code`、`state`、`iss`；relay 和 RP 都只接收这三键且
+`iss=${KOKORO_WEB_ORIGIN}/iam`，随后将完整 query 交 `openid-client` 再验证 issuer。
 受控入口拒绝浏览器覆盖 `resource`、`scope`、`client_id`、`redirect_uri`、`callbackUrl`（含重复键），
 固定 Web origin、`${KOKORO_WEB_ORIGIN}/iam` issuer、单 provider `kokoro-iam` 与唯一
 `resource=https://kokoro.dev/resources/iam-internal`。Auth.js v4 自定义 `token.request` 必须
