@@ -104,6 +104,13 @@ pnpm test:e2e
 
 已获得的本地结果：130 个 Vitest test files / 1,221 个测试通过；Playwright desktop + mobile 共 6 个浏览器、可访问性与 viewport smoke 通过；Next production build 通过。该证据不等价于 live BFF、真实外部存储、生产 telemetry/SLO 或镜像发布验收。
 
+W1D 登录 handoff 当前使用 Node `22.22.2` 执行 `pnpm check`：contract 6 files/54 tests、
+architecture 4 files/32 tests、lint、typecheck、全量 Vitest 142 files/1,397 tests与 production build
+均通过；`pnpm test:e2e` 在 desktop/mobile 为 15 passed、1 个既有 mobile rail logout skip。浏览器门证明
+首屏零 CSRF/System 请求、点击后固定 CSRF/provider POST、失败停止重试、axe 与 viewport；其中真实 303
+用例只证明 **RP 配置缺失时 signin route 的受控早退** 返回 `/login?auth=sign_in_failed` 且页面不自动循环，
+不代表 authorize/token/userinfo、IAM 签名、Product Session 或完整 OAuth 失败链已经通过。
+
 W1C-2A 当前工作树使用 Node `22.22.2` 重新执行：vendor policy 与固定 BFF commit blob 的 SHA-256/字节
 对照一致；聚焦 4 files / 38 tests、`pnpm contract` 6 files / 52 tests、`pnpm test:architecture`
 4 files / 29 tests、`pnpm lint`、`pnpm typecheck`、全量 `pnpm test` 134 files / 1,259 tests、`pnpm build`

@@ -15,6 +15,10 @@ async function mockProductLogout(page: Page) {
 }
 
 test.describe("Web production boundary", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"))
+  })
+
   test("public root and login render without System manifest or a backend", async ({ page }) => {
     let manifestRequests = 0
     let csrfRequests = 0
@@ -51,6 +55,7 @@ test.describe("Web production boundary", () => {
       await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>OIDC started</h1>" })
     })
     await page.goto("/login", { waitUntil: "domcontentloaded" })
+    await expect(page.locator("html")).toHaveAttribute("lang", "en")
     await expect(page.getByTestId("login-email")).toHaveCount(0)
     await page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu }).click()
     const request = await signIn
@@ -67,6 +72,7 @@ test.describe("Web production boundary", () => {
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" })
     })
     await page.goto("/login", { waitUntil: "domcontentloaded" })
+    await expect(page.locator("html")).toHaveAttribute("lang", "en")
     await page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu }).click()
     await expect(page.getByRole("heading", { name: /登录 Kokoro|Sign in to Kokoro/iu })).toBeVisible()
     await expect(page.getByRole("button", { name: /重试登录|Try again/iu })).toBeVisible()
