@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic"
 const CSRF_PARTS = { params: Promise.resolve({ nextauth: ["csrf"] }) }
 const SIGN_IN_PARTS = { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) }
 
-function unavailable(): Response {
+function unavailable(phase: string): Response {
+  console.error("Kokoro Product login start unavailable:", phase)
   // Keep the issuer's visual language without showing an imitation credential form.
   const html = iamInteractionDocument({
     title: "Sign in",
@@ -44,17 +45,17 @@ export async function GET(request: NextRequest): Promise<Response> {
   const config = oidcRpConfig(process.env)
   if (config === null || request.nextUrl.pathname !== "/login" || request.nextUrl.search !== "" ||
     request.headers.get("host") !== config.relay.webHost ||
-    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable()
+    (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable("configuration_or_origin")
 
   const base = config.relay.webOrigin
   const headers = new Headers({ host: config.relay.webHost, accept: "application/json" })
   try {
     const csrf = await authGet(new NextRequest(`${base}/api/auth/csrf`, { headers }), CSRF_PARTS)
-    if (csrf.status !== 200) return unavailable()
+    if (csrf.status !== 200) return unavailable("csrf_status")
     const body: unknown = await csrf.json()
     const token = typeof body === "object" && body !== null ? (body as { csrfToken?: unknown }).csrfToken : null
     const cookies = cookiePairs(csrf)
-    if (typeof token !== "string" || !/^[A-Za-z0-9]+$/u.test(token) || cookies === null) return unavailable()
+    if (typeof token !== "string" || !/^[A-Za-z0-9]+$/u.test(token) || cookies === null) return unavailable("csrf_shape")
 
     const signIn = await authPost(new NextRequest(`${base}/api/auth/signin/kokoro-iam`, {
       method: "POST",
@@ -62,14 +63,14 @@ export async function GET(request: NextRequest): Promise<Response> {
         host: config.relay.webHost,
         origin: base,
         cookie: cookies.join("; "),
-        accept: "application/json",
+        accept: "text/html",
         "content-type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ csrfToken: token }).toString(),
     }), SIGN_IN_PARTS)
     const location = signIn.headers.get("location")
     if (signIn.status !== 302 || location === null ||
-      !location.startsWith(`${base}/iam/oauth2/authorize?`)) return unavailable()
+      !location.startsWith(`${base}/iam/oauth2/authorize?`)) return unavailable("signin_response")
 
     const responseHeaders = new Headers({
       location,
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
     return new Response(null, { status: 302, headers: responseHeaders })
   } catch {
-    return unavailable()
+    return unavailable("start_exception")
   }
 }
 
