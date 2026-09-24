@@ -17,7 +17,9 @@ async function mockProductLogout(page: Page) {
 test.describe("Web production boundary", () => {
   test("public root and login render without System manifest or a backend", async ({ page }) => {
     let manifestRequests = 0
+    let csrfRequests = 0
     await page.route("**/api/auth/csrf", async (route) => {
+      csrfRequests += 1
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" })
     })
     await page.route("**/api/system/runtime-manifest**", async (route) => {
@@ -28,16 +30,17 @@ test.describe("Web production boundary", () => {
     expect(home?.status()).toBe(200)
     await expect(page.getByRole("heading", { name: "把想法说给它，收回能用的成果" })).toBeVisible()
     await page.goto("/login", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("button", { name: /重试登录|Try again/iu })).toBeVisible()
+    await expect(page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu })).toBeVisible()
     await expect(page.getByRole("link", { name: "Kokoro" })).toBeVisible()
     await expect(page.getByRole("navigation")).toHaveCount(0)
     await expect(page.getByTestId("login-submit")).toHaveCount(0)
     await expect(page.getByText("配置不可用")).toHaveCount(0)
     expect(manifestRequests).toBe(0)
+    expect(csrfRequests).toBe(0)
     expect((await page.request.get("/preview/marketing")).status()).toBe(404)
   })
 
-  test("Product login automatically submits the fixed provider with a CSRF token", async ({ page }) => {
+  test("Product login submits the fixed provider with a CSRF token only after the primary action", async ({ page }) => {
     let signInCount = 0
     await page.route("**/api/auth/csrf", async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })
@@ -49,6 +52,7 @@ test.describe("Web production boundary", () => {
     })
     await page.goto("/login", { waitUntil: "domcontentloaded" })
     await expect(page.getByTestId("login-email")).toHaveCount(0)
+    await page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu }).click()
     const request = await signIn
     expect(request.method()).toBe("POST")
     expect(new URLSearchParams(request.postData() ?? "").get("csrfToken")).toBe("Token123")
@@ -56,20 +60,19 @@ test.describe("Web production boundary", () => {
     expect(signInCount).toBe(1)
   })
 
-  test("a failed browser form POST returns to a retry page without auto-looping", async ({ page }) => {
-    let signInCount = 0
+  test("a failed OIDC start stops on an explicit retry state without auto-looping", async ({ page }) => {
+    let csrfCount = 0
     await page.route("**/api/auth/csrf", async (route) => {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })
-    })
-    await page.route("**/api/auth/signin/kokoro-iam", async (route) => {
-      signInCount += 1
-      await route.fulfill({ status: 303, headers: { location: "/login?auth=sign_in_failed" }, body: "" })
+      csrfCount += 1
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" })
     })
     await page.goto("/login", { waitUntil: "domcontentloaded" })
-    await expect(page).toHaveURL(/\/login\?auth=sign_in_failed$/u)
+    await page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu }).click()
     await expect(page.getByRole("heading", { name: /登录 Kokoro|Sign in to Kokoro/iu })).toBeVisible()
     await expect(page.getByRole("button", { name: /重试登录|Try again/iu })).toBeVisible()
-    expect(signInCount).toBe(1)
+    expect(csrfCount).toBe(1)
+    await page.waitForTimeout(100)
+    expect(csrfCount).toBe(1)
   })
 
   test("rail logout posts Product signout and navigates to issuer confirmation", async ({ page, isMobile }) => {
@@ -95,11 +98,8 @@ test.describe("Web production boundary", () => {
   })
 
   test("has no critical accessibility violations on the public login surface", async ({ page }) => {
-    await page.route("**/api/auth/csrf", async (route) => {
-      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" })
-    })
     await page.goto("/login", { waitUntil: "domcontentloaded" })
-    await expect(page.getByRole("button", { name: /重试登录|Try again/iu })).toBeVisible()
+    await expect(page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu })).toBeVisible()
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()
     const critical = results.violations.filter((violation) => violation.impact === "critical")
     expect(critical, critical.map((violation) => `${violation.id}: ${violation.help}`).join("\n")).toEqual([])

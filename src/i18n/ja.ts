@@ -374,6 +374,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "theme.light": "明るい",
   "theme.dark": "暗い",
   "auth.title": "ログイン ココロ",
+  "auth.handoffBody": "Kokoro アカウントで安全に続行します",
+  "auth.continue": "Kokoro で続行",
   "auth.connectingTitle": "Kokoro に接続しています",
   "auth.connectingBody": "安全なログインページに移動しています…",
   "auth.retry": "もう一度試す",

@@ -314,6 +314,8 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "theme.light": "Brilhante",
   "theme.dark": "escuro",
   "auth.title": "Entrar Kokoro",
+  "auth.handoffBody": "Continue com segurança usando sua conta Kokoro",
+  "auth.continue": "Continuar com Kokoro",
   "auth.connectingTitle": "Conectando ao Kokoro",
   "auth.connectingBody": "Levando você para a página de login segura…",
   "auth.retry": "Tentar novamente",

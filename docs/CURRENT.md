@@ -17,7 +17,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
-- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest，挂载后只自动发起一次固定 Product RP OIDC；过渡页只保留品牌和连接状态，失败后停止并提供显式重试，不呈现营销导航或重复中转按钮。`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时仍真实请求 Auth.js CSRF/OIDC 并呈现受控错误，不伪造成功。
+- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest，首屏呈现单一 Kokoro 账号继续动作且不请求 CSRF；用户点击后才发起固定 Product RP OIDC，连接成功前保持过渡状态，失败后停止并提供显式重试，不呈现营销导航或 Web 凭据表单。`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时仅在用户主动继续后真实请求 Auth.js CSRF/OIDC 并呈现受控错误，不伪造成功。
 - W1D-Web-Gate：`/app` 的访问权只由在线 Product Session 决定；System manifest 为可选展示数据。已认证状态即使用本仓固定品牌/导航装载 live 工作台，有效 manifest 才覆盖动态展示；失败或重试会清除旧站点皮肤，不切到 preview transport。旧 `RuntimeUnavailable` 页面、样式、测试与九语种死文案已删除。当前 Node22 contract/architecture/lint/typecheck、串行 Vitest 1385/1385、build、Playwright 11通过/1既有skip；真实浏览器在已认证探针与 System 503 下仍于 `/app` 显示核心工作台。
 - 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
 - 新 Product Session cookie 使用加密 HttpOnly 信封、`SameSite=Lax`，固定公开 Web origin 为 HTTPS 或 Web production mode 时设置 `Secure`；浏览器 cookie 不透传给业务上游。旧 sealed session 仅属于待删除旧路径。

@@ -314,6 +314,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "theme.light": "밝은",
   "theme.dark": "어두운",
   "auth.title": "로그인 코코로",
+  "auth.handoffBody": "Kokoro 계정으로 안전하게 계속하세요",
+  "auth.continue": "Kokoro로 계속",
   "auth.connectingTitle": "Kokoro에 연결 중",
   "auth.connectingBody": "보안 로그인 페이지로 이동 중입니다…",
   "auth.retry": "다시 시도",

@@ -16,11 +16,11 @@ import { beginProductSignIn } from "./product-auth-client"
 
 import styles from "./login-panel.module.css"
 
-type LoginState = "connecting" | "failed"
+type LoginState = "idle" | "connecting" | "failed"
 
 export function LoginPanel({ initialFailure = false }: { initialFailure?: boolean }) {
   const t = useT()
-  const [state, setState] = useState<LoginState>(initialFailure ? "failed" : "connecting")
+  const [state, setState] = useState<LoginState>(initialFailure ? "failed" : "idle")
   const attemptRef = useRef<AbortController | null>(null)
 
   const startSignIn = useCallback(async (): Promise<void> => {
@@ -40,16 +40,11 @@ export function LoginPanel({ initialFailure = false }: { initialFailure?: boolea
   }, [])
 
   useEffect(() => {
-    // StrictMode replays effects. Deferring one microtask ensures its first
-    // (already cleaned-up) effect never starts a duplicate navigation.
-    let mounted = true
-    if (!initialFailure) queueMicrotask(() => { if (mounted) void startSignIn() })
     return () => {
-      mounted = false
       attemptRef.current?.abort()
       attemptRef.current = null
     }
-  }, [initialFailure, startSignIn])
+  }, [])
 
   const retry = (): void => {
     void startSignIn()
@@ -69,11 +64,18 @@ export function LoginPanel({ initialFailure = false }: { initialFailure?: boolea
               <Spinner aria-hidden="true" />
               <span>{t("auth.connectingBody")}</span>
             </div>
-          ) : (
+          ) : state === "failed" ? (
             <div className={styles.failure} role="alert">
               <p>{t("auth.unavailable")}</p>
               <Button type="button" className={styles.retryBtn} onClick={retry}>
                 {t("auth.retry")}
+              </Button>
+            </div>
+          ) : (
+            <div className={styles.handoff}>
+              <p>{t("auth.handoffBody")}</p>
+              <Button type="button" className={styles.primaryBtn} onClick={retry}>
+                {t("auth.continue")}
               </Button>
             </div>
           )}
