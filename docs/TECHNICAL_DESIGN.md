@@ -52,10 +52,10 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、policy `1.0.0`、blob SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；浏览器 GET 集合没有
 `/verify-email`，正式邮件链接 `${KOKORO_WEB_ORIGIN}/iam/verify-email?<query>` 在基线不可达。BFF owner
-已在 `main` `928ada2880f222b4406b13144f7dfc7be43c8099` 发布 policy `1.1.0` artifact，SHA-256
-`67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6`，仅新增精确
-`GET /verify-email`；IAM owner commit 仍是 `e36da9ecf8d62a364182949817431a8e2329d50a`。
-本提交已固定该 BFF blob/commit 并增加浏览器入口；真 IAM 邮件点击与完整登录仍待组合验证。
+当前在 `main` `a50f987d73aef6efeccde29e1c5ee6d5f4a13419` 发布 policy `1.1.0` artifact，SHA-256
+`4066b792805dfe7ab1d0f48d8359ea9c1f2a74180ffb69ceaac8a45e6553b481`；原始切片仅新增精确
+`GET /verify-email`，本次只重钉来源，IAM owner commit 为 `c16a9bcddd19211eb1e9705c392f4e5cf96f494e`。
+浏览器入口已发布；真 IAM 邮件点击与完整登录仍待组合验证。
 
 **Owner 与放置。** IAM 独占 Better Auth 1.7.3 有期签名 JWT 的签发/校验、`emailVerified` 幂等状态
 和审计；BFF 独占 browser-private relay policy 与上游敏感响应安全头；Web 仅拥有浏览器 GET 准入和
