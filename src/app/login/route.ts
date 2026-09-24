@@ -4,7 +4,6 @@ import { NextRequest } from "next/server"
 import { cookies as requestCookies } from "next/headers"
 
 import { GET as authGet, POST as authPost } from "@/app/api/auth/[...nextauth]/route"
-import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
@@ -15,15 +14,7 @@ const SIGN_IN_PARTS = { params: Promise.resolve({ nextauth: ["signin", "kokoro-i
 
 function unavailable(phase: string): Response {
   console.error("Kokoro Product login start unavailable:", phase)
-  // Keep the issuer's visual language without showing an imitation credential form.
-  const html = iamInteractionDocument({
-    title: "Sign in",
-    heading: "Sign in",
-    description: "Continue with your Kokoro account.",
-    trustedFormHtml: '<p class="empty" role="alert">Sign-in is temporarily unavailable. Please reload this page later.</p>',
-  })
-  return new Response(html, { status: 503, headers: {
-    "content-type": "text/html; charset=utf-8",
+  return new Response(null, { status: 503, headers: {
     "cache-control": "no-store",
     "referrer-policy": "no-referrer",
     "x-request-id": randomUUID(),
