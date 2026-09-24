@@ -70,7 +70,10 @@ export async function GET(request: NextRequest): Promise<Response> {
     }), SIGN_IN_PARTS)
     const location = signIn.headers.get("location")
     if (signIn.status !== 302 || location === null ||
-      !location.startsWith(`${base}/iam/oauth2/authorize?`)) return unavailable("signin_response")
+      !location.startsWith(`${base}/iam/oauth2/authorize?`)) {
+      const path = location === null ? "none" : new URL(location, base).pathname
+      return unavailable(`signin_response_${signIn.status}_${path}`)
+    }
 
     const responseHeaders = new Headers({
       location,
