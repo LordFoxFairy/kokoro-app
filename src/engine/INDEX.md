@@ -38,7 +38,8 @@
   `Last-Event-ID`、断线重连与 frame cursor 去重，拒绝 reducer-shaped legacy wire；
   同一 chat 的同一 UIMessage id/content 重送复用 key，新 id 或内容变化换 key。
 - `agui-event-mapper.ts`：把已校验 AG-UI frame 分别映射成 AI SDK `UIMessageChunk` 与
-  `ChatProjectionEvent`；wire DTO 不进入 core/UI model。
+  `ChatProjectionEvent`；BFF 终帧的 cancelled status 与工具结果的 isError 保留到两种本地视图；
+  wire DTO 不进入 core/UI model。
 - `session-scope.ts`：`SessionScope` 将用户直接会话与一个 opaque `projectRef` 的专案任务
   分开。浏览器仅发送 `scope=direct` 或 `project_ref`；部署上下文一律由 BFF 从服务端
   `KOKORO_DOMAIN` 生成的受信 `Forwarded` 与 httpOnly 信封派生。每个 scope 使用独立引擎与

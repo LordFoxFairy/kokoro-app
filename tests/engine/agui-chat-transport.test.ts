@@ -52,6 +52,43 @@ describe("AgUiChatTransport", () => {
     vi.unstubAllGlobals()
   })
 
+  it("projects one complete BFF assistant turn with its emitted terminal fields", async () => {
+    const cursors = [1, 2, 3, 4, 5].map((index) => `agui_${index.toString(16).padStart(32, "0")}`)
+    const events = [
+      { type: "RUN_STARTED", timestamp: 1, threadId: "session-1", runId: "run-1", metadata: metadata("owner-1", 1) },
+      { type: "TEXT_MESSAGE_START", timestamp: 2, messageId: "assistant-1", role: "assistant", metadata: metadata("owner-2", 2) },
+      { type: "TEXT_MESSAGE_CONTENT", timestamp: 3, messageId: "assistant-1", delta: "Hello from owner", metadata: metadata("owner-3", 3) },
+      { type: "TEXT_MESSAGE_END", timestamp: 4, messageId: "assistant-1", metadata: metadata("owner-4", 4) },
+      { type: "RUN_FINISHED", timestamp: 5, threadId: "session-1", runId: "run-1", status: "completed", outcome: { type: "success" }, metadata: metadata("owner-5", 5) },
+    ]
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(response(events.map((event, index) => sse(cursors[index] ?? "", event)).join(""))))
+
+    const accepted: AgUiTransportFrame[] = []
+    let handle: { close: () => void } | null = null
+    await new Promise<void>((resolve, reject) => {
+      handle = new AgUiChatTransport({ eventsUrl: (chatId) => `/api/session/sessions/${chatId}/events` })
+        .openProjectionEvents({
+          chatId: "session-1",
+          resumeCursor: null,
+          onFrame: (frame) => {
+            accepted.push(frame)
+            if (frame.terminal) {
+              handle?.close()
+              resolve()
+            }
+          },
+          onStreamError: reject,
+        })
+    })
+
+    expect(accepted).toHaveLength(5)
+    expect(accepted.map((frame) => frame.projectionEvent?.kind)).toEqual([
+      "run.created", "message.delta", "message.delta", "message.delta", "run.completed",
+    ])
+    expect(accepted[2]?.projectionEvent).toMatchObject({ payload: { delta: "Hello from owner" } })
+    expect(accepted[4]?.terminal).toBe(true)
+  })
+
   it("resumes from the last accepted opaque cursor and suppresses a repeated frame", async () => {
     const runStarted = {
       type: "RUN_STARTED",

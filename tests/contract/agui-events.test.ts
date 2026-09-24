@@ -28,6 +28,61 @@ describe("AG-UI wire contract", () => {
     })
   })
 
+  it("accepts the BFF terminal success envelope without loosening unknown fields", () => {
+    expect(parseAgUiEvent({
+      type: "RUN_FINISHED",
+      timestamp: Date.parse("2026-09-02T12:00:00.000Z"),
+      threadId: "session-1",
+      runId: "run-1",
+      status: "completed",
+      outcome: { type: "success" },
+      metadata,
+    })).toMatchObject({ type: "RUN_FINISHED", status: "completed", outcome: { type: "success" } })
+
+    expect(() => parseAgUiEvent({
+      type: "RUN_FINISHED",
+      timestamp: Date.parse("2026-09-02T12:00:00.000Z"),
+      threadId: "session-1",
+      runId: "run-1",
+      status: "completed",
+      outcome: { type: "success" },
+      unexpected: "not-an-owner-field",
+      metadata,
+    })).toThrow()
+  })
+
+  it("accepts BFF cancellation, failure, and tool result fields", () => {
+    expect(parseAgUiEvent({
+      type: "RUN_FINISHED",
+      timestamp: 1,
+      threadId: "session-1",
+      runId: "run-1",
+      status: "cancelled",
+      result: { status: "cancelled" },
+      outcome: { type: "interrupt", interrupts: [{ id: "cancelled:1", reason: "cancelled" }] },
+      metadata,
+    }).type).toBe("RUN_FINISHED")
+    expect(parseAgUiEvent({
+      type: "RUN_ERROR",
+      timestamp: 1,
+      threadId: "session-1",
+      runId: "run-1",
+      message: "failed",
+      code: "internal_error",
+      metadata,
+    }).type).toBe("RUN_ERROR")
+    expect(parseAgUiEvent({
+      type: "TOOL_CALL_RESULT",
+      timestamp: 1,
+      messageId: "message-1",
+      toolCallId: "tool-1",
+      content: "failed",
+      role: "tool",
+      isError: true,
+      metadata,
+    }).type).toBe("TOOL_CALL_RESULT")
+  })
+
   it("rejects an AG-UI event without Kokoro replay metadata", () => {
     expect(() => parseAgUiEvent({
       type: "RUN_STARTED",

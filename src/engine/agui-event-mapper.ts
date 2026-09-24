@@ -242,11 +242,12 @@ export class AgUiEventMapper {
       }
       case EventType.RUN_FINISHED: {
         this.#clearRun(metadata.session_id, event.runId)
+        const cancelled = event.status === "cancelled"
         const usage = event.usage?.[0]
         const inputTokens = usage?.inputTokens
         const outputTokens = usage?.outputTokens
         const projectionEvent = projectionEnvelope(cursor, event, "run.completed", {
-          status: "completed",
+          status: cancelled ? "cancelled" : "completed",
           token_usage:
             typeof inputTokens === "number" && typeof outputTokens === "number"
               ? { input_tokens: inputTokens, output_tokens: outputTokens }
@@ -257,7 +258,7 @@ export class AgUiEventMapper {
           projectionEvent,
           uiMessageChunks: [
             { type: "finish-step" },
-            { type: "finish", finishReason: "stop", messageMetadata },
+            { type: "finish", finishReason: cancelled ? "other" : "stop", messageMetadata },
           ],
           terminal: true,
         }
@@ -422,12 +423,9 @@ export class AgUiEventMapper {
           tool.inputCompleted = true
         }
         this.#toolCalls.delete(key)
-        uiMessageChunks.push({
-          type: "tool-output-available",
-          toolCallId: event.toolCallId,
-          output: event.content,
-          dynamic: true,
-        })
+        uiMessageChunks.push(event.isError === true
+          ? { type: "tool-output-error", toolCallId: event.toolCallId, errorText: event.content, dynamic: true }
+          : { type: "tool-output-available", toolCallId: event.toolCallId, output: event.content, dynamic: true })
         return {
           cursor,
           projectionEvent: projectionEnvelope(cursor, event, "tool.returned", {
@@ -435,7 +433,7 @@ export class AgUiEventMapper {
             tool_id: event.toolCallId,
             name: tool.name,
             result: event.content,
-            is_error: false,
+            is_error: event.isError === true,
           }),
           uiMessageChunks,
           terminal: false,

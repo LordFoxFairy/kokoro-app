@@ -133,6 +133,37 @@ describe("AgUiEventMapper", () => {
     ])
   })
 
+  it("preserves BFF cancelled RUN_FINISHED as a cancelled terminal", () => {
+    const mapped = new AgUiEventMapper().map(CURSORS.terminal, {
+      type: "RUN_FINISHED",
+      timestamp: 5,
+      threadId: "session-1",
+      runId: "run-1",
+      status: "cancelled",
+      result: { status: "cancelled" },
+      outcome: { type: "interrupt", interrupts: [{ id: "cancelled:1", reason: "cancelled" }] },
+      metadata: metadata("agent-cancelled-finish", 10),
+    })
+
+    expect(mapped.projectionEvent).toMatchObject({ kind: "run.completed", payload: { status: "cancelled" } })
+    expect(mapped.uiMessageChunks.at(-1)).toMatchObject({ type: "finish", finishReason: "other" })
+  })
+
+  it("preserves BFF tool isError in reducer and UI message output", () => {
+    const mapped = new AgUiEventMapper().map(CURSORS.result, {
+      type: "TOOL_CALL_RESULT",
+      timestamp: 4,
+      messageId: "message-error-result",
+      toolCallId: "tool-error-result",
+      role: "tool",
+      content: "tool failed",
+      isError: true,
+      metadata: metadata("agent-tool-error", 4),
+    })
+    expect(mapped.projectionEvent).toMatchObject({ kind: "tool.returned", payload: { is_error: true } })
+    expect(mapped.uiMessageChunks.at(-1)).toMatchObject({ type: "tool-output-error", errorText: "tool failed" })
+  })
+
   it("bootstraps tool input when replay starts at an args, end, or result cursor", () => {
     const partialArgs = new AgUiEventMapper().map(CURSORS.args, {
       type: "TOOL_CALL_ARGS",

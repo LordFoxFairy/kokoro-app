@@ -1,5 +1,17 @@
 # Kokoro User Web 当前状态
 
+W1D-Chat 浏览器闭环修复候选（本工作树，尚待 Root 固定 SHA 真实 Chromium 复验）：BFF 当前
+`RUN_FINISHED` 带 `status/outcome`（取消时另有 `result`），`RUN_ERROR` 带
+`threadId/runId`，工具结果带 `isError`；此前 Web AG-UI 严格 schema 将这些 owner
+字段误判为未知字段，使终帧解析失败。当前精确声明字段、仍拒绝未知键，并在内部投影保留
+cancelled/tool error。SSE 同源代理此前使用普通 HTTP 15 秒总 deadline；当前仅
+`GET /sessions/:id/events` 在首部连接后改用 60 秒可续的 idle deadline，普通响应保留原总
+deadline。上述两项分别以旧实现 RED、修改后 GREEN 的 contract/真实 Node HTTP 测试证明；
+尚未据此宣称浏览器 Chat 完成，须等 Root 独立固定版本端到端验收。
+Node `22.22.2` 本工作树已执行 `pnpm contract` 56/56、`pnpm test:architecture`
+32/32、`pnpm lint`、`pnpm test` 1408/1408、`tsc --noEmit`；共享 3310 dev 仍在运行，
+本切片未在其 `.next` 上运行 build/Playwright，交 Root 串行完成。
+
 状态日期：2026-09-24。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
 W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；后续已发布的旧 generation signout CAS 保持有效。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback

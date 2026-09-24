@@ -31,7 +31,9 @@ runtime token、内部服务地址、workload secret 或后端隔离键。
   - `bffPathUrl(path, env?)`：生成版本化业务 BFF 地址。
 - `upstream-http.ts`
   - `fetchWithDomain`：普通 JSON/下载请求，覆盖调用方的 `forwarded`。
-  - `requestWithDomain`：HTTP/SSE/二进制流式代理，覆盖调用方的 `forwarded`。
+  - `requestWithDomain`：HTTP/SSE/二进制流式代理，覆盖调用方的 `forwarded`；普通响应保留
+    15 秒总 deadline，Chat AG-UI SSE 仅在 route 明确选择时使用首部连接 deadline 与可续
+    idle deadline，断流交给浏览器按 durable cursor 重连。
   - `getJsonWithDomain`：System manifest 的 JSON 请求变体。
 - `iam-relay-policy.ts`：固定 BFF policy provenance、只读 browser GET 子集与 issuer cookie 入站过滤。
 - `iam-relay-config.ts`：固定 Web origin、BFF origin 与 service identity 的共用 server-only 解析。

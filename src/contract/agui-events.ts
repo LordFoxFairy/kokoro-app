@@ -1,7 +1,7 @@
 // Web ↔ BFF streaming wire contract. This module validates canonical AG-UI
 // frames only; reducer/UI projection belongs to the engine adapter.
 
-import { EventSchemas, EventType } from "@ag-ui/core"
+import { EventSchemas, EventType, RunFinishedOutcomeSchema } from "@ag-ui/core"
 import { z } from "zod"
 
 export const eventCursorSchema = z.string().regex(/^agui_[0-9a-f]{32}$/u)
@@ -34,10 +34,18 @@ const eventSchema = z.discriminatedUnion("type", [
     type: z.literal(EventType.RUN_FINISHED),
     threadId: z.string().min(1),
     runId: z.string().min(1),
+    // BFF's completed/cancelled projection carries an explicit status and
+    // canonical AG-UI outcome. Keep both declared rather than accepting
+    // arbitrary top-level fields from an untrusted stream.
+    status: z.enum(["completed", "cancelled"]).optional(),
+    result: z.unknown().optional(),
+    outcome: RunFinishedOutcomeSchema.optional(),
     usage: z.array(z.record(z.unknown())).optional(),
   }),
   base.extend({
     type: z.literal(EventType.RUN_ERROR),
+    threadId: z.string().min(1).optional(),
+    runId: z.string().min(1).optional(),
     message: z.string().min(1),
     code: z.string().min(1).optional(),
   }),
@@ -76,6 +84,7 @@ const eventSchema = z.discriminatedUnion("type", [
     toolCallId: z.string().min(1),
     content: z.string(),
     role: z.literal("tool").optional(),
+    isError: z.boolean().optional(),
   }),
   base.extend({
     type: z.literal(EventType.CUSTOM),
@@ -85,18 +94,18 @@ const eventSchema = z.discriminatedUnion("type", [
 ])
 
 export const agUiEventSchema = eventSchema.superRefine((event, context) => {
-  if (event.type !== EventType.RUN_STARTED && event.type !== EventType.RUN_FINISHED) {
+  if (event.type !== EventType.RUN_STARTED && event.type !== EventType.RUN_FINISHED && event.type !== EventType.RUN_ERROR) {
     return
   }
   const metadata = event.metadata.kokoro
-  if (event.threadId !== metadata.session_id) {
+  if (event.threadId !== undefined && event.threadId !== metadata.session_id) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["threadId"],
       message: "threadId must match metadata.kokoro.session_id",
     })
   }
-  if (event.runId !== metadata.run_id) {
+  if (event.runId !== undefined && event.runId !== metadata.run_id) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["runId"],

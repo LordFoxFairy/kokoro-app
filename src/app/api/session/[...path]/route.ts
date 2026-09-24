@@ -23,6 +23,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
+const AGUI_STREAM_IDLE_TIMEOUT_MS = 60_000
 
 // 仅转发 Chat 实际需要的入站头，绝不转发 cookie（信封 cookie 不得外泄到 BFF）。
 const FORWARD_HEADERS = ["accept", "content-type", "last-event-id", "idempotency-key"] as const
@@ -51,8 +52,11 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
 
   const { path } = await context.params
+  const segments = path ?? []
+  const isAgUiEvents = request.method === "GET" && segments.length === 3
+    && segments[0] === "sessions" && segments[2] === "events"
   const search = new URL(request.url).search
-  const encodedPath = (path ?? []).map((segment) => encodeURIComponent(segment)).join("/")
+  const encodedPath = segments.map((segment) => encodeURIComponent(segment)).join("/")
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedPath}${search}`
 
   const headers = productBffHeaders(config, claims, requestId)
@@ -84,6 +88,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
+      ...(isAgUiEvents ? { streamIdleTimeoutMs: AGUI_STREAM_IDLE_TIMEOUT_MS } : {}),
     })
   } catch {
     return webErrorResponse("bff_unreachable", 502, requestId)

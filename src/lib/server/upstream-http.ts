@@ -61,22 +61,30 @@ function headersWithForwardedHost(headers: HeadersInit | undefined, domain: stri
 type Deadline = {
   controller: AbortController
   timedOut: () => boolean
+  restart: (timeoutMs: number) => void
   cleanup: () => void
 }
 
 function deadlineFor(signal: AbortSignal | undefined, timeoutMs: number): Deadline {
   const controller = new AbortController()
   let timedOut = false
-  const timeout = setTimeout(() => {
-    timedOut = true
-    controller.abort(new UpstreamTimeoutError())
-  }, timeoutMs)
+  let timeout: ReturnType<typeof setTimeout>
+  const restart = (milliseconds: number): void => {
+    clearTimeout(timeout)
+    timedOut = false
+    timeout = setTimeout(() => {
+      timedOut = true
+      controller.abort(new UpstreamTimeoutError())
+    }, milliseconds)
+  }
+  restart(timeoutMs)
   const abort = () => controller.abort(signal?.reason)
   if (signal?.aborted) abort()
   else signal?.addEventListener("abort", abort, { once: true })
   return {
     controller,
     timedOut: () => timedOut,
+    restart,
     cleanup: () => {
       clearTimeout(timeout)
       signal?.removeEventListener("abort", abort)
@@ -97,6 +105,7 @@ function nodeResponseStream(
   client: ClientRequest,
   deadline: Deadline,
   maxBytes: number,
+  idleTimeoutMs: number | undefined,
   onDone: () => void,
 ): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
@@ -123,6 +132,7 @@ function nodeResponseStream(
         fail(error ?? new Error("upstream request aborted"))
       }
       const onData = (chunk: Buffer | string | Uint8Array) => {
+        if (idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
         const bytes = Buffer.from(chunk)
         total += bytes.byteLength
         if (total > maxBytes) {
@@ -195,6 +205,9 @@ type RequestWithDomainOptions = {
   body?: ArrayBuffer
   signal?: AbortSignal
   timeoutMs?: number
+  // SSE has a short connection deadline, then a renewable idle deadline.
+  // Non-streaming responses retain the normal total deadline.
+  streamIdleTimeoutMs?: number
   maxRequestBytes?: number
   maxResponseBytes?: number
 }
@@ -251,7 +264,10 @@ export function requestWithDomain(
         resolveOnce(new Response(null, { status: response.statusCode, headers: responseHeaders(response.headers) }))
         return
       }
-      const body = nodeResponseStream(response, client, deadline, maxResponseBytes, deadline.cleanup)
+      const isEventStream = response.headers["content-type"]?.toString().toLowerCase().startsWith("text/event-stream") ?? false
+      const idleTimeoutMs = isEventStream ? options.streamIdleTimeoutMs : undefined
+      if (idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
+      const body = nodeResponseStream(response, client, deadline, maxResponseBytes, idleTimeoutMs, deadline.cleanup)
       resolveOnce(new Response(body, { status: response.statusCode ?? 502, headers: responseHeaders(response.headers) }))
     })
     const onAbort = () => {

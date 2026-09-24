@@ -219,6 +219,7 @@ describe("/api/session/[...path] proxy", () => {
     const [, domain, init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string> }]
     expect(domain).toBe("dev.kokoro.localhost")
     expect(new Headers(init.headers).get("last-event-id")).toBe("42")
+    expect(init).toMatchObject({ streamIdleTimeoutMs: 60_000 })
   })
 
   it("projects a BFF error envelope without leaking upstream internals", async () => {

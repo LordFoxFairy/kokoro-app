@@ -111,6 +111,45 @@ describe("server upstream transport", () => {
     expect(await response.text()).toContain("data: two")
   })
 
+  it("keeps an active SSE stream beyond its connection deadline", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "text/event-stream" })
+      response.write(": keep-alive\n\n")
+      setTimeout(() => response.end("id: agui_00000000000000000000000000000001\ndata: done\n\n"), 45)
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/events`, "dev.kokoro.localhost", {
+      method: "GET",
+      headers: { accept: "text/event-stream" },
+      timeoutMs: 15,
+      streamIdleTimeoutMs: 80,
+    })
+    expect(await response.text()).toContain("data: done")
+  })
+
+  it("aborts an SSE stream when its idle deadline expires", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "text/event-stream" })
+      response.write(": keep-alive\n\n")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/events`, "dev.kokoro.localhost", {
+      method: "GET",
+      headers: { accept: "text/event-stream" },
+      timeoutMs: 100,
+      streamIdleTimeoutMs: 20,
+    })
+    await expect(response.text()).rejects.toBeInstanceOf(UpstreamTimeoutError)
+  })
+
   it("rejects an oversized request before opening the upstream connection", async () => {
     let received = false
     const server = createServer(() => {
