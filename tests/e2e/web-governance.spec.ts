@@ -1,14 +1,54 @@
 import { expect, test } from "@playwright/test"
+import type { Page } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
 
-test.describe("Web production boundary", () => {
-  test("serves a private preview session and a navigable login page", async ({ page, request }) => {
-    const session = await request.get("/api/auth/session-state")
-    expect(session.ok()).toBe(true)
-    expect(await session.json()).toEqual({ state: "preview" })
-    expect(session.headers()["cache-control"]).toContain("no-store")
+async function mockProductLogout(page: Page) {
+  await page.route("**/api/auth/csrf", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })
+  })
+  await page.route("**/api/auth/signout", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ issuer_end_session_url: "/iam/oauth2/end-session?client_id=web" }) })
+  })
+  await page.route("**/iam/oauth2/end-session?*", async (route) => {
+    await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>Issuer confirmation</h1>" })
+  })
+}
 
-    const response = await page.goto("/login", { waitUntil: "domcontentloaded" })
+test.describe("Web production boundary", () => {
+  test("Product login submits the fixed provider with a CSRF token, not an email link", async ({ page }) => {
+    await page.route("**/api/auth/csrf", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })
+    })
+    const signIn = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/auth/signin/kokoro-iam")
+    await page.route("**/api/auth/signin/kokoro-iam", async (route) => {
+      await route.fulfill({ status: 200, contentType: "text/html", body: "<h1>OIDC started</h1>" })
+    })
+    await page.goto("/login", { waitUntil: "networkidle" })
+    await expect(page.getByTestId("login-email")).toHaveCount(0)
+    await page.getByTestId("login-submit").click()
+    const request = await signIn
+    expect(request.method()).toBe("POST")
+    expect(new URLSearchParams(request.postData() ?? "").get("csrfToken")).toBe("Token123")
+    await expect(page.getByRole("heading", { name: "OIDC started" })).toBeVisible()
+  })
+
+  test("rail logout posts Product signout and navigates to issuer confirmation", async ({ page, isMobile }) => {
+    test.skip(isMobile, "the workspace rail is rendered only on desktop")
+    await mockProductLogout(page)
+    const signout = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/auth/signout")
+    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.getByTestId("rail-utility-account").click()
+    await page.getByRole("menuitem", { name: /退出登录|Sign out/iu }).click()
+    const request = await signout
+    expect(request.method()).toBe("POST")
+    expect(new URLSearchParams(request.postData() ?? "").get("csrfToken")).toBe("Token123")
+    await expect(page.getByRole("heading", { name: "Issuer confirmation" })).toBeVisible()
+  })
+
+  test("serves a navigable Product sign-in page without exposing credentials", async ({ page }) => {
+    const response = await page.goto("/login", {
+      waitUntil: "domcontentloaded",
+    })
     expect(response?.ok()).toBe(true)
     await expect(page.locator("body")).toBeVisible()
     await expect(page.locator("body")).not.toContainText(/tenant_id|workload_token|iam_access_token/iu)

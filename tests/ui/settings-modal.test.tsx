@@ -9,11 +9,13 @@ import type { ComponentProps } from "react"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 
-const { registerCustomMcp, registerCustomApi, uploadConnectorIcon } = vi.hoisted(() => ({
+const { registerCustomMcp, registerCustomApi, uploadConnectorIcon, endProductSession } = vi.hoisted(() => ({
   registerCustomMcp: vi.fn().mockResolvedValue({}),
   registerCustomApi: vi.fn().mockResolvedValue({}),
   uploadConnectorIcon: vi.fn().mockResolvedValue({ asset_id: "asset_crm", url: "/assets/crm.png" }),
+  endProductSession: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock("@/ui/auth/product-auth-client", () => ({ endProductSession }))
 
 // AccountCard(退出登录跳转)用 useRouter；模态本身不依赖路由。
 vi.mock("next/navigation", () => ({
@@ -106,6 +108,7 @@ beforeEach(() => {
   registerCustomMcp.mockClear()
   registerCustomApi.mockClear()
   uploadConnectorIcon.mockClear()
+  endProductSession.mockClear()
   window.localStorage.setItem("kokoro.locale", "zh")
   window.history.replaceState({}, "", "/")
 })
@@ -118,6 +121,12 @@ afterEach(() => {
 })
 
 describe("SettingsModal 设置中心模态", () => {
+  it("非预览账户退出调用 Product signout，而不是旧 logout", async () => {
+    renderSettings()
+    fireEvent.click(screen.getByTestId("settings-logout"))
+    await waitFor(() => expect(endProductSession).toHaveBeenCalledOnce())
+  })
+
   it("兼容 Manus 的 general 设置深链", () => {
     expect(normalizeSettingsTab("general")).toBe("appearance")
     expect(normalizeSettingsTab("appearance")).toBe("appearance")

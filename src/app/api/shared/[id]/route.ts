@@ -4,21 +4,22 @@
 
 import { NextResponse } from "next/server"
 
-import { authConfig, INTERNAL_SECRET_HEADER, SERVICE_HEADER, SERVICE_VALUE } from "@/lib/server/auth"
+import { configuredDomain } from "@/lib/server/domain-context"
+import { INTERNAL_SECRET_HEADER, SERVICE_HEADER, SERVICE_VALUE } from "@/lib/server/product-bff"
+import { configuredBffBaseUrl } from "@/lib/server/service-config"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-): Promise<Response> {
-  const config = authConfig()
-  if (config === null) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
+  const domain = configuredDomain()
+  const bffBaseUrl = configuredBffBaseUrl()
+  const internalSecret = process.env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
+  if (domain === null || (process.env.NODE_ENV === "production" && internalSecret === null)) {
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
-  if (config.bffBaseUrl === null || config.bffBaseUrl === undefined) {
+  if (bffBaseUrl === null) {
     return NextResponse.json({ error: "bff_not_configured" }, { status: 503 })
   }
   const { id } = await context.params
@@ -26,15 +27,18 @@ export async function GET(
   if (id.length === 0) {
     return NextResponse.json({ error: "share_not_found" }, { status: 404 })
   }
-  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/shared/${encodeURIComponent(id)}`
+  const target = `${bffBaseUrl.replace(/\/+$/, "")}/v1/shared/${encodeURIComponent(id)}`
   const headers = new Headers({ [SERVICE_HEADER]: SERVICE_VALUE })
-  if (config.internalSecret !== null) {
-    headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+  if (internalSecret !== null) {
+    headers.set(INTERNAL_SECRET_HEADER, internalSecret)
   }
 
   let upstream: Response
   try {
-    upstream = await fetchWithDomain(target, config.domain, { headers, cache: "no-store" })
+    upstream = await fetchWithDomain(target, domain, {
+      headers,
+      cache: "no-store",
+    })
   } catch {
     return NextResponse.json({ error: "bff_unreachable" }, { status: 502 })
   }
@@ -44,5 +48,8 @@ export async function GET(
   if (contentType !== null) {
     responseHeaders.set("content-type", contentType)
   }
-  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }

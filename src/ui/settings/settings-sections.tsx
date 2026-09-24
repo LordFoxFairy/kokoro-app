@@ -15,6 +15,7 @@ import { useTheme, type ThemeMode } from "@/ui/theme/theme-context"
 import { mutationHeaders } from "@/lib/client/mutation"
 import { LOCALES, LOCALE_NAMES, type Locale } from "@/i18n/messages"
 import { browserListClient } from "@/ui/shell/page-clients"
+import { endProductSession } from "@/ui/auth/product-auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
@@ -117,11 +118,11 @@ export function AccountCard({
       return
     }
     try {
-      await fetch("/api/auth/logout", { method: "POST" })
+      await endProductSession()
     } catch {
       // 登出失败也回首页：信封若仍在，首页闸会重新裁决。
     }
-    router.push("/")
+    // Product sign-out owns the issuer confirmation navigation.
   }
 
   const displayName = account?.displayName ?? "—"

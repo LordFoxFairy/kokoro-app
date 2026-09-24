@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCredits } from "@/billing/format"
 import { useT } from "@/i18n/context"
+import { endProductSession } from "@/ui/auth/product-auth-client"
 import { browserBillingClient, browserTeamClient } from "@/ui/shell/page-clients"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { NotificationPanel } from "@/ui/notifications/notification-panel"
@@ -206,7 +207,7 @@ export function WorkspaceRailAccount({
           <DropdownMenuItem asChild><a href="/docs"><CircleHelp aria-hidden="true" />{t("rail.accountHelp")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
           <DropdownMenuItem asChild><a href="/docs"><FileText aria-hidden="true" />{t("rail.accountDocs")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => void fetch("/api/auth/logout", { method: "POST" }).then(() => { window.location.assign("/") })}>
+          <DropdownMenuItem variant="destructive" onSelect={() => void endProductSession()}>
             <LogOut aria-hidden="true" />{t("settings.logout")}
           </DropdownMenuItem>
         </DropdownMenuContent>

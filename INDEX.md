@@ -61,6 +61,7 @@
 | 文件 | 说明 |
 | --- | --- |
 | `src/lib/server/auth.ts` | session cookie、nonce、session refresh 与当前 IAM client |
+| `src/lib/server/product-bff.ts` | 普通受保护 BFF adapter 的在线 Product Session admission、唯一 Bearer 与 service identity |
 | `src/lib/server/session-envelope.ts` | AES-256-GCM sealed envelope |
 | `src/lib/server/domain-context.ts` | server-only `KOKORO_DOMAIN` 与 `Forwarded` |
 | `src/app/iam/[...path]/route.ts` | server-only `KOKORO_WEB_ORIGIN`、固定 GET allowlist 与请求准入 |

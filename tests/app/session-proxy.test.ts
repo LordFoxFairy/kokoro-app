@@ -2,15 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { sealEnvelope } from "@/lib/server/session-envelope"
 
-const { requestWithDomain } = vi.hoisted(() => ({ requestWithDomain: vi.fn() }))
+const { requestWithDomain } = vi.hoisted(() => ({
+  requestWithDomain: vi.fn(),
+}))
 
 vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/upstream-http")>()),
   requestWithDomain,
 }))
 
+const { currentProductSession } = vi.hoisted(() => ({
+  currentProductSession: vi.fn(),
+}))
+vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+
 const ENV = {
   KOKORO_WEB_SESSION_SECRET: "test-session-secret",
+  KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
+  KOKORO_WEB_REDIS_URL: "redis://fixture.invalid/9",
+  KOKORO_WEB_ORIGIN: "http://localhost",
   KOKORO_IAM_BASE_URL: "http://user.test",
   KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
@@ -21,7 +31,14 @@ const nowSec = (): number => Math.floor(Date.now() / 1000)
 
 function sessionCookie(): string {
   const sealed = sealEnvelope(
-    { runtime_jwt: "rt.jwt.sig", access_exp: nowSec() + 3600, refresh_token: "rt-refresh", user_id: "u1", namespace: "team_1", exp: nowSec() + 3600 },
+    {
+      runtime_jwt: "rt.jwt.sig",
+      access_exp: nowSec() + 3600,
+      refresh_token: "rt-refresh",
+      user_id: "u1",
+      namespace: "team_1",
+      exp: nowSec() + 3600,
+    },
     [ENV.KOKORO_WEB_SESSION_SECRET],
   )
   return `kokoro_session=${sealed}`
@@ -32,10 +49,16 @@ function params(path: string[]): { params: Promise<{ path: string[] }> } {
 }
 
 beforeEach(() => {
+  currentProductSession.mockReset()
+  currentProductSession.mockResolvedValue({
+    access: "product-access",
+    accessExpiresAt: Date.now() + 60_000,
+  })
   for (const [k, v] of Object.entries(ENV)) process.env[k] = v
 })
 afterEach(() => {
   vi.unstubAllGlobals()
+  currentProductSession.mockReset()
   requestWithDomain.mockReset()
   for (const k of Object.keys(ENV)) delete process.env[k]
 })
@@ -44,22 +67,36 @@ describe("/api/session/[...path] proxy", () => {
   it("projects Chat through the BFF and unwraps the v1 response for the browser contract", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
-    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({ data: { sessions: [] }, meta: { request_id: "req_1" } }), { status: 200, headers: { "content-type": "application/json" } }))
+    requestWithDomain.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { sessions: [] },
+          meta: { request_id: "req_1" },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    )
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const res = await GET(
-      new Request("http://localhost/api/session/sessions/ses_1?x=1", { headers: { cookie: sessionCookie() } }),
+      new Request("http://localhost/api/session/sessions/ses_1?x=1", {
+        headers: { cookie: sessionCookie() },
+      }),
       params(["sessions", "ses_1"]),
     )
     expect(res.status).toBe(200)
 
-    const [target, domain, init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string> }]
+    const [target, domain, init] = requestWithDomain.mock.calls[0] as [
+      string,
+      string,
+      { headers: Record<string, string> },
+    ]
     expect(target).toBe("http://bff.test/v1/sessions/ses_1?x=1")
     expect(domain).toBe("dev.kokoro.localhost")
     expect(new Headers(init.headers).get("x-kokoro-service")).toBe("web-bff")
     expect(new Headers(init.headers).get("x-kokoro-internal-secret")).toBe("web-bff-secret")
-    expect(new Headers(init.headers).get("x-kokoro-namespace")).toBe("team_1")
-    expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBe("u1")
+    expect(new Headers(init.headers).get("x-kokoro-namespace")).toBeNull()
+    expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBeNull()
     expect(res.headers.get("x-request-id")).toBe("req_1")
     expect(await res.json()).toEqual({ sessions: [] })
   })
@@ -69,43 +106,68 @@ describe("/api/session/[...path] proxy", () => {
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const response = await GET(
-      new Request("http://localhost/api/session/sessions/ses_1/messages", { headers: { cookie: sessionCookie(), "x-kokoro-request-id": "request-local" } }),
+      new Request("http://localhost/api/session/sessions/ses_1/messages", {
+        headers: {
+          cookie: sessionCookie(),
+          "x-kokoro-request-id": "request-local",
+        },
+      }),
       params(["sessions", "ses_1", "messages"]),
     )
 
     expect(response.status).toBe(503)
     expect(response.headers.get("x-request-id")).toBe("request-local")
     expect(await response.json()).toEqual({
-      error: { code: "bff_not_configured", message: "bff_not_configured" },
+      error: { code: "auth_not_configured", message: "auth_not_configured" },
       meta: { request_id: "request-local" },
     })
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
   it("streams an SSE response through unchanged (content-type + body)", async () => {
-    const upstream = new Response("data: hello\n\n", { status: 200, headers: { "content-type": "text/event-stream" } })
+    const upstream = new Response("data: hello\n\n", {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "public, max-age=3600",
+      },
+    })
     vi.stubGlobal("fetch", vi.fn())
     requestWithDomain.mockResolvedValue(upstream)
     const { GET } = await import("@/app/api/session/[...path]/route")
 
     const res = await GET(
       new Request("http://localhost/api/session/sessions/ses_1/events", {
-        headers: { cookie: sessionCookie(), accept: "text/event-stream", "last-event-id": "42" },
+        headers: {
+          cookie: sessionCookie(),
+          accept: "text/event-stream",
+          "last-event-id": "42",
+        },
       }),
       params(["sessions", "ses_1", "events"]),
     )
     expect(res.headers.get("content-type")).toBe("text/event-stream")
+    expect(res.headers.get("cache-control")).toBe("private, no-store")
     expect(await res.text()).toBe("data: hello\n\n")
   })
 
   it("forwards the SSE resume header (last-event-id) upstream", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
-    requestWithDomain.mockResolvedValue(new Response("", { status: 200, headers: { "content-type": "text/event-stream" } }))
+    requestWithDomain.mockResolvedValue(
+      new Response("", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    )
     const { GET } = await import("@/app/api/session/[...path]/route")
     await GET(
       new Request("http://localhost/api/session/sessions/ses_1/events", {
-        headers: { cookie: sessionCookie(), accept: "text/event-stream", "last-event-id": "42" },
+        headers: {
+          cookie: sessionCookie(),
+          accept: "text/event-stream",
+          "last-event-id": "42",
+        },
       }),
       params(["sessions", "ses_1", "events"]),
     )
@@ -115,15 +177,24 @@ describe("/api/session/[...path] proxy", () => {
   })
 
   it("projects a BFF error envelope without leaking upstream internals", async () => {
-    requestWithDomain.mockResolvedValue(new Response(JSON.stringify({
-      error: { code: "run_not_active", message: "Run is not active" },
-      meta: { request_id: "req_error" },
-    }), { status: 409, headers: { "content-type": "application/json" } }))
+    requestWithDomain.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: { code: "run_not_active", message: "Run is not active" },
+          meta: { request_id: "req_error" },
+        }),
+        { status: 409, headers: { "content-type": "application/json" } },
+      ),
+    )
     const { POST } = await import("@/app/api/session/[...path]/route")
     const response = await POST(
       new Request("http://localhost/api/session/sessions/ses_1/runs/run_1/control", {
         method: "POST",
-        headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json" },
+        headers: {
+          cookie: sessionCookie(),
+          origin: "http://localhost",
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ kind: "run.cancel", session_id: "ses_1" }),
       }),
       params(["sessions", "ses_1", "runs", "run_1", "control"]),
@@ -137,6 +208,7 @@ describe("/api/session/[...path] proxy", () => {
   })
 
   it("returns 401 when there is no envelope", async () => {
+    currentProductSession.mockResolvedValueOnce(null)
     vi.stubGlobal("fetch", vi.fn())
     const { GET } = await import("@/app/api/session/[...path]/route")
     const res = await GET(new Request("http://localhost/api/session/sessions/ses_1"), params(["sessions", "ses_1"]))
@@ -149,7 +221,11 @@ describe("/api/session/[...path] proxy", () => {
     const res = await POST(
       new Request("http://localhost/api/session/sessions/ses_1/messages", {
         method: "POST",
-        headers: { cookie: sessionCookie(), origin: "http://evil.test", "content-type": "application/json" },
+        headers: {
+          cookie: sessionCookie(),
+          origin: "http://evil.test",
+          "content-type": "application/json",
+        },
         body: "{}",
       }),
       params(["sessions", "ses_1", "messages"]),

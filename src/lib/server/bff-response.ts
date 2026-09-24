@@ -5,17 +5,23 @@ export const PUBLIC_REQUEST_ID_HEADER = "x-request-id"
 
 const requestIdSchema = z.string().trim().min(1)
 
-export const bffRequestMetaSchema = z.object({
-  request_id: requestIdSchema,
-}).passthrough()
+export const bffRequestMetaSchema = z
+  .object({
+    request_id: requestIdSchema,
+  })
+  .passthrough()
 
-export const bffErrorEnvelopeSchema = z.object({
-  error: z.object({
-    code: requestIdSchema,
-    message: z.string().min(1),
-  }).strict(),
-  meta: bffRequestMetaSchema,
-}).strict()
+export const bffErrorEnvelopeSchema = z
+  .object({
+    error: z
+      .object({
+        code: requestIdSchema,
+        message: z.string().min(1),
+      })
+      .strict(),
+    meta: bffRequestMetaSchema,
+  })
+  .strict()
 
 export function bffSuccessEnvelopeSchema<T extends z.ZodTypeAny>(data: T) {
   return z.object({ data, meta: bffRequestMetaSchema }).passthrough()
@@ -27,14 +33,16 @@ function nonEmptyHeader(request: Request, name: string): string | null {
 }
 
 export function requestIdForRequest(request: Request): string {
-  return nonEmptyHeader(request, "x-kokoro-request-id")
-    ?? nonEmptyHeader(request, PUBLIC_REQUEST_ID_HEADER)
-    ?? crypto.randomUUID()
+  return (
+    nonEmptyHeader(request, "x-kokoro-request-id") ??
+    nonEmptyHeader(request, PUBLIC_REQUEST_ID_HEADER) ??
+    crypto.randomUUID()
+  )
 }
 
 export function requestIdFromResponse(upstream: Response, fallback: string): string {
-  const value = upstream.headers.get(PUBLIC_REQUEST_ID_HEADER)?.trim()
-    || upstream.headers.get("x-kokoro-request-id")?.trim()
+  const value =
+    upstream.headers.get(PUBLIC_REQUEST_ID_HEADER)?.trim() || upstream.headers.get("x-kokoro-request-id")?.trim()
   return value || fallback
 }
 
@@ -55,6 +63,7 @@ export function upstreamResponseHeaders(
     const value = upstream.headers.get(name)
     if (value !== null) headers.set(name, value)
   }
+  headers.set("cache-control", "private, no-store")
   return headers
 }
 
@@ -66,11 +75,14 @@ export function webErrorResponse(
   init?: HeadersInit,
 ): NextResponse {
   const headers = responseHeadersWithRequestId(requestId, init)
-  if (!headers.has("cache-control")) headers.set("cache-control", "no-store")
-  return NextResponse.json({
-    error: { code, message },
-    meta: { request_id: requestId },
-  }, { status, headers })
+  headers.set("cache-control", "private, no-store")
+  return NextResponse.json(
+    {
+      error: { code, message },
+      meta: { request_id: requestId },
+    },
+    { status, headers },
+  )
 }
 
 export function bffErrorResponse(
@@ -81,9 +93,7 @@ export function bffErrorResponse(
   init?: HeadersInit,
 ): Response {
   const parsed = bffErrorEnvelopeSchema.safeParse(body)
-  const requestId = parsed.success
-    ? parsed.data.meta.request_id
-    : requestIdFromResponse(upstream, fallbackRequestId)
+  const requestId = parsed.success ? parsed.data.meta.request_id : requestIdFromResponse(upstream, fallbackRequestId)
   const status = upstream.status >= 400 ? upstream.status : 502
   const headers = responseHeadersWithRequestId(requestId, init)
   for (const name of ["cache-control", "retry-after"] as const) {
@@ -92,7 +102,7 @@ export function bffErrorResponse(
       if (value !== null) headers.set(name, value)
     }
   }
-  if (!headers.has("cache-control")) headers.set("cache-control", "no-store")
+  headers.set("cache-control", "private, no-store")
   headers.set("content-type", "application/json; charset=utf-8")
   headers.delete("content-length")
 
@@ -100,8 +110,11 @@ export function bffErrorResponse(
     return new Response(JSON.stringify({ error: parsed.data.error, meta: parsed.data.meta }), { status, headers })
   }
 
-  return NextResponse.json({
-    error: { code: fallbackCode, message: fallbackCode },
-    meta: { request_id: requestId },
-  }, { status, headers })
+  return NextResponse.json(
+    {
+      error: { code: fallbackCode, message: fallbackCode },
+      meta: { request_id: requestId },
+    },
+    { status, headers },
+  )
 }

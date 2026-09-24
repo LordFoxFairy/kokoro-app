@@ -1,14 +1,14 @@
 # Kokoro User Web API 契约策略
 
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、
-W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布；当前工作树修复 stale-generation signout。
-真实三仓 IAM 组合待 Root 验收，普通 `/v1` Bearer adapter 与旧路径删除未实施。
+W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。
+普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合、旧 route/Team 路径删除未完成。
 
-## W1C-2：同源 IAM 与 Product Session 契约（S1 已发布，三仓组合待验）
+## W1C-2：同源 IAM 与 Product Session 契约（S1 已发布并完成三仓组合）
 
 ### 版本、来源和可见性
 
-当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF。普通 BFF `/v1` adapter 仍沿旧路径；完整真实三仓链仍待验收。
+当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF。普通 BFF `/v1` adapter 已在线核验 Product Session generation 并仅发送一个 access Bearer；S2-A 的真实三仓业务代理链仍待验收。
 BFF relay 固定policy来源 `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`，
@@ -18,7 +18,7 @@ BFF relay 固定policy来源 `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`，其
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始
 字节计算固定 digest，并校验 provenance、只读路由子集、结构不变量与篡改负例；Root 的跨仓门另从固定
 BFF commit blob 比对同一字节，Web 仓不把本地副本自比冒充源 commit 证明。真实 Web→BFF→IAM 与
-Auth.js 真实 IAM 组合仍待后续验收。Web 不重建/维护 IAM OpenAPI、BFF Product OpenAPI 或 BFF policy 的第二事实源。
+Auth.js S1 真实 IAM 组合已通过；S2-A 普通业务代理的真实组合待验。Web 不重建/维护 IAM OpenAPI、BFF Product OpenAPI 或 BFF policy 的第二事实源。
 
 `/iam/*` 是 Web 拥有的 `browser-private` **原生 OAuth/OIDC 传输边界**，不是 BFF `/v1`
 Product API，也不进入 Developer API。`/api/auth/[...nextauth]` 是已发布的 Auth.js RP transaction/callback 与 S1 session/signout
@@ -31,7 +31,7 @@ Product projection，最终请求 BFF `/v1/*`；IAM 所有 endpoint 语义、字
 W1C-2C 第一切片的**历史 RP-only 契约**：当时 RP callback 即使完成 code、ID token 与 userinfo 验证，也只返回受控
 `503 product_session_unavailable` 并清除 RP 事务；不签发可用 Auth.js/Product Session cookie，
 不透出 token、userinfo 或 callback code。这不是首次登录完成。server-only Basic token POST 与
-Bearer userinfo GET 只能经固定 BFF `/iam` relay；浏览器直打仍本地拒绝。S1 已替代成功 callback 的固定 503，建立 Product Session 并实现 refresh/signout；普通 `/v1` Bearer 代理及旧路径删除仍属 S2。
+Bearer userinfo GET 只能经固定 BFF `/iam` relay；浏览器直打仍本地拒绝。S1 已替代成功 callback 的固定 503，建立 Product Session 并实现 refresh/signout；普通 `/v1` Bearer 代理已由 S2-A 完成；旧路径删除仍属 S2-B。
 Browser-private RP 入口只接受单 provider 的 Auth.js CSRF 获取、受控 signin POST 与固定 callback GET；
 精确同源 Host/Origin、方法、body/query 长度及重复键先校验，浏览器不能覆盖固定 `client_id`、
 `redirect_uri`、`scope`、`resource`、`callbackUrl`。authorize 与 token 各恰好一个固定 internal
@@ -73,7 +73,7 @@ Web-owned 静态 `/iam/interactions/select-tenant|consent`；外层 POST 405。i
 在 2B-2 基线上，`/api/auth/callback/kokoro-iam` 尚未安装，匹配该目标返回受控 `503 rp_callback_unavailable`；
 当前已安装固定 callback；按 IAM 实际成功响应仅将严格同源、唯一 `code/state/iss`
 且 `iss=${KOKORO_WEB_ORIGIN}/iam` 的 Location 交给浏览器，完整 query 由 RP 验证型 callback 再核 issuer。后续 RP
-2C RP-only 基线验证成功仍只报 `503 product_session_unavailable`；当前 S1 验证成功建立 Product Session、清 RP 事务 cookie 并 303 到 `/app`，仍不把 token 发给浏览器。真实三仓链待验。
+2C RP-only 基线验证成功仍只报 `503 product_session_unavailable`；当前 S1 验证成功建立 Product Session、清 RP 事务 cookie 并 303 到 `/app`，仍不把 token 发给浏览器。S1 真实三仓链已验；S2-A 普通业务代理组合待验。
 
 上表是 W1C-2B 的完整固定 policy。已发布的 W1C-2A `/iam/[...path]` Route Handler 只安装 GET
 `/.well-known/openid-configuration`、`/.well-known/oauth-authorization-server`、`/jwks`、

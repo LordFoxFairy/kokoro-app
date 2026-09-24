@@ -5,13 +5,7 @@
 
 import { NextResponse } from "next/server"
 
-import {
-  authConfig,
-  INTERNAL_SECRET_HEADER,
-  resolveSessionWithRefresh,
-  SERVICE_HEADER,
-  SERVICE_VALUE,
-} from "@/lib/server/auth"
+import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -23,10 +17,7 @@ function errorResponse(error: string, status: number): Response {
   return NextResponse.json({ error }, { status })
 }
 
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ path: string[] }> },
-): Promise<Response> {
+export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const path = (await context.params).path ?? []
   if (path.length !== 2 || path[0] !== "connections" || path[1] !== "setup") {
     return errorResponse("agent_route_not_found", 404)
@@ -34,28 +25,26 @@ export async function GET(
 
   const url = new URL(request.url)
   const platforms = url.searchParams.getAll("platform")
-  const platform = platforms.length === 1 ? platforms[0] ?? null : null
+  const platform = platforms.length === 1 ? (platforms[0] ?? null) : null
   if (platform === null || !PLATFORMS.has(platform)) {
     return errorResponse("invalid_agent_platform", 400)
   }
 
-  const config = authConfig()
+  const config = productBffConfig()
   if (config === null) return errorResponse("auth_not_configured", 503)
   if (config.bffBaseUrl == null) return errorResponse("agent_not_configured", 503)
 
-  const resolved = await resolveSessionWithRefresh(request, config)
-  if (resolved === null) return errorResponse("unauthenticated", 401)
-  const { envelope, setCookie } = resolved
+  let claims
+  try {
+    claims = await admittedProductSession(request, config)
+  } catch {
+    return errorResponse("session_unavailable", 503)
+  }
+  if (claims === null) return errorResponse("unauthenticated", 401)
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/agents/connections/setup?platform=${encodeURIComponent(platform)}`
 
-  const headers = new Headers({
-    [SERVICE_HEADER]: SERVICE_VALUE,
-    ["x-kokoro-namespace"]: envelope.namespace,
-    ["x-kokoro-principal-id"]: envelope.user_id,
-    ["x-kokoro-request-id"]: requestId,
-  })
-  if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+  const headers = productBffHeaders(config, claims, requestId)
   const accept = request.headers.get("accept")
   if (accept !== null) headers.set("accept", accept)
 
@@ -75,13 +64,22 @@ export async function GET(
     const value = upstream.headers.get(name)
     if (value !== null) responseHeaders.set(name, value)
   }
-  if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
+  responseHeaders.set("cache-control", "private, no-store")
   if (upstream.ok) {
-    const raw = await upstream.json().catch(() => null) as { data?: unknown } | null
-    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data")) return errorResponse("invalid_agent_response", 502)
+    const raw = (await upstream.json().catch(() => null)) as {
+      data?: unknown
+    } | null
+    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data"))
+      return errorResponse("invalid_agent_response", 502)
     responseHeaders.set("content-type", "application/json")
     responseHeaders.delete("content-length")
-    return new Response(JSON.stringify(raw.data), { status: upstream.status, headers: responseHeaders })
+    return new Response(JSON.stringify(raw.data), {
+      status: upstream.status,
+      headers: responseHeaders,
+    })
   }
-  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }

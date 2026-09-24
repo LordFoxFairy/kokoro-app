@@ -9,20 +9,10 @@ import {
   webErrorResponse,
 } from "@/lib/server/bff-response"
 import { getJsonWithDomain } from "@/lib/server/upstream-http"
-import {
-  authConfig,
-  INTERNAL_SECRET_HEADER,
-  readEnvelope,
-  SERVICE_HEADER,
-  SERVICE_VALUE,
-} from "@/lib/server/auth"
 import { configuredDomain } from "@/lib/server/domain-context"
+import { INTERNAL_SECRET_HEADER, SERVICE_HEADER, SERVICE_VALUE } from "@/lib/server/product-bff"
 import { configuredBffBaseUrl } from "@/lib/server/service-config"
-import {
-  bffRuntimeManifestSchema,
-  fromBffRuntimeManifest,
-  toPublicRuntimeManifest,
-} from "@/system/runtime-manifest"
+import { bffRuntimeManifestSchema, fromBffRuntimeManifest, toPublicRuntimeManifest } from "@/system/runtime-manifest"
 
 export const runtime = "nodejs"
 
@@ -46,12 +36,11 @@ export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdForRequest(request)
   const domain = configuredDomain()
   const internalSecret = process.env.KOKORO_INTERNAL_SECRET_WEB_BFF?.trim() || null
-  const auth = authConfig()
 
   if (
-    (requestedProductId !== null && requestedProductId !== productId)
-    || (requestedSurfaceId !== null && requestedSurfaceId !== surfaceId)
-    || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$/u.test(locale)
+    (requestedProductId !== null && requestedProductId !== productId) ||
+    (requestedSurfaceId !== null && requestedSurfaceId !== surfaceId) ||
+    !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})*$/u.test(locale)
   ) {
     return fail("invalid_runtime_manifest_request", 400, requestId)
   }
@@ -73,10 +62,6 @@ export async function GET(request: Request): Promise<Response> {
     [SERVICE_HEADER]: SERVICE_VALUE,
   }
   if (internalSecret !== null) headers[INTERNAL_SECRET_HEADER] = internalSecret
-  const envelope = auth === null ? null : readEnvelope(request, auth)
-  if (envelope?.namespace) headers["x-kokoro-tenant-id"] = envelope.namespace
-  if (envelope?.user_id) headers["x-kokoro-principal-id"] = envelope.user_id
-
   const upstream = await getJsonWithDomain(upstreamUrl, domain, headers, request.signal).catch(() => null)
   if (!upstream) return fail("system_runtime_unavailable", 503, requestId)
 
@@ -93,10 +78,13 @@ export async function GET(request: Request): Promise<Response> {
     return fail("invalid_runtime_manifest_response", 503, requestId)
   }
 
-  return NextResponse.json({ data: toPublicRuntimeManifest(manifest) }, {
-    status: 200,
-    headers: responseHeadersWithRequestId(parsed.data.meta.request_id, {
-      "cache-control": "private, no-store",
-    }),
-  })
+  return NextResponse.json(
+    { data: toPublicRuntimeManifest(manifest) },
+    {
+      status: 200,
+      headers: responseHeadersWithRequestId(parsed.data.meta.request_id, {
+        "cache-control": "private, no-store",
+      }),
+    },
+  )
 }

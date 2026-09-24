@@ -32,7 +32,7 @@ Browser
 | 路径 | 职责 |
 | --- | --- |
 | `src/app/` | Next.js 页面与同源 `/api/*` route adapter |
-| `src/lib/server/` | session envelope、受信上下文、上游 HTTP 与错误映射 |
+| `src/lib/server/` | Product Session 在线 admission、受信上下文、上游 HTTP 与错误映射；旧 envelope 仅供待删除登录/Team 链 |
 | `src/contract/` | 当前运行时 Zod contract 与路径 helper |
 | `src/engine/`、`src/core/` | Chat 状态机、重连和纯 reducer 投影 |
 | `src/features/`、`src/ui/`、`src/components/` | 产品 surface 与 UI；本阶段不修改 |

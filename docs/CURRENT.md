@@ -2,12 +2,11 @@
 
 状态日期：2026-09-23。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
-W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；本次未提交工作树进一步修复旧 generation cookie 的 signout CAS。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
+W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；后续已发布的旧 generation signout CAS 保持有效。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
 以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh；固定 Web origin 为 HTTPS 或 Web production mode 时带 Secure）和 Web Redis 加密
 refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
 执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅匹配 cookie generation 的 active record 才 take 已确认当前 refresh，
-pending 时只 tombstone。旧 generation signout 不发送 Product `Set-Cookie`，避免乱序响应清除浏览器已收到的新 cookie；HTTP 200 返回 `stale_session`/`not_required`，旧 cookie 仍被在线 generation 校验拒绝，不改当前 Redis record、不 revoke、也不返回 issuer 引导；其他 signout 返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。旧普通 BFF adapter、legacy magic-link/team 路径仍是**待切换旧态**；本切片不声称
-它们已改为 Bearer，也不声称真实三仓 IAM 组合通过。固定 BFF relay policy 已重钉
+pending 时只 tombstone。旧 generation signout 不发送 Product `Set-Cookie`，避免乱序响应清除浏览器已收到的新 cookie；HTTP 200 返回 `stale_session`/`not_required`，旧 cookie 仍被在线 generation 校验拒绝，不改当前 Redis record、不 revoke、也不返回 issuer 引导；其他 signout 返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。七个普通受保护 BFF adapter 已切换为在线 Product Session generation 核验与唯一 access Bearer；legacy magic-link/team route 仍是**待删除旧态**，UI 主链不再消费它们；本切片不声称它们已删除；S1 真实三仓 HTTPS 组合已通过，S2-A 普通业务代理组合待验。固定 BFF relay policy 已重钉
 `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`/IAM `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，
 SHA-256 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；仅来源 metadata 变化。
 本地 Node `22.22.2` 在 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc` 以 `caffeinate -dimsu` 执行：
@@ -45,7 +44,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   POST；IAM 签名仍由 IAM owner 验证。中间 sign-in 响应中的 session token JSON 不返回浏览器；最终继续响应
   对 IAM 实际 200 `{redirect:true,url}` 严格校验固定 Web origin/允许交互路径后返回 303/Location 与多个
   issuer `Set-Cookie`；中间 sign-in 失败仅受控 401/429/503 且不调用 continue。直接 browser `/iam/*` POST
-  仍全部拒绝；此项是 2B-1 历史切片状态，当前 S1 已安装 Auth.js/Product Session；普通业务 adapter 尚未切换。Redis 依赖精确固定
+  仍全部拒绝；此项是 2B-1 历史切片状态，当前 S1 已安装 Auth.js/Product Session；普通业务 adapter 已由 S2-A 切换。Redis 依赖精确固定
   `redis@5.12.1`，`KOKORO_WEB_REDIS_URL` 缺失或 Redis 故障时交互 fail closed，Web 不清理共享 Redis。
 - W1C-2B-2 新增 `/auth/select-tenant` 与 `/auth/consent` 严格 GET 外层，引导至
   `/iam/interactions/select-tenant|consent` 真正的 Web-owned GET/POST；外层 POST 405。IAM issuer
@@ -77,7 +76,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   W1C-2D 将 IAM consent 实际成功响应的唯一 `code`、`state`、`iss` 三参数严格准入，
   `iss` 必须等于固定 `${KOKORO_WEB_ORIGIN}/iam`；完整 query 交验证型 `openid-client` 再核 issuer。
   缺失、重复、错误 issuer 或额外参数在 relay/RP 边界拒绝，不把 2B-2 的受控 503 误判当成功。
-  旧 magic-link 与普通 `/v1` Bearer 代理仍未迁移；该历史 fixture 不是 IAM owner 签名组合验收；当前 S1 已实现新 session/refresh/signout，但三仓真实闭环仍待 Root runner 验收。
+  旧 magic-link route 仍待删除，但 UI 登录/探针/退出主链与普通 `/v1` Bearer 代理均已迁移；该历史 fixture 不是 IAM owner 签名组合验收；当前 S1 已实现新 session/refresh/signout，但三仓真实闭环仍待 Root runner 验收。
 
 ## 2. 已落地的质量门
 
@@ -139,14 +138,14 @@ BFF 仍是 HTTP fixture，
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. 旧 Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，但普通 BFF adapter、旧认证/Team 路径的删除仍须在后续 S2 切片完成。真实三仓 IAM 组合验收未通过前不宣称首次登录全链闭环。
+2. 旧 Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，但普通 BFF adapter 已切换；旧认证/Team route 删除仍须在后续 S2-B 完成；UI 登录、会话探针和退出已切至 Product Session。真实三仓 IAM 组合验收未通过前不宣称首次登录全链闭环。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
 5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。
 
 ## 5. 后续顺序
 
-1. 完成 S1 真实三仓 IAM 组合验收，再做 S2：普通 `/v1` adapter 切换到在线 Product Session 单一 Bearer，删除旧 Web→IAM 直连和旧认证/Team 路径；
+1. 完成 S1 真实三仓 IAM 组合验收，继续 S2-B：删除旧 Web→IAM 直连和旧认证/Team 路径；
    legacy Chat 双读另由 W1D generated Product consumer/AG-UI 切片删除。
 2. 统一 route envelope、request/trace ID、日志与 telemetry，并补 health/ready 与生产观测证据。
 3. 独立完成遗留 UI/CSS 切片、视觉回归、bundle budget 与 live release acceptance。

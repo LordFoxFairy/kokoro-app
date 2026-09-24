@@ -6,14 +6,8 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import {
-  authConfig,
-  INTERNAL_SECRET_HEADER,
-  resolveSessionWithRefresh,
-  sameOriginOk,
-  SERVICE_HEADER,
-  SERVICE_VALUE,
-} from "@/lib/server/auth"
+import { sameOriginOk } from "@/lib/server/auth"
+import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -21,38 +15,55 @@ export const dynamic = "force-dynamic"
 
 const MUTATION_METHODS = new Set(["POST", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
-const bffErrorEnvelopeSchema = z.object({
-  error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
-  meta: z.object({ request_id: z.string().min(1) }).passthrough(),
-}).passthrough()
+const bffErrorEnvelopeSchema = z
+  .object({
+    error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(),
+    meta: z.object({ request_id: z.string().min(1) }).passthrough(),
+  })
+  .passthrough()
 
 function errorResponse(error: string, status: number): Response {
-  return NextResponse.json({ error }, { status })
+  return NextResponse.json({ error }, { status, headers: { "cache-control": "private, no-store" } })
 }
 
 async function projectBffError(upstream: Response, responseHeaders: Headers): Promise<Response | null> {
-  const parsed = bffErrorEnvelopeSchema.safeParse(await upstream.clone().json().catch(() => null))
+  const parsed = bffErrorEnvelopeSchema.safeParse(
+    await upstream
+      .clone()
+      .json()
+      .catch(() => null),
+  )
   if (!parsed.success) return null
   responseHeaders.set("content-type", "application/json")
   responseHeaders.delete("content-length")
-  return new Response(JSON.stringify({ error: parsed.data.error.message, code: parsed.data.error.code }), {
-    status: upstream.status,
-    headers: responseHeaders,
-  })
+  return new Response(
+    JSON.stringify({
+      error: parsed.data.error.message,
+      code: parsed.data.error.code,
+    }),
+    {
+      status: upstream.status,
+      headers: responseHeaders,
+    },
+  )
 }
 
 export async function proxyScheduledTaskRequest(
   request: Request,
   context: { params: Promise<{ path?: string[] }> },
 ): Promise<Response> {
-  const config = authConfig()
+  const config = productBffConfig()
   if (config === null) return errorResponse("auth_not_configured", 503)
   if (config.bffBaseUrl == null) return errorResponse("scheduled_tasks_not_configured", 503)
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) return errorResponse("forbidden_origin", 403)
 
-  const resolved = await resolveSessionWithRefresh(request, config)
-  if (resolved === null) return errorResponse("unauthenticated", 401)
-  const { envelope, setCookie } = resolved
+  let claims
+  try {
+    claims = await admittedProductSession(request, config)
+  } catch {
+    return errorResponse("session_unavailable", 503)
+  }
+  if (claims === null) return errorResponse("unauthenticated", 401)
   const path = (await context.params).path ?? []
   if (path.length > 2 || (path.length === 2 && path[1] !== "retry") || path.some((segment) => segment.length === 0)) {
     return errorResponse("invalid_scheduled_task_path", 404)
@@ -61,13 +72,7 @@ export async function proxyScheduledTaskRequest(
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
   const suffix = path.length === 0 ? "" : `/${path.map((segment) => encodeURIComponent(segment)).join("/")}`
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/scheduled-tasks${suffix}${new URL(request.url).search}`
-  const headers = new Headers({
-    [SERVICE_HEADER]: SERVICE_VALUE,
-    ["x-kokoro-namespace"]: envelope.namespace,
-    ["x-kokoro-principal-id"]: envelope.user_id,
-    ["x-kokoro-request-id"]: requestId,
-  })
-  if (config.internalSecret !== null) headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+  const headers = productBffHeaders(config, claims, requestId)
   for (const name of FORWARD_HEADERS) {
     const value = request.headers.get(name)
     if (value !== null) headers.set(name, value)
@@ -102,19 +107,28 @@ export async function proxyScheduledTaskRequest(
     const value = upstream.headers.get(name)
     if (value !== null) responseHeaders.set(name, value)
   }
-  if (setCookie !== null) responseHeaders.append("set-cookie", setCookie)
+  responseHeaders.set("cache-control", "private, no-store")
   if (!upstream.ok) {
     const projectedError = await projectBffError(upstream, responseHeaders)
     if (projectedError !== null) return projectedError
   }
   if (upstream.ok) {
-    const raw = await upstream.json().catch(() => null) as { data?: unknown } | null
-    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data")) return errorResponse("invalid_scheduled_tasks_response", 502)
+    const raw = (await upstream.json().catch(() => null)) as {
+      data?: unknown
+    } | null
+    if (raw === null || !Object.prototype.hasOwnProperty.call(raw, "data"))
+      return errorResponse("invalid_scheduled_tasks_response", 502)
     responseHeaders.set("content-type", "application/json")
     responseHeaders.delete("content-length")
-    return new Response(JSON.stringify(raw.data), { status: upstream.status, headers: responseHeaders })
+    return new Response(JSON.stringify(raw.data), {
+      status: upstream.status,
+      headers: responseHeaders,
+    })
   }
-  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }
 
 export const GET = proxyScheduledTaskRequest

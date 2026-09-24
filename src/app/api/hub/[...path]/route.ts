@@ -8,14 +8,8 @@
 
 import { NextResponse } from "next/server"
 
-import {
-  authConfig,
-  INTERNAL_SECRET_HEADER,
-  resolveSessionWithRefresh,
-  sameOriginOk,
-  SERVICE_HEADER,
-  SERVICE_VALUE,
-} from "@/lib/server/auth"
+import { sameOriginOk } from "@/lib/server/auth"
+import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
 
 export const runtime = "nodejs"
@@ -27,10 +21,6 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 // 也绝不转发浏览器可能伪造的 x-kokoro-* 身份头（新建 Headers 天然丢弃它们）。
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 
-// self 面的密封身份头（scope 恒取信封 namespace；userId 取信封 user_id）。
-const NAMESPACE_HEADER = "x-kokoro-namespace"
-const USER_ID_HEADER = "x-kokoro-principal-id"
-
 function bffBusinessPath(path: string[]): string[] {
   // Preserve the browser-facing Hub namespace and translate it only at the
   // Web-to-BFF boundary. The BFF owns the business path after this point.
@@ -38,8 +28,11 @@ function bffBusinessPath(path: string[]): string[] {
   return path
 }
 
-export async function proxyHubRequest(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
-  const config = authConfig()
+export async function proxyHubRequest(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+): Promise<Response> {
+  const config = productBffConfig()
   if (config === null) {
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
@@ -51,11 +44,15 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   }
   const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
-  const resolved = await resolveSessionWithRefresh(request, config)
-  if (resolved === null) {
+  let claims
+  try {
+    claims = await admittedProductSession(request, config)
+  } catch {
+    return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
+  }
+  if (claims === null) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
-  const { envelope, setCookie } = resolved
 
   const { path } = await context.params
   const search = new URL(request.url).search
@@ -63,15 +60,7 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
   const encodedBusinessPath = businessPath.map((segment) => encodeURIComponent(segment)).join("/")
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
 
-  const headers = new Headers()
-  headers.set(SERVICE_HEADER, SERVICE_VALUE)
-  if (config.internalSecret !== null) {
-    headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
-  }
-  // scope/user 身份轴从信封派生（web 侧解析后的密封结果），浏览器无从伪造。
-  headers.set(NAMESPACE_HEADER, envelope.namespace)
-  headers.set(USER_ID_HEADER, envelope.user_id)
-  headers.set("x-kokoro-request-id", requestId)
+  const headers = productBffHeaders(config, claims, requestId)
   for (const name of FORWARD_HEADERS) {
     const value = request.headers.get(name)
     if (value !== null) {
@@ -85,7 +74,9 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
       body = await readBoundedRequestBody(request)
     } catch (error) {
       return NextResponse.json(
-        { error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable" },
+        {
+          error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
+        },
         { status: error instanceof UpstreamRequestTooLargeError ? 413 : 400 },
       )
     }
@@ -111,10 +102,11 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
       responseHeaders.set(name, value)
     }
   }
-  if (setCookie !== null) {
-    responseHeaders.append("set-cookie", setCookie)
-  }
-  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
+  responseHeaders.set("cache-control", "private, no-store")
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: responseHeaders,
+  })
 }
 
 export const GET = proxyHubRequest

@@ -1,8 +1,7 @@
 # Kokoro User Web 技术设计
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
-已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 当前未提交工作树实现
-Product Session 基础、Web Redis 双 CAS 与标准 session/signout route，真实三仓 IAM 组合仍待 Root 验收。
+已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 Product Session 基础、Web Redis 双 CAS 与标准 session/signout route 已发布，S1 真实三仓 HTTPS 组合已通过；S2-A 普通业务代理组合待验。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
@@ -22,7 +21,7 @@ Code+S256、state、nonce、固定 issuer/client/redirect URI/resource 验证成
 当时尚未安装，回调只返回受控 `503 product_session_unavailable` 并清除 RP 事务；S1 工作树成功回调改为建
 Web 在线 Product Session、清 RP cookie 后 303 到 `/app`，失败/重放仍按原受控拒绝；不建立旧 sealed session，
 不把 token、code、userinfo 正文或上游错误返回浏览器。Redis 仅保存一次性 RP state 摘要与短期事务绑定，
-不保存 token/PII；S1 仅实现自身刷新/退出，普通 BFF Bearer 代理及旧路径删除留后续切片。
+不保存 token/PII；S1 实现自身刷新/退出；S2-A 已切换普通 BFF Bearer 代理与 UI 登录/探针/退出主链，旧 route/Team 路径删除留给 S2-B。
 IAM consent 成功的 callback 实际带唯一 `code`、`state`、`iss`；relay 和 RP 都只接收这三键且
 `iss=${KOKORO_WEB_ORIGIN}/iam`，随后将完整 query 交 `openid-client` 再验证 issuer。
 受控入口拒绝浏览器覆盖 `resource`、`scope`、`client_id`、`redirect_uri`、`callbackUrl`（含重复键），
@@ -74,7 +73,7 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   `src/app/auth/sign-in/route.ts` 处理首个交互，`src/app/auth/{select-tenant,consent}/route.ts`
   只做外层引导，`src/app/iam/interactions/{select-tenant,consent}/route.ts` 在 issuer cookie
   `Path=/iam` 下处理其余原生交互页及已签 query 续接。
-  普通 BFF adapter 仍归现有 `src/app/api/**/route.ts`，由共享 server-only 凭据读取边界注入 Bearer。
+  普通 BFF adapter 归现有 `src/app/api/**/route.ts`，由共享 server-only 凭据读取边界注入 Bearer。
   不建 Web DB 模块、万能上游代理或第二套 IAM client。
 - 上述放置优于把凭据放进 `src/contract/`（会污染 browser wire/schema）或 UI feature（会把 secret
   带入客户端）。现有 `src/lib/server/` 与 Next Route Handler 是稳定边界；RP、token、store、relay 分文件是

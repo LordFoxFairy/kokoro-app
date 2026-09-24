@@ -7,7 +7,10 @@
 import { useEffect, useState } from "react"
 
 export type SessionState = "checking" | "pass" | "anonymous"
-export type SessionProbe = { state: SessionState; mode: "checking" | "preview" | "authenticated" }
+export type SessionProbe = {
+  state: SessionState
+  mode: "checking" | "preview" | "authenticated"
+}
 
 // Preview mode is an explicit local-only opt-in. It is safe to start in the
 // pass state because no auth-configured server is present in this mode; the
@@ -15,29 +18,26 @@ export type SessionProbe = { state: SessionState; mode: "checking" | "preview" |
 // session decision before mounting the workbench.
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
-function parseProbe(raw: unknown): "authenticated" | "preview" | "anonymous" {
-  if (typeof raw === "object" && raw !== null && "state" in raw) {
-    const state = (raw as { state: unknown }).state
-    if (state === "authenticated" || state === "preview") {
-      return state
-    }
-  }
-  return "anonymous"
-}
+type ResolvedSessionMode = "authenticated" | "preview" | "anonymous"
 
-let sessionProbeInflight: Promise<ReturnType<typeof parseProbe>> | null = null
+let sessionProbeInflight: Promise<ResolvedSessionMode> | null = null
 
-function requestSessionMode(): Promise<ReturnType<typeof parseProbe>> {
+function requestSessionMode(): Promise<ResolvedSessionMode> {
   if (sessionProbeInflight !== null) return sessionProbeInflight
 
   // Keep the request shared across Strict Mode effect replay, focus events and
   // concurrent shell mounts. The promise is cleared after settlement so a
   // later visibility check still observes session expiry.
-  const request = Promise.resolve().then(async () => {
-    const response = await fetch("/api/auth/session-state", { cache: "no-store" })
-    if (!response.ok) return "anonymous" as const
-    return parseProbe(await response.json())
-  }).catch(() => "anonymous" as const)
+  const request = Promise.resolve()
+    .then(async () => {
+      const response = await fetch("/api/auth/session", { cache: "no-store" })
+      if (!response.ok) return "anonymous" as const
+      const raw: unknown = await response.json()
+      return typeof raw === "object" && raw !== null && (raw as { authenticated?: unknown }).authenticated === true
+        ? "authenticated"
+        : "anonymous"
+    })
+    .catch(() => "anonymous" as const)
   sessionProbeInflight = request
   const clear = (): void => {
     if (sessionProbeInflight === request) sessionProbeInflight = null
@@ -46,7 +46,7 @@ function requestSessionMode(): Promise<ReturnType<typeof parseProbe>> {
   return request
 }
 
-function probeFromMode(mode: ReturnType<typeof parseProbe>): SessionProbe {
+function probeFromMode(mode: ResolvedSessionMode): SessionProbe {
   if (mode === "anonymous") {
     return { state: "anonymous", mode: "checking" }
   }
@@ -54,16 +54,15 @@ function probeFromMode(mode: ReturnType<typeof parseProbe>): SessionProbe {
 }
 
 export function useSessionProbe(): SessionProbe {
-  const [probe, setProbe] = useState<SessionProbe>(() => EXPLICIT_PREVIEW
-    ? { state: "pass", mode: "preview" }
-    : { state: "checking", mode: "checking" })
+  const [probe, setProbe] = useState<SessionProbe>(() =>
+    EXPLICIT_PREVIEW ? { state: "pass", mode: "preview" } : { state: "checking", mode: "checking" },
+  )
 
   useEffect(() => {
     if (EXPLICIT_PREVIEW) return
     let live = true
     const check = (): void => {
-      void requestSessionMode()
-        .then((resolved) => live && setProbe(probeFromMode(resolved)))
+      void requestSessionMode().then((resolved) => live && setProbe(probeFromMode(resolved)))
     }
     check()
     // 复检会话:信封 cookie 随 magic-link TTL 过期（默认 900s），长会话会失效。聚焦/重新可见/每 2 分钟

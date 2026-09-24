@@ -1,9 +1,15 @@
 import { createServer, type RequestListener, type Server } from "node:http"
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
+
+vi.mock("@/lib/server/product-session", () => ({
+  currentProductSession: vi.fn(async () => ({
+    access: "product-access",
+    accessExpiresAt: Date.now() + 60_000,
+  })),
+}))
 
 import { POST } from "@/app/api/session/[...path]/route"
-import { sealEnvelope } from "@/lib/server/session-envelope"
 
 type RunningServer = { server: Server; baseUrl: string }
 
@@ -30,17 +36,23 @@ describe("Chat BFF against a local BFF contract fixture", () => {
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
       receivedAuthorization = request.headers.authorization?.toString() ?? ""
-      response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" })
+      response.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+      })
       response.end("data: chat-ok\n\n")
     })
     process.env.KOKORO_WEB_SESSION_SECRET = "integration-secret"
+    process.env.KOKORO_WEB_AUTH_SECRET = "a".repeat(32)
+    process.env.KOKORO_WEB_REDIS_URL = "redis://fixture.invalid/9"
+    process.env.KOKORO_WEB_ORIGIN = "https://first.example"
     process.env.KOKORO_IAM_BASE_URL = "http://user.fixture"
     process.env.KOKORO_BFF_BASE_URL = bff.baseUrl
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
   })
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => bff.server.close((error) => error ? reject(error) : resolve()))
+    await new Promise<void>((resolve, reject) => bff.server.close((error) => (error ? reject(error) : resolve())))
     for (const key of Object.keys(process.env)) {
       if (!(key in original)) delete process.env[key]
     }
@@ -48,23 +60,12 @@ describe("Chat BFF against a local BFF contract fixture", () => {
   })
 
   it("forwards RFC 7239 authority and the sealed access token while keeping browser Host out of tenant selection", async () => {
-    const now = Math.floor(Date.now() / 1000)
-    const sealed = sealEnvelope({
-      runtime_jwt: "runtime.jwt.signature",
-      access_exp: now + 3600,
-      refresh_token: "refresh-token",
-      user_id: "user-a",
-      namespace: "personal",
-      exp: now + 3600,
-    }, ["integration-secret"])
-
     const response = await POST(
       new Request("https://first.example/api/session/run", {
         method: "POST",
         headers: {
           host: "first.example",
           origin: "https://first.example",
-          cookie: `kokoro_session=${sealed}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ prompt: "hello" }),
@@ -77,6 +78,6 @@ describe("Chat BFF against a local BFF contract fixture", () => {
     expect(await response.text()).toContain("chat-ok")
     expect(receivedDomain).toBe("host=dev.kokoro.localhost")
     expect(receivedHost).not.toBe("first.example")
-    expect(receivedAuthorization).toBe("Bearer runtime.jwt.signature")
+    expect(receivedAuthorization).toBe("Bearer product-access")
   })
 })
