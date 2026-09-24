@@ -1,10 +1,17 @@
 "use client";
 
-async function currentCsrf(): Promise<string> {
-  const response = await fetch("/api/auth/csrf", { cache: "no-store" });
+function checkNotCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException("Sign-in cancelled", "AbortError");
+}
+
+async function currentCsrf(signal?: AbortSignal): Promise<string> {
+  checkNotCancelled(signal);
+  const response = await fetch("/api/auth/csrf", { cache: "no-store", ...(signal ? { signal } : {}) });
+  checkNotCancelled(signal);
   const raw: unknown = response.ok
     ? await response.json().catch(() => null)
     : null;
+  checkNotCancelled(signal);
   const token =
     typeof raw === "object" && raw !== null
       ? (raw as { csrfToken?: unknown }).csrfToken
@@ -14,14 +21,16 @@ async function currentCsrf(): Promise<string> {
   return token;
 }
 
-export async function beginProductSignIn(): Promise<void> {
+export async function beginProductSignIn(signal?: AbortSignal): Promise<void> {
+  checkNotCancelled(signal);
   const form = document.createElement("form");
   form.method = "POST";
   form.action = "/api/auth/signin/kokoro-iam";
   const input = document.createElement("input");
   input.type = "hidden";
   input.name = "csrfToken";
-  input.value = await currentCsrf();
+  input.value = await currentCsrf(signal);
+  checkNotCancelled(signal);
   form.append(input);
   document.body.append(form);
   form.submit();

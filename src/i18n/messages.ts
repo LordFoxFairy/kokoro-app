@@ -351,6 +351,9 @@ export const zh = {
   "theme.dark": "深色",
   // 登录闸（AUTH-P0：magic-link 签发链 web 端）
   "auth.title": "登录 Kokoro",
+  "auth.connectingTitle": "正在连接 Kokoro",
+  "auth.connectingBody": "正在前往安全登录页面…",
+  "auth.retry": "重试登录",
   "auth.subtitle": "输入邮箱,我们发一封登录链接邮件给你。",
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "发送登录链接",

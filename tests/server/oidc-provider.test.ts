@@ -51,15 +51,16 @@ function authorizeResponse(scope: string, duplicateScope = false): Response {
   })
 }
 
-async function signIn(): Promise<Response> {
+async function signIn(accept?: string, body = new URLSearchParams({ csrfToken: "a".repeat(64) }).toString()): Promise<Response> {
   return POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
     method: "POST",
     headers: {
       host: "web.example.test",
       origin: ENV.KOKORO_WEB_ORIGIN,
       "content-type": "application/x-www-form-urlencoded",
+      ...(accept ? { accept } : {}),
     },
-    body: new URLSearchParams({ csrfToken: "a".repeat(64) }).toString(),
+    body,
   }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
 }
 
@@ -72,6 +73,20 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("Product OIDC Team read scopes", () => {
+  it("returns browser form failures to a stable retry page but keeps API errors as JSON", async () => {
+    const browser = await signIn("text/html", "csrfToken=invalid%20token")
+    expect(browser.status).toBe(303)
+    expect(browser.headers.get("location")).toBe("/login?auth=sign_in_failed")
+    expect(browser.headers.get("cache-control")).toBe("no-store")
+    expect(nextAuth).not.toHaveBeenCalled()
+    const api = await signIn(undefined, "csrfToken=invalid%20token")
+    expect(api.status).toBe(400)
+    expect(await api.json()).toMatchObject({ error: { code: "rp_signin_rejected" } })
+    vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
+    const unavailable = await signIn("text/html")
+    expect(unavailable.status).toBe(303)
+    expect(unavailable.headers.get("location")).toBe("/login?auth=sign_in_failed")
+  })
   it("requests the original scopes followed by exactly the three Team read scopes", () => {
     const config = oidcRpConfig(ENV)!
     const provider = oidcAuthOptions(config, vi.fn(), new AbortController().signal)

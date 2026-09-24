@@ -32,6 +32,22 @@ describe("Product auth browser client", () => {
     expect(submit).toHaveBeenCalledOnce();
   });
 
+  it("does not submit after the login page cancels an in-flight CSRF request", async () => {
+    let resolveFetch!: (value: Response) => void;
+    const pending = new Promise<Response>((resolve) => { resolveFetch = resolve; });
+    const fetchMock = vi.fn().mockReturnValue(pending);
+    vi.stubGlobal("fetch", fetchMock);
+    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => undefined);
+    const controller = new AbortController();
+    const attempt = beginProductSignIn(controller.signal);
+    controller.abort();
+    resolveFetch(new Response(JSON.stringify({ csrfToken: "Token123" }), { status: 200 }));
+    await expect(attempt).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/csrf", { cache: "no-store", signal: controller.signal });
+    expect(submit).not.toHaveBeenCalled();
+    expect(document.querySelector("form")).toBeNull();
+  });
+
   it("uses CSRF-protected Product signout and follows only the issuer handoff", async () => {
     const navigate = vi.fn();
     vi.stubGlobal(

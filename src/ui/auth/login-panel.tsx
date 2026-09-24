@@ -3,79 +3,82 @@
 // The browser begins the fixed Product OIDC flow; credentials and tokens stay
 // with the issuer and server-only RP, never with this page.
 
-import { useEffect, useRef, useState } from "react"
-import { ArrowRight } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import Link from "next/link"
 
-import { useT } from "@/i18n/context"
+import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { DEFAULT_BRAND } from "@/config/brand"
-import { MarketingTopBar } from "@/ui/marketing/marketing-top-bar"
+import { useT } from "@/i18n/context"
 import { beginProductSignIn } from "./product-auth-client"
 
 import styles from "./login-panel.module.css"
 
-export function LoginPanel() {
+type LoginState = "connecting" | "failed"
+
+export function LoginPanel({ initialFailure = false }: { initialFailure?: boolean }) {
   const t = useT()
-  const [busy, setBusy] = useState(false)
-  const [unavailable, setUnavailable] = useState(false)
-  const submitLockRef = useRef(false)
+  const [state, setState] = useState<LoginState>(initialFailure ? "failed" : "connecting")
+  const attemptRef = useRef<AbortController | null>(null)
+
+  const startSignIn = useCallback(async (): Promise<void> => {
+    if (attemptRef.current) return
+    const controller = new AbortController()
+    attemptRef.current = controller
+    setState("connecting")
+    try {
+      await beginProductSignIn(controller.signal)
+      // A successful form submission navigates away. Keep the transition UI
+      // stable instead of flashing a second action before navigation commits.
+    } catch {
+      if (controller.signal.aborted) return
+      attemptRef.current = null
+      setState("failed")
+    }
+  }, [])
 
   useEffect(() => {
-    if (!unavailable) return
-    const timer = setTimeout(() => setUnavailable(false), 5000)
-    return () => clearTimeout(timer)
-  }, [unavailable])
-
-  const submit = async (): Promise<void> => {
-    if (busy || submitLockRef.current) return
-    submitLockRef.current = true
-    setBusy(true)
-    setUnavailable(false)
-    try {
-      await beginProductSignIn()
-    } catch {
-      setUnavailable(true)
-    } finally {
-      submitLockRef.current = false
-      setBusy(false)
+    // StrictMode replays effects. Deferring one microtask ensures its first
+    // (already cleaned-up) effect never starts a duplicate navigation.
+    let mounted = true
+    if (!initialFailure) queueMicrotask(() => { if (mounted) void startSignIn() })
+    return () => {
+      mounted = false
+      attemptRef.current?.abort()
+      attemptRef.current = null
     }
+  }, [initialFailure, startSignIn])
+
+  const retry = (): void => {
+    void startSignIn()
   }
 
   return (
-    <div className={styles.screen}>
-      <MarketingTopBar
-        brandName={DEFAULT_BRAND.name}
-        brandMark={DEFAULT_BRAND.mark}
-      />
-      {unavailable ? (
-        <div className={styles.toast} role="alert" data-testid="login-toast">
-          {t("auth.unavailable")}
-        </div>
-      ) : null}
+    <main className={styles.screen}>
+      <Link className={styles.brand} href="/" aria-label={DEFAULT_BRAND.name}>
+        <BrandFallback mark={DEFAULT_BRAND.mark} className={styles.brandMark ?? ""} />
+        <span>{DEFAULT_BRAND.name}</span>
+      </Link>
       <div className={styles.stage}>
         <Card className={styles.card} data-testid="login-panel">
-          <h1 className={styles.title}>{t("auth.title")}</h1>
-          <form onSubmit={(event) => { event.preventDefault(); void submit() }}>
-            <Button
-              variant="default"
-              type="submit"
-              className={styles.primaryBtn}
-              disabled={busy}
-              aria-busy={busy}
-              data-testid="login-submit"
-            >
-              {busy ? <Spinner aria-hidden="true" /> : (
-                <>
-                  <span>{t("auth.title")}</span>
-                  <span className={styles.primaryArrow} aria-hidden><ArrowRight /></span>
-                </>
-              )}
-            </Button>
-          </form>
+          <h1 className={styles.title}>{t(state === "connecting" ? "auth.connectingTitle" : "auth.title")}</h1>
+          {state === "connecting" ? (
+            <div className={styles.status} role="status" aria-live="polite">
+              <Spinner aria-hidden="true" />
+              <span>{t("auth.connectingBody")}</span>
+            </div>
+          ) : (
+            <div className={styles.failure} role="alert">
+              <p>{t("auth.unavailable")}</p>
+              <Button type="button" className={styles.retryBtn} onClick={retry}>
+                {t("auth.retry")}
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
-    </div>
+    </main>
   )
 }
