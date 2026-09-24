@@ -1,5 +1,17 @@
 # Kokoro User Web 当前状态
 
+W1C-FIXED-TENANT-WEB-D 第一切片（2026-09-24，待 Root 来源 pin）：已删除可见
+Team switcher、客户端 `switchTeam` 和 `/api/team/switch` route；邀请/成员管理继续按
+旧 Team context 展示，不把本片冒称固定租户登录已完成。三设计文档已明确目标：
+待 IAM 第一方 Web client 续接和 BFF `/v1/me` 固定契约发布后，Web 内层 tenant
+交互须无选择页、server-only 固定 ID 续接，并在 RP code/refresh 时校验受信
+subject/tenant。测试先 RED 后 GREEN：Node22 聚焦 85/85、contract 57/57、
+architecture 34/34、全量 Vitest 1418/1418、lint PASS；共享 3310 的 `.next`
+仍缓存已删 route，当前 checkout 的裸 `tsc --noEmit` 被旧生成类型阻断，未清理
+用户进程。一次性独立复制（实体 `node_modules`，无共享 `.next`）的 `pnpm typecheck`
+及 `pnpm build` 均 exit0，生产路由表无 `/api/team/switch`。3310 `/login`
+仍是 Web-only 的空 503，不是已打通的可见 IAM 入口。
+
 R2e-IAM-VERIFY-WEB（2026-09-24，已发布；本次仅来源重钉）：Web 当前从 BFF
 `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 固定只读 IAM relay policy `1.1.0`，artifact
 SHA-256 `97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`，IAM owner

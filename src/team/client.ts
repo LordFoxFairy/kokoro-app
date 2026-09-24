@@ -1,5 +1,5 @@
 // 团队自助面 HTTP 客户端：同源 `/api/team/*` BFF 代理（注入 web-bff 凭据 + 信封 user principal）。
-// 换签走 `/api/team/switch`（服务端重密封 cookie，token 不回浏览器）。入站过 Zod；错误尽力取
+// 入站过 Zod；错误尽力取
 // user 稳定错误码（如 membership.last_owner / invite.expired）供 UI 本地化。
 
 import { z, type ZodTypeAny } from "zod"
@@ -111,7 +111,6 @@ export type TeamClient = {
   declineInvite: (inviteId: string) => Promise<void>
   changeRole: (teamId: string, targetUserId: string, role: TeamRole) => Promise<void>
   removeMember: (teamId: string, targetUserId: string) => Promise<void>
-  switchTeam: (teamId: string) => Promise<string>
 }
 
 export function createTeamClient(): TeamClient {
@@ -147,23 +146,6 @@ export function createTeamClient(): TeamClient {
         z.unknown(),
         jsonPost({ targetUserId }),
       )
-    },
-    // 切换：命中专用 re-seal 路由（不经通用代理）；成功回新 namespace，调用方据此整页刷新。
-    switchTeam: async (teamId) => {
-      let response: Response
-      try {
-        response = await fetch(`${BASE}/switch`, jsonPost({ team_id: teamId }))
-      } catch (error) {
-        throw new TeamClientError(error instanceof Error ? error.message : String(error), null, null)
-      }
-      if (!response.ok) {
-        throw new TeamClientError(`switch failed with status ${response.status}`, null, response.status)
-      }
-      const parsed = z.object({ ok: z.boolean(), namespace: z.string() }).safeParse(await response.json().catch(() => null))
-      if (!parsed.success) {
-        throw new TeamClientError("invalid switch response", null, response.status)
-      }
-      return parsed.data.namespace
     },
   }
 }

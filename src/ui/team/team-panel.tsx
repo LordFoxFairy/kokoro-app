@@ -8,8 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-// 团队面板（TEAM-1）：团队切换器（当前 namespace 高亮，切换→BFF 换签→重密封 cookie→整页刷新，
-// Wave3 rail/技能/余额随 namespace 天然重水合）+ 待处理邀请（accept/decline）+ 当前团队成员管理
+// 团队面板（TEAM-1）：固定部署租户内的待处理邀请（accept/decline）与当前团队成员管理
 // （owner/admin 邀请/改角色/移除；member 只读）。user principal 全留服务端，前端只见同源 `/api/team/*`。
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -25,21 +24,14 @@ import {
   type TeamClient,
   type TeamDetail,
   type TeamRole,
-  type TeamSummary,
 } from "@/team/client"
 
 import styles from "./team-panel.module.css"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 
-// 团队查询键：切换/邀请/成员变更后按前缀失活重取（team/ 覆盖全部；细分键各自可单独失活）。
-const TEAMS_KEY = "team/teams"
+// 团队查询键：邀请与成员变更后按业务读模型失活重取。
 const INVITES_KEY = "team/invites"
 const DETAIL_PREFIX = "team/detail"
-
-type TeamsState =
-  | { kind: "loading" }
-  | { kind: "error" }
-  | { kind: "ready"; teams: TeamSummary[] }
 
 type DetailState =
   | { kind: "loading" }
@@ -50,8 +42,6 @@ type TeamPanelProps = {
   client: TeamClient
   currentNamespace: string | null
   onClose: () => void
-  // 换签成功回调：由外壳整页刷新，令三竖切按新 namespace 重水合。
-  onSwitched: (namespace: string) => void
 }
 
 type TeamErrorKey =
@@ -82,22 +72,16 @@ function errorKey(error: unknown): TeamErrorKey {
 type TeamContentProps = {
   client: TeamClient
   currentNamespace: string | null
-  // 换签成功回调：由外壳整页刷新，令三竖切按新 namespace 重水合。
-  onSwitched: (namespace: string) => void
   embedded?: boolean
 }
 
-export function TeamContent({ client, currentNamespace, onSwitched, embedded = false }: TeamContentProps) {
+export function TeamContent({ client, currentNamespace, embedded = false }: TeamContentProps) {
   const t = useT()
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
-  // 团队清单 / 待处理邀请 / 当前团队详情三读经查询层（模块缓存/去重/失活）。
+  // 待处理邀请 / 当前团队详情经查询层（模块缓存/去重/失活）。
   // ResourceResult 适配回既有判别式，子组件展示分支不变。
-  const teamsRes = useResource<TeamSummary[]>(
-    TEAMS_KEY,
-    useCallback(() => client.listMyTeams(), [client]),
-  )
   const invitesRes = useResource<PendingInvite[]>(
     INVITES_KEY,
     useCallback(() => client.listInvites(), [client]),
@@ -113,12 +97,6 @@ export function TeamContent({ client, currentNamespace, onSwitched, embedded = f
     }, [client, currentNamespace]),
   )
 
-  const teams: TeamsState =
-    teamsRes.data !== undefined
-      ? { kind: "ready", teams: teamsRes.data }
-      : teamsRes.error !== undefined
-        ? { kind: "error" }
-        : { kind: "loading" }
   // 邀请尽力而为：失败回空池（与旧 catch→[] 一致）。
   const invites = invitesRes.data ?? []
   const detail: DetailState =
@@ -130,24 +108,7 @@ export function TeamContent({ client, currentNamespace, onSwitched, embedded = f
 
   const afterMemberMutation = useCallback(async () => {
     invalidate(DETAIL_PREFIX)
-    invalidate(TEAMS_KEY)
   }, [])
-
-  const onSwitch = useCallback(
-    async (teamId: string) => {
-      setBusy(`switch:${teamId}`)
-      setNotice(null)
-      try {
-        const namespace = await client.switchTeam(teamId)
-        onSwitched(namespace)
-      } catch (error) {
-        setNotice(t(errorKey(error)))
-      } finally {
-        setBusy(null)
-      }
-    },
-    [client, onSwitched, t],
-  )
 
   const onAccept = useCallback(
     async (inviteId: string) => {
@@ -155,8 +116,7 @@ export function TeamContent({ client, currentNamespace, onSwitched, embedded = f
       setNotice(null)
       try {
         await client.acceptInvite(inviteId)
-        // 入队成功：清单/邀请/详情全失活重取（新团队进列表、邀请离池、详情随之刷新）。
-        invalidate(TEAMS_KEY)
+        // 入队成功：邀请与当前详情失活重取。
         invalidate(INVITES_KEY)
         invalidate(DETAIL_PREFIX)
       } catch (error) {
@@ -192,15 +152,6 @@ export function TeamContent({ client, currentNamespace, onSwitched, embedded = f
             </Alert>
           ) : null}
 
-          <SwitcherSection
-            teams={teams}
-            currentNamespace={currentNamespace}
-            busy={busy}
-            loading={teamsRes.loading}
-            onRetry={teamsRes.refetch}
-            onSwitch={onSwitch}
-          />
-
           {invites.length > 0 ? (
             <section className={styles.section} data-testid="team-invites">
               <h3 className={styles.sectionTitle}>{t("team.invitesTitle")}</h3>
@@ -232,7 +183,7 @@ export function TeamContent({ client, currentNamespace, onSwitched, embedded = f
   )
 }
 
-export function TeamPanel({ client, currentNamespace, onClose, onSwitched }: TeamPanelProps) {
+export function TeamPanel({ client, currentNamespace, onClose }: TeamPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
 
@@ -253,81 +204,9 @@ export function TeamPanel({ client, currentNamespace, onClose, onSwitched }: Tea
           </div>
         </header>
 
-        <TeamContent client={client} currentNamespace={currentNamespace} onSwitched={onSwitched} />
+        <TeamContent client={client} currentNamespace={currentNamespace} />
       </DialogContent>
     </Dialog>
-  )
-}
-
-function SwitcherSection({
-  teams,
-  currentNamespace,
-  busy,
-  loading,
-  onRetry,
-  onSwitch,
-}: {
-  teams: TeamsState
-  currentNamespace: string | null
-  busy: string | null
-  loading: boolean
-  onRetry: () => void
-  onSwitch: (teamId: string) => void
-}) {
-  const t = useT()
-  return (
-    <section className={styles.section} data-testid="team-switcher">
-      <h3 className={styles.sectionTitle}>{t("team.switcherTitle")}</h3>
-      {teams.kind === "loading" ? (
-        <div className={styles.loadingState} role="status" aria-label={t("team.loading")}>
-          <Skeleton className={styles.loadingLine} />
-          <Skeleton className={styles.loadingLine} />
-        </div>
-      ) : teams.kind === "error" ? (
-        <Alert variant="destructive" className={styles.feedback}>
-          <AlertDescription>
-            <p>{t("team.loadError")}</p>
-          <Button variant="outline" type="button" className={styles.retry} disabled={loading} aria-busy={loading} onClick={onRetry}>
-            {loading ? <Spinner aria-hidden="true" /> : null}
-            {loading ? t("team.loading") : t("team.retry")}
-          </Button>
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <ul className={styles.teamList}>
-          {teams.teams.map((summary) => {
-            const isCurrent = summary.team.id === currentNamespace
-            const switching = busy === `switch:${summary.team.id}`
-            return (
-              <li key={summary.team.id}>
-                <Button variant="outline"
-                  type="button"
-                  className={styles.teamItem}
-                  data-active={isCurrent}
-                  data-testid={`team-switch-${summary.team.id}`}
-                  disabled={isCurrent || switching || busy !== null}
-                  aria-busy={switching}
-                  aria-pressed={isCurrent}
-                  aria-label={`${teamLabel(summary.team.type, summary.membership.role, summary.team.name, t)} · ${isCurrent ? t("team.current") : t("team.switcherTitle")}`}
-                  onClick={() => onSwitch(summary.team.id)}
-                >
-                  <span className={styles.teamName}>
-                    {teamLabel(summary.team.type, summary.membership.role, summary.team.name, t)}
-                  </span>
-                  <span className={styles.teamMeta}>
-                    <span className={styles.roleBadge} data-role={summary.membership.role}>
-                      {t(roleKey(summary.membership.role))}
-                    </span>
-                    {isCurrent ? <span className={styles.currentTag}>{t("team.current")}</span> : null}
-                    {switching ? <span className={styles.currentTag}><Spinner aria-hidden="true" />{t("team.switching")}</span> : null}
-                  </span>
-                </Button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </section>
   )
 }
 

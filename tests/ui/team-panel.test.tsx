@@ -1,4 +1,4 @@
-// 团队面板组件测试（TEAM-1）：切换器高亮当前 + 切换触发换签回调；待处理邀请 accept/decline；
+// 团队面板组件测试（TEAM-1）：固定部署租户不呈现切换器；待处理邀请 accept/decline；
 // owner 邀请/移除成员；last_owner 错误反射本地化提示。团队客户端为注入 fake（不打网络）。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -33,14 +33,13 @@ function makeClient(overrides: Partial<TeamClient> = {}): TeamClient {
     declineInvite: vi.fn().mockResolvedValue(undefined),
     changeRole: vi.fn().mockResolvedValue(undefined),
     removeMember: vi.fn().mockResolvedValue(undefined),
-    switchTeam: vi.fn().mockResolvedValue("t-acme"),
     ...overrides,
   }
 }
 
-function renderPanel(client: TeamClient, onSwitched = vi.fn(), onClose = vi.fn(), currentNamespace = "t-personal") {
+function renderPanel(client: TeamClient, onClose = vi.fn(), currentNamespace = "t-personal") {
   return render(
-    <TeamPanel client={client} currentNamespace={currentNamespace} onClose={onClose} onSwitched={onSwitched} />,
+    <TeamPanel client={client} currentNamespace={currentNamespace} onClose={onClose} />,
     { wrapper: LocaleProvider },
   )
 }
@@ -48,24 +47,13 @@ function renderPanel(client: TeamClient, onSwitched = vi.fn(), onClose = vi.fn()
 afterEach(cleanup)
 
 describe("TeamPanel", () => {
-  it("highlights the current team and switches to another", async () => {
+  it("never offers tenant switching even when multiple memberships exist", async () => {
     const client = makeClient()
-    const onSwitched = vi.fn()
-    renderPanel(client, onSwitched)
-
-    const current = await screen.findByTestId("team-switch-t-personal")
-    expect(current.getAttribute("data-active")).toBe("true")
-    expect(current).toHaveAttribute("aria-pressed", "true")
-    expect((current as HTMLButtonElement).disabled).toBe(true)
-
-    const other = screen.getByTestId("team-switch-t-acme")
-    expect(other.getAttribute("data-active")).toBe("false")
-    expect(other).toHaveAttribute("aria-pressed", "false")
-    expect(other).toHaveAccessibleName(/Acme/)
-    fireEvent.click(other)
-
-    await waitFor(() => expect(client.switchTeam).toHaveBeenCalledWith("t-acme"))
-    await waitFor(() => expect(onSwitched).toHaveBeenCalledWith("t-acme"))
+    renderPanel(client)
+    await screen.findByTestId("team-members")
+    expect(screen.queryByTestId("team-switcher")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("team-switch-t-acme")).not.toBeInTheDocument()
+    expect(client.listMyTeams).not.toHaveBeenCalled()
   })
 
   it("accepts a pending invite and reloads", async () => {
@@ -84,8 +72,9 @@ describe("TeamPanel", () => {
     expect(screen.getByTestId("invite-decline")).toHaveAccessibleName(/Decline.*Acme/i)
     fireEvent.click(accept)
     await waitFor(() => expect(client.acceptInvite).toHaveBeenCalledWith("inv-1"))
-    // 接受后重取清单/详情。
-    await waitFor(() => expect((client.listMyTeams as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1))
+    // 接受后重取邀请与详情，不重新加载跨租户清单。
+    await waitFor(() => expect((client.listInvites as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1))
+    expect(client.listMyTeams).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.getByTestId("team-close")).toHaveFocus())
   })
 

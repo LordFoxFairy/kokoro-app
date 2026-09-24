@@ -1,5 +1,16 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W1C 固定租户数据边界（2026-09-24 设计门）
+
+Web 当前没有持久化 tenant owner；旧 Team sealed-session 切换路由仍在，RP
+成功创建/refresh Product Session 前尚未核 BFF 固定部署租户。目标保持 Web
+无 PostgreSQL/schema/migration：server-only `KOKORO_TENANT_ID` 是部署约束而非
+新业务事实；BFF `GET /v1/me` 的已验证 subject/tenant 是 admission 投影，
+只用于 code callback/refresh 的 fail-closed 校验。现有加密 HttpOnly Product
+Session/Redis CAS 不增加 tenant 副本或新 key；浏览器不能选择或覆盖 tenant。
+删除旧 Team switch 对 sealed envelope 的重签/重密封路径。owner 的 tenant、
+membership、token 与审计事实仍在 IAM/BFF 自仓；无跨 owner SQL、事务或缓存。
+
 状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 已发布，S1 未提交工作树已实现
 Product Session 在线协调，真实三仓 IAM 组合尚未验收；普通代理已由 S2-A 切换；旧认证/Team 路径未删除。
 

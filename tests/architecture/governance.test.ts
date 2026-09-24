@@ -107,6 +107,14 @@ describe("Web governance boundary", () => {
     expect(redirects).toEqual([])
   })
 
+  it("does not expose legacy browser tenant switching", async () => {
+    expect(await exists("src/app/api/team/switch/route.ts")).toBe(false)
+    const teamUi = await readFile(path.join(root, "src/ui/team/team-panel.tsx"), "utf8")
+    const teamClient = await readFile(path.join(root, "src/team/client.ts"), "utf8")
+    expect(teamUi).not.toContain("SwitcherSection")
+    expect(teamClient).not.toContain("switchTeam")
+  })
+
   it.each(["ci.yml", "cloudflare.yml", "release-image.yml"])("runs %s tests with isolated Redis service", async (name) => {
     const workflow = await readFile(path.join(root, ".github", "workflows", name), "utf8")
     const verify = workflow.split(/\n  verify:\n/u)[1]?.split(/\n  (?:deploy|publish):\n/u)[0]

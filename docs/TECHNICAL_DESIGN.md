@@ -1,5 +1,22 @@
 # Kokoro User Web 技术设计
 
+## W1C 固定部署租户收敛（设计门，2026-09-24）
+
+当前 `GET /login` 已是无可见中转页的服务端 OIDC 启动；但 issuer 的
+`/iam/interactions/select-tenant` 仍显示团队选择表单，Web RP callback/refresh
+尚未核对部署租户，旧 Team UI 还暴露跨租户切换。目标只复用现有交互路由、RP
+与 Team 文件：部署配置 `KOKORO_TENANT_ID` 仅在服务端使用，signed tenant
+交互由服务端按固定租户续接，不渲染选择页或接收浏览器 tenant 输入；已验证
+OIDC subject/tenant 再与 BFF owner `GET /v1/me` 投影比对，匹配后才创建或刷新
+Product Session。Web 不自验 JWT tenant、不读取 IAM/BFF 数据库、不建立第二身份
+事实源。BFF `/v1/me` 契约提交前只删除独立的旧 Team 切换 UI/route；其余实现
+等 owner contract 与 IAM 第一方 client 续接一起验收。失败保持零可用 Product
+Session，不恢复“连接中／整页重试”页面。
+
+放置选择：复用 `src/app/iam/interactions/select-tenant`、现有 RP/会话适配和
+`src/ui/team`（采用）；新建登录 SPA/通用 IAM proxy/第二身份 store（淘汰）。
+Web 无新 SQL、Redis 事实或跨仓写入；BFF/IAM 各保持唯一契约 owner。
+
 ## 公开入口与单租户登录边界（当前切片）
 
 `/` 渲染固定 Kokoro 公开首页，`/login` 仅是服务端 Product RP OIDC 启动路由，`/app` 由在线 Product Session 决定访问；System runtime manifest 仅在有效时覆盖动态展示，不是核心工作台闸。公开首页和登录入口不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`。进入 `/login` 后由服务端经固定 Auth.js CSRF 和 `kokoro-iam` provider 建立 RP transaction，浏览器直接跳到 IAM `/auth/sign-in` 邮箱/密码表单；不再渲染“连接中／整页重试”的 React 中转页，不把凭据搬到 Product RP。OIDC 启动失败不自动循环，返回无假表单的 503；IAM 表单凭据失败保留邮箱、清空密码、签发新一次性 CSRF 并在表单内显示受控错误。`/auth/sign-in` 仍是 IAM issuer 签名交互入口，与 Product `/login` 语义不同；其页面收敛为品牌+窄列真实表单，删除双区大装饰。`/preview/marketing` 与未使用的 `HomeGate` 已删除。验收覆盖无后端时公开页正常、登录入口诚实失败且零 manifest 请求、服务端 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。

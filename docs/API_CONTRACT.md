@@ -1,5 +1,18 @@
 # Kokoro User Web API 契约策略
 
+## W1C 固定租户 Web consumer 目标（2026-09-24 设计门）
+
+当前 `/login` 成功只作同源 302，不呈现连接/整页重试 UI；旧 tenant 选择表单、
+浏览器 `/api/team/switch` 与 RP tenant 未核验仍待删除。目标：`/auth/select-tenant`
+保留无状态 302 以使 `Path=/iam` issuer cookie 到达内层；内层 GET 仅使用
+server-only `KOKORO_TENANT_ID` 完成 signed continuation，不显示选择表单、
+不开放浏览器 POST/list。Web code callback 与 refresh 消费 BFF owner 即将发布的
+固定版本 `GET /v1/me` 当前身份投影，验证 subject、tenant 与部署配置后才建立
+可用 Product Session；契约字段及 digest 以 BFF 提交为准，不在此处预造 wire。
+删除旧 Team switch mutation/可见切换器，不能从浏览器 body/header 指定 tenant。
+失败只给有界机器错误，不跳转到任何整页重试或假登录页面。现有历史小节描述
+原发布版本，不作为新 consumer 的并行实现依据。
+
 公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的服务端 Product RP OIDC 启动路由（成功 302 到同源 IAM authorize，不渲染中转页）；`/app` 要求在线 Product Session；System runtime manifest 是可选展示数据，不决定访问权或 live/preview transport。`/auth/sign-in` 是 IAM issuer 签名交互路由，只有有效签名交互才呈现真正邮箱/密码表单，不能当作静态营销别名。公开首页/登录入口不调用 `/api/system/runtime-manifest`；`/login` 在服务端经 Auth.js CSRF 启动固定 OIDC provider，失败返回无自动循环的 503；此入口行为不改变 token、cookie 或 BFF/IAM owner API。
 
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、

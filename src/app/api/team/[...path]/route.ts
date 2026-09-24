@@ -1,6 +1,6 @@
 // 团队自助面同源代理（BFF）：读信封 → 注入 web-bff caller 凭据 + principal（x-kokoro-principal-id）→
 // 转发到 kokoro-iam 的 /bff/*（成员/邀请读写）。user principal 从密封信封派生，浏览器无从伪造。
-// 绝不代理 /bff/auth/*（换签走专用 /api/team/switch，token 不回浏览器）；变更类请求校验同源 Origin。
+// 绝不代理 /bff/auth/* 或浏览器租户切换；变更类请求校验同源 Origin。
 
 import { NextResponse } from "next/server"
 
@@ -18,7 +18,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
-// 仅放行成员/邀请读写前缀；auth（换签）等一律拒（防 runtime token 经通用代理泄回浏览器）。
+// 仅放行成员/邀请读写前缀；auth 等一律拒（防 runtime token 经通用代理泄回浏览器）。
 const ALLOWED_PREFIXES = new Set(["me", "teams", "invites"])
 
 async function proxy(

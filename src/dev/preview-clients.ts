@@ -340,6 +340,5 @@ export function createPreviewTeamClient(): TeamClient {
     declineInvite: () => Promise.resolve(),
     changeRole: () => Promise.resolve(),
     removeMember: () => Promise.resolve(),
-    switchTeam: (teamId) => Promise.resolve(teamId),
   }
 }

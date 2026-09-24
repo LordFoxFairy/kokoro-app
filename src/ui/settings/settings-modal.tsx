@@ -381,7 +381,6 @@ export function SettingsModal({
         <TeamContent
           client={browserTeamClient({ preview })}
           currentNamespace={teamNs ?? null}
-          onSwitched={() => window.location.reload()}
           embedded
         />
       ) : null}
