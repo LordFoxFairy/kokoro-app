@@ -11,11 +11,11 @@ W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session �
 起始 Web `main` 基线 `0a093f65bdc4990b956b10ae534198e3b4b5c3b5` 消费 BFF policy `1.0.0`、
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，artifact SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；其浏览器 GET
-白名单缺 `/iam/verify-email`。BFF owner `main` `a50f987d73aef6efeccde29e1c5ee6d5f4a13419`
+白名单缺 `/iam/verify-email`。BFF owner `main` `7a7f3adfaec7d1bcee3b2079304a6129c0591d06`
 当前发布 `contract/iam-relay-policy.json` version `1.1.0`、SHA-256
-`4066b792805dfe7ab1d0f48d8359ea9c1f2a74180ffb69ceaac8a45e6553b481`；Web 本次只读重钉
+`731735ba8ce07c578fe04fa51783a95c7ac7daf50df33cea0ef9cefedc32d032`；Web 本次只读重钉
 该 blob 与 commit，不编辑 BFF policy，不建立第二份可编辑 IAM contract。IAM owner
-`c16a9bcddd19211eb1e9705c392f4e5cf96f494e` 拥有 Better Auth 1.7.3 验证 token/邮箱状态，
+`093b76513a9aa71611c65d4f210e279d3227e002` 拥有 Better Auth 1.7.3 验证 token/邮箱状态，
 Web 不解释 token 或验证结果。此增量是 Web `browser-private`，不进入 BFF public `/v1` OpenAPI。
 
 | Web 已实现 operation | 请求与原生响应 |

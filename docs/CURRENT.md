@@ -1,9 +1,9 @@
 # Kokoro User Web 当前状态
 
 R2e-IAM-VERIFY-WEB（2026-09-24，已发布；本次仅来源重钉）：Web 当前从 BFF
-`a50f987d73aef6efeccde29e1c5ee6d5f4a13419` 固定只读 IAM relay policy `1.1.0`，artifact
-SHA-256 `4066b792805dfe7ab1d0f48d8359ea9c1f2a74180ffb69ceaac8a45e6553b481`，IAM owner
-`c16a9bcddd19211eb1e9705c392f4e5cf96f494e`；原始切片仅新增
+`7a7f3adfaec7d1bcee3b2079304a6129c0591d06` 固定只读 IAM relay policy `1.1.0`，artifact
+SHA-256 `731735ba8ce07c578fe04fa51783a95c7ac7daf50df33cea0ef9cefedc32d032`，IAM owner
+`093b76513a9aa71611c65d4f210e279d3227e002`；原始切片仅新增
 浏览器精确 `GET /iam/verify-email`。Web 对规范化后单一非空 `token`/可选单一 `callbackURL`
 执行准入，重复/额外键本地拒绝；Next 可能在 handler 前规范化编码，故不声称任意 raw query 字节
 保真。BFF/Web 继续受固定同源 302 Location 与 issuer cookie/Authorization 隔离约束；此精确路径
