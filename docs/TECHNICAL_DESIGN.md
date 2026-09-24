@@ -86,7 +86,11 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
 
 1. IAM operator/provisioning 先创建并 readback `user_delegated` confidential client：
    `client_secret_basic`、`require_pkce=true`、`enable_end_session=true`、精确 Web callback/post-logout URI、
-   `openid profile email offline_access iam:session-authorization.verify` scopes 和 internal resource binding。
+   `openid profile email offline_access iam:session-authorization.verify iam:member.read iam:invitation.read iam:role.read`
+   scopes 和 internal resource binding。W1C-Team-R3-Web 保持原 scope 顺序，仅追加 IAM 已发布的三个
+   Team 只读 scope；provider 授权请求与 RP 对 Auth.js authorization Location 的严格匹配使用同一固定值。
+   不申请 Team 写权限，不改变 token callback 的既有验证语义，也不把申请 scope 当作授权事实；
+   IAM/BFF 仍验证当前 membership、角色、权限与 token。旧 Team UI/直连及 relay policy 不在本片修改。
    issuer/discovery、`IAM_ISSUER_URL` 与 Web origin 必须精确匹配；不从浏览器 Host 推导 issuer。
 2. Auth.js v4（本工作树精确固定 `next-auth@4.24.15`、`openid-client@5.7.1`，Node 22/Next 16 构建与真实 Next HTTP 已验证）执行 Authorization Code
    + S256 PKCE，保存并验证 state/nonce/PKCE；登录页、租户选择页、同意页承接 IAM 原生带签名 query，
