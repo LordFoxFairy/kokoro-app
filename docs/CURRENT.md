@@ -2,18 +2,18 @@
 
 状态日期：2026-09-23。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
-W1C-2F-S1 当前未提交工作树在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
-以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh）和 Web Redis 加密
+W1C-2F-S1 已发布 Web main `1ba0498511447b9aafde892adafaae4de7f61ed6`，当前未提交工作树修复 HTTPS Product cookie；该切片在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
+以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh；固定 Web origin 为 HTTPS 或 Web production mode 时带 Secure）和 Web Redis 加密
 refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
 执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅 active 时 take 已确认当前 refresh，
 pending 时只 tombstone。signout 仅返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。旧普通 BFF adapter、legacy magic-link/team 路径仍是**待切换旧态**；本切片不声称
 它们已改为 Bearer，也不声称真实三仓 IAM 组合通过。固定 BFF relay policy 已重钉
 `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`/IAM `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，
 SHA-256 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；仅来源 metadata 变化。
-本地 Node `22.22.2` 在 Web 基线 `5da730426faaca54a9f0003fa1e7fd99f4db6f00` 加本未提交工作树执行：
+本地 Node `22.22.2` 在 Web main `1ba0498511447b9aafde892adafaae4de7f61ed6` 加本未提交修复，以 `caffeinate -dimsu` 执行：
 `pnpm contract` 6 files/52 tests、`pnpm test:architecture` 4/32、`pnpm lint`、`pnpm typecheck`、
-`pnpm test` 138/1366、`pnpm build`、`pnpm test:e2e` 6/6 均通过。RP-only 固定 503 的成功断言先
-反转获 RED，再在当前工作树获得 GREEN；真实 Web→BFF→IAM 三仓 runner、普通 `/v1` Bearer adapter、
+`pnpm test` 139/1369、`pnpm build`、`pnpm test:e2e` 6/6 均通过。RP-only 固定 503 的成功断言先
+反转获 RED，再在当前工作树获得 GREEN；真实 Web→BFF→IAM 三仓 runner 首轮识别出 HTTPS Product cookie 缺 Secure，本工作树已修复、待 Root 复验；普通 `/v1` Bearer adapter、
 Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界

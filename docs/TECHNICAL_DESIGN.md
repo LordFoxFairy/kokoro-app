@@ -108,7 +108,7 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    结果未知、Redis 故障均 fail closed；未决 reservation 到期只撤销，绝不恢复旧 active。finalize 成功
    或 Redis finalize ACK 未知时不发送新 cookie；即使 Redis 已提交 `active(g+1)`，旧 g 仍拒绝、用户
    重新登录，无客户端可达的 active record 按固定 TTL 回收；不依赖 IAM 的 replay 窗口恢复败者。
-   cookie 的 `Path=/`、`SameSite=Lax`、`HttpOnly`、production `Secure` 与 issuer cookie 分离。
+   cookie 的 `Path=/`、`SameSite=Lax`、`HttpOnly` 与固定 `KOKORO_WEB_ORIGIN=https:` **或** Web production mode 时 `Secure` 在创建/refresh/清除一致；该 Product 决策与 IAM issuer cookie 的 production 模式分离。
 5. logout 从可信解封的 cookie 取得 session ID；不要求请求 generation 仍是最新。单次 Redis 原子操作
    tombstone 当前记录；**仅在记录为 active 时** take 已确认当前的加密 refresh，经固定 BFF relay 单次
    有界尝试 IAM revoke；issuer end-session 必须另由浏览器确认，refresh revoke 不等于 issuer cookie 清除。若记录为 refreshing/pending，旧 refresh 可能已轮换，故只

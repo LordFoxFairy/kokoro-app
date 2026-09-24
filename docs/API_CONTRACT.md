@@ -136,7 +136,7 @@ internal resource binding。`IAM_ISSUER_URL` 与 discovery issuer 精确相同�
 默认 token request 不视为已覆盖，此点须在真实 HTTP 检查请求体/Bearer audience/BFF admission。
 
 Product Session 是 Web server-only：Auth.js 加密 HttpOnly cookie 只含随机 session ID、generation、
-当前 access 与必要 RP 退出提示，**不含 refresh**；公开 session callback 不输出 token。Web Redis 隔离
+当前 access 与必要 RP 退出提示，**不含 refresh**；固定 `KOKORO_WEB_ORIGIN` 为 HTTPS **或** Web 运行于 production mode 时，Product cookie 创建/refresh/清除均带 `Secure`，不借 IAM issuer 的 production cookie 模式决定；公开 session callback 不输出 token。Web Redis 隔离
 record 保留 Web 密钥加密的当前 refresh、固定到期及 `active(g)`/`refreshing(g,reservation,deadline)`/
 `revoked`。每请求先在线比对 generation/tombstone。refresh 的第一 CAS 只允许一位赢家从 active 预留，
 由赢家向 IAM 发起至多一次固定 Basic/resource exchange；第二 CAS 仅在 reservation、deadline、未撤销

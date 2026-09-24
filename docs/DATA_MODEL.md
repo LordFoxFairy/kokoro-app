@@ -56,7 +56,7 @@ Redis logical DB”的过宽说法：Web 可按 Root namespace/logical DB 决策
 | IAM issuer cookie | IAM；浏览器 `/iam` path | IAM 原生 session/interaction；IAM 决定 TTL/撤销 | 仅精确 `kokoro-issuer.*` 或 production `__Secure-kokoro-issuer.*` snapshot；常规 `Path=/iam`，logout-confirmation 精确子路径；Web 不解析为 Product 权限 |
 | Auth.js RP transaction cookie | Web；浏览器 HttpOnly | state/nonce/S256 verifier 与回调相关短期事务 | 用后清除，callback/code 重放拒绝；不向 BFF/IAM 转发该 cookie |
 | Web 交互 CSRF cookie/record | Web；浏览器 HttpOnly cookie + 隔离 Redis namespace | 随机 token 的摘要、目标 POST path、IAM 交互绑定与短 TTL | hidden form 字段配对；原子一次性消费；不把 Web CSRF 字段送 IAM；Redis 不可用即拒绝 |
-| Product Session cookie | Web；浏览器 HttpOnly 加密 JWT | 随机 session ID、generation、server-only 当前 access、必要 RP 退出提示；**无 refresh** | `Path=/`、`SameSite=Lax`、production `Secure`；公开 session callback 不回 token；浏览器脚本/localStorage 不读取 |
+| Product Session cookie | Web；浏览器 HttpOnly 加密 JWT | 随机 session ID、generation、server-only 当前 access、必要 RP 退出提示；**无 refresh** | `Path=/`、`SameSite=Lax`、固定 Web public origin 为 HTTPS **或** Web production mode 时 `Secure`（与 IAM issuer cookie 的过滤/发行模式分离）；公开 session callback 不回 token；浏览器脚本/localStorage 不读取 |
 | generation/state record | Web Redis 隔离 namespace | 随机 session ID → `active(g)`、`refreshing(g,reservation,deadline)` 或 `revoked`、固定到期、Web 密钥加密的**当前** refresh；双阶段 CAS 协调 refresh | TTL 不长于会话与 refresh 有效期；每请求在线核验；缺失/Redis down fail closed；pending 不允许旧 g 代理；refresh 不写入 key/log/公开响应 |
 | tombstone | Web Redis 隔离 namespace | logout/revocation 的 session ID 阻断记录；仅 active 时原子 take 已确认当前的加密 refresh，refreshing/pending 时不 take | TTL 覆盖最大 Product 会话/在途窗口；记录缺失也建立；先写 tombstone 再清 cookie/上游 revoke；不可被旧 generation 覆盖 |
 | UI preference/draft | Web browser storage | 非敏感临时体验状态 | 不含 token、tenant 选择器、service URL；不是任何会话/授权证据 |

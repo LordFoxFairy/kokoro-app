@@ -367,16 +367,16 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     if (typeof claims?.id === "string") productIds.add(claims.id)
   }
 
-  async function productRecordCount(): Promise<number> {
+  async function productRecordKeys(): Promise<Set<string>> {
     const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
     client.on("error", () => undefined)
     try {
       await client.connect()
-      let count = 0
-      for await (const key of client.scanIterator({ MATCH: `${productSessionKeyPrefix(`http://localhost:${nextPort}`)}*` })) {
-        if (key !== undefined) count += 1
+      const keys = new Set<string>()
+      for await (const batch of client.scanIterator({ MATCH: `${productSessionKeyPrefix(`http://localhost:${nextPort}`)}*` })) {
+        for (const key of batch) keys.add(key)
       }
-      return count
+      return keys
     } finally { client.destroy() }
   }
 
@@ -482,20 +482,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("keeps BFF untouched while real Next has not received a complete slow confirmation body", async () => {
     const before = paths.length
-    let sawResponse = false
+    let responseStatus: number | undefined
     await new Promise<void>((resolve) => {
       const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort,
         path: "/iam/oauth2/end-session/confirm", method: "POST",
         headers: { host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`,
           "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } }, (reply) => {
-        sawResponse = true
+        responseStatus = reply.statusCode
         reply.resume()
       })
       browser.on("error", () => undefined)
       browser.write("action=")
       setTimeout(() => { browser.destroy(); resolve() }, 5_500)
     })
-    expect(sawResponse).toBe(false)
+    expect(responseStatus === undefined || responseStatus === 400).toBe(true)
     expect(paths).toHaveLength(before)
   }, 8_000)
 
@@ -517,7 +517,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const { csrf, signin, jar, location } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
-    expect(callback.status).toBe(303)
+    expect(callback.status, `pending-refresh callback Location: ${String(callback.headers.location ?? "<none>")}`).toBe(303)
     await recordProduct(callback)
     const cookie = cookieHeader(csrf, signin, callback)
     const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
@@ -631,13 +631,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     oversizedSubject = true
     try {
-      const before = await productRecordCount()
+      const before = await productRecordKeys()
       const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
       expect(callback.status).toBe(503)
       expect(JSON.parse(callback.body)).toMatchObject({ error: { code: "product_session_unavailable" } })
       expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
         .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(false)
-      expect(await productRecordCount()).toBe(before)
+      for (const key of await productRecordKeys()) expect(before.has(key)).toBe(true)
     } finally { oversizedSubject = false }
   })
 

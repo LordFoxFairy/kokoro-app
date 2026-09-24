@@ -73,7 +73,7 @@ async function productAction(request: NextRequest, action: "session" | "signout"
     const issuer = { issuer_session: "pending_browser_confirmation", issuer_end_session_url: issuerEndSessionUrl }
     const claims = await decodeProductSession(request, config.authSecret)
     const headers = new Headers({ "cache-control": "private, no-store", "x-request-id": requestId })
-    headers.append("set-cookie", clearProductSessionCookie(config.relay.secureCookies))
+    headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
     if (claims === null) return Response.json({ status: "signed_out", remote_revocation: "not_required", ...issuer }, { headers })
     let taken: Awaited<ReturnType<typeof tombstoneSession>>
     try { taken = await tombstoneSession(store, claims.id) }
@@ -96,7 +96,7 @@ async function productAction(request: NextRequest, action: "session" | "signout"
     const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal)
     const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access,
       accessExpiresAt: Date.now() + refreshed.expiresIn * 1_000 }
-    const cookie = await productSessionCookie(next, config.authSecret, config.relay.secureCookies)
+    const cookie = await productSessionCookie(next, config.authSecret, config.relay.webOrigin)
     if (!(await finalizeRefresh(store, claims.id, claims.generation, reserved.reservation, refreshed.refresh))) {
       return errorResponse(409, "product_session_refresh_conflict")
     }
@@ -225,7 +225,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     const candidate = newSessionCandidate()
     const cookie = await productSessionCookie({ id: candidate.id, generation: 0, access: tokens.access,
       accessExpiresAt: tokens.accessExpiresAt, expiresAt: candidate.expiresAt, subject: tokens.subject },
-    config.authSecret, config.relay.secureCookies)
+    config.authSecret, config.relay.webOrigin)
     await createSession({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       secret: config.authSecret }, tokens.refresh, candidate)
     const headers = new Headers({ location: "/app", "cache-control": "private, no-store", "referrer-policy": "no-referrer" })

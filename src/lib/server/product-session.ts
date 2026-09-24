@@ -45,17 +45,23 @@ export async function currentProductSession(request: Request, config: StoreConfi
   return await inspectSession(config, claims.id, claims.generation) ? claims : null
 }
 
-export async function productSessionCookie(claims: ProductClaims, secret: string, secure: boolean): Promise<string> {
+function secureProductCookie(webOrigin: string): boolean {
+  const protocol = new URL(webOrigin).protocol
+  if (protocol !== "http:" && protocol !== "https:") throw new Error("invalid Product Session origin")
+  return protocol === "https:" || process.env.NODE_ENV === "production"
+}
+
+export async function productSessionCookie(claims: ProductClaims, secret: string, webOrigin: string): Promise<string> {
   if (!validClaims(claims)) throw new Error("invalid Product Session claims")
   const maxAge = Math.max(0, Math.min(SESSION_SECONDS, Math.floor((claims.expiresAt - Date.now()) / 1000)))
   const value = await encode({ token: { ...claims }, secret, salt: "kokoro-product-session-v1", maxAge })
-  const cookie = `${COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+  const cookie = `${COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureProductCookie(webOrigin) ? "; Secure" : ""}`
   if (Buffer.byteLength(cookie, "utf8") > 4096) throw new Error("Product Session cookie too large")
   return cookie
 }
 
-export function clearProductSessionCookie(secure: boolean): string {
-  return `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`
+export function clearProductSessionCookie(webOrigin: string): string {
+  return `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureProductCookie(webOrigin) ? "; Secure" : ""}`
 }
 
 export type { ProductClaims }
