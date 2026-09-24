@@ -474,7 +474,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "Send sign-in link",
   "auth.invalidEmail": "Please enter a valid email",
-  "auth.unavailable": "Sign-in service is unavailable, try again later",
+  "auth.unavailable": "Sign-in did not finish. Try again.",
   "auth.rateLimited": "Too many requests, please try again later",
   "auth.linkUnavailable": "That sign-in link is invalid or expired. Request a new one.",
   "auth.sentTitle": "Check your email",

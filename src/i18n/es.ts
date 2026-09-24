@@ -323,7 +323,7 @@ export const es: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "tu@ejemplo.com",
   "auth.submit": "Enviar enlace de inicio de sesión",
   "auth.invalidEmail": "Por favor, introduce una dirección de correo electrónico válida",
-  "auth.unavailable": "El servicio de inicio de sesión no está disponible temporalmente, inténtalo de nuevo más tarde",
+  "auth.unavailable": "No se completó el inicio de sesión. Inténtalo de nuevo.",
   "auth.rateLimited": "La solicitud es demasiado frecuente, inténtalo de nuevo más tarde.",
   "auth.linkUnavailable": "El enlace de inicio de sesión no es válido o ha caducado; vuelva a enviarlo.",
   "auth.sentTitle": "comprobar correo electrónico",

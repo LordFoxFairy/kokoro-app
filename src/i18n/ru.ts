@@ -323,7 +323,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "Отправить ссылку для входа",
   "auth.invalidEmail": "Пожалуйста, введите действительный адрес электронной почты",
-  "auth.unavailable": "Служба входа временно недоступна, повторите попытку позже.",
+  "auth.unavailable": "Вход не завершён. Повторите попытку.",
   "auth.rateLimited": "Запрос слишком частый, повторите попытку позже.",
   "auth.linkUnavailable": "Ссылка для входа недействительна или срок ее действия истек, отправьте ее повторно.",
   "auth.sentTitle": "Проверить электронную почту",

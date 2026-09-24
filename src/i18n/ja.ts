@@ -383,7 +383,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "ログインリンクを送信する",
   "auth.invalidEmail": "有効なメールアドレスを入力してください",
-  "auth.unavailable": "ログイン サービスが一時的に利用できません。後でもう一度お試しください",
+  "auth.unavailable": "ログインが完了しませんでした。もう一度お試しください。",
   "auth.rateLimited": "リクエストが多すぎます。後でもう一度お試しください。",
   "auth.linkUnavailable": "ログイン リンクが無効か期限切れです。再送信してください。",
   "auth.sentTitle": "メールをチェックする",

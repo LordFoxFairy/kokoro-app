@@ -163,7 +163,7 @@
 - [x] 命令菜单、移动导航开关和工作区分组文案在全部上线语言中独立覆盖，不会在切换语言后回退成中文。
 - [x] 全部上线语言覆盖当前 zh 源的 100% 消息键；Canvas、作品库、账单、套餐、MCP、团队和分享错误/操作态不再回退中文。
 - [x] Canvas/作品预览的文本与媒体加载失败都提供 shadcn Alert + 可操作的“重新加载预览”，重试会重新发起鉴权请求并释放旧资源。
-- [x] `/login` 在 280px 下仍保持可读登录卡与可触达提交按钮，不出现水平滚动；System 故障不替换为配置错误页。
+- [x] `/login` 窄屏保持可读的品牌登录场景与可触达重试按钮，不出现水平滚动；System 故障不替换为配置错误页。首次装载自动进入 IAM 流程，不显示中转提交按钮。
 - [x] Settings 移动端的 ScrollArea 内容 wrapper 不再继承 Radix 的 `display: table; min-width: 100%`，团队、技能、连接等表单在 320px 宽度下不会被右侧 Dialog 边界裁切。
 - [x] Settings 从深链打开、没有真实 DialogTrigger 时，关闭按钮、Escape 和背幕关闭仍把焦点交给 Composer，不落到 document.body。
 - [x] Settings 打开后跨越 `767px` 断点时，原移动 SidebarTrigger 变为零尺寸也不会被重新聚焦；关闭后改回当前可见 Composer。

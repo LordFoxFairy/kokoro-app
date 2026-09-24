@@ -360,7 +360,7 @@ export const zh = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "发送登录链接",
   "auth.invalidEmail": "请输入合法邮箱",
-  "auth.unavailable": "登录服务暂不可用,稍后再试",
+  "auth.unavailable": "登录未完成，请重试。",
   "auth.rateLimited": "请求过于频繁,请稍后再试",
   "auth.linkUnavailable": "登录链接无效或已过期,请重新发送",
   "auth.sentTitle": "查收邮件",

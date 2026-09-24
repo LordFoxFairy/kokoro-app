@@ -323,7 +323,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "Login-Link senden",
   "auth.invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
-  "auth.unavailable": "Der Anmeldedienst ist vorübergehend nicht verfügbar. Versuchen Sie es später erneut",
+  "auth.unavailable": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
   "auth.rateLimited": "Die Anfrage kommt zu häufig vor. Bitte versuchen Sie es später noch einmal",
   "auth.linkUnavailable": "Der Anmeldelink ist ungültig oder abgelaufen. Bitte senden Sie ihn erneut.",
   "auth.sentTitle": "E-Mails prüfen",

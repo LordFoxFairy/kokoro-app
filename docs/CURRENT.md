@@ -17,7 +17,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
-- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest，首屏呈现单一 Kokoro 账号继续动作且不请求 CSRF；用户点击后才发起固定 Product RP OIDC，连接成功前保持过渡状态，失败后停止并提供显式重试，不呈现营销导航或 Web 凭据表单。`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时仅在用户主动继续后真实请求 Auth.js CSRF/OIDC 并呈现受控错误，不伪造成功。
+- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest，首次装载自动发起固定 Product RP OIDC，连接成功前保持品牌过渡状态；失败回跳停止并保留全视口品牌布局，仅出现次级错误和显式重试，不呈现营销导航、中转按钮或 Web 凭据表单。`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时真实请求 Auth.js CSRF/OIDC 并呈现受控错误，不伪造成功。
 - W1D-Web-Gate：`/app` 的访问权只由在线 Product Session 决定；System manifest 为可选展示数据。已认证状态即使用本仓固定品牌/导航装载 live 工作台，有效 manifest 才覆盖动态展示；失败或重试会清除旧站点皮肤，不切到 preview transport。旧 `RuntimeUnavailable` 页面、样式、测试与九语种死文案已删除。当前 Node22 contract/architecture/lint/typecheck、串行 Vitest 1385/1385、build、Playwright 11通过/1既有skip；真实浏览器在已认证探针与 System 503 下仍于 `/app` 显示核心工作台。
 - 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
 - 新 Product Session cookie 使用加密 HttpOnly 信封、`SameSite=Lax`，固定公开 Web origin 为 HTTPS 或 Web production mode 时设置 `Secure`；浏览器 cookie 不透传给业务上游。旧 sealed session 仅属于待删除旧路径。
@@ -104,10 +104,10 @@ pnpm test:e2e
 
 已获得的本地结果：130 个 Vitest test files / 1,221 个测试通过；Playwright desktop + mobile 共 6 个浏览器、可访问性与 viewport smoke 通过；Next production build 通过。该证据不等价于 live BFF、真实外部存储、生产 telemetry/SLO 或镜像发布验收。
 
-W1D 登录 handoff 当前使用 Node `22.22.2` 执行 `pnpm check`：contract 6 files/54 tests、
+W1D 登录 handoff 旧基线使用 Node `22.22.2` 执行 `pnpm check`：contract 6 files/54 tests、
 architecture 4 files/32 tests、lint、typecheck、全量 Vitest 142 files/1,396 tests与 production build
 均通过；`pnpm test:e2e` 在 desktop/mobile 为 15 passed、1 个既有 mobile rail logout skip。浏览器门证明
-首屏零 CSRF/System 请求、点击后固定 CSRF/provider POST、失败停止重试、axe 与 viewport；其中真实 303
+旧基线首屏零 CSRF/System 请求、点击后固定 CSRF/provider POST、失败停止重试、axe 与 viewport；本次自动登录与无卡片布局已替代“点击后”行为，当前工作树的聚焦浏览器门禁见本切片交付记录；其中真实 303
 用例只证明 **RP 配置缺失时 signin route 的受控早退** 返回 `/login?auth=sign_in_failed` 且页面不自动循环，
 不代表 authorize/token/userinfo、IAM 签名、Product Session 或完整 OAuth 失败链已经通过。
 

@@ -323,7 +323,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "você@exemplo.com",
   "auth.submit": "Enviar link de login",
   "auth.invalidEmail": "Por favor insira um endereço de e-mail válido",
-  "auth.unavailable": "O serviço de login está temporariamente indisponível. Tente novamente mais tarde",
+  "auth.unavailable": "O login não foi concluído. Tente novamente.",
   "auth.rateLimited": "A solicitação é muito frequente. Tente novamente mais tarde",
   "auth.linkUnavailable": "O link de login é inválido ou expirou, reenvie-o.",
   "auth.sentTitle": "Verifique e-mail",

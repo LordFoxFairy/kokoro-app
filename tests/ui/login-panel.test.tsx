@@ -30,26 +30,25 @@ afterEach(() => {
 })
 
 describe("LoginPanel", () => {
-  it("renders a complete login handoff without starting OIDC or requesting System runtime", () => {
+  it("renders the branded connecting surface and starts fixed OIDC without System runtime", async () => {
     renderPanel()
-    expect(screen.getByRole("heading", { name: "登录 Kokoro" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "正在连接 Kokoro" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Kokoro" })).toHaveAttribute("href", "/")
-    expect(screen.getByText("使用你的 Kokoro 账号安全地继续")).toBeVisible()
-    expect(screen.getByRole("button", { name: "使用 Kokoro 账号继续" })).toBeVisible()
-    expect(beginProductSignIn).not.toHaveBeenCalled()
+    expect(screen.getByRole("status")).toHaveTextContent("正在前往安全登录页面")
+    await waitFor(() => expect(beginProductSignIn).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole("navigation")).toBeNull()
     expect(useRuntimeManifest).not.toHaveBeenCalled()
     expect(screen.queryByText("配置不可用")).toBeNull()
   })
-  it("exposes one account action without credential inputs or duplicate calls to action", () => {
+  it("has no credential inputs or intermediate login action", () => {
     renderPanel()
-    expect(screen.getAllByRole("button")).toHaveLength(1)
+    expect(screen.queryByRole("button")).toBeNull()
     expect(screen.queryByTestId("login-email")).toBeNull()
     expect(screen.queryByTestId("login-sent")).toBeNull()
     expect(screen.queryByTestId("login-oauth-slot")).toBeNull()
   })
 
-  it("starts the fixed Product OIDC flow once on click under StrictMode and keeps connecting after success", async () => {
+  it("starts the fixed Product OIDC flow once under StrictMode and keeps connecting after success", async () => {
     let release!: () => void
     beginProductSignIn.mockImplementation(
       () =>
@@ -58,10 +57,6 @@ describe("LoginPanel", () => {
         }),
     )
     renderPanel({ strict: true })
-    expect(beginProductSignIn).not.toHaveBeenCalled()
-    const action = screen.getByRole("button", { name: "使用 Kokoro 账号继续" })
-    fireEvent.click(action)
-    fireEvent.click(action)
     await waitFor(() => expect(beginProductSignIn).toHaveBeenCalledTimes(1))
     release()
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("正在前往安全登录页面"))
@@ -71,8 +66,7 @@ describe("LoginPanel", () => {
   it("stops after a failure and starts exactly one new attempt when retried", async () => {
     beginProductSignIn.mockRejectedValue(new Error("down"))
     renderPanel()
-    fireEvent.click(screen.getByRole("button", { name: "使用 Kokoro 账号继续" }))
-    expect((await screen.findByRole("alert")).textContent).toContain("暂不可用")
+    expect((await screen.findByRole("alert")).textContent).toContain("登录未完成")
     expect(beginProductSignIn).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("heading", { name: "登录 Kokoro" })).toBeInTheDocument()
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -100,7 +94,6 @@ describe("LoginPanel", () => {
       return new Promise<void>(() => undefined)
     })
     const page = renderPanel()
-    fireEvent.click(screen.getByRole("button", { name: "使用 Kokoro 账号继续" }))
     await waitFor(() => expect(beginProductSignIn).toHaveBeenCalledTimes(1))
     page.unmount()
     expect(signal?.aborted).toBe(true)

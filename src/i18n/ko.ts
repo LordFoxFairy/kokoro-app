@@ -323,7 +323,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "auth.emailPlaceholder": "you@example.com",
   "auth.submit": "로그인 링크 보내기",
   "auth.invalidEmail": "유효한 이메일 주소를 입력하세요.",
-  "auth.unavailable": "로그인 서비스를 일시적으로 사용할 수 없습니다. 나중에 다시 시도해 주세요.",
+  "auth.unavailable": "로그인이 완료되지 않았습니다. 다시 시도해 주세요.",
   "auth.rateLimited": "요청이 너무 자주 발생합니다. 나중에 다시 시도해 주세요.",
   "auth.linkUnavailable": "로그인 링크가 유효하지 않거나 만료되었습니다. 다시 보내주세요.",
   "auth.sentTitle": "이메일 확인",
