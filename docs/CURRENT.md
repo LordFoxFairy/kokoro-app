@@ -19,8 +19,8 @@ W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HT
 refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
 执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅匹配 cookie generation 的 active record 才 take 已确认当前 refresh，
 pending 时只 tombstone。旧 generation signout 不发送 Product `Set-Cookie`，避免乱序响应清除浏览器已收到的新 cookie；HTTP 200 返回 `stale_session`/`not_required`，旧 cookie 仍被在线 generation 校验拒绝，不改当前 Redis record、不 revoke、也不返回 issuer 引导；其他 signout 返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。七个普通受保护 BFF adapter 已切换为在线 Product Session generation 核验与唯一 access Bearer；legacy magic-link/team route 仍是**待删除旧态**，UI 主链不再消费它们；本切片不声称它们已删除；S1 真实三仓 HTTPS 组合已通过，S2-A 普通业务代理组合已通过固定三仓真 HTTPS。固定 BFF relay policy 已重钉
-`84a560abeac5b7a63f32d7064abdde849ab33cf9`/IAM `b35a9a5301219654ea344c03407fd355f58c481e`，
-SHA-256 `f7c3d29f500ffe729da006c9ff8bf29d4f853e2a613ba92357592414bee421d9`；仅来源 metadata 变化。
+`eb1eb2926d08b8a3779898b2c31e604a8585ec8b`/IAM `e36da9ecf8d62a364182949817431a8e2329d50a`，
+SHA-256 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；仅来源 metadata 变化。
 本地 Node `22.22.2` 在 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc` 以 `caffeinate -dimsu` 执行：
 `pnpm contract` 6 files/52 tests、`pnpm test:architecture` 4/32、`pnpm lint`、`pnpm typecheck`、
 `pnpm test` 139/1369、`pnpm build`、`pnpm test:e2e` 6/6 均通过。RP-only 固定 503 的成功断言先
@@ -51,9 +51,9 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
   保持原生 status/header/body 与多个
   `Set-Cookie`，并实施 issuer-cookie 白名单、16 KiB header、1 MiB response、5 s deadline 与取消传播。
-- 只读 snapshot 固定 BFF `84a560abeac5b7a63f32d7064abdde849ab33cf9`、IAM
-  `b35a9a5301219654ea344c03407fd355f58c481e` 和 policy SHA-256
-  `f7c3d29f500ffe729da006c9ff8bf29d4f853e2a613ba92357592414bee421d9`；Web 不编辑 owner policy，
+- 只读 snapshot 固定 BFF `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、IAM
+  `e36da9ecf8d62a364182949817431a8e2329d50a` 和 policy SHA-256
+  `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
 - 已发布的 W1C-2B-1 新增 `/auth/sign-in` 交互入口：GET 保留 IAM 原始签名 query 并在 Web Redis 自有前缀写入
   5 分钟一次性 CSRF 摘要/目标 POST method/issuer-cookie 绑定，POST 必须精确同源 Origin、Cookie+hidden token 与原始 query
@@ -154,9 +154,9 @@ W1C-2B-2 以 Web main `d619f2c06951cb2decdb1eeac48547e3bcf40361` 为基线，使
 BFF 仍是 HTTP fixture，
 未做真实 IAM/RP 闭环或 GitHub Actions runner 验证。测试覆盖 tenant 列表信任、重核/越界、
 签名 query 变化、Origin/CSRF/重放、consent 拒绝/伪造 query owner 401、恶意导航、native
-302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。当前 W1C-Team-R3-Pin 再次机械 re-pin BFF policy
-`84a560abeac5b7a63f32d7064abdde849ab33cf9`/IAM
-`b35a9a5301219654ea344c03407fd355f58c481e`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
+302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。当前 R2d-WEB-RELAY-PIN 再次机械 re-pin BFF policy
+`eb1eb2926d08b8a3779898b2c31e604a8585ec8b`/IAM
+`e36da9ecf8d62a364182949817431a8e2329d50a`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
 语义与前 pin 相同。
 
 ## 4. 尚未闭合的边界

@@ -32,9 +32,9 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与旧路径，这是**待删除的旧态**。Product Session、
 Redis CAS/tombstone 与 OIDC RP 的 S1 实现及真实三仓 HTTPS 已验；BFF relay 最新 release
-`84a560abeac5b7a63f32d7064abdde849ab33cf9` 已 pin IAM
-`b35a9a5301219654ea344c03407fd355f58c481e`，policy SHA-256
-`f7c3d29f500ffe729da006c9ff8bf29d4f853e2a613ba92357592414bee421d9`；W1C-2A 已固定消费该只读
+`eb1eb2926d08b8a3779898b2c31e604a8585ec8b` 已 pin IAM
+`e36da9ecf8d62a364182949817431a8e2329d50a`，policy SHA-256
+`ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；W1C-2A 已固定消费该只读
 artifact 与 provenance；普通 Product Bearer/Team 真实三仓组合仍待验。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
