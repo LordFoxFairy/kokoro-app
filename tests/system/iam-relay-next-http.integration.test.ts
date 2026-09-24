@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
-import { cp, mkdtemp, rm, symlink } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createClient } from "redis"
 import { chromium } from "@playwright/test"
+import AxeBuilder from "@axe-core/playwright"
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
@@ -420,6 +421,71 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       expect((await page.context().cookies()).some((cookie) =>
         cookie.name === "kokoro-issuer.session_token" && cookie.path === "/iam")).toBe(true)
       expect(receivedPaths).toEqual(["/iam/oauth2/authorize?client_id=web"])
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
+
+  it("renders stacked, responsive and accessible issuer forms without client credential logic", async () => {
+    const browser = await chromium.launch({ headless: true })
+    try {
+      for (const [name, viewport] of [
+        ["desktop", { width: 1440, height: 900 }],
+        ["narrow", { width: 560, height: 600 }],
+        ["mobile", { width: 390, height: 844 }],
+      ] as const) {
+        const context = await browser.newContext({ viewport })
+        const page = await context.newPage()
+        const response = await page.goto(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`, {
+          waitUntil: "domcontentloaded",
+        })
+        expect(response?.status()).toBe(200)
+        expect(await page.getByRole("heading", { name: "Sign in" }).count()).toBe(1)
+        const email = page.getByLabel("Email")
+        const password = page.getByLabel("Password")
+        const submit = page.getByRole("button", { name: "Sign in" })
+        const [emailBox, passwordBox, buttonBox] = await Promise.all([
+          email.boundingBox(), password.boundingBox(), submit.boundingBox(),
+        ])
+        expect(emailBox?.width).toBeGreaterThan(250)
+        expect((passwordBox?.y ?? 0)).toBeGreaterThan((emailBox?.y ?? 0) + (emailBox?.height ?? 0))
+        expect((buttonBox?.y ?? 0)).toBeGreaterThan((passwordBox?.y ?? 0) + (passwordBox?.height ?? 0))
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+        expect(await page.locator("form").getAttribute("action")).toBe("/auth/sign-in?sig=%2BAb")
+        expect(await page.locator('input[name="csrf_token"]').count()).toBe(1)
+        expect((await response?.text())?.includes("<script")).toBe(false)
+        if (name === "mobile") {
+          const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()
+          expect(accessibility.violations).toEqual([])
+        }
+        const screenshotDir = process.env.KOKORO_IAM_UI_SCREENSHOT_DIR
+        if (screenshotDir) {
+          await mkdir(screenshotDir, { recursive: true })
+          await page.screenshot({ path: path.join(screenshotDir, `sign-in-${name}.png`), fullPage: true })
+        }
+
+        const tenant = await page.goto(`http://localhost:${nextPort}/iam/interactions/select-tenant?sig=%2BAb`, {
+          waitUntil: "domcontentloaded",
+        })
+        expect(tenant?.status()).toBe(200)
+        expect(await page.getByRole("heading", { name: "Select tenant" }).count()).toBe(1)
+        expect(await page.getByRole("combobox", { name: "Tenant" }).count()).toBe(1)
+        expect(await page.getByRole("button", { name: "Continue" }).count()).toBe(1)
+        expect(await page.locator("form").getAttribute("action")).toBe("/iam/interactions/select-tenant?sig=%2BAb")
+        if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, `select-tenant-${name}.png`), fullPage: true })
+
+        const consent = await page.goto(`http://localhost:${nextPort}/iam/interactions/consent?sig=%2BAb&scope=openid`, {
+          waitUntil: "domcontentloaded",
+        })
+        expect(consent?.status()).toBe(200)
+        expect(await page.getByRole("heading", { name: "Review requested access" }).count()).toBe(1)
+        expect(await page.getByRole("button", { name: "Agree and continue" }).count()).toBe(1)
+        expect(await page.getByRole("button", { name: "Decline" }).count()).toBe(1)
+        expect(await page.locator("form").getAttribute("action")).toBe("/iam/interactions/consent?sig=%2BAb&scope=openid")
+        if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, `consent-${name}.png`), fullPage: true })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
+        await context.close()
+      }
     } finally {
       await browser.close()
     }

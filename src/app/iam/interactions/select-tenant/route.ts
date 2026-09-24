@@ -1,4 +1,5 @@
 import { consumeIamInteractionCsrf, iamCsrfCookieName, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
 import {
   boundedInteractionForm, csrfCookieValue, escapeInteractionHtml, interactionError,
   interactionMethodNotAllowed, interactionNavigation, interactionUpstreamHeaders, issuerCookieAfter,
@@ -74,9 +75,10 @@ export async function GET(request: Request): Promise<Response> {
     })
     const action = escapeInteractionHtml(`${PAGE_PATH}${context.query}`)
     const choices = tenants.map((tenant) => `<option value="${escapeInteractionHtml(tenant.id)}">${escapeInteractionHtml(tenant.name)}</option>`).join("")
-    const content = tenants.length === 0 ? "<p>No active tenants are available.</p>" :
-      `<label>Tenant <select name="organization_id" required>${choices}</select></label><button type="submit">Continue</button>`
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Select tenant</title></head><body><main><h1>Select tenant</h1><form method="post" action="${action}"><input type="hidden" name="csrf_token" value="${proof.token}"><input type="hidden" name="tenant_ids" value="${escapeInteractionHtml(ids)}">${content}</form></main></body></html>`
+    const content = tenants.length === 0 ? "<p class=\"empty\">No active tenants are available.</p>" :
+      `<label class="field" for="organization_id">Tenant<select id="organization_id" name="organization_id" required>${choices}</select></label><div class="actions single"><button type="submit">Continue</button></div>`
+    const form = `<form class="auth-form" method="post" action="${action}"><input type="hidden" name="csrf_token" value="${escapeInteractionHtml(proof.token)}"><input type="hidden" name="tenant_ids" value="${escapeInteractionHtml(ids)}">${content}</form>`
+    const html = iamInteractionDocument({ title: "Select tenant", heading: "Select tenant", description: "Choose the workspace for this session.", trustedFormHtml: form })
     const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": context.id })
     for (const cookie of native.headers.getSetCookie()) headers.append("set-cookie", cookie)
     headers.append("set-cookie", proof.cookie)

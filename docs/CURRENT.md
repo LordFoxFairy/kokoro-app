@@ -17,6 +17,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
+- 当前工作树为 `/auth/sign-in`、`/iam/interactions/select-tenant|consent` 的服务端 GET 表单加上共享无脚本品牌外壳与响应式样式；Email/Password、Tenant、Consent 仍各自原生 POST，CSRF/签名 query/cookie/owner 校验路径不改。真实 Next+Chromium fixture 在 1440×900、560×600、390×844 验证字段上下排列、label、action、无水平溢出与交互页可达；这只证明 Web-owned issuer 页面视觉与边界，不冒充完整 OIDC/Product Session 闭环。
 - 当前工作树的真实 Chromium 登录切片修复了 `GET /iam/oauth2/authorize` 的浏览器导航断层：IAM owner 实际返回 200 `application/json` `{redirect:true,url}`；Web 只在该固定 route 经原生 header/issuer cookie 和固定同源交互 Location 校验后转为无 body 302。其他 IAM JSON 保持原生，异常 authorize continuation 返回不透传上游 body/cookie 的 502。真实 Next + Chromium fixture 已验证浏览器进入 `/auth/sign-in`；完整 Product Session/Chat 浏览器闭环仍由 Root 独立组合 runner 验收。
 - 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest，首次装载自动发起固定 Product RP OIDC，连接成功前保持品牌过渡状态；失败回跳停止并保留全视口品牌布局，仅出现次级错误和显式重试，不呈现营销导航、中转按钮或 Web 凭据表单。`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时真实请求 Auth.js CSRF/OIDC 并呈现受控错误，不伪造成功。
 - W1D-Web-Gate：`/app` 的访问权只由在线 Product Session 决定；System manifest 为可选展示数据。已认证状态即使用本仓固定品牌/导航装载 live 工作台，有效 manifest 才覆盖动态展示；失败或重试会清除旧站点皮肤，不切到 preview transport。旧 `RuntimeUnavailable` 页面、样式、测试与九语种死文案已删除。当前 Node22 contract/architecture/lint/typecheck、串行 Vitest 1385/1385、build、Playwright 11通过/1既有skip；真实浏览器在已认证探针与 System 503 下仍于 `/app` 显示核心工作台。

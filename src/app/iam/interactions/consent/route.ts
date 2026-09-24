@@ -1,4 +1,5 @@
 import { consumeIamInteractionCsrf, iamCsrfCookieName, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
 import {
   boundedInteractionForm, csrfCookieValue, escapeInteractionHtml, interactionError,
   interactionMethodNotAllowed, interactionNavigation, interactionUpstreamHeaders, prepareInteraction,
@@ -64,7 +65,8 @@ export async function GET(request: Request): Promise<Response> {
       query: context.query, issuerCookie: context.issuerCookie, secureCookies: context.config.secureCookies,
     })
     const items = scope.split(" ").map((item) => `<li>${escapeInteractionHtml(item)}</li>`).join("")
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Review access</title></head><body><main><h1>Review requested access</h1><p>The request below is a preview. The identity provider validates the signed request when you continue.</p><ul>${items}</ul><form method="post" action="${escapeInteractionHtml(`${PAGE_PATH}${context.query}`)}"><input type="hidden" name="csrf_token" value="${proof.token}"><button type="submit" name="decision" value="agree">Agree and continue</button><button type="submit" name="decision" value="decline">Decline</button></form></main></body></html>`
+    const form = `<ul class="scope-list">${items}</ul><form class="auth-form" method="post" action="${escapeInteractionHtml(`${PAGE_PATH}${context.query}`)}"><input type="hidden" name="csrf_token" value="${escapeInteractionHtml(proof.token)}"><div class="actions"><button type="submit" name="decision" value="agree">Agree and continue</button><button class="secondary" type="submit" name="decision" value="decline">Decline</button></div></form>`
+    const html = iamInteractionDocument({ title: "Review access", heading: "Review requested access", description: "The identity provider validates this signed request when you continue.", trustedFormHtml: form })
     return new Response(html, { status: 200, headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": context.id,
       "set-cookie": proof.cookie,

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamCsrfCookieName, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
+import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
@@ -156,7 +157,8 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const proof = await issueIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, secureCookies: config.secureCookies })
     const action = escapeHtml(`${PAGE_PATH}${query}`)
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in</title></head><body><main><h1>Sign in</h1><form method="post" action="${action}"><input type="hidden" name="csrf_token" value="${proof.token}"><label>Email <input name="email" type="email" autocomplete="username" required></label><label>Password <input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></main></body></html>`
+    const form = `<form class="auth-form" method="post" action="${action}"><input type="hidden" name="csrf_token" value="${escapeHtml(proof.token)}"><label class="field" for="email">Email<input id="email" name="email" type="email" autocomplete="username" required></label><label class="field" for="password">Password<input id="password" name="password" type="password" autocomplete="current-password" required></label><div class="actions single"><button type="submit">Sign in</button></div></form>`
+    const html = iamInteractionDocument({ title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.", trustedFormHtml: form })
     return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": id, "set-cookie": proof.cookie } })
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)

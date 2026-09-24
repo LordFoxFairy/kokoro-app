@@ -9,6 +9,9 @@
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
+三条 issuer 交互 GET（sign-in、select-tenant、consent）共用仅服务端的无脚本品牌 HTML/CSS 外壳，
+桌面双区、窄屏单列，字段垂直排列并保留键盘焦点可见；外壳只接收固定文案和调用方已转义的表单片段，
+不处理凭据、CSRF、签名 query 或 POST。表单字段名、action 原始 query 与后续安全校验保持原契约。
 自有 Redis key 保存随机 token 摘要对应的目标 POST method/原始 query/issuer-cookie 绑定摘要，TTL 300 秒；POST
 精确 Origin、Host、URL、Cookie/hidden token 配对后以 `GETDEL` 原子消耗，Redis 故障拒绝。
 `redis@5.12.1` 与本组合 BFF 版本对齐并固定在 manifest/lockfile；仅 server-only
