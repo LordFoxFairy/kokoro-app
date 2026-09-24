@@ -320,7 +320,7 @@ Playwright 运行时检查：`document.documentElement.scrollWidth === clientWid
 2. `workspace.resources` 的数据源是否统一为 System artifact/library，还是同时包含 Storage 文件？前端不应在契约未定前显示删除、替换等动作。
 3. `workspace.connectors` 是否只表示 Hub MCP，还是包含未来外部连接器目录？需要固定 capability key 和权限语义。
 4. `workspace.tasks` 任务列表是否由 Project API 提供，还是继续由 Session conversation 投影？当前列表仍是会话投影，服务端任务状态接入后需要替换 adapter。
-5. 本地未配置 System 时 `/api/system/runtime-manifest` 返回 503，真实认证页面进入配置不可用态；未认证 `/app` 使用显式 preview transport。不能把 fixture 当成真实 live 配置。
+5. 历史审计时本地未配置 System 会使已认证 `/app` 进入配置错误页；现已改为 Product Session 单独闸，System 仅提供可选展示。未认证 `/app` 仍转 `/login`，只有显式本地 preview 才使用 preview transport。
 
 ### 验证结果
 

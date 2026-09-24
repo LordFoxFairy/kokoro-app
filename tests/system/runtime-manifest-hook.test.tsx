@@ -29,6 +29,27 @@ describe("useRuntimeManifest", () => {
     expect(result.current.retry).toEqual(expect.any(Function))
   })
 
+  it("drops stale site branding when a verified manifest later becomes unavailable", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+        productId: "kokoro", locale: "en-US", navigation: [], localeNamespaces: [],
+        theme: { brandName: "Previous Site", primary: "#7c3aed" },
+        featureFlags: [], references: [], configVersion: "1", releaseId: null, digest: "previous",
+      } }), { status: 200 }))
+      .mockRejectedValueOnce(new Error("system unavailable"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const { result } = renderHook(() => useRuntimeManifest())
+    await waitFor(() => expect(result.current.source).toBe("live"))
+    expect(document.documentElement.style.getPropertyValue("--primary")).toBe("#7c3aed")
+
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.source).toBe("error"))
+    expect(result.current.manifest.brand.name).toBe("Kokoro")
+    expect(document.title).toBe("Kokoro Web")
+    expect(document.documentElement.style.getPropertyValue("--primary")).toBe("")
+  })
+
   it("从 preview 切到 live 时先进入 loading，避免 mock 皮肤闪现", async () => {
     const fetchMock = vi.fn().mockImplementation(() => new Promise<Response>(() => undefined))
     vi.stubGlobal("fetch", fetchMock)

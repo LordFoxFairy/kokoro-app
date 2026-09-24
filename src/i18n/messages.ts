@@ -1262,9 +1262,6 @@ export const zh = {
   // 第一个 site AppFrame（System locale 按前缀选择对应 overlay）。
   "firstSite.member": "工作区成员",
   "firstSite.runtimeUnavailable": "实时配置暂时不可用。",
-  "firstSite.runtimeUnavailableDetail": "请稍后重试。为避免跨站点串配，当前不会启动任务。",
-  "firstSite.reload": "重新加载",
-  "firstSite.statusError": "配置不可用",
   "firstSite.unavailable": "不可用",
   "firstSite.personalWorkspace": "个人工作区",
   "firstSite.projectCreatedBy": "由你创建",

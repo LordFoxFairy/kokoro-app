@@ -1,6 +1,6 @@
 # Kokoro User Web 当前状态
 
-状态日期：2026-09-23。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
+状态日期：2026-09-24。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
 W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；后续已发布的旧 generation signout CAS 保持有效。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
 以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh；固定 Web origin 为 HTTPS 或 Web production mode 时带 Secure）和 Web Redis 加密
@@ -17,7 +17,8 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
-- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest 即可渲染 Product RP 登录卡，`/app` 仍需要在线 Product Session 与 System manifest；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时登录按钮仍真实请求 Auth.js CSRF/OIDC，失败以受控 toast 呈现，不伪造成功。
+- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页，`/login` 不依赖 System runtime manifest 即可渲染 Product RP 登录卡，`/app` 仍需在线 Product Session，但 System manifest 仅增强展示，不再阻断核心工作台；`/auth/sign-in` 是 IAM issuer 签名交互，不是 Product 登录页。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。没有后端时登录按钮仍真实请求 Auth.js CSRF/OIDC，失败以受控 toast 呈现，不伪造成功。
+- W1D-Web-Gate：`/app` 的访问权只由在线 Product Session 决定；System manifest 为可选展示数据。已认证状态即使用本仓固定品牌/导航装载 live 工作台，有效 manifest 才覆盖动态展示；失败或重试会清除旧站点皮肤，不切到 preview transport。旧 `RuntimeUnavailable` 页面、样式、测试与九语种死文案已删除。当前 Node22 contract/architecture/lint/typecheck、串行 Vitest 1385/1385、build、Playwright 11通过/1既有skip；真实浏览器在已认证探针与 System 503 下仍于 `/app` 显示核心工作台。
 - 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
 - 新 Product Session cookie 使用加密 HttpOnly 信封、`SameSite=Lax`，固定公开 Web origin 为 HTTPS 或 Web production mode 时设置 `Secure`；浏览器 cookie 不透传给业务上游。旧 sealed session 仅属于待删除旧路径。
 - Product 上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。W1C-2A `/iam` 原生协议例外使用独立 transport，避免合并多个 `Set-Cookie`。

@@ -13,8 +13,18 @@ export type PreviewRuntimeManifest = {
   digest?: string
 }
 
-export const PREVIEW_RUNTIME_MANIFEST: PreviewRuntimeManifest = {
+/** Product-owned presentation before (or without) a System manifest. No fixture capabilities. */
+export const PRODUCT_RUNTIME_MANIFEST: PreviewRuntimeManifest = {
   brand: DEFAULT_BRAND,
+  navigation: [],
+  capabilities: [],
+  locale: "en-US",
+  theme: {},
+  featureFlags: [],
+}
+
+export const PREVIEW_RUNTIME_MANIFEST: PreviewRuntimeManifest = {
+  ...PRODUCT_RUNTIME_MANIFEST,
   navigation: [
     { key: "chat", label: "Chat", icon: "⌁" },
     { key: "library", label: "Library", icon: "▦" },

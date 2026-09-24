@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-import { PREVIEW_RUNTIME_MANIFEST, type PreviewRuntimeManifest, type RuntimeFeatureFlag } from "./preview-runtime"
+import { PREVIEW_RUNTIME_MANIFEST, PRODUCT_RUNTIME_MANIFEST, type PreviewRuntimeManifest, type RuntimeFeatureFlag } from "./preview-runtime"
 import { publicRuntimeManifestSchema } from "./runtime-manifest"
 
 function navigationItems(input: readonly unknown[]): PreviewRuntimeManifest["navigation"] {
@@ -125,10 +125,10 @@ function mergeManifest(input: unknown): PreviewRuntimeManifest | null {
   const logoUrl = brandLogoUrl(parsed.data.data.theme.brandLogoUrl)
 
   return {
-    ...PREVIEW_RUNTIME_MANIFEST,
+    ...PRODUCT_RUNTIME_MANIFEST,
     brand: {
-      name: name ?? PREVIEW_RUNTIME_MANIFEST.brand.name,
-      mark: mark ?? PREVIEW_RUNTIME_MANIFEST.brand.mark,
+      name: name ?? PRODUCT_RUNTIME_MANIFEST.brand.name,
+      mark: mark ?? PRODUCT_RUNTIME_MANIFEST.brand.mark,
       ...(logoUrl ? { logoUrl } : {}),
     },
     locale: parsed.data.data.locale,
@@ -153,7 +153,7 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
   const preview = options.preview ?? (
     process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
   )
-  const [manifest, setManifest] = useState(PREVIEW_RUNTIME_MANIFEST)
+  const [manifest, setManifest] = useState(preview ? PREVIEW_RUNTIME_MANIFEST : PRODUCT_RUNTIME_MANIFEST)
   const [source, setSource] = useState<RuntimeManifestSource>(preview ? "preview" : "loading")
   const [attempt, setAttempt] = useState(0)
   const [retrying, setRetrying] = useState(false)
@@ -213,9 +213,9 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
       })
       .catch((error: unknown) => {
         if ((error as { name?: string }).name === "AbortError") return
-        // A live tenant must never be presented as a fixture after a backend
-        // failure. The preview transport is opt-in and never silently replaces
-        // a failed live tenant manifest.
+        // Clear any previously verified site skin before reporting a failure.
+        // Product defaults are not preview capabilities or a preview transport.
+        setManifest(PRODUCT_RUNTIME_MANIFEST)
         setSource("error")
         setRetrying(false)
       })

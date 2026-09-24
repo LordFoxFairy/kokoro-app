@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation"
 
 import { useRuntimeManifest } from "@/system/use-runtime-manifest"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
+import { DEFAULT_BRAND } from "@/config/brand"
 
 import { useSessionProbe } from "./use-session-state"
-import { RuntimeUnavailable } from "./runtime-unavailable"
 import { RuntimeLoading } from "./runtime-loading"
 import { browserScheduledTaskClient } from "@/ui/shell/page-clients"
 
@@ -16,45 +16,31 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
   const router = useRouter()
   const t = useT()
   const probe = useSessionProbe()
-  // The authenticated workspace must consume the same System skin as the
-  // public/login surfaces; otherwise the product silently falls back to
-  // the default palette after the redirect to /app.
-  // Session probing is asynchronous. Treat the undecided first render as a
-  // local preview so it does not fire a live System request that is guaranteed
-  // to race the probe and leave a misleading 503 in the browser console. Once
-  // the server explicitly confirms authentication, the hook flips to live
-  // mode and fetches the deployment-scoped manifest.
-  const { manifest, source, retry } = useRuntimeManifest({ preview: probe.mode !== "authenticated" })
-  const brandLogoUrl = manifest.brand.logoUrl
+  // Identity is decided only by the Product Session. System supplies optional
+  // presentation after authentication; its outage must not block core Chat or
+  // switch the live transport into preview mode.
+  const { manifest, source } = useRuntimeManifest({ preview: probe.mode !== "authenticated" })
+  const livePresentation = source === "live" && probe.mode === "authenticated"
+  const brand = livePresentation ? manifest.brand : DEFAULT_BRAND
+  const brandLogoUrl = livePresentation ? manifest.brand.logoUrl : undefined
   const state = probe.state
 
   useEffect(() => {
     if (state === "anonymous") router.replace("/login")
   }, [router, state])
 
-  if (state === "checking" || state === "anonymous" || source === "loading") {
+  if (state === "checking" || state === "anonymous") {
     return <RuntimeLoading label={t("shell.loadingApp")} />
   }
-  if (source === "error") {
-    return (
-      <RuntimeUnavailable
-        onRetry={retry}
-        brandName={brandName ?? manifest.brand.name}
-        brandMark={manifest.brand.mark}
-        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
-      />
-    )
-  }
 
-  // The route owns only authentication/runtime wiring. Product layout lives in
-  // the canonical AppFrame block without introducing a runtime product selector.
+  // Product-owned defaults are not preview data. Only a verified live manifest
+  // may override visual presentation or feature flags.
   return (
     <KokoroAppSurface
-      brandName={brandName ?? manifest.brand.name}
-      brandMark={manifest.brand.mark}
+      brandName={brandName ?? brand.name}
+      brandMark={brand.mark}
       {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
-      {...(probe.mode === "preview" ? {} : { navigation: manifest.navigation })}
-      {...(probe.mode === "preview" ? {} : { featureFlags: manifest.featureFlags })}
+      {...(livePresentation ? { navigation: manifest.navigation, featureFlags: manifest.featureFlags } : {})}
       preview={probe.mode === "preview"}
       {...(probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
     />

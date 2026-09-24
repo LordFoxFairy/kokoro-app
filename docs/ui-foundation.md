@@ -32,7 +32,7 @@ Runtime site skin configuration uses the same token names as keys (`primary`, `b
 - The shell fallback is only the neutral shadcn `Empty` composition. It is not a product welcome screen and must not grow site-specific cards, prompts, or navigation; a site that needs a real first-run surface must provide the `emptyState` slot.
 - The desktop Canvas is a resizable third column, so its header uses CSS container queries in addition to the mobile viewport breakpoint. Components must respond to the width they actually receive, not only to `window.innerWidth`.
 - The Composer follows the same rule: model/agent/mode controls wrap from the Composer container width when the Canvas reduces the main column, while preserving the send action and focus ring.
-- Live runtime-manifest failure is a shell gate, not a theme fallback: `AppGate`, `HomeGate`, and `LoginPanel` render the shared shadcn `RuntimeUnavailable` surface and expose an explicit retry action.
+- Product Session alone gates the live workbench. A verified System manifest may enhance presentation; failure leaves Kokoro-owned brand/navigation in place and does not switch the live transport to preview.
 - CSS Modules do not add overlay `z-index`, duplicate modal backdrops, or custom positioning for Radix content.
 - Dynamic values such as rail width, canvas width, and progress width are the only inline styles allowed in product code.
 - Controlled overlays receive an optional shell scope for fallback focus recovery; document-wide queries must not move focus into another independently mounted Site Web instance.

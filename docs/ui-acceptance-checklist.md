@@ -56,7 +56,7 @@
 ## 公开入口
 
 - [x] 营销首页 1280×720 实机检查：顶栏、Hero Composer、能力 Tabs、FAQ Accordion 与 CTA 无横向溢出；Hero Enter/开始按钮进入登录流程并保留草稿，FAQ 展开/收起使用真实 Accordion 状态。
-- [x] 营销首页控制台无 error/warning；登录配置不可用时显示明确的 RuntimeUnavailable Alert 与重试按钮，不伪造 OAuth 或密码登录入口。
+- [x] 营销首页控制台无 error/warning；登录页使用固定单租户品牌且不请求 System manifest，不伪造 OAuth 或密码登录入口。
 
 ## 侧栏
 
@@ -163,7 +163,7 @@
 - [x] 命令菜单、移动导航开关和工作区分组文案在全部上线语言中独立覆盖，不会在切换语言后回退成中文。
 - [x] 全部上线语言覆盖当前 zh 源的 100% 消息键；Canvas、作品库、账单、套餐、MCP、团队和分享错误/操作态不再回退中文。
 - [x] Canvas/作品预览的文本与媒体加载失败都提供 shadcn Alert + 可操作的“重新加载预览”，重试会重新发起鉴权请求并释放旧资源。
-- [x] `/login` 运行时配置不可用态在 280px 下仍保持居中 Card、可读 Alert 和可触达 Reload 按钮，不出现水平滚动。
+- [x] `/login` 在 280px 下仍保持可读登录卡与可触达提交按钮，不出现水平滚动；System 故障不替换为配置错误页。
 - [x] Settings 移动端的 ScrollArea 内容 wrapper 不再继承 Radix 的 `display: table; min-width: 100%`，团队、技能、连接等表单在 320px 宽度下不会被右侧 Dialog 边界裁切。
 - [x] Settings 从深链打开、没有真实 DialogTrigger 时，关闭按钮、Escape 和背幕关闭仍把焦点交给 Composer，不落到 document.body。
 - [x] Settings 打开后跨越 `767px` 断点时，原移动 SidebarTrigger 变为零尺寸也不会被重新聚焦；关闭后改回当前可见 Composer。
@@ -315,7 +315,7 @@
 - `output/playwright/canvas-download-error-1440-current.png` — 本地预览端点不可用时，Canvas 下载按钮进入“重新下载”错误态，错误提示和“重新加载预览”均保持在内容区内，不吞掉失败状态。
 - `output/playwright/login-390-current.png` — System/IAM runtime manifest 不可用时，登录页使用 shadcn Card + destructive Alert 呈现明确错误，并保留“重新加载”恢复动作，不启动任务。
 - `output/playwright/login-runtime-error-390-final.png` — runtime error 态进一步统一 MarketingTopBar 品牌头、卡片层级和错误说明，移除重复标题，移动端仍保持明确重试入口。
-- `src/ui/auth/runtime-unavailable.tsx` + `runtime-unavailable.module.css` — 配置不可用态复用营销顶栏和 shadcn Card/Alert/Button，登录、首页、工作区三条失败路径共享同一视觉与品牌契约。
+- `src/ui/auth/app-gate.tsx` — 认证闸只依赖 Product Session；System 展示配置不可达时继续渲染产品默认工作台，不启用 preview transport。
 - `output/playwright/root-390-current.png` — 根入口按站点路由进入 `/app`，首屏仍保持 Kokoro first-site 空工作区与 Composer，不出现旧布局回退。
 - `src/dev/preview-transport.ts` + `tests/dev/preview-transport.test.ts` — HITL 续流使用 session seq 生成全局唯一 event_id；批准后真实走 `tool.returned → message.completed → run.completed`，避免重复 event_id 被 reducer 幂等去重后卡在“已记录你的决定”。
 - `output/playwright/marketing-1440-current.png` / `marketing-390-current.png` — first-site 营销首页桌面/移动首屏；Hero 输入、能力 Tabs、页内信息架构与响应式卡片保持稳定，390px 下 `scrollWidth === innerWidth`。
@@ -325,7 +325,7 @@
 - `output/playwright/settings-touch-targets-390.png` + `src/ui/settings/settings-modal.module.css` + `src/ui/settings/settings-sections.module.css` — 390px 设置中心的九枚横向 Tab、主题 ToggleGroup 均统一为 44px 触控命中区；横向导航仍可滚动，内容宽度保持在视口内。
 - `output/playwright/settings-tab-rail-280-safe.png` + `src/ui/settings/settings-modal.module.css` — 修复 280px Settings TabList 的 `justify-content:center` 造成的负起点与 close 覆盖问题；TabList 现在从左起滚动，右侧安全边界与 44px close 热区严格分离。
 - `output/playwright/action-targets-280.png` + `src/features/app/kokoro-welcome.module.css` + `src/ui/composer/composer.module.css` — 280px 极窄视口下六个首屏动作、模式选择、放大编辑和发送按钮均保持 44px 命中区；Composer 不遮挡最后一个动作，页面仍无横向溢出。
-- `src/ui/marketing/marketing-top-bar.module.css` + `src/ui/marketing/landing-page.module.css` + `src/ui/auth/runtime-unavailable.module.css` — 移动营销页/登录页的导航 Sheet 关闭、能力 Tab、Hero 开始、导航入口和运行时重试按钮统一达到 44px；Sheet 展开后的链接也保持完整触控热区。
+- `src/ui/marketing/marketing-top-bar.module.css` + `src/ui/marketing/landing-page.module.css` — 移动营销页/登录页的导航 Sheet 关闭、能力 Tab、Hero 开始与导航入口达到 44px；Sheet 展开后的链接保持完整触控热区。
 - `src/components/ui/dialog.tsx` + `src/components/ui/sheet.tsx` + `src/ui/composer/composer.module.css` — shadcn Dialog/Sheet 的移动关闭按钮与放大编辑收起按钮统一为 44px；Command Menu、Settings、营销导航和 Composer 共用同一 overlay/action 触控底座。
 - `output/playwright/marketing-action-targets-390.png` — 营销首站 390px 真实浏览器截图；Hero 标签、能力 Tab、CTA、页脚链接和移动导航入口均保持完整触控热区，`scrollWidth === innerWidth`。
 - `output/playwright/desktop-brand-consistency-1440.png` + `src/components/blocks/workspace-rail/workspace-rail.tsx` — 1440px 首站桌面 Rail 的产品品牌、底部身份和移动 Header 统一为 Kokoro；preview Team fixture 只用于 Settings 数据，不再污染产品壳身份。
