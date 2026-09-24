@@ -3,6 +3,13 @@ import type { NextConfig } from "next"
 const configuredDevOrigin = process.env.KOKORO_DOMAIN?.trim()
 
 const nextConfig: NextConfig = {
+  // Next dev logs the full incoming URL by default. Verification links carry
+  // signed tokens in the query, so omit only this exact browser-private path.
+  logging: {
+    incomingRequests: {
+      ignore: [/^\/iam\/verify-email(?:\?.*)?$/u],
+    },
+  },
   // Keep the configured local hostname usable in desktop QA. The wildcard
   // `*.localhost` resolves to loopback without a hosts-file entry. Do not
   // bake a production hostname into the Next config.

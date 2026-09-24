@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
-import { browserAuthorizeResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
+import { browserAuthorizeResponse, browserIamGetResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -89,20 +89,21 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (rawPath !== expectedPath) return errorResponse("iam_relay_route_not_found", 404, id)
   const route = resolveBrowserIamGet(rawTarget, request.method)
   if (route === null) return errorResponse("iam_relay_route_not_found", 404, id)
+  const browserResponse = (response: Response): Response => browserIamGetResponse(response, route.relativePath)
   if (incomingHeaderBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes) {
-    return errorResponse("iam_relay_request_too_large", 413, id)
+    return browserResponse(errorResponse("iam_relay_request_too_large", 413, id))
   }
-  if (request.headers.has("authorization")) return errorResponse("iam_relay_credential_rejected", 403, id)
+  if (request.headers.has("authorization")) return browserResponse(errorResponse("iam_relay_credential_rejected", 403, id))
   const config = iamRelayConfig(process.env)
-  if (config === null) return errorResponse("iam_relay_unavailable", 503, id)
-  if (!matchesCanonicalWebRequest(request, config, "GET")) return errorResponse("iam_relay_origin_rejected", 403, id)
+  if (config === null) return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
+  if (!matchesCanonicalWebRequest(request, config, "GET")) return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
   if (route.relativePath === "/oauth2/end-session") {
     const query = new URLSearchParams(route.query)
     const clientId = process.env.KOKORO_OIDC_CLIENT_ID?.trim()
     if (!clientId || [...query.keys()].length !== 2 || query.getAll("client_id").length !== 1 ||
       query.getAll("post_logout_redirect_uri").length !== 1 || query.get("client_id") !== clientId ||
       query.get("post_logout_redirect_uri") !== `${config.webOrigin}/auth/sign-in`) {
-      return errorResponse("iam_logout_query_rejected", 400, id)
+      return browserResponse(errorResponse("iam_logout_query_rejected", 400, id))
     }
   }
   const origin = request.headers.get("origin")
@@ -110,15 +111,15 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (
     request.headers.has("transfer-encoding") || request.body !== null ||
     (contentLength !== null && contentLength !== "0")
-  ) return errorResponse("iam_relay_body_rejected", 400, id)
+  ) return browserResponse(errorResponse("iam_relay_body_rejected", 400, id))
 
   const cookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
-  if (cookie === null) return errorResponse("iam_relay_cookie_invalid", 400, id)
+  if (cookie === null) return browserResponse(errorResponse("iam_relay_cookie_invalid", 400, id))
 
   const headers = new Headers()
   const accept = request.headers.get("accept")
   if (accept !== null) {
-    if (!safeShortHeader(accept)) return errorResponse("iam_relay_header_invalid", 400, id)
+    if (!safeShortHeader(accept)) return browserResponse(errorResponse("iam_relay_header_invalid", 400, id))
     headers.set("accept", accept)
   }
   if (origin !== null) headers.set("origin", origin)
@@ -137,10 +138,10 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
     const response = route.relativePath === "/oauth2/authorize" ? browserAuthorizeResponse : nativeIamResponse
-    return response(upstream, config.webOrigin, config.secureCookies, id)
-      ?? errorResponse("iam_relay_response_invalid", 502, id)
+    return browserResponse(response(upstream, config.webOrigin, config.secureCookies, id)
+      ?? errorResponse("iam_relay_response_invalid", 502, id))
   } catch {
-    return errorResponse("iam_relay_unavailable", 503, id)
+    return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
   }
 }
 

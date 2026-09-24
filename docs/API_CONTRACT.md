@@ -6,13 +6,43 @@
 W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。
 普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合已验；旧 route/Team 路径删除未完成。
 
+## R2e-IAM-VERIFY-WEB：邮箱验证 browser-private 增量（本提交已实现，真 IAM 待验）
+
+起始 Web `main` 基线 `0a093f65bdc4990b956b10ae534198e3b4b5c3b5` 消费 BFF policy `1.0.0`、
+`eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，artifact SHA-256
+`ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；其浏览器 GET
+白名单缺 `/iam/verify-email`。BFF owner `main` `928ada2880f222b4406b13144f7dfc7be43c8099`
+已发布 `contract/iam-relay-policy.json` version `1.1.0`、SHA-256
+`67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6`；Web 本提交只读固定
+该 blob 与 commit，不编辑 BFF policy，不建立第二份可编辑 IAM contract。IAM owner
+`e36da9ecf8d62a364182949817431a8e2329d50a` 拥有 Better Auth 1.7.3 验证 token/邮箱状态，
+Web 不解释 token 或验证结果。此增量是 Web `browser-private`，不进入 BFF public `/v1` OpenAPI。
+
+| Web 已实现 operation | 请求与原生响应 |
+| --- | --- |
+| `GET /iam/verify-email?token=...&callbackURL=...` | 仅此精确路径与 GET；Next 规范化后恰好一个非空 `token`、最多一个 `callbackURL`，重复或额外键在 Web 本地拒绝，零 BFF socket。纯函数拒绝其输入中的编码键名；真实 Next 可将 `%74oken` 规范化成相同 `token`，唯一键可接受，与字面键并存则按重复拒绝。Web 只保证支持形状的键值语义，BFF 保持收到的 Web URL query。`token` 为 IAM 有期签名 JWT；`callbackURL` 不是 Web/BFF 对上游或 `Location` 的授权，Web 不解释/记录 token。错误方法、路径编码 alias、畸形/超限 query 不形成 BFF socket。 |
+| IAM 原生 200/302/失败 | 原生 status/body 与已允许 header/cookie 保持；302 `Location` 必须通过现有固定 Web origin、精确已批准路径检查，`/auth/sign-in` 是邮件 bootstrap 指定的返回路径，外域/任意新路径拒绝，不自动跟随。此精确路径的浏览器响应（含 Web 本地拒绝/上游失败）无论上游缺失或给出可缓存 `Cache-Control`，Web 固定覆盖为 `no-store` 并合成 `Referrer-Policy: no-referrer`；其他 GET 不变。 |
+
+BFF policy 的 `responseHeaders` 仍不含 `referrer-policy`；BFF 对此敏感 GET 虽已合成
+`Cache-Control: no-store`/`Referrer-Policy: no-referrer`，Web 不能依赖普通 header 白名单透传后者，
+也不应为它泛化白名单；Web Route Handler 在已准入路径合成，最终 `src/proxy.ts` 在通用安全头后
+对精确 pathname 再覆盖，保证 Next 最终浏览器响应而非仅 helper 对象满足契约。浏览器入站
+`Authorization`、Product Session/Auth.js cookie、任意身份 header
+不能作为 IAM 凭据；仅已有 issuer cookie 过滤继续有效。Web 自有拒绝维持受控 code、`x-request-id`、
+`no-store`/`no-referrer`，不泄露 query、token、原生错误 body。该 GET 不生成 Product Session、Web Redis key、SQL、
+receipt 或缓存，不增加 POST、sign-up、组织写入和通配 `/iam/*`。验证先以固定 artifact digest/provenance
+及 contract/architecture 测试拒绝来源漂移，再用 unit/真实 Next HTTP 覆盖支持的 query 形状、同源 302、
+缺失/恶意缓存头、外域/编码/错方法零上游；真实 IAM 邮件点击及浏览器 Referer 由 Root 组合门另验。
+Next 开发模式的 `logging.incomingRequests.ignore` 仅精确抑制 `/iam/verify-email`（含 query）的
+框架 stdout 请求行；不改变其他路由日志，也不是 TLS 前置 access log、浏览器历史或邮件系统的保密声明。
+
 ## W1C-2：同源 IAM 与 Product Session 契约（S1 已发布并完成三仓组合）
 
 ### 版本、来源和可见性
 
 当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF。普通 BFF `/v1` adapter 已在线核验 Product Session generation 并仅发送一个 access Bearer；S2-A 的真实三仓业务代理链仍待验收。
-BFF relay 固定policy来源 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
-`contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
+BFF relay 在 W1C-2 起始基线固定来源 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
+`contract/iam-relay-policy.json` version `1.0.0` 当时 blob SHA-256 是
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`，
 引用 IAM owner `e36da9ecf8d62a364182949817431a8e2329d50a`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256

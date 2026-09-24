@@ -4,6 +4,14 @@ import type { IamRelayUpstream } from "./iam-relay-transport"
 const LOGOUT_CSP = "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 const COOKIE_ATTRIBUTES = new Set(["path", "httponly", "samesite", "secure", "expires", "max-age"])
 
+export function browserIamGetResponse(response: Response, relativePath: string): Response {
+  if (relativePath === "/verify-email") {
+    response.headers.set("cache-control", "no-store")
+    response.headers.set("referrer-policy", "no-referrer")
+  }
+  return response
+}
+
 function safeHeaderValue(value: string, maxBytes = 4096): boolean {
   return Buffer.byteLength(value) <= maxBytes && /^[\x20-\x7e]*$/u.test(value)
 }

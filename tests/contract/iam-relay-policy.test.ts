@@ -19,9 +19,10 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "eb1eb2926d08b8a3779898b2c31e604a8585ec8b",
-      policySha256: "ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53",
+      ownerCommit: "928ada2880f222b4406b13144f7dfc7be43c8099",
+      policySha256: "67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6",
     })
+    expect(IAM_RELAY_POLICY.version).toBe("1.1.0")
     expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("e36da9ecf8d62a364182949817431a8e2329d50a")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
@@ -50,6 +51,7 @@ describe("fixed BFF IAM relay policy consumer", () => {
       "/iam/oauth2/end-session?client_id=web",
       "/iam/get-session",
       "/iam/organization/list",
+      "/iam/verify-email?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in",
     ]) {
       expect(resolveBrowserIamGet(path, "GET"), path).not.toBeNull()
     }
@@ -59,6 +61,9 @@ describe("fixed BFF IAM relay policy consumer", () => {
       ["/iam/oauth2/end-session/confirm", "GET"],
       ["/iam/oauth2/authorize", "POST"],
       ["/iam/jwks", "POST"],
+      ["/iam/verify-email", "POST"],
+      ["/iam/%76erify-email", "GET"],
+      ["/iam/Verify-email", "GET"],
       ["/iam/unknown", "GET"],
       ["/iam/JWKS", "GET"],
       ["/iam//jwks", "GET"],
@@ -69,6 +74,14 @@ describe("fixed BFF IAM relay policy consumer", () => {
       expect(resolveBrowserIamGet(path, method), `${method} ${path}`).toBeNull()
     }
     expect(resolveBrowserIamGet(`/iam/jwks?x=${"a".repeat(IAM_RELAY_POLICY.maxQueryBytes)}`, "GET")).toBeNull()
+    expect(resolveBrowserIamGet("/iam/verify-email?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in", "GET"))
+      .toEqual({ relativePath: "/verify-email", query: "?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in" })
+    for (const query of [
+      "", "?token=", "?token=one&token=two", "?token=one&callbackURL=%2Fauth&callbackURL=%2Fapp",
+      "?%74oken=one", "?token=one&%63allbackURL=%2Fauth", "?token=one&extra=one",
+    ]) {
+      expect(resolveBrowserIamGet(`/iam/verify-email${query}`, "GET"), query).toBeNull()
+    }
   })
 
   it("keeps only exact issuer cookies and rejects ambiguous duplicates", () => {

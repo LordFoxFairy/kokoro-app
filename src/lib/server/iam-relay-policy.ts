@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "eb1eb2926d08b8a3779898b2c31e604a8585ec8b",
-  policySha256: "ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53",
+  ownerCommit: "928ada2880f222b4406b13144f7dfc7be43c8099",
+  policySha256: "67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -34,13 +34,14 @@ const BROWSER_GET_PATHS = new Set([
   "/oauth2/end-session",
   "/get-session",
   "/organization/list",
+  "/verify-email",
 ])
 
 export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   if (typeof value !== "object" || value === null) throw new Error("invalid IAM relay policy snapshot")
   const policy = value as Partial<IamRelayPolicy>
   if (
-    policy.version !== "1.0.0" ||
+    policy.version !== "1.1.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
     typeof policy.routes !== "object" || policy.routes === null ||
     !Array.isArray(policy.cookieNames) || !Array.isArray(policy.cookieNamePrefixes) ||
@@ -62,6 +63,27 @@ export const IAM_RELAY_POLICY = validateIamRelayPolicySnapshot(policySnapshot)
 
 export type BrowserIamGet = Readonly<{ relativePath: string; query: string }>
 
+function validVerifyEmailQuery(query: string): boolean {
+  if (!query.startsWith("?")) return false
+  let tokenCount = 0
+  let callbackCount = 0
+  for (const pair of query.slice(1).split("&")) {
+    const separator = pair.indexOf("=")
+    if (separator < 1) return false
+    const name = pair.slice(0, separator)
+    if (name === "token") {
+      tokenCount += 1
+      if (pair.slice(separator + 1) === "") return false
+    } else if (name === "callbackURL") {
+      callbackCount += 1
+    } else {
+      return false
+    }
+    if (tokenCount > 1 || callbackCount > 1) return false
+  }
+  return tokenCount === 1
+}
+
 export function resolveBrowserIamGet(rawTarget: string, method: string): BrowserIamGet | null {
   if (
     method !== "GET" || !rawTarget.startsWith("/iam/") || rawTarget.startsWith("//") ||
@@ -76,6 +98,7 @@ export function resolveBrowserIamGet(rawTarget: string, method: string): Browser
   ) return null
   const relativePath = path.slice("/iam".length)
   if (!BROWSER_GET_PATHS.has(relativePath) || !IAM_RELAY_POLICY.routes[relativePath]?.includes("GET")) return null
+  if (relativePath === "/verify-email" && !validVerifyEmailQuery(query)) return null
   return { relativePath, query }
 }
 

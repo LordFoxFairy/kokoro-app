@@ -18,6 +18,10 @@ export function proxy(request: NextRequest): NextResponse {
   for (const [name, value] of Object.entries(responseSecurityHeaders)) {
     response.headers.set(name, value)
   }
+  if (request.nextUrl.pathname === "/iam/verify-email") {
+    response.headers.set("Cache-Control", "no-store")
+    response.headers.set("Referrer-Policy", "no-referrer")
+  }
   if (shouldDisableCaching(request.nextUrl.pathname)) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")
     response.headers.set("Vary", "Cookie")

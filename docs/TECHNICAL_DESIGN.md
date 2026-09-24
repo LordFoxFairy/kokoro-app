@@ -45,6 +45,53 @@ IAM 实际 ID token 签名算法固定为 EdDSA；Auth.js client metadata 显式
 Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器中断时当前 BFF socket 即销毁、
 后续 backchannel 不发起；不改 `openid-client` 全局默认或绕开验证型 callback。
 
+## R2e-IAM-VERIFY-WEB：邮箱验证链接的同源消费设计（本提交已实现，真 IAM 待验）
+
+**起始态与来源。** Web `main` 基线 `0a093f65bdc4990b956b10ae534198e3b4b5c3b5` 的
+`src/generated/iam-relay-policy.json` 及 `src/lib/server/iam-relay-policy.ts` 仍固定 BFF
+`eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、policy `1.0.0`、blob SHA-256
+`ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；浏览器 GET 集合没有
+`/verify-email`，正式邮件链接 `${KOKORO_WEB_ORIGIN}/iam/verify-email?<query>` 在基线不可达。BFF owner
+已在 `main` `928ada2880f222b4406b13144f7dfc7be43c8099` 发布 policy `1.1.0` artifact，SHA-256
+`67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6`，仅新增精确
+`GET /verify-email`；IAM owner commit 仍是 `e36da9ecf8d62a364182949817431a8e2329d50a`。
+本提交已固定该 BFF blob/commit 并增加浏览器入口；真 IAM 邮件点击与完整登录仍待组合验证。
+
+**Owner 与放置。** IAM 独占 Better Auth 1.7.3 有期签名 JWT 的签发/校验、`emailVerified` 幂等状态
+和审计；BFF 独占 browser-private relay policy 与上游敏感响应安全头；Web 仅拥有浏览器 GET 准入和
+同源响应。本片以 BFF 固定 blob 字节替换现有 `src/generated/iam-relay-policy.json`，在现有
+`src/lib/server/iam-relay-policy.ts` 更新版本/provenance/精确 GET 集合，在现有
+`src/lib/server/iam-relay-response.ts` 对已准入 `relativePath === "/verify-email"` 的上游响应
+固定合成 `Cache-Control: no-store` 与 `Referrer-Policy: no-referrer`；同一路径的 Web 自有拒绝/失败
+也固定这两个响应头。既有 `src/app/iam/[...path]/route.ts` 把已准入的 `relativePath` 传给
+response 层并将 handler 可见 query 送入 BFF，不新建 route 或扩大其他 GET 语义。
+Next 最终响应还会经过现有 `src/proxy.ts` 的全局安全头；该层须在通用写入后仅对精确
+`/iam/verify-email` pathname 再固定 `no-store`/`no-referrer`，否则通用
+`Referrer-Policy: strict-origin-when-cross-origin` 会覆盖 Route Handler 的更严格值。
+选择现有 policy/response 边界而不新建 auth proxy 或全局 security header：后两者会扩大无关路径、
+引入第二准入事实或改变其他响应。BFF artifact 的 `responseHeaders` **没有** `referrer-policy`，
+Web 不泛化其白名单、不修改 BFF owner contract，而是在此单一路径合成浏览器安全头。
+
+**传输、失败与验证。** 保持 `Browser → Web → BFF → IAM`；Web 仅检查验证 GET 的 query 形状：
+规范化后恰好一个非空 `token`、最多一个 `callbackURL`，拒绝重复和额外键；纯函数对 handler 可见的
+编码键名拒绝，但 Next 可在 handler 前将 `%74oken` 规范化为相同 `token`，此时合法唯一键可接受，
+与字面键并存形成重复则拒绝。不解析 token 内容或从 callbackURL 选择目标 origin；只承诺支持形状的
+键值语义保持，BFF 对收到的 Web URL query 不再重排。原生 302 仅接受 BFF/Web 现有的固定 Web origin、
+已批准 `/auth/sign-in` 等精确 Location；外域、编码 alias、错误方法在 Web/BFF 准入失败，不自动跟随
+redirect。该精确路径的 Web 浏览器响应（含本地拒绝与上游失败）均固定这两个安全头，覆盖缺失或可缓存的
+上游 `Cache-Control`；其他 GET 保持原有 header 行为。浏览器 `Authorization`/Product cookie 不入 IAM，
+issuer cookie 仍按既有白名单。Next 16.2.6 开发模式默认会把完整 incoming URL 输出到 stdout；现有
+`next.config.ts` 只对锚定 `/iam/verify-email` 路径及其 query 使用 `logging.incomingRequests.ignore`，
+其余请求的开发日志不变。这只抑制 Next 自带 incoming log，不覆盖 TLS 前置 access log、浏览器历史
+或外部邮件系统。此切片不开放注册/组织写入、POST、通配路由或新身份/session owner，
+不增加 Web SQL、Redis key、事务或缓存；请求取消和现有大小/时间预算不变。代码测试先 RED 后
+GREEN，覆盖固定来源 digest/version、支持的 token/callbackURL query 与重复键零 BFF socket、
+200/302 缺头及恶意缓存值、同源 302、外域/编码/错方法
+零上游 socket；Root 已执行 Node22 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、
+`tsc --noEmit`、全量 `pnpm test` 及聚焦真 Next HTTP/Chromium；为不触用户 3310 共享 `.next`，
+`pnpm typecheck` 的 Next typegen 与正式 `pnpm build` 待隔离验证。Root 另需在正式来源验证真实邮件点击，
+fixture 不能替代 IAM JWT 和完整登录组合。
+
 ## W1C-2：OIDC RP、Product Session 与同源 IAM 边界
 
 ### 当前事实与发布前置
@@ -54,8 +101,8 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
-`contract/iam-relay-policy.json` 当前 SHA-256 为
+BFF relay 在 W1C-2 起始基线固定来源 commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
+`contract/iam-relay-policy.json` 当时 SHA-256 为
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；policy version `1.0.0`
 固定 IAM owner commit `e36da9ecf8d62a364182949817431a8e2329d50a`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，

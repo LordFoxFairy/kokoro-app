@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { cp, mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
@@ -175,6 +175,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let nextOutput = ""
   let fixtureRoot: string | undefined
   const receivedPaths: string[] = []
+  const receivedCookies: Array<string | undefined> = []
   const receivedBodies: string[] = []
   const issuedCsrfTokens = new Set<string>()
   let signInStatus = 200
@@ -196,6 +197,12 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let consentPayload: unknown = { redirect: true, url: "" }
   let consentCookies: string[] = []
   let sessionRequired = false
+  let verifyEmailStatus = 200
+  let verifyEmailLocation = "/auth/sign-in"
+  let verifyEmailCacheControl: string | undefined
+  let verifyEmailReferrerPolicy: string | undefined
+  let verifyEmailContentType = "text/plain"
+  let verifyEmailBody = "verified"
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
 
   async function ownCsrfKeys(): Promise<string[]> {
@@ -261,6 +268,16 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       fixtureRoot = await createIsolatedNextFixture(projectRoot)
       bff = createServer((request, response) => {
         receivedPaths.push(request.url ?? "")
+        receivedCookies.push(request.headers.cookie)
+        if (request.url?.startsWith("/iam/verify-email")) {
+          response.writeHead(verifyEmailStatus, {
+            ...(verifyEmailStatus === 302 ? { location: verifyEmailLocation } : { "content-type": verifyEmailContentType }),
+            ...(verifyEmailCacheControl === undefined ? {} : { "cache-control": verifyEmailCacheControl }),
+            ...(verifyEmailReferrerPolicy === undefined ? {} : { "referrer-policy": verifyEmailReferrerPolicy }),
+          })
+          response.end(verifyEmailStatus === 302 ? "" : verifyEmailBody)
+          return
+        }
         if (request.url?.startsWith("/iam/oauth2/authorize?")) {
           response.writeHead(200, {
             "content-type": "application/json",
@@ -385,6 +402,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
 
   beforeEach(() => {
     receivedPaths.length = 0
+    receivedCookies.length = 0
     receivedBodies.length = 0
     signInStatus = 200
     authorizePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/sign-in?sig=%2BAb` }
@@ -405,6 +423,12 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     consentPayload = { redirect: true, url: `http://localhost:${nextPort}/api/auth/callback/kokoro-iam?code=secret-code` }
     consentCookies = []
     sessionRequired = false
+    verifyEmailStatus = 200
+    verifyEmailLocation = "/auth/sign-in"
+    verifyEmailCacheControl = undefined
+    verifyEmailReferrerPolicy = undefined
+    verifyEmailContentType = "text/plain"
+    verifyEmailBody = "verified"
   })
 
   afterAll(cleanupResources)
@@ -547,6 +571,133 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(JSON.parse(attacker.body)).toMatchObject({ error: { code: "iam_relay_origin_rejected" } })
     expect(receivedPaths).toEqual([])
   })
+
+  it("keeps verification query bytes and fixes sensitive response headers without changing other GETs", async () => {
+    const query = "?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in"
+    const missing = await rawHttp(nextPort, `/iam/verify-email${query}`, undefined, undefined, {
+      cookie: "kokoro_session=product; kokoro-issuer.session_token=issuer",
+    })
+    expect(missing.status).toBe(200)
+    expect(missing.body).toBe("verified")
+    expect(missing.headers["cache-control"]).toBe("no-store")
+    expect(missing.headers["referrer-policy"]).toBe("no-referrer")
+    expect(receivedPaths.splice(0)).toEqual([`/iam/verify-email${query}`])
+    expect(receivedCookies.splice(0)).toEqual(["kokoro-issuer.session_token=issuer"])
+
+    verifyEmailCacheControl = "public, max-age=3600"
+    verifyEmailReferrerPolicy = "unsafe-url"
+    const poisoned = await rawHttp(nextPort, `/iam/verify-email${query}`)
+    expect(poisoned.headers["cache-control"]).toBe("no-store")
+    expect(poisoned.headers["referrer-policy"]).toBe("no-referrer")
+    expect(receivedPaths.splice(0)).toEqual([`/iam/verify-email${query}`])
+
+    const jwks = await rawHttp(nextPort, "/iam/jwks")
+    expect(jwks.status).toBe(200)
+    expect(jwks.headers["referrer-policy"]).not.toBe("no-referrer")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/jwks"])
+  })
+
+  it("omits the verification token from Next development incoming-request logs only", async () => {
+    const token = `verify-log-${randomUUID()}`
+    const marker = `ordinary-log-${randomUUID()}`
+    const verification = await rawHttp(nextPort, `/iam/verify-email?token=${token}`)
+    const ordinary = await rawHttp(nextPort, `/iam/jwks?probe=${marker}`)
+    expect(verification.status).toBe(200)
+    expect(ordinary.status).toBe(200)
+    expect(receivedPaths.splice(0)).toEqual([
+      `/iam/verify-email?token=${token}`,
+      `/iam/jwks?probe=${marker}`,
+    ])
+    for (let attempt = 0; attempt < 20 && !nextOutput.includes(marker); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(nextOutput).toContain(marker)
+    expect(nextOutput).not.toContain(token)
+  })
+
+  it("accepts only fixed-origin verification redirects and fails closed without leaking Location", async () => {
+    verifyEmailStatus = 302
+    verifyEmailLocation = `http://localhost:${nextPort}/auth/sign-in?from=verified`
+    verifyEmailCacheControl = "public"
+    const accepted = await rawHttp(nextPort, "/iam/verify-email?token=one")
+    expect(accepted.status).toBe(302)
+    expect(accepted.headers.location).toBe(verifyEmailLocation)
+    expect(accepted.headers["cache-control"]).toBe("no-store")
+    expect(accepted.headers["referrer-policy"]).toBe("no-referrer")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/verify-email?token=one"])
+
+    verifyEmailLocation = "https://evil.example/auth/sign-in?token=one"
+    const rejected = await rawHttp(nextPort, "/iam/verify-email?token=one")
+    expect(rejected.status).toBe(502)
+    expect(rejected.headers.location).toBeUndefined()
+    expect(rejected.body).not.toContain("evil.example")
+    expect(rejected.headers["cache-control"]).toBe("no-store")
+    expect(rejected.headers["referrer-policy"]).toBe("no-referrer")
+    expect(receivedPaths.splice(0)).toEqual(["/iam/verify-email?token=one"])
+  })
+
+  it("rejects verification aliases, methods and credentials before the BFF socket", async () => {
+    const alias = await rawHttp(nextPort, "/iam/%76erify-email?token=one")
+    const duplicate = await rawHttp(nextPort, "/iam/verify-email?token=one&callbackURL=%2Fauth&token=two")
+    const encodedKey = await rawHttp(nextPort, "/iam/verify-email?%74oken=one")
+    const normalizedDuplicate = await rawHttp(nextPort, "/iam/verify-email?token=one&%74oken=two")
+    const extra = await rawHttp(nextPort, "/iam/verify-email?token=one&extra=one")
+    const empty = await rawHttp(nextPort, "/iam/verify-email?token=")
+    const wrongMethod = await rawPost(nextPort, "/iam/verify-email?token=one", "x=y", {
+      origin: `http://localhost:${nextPort}`,
+    })
+    const credential = await rawHttp(nextPort, "/iam/verify-email?token=one", undefined, undefined, {
+      authorization: "Bearer attacker",
+      cookie: "kokoro_session=product",
+    })
+    expect(alias.status).toBe(404)
+    expect(encodedKey.status).toBe(200)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/verify-email?token=one"])
+    expect([duplicate.status, normalizedDuplicate.status, extra.status, empty.status]).toEqual([404, 404, 404, 404])
+    expect(wrongMethod.status).toBe(405)
+    expect(credential.status).toBe(403)
+    expect(credential.headers["cache-control"]).toBe("no-store")
+    expect(credential.headers["referrer-policy"]).toBe("no-referrer")
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("does not send the verification token URL as Referer on real Chromium same-origin navigation", async () => {
+    verifyEmailContentType = "text/html"
+    verifyEmailBody = '<a href="/iam/jwks">continue</a>'
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage()
+      await page.goto(`http://localhost:${nextPort}/iam/verify-email?token=secret-token`, {
+        waitUntil: "domcontentloaded",
+      })
+      const followup = page.waitForRequest((request) => new URL(request.url()).pathname === "/iam/jwks")
+      await page.getByRole("link", { name: "continue" }).click()
+      const followupHeaders = await (await followup).allHeaders()
+      expect(receivedPaths).toEqual(["/iam/verify-email?token=secret-token", "/iam/jwks"])
+      expect(followupHeaders.referer).toBeUndefined()
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
+
+  it("keeps a real Chromium verification 302 inside the fixed origin", async () => {
+    verifyEmailStatus = 302
+    verifyEmailLocation = `http://localhost:${nextPort}/iam/jwks`
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage()
+      const followup = page.waitForRequest((request) => new URL(request.url()).pathname === "/iam/jwks")
+      await page.goto(`http://localhost:${nextPort}/iam/verify-email?token=secret-token`, {
+        waitUntil: "domcontentloaded",
+      })
+      const followupHeaders = await (await followup).allHeaders()
+      expect(receivedPaths).toEqual(["/iam/verify-email?token=secret-token", "/iam/jwks"])
+      expect(page.url()).toBe(`http://localhost:${nextPort}/iam/jwks`)
+      expect(followupHeaders.referer).toBeUndefined()
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
 
   it("rejects a chunked GET body before opening BFF", async () => {
     const response = await rawHttp(nextPort, "/iam/jwks", undefined, "unexpected-body")

@@ -24,6 +24,34 @@ state/nonce/S256 verifier cookie 仅供短期 RP 校验，用后清除；这是�
 固定 TTL 300 秒；`SET NX` 防 state 碰撞，`GETDEL` 保证同 state 并发最多一次 code exchange。
 Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合摘要，无 token 或明文 userinfo。
 
+## R2e-IAM-VERIFY-WEB：邮箱验证链接的数据边界（本提交已实现，真 IAM 待验）
+
+起始 Web `main` 基线 `0a093f65bdc4990b956b10ae534198e3b4b5c3b5` 固定 BFF relay policy
+`1.0.0`、BFF commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、SHA-256
+`ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`，故
+`/iam/verify-email` 不在基线的浏览器 GET 集合。本提交消费已发布 BFF `main`
+`928ada2880f222b4406b13144f7dfc7be43c8099` 的只读 policy `1.1.0`，blob SHA-256
+`67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6`；这只是
+准入来源替换，不是 Web 新业务事实。IAM 独占有期签名验证 JWT 的校验、`emailVerified` 幂等状态
+与审计；BFF/Web 不持有邮箱验证表、receipt、outbox 或副本，不自行决定 token 是否已使用。
+
+目标传输为 `Browser → Web GET /iam/verify-email?token=...&callbackURL=... → BFF → IAM`。Web
+只接受规范化后一个非空 `token` 与最多一个 `callbackURL`，重复/额外键本地拒绝；Next
+可能在 handler 前把编码键名规范化为相同键，唯一键可接受，规范化后重复仍拒绝。Web 仅保证
+支持形状的键值语义，不把任意 raw query 保真当作事实。
+签名 query 只在有界 request target 中传输，不持久化到 Web Redis、SQL、cookie、localStorage、
+sessionStorage、日志、trace 或缓存；`callbackURL` 不成为 Web 存储字段或出站 origin 选择器。
+IAM 原生 302 的 `Location` 只经现有固定同源/精确路径白名单验证，不能从 query 推断允许外域。
+Web 对该精确 GET 的浏览器响应（含本地拒绝/上游失败）合成 `Cache-Control: no-store` 与
+`Referrer-Policy: no-referrer`，即使 BFF/header 过滤缺失或上游给出可缓存值；其他 GET 语义不变。
+Next 的最终 `src/proxy.ts` 仅对此 pathname 覆盖通用安全头，响应头是传输边界而非数据 owner。
+`next.config.ts` 仅抑制 Next 开发模式对此路径的 incoming URL stdout 日志，避免签名 token 进入
+该框架日志；TLS 前置 access log、浏览器历史与外部邮件系统仍属各自边界，不归 Web 数据 owner。
+无新 PostgreSQL schema、migration、Redis key/TTL、事务、索引、
+保留/删除流程或 Product Session 状态转换。Web 对 GET 的本地拒绝不触达 BFF，IAM 验证失败
+不触发 Web 写入。后续 contract/Next HTTP 测试与 Root 真邮件点击/同源 302/Referer 组合分别给出
+静态和行为证据；已通过的真 Next/Chromium fixture 不等于真实 IAM JWT/SMTP/完整登录验收。
+
 ## W1C-2：Web Product Session 数据与事务边界
 
 ### 当前态与目标 owner
@@ -31,7 +59,7 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 当前 Web 使用 `kokoro_session`
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与旧路径，这是**待删除的旧态**。Product Session、
-Redis CAS/tombstone 与 OIDC RP 的 S1 实现及真实三仓 HTTPS 已验；BFF relay 最新 release
+Redis CAS/tombstone 与 OIDC RP 的 S1 实现及真实三仓 HTTPS 已验；BFF relay 的 W1C-2 起始基线
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b` 已 pin IAM
 `e36da9ecf8d62a364182949817431a8e2329d50a`，policy SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；W1C-2A 已固定消费该只读

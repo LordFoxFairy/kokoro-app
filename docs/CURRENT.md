@@ -1,5 +1,23 @@
 # Kokoro User Web 当前状态
 
+R2e-IAM-VERIFY-WEB（2026-09-24，随本提交发布）：Web 从 BFF
+`928ada2880f222b4406b13144f7dfc7be43c8099` 固定只读 IAM relay policy `1.1.0`，artifact
+SHA-256 `67e40a5a034d27f205492cb57c3c8a84b3d10ef2096bc8447f5014dbcb69b6d6`；仅新增
+浏览器精确 `GET /iam/verify-email`。Web 对规范化后单一非空 `token`/可选单一 `callbackURL`
+执行准入，重复/额外键本地拒绝；Next 可能在 handler 前规范化编码，故不声称任意 raw query 字节
+保真。BFF/Web 继续受固定同源 302 Location 与 issuer cookie/Authorization 隔离约束；此精确路径
+的最终浏览器响应无论成功、拒绝或上游失败均强制 `Cache-Control: no-store` 和
+`Referrer-Policy: no-referrer`，其他 GET 不变。真 Next HTTP 聚焦测试覆盖 200/302、缺失/恶意缓存头、
+外域 Location、错方法/路径别名/重复键零 BFF socket；真实 Chromium 从 token URL 的 200 页面点击
+同源链接，出站 request 不带完整 token Referer。该 fixture 未验证 IAM JWT、SMTP 邮件点击或完整账号
+登录；Web 无新 SQL/Redis owner。Next 16.2.6 开发模式默认会把完整 incoming URL 写入 stdout；
+本工作树仅对精确 `/iam/verify-email`（含 query）启用 `logging.incomingRequests.ignore`，隔离真 Next
+测试以独特 token 验证该框架请求日志不含 token、普通 `/iam/jwks` 仍被记录。此结论不覆盖 TLS
+前置 access log、浏览器历史或外部邮件系统。Root 独立重跑 Node22 聚焦真 Next/登录/contract
+13/13、`pnpm contract` 56/56、`pnpm test:architecture` 32/32、`pnpm lint`、`tsc --noEmit`、
+`pnpm test` 1414/1414 均通过；为不触用户 3310 的共享 `.next`，`pnpm typecheck` 的 Next typegen、
+正式 `pnpm build` 仍待隔离验收。Root 跨仓来源门与真 IAM 邮件点击/完整登录也待执行。
+
 W1D-Chat 浏览器闭环修复候选（本工作树，尚待 Root 固定 SHA 真实 Chromium 复验）：BFF 当前
 `RUN_FINISHED` 带 `status/outcome`（取消时另有 `result`），`RUN_ERROR` 带
 `threadId/runId`，工具结果带 `isError`；此前 Web AG-UI 严格 schema 将这些 owner
