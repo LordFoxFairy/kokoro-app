@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { NextRequest } from "next/server"
+import { cookies as requestCookies } from "next/headers"
 
 import { GET as authGet, POST as authPost } from "@/app/api/auth/[...nextauth]/route"
 import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
@@ -31,7 +32,7 @@ function unavailable(phase: string): Response {
 
 function cookiePairs(response: Response): string[] | null {
   const cookies = response.headers.getSetCookie()
-  if (cookies.length === 0 || cookies.length > 4) return null
+  if (cookies.length > 4) return null
   const pairs: string[] = []
   for (const cookie of cookies) {
     const pair = cookie.split(";", 1)[0]
@@ -54,8 +55,24 @@ export async function GET(request: NextRequest): Promise<Response> {
     if (csrf.status !== 200) return unavailable("csrf_status")
     const body: unknown = await csrf.json()
     const token = typeof body === "object" && body !== null ? (body as { csrfToken?: unknown }).csrfToken : null
-    const cookies = cookiePairs(csrf)
-    if (typeof token !== "string" || !/^[A-Za-z0-9]+$/u.test(token) || cookies === null) return unavailable("csrf_shape")
+    const issuedCookies = cookiePairs(csrf)
+    if (typeof token !== "string" || !/^[A-Za-z0-9]+$/u.test(token) || issuedCookies === null) return unavailable("csrf_shape")
+    // Auth.js v4's Route Handler reads cookies() from the active Next request
+    // context, not from a synthetic NextRequest passed to its handler.
+    const activeCookies = await requestCookies()
+    const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
+    const cookies = [...issuedCookies]
+    if (!cookies.some((pair) => pair.startsWith(`${csrfName}=`))) {
+      const existing = activeCookies.get(csrfName)?.value
+      if (existing?.split("|", 1)[0] !== token) return unavailable("csrf_cookie_missing")
+      cookies.push(`${csrfName}=${encodeURIComponent(existing)}`)
+    }
+    for (const pair of cookies) {
+      const separator = pair.indexOf("=")
+      activeCookies.set(pair.slice(0, separator), decodeURIComponent(pair.slice(separator + 1)), {
+        path: "/", httpOnly: true, sameSite: "lax", secure: config.relay.secureCookies,
+      })
+    }
 
     const signIn = await authPost(new NextRequest(`${base}/api/auth/signin/kokoro-iam`, {
       method: "POST",

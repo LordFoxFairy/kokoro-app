@@ -213,12 +213,15 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
       const state = location === null ? null : safeAuthorizeLocation(location, config.relay.webOrigin, config.clientId, config.callbackUrl)
       const setCookies = response.headers.getSetCookie()
       if (response.status !== 302 || state === null || setCookies.some((cookie) => /(?:^|;)\s*(?:__Secure-)?next-auth\.session-token=/u.test(cookie))) {
+        console.error("Kokoro RP sign-in response rejected:", response.status,
+          location === null ? "no_location" : new URL(location, config.relay.webOrigin).pathname,
+          state === null ? "no_state" : "state_ok")
         return signInFailure(request, 403, "rp_signin_rejected")
       }
       await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies })
       response.headers.set("cache-control", "no-store")
       return response
-    } catch { return signInFailure(request, 503, "rp_unavailable") }
+    } catch { console.error("Kokoro RP sign-in start threw"); return signInFailure(request, 503, "rp_unavailable") }
   }
 
   const cleanup = rpCleanupCookies(config.relay.secureCookies)

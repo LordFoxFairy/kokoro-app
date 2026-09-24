@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const { authGet, authPost } = vi.hoisted(() => ({ authGet: vi.fn(), authPost: vi.fn() }))
 vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ GET: authGet, POST: authPost }))
 vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
+const { setCookie, getCookie } = vi.hoisted(() => ({ setCookie: vi.fn(), getCookie: vi.fn() }))
+vi.mock("next/headers", () => ({ cookies: async () => ({ set: setCookie, get: getCookie }) }))
 
 import { GET } from "@/app/login/route"
 
@@ -53,6 +55,7 @@ describe("GET /login", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(authGet).toHaveBeenCalledOnce()
     expect(authPost).toHaveBeenCalledOnce()
+    expect(setCookie).toHaveBeenCalledWith("next-auth.csrf-token", "token|digest", expect.objectContaining({ httpOnly: true }))
     const signInRequest = authPost.mock.calls[0]?.[0] as NextRequest
     expect(signInRequest.headers.get("origin")).toBe(ORIGIN)
     expect(signInRequest.headers.get("cookie")).toBe("next-auth.csrf-token=token%7Cdigest")

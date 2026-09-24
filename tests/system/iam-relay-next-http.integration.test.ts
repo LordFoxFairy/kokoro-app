@@ -361,6 +361,10 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
             KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
             KOKORO_INTERNAL_SECRET_WEB_BFF: "next-http-secret",
             KOKORO_WEB_REDIS_URL: redisUrl,
+            KOKORO_OIDC_CLIENT_ID: "product-web",
+            KOKORO_OIDC_CLIENT_SECRET: "fixture-secret",
+            KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
+            NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth`,
             NEXT_PUBLIC_SESSION_PREVIEW: "1",
           },
           stdio: ["ignore", "pipe", "pipe"],
@@ -404,6 +408,20 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   })
 
   afterAll(cleanupResources)
+
+  it("starts Product OIDC from the server login route", async () => {
+    const response = await rawHttp(nextPort, "/login")
+    if (response.status !== 302) throw new Error(`login status ${response.status}; ${nextOutput.slice(-1000)}`)
+    expect(response.headers.location).toContain("/iam/oauth2/authorize?")
+    const issued = response.headers["set-cookie"] as string[] | undefined
+    expect(issued?.some((cookie) => cookie.startsWith("next-auth.csrf-token="))).toBe(true)
+    expect(issued?.filter((cookie) => cookie.startsWith("next-auth.csrf-token="))).toHaveLength(1)
+    expect(issued?.some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
+    const returning = await rawHttp(nextPort, "/login", `localhost:${nextPort}`, undefined, {
+      cookie: issued?.map((cookie) => cookie.split(";", 1)[0]).join("; ") ?? "",
+    })
+    expect(returning.status).toBe(302)
+  })
 
   it("navigates a real Chromium tab from authorize JSON to the Web sign-in page", async () => {
     authorizeCookies = ["kokoro-issuer.session_token=opaque; Path=/iam; HttpOnly; SameSite=Lax"]
