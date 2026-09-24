@@ -7,8 +7,9 @@ import { LocaleProvider } from "@/i18n/context"
 import { LandingPage } from "@/ui/marketing/landing-page"
 
 const push = vi.fn()
+const replace = vi.fn()
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }))
 
 function renderLanding(brandName?: string, marketingHref?: string) {
@@ -23,10 +24,20 @@ function renderLanding(brandName?: string, marketingHref?: string) {
 afterEach(() => {
   cleanup()
   push.mockClear()
+  replace.mockClear()
+  window.history.replaceState({}, "", "/")
   window.localStorage.clear()
 })
 
 describe("LandingPage", () => {
+  it("does not redirect a legacy magic-link error query to the unavailable login page", () => {
+    window.history.replaceState({}, "", "/?auth=link_unavailable")
+    renderLanding()
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument()
+    expect(replace).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+  })
+
   it("renders the injected brand name in top bar and footer", () => {
     renderLanding("Acme")
     expect(screen.getAllByText("Acme").length).toBeGreaterThanOrEqual(2)
