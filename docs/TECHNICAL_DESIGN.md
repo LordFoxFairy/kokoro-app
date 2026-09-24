@@ -52,9 +52,9 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、policy `1.0.0`、blob SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；浏览器 GET 集合没有
 `/verify-email`，正式邮件链接 `${KOKORO_WEB_ORIGIN}/iam/verify-email?<query>` 在基线不可达。BFF owner
-当前在 `main` `7a7f3adfaec7d1bcee3b2079304a6129c0591d06` 发布 policy `1.1.0` artifact，SHA-256
-`731735ba8ce07c578fe04fa51783a95c7ac7daf50df33cea0ef9cefedc32d032`；原始切片仅新增精确
-`GET /verify-email`，本次只重钉来源，IAM owner commit 为 `093b76513a9aa71611c65d4f210e279d3227e002`。
+当前在 `main` `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 发布 policy `1.1.0` artifact，SHA-256
+`97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`；原始切片仅新增精确
+`GET /verify-email`，本次只重钉来源，IAM owner commit 为 `b363554d07e5b6e182160b42ae1402330e55d9db`。
 浏览器入口已发布；真 IAM 邮件点击与完整登录仍待组合验证。
 
 **Owner 与放置。** IAM 独占 Better Auth 1.7.3 有期签名 JWT 的签发/校验、`emailVerified` 幂等状态

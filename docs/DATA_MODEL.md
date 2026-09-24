@@ -30,9 +30,9 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 `1.0.0`、BFF commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`，故
 `/iam/verify-email` 不在基线的浏览器 GET 集合。当前 Web 消费 BFF `main`
-`7a7f3adfaec7d1bcee3b2079304a6129c0591d06` 的只读 policy `1.1.0`，blob SHA-256
-`731735ba8ce07c578fe04fa51783a95c7ac7daf50df33cea0ef9cefedc32d032`，IAM owner
-`093b76513a9aa71611c65d4f210e279d3227e002`；当前来源重钉只是
+`dadf9264116ea9df2c0886c4af84bacb67aa6e41` 的只读 policy `1.1.0`，blob SHA-256
+`97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`，IAM owner
+`b363554d07e5b6e182160b42ae1402330e55d9db`；当前来源重钉只是
 准入来源替换，不是 Web 新业务事实。IAM 独占有期签名验证 JWT 的校验、`emailVerified` 幂等状态
 与审计；BFF/Web 不持有邮箱验证表、receipt、outbox 或副本，不自行决定 token 是否已使用。
 
