@@ -75,6 +75,24 @@ test.describe("Web production boundary", () => {
     expect(csrfCount).toBe(1)
   })
 
+  test("the real RP 303 failure returns to a stable retry page without submitting again", async ({ page }) => {
+    let csrfCount = 0
+    await page.route("**/api/auth/csrf", async (route) => {
+      csrfCount += 1
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })
+    })
+    const signIn = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/signin/kokoro-iam")
+    await page.goto("/login", { waitUntil: "domcontentloaded" })
+    await expect(page.locator("html")).toHaveAttribute("lang", "en")
+    await page.getByRole("button", { name: /使用 Kokoro 账号继续|Continue with Kokoro/iu }).click()
+    expect((await signIn).status()).toBe(303)
+    await expect(page).toHaveURL(/\/login\?auth=sign_in_failed$/u)
+    await expect(page.getByRole("button", { name: /重试登录|Try again/iu })).toBeVisible()
+    expect(csrfCount).toBe(1)
+    await page.waitForTimeout(100)
+    expect(csrfCount).toBe(1)
+  })
+
   test("rail logout posts Product signout and navigates to issuer confirmation", async ({ page, isMobile }) => {
     test.skip(isMobile, "the workspace rail is rendered only on desktop")
     await mockProductLogout(page)

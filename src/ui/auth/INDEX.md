@@ -8,7 +8,7 @@
 - `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
 - `AppGate`（`app-gate.tsx`）：`/app` 的认证闸；authenticated 直接渲染产品工作台；System manifest 仅在已验证时覆盖品牌、导航与 feature flags，anonymous 转到 `/login`。
-- `LoginPanel`（`login-panel.tsx`）：`/login` 独立于 System manifest 使用固定单租户 Kokoro 品牌；挂载后自动经 Auth.js CSRF 启动固定 `kokoro-iam` OIDC。CSRF 或浏览器表单提交失败时保留站内失败页与显式重试；离开页面会取消未完成的 CSRF 请求。
+- `LoginPanel`（`login-panel.tsx`）：`/login` 独立于 System manifest 使用固定单租户 Kokoro 品牌；首屏不请求 CSRF，用户点击唯一的 Kokoro 账号继续动作后才经 Auth.js CSRF 启动固定 `kokoro-iam` OIDC。CSRF 或浏览器表单提交失败时保留站内失败页与显式重试；离开页面会取消未完成的 CSRF 请求。
 
 ## 协作者
 上游：`@/app/page.tsx`（公开首页）、`@/app/login/page.tsx`（LoginPanel）、`@/ui/settings`（useSessionState 匿名闸）。下游：Web 同源 `@/app/api/auth/*` RP、`@/i18n`（auth.* 文案）。只有 `AppGate` 消费 System runtime manifest。
