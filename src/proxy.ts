@@ -19,7 +19,7 @@ export function proxy(request: NextRequest): NextResponse {
     response.headers.set(name, value)
   }
   if (shouldDisableCaching(request.nextUrl.pathname)) {
-    response.headers.set("Cache-Control", "no-store, max-age=0")
+    response.headers.set("Cache-Control", "private, no-store, max-age=0")
     response.headers.set("Vary", "Cookie")
   }
   return response

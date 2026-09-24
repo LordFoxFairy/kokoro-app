@@ -20,7 +20,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 - 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
 - 新 Product Session cookie 使用加密 HttpOnly 信封、`SameSite=Lax`，固定公开 Web origin 为 HTTPS 或 Web production mode 时设置 `Secure`；浏览器 cookie 不透传给业务上游。旧 sealed session 仅属于待删除旧路径。
 - Product 上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。W1C-2A `/iam` 原生协议例外使用独立 transport，避免合并多个 `Set-Cookie`。
-- `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: no-store` 与 `Vary: Cookie`。
+- `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: private, no-store, max-age=0` 与 `Vary: Cookie`。
 - `kokoro-app` 是 Web remote 名；主控仓中的对应 submodule 路径是 `apps/kokoro-app`，不使用歧义的 `kokoro/` 名称。
 - W1C-2A 已新增 BFF-only 的同源 `/iam/[...path]` 只读入口：只允许固定 policy 中无需 browser Bearer 的
   discovery、JWKS、authorize、issuer session、organization 与固定参数 end-session GET；仅 logout-confirm POST 通过专用窄路由，其他浏览器 POST、userinfo、

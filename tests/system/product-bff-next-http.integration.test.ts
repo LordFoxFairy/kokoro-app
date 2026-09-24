@@ -179,6 +179,7 @@ export async function GET(): Promise<Response> {
   it("returns 401 without a Product Session and never connects to BFF", async () => {
     const response = await get(nextPort);
     expect(response.status).toBe(401);
+    expect(response.headers["cache-control"]).toBe("private, no-store, max-age=0");
     expect(bffCalls).toBe(0);
   });
 
