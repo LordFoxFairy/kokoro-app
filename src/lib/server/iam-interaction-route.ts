@@ -198,6 +198,8 @@ export function interactionNavigation(
   headers.set("cache-control", "no-store")
   headers.set("location", location)
   const response = new Response(null, { status: upstream.status === 302 ? 302 : 303, headers })
-  response.headers.append("set-cookie", clearIamCsrfCookie(path, context.config.secureCookies))
+  if (path === "/iam/interactions/consent") {
+    response.headers.append("set-cookie", clearIamCsrfCookie(path, context.config.secureCookies))
+  }
   return response
 }

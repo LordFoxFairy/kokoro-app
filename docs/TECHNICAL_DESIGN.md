@@ -2,20 +2,28 @@
 
 ## W1C 固定部署租户收敛（设计门，2026-09-24）
 
-当前 `GET /login` 已是无可见中转页的服务端 OIDC 启动；但 issuer 的
-`/iam/interactions/select-tenant` 仍显示团队选择表单，Web RP callback/refresh
-尚未核对部署租户，旧 Team UI 还暴露跨租户切换。目标只复用现有交互路由、RP
-与 Team 文件：部署配置 `KOKORO_TENANT_ID` 仅在服务端使用，signed tenant
-交互由服务端按固定租户续接，不渲染选择页或接收浏览器 tenant 输入；已验证
+当前 `GET /login` 已是无可见中转页的服务端 OIDC 启动；Team 切换器和
+`/api/team/switch` 已删除。issuer 的 `/iam/interactions/select-tenant` 已改为
+仅 GET 的服务端固定租户续接：无选择表单、候选列表、浏览器 POST 或 CSRF
+token，缺失 issuer cookie 直接拒绝。Web RP callback/refresh 尚未核对部署租户。
+下一步复用现有 RP/会话适配：部署配置 `KOKORO_TENANT_ID` 仅在服务端使用，已验证
 OIDC subject/tenant 再与 BFF owner `GET /v1/me` 投影比对，匹配后才创建或刷新
 Product Session。Web 不自验 JWT tenant、不读取 IAM/BFF 数据库、不建立第二身份
-事实源。BFF `/v1/me` 契约提交前只删除独立的旧 Team 切换 UI/route；其余实现
-等 owner contract 与 IAM 第一方 client 续接一起验收。失败保持零可用 Product
+事实源。BFF `/v1/me` 和 IAM 第一方 client 续接均已由各自 owner 发布；Web RP
+准入消费仍待实现及真组合验收。失败保持零可用 Product
 Session，不恢复“连接中／整页重试”页面。
 
 放置选择：复用 `src/app/iam/interactions/select-tenant`、现有 RP/会话适配和
 `src/ui/team`（采用）；新建登录 SPA/通用 IAM proxy/第二身份 store（淘汰）。
 Web 无新 SQL、Redis 事实或跨仓写入；BFF/IAM 各保持唯一契约 owner。
+
+当前 browser-private relay 固定 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56`
+的 policy `2.0.0`，artifact SHA-256
+`b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92`，
+IAM owner `3231d2e9b225c337a1432ffb431cd7a5269d988d`。`/organization/list`
+已从 Web GET allowlist 删除；`/organization/set-active` 仅由上述 server-only
+signed continuation 调用。下文 W1C-2B-2 与 R2e 的选择表单、policy 1.x 描述为
+原始发布基线，已被本节取代，不是当前实现依据。
 
 ## 公开入口与单租户登录边界（当前切片）
 

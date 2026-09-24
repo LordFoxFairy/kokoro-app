@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "dadf9264116ea9df2c0886c4af84bacb67aa6e41",
-  policySha256: "97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c",
+  ownerCommit: "87f9d8d154241e8fbde0fc61e67417ee4f1dfa56",
+  policySha256: "b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -25,7 +25,7 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "b363554d07e5b6e182160b42ae1402330e55d9db"
+const EXPECTED_IAM_COMMIT = "3231d2e9b225c337a1432ffb431cd7a5269d988d"
 const BROWSER_GET_PATHS = new Set([
   "/.well-known/openid-configuration",
   "/.well-known/oauth-authorization-server",
@@ -33,7 +33,6 @@ const BROWSER_GET_PATHS = new Set([
   "/oauth2/authorize",
   "/oauth2/end-session",
   "/get-session",
-  "/organization/list",
   "/verify-email",
 ])
 
@@ -41,7 +40,7 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   if (typeof value !== "object" || value === null) throw new Error("invalid IAM relay policy snapshot")
   const policy = value as Partial<IamRelayPolicy>
   if (
-    policy.version !== "1.1.0" ||
+    policy.version !== "2.0.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
     typeof policy.routes !== "object" || policy.routes === null ||
     !Array.isArray(policy.cookieNames) || !Array.isArray(policy.cookieNamePrefixes) ||

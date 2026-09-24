@@ -2,7 +2,7 @@
 
 ## W1C 固定租户数据边界（2026-09-24 设计门）
 
-Web 当前没有持久化 tenant owner；旧 Team sealed-session 切换路由仍在，RP
+Web 当前没有持久化 tenant owner；旧 Team sealed-session 切换路由已删除，RP
 成功创建/refresh Product Session 前尚未核 BFF 固定部署租户。目标保持 Web
 无 PostgreSQL/schema/migration：server-only `KOKORO_TENANT_ID` 是部署约束而非
 新业务事实；BFF `GET /v1/me` 的已验证 subject/tenant 是 admission 投影，
@@ -10,6 +10,11 @@ Web 当前没有持久化 tenant owner；旧 Team sealed-session 切换路由仍
 Session/Redis CAS 不增加 tenant 副本或新 key；浏览器不能选择或覆盖 tenant。
 删除旧 Team switch 对 sealed envelope 的重签/重密封路径。owner 的 tenant、
 membership、token 与审计事实仍在 IAM/BFF 自仓；无跨 owner SQL、事务或缓存。
+
+固定租户 issuer 续接已取消租户候选列表及其一次性 CSRF/POST：内层 GET
+只读取服务端 `KOKORO_TENANT_ID`、原始 signed query 与 issuer cookie，经 BFF
+窄 set-active relay 续接；不产生新 Web Redis key/tenant 事实。下文 W1C-2B-2
+候选列表与租户 CSRF 仅为旧发布基线，非当前数据模型。
 
 状态：当前数据边界与 W1C-2 会话协调目标，2026-09-23；2C RP-only 已发布，S1 未提交工作树已实现
 Product Session 在线协调，真实三仓 IAM 组合尚未验收；普通代理已由 S2-A 切换；旧认证/Team 路径未删除。

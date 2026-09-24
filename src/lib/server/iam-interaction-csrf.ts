@@ -9,7 +9,7 @@ const COOKIE_NAME = "kokoro_iam_csrf"
 type Binding = Readonly<{
   redisUrl: string
   webOrigin: string
-  path: "/auth/sign-in" | "/iam/interactions/select-tenant" | "/iam/interactions/consent"
+  path: "/auth/sign-in" | "/iam/interactions/consent"
   method: "GET" | "POST"
   query: string
   issuerCookie: string

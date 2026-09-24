@@ -1,5 +1,20 @@
 # Kokoro User Web 当前状态
 
+W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，待 Root 来源 pin 与三仓真组合）：
+Web 固定消费 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56` 的
+browser-private policy `2.0.0`（artifact SHA-256
+`b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92`，
+IAM owner `3231d2e9b225c337a1432ffb431cd7a5269d988d`）。
+`/iam/organization/list` 不再是可消费 Web GET；`/iam/interactions/select-tenant`
+不再渲染选择表单/全屏重试、签发 tenant CSRF 或接受浏览器 POST，而是在精确签名
+query 与 issuer cookie 下，以 server-only `KOKORO_TENANT_ID` 经窄 BFF
+set-active 直接 302/303 续接。外层 `/auth/select-tenant` 仍仅保留把
+`Path=/iam` issuer cookie 带入内层的无状态 302。Web RP callback/refresh 对
+BFF `/v1/me` 的固定租户核验仍待实施，本片不冒充 Product 登录全链验收。
+真实 Next 51 个 IAM interaction 测试、5 个 HTTPS 反代测试与 Web 全量 Vitest
+1417/1417 已通过；3310 当前 `/login` 仍是空 503（Web-only 未配齐），未改用户进程。
+下文描述 tenant 表单、policy 1.x 的段落记录历史发布基线，以本节为当前事实。
+
 W1C-FIXED-TENANT-WEB-D 第一切片（2026-09-24，待 Root 来源 pin）：已删除可见
 Team switcher、客户端 `switchTeam` 和 `/api/team/switch` route；邀请/成员管理继续按
 旧 Team context 展示，不把本片冒称固定租户登录已完成。三设计文档已明确目标：
@@ -65,7 +80,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
-- 当前工作树为 `/auth/sign-in`、`/iam/interactions/select-tenant|consent` 的服务端 GET 表单加上共享无脚本品牌外壳与响应式样式；Email/Password、Tenant、Consent 仍各自原生 POST，CSRF/签名 query/cookie/owner 校验路径不改。真实 Next+Chromium fixture 在 1440×900、560×600、390×844 验证字段上下排列、label、action、无水平溢出与交互页可达；这只证明 Web-owned issuer 页面视觉与边界，不冒充完整 OIDC/Product Session 闭环。
+- 历史 W1C-2B-2 基线曾为 `/auth/sign-in`、`/iam/interactions/select-tenant|consent` 的服务端 GET 表单加上共享无脚本品牌外壳；当时 Email/Password、Tenant、Consent 各自原生 POST。当前 tenant 表单/POST 已由本文件首节的固定租户服务端续接取代，sign-in 与 consent 仍保留表单。旧真实 Next+Chromium fixture 只证明当时的视觉与交互边界，不冒充当前完整 OIDC/Product Session 闭环。
 - 当前工作树的真实 Chromium 登录切片修复了 `GET /iam/oauth2/authorize` 的浏览器导航断层：IAM owner 实际返回 200 `application/json` `{redirect:true,url}`；Web 只在该固定 route 经原生 header/issuer cookie 和固定同源交互 Location 校验后转为无 body 302。其他 IAM JSON 保持原生，异常 authorize continuation 返回不透传上游 body/cookie 的 502。真实 Next + Chromium fixture 已验证浏览器进入 `/auth/sign-in`；完整 Product Session/Chat 浏览器闭环仍由 Root 独立组合 runner 验收。
 - 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页；`/login` 现为服务端 Product RP OIDC 启动路由，不依赖 System runtime manifest，浏览器成功时直接进入真正的 IAM `/auth/sign-in` 邮箱/密码表单。可见的连接中/整页重试组件与失败态共用的假登录页面均已删除；RP `signin` 失败后 303 回登录重试页的分支也已删除，失败仅返回结构化错误。`/login` 启动失败仅返回无 body 的 HTTP 503，并在服务端记录阶段。没有 RP 配置时当前本地 3310 返回这个空 503（非可登录预览），不会显示假凭据表单。`/app` 仍需在线 Product Session，System manifest 仅增强展示。IAM 表单已收敛为紧凑单列，浏览器凭据错误留在表单内并重签一次性 CSRF。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。
 - 本次改动在 Node `22.22.2` 下的 `pnpm check` 通过：contract 54、architecture 32、Vitest 1401、lint/typecheck/build；真实 Next HTTP 集成测试覆盖首次及已有 CSRF cookie 的 `/login` 302 与 RP cookie；聚焦 3310 离线 Playwright 10/10 通过。Auth.js v4 Route Handler 读取当前 Next request context 的 `cookies()`，不是合成 `NextRequest` 的 cookie header；服务端启动已显式同步经过 Auth.js 签发的 CSRF cookie。固定 Web `175a6d805b69b88c1478b86164fdcbfe925f498a` 的 Root 真 HTTPS Chromium 组合已 PASS：浏览器从 `/login` 直达带签名 IAM 表单，提交邮箱/密码、tenant、consent 后到 `/app` 并取得 Product Session；浏览器未发 CSRF/signin 中转请求。其后独立 CookieJar 完成 BFF/Agent worker 聊天回归，不能冒充 Chromium Chat；测试自有 PG、Redis、进程均清零。3310 仍无 RP/IAM/BFF 配置，HTTP 503 是当前环境事实。

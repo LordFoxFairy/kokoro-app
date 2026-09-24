@@ -2,16 +2,23 @@
 
 ## W1C 固定租户 Web consumer 目标（2026-09-24 设计门）
 
-当前 `/login` 成功只作同源 302，不呈现连接/整页重试 UI；旧 tenant 选择表单、
-浏览器 `/api/team/switch` 与 RP tenant 未核验仍待删除。目标：`/auth/select-tenant`
-保留无状态 302 以使 `Path=/iam` issuer cookie 到达内层；内层 GET 仅使用
-server-only `KOKORO_TENANT_ID` 完成 signed continuation，不显示选择表单、
-不开放浏览器 POST/list。Web code callback 与 refresh 消费 BFF owner 即将发布的
+当前 `/login` 成功只作同源 302，不呈现连接/整页重试 UI；浏览器
+`/api/team/switch` 与可见 Team 切换器已删除。`/auth/select-tenant` 保留无状态
+302 以使 `Path=/iam` issuer cookie 到达内层；内层 GET 仅使用 server-only
+`KOKORO_TENANT_ID` 完成 signed continuation，不显示选择表单，不开放浏览器
+POST 或 `/iam/organization/list`。RP tenant 核验仍待完成。Web code callback 与 refresh 消费 BFF owner 已发布的
 固定版本 `GET /v1/me` 当前身份投影，验证 subject、tenant 与部署配置后才建立
-可用 Product Session；契约字段及 digest 以 BFF 提交为准，不在此处预造 wire。
+可用 Product Session；BFF 公开契约为 `{data:{user_id,tenant_id},meta:{request_id}}`，
+OpenAPI SHA-256 `75ab482132602bd1d7ce77dbec1423b10d4ce7a8244ad284ecac78cd4e7b50ca`。
 删除旧 Team switch mutation/可见切换器，不能从浏览器 body/header 指定 tenant。
 失败只给有界机器错误，不跳转到任何整页重试或假登录页面。现有历史小节描述
 原发布版本，不作为新 consumer 的并行实现依据。
+
+Web 当前固定消费 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56`
+policy `2.0.0`，artifact SHA-256
+`b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92`；
+`/organization/list` 已删除。下文旧 policy 1.x/候选列表/tenant 表单是历史发布记录，
+不表示当前仍可访问。
 
 公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的服务端 Product RP OIDC 启动路由（成功 302 到同源 IAM authorize，不渲染中转页）；`/app` 要求在线 Product Session；System runtime manifest 是可选展示数据，不决定访问权或 live/preview transport。`/auth/sign-in` 是 IAM issuer 签名交互路由，只有有效签名交互才呈现真正邮箱/密码表单，不能当作静态营销别名。公开首页/登录入口不调用 `/api/system/runtime-manifest`；`/login` 在服务端经 Auth.js CSRF 启动固定 OIDC provider，失败返回无自动循环的 503；此入口行为不改变 token、cookie 或 BFF/IAM owner API。
 
@@ -106,7 +113,7 @@ policy 的 relative path，不扩张为任意 catch-all：
 | `/oauth2/end-session` | GET、POST | issuer cookie；POST 同源 CSRF |
 | `/oauth2/end-session/confirm` | POST | issuer logout-confirmation cookie；同源 CSRF |
 | `/sign-in/email`、`/sign-out` | POST | issuer cookie；同源 CSRF |
-| `/get-session`、`/organization/list` | GET | issuer cookie；仅 IAM 交互状态，不是 Product Session 授权 |
+| `/get-session` | GET | issuer cookie；仅 IAM 交互状态，不是 Product Session 授权；`/organization/list` 已从 Web relay 删除 |
 | `/organization/set-active`、`/oauth2/consent`、`/oauth2/continue` | POST | issuer cookie；同源 CSRF |
 
 W1C-2B-2 的 `/auth/select-tenant|consent` 只准严格同源 GET 且保持原签名 query，302 引导到
@@ -277,8 +284,8 @@ Browser /api/*                         browser-private
 | `/api/shared/*` | 公开 share 投影 | `kokoro-bff` owner route |
 | `/api/auth/magic-link/request`、旧 `/api/auth/callback` | 已删除的 magic-link 申请/消费端点 | 不保留 route、alias 或 `/login?auth=` 失败跳转；固定 OIDC `/api/auth/callback/kokoro-iam` 仍归 Auth.js `/api/auth/[...nextauth]` |
 | 旧 `/api/auth/logout`、`/api/auth/session-state` | 仍在的旧 sealed session 退出/状态 | 后续 clean-slate 删除；Product Session 已由 Auth.js browser-private action 承接 |
-| `/api/team/*` | 当前 team context/switch 与旧 IAM team-session 路径 | 旧 team-session、switch/context alias 删除；仍有产品需要的 tenant 选择由 `/auth/select-tenant` + `/iam/organization/*` IAM 原生交互承担，不复制 team-session |
-| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam` owner mutation 直接 browser POST 全拒绝；`/auth/sign-in` 是 GET/POST，另两个 `/auth/*` 仅 GET 引导；静态 `/iam/interactions/*` 是带 issuer cookie 的 Web-owned GET/POST，consent 最终 RP callback 仍受控 503 | 后续 Auth.js RP 安装固定 callback 并验收；不是任意 `/v1` proxy |
+| `/api/team/*` | 当前仍有 Team context/成员邀请等路径；`/api/team/switch` 已删除 | 固定 Product tenant，不保留浏览器租户切换 route 或 UI；Team context 整体替换属后续 consumer 切片 |
+| `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam` owner mutation 直接 browser POST 全拒绝；`/auth/sign-in` 是 GET/POST，另两个 `/auth/*` 仅 GET 引导；内层 tenant 是 GET-only 固定续接，consent 是带 issuer cookie 的 GET/POST 表单 | 已安装固定 Auth.js RP callback；不是任意 `/v1` proxy |
 | `/api/dev/*` | 非 production preview fixture | 无 live upstream；不得在 production 启用 |
 
 Catch-all route 不表示浏览器可以任意代理 `/v1`；允许路径必须由 client/schema/route test 明确冻结。

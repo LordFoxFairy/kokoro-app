@@ -114,9 +114,9 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
       bff = createServer((request, response) => {
         bffPaths.push(request.url ?? "")
         const route = request.url ?? ""
-        if (route === "/iam/organization/list") {
+        if (route === "/iam/organization/set-active") {
           response.writeHead(200, { "content-type": "application/json" })
-          response.end('[{"id":"tenant-one","name":"Tenant One","status":"active"}]')
+          response.end(JSON.stringify({ redirect: true, url: `${WEB_ORIGIN}/auth/consent${SIGNED_QUERY}&scope=openid` }))
         } else if (route === "/iam/sign-in/email") {
           response.writeHead(200, { "content-type": "application/json",
             "set-cookie": "kokoro-issuer.session_token=opaque; Path=/iam; HttpOnly; SameSite=Lax" })
@@ -136,7 +136,7 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
         cwd: root,
         env: { ...process.env, KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
           KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,
-          KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret",
+          KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret", KOKORO_TENANT_ID: "tenant-one",
           KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` },
         stdio: ["ignore", "pipe", "pipe"],
       })
@@ -173,8 +173,10 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
     expect(selectOuter.headers.location).toBe(`/iam/interactions/select-tenant${SIGNED_QUERY}`)
     const selectInner = await http(proxyPort, `/iam/interactions/select-tenant${SIGNED_QUERY}`,
       "GET", "", { cookie: "kokoro-issuer.session_token=opaque" })
-    expect(selectInner.status).toBe(200)
-    csrfToken(selectInner, issuedCsrf)
+    expect(selectInner.status).toBe(303)
+    expect(selectInner.headers.location).toBe(`${WEB_ORIGIN}/auth/consent${SIGNED_QUERY}&scope=openid`)
+    expect(bffPaths).toContain("/iam/organization/set-active")
+    expect(bffPaths).not.toContain("/iam/organization/list")
     const consentOuter = await http(proxyPort, `/auth/consent${SIGNED_QUERY}&scope=openid`)
     expect(consentOuter.status).toBe(302)
     const consentInner = await http(proxyPort, `/iam/interactions/consent${SIGNED_QUERY}&scope=openid`,

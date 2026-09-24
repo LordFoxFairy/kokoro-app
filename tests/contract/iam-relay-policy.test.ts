@@ -19,11 +19,11 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "dadf9264116ea9df2c0886c4af84bacb67aa6e41",
-      policySha256: "97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c",
+      ownerCommit: "87f9d8d154241e8fbde0fc61e67417ee4f1dfa56",
+      policySha256: "b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92",
     })
-    expect(IAM_RELAY_POLICY.version).toBe("1.1.0")
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("b363554d07e5b6e182160b42ae1402330e55d9db")
+    expect(IAM_RELAY_POLICY.version).toBe("2.0.0")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("3231d2e9b225c337a1432ffb431cd7a5269d988d")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
   })
@@ -50,7 +50,6 @@ describe("fixed BFF IAM relay policy consumer", () => {
       "/iam/oauth2/authorize?client_id=web",
       "/iam/oauth2/end-session?client_id=web",
       "/iam/get-session",
-      "/iam/organization/list",
       "/iam/verify-email?token=a%2Bb&callbackURL=%2Fauth%2Fsign-in",
     ]) {
       expect(resolveBrowserIamGet(path, "GET"), path).not.toBeNull()
@@ -58,6 +57,7 @@ describe("fixed BFF IAM relay policy consumer", () => {
 
     for (const [path, method] of [
       ["/iam/oauth2/userinfo", "GET"],
+      ["/iam/organization/list", "GET"],
       ["/iam/oauth2/end-session/confirm", "GET"],
       ["/iam/oauth2/authorize", "POST"],
       ["/iam/jwks", "POST"],
