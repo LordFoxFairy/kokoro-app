@@ -280,7 +280,7 @@
 - `src/components/ui/message.tsx` + `src/components/ui/bubble.tsx` + `src/ui/thread/message-bubble.tsx` — 用户消息改用 shadcn Message/Bubble/BubbleContent，站点 CSS 只保留宽度和文案皮肤
 - Composer/TodoBar 明确 `flex-shrink: 0`，消息滚动区才承担压缩；避免 Codex 已公开的“调整侧栏后 Composer 溢出/覆盖消息”类 flex 布局问题。
 - `tests/ui/todo-bar.test.tsx` — 计划进度条的可访问名称、完成数量和收起后的摘要语义通过。
-- `tests/ui/team-panel.test.tsx`、`tests/ui/login-panel.test.tsx` — 邀请邮箱与登录邮箱字段级校验通过
+- `tests/ui/team-panel.test.tsx` — 邀请邮箱校验；登录凭据只在 IAM 签名交互表单，`tests/server/login-route.test.ts` 验证 Product 入口直达 IAM、无可见中转。
 - `tests/ui/workspace-rail.test.tsx` — 对话入口由 `chatHref` 提供，preview 不再被通用 rail 强制跳转到 `/app`
 - `tests/ui/workspace-rail.test.tsx` — 侧栏新对话、重命名、删除操作均保持 `type="button"`
 - `tests/ui/overlay-handoff.test.ts` — 普通动效等待旧 Sheet/Dialog 释放焦点，减少动效模式不额外等待关闭动画。

@@ -1,6 +1,6 @@
 # Kokoro User Web API 契约策略
 
-公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的 Product RP 登录页；`/app` 要求在线 Product Session；System runtime manifest 是可选展示数据，不决定访问权或 live/preview transport。`/auth/sign-in` 是 IAM issuer 签名交互路由，不能当作普通登录页或静态营销别名。公开首页/登录页不调用 `/api/system/runtime-manifest`；`/login` 首次装载自动通过 Auth.js CSRF 启动固定 OIDC provider，`?auth=sign_in_failed` 不自动重试；此页面行为调整不改变现有机器契约、token、cookie 或 BFF/IAM owner API。
+公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的服务端 Product RP OIDC 启动路由（成功 302 到同源 IAM authorize，不渲染中转页）；`/app` 要求在线 Product Session；System runtime manifest 是可选展示数据，不决定访问权或 live/preview transport。`/auth/sign-in` 是 IAM issuer 签名交互路由，只有有效签名交互才呈现真正邮箱/密码表单，不能当作静态营销别名。公开首页/登录入口不调用 `/api/system/runtime-manifest`；`/login` 在服务端经 Auth.js CSRF 启动固定 OIDC provider，失败返回无自动循环的 503；此入口行为不改变 token、cookie 或 BFF/IAM owner API。
 
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、
 W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。

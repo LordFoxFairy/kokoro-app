@@ -2,7 +2,7 @@
 
 ## 公开入口与单租户登录边界（当前切片）
 
-`/` 渲染固定 Kokoro 公开首页，`/login` 渲染固定 Product RP 登录场景，`/app` 由在线 Product Session 决定访问；System runtime manifest 仅在有效时覆盖动态展示，不是核心工作台闸。公开首页和登录页不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`，不把缺失的 System 配置伪装成另一个租户，也不启动任务。进入 `/login` 后自动经 `GET /api/auth/csrf` 与 `POST /api/auth/signin/kokoro-iam` 进入真实 Auth.js→BFF→IAM；失败回跳停在同一全视口品牌布局，仅显示次级错误与显式重试，不自动循环，不回退 mock/旧 magic-link。`/auth/sign-in` 保持 IAM issuer 的签名交互入口，与 Product `/login` 语义不同；`/preview/marketing` 与未使用的 `HomeGate` 已删除，公开页面不再藏在 fixture path。验收分别覆盖后端缺席时公开页/登录页可渲染且零 manifest 请求、自动登录请求的 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。
+`/` 渲染固定 Kokoro 公开首页，`/login` 仅是服务端 Product RP OIDC 启动路由，`/app` 由在线 Product Session 决定访问；System runtime manifest 仅在有效时覆盖动态展示，不是核心工作台闸。公开首页和登录入口不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`。进入 `/login` 后由服务端经固定 Auth.js CSRF 和 `kokoro-iam` provider 建立 RP transaction，浏览器直接跳到 IAM `/auth/sign-in` 邮箱/密码表单；不再渲染“连接中／整页重试”的 React 中转页，不把凭据搬到 Product RP。OIDC 启动失败不自动循环，返回无假表单的 503；IAM 表单凭据失败保留邮箱、清空密码、签发新一次性 CSRF 并在表单内显示受控错误。`/auth/sign-in` 仍是 IAM issuer 签名交互入口，与 Product `/login` 语义不同；其页面收敛为品牌+窄列真实表单，删除双区大装饰。`/preview/marketing` 与未使用的 `HomeGate` 已删除。验收覆盖无后端时公开页正常、登录入口诚实失败且零 manifest 请求、服务端 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
 已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 Product Session 基础、Web Redis 双 CAS 与标准 session/signout route 已发布，S1 真实三仓 HTTPS 组合已通过；S2-A 普通业务代理组合已通过固定三仓真 HTTPS。

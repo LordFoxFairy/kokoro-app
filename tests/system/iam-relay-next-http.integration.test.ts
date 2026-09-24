@@ -617,6 +617,25 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
   })
 
+  it("keeps a browser credential error on the IAM form with a fresh CSRF proof", async () => {
+    signInStatus = 401
+    const page = await signInPage()
+    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
+      origin: `http://localhost:${nextPort}`, cookie: cookie ?? "", accept: "text/html",
+    })
+    expect(result.status).toBe(401)
+    expect(result.body).toContain('name="email" type="email"')
+    expect(result.body).toContain('value="user@example.test"')
+    expect(result.body).toContain('role="alert"')
+    expect(result.body).not.toContain("password=secret")
+    expect(result.body).not.toContain("sensitive-marker-must-not-reach-browser")
+    expect(result.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]).not.toBe(token)
+    expect((result.headers["set-cookie"] as string[] | undefined)?.length).toBe(1)
+    expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
+  })
+
   it("preserves a native 302 continuation with multiple issuer cookies", async () => {
     continueStatus = 302
     continueSetCookies = [

@@ -104,6 +104,42 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character)
 }
 
+function signInForm(action: string, token: string, email = "", error?: string): string {
+  const describedBy = error ? ' aria-describedby="sign-in-error"' : ""
+  const alert = error ? `<p class="form-error" id="sign-in-error" role="alert">${escapeHtml(error)}</p>` : ""
+  return `<form class="auth-form" method="post" action="${escapeHtml(action)}">${alert}<input type="hidden" name="csrf_token" value="${escapeHtml(token)}"><label class="field" for="email">Email<input id="email" name="email" type="email" autocomplete="username" value="${escapeHtml(email)}"${describedBy} required></label><label class="field" for="password">Password<input id="password" name="password" type="password" autocomplete="current-password"${describedBy} required></label><div class="actions single"><button type="submit">Sign in</button></div></form>`
+}
+
+async function signInFormFailure(input: Readonly<{
+  status: 401 | 429 | 503
+  query: string
+  email: string
+  issuerCookie: string
+  redisUrl: string
+  webOrigin: string
+  secureCookies: boolean
+  requestId: string
+}>): Promise<Response> {
+  const message = input.status === 401 ? "Email or password is incorrect." : input.status === 429
+    ? "Too many sign-in attempts. Please try again later." : "Sign-in could not be completed. Please try again."
+  try {
+    const proof = await issueIamInteractionCsrf({
+      redisUrl: input.redisUrl, webOrigin: input.webOrigin, path: PAGE_PATH, method: "POST",
+      query: input.query, issuerCookie: input.issuerCookie, secureCookies: input.secureCookies,
+    })
+    const html = iamInteractionDocument({
+      title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.",
+      trustedFormHtml: signInForm(`${PAGE_PATH}${input.query}`, proof.token, input.email, message),
+    })
+    return new Response(html, { status: input.status, headers: {
+      "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+      "x-request-id": input.requestId, "set-cookie": proof.cookie,
+    } })
+  } catch {
+    return errorResponse(503, "iam_interaction_unavailable", input.requestId)
+  }
+}
+
 function issuerCookiesFromResponse(previous: string, upstream: IamRelayUpstream): string {
   const pairs = new Map<string, string>()
   if (previous !== "") for (const pair of previous.split("; ")) pairs.set(pair.slice(0, pair.indexOf("=")), pair)
@@ -156,8 +192,7 @@ export async function GET(request: Request): Promise<Response> {
   if (issuerCookie === null) return errorResponse(400, "iam_interaction_cookie_invalid", id)
   try {
     const proof = await issueIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, secureCookies: config.secureCookies })
-    const action = escapeHtml(`${PAGE_PATH}${query}`)
-    const form = `<form class="auth-form" method="post" action="${action}"><input type="hidden" name="csrf_token" value="${escapeHtml(proof.token)}"><label class="field" for="email">Email<input id="email" name="email" type="email" autocomplete="username" required></label><label class="field" for="password">Password<input id="password" name="password" type="password" autocomplete="current-password" required></label><div class="actions single"><button type="submit">Sign in</button></div></form>`
+    const form = signInForm(`${PAGE_PATH}${query}`, proof.token)
     const html = iamInteractionDocument({ title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.", trustedFormHtml: form })
     return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": id, "set-cookie": proof.cookie } })
   } catch {
@@ -208,6 +243,10 @@ export async function POST(request: Request): Promise<Response> {
     if (signedIn.status !== 200) {
       const status = signedIn.status === 401 ? 401 : signedIn.status === 429 ? 429 : 503
       const code = status === 401 ? "iam_interaction_credentials_rejected" : status === 429 ? "iam_interaction_rate_limited" : "iam_interaction_unavailable"
+      if (request.headers.get("accept")?.includes("text/html")) {
+        return signInFormFailure({ status, query, email: form.get("email") ?? "", issuerCookie,
+          redisUrl, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id })
+      }
       return errorResponse(status, code, id)
     }
     if (!signedIn.setCookies.some((value) => value.startsWith(config.secureCookies ? "__Secure-kokoro-issuer.session_token=" : "kokoro-issuer.session_token="))) {
