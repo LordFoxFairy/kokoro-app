@@ -110,6 +110,53 @@ describe("/iam/[...path] read-only relay", () => {
     expect(await response.text()).toBe("redirect")
   })
 
+  it("turns only the authorize owner's exact redirect JSON into browser navigation", async () => {
+    const target = "https://web.example.test/auth/sign-in?sig=%2BAb"
+    requestIamRelay.mockResolvedValue(upstream({
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "issuer-authorize" },
+      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      body: JSON.stringify({ redirect: true, url: target }),
+    }))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?client_id=web"),
+      params(["oauth2", "authorize"]))
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get("location")).toBe(target)
+    expect(response.headers.get("content-type")).toBeNull()
+    expect(response.headers.get("content-length")).toBeNull()
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("x-request-id")).toBe("issuer-authorize")
+    expect(response.headers.getSetCookie()).toEqual(["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"])
+    expect(await response.text()).toBe("")
+
+    const other = await GET(browserRequest("https://web.example.test/iam/get-session"), params(["get-session"]))
+    expect(other.status).toBe(200)
+    expect(other.headers.get("location")).toBeNull()
+    expect(await other.json()).toEqual({ redirect: true, url: target })
+  })
+
+  it.each([
+    { redirect: true, url: "https://evil.example/auth/sign-in?sig=%2BAb" },
+    { redirect: true, url: "/auth/sign-in?sig=%2BAb" },
+    { redirect: true, url: "https://web.example.test/auth/sign-in" },
+    { redirect: true, url: "https://web.example.test/auth/%73ign-in?sig=%2BAb" },
+    { redirect: true, url: "https://web.example.test/auth/sign-in?sig=%2BAb", extra: "drift" },
+    { redirect: false, url: "https://web.example.test/auth/sign-in?sig=%2BAb" },
+  ])("rejects invalid authorize redirect JSON without leaking issuer body or cookie", async (payload) => {
+    requestIamRelay.mockResolvedValue(upstream({ status: 200, headers: { "content-type": "application/json" },
+      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      body: JSON.stringify(payload) }))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?client_id=web"),
+      params(["oauth2", "authorize"]))
+    expect(response.status).toBe(502)
+    expect(response.headers.get("location")).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+    expect(await response.text()).not.toContain("evil.example")
+  })
+
   it("relays only the fixed issuer logout URL and strips confirmation cookie from GET", async () => {
     requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "text/html; charset=utf-8" },
       setCookies: ["kokoro-issuer.session_token.oauth_logout_confirmation=signed; Path=/iam/oauth2/end-session/confirm; HttpOnly; SameSite=Lax"], body: "confirm" }))

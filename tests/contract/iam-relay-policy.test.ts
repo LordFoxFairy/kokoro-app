@@ -39,6 +39,9 @@ describe("fixed BFF IAM relay policy consumer", () => {
   })
 
   it("admits the fixed browser GET subset including issuer logout confirmation entry", () => {
+    expect(IAM_RELAY_POLICY.webInteractionPaths).toEqual([
+      "/auth/sign-in", "/auth/select-tenant", "/auth/consent",
+    ])
     for (const path of [
       "/iam/.well-known/openid-configuration",
       "/iam/.well-known/oauth-authorization-server",

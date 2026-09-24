@@ -5,6 +5,7 @@ import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createClient } from "redis"
+import { chromium } from "@playwright/test"
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
@@ -176,6 +177,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   const receivedBodies: string[] = []
   const issuedCsrfTokens = new Set<string>()
   let signInStatus = 200
+  let authorizePayload: unknown = { redirect: true, url: "" }
+  let authorizeCookies: string[] = []
   let continueStatus = 200
   let continueLocation = "/auth/select-tenant?sig=%2BAb"
   let continueSetCookies: string[] = []
@@ -257,6 +260,15 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       fixtureRoot = await createIsolatedNextFixture(projectRoot)
       bff = createServer((request, response) => {
         receivedPaths.push(request.url ?? "")
+        if (request.url?.startsWith("/iam/oauth2/authorize?")) {
+          response.writeHead(200, {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+            "set-cookie": authorizeCookies,
+          })
+          response.end(JSON.stringify(authorizePayload))
+          return
+        }
         if (request.url === "/iam/organization/list") {
           if (sessionRequired && !request.headers.cookie?.includes("kokoro-issuer.session_token=opaque")) {
             response.writeHead(401, { "content-type": "application/json" })
@@ -332,6 +344,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       })
       bffPort = await listen(bff)
       nextPort = await unusedPort()
+      authorizePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/sign-in?sig=%2BAb` }
       continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
       setActivePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid` }
       consentPayload = { redirect: true, url: `http://localhost:${nextPort}/api/auth/callback/kokoro-iam?code=secret-code` }
@@ -369,6 +382,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     receivedPaths.length = 0
     receivedBodies.length = 0
     signInStatus = 200
+    authorizePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/sign-in?sig=%2BAb` }
+    authorizeCookies = []
     continueStatus = 200
     continueLocation = "/auth/select-tenant?sig=%2BAb"
     continueSetCookies = []
@@ -388,6 +403,27 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   })
 
   afterAll(cleanupResources)
+
+  it("navigates a real Chromium tab from authorize JSON to the Web sign-in page", async () => {
+    authorizeCookies = ["kokoro-issuer.session_token=opaque; Path=/iam; HttpOnly; SameSite=Lax"]
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage()
+      const authorizeResponse = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === "/iam/oauth2/authorize")
+      await page.goto(`http://localhost:${nextPort}/iam/oauth2/authorize?client_id=web`, {
+        waitUntil: "domcontentloaded",
+      })
+      expect((await authorizeResponse).status()).toBe(302)
+      expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      expect(await page.locator("body").innerText()).not.toContain('"redirect":true')
+      expect((await page.context().cookies()).some((cookie) =>
+        cookie.name === "kokoro-issuer.session_token" && cookie.path === "/iam")).toBe(true)
+      expect(receivedPaths).toEqual(["/iam/oauth2/authorize?client_id=web"])
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
 
   async function signInPage(): Promise<HttpResult> {
     const page = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb")

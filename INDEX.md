@@ -32,7 +32,7 @@
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
-| `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；直接 browser POST 与 server-only 凭据路由拒绝 |
+| `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；仅 authorize 200 redirect JSON 转受限浏览器 302；直接 browser POST 与 server-only 凭据路由拒绝 |
 | `src/app/auth/sign-in/route.ts` | 原始签名 query 的 sign-in 页面与 Web-owned CSRF POST |
 | `src/app/auth/{select-tenant,consent}/route.ts` | IAM 固定外层交互 URI 的严格 GET 到 `/iam/interactions/*`；外层 POST 405 |
 | `src/app/iam/interactions/select-tenant/route.ts` | `/iam` cookie path 内的 owner `/organization/list` 候选、选择重核及 set-active 续接 |

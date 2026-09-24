@@ -100,8 +100,12 @@ production 使用 `__Secure-kokoro-issuer.` 前缀。普通 cookie `Path=/iam`�
 仅 `Path=/iam/oauth2/end-session/confirm`。多 `Set-Cookie` 不能合并；未知名称、Domain、路径或属性拒绝。
 
 代理保持 IAM 原生 status/body、合法 Location、Cache-Control、Content-Type、429 Retry-After、logout
-Content-Security-Policy/X-Content-Type-Options/Pragma 和精确 Set-Cookie，不自动跟随 redirect。W1C-2A
-Location 只允许固定 `KOKORO_WEB_ORIGIN` 下已安装的只读 `/iam` route，或固定的
+Content-Security-Policy/X-Content-Type-Options/Pragma 和精确 Set-Cookie，不自动跟随 redirect。
+唯一浏览器导航适配是 `GET /iam/oauth2/authorize` 的 IAM 200 `application/json` 精确
+`{redirect:true,url}`：先经原生响应 header/issuer cookie 校验，再按已存在的固定同源交互/严格 callback
+Location 白名单验证 `url`，转无 body 302；其他 `/iam` JSON、非法 shape/URL、错误 status 不作重定向，
+非法 authorize continuation 返回无上游 body/cookie 的 502。该适配不新增 BFF/IAM contract 或可编辑 policy。
+固定 policy 的 Location 只允许固定 `KOKORO_WEB_ORIGIN` 下已安装的只读 `/iam` route，或固定的
 `/auth/{sign-in,select-tenant,consent}` 目标路径；后两者现在先经无状态同源 302 到静态
 `/iam/interactions/*`，浏览器才会携带 IAM `Path=/iam` issuer cookie。callback 与 post-logout
 Location 在 2B-2 基线尚未允许；当前仅允许安装后的固定 callback URI/唯一

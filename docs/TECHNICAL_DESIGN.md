@@ -138,8 +138,11 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
   308、编码 route 名返回 404，因此文档不把框架前不可见的原始输入冒称为 handler 拒绝。任一情况都不扩张
   固定 allowlist、身份或响应内容。CRLF、超限 query/header/body 同样拒绝；不自动跟随 redirect。Web 原样
   保留合法 status、Location、
-  Cache-Control、Content-Type、Retry-After、logout 安全 header 和多个 `Set-Cookie`，不把 OAuth 协议
-  包进 Product `{data}`/`{error}` envelope。BFF policy 限制的 8 KiB query、64 KiB request、
+  Cache-Control、Content-Type、Retry-After、logout 安全 header 和多个 `Set-Cookie`；唯一窄例外是浏览器
+  `GET /iam/oauth2/authorize` 的 IAM 200 JSON `{redirect:true,url}`：先按原生响应验证状态、header 和
+  issuer cookie，再要求精确字段、固定同源且属于既有交互/严格 callback Location 白名单，转为无 body 的
+  302 导航。其他 `/iam` 路由不解释 JSON redirect，非法 authorize JSON 返回不带上游 body/cookie 的 502。
+  OAuth 协议不包进 Product `{data}`/`{error}` envelope。BFF policy 限制的 8 KiB query、64 KiB request、
   16 KiB header、1 MiB response、5 s duration 是 Web 不得放宽的上限；浏览器取消传播到 BFF。
   W1C-2A GET 不承载请求体；非零/异常 `Content-Length`、任意 `Transfer-Encoding` 或可观察 Request body
   都在 BFF socket 前拒绝。policy 保留的三个 `/auth/*` 交互 Location 在 2A 尚未安装；

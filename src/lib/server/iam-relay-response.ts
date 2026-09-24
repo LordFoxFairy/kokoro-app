@@ -139,3 +139,36 @@ export function nativeIamResponse(
       ) as ArrayBuffer
   return new Response(body, { status: upstream.status, headers })
 }
+
+// Better Auth emits an authorize continuation as 200 JSON. Only the browser
+// authorize GET may translate that owner response into a navigation; all
+// other IAM relay paths keep their native HTTP semantics.
+export function browserAuthorizeResponse(
+  upstream: IamRelayUpstream,
+  webOrigin: string,
+  secureCookies: boolean,
+  fallbackRequestId: string,
+): Response | null {
+  const native = nativeIamResponse(upstream, webOrigin, secureCookies, fallbackRequestId)
+  if (native === null || upstream.status !== 200) return native
+  if (upstream.headers.has("location") ||
+    !/^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) return null
+
+  let location: string | null = null
+  try {
+    const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const fields = value as Record<string, unknown>
+      if (Object.keys(fields).sort().join(",") === "redirect,url" && fields.redirect === true &&
+        typeof fields.url === "string" && validIamInteractionNavigation(fields.url, webOrigin)) location = fields.url
+    }
+  } catch { /* Malformed authorize continuation is rejected without exposing its body. */ }
+  if (location === null) return null
+
+  const headers = new Headers(native.headers)
+  headers.delete("content-length")
+  headers.delete("content-type")
+  headers.set("cache-control", "no-store")
+  headers.set("location", location)
+  return new Response(null, { status: 302, headers })
+}
