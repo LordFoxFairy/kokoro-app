@@ -433,6 +433,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: oldJar })).body).toContain('"authenticated":false')
     const newJar = cookieHeader(csrf, signin, callback, winner)
     expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":true')
+    const revokesBeforeStaleSignout = paths.filter((item) => item === "/iam/oauth2/revoke").length
+    const staleSignout = await http(nextPort, "/api/auth/signout", "POST", form,
+      { origin: `http://localhost:${nextPort}`, cookie: oldJar })
+    expect(staleSignout.status).toBe(200)
+    expect(JSON.parse(staleSignout.body)).toEqual({ status: "stale_session", remote_revocation: "not_required" })
+    expect(staleSignout.headers["set-cookie"]).toBeUndefined()
+    expect(cookieHeader(csrf, signin, callback, winner, staleSignout)).toBe(newJar)
+    expect(paths.filter((item) => item === "/iam/oauth2/revoke")).toHaveLength(revokesBeforeStaleSignout)
+    expect((await http(nextPort, "/api/auth/session", "GET", "", { cookie: newJar })).body).toContain('"authenticated":true')
     const signout = await http(nextPort, "/api/auth/signout", "POST", form,
       { origin: `http://localhost:${nextPort}`, cookie: newJar })
     expect(signout.headers["x-request-id"]).toMatch(/^[a-f0-9-]{36}$/u)

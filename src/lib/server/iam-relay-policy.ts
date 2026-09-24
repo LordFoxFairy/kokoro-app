@@ -2,7 +2,7 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "1d1f42775e0fa4464de6b08ee9d2b9cd82911a71",
+  ownerCommit: "ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2",
   policySha256: "bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819",
 })
 

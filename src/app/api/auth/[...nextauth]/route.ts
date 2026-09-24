@@ -73,11 +73,20 @@ async function productAction(request: NextRequest, action: "session" | "signout"
     const issuer = { issuer_session: "pending_browser_confirmation", issuer_end_session_url: issuerEndSessionUrl }
     const claims = await decodeProductSession(request, config.authSecret)
     const headers = new Headers({ "cache-control": "private, no-store", "x-request-id": requestId })
-    headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
-    if (claims === null) return Response.json({ status: "signed_out", remote_revocation: "not_required", ...issuer }, { headers })
+    if (claims === null) {
+      headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
+      return Response.json({ status: "signed_out", remote_revocation: "not_required", ...issuer }, { headers })
+    }
     let taken: Awaited<ReturnType<typeof tombstoneSession>>
-    try { taken = await tombstoneSession(store, claims.id) }
-    catch { return Response.json({ status: "browser_cookie_cleared", remote_revocation: "unconfirmed", ...issuer }, { status: 503, headers }) }
+    try { taken = await tombstoneSession(store, claims.id, claims.generation) }
+    catch {
+      headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
+      return Response.json({ status: "browser_cookie_cleared", remote_revocation: "unconfirmed", ...issuer }, { status: 503, headers })
+    }
+    if (taken.status === "stale") {
+      return Response.json({ status: "stale_session", remote_revocation: "not_required" }, { headers })
+    }
+    headers.append("set-cookie", clearProductSessionCookie(config.relay.webOrigin))
     if (taken.status !== "active" || taken.refresh === undefined) {
       return Response.json({ status: "signed_out", remote_revocation: "unconfirmed", ...issuer }, { headers })
     }

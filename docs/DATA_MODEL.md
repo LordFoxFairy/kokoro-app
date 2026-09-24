@@ -32,7 +32,7 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
 principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
 Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71` 已 pin IAM
+`ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2` 已 pin IAM
 `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，policy SHA-256
 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；W1C-2A 已固定消费该只读
 artifact 与 provenance，真实 Web→BFF→IAM 及 Product Session 验收仍待完成。
@@ -94,8 +94,8 @@ previous generation / tombstoned handle ──replay──> reject
   猜测重试；不依赖 issuer 的 replay 窗口恢复败者。finalize 成功但新 cookie 交付未知，或 Redis
   finalize ACK 未知时不发送新 cookie；即使记录已是 `active(g+1)`，旧 g 仍拒绝，用户重新登录，
   无客户端可达的 active record 由固定 TTL 回收。不得以进程锁或 localStorage 代替跨实例 CAS。
-- logout 从可信解封 cookie 取得 session ID，不要求 cookie generation 当前；原子 tombstone 当前 record，
-  **仅 active 状态**同时 take 已确认当前的加密 refresh，经 BFF 固定 relay 单次有界尝试 IAM
+- logout 从可信解封 cookie 取得 session ID 与 generation；Redis 原子比对当前 record generation，只有匹配时才 tombstone。旧 generation 不发 Product `Set-Cookie`，避免乱序响应删除新 cookie；旧 cookie 仍因在线校验不可用，保留当前 record/refresh 且不请求 revoke 或返回 issuer 确认引导；
+  **仅匹配 generation 的 active 状态**同时 take 已确认当前的加密 refresh，经 BFF 固定 relay 单次有界尝试 IAM
   revoke。issuer end-session 是浏览器原生确认流程，不由 Web Redis refresh take 代替；refreshing/pending 时可能已轮换，故不 take/发送旧 refresh，报告远端撤销未确认。
   记录缺失也建立覆盖最大会话/在途窗口的 tombstone；迟到 finalize 不可复活，重复 logout 不重复远端
   revoke。清 Web cookie。旧 refresh 的 revoke 可能扩及同 client/user family 且返回 400，不能当作

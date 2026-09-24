@@ -2,24 +2,24 @@
 
 状态日期：2026-09-23。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
-W1C-2F-S1 已发布 Web main `1ba0498511447b9aafde892adafaae4de7f61ed6`，当前未提交工作树修复 HTTPS Product cookie；该切片在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
+W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；本次未提交工作树进一步修复旧 generation cookie 的 signout CAS。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
 以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh；固定 Web origin 为 HTTPS 或 Web production mode 时带 Secure）和 Web Redis 加密
 refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
-执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅 active 时 take 已确认当前 refresh，
-pending 时只 tombstone。signout 仅返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。旧普通 BFF adapter、legacy magic-link/team 路径仍是**待切换旧态**；本切片不声称
+执行受 CSRF 保护的双 CAS refresh，`POST /api/auth/signout` 仅匹配 cookie generation 的 active record 才 take 已确认当前 refresh，
+pending 时只 tombstone。旧 generation signout 不发送 Product `Set-Cookie`，避免乱序响应清除浏览器已收到的新 cookie；HTTP 200 返回 `stale_session`/`not_required`，旧 cookie 仍被在线 generation 校验拒绝，不改当前 Redis record、不 revoke、也不返回 issuer 引导；其他 signout 返回固定同源 `issuer_end_session_url` 与 `issuer_session=pending_browser_confirmation`；浏览器实际完成 `/iam/oauth2/end-session` GET 确认页和受 Origin/签名确认 cookie 保护的 POST 后，IAM issuer session 才算结束。旧普通 BFF adapter、legacy magic-link/team 路径仍是**待切换旧态**；本切片不声称
 它们已改为 Bearer，也不声称真实三仓 IAM 组合通过。固定 BFF relay policy 已重钉
-`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`/IAM `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，
+`ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`/IAM `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，
 SHA-256 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；仅来源 metadata 变化。
-本地 Node `22.22.2` 在 Web main `1ba0498511447b9aafde892adafaae4de7f61ed6` 加本未提交修复，以 `caffeinate -dimsu` 执行：
+本地 Node `22.22.2` 在 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc` 以 `caffeinate -dimsu` 执行：
 `pnpm contract` 6 files/52 tests、`pnpm test:architecture` 4/32、`pnpm lint`、`pnpm typecheck`、
 `pnpm test` 139/1369、`pnpm build`、`pnpm test:e2e` 6/6 均通过。RP-only 固定 503 的成功断言先
-反转获 RED，再在当前工作树获得 GREEN；真实 Web→BFF→IAM 三仓 runner 首轮识别出 HTTPS Product cookie 缺 Secure，本工作树已修复、待 Root 复验；普通 `/v1` Bearer adapter、
+反转获 RED，再在 S1 获得 GREEN；真实 Web→BFF→IAM 三仓 runner 首轮识别出 HTTPS Product cookie 缺 Secure，已由 main 修复、待 Root 复验。本次 stale-signout 切片新增 Redis CAS 与真实 Next HTTP 回归：旧 cookie 不发 Product `Set-Cookie`、不触发 revoke、不返回 issuer 确认引导、不影响新 cookie；Node `22.22.2` 在本工作树执行 `pnpm check`，contract 52/52、architecture 32/32、全量 Vitest 1371/1371、lint/typecheck/build 均通过，`pnpm test:e2e` 6/6 通过。普通 `/v1` Bearer adapter、
 Team、GitHub runner 与上线验收仍未执行/完成。
 
 ## 1. 当前边界
 
-- 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要，并在 S1 工作树保存 Product Session 在线协调 record。
-- Session cookie 使用 AES-256-GCM 信封，设置为 `HttpOnly`、`SameSite=Lax`，生产环境额外设置 `Secure`。浏览器 cookie 不透传给业务上游。
+- 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
+- 新 Product Session cookie 使用加密 HttpOnly 信封、`SameSite=Lax`，固定公开 Web origin 为 HTTPS 或 Web production mode 时设置 `Secure`；浏览器 cookie 不透传给业务上游。旧 sealed session 仅属于待删除旧路径。
 - Product 上游调用由 `src/lib/server/upstream-http.ts` 统一执行：重建可信 `Forwarded` 上下文，删除浏览器可控的 domain/tenant/site/forwarded 头，设置总 deadline，并限制请求与响应体大小。W1C-2A `/iam` 原生协议例外使用独立 transport，避免合并多个 `Set-Cookie`。
 - `src/proxy.ts` 为每次页面请求生成 CSP nonce；配合动态 layout 注入的 nonce，响应包含 CSP、frame、referrer、permissions 与 no-sniff 防护头。`/api/*` 明确 `Cache-Control: no-store` 与 `Vary: Cookie`。
 - `kokoro-app` 是 Web remote 名；主控仓中的对应 submodule 路径是 `apps/kokoro-app`，不使用歧义的 `kokoro/` 名称。
@@ -35,7 +35,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   W1C-2A 发布时只是后续交互目标，未安装页面；2B-1 和本次 2B-2 才逐片安装。专用 transport
   保持原生 status/header/body 与多个
   `Set-Cookie`，并实施 issuer-cookie 白名单、16 KiB header、1 MiB response、5 s deadline 与取消传播。
-- 只读 snapshot 固定 BFF `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`、IAM
+- 只读 snapshot 固定 BFF `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`、IAM
   `f240bd7d5f542bb152c7eb929074c96b6c290ea8` 和 policy SHA-256
   `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；Web 不编辑 owner policy，
   `tests/contract/iam-relay-policy.test.ts` 对 snapshot 原始字节与 provenance 做漂移门。
@@ -45,7 +45,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   POST；IAM 签名仍由 IAM owner 验证。中间 sign-in 响应中的 session token JSON 不返回浏览器；最终继续响应
   对 IAM 实际 200 `{redirect:true,url}` 严格校验固定 Web origin/允许交互路径后返回 303/Location 与多个
   issuer `Set-Cookie`；中间 sign-in 失败仅受控 401/429/503 且不调用 continue。直接 browser `/iam/*` POST
-  仍全部拒绝；Auth.js/Product Session 尚未实现，因此此工作树不构成完整登录流。Redis 依赖精确固定
+  仍全部拒绝；此项是 2B-1 历史切片状态，当前 S1 已安装 Auth.js/Product Session；普通业务 adapter 尚未切换。Redis 依赖精确固定
   `redis@5.12.1`，`KOKORO_WEB_REDIS_URL` 缺失或 Redis 故障时交互 fail closed，Web 不清理共享 Redis。
 - W1C-2B-2 新增 `/auth/select-tenant` 与 `/auth/consent` 严格 GET 外层，引导至
   `/iam/interactions/select-tenant|consent` 真正的 Web-owned GET/POST；外层 POST 405。IAM issuer
@@ -65,20 +65,19 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   四条新外/内层 route 的 HEAD/OPTIONS 显式 405，零 BFF/CSRF Redis 写入；当 IAM 对
   `session_data` 下发 `Max-Age=0` 或已过期 `Expires` 删除时，Web 的后续 CSRF issuer 绑定与
   浏览器 CookieJar 一致，只保留有效 `session_token`，且有效 `Max-Age` 优先于旧 `Expires`。
-- 本工作树 W1C-2C RP-only **候选未发布**：固定 `/api/auth/[...nextauth]` 只开放 CSRF GET、
+- 历史 W1C-2C RP-only 切片（现已发布且被 S1 接续）：当时固定 `/api/auth/[...nextauth]` 只开放 CSRF GET、
   `kokoro-iam` signin POST 与 callback GET；固定 Host/按方法精确 Origin、Auth.js CSRF、固定 issuer/client/
   callback/resource、S256/state/nonce 与 300 秒 Redis `SET NX`/`GETDEL` 绑定。签名算法显式 pin
   EdDSA；自定义 token request 调用验证型 `openid-client` callback，server-only Basic token、
   Bearer userinfo 与 JWKS 仅走固定 BFF backchannel，每次独立 agent 限制绝对 5 秒、响应头/正文
   1 MiB，并传播浏览器 `request.signal`：callback 断连销毁当前 BFF socket 且不继续后续 backchannel。
   真实 Next+BFF fixture 覆盖签名/issuer/audience/nonce/过期/算法、userinfo sub、CSRF、
-  竞态重放、body/响应超限与慢滴流；验证成功仍只返回受控
-  `503 product_session_unavailable`，清 RP cookie，不签发可用 Auth.js/旧 Product Session。
+  竞态重放、body/响应超限与慢滴流；在当时 RP-only 基线验证成功仍只返回受控
+  `503 product_session_unavailable`，清 RP cookie，不签发可用 Auth.js/旧 Product Session；当前 S1 成功回调已建立新 Product Session 并 303 到 `/app`。
   W1C-2D 将 IAM consent 实际成功响应的唯一 `code`、`state`、`iss` 三参数严格准入，
   `iss` 必须等于固定 `${KOKORO_WEB_ORIGIN}/iam`；完整 query 交验证型 `openid-client` 再核 issuer。
   缺失、重复、错误 issuer 或额外参数在 relay/RP 边界拒绝，不把 2B-2 的受控 503 误判当成功。
-  旧 magic-link、refresh、logout 与普通 `/v1` Bearer 代理仍未迁移；该 fixture 不是 IAM owner 签名
-  组合验收，更不是首次登录完成。
+  旧 magic-link 与普通 `/v1` Bearer 代理仍未迁移；该历史 fixture 不是 IAM owner 签名组合验收；当前 S1 已实现新 session/refresh/signout，但三仓真实闭环仍待 Root runner 验收。
 
 ## 2. 已落地的质量门
 
@@ -133,23 +132,21 @@ BFF 仍是 HTTP fixture，
 未做真实 IAM/RP 闭环或 GitHub Actions runner 验证。测试覆盖 tenant 列表信任、重核/越界、
 签名 query 变化、Origin/CSRF/重放、consent 拒绝/伪造 query owner 401、恶意导航、native
 302/多 Set-Cookie、错误敏感体清洗及未安装 RP callback 503。本片仅机械 re-pin BFF policy
-`1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`/IAM
+`ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`/IAM
 `f240bd7d5f542bb152c7eb929074c96b6c290ea8`，复制 BFF 发布的只读 JSON 原字节，其余 route/method
 语义与前 pin 相同。
 
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；已装三页的 POST/CSRF 不等于 Auth.js
-   Code+S256、server-only token/userinfo、可信 GET consent 签名确认或 Product Session 已完成，这些必须在
-   后续切片替换旧路径。
+2. 旧 Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，但普通 BFF adapter、旧认证/Team 路径的删除仍须在后续 S2 切片完成。真实三仓 IAM 组合验收未通过前不宣称首次登录全链闭环。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
 5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。
 
 ## 5. 后续顺序
 
-1. 基于已固定的 BFF relay policy 实现 Auth.js Code+S256、交互 CSRF/Product Session，再删除 Web→IAM 直连；
+1. 完成 S1 真实三仓 IAM 组合验收，再做 S2：普通 `/v1` adapter 切换到在线 Product Session 单一 Bearer，删除旧 Web→IAM 直连和旧认证/Team 路径；
    legacy Chat 双读另由 W1D generated Product consumer/AG-UI 切片删除。
 2. 统一 route envelope、request/trace ID、日志与 telemetry，并补 health/ready 与生产观测证据。
 3. 独立完成遗留 UI/CSS 切片、视觉回归、bundle budget 与 live release acceptance。

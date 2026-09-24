@@ -54,20 +54,20 @@ describe("Product Session Redis double-CAS", () => {
     expect(await finalizeRefresh(config, id, 0, winner!.reservation, "rotated-refresh")).toBe(true)
     expect(await inspectSession(config, id, 0)).toBe(false)
     expect(await inspectSession(config, id, 1)).toBe(true)
-    const taken = await tombstoneSession(config, id)
+    const taken = await tombstoneSession(config, id, 1)
     expect(taken).toEqual({ status: "active", refresh: "rotated-refresh" })
     expect(await inspectSession(config, id, 1)).toBe(false)
-    expect(await tombstoneSession(config, id)).toEqual({ status: "repeat" })
+    expect(await tombstoneSession(config, id, 1)).toEqual({ status: "repeat" })
   })
 
   it("tombstones pending without exposing or revoking its possibly stale refresh", async () => {
     const id = await newSession()
     const pending = await reserveRefresh(config, id, 0)
     expect(pending).not.toBeNull()
-    expect(await tombstoneSession(config, id)).toEqual({ status: "pending" })
+    expect(await tombstoneSession(config, id, 0)).toEqual({ status: "pending" })
     expect(await finalizeRefresh(config, id, 0, pending!.reservation, "late-rotated")).toBe(false)
     expect(await inspectSession(config, id, 0)).toBe(false)
-    expect(await tombstoneSession(config, id)).toEqual({ status: "repeat" })
+    expect(await tombstoneSession(config, id, 0)).toEqual({ status: "repeat" })
   })
 
   it("binds encrypted refresh to origin, session ID and generation", async () => {
@@ -112,7 +112,7 @@ describe("Product Session Redis double-CAS", () => {
     expect(reserved).not.toBeNull()
     await expect(finalizeRefresh(config, id, 0, reserved!.reservation, "r".repeat(8193))).rejects.toThrow()
     expect(await inspectSession(config, id, 1)).toBe(false)
-    expect(await tombstoneSession(config, id)).toEqual({ status: "pending" })
+    expect(await tombstoneSession(config, id, 0)).toEqual({ status: "pending" })
   })
 
   it("leaves the old generation unusable if finalize committed but its ACK or new cookie was lost", async () => {
@@ -124,5 +124,27 @@ describe("Product Session Redis double-CAS", () => {
     expect(await inspectSession(config, id, 0)).toBe(false)
     expect(await inspectSession(config, id, 1)).toBe(true)
     // No second issuer refresh or previous-generation recovery; the orphan expires by record TTL.
+  })
+
+  it("does not let a stale generation tombstone or take the current rotated refresh", async () => {
+    const id = await newSession()
+    const reserved = await reserveRefresh(config, id, 0)
+    expect(reserved).not.toBeNull()
+    expect(await finalizeRefresh(config, id, 0, reserved!.reservation, "current-refresh")).toBe(true)
+    expect(await tombstoneSession(config, id, 0)).toEqual({ status: "stale" })
+    expect(await inspectSession(config, id, 1)).toBe(true)
+    expect(await tombstoneSession(config, id, 1)).toEqual({ status: "active", refresh: "current-refresh" })
+    expect(await inspectSession(config, id, 1)).toBe(false)
+  })
+
+  it("does not let a future generation tombstone a pending or active record", async () => {
+    const id = await newSession()
+    expect(await tombstoneSession(config, id, 1)).toEqual({ status: "stale" })
+    expect(await inspectSession(config, id, 0)).toBe(true)
+    const pending = await reserveRefresh(config, id, 0)
+    expect(pending).not.toBeNull()
+    expect(await tombstoneSession(config, id, 1)).toEqual({ status: "stale" })
+    expect(await finalizeRefresh(config, id, 0, pending!.reservation, "current-refresh")).toBe(true)
+    expect(await inspectSession(config, id, 1)).toBe(true)
   })
 })

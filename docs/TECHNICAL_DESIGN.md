@@ -48,7 +48,7 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `1d1f42775e0fa4464de6b08ee9d2b9cd82911a71`，其
+BFF relay 固定policy来源 commit `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
 `bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；policy version `1.0.0`
 固定 IAM owner commit `f240bd7d5f542bb152c7eb929074c96b6c290ea8`。该 pin 已随 IAM test-only
@@ -109,8 +109,7 @@ Browser ──同源 cookie──> Web Route Handler/Auth.js RP
    或 Redis finalize ACK 未知时不发送新 cookie；即使 Redis 已提交 `active(g+1)`，旧 g 仍拒绝、用户
    重新登录，无客户端可达的 active record 按固定 TTL 回收；不依赖 IAM 的 replay 窗口恢复败者。
    cookie 的 `Path=/`、`SameSite=Lax`、`HttpOnly` 与固定 `KOKORO_WEB_ORIGIN=https:` **或** Web production mode 时 `Secure` 在创建/refresh/清除一致；该 Product 决策与 IAM issuer cookie 的 production 模式分离。
-5. logout 从可信解封的 cookie 取得 session ID；不要求请求 generation 仍是最新。单次 Redis 原子操作
-   tombstone 当前记录；**仅在记录为 active 时** take 已确认当前的加密 refresh，经固定 BFF relay 单次
+5. logout 从可信解封的 cookie 取得 session ID 与 generation；单次 Redis 原子 compare-and-tombstone 仅在当前记录 generation 匹配时修改记录。旧 generation 不发送 Product `Set-Cookie`（乱序删除 cookie 会损坏并发 refresh 赢家），HTTP 200 返回 `stale_session`/`not_required`；旧 cookie 仍因在线 generation 校验不可用，不写 tombstone、不删除当前记录、不 revoke，也不返回 issuer 确认引导；**仅在匹配 generation 且记录为 active 时** take 已确认当前的加密 refresh，经固定 BFF relay 单次
    有界尝试 IAM revoke；issuer end-session 必须另由浏览器确认，refresh revoke 不等于 issuer cookie 清除。若记录为 refreshing/pending，旧 refresh 可能已轮换，故只
    tombstone，不 take/发送旧 refresh 到 IAM，并报告远端撤销未确认。缺失记录也建立覆盖最大会话/在途
    窗口的 tombstone，迟到 finalize 不可复活；重复 logout 不重复远端 revoke。清 Web cookie；

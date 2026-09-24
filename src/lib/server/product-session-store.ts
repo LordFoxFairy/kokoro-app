@@ -135,19 +135,25 @@ export async function invalidatePending(config: StoreConfig, id: string, reserva
   await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [reservation, String(MAX_SESSION_SECONDS + 60)] }))
 }
 
-export async function tombstoneSession(config: StoreConfig, id: string): Promise<{ status: "active" | "pending" | "missing" | "repeat"; refresh?: string }> {
+export async function tombstoneSession(config: StoreConfig, id: string, expectedGeneration: number): Promise<{ status: "active" | "pending" | "missing" | "repeat" | "stale"; refresh?: string }> {
   const [record, tombstone] = keys(config.webOrigin, id)
   const script = `if redis.call('EXISTS', KEYS[2]) == 1 then return {'repeat'} end
-    local raw=redis.call('GET', KEYS[1]); redis.call('SET', KEYS[2], '1', 'EX', ARGV[1], 'NX'); redis.call('DEL', KEYS[1]);
+    local raw=redis.call('GET', KEYS[1]);
+    local v=nil
+    if raw then
+      v=cjson.decode(raw)
+      if v.generation ~= tonumber(ARGV[2]) then return {'stale'} end
+    end
+    redis.call('SET', KEYS[2], '1', 'EX', ARGV[1], 'NX'); redis.call('DEL', KEYS[1]);
     if not raw then return {'missing'} end
-    local v=cjson.decode(raw); if v.state == 'active' then return {'active', v.refresh, tostring(v.generation)} end
+    if v.state == 'active' then return {'active', v.refresh, tostring(v.generation)} end
     return {'pending'}`
-  const result = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(MAX_SESSION_SECONDS + 60)] }))
+  const result = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(MAX_SESSION_SECONDS + 60), String(expectedGeneration)] }))
   if (!Array.isArray(result)) throw new Error("invalid tombstone result")
   const status = result[0]
   if (status === "active" && typeof result[1] === "string" && typeof result[2] === "string") {
     return { status, refresh: decrypt(config, id, Number(result[2]), result[1]) }
   }
-  if (status === "pending" || status === "missing" || status === "repeat") return { status }
+  if (status === "pending" || status === "missing" || status === "repeat" || status === "stale") return { status }
   throw new Error("invalid tombstone result")
 }
