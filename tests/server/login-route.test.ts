@@ -71,8 +71,8 @@ describe("GET /login", () => {
     expect(authGet).not.toHaveBeenCalled()
   })
 
-  it("does not redirect-loop after an RP start failure", async () => {
-    authPost.mockResolvedValue(new Response(null, { status: 303, headers: { location: "/login?auth=sign_in_failed" } }))
+  it("does not navigate to a fallback document after an RP start failure", async () => {
+    authPost.mockResolvedValue(new Response(null, { status: 303, headers: { location: "/auth/retry" } }))
     const response = await GET(browserRequest())
     expect(response.status).toBe(503)
     expect(response.headers.get("location")).toBeNull()

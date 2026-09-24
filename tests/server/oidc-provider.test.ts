@@ -73,19 +73,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("Product OIDC Team read scopes", () => {
-  it("returns browser form failures to a stable retry page but keeps API errors as JSON", async () => {
+  it("returns RP start failures without a browser retry-page redirect", async () => {
     const browser = await signIn("text/html", "csrfToken=invalid%20token")
-    expect(browser.status).toBe(303)
-    expect(browser.headers.get("location")).toBe("/login?auth=sign_in_failed")
+    expect(browser.status).toBe(400)
+    expect(browser.headers.get("location")).toBeNull()
     expect(browser.headers.get("cache-control")).toBe("no-store")
+    expect(await browser.json()).toMatchObject({ error: { code: "rp_signin_rejected" } })
     expect(nextAuth).not.toHaveBeenCalled()
     const api = await signIn(undefined, "csrfToken=invalid%20token")
     expect(api.status).toBe(400)
     expect(await api.json()).toMatchObject({ error: { code: "rp_signin_rejected" } })
     vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
     const unavailable = await signIn("text/html")
-    expect(unavailable.status).toBe(303)
-    expect(unavailable.headers.get("location")).toBe("/login?auth=sign_in_failed")
+    expect(unavailable.status).toBe(503)
+    expect(unavailable.headers.get("location")).toBeNull()
+    expect(await unavailable.json()).toMatchObject({ error: { code: "rp_unavailable" } })
   })
   it("requests the original scopes followed by exactly the three Team read scopes", () => {
     const config = oidcRpConfig(ENV)!

@@ -49,7 +49,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
 
 - 当前工作树为 `/auth/sign-in`、`/iam/interactions/select-tenant|consent` 的服务端 GET 表单加上共享无脚本品牌外壳与响应式样式；Email/Password、Tenant、Consent 仍各自原生 POST，CSRF/签名 query/cookie/owner 校验路径不改。真实 Next+Chromium fixture 在 1440×900、560×600、390×844 验证字段上下排列、label、action、无水平溢出与交互页可达；这只证明 Web-owned issuer 页面视觉与边界，不冒充完整 OIDC/Product Session 闭环。
 - 当前工作树的真实 Chromium 登录切片修复了 `GET /iam/oauth2/authorize` 的浏览器导航断层：IAM owner 实际返回 200 `application/json` `{redirect:true,url}`；Web 只在该固定 route 经原生 header/issuer cookie 和固定同源交互 Location 校验后转为无 body 302。其他 IAM JSON 保持原生，异常 authorize continuation 返回不透传上游 body/cookie 的 502。真实 Next + Chromium fixture 已验证浏览器进入 `/auth/sign-in`；完整 Product Session/Chat 浏览器闭环仍由 Root 独立组合 runner 验收。
-- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页；`/login` 现为服务端 Product RP OIDC 启动路由，不依赖 System runtime manifest，浏览器成功时直接进入真正的 IAM `/auth/sign-in` 邮箱/密码表单。可见的连接中/整页重试组件与失败态共用的假登录页面均已删除；启动失败仅返回无 body 的 HTTP 503，并在服务端记录阶段。没有 RP 配置时当前本地 3310 返回这个空 503（非可登录预览），不会显示假凭据表单。`/app` 仍需在线 Product Session，System manifest 仅增强展示。IAM 表单已收敛为紧凑单列，浏览器凭据错误留在表单内并重签一次性 CSRF。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。
+- 公开入口已收敛：`/` 使用固定单租户 Kokoro 品牌直接渲染营销首页；`/login` 现为服务端 Product RP OIDC 启动路由，不依赖 System runtime manifest，浏览器成功时直接进入真正的 IAM `/auth/sign-in` 邮箱/密码表单。可见的连接中/整页重试组件与失败态共用的假登录页面均已删除；RP `signin` 失败后 303 回登录重试页的分支也已删除，失败仅返回结构化错误。`/login` 启动失败仅返回无 body 的 HTTP 503，并在服务端记录阶段。没有 RP 配置时当前本地 3310 返回这个空 503（非可登录预览），不会显示假凭据表单。`/app` 仍需在线 Product Session，System manifest 仅增强展示。IAM 表单已收敛为紧凑单列，浏览器凭据错误留在表单内并重签一次性 CSRF。`/preview/marketing` fixture 和未使用的 HomeGate 已删除。
 - 本次改动在 Node `22.22.2` 下的 `pnpm check` 通过：contract 54、architecture 32、Vitest 1401、lint/typecheck/build；真实 Next HTTP 集成测试覆盖首次及已有 CSRF cookie 的 `/login` 302 与 RP cookie；聚焦 3310 离线 Playwright 10/10 通过。Auth.js v4 Route Handler 读取当前 Next request context 的 `cookies()`，不是合成 `NextRequest` 的 cookie header；服务端启动已显式同步经过 Auth.js 签发的 CSRF cookie。固定 Web `175a6d805b69b88c1478b86164fdcbfe925f498a` 的 Root 真 HTTPS Chromium 组合已 PASS：浏览器从 `/login` 直达带签名 IAM 表单，提交邮箱/密码、tenant、consent 后到 `/app` 并取得 Product Session；浏览器未发 CSRF/signin 中转请求。其后独立 CookieJar 完成 BFF/Agent worker 聊天回归，不能冒充 Chromium Chat；测试自有 PG、Redis、进程均清零。3310 仍无 RP/IAM/BFF 配置，HTTP 503 是当前环境事实。
 - W1D-Web-Gate：`/app` 的访问权只由在线 Product Session 决定；System manifest 为可选展示数据。已认证状态即使用本仓固定品牌/导航装载 live 工作台，有效 manifest 才覆盖动态展示；失败或重试会清除旧站点皮肤，不切到 preview transport。旧 `RuntimeUnavailable` 页面、样式、测试与九语种死文案已删除。当前 Node22 contract/architecture/lint/typecheck、串行 Vitest 1385/1385、build、Playwright 11通过/1既有skip；真实浏览器在已认证探针与 System 503 下仍于 `/app` 显示核心工作台。
 - 浏览器只访问同源 Web 入口；Chat 请求经 `/api/session/*` 代理到 `${KOKORO_BFF_BASE_URL}/v1/*`。Web 不拥有 PostgreSQL、ORM、migration 或任何其他 owner 的数据库事实；Redis 自有 namespace 保存短期 CSRF/RP 摘要和 S1 Product Session 在线协调 record。
@@ -141,8 +141,9 @@ W1D 登录 handoff 旧基线使用 Node `22.22.2` 执行 `pnpm check`：contract
 architecture 4 files/32 tests、lint、typecheck、全量 Vitest 142 files/1,396 tests与 production build
 均通过；`pnpm test:e2e` 在 desktop/mobile 为 15 passed、1 个既有 mobile rail logout skip。浏览器门证明
 旧基线首屏零 CSRF/System 请求、点击后固定 CSRF/provider POST、失败停止重试、axe 与 viewport；本次自动登录与无卡片布局已替代“点击后”行为，当前工作树的聚焦浏览器门禁见本切片交付记录；其中真实 303
-用例只证明 **RP 配置缺失时 signin route 的受控早退** 返回 `/login?auth=sign_in_failed` 且页面不自动循环，
-不代表 authorize/token/userinfo、IAM 签名、Product Session 或完整 OAuth 失败链已经通过。
+用例只证明当时 RP 配置缺失时的受控早退；其中失败后跳转登录重试页的旧行为已删除。
+当前 RP `signin` 失败返回无跳转的结构化错误，`/login` 不承载中转或重试 UI；这不代表
+authorize/token/userinfo、IAM 签名、Product Session 或完整 OAuth 失败链已经通过。
 
 W1C-2A 当前工作树使用 Node `22.22.2` 重新执行：vendor policy 与固定 BFF commit blob 的 SHA-256/字节
 对照一致；聚焦 4 files / 38 tests、`pnpm contract` 6 files / 52 tests、`pnpm test:architecture`

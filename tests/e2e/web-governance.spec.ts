@@ -41,11 +41,11 @@ test.describe("Web production boundary", () => {
     expect((await page.request.get("/preview/marketing")).status()).toBe(404)
   })
 
-  test("an RP failure URL does not start an automatic redirect loop", async ({ page }) => {
-    const response = await page.goto("/login?auth=sign_in_failed", { waitUntil: "domcontentloaded" })
+  test("an unexpected login query cannot select a fallback page", async ({ page }) => {
+    const response = await page.goto("/login?unexpected=1", { waitUntil: "domcontentloaded" })
     expect(response?.status()).toBe(503)
     await expect(page.locator("body")).toBeEmpty()
-    await expect(page).toHaveURL(/\/login\?auth=sign_in_failed$/u)
+    await expect(page).toHaveURL(/\/login\?unexpected=1$/u)
   })
 
   test("rail logout posts Product signout and navigates to issuer confirmation", async ({ page, isMobile }) => {

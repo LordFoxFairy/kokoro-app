@@ -24,16 +24,6 @@ function errorResponse(status: number, code: string, clearCookies: readonly stri
   return new Response(JSON.stringify({ error: { code, message: "RP request was rejected" } }), { status, headers })
 }
 
-function signInFailure(request: Request, status: number, code: string): Response {
-  // Native browser form submission navigates to the response document. Give
-  // it a bounded local retry page; API callers still receive structured JSON.
-  if (!request.headers.get("accept")?.includes("text/html")) return errorResponse(status, code)
-  return new Response(null, { status: 303, headers: {
-    location: "/login?auth=sign_in_failed", "cache-control": "no-store",
-    "referrer-policy": "no-referrer", "x-request-id": randomUUID(),
-  } })
-}
-
 function routeAction(parts: readonly string[]): Action | null {
   if (parts.length === 1 && parts[0] === "csrf") return "csrf"
   if (parts.length === 1 && parts[0] === "session") return "session"
@@ -161,8 +151,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     (action === "signin" || action === "signout" ? method !== "POST" :
       action === "session" ? false : method !== "GET")) return errorResponse(405, "rp_method_not_allowed")
   const config = oidcRpConfig(process.env)
-  if (config === null) return action === "signin"
-    ? signInFailure(request, 503, "rp_unavailable") : errorResponse(503, "rp_unavailable")
+  if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
   if (url.pathname !== expectedPath || !matchesCanonicalWebRequest(request, config.relay, method)) {
@@ -199,10 +188,10 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
 
   if (action === "signin") {
     if (url.search !== "" || request.headers.get("content-type") !== "application/x-www-form-urlencoded") {
-      return signInFailure(request, 400, "rp_signin_rejected")
+      return errorResponse(400, "rp_signin_rejected")
     }
     const form = await boundedInteractionForm(request, ["csrfToken"])
-    if (form === null || !/^[A-Za-z0-9]+$/u.test(form.get("csrfToken") ?? "")) return signInFailure(request, 400, "rp_signin_rejected")
+    if (form === null || !/^[A-Za-z0-9]+$/u.test(form.get("csrfToken") ?? "")) return errorResponse(400, "rp_signin_rejected")
     try {
       const headers = new Headers(request.headers)
       headers.delete("content-length")
@@ -216,12 +205,12 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
         console.error("Kokoro RP sign-in response rejected:", response.status,
           location === null ? "no_location" : new URL(location, config.relay.webOrigin).pathname,
           state === null ? "no_state" : "state_ok")
-        return signInFailure(request, 403, "rp_signin_rejected")
+        return errorResponse(403, "rp_signin_rejected")
       }
       await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies })
       response.headers.set("cache-control", "no-store")
       return response
-    } catch { console.error("Kokoro RP sign-in start threw"); return signInFailure(request, 503, "rp_unavailable") }
+    } catch { console.error("Kokoro RP sign-in start threw"); return errorResponse(503, "rp_unavailable") }
   }
 
   const cleanup = rpCleanupCookies(config.relay.secureCookies)
