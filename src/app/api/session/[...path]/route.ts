@@ -143,7 +143,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   // business APIs remain envelope-first and independently versioned.
   const responseHeaders = responseHeadersWithRequestId(parsed.data.meta.request_id, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
+    "cache-control": "private, no-store",
   })
   return new Response(JSON.stringify(parsed.data.data), {
     status: upstream.status,

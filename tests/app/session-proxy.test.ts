@@ -73,7 +73,7 @@ describe("/api/session/[...path] proxy", () => {
           data: { sessions: [] },
           meta: { request_id: "req_1" },
         }),
-        { status: 200, headers: { "content-type": "application/json" } },
+        { status: 200, headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } },
       ),
     )
     const { GET } = await import("@/app/api/session/[...path]/route")
@@ -98,6 +98,7 @@ describe("/api/session/[...path] proxy", () => {
     expect(new Headers(init.headers).get("x-kokoro-namespace")).toBeNull()
     expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBeNull()
     expect(res.headers.get("x-request-id")).toBe("req_1")
+    expect(res.headers.get("cache-control")).toBe("private, no-store")
     expect(await res.json()).toEqual({ sessions: [] })
   })
 
