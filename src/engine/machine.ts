@@ -26,6 +26,7 @@ import { SessionClientError } from "./client"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
 import {
   createExecutionAdapter,
+  type CreateMessageArgs,
   type MessageExecutionOptions,
 } from "./execution-adapter"
 import {
@@ -104,8 +105,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // React 的 disabled 是渲染态，连续点击可能在一次提交前同时进入 engine。
   // 以 run 为粒度加同步闸门，保证同一暂停帧始终只有一个 resume 请求在途。
   const resumeInFlight = new Set<string>()
-  // 最近一次未获回执的提交：POST 失败重试复用同一 idempotency_key（服务端命中即重放 receipt）。
-  let pendingSubmission: { content: string; idempotencyKey: string } | null = null
+  // 最近一次未获回执的完整提交意图：重试复用同一 key 与业务 body，保持 BFF digest 不变。
+  let pendingSubmission: CreateMessageArgs | null = null
   // Stop can arrive after POST has started but before its receipt. Remember
   // those keys so an accepted late run is cancelled instead of being
   // resurrected by the delayed response.
@@ -355,22 +356,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       mode,
       model: selectedModel,
       agent: selectedAgent,
-      pinnedSkills,
+      pinnedSkills: [...pinnedSkills],
     }
   }
 
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
-  function beginRun(sessionId: string, content: string, idempotencyKey: string): void {
-    pendingSubmission = { content, idempotencyKey }
-    // 模式意图上 wire：thinking 档=true（后端各 provider 翻成原生推理开关），fast=false 显式关。
-    const mode = store ? activeMode(store) : pendingMode
+  function beginRun(args: CreateMessageArgs): void {
+    const submission = {
+      ...args,
+      options: { ...args.options, pinnedSkills: [...args.options.pinnedSkills] },
+    }
+    pendingSubmission = submission
+    const { sessionId, idempotencyKey } = submission
     execution
-      .createMessage({
-        sessionId,
-        content,
-        idempotencyKey,
-        options: messageExecutionOptions(mode),
-      })
+      .createMessage(submission)
       .then((receipt) => {
         const cancelledSessionId = cancelledSubmissions.get(idempotencyKey)
         if (cancelledSessionId === sessionId) {
@@ -462,7 +461,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     thread = appendUserMessage(thread, { id: createId("usr"), content: trimmed })
     syncActiveEntry()
     notify()
-    beginRun(store.activeId, trimmed, createId("idem"))
+    // 模式意图上 wire：thinking 档=true，fast=false 显式关。
+    beginRun({
+      sessionId: store.activeId,
+      content: trimmed,
+      idempotencyKey: createId("idem"),
+      options: messageExecutionOptions(activeMode(store)),
+    })
   }
 
   function retry(): void {
@@ -485,11 +490,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     notify()
     // 未获回执的同文重试复用 idempotency_key（服务端命中即重放 receipt，不造重复 run）；
     // 已回执后的失败重试换新 key（上一 run 已真实存在并失败）。
-    const reuseKey =
-      pendingSubmission !== null && pendingSubmission.content === lastUser.content
-        ? pendingSubmission.idempotencyKey
-        : createId("idem")
-    beginRun(store.activeId, lastUser.content, reuseKey)
+    const pending = pendingSubmission
+    beginRun(pending !== null && pending.sessionId === store.activeId && pending.content === lastUser.content
+      ? pending
+      : {
+          sessionId: store.activeId,
+          content: lastUser.content,
+          idempotencyKey: createId("idem"),
+          options: messageExecutionOptions(activeMode(store)),
+        })
   }
 
   function stageToolDecision(runId: string, toolId: string, decision: ToolDecision): void {

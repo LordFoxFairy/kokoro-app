@@ -9,7 +9,7 @@
 
 - `machine.ts`
   - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
-    steer POST，不动状态机）/ retry（未回执重试复用 idempotency_key）/ cancelRun /
+    steer POST，不动状态机）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
     stageToolDecision / selectConversation / newConversation / deleteConversation / setMode /
     dispose。
   - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。
@@ -30,10 +30,13 @@
   contract zod，失败以 `SessionClientError`（network/http/parse）上抛零静默降级；
   baseUrl+path 直接拼接（非 new URL，保住 `/api/session` 前缀）；AUTH-P0 起客户端不持
   token，鉴权由同源 BFF 代理注入 Bearer、httpOnly 信封 cookie 同源自动携带；
+  MessageCreate 的内部 `idempotency_key` 只映射到 `Idempotency-Key` header，strict schema 在
+  fetch 前拒绝非法字段/缺失 key，JSON 只含 BFF 允许的业务字段；
   `openEvents` 只委托 `AgUiChatTransport`；`fetchSnapshot` 404/410 返 null（空线程即真态）。
 - `agui-chat-transport.ts`：仓内唯一 AG-UI network adapter，实现 Vercel AI SDK
   `ChatTransport<KokoroUiMessage>`；负责 SSE framing、严格 runtime schema、opaque
-  `Last-Event-ID`、断线重连与 frame cursor 去重，拒绝 reducer-shaped legacy wire。
+  `Last-Event-ID`、断线重连与 frame cursor 去重，拒绝 reducer-shaped legacy wire；
+  同一 chat 的同一 UIMessage id/content 重送复用 key，新 id 或内容变化换 key。
 - `agui-event-mapper.ts`：把已校验 AG-UI frame 分别映射成 AI SDK `UIMessageChunk` 与
   `ChatProjectionEvent`；wire DTO 不进入 core/UI model。
 - `session-scope.ts`：`SessionScope` 将用户直接会话与一个 opaque `projectRef` 的专案任务

@@ -64,6 +64,50 @@ afterEach(() => {
 })
 
 describe("/api/session/[...path] proxy", () => {
+  it("forwards the canonical message body and Idempotency-Key without promoting legacy body fields or browser identity", async () => {
+    requestWithDomain.mockResolvedValue(new Response(
+      JSON.stringify({ data: { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }, meta: { request_id: "req_1" } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ))
+    const { POST } = await import("@/app/api/session/[...path]/route")
+    const response = await POST(new Request("http://localhost/api/session/sessions/ses_1/messages", {
+      method: "POST",
+      headers: {
+        cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json",
+        "idempotency-key": "message_1", authorization: "Bearer browser-forgery",
+        "x-kokoro-tenant-id": "other-tenant", "x-kokoro-principal-id": "other-user",
+        "x-kokoro-service": "browser-forgery", "x-kokoro-internal-secret": "browser-forgery",
+      },
+      body: JSON.stringify({ content: "hello" }),
+    }), params(["sessions", "ses_1", "messages"]))
+
+    expect(response.status).toBe(200)
+    const [, , init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string>; body: ArrayBuffer; signal: AbortSignal }]
+    const headers = new Headers(init.headers)
+    expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ content: "hello" })
+    expect(headers.get("idempotency-key")).toBe("message_1")
+    expect(headers.get("authorization")).toBe("Bearer product-access")
+    expect(headers.get("x-kokoro-service")).toBe("web-bff")
+    expect(headers.get("x-kokoro-internal-secret")).toBe("web-bff-secret")
+    expect(headers.get("x-kokoro-tenant-id")).toBeNull()
+    expect(headers.get("x-kokoro-principal-id")).toBeNull()
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+  })
+
+  it("does not promote the retired body idempotency_key when the header is absent", async () => {
+    requestWithDomain.mockResolvedValue(new Response("", { status: 400, headers: { "content-type": "text/plain" } }))
+    const { POST } = await import("@/app/api/session/[...path]/route")
+    await POST(new Request("http://localhost/api/session/sessions/ses_1/messages", {
+      method: "POST",
+      headers: { cookie: sessionCookie(), origin: "http://localhost", "content-type": "application/json" },
+      body: JSON.stringify({ idempotency_key: "retired", content: "hello" }),
+    }), params(["sessions", "ses_1", "messages"]))
+    const [, , init] = requestWithDomain.mock.calls[0] as [string, string, { headers: Record<string, string>; body: ArrayBuffer }]
+    expect(new Headers(init.headers).get("idempotency-key")).toBeNull()
+    expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ idempotency_key: "retired", content: "hello" })
+  })
+
   it("projects Chat through the BFF and unwraps the v1 response for the browser contract", async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)

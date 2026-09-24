@@ -266,6 +266,11 @@ Web 可在 browser-private 边界将 BFF success `data` 投影成当前 UI 所�
 - POST/PATCH/DELETE 等具副作用 command 使用 `Idempotency-Key`；相同 key/相同 digest 重放原结果，
   相同 key/不同 digest 返回冲突。
 - 浏览器可产生 command identity，但 durable receipt 与 request digest 由 BFF owner 保存。
+- MessageCreate 的浏览器内部参数可携 `idempotency_key` 供状态机重试；标准 Chat 客户端发送的 JSON 仅为
+  `{content, model?, agent?, thinking?, pinned_skills?, mcp_servers?, project_ref?}`，该 key 只在
+  `Idempotency-Key` header。客户端在 fetch 前拒绝未知字段或空/缺 key；未获回执的重试冻结
+  首发 options/业务 body 与 key。同一 AI SDK UIMessage id/content 的重复提交复用 key，新消息
+  id 或编辑后的内容使用新 key。`/api/session/*` 不再从 JSON body 提升旧 key。
 - 幂等身份缺失时不做自动 mutation retry。
 - 资源版本冲突由 BFF contract 的 version/ETag/receipt 语义表达；Web 不猜测成功。
 

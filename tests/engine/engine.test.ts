@@ -785,6 +785,33 @@ describe("失败重试", () => {
     expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_retry" })
   })
 
+  it("未获回执重试冻结首发完整意图，偏好变化不改变同 key 的请求摘要", async () => {
+    buildEngine()
+    engine.setMode("thinking")
+    engine.setModel("model_original")
+    engine.setAgent("agent_original")
+    engine.setPinnedSkills(["skill_original"])
+    client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
+    engine.submit("hello")
+    await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("error")
+
+    engine.setMode("fast")
+    engine.setModel("model_new")
+    engine.setAgent("agent_new")
+    engine.setPinnedSkills(["skill_new"])
+    client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
+    engine.retry()
+    await settle()
+
+    expect(client.createCalls).toHaveLength(2)
+    expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    expect(client.createCalls[0]?.body).toMatchObject({
+      idempotency_key: expect.any(String), content: "hello", thinking: true,
+      model: "model_original", agent: "agent_original", pinned_skills: ["skill_original"],
+    })
+  })
+
   it("run.failed 终态后 retry：换新 idempotency_key 重新开跑（旧 run 已真实失败）", async () => {
     buildEngine()
     engine.submit("job")

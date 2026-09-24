@@ -209,4 +209,35 @@ describe("AgUiChatTransport", () => {
     expect(chunks).toContainEqual({ type: "text-start", id: "assistant-1" })
     expect(chunks.at(-1)).toMatchObject({ type: "finish", finishReason: "stop" })
   })
+
+  it("reuses an idempotency key for the same UIMessage retry and rotates it for a new message", async () => {
+    const submitted: Array<{ content: string; idempotencyKey: string }> = []
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(response(sse(TERMINAL_CURSOR, {
+      type: "RUN_FINISHED", timestamp: 2, threadId: "session-1", runId: "run-1",
+      metadata: metadata("agent-terminal", 2),
+    })))))
+    const transport = new AgUiChatTransport({
+      eventsUrl: (chatId) => `/api/session/sessions/${chatId}/events`,
+      submitMessage: ({ content, idempotencyKey }) => {
+        submitted.push({ content, idempotencyKey })
+        return submitted.length === 1 ? Promise.reject(new Error("unknown commit")) : Promise.resolve()
+      },
+    })
+    const send = (id: string, text: string) => transport.sendMessages({
+      trigger: "submit-message", chatId: "session-1", messageId: undefined,
+      messages: [{ id, role: "user", parts: [{ type: "text", text }] }], abortSignal: undefined,
+    })
+    await expect(send("user-1", "hello")).rejects.toThrow("unknown commit")
+    const retryStream = await send("user-1", "hello")
+    await retryStream.cancel()
+    const nextStream = await send("user-2", "next")
+    await nextStream.cancel()
+    const changedStream = await send("user-2", "edited")
+    await changedStream.cancel()
+    expect(submitted).toHaveLength(4)
+    expect(submitted[0]?.idempotencyKey).toBeTruthy()
+    expect(submitted[1]?.idempotencyKey).toBe(submitted[0]?.idempotencyKey)
+    expect(submitted[2]?.idempotencyKey).not.toBe(submitted[0]?.idempotencyKey)
+    expect(submitted[3]?.idempotencyKey).not.toBe(submitted[2]?.idempotencyKey)
+  })
 })

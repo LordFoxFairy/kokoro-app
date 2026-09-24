@@ -28,7 +28,7 @@
 | `src/app/app/layout.tsx` | 登录后的桌面工作区布局 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
 | `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
-| `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter |
+| `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |

@@ -1,4 +1,4 @@
-import { createServer, type RequestListener, type Server } from "node:http"
+import { createServer, type IncomingHttpHeaders, type RequestListener, type Server } from "node:http"
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
@@ -30,17 +30,25 @@ describe("Chat BFF against a local BFF contract fixture", () => {
   let receivedDomain = ""
   let receivedHost = ""
   let receivedAuthorization = ""
+  let receivedHeaders: IncomingHttpHeaders = {}
+  let receivedBody = ""
 
   beforeAll(async () => {
     bff = await listen((request, response) => {
+      receivedHeaders = request.headers
       receivedHost = request.headers.host?.toString() ?? ""
       receivedDomain = request.headers.forwarded?.toString() ?? ""
       receivedAuthorization = request.headers.authorization?.toString() ?? ""
-      response.writeHead(200, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
+      const chunks: Buffer[] = []
+      request.on("data", (chunk: Buffer) => chunks.push(chunk))
+      request.on("end", () => {
+        receivedBody = Buffer.concat(chunks).toString("utf8")
+        response.writeHead(200, {
+          "content-type": "text/event-stream",
+          "cache-control": "no-cache",
+        })
+        response.end("data: chat-ok\n\n")
       })
-      response.end("data: chat-ok\n\n")
     })
     process.env.KOKORO_WEB_SESSION_SECRET = "integration-secret"
     process.env.KOKORO_WEB_AUTH_SECRET = "a".repeat(32)
@@ -79,5 +87,27 @@ describe("Chat BFF against a local BFF contract fixture", () => {
     expect(receivedDomain).toBe("host=dev.kokoro.localhost")
     expect(receivedHost).not.toBe("first.example")
     expect(receivedAuthorization).toBe("Bearer product-access")
+  })
+
+  it("sends canonical MessageCreateRequest bytes with header-only idempotency and trusted identity", async () => {
+    const response = await POST(new Request("https://first.example/api/session/sessions/ses_1/messages", {
+      method: "POST",
+      headers: {
+        host: "first.example", origin: "https://first.example", "content-type": "application/json",
+        "idempotency-key": "stable-message-1", authorization: "Bearer forged",
+        "x-kokoro-tenant-id": "forged-tenant", "x-kokoro-principal-id": "forged-user",
+        "x-kokoro-service": "forged-service",
+      },
+      body: JSON.stringify({ content: "hello", model: "model_1" }),
+    }), { params: Promise.resolve({ path: ["sessions", "ses_1", "messages"] }) })
+
+    expect(response.status).toBe(200)
+    expect(receivedBody).toBe('{"content":"hello","model":"model_1"}')
+    expect(receivedHeaders["idempotency-key"]).toBe("stable-message-1")
+    expect(receivedAuthorization).toBe("Bearer product-access")
+    expect(receivedHeaders["x-kokoro-service"]).toBe("web-bff")
+    expect(receivedHeaders["x-kokoro-tenant-id"]).toBeUndefined()
+    expect(receivedHeaders["x-kokoro-principal-id"]).toBeUndefined()
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
   })
 })

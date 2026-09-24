@@ -17,6 +17,7 @@ import {
   shareReceiptSchema,
   snapshotPath,
   messageCreateReceiptSchema,
+  messageCreateParamsSchema,
   modelCandidatesPath,
   modelCandidateListSchema,
   agentCandidatesPath,
@@ -135,14 +136,7 @@ async function postJson<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   let response: Response
-  const bodyRecord = typeof body === "object" && body !== null && !Array.isArray(body)
-    ? body as Record<string, unknown>
-    : null
-  const idempotencyKey = commandId?.trim() || (
-    typeof bodyRecord?.idempotency_key === "string" && bodyRecord.idempotency_key.trim() !== ""
-      ? bodyRecord.idempotency_key.trim()
-      : `session-mutation:${crypto.randomUUID()}`
-  )
+  const idempotencyKey = commandId?.trim() || `session-mutation:${crypto.randomUUID()}`
   try {
     response = await fetch(url, {
       method: "POST",
@@ -166,12 +160,12 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
   const url = (path: string): string => `${base}${path}`
   const agUiTransport = new AgUiChatTransport({
     eventsUrl: (sessionId) => url(eventsPath(sessionId)),
-    submitMessage: async ({ chatId, content, abortSignal }) => {
+    submitMessage: async ({ chatId, content, idempotencyKey, abortSignal }) => {
       await postJson(
         url(messagesPath(chatId)),
-        { idempotency_key: `ai-chat:${crypto.randomUUID()}`, content },
+        { content },
         (raw) => messageCreateReceiptSchema.parse(raw),
-        undefined,
+        idempotencyKey,
         abortSignal,
       )
     },
@@ -202,8 +196,14 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => sessionListSchema.parse(raw))
     },
 
-    createMessage: (sessionId, body) =>
-      postJson(url(messagesPath(sessionId)), body, (raw) => messageCreateReceiptSchema.parse(raw)),
+    createMessage: async (sessionId, input) => {
+      const parsed = messageCreateParamsSchema.safeParse(input)
+      if (!parsed.success || parsed.data.idempotency_key.trim() === "") {
+        throw new SessionClientError("parse", "Invalid message create parameters")
+      }
+      const { idempotency_key, ...body } = parsed.data
+      return postJson(url(messagesPath(sessionId)), body, (raw) => messageCreateReceiptSchema.parse(raw), idempotency_key)
+    },
 
     listModels: async () => {
       const target = url(modelCandidatesPath())

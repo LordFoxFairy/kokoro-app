@@ -77,22 +77,6 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
     }
   }
 
-  // The browser Chat client carries its stable message key in the JSON body
-  // for the flat legacy contract. Promote it to the standard HTTP
-  // Idempotency-Key expected by BFF v1 without exposing any extra identity
-  // channel to the browser.
-  if (MUTATION_METHODS.has(request.method) && !headers.has("idempotency-key") && body !== undefined) {
-    try {
-      const parsed: unknown = JSON.parse(new TextDecoder().decode(body))
-      if (typeof parsed === "object" && parsed !== null && "idempotency_key" in parsed) {
-        const key = (parsed as { idempotency_key?: unknown }).idempotency_key
-        if (typeof key === "string" && key.trim() !== "") headers.set("idempotency-key", key.trim())
-      }
-    } catch {
-      // Preserve the original body. BFF owns the canonical invalid JSON error.
-    }
-  }
-
   let upstream: Response
   try {
     upstream = await requestWithDomain(target, config.domain, {

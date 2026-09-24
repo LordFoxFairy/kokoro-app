@@ -191,7 +191,7 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/artifacts?cursor=artifact%20cursor")
   })
 
-  it("keeps direct and project Chat on the same flat message/control contract", async () => {
+  it("keeps direct and project Chat on the same message/control contract with header-only message identity", async () => {
     const receipt = { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))
@@ -224,8 +224,10 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/session/sessions/project_session/messages")
     expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/session/sessions/direct_session/runs/run_1/control")
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/session/sessions/project_session/runs/run_2/control")
-    expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).not.toHaveProperty("project_ref")
-    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toMatchObject({ project_ref: "project/1" })
+    expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({ content: "hello" })
+    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({ content: "project task", project_ref: "project/1" })
+    expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("direct_1")
+    expect(new Headers((fetchMock.mock.calls[3]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("project_1")
     expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel", session_id: "direct_session" })
     expect(new Headers((fetchMock.mock.calls[4]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("cancel_1")
     expect(JSON.parse((fetchMock.mock.calls[5]?.[1] as RequestInit).body as string)).toEqual({
@@ -234,6 +236,40 @@ describe("cursor pagination and same-origin client paths", () => {
       decisions: [{ type: "submit", request_id: "tool_1", value: { answer: "yes" } }],
     })
     expect(new Headers((fetchMock.mock.calls[5]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("resume_1")
+  })
+
+  it("reuses the message key and unchanged canonical body when an unacknowledged intent is retried", async () => {
+    const receipt = { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error("connection reset"))
+      .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createSessionClient({ baseUrl: "/api/session" })
+    const intent = { idempotency_key: "stable-intent", content: "retry me", model: "model_1" }
+    await expect(client.createMessage("session_1", intent)).rejects.toMatchObject({ reason: "network" })
+    await expect(client.createMessage("session_1", intent)).resolves.toEqual(receipt)
+    const sent = fetchMock.mock.calls.map(([, init]) => ({
+      key: new Headers((init as RequestInit).headers).get("idempotency-key"),
+      body: JSON.parse((init as RequestInit).body as string),
+    }))
+    expect(sent).toEqual([
+      { key: "stable-intent", body: { content: "retry me", model: "model_1" } },
+      { key: "stable-intent", body: { content: "retry me", model: "model_1" } },
+    ])
+  })
+
+  it("rejects unknown identity fields and missing or empty message keys before fetch", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createSessionClient({ baseUrl: "/api/session" })
+    const invalid = [
+      { idempotency_key: "stable", content: "hello", tenant_id: "forged" },
+      { idempotency_key: "", content: "hello" },
+      { content: "hello" },
+    ]
+    for (const body of invalid) {
+      await expect(client.createMessage("session_1", body as never)).rejects.toMatchObject({ reason: "parse" })
+    }
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("uses the same resumable SSE wire for a project Chat session", async () => {

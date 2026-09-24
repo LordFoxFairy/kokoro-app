@@ -26,6 +26,7 @@ export type ProjectionStreamHandle = {
 export type SubmitAgUiMessageArgs = {
   chatId: string
   content: string
+  idempotencyKey: string
   headers: Headers
   body?: object
   abortSignal?: AbortSignal
@@ -84,19 +85,22 @@ function parseFrameData(
   }
 }
 
-function userText(messages: readonly KokoroUiMessage[]): string {
+function userText(messages: readonly KokoroUiMessage[]): { id: string; content: string } | null {
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex]
     if (message === undefined || message.role !== "user") {
       continue
     }
-    return message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("")
-      .trim()
+    return {
+      id: message.id,
+      content: message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("")
+        .trim(),
+    }
   }
-  return ""
+  return null
 }
 
 function retryDelay(milliseconds: number, signal: AbortSignal): Promise<boolean> {
@@ -148,6 +152,8 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
   readonly #fetcher: Fetcher
   readonly #retryMs: number
   readonly #cursorByChat = new Map<string, EventCursor>()
+  // AI SDK submit-message 的 options.messageId 为 undefined；最新 user UIMessage.id 才是重试身份。
+  readonly #messageIntentByChat = new Map<string, { id: string; content: string; key: string }>()
 
   constructor(options: AgUiChatTransportOptions) {
     this.#eventsUrl = options.eventsUrl
@@ -304,13 +310,19 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
     if (this.#submitMessage === undefined) {
       throw new SessionClientError("http", "AG-UI message submission is not configured")
     }
-    const content = userText(options.messages)
-    if (content.length === 0) {
+    const message = userText(options.messages)
+    if (message === null || message.id.length === 0 || message.content.length === 0) {
       throw new SessionClientError("parse", "The latest user UIMessage has no text content")
     }
+    const previous = this.#messageIntentByChat.get(options.chatId)
+    const idempotencyKey = previous?.id === message.id && previous.content === message.content
+      ? previous.key
+      : `ai-chat:${crypto.randomUUID()}`
+    this.#messageIntentByChat.set(options.chatId, { ...message, key: idempotencyKey })
     const submitArgs: SubmitAgUiMessageArgs = {
       chatId: options.chatId,
-      content,
+      content: message.content,
+      idempotencyKey,
       headers: new Headers(options.headers),
       ...(options.body === undefined ? {} : { body: options.body }),
       ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
