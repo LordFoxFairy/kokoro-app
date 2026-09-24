@@ -1,6 +1,7 @@
 /**
- * Build-time fallback used before a tenant runtime manifest is available.
- * Live sites must override these values through the domain-bound manifest.
+ * Fixed Kokoro product identity for the public landing and Product RP login.
+ * The authenticated workspace may overlay site presentation only after its
+ * domain-bound System manifest has been verified.
  */
 export const DEFAULT_BRAND = Object.freeze({
   name: "Kokoro",

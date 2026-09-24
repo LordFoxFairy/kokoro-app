@@ -15,6 +15,22 @@ async function mockProductLogout(page: Page) {
 }
 
 test.describe("Web production boundary", () => {
+  test("public root and login render without System manifest or a backend", async ({ page }) => {
+    let manifestRequests = 0
+    await page.route("**/api/system/runtime-manifest**", async (route) => {
+      manifestRequests += 1
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" })
+    })
+    const home = await page.goto("/", { waitUntil: "domcontentloaded" })
+    expect(home?.status()).toBe(200)
+    await expect(page.getByRole("heading", { name: "把想法说给它，收回能用的成果" })).toBeVisible()
+    await page.goto("/login", { waitUntil: "domcontentloaded" })
+    await expect(page.getByTestId("login-submit")).toBeVisible()
+    await expect(page.getByText("配置不可用")).toHaveCount(0)
+    expect(manifestRequests).toBe(0)
+    expect((await page.request.get("/preview/marketing")).status()).toBe(404)
+  })
+
   test("Product login submits the fixed provider with a CSRF token, not an email link", async ({ page }) => {
     await page.route("**/api/auth/csrf", async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ csrfToken: "Token123" }) })

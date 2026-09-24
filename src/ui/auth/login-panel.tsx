@@ -10,18 +10,14 @@ import { useT } from "@/i18n/context"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
-import { useRuntimeManifest } from "@/system/use-runtime-manifest"
+import { DEFAULT_BRAND } from "@/config/brand"
 import { MarketingTopBar } from "@/ui/marketing/marketing-top-bar"
-import { RuntimeUnavailable } from "./runtime-unavailable"
 import { beginProductSignIn } from "./product-auth-client"
 
 import styles from "./login-panel.module.css"
 
-export function LoginPanel({ brandName }: { brandName?: string }) {
+export function LoginPanel() {
   const t = useT()
-  const { manifest, source, retry, retrying = false } = useRuntimeManifest()
-  const brand = brandName ?? manifest.brand.name
-  const brandLogoUrl = manifest.brand.logoUrl
   const [busy, setBusy] = useState(false)
   const [unavailable, setUnavailable] = useState(false)
   const submitLockRef = useRef(false)
@@ -47,24 +43,11 @@ export function LoginPanel({ brandName }: { brandName?: string }) {
     }
   }
 
-  if (source === "error" || retrying) {
-    return (
-      <RuntimeUnavailable
-        onRetry={retry}
-        retrying={retrying}
-        brandName={brand}
-        brandMark={manifest.brand.mark}
-        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
-      />
-    )
-  }
-
   return (
     <div className={styles.screen}>
       <MarketingTopBar
-        brandName={brand}
-        brandMark={manifest.brand.mark}
-        {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
+        brandName={DEFAULT_BRAND.name}
+        brandMark={DEFAULT_BRAND.mark}
       />
       {unavailable ? (
         <div className={styles.toast} role="alert" data-testid="login-toast">

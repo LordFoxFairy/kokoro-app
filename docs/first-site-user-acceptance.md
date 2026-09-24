@@ -2,9 +2,9 @@
 
 ## 页面入口
 
-- `/`：Kokoro 产品稳定入口，服务端重定向到 `/app`。
-- `/preview/marketing`：公开营销预览，不加载工作区会话。
-- `/login`：User Web 登录面。
+- `/`：固定单租户公开营销首页，不依赖 System manifest。
+- `/login`：独立 Product RP 登录面；不依赖 System manifest，提交仍走真实 Auth.js/BFF/IAM。
+- `/auth/sign-in`：IAM issuer 的签名交互路由，不是 Product 登录面。
 - `/app`：桌面工作区；直接聊天、项目聊天、Agent、Skills、Scheduled、Library 和设置由当前
   产品仓库的 AppFrame 装配。
 

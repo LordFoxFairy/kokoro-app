@@ -1,10 +1,6 @@
-import { redirect } from "next/navigation"
+import { DEFAULT_BRAND } from "@/config/brand"
+import { LandingPage } from "@/ui/marketing/landing-page"
 
-/**
- * The first Site's canonical workspace is `/app`. Keep `/` as a stable,
- * bookmarkable entry point that lands in the same desktop Web shell instead
- * of rendering a second, divergent home surface.
- */
 export default function Home() {
-  redirect("/app")
+  return <LandingPage brandName={DEFAULT_BRAND.name} brandMark={DEFAULT_BRAND.mark} />
 }

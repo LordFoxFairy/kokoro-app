@@ -7,19 +7,16 @@ const { beginProductSignIn } = vi.hoisted(() => ({
   beginProductSignIn: vi.fn(),
 }))
 vi.mock("@/ui/auth/product-auth-client", () => ({ beginProductSignIn }))
-vi.mock("@/system/use-runtime-manifest", () => ({
-  useRuntimeManifest: () => ({
-    manifest: { brand: { name: "Kokoro", mark: "心" } },
-    source: "live",
-    retry: vi.fn(),
-  }),
+const { useRuntimeManifest } = vi.hoisted(() => ({
+  useRuntimeManifest: vi.fn(() => { throw new Error("Login must not load System runtime") }),
 }))
+vi.mock("@/system/use-runtime-manifest", () => ({ useRuntimeManifest }))
 
 import { LoginPanel } from "@/ui/auth/login-panel"
 
 function renderPanel() {
   window.localStorage.setItem("kokoro.locale", "zh")
-  return render(<LoginPanel brandName="Acme" />, { wrapper: LocaleProvider })
+  return render(<LoginPanel />, { wrapper: LocaleProvider })
 }
 
 beforeEach(() => {
@@ -32,6 +29,13 @@ afterEach(() => {
 })
 
 describe("LoginPanel", () => {
+  it("renders the configured single-tenant brand without requesting System runtime", () => {
+    renderPanel()
+    expect(screen.getByRole("heading", { name: "登录 Kokoro" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Kokoro" })).toHaveAttribute("href", "/")
+    expect(useRuntimeManifest).not.toHaveBeenCalled()
+    expect(screen.queryByText("配置不可用")).toBeNull()
+  })
   it("renders Product sign-in without an unused email or sent-link state", () => {
     renderPanel()
     expect(screen.getByTestId("login-submit")).toBeInTheDocument()

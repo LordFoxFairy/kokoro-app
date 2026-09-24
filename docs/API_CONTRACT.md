@@ -1,8 +1,10 @@
 # Kokoro User Web API 契约策略
 
+公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的 Product RP 登录页；`/app` 要求在线 Product Session。`/auth/sign-in` 是 IAM issuer 签名交互路由，不能当作普通登录页或静态营销别名。公开首页/登录页不调用 `/api/system/runtime-manifest`，登录提交仍严格通过 Auth.js CSRF 与固定 OIDC provider；此页面路由调整不改变现有机器契约、token、cookie 或 BFF/IAM owner API。
+
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、
 W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。
-普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合、旧 route/Team 路径删除未完成。
+普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合已验；旧 route/Team 路径删除未完成。
 
 ## W1C-2：同源 IAM 与 Product Session 契约（S1 已发布并完成三仓组合）
 
@@ -77,7 +79,7 @@ Web-owned 静态 `/iam/interactions/select-tenant|consent`；外层 POST 405。i
 在 2B-2 基线上，`/api/auth/callback/kokoro-iam` 尚未安装，匹配该目标返回受控 `503 rp_callback_unavailable`；
 当前已安装固定 callback；按 IAM 实际成功响应仅将严格同源、唯一 `code/state/iss`
 且 `iss=${KOKORO_WEB_ORIGIN}/iam` 的 Location 交给浏览器，完整 query 由 RP 验证型 callback 再核 issuer。后续 RP
-2C RP-only 基线验证成功仍只报 `503 product_session_unavailable`；当前 S1 验证成功建立 Product Session、清 RP 事务 cookie 并 303 到 `/app`，仍不把 token 发给浏览器。S1 真实三仓链已验；S2-A 普通业务代理组合待验。
+2C RP-only 基线验证成功仍只报 `503 product_session_unavailable`；当前 S1 验证成功建立 Product Session、清 RP 事务 cookie 并 303 到 `/app`，仍不把 token 发给浏览器。S1 真实三仓链已验；S2-A 普通业务代理组合已通过固定三仓真 HTTPS。
 
 上表是 W1C-2B 的完整固定 policy。已发布的 W1C-2A `/iam/[...path]` Route Handler 只安装 GET
 `/.well-known/openid-configuration`、`/.well-known/oauth-authorization-server`、`/jwks`、

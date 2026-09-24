@@ -341,7 +341,7 @@
 - `src/ui/navigation/runtime-navigation-registry.ts` — Rail 与 Command Menu 共用唯一 route registry 和 featureFlag 判定，消除两套菜单映射漂移；manifest 仍只能选择已注册设置动作。
 - `src/system/runtime-navigation.ts` + `src/system/use-runtime-manifest.ts` — 浏览器侧 runtime navigation projection 不再暴露 manifest `href`；路径只用于安全校验，最终目的地只能由静态 route registry 决定。
 - `output/playwright/command-menu-390-final.png` — 390px Command Menu 真实浏览器态；焦点落在搜索框、工作区/偏好设置分组清晰、面板不溢出，Escape 关闭后返回移动头部命令按钮。
-- `src/app/preview/marketing/page.tsx` — first-site 独立本地 marketing fixture，使用与生产相同的 LandingPage/MarketingTopBar，不依赖 System/IAM，专门承接视觉与交互回归。
+- `src/app/page.tsx` — 公开 `/` 使用 LandingPage/MarketingTopBar 的固定单租户入口，不依赖 System/IAM 渲染；浏览器视觉与交互回归直接验证真实根路径。
 - `src/components/blocks/app-frame/app-frame.tsx` + `src/components/blocks/workspace-rail/workspace-rail.tsx` — Canvas 关闭与 rail 跨布局焦点回收限定在当前 AppFrame/Rail 实例内；嵌入多个 User Web surface 时不再把焦点交给文档中的第一个匹配控件。
 - `src/ui/share/share-button.tsx` — 多个分享控件并存时，Popover 的 Done/撤销/关闭焦点始终回到触发它的同一个分享按钮。
 - `src/components/ui/message-scroller.tsx` + `src/i18n/*.ts` — “滚动到最新/开头”按钮的屏幕阅读器名称进入完整 i18n，不再残留硬编码英文。

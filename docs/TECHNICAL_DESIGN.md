@@ -1,7 +1,11 @@
 # Kokoro User Web 技术设计
 
+## 公开入口与单租户登录边界（当前切片）
+
+`/` 渲染固定 Kokoro 公开首页，`/login` 渲染固定 Product RP 登录卡，`/app` 才进入在线会话与 System runtime manifest 闸。公开首页和登录页不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`，不把缺失的 System 配置伪装成另一个租户，也不启动任务。登录点击仍经 `GET /api/auth/csrf` 与 `POST /api/auth/signin/kokoro-iam` 进入真实 Auth.js→BFF→IAM，失败只在登录卡显示受控状态，不回退 mock/旧 magic-link。`/auth/sign-in` 保持 IAM issuer 的签名交互入口，与 Product `/login` 语义不同；`/preview/marketing` 与未使用的 `HomeGate` 已删除，公开页面不再藏在 fixture path。验收分别覆盖后端缺席时公开页/登录页可渲染且零 manifest 请求、登录请求的 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。
+
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
-已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 Product Session 基础、Web Redis 双 CAS 与标准 session/signout route 已发布，S1 真实三仓 HTTPS 组合已通过；S2-A 普通业务代理组合待验。
+已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 Product Session 基础、Web Redis 双 CAS 与标准 session/signout route 已发布，S1 真实三仓 HTTPS 组合已通过；S2-A 普通业务代理组合已通过固定三仓真 HTTPS。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
