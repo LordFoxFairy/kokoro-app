@@ -57,8 +57,9 @@ Next 的最终 `src/proxy.ts` 仅对此 pathname 覆盖通用安全头，响应�
 
 ### 当前态与目标 owner
 
-当前 Web 使用 `kokoro_session`
-AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
+当前 Web 的旧路径仍使用 `kokoro_session`
+AES-256-GCM sealed envelope；`kokoro_auth_nonce` 只剩旧 helper/常量，两个 browser magic-link route
+已删除，不再由 Web 签发或消费该 cookie。`auth.ts` 仍保留 IAM 直连 helper，旧 namespace/
 principal 和 runtime credential 仍从该信封参与旧路径，这是**待删除的旧态**。Product Session、
 Redis CAS/tombstone 与 OIDC RP 的 S1 实现及真实三仓 HTTPS 已验；BFF relay 的 W1C-2 起始基线
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b` 已 pin IAM
@@ -183,7 +184,7 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 | 名称 | 内容与用途 | 生命周期 | 安全属性 |
 | --- | --- | --- | --- |
 | `kokoro_session`（当前旧态，W1C-2 删除） | AES-256-GCM sealed envelope；含 runtime credential、refresh token、user/namespace 和过期时间 | 当前对齐 refresh expiry；旧密钥可解封 | HttpOnly、SameSite=Lax、Path=/；production Secure；不作为目标在线授权 |
-| `kokoro_auth_nonce`（当前旧态，W1C-2 删除） | magic-link 请求与消费设备绑定 nonce | 当前实现 900 秒 | HttpOnly、SameSite=Lax；production Secure |
+| `kokoro_auth_nonce`（遗留 helper，browser route 已删除） | 原 magic-link 设备绑定 nonce；当前 Web 浏览器流程不再签发/消费 | 原实现 900 秒 | 原 HttpOnly、SameSite=Lax；production Secure；待清理常量/helper |
 | `sidebar_state` | 非敏感 Rail 展开偏好 | 当前实现 7 天 | 浏览器可读 UI cookie，不是身份依据 |
 
 当前 `kokoro_session` 的 namespace/user 由 Web server 解封后用于构造旧上游上下文；W1C-2
@@ -211,7 +212,7 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 
 - `sessionStorage` 承载一次性 project draft handoff、creation intent 和 preview sequence；关闭 tab 后失效。
 - URL/query/hash 承载可导航 surface、project/conversation 引用和非敏感筛选状态。
-- magic-link token 当前会进入 callback URL；route 必须避免 referrer 泄漏并在消费后重定向清除。
+- 旧 magic-link 申请/回调 route 已删除，Web 不再生成带 token 的旧 callback URL；固定 OIDC callback 使用独立的 `code/state/iss` 流程。
 - runtime JWT、refresh token、internal secret、tenant/site 不进入 URL。
 
 ### 2.4 内存状态

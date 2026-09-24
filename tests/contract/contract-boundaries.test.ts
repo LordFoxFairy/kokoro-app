@@ -36,4 +36,14 @@ describe("v1 contract boundaries", () => {
     expect(source).toContain('export * from "./chat"')
     expect(source).toContain('export * from "./paths"')
   })
+
+  it("retains only the fixed OIDC callback rather than a magic-link browser contract", async () => {
+    const provider = await readFile(path.join(root, "src/lib/server/oidc-provider.ts"), "utf8")
+    const authRoute = await readFile(path.join(root, "src/app/api/auth/[...nextauth]/route.ts"), "utf8")
+    expect(provider).toContain('const PROVIDER_ID = "kokoro-iam"')
+    expect(provider).toContain("/api/auth/callback/${PROVIDER_ID}")
+    expect(authRoute).toContain('parts[0] === "callback"')
+    expect(await exists("src/app/api/auth/callback/route.ts")).toBe(false)
+    expect(await exists("src/app/api/auth/magic-link/request/route.ts")).toBe(false)
+  })
 })

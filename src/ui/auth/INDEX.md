@@ -14,5 +14,5 @@
 上游：`@/app/page.tsx`（公开首页）、`@/app/login/route.ts`（Product OIDC 启动）、`@/ui/settings`（useSessionState 匿名闸）。下游：Web 同源 `@/app/api/auth/*` RP 与 `@/app/auth/sign-in/route.ts` IAM 表单。只有 `AppGate` 消费 System runtime manifest。
 
 ## 陷阱
-- 登录主链只使用 `GET /api/auth/csrf` + `POST /api/auth/signin/kokoro-iam`；会话探针使用 Product `GET /api/auth/session`，退出使用 CSRF 保护的 Product `POST /api/auth/signout` 并续接 issuer end-session。旧 magic-link route 仅因 Team/旧链依赖暂存，不作为 UI fallback。
+- 登录主链只使用 `GET /api/auth/csrf` + `POST /api/auth/signin/kokoro-iam`；会话探针使用 Product `GET /api/auth/session`，退出使用 CSRF 保护的 Product `POST /api/auth/signout` 并续接 issuer end-session。旧 magic-link 申请/回调 route 已删除；其余旧认证/Team helper 与 route 仍待独立清理，不作为 UI fallback。
 - 诚实态：不放假 OAuth 按钮或可见中转；失败 URL 不自动循环提交，未接入 IAM 时不呈现假凭据表单。

@@ -33,6 +33,11 @@ Node `22.22.2` 本工作树已执行 `pnpm contract` 56/56、`pnpm test:architec
 
 状态日期：2026-09-24。范围：`kokoro-app` 独立子仓。本文只陈述当前工作树可验证的事实；历史报告、preview fixture、截图和 Agent 自报均不构成生产验收。
 
+W1C 旧可见失败链清理：`/api/auth/magic-link/request` 与旧 `/api/auth/callback` 两个 browser-private
+Route Handler 已删除，不再生成 magic-link 开发回调，也不再从失败回调 303 到
+`/login?auth=link_unavailable`。固定 Auth.js `/api/auth/callback/kokoro-iam` 仍由
+`/api/auth/[...nextauth]` 承载；旧 `auth.ts` helper、其他认证和 Team 路径本片未删。
+
 W1C-2F-S1 已发布 Web main `0e0ec3a6a9682a09a7f335fbd7d96743afefd7dc`（含 HTTPS Product cookie `Secure` 修正）；后续已发布的旧 generation signout CAS 保持有效。S1 在已验 RP-only 基线之上接入 Web 自有 Product Session：成功 callback
 以加密 HttpOnly cookie（随机 session ID/generation、server-only access，无 refresh；固定 Web origin 为 HTTPS 或 Web production mode 时带 Secure）和 Web Redis 加密
 refresh record 建立在线状态；同源标准 `GET/POST /api/auth/session` 分别返回无 token 的最小 projection/
@@ -112,7 +117,7 @@ Team、GitHub runner 与上线验收仍未执行/完成。
   W1C-2D 将 IAM consent 实际成功响应的唯一 `code`、`state`、`iss` 三参数严格准入，
   `iss` 必须等于固定 `${KOKORO_WEB_ORIGIN}/iam`；完整 query 交验证型 `openid-client` 再核 issuer。
   缺失、重复、错误 issuer 或额外参数在 relay/RP 边界拒绝，不把 2B-2 的受控 503 误判当成功。
-  旧 magic-link route 仍待删除，但 UI 登录/探针/退出主链与普通 `/v1` Bearer 代理均已迁移；该历史 fixture 不是 IAM owner 签名组合验收；当前 S1 已实现新 session/refresh/signout，但三仓真实闭环仍待 Root runner 验收。
+  当时旧 magic-link route 仍待删除，但 UI 登录/探针/退出主链与普通 `/v1` Bearer 代理均已迁移；本轮已删除其中的申请和回调 route，其余旧认证/Team 路径仍在。该历史 fixture 不是 IAM owner 签名组合验收；当前 S1 已实现新 session/refresh/signout，但三仓真实闭环仍待 Root runner 验收。
 
 ## 2. 已落地的质量门
 
@@ -182,7 +187,7 @@ BFF 仍是 HTTP fixture，
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. 旧 Auth magic-link / refresh 仍直连 `KOKORO_IAM_BASE_URL`；S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，但普通 BFF adapter 已切换；旧认证/Team route 删除仍须在后续 S2-B 完成；UI 登录、会话探针和退出已切至 Product Session。真实三仓 IAM 组合验收未通过前不宣称首次登录全链闭环。
+2. 两个旧 magic-link browser route 已删除；`auth.ts` 中的旧 magic-link/refresh helper 与其余旧认证/Team route 仍存在，其中旧调用继续直连 `KOKORO_IAM_BASE_URL`。S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，普通 BFF adapter、UI 登录/会话探针/退出主链已切换；其余旧路径仍须由后续 S2-B 清理。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
 4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
 5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。

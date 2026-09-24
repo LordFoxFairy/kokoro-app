@@ -96,10 +96,11 @@ fixture 不能替代 IAM JWT 和完整登录组合。
 
 ### 当前事实与发布前置
 
-当前 Web 的 `src/lib/server/auth.ts` 仍直接调用
+W1C-2 起始基线的 Web `src/lib/server/auth.ts` 直接调用
 `KOKORO_IAM_BASE_URL` 的 magic-link/refresh/team-session；`session-envelope.ts` 保存旧 sealed session，
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
-`sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
+`sameOriginOk` 当时允许缺失 Origin。以下是**起始旧态**，不是已接受的目标安全性质；
+本轮仅删除旧 magic-link 申请与回调 route，其余 helper、认证和 Team 路径另行收敛。
 
 BFF relay 在 W1C-2 起始基线固定来源 commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
 `contract/iam-relay-policy.json` 当时 SHA-256 为
@@ -237,8 +238,9 @@ Location、Set-Cookie；回调导航待 RP 切片安装和验证后才开放。
   Session 提取**单一** access Bearer，另加 Web service identity；删去 `x-kokoro-namespace`、
   `x-kokoro-principal-id`、浏览器 Authorization/cookie 透传。service-only runtime manifest 与公开 Share
   按 BFF 明确例外各自测试，不伪造 user Bearer 或把 public route 变成登录依赖。
-- `src/lib/server/auth.ts`、`session-envelope.ts`、旧 `/api/auth/{magic-link/request,callback,logout,session-state}`、
-  `/api/team/*` 的 magic-link/team-session 路径及旧 `/auth/refresh` 必须逐调用点删除或按新职责替换；
+- 旧 `/api/auth/magic-link/request` 与 `/api/auth/callback` 已删除；`src/lib/server/auth.ts`、
+  `session-envelope.ts`、其余旧 `/api/auth/{logout,session-state}`、`/api/team/*` 的
+  magic-link/team-session 路径及旧 `/auth/refresh` 仍须逐调用点删除或按新职责替换；
   不保留旧 endpoint alias、旧环境变量读取、双轨 cookie/refresh 或 IAM 直连 fallback。
 
 ### 失败恢复、契约与门禁

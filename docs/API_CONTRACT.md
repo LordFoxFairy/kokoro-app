@@ -4,7 +4,7 @@
 
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、
 W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。
-普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合已验；旧 route/Team 路径删除未完成。
+普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合已验；两个旧 magic-link browser route 已删除，其余旧认证/Team 路径删除未完成。
 
 ## R2e-IAM-VERIFY-WEB：邮箱验证 browser-private 增量（本提交已实现，真 IAM 待验）
 
@@ -196,9 +196,10 @@ logout 以可信解封的 session ID 与 cookie generation 原子 compare-and-to
 service-only runtime manifest 与公开 Share 按 BFF owner 明确边界运行，不伪造用户凭据。BFF 自己验证
 IAM admission、resource/tenant 业务授权；Web session UI 不构成 owner 授权。
 
-旧 `/api/auth/magic-link/request`、`/api/auth/callback`、`/api/auth/logout`、`/api/auth/session-state`、
-旧 `/api/team/*` magic-link/team-session、`/auth/refresh`、旧 sealed-envelope/nonce 与 IAM 直连
-在后续 Product Session/clean-slate cutover 切片删除或按上述 route 替换，不留 alias、fallback 或双轨 cookie；
+旧 `/api/auth/magic-link/request` 与 `/api/auth/callback` 已删除，不保留 alias 或失败重定向；
+`/api/auth/logout`、`/api/auth/session-state`、旧 `/api/team/*` magic-link/team-session、
+`/auth/refresh`、旧 sealed-envelope/nonce 与 IAM 直连仍待后续 clean-slate 切片删除或按上述 route 替换，
+不留 fallback 或双轨 cookie；
 2C RP 验证片不删除这些仍被旧调用点使用的路径，也不将其视为新 RP 授权。既有 Product request/
 response、幂等 key、SSE/AG-UI 仍服从 BFF `/v1` owner contract；`/iam` 原生协议不套用 Product
 JSON envelope、Product idempotency receipt 或分页。
@@ -261,7 +262,8 @@ Browser /api/*                         browser-private
 | `/api/billing/*` | Billing catalog/checkout 投影 | `kokoro-bff /v1/billing/*` |
 | `/api/system/runtime-manifest` | 当前产品/surface 的 manifest | `kokoro-bff /v1/system/runtime-manifest` |
 | `/api/shared/*` | 公开 share 投影 | `kokoro-bff` owner route |
-| `/api/auth/magic-link/request`、旧 `/api/auth/callback`、旧 `/api/auth/logout`、`/api/auth/session-state` | 当前 magic-link、sealed session 登录/退出/状态 | W1C-2 删除，不保留 alias；Auth.js 专用 `/api/auth/[...nextauth]` 接管 RP action/callback；Product Session 展示状态按新 browser-private contract 单独定义 |
+| `/api/auth/magic-link/request`、旧 `/api/auth/callback` | 已删除的 magic-link 申请/消费端点 | 不保留 route、alias 或 `/login?auth=` 失败跳转；固定 OIDC `/api/auth/callback/kokoro-iam` 仍归 Auth.js `/api/auth/[...nextauth]` |
+| 旧 `/api/auth/logout`、`/api/auth/session-state` | 仍在的旧 sealed session 退出/状态 | 后续 clean-slate 删除；Product Session 已由 Auth.js browser-private action 承接 |
 | `/api/team/*` | 当前 team context/switch 与旧 IAM team-session 路径 | 旧 team-session、switch/context alias 删除；仍有产品需要的 tenant 选择由 `/auth/select-tenant` + `/iam/organization/*` IAM 原生交互承担，不复制 team-session |
 | `/iam/*`、`/auth/{sign-in,select-tenant,consent}` | `/iam` owner mutation 直接 browser POST 全拒绝；`/auth/sign-in` 是 GET/POST，另两个 `/auth/*` 仅 GET 引导；静态 `/iam/interactions/*` 是带 issuer cookie 的 Web-owned GET/POST，consent 最终 RP callback 仍受控 503 | 后续 Auth.js RP 安装固定 callback 并验收；不是任意 `/v1` proxy |
 | `/api/dev/*` | 非 production preview fixture | 无 live upstream；不得在 production 启用 |

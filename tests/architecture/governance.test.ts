@@ -90,6 +90,23 @@ describe("Web governance boundary", () => {
     expect(source).toMatch(/"useUnknownInCatchVariables"\s*:\s*true/u)
   })
 
+  it("does not restore the legacy magic-link routes or the retired login error redirect", async () => {
+    for (const route of [
+      "src/app/api/auth/magic-link/request/route.ts",
+      "src/app/api/auth/callback/route.ts",
+    ]) {
+      expect(await exists(route), route).toBe(false)
+    }
+    const sourceRoot = path.join(root, "src")
+    const entries = await readdir(sourceRoot, { recursive: true })
+    const redirects: string[] = []
+    for (const entry of entries) {
+      if (!/\.tsx?$/u.test(entry) || entry.startsWith(`generated${path.sep}`)) continue
+      if ((await readFile(path.join(sourceRoot, entry), "utf8")).includes("/login?auth=")) redirects.push(entry)
+    }
+    expect(redirects).toEqual([])
+  })
+
   it.each(["ci.yml", "cloudflare.yml", "release-image.yml"])("runs %s tests with isolated Redis service", async (name) => {
     const workflow = await readFile(path.join(root, ".github", "workflows", name), "utf8")
     const verify = workflow.split(/\n  verify:\n/u)[1]?.split(/\n  (?:deploy|publish):\n/u)[0]
