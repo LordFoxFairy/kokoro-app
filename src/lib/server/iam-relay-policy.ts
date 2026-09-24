@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "1917f9097d08a38128ed5f4087c826356142c548",
-  policySha256: "b50509a18986d4401f66f8b1fecda87b7a134958d48dc61b03bce5bf59257dae",
+  ownerCommit: "84a560abeac5b7a63f32d7064abdde849ab33cf9",
+  policySha256: "f7c3d29f500ffe729da006c9ff8bf29d4f853e2a613ba92357592414bee421d9",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -25,7 +25,7 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "c0f6068731b8a506cd2d3554e72719aa7327f2be"
+const EXPECTED_IAM_COMMIT = "b35a9a5301219654ea344c03407fd355f58c481e"
 const BROWSER_GET_PATHS = new Set([
   "/.well-known/openid-configuration",
   "/.well-known/oauth-authorization-server",
