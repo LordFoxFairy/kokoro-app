@@ -30,12 +30,12 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 
 当前 Web 使用 `kokoro_session`
 AES-256-GCM sealed envelope、`kokoro_auth_nonce` magic-link cookie；`auth.ts` 直连 IAM，旧 namespace/
-principal 和 runtime credential 仍从该信封参与代理。这是**待删除的旧态**。本节 Product Session、
-Redis CAS/tombstone 与 OIDC RP 只是 W1C-2 设计；BFF relay 最新 release
-`ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2` 已 pin IAM
-`f240bd7d5f542bb152c7eb929074c96b6c290ea8`，policy SHA-256
-`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；W1C-2A 已固定消费该只读
-artifact 与 provenance，真实 Web→BFF→IAM 及 Product Session 验收仍待完成。
+principal 和 runtime credential 仍从该信封参与旧路径，这是**待删除的旧态**。Product Session、
+Redis CAS/tombstone 与 OIDC RP 的 S1 实现及真实三仓 HTTPS 已验；BFF relay 最新 release
+`1917f9097d08a38128ed5f4087c826356142c548` 已 pin IAM
+`c0f6068731b8a506cd2d3554e72719aa7327f2be`，policy SHA-256
+`b50509a18986d4401f66f8b1fecda87b7a134958d48dc61b03bce5bf59257dae`；W1C-2A 已固定消费该只读
+artifact 与 provenance；普通 Product Bearer/Team 真实三仓组合仍待验。
 
 Web **无 PostgreSQL/业务持久化 owner**：不建 `database/`、schema、migration、ORM、SQL 表、跨
 owner JOIN 或 `db:apply-schema`。Root 现行**目标态**是本地/CI 共用一个物理开发 PostgreSQL database、一套应用

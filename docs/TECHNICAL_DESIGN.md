@@ -47,12 +47,12 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `/api/auth/*` 与 `/api/team/*` 是旧路由，部分 `/api/*` 代理还发送自报 namespace/principal。
 `sameOriginOk` 目前允许缺失 Origin。以下均是**待替换的当前态**，不是已接受的目标安全性质。
 
-BFF relay 固定policy来源 commit `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`，其
+BFF relay 固定policy来源 commit `1917f9097d08a38128ed5f4087c826356142c548`，其
 `contract/iam-relay-policy.json` 当前 SHA-256 为
-`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`；policy version `1.0.0`
-固定 IAM owner commit `f240bd7d5f542bb152c7eb929074c96b6c290ea8`。该 pin 已随 IAM test-only
+`b50509a18986d4401f66f8b1fecda87b7a134958d48dc61b03bce5bf59257dae`；policy version `1.0.0`
+固定 IAM owner commit `c0f6068731b8a506cd2d3554e72719aa7327f2be`。该 pin 已随 IAM test-only
 fixture 更新；W1C-2A 已 vendor 只读 policy snapshot 并通过 consumer blob digest/provenance 漂移门，
-但真实 Web→BFF→IAM 链与 Product Session 仍待后续验收。上游再发布时必须重新核验 BFF commit、policy blob
+S1 Product Session 真实三仓 HTTPS 已验，普通 Product Bearer/Team 真实组合仍待验。上游再发布时必须重新核验 BFF commit、policy blob
 digest、IAM allowlist/snapshot digest，不能只改文档版本。Web 不复制 IAM schema 或编辑 BFF policy。
 
 ### Owner、组件与调用方向

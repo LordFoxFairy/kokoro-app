@@ -9,10 +9,10 @@ W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session �
 ### 版本、来源和可见性
 
 当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF。普通 BFF `/v1` adapter 已在线核验 Product Session generation 并仅发送一个 access Bearer；S2-A 的真实三仓业务代理链仍待验收。
-BFF relay 固定policy来源 `ddb462e6ab3a7270a3dab248ba7ee887b0ec9ba2`，其
+BFF relay 固定policy来源 `1917f9097d08a38128ed5f4087c826356142c548`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当前 blob SHA-256 是
-`bbd86696e1b36a82c1ebd35262dba3950a35d56d7d63856df217f397d8b48819`，
-引用 IAM owner `f240bd7d5f542bb152c7eb929074c96b6c290ea8`、allowlist SHA-256
+`b50509a18986d4401f66f8b1fecda87b7a134958d48dc61b03bce5bf59257dae`，
+引用 IAM owner `c0f6068731b8a506cd2d3554e72719aa7327f2be`、allowlist SHA-256
 `f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead` 与 snapshot SHA-256
 `b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1`。IAM test-only fixture
 已随 BFF repin 发布；W1C-2A 已 vendor **只读** policy snapshot。Web contract test 对 snapshot 原始
