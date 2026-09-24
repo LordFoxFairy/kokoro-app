@@ -919,7 +919,7 @@ export const zh = {
   "marketing.faqMcpQ": "能接入我自己的工具吗？",
   "marketing.faqMcpA": "可以。通过 MCP 注册你自己的服务，配置允许的工具范围，凭据由系统加密托管。",
   "marketing.ctaTitle": "现在就把第一件事交给它",
-  "marketing.ctaBody": "输入邮箱即可开始，无需信用卡。",
+  "marketing.ctaBody": "使用现有账号登录，即可开始。",
   "marketing.ctaButton": "开始使用",
   "marketing.footTagline": "会规划、会动手、把成果交到你手里的 AI 伙伴。",
   "marketing.footProduct": "产品",

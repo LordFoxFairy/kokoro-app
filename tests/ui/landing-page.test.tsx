@@ -37,6 +37,12 @@ describe("LandingPage", () => {
     expect(screen.getAllByText("Kokoro").length).toBeGreaterThanOrEqual(1)
   })
 
+  it("describes the existing-account sign-in instead of a removed email form", () => {
+    renderLanding()
+    expect(screen.getByText("使用现有账号登录，即可开始。")).toBeInTheDocument()
+    expect(screen.queryByText("输入邮箱即可开始，无需信用卡。")).not.toBeInTheDocument()
+  })
+
   it("renders all six capability sections and four FAQ items", () => {
     renderLanding()
     expect(screen.getByText("对话即协作，关键处由你把关")).toBeInTheDocument()

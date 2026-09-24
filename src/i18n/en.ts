@@ -1003,7 +1003,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "marketing.faqMcpQ": "Can I connect my own tools?",
   "marketing.faqMcpA": "Yes. Register your own services over MCP, scope the tools they may use, and let the system hold their credentials encrypted.",
   "marketing.ctaTitle": "Hand it your first task now",
-  "marketing.ctaBody": "Enter your email to begin — no credit card required.",
+  "marketing.ctaBody": "Sign in with your existing account to get started.",
   "marketing.ctaButton": "Get started",
   "marketing.footTagline": "An AI partner that plans, does the work, and hands you the result.",
   "marketing.footProduct": "Product",

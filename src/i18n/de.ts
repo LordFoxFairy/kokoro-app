@@ -614,7 +614,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "marketing.faqMcpQ": "Kann ich meine eigenen Tools anschließen?",
   "marketing.faqMcpA": "Dürfen. Registrieren Sie Ihren eigenen Dienst über MCP, konfigurieren Sie den Umfang der zulässigen Tools und die Anmeldeinformationen werden vom System kryptografisch gehostet.",
   "marketing.ctaTitle": "Geben Sie es jetzt als Erstes",
-  "marketing.ctaBody": "Geben Sie Ihre E-Mail-Adresse ein, um loszulegen. Es ist keine Kreditkarte erforderlich.",
+  "marketing.ctaBody": "Melden Sie sich mit Ihrem bestehenden Konto an, um zu beginnen.",
   "marketing.ctaButton": "Fangen Sie an",
   "marketing.footTagline": "Ein KI-Partner, der planen, Dinge umsetzen und die Ergebnisse in Ihre Hände legen kann.",
   "marketing.footProduct": "Produkt",

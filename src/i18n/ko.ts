@@ -614,7 +614,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "marketing.faqMcpQ": "나만의 도구를 연결할 수 있나요?",
   "marketing.faqMcpA": "할 수 있다. MCP를 통해 자체 서비스를 등록하고 허용되는 도구의 범위를 구성하면 자격 증명이 시스템에서 암호화 방식으로 호스팅됩니다.",
   "marketing.ctaTitle": "지금 제일 먼저 줘",
-  "marketing.ctaBody": "시작하려면 이메일을 입력하세요. 신용카드는 필요하지 않습니다.",
+  "marketing.ctaBody": "기존 계정으로 로그인하여 시작하세요.",
   "marketing.ctaButton": "시작하기",
   "marketing.footTagline": "계획하고, 일을 실행하고, 결과를 손에 넣을 수 있는 AI 파트너입니다.",
   "marketing.footProduct": "제품",

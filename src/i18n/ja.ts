@@ -674,7 +674,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "marketing.faqMcpQ": "独自のツールを接続できますか?",
   "marketing.faqMcpA": "できる。 MCP 経由で独自のサービスを登録し、許可されるツールの範囲を構成すると、認証情報はシステムによって暗号化されてホストされます。",
   "marketing.ctaTitle": "今すぐそれを第一にあげてください",
-  "marketing.ctaBody": "メールアドレスを入力して開始してください。クレジット カードは必要ありません。",
+  "marketing.ctaBody": "既存のアカウントでログインして始めましょう。",
   "marketing.ctaButton": "始めましょう",
   "marketing.footTagline": "計画を立て、物事を実行し、結果をあなたの手に届けることができる AI パートナー。",
   "marketing.footProduct": "製品",
