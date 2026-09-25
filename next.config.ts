@@ -7,7 +7,10 @@ const nextConfig: NextConfig = {
   // signed tokens in the query, so omit only this exact browser-private path.
   logging: {
     incomingRequests: {
-      ignore: [/^\/iam\/verify-email(?:\?.*)?$/u],
+      ignore: [
+        /^\/iam\/verify-email(?:\?.*)?$/u,
+        /^\/iam\/interactions\/invitation(?:\?.*)?$/u,
+      ],
     },
   },
   // Keep the configured local hostname usable in desktop QA. The wildcard

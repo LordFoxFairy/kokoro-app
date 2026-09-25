@@ -1,5 +1,17 @@
 # Kokoro User Web 当前状态
 
+R5-INVITE-WEB-ENTRY B 工作树候选（2026-09-25，**待 Root 审查/提交**）：Web 已在上一 A commit
+`45388f620d2d255eee02073ffe5ef62102b6a430` 固定 BFF policy 2.1.0、IAM 0.4.0 和 verify-email 精确邀请 Location。
+本候选增加唯一静态 `/iam/interactions/invitation`：无 issuer Session 可用独立真实邮箱/密码登录或新邮箱注册；注册 callbackURL
+由服务端固定同源邀请 ID 构造，成功只提示验证邮箱；有效 issuer Session 则向 BFF 读取 recipient-only pending context，并仅投影
+组织/角色/到期。Web Redis 一次性 CSRF 对 sign-in/sign-up 分别绑定静态路径、ID、动作；页面使用仅邀请生效的紧凑视觉 variant，
+不改变旧 OAuth sign-in/consent 布局。**accept/reject POST 尚未实现**，预览页不显示虚假操作按钮；因此邮件加入与 Product
+`/login` 仍未闭环，用户 3310 也未由本候选验证。Node 22.22.2 当前工作树复跑 contract 69/69、architecture
+34/34、全量 Vitest 1474/1474、lint、Next typegen 和 `tsc --noEmit` 均通过；Chromium 独立页面布局/默认收起注册
+3/3，通过桌面和移动端截图核对。隔离 production build 的临时目录使用仓外 node_modules symlink，Turbopack 因
+filesystem root 限制拒绝该测试布置，故本候选 **production build 尚未通过验收**；真 SMTP/HTTPS 浏览器验收仍待执行。
+
+
 R5-INVITE-WEB-ENTRY 设计门（2026-09-25，仅文档，**未实现/未验收**）：Web main
 `63aca94f93095722425340a0a95985e8796a5b33` 仍固定 BFF policy `2.0.0`，没有
 `/iam/interactions/invitation` 静态入口；既有 `/auth/sign-in` 仅服务签名 OAuth，`/login` 仅服务 Product RP，

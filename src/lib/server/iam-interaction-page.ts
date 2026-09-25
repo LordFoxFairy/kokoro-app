@@ -63,6 +63,23 @@ button.secondary { border-color: var(--border); background: var(--card); color: 
 
 const WAVE_MARK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></svg>`
 
+const COMPACT_INVITATION_STYLE = `
+html { background: var(--background); }
+.auth-page { display: grid; align-content: center; justify-items: center; gap: 1.25rem; padding: 2.5rem 1rem; }
+.brand-panel { width: min(100%, 27rem); margin: 0; padding: 0 .25rem; }
+.interaction { display: block; flex: none; width: min(100%, 27rem); min-width: 0; padding: 0; }
+.content { width: 100%; padding: clamp(1.5rem, 5vw, 2rem); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.25); background: var(--card); box-shadow: 0 8px 28px -18px color-mix(in srgb, var(--foreground) 20%, transparent); }
+h1 { font-size: clamp(1.65rem, 4vw, 2rem); }
+.lead { margin-top: .7rem; font-size: .925rem; }
+.auth-form { gap: 1rem; margin-top: 1.5rem; }
+.invitation-register { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.invitation-register summary { color: var(--primary); font-size: .9rem; font-weight: 600; cursor: pointer; }
+.invitation-register summary:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.invitation-register .auth-form { margin-top: 1.25rem; }
+.invitation-subheading { margin: 1.5rem 0 .25rem; font-size: 1rem; }
+@media (max-width: 720px) { .auth-page { align-content: start; padding: 1.5rem 1rem 2rem; } .content { padding: 1.5rem; } }
+`
+
 function escapeText(value: string): string {
   return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character)
 }
@@ -72,6 +89,9 @@ export function iamInteractionDocument(input: Readonly<{
   heading: string
   description: string
   trustedFormHtml: string
+  variant?: "compact-invitation"
 }>): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeText(input.title)} · Kokoro</title><style>${PAGE_STYLE}</style></head><body><main class="auth-page"><header class="brand-panel"><div class="brand">${WAVE_MARK}<span>Kokoro</span></div></header><section class="interaction" aria-labelledby="interaction-heading"><div class="content"><h1 id="interaction-heading">${escapeText(input.heading)}</h1><p class="lead">${escapeText(input.description)}</p>${input.trustedFormHtml}</div></section></main></body></html>`
+  const style = input.variant === "compact-invitation" ? `${PAGE_STYLE}\n${COMPACT_INVITATION_STYLE}` : PAGE_STYLE
+  const lang = input.variant === "compact-invitation" ? "zh-CN" : "en"
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeText(input.title)} · Kokoro</title><style>${style}</style></head><body><main class="auth-page"><header class="brand-panel"><div class="brand">${WAVE_MARK}<span>Kokoro</span></div></header><section class="interaction" aria-labelledby="interaction-heading"><div class="content"><h1 id="interaction-heading">${escapeText(input.heading)}</h1><p class="lead">${escapeText(input.description)}</p>${input.trustedFormHtml}</div></section></main></body></html>`
 }

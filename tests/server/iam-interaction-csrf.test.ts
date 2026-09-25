@@ -96,6 +96,21 @@ describe("Web IAM interaction CSRF", () => {
       cookieToken: issued.token, formToken: issued.token })).toBe(true)
   })
 
+  it("binds an invitation login proof to its invitation and action without issuer session", async () => {
+    const id = "01234567-89ab-4cde-8f01-23456789abcd"
+    const proof = await issue({
+      redisUrl, webOrigin, path: "/iam/interactions/invitation", method: "POST",
+      query: `?id=${id}`, issuerCookie: "", context: "sign-in", secureCookies: false,
+      cookieName: "kokoro_iam_csrf_invite_signin",
+    })
+    expect(proof.cookie).toContain("Path=/iam/interactions/invitation")
+    expect(proof.cookie).toContain("kokoro_iam_csrf_invite_signin=")
+    const base = { redisUrl, webOrigin, path: "/iam/interactions/invitation" as const, method: "POST" as const,
+      query: `?id=${id}`, issuerCookie: "", context: "sign-in", cookieToken: proof.token, formToken: proof.token }
+    expect(await consumeIamInteractionCsrf({ ...base, context: "sign-up" })).toBe(false)
+    expect(await consumeIamInteractionCsrf(base)).toBe(false)
+  })
+
   it("deletes only issued keys and leaves a pre-existing key in the same namespace", async () => {
     const sentinelKey = `${prefix}preexisting-${randomUUID()}`
     await withTestRedis(redisUrl, async (client) => { await client.set(sentinelKey, "other-owner", { EX: 60 }) })

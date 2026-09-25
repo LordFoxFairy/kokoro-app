@@ -9,7 +9,7 @@ const COOKIE_NAME = "kokoro_iam_csrf"
 type Binding = Readonly<{
   redisUrl: string
   webOrigin: string
-  path: "/auth/sign-in" | "/iam/interactions/consent"
+  path: "/auth/sign-in" | "/iam/interactions/consent" | "/iam/interactions/invitation"
   method: "GET" | "POST"
   query: string
   issuerCookie: string
@@ -58,10 +58,14 @@ async function withRedis<T>(url: string, operation: (client: ReturnType<typeof c
   }
 }
 
-export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secureCookies: boolean }>): Promise<Readonly<{
+export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secureCookies: boolean; cookieName?: string }>): Promise<Readonly<{
   token: string
   cookie: string
 }>> {
+  const cookieName = input.cookieName ?? COOKIE_NAME
+  if (!/^kokoro_iam_csrf(?:_invite_(?:signin|signup|accept|reject))?$/u.test(cookieName)) {
+    throw new Error("invalid IAM interaction CSRF cookie name")
+  }
   const token = randomBytes(32).toString("base64url")
   const key = `${iamCsrfKeyPrefix(input.webOrigin)}${sha256(token)}`
   const stored = await withRedis(input.redisUrl, (client) => client.set(key, bindingDigest(input), {
@@ -71,7 +75,7 @@ export async function issueIamInteractionCsrf(input: Binding & Readonly<{ secure
   if (stored !== "OK") throw new Error("Web CSRF nonce collision")
   return {
     token,
-    cookie: `${COOKIE_NAME}=${token}; Path=${input.path}; Max-Age=${TOKEN_TTL_SECONDS}; HttpOnly; SameSite=Lax${input.secureCookies ? "; Secure" : ""}`,
+    cookie: `${cookieName}=${token}; Path=${input.path}; Max-Age=${TOKEN_TTL_SECONDS}; HttpOnly; SameSite=Lax${input.secureCookies ? "; Secure" : ""}`,
   }
 }
 
@@ -94,6 +98,6 @@ export function iamCsrfCookieName(): string {
   return COOKIE_NAME
 }
 
-export function clearIamCsrfCookie(path: Binding["path"], secureCookies: boolean): string {
-  return `${COOKIE_NAME}=; Path=${path}; Max-Age=0; HttpOnly; SameSite=Lax${secureCookies ? "; Secure" : ""}`
+export function clearIamCsrfCookie(path: Binding["path"], secureCookies: boolean, cookieName = COOKIE_NAME): string {
+  return `${cookieName}=; Path=${path}; Max-Age=0; HttpOnly; SameSite=Lax${secureCookies ? "; Secure" : ""}`
 }

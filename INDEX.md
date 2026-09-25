@@ -33,6 +33,7 @@
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
 | `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；仅 authorize 200 redirect JSON 转受限浏览器 302；直接 browser POST 与 server-only 凭据路由拒绝 |
+| `src/app/iam/interactions/invitation/route.ts` | 邀请邮件的唯一静态入口：独立 issuer 登录/注册、recipient-only context；接受/拒绝写操作仍待下一切片 |
 | `src/app/auth/sign-in/route.ts` | 原始签名 query 的 sign-in 页面与 Web-owned CSRF POST |
 | `src/app/auth/{select-tenant,consent}/route.ts` | IAM 固定外层交互 URI 的严格 GET 到 `/iam/interactions/*`；外层 POST 405 |
 | `src/app/iam/interactions/select-tenant/route.ts` | `/iam` cookie path 内的 owner `/organization/list` 候选、选择重核及 set-active 续接 |
@@ -74,6 +75,9 @@
 | `src/lib/server/iam-relay-config.ts` | `/iam` 与 sign-in 共用的固定 Web origin/BFF/service-secret 配置解析 |
 | `src/lib/server/iam-interaction-csrf.ts` | Redis 原子一次性 CSRF 摘要/交互绑定；唯一允许 Redis import 的 server-only 文件 |
 | `src/lib/server/iam-interaction-page.ts` | 三条 IAM issuer GET 页面共享的无脚本品牌 HTML/CSS 外壳；表单字段与 POST 安全逻辑仍归各自 route |
+| `src/lib/server/iam-invitation-input.ts` | 邀请入口 query、owner context 与有界表单的纯校验；不拥有网络调用或页面编排 |
+| `src/lib/server/iam-invitation-page.ts` | 邀请专用中文登录、注册与 recipient-only 预览页面；不拥有 IAM/BFF 业务事实 |
+| `src/lib/server/iam-invitation-page.ts` | 邀请登录、注册、context 的纯 HTML 投影；只对邀请启用紧凑视觉 variant，不改变已有 OAuth 交互外壳 |
 | `src/lib/server/iam-interaction-route.ts` | 外层同源跳转及内层 tenant/consent 共用的严格 Origin/query/form 与安全导航边界 |
 | `src/lib/server/iam-relay-transport.ts` | `/iam` 专用原生 HTTP transport；保持多 `Set-Cookie`、限额、deadline 与取消 |
 | `src/lib/server/iam-relay-response.ts` | 原生 status/header/Location/issuer `Set-Cookie` 出站校验 |
