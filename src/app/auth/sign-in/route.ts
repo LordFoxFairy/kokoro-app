@@ -129,7 +129,7 @@ async function signInFormFailure(input: Readonly<{
     })
     const html = iamInteractionDocument({
       title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.",
-      trustedFormHtml: signInForm(`${PAGE_PATH}${input.query}`, proof.token, input.email, message),
+      trustedFormHtml: signInForm(`${PAGE_PATH}${input.query}`, proof.token, input.email, message), variant: "sign-in",
     })
     return new Response(html, { status: input.status, headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
@@ -193,7 +193,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const proof = await issueIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, secureCookies: config.secureCookies })
     const form = signInForm(`${PAGE_PATH}${query}`, proof.token)
-    const html = iamInteractionDocument({ title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.", trustedFormHtml: form })
+    const html = iamInteractionDocument({ title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.", trustedFormHtml: form, variant: "sign-in" })
     return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": id, "set-cookie": proof.cookie } })
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)

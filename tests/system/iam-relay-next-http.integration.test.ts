@@ -468,9 +468,17 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         })
         expect(response?.status()).toBe(200)
         expect(await page.getByRole("heading", { name: "Sign in" }).count()).toBe(1)
+        const [brandBox, cardBox] = await Promise.all([
+          page.locator(".brand-panel").boundingBox(), page.locator(".content").boundingBox(),
+        ])
+        expect(cardBox?.y ?? 0).toBeGreaterThanOrEqual((brandBox?.y ?? 0) + (brandBox?.height ?? 0))
+        expect((cardBox?.y ?? 0) - (brandBox?.y ?? 0) - (brandBox?.height ?? 0)).toBeLessThan(48)
+        expect(await page.locator(".content").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
         const email = page.getByLabel("Email")
         const password = page.getByLabel("Password")
         const submit = page.getByRole("button", { name: "Sign in" })
+        await email.focus()
+        expect(await email.evaluate((input) => getComputedStyle(input).outlineStyle)).not.toBe("none")
         const [emailBox, passwordBox, buttonBox] = await Promise.all([
           email.boundingBox(), password.boundingBox(), submit.boundingBox(),
         ])
