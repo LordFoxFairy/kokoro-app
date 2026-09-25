@@ -43,7 +43,19 @@ export function validIamRpCallbackNavigation(value: string, webOrigin: string): 
   } catch { return false }
 }
 
-function allowedLocation(value: string, webOrigin: string): boolean {
+export function validInvitationLocation(value: string, webOrigin: string, sourceRoute: string): boolean {
+  if (sourceRoute !== IAM_RELAY_POLICY.invitationLocation.sourceRoute ||
+    !value.startsWith(`${webOrigin}${IAM_RELAY_POLICY.invitationLocation.path}?id=`) ||
+    !safeHeaderValue(value, 8192) || value.includes("\\") || value.includes("#")) return false
+  const remainder = value.slice(`${webOrigin}${IAM_RELAY_POLICY.invitationLocation.path}?id=`.length)
+  const [invitationId, error, extra] = remainder.split("&")
+  if (extra !== undefined || !invitationId ||
+    !/^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/u.test(invitationId)) return false
+  return error === undefined ||
+    (error.startsWith("error=") && IAM_RELAY_POLICY.invitationLocation.allowedErrorCodes.includes(error.slice("error=".length)))
+}
+
+function allowedLocation(value: string, webOrigin: string, sourceRoute?: string): boolean {
   if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
   const rawPath = rawLocationPath(value)
   if (
@@ -60,6 +72,7 @@ function allowedLocation(value: string, webOrigin: string): boolean {
     ) return false
     if (IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)) return true
     if (validIamRpCallbackNavigation(value, webOrigin)) return true
+    if (sourceRoute !== undefined && validInvitationLocation(value, webOrigin, sourceRoute)) return true
     return resolveBrowserIamGet(`${target.pathname}${target.search}`, "GET") !== null
   } catch {
     return false
@@ -108,6 +121,7 @@ export function nativeIamResponse(
   webOrigin: string,
   secureCookies: boolean,
   fallbackRequestId: string,
+  sourceRoute?: string,
 ): Response | null {
   if (!Number.isInteger(upstream.status) || upstream.status < 200 || upstream.status > 599) return null
   if ((upstream.status === 204 || upstream.status === 304) && upstream.body.byteLength !== 0) return null
@@ -117,7 +131,7 @@ export function nativeIamResponse(
     const value = upstream.headers.get(name)
     if (value === null) continue
     if (!safeHeaderValue(value, name === "location" ? 8192 : 4096)) return null
-    if (name === "location" && !allowedLocation(value, webOrigin)) return null
+    if (name === "location" && !allowedLocation(value, webOrigin, sourceRoute)) return null
     if (
       name === "retry-after" &&
       (upstream.status !== 429 || !/^[1-9][0-9]{0,4}$/u.test(value) || Number(value) > 86400)

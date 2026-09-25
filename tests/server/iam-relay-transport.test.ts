@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { IamRelayTransportError, requestIamRelay } from "@/lib/server/iam-relay-transport"
-import { validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
+import { validIamInteractionNavigation, validInvitationLocation } from "@/lib/server/iam-relay-response"
 
 async function close(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
@@ -179,5 +179,24 @@ describe("IAM interaction navigation allowlist", () => {
     "javascript:alert(1)",
   ])("rejects an unsafe or unsupported continuation URL %s", (url) => {
     expect(validIamInteractionNavigation(url, origin)).toBe(false)
+  })
+})
+
+describe("invitation verify-email Location", () => {
+  const origin = "https://web.example.test"
+  const id = "01234567-89ab-4cde-8f01-23456789abcd"
+
+  it("accepts only the owner-ordered same-origin invitation query from verify-email", () => {
+    expect(validInvitationLocation(`${origin}/iam/interactions/invitation?id=${id}`, origin, "/verify-email")).toBe(true)
+    expect(validInvitationLocation(`${origin}/iam/interactions/invitation?id=${id}&error=INVALID_TOKEN`, origin, "/verify-email")).toBe(true)
+    for (const value of [
+      `${origin}/iam/interactions/invitation?id=${id}&error=OTHER`,
+      `/iam/interactions/invitation?error=INVALID_TOKEN&id=${id}`,
+      `/iam/interactions/invitation?id=${id}&id=${id}`,
+      `/iam/interactions/invitation?id=%30${id.slice(1)}`,
+      `https://evil.example.test/iam/interactions/invitation?id=${id}`,
+      `/auth/invitation?id=${id}`,
+    ]) expect(validInvitationLocation(value, origin, "/verify-email"), value).toBe(false)
+    expect(validInvitationLocation(`/iam/interactions/invitation?id=${id}`, origin, "/oauth2/authorize")).toBe(false)
   })
 })

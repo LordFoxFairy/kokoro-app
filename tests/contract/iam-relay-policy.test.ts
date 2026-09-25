@@ -19,11 +19,13 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "dd605c99e9bb5c6669ec31e04e285e5f92b79ed0",
-      policySha256: "74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037",
+      ownerCommit: "d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7",
+      policySha256: "b3ff912e70858cc5a5cf7bdbc597c8872ab29c5bfec4dfbe070ce4b37500239d",
     })
-    expect(IAM_RELAY_POLICY.version).toBe("2.0.0")
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("ad5224a9e0a3a31d1c593d214d37940d6923b2e7")
+    expect(IAM_RELAY_POLICY.version).toBe("2.1.0")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("ac94f152daffa2293801ea4f56f98b3ae59452d7")
+    expect(IAM_RELAY_POLICY.iamOpenapiVersion).toBe("0.4.0")
+    expect(IAM_RELAY_POLICY.iamOpenapiSha256).toBe("a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
   })
@@ -37,6 +39,17 @@ describe("fixed BFF IAM relay policy consumer", () => {
       ...IAM_RELAY_POLICY,
       routes: { ...IAM_RELAY_POLICY.routes, "/jwks": [] },
     })).toThrow("IAM relay policy is missing a browser GET route")
+    expect(() => validateIamRelayPolicySnapshot({
+      ...IAM_RELAY_POLICY,
+      invitationRoutes: [
+        { ...IAM_RELAY_POLICY.invitationRoutes[0], visibility: "public" },
+        ...IAM_RELAY_POLICY.invitationRoutes.slice(1),
+      ],
+    })).toThrow("IAM relay invitation policy is invalid")
+    expect(() => validateIamRelayPolicySnapshot({
+      ...IAM_RELAY_POLICY,
+      invitationLocation: { ...IAM_RELAY_POLICY.invitationLocation, allowedErrorCodes: ["INVALID_TOKEN"] },
+    })).toThrow("IAM relay invitation policy is invalid")
   })
 
   it("admits the fixed browser GET subset including issuer logout confirmation entry", () => {

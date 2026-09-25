@@ -137,8 +137,10 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
       maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes,
     })
-    const response = route.relativePath === "/oauth2/authorize" ? browserAuthorizeResponse : nativeIamResponse
-    return browserResponse(response(upstream, config.webOrigin, config.secureCookies, id)
+    const response = route.relativePath === "/oauth2/authorize"
+      ? browserAuthorizeResponse(upstream, config.webOrigin, config.secureCookies, id)
+      : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
+    return browserResponse(response
       ?? errorResponse("iam_relay_response_invalid", 502, id))
   } catch {
     return browserResponse(errorResponse("iam_relay_unavailable", 503, id))

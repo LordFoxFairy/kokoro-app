@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "dd605c99e9bb5c6669ec31e04e285e5f92b79ed0",
-  policySha256: "74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037",
+  ownerCommit: "d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7",
+  policySha256: "b3ff912e70858cc5a5cf7bdbc597c8872ab29c5bfec4dfbe070ce4b37500239d",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -11,7 +11,34 @@ export type IamRelayPolicy = Readonly<{
   iamOwnerCommit: string
   iamAllowlistSha256: string
   iamSnapshotSha256: string
+  iamOpenapiPath: string
+  iamOpenapiVersion: string
+  iamOpenapiSha256: string
   routes: Readonly<Record<string, readonly string[]>>
+  invitationRoutes: readonly Readonly<{
+    template: string
+    methods: readonly string[]
+    operationId: string
+    owner: string
+    visibility: string
+    stability: string
+    idempotency: string
+  }>[]
+  invitationSignUp: Readonly<{
+    route: string
+    method: string
+    bodyFields: readonly string[]
+    callbackPath: string
+    callbackQueryParameter: string
+  }>
+  invitationLocation: Readonly<{
+    sourceRoute: string
+    path: string
+    queryParameter: string
+    valueFormat: string
+    errorQueryParameter: string
+    allowedErrorCodes: readonly string[]
+  }>
   requestHeaders: readonly string[]
   responseHeaders: readonly string[]
   cookieNames: readonly string[]
@@ -25,7 +52,13 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "ad5224a9e0a3a31d1c593d214d37940d6923b2e7"
+const EXPECTED_IAM_COMMIT = "ac94f152daffa2293801ea4f56f98b3ae59452d7"
+const EXPECTED_INVITATION_ROUTES = [
+  ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/context", "GET", "getTenantInvitationContext"],
+  ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept", "POST", "acceptTenantInvitation"],
+  ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/reject", "POST", "rejectTenantInvitation"],
+] as const
+const EXPECTED_INVITATION_ERRORS = ["TOKEN_EXPIRED", "INVALID_TOKEN", "USER_NOT_FOUND", "INVALID_USER"] as const
 const BROWSER_GET_PATHS = new Set([
   "/.well-known/openid-configuration",
   "/.well-known/oauth-authorization-server",
@@ -40,8 +73,13 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   if (typeof value !== "object" || value === null) throw new Error("invalid IAM relay policy snapshot")
   const policy = value as Partial<IamRelayPolicy>
   if (
-    policy.version !== "2.0.0" ||
+    policy.version !== "2.1.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
+    policy.iamOpenapiPath !== "contract/openapi/iam.internal.v1.json" ||
+    policy.iamOpenapiVersion !== "0.4.0" ||
+    policy.iamOpenapiSha256 !== "a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416" ||
+    !Array.isArray(policy.invitationRoutes) || policy.invitationRoutes.length !== 3 ||
+    !policy.invitationSignUp || !policy.invitationLocation ||
     typeof policy.routes !== "object" || policy.routes === null ||
     !Array.isArray(policy.cookieNames) || !Array.isArray(policy.cookieNamePrefixes) ||
     policy.cookieNamePrefixes.length !== 2 ||
@@ -55,6 +93,24 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
   for (const path of BROWSER_GET_PATHS) {
     if (!policy.routes[path]?.includes("GET")) throw new Error("IAM relay policy is missing a browser GET route")
   }
+  if (JSON.stringify(policy.routes["/sign-up/email"]) !== '["POST"]' ||
+    policy.invitationSignUp.route !== "/sign-up/email" || policy.invitationSignUp.method !== "POST" ||
+    JSON.stringify(policy.invitationSignUp.bodyFields) !== '["callbackURL","email","name","password"]' ||
+    policy.invitationSignUp.callbackPath !== "/iam/interactions/invitation" ||
+    policy.invitationSignUp.callbackQueryParameter !== "id" ||
+    policy.invitationLocation.sourceRoute !== "/verify-email" ||
+    policy.invitationLocation.path !== "/iam/interactions/invitation" ||
+    policy.invitationLocation.queryParameter !== "id" ||
+    policy.invitationLocation.valueFormat !== "canonical-lowercase-uuid" ||
+    policy.invitationLocation.errorQueryParameter !== "error" ||
+    JSON.stringify(policy.invitationLocation.allowedErrorCodes) !== JSON.stringify(EXPECTED_INVITATION_ERRORS) ||
+    !policy.invitationRoutes.every((route, index) => {
+      const expected = EXPECTED_INVITATION_ROUTES[index]
+      return expected !== undefined && route.template === expected[0] &&
+        JSON.stringify(route.methods) === JSON.stringify([expected[1]]) && route.operationId === expected[2] &&
+        route.owner === "kokoro-iam" && route.visibility === "browser-private" &&
+        route.stability === "stable" && route.idempotency === "none"
+    })) throw new Error("IAM relay invitation policy is invalid")
   return policy as IamRelayPolicy
 }
 
