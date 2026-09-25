@@ -1,5 +1,14 @@
 # Kokoro User Web 技术设计
 
+## 当前 R5 邀请实现与来源（2026-09-25）
+
+唯一静态 `/iam/interactions/invitation` 已实现独立 issuer 登录/注册、recipient-only context 与
+一次性 CSRF 约束的接受/拒绝；接受仅在 owner 200 后转 `/login`。Web 当前固定消费 BFF main
+`2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 policy `2.1.0` 原始 blob，SHA-256
+`f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`，其中 IAM owner
+`7215223b2ed27a0d5217f3bbaaabce547006d3bb`；本切片无新目录、协议或 UI 行为，只重钉来源。
+下节“目标态，尚未实现”指 `63aca94` 时的设计门历史基线；真 SMTP/HTTPS 浏览器及用户 3310 尚待 Root 验收。
+
 ## R5-INVITE-WEB-ENTRY：独立邀请入口设计门（目标态，尚未实现）
 
 **当前态与唯一来源。** Web main `63aca94f93095722425340a0a95985e8796a5b33` 仍消费 BFF relay policy `2.0.0`，没有

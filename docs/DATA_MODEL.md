@@ -1,5 +1,13 @@
 # Kokoro User Web 数据模型与 Owner
 
+## 当前 R5 邀请数据边界（2026-09-25）
+
+Web 邀请入口已实现，但没有 Invitation、Member、User 的持久化事实或 SQL schema；这些仍由 IAM
+`7215223b2ed27a0d5217f3bbaaabce547006d3bb` 唯一拥有。Web 当前消费 BFF
+`2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` policy `2.1.0`，SHA-256
+`f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`。本次仅来源重钉，
+不修改 Web Redis CSRF、Product Session、API/事务或数据生命周期；下节“尚未实现”是原设计门历史基线。
+
 ## R5-INVITE-WEB-ENTRY：邀请流程数据边界（目标态，尚未实现）
 
 Web main `63aca94f93095722425340a0a95985e8796a5b33` 尚无独立邀请入口，仍固定 BFF policy `2.0.0`；目标来源是

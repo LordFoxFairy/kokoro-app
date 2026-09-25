@@ -1,5 +1,13 @@
 # Kokoro User Web 当前状态
 
+R5-INVITE-WEB-ENTRY 来源重钉（2026-09-25）：当前 Web `src/generated/iam-relay-policy.json` 与 BFF
+main `2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 policy `2.1.0` 原始字节相同，SHA-256
+`f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`；其中 IAM owner commit 为
+`7215223b2ed27a0d5217f3bbaaabce547006d3bb`，OpenAPI 0.4.0 SHA-256
+`a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416` 不变。本次只更新只读快照、
+provenance 与固定来源断言，邀请 UI/行为不变；下方旧 commit/digest 是当时切片的历史证据，不是当前消费 pin。
+真实三仓 SMTP/HTTPS 浏览器组合及用户 3310 仍由 Root 独立验收。
+
 R5-INVITE-WEB-ENTRY C 实现切片（2026-09-25，跨仓验收仍待 Root）：基线 Web main
 `63a0c8523bc06a513ff897b9ed8326ac543a3895`。同一静态邀请页的 recipient-only pending 预览增加真实接受/拒绝
 表单；Web Redis 一次性证明绑定固定 tenant、canonical 邀请 ID、当前 issuer Cookie 和动作。POST 精确同源 Origin、
