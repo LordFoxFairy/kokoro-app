@@ -1,15 +1,23 @@
 # Kokoro User Web 当前状态
 
-R5-INVITE-WEB-ENTRY B 工作树候选（2026-09-25，**待 Root 审查/提交**）：Web 已在上一 A commit
+R5-INVITE-WEB-ENTRY C 实现切片（2026-09-25，跨仓验收仍待 Root）：基线 Web main
+`63a0c8523bc06a513ff897b9ed8326ac543a3895`。同一静态邀请页的 recipient-only pending 预览增加真实接受/拒绝
+表单；Web Redis 一次性证明绑定固定 tenant、canonical 邀请 ID、当前 issuer Cookie 和动作。POST 精确同源 Origin、
+方法、表单字段与 Cookie 后经 BFF 原生转发 IAM，不发送 Product Bearer、业务 body 或幂等键；仅匹配 owner 200
+成功 shape 才确认：接受 303 `/login` 启动 Product OIDC，拒绝显示完成状态。404/超时/未知结果不推断成功、不自动
+重放。注册失败改为注册区就近错误并自动展开，保留姓名/邮箱、不保留密码；致命依赖失败不再提示“从原链接重来”。
+Node 22.22.2 本切片经 Root 复跑 contract 69/69、architecture 34/34、lint、Next typegen、typecheck、全量
+Vitest 1483/1483 和隔离 production build，全部 exit0；真 SMTP/HTTP 浏览器组合仍待 Root 跨仓验收，本切片不触用户 3310。
+
+R5-INVITE-WEB-ENTRY B 已提交 main `63a0c8523bc06a513ff897b9ed8326ac543a3895`（2026-09-25）：Web 已在上一 A commit
 `45388f620d2d255eee02073ffe5ef62102b6a430` 固定 BFF policy 2.1.0、IAM 0.4.0 和 verify-email 精确邀请 Location。
-本候选增加唯一静态 `/iam/interactions/invitation`：无 issuer Session 可用独立真实邮箱/密码登录或新邮箱注册；注册 callbackURL
+该切片增加唯一静态 `/iam/interactions/invitation`：无 issuer Session 可用独立真实邮箱/密码登录或新邮箱注册；注册 callbackURL
 由服务端固定同源邀请 ID 构造，成功只提示验证邮箱；有效 issuer Session 则向 BFF 读取 recipient-only pending context，并仅投影
 组织/角色/到期。Web Redis 一次性 CSRF 对 sign-in/sign-up 分别绑定静态路径、ID、动作；页面使用仅邀请生效的紧凑视觉 variant，
-不改变旧 OAuth sign-in/consent 布局。**accept/reject POST 尚未实现**，预览页不显示虚假操作按钮；因此邮件加入与 Product
-`/login` 仍未闭环，用户 3310 也未由本候选验证。Node 22.22.2 当前工作树复跑 contract 69/69、architecture
+不改变旧 OAuth sign-in/consent 布局。B 提交时 **accept/reject POST 尚未实现**，预览页不显示虚假操作按钮；这部分由上方 C 切片补齐，用户 3310 仍未验证。Node 22.22.2 B 切片复跑 contract 69/69、architecture
 34/34、全量 Vitest 1474/1474、lint、Next typegen 和 `tsc --noEmit` 均通过；Chromium 独立页面布局/默认收起注册
 3/3，通过桌面和移动端截图核对。隔离 production build 的临时目录使用仓外 node_modules symlink，Turbopack 因
-filesystem root 限制拒绝该测试布置，故本候选 **production build 尚未通过验收**；真 SMTP/HTTPS 浏览器验收仍待执行。
+filesystem root 限制拒绝该测试布置；随后 Root 在不改变用户 `.next` 的前提下于本仓隔离重跑 production build exit0。真 SMTP/HTTPS 浏览器验收仍待执行。
 
 
 R5-INVITE-WEB-ENTRY 设计门（2026-09-25，仅文档，**未实现/未验收**）：Web main

@@ -111,6 +111,29 @@ describe("Web IAM interaction CSRF", () => {
     expect(await consumeIamInteractionCsrf(base)).toBe(false)
   })
 
+  it("binds invitation acceptance to fixed tenant, canonical ID, issuer session and action", async () => {
+    const id = "01234567-89ab-4cde-8f01-23456789abcd"
+    const proof = await issue({ redisUrl, webOrigin, path: "/iam/interactions/invitation", method: "POST",
+      query: `?id=${id}`, issuerCookie, context: "tenant-one:accept", secureCookies: false,
+      cookieName: "kokoro_iam_csrf_invite_accept" })
+    const base = { redisUrl, webOrigin, path: "/iam/interactions/invitation" as const, method: "POST" as const,
+      query: `?id=${id}`, issuerCookie, context: "tenant-one:accept", cookieToken: proof.token, formToken: proof.token }
+    expect(await consumeIamInteractionCsrf({ ...base, context: "tenant-two:accept" })).toBe(false)
+    const next = await issue({ redisUrl, webOrigin, path: base.path, method: base.method, query: base.query,
+      issuerCookie, context: base.context, secureCookies: false, cookieName: "kokoro_iam_csrf_invite_accept" })
+    const second = { ...base, cookieToken: next.token, formToken: next.token }
+    expect(await consumeIamInteractionCsrf({ ...second, issuerCookie: "kokoro-issuer.session_data=other" })).toBe(false)
+    const third = await issue({ redisUrl, webOrigin, path: base.path, method: base.method, query: base.query,
+      issuerCookie, context: base.context, secureCookies: false, cookieName: "kokoro_iam_csrf_invite_accept" })
+    const valid = { ...base, cookieToken: third.token, formToken: third.token }
+    expect(await consumeIamInteractionCsrf({ ...valid, context: "tenant-one:reject" })).toBe(false)
+    const fourth = await issue({ redisUrl, webOrigin, path: base.path, method: base.method, query: base.query,
+      issuerCookie, context: base.context, secureCookies: false, cookieName: "kokoro_iam_csrf_invite_accept" })
+    const once = { ...base, cookieToken: fourth.token, formToken: fourth.token }
+    expect(await consumeIamInteractionCsrf(once)).toBe(true)
+    expect(await consumeIamInteractionCsrf(once)).toBe(false)
+  })
+
   it("deletes only issued keys and leaves a pre-existing key in the same namespace", async () => {
     const sentinelKey = `${prefix}preexisting-${randomUUID()}`
     await withTestRedis(redisUrl, async (client) => { await client.set(sentinelKey, "other-owner", { EX: 60 }) })

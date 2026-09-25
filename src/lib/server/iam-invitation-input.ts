@@ -9,6 +9,10 @@ const CONTEXT = z.object({ data: z.object({
   tenant_name: z.string().min(1).max(200), roles: z.array(z.string().min(1).max(128)).min(1).max(32),
   status: z.literal("pending"), expires_at: z.string().datetime({ offset: true }),
 }).strict() }).strict()
+const ACCEPTED = z.object({ data: z.object({ invitation_id: z.string().regex(CANONICAL_ID),
+  member_id: z.string().min(1), status: z.literal("accepted") }).strict() }).strict()
+const REJECTED = z.object({ data: z.object({ invitation_id: z.string().regex(CANONICAL_ID),
+  status: z.literal("rejected") }).strict() }).strict()
 
 export const VERIFY_MESSAGES: Readonly<Record<string, string>> = {
   TOKEN_EXPIRED: "验证链接已过期，请联系邀请人重新发送邮件。",
@@ -50,6 +54,14 @@ export function isExpiredInvitationError(body: Uint8Array): boolean {
   } catch { return false }
 }
 
+export function matchesInvitationDecision(body: Uint8Array, invitationId: string, decision: "accept" | "reject"): boolean {
+  try {
+    const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body))
+    const parsed = (decision === "accept" ? ACCEPTED : REJECTED).safeParse(value)
+    return parsed.success && parsed.data.data.invitation_id === invitationId
+  } catch { return false }
+}
+
 export async function readInvitationForm(request: Request): Promise<URLSearchParams | null> {
   if (request.headers.get("content-type") !== "application/x-www-form-urlencoded" || request.body === null ||
     request.headers.has("transfer-encoding")) return null
@@ -76,11 +88,12 @@ export async function readInvitationForm(request: Request): Promise<URLSearchPar
   try { form = new URLSearchParams(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks.map((part) => Buffer.from(part)), total))) }
   catch { return null }
   const action = form.get("decision")
-  if (action !== "sign-in" && action !== "sign-up") return null
+  if (action !== "sign-in" && action !== "sign-up" && action !== "accept" && action !== "reject") return null
   const fields = action === "sign-in" ? ["csrf_token", "decision", "email", "password"] :
-    ["csrf_token", "decision", "email", "name", "password"]
+    action === "sign-up" ? ["csrf_token", "decision", "email", "name", "password"] : ["csrf_token", "decision"]
   if ([...form.keys()].length !== fields.length || fields.some((field) => form.getAll(field).length !== 1) ||
     [...form.keys()].some((field) => !fields.includes(field))) return null
+  if (action === "accept" || action === "reject") return form
   const email = form.get("email") ?? ""
   const password = form.get("password") ?? ""
   const name = form.get("name") ?? ""

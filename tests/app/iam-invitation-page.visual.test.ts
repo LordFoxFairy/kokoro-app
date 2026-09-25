@@ -37,9 +37,27 @@ describe("invitation interaction visual layout", () => {
   })
 
   it("escapes owner-provided preview fields before they reach DOM", async () => {
-    const html = invitationPreviewPage({ tenantName: "<script>alert(1)</script>", roles: ["member"],
+    const html = invitationPreviewPage({ action: "/iam/interactions/invitation?id=01234567-89ab-4cde-8f01-23456789abcd",
+      acceptToken: "accept-proof", rejectToken: "reject-proof", tenantName: "<script>alert(1)</script>", roles: ["member"],
       expiresAt: "2026-10-01T12:00:00Z" })
     expect(html).not.toContain("<script>alert(1)</script>")
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;")
+  })
+
+  it("opens the registration panel at its own error and does not restore a password", async () => {
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+      await page.setContent(invitationSignInPage({ action: "/iam/interactions/invitation?id=01234567-89ab-4cde-8f01-23456789abcd",
+        signInToken: "sign-in-proof", signUpToken: "sign-up-proof", failedAction: "sign-up",
+        name: "New Member", email: "new@example.test", message: "未能创建账号，请检查填写的信息。" }))
+      const registration = page.locator("details.invitation-register")
+      await browserExpect(registration).toHaveAttribute("open", "")
+      await browserExpect(registration.getByRole("alert")).toBeVisible()
+      await browserExpect(registration.getByLabel("姓名")).toHaveValue("New Member")
+      await browserExpect(registration.getByLabel("邮箱")).toHaveValue("new@example.test")
+      await browserExpect(registration.getByLabel("密码")).toHaveValue("")
+      await page.close()
+    } finally { await browser.close() }
   })
 })
