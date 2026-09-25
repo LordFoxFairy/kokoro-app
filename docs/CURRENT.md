@@ -1,6 +1,6 @@
 # Kokoro User Web 当前状态
 
-W1C-FIXED-TENANT-WEB-D 第三切片（2026-09-24，Root 独立代码门已验；真三仓烟测待验）：Web RP code callback
+W1C-FIXED-TENANT-WEB-D 第三切片（2026-09-24，Root 独立代码门与固定来源真三仓烟测已验）：Web RP code callback
 在创建 Product Session 前、refresh 在 generation finalize 前，均以当前 user Bearer、固定 service
 identity 和受信 `Forwarded` 调用 BFF `GET /v1/me`（owner OpenAPI SHA-256
 `75ab482132602bd1d7ce77dbec1423b10d4ce7a8244ad284ecac78cd4e7b50ca`），严格核对
@@ -9,8 +9,12 @@ identity 和受信 `Forwarded` 调用 BFF `GET /v1/me`（owner OpenAPI SHA-256
 错配撤销 pending record，旧 generation 立即失效。无 JWT 自验、fallback 或可见中转，凭据不进响应/日志。
 Root 在当前工作树重跑 contract 57/57、architecture 34/34、lint、全量测试 1424/1424、
 typecheck 以及独立目录的 Next production build，均通过；3310 预览进程未重启。
+Root 以 IAM `7f39193`、BFF `e0663a8`、Web `d117688` 固定来源运行测试自有 HTTPS
+SMTP 首登→正式 IAM 邀请加入同一 tenant→OIDC→BFF `/v1/me`→Product Session/refresh/logout，
+结果 `status=passed`、`owned_resources_remaining=0`。该结果不代表当前仅起 Web 的 3310
+已经配齐 BFF/IAM/RP；只读实测 `/login` 仍为 HTTP 503、空 body，不显示旧中转页。
 
-W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，来源已重钉；三仓真组合待验）：
+W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，来源已重钉；真组合证据见上）：
 Web 固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce` 的
 browser-private policy `2.0.0`（artifact SHA-256
 `70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`，
