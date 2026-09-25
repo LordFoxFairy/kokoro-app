@@ -1,5 +1,17 @@
 # Kokoro User Web 当前状态
 
+R5-INVITE-WEB-ENTRY 设计门（2026-09-25，仅文档，**未实现/未验收**）：Web main
+`63aca94f93095722425340a0a95985e8796a5b33` 仍固定 BFF policy `2.0.0`，没有
+`/iam/interactions/invitation` 静态入口；既有 `/auth/sign-in` 仅服务签名 OAuth，`/login` 仅服务 Product RP，
+未入组邮件收件人没有真实首登路径。BFF main `d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7` 已发布 2.1.0
+policy SHA-256 `b3ff912e70858cc5a5cf7bdbc597c8872ab29c5bfec4dfbe070ce4b37500239d`，上游 IAM
+`ac94f152daffa2293801ea4f56f98b3ae59452d7`/OpenAPI 0.4.0。Web 三设计面已记录下一切片：只读固定
+policy 来源；唯一静态邀请页完成独立 issuer 登录/新邮箱注册+验证、recipient-only context、一次性 CSRF 接受/拒绝，
+accept 200 后才启动 Product `/login`；无可见“连接中／整页重试”、假 `/auth/invitation`、Web SQL 或 Product 未入组 fallback。
+未决且须代码证明：Web policy 2.1.0 pin、静态 Route Handler/表单/CSRF、安全响应和 owner 错误映射、Node22 全门、
+Root 固定 SHA 的真实 PostgreSQL/Redis/SMTP/HTTPS Chromium 两类邮箱与错人/过期/并发验收；用户 3310 未由此门
+启动或验证。早期 policy 2.0.0 与邀请空缺的后文属于历史/当前运行基线，不是已经完成 2.1.0 消费的证据。
+
 R5-Web-Team-Product 切片（2026-09-25，Root 最终集成待验收）：已将旧 Team context、
 namespace/inbox 与 IAM `/bff/*` 直达实现替换为 BFF public Team contract 生成客户端和
 同源 `/api/team/*` adapter；设置中心只展示固定租户的成员、角色、管理邀请与显式确认写操作。

@@ -1,5 +1,23 @@
 # Kokoro User Web 数据模型与 Owner
 
+## R5-INVITE-WEB-ENTRY：邀请流程数据边界（目标态，尚未实现）
+
+Web main `63aca94f93095722425340a0a95985e8796a5b33` 尚无独立邀请入口，仍固定 BFF policy `2.0.0`；目标来源是
+BFF `d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7` 的 `2.1.0`、IAM
+`ac94f152daffa2293801ea4f56f98b3ae59452d7`。IAM 唯一保存 Invitation/recipient、User、issuer Session、Member、
+Role、过期和审计；BFF 不落邀请事实，Web 更不创建邀请表、tenant/member/role 副本、SQL schema、migration、ORM、
+事务或跨 owner JOIN。固定 `KOKORO_TENANT_ID` 只是 server-only 部署约束，不是浏览器可选事实；Web 只有经 BFF/IAM
+校验后的单次请求 context UI 投影，页面不持久化邀请资料、邮箱验证 token、密码或 owner 错误正文。
+
+Web 只扩现有隔离 Redis `kokoro:web:iam-csrf:<Web-origin-hash>:<token-sha256>` 的短 TTL 一次性记录：绑定固定 Web
+origin、静态邀请 path、canonical ID、POST 动作；已登录 accept/reject 另绑定 issuer Cookie 摘要，匿名注册/登录不假设有
+issuer Cookie。浏览器只持有 HttpOnly CSRF cookie 与隐藏 token，Redis `SET NX`/`GETDEL` 保证单次消费，值不含姓名、邮件、
+邀请预览、密码或明文 Cookie。Redis 故障 fail closed；只清理测试自有精确 key。已有 Product Session Redis record 与
+Auth.js RP 事务不因邀请预览/注册/邮箱验证而建立；**accept 200 后**才可经 `/login` 的正常 OIDC 流建立 Product Session。
+reject 200 不建 Member 或 Product Session。accept/reject 无 Web/BFF receipt 或跨仓事务，不把未知网络结果写成成功；
+context 终态 404 不证明之前的写入方向。邮箱验证 JWT 的核验/状态仍由 IAM 负责，Web 对它只执行严格同源传输与安全
+Location 校验。`no-store`/`no-referrer` 覆盖预览、表单、验证回跳、完成与本地错误，避免敏感信息落入浏览器缓存或 Referer。
+
 R5-Web-Team-Product 前置 scope 切片仅增加 OAuth user-delegated `iam:member.write`、
 `iam:invitation.write` 的固定申请与严格校验；不增加 Web SQL/Redis key、tenant 或成员/邀请副本。
 IAM `ad5224a` 仍是 Member/Invitation/Role 唯一 writer，BFF `da03b76` 是 Product Team

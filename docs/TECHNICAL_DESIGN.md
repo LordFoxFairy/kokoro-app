@@ -1,5 +1,45 @@
 # Kokoro User Web 技术设计
 
+## R5-INVITE-WEB-ENTRY：独立邀请入口设计门（目标态，尚未实现）
+
+**当前态与唯一来源。** Web main `63aca94f93095722425340a0a95985e8796a5b33` 仍消费 BFF relay policy `2.0.0`，没有
+`/iam/interactions/invitation` 静态路由；`/iam/[...path]` 只允许既定 issuer GET，`/auth/sign-in` 只接受 OAuth 签名 query，
+`/login` 只启动已具备成员资格后的 Product RP OIDC。任何一个都不是未入组收件人的邀请入口。BFF main
+`d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7` 已发布 policy `2.1.0`（SHA-256
+`b3ff912e70858cc5a5cf7bdbc597c8872ab29c5bfec4dfbe070ce4b37500239d`），固定 IAM
+`ac94f152daffa2293801ea4f56f98b3ae59452d7`/OpenAPI `0.4.0`，它是目标 Web 只读消费来源；Web 尚未重钉该 artifact，
+本文不是已上线或 3310 已打通的证据。下文的 policy 2.0.0 和早期邀请空缺描述是历史基线，不与本目标并行运行。
+
+| 设计门 | 裁决 |
+| --- | --- |
+| Owner/当前入口 | IAM 唯一拥有 User、issuer Session、Invitation、Member、recipient/expiry/role 与审计；BFF 只拥有固定 browser-private relay；Web 只拥有页面、表单状态、同源 Route Handler、一次性 CSRF。当前 Web `src/app/iam/[...path]`、`src/app/auth/sign-in`、`src/lib/server/iam-interaction-csrf.ts` 已存在，邀请静态路由和 2.1.0 consumer 未实现。 |
+| 放置选择 | 采用唯一 `src/app/iam/interactions/invitation/route.ts` 静态 GET/POST，并窄化复用现有 server-only relay transport、issuer Cookie 过滤、交互页面壳与 CSRF 算法；拒绝扩展 `[...path]` 通配、把未入组者送 Product `/login`、复用 OAuth 签名专属 `/auth/sign-in`，也不新建独立登录 SPA 或第二套认证 store。现有 CSRF binding 只覆盖签名 OAuth path，须为邀请 ID/动作单独扩展绑定而非原样误用。 |
+| 依赖/数据 | Browser → Web 静态同源入口 → BFF `/iam/*` → IAM。Web server-only `KOKORO_TENANT_ID` 决定 path tenant，Web origin/service secret 只在服务端；浏览器不能自报 tenant/actor/recipient，不持有 service credential。只固定消费 BFF policy/blob，不复制或编辑 IAM OpenAPI；无 Web SQL/Invitation 副本、跨仓事务、缓存或持久 receipt。 |
+| 删除项 | 不创建 `/auth/invitation` 假入口或 alias，不保留可见“连接中／整页重试”页面、通用 proxy、旧 policy 双读或未验证时的 Product fallback。 |
+| 验证 | Web Node 22 的 `pnpm contract && pnpm test:architecture && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:e2e`；Root 固定三仓 SHA 的真实 PG/Redis/SMTP/HTTPS Chromium 首登、已有账号、错人/过期/并发、cookie Path 与 Product OIDC。构建须隔离 `.next`，不触碰用户 3310。 |
+
+**唯一交互状态机。** 邮件链接只允许精确 `GET /iam/interactions/invitation?id=<canonical-lowercase-UUID>`，
+`/iam/verify-email` 来源的失败跳转只允许再追加一个 policy 枚举 `error`。页面验证原始 path/query、Web origin 和长度后，
+只用固定 tenant 和过滤后的 `Path=/iam` issuer Cookie 向 BFF GET context。无有效 issuer Session 时，同一静态入口呈现**独立真实**
+邮箱/密码登录与新邮箱注册表单，不触发 Product RP；登录调用既有精确 `/iam/sign-in/email`，注册调用新增精确
+`/iam/sign-up/email`，其 `callbackURL` 由服务端根据当前 canonical ID 构造，绝不信任表单自报。注册 200 不代表登录：只显示
+“检查邮箱”的局部状态；IAM 邮件验证完成后精确回到同一静态入口，新用户重新登录 issuer Session。已有用户登录后重新 GET
+context；只有 IAM 返回 recipient-matched pending context，才显示组织、角色、到期与接受/拒绝操作。不能从邮件地址、邀请 ID、
+Product Session 或匿名页面自行推断收件人和权限。
+
+每个写表单都要求同源 Origin、严格字段/大小限制及 Web Redis 一次性 CSRF；接受/拒绝的绑定至少包含固定 Web origin、静态 path、
+canonical invitation ID、动作、issuer Cookie 摘要及短 TTL，`GETDEL` 消耗后才注入 Web service credential 发往 BFF。注册与独立
+issuer 登录也要有同源、一次性 CSRF，但注册尚无 issuer Cookie，绑定不能假设有登录 Session。Web 响应和日志不包含密码、
+验证 token、原始 owner 错误、完整敏感 query；页面用受控文案、`no-store`、`no-referrer`、request ID，凭据错误留在表单附近，
+不跳转到整页重试。四种邮箱验证失败码只映射固定用户文案，不渲染原始 code/message/query。错人/不存在/终态 context 保持
+不可见 404；过期或租户停用按 IAM 契约显示安全终态，不暴露邀请详情。非成功、超时、取消、Cookie/contract/依赖异常
+均不创建 Product Session；写操作无 receipt，绝不自动重试。accept **200** 才导航 `/login` 启动 Product OIDC；reject **200**
+仅显示完成。若 POST 结果未知，重新读取 context 仅用于观察可见 pending 状态，终态 404 不能证明接受成功，不据此启动 Product
+登录或盲重放写入。签入/注册/预览/应答/完成均在同一紧凑页面内呈现局部状态，不出现“连接中／整页重试”中转设计。
+
+实现顺序是固定 BFF policy 2.1.0 digest/provenance/路径门与负例 → 静态 route + 独立登录/注册和 CSRF → context/accept/reject
+及响应安全 → owner 与真实浏览器组合。只有最后一门通过，才可将本节从目标态改为已闭环。
+
 ## W1C 固定部署租户收敛（设计门，2026-09-24）
 
 当前 `GET /login` 已是无可见中转页的服务端 OIDC 启动；Team 切换器和

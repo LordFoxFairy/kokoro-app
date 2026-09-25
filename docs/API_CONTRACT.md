@@ -1,5 +1,32 @@
 # Kokoro User Web API 契约策略
 
+## R5-INVITE-WEB-ENTRY：独立邀请 browser-private 契约（目标态）
+
+当前 Web main `63aca94f93095722425340a0a95985e8796a5b33` 的本地 policy 仍为 `2.0.0`，尚无静态邀请入口；目标只读固定
+BFF main `d6dc8a0ea5a3fee7a4f54f01fefdeff0e28892e7` 的
+[`contract/iam-relay-policy.json`](../../kokoro-bff/contract/iam-relay-policy.json) `2.1.0`，SHA-256
+`b3ff912e70858cc5a5cf7bdbc597c8872ab29c5bfec4dfbe070ce4b37500239d`。其上游 IAM main
+`ac94f152daffa2293801ea4f56f98b3ae59452d7`、内部 OpenAPI `0.4.0`/SHA-256
+`a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416`。Web 重钉时只复制 BFF
+commit blob 快照并机器校验 digest、路由/方法、Location 和四枚举，不手改生成物或维护第二份 IAM 契约。三条 dynamic invitation
+operation 是 `browser-private`，绝不并入 BFF public Product `/v1` API。
+
+| 浏览器 → Web | Web → BFF | 准入与响应 |
+| --- | --- | --- |
+| `GET /iam/interactions/invitation?id=<UUID>` | `GET /iam/v1/tenants/{tenant_id}/invitations/{invitation_id}/context` | 精确单一小写 UUID、无额外 query；tenant 仅来自 server-only 配置。有效 issuer Session 才读取，IAM 只向匹配收件人返回 pending 预览；无 Session 显示独立 issuer 登录/注册表单，不泄露邀请资料。context 返回组织名、角色、到期的 UI 投影，字段形状只以 owner OpenAPI 为准。 |
+| 同一静态页面 POST 登录/注册 | 精确 `POST /iam/sign-in/email` 或 `POST /iam/sign-up/email` | 同源 Origin + Web 一次性 CSRF；BFF Web service 身份、无 Product Bearer。注册 body 只能是 `name,email,password,callbackURL`，callbackURL 由 Web 固定 Origin + 当前 UUID 构造，绝不接受浏览器 URL；注册成功只进入邮箱验证等待，不获得 issuer/Product Session。 |
+| 同一静态页面 POST 接受/拒绝 | `POST .../{invitation_id}/accept` 或 `/reject` | 当前 issuer Cookie、固定 tenant/UUID、同源 Origin、Web 一次性 CSRF；上游无 query/body/Authorization/Idempotency-Key。accept 200 才可导航 Product `/login`；reject 200 仅本页完成。 |
+| `GET /iam/verify-email?...` 的 302 | Web 同源页面 Location | BFF `invitationLocation` 只允许 `/iam/interactions/invitation?id=<canonical UUID>`，或其后单个 `&error=TOKEN_EXPIRED\|INVALID_TOKEN\|USER_NOT_FOUND\|INVALID_USER`；Web 只用固定安全文案显示错误，拒绝外域、额外/重复/编码 alias 与任意重排。 |
+
+现有 `/iam/[...path]` 仍只有固定静态 issuer GET；静态 Web invitation route 不被视为 IAM API。`/auth/sign-in` 是 OAuth
+签名交互，不是邀请登录别名；`/login` 是 Product RP 入口，不负责未入组者首登。Web 不接受浏览器指定 tenant、actor、
+recipient、service secret、Origin 目标或 callbackURL；issuer Cookie 只走 BFF policy 白名单及 `Path=/iam`，Product/Auth.js Cookie 不转发。
+请求/响应限额、deadline、原生 Cookie、错误码/状态与 Location 仍以固定 BFF policy、IAM OpenAPI 和本仓唯一运行时门禁为准，
+本文不复制一份可编辑 DTO。context 404 不区分错人/不存在/终态；过期/停用按 IAM 稳定 code 局部反馈。所有页面、POST
+与本地拒绝均 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`、受控 `x-request-id`，不回显验证 token、密码、
+Cookie、原始上游 message/details 或完整 query。429 可按受控 `Retry-After` 局部提示；未知写入结果不自动重试，也不凭终态
+404 推断曾接受成功。验收必须覆盖准确机器来源、精确路径/方法、CSRF 重放与身份/租户负例，以及真实三仓 HTTPS/SMTP/Chromium。
+
 ## W1C 固定租户 Web consumer 目标（2026-09-24 设计门）
 
 当前 `/login` 成功只作同源 302，不呈现连接/整页重试 UI；浏览器
