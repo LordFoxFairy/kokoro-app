@@ -1,151 +1,143 @@
-// 团队自助面 HTTP 客户端：同源 `/api/team/*` BFF 代理（注入 web-bff 凭据 + 信封 user principal）。
-// 入站过 Zod；错误尽力取
-// user 稳定错误码（如 membership.last_owner / invite.expired）供 UI 本地化。
+// Browser-only Team Product client. Generated BFF SDK operations are transport-bound to Web's
+// same-origin /api/team adapter; the browser never contacts the BFF/IAM origin directly.
 
-import { z, type ZodTypeAny } from "zod"
+import { z, type ZodType } from "zod"
 
-export type TeamRole = "owner" | "admin" | "member"
+import { createClient } from "@/generated/bff-team/client/client.gen"
+import {
+  cancelTeamInvitation, createTeamInvitation, leaveTeam, listTeamInvitations, listTeamMembers,
+  listTeamRoles, removeTeamMember, replaceTeamMemberRoles, resendTeamInvitation,
+} from "@/generated/bff-team/sdk.gen"
+import type { TeamInvitation, TeamMember, TeamRole } from "@/generated/bff-team/types.gen"
 
-const dataEnvelope = <T extends ZodTypeAny>(inner: T) => z.object({ data: inner })
-const errorEnvelope = z.object({ error: z.object({ code: z.string(), message: z.string() }) })
+import {
+  teamCanceledInvitationResponseSchema, teamCreateInvitationRequestSchema, teamErrorResponseSchema,
+  teamInvitationsResponseSchema, teamLeftMemberResponseSchema, teamMembersResponseSchema,
+  teamPendingInvitationResponseSchema, teamRemovedMemberResponseSchema, teamReplaceRolesRequestSchema,
+  teamRolesChangedResponseSchema, teamRolesResponseSchema,
+} from "./schema"
 
-const teamSummarySchema = z.object({
-  team: z.object({ id: z.string(), name: z.string(), type: z.enum(["personal", "team"]) }).passthrough(),
-  membership: z.object({ role: z.enum(["owner", "admin", "member"]) }).passthrough(),
-})
-export type TeamSummary = z.infer<typeof teamSummarySchema>
+export type { TeamInvitation, TeamMember, TeamRole } from "@/generated/bff-team/types.gen"
 
-const pendingInviteSchema = z.object({
-  id: z.string(),
-  teamId: z.string(),
-  teamName: z.string(),
-  role: z.enum(["owner", "admin", "member"]),
-  expiresAt: z.string(),
-  createdAt: z.string(),
-})
-export type PendingInvite = z.infer<typeof pendingInviteSchema>
-
-const memberSchema = z.object({
-  userId: z.string(),
-  email: z.string().nullable(),
-  displayName: z.string().nullable(),
-  role: z.enum(["owner", "admin", "member"]),
-  status: z.enum(["active", "disabled"]),
-  joinedAt: z.string(),
-})
-export type Member = z.infer<typeof memberSchema>
-
-const teamInviteSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  role: z.enum(["owner", "admin", "member"]),
-  status: z.enum(["pending", "accepted", "revoked", "expired"]),
-  expiresAt: z.string(),
-  createdAt: z.string(),
-})
-const teamDetailSchema = z.object({
-  team: z.object({ id: z.string(), name: z.string(), type: z.enum(["personal", "team"]) }).passthrough(),
-  viewerRole: z.enum(["owner", "admin", "member"]),
-  members: z.array(memberSchema),
-  invites: z.array(teamInviteSchema),
-})
-export type TeamDetail = z.infer<typeof teamDetailSchema>
+export type TeamPage<T> = Readonly<{ items: T[]; nextCursor: string | null; requestId: string }>
+export type TeamReadOptions = Readonly<{ limit?: number; cursor?: string }>
 
 export class TeamClientError extends Error {
-  readonly code: string | null
-  readonly status: number | null
-  constructor(message: string, code: string | null, status: number | null) {
+  constructor(
+    message: string,
+    readonly code: string | null,
+    readonly status: number | null,
+    readonly requestId: string | null,
+  ) {
     super(message)
     this.name = "TeamClientError"
-    this.code = code
-    this.status = status
   }
 }
 
-const BASE = "/api/team"
+type GeneratedResult = Readonly<{ data?: unknown; error?: unknown; response?: Response }>
 
-async function readError(response: Response): Promise<TeamClientError> {
-  let code: string | null = null
-  let message = `team request failed with status ${response.status}`
-  try {
-    const parsed = errorEnvelope.safeParse(await response.json())
-    if (parsed.success) {
-      code = parsed.data.error.code
-      message = parsed.data.error.message || message
+function teamTransport(origin: string): typeof fetch {
+  return async (input, init) => {
+    const generated = input instanceof Request ? input : new Request(input, init)
+    const url = new URL(generated.url)
+    if (url.origin !== origin || !url.pathname.startsWith("/v1/team/")) {
+      throw new TeamClientError("Unexpected Team endpoint", "unexpected_team_endpoint", null, null)
     }
-  } catch {
-    // 无 JSON 错误体：保留状态码描述。
+    const browserUrl = new URL(`/api/team/${url.pathname.slice("/v1/team/".length)}`, origin)
+    browserUrl.search = url.search
+    const body = generated.body === null ? undefined : await generated.arrayBuffer()
+    return fetch(new Request(browserUrl, {
+      method: generated.method,
+      headers: generated.headers,
+      ...(body === undefined ? {} : { body }),
+      signal: generated.signal,
+      credentials: "same-origin",
+    }))
   }
-  return new TeamClientError(message, code, response.status)
 }
 
-async function requestData<T extends ZodTypeAny>(
-  path: string,
-  inner: T,
-  init?: RequestInit,
-): Promise<z.infer<T>> {
-  let response: Response
-  try {
-    response = await fetch(`${BASE}${path}`, { cache: "no-store", ...init })
-  } catch (error) {
-    throw new TeamClientError(error instanceof Error ? error.message : String(error), null, null)
+async function checked<T>(result: Promise<unknown>, schema: ZodType<T, z.ZodTypeDef, unknown>): Promise<T> {
+  let outcome: GeneratedResult
+  try { outcome = await result as GeneratedResult }
+  catch (error) {
+    throw new TeamClientError(error instanceof Error ? error.message : "Team network failure", null, null, null)
   }
-  if (!response.ok) {
-    throw await readError(response)
+  const status = outcome.response?.status ?? null
+  if (outcome.error !== undefined || status === null || status >= 400) {
+    const parsed = teamErrorResponseSchema.safeParse(outcome.error)
+    if (parsed.success) {
+      throw new TeamClientError(parsed.data.error.message, parsed.data.error.code, status, parsed.data.meta.request_id)
+    }
+    throw new TeamClientError("Team request failed", status === null ? "team_network_error" : "bff_bad_response", status, null)
   }
-  const raw: unknown = await response.json().catch(() => null)
-  return dataEnvelope(inner).parse(raw).data
+  const parsed = schema.safeParse(outcome.data)
+  if (!parsed.success) throw new TeamClientError("Malformed Team response", "bff_bad_response", status, null)
+  return parsed.data
 }
 
-function jsonPost(body: unknown): RequestInit {
-  return { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+function page<T>(value: { data: T[]; meta: { next_cursor: string | null; request_id: string } }): TeamPage<T> {
+  return { items: value.data, nextCursor: value.meta.next_cursor, requestId: value.meta.request_id }
 }
 
-export type TeamClient = {
-  currentNamespace: () => Promise<string | null>
-  listMyTeams: () => Promise<TeamSummary[]>
-  listInvites: () => Promise<PendingInvite[]>
-  teamDetail: (teamId: string) => Promise<TeamDetail>
-  createInvite: (teamId: string, email: string, role: "admin" | "member") => Promise<void>
-  acceptInvite: (inviteId: string) => Promise<void>
-  declineInvite: (inviteId: string) => Promise<void>
-  changeRole: (teamId: string, targetUserId: string, role: TeamRole) => Promise<void>
-  removeMember: (teamId: string, targetUserId: string) => Promise<void>
-}
+export type TeamClient = Readonly<{
+  currentUserId: () => Promise<string>
+  listMembers: (options?: TeamReadOptions) => Promise<TeamPage<TeamMember>>
+  listInvitations: (options?: TeamReadOptions) => Promise<TeamPage<TeamInvitation>>
+  listRoles: (options?: TeamReadOptions) => Promise<TeamPage<TeamRole>>
+  createInvitation: (email: string, roles: string[]) => Promise<void>
+  resendInvitation: (invitationId: string) => Promise<void>
+  cancelInvitation: (invitationId: string) => Promise<void>
+  replaceMemberRoles: (memberId: string, roles: string[]) => Promise<void>
+  removeMember: (memberId: string) => Promise<void>
+  leave: () => Promise<void>
+}>
 
 export function createTeamClient(): TeamClient {
+  const origin = window.location.origin
+  const client = createClient({ baseUrl: origin, fetch: teamTransport(origin), responseStyle: "fields", throwOnError: false })
+  const query = (options?: TeamReadOptions) => options === undefined ? undefined : {
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
+    ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+  }
   return {
-    currentNamespace: async () => {
-      const res = await fetch(`${BASE}/context`, { cache: "no-store" })
-      if (!res.ok) return null
-      const parsed = z.object({ namespace: z.string().nullable() }).safeParse(await res.json().catch(() => null))
-      return parsed.success ? parsed.data.namespace : null
+    currentUserId: async () => {
+      let response: Response
+      try { response = await fetch("/api/auth/session", { cache: "no-store" }) }
+      catch { throw new TeamClientError("Product Session unavailable", "session_unavailable", null, null) }
+      const raw: unknown = await response.json().catch(() => null)
+      const parsed = z.object({ authenticated: z.literal(true), subject: z.string().min(1) }).safeParse(raw)
+      if (!response.ok || !parsed.success) throw new TeamClientError("Product Session unavailable", "unauthenticated", response.status, null)
+      return parsed.data.subject
     },
-    listMyTeams: () => requestData("/me/teams", z.array(teamSummarySchema)),
-    listInvites: () => requestData("/me/invites", z.array(pendingInviteSchema)),
-    teamDetail: (teamId) => requestData(`/teams/${encodeURIComponent(teamId)}`, teamDetailSchema),
-    createInvite: async (teamId, email, role) => {
-      await requestData(`/teams/${encodeURIComponent(teamId)}/invites`, z.unknown(), jsonPost({ email, role }))
+    listMembers: async (options) => {
+      const params = query(options)
+      return page(await checked(listTeamMembers({ client, ...(params === undefined ? {} : { query: params }) }), teamMembersResponseSchema))
     },
-    acceptInvite: async (inviteId) => {
-      await requestData(`/invites/${encodeURIComponent(inviteId)}/accept`, z.unknown(), { method: "POST" })
+    listInvitations: async (options) => {
+      const params = query(options)
+      return page(await checked(listTeamInvitations({ client, ...(params === undefined ? {} : { query: params }) }), teamInvitationsResponseSchema))
     },
-    declineInvite: async (inviteId) => {
-      await requestData(`/invites/${encodeURIComponent(inviteId)}/decline`, z.unknown(), { method: "POST" })
+    listRoles: async (options) => {
+      const params = query(options)
+      return page(await checked(listTeamRoles({ client, ...(params === undefined ? {} : { query: params }) }), teamRolesResponseSchema))
     },
-    changeRole: async (teamId, targetUserId, role) => {
-      await requestData(
-        `/teams/${encodeURIComponent(teamId)}/members/change-role`,
-        z.unknown(),
-        jsonPost({ targetUserId, role }),
-      )
+    createInvitation: async (email, roles) => {
+      const body = teamCreateInvitationRequestSchema.parse({ email, roles })
+      await checked(createTeamInvitation({ client, body }), teamPendingInvitationResponseSchema)
     },
-    removeMember: async (teamId, targetUserId) => {
-      await requestData(
-        `/teams/${encodeURIComponent(teamId)}/members/remove`,
-        z.unknown(),
-        jsonPost({ targetUserId }),
-      )
+    resendInvitation: async (invitationId) => {
+      await checked(resendTeamInvitation({ client, path: { invitation_id: invitationId } }), teamPendingInvitationResponseSchema)
     },
+    cancelInvitation: async (invitationId) => {
+      await checked(cancelTeamInvitation({ client, path: { invitation_id: invitationId } }), teamCanceledInvitationResponseSchema)
+    },
+    replaceMemberRoles: async (memberId, roles) => {
+      const body = teamReplaceRolesRequestSchema.parse({ roles })
+      await checked(replaceTeamMemberRoles({ client, path: { member_id: memberId }, body }), teamRolesChangedResponseSchema)
+    },
+    removeMember: async (memberId) => {
+      await checked(removeTeamMember({ client, path: { member_id: memberId } }), teamRemovedMemberResponseSchema)
+    },
+    leave: async () => { await checked(leaveTeam({ client }), teamLeftMemberResponseSchema) },
   }
 }

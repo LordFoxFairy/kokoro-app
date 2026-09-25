@@ -1,15 +1,45 @@
-// 团队成员管理权限判定（纯规则，零 React 零 I/O）：viewer 角色 → 能否管理成员 / 能否改派角色。
-// UI 只消费这些谓词，不在组件内散写角色比较。权威身份/角色由服务端信封解析，前端只据 viewerRole 决定
-// 控件可见性（真正的越权由后端拒绝，前端判定仅为体验）。
-
+// Presentation-only permission hints from the BFF/IAM role catalog. IAM remains authoritative.
 import type { TeamRole } from "./client"
 
-// 可管理成员（邀请 / 移除成员）：owner 与 admin。
-export function canManageMembers(role: TeamRole): boolean {
-  return role === "owner" || role === "admin"
+function permissions(assigned: readonly string[], catalog: readonly TeamRole[]): Set<string> | null {
+  const byName = new Map(catalog.map((role) => [role.name, role]))
+  const result = new Set<string>()
+  for (const name of assigned) {
+    const role = byName.get(name)
+    if (role === undefined) return null
+    for (const [resource, actions] of Object.entries(role.permissions)) {
+      for (const action of actions ?? []) result.add(`${resource}:${action}`)
+    }
+  }
+  return result
 }
 
-// 可改派成员角色（含升降 owner）：仅 owner。
-export function canAssignRoles(role: TeamRole): boolean {
-  return role === "owner"
+function has(assigned: readonly string[], catalog: readonly TeamRole[], permission: string): boolean {
+  return permissions(assigned, catalog)?.has(permission) ?? false
+}
+
+export function canInvite(actor: readonly string[], catalog: readonly TeamRole[]): boolean {
+  return has(actor, catalog, "invitation:create")
+}
+
+export function canManageInvitations(actor: readonly string[], catalog: readonly TeamRole[]): boolean {
+  return has(actor, catalog, "invitation:cancel")
+}
+
+export function canReadInvitations(actor: readonly string[], catalog: readonly TeamRole[]): boolean {
+  return has(actor, catalog, "invitation:read")
+}
+
+export function canRemoveMember(actor: readonly string[], target: readonly string[], catalog: readonly TeamRole[]): boolean {
+  return has(actor, catalog, "member:delete") && (!target.includes("owner") || actor.includes("owner"))
+}
+
+export function canReplaceMemberRoles(
+  actor: readonly string[], current: readonly string[], replacement: readonly string[], catalog: readonly TeamRole[],
+): boolean {
+  const actorPermissions = permissions(actor, catalog)
+  const replacementPermissions = permissions(replacement, catalog)
+  if (actorPermissions === null || replacementPermissions === null || !actorPermissions.has("member:update")) return false
+  if (current.includes("owner") !== replacement.includes("owner") && !actor.includes("owner")) return false
+  return actor.includes("owner") || [...replacementPermissions].every((permission) => actorPermissions.has(permission))
 }

@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatCredits } from "@/billing/format"
 import { useT } from "@/i18n/context"
 import { endProductSession } from "@/ui/auth/product-auth-client"
-import { browserBillingClient, browserTeamClient } from "@/ui/shell/page-clients"
+import { browserBillingClient } from "@/ui/shell/page-clients"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { NotificationPanel } from "@/ui/notifications/notification-panel"
 import notificationStyles from "@/ui/notifications/notification-panel.module.css"
@@ -35,31 +35,6 @@ export function ComputerStatusIcon(props: SVGProps<SVGSVGElement>) {
       <circle cx="19" cy="16" r="2.5" fill="var(--sidebar)" />
     </svg>
   )
-}
-
-function useTeamName(preview: boolean): string | null | undefined {
-  // undefined=未取，null=预览/无信封，string=已解析团队名（与 settings AccountCard 同源逻辑）。
-  const [name, setName] = useState<string | null | undefined>(undefined)
-  useEffect(() => {
-    let live = true
-    void (async () => {
-      try {
-        const namespace = await browserTeamClient({ preview }).currentNamespace()
-        if (namespace === null) {
-          if (live) setName(null)
-          return
-        }
-        const teams = await browserTeamClient({ preview }).listMyTeams()
-        if (live) setName(teams.find((entry) => entry.team.id === namespace)?.team.name ?? null)
-      } catch {
-        if (live) setName(null)
-      }
-    })()
-    return () => {
-      live = false
-    }
-  }, [preview])
-  return name
 }
 
 export type WorkspaceRailAccountProps = {
@@ -81,17 +56,12 @@ export function WorkspaceRailAccount({
   accountTriggerRef,
 }: WorkspaceRailAccountProps) {
   const t = useT()
-  const teamName = useTeamName(preview)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [creditBalance, setCreditBalance] = useState("—")
   const accountSettingsFrameRef = useRef<number | null>(null)
   const previousCompactDesktopRef = useRef(compactDesktop)
-  // Preview TeamClient data must not replace the site's product brand.
-  const display = preview
-    ? brandName ?? "Workspace"
-    : teamName === undefined
-      ? brandName ?? "Workspace"
-      : teamName ?? brandName ?? "Workspace"
+  // The deployment tenant is fixed; the rail shows product identity, not an IAM namespace switcher.
+  const display = brandName ?? "Kokoro"
   const initial = (display.trim().charAt(0) || "K").toUpperCase()
   const accountCard = (
     <>

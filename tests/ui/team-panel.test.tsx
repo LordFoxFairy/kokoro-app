@@ -1,135 +1,165 @@
-// 团队面板组件测试（TEAM-1）：固定部署租户不呈现切换器；待处理邀请 accept/decline；
-// owner 邀请/移除成员；last_owner 错误反射本地化提示。团队客户端为注入 fake（不打网络）。
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+const { endProductSession } = vi.hoisted(() => ({ endProductSession: vi.fn().mockResolvedValue(undefined) }))
+vi.mock("@/ui/auth/product-auth-client", () => ({ endProductSession }))
+
 import { LocaleProvider } from "@/i18n/context"
-import { TeamClientError, type TeamClient, type TeamDetail, type TeamSummary } from "@/team/client"
+import { TeamClientError, type TeamClient, type TeamInvitation, type TeamMember, type TeamRole } from "@/team/client"
 import { TeamPanel } from "@/ui/team/team-panel"
 
-const TEAMS: TeamSummary[] = [
-  { team: { id: "t-personal", name: "Personal", type: "personal" }, membership: { role: "owner" } },
-  { team: { id: "t-acme", name: "Acme", type: "team" }, membership: { role: "member" } },
+const timestamp = "2026-09-24T00:00:00Z"
+const members: TeamMember[] = [
+  { member_id: "member-me", user_id: "user-me", display_name: "Me", image_url: null, roles: ["owner"], joined_at: timestamp },
+  { member_id: "member-bob", user_id: "user-bob", display_name: "Bob", image_url: null, roles: ["member"], joined_at: timestamp },
+]
+const invitations: TeamInvitation[] = [
+  { invitation_id: "inv-1", email: "invite@example.test", roles: ["member"], status: "pending", created_at: timestamp, expires_at: timestamp },
+]
+const roles: TeamRole[] = [
+  { role_id: null, name: "owner", kind: "builtin", permissions: { member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"] } },
+  { role_id: null, name: "admin", kind: "builtin", permissions: { member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"] } },
+  { role_id: null, name: "member", kind: "builtin", permissions: { member: ["read"] } },
 ]
 
-const OWNER_DETAIL: TeamDetail = {
-  team: { id: "t-personal", name: "Personal", type: "personal" },
-  viewerRole: "owner",
-  members: [
-    { userId: "u-me", email: "me@example.com", displayName: "Me", role: "owner", status: "active", joinedAt: "2026-07-13T00:00:00.000Z" },
-    { userId: "u-bob", email: "bob@example.com", displayName: "Bob", role: "member", status: "active", joinedAt: "2026-07-13T00:00:00.000Z" },
-  ],
-  invites: [],
-}
-
-function makeClient(overrides: Partial<TeamClient> = {}): TeamClient {
+function client(overrides: Partial<TeamClient> = {}): TeamClient {
   return {
-    currentNamespace: vi.fn().mockResolvedValue("t-personal"),
-    listMyTeams: vi.fn().mockResolvedValue(TEAMS),
-    listInvites: vi.fn().mockResolvedValue([]),
-    teamDetail: vi.fn().mockResolvedValue(OWNER_DETAIL),
-    createInvite: vi.fn().mockResolvedValue(undefined),
-    acceptInvite: vi.fn().mockResolvedValue(undefined),
-    declineInvite: vi.fn().mockResolvedValue(undefined),
-    changeRole: vi.fn().mockResolvedValue(undefined),
+    currentUserId: vi.fn().mockResolvedValue("user-me"),
+    listMembers: vi.fn().mockResolvedValue({ items: members, nextCursor: null, requestId: "req-members" }),
+    listInvitations: vi.fn().mockResolvedValue({ items: invitations, nextCursor: null, requestId: "req-invites" }),
+    listRoles: vi.fn().mockResolvedValue({ items: roles, nextCursor: null, requestId: "req-roles" }),
+    createInvitation: vi.fn().mockResolvedValue(undefined),
+    resendInvitation: vi.fn().mockResolvedValue(undefined),
+    cancelInvitation: vi.fn().mockResolvedValue(undefined),
+    replaceMemberRoles: vi.fn().mockResolvedValue(undefined),
     removeMember: vi.fn().mockResolvedValue(undefined),
+    leave: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
 }
 
-function renderPanel(client: TeamClient, onClose = vi.fn(), currentNamespace = "t-personal") {
-  return render(
-    <TeamPanel client={client} currentNamespace={currentNamespace} onClose={onClose} />,
-    { wrapper: LocaleProvider },
-  )
+function show(value: TeamClient) {
+  return render(<TeamPanel client={value} onClose={vi.fn()} />, { wrapper: LocaleProvider })
 }
 
 afterEach(cleanup)
 
-describe("TeamPanel", () => {
-  it("never offers tenant switching even when multiple memberships exist", async () => {
-    const client = makeClient()
-    renderPanel(client)
-    await screen.findByTestId("team-members")
-    expect(screen.queryByTestId("team-switcher")).not.toBeInTheDocument()
-    expect(screen.queryByTestId("team-switch-t-acme")).not.toBeInTheDocument()
-    expect(client.listMyTeams).not.toHaveBeenCalled()
+describe("fixed-tenant Team Product UI", () => {
+  it("shows current-tenant members/management invitations with roles[] but no namespace switch or inbox", async () => {
+    show(client())
+    expect(await screen.findByTestId("member-row-member-bob")).toHaveTextContent("Bob")
+    expect(screen.getByTestId("invitation-row-inv-1")).toHaveTextContent("invite@example.test")
+    expect(screen.getByTestId("member-row-member-me")).toHaveTextContent("owner")
+    expect(screen.queryByTestId("team-switcher")).toBeNull()
+    expect(screen.queryByTestId("invite-accept")).toBeNull()
+    expect(screen.queryByTestId("invite-decline")).toBeNull()
   })
 
-  it("accepts a pending invite and reloads", async () => {
-    const client = makeClient({
-      listInvites: vi
-        .fn()
-        .mockResolvedValueOnce([
-          { id: "inv-1", teamId: "t-acme", teamName: "Acme", role: "member", expiresAt: "x", createdAt: "y" },
-        ])
-        .mockResolvedValue([]),
-    })
-    renderPanel(client)
-
-    const accept = await screen.findByTestId("invite-accept")
-    expect(accept).toHaveAccessibleName(/Accept.*Acme/i)
-    expect(screen.getByTestId("invite-decline")).toHaveAccessibleName(/Decline.*Acme/i)
-    fireEvent.click(accept)
-    await waitFor(() => expect(client.acceptInvite).toHaveBeenCalledWith("inv-1"))
-    // 接受后重取邀请与详情，不重新加载跨租户清单。
-    await waitFor(() => expect((client.listInvites as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1))
-    expect(client.listMyTeams).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByTestId("team-close")).toHaveFocus())
-  })
-
-  it("lets an owner invite and remove members", async () => {
-    const client = makeClient()
-    renderPanel(client)
-
-    await screen.findByTestId("team-members")
-    fireEvent.change(screen.getByTestId("invite-email"), { target: { value: "new@example.com" } })
+  it("creates, resends and cancels invitations using invitation_id, then refreshes read pages", async () => {
+    const api = client()
+    show(api)
+    await screen.findByTestId("invitation-row-inv-1")
+    fireEvent.change(screen.getByTestId("invite-email"), { target: { value: "new@example.test" } })
     fireEvent.click(screen.getByTestId("invite-submit"))
-    await waitFor(() =>
-      expect(client.createInvite).toHaveBeenCalledWith("t-personal", "new@example.com", "member"),
-    )
-
-    const remove = screen.getByTestId("member-remove-u-bob")
-    expect(remove).toHaveAccessibleName(/Remove.*Bob/i)
-    fireEvent.click(remove)
-    expect(screen.getByTestId("member-remove-confirm-u-bob")).toHaveAccessibleName(/Confirm removal.*Bob/i)
-    await waitFor(() => expect(screen.getByTestId("member-remove-confirm-u-bob")).toHaveFocus())
-    fireEvent.click(await screen.findByTestId("member-remove-confirm-u-bob"))
-    await waitFor(() => expect(client.removeMember).toHaveBeenCalledWith("t-personal", "u-bob"))
-    await waitFor(() => expect(screen.getByTestId("invite-submit")).toHaveFocus())
+    await waitFor(() => expect(api.createInvitation).toHaveBeenCalledWith("new@example.test", ["member"]))
+    fireEvent.click(screen.getByTestId("invitation-resend-inv-1"))
+    await waitFor(() => expect(api.resendInvitation).toHaveBeenCalledWith("inv-1"))
+    fireEvent.click(screen.getByTestId("invitation-cancel-inv-1"))
+    await waitFor(() => expect(api.cancelInvitation).toHaveBeenCalledWith("inv-1"))
+    expect((api.listInvitations as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(1)
   })
 
-  it("shows field-level email feedback before inviting", async () => {
-    renderPanel(makeClient())
-    await screen.findByTestId("invite-submit")
-    fireEvent.click(screen.getByTestId("invite-submit"))
-    await waitFor(() => expect(screen.getByTestId("invite-email")).toHaveFocus())
-    expect(screen.getByTestId("invite-email")).toHaveAttribute("aria-invalid", "true")
-    expect(screen.getByText("Please enter a valid email")).toBeInTheDocument()
+  it("replaces roles[] and removes by member_id, not IAM user_id", async () => {
+    const api = client()
+    show(api)
+    await screen.findByTestId("member-row-member-bob")
+    fireEvent.click(screen.getByTestId("member-role-member-bob-member"))
+    fireEvent.click(screen.getByTestId("member-role-member-bob-admin"))
+    fireEvent.click(screen.getByTestId("member-role-save-member-bob"))
+    await waitFor(() => expect(api.replaceMemberRoles).toHaveBeenCalledWith("member-bob", ["admin"]))
+    fireEvent.click(screen.getByTestId("member-remove-member-bob"))
+    fireEvent.click(screen.getByTestId("member-remove-confirm-member-bob"))
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith("member-bob"))
   })
 
-  it("surfaces the last-owner guard as a localized notice", async () => {
-    const client = makeClient({
-      removeMember: vi
-        .fn()
-        .mockRejectedValue(new TeamClientError("last owner", "membership.last_owner", 409)),
+  it("supports explicit leave and presents LAST_OWNER without automatic retry", async () => {
+    const api = client({ leave: vi.fn().mockRejectedValue(new TeamClientError("Last owner", "LAST_OWNER", 409, "req-conflict")) })
+    show(api)
+    fireEvent.click(await screen.findByTestId("team-leave"))
+    fireEvent.click(screen.getByTestId("team-leave-confirm"))
+    expect(await screen.findByTestId("team-notice")).toBeInTheDocument()
+    expect(api.leave).toHaveBeenCalledOnce()
+  })
+
+  it("pages members by opaque cursor and hides mutation controls for a plain member", async () => {
+    const api = client({
+      listInvitations: vi.fn().mockRejectedValue(new TeamClientError("Forbidden", "FORBIDDEN", 403, "req-forbidden")),
+      listMembers: vi.fn()
+        .mockResolvedValueOnce({ items: [{ ...members[0], roles: ["member"] }], nextCursor: "opaque+2", requestId: "r1" })
+        .mockResolvedValueOnce({ items: [members[1]], nextCursor: null, requestId: "r2" }),
     })
-    renderPanel(client)
-
-    fireEvent.click(await screen.findByTestId("member-remove-u-me"))
-    fireEvent.click(await screen.findByTestId("member-remove-confirm-u-me"))
-    const notice = await screen.findByTestId("team-notice")
-    expect(notice.textContent && notice.textContent.length > 0).toBe(true)
-  })
-
-  it("shows a read-only hint for plain members", async () => {
-    const client = makeClient({
-      teamDetail: vi.fn().mockResolvedValue({ ...OWNER_DETAIL, viewerRole: "member" }),
-    })
-    renderPanel(client)
-
+    show(api)
     await screen.findByTestId("team-members")
-    // member 视图无邀请表单。
     expect(screen.queryByTestId("invite-submit")).toBeNull()
+    expect(api.listInvitations).not.toHaveBeenCalled()
+    expect(screen.queryByTestId("member-remove-member-me")).toBeNull()
+    fireEvent.click(screen.getByTestId("members-more"))
+    expect(await screen.findByTestId("member-row-member-bob")).toBeInTheDocument()
+    expect(api.listMembers).toHaveBeenCalledWith({ limit: 25, cursor: "opaque+2" })
+  })
+
+  it("finds the actor and all roles beyond the first pages before deriving controls", async () => {
+    const api = client({
+      listMembers: vi.fn()
+        .mockResolvedValueOnce({ items: [members[1]], nextCursor: "member-next", requestId: "r1" })
+        .mockResolvedValueOnce({ items: [members[0]], nextCursor: null, requestId: "r2" }),
+      listRoles: vi.fn()
+        .mockResolvedValueOnce({ items: [roles[2]], nextCursor: "role-next", requestId: "r1" })
+        .mockResolvedValueOnce({ items: [roles[0], roles[1]], nextCursor: null, requestId: "r2" }),
+    })
+    show(api)
+    expect(await screen.findByTestId("invite-submit")).toBeInTheDocument()
+    expect(screen.getByTestId("member-remove-member-bob")).toBeInTheDocument()
+    expect(api.listMembers).toHaveBeenCalledWith({ limit: 100, cursor: "member-next" })
+    expect(api.listRoles).toHaveBeenCalledWith({ limit: 100, cursor: "role-next" })
+  })
+
+  it("does not report a successful write as failed when its readback fails or repeat the write", async () => {
+    const api = client({
+      listInvitations: vi.fn()
+        .mockResolvedValueOnce({ items: invitations, nextCursor: null, requestId: "first" })
+        .mockRejectedValueOnce(new TeamClientError("Unavailable", "UNAVAILABLE", 503, "later")),
+    })
+    show(api)
+    await screen.findByTestId("invite-submit")
+    fireEvent.change(screen.getByTestId("invite-email"), { target: { value: "new@example.test" } })
+    fireEvent.click(screen.getByTestId("invite-submit"))
+    expect(await screen.findByTestId("team-notice")).toHaveTextContent(/submitted|已提交/u)
+    expect(screen.getByTestId("invite-submit")).toBeDisabled()
+    fireEvent.click(screen.getByTestId("invite-submit"))
+    expect(api.createInvitation).toHaveBeenCalledOnce()
+  })
+
+  it("pages invitations by owner cursor", async () => {
+    const nextInvitation = { ...invitations[0]!, invitation_id: "inv-2", email: "second@example.test" }
+    const api = client({
+      listInvitations: vi.fn()
+        .mockResolvedValueOnce({ items: invitations, nextCursor: "invite-next", requestId: "r1" })
+        .mockResolvedValueOnce({ items: [nextInvitation], nextCursor: null, requestId: "r2" }),
+    })
+    show(api)
+    fireEvent.click(await screen.findByTestId("invitations-more"))
+    expect(await screen.findByTestId("invitation-row-inv-2")).toHaveTextContent("second@example.test")
+    expect(api.listInvitations).toHaveBeenCalledWith({ limit: 25, cursor: "invite-next" })
+  })
+
+  it("ends the Product Session after a successful leave without refetching forbidden members", async () => {
+    const api = client()
+    show(api)
+    fireEvent.click(await screen.findByTestId("team-leave"))
+    fireEvent.click(screen.getByTestId("team-leave-confirm"))
+    await waitFor(() => expect(endProductSession).toHaveBeenCalledOnce())
+    expect(api.leave).toHaveBeenCalledOnce()
+    expect(api.listMembers).toHaveBeenCalledOnce()
   })
 })

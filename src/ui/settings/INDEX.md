@@ -14,6 +14,6 @@
 
 ## 陷阱
 - 当前 BFF v1 没有个人资料 projection；账户卡在 live 保留信息架构但不渲染未接线的读写动作，预览态只使用 `.test` fixture，浏览器不接收可信 tenant 轴。
-- 账户卡当前团队由 `currentNamespace()` + `listMyTeams()` 解析名；预览/无信封显“预览模式”。
+- 团队 tab 只使用固定部署租户的 BFF Team Product 客户端；侧栏品牌不由 IAM namespace 覆盖。
 - 技能/连接/团队/账单/定价内容使用独立 `XxxContent`（`@/ui/skills`、`@/ui/mcp`、`@/ui/team`、`@/ui/billing`），设置中心直接装配。成果库属于独立的 Session/Artifact 业务面，不再作为账户设置入口重复装配。
 - `settings-sections.tsx`（账户/外观/对话/订阅卡）+ `settings-sections.module.css`（sections 卡片/行/segment/select 皮肤）；账户/外观/对话为 sections，订阅=`BillingContent`+`PricingContent`。模态内两栏布局在 `settings-modal.module.css`。

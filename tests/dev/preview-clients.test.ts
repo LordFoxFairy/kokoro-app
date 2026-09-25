@@ -122,9 +122,9 @@ describe("preview settings clients", () => {
   it("提供账单、套餐和团队的稳定预览数据", async () => {
     const billing = await createPreviewBillingClient().summary()
     const pricing = await createPreviewPricingClient().plans()
-    const team = await createPreviewTeamClient().listMyTeams()
+    const team = await createPreviewTeamClient().listMembers()
     expect(billing.balance_micros).toBe("10000000")
     expect(pricing.plans).toHaveLength(2)
-    expect(team[0]?.team.id).toBe("team_preview")
+    expect(team.items[0]?.member_id).toBe("preview-member")
   })
 })

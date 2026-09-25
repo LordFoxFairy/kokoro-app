@@ -20,7 +20,7 @@ import type {
   UploadConfirm,
   UploadPreview,
 } from "@/hub/schemas"
-import type { TeamClient, TeamDetail, TeamSummary } from "@/team/client"
+import type { TeamClient, TeamMember, TeamRole } from "@/team/client"
 
 const previewUpdatedAt = Date.UTC(2026, 7, 28)
 const previewSkills: SkillCard[] = [
@@ -321,24 +321,26 @@ export function createPreviewPricingClient(): PricingClient {
   return { plans: () => Promise.resolve(plans), checkout: () => Promise.resolve({ status: "unavailable" as const }) }
 }
 
-const previewTeam: TeamSummary = { team: { id: "team_preview", name: "Preview Workspace", type: "team" }, membership: { role: "owner" } }
-const previewDetail: TeamDetail = {
-  team: previewTeam.team,
-  viewerRole: "owner",
-  members: [{ userId: "preview-user", email: "preview@example.test", displayName: "Preview User", role: "owner", status: "active", joinedAt: new Date().toISOString() }],
-  invites: [],
+const previewMember: TeamMember = {
+  member_id: "preview-member", user_id: "preview-user", display_name: "Preview User",
+  image_url: null, roles: ["owner"], joined_at: new Date(previewUpdatedAt).toISOString(),
 }
+const previewRoles: TeamRole[] = [
+  { role_id: null, name: "owner", kind: "builtin", permissions: { member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"] } },
+  { role_id: null, name: "member", kind: "builtin", permissions: { member: ["read"] } },
+]
 
 export function createPreviewTeamClient(): TeamClient {
   return {
-    currentNamespace: () => Promise.resolve("team_preview"),
-    listMyTeams: () => Promise.resolve([previewTeam]),
-    listInvites: () => Promise.resolve([]),
-    teamDetail: () => Promise.resolve(previewDetail),
-    createInvite: () => Promise.resolve(),
-    acceptInvite: () => Promise.resolve(),
-    declineInvite: () => Promise.resolve(),
-    changeRole: () => Promise.resolve(),
+    currentUserId: () => Promise.resolve("preview-user"),
+    listMembers: () => Promise.resolve({ items: [previewMember], nextCursor: null, requestId: "preview-members" }),
+    listInvitations: () => Promise.resolve({ items: [], nextCursor: null, requestId: "preview-invitations" }),
+    listRoles: () => Promise.resolve({ items: previewRoles, nextCursor: null, requestId: "preview-roles" }),
+    createInvitation: () => Promise.resolve(),
+    resendInvitation: () => Promise.resolve(),
+    cancelInvitation: () => Promise.resolve(),
+    replaceMemberRoles: () => Promise.resolve(),
     removeMember: () => Promise.resolve(),
+    leave: () => Promise.resolve(),
   }
 }

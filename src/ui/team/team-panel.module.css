@@ -218,6 +218,23 @@
   border-radius: var(--radius-sm);
 }
 
+.roleChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.roleChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
 .pending {
   margin-top: 0.4rem;
   padding-top: 0.6rem;

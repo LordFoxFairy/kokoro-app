@@ -179,8 +179,7 @@ export function SettingsModal({
   // resource cache's client scope stable when a test/site supplies a factory
   // instead of a process singleton.
   const hubClient = useMemo(() => browserHubClient({ preview }), [preview])
-  // 团队切换器高亮当前 namespace:undefined=未取,null=预览/无信封,string=当前 team id。
-  const [teamNs, setTeamNs] = useState<string | null | undefined>(undefined)
+  const teamClient = useMemo(() => browserTeamClient({ preview }), [preview])
   const pinnedSkillsEngine = useMemo(
     () => engine === undefined ? browserEngine({ preview }) : engine,
     [engine, preview],
@@ -198,26 +197,8 @@ export function SettingsModal({
     return () => window.clearTimeout(timer)
   }, [domainUpgradeOpen])
 
-  // 进入团队 tab 且 ns 未取时拉当前 namespace(切 tab 走 selectTab 会置回 undefined 触发重取)。
-  useEffect(() => {
-    if (tab !== "team" || teamNs !== undefined) {
-      return
-    }
-    let live = true
-    void browserTeamClient({ preview })
-      .currentNamespace()
-      .then((ns) => live && setTeamNs(ns))
-      .catch(() => live && setTeamNs(null))
-    return () => {
-      live = false
-    }
-  }, [preview, tab, teamNs])
-
   const selectTab = (next: SettingsTab): void => {
     setTab(next)
-    if (next === "team") {
-      setTeamNs(undefined) // 每次进团队重取 ns(切换后回来反映新态)。
-    }
     if (next !== "integration") setIntegrationId(null)
     if (next !== "account") setAccountLoginMethods(false)
     onTabChange?.(next)
@@ -379,8 +360,7 @@ export function SettingsModal({
       {panelTab === "mcp" ? <McpContent client={hubClient} embedded {...(brandName === undefined ? {} : { brandName })} /> : null}
       {panelTab === "team" ? (
         <TeamContent
-          client={browserTeamClient({ preview })}
-          currentNamespace={teamNs ?? null}
+          client={teamClient}
           embedded
         />
       ) : null}

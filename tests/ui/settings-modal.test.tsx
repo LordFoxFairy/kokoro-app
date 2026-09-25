@@ -24,12 +24,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/ui/shell/page-clients", () => ({
   browserTeamClient: () => ({
-    currentNamespace: vi.fn().mockResolvedValue("team_1"),
-    listMyTeams: vi.fn().mockResolvedValue([
-      { team: { id: "team_1", name: "Studio", type: "team" }, membership: { role: "owner" } },
-    ]),
-    listInvites: vi.fn().mockResolvedValue([]),
-    teamDetail: vi.fn().mockRejectedValue(new Error("detail not needed in tab navigation test")),
+    currentUserId: vi.fn().mockResolvedValue("user-me"),
+    listMembers: vi.fn().mockResolvedValue({ items: [{ member_id: "member-me", user_id: "user-me", display_name: "Me", image_url: null, roles: ["owner"], joined_at: "2026-09-24T00:00:00Z" }], nextCursor: null, requestId: "test" }),
+    listInvitations: vi.fn().mockResolvedValue({ items: [], nextCursor: null, requestId: "test" }),
+    listRoles: vi.fn().mockResolvedValue({ items: [{ role_id: null, name: "owner", kind: "builtin", permissions: { member: ["read"], invitation: ["read"] } }], nextCursor: null, requestId: "test" }),
   }),
   browserBillingClient: () => ({
     summary: vi.fn().mockResolvedValue({ balance_micros: "12500000", held_micros: "500000" }),

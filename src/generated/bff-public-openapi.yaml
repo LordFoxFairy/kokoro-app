@@ -1,0 +1,4391 @@
+openapi: 3.1.0
+info:
+  title: Kokoro Business API
+  version: 1.0.0
+  description: Kokoro BFF 面向 Web 的业务契约；阶段 1 仅通过 PostgreSQL + Redis 及显式 HTTP upstream/adapter 契约协作，不新增 MySQL/Mongo 依赖。
+  license:
+    name: Proprietary Kokoro contract
+    url: https://kokoro.invalid/license
+servers:
+  - url: http://127.0.0.1:4300
+    description: Local mock BFF
+  - url: https://bff.kokoro.invalid
+    description: Production placeholder
+security:
+  - serviceHeader: []
+    internalSecret: []
+    userBearer: []
+tags:
+  - name: Health
+    description: Process and dependency health probes.
+  - name: Identity
+    description: Current IAM-admitted Product identity projections.
+  - name: System
+    description: Tenant-scoped runtime manifest projection.
+  - name: Projects
+    description: BFF-owned projects and project resources.
+  - name: Mori Music
+    description: Provider-neutral music creation projections and generation events.
+  - name: Team
+    description: Current-tenant membership, invitation and role projections backed by IAM.
+  - name: Chat
+    description: Asynchronous sessions, messages, event streams, and run controls.
+  - name: Models
+    description: Tenant-visible model candidates.
+  - name: Skills
+    description: Skill catalog, revisions, quotas, and lifecycle operations.
+  - name: MCP
+    description: MCP server projections and lifecycle operations.
+  - name: Scheduled
+    description: BFF-owned scheduled task definitions.
+  - name: Agents
+    description: Agent connection setup projections.
+  - name: Library
+    description: BFF Library surface pending the Storage v2 integration.
+  - name: Billing
+    description: Billing catalog, summary, and checkout projections.
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      operationId: healthz
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: anonymous
+      summary: Check process health
+      security: []
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: Invalid probe request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /readyz:
+    get:
+      tags: [Health]
+      operationId: readyz
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: anonymous
+      summary: Check service readiness
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Required upstreams are not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400':
+          description: Invalid probe request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/system/runtime-manifest:
+    get:
+      tags: [System]
+      operationId: getRuntimeManifest
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: system.runtime_manifest.read
+      summary: Get the tenant runtime manifest
+      description: Uses the server-configured tenant and domain to load the System owner manifest; System validates its own Site/Host binding before the BFF projects the resource fields once into the v1 snake_case transport.
+      parameters:
+        - name: product_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: locale
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+        - name: surface_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      security:
+        - serviceHeader: []
+          internalSecret: []
+      responses:
+        '200':
+          description: Server-configured tenant runtime manifest; System validates the configured tenant with Forwarded host against its own Site/Host binding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeManifestResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '502':
+          description: System owner transport/contract failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: System owner is not configured or unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: identity.self.read
+      summary: Get the current Product user and fixed tenant
+      description: The trusted Web service and unique user Bearer are verified online through IAM; the admitted tenant must equal the server-configured Product tenant. No caller-supplied tenant or user field is used.
+      responses:
+        '200':
+          description: Current IAM-admitted identity
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUserResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM admission is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/members:
+    get:
+      tags: [Team]
+      operationId: listTeamMembers
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.member.read
+      summary: List current-tenant members through IAM
+      parameters:
+        - $ref: '#/components/parameters/TeamReadLimit'
+        - $ref: '#/components/parameters/TeamReadCursor'
+      responses:
+        '200':
+          description: Current-tenant members page
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamMembersResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: IAM admission or Team read is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/invitations:
+    get:
+      tags: [Team]
+      operationId: listTeamInvitations
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.invitation.read
+      summary: List current-tenant invitations through IAM
+      parameters:
+        - $ref: '#/components/parameters/TeamReadLimit'
+        - $ref: '#/components/parameters/TeamReadCursor'
+      responses:
+        '200':
+          description: Current-tenant invitations page
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamInvitationsResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: IAM admission or Team read is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Team]
+      operationId: createTeamInvitation
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.invitation.write
+      summary: Create invitation in the admitted tenant
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamCreateInvitationRequest' }
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamPendingInvitationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/roles:
+    get:
+      tags: [Team]
+      operationId: listTeamRoles
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.role.read
+      summary: List current-tenant roles through IAM
+      parameters:
+        - $ref: '#/components/parameters/TeamReadLimit'
+        - $ref: '#/components/parameters/TeamReadCursor'
+      responses:
+        '200':
+          description: Current-tenant roles page
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRolesResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: IAM admission or Team read is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/invitations/{invitation_id}/resend:
+    post:
+      tags: [Team]
+      operationId: resendTeamInvitation
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.invitation.write
+      summary: Resend a pending invitation
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      parameters:
+        - name: invitation_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamPendingInvitationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/invitations/{invitation_id}:
+    delete:
+      tags: [Team]
+      operationId: cancelTeamInvitation
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.invitation.write
+      summary: Cancel a pending invitation
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      parameters:
+        - name: invitation_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamCanceledInvitationResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/members/me:
+    delete:
+      tags: [Team]
+      operationId: leaveTeam
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.member.write
+      summary: Leave the admitted tenant
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamLeftMemberResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/members/{member_id}/roles:
+    put:
+      tags: [Team]
+      operationId: replaceTeamMemberRoles
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.member.write
+      summary: Replace member roles
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamReplaceRolesRequest' }
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRolesChangedResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/team/members/{member_id}:
+    delete:
+      tags: [Team]
+      operationId: removeTeamMember
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: team.member.write
+      summary: Remove a member
+      description: IAM owns the mutation; no receipt or automatic retry is available for an uncertain result.
+      parameters:
+        - name: member_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: IAM owner mutation result
+          headers:
+            x-request-id:
+              schema: { $ref: '#/components/schemas/RequestId' }
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRemovedMemberResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM admission or Team mutation is rate limited
+          headers:
+            Retry-After:
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/sessions:
+    get:
+      tags: [Chat]
+      operationId: listSessions
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: chat.session.read
+      summary: List chat sessions
+      parameters:
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/CursorQuery'
+      responses:
+        '200':
+          description: Session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/models:
+    get:
+      tags: [Models]
+      operationId: listModels
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: model.catalog.read
+      summary: List visible models
+      parameters:
+        - name: feature_key
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tenant-visible model candidates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCandidateListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/sessions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Chat]
+      operationId: getSessionSnapshot
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: chat.session.read
+      summary: Get a session snapshot
+      description: >-
+        Returns the owner-scoped session, the latest 100 durable Message facts in chronological
+        order, and AG-UI event watermark from one PostgreSQL read snapshot. The watermark is the latest committed public
+        ledger cursor visible with these messages, not an Agent execution cursor.
+      parameters:
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      responses:
+        '200':
+          description: Session snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSnapshotResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [Chat]
+      operationId: deleteSession
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.session.delete
+      summary: Delete a chat session
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      responses:
+        '200':
+          description: Delete receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteSessionResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/sessions/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Chat]
+      operationId: listSessionMessages
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: chat.session.read
+      summary: List session messages
+      description: Cursor-paginated message history for a session. This is the v1 equivalent of Manus task.listMessages; session detail remains a bounded metadata snapshot.
+      parameters:
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+        - $ref: '#/components/parameters/CursorQuery'
+      responses:
+        '200':
+          description: Cursor-paginated session messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionMessageListResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Chat]
+      operationId: createMessage
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.message.create
+      summary: Submit a session message
+      description: >-
+        For an absent client-created conv_<UUID> session, the first accepted message atomically
+        creates a private active session owned by the admitted tenant and subject, derives its
+        title from the first message, and queues the Agent run. Existing active sessions continue
+        normally. Deleted or foreign session identifiers remain not found; the identifier itself
+        grants no access. Replaying the same idempotency key and request returns the original receipt.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequest'
+            example:
+              content: Review the latest project changes.
+              model: default
+              project_ref: project_kokoro
+      responses:
+        '202':
+          description: Message receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReceiptResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/sessions/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [Chat]
+      operationId: streamSessionEvents
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: chat.session.read
+      summary: Stream session events
+      parameters:
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+        - $ref: '#/components/parameters/LastEventId'
+      responses:
+        '200':
+          description: Session event stream
+          headers:
+            X-Kokoro-Request-Id:
+              description: Request correlation identifier for the stream setup.
+              schema:
+                $ref: '#/components/schemas/RequestId'
+              example: req_01JASYNC000000000000000000
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SessionEventStream'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/sessions/{id}/runs/{runId}/control:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [Chat]
+      operationId: controlRun
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.run.control
+      summary: Control an asynchronous run
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunControlRequest'
+            examples:
+              cancel:
+                value:
+                  kind: run.cancel
+              resume:
+                value:
+                  kind: run.resume
+                  decisions:
+                    - type: approve
+                      tool_id: tool_01J
+      responses:
+        '202':
+          description: Run control receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlReceiptResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/sessions/{id}/title:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    patch:
+      tags: [Chat]
+      operationId: renameSession
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.session.update
+      summary: Rename a chat session
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameSessionRequest'
+      responses:
+        '200':
+          description: Rename receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/sessions/{id}/share:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [Chat]
+      operationId: createShare
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.share.manage
+      summary: Create a session share
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      responses:
+        '200':
+          description: Share receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareReceiptResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [Chat]
+      operationId: revokeShare
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: chat.share.manage
+      summary: Revoke a session share
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/DirectScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      responses:
+        '200':
+          description: Share receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareReceiptResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/shared/{shareId}:
+    parameters:
+      - $ref: '#/components/parameters/ShareId'
+    get:
+      tags: [Chat]
+      operationId: getSharedSessionSnapshot
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: chat.share.read
+      summary: Get a shared session snapshot
+      parameters:
+        - $ref: '#/components/parameters/ShareScopeQuery'
+        - $ref: '#/components/parameters/ProjectRefQuery'
+      security:
+        - serviceHeader: []
+          internalSecret: []
+      responses:
+        '200':
+          description: Shared session snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSnapshotResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: project.read
+      summary: List projects
+      responses:
+        '200':
+          description: Project list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Projects]
+      operationId: createProject
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.create
+      summary: Create a project
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '200':
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Projects]
+      operationId: getProject
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: project.read
+      summary: Get a project
+      responses:
+        '200':
+          description: Project projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    patch:
+      tags: [Projects]
+      operationId: updateProjectInstruction
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.update
+      summary: Update project instructions
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectInstructionRequest'
+      responses:
+        '200':
+          description: Updated project projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/projects:
+    get:
+      tags: [Mori Music]
+      operationId: listMoriProjects
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: List Mori music projects
+      responses:
+        '200':
+          description: Mori project list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriProjectListResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Mori Music]
+      operationId: createMoriProject
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.create
+      summary: Create a Mori music project
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoriProjectRequest'
+      responses:
+        '201':
+          description: Mori project created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriProjectResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/projects/{projectRef}:
+    parameters:
+      - $ref: '#/components/parameters/MoriProjectRef'
+    get:
+      tags: [Mori Music]
+      operationId: getMoriProject
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: Get a Mori music project
+      responses:
+        '200':
+          description: Mori project projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriProjectResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/projects/{projectRef}/song_plans:
+    parameters:
+      - $ref: '#/components/parameters/MoriProjectRef'
+    post:
+      tags: [Mori Music]
+      operationId: createMoriSongPlan
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.create
+      summary: Create a project-bound Mori Song Plan
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoriSongPlanRequest'
+      responses:
+        '201':
+          description: Song Plan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriSongPlanResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/projects/{projectRef}/generations:
+    parameters:
+      - $ref: '#/components/parameters/MoriProjectRef'
+    post:
+      tags: [Mori Music]
+      operationId: createMoriGeneration
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.create
+      summary: Queue a Mori music generation
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoriGenerationRequest'
+      responses:
+        '202':
+          description: Generation queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriGenerationReceiptResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/generations/{generationRef}:
+    parameters:
+      - $ref: '#/components/parameters/MoriGenerationRef'
+    get:
+      tags: [Mori Music]
+      operationId: getMoriGeneration
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: Get a Mori generation snapshot
+      responses:
+        '200':
+          description: Generation snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriGenerationResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/generations/{generationRef}/events:
+    parameters:
+      - $ref: '#/components/parameters/MoriGenerationRef'
+      - $ref: '#/components/parameters/MoriLastEventId'
+    get:
+      tags: [Mori Music]
+      operationId: streamMoriGenerationEvents
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: Stream Mori generation progress events
+      responses:
+        '200':
+          description: Server-sent generation events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/generations/{generationRef}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/MoriGenerationRef'
+    post:
+      tags: [Mori Music]
+      operationId: cancelMoriGeneration
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.cancel
+      summary: Cancel a Mori generation
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Cancellation applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriGenerationReceiptResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/projects/{projectRef}/candidates:
+    parameters:
+      - $ref: '#/components/parameters/MoriProjectRef'
+    get:
+      tags: [Mori Music]
+      operationId: listMoriCandidates
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: List generated Mori candidates for a project
+      parameters:
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Candidate directions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriCandidateListResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/candidates/{candidateRef}/promote:
+    parameters:
+      - $ref: '#/components/parameters/MoriCandidateRef'
+    post:
+      tags: [Mori Music]
+      operationId: promoteMoriCandidate
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.promote
+      summary: Promote a Mori candidate into the current project version
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Version created or confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriPromoteResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/versions/{versionRef}/remix:
+    parameters:
+      - $ref: '#/components/parameters/MoriVersionRef'
+    post:
+      tags: [Mori Music]
+      operationId: remixMoriVersion
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.create
+      summary: Queue a new generation from a Mori version
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoriGenerationRequest'
+      responses:
+        '202':
+          description: Remix generation queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriGenerationReceiptResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/library:
+    get:
+      tags: [Mori Music]
+      operationId: listMoriLibrary
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: List promoted Mori versions across projects
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema: { type: string, enum: [all, version], default: all }
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Mori library projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriLibraryListResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/versions/{versionRef}/exports:
+    parameters:
+      - $ref: '#/components/parameters/MoriVersionRef'
+    post:
+      tags: [Mori Music]
+      operationId: createMoriExport
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: mori.export.create
+      summary: Queue an export for a Mori version
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoriExportRequest'
+      responses:
+        '202':
+          description: Export queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriExportReceiptResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mori/exports/{exportRef}:
+    parameters:
+      - $ref: '#/components/parameters/MoriExportRef'
+    get:
+      tags: [Mori Music]
+      operationId: getMoriExport
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: mori.read
+      summary: Get a Mori export projection
+      responses:
+        '200':
+          description: Export status and short-lived download projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoriExportResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Projects]
+      operationId: listProjectTasks
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: project.read
+      summary: List project tasks
+      responses:
+        '200':
+          description: Project task projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/instruction-revisions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      tags: [Projects]
+      operationId: listProjectInstructionRevisions
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: project.read
+      summary: List instruction revisions
+      responses:
+        '200':
+          description: Instruction history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectInstructionRevisionResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/resources:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Projects]
+      operationId: uploadProjectResources
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.resource.create
+      summary: Upload project resources
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: Resource request accepted by the BFF
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/skills/{skill}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SkillName'
+    patch:
+      tags: [Projects]
+      operationId: updateProjectSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: project.update
+      summary: Update project skill state
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectSkillRequest'
+      responses:
+        '200':
+          description: Project skill state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectSkillResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/projects/{projectId}/scheduled-tasks:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      tags: [Projects]
+      operationId: createProjectScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: scheduled_task.create
+      summary: Create a project scheduled task
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduledTaskRequest'
+      responses:
+        '200':
+          description: Project scheduled task projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills:
+    get:
+      tags: [Skills]
+      operationId: listSkills
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.read
+      summary: List skills
+      parameters:
+        - $ref: '#/components/parameters/CapabilitySkillQuery'
+        - $ref: '#/components/parameters/CapabilitySkillTags'
+        - $ref: '#/components/parameters/CapabilitySkillScope'
+        - $ref: '#/components/parameters/CapabilityLimit'
+        - $ref: '#/components/parameters/CapabilityCursor'
+      responses:
+        '200':
+          description: Skill projections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/skills/pool:
+    get:
+      tags: [Skills]
+      operationId: listSkillPool
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.read
+      summary: List the skill pool
+      parameters:
+        - $ref: '#/components/parameters/CapabilitySkillQuery'
+        - $ref: '#/components/parameters/CapabilitySkillTags'
+        - $ref: '#/components/parameters/CapabilitySkillScope'
+        - $ref: '#/components/parameters/CapabilityLimit'
+        - $ref: '#/components/parameters/CapabilityCursor'
+      responses:
+        '200':
+          description: Skill pool
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillPoolResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/skills/catalog:
+    get:
+      tags: [Skills]
+      operationId: listSkillCatalog
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.read
+      summary: List the skill catalog
+      parameters:
+        - $ref: '#/components/parameters/CapabilitySkillQuery'
+        - $ref: '#/components/parameters/CapabilitySkillTags'
+        - $ref: '#/components/parameters/CapabilitySkillScope'
+        - $ref: '#/components/parameters/CapabilityLimit'
+        - $ref: '#/components/parameters/CapabilityCursor'
+      responses:
+        '200':
+          description: Skill catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillCatalogResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/skills/quota:
+    get:
+      tags: [Skills]
+      operationId: getSkillQuota
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.read
+      summary: Get skill quota
+      responses:
+        '200':
+          description: Skill quota
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillQuotaResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/{name}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/SkillNameOnly'
+      - $ref: '#/components/parameters/SkillScope'
+    get:
+      tags: [Skills]
+      operationId: listSkillRevisions
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.read
+      summary: List skill revisions
+      responses:
+        '200':
+          description: Skill revisions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillRevisionResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/{name}/enable:
+    parameters:
+      - $ref: '#/components/parameters/SkillNameOnly'
+      - $ref: '#/components/parameters/SkillScope'
+    post:
+      tags: [Skills]
+      operationId: enableSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.skill.manage
+      summary: Enable a skill
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Skill enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/{name}/disable:
+    parameters:
+      - $ref: '#/components/parameters/SkillNameOnly'
+      - $ref: '#/components/parameters/SkillScope'
+    post:
+      tags: [Skills]
+      operationId: disableSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.skill.manage
+      summary: Disable a skill
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Skill disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/github/preview:
+    post:
+      tags: [Skills]
+      operationId: previewGithubSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.skill.preview
+      summary: Preview a GitHub skill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GithubSkillRequest'
+      responses:
+        '200':
+          description: GitHub skill preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubSkillResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/github/import:
+    post:
+      tags: [Skills]
+      operationId: importGithubSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.skill.import
+      summary: Import a GitHub skill
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GithubSkillRequest'
+      responses:
+        '200':
+          description: GitHub skill import
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GithubSkillResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mcp/servers:
+    get:
+      tags: [MCP]
+      operationId: listMcpServers
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: capability.mcp.read
+      summary: List MCP servers
+      parameters:
+        - $ref: '#/components/parameters/CapabilityProviderKey'
+        - $ref: '#/components/parameters/CapabilityLimit'
+        - $ref: '#/components/parameters/CapabilityCursor'
+      responses:
+        '200':
+          description: MCP server list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    post:
+      tags: [MCP]
+      operationId: registerMcpServer
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.mcp.manage
+      summary: Register an MCP server
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerRequest'
+      responses:
+        '200':
+          description: MCP server registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mcp/servers/{name}/enable:
+    parameters:
+      - $ref: '#/components/parameters/McpServerName'
+    post:
+      tags: [MCP]
+      operationId: enableMcpServer
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.mcp.manage
+      summary: Enable an MCP server
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: MCP server enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mcp/servers/{name}/disable:
+    parameters:
+      - $ref: '#/components/parameters/McpServerName'
+    post:
+      tags: [MCP]
+      operationId: disableMcpServer
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.mcp.manage
+      summary: Disable an MCP server
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: MCP server disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/mcp/servers/{name}:
+    parameters:
+      - $ref: '#/components/parameters/McpServerName'
+    delete:
+      tags: [MCP]
+      operationId: deleteMcpServer
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: capability.mcp.manage
+      summary: Delete an MCP server
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: MCP server deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/scheduled-tasks:
+    get:
+      tags: [Scheduled]
+      operationId: listScheduledTasks
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: scheduled_task.read
+      summary: List scheduled tasks
+      responses:
+        '200':
+          description: Scheduled task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Scheduled]
+      operationId: createScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: scheduled_task.create
+      summary: Create a scheduled task
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduledTaskRequest'
+      responses:
+        '200':
+          description: Scheduled task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/scheduled-tasks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ScheduledTaskId'
+    get:
+      tags: [Scheduled]
+      operationId: getScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: scheduled_task.read
+      summary: Get a scheduled task
+      responses:
+        '200':
+          description: Scheduled task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    patch:
+      tags: [Scheduled]
+      operationId: updateScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: scheduled_task.update
+      summary: Update a scheduled task
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduledTaskPatchRequest'
+      responses:
+        '200':
+          description: Scheduled task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [Scheduled]
+      operationId: deleteScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: scheduled_task.delete
+      summary: Delete a scheduled task
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Scheduled task deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/scheduled-tasks/{id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/ScheduledTaskId'
+    post:
+      tags: [Scheduled]
+      operationId: retryScheduledTask
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: scheduled_task.retry
+      summary: Retry a scheduled task
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Scheduled task retried
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/agents/connections/setup:
+    get:
+      tags: [Agents]
+      operationId: getAgentConnectionSetup
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: agent.connection.read
+      summary: Get agent connection setup
+      parameters:
+        - $ref: '#/components/parameters/Platform'
+      responses:
+        '200':
+          description: Agent connection setup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentConnectionSetupResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/library:
+    get:
+      tags: [Library]
+      operationId: listLibrary
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: storage.library.read
+      summary: List library items
+      responses:
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '503':
+          description: Storage integration is unavailable until the Storage v2 prerequisites are complete
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - allOf:
+                      - $ref: '#/components/schemas/ErrorEnvelope'
+                      - type: object
+                        properties:
+                          error:
+                            type: object
+                            properties:
+                              code:
+                                type: string
+                                const: storage_integration_unavailable
+                  - allOf:
+                      - $ref: '#/components/schemas/ErrorEnvelope'
+                      - type: object
+                        properties:
+                          error:
+                            type: object
+                            properties:
+                              code:
+                                type: string
+                                const: iam_admission_unavailable
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /v1/billing/plans:
+    get:
+      tags: [Billing]
+      operationId: listBillingPlans
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: billing.catalog.read
+      summary: List billing plans
+      responses:
+        '200':
+          description: Billing plans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingPlanListResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/billing/summary:
+    get:
+      tags: [Billing]
+      operationId: getBillingSummary
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: billing.summary.read
+      summary: Get billing summary
+      responses:
+        '200':
+          description: Billing summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingSummaryResponse'
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/billing/checkout:
+    post:
+      tags: [Billing]
+      operationId: createBillingCheckout
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: billing.checkout.create
+      summary: Create a billing checkout
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingCheckoutRequest'
+      responses:
+        '200':
+          description: Checkout projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingCheckoutResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
+        '429':
+          description: IAM session admission is rate limited
+          headers:
+            Retry-After:
+              description: Bounded delay in seconds before retrying admission
+              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+components:
+  securitySchemes:
+    serviceHeader:
+      type: apiKey
+      in: header
+      name: x-kokoro-service
+    internalSecret:
+      type: apiKey
+      in: header
+      name: x-kokoro-internal-secret
+    userBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-session-token
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      description: Opaque chat session identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: session_kokoro
+    RunId:
+      name: runId
+      in: path
+      required: true
+      description: Opaque asynchronous run identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: run_01JASYNC
+    ShareId:
+      name: shareId
+      in: path
+      required: true
+      description: Opaque public session share identifier.
+      schema:
+        type: string
+        minLength: 1
+      example: shr_01JSHARE
+    DirectScopeQuery:
+      name: scope
+      in: query
+      required: false
+      description: Private Chat filtering only; omitted, empty, or direct never overrides the admitted tenant and subject.
+      schema:
+        type: string
+        enum: ['', direct]
+      example: direct
+    ShareScopeQuery:
+      name: scope
+      in: query
+      required: false
+      description: Optional public-share narrowing filter; it never grants private Chat access.
+      schema:
+        type: string
+        minLength: 1
+      example: ns_test
+    ProjectRefQuery:
+      name: project_ref
+      in: query
+      required: false
+      description: Filter sessions to a project reference.
+      schema:
+        type: string
+        minLength: 1
+      example: project_kokoro
+    TeamReadLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    TeamReadCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque IAM cursor bound to the admitted tenant and query.
+      schema: { type: string, minLength: 1, maxLength: 2048 }
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of sessions to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+    CursorQuery:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor returned by the previous page.
+      schema:
+        $ref: '#/components/schemas/Cursor'
+      example: cur_01JNEXT
+    CapabilitySkillQuery:
+      name: query
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    CapabilitySkillTags:
+      name: tags
+      in: query
+      required: false
+      schema:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 128
+      style: form
+      explode: true
+    CapabilitySkillScope:
+      name: scope_kind
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [personal, project, organization, session, '1', '2', '3', '4']
+    CapabilityProviderKey:
+      name: provider_key
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 191
+    CapabilityLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    CapabilityCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque owner cursor; clients and the BFF must not parse or construct it.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 2048
+    LastEventId:
+      name: Last-Event-ID
+      in: header
+      required: false
+      description: Opaque BFF ledger cursor from the last delivered AG-UI frame; replay resumes strictly after it.
+      schema:
+        $ref: '#/components/schemas/EventCursor'
+      example: agui_0123456789abcdef0123456789abcdef
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+    MoriProjectRef:
+      name: projectRef
+      in: path
+      required: true
+      description: Opaque Mori music project reference.
+      schema:
+        type: string
+        minLength: 1
+      example: project_preview_first_light
+    MoriGenerationRef:
+      name: generationRef
+      in: path
+      required: true
+      description: Opaque Mori generation reference.
+      schema:
+        type: string
+        minLength: 1
+      example: generation_mori_1
+    MoriLastEventId:
+      name: Last-Event-ID
+      in: header
+      required: false
+      description: Mori generation event cursor; the stream resumes strictly after this id.
+      schema:
+        type: string
+      example: generation_mori_1:2
+    MoriCandidateRef:
+      name: candidateRef
+      in: path
+      required: true
+      description: Opaque Mori candidate reference.
+      schema:
+        type: string
+        minLength: 1
+      example: candidate_preview_first_light_a
+    MoriVersionRef:
+      name: versionRef
+      in: path
+      required: true
+      description: Opaque immutable Mori version reference.
+      schema:
+        type: string
+        minLength: 1
+      example: version_preview_first_light_a
+    MoriExportRef:
+      name: exportRef
+      in: path
+      required: true
+      description: Opaque Mori export reference.
+      schema:
+        type: string
+        minLength: 1
+      example: export_mori_1
+    SkillName:
+      name: skill
+      in: path
+      required: true
+      schema:
+        type: string
+    SkillNameOnly:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    SkillScope:
+      name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+    McpServerName:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    ScheduledTaskId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Platform:
+      name: platform
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: [telegram, line, slack]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+  schemas:
+    RequestId:
+      type: string
+      minLength: 1
+      maxLength: 256
+      description: Request correlation identifier echoed by every v1 envelope.
+      example: req_01JASYNC000000000000000000
+    Cursor:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Opaque pagination cursor. Clients must not parse or construct it.
+      example: cur_01JNEXT000000000000000000
+    EventCursor:
+      type: string
+      minLength: 37
+      maxLength: 37
+      pattern: '^agui_[0-9a-f]{32}$'
+      description: Opaque cursor for one durable BFF AG-UI frame. Clients must not parse or construct it.
+      example: agui_0123456789abcdef0123456789abcdef
+    EventWatermark:
+      description: Cursor of the current durable AG-UI ledger head, or null before the first public frame.
+      oneOf:
+        - $ref: '#/components/schemas/EventCursor'
+        - type: 'null'
+    RequestMeta:
+      type: object
+      required: [request_id]
+      additionalProperties: false
+      properties:
+        request_id:
+          $ref: '#/components/schemas/RequestId'
+      example:
+        request_id: req_01JASYNC000000000000000000
+    TeamPageMeta:
+      type: object
+      required: [request_id, next_cursor]
+      additionalProperties: false
+      properties:
+        request_id: { $ref: '#/components/schemas/RequestId' }
+        next_cursor: { type: [string, 'null'], maxLength: 2048 }
+    TeamMember:
+      type: object
+      required: [member_id, user_id, display_name, image_url, roles, joined_at]
+      additionalProperties: false
+      properties:
+        member_id: { type: string, minLength: 1 }
+        user_id: { type: string, minLength: 1 }
+        display_name: { type: string }
+        image_url: { type: [string, 'null'] }
+        roles:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]*$' }
+        joined_at: { type: string, format: date-time }
+    TeamInvitation:
+      type: object
+      required: [invitation_id, email, roles, status, created_at, expires_at]
+      additionalProperties: false
+      properties:
+        invitation_id: { type: string, minLength: 1 }
+        email: { type: string, format: email }
+        roles:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]*$' }
+        status: { type: string, enum: [pending] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+    TeamRole:
+      type: object
+      required: [role_id, name, kind, permissions]
+      additionalProperties: false
+      properties:
+        role_id: { type: [string, 'null'], minLength: 1 }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]*$' }
+        kind: { type: string, enum: [builtin, custom] }
+        permissions:
+          type: object
+          additionalProperties: false
+          properties:
+            organization: { type: array, minItems: 1, items: { type: string, enum: [update] } }
+            member: { type: array, minItems: 1, items: { type: string, enum: [create, read, update, delete] } }
+            invitation: { type: array, minItems: 1, items: { type: string, enum: [create, read, cancel] } }
+            ac: { type: array, minItems: 1, items: { type: string, enum: [create, read, update] } }
+            tenant: { type: array, minItems: 1, items: { type: string, enum: [read] } }
+            audit: { type: array, minItems: 1, items: { type: string, enum: [read] } }
+    CurrentUserIdentity:
+      type: object
+      required: [user_id, tenant_id]
+      additionalProperties: false
+      properties:
+        user_id: { type: string, minLength: 1 }
+        tenant_id: { type: string, minLength: 1 }
+    CurrentUserResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/CurrentUserIdentity' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    TeamMembersResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
+        meta: { $ref: '#/components/schemas/TeamPageMeta' }
+    TeamInvitationsResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TeamInvitation' }
+        meta: { $ref: '#/components/schemas/TeamPageMeta' }
+    TeamRolesResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/TeamRole' }
+        meta: { $ref: '#/components/schemas/TeamPageMeta' }
+    TeamCreateInvitationRequest:
+      type: object
+      required: [email, roles]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, pattern: '^(?!\.)(?!.*\.\.)([A-Za-z0-9_''+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$' }
+        roles: { $ref: '#/components/schemas/TeamWriteRoles' }
+    TeamReplaceRolesRequest:
+      type: object
+      required: [roles]
+      additionalProperties: false
+      properties:
+        roles: { $ref: '#/components/schemas/TeamWriteRoles' }
+    TeamWriteRoles:
+      type: array
+      minItems: 1
+      maxItems: 20
+      items: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]*$' }
+    TeamPendingInvitationResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [invitation_id, status]
+          additionalProperties: false
+          properties:
+            invitation_id: { type: string, minLength: 1 }
+            status: { type: string, enum: [pending] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    TeamCanceledInvitationResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [invitation_id, status]
+          additionalProperties: false
+          properties:
+            invitation_id: { type: string, minLength: 1 }
+            status: { type: string, enum: [canceled] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    TeamRemovedMemberResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [member_id, status]
+          additionalProperties: false
+          properties:
+            member_id: { type: string, minLength: 1 }
+            status: { type: string, enum: [removed] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    TeamLeftMemberResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [member_id, status]
+          additionalProperties: false
+          properties:
+            member_id: { type: string, minLength: 1 }
+            status: { type: string, enum: [left] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    TeamResultRoles:
+      type: array
+      minItems: 1
+      items: { type: string, minLength: 1, maxLength: 64, pattern: '^[a-z][a-z0-9_-]*$' }
+    TeamRolesChangedResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [member_id, roles]
+          additionalProperties: false
+          properties:
+            member_id: { type: string, minLength: 1 }
+            roles: { $ref: '#/components/schemas/TeamResultRoles' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          example: session_not_found
+        message:
+          type: string
+          minLength: 1
+          example: Session was not found
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/ErrorDetail' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        error:
+          code: session_not_found
+          message: Session was not found
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    ChatSessionSummary:
+      type: object
+      required: [session_id, title, updated_at]
+      additionalProperties: false
+      properties:
+        session_id: { type: string, minLength: 1 }
+        title: { type: string }
+        updated_at: { type: string, format: date-time }
+      example:
+        session_id: session_kokoro
+        title: Review business API contract
+        updated_at: '2026-01-01T00:00:00.000Z'
+    SessionListResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [sessions, next_cursor]
+          additionalProperties: false
+          properties:
+            sessions:
+              type: array
+              items: { $ref: '#/components/schemas/ChatSessionSummary' }
+            next_cursor:
+              type: [string, 'null']
+              description: Opaque cursor for the next page; null means there is no next page.
+              example: null
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    SessionMessageListResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [messages, next_cursor]
+          additionalProperties: false
+          properties:
+            messages:
+              type: array
+              items: { $ref: '#/components/schemas/ChatMessage' }
+            next_cursor:
+              type: [string, 'null']
+              description: Opaque cursor for the next page; null means there is no next page.
+              example: null
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          messages: []
+          next_cursor: null
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    ChatSession:
+      type: object
+      required: [session_id, title, owner_id, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        session_id: { type: string, minLength: 1 }
+        title: { type: string }
+        owner_id: { type: string, minLength: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      example:
+        session_id: session_kokoro
+        title: Review business API contract
+        owner_id: ns_test
+        created_at: '2026-01-01T00:00:00.000Z'
+        updated_at: '2026-01-01T00:00:00.000Z'
+    ChatMessage:
+      type: object
+      required: [message_id, role, content, status, created_at]
+      additionalProperties: false
+      properties:
+        message_id: { type: string, minLength: 1 }
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content: { type: string }
+        status:
+          type: string
+          enum: [pending, streaming, completed, failed]
+        created_at: { type: string, format: date-time }
+        run_id: { type: string }
+      example:
+        message_id: msg_01JUSER
+        role: user
+        content: Review the contract
+        status: completed
+        created_at: '2026-01-01T00:00:00.000Z'
+        run_id: run_01JASYNC
+    ChatRun:
+      type: object
+      required: [run_id, status]
+      additionalProperties: false
+      properties:
+        run_id: { type: string, minLength: 1 }
+        status:
+          type: string
+          enum: [running, completed, cancelled, failed, waiting]
+      example:
+        run_id: run_01JASYNC
+        status: running
+    SessionSnapshotResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [session, pending_pauses, files, deliveries, event_watermark]
+          additionalProperties: false
+          properties:
+            session: { $ref: '#/components/schemas/ChatSession' }
+            messages:
+              type: array
+              items: { $ref: '#/components/schemas/ChatMessage' }
+            active_run: { $ref: '#/components/schemas/ChatRun' }
+            pending_pauses:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            files:
+              type: array
+              items: { $ref: '#/components/schemas/WorkspaceFile' }
+            deliveries:
+              type: array
+              items: { $ref: '#/components/schemas/Delivery' }
+            event_watermark: { $ref: '#/components/schemas/EventWatermark' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          session:
+            session_id: session_kokoro
+            title: Review business API contract
+            owner_id: ns_test
+            created_at: '2026-01-01T00:00:00.000Z'
+            updated_at: '2026-01-01T00:00:00.000Z'
+          messages: []
+          active_run:
+            run_id: run_01JASYNC
+            status: running
+          pending_pauses: []
+          files: []
+          deliveries: []
+          event_watermark: agui_0123456789abcdef0123456789abcdef
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    WorkspaceFile:
+      type: object
+      required: [path, mime, bytes]
+      additionalProperties: false
+      properties:
+        path: { type: string }
+        mime: { type: string }
+        bytes: { type: integer, minimum: 0 }
+    Delivery:
+      type: object
+      required: [content_hash, path, title, mime, size, run_id, created_at]
+      additionalProperties: false
+      properties:
+        content_hash: { type: string }
+        path: { type: string }
+        title: { type: string }
+        mime: { type: string }
+        size: { type: integer, minimum: 0 }
+        run_id: { type: string }
+        created_at: { type: string, format: date-time }
+    MessageCreateRequest:
+      type: object
+      required: [content]
+      additionalProperties: false
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 100000
+        model: { type: string, minLength: 1 }
+        agent: { type: string, minLength: 1 }
+        thinking: { type: boolean }
+        pinned_skills:
+          type: array
+          items: { type: string, minLength: 1 }
+        mcp_servers:
+          type: array
+          items: { type: string, minLength: 1 }
+        project_ref: { type: string, minLength: 1 }
+      example:
+        content: Review the latest project changes.
+        model: default
+        project_ref: project_kokoro
+    MessageReceipt:
+      type: object
+      required: [run_id, user_message_id, assistant_message_id]
+      additionalProperties: false
+      properties:
+        run_id: { type: string, minLength: 1 }
+        user_message_id: { type: string, minLength: 1 }
+        assistant_message_id: { type: string, minLength: 1 }
+      example:
+        run_id: run_01JASYNC
+        user_message_id: msg_01JUSER
+        assistant_message_id: msg_01JASSISTANT
+    MessageReceiptResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/MessageReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          run_id: run_01JASYNC
+          user_message_id: msg_01JUSER
+          assistant_message_id: msg_01JASSISTANT
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    RunCancelRequest:
+      type: object
+      required: [kind]
+      additionalProperties: false
+      properties:
+        kind: { type: string, const: run.cancel }
+      example:
+        kind: run.cancel
+    RunResumeRequest:
+      type: object
+      required: [kind, decisions]
+      additionalProperties: false
+      properties:
+        kind: { type: string, const: run.resume }
+        decisions:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: true
+      example:
+        kind: run.resume
+        decisions:
+          - type: approve
+            tool_id: tool_01J
+    RunSteerRequest:
+      type: object
+      required: [kind, message_id, content]
+      additionalProperties: false
+      properties:
+        kind: { type: string, const: run.steer }
+        message_id: { type: string, minLength: 1 }
+        content: { type: string, minLength: 1 }
+      example:
+        kind: run.steer
+        message_id: msg_01JASSISTANT
+        content: Focus on the API contract.
+    RunControlRequest:
+      oneOf:
+        - $ref: '#/components/schemas/RunCancelRequest'
+        - $ref: '#/components/schemas/RunResumeRequest'
+        - $ref: '#/components/schemas/RunSteerRequest'
+      discriminator:
+        propertyName: kind
+      examples:
+        - kind: run.cancel
+        - kind: run.resume
+          decisions:
+            - type: approve
+              tool_id: tool_01J
+    ControlReceipt:
+      type: object
+      required: [run_id, command_id, request_digest, status, replayed]
+      additionalProperties: false
+      properties:
+        run_id:
+          type: string
+          minLength: 1
+          description: BFF projection of the trusted runId path parameter; the Agent owner receipt does not repeat it.
+        command_id: { type: string, minLength: 1 }
+        request_digest: { type: string, minLength: 1 }
+        status: { type: string, enum: [pending, succeeded, failed] }
+        error_code: { type: string, minLength: 1 }
+        replayed: { type: boolean }
+      example:
+        run_id: run_01JASYNC
+        command_id: command_01J
+        request_digest: sha256:abc123
+        status: pending
+        replayed: false
+    ControlReceiptResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/ControlReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          run_id: run_01JASYNC
+          command_id: command_01J
+          request_digest: sha256:abc123
+          status: pending
+          replayed: false
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    SessionEventStream:
+      type: string
+      description: AG-UI server-sent event frames read from the BFF PostgreSQL ledger. Each id is a distinct opaque resume cursor.
+      example: |-
+        id: agui_0123456789abcdef0123456789abcdef
+        data: {"type":"RUN_FINISHED","timestamp":1767225604000,"threadId":"session_kokoro","runId":"run_01JASYNC","metadata":{"kokoro":{"event_id":"agent_event_4","seq":4,"session_id":"session_kokoro","run_id":"run_01JASYNC","timestamp":"2026-01-01T00:00:04.000Z"}}}
+    RenameSessionRequest:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+      example:
+        title: Contract review
+    DeleteSessionResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data:
+          type: object
+          required: [status]
+          additionalProperties: false
+          properties:
+            status: { type: string, const: deleted }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          status: deleted
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    ShareReceipt:
+      type: object
+      required: [share_id]
+      additionalProperties: false
+      properties:
+        share_id: { type: string, minLength: 1 }
+      example:
+        share_id: shr_01JSHARE
+    ShareReceiptResponse:
+      type: object
+      required: [data, meta]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/ShareReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          share_id: shr_01JSHARE
+        meta:
+          request_id: req_01JASYNC000000000000000000
+    HealthResponse:
+      type: object
+      required: [status, service, mode]
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+          const: kokoro-bff
+        mode:
+          type: string
+          enum: [mock, live]
+    Project:
+      type: object
+      required: [id, name, slug, description, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        instruction: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProjectListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [projects]
+          properties:
+            projects:
+              type: array
+              items: { $ref: '#/components/schemas/Project' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    ProjectResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [project]
+          properties:
+            project: { $ref: '#/components/schemas/Project' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriProject:
+      type: object
+      required: [project_ref, title, description, current_version_ref, candidate_count, last_activity_at]
+      additionalProperties: false
+      properties:
+        project_ref: { type: string, minLength: 1 }
+        title: { type: string }
+        description: { type: string }
+        current_version_ref: { type: [string, 'null'] }
+        candidate_count: { type: integer, minimum: 0 }
+        last_activity_at: { type: string, format: date-time }
+    MoriProjectRequest:
+      type: object
+      required: [title, description]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+    MoriProjectListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [projects, next_cursor]
+          properties:
+            projects:
+              type: array
+              items: { $ref: '#/components/schemas/MoriProject' }
+            next_cursor: { type: [string, 'null'] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriProjectResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriProject' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriGenerationRequest:
+      type: object
+      required: [song_plan_ref, mode, prompt, lyrics, lyrics_mode, style, reference_asset_refs, voice_ref, duration_seconds]
+      additionalProperties: false
+      properties:
+        song_plan_ref: { type: [string, 'null'] }
+        mode: { type: string, enum: [smart, custom] }
+        prompt: { type: string, minLength: 1 }
+        lyrics: { type: [string, 'null'] }
+        lyrics_mode: { type: string, enum: [lyrics, instrumental] }
+        style: { type: [string, 'null'] }
+        reference_asset_refs:
+          type: array
+          items: { type: string }
+        voice_ref: { type: [string, 'null'] }
+        duration_seconds: { type: [integer, 'null'], minimum: 30, maximum: 600 }
+    MoriGenerationReceipt:
+      type: object
+      required: [generation_ref, status]
+      additionalProperties: false
+      properties:
+        generation_ref: { type: string, minLength: 1 }
+        status: { type: string, enum: [queued, preparing, generating] }
+    MoriGenerationReceiptResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriGenerationReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriGeneration:
+      type: object
+      required: [generation_ref, project_ref, song_plan_ref, mode, status, progress, candidate_refs, created_at]
+      additionalProperties: false
+      properties:
+        generation_ref: { type: string, minLength: 1 }
+        project_ref: { type: string, minLength: 1 }
+        song_plan_ref: { type: [string, 'null'] }
+        mode: { type: string, enum: [smart, custom] }
+        status:
+          type: string
+          enum: [queued, preparing, generating, post_processing, succeeded, failed, cancelled, expired]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        candidate_refs:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+    MoriGenerationResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriGeneration' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriSongPlanRequest:
+      type: object
+      required: [prompt, mood, tempo_bpm, structure, instruments, vocal_direction, lyrics_intent]
+      additionalProperties: false
+      properties:
+        prompt: { type: string, minLength: 1 }
+        mood: { type: string, minLength: 1 }
+        tempo_bpm: { type: integer, minimum: 40, maximum: 240 }
+        structure:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+        instruments:
+          type: array
+          items: { type: string, minLength: 1 }
+        vocal_direction: { type: string, minLength: 1 }
+        lyrics_intent: { type: string, minLength: 1 }
+    MoriSongPlan:
+      allOf:
+        - $ref: '#/components/schemas/MoriSongPlanRequest'
+        - type: object
+          required: [song_plan_ref, project_ref, created_at]
+          properties:
+            song_plan_ref: { type: string, minLength: 1 }
+            project_ref: { type: string, minLength: 1 }
+            created_at: { type: string, format: date-time }
+    MoriSongPlanResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriSongPlan' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriCandidate:
+      type: object
+      required: [candidate_ref, generation_ref, version_ref, project_ref, title, duration_seconds, audio_asset_ref, waveform_asset_ref, style_tags, created_at]
+      additionalProperties: false
+      properties:
+        candidate_ref: { type: string, minLength: 1 }
+        generation_ref: { type: string, minLength: 1 }
+        version_ref: { type: string, minLength: 1 }
+        project_ref: { type: string, minLength: 1 }
+        title: { type: string }
+        duration_seconds: { type: integer, minimum: 1 }
+        audio_asset_ref: { type: string, minLength: 1 }
+        waveform_asset_ref: { type: string, minLength: 1 }
+        style_tags:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+    MoriCandidateListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [candidates, next_cursor]
+          properties:
+            candidates:
+              type: array
+              items: { $ref: '#/components/schemas/MoriCandidate' }
+            next_cursor: { type: [string, 'null'] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriPromote:
+      type: object
+      required: [version_ref, project_ref, source_candidate_ref, status]
+      additionalProperties: false
+      properties:
+        version_ref: { type: string, minLength: 1 }
+        project_ref: { type: string, minLength: 1 }
+        source_candidate_ref: { type: string, minLength: 1 }
+        status: { type: string, enum: [current] }
+    MoriPromoteResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriPromote' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriLibraryItem:
+      type: object
+      required: [library_item_ref, kind, project_ref, project_title, version_ref, title, duration_seconds, audio_asset_ref, waveform_asset_ref, created_at]
+      additionalProperties: false
+      properties:
+        library_item_ref: { type: string, minLength: 1 }
+        kind: { type: string, enum: [version] }
+        project_ref: { type: string, minLength: 1 }
+        project_title: { type: string }
+        version_ref: { type: string, minLength: 1 }
+        title: { type: string }
+        duration_seconds: { type: integer, minimum: 1 }
+        audio_asset_ref: { type: string, minLength: 1 }
+        waveform_asset_ref: { type: string, minLength: 1 }
+        created_at: { type: string, format: date-time }
+    MoriLibraryListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items, next_cursor]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/MoriLibraryItem' }
+            next_cursor: { type: [string, 'null'] }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriExportRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        format: { type: string, enum: [mp3, wav], default: mp3 }
+    MoriExportReceipt:
+      type: object
+      required: [export_ref, status]
+      additionalProperties: false
+      properties:
+        export_ref: { type: string, minLength: 1 }
+        status: { type: string, enum: [queued, processing] }
+    MoriExportReceiptResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriExportReceipt' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    MoriExport:
+      type: object
+      required: [export_ref, project_ref, version_ref, format, status, download_url, created_at]
+      additionalProperties: false
+      properties:
+        export_ref: { type: string, minLength: 1 }
+        project_ref: { type: string, minLength: 1 }
+        version_ref: { type: string, minLength: 1 }
+        format: { type: string, enum: [mp3, wav] }
+        status: { type: string, enum: [queued, processing, succeeded, failed] }
+        download_url: { type: [string, 'null'], format: uri }
+        created_at: { type: string, format: date-time }
+    MoriExportResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/MoriExport' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    Task:
+      type: object
+      required: [id, project_id, title, status, updated_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        title: { type: string }
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+        updated_at: { type: string, format: date-time }
+    TaskListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [tasks]
+          properties:
+            tasks:
+              type: array
+              items: { $ref: '#/components/schemas/Task' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    ProjectInstructionRevision:
+      type: object
+      required: [id, instruction, updated_at, actor_name, current]
+      properties:
+        id: { type: string }
+        instruction: { type: string }
+        updated_at: { type: string, format: date-time }
+        actor_name: { type: string }
+        current: { type: boolean }
+      example:
+        id: project-instruction-2
+        instruction: Keep all implementation notes scoped to this project.
+        updated_at: '2026-01-01T00:00:00.000Z'
+        actor_name: You
+        current: true
+    ProjectInstructionRevisionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/ProjectInstructionRevision' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+      example:
+        data:
+          items:
+            - id: project-instruction-2
+              instruction: Keep all implementation notes scoped to this project.
+              updated_at: '2026-01-01T00:00:00.000Z'
+              actor_name: You
+              current: true
+        meta:
+          request_id: req_project_instruction_history_1
+    CreateProjectRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        description: { type: string }
+    UpdateProjectInstructionRequest:
+      type: object
+      required: [instruction]
+      additionalProperties: false
+      properties:
+        instruction: { type: string }
+    ProjectSkillRequest:
+      type: object
+      required: [enabled]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+    ProjectSkillResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [skill]
+          properties:
+            skill:
+              type: object
+              required: [project_id, name, enabled]
+              properties:
+                project_id: { type: string }
+                name: { type: string }
+                enabled: { type: boolean }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    ScheduledTask:
+      type: object
+      required: [id, title, prompt, frequency, time, timezone, next_run_at, auto_approve, enabled, status]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        title: { type: string }
+        prompt: { type: string }
+        frequency:
+          type: string
+          enum: [daily, weekly]
+        time: { type: string }
+        timezone: { type: string }
+        next_run_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        auto_approve: { type: boolean }
+        enabled: { type: boolean }
+        status:
+          type: string
+          enum: [active, paused, failed]
+    ScheduledTaskResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [task]
+          properties:
+            task: { $ref: '#/components/schemas/ScheduledTask' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    ScheduledTaskListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [tasks]
+          properties:
+            tasks:
+              type: array
+              items: { $ref: '#/components/schemas/ScheduledTask' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    CreateScheduledTaskRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string }
+        prompt: { type: string }
+        frequency:
+          type: string
+          enum: [daily, weekly]
+        time: { type: string }
+        timezone: { type: string }
+        next_run_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        auto_approve: { type: boolean }
+        enabled: { type: boolean }
+        status:
+          type: string
+          enum: [active, paused, failed]
+    ScheduledTaskPatchRequest:
+      type: object
+      additionalProperties: true
+    Skill:
+      type: object
+      required: [name, description, content_hash, scope]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        content_hash: { type: string }
+        scope: { type: string }
+        source_url: { type: string }
+        enabled: { type: boolean }
+        installed: { type: boolean }
+        categories:
+          type: array
+          items: { type: string }
+        updated_at: { type: integer }
+    SkillListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [skills]
+          properties:
+            skills:
+              type: array
+              items: { $ref: '#/components/schemas/Skill' }
+            next_cursor:
+              type: [string, 'null']
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    SkillPoolResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [skills]
+          properties:
+            skills:
+              type: array
+              items: { $ref: '#/components/schemas/Skill' }
+            next_cursor:
+              type: [string, 'null']
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    SkillCatalogResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [skills, next_cursor]
+          properties:
+            skills:
+              type: array
+              items: { $ref: '#/components/schemas/Skill' }
+            next_cursor:
+              type: [string, 'null']
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    SkillQuotaResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [namespace, package_count, package_bytes, max_packages, max_bytes]
+          properties:
+            namespace: { type: string }
+            package_count: { type: integer }
+            package_bytes: { type: integer }
+            max_packages: { type: integer }
+            max_bytes: { type: integer }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    SkillRevision:
+      type: object
+      required: [scope, name, revision, content_hash, package_size, source, created_at]
+      properties:
+        scope: { type: string }
+        name: { type: string }
+        revision: { type: integer }
+        content_hash: { type: string }
+        package_size: { type: integer }
+        source: { type: string }
+        created_at: { type: integer }
+    SkillRevisionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [revisions]
+          properties:
+            revisions:
+              type: array
+              items: { $ref: '#/components/schemas/SkillRevision' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    GithubSkillRequest:
+      type: object
+      required: [repository]
+      additionalProperties: false
+      properties:
+        repository: { type: string }
+    GithubSkillResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [repository, default_branch, skill]
+          properties:
+            repository: { type: string }
+            default_branch: { type: string }
+            skill:
+              type: object
+              required: [name, description]
+              properties:
+                name: { type: string }
+                description: { type: string }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    McpServer:
+      type: object
+      required: [scope, name, revision, transport, url, allowed_tools, secret_ref, enabled]
+      properties:
+        scope: { type: string }
+        name: { type: string }
+        revision: { type: integer }
+        transport:
+          type: string
+          enum: [http, streamable_http]
+        url: { type: string }
+        allowed_tools:
+          type: array
+          items: { type: string }
+        secret_ref:
+          type: [string, 'null']
+        enabled: { type: boolean }
+    McpServerRequest:
+      type: object
+      required: [name, transport, url, allowed_tools]
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        transport:
+          type: string
+          enum: [http, streamable_http]
+        url: { type: string }
+        allowed_tools:
+          type: array
+          items: { type: string }
+        secret_ref:
+          type: [string, 'null']
+    McpServerListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [servers]
+          properties:
+            servers:
+              type: array
+              items: { $ref: '#/components/schemas/McpServer' }
+            next_cursor:
+              type: string
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    McpServerResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [server]
+          properties:
+            server: { $ref: '#/components/schemas/McpServer' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    AgentConnectionSetup:
+      type: object
+      required: [platform, status, qr_value, continue_url, expires_at]
+      properties:
+        platform:
+          type: string
+          enum: [telegram, line, slack]
+        status:
+          type: string
+          enum: [disconnected, pending, connected, expired]
+        qr_value: { type: string }
+        continue_url: { type: string }
+        expires_at: { type: string, format: date-time }
+    AgentConnectionSetupResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/AgentConnectionSetup' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    RuntimeManifest:
+      type: object
+      required: [tenant_id, product_id, locale, navigation, locale_namespaces, theme, feature_flags, references, config_version, release_id, digest]
+      properties:
+        tenant_id: { type: string, minLength: 1 }
+        product_id: { type: string, minLength: 1 }
+        locale: { type: string, minLength: 2 }
+        navigation:
+          type: array
+          items: {}
+        locale_namespaces:
+          type: array
+          items: {}
+        theme: { type: object, additionalProperties: true }
+        feature_flags:
+          type: array
+          items: {}
+        references:
+          type: array
+          items: {}
+        config_version: { type: string, minLength: 1 }
+        release_id: { type: [string, 'null'] }
+        digest: { type: string, minLength: 1 }
+    RuntimeManifestResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/RuntimeManifest' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    BillingPlan:
+      type: object
+      required: [id, key, name, currency, amount_minor, credit_micros, billing_interval]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        currency: { type: string }
+        amount_minor: { type: string }
+        credit_micros: { type: string }
+        billing_interval:
+          type: string
+          enum: [once, month, year]
+    BillingPlanListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [plans]
+          properties:
+            plans:
+              type: array
+              items: { $ref: '#/components/schemas/BillingPlan' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+
+    ModelCandidate:
+      type: object
+      required: [provider, name, is_default]
+      properties:
+        provider: { type: string }
+        name: { type: string }
+        is_default: { type: boolean }
+        display_name: { type: string }
+    ModelCandidateListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [models]
+          properties:
+            models:
+              type: array
+              items: { $ref: '#/components/schemas/ModelCandidate' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    BillingSummary:
+      type: object
+      required: [balance, currency, period, usage]
+      properties:
+        balance: { type: number }
+        currency: { type: string }
+        period: { type: string }
+        usage: { type: number }
+    BillingSummaryResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/BillingSummary' }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    BillingCheckoutRequest:
+      type: object
+      required: [plan_id]
+      additionalProperties: false
+      properties:
+        plan_id: { type: string }
+    BillingCheckoutResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [checkout_url]
+          properties:
+            checkout_url: { type: string }
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+    OkResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [ok]
+          properties:
+            ok:
+              type: boolean
+              const: true
+        meta: { $ref: '#/components/schemas/RequestMeta' }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceAuthFailed:
+      description: Service or user-session authentication failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Request conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Gone:
+      description: The supplied durable cursor is outside the retained replay window
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    PayloadTooLarge:
+      description: The request body exceeded the BFF admission limit
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    BadGateway:
+      description: An owner source response was unavailable, malformed, or reused a conflicting source identity
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceUnavailable:
+      description: A required BFF fact store or owner source is not configured
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }

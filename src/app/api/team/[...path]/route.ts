@@ -1,107 +1,127 @@
-// 团队自助面同源代理（BFF）：读信封 → 注入 web-bff caller 凭据 + principal（x-kokoro-principal-id）→
-// 转发到 kokoro-iam 的 /bff/*（成员/邀请读写）。user principal 从密封信封派生，浏览器无从伪造。
-// 绝不代理 /bff/auth/* 或浏览器租户切换；变更类请求校验同源 Origin。
+// Fixed-tenant Team Product adapter: browser cookie -> online Product Session -> one BFF user Bearer.
+// IAM Member/Invitation/Role facts and authorization stay behind the BFF public owner contract.
 
-import { NextResponse } from "next/server"
+import { z } from "zod"
 
+import { sameOriginOk } from "@/lib/server/auth"
 import {
-  authConfig,
-  INTERNAL_SECRET_HEADER,
-  resolveSessionWithRefresh,
-  sameOriginOk,
-  SERVICE_HEADER,
-  SERVICE_VALUE,
-} from "@/lib/server/auth"
+  bffErrorResponse,
+  bffSuccessEnvelopeSchema,
+  requestIdForRequest,
+  responseHeadersWithRequestId,
+  webErrorResponse,
+} from "@/lib/server/bff-response"
+import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
+import { teamCreateInvitationRequestSchema, teamReplaceRolesRequestSchema } from "@/team/schema"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
-// 仅放行成员/邀请读写前缀；auth 等一律拒（防 runtime token 经通用代理泄回浏览器）。
-const ALLOWED_PREFIXES = new Set(["me", "teams", "invites"])
+type Context = { params: Promise<{ path: string[] }> }
+type TeamMethod = "GET" | "POST" | "PUT" | "DELETE"
 
-async function proxy(
-  request: Request,
-  context: { params: Promise<{ path: string[] }> },
-): Promise<Response> {
-  const config = authConfig()
-  if (config === null) {
-    return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
-  }
-  if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
-    return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
-  }
-  const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
-  const resolved = await resolveSessionWithRefresh(request, config)
-  if (resolved === null) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
-  }
-  const { envelope, setCookie } = resolved
+function validId(value: string | undefined): value is string {
+  return value !== undefined && value.length > 0 && value.length <= 256 && !/[\/%\u0000-\u001f\u007f]/u.test(value)
+}
 
+function selectedPath(method: TeamMethod, path: readonly string[]): string | null {
+  if (method === "GET" && path.length === 1 && ["members", "invitations", "roles"].includes(path[0]!)) {
+    return path[0]!
+  }
+  if (method === "POST" && path.length === 1 && path[0] === "invitations") return "invitations"
+  if (method === "POST" && path.length === 3 && path[0] === "invitations" && validId(path[1]) && path[2] === "resend") {
+    return `invitations/${encodeURIComponent(path[1])}/resend`
+  }
+  if (method === "DELETE" && path.length === 2 && path[0] === "invitations" && validId(path[1])) {
+    return `invitations/${encodeURIComponent(path[1])}`
+  }
+  if (method === "DELETE" && path.length === 2 && path[0] === "members" && path[1] === "me") return "members/me"
+  if (path[0] === "members" && validId(path[1]) && path[1] !== "me") {
+    if (method === "PUT" && path.length === 3 && path[2] === "roles") return `members/${encodeURIComponent(path[1])}/roles`
+    if (method === "DELETE" && path.length === 2) return `members/${encodeURIComponent(path[1])}`
+  }
+  return null
+}
+
+function validQuery(request: Request, method: TeamMethod): string | null {
+  const query = new URL(request.url).search
+  if (method !== "GET") return query === "" ? "" : null
+  if (query.length > 4096) return null
+  const params = new URLSearchParams(query)
+  if ([...params.keys()].some((key) => key !== "limit" && key !== "cursor")) return null
+  if (params.getAll("limit").length > 1 || params.getAll("cursor").length > 1) return null
+  const limit = params.get("limit")
+  if (limit !== null && (!/^[1-9][0-9]{0,2}$/u.test(limit) || Number(limit) > 100)) return null
+  const cursor = params.get("cursor")
+  if (cursor !== null && (cursor.length === 0 || cursor.length > 2048)) return null
+  return query
+}
+
+async function mutationBody(request: Request, method: TeamMethod, path: string): Promise<ArrayBuffer | undefined | null> {
+  const expectsJson = method === "POST" && path === "invitations" || method === "PUT"
+  if (!expectsJson) return request.body === null ? undefined : null
+  if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(request.headers.get("content-type") ?? "")) return null
+  const bytes = await readBoundedRequestBody(request, 16_384)
+  let raw: unknown
+  try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) }
+  catch { return null }
+  const parsed = method === "PUT" ? teamReplaceRolesRequestSchema.safeParse(raw) : teamCreateInvitationRequestSchema.safeParse(raw)
+  if (!parsed.success) return null
+  const normalized = new TextEncoder().encode(JSON.stringify(parsed.data))
+  return normalized.buffer.slice(normalized.byteOffset, normalized.byteOffset + normalized.byteLength) as ArrayBuffer
+}
+
+async function proxy(request: Request, context: Context): Promise<Response> {
+  const method = request.method as TeamMethod
+  const requestId = requestIdForRequest(request)
   const { path } = await context.params
-  const segments = path ?? []
-  if (segments.length === 0 || !ALLOWED_PREFIXES.has(segments[0]!)) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 })
-  }
+  const selected = selectedPath(method, path ?? [])
+  if (selected === null) return webErrorResponse("not_found", 404, requestId)
+  const query = validQuery(request, method)
+  if (query === null) return webErrorResponse("invalid_query", 400, requestId)
+  if (method !== "GET" && !sameOriginOk(request)) return webErrorResponse("forbidden_origin", 403, requestId)
 
-  const search = new URL(request.url).search
-  const encodedSegments = segments.map((segment) => encodeURIComponent(segment)).join("/")
-  const target = `${config.iamBaseUrl.replace(/\/+$/, "")}/bff/${encodedSegments}${search}`
+  const config = productBffConfig()
+  if (config === null) return webErrorResponse("bff_not_configured", 503, requestId)
+  let claims
+  try { claims = await admittedProductSession(request, config) }
+  catch { return webErrorResponse("session_unavailable", 503, requestId) }
+  if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
 
-  const headers = new Headers()
-  headers.set(SERVICE_HEADER, SERVICE_VALUE)
-  if (config.internalSecret !== null) {
-    headers.set(INTERNAL_SECRET_HEADER, config.internalSecret)
+  let body: ArrayBuffer | undefined | null
+  try { body = await mutationBody(request, method, selected) }
+  catch (error) {
+    return webErrorResponse(error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
+      error instanceof UpstreamRequestTooLargeError ? 413 : 400, requestId)
   }
-  // user principal 从信封派生（web 侧解封结果），浏览器无从伪造。
-  headers.set("x-kokoro-principal-id", envelope.user_id)
-  headers.set("x-kokoro-request-id", requestId)
+  if (body === null) return webErrorResponse("invalid_team_request", 400, requestId)
 
-  // 仅在确有 body 时透传 content-type：无 body 的 POST（accept/decline/remove-self）不能带
-  // application/json，否则上游 fastify 对空体报 FST_ERR_CTP_EMPTY_JSON_BODY(400)。
-  let rawBody = ""
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    try {
-      rawBody = new TextDecoder().decode(await readBoundedRequestBody(request))
-    } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable" },
-        { status: error instanceof UpstreamRequestTooLargeError ? 413 : 400 },
-      )
-    }
-  }
-  const bodyBytes = rawBody.length > 0 ? new TextEncoder().encode(rawBody) : null
-  const body = bodyBytes === null
-    ? undefined
-    : bodyBytes.buffer.slice(bodyBytes.byteOffset, bodyBytes.byteOffset + bodyBytes.byteLength) as ArrayBuffer
-  if (body !== undefined) {
-    headers.set("content-type", request.headers.get("content-type") ?? "application/json")
-  }
-
+  const headers = productBffHeaders(config, claims, requestId)
+  if (body !== undefined) headers.set("content-type", "application/json")
   let upstream: Response
   try {
-    upstream = await requestWithDomain(target, config.domain, {
-      method: request.method,
-      headers: Object.fromEntries(headers.entries()),
-      ...(body !== undefined ? { body } : {}),
-      signal: request.signal,
+    upstream = await requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/team/${selected}${query}`, config.domain, {
+      method, headers: Object.fromEntries(headers.entries()), ...(body === undefined ? {} : { body }),
+      signal: request.signal, timeoutMs: 10_000, maxRequestBytes: 16_384, maxResponseBytes: 2 * 1024 * 1024,
     })
   } catch {
-    return NextResponse.json({ error: "user_unreachable" }, { status: 502 })
+    return webErrorResponse("bff_unreachable", 502, requestId)
   }
 
-  const responseHeaders = new Headers()
-  const contentType = upstream.headers.get("content-type")
-  if (contentType !== null) {
-    responseHeaders.set("content-type", contentType)
-  }
-  if (setCookie !== null) {
-    responseHeaders.append("set-cookie", setCookie)
-  }
-  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
+  const raw: unknown = await upstream.json().catch(() => null)
+  if (!upstream.ok) return bffErrorResponse(upstream, raw, "bff_error", requestId)
+  const parsed = bffSuccessEnvelopeSchema(z.unknown()).safeParse(raw)
+  if (!parsed.success) return webErrorResponse("bff_bad_response", 502, requestId)
+  return new Response(JSON.stringify(parsed.data), {
+    status: upstream.status,
+    headers: responseHeadersWithRequestId(parsed.data.meta.request_id, {
+      "content-type": "application/json; charset=utf-8", "cache-control": "private, no-store",
+    }),
+  })
 }
 
 export const GET = proxy
 export const POST = proxy
+export const PUT = proxy
 export const DELETE = proxy
