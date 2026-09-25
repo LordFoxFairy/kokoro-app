@@ -20,7 +20,7 @@ function requestId(request: Request): string {
 
 function page(html: string, status: number, id: string, cookies: readonly string[] = []): Response {
   const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-    "referrer-policy": "no-referrer", "x-request-id": id })
+    "referrer-policy": "same-origin", "x-request-id": id })
   for (const cookie of cookies) headers.append("set-cookie", cookie)
   return new Response(html, { status, headers })
 }
@@ -161,7 +161,7 @@ export async function POST(request: Request): Promise<Response> {
         upstream.setCookies.length !== 0 || upstream.headers.has("location") ||
         !matchesInvitationDecision(upstream.body, target.id, action)) return rejected(503, id)
       const response = action === "accept" ? new Response(null, { status: 303, headers: {
-        location: "/login", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-request-id": id } }) :
+        location: "/login", "cache-control": "no-store", "referrer-policy": "same-origin", "x-request-id": id } }) :
         page(invitationStatusPage("已拒绝邀请", "这份邀请已关闭。"), 200, id)
       response.headers.append("set-cookie", clearIamCsrfCookie(PAGE_PATH, config.secureCookies, cookieName))
       return response
@@ -199,7 +199,7 @@ export async function POST(request: Request): Promise<Response> {
     const issuerName = config.secureCookies ? "__Secure-kokoro-issuer.session_token=" : "kokoro-issuer.session_token="
     if (native === null || !upstream.setCookies.some((cookie) => cookie.startsWith(issuerName))) return rejected(503, id)
     const response = new Response(null, { status: 303, headers: { location: `${PAGE_PATH}${target.query}`,
-      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-request-id": id } })
+      "cache-control": "no-store", "referrer-policy": "same-origin", "x-request-id": id } })
     for (const cookie of upstream.setCookies) response.headers.append("set-cookie", cookie)
     response.headers.append("set-cookie", clearIamCsrfCookie(PAGE_PATH, config.secureCookies, cookieName))
     return response

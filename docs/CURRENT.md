@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+R5-INVITE-BROWSER-ORIGIN 修复（2026-09-25）：真实 Chromium 表单 POST 暴露邀请页
+`Referrer-Policy: no-referrer` 会使浏览器发送 `Origin: null`，与严格同源写入门禁冲突。
+邀请静态入口与 Web proxy 的该精确路径改为 `same-origin`：跨站不传邀请 URL，
+同源 POST 保留 canonical Origin；`/iam/verify-email` 继续使用 `no-referrer`。
+该项仅记录代码事实，真实三仓 Chromium 结果以 Root 最新验收记录为准。
+
 R5-INVITE-WEB-ENTRY 来源重钉（2026-09-25）：当前 Web `src/generated/iam-relay-policy.json` 与 BFF
 main `2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 policy `2.1.0` 原始字节相同，SHA-256
 `f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`；其中 IAM owner commit 为

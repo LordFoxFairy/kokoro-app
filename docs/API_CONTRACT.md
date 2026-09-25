@@ -32,7 +32,8 @@ operation 是 `browser-private`，绝不并入 BFF public Product `/v1` API。
 recipient、service secret、Origin 目标或 callbackURL；issuer Cookie 只走 BFF policy 白名单及 `Path=/iam`，Product/Auth.js Cookie 不转发。
 请求/响应限额、deadline、原生 Cookie、错误码/状态与 Location 仍以固定 BFF policy、IAM OpenAPI 和本仓唯一运行时门禁为准，
 本文不复制一份可编辑 DTO。context 404 不区分错人/不存在/终态；过期/停用按 IAM 稳定 code 局部反馈。所有页面、POST
-与本地拒绝均 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`、受控 `x-request-id`，不回显验证 token、密码、
+与本地拒绝均 `Cache-Control: no-store`、`Referrer-Policy: same-origin`、受控 `x-request-id`，不向跨站请求发送邀请 URL，
+并让浏览器同源表单 POST 保留可严格校验的 `Origin`；不回显验证 token、密码、
 Cookie、原始上游 message/details 或完整 query。429 可按受控 `Retry-After` 局部提示；未知写入结果不自动重试，也不凭终态
 404 推断曾接受成功。验收必须覆盖准确机器来源、精确路径/方法、CSRF 重放与身份/租户负例，以及真实三仓 HTTPS/SMTP/Chromium。
 

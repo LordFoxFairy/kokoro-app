@@ -21,7 +21,7 @@ export function proxy(request: NextRequest): NextResponse {
   if (request.nextUrl.pathname === "/iam/verify-email" ||
     request.nextUrl.pathname === "/iam/interactions/invitation") {
     response.headers.set("Cache-Control", "no-store")
-    response.headers.set("Referrer-Policy", "no-referrer")
+    response.headers.set("Referrer-Policy", request.nextUrl.pathname === "/iam/verify-email" ? "no-referrer" : "same-origin")
   }
   if (shouldDisableCaching(request.nextUrl.pathname)) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")

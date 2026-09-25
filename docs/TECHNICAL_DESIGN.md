@@ -39,12 +39,16 @@ Product Session 或匿名页面自行推断收件人和权限。
 每个写表单都要求同源 Origin、严格字段/大小限制及 Web Redis 一次性 CSRF；接受/拒绝的绑定至少包含固定 Web origin、静态 path、
 canonical invitation ID、动作、issuer Cookie 摘要及短 TTL，`GETDEL` 消耗后才注入 Web service credential 发往 BFF。注册与独立
 issuer 登录也要有同源、一次性 CSRF，但注册尚无 issuer Cookie，绑定不能假设有登录 Session。Web 响应和日志不包含密码、
-验证 token、原始 owner 错误、完整敏感 query；页面用受控文案、`no-store`、`no-referrer`、request ID，凭据错误留在表单附近，
+验证 token、原始 owner 错误、完整敏感 query；页面用受控文案、`no-store`、`same-origin` Referrer-Policy、request ID，凭据错误留在表单附近，
 不跳转到整页重试。四种邮箱验证失败码只映射固定用户文案，不渲染原始 code/message/query。错人/不存在/终态 context 保持
 不可见 404；过期或租户停用按 IAM 契约显示安全终态，不暴露邀请详情。非成功、超时、取消、Cookie/contract/依赖异常
 均不创建 Product Session；写操作无 receipt，绝不自动重试。accept **200** 才导航 `/login` 启动 Product OIDC；reject **200**
 仅显示完成。若 POST 结果未知，重新读取 context 仅用于观察可见 pending 状态，终态 404 不能证明接受成功，不据此启动 Product
 登录或盲重放写入。签入/注册/预览/应答/完成均在同一紧凑页面内呈现局部状态，不出现“连接中／整页重试”中转设计。
+
+邀请页的 `same-origin` Referrer-Policy 不向跨站请求发送邀请 URL，同时保留浏览器同源表单 POST 的
+`Origin`，供严格同源校验使用；`no-referrer` 会使 Chromium 对该 POST 发送 `Origin: null`。邮箱验证
+`/iam/verify-email` 继续使用更严格的 `no-referrer`，两种路径不可共用响应策略。
 
 实现顺序是固定 BFF policy 2.1.0 digest/provenance/路径门与负例 → 静态 route + 独立登录/注册和 CSRF → context/accept/reject
 及响应安全 → owner 与真实浏览器组合。只有最后一门通过，才可将本节从目标态改为已闭环。

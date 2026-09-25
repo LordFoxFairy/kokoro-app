@@ -45,7 +45,7 @@ describe("static invitation GET", () => {
     const html = await response.text()
     expect(response.status).toBe(200)
     expect(response.headers.get("cache-control")).toBe("no-store")
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("referrer-policy")).toBe("same-origin")
     expect(html).toContain('name="email"')
     expect(html).toContain('name="password"')
     expect(html).toContain('name="name"')
