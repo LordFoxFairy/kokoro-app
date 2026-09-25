@@ -17,9 +17,9 @@ Product Session，refresh finalize 前拒绝会撤销 pending record，不回退
 失败只给有界机器错误，不跳转到任何整页重试或假登录页面。现有历史小节描述
 原发布版本，不作为新 consumer 的并行实现依据。
 
-Web 当前固定消费 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56`
+Web 当前固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce`
 policy `2.0.0`，artifact SHA-256
-`b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92`；
+`70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`；
 `/organization/list` 已删除。下文旧 policy 1.x/候选列表/tenant 表单是历史发布记录，
 不表示当前仍可访问。
 

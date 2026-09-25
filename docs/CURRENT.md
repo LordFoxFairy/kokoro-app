@@ -10,17 +10,17 @@ identity 和受信 `Forwarded` 调用 BFF `GET /v1/me`（owner OpenAPI SHA-256
 Root 在当前工作树重跑 contract 57/57、architecture 34/34、lint、全量测试 1424/1424、
 typecheck 以及独立目录的 Next production build，均通过；3310 预览进程未重启。
 
-W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，待 Root 来源 pin 与三仓真组合）：
-Web 固定消费 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56` 的
+W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，来源已重钉；三仓真组合待验）：
+Web 固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce` 的
 browser-private policy `2.0.0`（artifact SHA-256
-`b3c234924a48f9f92c9928f6e9d127172ee1f952658fa49dea99865cc554bc92`，
-IAM owner `3231d2e9b225c337a1432ffb431cd7a5269d988d`）。
+`70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`，
+IAM owner `7f39193fff97dbb1398cb536ded7dca0db354213`）。
 `/iam/organization/list` 不再是可消费 Web GET；`/iam/interactions/select-tenant`
 不再渲染选择表单/全屏重试、签发 tenant CSRF 或接受浏览器 POST，而是在精确签名
 query 与 issuer cookie 下，以 server-only `KOKORO_TENANT_ID` 经窄 BFF
 set-active 直接 302/303 续接。外层 `/auth/select-tenant` 仍仅保留把
 `Path=/iam` issuer cookie 带入内层的无状态 302。Web RP callback/refresh 对
-BFF `/v1/me` 的固定租户核验仍待实施，本片不冒充 Product 登录全链验收。
+BFF `/v1/me` 的固定租户核验已由第三切片实现；本片不冒充 Product 登录全链验收。
 真实 Next 51 个 IAM interaction 测试、5 个 HTTPS 反代测试与 Web 全量 Vitest
 1417/1417 已通过；3310 当前 `/login` 仍是空 503（Web-only 未配齐），未改用户进程。
 下文描述 tenant 表单、policy 1.x 的段落记录历史发布基线，以本节为当前事实。
