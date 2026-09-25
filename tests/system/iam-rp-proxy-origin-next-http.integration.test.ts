@@ -135,6 +135,7 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
       next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
         cwd: root,
         env: { ...process.env, KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
+          KOKORO_DOMAIN: WEB_HOST,
           KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,
           KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret", KOKORO_TENANT_ID: "tenant-one",
           KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` },

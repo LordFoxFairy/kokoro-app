@@ -7,6 +7,7 @@ import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
 import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { oidcAuthOptions, oidcRpConfig, OIDC_RESOURCE, OIDC_SCOPE, type VerifiedOidcTokens } from "@/lib/server/oidc-provider"
+import { verifyProductIdentity } from "@/lib/server/product-identity"
 import { consumeOidcState, issueOidcState, rpCleanupCookies } from "@/lib/server/oidc-rp-transaction"
 import { clearProductSessionCookie, currentProductSession, decodeProductSession, productSessionCookie, type ProductClaims } from "@/lib/server/product-session"
 import { createSession, finalizeRefresh, invalidatePending, newSessionCandidate, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
@@ -103,6 +104,7 @@ async function productAction(request: NextRequest, action: "session" | "signout"
   if (reserved === null) return errorResponse(409, "product_session_refresh_conflict")
   try {
     const refreshed = await refreshOidcToken(config, reserved.refresh, request.signal)
+    await verifyProductIdentity(config, refreshed.access, claims.subject, request.signal)
     const next: ProductClaims = { ...claims, generation: claims.generation + 1, access: refreshed.access,
       accessExpiresAt: Date.now() + refreshed.expiresIn * 1_000 }
     const cookie = await productSessionCookie(next, config.authSecret, config.relay.webOrigin)
@@ -234,6 +236,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (verified === null) return errorResponse(403, "rp_callback_rejected", cleanup)
   try {
     const tokens: VerifiedOidcTokens = verified
+    await verifyProductIdentity(config, tokens.access, tokens.subject, request.signal)
     const candidate = newSessionCandidate()
     const cookie = await productSessionCookie({ id: candidate.id, generation: 0, access: tokens.access,
       accessExpiresAt: tokens.accessExpiresAt, expiresAt: candidate.expiresAt, subject: tokens.subject },

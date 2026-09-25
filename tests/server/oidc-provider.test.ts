@@ -24,6 +24,8 @@ const ENV = {
   NODE_ENV: "test",
   KOKORO_BFF_BASE_URL: "https://bff.example.test",
   KOKORO_WEB_ORIGIN: "https://web.example.test",
+  KOKORO_DOMAIN: "web.example.test",
+  KOKORO_TENANT_ID: "tenant-one",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "service-secret",
   KOKORO_OIDC_CLIENT_ID: "product-web",
   KOKORO_OIDC_CLIENT_SECRET: "client-secret",
@@ -73,6 +75,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("Product OIDC Team read scopes", () => {
+  it("fails RP configuration closed without the server-only fixed tenant", () => {
+    expect(oidcRpConfig({ ...ENV, KOKORO_TENANT_ID: "" })).toBeNull()
+  })
+
   it("returns RP start failures without a browser retry-page redirect", async () => {
     const browser = await signIn("text/html", "csrfToken=invalid%20token")
     expect(browser.status).toBe(400)

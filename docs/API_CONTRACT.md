@@ -6,10 +6,13 @@
 `/api/team/switch` 与可见 Team 切换器已删除。`/auth/select-tenant` 保留无状态
 302 以使 `Path=/iam` issuer cookie 到达内层；内层 GET 仅使用 server-only
 `KOKORO_TENANT_ID` 完成 signed continuation，不显示选择表单，不开放浏览器
-POST 或 `/iam/organization/list`。RP tenant 核验仍待完成。Web code callback 与 refresh 消费 BFF owner 已发布的
+POST 或 `/iam/organization/list`。Web code callback 与 refresh 已消费 BFF owner 发布的
 固定版本 `GET /v1/me` 当前身份投影，验证 subject、tenant 与部署配置后才建立
 可用 Product Session；BFF 公开契约为 `{data:{user_id,tenant_id},meta:{request_id}}`，
 OpenAPI SHA-256 `75ab482132602bd1d7ce77dbec1423b10d4ce7a8244ad284ecac78cd4e7b50ca`。
+Web 严格拒绝额外/缺失字段、非 JSON、非 200、超限、超时和取消；callback 拒绝不创建
+Product Session，refresh finalize 前拒绝会撤销 pending record，不回退旧 generation。调用只发送
+一个当前 user Bearer、固定 Web service identity 与受信 `Forwarded`，不向浏览器暴露上游正文或凭据。
 删除旧 Team switch mutation/可见切换器，不能从浏览器 body/header 指定 tenant。
 失败只给有界机器错误，不跳转到任何整页重试或假登录页面。现有历史小节描述
 原发布版本，不作为新 consumer 的并行实现依据。

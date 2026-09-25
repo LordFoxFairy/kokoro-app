@@ -361,6 +361,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
           env: {
             ...process.env,
             KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
+            KOKORO_DOMAIN: "localhost",
             KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
             KOKORO_INTERNAL_SECRET_WEB_BFF: "next-http-secret",
             KOKORO_WEB_REDIS_URL: redisUrl,

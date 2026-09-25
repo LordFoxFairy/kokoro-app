@@ -14,6 +14,8 @@ const ENV = {
   NODE_ENV: "test",
   KOKORO_BFF_BASE_URL: "https://bff.example.test",
   KOKORO_WEB_ORIGIN: ORIGIN,
+  KOKORO_DOMAIN: "web.example.test",
+  KOKORO_TENANT_ID: "tenant-one",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "service-secret",
   KOKORO_OIDC_CLIENT_ID: "product-web",
   KOKORO_OIDC_CLIENT_SECRET: "client-secret",

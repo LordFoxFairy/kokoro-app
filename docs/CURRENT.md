@@ -1,5 +1,15 @@
 # Kokoro User Web 当前状态
 
+W1C-FIXED-TENANT-WEB-D 第三切片（2026-09-24，Root 独立代码门已验；真三仓烟测待验）：Web RP code callback
+在创建 Product Session 前、refresh 在 generation finalize 前，均以当前 user Bearer、固定 service
+identity 和受信 `Forwarded` 调用 BFF `GET /v1/me`（owner OpenAPI SHA-256
+`75ab482132602bd1d7ce77dbec1423b10d4ce7a8244ad284ecac78cd4e7b50ca`），严格核对
+`data.user_id` 与 OIDC subject、`data.tenant_id` 与 server-only `KOKORO_TENANT_ID`。配置缺失、
+非 200、超时/取消、响应超限/shape 错误或身份错配均 fail closed；callback 不创建 session，refresh
+错配撤销 pending record，旧 generation 立即失效。无 JWT 自验、fallback 或可见中转，凭据不进响应/日志。
+Root 在当前工作树重跑 contract 57/57、architecture 34/34、lint、全量测试 1424/1424、
+typecheck 以及独立目录的 Next production build，均通过；3310 预览进程未重启。
+
 W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，待 Root 来源 pin 与三仓真组合）：
 Web 固定消费 BFF `87f9d8d154241e8fbde0fc61e67417ee4f1dfa56` 的
 browser-private policy `2.0.0`（artifact SHA-256

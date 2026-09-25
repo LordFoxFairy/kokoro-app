@@ -3,6 +3,7 @@ import type { AuthOptions } from "next-auth"
 import type { OAuthConfig } from "next-auth/providers/oauth"
 
 import { boundedOidcBffAgent } from "./oidc-bff-agent"
+import { configuredDomain } from "./domain-context"
 import { iamRelayConfig, type IamRelayConfig } from "./iam-relay-config"
 import { validAccessCredential } from "./product-session"
 import { validRefreshCredential } from "./product-session-store"
@@ -20,6 +21,8 @@ export type OidcRpConfig = Readonly<{
   redisUrl: string
   issuer: string
   callbackUrl: string
+  domain: string
+  tenantId: string
 }>
 
 export type VerifiedOidcTokens = Readonly<{
@@ -35,11 +38,14 @@ export function oidcRpConfig(env: NodeJS.ProcessEnv): OidcRpConfig | null {
   const clientSecret = env.KOKORO_OIDC_CLIENT_SECRET?.trim()
   const authSecret = env.KOKORO_WEB_AUTH_SECRET?.trim()
   const redisUrl = env.KOKORO_WEB_REDIS_URL?.trim()
-  if (relay === null || !clientId || !clientSecret || !authSecret || !redisUrl) return null
+  const domain = configuredDomain(env)
+  const tenantId = env.KOKORO_TENANT_ID?.trim()
+  if (relay === null || !clientId || !clientSecret || !authSecret || !redisUrl || !domain || !tenantId) return null
+  if (tenantId.length > 256) return null
   if (authSecret.length < 32 || clientId.length > 256 || clientSecret.length > 1024) return null
   if (env.NEXTAUTH_URL !== `${relay.webOrigin}/api/auth`) return null
   return {
-    relay, clientId, clientSecret, authSecret, redisUrl,
+    relay, clientId, clientSecret, authSecret, redisUrl, domain, tenantId,
     issuer: `${relay.webOrigin}/iam`,
     callbackUrl: `${relay.webOrigin}/api/auth/callback/${PROVIDER_ID}`,
   }
