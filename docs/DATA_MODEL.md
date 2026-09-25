@@ -1,5 +1,10 @@
 # Kokoro User Web 数据模型与 Owner
 
+R5-Web-Team-Product 前置 scope 切片仅增加 OAuth user-delegated `iam:member.write`、
+`iam:invitation.write` 的固定申请与严格校验；不增加 Web SQL/Redis key、tenant 或成员/邀请副本。
+IAM `ad5224a` 仍是 Member/Invitation/Role 唯一 writer，BFF `da03b76` 是 Product Team
+投影 owner；Web 旧 Team 管理路径尚待替换，本切片不改变其数据流。
+
 ## W1C 固定租户数据边界（2026-09-24 设计门）
 
 Web 当前没有持久化 tenant owner；旧 Team sealed-session 切换路由已删除，RP

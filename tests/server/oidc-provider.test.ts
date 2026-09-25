@@ -19,7 +19,9 @@ import { oidcAuthOptions, oidcRpConfig } from "@/lib/server/oidc-provider"
 
 const BASE_SCOPE = "openid profile email offline_access iam:session-authorization.verify"
 const TEAM_READ_SCOPES = ["iam:member.read", "iam:invitation.read", "iam:role.read"]
-const EXPECTED_SCOPE = `${BASE_SCOPE} ${TEAM_READ_SCOPES.join(" ")}`
+const TEAM_WRITE_SCOPES = ["iam:member.write", "iam:invitation.write"]
+const TEAM_SCOPES = [...TEAM_READ_SCOPES, ...TEAM_WRITE_SCOPES]
+const EXPECTED_SCOPE = `${BASE_SCOPE} ${TEAM_SCOPES.join(" ")}`
 const ENV = {
   NODE_ENV: "test",
   KOKORO_BFF_BASE_URL: "https://bff.example.test",
@@ -74,7 +76,7 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
-describe("Product OIDC Team read scopes", () => {
+describe("Product OIDC fixed-tenant Team scopes", () => {
   it("fails RP configuration closed without the server-only fixed tenant", () => {
     expect(oidcRpConfig({ ...ENV, KOKORO_TENANT_ID: "" })).toBeNull()
   })
@@ -95,7 +97,7 @@ describe("Product OIDC Team read scopes", () => {
     expect(unavailable.headers.get("location")).toBeNull()
     expect(await unavailable.json()).toMatchObject({ error: { code: "rp_unavailable" } })
   })
-  it("requests the original scopes followed by exactly the three Team read scopes", () => {
+  it("requests the original scopes followed by exactly three Team read and two write scopes", () => {
     const config = oidcRpConfig(ENV)!
     const provider = oidcAuthOptions(config, vi.fn(), new AbortController().signal)
       .providers[0] as OAuthConfig<{ sub: string }>
@@ -121,12 +123,12 @@ describe("Product OIDC Team read scopes", () => {
 
   it.each([
     ["legacy scope", BASE_SCOPE],
-    ...TEAM_READ_SCOPES.map((missing) => [
+    ...TEAM_SCOPES.map((missing) => [
       `missing ${missing}`,
-      `${BASE_SCOPE} ${TEAM_READ_SCOPES.filter((scope) => scope !== missing).join(" ")}`,
+      `${BASE_SCOPE} ${TEAM_SCOPES.filter((scope) => scope !== missing).join(" ")}`,
     ]),
-    ["write scope", `${EXPECTED_SCOPE} iam:member.write`],
-    ["reordered scope", `${BASE_SCOPE} ${[...TEAM_READ_SCOPES].reverse().join(" ")}`],
+    ["extra scope", `${EXPECTED_SCOPE} iam:role.write`],
+    ["reordered scope", `${BASE_SCOPE} ${[...TEAM_SCOPES].reverse().join(" ")}`],
   ])("rejects %s before recording the RP transaction", async (_label, scope) => {
     nextAuth.mockResolvedValueOnce(authorizeResponse(scope!))
     const response = await signIn()

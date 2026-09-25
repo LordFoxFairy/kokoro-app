@@ -93,10 +93,11 @@ Browser-private RP 入口只接受单 provider 的 Auth.js CSRF 获取、受控 
 精确同源 Host/Origin、方法、body/query 长度及重复键先校验，浏览器不能覆盖固定 `client_id`、
 `redirect_uri`、`scope`、`resource`、`callbackUrl`。authorize 与 token 各恰好一个固定 internal
 resource；token 使用 `client_secret_basic`，userinfo 使用 server-only Bearer 且不发送浏览器 cookie。
-W1C-Team-R3-Web 的固定申请 scope 为
-`openid profile email offline_access iam:session-authorization.verify iam:member.read iam:invitation.read iam:role.read`；
-保留原顺序后追加三个 Team 只读 scope，不添加写权限。Auth.js authorization Location 的 scope 必须
-完整、顺序一致且仅出现一次；缺项、重复或添加写权限均拒绝。这是 Web 申请边界，不替代 IAM/BFF 的授权验证。
+R5-Web-Team-Product 前置切片的固定申请 scope 为
+`openid profile email offline_access iam:session-authorization.verify iam:member.read iam:invitation.read iam:role.read iam:member.write iam:invitation.write`；
+保留既有顺序，在三个 Team 只读 scope 后仅追加 IAM `ad5224a` 授权的两个 user-delegated 写 scope。
+Auth.js authorization Location 的 scope 必须完整、顺序一致且仅出现一次；缺项、重复或额外 scope 均拒绝。
+这是 Web 申请边界，不替代 IAM/BFF 的授权验证；旧 Team UI/API 仍待独立原子替换。
 state/nonce/PKCE 与 ID token issuer/audience/signature 在 code exchange 前后分别验证，userinfo
 `sub` 必须等于已验证 ID token 的 `sub`；Redis state 原子一次消费，错误/失联只返回安全码。
 ID token 算法固定 `EdDSA`（Ed25519），RS256 即使有合法 JWK 也拒绝。BFF token/userinfo/JWKS

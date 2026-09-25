@@ -9,7 +9,7 @@ import { validAccessCredential } from "./product-session"
 import { validRefreshCredential } from "./product-session-store"
 
 export const OIDC_RESOURCE = "https://kokoro.dev/resources/iam-internal"
-export const OIDC_SCOPE = "openid profile email offline_access iam:session-authorization.verify iam:member.read iam:invitation.read iam:role.read"
+export const OIDC_SCOPE = "openid profile email offline_access iam:session-authorization.verify iam:member.read iam:invitation.read iam:role.read iam:member.write iam:invitation.write"
 export const MAX_TOKEN_LIFETIME_SECONDS = 60 * 60
 const PROVIDER_ID = "kokoro-iam"
 

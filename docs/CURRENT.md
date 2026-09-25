@@ -1,5 +1,13 @@
 # Kokoro User Web 当前状态
 
+R5-Web-Team-Product 前置切片（2026-09-24，工作树待 Root 审查）：固定 OIDC RP scope 在既有
+三个 Team read scope 后追加 IAM `ad5224a` 的 `iam:member.write`、`iam:invitation.write`；
+Auth.js authorization Location 仍按完整有序 scope 精确比较，缺项/额外项/重复项 fail closed。
+聚焦测试先 RED（2 个预期失败），再 GREEN（13/13），Node 22.22.2。
+旧 `/api/team/*` sealed-session→IAM `/bff/*`、namespace/inbox UI 尚未替换；scope 申请本身
+不代表正式 Team Product 写、邀请链接或浏览器验收完成。BFF public Team contract 固定
+`da03b76`、OpenAPI SHA-256 `5ac3c225193f70b99555e87f765c13128e43343929611f446fe744b77eef7954`。
+
 R5-Web-policy-pin（2026-09-24，本仓来源重钉待 Root 验收）：Web browser-private IAM relay
 只读快照原样复制 BFF `dd605c99e9bb5c6669ec31e04e285e5f92b79ed0` 的
 `contract/iam-relay-policy.json`；policy 仍为 `2.0.0`，SHA-256
