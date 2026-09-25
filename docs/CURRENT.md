@@ -1,5 +1,17 @@
 # Kokoro User Web 当前状态
 
+R5-Web-policy-pin（2026-09-24，本仓来源重钉待 Root 验收）：Web browser-private IAM relay
+只读快照原样复制 BFF `dd605c99e9bb5c6669ec31e04e285e5f92b79ed0` 的
+`contract/iam-relay-policy.json`；policy 仍为 `2.0.0`，SHA-256
+`74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037`，
+IAM owner commit 仅更新为 `ad5224a9e0a3a31d1c593d214d37940d6923b2e7`。
+IAM allowlist/vendor digest、relay route/header/cookie/限额与 Web 运行语义均未改变；
+此切片不包含 Team Product 写或邀请邮件入口。下文旧来源 SHA/commit 是当时切片的历史证据，
+不再是当前 consumer pin。Node `22.22.2` 在 Web 工作树先验证来源断言 RED，再执行
+聚焦 4/4、`pnpm contract` 57/57、`pnpm test:architecture` 34/34、`pnpm lint`、
+`pnpm test` 1424/1424，均通过；`pnpm typecheck` 与 `pnpm build` 在独立复制目录通过，
+未触用户 3310 共享 `.next`。Root 的来源门、最终集成与真组合仍待审查。
+
 W1C-FIXED-TENANT-WEB-D 第三切片（2026-09-24，Root 独立代码门与固定来源真三仓烟测已验）：Web RP code callback
 在创建 Product Session 前、refresh 在 generation finalize 前，均以当前 user Bearer、固定 service
 identity 和受信 `Forwarded` 调用 BFF `GET /v1/me`（owner OpenAPI SHA-256
@@ -15,7 +27,7 @@ SMTP 首登→正式 IAM 邀请加入同一 tenant→OIDC→BFF `/v1/me`→Produ
 已经配齐 BFF/IAM/RP；只读实测 `/login` 仍为 HTTP 503、空 body，不显示旧中转页。
 
 W1C-FIXED-TENANT-WEB-D 第二切片（2026-09-24，来源已重钉；真组合证据见上）：
-Web 固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce` 的
+该切片当时固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce` 的
 browser-private policy `2.0.0`（artifact SHA-256
 `70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`，
 IAM owner `7f39193fff97dbb1398cb536ded7dca0db354213`）。
@@ -41,7 +53,7 @@ architecture 34/34、全量 Vitest 1418/1418、lint PASS；共享 3310 的 `.nex
 及 `pnpm build` 均 exit0，生产路由表无 `/api/team/switch`。3310 `/login`
 仍是 Web-only 的空 503，不是已打通的可见 IAM 入口。
 
-R2e-IAM-VERIFY-WEB（2026-09-24，已发布；本次仅来源重钉）：Web 当前从 BFF
+R2e-IAM-VERIFY-WEB（2026-09-24，历史发布证据）：Web 当时从 BFF
 `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 固定只读 IAM relay policy `1.1.0`，artifact
 SHA-256 `97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`，IAM owner
 `b363554d07e5b6e182160b42ae1402330e55d9db`；原始切片仅新增

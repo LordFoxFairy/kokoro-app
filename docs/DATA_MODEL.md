@@ -42,13 +42,19 @@ Redis value 只有固定 provider/callback 与三枚 RP cookie 摘要的组合�
 
 ## R2e-IAM-VERIFY-WEB：邮箱验证链接的数据边界（本提交已实现，真 IAM 待验）
 
+当前只读来源为 BFF `dd605c99e9bb5c6669ec31e04e285e5f92b79ed0`、policy `2.0.0`、
+artifact SHA-256 `74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037`、
+IAM owner `ad5224a9e0a3a31d1c593d214d37940d6923b2e7`。本次只更新 consumer
+快照/provenance，不改变 IAM allowlist/vendor digest、Web Redis/SQL owner、缓存、事务或运行语义。
+下文 `1.0.0`/`1.1.0` 是原邮箱验证切片的历史来源。
+
 起始 Web `main` 基线 `0a093f65bdc4990b956b10ae534198e3b4b5c3b5` 固定 BFF relay policy
 `1.0.0`、BFF commit `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`，故
-`/iam/verify-email` 不在基线的浏览器 GET 集合。当前 Web 消费 BFF `main`
+`/iam/verify-email` 不在基线的浏览器 GET 集合。当时 Web 消费 BFF `main`
 `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 的只读 policy `1.1.0`，blob SHA-256
 `97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`，IAM owner
-`b363554d07e5b6e182160b42ae1402330e55d9db`；当前来源重钉只是
+`b363554d07e5b6e182160b42ae1402330e55d9db`；该历史来源重钉只是
 准入来源替换，不是 Web 新业务事实。IAM 独占有期签名验证 JWT 的校验、`emailVerified` 幂等状态
 与审计；BFF/Web 不持有邮箱验证表、receipt、outbox 或副本，不自行决定 token 是否已使用。
 

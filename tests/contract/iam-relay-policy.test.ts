@@ -19,11 +19,11 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "e0663a8c85f055c2bac5af894070fea8e24ff3ce",
-      policySha256: "70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f",
+      ownerCommit: "dd605c99e9bb5c6669ec31e04e285e5f92b79ed0",
+      policySha256: "74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037",
     })
     expect(IAM_RELAY_POLICY.version).toBe("2.0.0")
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("7f39193fff97dbb1398cb536ded7dca0db354213")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("ad5224a9e0a3a31d1c593d214d37940d6923b2e7")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
   })

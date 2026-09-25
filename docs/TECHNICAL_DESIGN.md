@@ -17,10 +17,12 @@ Session，不恢复“连接中／整页重试”页面。
 `src/ui/team`（采用）；新建登录 SPA/通用 IAM proxy/第二身份 store（淘汰）。
 Web 无新 SQL、Redis 事实或跨仓写入；BFF/IAM 各保持唯一契约 owner。
 
-当前 browser-private relay 固定 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce`
+当前 browser-private relay 固定 BFF `dd605c99e9bb5c6669ec31e04e285e5f92b79ed0`
 的 policy `2.0.0`，artifact SHA-256
-`70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`，
-IAM owner `7f39193fff97dbb1398cb536ded7dca0db354213`。`/organization/list`
+`74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037`，
+IAM owner `ad5224a9e0a3a31d1c593d214d37940d6923b2e7`。此片仅按 BFF owner
+来源原样复制快照并更新 commit/digest 断言；IAM allowlist/vendor digest、route/header/cookie/限额、
+Web 运行语义和数据边界不变。`/organization/list`
 已从 Web GET allowlist 删除；`/organization/set-active` 仅由上述 server-only
 signed continuation 调用。下文 W1C-2B-2 与 R2e 的选择表单、policy 1.x 描述为
 原始发布基线，已被本节取代，不是当前实现依据。
@@ -77,9 +79,9 @@ Route Handler 的 `request.signal` 传到 token/JWKS/userinfo Agent，浏览器�
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`、policy `1.0.0`、blob SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；浏览器 GET 集合没有
 `/verify-email`，正式邮件链接 `${KOKORO_WEB_ORIGIN}/iam/verify-email?<query>` 在基线不可达。BFF owner
-当前在 `main` `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 发布 policy `1.1.0` artifact，SHA-256
+当时在 `main` `dadf9264116ea9df2c0886c4af84bacb67aa6e41` 发布 policy `1.1.0` artifact，SHA-256
 `97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`；原始切片仅新增精确
-`GET /verify-email`，本次只重钉来源，IAM owner commit 为 `b363554d07e5b6e182160b42ae1402330e55d9db`。
+`GET /verify-email`，该历史切片只重钉来源，IAM owner commit 为 `b363554d07e5b6e182160b42ae1402330e55d9db`。
 浏览器入口已发布；真 IAM 邮件点击与完整登录仍待组合验证。
 
 **Owner 与放置。** IAM 独占 Better Auth 1.7.3 有期签名 JWT 的签发/校验、`emailVerified` 幂等状态

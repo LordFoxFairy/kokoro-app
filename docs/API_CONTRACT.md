@@ -17,9 +17,11 @@ Product Session，refresh finalize 前拒绝会撤销 pending record，不回退
 失败只给有界机器错误，不跳转到任何整页重试或假登录页面。现有历史小节描述
 原发布版本，不作为新 consumer 的并行实现依据。
 
-Web 当前固定消费 BFF `e0663a8c85f055c2bac5af894070fea8e24ff3ce`
+Web 当前固定消费 BFF `dd605c99e9bb5c6669ec31e04e285e5f92b79ed0`
 policy `2.0.0`，artifact SHA-256
-`70cc9704ecf6f61d616011a72447ff3df8c209b3a769d5e4009692b81329e96f`；
+`74893ba4e566e4824a278cd3ee1548030a33435f9b37b7026a8a7e943c080037`，
+IAM owner `ad5224a9e0a3a31d1c593d214d37940d6923b2e7`；仅来源重钉，policy
+版本、route/method/header/cookie/限额及 Web 运行语义不变；
 `/organization/list` 已删除。下文旧 policy 1.x/候选列表/tenant 表单是历史发布记录，
 不表示当前仍可访问。
 
@@ -35,8 +37,8 @@ W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session �
 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，artifact SHA-256
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`；其浏览器 GET
 白名单缺 `/iam/verify-email`。BFF owner `main` `dadf9264116ea9df2c0886c4af84bacb67aa6e41`
-当前发布 `contract/iam-relay-policy.json` version `1.1.0`、SHA-256
-`97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`；Web 本次只读重钉
+当时发布 `contract/iam-relay-policy.json` version `1.1.0`、SHA-256
+`97022ea8727619bae03927027ef6a8ce87a3d2da4580ba5d211dc63b16fdc42c`；Web 该历史切片只读重钉
 该 blob 与 commit，不编辑 BFF policy，不建立第二份可编辑 IAM contract。IAM owner
 `b363554d07e5b6e182160b42ae1402330e55d9db` 拥有 Better Auth 1.7.3 验证 token/邮箱状态，
 Web 不解释 token 或验证结果。此增量是 Web `browser-private`，不进入 BFF public `/v1` OpenAPI。
