@@ -47,9 +47,9 @@ Root 固定 SHA 的真实 Product Session 登录/退出及 main-only/compatibili
 
 ## 当前 W1E IAM relay 来源（2026-09-26）
 
-Web 只读消费 BFF `017464480e603e3e5780c55597f8d40970589ef7` 的 policy `2.1.0` 原始字节，
-SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；其 IAM owner 为
-`5c9cecf714c87234bbc9558665b23e09afa6e9f6`。复用现有 `src/generated/iam-relay-policy.json`
+Web 只读消费 BFF `c586d0bdb42248f206b8adc92784e4c2140d2512` 的 policy `2.1.0` 原始字节，
+SHA-256 `ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4`；其 IAM owner 为
+`b720b6dc095b883237682102ca0a87ed6451a968`。复用现有 `src/generated/iam-relay-policy.json`
 及 `src/lib/server/iam-relay-policy.ts`，不新增路径或第二来源。唯一变化是 provenance；登录/邀请状态机和失败恢复不变。
 
 ## W1D IAM relay 来源（历史验收）

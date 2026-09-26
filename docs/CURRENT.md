@@ -1,9 +1,9 @@
 # Kokoro User Web 当前状态
 
-W1E-IAM-RELAY-CONSUMER（2026-09-26）：当前 Web 从 BFF `017464480e603e3e5780c55597f8d40970589ef7`
-原样复制 policy `2.1.0`，SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；
-其中 IAM owner 为 `5c9cecf714c87234bbc9558665b23e09afa6e9f6`，OpenAPI SHA-256 为
-`05ff7ff712ce06571ca5e092fdaf234b9ee4d1b4978c54e0d54d2b50fe51dde2`。只更新只读快照、运行 provenance
+W1E-IAM-RELAY-CONSUMER（2026-09-26）：当前 Web 从 BFF `c586d0bdb42248f206b8adc92784e4c2140d2512`
+原样复制 policy `2.1.0`，SHA-256 `ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4`；
+其中 IAM owner 为 `b720b6dc095b883237682102ca0a87ed6451a968`，OpenAPI `0.5.0` SHA-256 为
+`cddfec4cd3439d98f399254911232c447582a97e9b1d4c109139e68baaf030b9`。只更新只读快照、运行 provenance
 与契约断言；登录表单、路由、OIDC/CSRF、请求/响应、SQL/Redis 均不变。下方 W1D 来源是历史验收，不是当前 pin。
 
 W1D-LOGIN-UI-POLISH（2026-09-26，已发布）：签名 `/auth/sign-in` 仍由原 Route Handler

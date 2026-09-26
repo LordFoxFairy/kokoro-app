@@ -51,10 +51,10 @@ Root 固定 SHA 的真实组合验收尚待执行；没有变更 BFF/IAM 机器�
 
 ## 当前 W1E IAM relay 消费来源（2026-09-26）
 
-Web 固定消费 BFF `017464480e603e3e5780c55597f8d40970589ef7` policy `2.1.0` 原始字节，
-SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；policy 固定 IAM
-`5c9cecf714c87234bbc9558665b23e09afa6e9f6`，internal OpenAPI `0.4.0` SHA-256
-`05ff7ff712ce06571ca5e092fdaf234b9ee4d1b4978c54e0d54d2b50fe51dde2`。route/method/header/cookie/status
+Web 固定消费 BFF `c586d0bdb42248f206b8adc92784e4c2140d2512` policy `2.1.0` 原始字节，
+SHA-256 `ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4`；policy 固定 IAM
+`b720b6dc095b883237682102ca0a87ed6451a968`，internal OpenAPI `0.5.0` SHA-256
+`cddfec4cd3439d98f399254911232c447582a97e9b1d4c109139e68baaf030b9`。route/method/header/cookie/status
 及登录、邀请交互的 Web 同源契约均不变；新增的 IAM `platform:execute` 角色字段不是 Web 权限事实。
 
 ## W1D IAM relay 消费来源（历史验收）

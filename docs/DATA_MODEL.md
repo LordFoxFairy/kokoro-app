@@ -37,9 +37,9 @@ Root 固定 SHA 的真三仓 Product Session 登录/退出仍待集成验收。
 
 ## 当前 W1E IAM relay 来源与邀请数据边界（2026-09-26）
 
-Web 当前只读固定 BFF `017464480e603e3e5780c55597f8d40970589ef7` 的 relay policy
-`7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`，IAM owner 为
-`5c9cecf714c87234bbc9558665b23e09afa6e9f6`。IAM 继续唯一拥有角色、权限、邀请、用户与 issuer Session；
+Web 当前只读固定 BFF `c586d0bdb42248f206b8adc92784e4c2140d2512` 的 relay policy
+`ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4`，IAM owner 为
+`b720b6dc095b883237682102ca0a87ed6451a968`。IAM 继续唯一拥有角色、权限、邀请、用户与 issuer Session；
 Web 不建立 SQL、缓存或权限副本，现有 Product Session/CSRF Redis 数据生命周期不变。
 
 ## W1D IAM relay 来源与邀请数据边界（历史验收）
