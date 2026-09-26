@@ -42,15 +42,18 @@ Product Session 的 Redis 失联、refresh 竞争、logout tombstone 与远端�
 六个消费者的允许/拒绝 Origin 与既有错误行为、Auth.js session/signout、Product Bearer/CSRF、OIDC 登录与退出。
 单仓已执行 Node 22 `pnpm check`（contract 69、architecture 36、Vitest 1474、lint/typecheck/build）与
 独立端口 E2E 11 pass/1 预期 skip；生产 Next `/app` 为 private no-store、旧 URL GET/POST 为 404。
-Root 固定 SHA 的真实 Product Session 登录/退出、来源与 main-only/compatibility 门仍待集成复验。
+Root 固定 SHA 的真实 Product Session 登录/退出及 main-only/compatibility 门仍待集成复验；
+下节记录本切片后最新的 relay 来源。
 
-## 当前 R5 邀请实现与来源（2026-09-25）
+## 当前 W1D IAM relay 来源（2026-09-26）
 
 唯一静态 `/iam/interactions/invitation` 已实现独立 issuer 登录/注册、recipient-only context 与
 一次性 CSRF 约束的接受/拒绝；接受仅在 owner 200 后转 `/login`。Web 当前固定消费 BFF main
-`2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 policy `2.1.0` 原始 blob，SHA-256
-`f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`，其中 IAM owner
-`7215223b2ed27a0d5217f3bbaaabce547006d3bb`；本切片无新目录、协议或 UI 行为，只重钉来源。
+`bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 policy `2.1.0` 原始 blob，SHA-256
+`b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`，其中 IAM owner
+`6a55ffb4c22f0b155ddb83157735c0ace766701d`；本切片只替换现有只读生成快照、运行 provenance 与相邻断言，
+无新目录、协议、SQL、Redis 或 UI 行为。Web 不自行编辑 BFF policy；BFF owner commit 的 artifact 原始字节
+是唯一来源，运行时继续校验版本、IAM commit、OpenAPI 摘要与关键路由。
 下节“目标态，尚未实现”指 `63aca94` 时的设计门历史基线；真 SMTP/HTTPS 浏览器及用户 3310 尚待 Root 验收。
 
 ## R5-INVITE-WEB-ENTRY：独立邀请入口设计门（目标态，尚未实现）

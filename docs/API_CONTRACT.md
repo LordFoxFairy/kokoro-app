@@ -47,13 +47,13 @@ OpenAPI 或固定 relay policy，也不建立新的机器 contract。正式 OIDC
 architecture RED→GREEN 已证明活动生产源码不再引用 `KOKORO_IAM_BASE_URL`、旧 auth route 或 sealed
 cookie/envelope；六 route 同源守卫与正式 Auth.js session/signout 保留。Node22 `pnpm check`（contract 69、
 architecture 36、Vitest 1474、lint/typecheck/build）和独立 dev E2E 11 pass/1 预期 skip 已通过。
-Root 固定 SHA 的真实组合验收与来源 pin 尚待执行；没有变更 BFF/IAM 机器契约。
+Root 固定 SHA 的真实组合验收尚待执行；没有变更 BFF/IAM 机器契约。
 
-## 当前 R5 邀请来源（2026-09-25）
+## 当前 W1D IAM relay 消费来源（2026-09-26）
 
-Web 当前原样消费 BFF main `2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 browser-private
-policy `2.1.0`，artifact SHA-256 `f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`；
-该 policy 固定 IAM main `7215223b2ed27a0d5217f3bbaaabce547006d3bb`，内部 OpenAPI `0.4.0`
+Web 当前原样消费 BFF main `bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 browser-private
+policy `2.1.0`，artifact SHA-256 `b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`；
+该 policy 固定 IAM main `6a55ffb4c22f0b155ddb83157735c0ace766701d`，内部 OpenAPI `0.4.0`
 SHA-256 `a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416`。本次只是来源 commit
 和派生 policy digest 重钉；route、header、cookie、预算、邀请操作语义和 Web 对外行为不变。下节目标态
 中的旧 pin/“尚无入口”描述是设计时历史基线，当前运行事实以此节与代码为准。

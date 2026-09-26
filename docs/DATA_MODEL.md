@@ -35,12 +35,12 @@ IAM 持有，Web 只经 BFF 契约消费。
 活动代码删除与 architecture RED→GREEN 已完成，Web SQL/Schema、Product Session Redis 与 owner 机器契约未变。
 Root 固定 SHA 的真三仓 Product Session 登录/退出仍待集成验收。
 
-## 当前 R5 邀请数据边界（2026-09-25）
+## 当前 W1D IAM relay 来源与邀请数据边界（2026-09-26）
 
 Web 邀请入口已实现，但没有 Invitation、Member、User 的持久化事实或 SQL schema；这些仍由 IAM
-`7215223b2ed27a0d5217f3bbaaabce547006d3bb` 唯一拥有。Web 当前消费 BFF
-`2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` policy `2.1.0`，SHA-256
-`f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`。本次仅来源重钉，
+`6a55ffb4c22f0b155ddb83157735c0ace766701d` 唯一拥有。Web 当前消费 BFF
+`bc45632b8654db7e06eb9878bb4d7a609d12dc7b` policy `2.1.0`，SHA-256
+`b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`。本次仅来源重钉，
 不修改 Web Redis CSRF、Product Session、API/事务或数据生命周期；下节“尚未实现”是原设计门历史基线。
 
 ## R5-INVITE-WEB-ENTRY：邀请流程数据边界（目标态，尚未实现）

@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "2f1fc3382df31ba107d7eb2b2b6a611fa893bc13",
-  policySha256: "f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7",
+  ownerCommit: "bc45632b8654db7e06eb9878bb4d7a609d12dc7b",
+  policySha256: "b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -52,7 +52,7 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "7215223b2ed27a0d5217f3bbaaabce547006d3bb"
+const EXPECTED_IAM_COMMIT = "6a55ffb4c22f0b155ddb83157735c0ace766701d"
 const EXPECTED_INVITATION_ROUTES = [
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/context", "GET", "getTenantInvitationContext"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept", "POST", "acceptTenantInvitation"],

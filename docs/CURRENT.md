@@ -1,12 +1,22 @@
 # Kokoro User Web 当前状态
 
-W1D-WEB-IAM-DIRECT-CUT（2026-09-26，代码实施中）：本仓
+W1D-RELAY-PIN-WEB（2026-09-26，已发布）：Web 现有
+`src/generated/iam-relay-policy.json` 已从 BFF main
+`bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 `contract/iam-relay-policy.json`
+原始字节复制，SHA-256 `b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`；
+policy `2.1.0` 固定 IAM main `6a55ffb4c22f0b155ddb83157735c0ace766701d`，OpenAPI `0.4.0`
+摘要仍为 `a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416`。
+运行 provenance、固定来源断言同步重钉；不改变 UI、route、请求/响应、SQL、Redis 或用户 3310 进程。
+聚焦 contract RED→GREEN 已通过；Node22 `pnpm check` 通过（contract 69、architecture 36、
+Vitest 1474、lint/typecheck/build）。Root 固定 SHA 组合验收结果待补；本片不触碰用户 3310。
+
+W1D-WEB-IAM-DIRECT-CUT（2026-09-26，Web main `71d408e1a36fbe8c3ff7dc350311e5b4eeb8be23` 已发布）：本仓
 `docs/{TECHNICAL_DESIGN,API_CONTRACT,DATA_MODEL}.md` 已定义删除旧 IAM 直连、两条旧 auth route 与 sealed
 session 的单一路径，同时保留正式 Auth.js Product Session、六个同源业务 adapter 及其 CSRF/失败语义。
-当前工作树已删除旧 `auth.ts`、sealed envelope 与两条旧 route，正式认证保留。Node22 `pnpm check`
+该提交已删除旧 `auth.ts`、sealed envelope 与两条旧 route，正式认证保留。Node22 `pnpm check`
 通过（contract 69、architecture 36、Vitest 1474、lint/typecheck/build）；独立 Next
 生产进程实测公开 `/` 200、安全头/HTML，旧两 URL 的 GET/POST 404；独立 dev 端口 E2E 11 pass/1 预期
-skip，first-site 的 liveness/preview 模式与隔离 live fixture 均通过。Root commit/pin 和真三仓回归仍待执行。Root 已将
+skip，first-site 的 liveness/preview 模式与隔离 live fixture 均通过。Root 已固定该 Web gitlink；真三仓回归仍待执行。Root 已将
 本地隔离联调入口改为 `http://127.0.0.1:3310/login`，普通 Codex IAB 可见真实 IAM 登录表单并到达
 `/app`；该入口由 Root 启动器组合 IAM/BFF/Web，不是本仓单独 `pnpm dev` 的默认状态。
 
@@ -25,12 +35,12 @@ R5-INVITE-BROWSER-ORIGIN 修复（2026-09-25）：真实 Chromium 表单 POST �
 同源 POST 保留 canonical Origin；`/iam/verify-email` 继续使用 `no-referrer`。
 该项仅记录代码事实，真实三仓 Chromium 结果以 Root 最新验收记录为准。
 
-R5-INVITE-WEB-ENTRY 来源重钉（2026-09-25）：当前 Web `src/generated/iam-relay-policy.json` 与 BFF
+R5-INVITE-WEB-ENTRY 历史来源重钉（2026-09-25）：当时 Web `src/generated/iam-relay-policy.json` 与 BFF
 main `2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 policy `2.1.0` 原始字节相同，SHA-256
 `f7a3a44d9839a0e54faffc8cf6b7ceb601d0d6b647637faf10e9070c927d93e7`；其中 IAM owner commit 为
 `7215223b2ed27a0d5217f3bbaaabce547006d3bb`，OpenAPI 0.4.0 SHA-256
 `a18d57172df841cb2f55aa845a3eeb519ddb5abc8bea1c2be74fbb7e0fb62416` 不变。本次只更新只读快照、
-provenance 与固定来源断言，邀请 UI/行为不变；下方旧 commit/digest 是当时切片的历史证据，不是当前消费 pin。
+provenance 与固定来源断言，邀请 UI/行为不变；这一段与下方旧 commit/digest 均是历史证据，不是当前消费 pin。
 真实三仓 SMTP/HTTPS 浏览器组合及用户 3310 仍由 Root 独立验收。
 
 R5-INVITE-WEB-ENTRY C 实现切片（2026-09-25，跨仓验收仍待 Root）：基线 Web main
