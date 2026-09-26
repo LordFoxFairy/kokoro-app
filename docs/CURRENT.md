@@ -1,12 +1,14 @@
 # Kokoro User Web 当前状态
 
-W1F-LOGIN-SHADCN（2026-09-26，当前工作树待提交）：`/login` 仍固定 Product OIDC 302→IAM 签名交互；正式 `/auth/sign-in` GET 已从手写 HTML 改为 Web Proxy 签发一次性 CSRF、内部 HMAC 证明 rewrite 到真实 Next/shadcn Card/Input/Button/Label/Alert 页面，内部页直达 404。POST 保留原始签名 query/issuer Cookie/Origin/BFF→IAM，HTML 401/429/503 通过短时加密反馈 303 回同一表单并签发新 CSRF；非 HTML 错误语义不变。Root Node22 `pnpm check` exit0（contract 69、architecture 36、Vitest 1478、lint/typecheck/build）；3310 隔离运行拷贝已按明确文件热同步，无重启，Root 全新 Chromium 实测 `/login` 302→302→200、真实 shadcn 输入 2、登录按钮 1、旧重试/连接状态 0，错误态仍同页且密码清空。当前只证明本地登录可见面与错误态；正式生产部署及完整跨仓登录/Platform 闭环不由此代替。
+W1F-LOGIN-SHADCN（2026-09-26，Web main `1fa25d2b4760dc428d3fcdf77628ba343a5bc3ff` 已发布）：`/login` 仍固定 Product OIDC 302→IAM 签名交互；正式 `/auth/sign-in` GET 已从手写 HTML 改为 Web Proxy 签发一次性 CSRF、内部 HMAC 证明 rewrite 到真实 Next/shadcn Card/Input/Button/Label/Alert 页面，内部页直达 404。POST 保留原始签名 query/issuer Cookie/Origin/BFF→IAM，HTML 401/429/503 通过短时加密反馈 303 回同一表单并签发新 CSRF；非 HTML 错误语义不变。Root Node22 `pnpm check` exit0（contract 69、architecture 36、Vitest 1478、lint/typecheck/build）；3310 隔离运行拷贝已按明确文件热同步，无重启，Root 全新 Chromium 实测 `/login` 302→302→200、真实 shadcn 输入 2、登录按钮 1、旧重试/连接状态 0，错误态仍同页且密码清空。当前只证明本地登录可见面与错误态；正式生产部署及完整跨仓登录/Platform 闭环不由此代替。
 
-W1E-IAM-RELAY-CONSUMER（2026-09-26）：当前 Web 从 BFF `c586d0bdb42248f206b8adc92784e4c2140d2512`
-原样复制 policy `2.1.0`，SHA-256 `ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4`；
-其中 IAM owner 为 `b720b6dc095b883237682102ca0a87ed6451a968`，OpenAPI `0.5.0` SHA-256 为
-`cddfec4cd3439d98f399254911232c447582a97e9b1d4c109139e68baaf030b9`。只更新只读快照、运行 provenance
-与契约断言；登录表单、路由、OIDC/CSRF、请求/响应、SQL/Redis 均不变。下方 W1D 来源是历史验收，不是当前 pin。
+W1E-IAM-0.6-RELAY-CONSUMER（2026-09-26，Root 复验后发布）：当前 Web 从 BFF `1105553cfc24d4f44a90f626132bc30323a77946`
+原样复制 policy `2.1.0`，SHA-256 `8f7d4f4cb6fa0ec34d2cce8702d8882d3270a316a6cbdb2d8bdaccefb9c6b4a1`；
+其中 IAM owner 为 `a4c2b61467f1fc1772d6b6d8e98f081c090289fb`，OpenAPI `0.6.0` SHA-256 为
+`392ca0e49544c0ec6e0d2fa782c46c33c1847e2c350102e7ad3b8af43f858ced`。只更新只读快照、运行 provenance
+与契约断言；17 个 browser relay route、登录表单、OIDC/CSRF、请求/响应、SQL/Redis 均不变。下方 W1D 来源是历史验收，不是当前 pin。
+来源测试先 RED、复制 BFF 原始字节后 GREEN；与上一版 JSON 比较仅三个 IAM 来源字段变化。Node22 `pnpm check`
+由 Root 独立复跑通过（contract 69、architecture 36、Vitest 1478、lint/typecheck/build）；第一次全量运行中一个既有 OIDC refresh 真 HTTP 用例间歇性返回 200，单文件 38/38 与第二次全量 1478/1478 均通过，需后续单独稳定化。跨仓运行与 Root gitlink/库存仍待 Root 固定版本验收。
 
 W1D-LOGIN-UI-POLISH（2026-09-26，已发布）：签名 `/auth/sign-in` 仍由原 Route Handler
 签发一次性 CSRF 并向 BFF→IAM 提交凭据，`/login` 仍直接启动固定 Product OIDC；没有中转、连接中或整页重试页。

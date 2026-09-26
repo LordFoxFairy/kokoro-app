@@ -19,15 +19,34 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "c586d0bdb42248f206b8adc92784e4c2140d2512",
-      policySha256: "ed476b63205c0eaf59106dc618c138df6110ef6240ce2be50b417fea8ec800e4",
+      ownerCommit: "1105553cfc24d4f44a90f626132bc30323a77946",
+      policySha256: "8f7d4f4cb6fa0ec34d2cce8702d8882d3270a316a6cbdb2d8bdaccefb9c6b4a1",
     })
     expect(IAM_RELAY_POLICY.version).toBe("2.1.0")
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("b720b6dc095b883237682102ca0a87ed6451a968")
-    expect(IAM_RELAY_POLICY.iamOpenapiVersion).toBe("0.5.0")
-    expect(IAM_RELAY_POLICY.iamOpenapiSha256).toBe("cddfec4cd3439d98f399254911232c447582a97e9b1d4c109139e68baaf030b9")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("a4c2b61467f1fc1772d6b6d8e98f081c090289fb")
+    expect(IAM_RELAY_POLICY.iamOpenapiVersion).toBe("0.6.0")
+    expect(IAM_RELAY_POLICY.iamOpenapiSha256).toBe("392ca0e49544c0ec6e0d2fa782c46c33c1847e2c350102e7ad3b8af43f858ced")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
+    expect(IAM_RELAY_POLICY.routes).toEqual({
+      "/.well-known/openid-configuration": ["GET"],
+      "/.well-known/oauth-authorization-server": ["GET"],
+      "/jwks": ["GET"],
+      "/oauth2/authorize": ["GET", "POST"],
+      "/oauth2/token": ["POST"],
+      "/oauth2/userinfo": ["GET"],
+      "/oauth2/revoke": ["POST"],
+      "/oauth2/end-session": ["GET", "POST"],
+      "/oauth2/end-session/confirm": ["POST"],
+      "/sign-up/email": ["POST"],
+      "/sign-in/email": ["POST"],
+      "/verify-email": ["GET"],
+      "/sign-out": ["POST"],
+      "/get-session": ["GET"],
+      "/organization/set-active": ["POST"],
+      "/oauth2/consent": ["POST"],
+      "/oauth2/continue": ["POST"],
+    })
   })
 
   it("rejects a tampered owner pin or a contracted browser GET route", () => {
