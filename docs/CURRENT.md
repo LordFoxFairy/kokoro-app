@@ -1,5 +1,12 @@
 # Kokoro User Web 当前状态
 
+W1D-LOGIN-UI-POLISH（2026-09-26，已发布）：签名 `/auth/sign-in` 仍由原 Route Handler
+签发一次性 CSRF 并向 BFF→IAM 提交凭据，`/login` 仍直接启动固定 Product OIDC；没有中转、连接中或整页重试页。
+唯一可见邮箱/密码表单及 401/429/503 的表单内提示已统一为中文，沿用本仓 shadcn 语义色、
+Card/Input/Button 尺度的无脚本 HTML shell，明确 `zh-CN`、焦点与移动端布局。聚焦测试先红后绿；
+隔离真实 Next/Chromium 的桌面、窄屏、移动及 401 错误态通过，移动两状态 axe WCAG 2 A/AA 零违规。
+本片不更改 API、Cookie、Redis/OIDC/POST 语义，也不触碰用户 3310 进程；Root 尚需审查并固定 Web SHA。
+
 W1D-RELAY-PIN-WEB（2026-09-26，已发布）：Web 现有
 `src/generated/iam-relay-policy.json` 已从 BFF main
 `bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 `contract/iam-relay-policy.json`

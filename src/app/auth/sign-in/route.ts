@@ -107,7 +107,7 @@ function escapeHtml(value: string): string {
 function signInForm(action: string, token: string, email = "", error?: string): string {
   const describedBy = error ? ' aria-describedby="sign-in-error"' : ""
   const alert = error ? `<p class="form-error" id="sign-in-error" role="alert">${escapeHtml(error)}</p>` : ""
-  return `<form class="auth-form" method="post" action="${escapeHtml(action)}">${alert}<input type="hidden" name="csrf_token" value="${escapeHtml(token)}"><label class="field" for="email">Email<input id="email" name="email" type="email" autocomplete="username" value="${escapeHtml(email)}"${describedBy} required></label><label class="field" for="password">Password<input id="password" name="password" type="password" autocomplete="current-password"${describedBy} required></label><div class="actions single"><button type="submit">Sign in</button></div></form>`
+  return `<form class="auth-form" method="post" action="${escapeHtml(action)}">${alert}<input type="hidden" name="csrf_token" value="${escapeHtml(token)}"><label class="field" for="email">邮箱<input id="email" name="email" type="email" autocomplete="username" inputmode="email" value="${escapeHtml(email)}"${describedBy} required></label><label class="field" for="password">密码<input id="password" name="password" type="password" autocomplete="current-password"${describedBy} required></label><div class="actions single"><button type="submit">登录</button></div></form>`
 }
 
 async function signInFormFailure(input: Readonly<{
@@ -120,15 +120,15 @@ async function signInFormFailure(input: Readonly<{
   secureCookies: boolean
   requestId: string
 }>): Promise<Response> {
-  const message = input.status === 401 ? "Email or password is incorrect." : input.status === 429
-    ? "Too many sign-in attempts. Please try again later." : "Sign-in could not be completed. Please try again."
+  const message = input.status === 401 ? "邮箱或密码不正确。" : input.status === 429
+    ? "登录尝试次数过多，请稍后再试。" : "登录未完成，请重新提交。"
   try {
     const proof = await issueIamInteractionCsrf({
       redisUrl: input.redisUrl, webOrigin: input.webOrigin, path: PAGE_PATH, method: "POST",
       query: input.query, issuerCookie: input.issuerCookie, secureCookies: input.secureCookies,
     })
     const html = iamInteractionDocument({
-      title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.",
+      title: "登录", heading: "登录 Kokoro", description: "使用你的 Kokoro 账号继续。",
       trustedFormHtml: signInForm(`${PAGE_PATH}${input.query}`, proof.token, input.email, message), variant: "sign-in",
     })
     return new Response(html, { status: input.status, headers: {
@@ -193,7 +193,7 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const proof = await issueIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, secureCookies: config.secureCookies })
     const form = signInForm(`${PAGE_PATH}${query}`, proof.token)
-    const html = iamInteractionDocument({ title: "Sign in", heading: "Sign in", description: "Continue with your Kokoro account.", trustedFormHtml: form, variant: "sign-in" })
+    const html = iamInteractionDocument({ title: "登录", heading: "登录 Kokoro", description: "使用你的 Kokoro 账号继续。", trustedFormHtml: form, variant: "sign-in" })
     return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": id, "set-cookie": proof.cookie } })
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)

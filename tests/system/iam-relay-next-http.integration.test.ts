@@ -467,16 +467,17 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
           waitUntil: "domcontentloaded",
         })
         expect(response?.status()).toBe(200)
-        expect(await page.getByRole("heading", { name: "Sign in" }).count()).toBe(1)
+        expect(await page.getByRole("heading", { name: "登录 Kokoro" }).count()).toBe(1)
+        expect(await page.locator("html").getAttribute("lang")).toBe("zh-CN")
         const [brandBox, cardBox] = await Promise.all([
           page.locator(".brand-panel").boundingBox(), page.locator(".content").boundingBox(),
         ])
         expect(cardBox?.y ?? 0).toBeGreaterThanOrEqual((brandBox?.y ?? 0) + (brandBox?.height ?? 0))
         expect((cardBox?.y ?? 0) - (brandBox?.y ?? 0) - (brandBox?.height ?? 0)).toBeLessThan(48)
         expect(await page.locator(".content").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
-        const email = page.getByLabel("Email")
-        const password = page.getByLabel("Password")
-        const submit = page.getByRole("button", { name: "Sign in" })
+        const email = page.getByLabel("邮箱")
+        const password = page.getByLabel("密码")
+        const submit = page.getByRole("button", { name: "登录" })
         await email.focus()
         expect(await email.evaluate((input) => getComputedStyle(input).outlineStyle)).not.toBe("none")
         const [emailBox, passwordBox, buttonBox] = await Promise.all([
@@ -788,12 +789,38 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(result.body).toContain('name="email" type="email"')
     expect(result.body).toContain('value="user@example.test"')
     expect(result.body).toContain('role="alert"')
+    expect(result.body).toContain("邮箱或密码不正确")
     expect(result.body).not.toContain("password=secret")
     expect(result.body).not.toContain("sensitive-marker-must-not-reach-browser")
     expect(result.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]).not.toBe(token)
     expect((result.headers["set-cookie"] as string[] | undefined)?.length).toBe(1)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
   })
+
+  it("keeps a real Chromium sign-in failure inline and accessible", async () => {
+    signInStatus = 401
+    const browser = await chromium.launch({ headless: true })
+    try {
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      await page.getByLabel("邮箱").fill("user@example.test")
+      await page.getByLabel("密码").fill("wrong-password")
+      await page.getByRole("button", { name: "登录" }).click()
+      await expect.poll(async () => page.getByRole("alert").textContent()).toBe("邮箱或密码不正确。")
+      expect(page.url()).toBe(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      expect(await page.getByLabel("邮箱").inputValue()).toBe("user@example.test")
+      expect(await page.getByLabel("密码").inputValue()).toBe("")
+      expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([])
+      const screenshotDir = process.env.KOKORO_IAM_UI_SCREENSHOT_DIR
+      if (screenshotDir) {
+        await mkdir(screenshotDir, { recursive: true })
+        await page.screenshot({ path: path.join(screenshotDir, "sign-in-error-mobile.png"), fullPage: true })
+      }
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
 
   it("preserves a native 302 continuation with multiple issuer cookies", async () => {
     continueStatus = 302
