@@ -1,5 +1,48 @@
 # Kokoro User Web 技术设计
 
+## W1D-WEB-IAM-DIRECT-CUT 文档门（2026-09-25，代码尚未实施）
+
+### Owner、当前事实与目标职责
+
+Web RP 与浏览器同源安全边界由 `kokoro-app` 唯一维护；identity、issuer Session、token 与授权事实仍只属于
+IAM，`/iam` relay policy 与转发仍只属于 BFF。当前生产源码中唯一读取 `KOKORO_IAM_BASE_URL` 并直接请求
+IAM 的入口是 `src/lib/server/auth.ts`。该文件同时保留旧 magic-link、refresh、revoke、team-session、
+`kokoro_auth_nonce` 与 AES-256-GCM `kokoro_session` helper；`src/lib/server/session-envelope.ts` 只服务这套旧
+sealed envelope。生产路由中，旧 `POST /api/auth/logout` 与 `GET /api/auth/session-state` 仍消费这些 helper。
+`src/app/api/auth/[...nextauth]/route.ts` 已独立承接正式 Product Session 主链：`GET /api/auth/session`
+只在线核对 Redis generation/expiry 并返回非敏感只读投影；`POST /api/auth/session` 先验证 Auth.js CSRF，
+再执行 refresh reservation、经固定 BFF `/iam` relay 的 IAM token refresh、BFF `/v1/me` 身份重核与 finalize CAS，成功后推进 generation、
+轮换 Product Session cookie 并返回新投影；`POST /api/auth/signout` 承接 tombstone、远端 revoke 与 issuer
+confirmation。正式三条 operation 都不是旧路由的 alias。
+
+目标是原子删除 `auth.ts`、`session-envelope.ts`、两条旧 auth route 及其失效测试/配置引用，不触碰 Auth.js
+OIDC callback、Product Session cookie、在线 generation、refresh 双 CAS、tombstone 或 issuer logout-confirmation。
+删除后跨仓调用方向只有 `Browser → Web same-origin adapter → BFF → IAM`；Web 生产源码不再读取 IAM base URL，
+也不再持有旧 sealed session/nonce 的第二身份通道。
+
+### 放置与粒度裁决
+
+| 项 | 裁决 |
+| --- | --- |
+| 方案 A：留下瘦 `auth.ts` | 淘汰。文件只剩通用 Origin guard，却继续暗示它拥有登录、会话或 IAM client，保留错误 owner 名称并为后续代码重新塞回认证职责留下入口。 |
+| 方案 B：既有 `src/lib/server/` 下新建 `same-origin.ts` | 采用。目录已经承载 server-only HTTP 边界；文件只拥有 `sameOriginOk(request)` 一项同源判断，不新建目录、auth facade、兼容 re-export 或第二套 CSRF。 |
+| 依赖方向 | 六个现有业务 route 直接依赖 `same-origin.ts`：`api/session/[...path]`、`api/hub/[...path]`、`api/team/[...path]`、`api/scheduled-tasks/[[...path]]`、`api/billing/checkout`、`api/billing/mock-pay`。`same-origin.ts` 不依赖 Auth.js、Product Session、BFF client、IAM config、Redis 或业务 contract。 |
+| 保留语义 | `sameOriginOk` 原样保留现有行为：有 `Origin` 时解析并与 `Host` 比较，缺 `Host` 才回退 request URL；畸形或不匹配拒绝；缺失 `Origin` 继续交由各 route 既有方法门、Cookie/SameSite 与相邻 CSRF 约束处理。本切片不借重命名改变状态码、错误体、Bearer、幂等、SSE 或 body 限额。 |
+| 删除项 | 删除旧 IAM 直连、magic-link/refresh/revoke/team-session helper，`kokoro_session`/`kokoro_auth_nonce` sealed 路径，两条旧 auth route、对应测试和仅服务旧路径的配置引用；不保留 alias、fallback、双读或双 cookie。 |
+
+### 失败恢复与验证
+
+这是一项 clean-slate 删除，不增加迁移期双轨。旧 URL 删除后返回框架 404；调用方继续只使用正式 Auth.js
+session/signout。`sameOriginOk` 搬迁失败在 architecture/typecheck 阶段暴露，不回退导入 `auth.ts`。正式
+Product Session 的 Redis 失联、refresh 竞争、logout tombstone 与远端撤销未知仍按既有 fail-closed 状态机
+恢复；本切片不新增 Redis key、重试队列、缓存、事务或补偿事实。
+
+实现片先以 architecture RED 证明生产源码仍存在 IAM 直连、旧 route 或 sealed cookie，再 GREEN 删除；随后覆盖
+六个消费者的允许/拒绝 Origin 与既有错误行为、Auth.js session/signout、Product Bearer/CSRF、OIDC 登录与退出。
+单仓门为 Node 22 聚焦测试、`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、
+`pnpm test`、隔离 `pnpm build` 与 `pnpm test:e2e`；Root 再跑固定 SHA 的真实 HTTPS Product Session
+登录/退出、来源与 main-only/compatibility 门。本文仅完成三文档设计门，不是代码、机器契约或运行验收证据。
+
 ## 当前 R5 邀请实现与来源（2026-09-25）
 
 唯一静态 `/iam/interactions/invitation` 已实现独立 issuer 登录/注册、recipient-only context 与

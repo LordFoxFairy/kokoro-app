@@ -1,5 +1,55 @@
 # Kokoro User Web API 契约策略
 
+## W1D-WEB-IAM-DIRECT-CUT browser-private 契约门（2026-09-25，代码尚未实施）
+
+### 当前 operation 与唯一目标
+
+当前 Web 同时暴露两套名称相近但事实来源不同的 browser-private operation：
+
+| 当前浏览器 operation | 当前实现与语义 | 本切片目标 |
+| --- | --- | --- |
+| `GET /api/auth/session-state` | 读取旧 `kokoro_session` sealed envelope，返回旧会话投影；由 `auth.ts`/`session-envelope.ts` 支撑 | 删除 route，不迁移、不留 alias；未知路径按框架 404 |
+| `POST /api/auth/logout` | 读取旧 envelope，经 `KOKORO_IAM_BASE_URL` 直连旧 revoke/logout helper 并清旧 cookie | 删除 route，不重定向到正式 signout，不保留兼容响应 |
+| `GET /api/auth/session` | Product Session 的非敏感只读投影；在线核对 Redis generation/expiry，返回 authenticated/subject/expiry，不刷新、不轮换 cookie，响应不含 access/refresh | 保留，request/response、cache 与错误语义不变 |
+| `POST /api/auth/session` | Auth.js CSRF 通过后执行 Product Session refresh：读取在线 session，reserve CAS 后经固定 BFF `/iam` relay 单次刷新 IAM token、再经 BFF `/v1/me` 重核 subject/tenant，finalize CAS 成功才推进 generation、写入轮换 cookie并返回新投影；冲突、结果未知或依赖失败保持既有 fail-closed 路径 | 保留，CSRF、reserve/finalize、cookie、响应与错误语义不变 |
+| `POST /api/auth/signout` | Auth.js/Product Session 正式退出；同源 Origin + Auth.js CSRF，本地 tombstone 后返回受限 issuer confirmation 导航 | 保留，远端撤销未知和 issuer confirmation 语义不变 |
+
+旧两条 operation 不是 BFF public API，也没有第三方兼容承诺；clean-slate 删除不修改 BFF OpenAPI、IAM
+OpenAPI 或固定 relay policy，也不建立新的机器 contract。正式 OIDC callback、`/login`、`/iam/*` 和
+`/api/auth/session|signout` 是唯一保留认证链。删除后 Web 不再直接请求 IAM；OAuth/token/revoke/issuer
+协议仍只通过固定 `Web → BFF /iam → IAM` 边界。
+
+### 六个同源消费者的保留契约
+
+`sameOriginOk` 从误命名的 `auth.ts` 迁到单责 `src/lib/server/same-origin.ts`，只改变 import owner，不改变
+以下六个 route 的 browser-private HTTP 契约：
+
+| route | guard 适用面与必须保留的行为 |
+| --- | --- |
+| `/api/session/[...path]` | mutation 才执行现有 guard；Product Bearer、幂等、SSE/cursor/取消、body/response 限额与错误映射不变 |
+| `/api/hub/[...path]` | mutation 的 Origin 拒绝与现有 Product Session/BFF 转发不变 |
+| `/api/team/[...path]` | 非 GET 的 Origin 拒绝、Product Session 与固定租户权限不变 |
+| `/api/scheduled-tasks/[[...path]]` | mutation 的 Origin 拒绝、方法/path 白名单与错误体不变 |
+| `/api/billing/checkout` | 写请求的 Origin 拒绝、Bearer/幂等与 BFF checkout 语义不变 |
+| `/api/billing/mock-pay` | 开发支付写请求的 Origin 拒绝和既有非生产门不变 |
+
+迁移后的纯 guard 继续按当前契约处理：存在 `Origin` 时必须是可解析且 host 与请求 `Host` 相同；没有
+`Host` 才用 request URL host；畸形或不匹配返回各调用 route 既有 403/机器错误；缺失 `Origin` 的处理
+保持现状，不在本片发明第二个 CSRF 协议。各 route 已有 method、SameSite、Auth.js CSRF 或业务写入门禁仍各自负责。
+浏览器自报 Authorization、tenant、actor、namespace 或 principal 仍不能覆盖在线 Product Session Bearer。
+
+### 失败与验收
+
+旧 route 删除后不代理、不自动重试、不创建 Product Session，也不从旧 cookie 推断认证；正式 session/signout
+在 Redis 缺失/故障、旧 generation、tombstone、远端撤销结果未知时继续既有 fail-closed 响应与恢复路径。
+本切片不新增 API、错误码、header、cookie、Redis key、缓存或幂等 receipt。
+
+实现验收必须先有 architecture 失败样本，禁止生产源码出现 `KOKORO_IAM_BASE_URL`、旧 auth route 或 sealed
+cookie/envelope；再验证六个 route 的同源正负例、正式 Auth.js session/signout 与 OIDC/Product Session
+登录退出。执行 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、
+隔离 `pnpm build`、`pnpm test:e2e`，并由 Root 用固定 SHA 跑真实 HTTPS 组合。本节是 Web 文档门，
+不表示代码或机器契约已变更。
+
 ## 当前 R5 邀请来源（2026-09-25）
 
 Web 当前原样消费 BFF main `2f1fc3382df31ba107d7eb2b2b6a611fa893bc13` 的 browser-private
@@ -102,7 +152,7 @@ Next 开发模式的 `logging.incomingRequests.ignore` 仅精确抑制 `/iam/ver
 
 ### 版本、来源和可见性
 
-当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 仅返回 authenticated/subject/expiry，不回 access/refresh，POST 要求同源 Origin 与 Auth.js CSRF。普通 BFF `/v1` adapter 已在线核验 Product Session generation 并仅发送一个 access Bearer；S2-A 的真实三仓业务代理链仍待验收。
+当前 Web 仍有 IAM magic-link/team-session 直连和旧 sealed session；2A 只读 `/iam`、2B-1 sign-in POST、2B-2 静态 `/iam/interactions/*` POST、2C Auth.js Code+S256 RP-only 与 S1 均已发布。S1 成功 callback 后建立在线 Product Session，提供标准 `GET/POST /api/auth/session` 与 `POST /api/auth/signout`；session GET 只在线核对并返回 authenticated/subject/expiry，不回 access/refresh、不刷新或轮换 cookie。session POST 要求同源 Origin 与 Auth.js CSRF，并按 reserve CAS → 固定 BFF `/iam` relay token refresh → BFF `/v1/me` 身份重核 → finalize CAS 执行刷新，只有 finalize 成功才推进 generation、轮换 cookie并返回新投影。普通 BFF `/v1` adapter 已在线核验 Product Session generation 并仅发送一个 access Bearer；S2-A 的真实三仓业务代理链仍待验收。
 BFF relay 在 W1C-2 起始基线固定来源 `eb1eb2926d08b8a3779898b2c31e604a8585ec8b`，其
 `contract/iam-relay-policy.json` version `1.0.0` 当时 blob SHA-256 是
 `ddfdb1f335d87d7b7c904a23c589e33c1f938908188313e8c20e56223bde5d53`，

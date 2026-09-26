@@ -1,5 +1,40 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W1D-WEB-IAM-DIRECT-CUT 数据边界（2026-09-25，代码尚未实施）
+
+### 当前事实与删除目标
+
+当前正式 Product Session 与待删除旧 envelope 是两套不同数据路径：
+
+| 数据 | 当前 owner/用途 | 本切片目标 |
+| --- | --- | --- |
+| `kokoro_session` | Web 旧 AES-256-GCM sealed cookie；载有 runtime credential、refresh、user/namespace 与 expiry，只供旧 `/api/auth/logout|session-state` 及 `auth.ts` helper | 连同 `session-envelope.ts`、旧 route 与配置/测试引用删除；不迁移为 Product Session，不保留读兼容或 tombstone |
+| `kokoro_auth_nonce` | 旧 magic-link nonce 常量/helper；两个 browser magic-link route 已先行删除，当前正式登录不签发或消费 | 连同旧 `auth.ts` 删除；不建立替代字段或 Redis record |
+| Auth.js RP transaction cookie | Web 正式 OIDC state/nonce/PKCE 临时数据 | 保留，生命周期与一次消费不变 |
+| Product Session cookie | Web 正式 HttpOnly 加密 session ID、generation、server-only access 与必要退出提示，不含 refresh | 保留，字段、TTL、Secure/SameSite 与公开 projection 不变 |
+| Product Session Redis record/tombstone | Web 隔离 namespace 中的在线 generation、双阶段 refresh CAS、加密当前 refresh 与撤销阻断 | 保留，key/value、TTL、并发和失败恢复不变 |
+
+旧 `kokoro_session` 的删除不创建迁移事务：旧 cookie 即使仍在浏览器也没有 route/helper 消费，随浏览器现有
+生命周期自然淘汰；它不被导入 Product Session、Redis 或 localStorage。旧 URL 返回框架 404，不能据旧 cookie
+恢复身份。用户通过正式 `/login` 建立 Product Session；退出只走 Auth.js `/api/auth/signout` 及既有
+tombstone/issuer confirmation 状态机。
+
+### 不变的数据与失败边界
+
+`sameOriginOk` 从 `auth.ts` 搬到 `same-origin.ts` 是无状态代码归属调整：不读取/写入 cookie、Redis、SQL、
+browser storage 或 owner payload，不产生 retention、删除、索引、事务或审计事实。六个现有业务 route 仅更换
+import，仍从在线 Product Session 取得唯一 Bearer；不恢复旧 namespace/principal/runtime credential。
+
+Web 当前与目标都没有 PostgreSQL、schema、migration、ORM、跨 owner SQL 或 fresh-install 数据门。本片也不
+增加 Redis key、logical DB、缓存、队列、receipt、锁或补偿任务；已有 Product Session/RP/交互 CSRF Redis
+事实保持原样。Redis 丢失、pending refresh、旧 generation、logout ACK 未知与远端 revoke 未确认继续按现有
+fail-closed/TTL 回收路径处理，删除旧 envelope 不提供 fallback。身份、issuer token、成员资格和审计仍由
+IAM 持有，Web 只经 BFF 契约消费。
+
+文档门只校验本文件与 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 对 owner、删除项、零新数据事实和失败恢复
+的描述一致；代码片另以 architecture RED→GREEN、正式 session/signout、六 route 正负例及 Root 真实 HTTPS
+登录/退出验证。此处不声明代码、Schema、Redis 或机器契约已经变更。
+
 ## 当前 R5 邀请数据边界（2026-09-25）
 
 Web 邀请入口已实现，但没有 Invitation、Member、User 的持久化事实或 SQL schema；这些仍由 IAM

@@ -1,13 +1,20 @@
 # Kokoro User Web 当前状态
 
+W1D-WEB-IAM-DIRECT-CUT（2026-09-26，三设计文档门，代码待实施）：本仓
+`docs/{TECHNICAL_DESIGN,API_CONTRACT,DATA_MODEL}.md` 已定义删除旧 IAM 直连、两条旧 auth route 与 sealed
+session 的单一路径，同时保留正式 Auth.js Product Session、六个同源业务 adapter 及其 CSRF/失败语义。
+这些是后续代码片的目标，不代表 `auth.ts`、旧 route 或 Web→IAM 非法 edge 已删除。Root 已将
+本地隔离联调入口改为 `http://127.0.0.1:3310/login`，普通 Codex IAB 可见真实 IAM 登录表单并到达
+`/app`；该入口由 Root 启动器组合 IAM/BFF/Web，不是本仓单独 `pnpm dev` 的默认状态。
+
 W1-LOGIN-UI（2026-09-25）：`/login` 仍仅在服务端启动 Product OIDC，浏览器直接进入唯一签名
 `/auth/sign-in`；后者保留完整 Route Handler、一次性 Cookie-bound CSRF、原始签名 query、
 同源 Origin 与 BFF→IAM 真实提交，GET 和凭据失败均显示紧凑正式表单。视觉按本仓 shadcn
 token/尺寸/焦点收敛，但没有在 Route Handler 中导入 React 组件或新增第二条登录链。Root 用
 Node 22.22.2 复验真实 Next HTTP/Chromium 7/7（含桌面、窄屏、移动和错误态）、contract 69、
-architecture 34、Vitest 1483、lint、typecheck、production build，均通过。当前 3310 无监听，
-本仓也没有 `.env.local`；这些隔离测试不是用户 3310 已可登录的证据。下一步仍须固定正式
-Web/BFF/IAM 配置、同源 HTTPS 入口与常驻浏览器验收，不能用可见错误页或假表单代替。
+architecture 34、Vitest 1483、lint、typecheck、production build，均通过。该次切片验收时 3310 无监听，
+本仓也没有 `.env.local`；这些隔离测试本身不是用户 3310 已可登录的证据。后续 Root HTTP loopback
+组合与浏览器验收见上方新记录；不能用可见错误页或假表单代替。
 
 R5-INVITE-BROWSER-ORIGIN 修复（2026-09-25）：真实 Chromium 表单 POST 暴露邀请页
 `Referrer-Policy: no-referrer` 会使浏览器发送 `Origin: null`，与严格同源写入门禁冲突。
