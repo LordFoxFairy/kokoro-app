@@ -50,11 +50,9 @@ describe("Scheduled BFF against a local business BFF contract fixture", () => {
         }),
       )
     })
-    process.env.KOKORO_WEB_SESSION_SECRET = "integration-secret"
     process.env.KOKORO_WEB_AUTH_SECRET = "a".repeat(32)
     process.env.KOKORO_WEB_REDIS_URL = "redis://fixture.invalid/9"
     process.env.KOKORO_WEB_ORIGIN = "https://first.example"
-    process.env.KOKORO_IAM_BASE_URL = "http://user.fixture"
     process.env.KOKORO_BFF_BASE_URL = bff.baseUrl
     process.env.KOKORO_DOMAIN = "dev.kokoro.localhost"
   })

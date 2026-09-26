@@ -149,7 +149,6 @@ Chat 不在 Web 内部复制一套业务接口。浏览器始终访问同源 `/a
 # kokoro-app（仅服务端）
 KOKORO_WEB_ORIGIN="http://dev.kokoro.localhost:3000"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
-KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<web-bff-secret>"
 
 # kokoro-bff（独立服务）
@@ -163,8 +162,7 @@ KOKORO_INTERNAL_SECRET_BFF="<bff-upstream-secret>"
 不访问 4300 端口，也不持有 BFF secret。生产切换到 `live` 后，为每个业务子仓库配置独立的
 `KOKORO_*_BASE_URL`，缺失的上游返回明确 503，不静默回退 Mock。
 
-这三个仓库之间没有 workspace、`file:` 依赖、`src/site` 复制或 submodule。Web 负责 HttpOnly
-session envelope、Origin 检查和同源入口；BFF 负责业务投影、Chat 编排、幂等和 upstream 适配；
+这三个仓库之间没有 workspace、`file:` 依赖、`src/site` 复制或 submodule。Web 负责 HttpOnly Product Session、Origin 检查和同源入口；BFF 负责业务投影、Chat 编排、幂等和 upstream 适配；
 Agent 负责执行、Run 状态、HITL 和 Redis worker，不被 Web 或 BFF 直接访问其存储。
 当前拓扑不使用 `kokoro-gateway`，旧 Gateway 只保留为历史独立仓库，不是运行、CI 或部署前置条件。
 
@@ -206,9 +204,8 @@ git push origin v1.0.0
 ```dotenv
 KOKORO_DOMAIN="app.example.com"
 KOKORO_WEB_ORIGIN="https://app.example.com"
-KOKORO_WEB_SESSION_SECRET="<secret>"
+KOKORO_WEB_AUTH_SECRET="<secret>"
 KOKORO_BFF_BASE_URL="http://kokoro-bff:4300"
-KOKORO_IAM_BASE_URL="http://kokoro-iam:4211"
 KOKORO_INTERNAL_SECRET_WEB_BFF="<secret>"
 # System owner 地址和凭据由 kokoro-bff 注入；Web 不直连 System。
 ```
@@ -243,9 +240,8 @@ Cloudflare Build variables/secrets 配置：
 ```text
 KOKORO_DOMAIN
 KOKORO_WEB_ORIGIN                  # exact public origin for /iam admission and Location
-KOKORO_WEB_SESSION_SECRET
+KOKORO_WEB_AUTH_SECRET
 KOKORO_BFF_BASE_URL                   # independent server-only business entry
-KOKORO_IAM_BASE_URL                  # explicit auth service
 KOKORO_INTERNAL_SECRET_WEB_BFF        # production-required BFF credential
 # System address/credential and IAM tenant binding are configured in kokoro-bff.
 ```

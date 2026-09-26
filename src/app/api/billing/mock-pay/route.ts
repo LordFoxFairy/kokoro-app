@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { sameOriginOk } from "@/lib/server/auth"
+import { sameOriginOk } from "@/lib/server/same-origin"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 

@@ -7,7 +7,7 @@
 本仓只拥有：
 
 - User Web 页面与浏览器交互状态；
-- 当前站点的 HttpOnly session envelope 与同源请求边界；
+- 当前站点的 Auth.js/OIDC Product Session 与同源请求边界；
 - `/api/*` browser-private adapter；
 - 固定 BFF policy 约束的 `/iam/*` 原生 OAuth/OIDC 同源传输边界；
 - AG-UI 到 Web 内部 view state 的适配职责。
@@ -61,10 +61,9 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `src/lib/server/auth.ts` | session cookie、nonce、session refresh 与当前 IAM client |
+| `src/lib/server/same-origin.ts` | 六个业务同源 adapter 复用的 Origin/Host 守卫 |
 | `src/lib/server/product-bff.ts` | 普通受保护 BFF adapter 的在线 Product Session admission、唯一 Bearer 与 service identity |
 | `src/lib/server/product-identity.ts` | RP callback/refresh 对固定 BFF `/v1/me` 的严格 subject/tenant 在线准入；wire 类型在此终止 |
-| `src/lib/server/session-envelope.ts` | AES-256-GCM sealed envelope |
 | `src/lib/server/domain-context.ts` | server-only `KOKORO_DOMAIN` 与 `Forwarded` |
 | `src/app/iam/[...path]/route.ts` | server-only `KOKORO_WEB_ORIGIN`、固定 GET allowlist 与请求准入 |
 | `src/lib/server/service-config.ts` | BFF 地址读取 |

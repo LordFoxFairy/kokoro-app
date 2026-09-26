@@ -18,7 +18,7 @@
 ## 2. 本地验证
 
 ```bash
-cd /Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/kokoro
+cd /Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app
 git status --short --branch
 node --version
 pnpm --version
@@ -31,14 +31,18 @@ pnpm test
 pnpm build
 ```
 
-本仓当前没有专用 `/healthz`/`/readyz`。进程 smoke 只能临时检查页面和 session-state，不能冒充依赖
+本仓当前没有专用 `/healthz`/`/readyz`。进程 smoke 只能临时检查公开首页，不能冒充依赖
 readiness：
 
 ```bash
 pnpm start
 curl -i http://127.0.0.1:3000/
-curl -i http://127.0.0.1:3000/api/auth/session-state
 ```
+
+`KOKORO_SMOKE_MODE=liveness pnpm smoke:first-site` 只验证公开页与安全头；`preview` 显式验证无后端预览，
+`live`（默认）仍验证 System manifest、`/app` 的匿名 shell/受控登录跳转与敏感字段；提供临时
+`KOKORO_SESSION_COOKIE` 时额外验证已认证的 `/api/auth/session`，不把无凭据的 200 shell 冒充登录成功。
+三种模式不可互相冒充，脚本不从旧 session-state 推断环境。
 
 preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连接已知版本 BFF。
 
@@ -51,10 +55,9 @@ preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连�
 | `NODE_ENV` | production deployment 为 `production` |
 | `KOKORO_DOMAIN` | 不带协议/路径的 canonical hostname |
 | `KOKORO_WEB_ORIGIN` | `/iam` 公开入口的精确 HTTP(S) origin；含 scheme/hostname/可选 port，无尾斜杠/路径/query/fragment |
-| `KOKORO_WEB_SESSION_SECRET` | 已注入；轮换时当前 key 在首位 |
+| `KOKORO_WEB_AUTH_SECRET` | 已注入；Auth.js RP 与 Product Session 使用同一当前密钥 |
 | `KOKORO_INTERNAL_SECRET_WEB_BFF` | production 必需 |
 | `KOKORO_BFF_BASE_URL` | server-only BFF URL |
-| `KOKORO_IAM_BASE_URL` | 当前实现仍需；终态删除并经 BFF |
 | `NEXT_PUBLIC_SESSION_PREVIEW` | production 不启用 |
 
 检查 browser bundle/Network：不应出现上述 secret、BFF/IAM internal URL、runtime JWT、tenant/site header。
@@ -74,8 +77,8 @@ preview 成功只证明本地 fixture；live 诊断必须关闭 preview 并连�
 1. 检查公开 hostname 与 `KOKORO_DOMAIN` 一致，并核对入站 Host、GET 可选/POST 必需 Origin 与固定
    `KOKORO_WEB_ORIGIN` 精确一致；后者缺失/非法会返回 503，不匹配会返回 403。反代后 Next 重建的
    request URL authority 和 `X-Forwarded-*` 不作公开 origin 判据；HTTPS 下 cookie 带 Secure。
-2. 检查 session/nonce cookie 的 Path、SameSite、expiry；不要读取或粘贴值。
-3. 关联 Web request id 与 BFF/IAM 记录，区分 envelope invalid、access expired、refresh revoke 和 service auth。
+2. 检查 Product Session/RP cookie 的 Path、SameSite、expiry；不要读取或粘贴值。
+3. 关联 Web request id 与 BFF/IAM 记录，区分 Product Session generation invalid、access expired、refresh revoke 和 service auth。
 4. 多 tab refresh race 不应立即踢出仍有效 access；确认是否发生重复 rotation。
 5. 大面积故障优先回滚最近 auth/config 变更；credential 泄漏走第 7 节。
 
@@ -121,7 +124,7 @@ smoke 和 rollback digest。当前流水线尚未全部生成这些证据，未�
 1. 停止继续 rollout；
 2. 将流量切回上一个已验证不可变 image digest/Cloudflare deployment；
 3. 保留当前故障版本、日志和 request id 供分析；
-4. 验证 `/`、session-state、登录、BFF JSON、AG-UI reconnect、HITL 和关键页面；
+4. 验证 `/`、正式 `/api/auth/session`、登录、BFF JSON、AG-UI reconnect、HITL 和关键页面；
 5. 确认旧版本与当前 BFF contract 兼容；若不兼容，按 owner 发布顺序协调回滚；
 6. 更新 incident timeline 和已恢复时间。
 
@@ -137,13 +140,11 @@ smoke 和 rollback digest。当前流水线尚未全部生成这些证据，未�
 4. 撤销旧 credential；
 5. 检查日志/artifact 是否泄漏。
 
-### Session envelope key
+### Product Session/Auth.js secret 轮换
 
-1. 将新 key 放 `KOKORO_WEB_SESSION_SECRET` 列表首位，旧 key 保留在后；
-2. 新 cookie 由新 key密封，旧 cookie 在短轮换窗口仍可解；
-3. 监测 anonymous/login/refresh error；
-4. 窗口结束删除旧 key；
-5. 泄漏场景同时在 IAM/BFF 吊销 session/refresh，不只轮换 Web key。
+1. 切换 `KOKORO_WEB_AUTH_SECRET` 并部署同一版本的 Web 实例；当前实现只接受一个密钥，旧 RP/Product cookie 会失效，不承诺旧 key 读取窗口。
+2. 用户重新登录；监测 anonymous/login/refresh error，并确认 Redis 中旧 Product Session 按保留期清理。
+3. 泄漏场景同时在 IAM/BFF 吊销相关 session/refresh，不只轮换 Web 密钥。
 
 ## 7. 安全事件
 

@@ -16,7 +16,10 @@ describe("security headers", () => {
   })
 
   it("marks browser API responses as private", () => {
-    expect(shouldDisableCaching("/api/auth/session-state")).toBe(true)
-    expect(shouldDisableCaching("/app")).toBe(false)
+    expect(shouldDisableCaching("/api/auth/session")).toBe(true)
+    expect(shouldDisableCaching("/app")).toBe(true)
+    expect(shouldDisableCaching("/app/project/example")).toBe(true)
+    expect(shouldDisableCaching("/application")).toBe(false)
+    expect(shouldDisableCaching("/")).toBe(false)
   })
 })

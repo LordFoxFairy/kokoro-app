@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 
-import { sameOriginOk } from "@/lib/server/auth"
+import { sameOriginOk } from "@/lib/server/same-origin"
 import {
   bffErrorEnvelopeSchema,
   bffErrorResponse,

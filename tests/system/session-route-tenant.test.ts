@@ -8,7 +8,7 @@ const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
 }))
 
-vi.mock("@/lib/server/auth", () => ({ sameOriginOk: () => true }))
+vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk: () => true }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedProductSession,

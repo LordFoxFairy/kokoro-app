@@ -130,10 +130,11 @@ jobs:
           for attempt in $(seq 1 60); do
             if curl --fail --silent --show-error --max-time 3 \
               --dump-header /tmp/kokoro-web-headers \
-              http://127.0.0.1:3310/api/auth/session-state >/tmp/kokoro-web-body; then
+              http://127.0.0.1:3310/ >/tmp/kokoro-web-body; then
               grep -qi '^x-content-type-options: nosniff' /tmp/kokoro-web-headers
-              grep -qi '^cache-control: no-store' /tmp/kokoro-web-headers
-              grep -q '"state":"preview"' /tmp/kokoro-web-body
+              grep -qi '^x-frame-options: DENY' /tmp/kokoro-web-headers
+              grep -qi '^content-type: text/html' /tmp/kokoro-web-headers
+              grep -q 'Kokoro' /tmp/kokoro-web-body
               exit 0
             fi
             sleep 1

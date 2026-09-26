@@ -14,7 +14,7 @@ vi.mock("@/lib/server/oidc-rp-transaction", () => ({
   rpCleanupCookies: vi.fn(),
 }))
 
-import { POST } from "@/app/api/auth/[...nextauth]/route"
+import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
 import { oidcAuthOptions, oidcRpConfig } from "@/lib/server/oidc-provider"
 
 const BASE_SCOPE = "openid profile email offline_access iam:session-authorization.verify"
@@ -77,6 +77,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("Product OIDC fixed-tenant Team scopes", () => {
+  it.each(["logout", "session-state"])("returns 404 for retired /api/auth/%s before RP configuration", async (legacy) => {
+    vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
+    const response = await GET(new NextRequest(`${ENV.NEXTAUTH_URL}/${legacy}`, {
+      headers: { host: "web.example.test" },
+    }), { params: Promise.resolve({ nextauth: [legacy] }) })
+    expect(response.status).toBe(404)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(nextAuth).not.toHaveBeenCalled()
+  })
   it("fails RP configuration closed without the server-only fixed tenant", () => {
     expect(oidcRpConfig({ ...ENV, KOKORO_TENANT_ID: "" })).toBeNull()
   })

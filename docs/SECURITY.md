@@ -29,18 +29,16 @@ Untrusted browser input
 
 - Browser、URL、body、localStorage 和 browser-provided header 均不可信。
 - `Forwarded` 只由 Web server 根据 `KOKORO_DOMAIN` 重建；它是部署路由上下文，不是认证凭据。
-- user/namespace 来自已密封 session envelope，但 BFF/owner 仍需执行权限与 tenant 检查。
+- Product Session 来自在线 Auth.js/OIDC 准入；BFF/owner 仍需执行权限与 tenant 检查。
 - UI 中的 disabled/hidden 状态只改善交互，不构成授权。
 
 ## 2. 已实现控制
 
 ### 2.1 Session 与 secret
 
-- `kokoro_session` 使用 AES-256-GCM 认证加密；每次随机 IV，tag 防篡改。
-- 当前密钥用于加密，多把密钥用于解密，支持轮换窗口。
-- session 与 nonce cookie 为 HttpOnly、SameSite=Lax；production 设置 Secure。
-- runtime/refresh credential 留在 server cookie envelope，不返回浏览器 JavaScript。
-- production 缺 `KOKORO_INTERNAL_SECRET_WEB_BFF` 时 `authConfig()` 不进入 live authenticated 模式。
+- Product Session 的加密 HttpOnly cookie 保存 session id、generation、subject 与短期 access credential；refresh 留在 Redis，并在线核对 generation。旧 sealed `kokoro_session` 不再读取。
+- OIDC state/nonce/PKCE、Auth.js CSRF 与服务端 Redis CAS 保持独立生命周期。
+- 凭据、access/refresh token 不返回浏览器 JavaScript；Web→BFF 只发送受信 Product Bearer 和服务身份。
 
 ### 2.2 请求边界
 
@@ -79,11 +77,10 @@ Untrusted browser input
 
 | 变量 | 位置 | 浏览器可见 | 说明 |
 | --- | --- | --- | --- |
-| `KOKORO_WEB_SESSION_SECRET` | Web server secret | 否 | session envelope 密钥；支持逗号分隔轮换 |
 | `KOKORO_INTERNAL_SECRET_WEB_BFF` | Web server secret | 否 | Web→BFF service credential |
+| `KOKORO_WEB_AUTH_SECRET` | Web server secret | 否 | Auth.js RP 与 Product Session cookie 的加密/校验密钥 |
 | `KOKORO_BFF_BASE_URL` | Web server config | 否 | 业务与 Chat 上游 |
 | `KOKORO_WEB_ORIGIN` | Web server config | 否 | `/iam` 的固定公开 HTTP(S) origin；精确 scheme/host/port，无尾斜杠或路径 |
-| `KOKORO_IAM_BASE_URL` | 当前 Web server config | 否 | 当前直连缺口；目标移到 BFF |
 | `KOKORO_DOMAIN` | Web server config | 否 | canonical deployment hostname |
 | `KOKORO_PAYMENT_MOCK_WEBHOOK_SECRET` | 非 production | 否 | mock payment；production 禁用 |
 
@@ -93,7 +90,6 @@ Untrusted browser input
 
 | 优先级 | 风险 | 当前状态/所需动作 |
 | --- | --- | --- |
-| P0 | Web 仍直接调用 IAM | 将 auth/team owner call 收口到 BFF；删除 `KOKORO_IAM_BASE_URL` Web runtime 依赖 |
 | P0 | 上游无 connect/read/overall timeout 与响应大小上限 | 在公共 server transport 实施并测试 abort、slow body 和 oversized body |
 | P0 | 部分 route 返回 flat error/request id/cache policy 不一致 | 统一使用安全 BFF envelope mapper |
 | P0 | 无全局 CSP/frame/referrer/permissions policy | 在 Next/edge 配置并以 route/browser test 阻断回归 |
@@ -122,7 +118,7 @@ SSE 需要允许正确 content type/streaming，但不豁免鉴权、no-store、
 
 ## 6. 认证与授权检查
 
-1. Web 校验 session envelope 的结构、认证 tag 和 expiry。
+1. Web 校验加密 Product Session cookie 的结构、时效与 Redis 在线 generation。
 2. Web 不信任 browser tenant/site/user header。
 3. BFF 校验 Web service identity、session identity、permission 和资源 owner。
 4. Owner 以受信 tenant context 查询；Web 不接触数据库。
@@ -151,7 +147,7 @@ SSE 需要允许正确 content type/streaming，但不豁免鉴权、no-store、
 
 1. 停止相关发布并保存 request id、版本、时间范围和脱敏日志；
 2. 轮换 Web→BFF secret；将新值先部署到校验方，再部署 caller，最后撤销旧值；
-3. 轮换 session envelope key 时把新 key 放首位、旧 key保留短窗口，随后删除旧 key；
+3. 轮换 `KOKORO_WEB_AUTH_SECRET` 会使旧 RP/Product cookie 失效；按 [`RUNBOOK.md`](RUNBOOK.md) 引导重新登录，不假定多 key 读取窗口；
 4. 通过 IAM 吊销 refresh/session；不要只清一个浏览器 cookie；
 5. 检查 Developer API/catalog、前端 bundle、日志和 artifact 是否误含 browser-private/secret；
 6. 完成范围确认、恢复验证和事故记录。

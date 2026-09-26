@@ -1,9 +1,12 @@
 # Kokoro User Web 当前状态
 
-W1D-WEB-IAM-DIRECT-CUT（2026-09-26，三设计文档门，代码待实施）：本仓
+W1D-WEB-IAM-DIRECT-CUT（2026-09-26，代码实施中）：本仓
 `docs/{TECHNICAL_DESIGN,API_CONTRACT,DATA_MODEL}.md` 已定义删除旧 IAM 直连、两条旧 auth route 与 sealed
 session 的单一路径，同时保留正式 Auth.js Product Session、六个同源业务 adapter 及其 CSRF/失败语义。
-这些是后续代码片的目标，不代表 `auth.ts`、旧 route 或 Web→IAM 非法 edge 已删除。Root 已将
+当前工作树已删除旧 `auth.ts`、sealed envelope 与两条旧 route，正式认证保留。Node22 `pnpm check`
+通过（contract 69、architecture 36、Vitest 1474、lint/typecheck/build）；独立 Next
+生产进程实测公开 `/` 200、安全头/HTML，旧两 URL 的 GET/POST 404；独立 dev 端口 E2E 11 pass/1 预期
+skip，first-site 的 liveness/preview 模式与隔离 live fixture 均通过。Root commit/pin 和真三仓回归仍待执行。Root 已将
 本地隔离联调入口改为 `http://127.0.0.1:3310/login`，普通 Codex IAB 可见真实 IAM 登录表单并到达
 `/app`；该入口由 Root 启动器组合 IAM/BFF/Web，不是本仓单独 `pnpm dev` 的默认状态。
 
@@ -318,9 +321,9 @@ BFF 仍是 HTTP fixture，
 ## 4. 尚未闭合的边界
 
 1. Chat transport 仍保留 legacy `SessionEvent` 解析回退；AG-UI 单一路径、`AgUiChatTransport` 与 Vercel AI SDK `UIMessage` 映射尚未完成。
-2. 两个旧 magic-link browser route 已删除；`auth.ts` 中的旧 magic-link/refresh helper 与其余旧认证/Team route 仍存在，其中旧调用继续直连 `KOKORO_IAM_BASE_URL`。S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，普通 BFF adapter、UI 登录/会话探针/退出主链已切换；其余旧路径仍须由后续 S2-B 清理。
+2. 历史基线曾保留旧 magic-link/refresh 与 IAM 直连 helper；W1D 工作树已删除，不再作当前运行路径。S1 新 Auth.js Code+S256、server-only token/userinfo 和 Product Session 已落地，普通 BFF adapter、UI 登录/会话探针/退出主链已切换；其余旧路径仍须由后续 S2-B 清理。
 3. 全部 route 的 success/error envelope、request/trace ID 和结构化 telemetry 尚未统一；没有实测 SLI、错误预算、burn-rate alert 或 production runbook 证据。
-4. 未建独立 `/healthz` 与 `/readyz`；当前镜像 healthcheck 只验证受保护 session-state 路由可服务。
+4. 未建独立 `/healthz` 与 `/readyz`；W1D 工作树镜像 liveness 改为公开 `/`，不冒充 IAM/BFF readiness。
 5. 部分遗留 UI/CSS 仍超出目标粒度；视觉回归与 bundle budget 尚未成为阻断门禁。
 
 ## 5. 后续顺序

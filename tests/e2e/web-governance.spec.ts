@@ -79,7 +79,9 @@ test.describe("Web production boundary", () => {
   })
 
   test("does not introduce horizontal overflow at the active viewport", async ({ page }) => {
-    await page.goto("/login", { waitUntil: "domcontentloaded" })
+    // The unavailable /login response intentionally has no document body or
+    // viewport meta; check the actual user-visible layout instead.
+    await page.goto("/", { waitUntil: "domcontentloaded" })
     const dimensions = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,

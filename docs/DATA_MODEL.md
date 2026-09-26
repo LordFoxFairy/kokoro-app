@@ -1,21 +1,21 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W1D-WEB-IAM-DIRECT-CUT 数据边界（2026-09-25，代码尚未实施）
+## W1D-WEB-IAM-DIRECT-CUT 当前数据边界（2026-09-26，Root 集成待验）
 
-### 当前事实与删除目标
+### 切片前事实与当前结果
 
-当前正式 Product Session 与待删除旧 envelope 是两套不同数据路径：
+切片前正式 Product Session 与旧 envelope 是两套不同数据路径；当前旧路径已删除：
 
-| 数据 | 当前 owner/用途 | 本切片目标 |
+| 数据 | 切片前 owner/用途 | 当前结果 |
 | --- | --- | --- |
-| `kokoro_session` | Web 旧 AES-256-GCM sealed cookie；载有 runtime credential、refresh、user/namespace 与 expiry，只供旧 `/api/auth/logout|session-state` 及 `auth.ts` helper | 连同 `session-envelope.ts`、旧 route 与配置/测试引用删除；不迁移为 Product Session，不保留读兼容或 tombstone |
-| `kokoro_auth_nonce` | 旧 magic-link nonce 常量/helper；两个 browser magic-link route 已先行删除，当前正式登录不签发或消费 | 连同旧 `auth.ts` 删除；不建立替代字段或 Redis record |
+| `kokoro_session` | Web 旧 AES-256-GCM sealed cookie；载有 runtime credential、refresh、user/namespace 与 expiry，只供旧 `/api/auth/logout|session-state` 及 `auth.ts` helper | 已连同 `session-envelope.ts`、旧 route 与配置/测试引用删除；不迁移为 Product Session，不保留读兼容或 tombstone |
+| `kokoro_auth_nonce` | 旧 magic-link nonce 常量/helper；两个 browser magic-link route 已先行删除，当前正式登录不签发或消费 | 已连同旧 `auth.ts` 删除；不建立替代字段或 Redis record |
 | Auth.js RP transaction cookie | Web 正式 OIDC state/nonce/PKCE 临时数据 | 保留，生命周期与一次消费不变 |
 | Product Session cookie | Web 正式 HttpOnly 加密 session ID、generation、server-only access 与必要退出提示，不含 refresh | 保留，字段、TTL、Secure/SameSite 与公开 projection 不变 |
 | Product Session Redis record/tombstone | Web 隔离 namespace 中的在线 generation、双阶段 refresh CAS、加密当前 refresh 与撤销阻断 | 保留，key/value、TTL、并发和失败恢复不变 |
 
 旧 `kokoro_session` 的删除不创建迁移事务：旧 cookie 即使仍在浏览器也没有 route/helper 消费，随浏览器现有
-生命周期自然淘汰；它不被导入 Product Session、Redis 或 localStorage。旧 URL 返回框架 404，不能据旧 cookie
+生命周期自然淘汰；它不被导入 Product Session、Redis 或 localStorage。旧 URL 由 Auth.js catch-all 显式返回 404，不能据旧 cookie
 恢复身份。用户通过正式 `/login` 建立 Product Session；退出只走 Auth.js `/api/auth/signout` 及既有
 tombstone/issuer confirmation 状态机。
 
@@ -31,9 +31,9 @@ Web 当前与目标都没有 PostgreSQL、schema、migration、ORM、跨 owner S
 fail-closed/TTL 回收路径处理，删除旧 envelope 不提供 fallback。身份、issuer token、成员资格和审计仍由
 IAM 持有，Web 只经 BFF 契约消费。
 
-文档门只校验本文件与 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 对 owner、删除项、零新数据事实和失败恢复
-的描述一致；代码片另以 architecture RED→GREEN、正式 session/signout、六 route 正负例及 Root 真实 HTTPS
-登录/退出验证。此处不声明代码、Schema、Redis 或机器契约已经变更。
+本文件与 `TECHNICAL_DESIGN.md`、`API_CONTRACT.md` 对 owner、删除项、零新数据事实和失败恢复一致；
+活动代码删除与 architecture RED→GREEN 已完成，Web SQL/Schema、Product Session Redis 与 owner 机器契约未变。
+Root 固定 SHA 的真三仓 Product Session 登录/退出仍待集成验收。
 
 ## 当前 R5 邀请数据边界（2026-09-25）
 

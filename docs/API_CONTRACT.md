@@ -1,15 +1,15 @@
 # Kokoro User Web API 契约策略
 
-## W1D-WEB-IAM-DIRECT-CUT browser-private 契约门（2026-09-25，代码尚未实施）
+## W1D-WEB-IAM-DIRECT-CUT browser-private 当前契约（2026-09-26，Root 集成待验）
 
-### 当前 operation 与唯一目标
+### 切片前 operation 与当前结果
 
-当前 Web 同时暴露两套名称相近但事实来源不同的 browser-private operation：
+切片前 Web 同时暴露两套名称相近但事实来源不同的 browser-private operation；当前只保留正式 Auth.js 链：
 
-| 当前浏览器 operation | 当前实现与语义 | 本切片目标 |
+| 切片前浏览器 operation | 切片前实现与语义 | 当前结果 |
 | --- | --- | --- |
-| `GET /api/auth/session-state` | 读取旧 `kokoro_session` sealed envelope，返回旧会话投影；由 `auth.ts`/`session-envelope.ts` 支撑 | 删除 route，不迁移、不留 alias；未知路径按框架 404 |
-| `POST /api/auth/logout` | 读取旧 envelope，经 `KOKORO_IAM_BASE_URL` 直连旧 revoke/logout helper 并清旧 cookie | 删除 route，不重定向到正式 signout，不保留兼容响应 |
+| `GET /api/auth/session-state` | 读取旧 `kokoro_session` sealed envelope，返回旧会话投影；由 `auth.ts`/`session-envelope.ts` 支撑 | route 已删除，Auth.js catch-all 对 GET/POST 显式 404；不迁移、不留 alias |
+| `POST /api/auth/logout` | 读取旧 envelope，经 `KOKORO_IAM_BASE_URL` 直连旧 revoke/logout helper 并清旧 cookie | route 已删除，Auth.js catch-all 对 GET/POST 显式 404；不重定向或兼容 |
 | `GET /api/auth/session` | Product Session 的非敏感只读投影；在线核对 Redis generation/expiry，返回 authenticated/subject/expiry，不刷新、不轮换 cookie，响应不含 access/refresh | 保留，request/response、cache 与错误语义不变 |
 | `POST /api/auth/session` | Auth.js CSRF 通过后执行 Product Session refresh：读取在线 session，reserve CAS 后经固定 BFF `/iam` relay 单次刷新 IAM token、再经 BFF `/v1/me` 重核 subject/tenant，finalize CAS 成功才推进 generation、写入轮换 cookie并返回新投影；冲突、结果未知或依赖失败保持既有 fail-closed 路径 | 保留，CSRF、reserve/finalize、cookie、响应与错误语义不变 |
 | `POST /api/auth/signout` | Auth.js/Product Session 正式退出；同源 Origin + Auth.js CSRF，本地 tombstone 后返回受限 issuer confirmation 导航 | 保留，远端撤销未知和 issuer confirmation 语义不变 |
@@ -21,7 +21,7 @@ OpenAPI 或固定 relay policy，也不建立新的机器 contract。正式 OIDC
 
 ### 六个同源消费者的保留契约
 
-`sameOriginOk` 从误命名的 `auth.ts` 迁到单责 `src/lib/server/same-origin.ts`，只改变 import owner，不改变
+`sameOriginOk` 已从误命名的 `auth.ts` 迁到单责 `src/lib/server/same-origin.ts`，只改变 import owner，不改变
 以下六个 route 的 browser-private HTTP 契约：
 
 | route | guard 适用面与必须保留的行为 |
@@ -44,11 +44,10 @@ OpenAPI 或固定 relay policy，也不建立新的机器 contract。正式 OIDC
 在 Redis 缺失/故障、旧 generation、tombstone、远端撤销结果未知时继续既有 fail-closed 响应与恢复路径。
 本切片不新增 API、错误码、header、cookie、Redis key、缓存或幂等 receipt。
 
-实现验收必须先有 architecture 失败样本，禁止生产源码出现 `KOKORO_IAM_BASE_URL`、旧 auth route 或 sealed
-cookie/envelope；再验证六个 route 的同源正负例、正式 Auth.js session/signout 与 OIDC/Product Session
-登录退出。执行 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、
-隔离 `pnpm build`、`pnpm test:e2e`，并由 Root 用固定 SHA 跑真实 HTTPS 组合。本节是 Web 文档门，
-不表示代码或机器契约已变更。
+architecture RED→GREEN 已证明活动生产源码不再引用 `KOKORO_IAM_BASE_URL`、旧 auth route 或 sealed
+cookie/envelope；六 route 同源守卫与正式 Auth.js session/signout 保留。Node22 `pnpm check`（contract 69、
+architecture 36、Vitest 1474、lint/typecheck/build）和独立 dev E2E 11 pass/1 预期 skip 已通过。
+Root 固定 SHA 的真实组合验收与来源 pin 尚待执行；没有变更 BFF/IAM 机器契约。
 
 ## 当前 R5 邀请来源（2026-09-25）
 

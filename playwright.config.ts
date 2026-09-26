@@ -5,7 +5,7 @@ const baseURL = process.env.KOKORO_E2E_BASE_URL?.trim() || `http://127.0.0.1:${p
 const externalServer = Boolean(process.env.KOKORO_E2E_BASE_URL?.trim())
 const localWebServer = {
   command: `NEXT_PUBLIC_SESSION_PREVIEW=1 KOKORO_DOMAIN=test.kokoro.localhost pnpm dev --hostname 127.0.0.1 --port ${port}`,
-  url: `${baseURL}/login`,
+  url: `${baseURL}/`,
   reuseExistingServer: !process.env.CI,
   timeout: 120_000,
 } as const

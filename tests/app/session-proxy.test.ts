@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { sealEnvelope } from "@/lib/server/session-envelope"
 
 const { requestWithDomain } = vi.hoisted(() => ({
   requestWithDomain: vi.fn(),
@@ -17,31 +16,17 @@ const { currentProductSession } = vi.hoisted(() => ({
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
 
 const ENV = {
-  KOKORO_WEB_SESSION_SECRET: "test-session-secret",
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
   KOKORO_WEB_REDIS_URL: "redis://fixture.invalid/9",
   KOKORO_WEB_ORIGIN: "http://localhost",
-  KOKORO_IAM_BASE_URL: "http://user.test",
   KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",
 }
 
-const nowSec = (): number => Math.floor(Date.now() / 1000)
-
+// A retired cookie must never be promoted into a Product Session.
 function sessionCookie(): string {
-  const sealed = sealEnvelope(
-    {
-      runtime_jwt: "rt.jwt.sig",
-      access_exp: nowSec() + 3600,
-      refresh_token: "rt-refresh",
-      user_id: "u1",
-      namespace: "team_1",
-      exp: nowSec() + 3600,
-    },
-    [ENV.KOKORO_WEB_SESSION_SECRET],
-  )
-  return `kokoro_session=${sealed}`
+  return "kokoro_session=retired-forged-envelope"
 }
 
 function params(path: string[]): { params: Promise<{ path: string[] }> } {

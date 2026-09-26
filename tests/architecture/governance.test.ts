@@ -107,6 +107,36 @@ describe("Web governance boundary", () => {
     expect(redirects).toEqual([])
   })
 
+  it("keeps Web runtime free of the retired direct IAM and sealed-session path", async () => {
+    for (const legacy of [
+      "src/lib/server/auth.ts",
+      "src/lib/server/session-envelope.ts",
+      "src/app/api/auth/logout/route.ts",
+      "src/app/api/auth/session-state/route.ts",
+    ]) expect(await exists(legacy), legacy).toBe(false)
+    expect(await exists("src/lib/server/same-origin.ts")).toBe(true)
+    const sourceRoot = path.join(root, "src")
+    const entries = await readdir(sourceRoot, { recursive: true })
+    const violations: string[] = []
+    for (const entry of entries) {
+      if (!/\.tsx?$/u.test(entry) || entry.startsWith(`generated${path.sep}`)) continue
+      const source = await readFile(path.join(sourceRoot, entry), "utf8")
+      if (/KOKORO_IAM_BASE_URL|@\/lib\/server\/(?:auth|session-envelope)|kokoro_auth_nonce/u.test(source)) violations.push(entry)
+    }
+    expect(violations).toEqual([])
+  })
+
+  it("probes the public page rather than a configured Product Session for candidate liveness", async () => {
+    const dockerfile = await readFile(path.join(root, "Dockerfile"), "utf8")
+    const release = await readFile(path.join(root, ".github/workflows/release-image.yml"), "utf8")
+    const smoke = await readFile(path.join(root, "scripts/first-site-smoke.mjs"), "utf8")
+    for (const source of [dockerfile, release, smoke]) {
+      expect(source).not.toContain("/api/auth/session-state")
+      expect(source).toContain("/")
+    }
+    expect(release).toContain("x-content-type-options: nosniff")
+  })
+
   it("does not expose legacy browser tenant switching", async () => {
     expect(await exists("src/app/api/team/switch/route.ts")).toBe(false)
     const teamUi = await readFile(path.join(root, "src/ui/team/team-panel.tsx"), "utf8")

@@ -149,7 +149,8 @@ function safeAuthorizeLocation(value: string, webOrigin: string, clientId: strin
 async function handle(request: NextRequest, context: Context, method: "GET" | "POST"): Promise<Response> {
   const parts = (await context.params).nextauth
   const action = routeAction(parts)
-  if (request.method !== method || action === null ||
+  if (action === null) return errorResponse(404, "rp_not_found")
+  if (request.method !== method ||
     (action === "signin" || action === "signout" ? method !== "POST" :
       action === "session" ? false : method !== "GET")) return errorResponse(405, "rp_method_not_allowed")
   const config = oidcRpConfig(process.env)

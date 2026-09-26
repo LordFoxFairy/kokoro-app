@@ -4,7 +4,7 @@
 会话态探针与 Product 退出交互。登录入口由 `src/app/login/route.ts` 服务端持有；鉴权由 HttpOnly Product Session cookie 同源携带，前端不持 token。
 
 ## 公开件
-- `useSessionState`（`use-session-state.ts`）：探 `/api/auth/session` → `"checking"|"pass"|"anonymous"`；只有服务端明确返回 preview 才放行，探针网络失败按 anonymous 处理。
+- `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"`；preview 仅由非生产显式开关放行，探针网络失败按 anonymous 处理。
 - `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
 - `AppGate`（`app-gate.tsx`）：`/app` 的认证闸；authenticated 直接渲染产品工作台；System manifest 仅在已验证时覆盖品牌、导航与 feature flags，anonymous 转到 `/login`。
@@ -14,5 +14,5 @@
 上游：`@/app/page.tsx`（公开首页）、`@/app/login/route.ts`（Product OIDC 启动）、`@/ui/settings`（useSessionState 匿名闸）。下游：Web 同源 `@/app/api/auth/*` RP 与 `@/app/auth/sign-in/route.ts` IAM 表单。只有 `AppGate` 消费 System runtime manifest。
 
 ## 陷阱
-- 登录主链只使用 `GET /api/auth/csrf` + `POST /api/auth/signin/kokoro-iam`；会话探针使用 Product `GET /api/auth/session`，退出使用 CSRF 保护的 Product `POST /api/auth/signout` 并续接 issuer end-session。旧 magic-link 申请/回调 route 已删除；其余旧认证/Team helper 与 route 仍待独立清理，不作为 UI fallback。
+- 登录主链只使用 `GET /api/auth/csrf` + `POST /api/auth/signin/kokoro-iam`；会话探针使用 Product `GET /api/auth/session`，退出使用 CSRF 保护的 Product `POST /api/auth/signout` 并续接 issuer end-session。旧 magic-link、sealed session helper 与 `/api/auth/logout|session-state` 均已删除，不作为 UI fallback。
 - 诚实态：不放假 OAuth 按钮或可见中转；失败 URL 不自动循环提交，未接入 IAM 时不呈现假凭据表单。

@@ -23,11 +23,9 @@ Browser
 
 ```dotenv
 KOKORO_DOMAIN=dev.kokoro.localhost
-KOKORO_WEB_SESSION_SECRET=BACKEND_SECRET
+KOKORO_WEB_AUTH_SECRET=CHANGE_ME_AT_LEAST_32_CHARACTERS_LONG
 KOKORO_BFF_BASE_URL=http://kokoro-bff:4300
 KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
-# 当前 Web 仅保留服务端认证 adapter 的显式 IAM 地址；业务 API 不从 Web 直连 owner。
-# KOKORO_IAM_BASE_URL=http://kokoro-iam:4211
 
 # 业务 owner 的 URL、凭据和 Redis/数据库配置由 kokoro-bff 自己的部署环境管理；Web 不直连 owner repos。
 # 业务 API 目录见 ../../kokoro-bff/docs/api/v1/ 与本仓库 integration/business-bff-contract-v1.md
@@ -39,7 +37,7 @@ KOKORO_INTERNAL_SECRET_WEB_BFF=BACKEND_SECRET
 ## 3. RFC 7239 `Forwarded` 联调验收
 
 1. 让访问域名与 `KOKORO_DOMAIN` 保持一致；本地推荐 `dev.kokoro.localhost:3000`。
-2. 访问 `/`，确认 308/307 进入 `/app`，没有第二套旧首页布局。
+2. 访问 `/`，确认公开 Kokoro 首页返回 200、安全头齐全；登录入口 `/login` 直接启动正式 OIDC。
 3. 登录或进入 preview，检查浏览器 Network 只出现同源 `/api/*`。
 4. 检查 Web 到业务 BFF，以及业务 BFF 到 IAM、System、Model、Billing、Capability、Storage、Scheduler 和 Agent 的请求链路都有：
 

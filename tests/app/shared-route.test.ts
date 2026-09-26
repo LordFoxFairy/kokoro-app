@@ -5,8 +5,6 @@ const { fetchWithDomain } = vi.hoisted(() => ({ fetchWithDomain: vi.fn() }))
 vi.mock("@/lib/server/upstream-http", () => ({ fetchWithDomain }))
 
 const ENV = {
-  KOKORO_WEB_SESSION_SECRET: "test-session-secret",
-  KOKORO_IAM_BASE_URL: "http://user.test",
   KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "web-bff-secret",

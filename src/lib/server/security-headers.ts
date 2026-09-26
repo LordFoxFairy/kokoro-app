@@ -34,5 +34,5 @@ export function securityHeaders(nonce: string, development = false): Record<stri
 }
 
 export function shouldDisableCaching(pathname: string): boolean {
-  return pathname.startsWith("/api/") || pathname === "/api"
+  return pathname.startsWith("/api/") || pathname === "/api" || pathname === "/app" || pathname.startsWith("/app/")
 }

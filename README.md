@@ -1,7 +1,7 @@
 # Kokoro User Web
 
 `kokoro`（发布仓库名 `kokoro-app`，package `@kokoro/app`）是 Kokoro 的正式 User Web。
-它拥有页面、浏览器交互状态、HttpOnly 会话信封和同源 HTTP adapter；不拥有 Conversation、
+它拥有页面、浏览器交互状态、Auth.js/OIDC Product Session 和同源 HTTP adapter；不拥有 Conversation、
 Message、Project、Run、Billing、Capability 等服务端业务事实，也不拥有 PostgreSQL 或 Redis。
 
 ## 边界
@@ -15,8 +15,8 @@ Browser
 
 - 浏览器只访问当前站点的 `/api/*`，不持有服务地址、workload token、runtime JWT、tenant/site
   选择器或内部凭据。
-- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文，并从 HttpOnly session envelope
-  派生用户上下文。
+- Web 以部署侧 `KOKORO_DOMAIN` 生成受信 `Forwarded` 上下文，并在线核验 Product Session 后
+  向 BFF 传递单一 Bearer；旧 sealed cookie 不再参与认证。
 - Web 的同源 API 是 `browser-private` surface，只服务当前 Web，不进入 Developer API 门户。
   对外 Product API 只由 `kokoro-bff` 的 `public` contract 发布。
 - Web 与 BFF 的 Agent 对话事件网络协议只允许 AG-UI。`SessionEvent` 只能作为 Web 内部 reducer

@@ -7,7 +7,7 @@ const { productBffConfig, admittedProductSession, requestWithDomain, sameOriginO
   sameOriginOk: vi.fn(() => true),
 }))
 
-vi.mock("@/lib/server/auth", () => ({ sameOriginOk }))
+vi.mock("@/lib/server/same-origin", () => ({ sameOriginOk }))
 vi.mock("@/lib/server/product-bff", () => ({
   productBffConfig,
   admittedProductSession,

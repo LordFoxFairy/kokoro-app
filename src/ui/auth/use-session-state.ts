@@ -1,8 +1,8 @@
 "use client"
 
-// 会话态探针 hook（AUTH-P0）：httpOnly 信封浏览器读不到，须服务端 `/api/auth/session-state` 裁决。
-// authenticated/preview → "pass"（放行）；anonymous → "anonymous"（挡门/落地页）；探针未回前 "checking"。
-// 只有服务端明确返回 preview 才进入预览；探针网络失败按匿名处理，避免生产环境 fail-open。
+// Product Session 是 HttpOnly；浏览器通过正式 GET /api/auth/session 获取只读在线投影。
+// authenticated 或显式本地 preview → pass；anonymous → anonymous；探针未回前 checking。
+// preview 只由非生产环境的显式开关启用，网络失败按匿名处理，避免生产环境 fail-open。
 
 import { useEffect, useState } from "react"
 
@@ -65,8 +65,8 @@ export function useSessionProbe(): SessionProbe {
       void requestSessionMode().then((resolved) => live && setProbe(probeFromMode(resolved)))
     }
     check()
-    // 复检会话:信封 cookie 随 magic-link TTL 过期（默认 900s），长会话会失效。聚焦/重新可见/每 2 分钟
-    // 复检——过期即翻 anonymous,由页面匿名闸送回登录页,避免各处 API 401 裸报"加载失败"。
+    // 聚焦、重新可见和每两分钟重查在线 Product Session；过期或撤销后转匿名闸，
+    // 避免工作台继续展示失效会话并让后续 API 401 裸露给用户。
     const onVisible = (): void => {
       if (document.visibilityState === "visible") {
         check()
