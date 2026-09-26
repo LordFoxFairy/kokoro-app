@@ -453,7 +453,18 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     }
   }, 30_000)
 
-  it("renders stacked, responsive and accessible issuer forms without client credential logic", async () => {
+  it("rejects direct access to the internal React view even with forged proxy headers", async () => {
+    const direct = await rawHttp(nextPort, "/auth/sign-in/form?sig=%2BAb", `localhost:${nextPort}`, undefined, {
+      "x-kokoro-sign-in-query": "?sig=%2BAb",
+      "x-kokoro-sign-in-csrf": "a".repeat(43),
+      "x-kokoro-sign-in-proof": "b".repeat(43),
+    })
+    expect(direct.status).toBe(404)
+    expect(direct.body).not.toContain("欢迎回来")
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("renders the real shadcn issuer form responsively without a retry or connecting page", async () => {
     const browser = await chromium.launch({ headless: true })
     try {
       for (const [name, viewport] of [
@@ -463,23 +474,25 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       ] as const) {
         const context = await browser.newContext({ viewport })
         const page = await context.newPage()
+        const resourceHeaders: Array<Promise<Record<string, string>>> = []
+        page.on("request", (request) => {
+          if (request.url().includes("/_next/static/")) resourceHeaders.push(request.allHeaders().catch(() => ({})))
+        })
         const response = await page.goto(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`, {
-          waitUntil: "domcontentloaded",
+          waitUntil: "networkidle",
         })
         expect(response?.status()).toBe(200)
-        expect(await page.getByRole("heading", { name: "登录 Kokoro" }).count()).toBe(1)
+        expect(await page.getByRole("heading", { name: "欢迎回来" }).count()).toBe(1)
         expect(await page.locator("html").getAttribute("lang")).toBe("zh-CN")
-        const [brandBox, cardBox] = await Promise.all([
-          page.locator(".brand-panel").boundingBox(), page.locator(".content").boundingBox(),
-        ])
-        expect(cardBox?.y ?? 0).toBeGreaterThanOrEqual((brandBox?.y ?? 0) + (brandBox?.height ?? 0))
-        expect((cardBox?.y ?? 0) - (brandBox?.y ?? 0) - (brandBox?.height ?? 0)).toBeLessThan(48)
-        expect(await page.locator(".content").evaluate((card) => getComputedStyle(card).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
+        expect(await page.locator('[data-slot="card"]').count()).toBe(1)
+        expect(await page.locator('[data-slot="input"]').count()).toBe(2)
+        expect(await page.locator('[data-slot="button"]').count()).toBe(1)
+        expect(await page.getByRole("button", { name: /重试|连接中/u }).count()).toBe(0)
         const email = page.getByLabel("邮箱")
         const password = page.getByLabel("密码")
         const submit = page.getByRole("button", { name: "登录" })
         await email.focus()
-        expect(await email.evaluate((input) => getComputedStyle(input).outlineStyle)).not.toBe("none")
+        expect(await email.evaluate((input) => getComputedStyle(input).boxShadow)).not.toBe("none")
         const [emailBox, passwordBox, buttonBox] = await Promise.all([
           email.boundingBox(), password.boundingBox(), submit.boundingBox(),
         ])
@@ -489,7 +502,9 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width)
         expect(await page.locator("form").getAttribute("action")).toBe("/auth/sign-in?sig=%2BAb")
         expect(await page.locator('input[name="csrf_token"]').count()).toBe(1)
-        expect((await response?.text())?.includes("<script")).toBe(false)
+        expect(response?.headers()["referrer-policy"]).toBe("origin")
+        expect((await Promise.all(resourceHeaders)).every((headers) =>
+          !headers.referer?.includes("sig="))).toBe(true)
         if (name === "mobile") {
           const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()
           expect(accessibility.violations).toEqual([])
@@ -777,23 +792,27 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
   })
 
-  it("keeps a browser credential error on the IAM form with a fresh CSRF proof", async () => {
-    signInStatus = 401
+  it.each([401, 429, 503])("keeps browser %i feedback on the real shadcn form with fresh CSRF", async (status) => {
+    signInStatus = status
     const page = await signInPage()
     const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
     const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
     const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb", `csrf_token=${token}&email=user%40example.test&password=secret`, {
       origin: `http://localhost:${nextPort}`, cookie: cookie ?? "", accept: "text/html",
     })
-    expect(result.status).toBe(401)
-    expect(result.body).toContain('name="email" type="email"')
-    expect(result.body).toContain('value="user@example.test"')
-    expect(result.body).toContain('role="alert"')
-    expect(result.body).toContain("邮箱或密码不正确")
-    expect(result.body).not.toContain("password=secret")
-    expect(result.body).not.toContain("sensitive-marker-must-not-reach-browser")
-    expect(result.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]).not.toBe(token)
+    expect(result.status).toBe(303)
+    expect(result.headers.location).toBe("/auth/sign-in?sig=%2BAb")
     expect((result.headers["set-cookie"] as string[] | undefined)?.length).toBe(1)
+    const feedbackCookie = (result.headers["set-cookie"] as string[])[0]?.split(";", 1)[0]
+    const refreshed = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb", `localhost:${nextPort}`, undefined,
+      { cookie: feedbackCookie ?? "" })
+    expect(refreshed.status).toBe(200)
+    expect(refreshed.body).toContain('role="alert"')
+    expect(refreshed.body).toContain(status === 401 ? "邮箱或密码不正确" : status === 429 ? "登录尝试次数过多" : "登录未完成")
+    expect(refreshed.body).toContain('value="user@example.test"')
+    expect(refreshed.body).not.toContain("password=secret")
+    expect(refreshed.body).not.toContain("sensitive-marker-must-not-reach-browser")
+    expect(refreshed.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]).not.toBe(token)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email"])
   })
 

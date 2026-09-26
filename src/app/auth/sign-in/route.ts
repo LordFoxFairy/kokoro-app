@@ -1,16 +1,17 @@
 import { randomUUID } from "node:crypto"
 
-import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamCsrfCookieName, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
-import { iamInteractionDocument } from "@/lib/server/iam-interaction-page"
+import { clearIamCsrfCookie, consumeIamInteractionCsrf, iamCsrfCookieName } from "@/lib/server/iam-interaction-csrf"
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
 import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
+import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
+import { IAM_SIGN_IN_PATH, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const PAGE_PATH = "/auth/sign-in"
+const PAGE_PATH = IAM_SIGN_IN_PATH
 
 function errorResponse(status: number, code: string, requestId: string): Response {
   return Response.json({ error: { code, message: "IAM interaction was rejected" } }, {
@@ -28,21 +29,6 @@ function headerBytes(headers: Headers): number {
   let bytes = 2
   for (const [name, value] of headers) bytes += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
   return bytes
-}
-
-function rawQuery(request: Request): string | null {
-  const absolute = request.url
-  const authorityStart = absolute.indexOf("://") + 3
-  if (authorityStart < 3) return null
-  const pathStart = absolute.indexOf("/", authorityStart)
-  const target = pathStart < 0 ? "/" : absolute.slice(pathStart)
-  if (!target.startsWith(`${PAGE_PATH}?`) || target.includes("#")) return null
-  const query = target.slice(PAGE_PATH.length)
-  if (
-    query.length < 2 || Buffer.byteLength(query) > IAM_RELAY_POLICY.maxQueryBytes ||
-    /[\u0000-\u001f\u007f\\]/u.test(query) || /%(?![0-9a-fA-F]{2})/u.test(query)
-  ) return null
-  return query
 }
 
 function cookieValue(raw: string | null, name: string): string | null {
@@ -100,44 +86,23 @@ async function boundedForm(request: Request): Promise<URLSearchParams | null> {
   return form
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character)
-}
-
-function signInForm(action: string, token: string, email = "", error?: string): string {
-  const describedBy = error ? ' aria-describedby="sign-in-error"' : ""
-  const alert = error ? `<p class="form-error" id="sign-in-error" role="alert">${escapeHtml(error)}</p>` : ""
-  return `<form class="auth-form" method="post" action="${escapeHtml(action)}">${alert}<input type="hidden" name="csrf_token" value="${escapeHtml(token)}"><label class="field" for="email">邮箱<input id="email" name="email" type="email" autocomplete="username" inputmode="email" value="${escapeHtml(email)}"${describedBy} required></label><label class="field" for="password">密码<input id="password" name="password" type="password" autocomplete="current-password"${describedBy} required></label><div class="actions single"><button type="submit">登录</button></div></form>`
-}
-
-async function signInFormFailure(input: Readonly<{
+function signInFormFailure(input: Readonly<{
   status: 401 | 429 | 503
   query: string
   email: string
-  issuerCookie: string
-  redisUrl: string
+  secret: string
   webOrigin: string
   secureCookies: boolean
   requestId: string
-}>): Promise<Response> {
-  const message = input.status === 401 ? "邮箱或密码不正确。" : input.status === 429
-    ? "登录尝试次数过多，请稍后再试。" : "登录未完成，请重新提交。"
-  try {
-    const proof = await issueIamInteractionCsrf({
-      redisUrl: input.redisUrl, webOrigin: input.webOrigin, path: PAGE_PATH, method: "POST",
-      query: input.query, issuerCookie: input.issuerCookie, secureCookies: input.secureCookies,
-    })
-    const html = iamInteractionDocument({
-      title: "登录", heading: "登录 Kokoro", description: "使用你的 Kokoro 账号继续。",
-      trustedFormHtml: signInForm(`${PAGE_PATH}${input.query}`, proof.token, input.email, message), variant: "sign-in",
-    })
-    return new Response(html, { status: input.status, headers: {
-      "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-      "x-request-id": input.requestId, "set-cookie": proof.cookie,
-    } })
-  } catch {
-    return errorResponse(503, "iam_interaction_unavailable", input.requestId)
-  }
+}>): Response {
+  const feedback = issueSignInFeedback({
+    status: input.status, email: input.email, secret: input.secret,
+    origin: input.webOrigin, query: input.query, secure: input.secureCookies,
+  })
+  return new Response(null, { status: 303, headers: {
+    location: `${PAGE_PATH}${input.query}`, "cache-control": "no-store",
+    "referrer-policy": "origin", "x-request-id": input.requestId, "set-cookie": feedback,
+  } })
 }
 
 function issuerCookiesFromResponse(previous: string, upstream: IamRelayUpstream): string {
@@ -179,31 +144,10 @@ function safeNavigationResponse(native: Response, status: 302 | 303, location: s
   return new Response(null, { status, headers })
 }
 
-export async function GET(request: Request): Promise<Response> {
-  const id = requestId(request)
-  const config = iamRelayConfig(process.env)
-  const query = rawQuery(request)
-  const redisUrl = process.env.KOKORO_WEB_REDIS_URL
-  if (config === null || !redisUrl) return errorResponse(503, "iam_interaction_unavailable", id)
-  if (!matchesCanonicalWebRequest(request, config, "GET")) return errorResponse(403, "iam_interaction_origin_rejected", id)
-  if (query === null) return errorResponse(404, "iam_interaction_not_found", id)
-  if (headerBytes(request.headers) > IAM_RELAY_POLICY.maxHeaderBytes || request.body !== null) return errorResponse(413, "iam_interaction_request_too_large", id)
-  const issuerCookie = filterIssuerCookies(request.headers.get("cookie"), config.secureCookies)
-  if (issuerCookie === null) return errorResponse(400, "iam_interaction_cookie_invalid", id)
-  try {
-    const proof = await issueIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, secureCookies: config.secureCookies })
-    const form = signInForm(`${PAGE_PATH}${query}`, proof.token)
-    const html = iamInteractionDocument({ title: "登录", heading: "登录 Kokoro", description: "使用你的 Kokoro 账号继续。", trustedFormHtml: form, variant: "sign-in" })
-    return new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-request-id": id, "set-cookie": proof.cookie } })
-  } catch {
-    return errorResponse(503, "iam_interaction_unavailable", id)
-  }
-}
-
 export async function POST(request: Request): Promise<Response> {
   const id = requestId(request)
   const config = iamRelayConfig(process.env)
-  const query = rawQuery(request)
+  const query = rawIamSignInQuery(request.url)
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL
   if (config === null || !redisUrl) return errorResponse(503, "iam_interaction_unavailable", id)
   if (!matchesCanonicalWebRequest(request, config, "POST")) return errorResponse(403, "iam_interaction_origin_rejected", id)
@@ -244,8 +188,8 @@ export async function POST(request: Request): Promise<Response> {
       const status = signedIn.status === 401 ? 401 : signedIn.status === 429 ? 429 : 503
       const code = status === 401 ? "iam_interaction_credentials_rejected" : status === 429 ? "iam_interaction_rate_limited" : "iam_interaction_unavailable"
       if (request.headers.get("accept")?.includes("text/html")) {
-        return signInFormFailure({ status, query, email: form.get("email") ?? "", issuerCookie,
-          redisUrl, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id })
+        return signInFormFailure({ status, query, email: form.get("email") ?? "",
+          secret: config.secret, webOrigin: config.webOrigin, secureCookies: config.secureCookies, requestId: id })
       }
       return errorResponse(status, code, id)
     }

@@ -121,6 +121,8 @@ IAM owner `ad5224a9e0a3a31d1c593d214d37940d6923b2e7`；仅来源重钉，policy
 
 公开页面路径：`GET /` 是固定单租户营销首页，`GET /login` 是不依赖 System runtime manifest 的服务端 Product RP OIDC 启动路由（成功 302 到同源 IAM authorize，不渲染中转页）；`/app` 要求在线 Product Session；System runtime manifest 是可选展示数据，不决定访问权或 live/preview transport。`/auth/sign-in` 是 IAM issuer 签名交互路由，只有有效签名交互才呈现真正邮箱/密码表单，不能当作静态营销别名。公开首页/登录入口不调用 `/api/system/runtime-manifest`；`/login` 在服务端经 Auth.js CSRF 启动固定 OIDC provider，失败返回无自动循环的 503；此入口行为不改变 token、cookie 或 BFF/IAM owner API。
 
+当前签名表单 GET 在 Web Proxy 签发原有 Cookie-bound 一次性 CSRF 后内部渲染 React/shadcn 页面；`/auth/sign-in/form` 不对浏览器开放。浏览器 POST 仍提交原始 `/auth/sign-in?{signed-query}`，字段、同源 Origin、issuer Cookie、CSRF 与 BFF→IAM 两步调用不变。HTML 模式的 401/429/503 改为 303 回原签名 URL：短时加密反馈仅传受控错误码/邮箱、不传密码或上游正文；新 GET 签发新 CSRF 并在同一表单就近提示。非 HTML 客户端仍按原错误状态与 envelope 返回；成功继续采用受限同源 Location。页面与资源的 Referrer-Policy 为 `origin`，不向资源请求带签名 query。
+
 状态：browser-private 治理基线与 W1C-2 当前/目标契约，2026-09-23；W1C-2A 只读 GET relay、
 W1C-2B-1 sign-in、W1C-2B-2 tenant/consent、2C RP-only 与 S1 Product Session 已发布，S1 真实三仓 HTTPS 组合已通过。
 普通 `/v1` Bearer adapter 与 UI Product 登录/探针/退出已由 S2-A 切换；S2-A 真实三仓组合已验；两个旧 magic-link browser route 已删除，其余旧认证/Team 路径删除未完成。

@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
       ignore: [
         /^\/iam\/verify-email(?:\?.*)?$/u,
         /^\/iam\/interactions\/invitation(?:\?.*)?$/u,
+        /^\/auth\/sign-in(?:\?.*)?$/u,
       ],
     },
   },

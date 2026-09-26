@@ -34,7 +34,7 @@
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
 | `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；仅 authorize 200 redirect JSON 转受限浏览器 302；直接 browser POST 与 server-only 凭据路由拒绝 |
 | `src/app/iam/interactions/invitation/route.ts` | 邀请邮件的唯一静态入口：独立 issuer 登录/注册、recipient-only context、一次性 CSRF 接受/拒绝；`same-origin` Referrer-Policy 保留浏览器同源 POST Origin 且不向跨站发送邀请 URL；仅接受成功后转 Product `/login` |
-| `src/app/auth/sign-in/route.ts` | 原始签名 query 的唯一 IAM 邮箱/密码表单与 Web-owned CSRF POST；紧凑卡片视觉与本仓 shadcn token 一致，仍是无脚本 HTML |
+| `src/proxy.ts`、`src/app/auth/sign-in/form/page.tsx`、`src/app/auth/sign-in/route.ts` | 签名 GET 经 Proxy 签发一次性 CSRF 并内部 rewrite 到真实 shadcn React 表单；原路径 POST 仍处理凭据、Origin 和签名 query，401/429/503 回同一表单 |
 | `src/app/auth/{select-tenant,consent}/route.ts` | IAM 固定外层交互 URI 的严格 GET 到 `/iam/interactions/*`；外层 POST 405 |
 | `src/app/iam/interactions/select-tenant/route.ts` | `/iam` cookie path 内的 owner `/organization/list` 候选、选择重核及 set-active 续接 |
 | `src/app/iam/interactions/consent/route.ts` | `/iam` cookie path 内的未验签 scope 预览、明确同意及 IAM 最终验签；RP callback 未安装时受控 503 |
@@ -73,7 +73,8 @@
 | `src/lib/server/iam-relay-policy.ts` | snapshot provenance、只读 GET 子集、issuer cookie 入站过滤 |
 | `src/lib/server/iam-relay-config.ts` | `/iam` 与 sign-in 共用的固定 Web origin/BFF/service-secret 配置解析 |
 | `src/lib/server/iam-interaction-csrf.ts` | Redis 原子一次性 CSRF 摘要/交互绑定；唯一允许 Redis import 的 server-only 文件 |
-| `src/lib/server/iam-interaction-page.ts` | 三条 IAM issuer GET 页面共享的无脚本品牌 HTML/CSS 外壳；表单字段与 POST 安全逻辑仍归各自 route |
+| `src/lib/server/iam-interaction-page.ts` | 邀请与 consent 等 IAM issuer 交互的无脚本品牌 HTML/CSS 外壳；正式登录表单改用 React 页面 |
+| `src/lib/server/iam-sign-in-target.ts`、`src/lib/server/iam-sign-in-feedback.ts` | 登录原始签名 query 校验、短时加密表单错误反馈；不拥有 IAM 凭据或 Product Session |
 | `src/lib/server/iam-invitation-input.ts` | 邀请入口 query、owner context 与有界表单的纯校验；不拥有网络调用或页面编排 |
 | `src/lib/server/iam-invitation-page.ts` | 邀请专用中文登录、注册与 recipient-only 预览页面；不拥有 IAM/BFF 业务事实 |
 | `src/lib/server/iam-invitation-page.ts` | 邀请登录、注册、context 的纯 HTML 投影；只对邀请启用紧凑视觉 variant，不改变已有 OAuth 交互外壳 |

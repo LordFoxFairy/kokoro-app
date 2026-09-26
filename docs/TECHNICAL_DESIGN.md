@@ -136,24 +136,24 @@ signed continuation 调用。下文 W1C-2B-2 与 R2e 的选择表单、policy 1.
 
 ## 公开入口与单租户登录边界（当前切片）
 
-签名 IAM 表单的 GET 必须签发一次性、原始签名 query 绑定的 CSRF cookie，因此保留完整 HTML Route Handler，页面不经过 Next layout。紧凑卡片、输入和按钮按本仓 shadcn token/尺寸/焦点视觉收敛；这不是 import React 组件，也不增加第二条凭据链。
+签名 IAM 表单的 GET 必须签发一次性、原始签名 query 绑定的 CSRF cookie。当前由 `src/proxy.ts` 对精确 GET 签发证明并内部 rewrite 至 `src/app/auth/sign-in/form/page.tsx`；该页复用本仓真实 shadcn Card/Input/Button/Label/Alert 与 Next layout。内部页直达 404，rewrite 二次进入 Proxy 时以服务端 HMAC 证明准入。原路径 POST 仍是唯一凭据链，严格 Origin/Host/原始 query/一次性 CSRF；401/429/503 经短时加密反馈 cookie 303 回同一签名 URL，GET 重新签发 CSRF 并在同一表单显示错误、保留邮箱而清空密码。登录响应不缓存，Referrer-Policy `origin` 不把签名 query 发送给资源请求。
 
-`/` 渲染固定 Kokoro 公开首页，`/login` 仅是服务端 Product RP OIDC 启动路由，`/app` 由在线 Product Session 决定访问；System runtime manifest 仅在有效时覆盖动态展示，不是核心工作台闸。公开首页和登录入口不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`。进入 `/login` 后由服务端经固定 Auth.js CSRF 和 `kokoro-iam` provider 建立 RP transaction，浏览器直接跳到 IAM `/auth/sign-in` 邮箱/密码表单；不再渲染“连接中／整页重试”的 React 中转页，不把凭据搬到 Product RP。OIDC 启动失败不自动循环，返回无假表单的 503；IAM 表单凭据失败保留邮箱、清空密码、签发新一次性 CSRF 并在表单内显示受控错误。`/auth/sign-in` 仍是 IAM issuer 签名交互入口，与 Product `/login` 语义不同；其页面收敛为品牌+窄列真实表单，删除双区大装饰。`/preview/marketing` 与未使用的 `HomeGate` 已删除。验收覆盖无后端时公开页正常、登录入口诚实失败且零 manifest 请求、服务端 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。
+`/` 渲染固定 Kokoro 公开首页，`/login` 仅是服务端 Product RP OIDC 启动路由，`/app` 由在线 Product Session 决定访问；System runtime manifest 仅在有效时覆盖动态展示，不是核心工作台闸。公开首页和登录入口不请求 System manifest；单租户产品身份来自本仓 `src/config/brand.ts`。进入 `/login` 后由服务端经固定 Auth.js CSRF 和 `kokoro-iam` provider 建立 RP transaction，浏览器直接跳到 IAM `/auth/sign-in` 邮箱/密码表单；不再渲染“连接中／整页重试”的中转页，不把凭据搬到 Product RP。OIDC 启动失败不自动循环，返回无假表单的 503；IAM 表单凭据失败保留邮箱、清空密码、签发新一次性 CSRF 并在同一 React 表单内显示受控错误。`/auth/sign-in` 仍是 IAM issuer 签名交互入口，与 Product `/login` 语义不同；当前桌面为品牌侧栏加表单、移动端为单列表单。`/preview/marketing` 与未使用的 `HomeGate` 已删除。验收覆盖无后端时公开页正常、登录入口诚实失败且零 manifest 请求、服务端 CSRF/OIDC，以及固定 SHA 的真实三仓 Code+PKCE/Product Session。
 
 状态：当前架构与 W1C-2 目标设计，2026-09-23。W1C-2A 只读 GET relay、W1C-2B-1 sign-in
 已发布；W1C-2B-2 tenant/consent 已发布。W1C-2C RP-only 已发布；W1C-2F-S1 Product Session 基础、Web Redis 双 CAS 与标准 session/signout route 已发布，S1 真实三仓 HTTPS 组合已通过；S2-A 普通业务代理组合已通过固定三仓真 HTTPS。
 
 W1C-2B-1 已发布 `/auth/sign-in` 的受控表单与两步 IAM sign-in/continue POST，不改变
 `/iam/*` 直接 browser POST 全拒绝、旧认证路径或 Product Session。GET 保留原始签名 query 字节；Web
-三条 issuer 交互 GET（sign-in、select-tenant、consent）共用仅服务端的无脚本品牌 HTML/CSS 外壳，
-桌面双区、窄屏单列，字段垂直排列并保留键盘焦点可见；外壳只接收固定文案和调用方已转义的表单片段，
+旧切片的三条 issuer 交互 GET（sign-in、select-tenant、consent）曾共用无脚本品牌 HTML/CSS 外壳；当前 sign-in 已改为上述 React 页面，其余交互仍使用旧外壳。
+历史外壳桌面双区、窄屏单列，字段垂直排列并保留键盘焦点可见；外壳只接收固定文案和调用方已转义的表单片段，
 不处理凭据、CSRF、签名 query 或 POST。表单字段名、action 原始 query 与后续安全校验保持原契约。
 自有 Redis key 保存随机 token 摘要对应的目标 POST method/原始 query/issuer-cookie 绑定摘要，TTL 300 秒；POST
 精确 Origin、Host、URL、Cookie/hidden token 配对后以 `GETDEL` 原子消耗，Redis 故障拒绝。
 `redis@5.12.1` 与本组合 BFF 版本对齐并固定在 manifest/lockfile；仅 server-only
 `src/lib/server/iam-interaction-csrf.ts` 与 2C 的 `oidc-rp-transaction.ts` 静态引入，架构测试限制 browser/import 越界。
 `KOKORO_WEB_REDIS_URL` 仅服务端读取，Web origin 哈希隔离 key 前缀。不重签/归一化 IAM query，
-中间 sign-in 失败仅返回受控 401/429/503，不透传原文 body/cookie，也不调用 continue。成功的
+历史 sign-in HTML 失败曾直接返回受控 401/429/503；当前 HTML 模式按上节的 303 回表单，非 HTML 模式仍返回受控原状态；两者均不透传原文 body/cookie，也不调用 continue。成功的
 continue 原生 302 经 Location 校验保留；IAM 实际 200 `{redirect:true,url}` 必须通过精确 shape、
 固定 Web origin 与允许交互路径校验，再转成无 body 的浏览器 303 导航，合法多 issuer cookie 保留。
 测试只按本次随机 token 的精确 key 清理，不扫描/删除同前缀的其他 key。已发布的 2B-2 新增

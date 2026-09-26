@@ -31,6 +31,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   // 外部系统同步：<html lang> 跟随生效语言（含协商与显式切换）。
   useEffect(() => {
+    // IAM signed interaction is a fixed Chinese-only security form. The
+    // product preference must not change its document language after hydrate.
+    if (window.location.pathname === "/auth/sign-in") return
     document.documentElement.lang = locale
   }, [locale])
 
