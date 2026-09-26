@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+W1E-IAM-RELAY-CONSUMER（2026-09-26）：当前 Web 从 BFF `017464480e603e3e5780c55597f8d40970589ef7`
+原样复制 policy `2.1.0`，SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；
+其中 IAM owner 为 `5c9cecf714c87234bbc9558665b23e09afa6e9f6`，OpenAPI SHA-256 为
+`05ff7ff712ce06571ca5e092fdaf234b9ee4d1b4978c54e0d54d2b50fe51dde2`。只更新只读快照、运行 provenance
+与契约断言；登录表单、路由、OIDC/CSRF、请求/响应、SQL/Redis 均不变。下方 W1D 来源是历史验收，不是当前 pin。
+
 W1D-LOGIN-UI-POLISH（2026-09-26，已发布）：签名 `/auth/sign-in` 仍由原 Route Handler
 签发一次性 CSRF 并向 BFF→IAM 提交凭据，`/login` 仍直接启动固定 Product OIDC；没有中转、连接中或整页重试页。
 唯一可见邮箱/密码表单及 401/429/503 的表单内提示已统一为中文，沿用本仓 shadcn 语义色、
@@ -7,7 +13,7 @@ Card/Input/Button 尺度的无脚本 HTML shell，明确 `zh-CN`、焦点与移�
 隔离真实 Next/Chromium 的桌面、窄屏、移动及 401 错误态通过，移动两状态 axe WCAG 2 A/AA 零违规。
 本片不更改 API、Cookie、Redis/OIDC/POST 语义，也不触碰用户 3310 进程；Root 尚需审查并固定 Web SHA。
 
-W1D-RELAY-PIN-WEB（2026-09-26，已发布）：Web 现有
+W1D-RELAY-PIN-WEB（2026-09-26，历史验收）：Web 当时的
 `src/generated/iam-relay-policy.json` 已从 BFF main
 `bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 `contract/iam-relay-policy.json`
 原始字节复制，SHA-256 `b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`；

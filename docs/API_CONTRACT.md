@@ -49,7 +49,15 @@ cookie/envelope；六 route 同源守卫与正式 Auth.js session/signout 保留
 architecture 36、Vitest 1474、lint/typecheck/build）和独立 dev E2E 11 pass/1 预期 skip 已通过。
 Root 固定 SHA 的真实组合验收尚待执行；没有变更 BFF/IAM 机器契约。
 
-## 当前 W1D IAM relay 消费来源（2026-09-26）
+## 当前 W1E IAM relay 消费来源（2026-09-26）
+
+Web 固定消费 BFF `017464480e603e3e5780c55597f8d40970589ef7` policy `2.1.0` 原始字节，
+SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；policy 固定 IAM
+`5c9cecf714c87234bbc9558665b23e09afa6e9f6`，internal OpenAPI `0.4.0` SHA-256
+`05ff7ff712ce06571ca5e092fdaf234b9ee4d1b4978c54e0d54d2b50fe51dde2`。route/method/header/cookie/status
+及登录、邀请交互的 Web 同源契约均不变；新增的 IAM `platform:execute` 角色字段不是 Web 权限事实。
+
+## W1D IAM relay 消费来源（历史验收）
 
 Web 当前原样消费 BFF main `bc45632b8654db7e06eb9878bb4d7a609d12dc7b` 的 browser-private
 policy `2.1.0`，artifact SHA-256 `b18a559d162509c3029908b2e1c77ee7e59ed6af61b82e18be6b2e7669a0ef0c`；

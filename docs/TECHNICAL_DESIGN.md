@@ -45,7 +45,14 @@ Product Session 的 Redis 失联、refresh 竞争、logout tombstone 与远端�
 Root 固定 SHA 的真实 Product Session 登录/退出及 main-only/compatibility 门仍待集成复验；
 下节记录本切片后最新的 relay 来源。
 
-## 当前 W1D IAM relay 来源（2026-09-26）
+## 当前 W1E IAM relay 来源（2026-09-26）
+
+Web 只读消费 BFF `017464480e603e3e5780c55597f8d40970589ef7` 的 policy `2.1.0` 原始字节，
+SHA-256 `7bb829c988908804d0c3cac0cb023a6c247af6b0b4a55e8baf90b39d795f7118`；其 IAM owner 为
+`5c9cecf714c87234bbc9558665b23e09afa6e9f6`。复用现有 `src/generated/iam-relay-policy.json`
+及 `src/lib/server/iam-relay-policy.ts`，不新增路径或第二来源。唯一变化是 provenance；登录/邀请状态机和失败恢复不变。
+
+## W1D IAM relay 来源（历史验收）
 
 唯一静态 `/iam/interactions/invitation` 已实现独立 issuer 登录/注册、recipient-only context 与
 一次性 CSRF 约束的接受/拒绝；接受仅在 owner 200 后转 `/login`。Web 当前固定消费 BFF main
