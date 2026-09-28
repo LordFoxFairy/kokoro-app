@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { requestWithDomain } from "@/lib/server/upstream-http"
 
-vi.mock("@/lib/server/upstream-http", () => ({ requestWithDomain: vi.fn() }))
+vi.mock("@/lib/server/upstream-http", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/upstream-http")>()),
+  requestWithDomain: vi.fn(),
+}))
 
 const { currentProductSession } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
@@ -43,6 +46,42 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
+  it("allows the owner upload deadline only for one project resource POST", async () => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"error":{"code":"resource_scan_pending"}}', {
+      status: 503,
+      headers: { "content-type": "application/json" },
+    }))
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const body = new FormData()
+    body.append("files", new File(["content"], "notes.txt", { type: "text/plain" }))
+    await POST(new Request("http://localhost/api/hub/projects/project-1/resources", {
+      method: "POST",
+      headers: { origin: "http://localhost", "idempotency-key": "project-resource:key-1" },
+      body,
+    }), params(["projects", "project-1", "resources"]))
+    const [, , upload] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, { timeoutMs?: number; maxRequestBytes?: number; headers: Record<string, string> }]
+    expect(upload.timeoutMs).toBe(50_000)
+    expect(upload.maxRequestBytes).toBe(1024 * 1024)
+    expect(new Headers(upload.headers).get("idempotency-key")).toBe("project-resource:key-1")
+
+    await POST(new Request("http://localhost/api/hub/projects/project-1", {
+      method: "POST",
+      headers: { origin: "http://localhost", "content-type": "application/json" },
+      body: "{}",
+    }), params(["projects", "project-1"]))
+    const [, , ordinary] = vi.mocked(requestWithDomain).mock.calls[1] as [string, string, { timeoutMs?: number }]
+    expect(ordinary.timeoutMs).toBeUndefined()
+  })
+  it("rejects an oversized project resource body before forwarding it", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const response = await POST(new Request("http://localhost/api/hub/projects/project-1/resources", {
+      method: "POST", headers: { origin: "http://localhost", "idempotency-key": "project-resource:huge", "content-type": "multipart/form-data; boundary=fixture" },
+      body: new Uint8Array(1024 * 1024 + 1),
+    }), params(["projects", "project-1", "resources"]))
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({ error: "request_body_too_large" })
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  })
   it("injects web-bff caller creds + envelope scope/user and projects to the BFF", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(
       new Response('{"data":{"skills":[]}}', {

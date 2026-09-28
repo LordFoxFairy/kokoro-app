@@ -27,6 +27,7 @@ export type AppFrameMainSurfaceProps = {
   hideWorkspaceHeader: boolean
   standaloneSurface: boolean
   projectWorkspace: boolean
+  projectRef: string | undefined
   projectTaskView: boolean
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
@@ -56,6 +57,7 @@ export function AppFrameMainSurface({
   hideWorkspaceHeader,
   standaloneSurface,
   projectWorkspace,
+  projectRef,
   projectTaskView,
   resolvedRailCollapsed,
   narrowWeb,
@@ -124,9 +126,9 @@ export function AppFrameMainSurface({
         ) : (
           <EmptyState
             // A new conversation is a fresh workbench, not a continuation of
-            // the previous welcome surface. Keying by its session restores the
-            // canvas scroll and site-local empty-state controls together.
-            key={activeId ?? "new-workspace"}
+            // the previous welcome surface. Project-local upload intents must
+            // also remount when the project identity changes, even without a session.
+            key={projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId]) : activeId ?? "new-workspace"}
             {...emptyStateProps}
           />
         )}

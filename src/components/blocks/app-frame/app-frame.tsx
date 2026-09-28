@@ -334,7 +334,7 @@ export function AppFrame({
     projectInstructions: project.projectInstructions,
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
-    onUploadProjectResources: project.uploadProjectResources,
+    onUploadProjectResource: project.uploadProjectResource,
     onSetProjectSkillEnabled: project.setProjectSkillEnabled,
     onCreateProjectScheduledTask: project.createProjectScheduledTask,
     projectTask: projectTaskView,
@@ -362,6 +362,7 @@ export function AppFrame({
       hideWorkspaceHeader={hideWorkspaceHeader}
       standaloneSurface={standaloneSurface}
       projectWorkspace={projectWorkspace}
+      projectRef={projectRef}
       projectTaskView={projectTaskView}
       resolvedRailCollapsed={layout.resolvedRailCollapsed}
       narrowWeb={narrowWeb}

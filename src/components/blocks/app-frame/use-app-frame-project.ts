@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 
 import { useT } from "@/i18n/context"
+import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
+import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { clearPendingDraft } from "@/ui/shell/use-draft"
 
@@ -143,16 +145,9 @@ export function useAppFrameProject({
     setProjectInstructions(instructions)
   }, [preview, projectRef, t])
 
-  const uploadProjectResources = useCallback(async (files: FileList) => {
-    if (!projectRef || files.length === 0) return
-    const body = new FormData()
-    for (const file of Array.from(files)) body.append("files", file)
-    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/resources`, {
-      method: "POST",
-      headers: { "Idempotency-Key": `project-resources:${projectRef}:${crypto.randomUUID()}` },
-      body,
-    })
-    if (!response.ok) throw new Error(`project_resource_upload_failed:${response.status}`)
+  const uploadProjectResource = useCallback(async (file: File, idempotencyKey: string) => {
+    if (!projectRef) throw new ProjectResourceUploadError("project_not_selected", false)
+    return uploadProjectResourceRequest(projectRef, file, idempotencyKey)
   }, [projectRef])
 
   const setProjectSkillEnabled = useCallback(async (skill: string, enabled: boolean) => {
@@ -216,7 +211,7 @@ export function useAppFrameProject({
     projectInstructions,
     projectInstructionHistory,
     saveProjectInstructions,
-    uploadProjectResources,
+    uploadProjectResource,
     setProjectSkillEnabled,
     createProjectScheduledTask,
     openProject,

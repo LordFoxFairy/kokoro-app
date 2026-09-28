@@ -95,6 +95,13 @@ const composerFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const firstSiteFallback: Partial<Record<MessageKey, string>> = {
+  "firstSite.resourceUploading": "Uploading…",
+  "firstSite.resourceUploadRestart": "Upload for {name} ended. Select the file again to start a new upload.",
+  "firstSite.resourceUploadRejected": "{name} was not uploaded. Check the file or access permissions.",
+  "firstSite.resourceUploadFailed": "{name} could not be uploaded. Try again.",
+  "firstSite.resourceInfected": "{name} did not pass the security check.",
+  "firstSite.resourceTooLarge": "{name} exceeds the 1 MB upload limit.",
+  "firstSite.resourceRetryUpload": "Retry upload {name}",
   "firstSite.webResource": "Web",
   "firstSite.noMatchingResources": "No matching resources",
   "firstSite.manageSkills": "Manage skills",

@@ -16,6 +16,7 @@ import {
 } from "@/features/scheduled-tasks"
 import { useLocale } from "@/i18n/context"
 
+import type { ResourceUploadIntent } from "./kokoro-project-workspace"
 import type { ProjectResourcePreview, ProjectScheduledPreview, ProjectWebsitePreview, ResourceKind } from "./project-workspace-model"
 import dialogStyles from "./project-workspace-dialogs.module.css"
 
@@ -46,6 +47,8 @@ export type ProjectWorkspaceDialogsProps = {
   resourceSearchRef: React.RefObject<HTMLInputElement | null>
   resourceInputRef: React.RefObject<HTMLInputElement | null>
   filteredResources: readonly ProjectResourcePreview[]
+  resourceUploads: readonly ResourceUploadIntent[]
+  onRetryResourceUpload: (intent: ResourceUploadIntent) => void
   handleResourceFiles: (files: FileList) => Promise<void>
   skillsOpen: boolean
   setSkillsOpen: Dispatch<SetStateAction<boolean>>
@@ -85,7 +88,7 @@ export function ProjectWorkspaceDialogs({
   brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
   instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesOpen, setResourcesOpen,
-  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources,
+  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceUploads, onRetryResourceUpload,
   handleResourceFiles, skillsOpen, setSkillsOpen, skillQuery, setSkillQuery, setSkillFilter, skillBuilderEnabled,
   setSkillBuilderEnabled, skillVisible, onSetProjectSkillEnabled, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
   selectedWebsiteId, setSelectedWebsiteId, linkedWebsiteId, setLinkedWebsiteId, filteredWebsites, scheduledOpen, setScheduledOpen,
@@ -122,6 +125,11 @@ export function ProjectWorkspaceDialogs({
         <DialogTitle className={dialogStyles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
         <div className={dialogStyles.resourcesToolbar}><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" sideOffset={4}><DropdownMenuItem onSelect={() => setResourceKind("all")}>{t("library.filterAll")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("file")}>{t("library.filterDocuments")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("web")}>{t("firstSite.webResource")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu><label className={dialogStyles.resourcesSearch}><Search aria-hidden="true" /><Input ref={resourceSearchRef} aria-label={t("firstSite.searchResources")} placeholder={t("firstSite.searchResources")} value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} /></label></div>
         {filteredResources.length > 0 ? <div className={dialogStyles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>{filteredResources.map((resource) => <div key={resource.id} className={dialogStyles.resourceRow} role="listitem">{resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}<span><strong>{resource.name}</strong><small>{resource.detail}</small></span></div>)}</div> : <div className={dialogStyles.resourcesEmpty}><File aria-hidden="true" /><p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.filesHint")}</p></div>}
+        {resourceUploads.length > 0 ? <div className={dialogStyles.resourceUploadList} aria-live="polite">{resourceUploads.map((intent) => <div key={intent.id} className={dialogStyles.resourceUploadRow}>
+          <File aria-hidden="true" />
+          <span><strong>{intent.file.name}</strong><small role={intent.status === "failed" ? "alert" : "status"}>{intent.status === "uploading" ? t("firstSite.resourceUploading") : t(intent.error === "resource_file_infected" ? "firstSite.resourceInfected" : intent.error === "idempotency_conflict" || intent.error === "resource_upload_aborted" ? "firstSite.resourceUploadRestart" : intent.error === "request_body_too_large" || intent.error === "upload_http_413" ? "firstSite.resourceTooLarge" : intent.retryable ? "firstSite.resourceUploadFailed" : "firstSite.resourceUploadRejected", { name: intent.file.name })}</small></span>
+          {intent.status === "failed" && intent.retryable ? <Button type="button" variant="outline" size="sm" onClick={() => onRetryResourceUpload(intent)} aria-label={t("firstSite.resourceRetryUpload", { name: intent.file.name })}>{t("firstSite.retry")}</Button> : null}
+        </div>)}</div> : null}
         <div className={dialogStyles.resourcesAddGroup}><input ref={resourceInputRef} id="project-resource-upload" className={dialogStyles.resourcesFileInput} type="file" multiple onChange={(event) => { if (event.currentTarget.files) void handleResourceFiles(event.currentTarget.files); event.currentTarget.value = "" }} /><Button type="button" onClick={() => resourceInputRef.current?.click()}><Plus />{t("firstSite.add")}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="icon-sm" aria-label={t("firstSite.addMenu")}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger><DropdownMenuContent className={dialogStyles.resourcesAddMenu} align="end" sideOffset={4}><DropdownMenuItem onSelect={() => resourceInputRef.current?.click()}><Paperclip />{t("firstSite.addLocalFile")}</DropdownMenuItem><DropdownMenuItem onSelect={() => { setResourceKind("web"); window.requestAnimationFrame(() => resourceSearchRef.current?.focus()) }}><Globe2 />{t("firstSite.searchWeb")}</DropdownMenuItem><DropdownMenuSub><DropdownMenuSubTrigger><Grid2X2 />{t("firstSite.more")}</DropdownMenuSubTrigger><DropdownMenuSubContent className={dialogStyles.resourcesMoreMenu} sideOffset={4}><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromGoogleDrive")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDrivePersonal")}</DropdownMenuItem><DropdownMenuItem onSelect={() => onOpenSettings?.("mcp")}><Cloud />{t("firstSite.addFromOneDriveWork")}</DropdownMenuItem></DropdownMenuSubContent></DropdownMenuSub></DropdownMenuContent></DropdownMenu></div>
       </DialogContent>
     </Dialog>

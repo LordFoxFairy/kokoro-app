@@ -152,6 +152,13 @@
 .resourceRow > span { display: grid; min-width: 0; gap: 0.125rem; }
 .resourceRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 18px; }
 .resourceRow small { overflow: hidden; color: var(--muted-foreground); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; }
+.resourceUploadList { display: grid; gap: 0.5rem; margin-top: 1rem; }
+.resourceUploadRow { display: flex; align-items: center; gap: 0.75rem; padding: 0.625rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; }
+.resourceUploadRow > svg { width: 1.125rem; height: 1.125rem; color: var(--muted-foreground); }
+.resourceUploadRow > span { display: grid; flex: 1; min-width: 0; gap: 0.125rem; }
+.resourceUploadRow strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.resourceUploadRow small { color: var(--muted-foreground); font-size: 12px; }
+.resourceUploadRow [role="alert"] { color: var(--destructive); }
 .resourcesEmpty {
   display: flex;
   flex-direction: column;

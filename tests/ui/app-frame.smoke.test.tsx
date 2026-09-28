@@ -412,6 +412,33 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
   })
 })
 
+it("A→B 专案切换会清除 A 的失败上传意图与重试身份", async () => {
+  buildEngine()
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "resource_scan_pending" } }), { status: 503 }))
+  vi.stubGlobal("fetch", fetchMock)
+  const capabilities = { instructions: true, connectors: true, resources: true, skills: true, projectConversations: true }
+  const renderProject = (projectRef: string) => <ThemeProvider><LocaleProvider><AppFrame
+    engine={engine} chatHref="/app" preview projectWorkspace projectRef={projectRef}
+    emptyState={KokoroProjectWorkspace} emptyStateOwnsComposer workspaceCapabilities={capabilities}
+  /></LocaleProvider></ThemeProvider>
+  try {
+    const view = render(renderProject("project-a"))
+    const resourceCard = document.querySelector('[data-context-kind="resources-skills"]') as HTMLElement
+    fireEvent.click(within(resourceCard).getAllByRole("button", { name: /文件和资源/ })[0]!)
+    const first = new File(["a"], "project-a.txt", { type: "text/plain" })
+    fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [first] } })
+    await waitFor(() => expect(screen.getByRole("button", { name: "重试上传 project-a.txt" })).toBeInTheDocument())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    view.rerender(renderProject("project-b"))
+    await waitFor(() => expect(screen.queryByRole("button", { name: "重试上传 project-a.txt" })).not.toBeInTheDocument())
+    expect(screen.queryByText("project-a.txt")).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
 it("切换会话使用无刷新 URL 状态，并支持新建会话清理地址", async () => {
   buildEngine({
     activeId: "conv_a",

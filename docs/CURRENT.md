@@ -13,6 +13,16 @@ HTTPS/非默认端口及内部 listener 端口归一化 rewrite、伪造内部 h
 独立端口 Playwright 11 pass/1 预期 skip。真实 TLS Chromium + IAM/BFF/Product Session 联调仍由 Root 在固定提交后复验，
 此处不宣称完整登录链已经通过。
 
+
+P1-Web-Project-Resource-Upload（2026-09-28，工作树待 Root 审查）：BFF public OpenAPI 原样固定
+`kokoro-bff` main `199a1833d5a6c17839ff39b81380cf5a8377cf85`、SHA-256
+`8d250e61080f40a0c980b9d5c055bda605b66adcfb11450f1575375cca435f82`；旧 `da03b76` 来源为历史记录。
+项目资源浏览器多选现逐文件发送 BFF 唯一 `files` part，每文件生成一次幂等键；失败保留原 `File`+key
+供显式重试，只有严格校验 BFF CLEAN/单一资源 200 回执才进入已确认资源列表。BFF 同源代理仅精确
+`POST /projects/{id}/resources` 使用 1 MiB 整体请求边界和 50s deadline，其他 hub 请求维持默认 15s。
+BFF GET 资源列表与本仓预览样本未在此片变更；页面刷新后的持久资源列表尚未闭环，不声明已完成。
+Node 22.22.2 原切片已执行：contract 74/74、architecture 36/36、全量 Vitest 1490/1490、lint、typecheck、Next production build、`git diff --check` 均通过；首次全量命中既有 OIDC pending-refresh 间歇失败（1/1488），其单文件 38/38 与随后全量 1490/1490 通过。后续审查补上精确 409 分类（仅 `idempotency_in_progress` 保留原键重试，conflict/aborted 不提供同键重试）及 projectRef 纳入工作区 remount key，阻止 A 项目失败 File/key 留到 B；新测试先 RED 后 GREEN，Node22 聚焦 80/80、lint/typecheck/diff-check 通过，补丁后的全量/build 待 Root 串行复验。Root 集成与真实多仓 Chromium 上传仍待验；本切片不改 3310 用户预览进程。
+
 W1F-LOGIN-SHADCN（2026-09-26，Web main `1fa25d2b4760dc428d3fcdf77628ba343a5bc3ff` 已发布）：`/login` 仍固定 Product OIDC 302→IAM 签名交互；正式 `/auth/sign-in` GET 已从手写 HTML 改为 Web Proxy 签发一次性 CSRF、内部 HMAC 证明 rewrite 到真实 Next/shadcn Card/Input/Button/Label/Alert 页面，内部页直达 404。POST 保留原始签名 query/issuer Cookie/Origin/BFF→IAM，HTML 401/429/503 通过短时加密反馈 303 回同一表单并签发新 CSRF；非 HTML 错误语义不变。Root Node22 `pnpm check` exit0（contract 69、architecture 36、Vitest 1478、lint/typecheck/build）；3310 隔离运行拷贝已按明确文件热同步，无重启，Root 全新 Chromium 实测 `/login` 302→302→200、真实 shadcn 输入 2、登录按钮 1、旧重试/连接状态 0，错误态仍同页且密码清空。当前只证明本地登录可见面与错误态；正式生产部署及完整跨仓登录/Platform 闭环不由此代替。
 
 W1E-IAM-0.6-RELAY-CONSUMER（2026-09-26，Root 复验后发布）：当前 Web 从 BFF `1105553cfc24d4f44a90f626132bc30323a77946`

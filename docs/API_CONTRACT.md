@@ -481,3 +481,18 @@ Web↔BFF 的 Agent event stream 只使用 AG-UI canonical event union：
 pnpm contract
 pnpm test:architecture
 ```
+
+## Project resource upload browser projection (2026-09-28)
+
+BFF `public` owner artifact is `kokoro-bff/contract/openapi/v1/openapi.yaml` at commit
+`199a1833d5a6c17839ff39b81380cf5a8377cf85` (SHA-256
+`8d250e61080f40a0c980b9d5c055bda605b66adcfb11450f1575375cca435f82`), copied byte-for-byte to
+`src/generated/bff-public-openapi.yaml`. The Web browser-private `POST /api/hub/projects/{id}/resources`
+adapter forwards one multipart `files` part and the caller's stable `Idempotency-Key` to the BFF owner.
+The adapter caps the entire body at 1 MiB and the upstream wait at 50 seconds for this route only.
+The client projects only a BFF HTTP 200 envelope with exactly one CLEAN resource into the visible
+confirmed list; HTTP errors, malformed 200 receipts, and uncertain outcomes retain the original
+file/key for explicit retry. A terminal infected result is shown without retry. Browser multi-select
+uses N independent owner requests, not an unsupported N-file body. GET project resources is a
+separate owner contract and not implemented by this mutation slice; preview resource fixtures are
+unchanged. The local Zod schema is a consumer validator, not a second editable public contract.

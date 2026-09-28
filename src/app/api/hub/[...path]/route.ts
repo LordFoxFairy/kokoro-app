@@ -57,6 +57,10 @@ export async function proxyHubRequest(
   const { path } = await context.params
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
+  const projectResourceUpload = request.method === "POST"
+    && businessPath.length === 3
+    && businessPath[0] === "projects"
+    && businessPath[2] === "resources"
   const encodedBusinessPath = businessPath.map((segment) => encodeURIComponent(segment)).join("/")
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
 
@@ -71,7 +75,7 @@ export async function proxyHubRequest(
   let body: ArrayBuffer | undefined
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
     try {
-      body = await readBoundedRequestBody(request)
+      body = await readBoundedRequestBody(request, projectResourceUpload ? 1024 * 1024 : undefined)
     } catch (error) {
       return NextResponse.json(
         {
@@ -89,6 +93,7 @@ export async function proxyHubRequest(
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
+      ...(projectResourceUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
+import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 
 const capabilities = {
   instructions: true,
@@ -100,7 +101,7 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
 it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", async () => {
   const onPrompt = vi.fn()
   const onSaveProjectInstructions = vi.fn().mockResolvedValue(undefined)
-  const onUploadProjectResources = vi.fn().mockResolvedValue(undefined)
+  const onUploadProjectResource = vi.fn(async (file: File) => ({ assetId: "asset-single", filename: file.name, mimeType: file.type, sizeBytes: String(file.size) }))
 
   const { container } = render(
     <LocaleProvider>
@@ -110,7 +111,7 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
         onPrompt={onPrompt}
         projectInstructions="默认先给出摘要。"
         onSaveProjectInstructions={onSaveProjectInstructions}
-        onUploadProjectResources={onUploadProjectResources}
+        onUploadProjectResource={onUploadProjectResource}
         workspaceCapabilities={capabilities}
       />
     </LocaleProvider>,
@@ -150,7 +151,78 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
   const upload = document.getElementById("project-resource-upload") as HTMLInputElement
   const file = new File(["hello"], "brief.txt", { type: "text/plain" })
   fireEvent.change(upload, { target: { files: [file] } })
-  await waitFor(() => expect(onUploadProjectResources).toHaveBeenCalled())
+  await waitFor(() => expect(onUploadProjectResource).toHaveBeenCalled())
+})
+
+it("项目多选逐文件提交，部分失败可用原文件和原幂等键重试且不回滚成功项", async () => {
+  let secondAttempts = 0
+  const onUploadProjectResource = vi.fn(async (file: File, key: string) => {
+    expect(key).toMatch(/^project-resource:/)
+    if (file.name === "two.txt" && ++secondAttempts === 1) throw new Error("HTTP 503")
+    return { assetId: `asset-${file.name}`, filename: file.name, mimeType: "text/plain", sizeBytes: String(file.size) }
+  })
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+    brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
+    onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
+  /></LocaleProvider>)
+  const resourcesCard = contextCard(container, "resources-skills")
+  fireEvent.click(at(within(resourcesCard).getAllByRole("button", { name: /文件和资源/ }), 0, "resources trigger"))
+  const first = new File(["one"], "one.txt", { type: "text/plain" })
+  const second = new File(["two"], "two.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [first, second] } })
+
+  await waitFor(() => expect(onUploadProjectResource).toHaveBeenCalledTimes(2))
+  const [firstFile, firstKey] = onUploadProjectResource.mock.calls[0] ?? []
+  const [secondFile, secondKey] = onUploadProjectResource.mock.calls[1] ?? []
+  expect(firstFile).toBe(first)
+  expect(secondFile).toBe(second)
+  expect(firstKey).toMatch(/^project-resource:/)
+  expect(secondKey).toMatch(/^project-resource:/)
+  expect(secondKey).not.toBe(firstKey)
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  const confirmed = within(dialog).getByRole("list", { name: "文件和资源" })
+  expect(within(confirmed).getByText("one.txt")).toBeInTheDocument()
+  expect(within(confirmed).queryByText("two.txt")).toBeNull()
+  expect(within(dialog).getByRole("alert")).toHaveTextContent("two.txt")
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试上传 two.txt" }))
+  await waitFor(() => expect(onUploadProjectResource).toHaveBeenCalledTimes(3))
+  expect(onUploadProjectResource.mock.calls[2]).toEqual([second, secondKey])
+  await waitFor(() => expect(within(confirmed).getByText("two.txt")).toBeInTheDocument())
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+})
+
+it("终止性的文件审核失败不会伪造资源或显示无效重试", async () => {
+  const onUploadProjectResource = vi.fn().mockRejectedValue(new ProjectResourceUploadError("resource_file_infected", false, 422))
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+    brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
+    onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
+  /></LocaleProvider>)
+  const resourcesCard = contextCard(container, "resources-skills")
+  fireEvent.click(at(within(resourcesCard).getAllByRole("button", { name: /文件和资源/ }), 0, "resources trigger"))
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  const infected = new File(["bad"], "infected.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [infected] } })
+  await waitFor(() => expect(onUploadProjectResource).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("infected.txt 未通过安全检查"))
+  expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("infected.txt")
+  expect(within(dialog).queryByRole("button", { name: "重试上传 infected.txt" })).not.toBeInTheDocument()
+})
+
+it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件", async () => {
+  const onUploadProjectResource = vi.fn().mockRejectedValue(new ProjectResourceUploadError("idempotency_conflict", false, 409))
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+    brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
+    onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
+  /></LocaleProvider>)
+  const resourcesCard = contextCard(container, "resources-skills")
+  fireEvent.click(at(within(resourcesCard).getAllByRole("button", { name: /文件和资源/ }), 0, "resources trigger"))
+  const dialog = screen.getByRole("dialog", { name: "文件和资源" })
+  const file = new File(["content"], "conflict.txt", { type: "text/plain" })
+  fireEvent.change(document.getElementById("project-resource-upload") as HTMLInputElement, { target: { files: [file] } })
+  await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("请重新选择文件开始新上传"))
+  expect(within(dialog).queryByRole("button", { name: "重试上传 conflict.txt" })).not.toBeInTheDocument()
+  expect(within(dialog).getByRole("list", { name: "文件和资源" })).not.toHaveTextContent("conflict.txt")
 })
 
 it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {

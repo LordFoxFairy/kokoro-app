@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { useLocale } from "@/i18n/context"
 import { cn } from "@/lib/utils"
+import { ProjectResourceUploadError } from "./project-resource-upload"
 
 import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
@@ -23,8 +24,17 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResources" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
+  | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
 >
+
+export type ResourceUploadIntent = {
+  id: string
+  file: File
+  key: string
+  status: "uploading" | "failed"
+  error: string | undefined
+  retryable: boolean
+}
 
 /**
  * A project is a persistent workspace, not a renamed direct-chat screen.
@@ -46,7 +56,7 @@ export function KokoroProjectWorkspace({
   projectInstructions = "",
   projectInstructionHistory = [],
   onSaveProjectInstructions,
-  onUploadProjectResources,
+  onUploadProjectResource,
   onSetProjectSkillEnabled,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
@@ -62,6 +72,8 @@ export function KokoroProjectWorkspace({
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
   const [resourceItems, setResourceItems] = useState<readonly ProjectResourcePreview[]>(previewResources)
+  const [resourceUploads, setResourceUploads] = useState<readonly ResourceUploadIntent[]>([])
+  const activeResourceUploads = useRef(new Set<string>())
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
   const resourceSearchRef = useRef<HTMLInputElement | null>(null)
   const [skillsOpen, setSkillsOpen] = useState(false)
@@ -131,20 +143,41 @@ export function KokoroProjectWorkspace({
   const skillMatches = skillQuery.trim().length === 0 || t("firstSite.skillBuilder").toLocaleLowerCase().includes(skillQuery.trim().toLocaleLowerCase())
   const skillVisible = skillMatches && (skillFilter === "all" || skillFilter === "official")
 
-  const handleResourceFiles = async (files: FileList) => {
-    if (files.length === 0) return
-    const added = Array.from(files).map((file, index) => ({
-      id: `upload-${file.name}-${file.lastModified}-${index}`,
-      name: file.name,
-      kind: "file" as const,
-      detail: `${file.type || "文件"} · ${Math.max(1, Math.ceil(file.size / 1024))} KB`,
-    }))
-    setResourceItems((current) => [...added, ...current])
+  const submitResourceUpload = async (intent: ResourceUploadIntent) => {
+    if (activeResourceUploads.current.has(intent.id)) return
+    activeResourceUploads.current.add(intent.id)
+    setResourceUploads((current) => current.map((item) => item.id === intent.id ? { ...item, status: "uploading", error: undefined } : item))
     try {
-      await onUploadProjectResources?.(files)
-    } catch {
-      setResourceItems((current) => current.filter((item) => !added.some((candidate) => candidate.id === item.id)))
+      if (!onUploadProjectResource) throw new ProjectResourceUploadError("upload_not_configured", false)
+      const receipt = await onUploadProjectResource(intent.file, intent.key)
+      setResourceItems((current) => [{
+        id: receipt.assetId,
+        name: receipt.filename,
+        kind: "file",
+        detail: `${receipt.mimeType} · ${Math.max(1, Math.ceil(Number(receipt.sizeBytes) / 1024))} KB`,
+      }, ...current.filter((item) => item.id !== receipt.assetId)])
+      setResourceUploads((current) => current.filter((item) => item.id !== intent.id))
+    } catch (error) {
+      const uploadError = error instanceof ProjectResourceUploadError ? error : null
+      setResourceUploads((current) => current.map((item) => item.id === intent.id ? {
+        ...item,
+        status: "failed",
+        error: uploadError?.code ?? "upload_network_error",
+        retryable: uploadError?.retryable ?? true,
+      } : item))
+    } finally {
+      activeResourceUploads.current.delete(intent.id)
     }
+  }
+
+  const handleResourceFiles = async (files: FileList) => {
+    const intents = Array.from(files).map((file): ResourceUploadIntent => {
+      const identity = crypto.randomUUID()
+      return { id: identity, file, key: `project-resource:${identity}`, status: "uploading", error: undefined, retryable: true }
+    })
+    if (intents.length === 0) return
+    setResourceUploads((current) => [...current, ...intents])
+    for (const intent of intents) await submitResourceUpload(intent)
   }
 
   const handleScheduledTaskSave = async (task: {
@@ -380,6 +413,8 @@ export function KokoroProjectWorkspace({
         resourceSearchRef={resourceSearchRef}
         resourceInputRef={resourceInputRef}
         filteredResources={filteredResources}
+        resourceUploads={resourceUploads}
+        onRetryResourceUpload={(intent) => { void submitResourceUpload(intent) }}
         handleResourceFiles={handleResourceFiles}
         skillsOpen={skillsOpen}
         setSkillsOpen={setSkillsOpen}
