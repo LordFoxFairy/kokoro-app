@@ -327,6 +327,8 @@ it("资料库路由渲染独立目录而不是设置中心弹窗", async () => {
 
   expect(await screen.findByTestId("library-page")).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: "资料库", level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "个人文件" })).toHaveAttribute("data-state", "active")
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
   expect(screen.getByRole("textbox", { name: "搜寻档案" })).toBeInTheDocument()
   expect(screen.queryByTestId("settings-modal")).toBeNull()
   expect(screen.queryByRole("form", { name: "消息编辑区" })).toBeNull()

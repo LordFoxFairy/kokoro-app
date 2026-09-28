@@ -23,6 +23,10 @@
   line-height: 1.6875rem;
 }
 
+.libraryTabs { min-height: calc(100% - 3.5rem); }
+.libraryTabsList { margin: 0 1.5rem; }
+.libraryTabPanel { min-height: 0; }
+
 .toolbar {
   display: flex;
   height: 2rem;

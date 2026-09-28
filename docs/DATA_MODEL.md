@@ -1,9 +1,9 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2 Library 文件/作品分离（2026-09-28；设计未实施）
+## W2 Library 文件/作品分离（2026-09-28；Web 代码已实现，Root 待验）
 
-当前 Library React 状态只有 Agent `ArtifactRecord(content_hash,session_id,title,...)`，正式来源是
-`/api/session/artifacts`；Web 不持有个人 Asset 模型。目标个人文件来自 BFF `kind=file` 的
+Agent 作品 React 状态仍为 `ArtifactRecord(content_hash,session_id,title,...)`，正式来源是
+`/api/session/artifacts`；个人文件来自 BFF `kind=file` 的
 Storage CLEAN ASSET 投影，以 `asset_id` 为唯一列表身份；Agent 作品保留独立 `content_hash`/
 `session_id` 模型，不能用类型断言、可选字段或哈希下载动作合并两者。文件 `content_sha256`
 仅作 wire 边界校验，不作为列表身份或下载许可。

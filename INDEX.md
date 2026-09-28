@@ -44,6 +44,8 @@
 | 文件 | 角色 |
 | --- | --- |
 | `src/contract/project-resource.ts`、`src/features/app/project-resource-list.ts`、`src/features/app/use-project-resources.ts` | 固定 BFF CLEAN 资源页面校验、同源 GET 与项目内有界分页/取消/失败状态 |
+| `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页的独立 Zod 消费校验与同源 GET；不复用 Artifact wire |
+| `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的页签局部分页/取消/错误状态与只读 Asset 列表 |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
 | `src/contract/agui-events.ts` | 校验 AG-UI frame 并投影到当前 reducer shape |
 | `src/contract/session-events.ts` | 当前内部 reducer event shape；live client 仍将其当兼容 wire 读取 |
@@ -89,7 +91,7 @@
 - `src/core/`、`src/lib/persisted-store.ts`：受 Zod 校验的 browser store；
 - `src/dev/preview-transport.ts`：local/test 合成 Chat 历史；
 - `src/features/app/kokoro-scheduled-surface.tsx`：preview Scheduled localStorage；
-- `src/features/app/kokoro-library-surface.tsx`：资料库的显式 preview/fixture 与正式同源 live 加载、错误及重试状态；
+- `src/features/app/kokoro-library-surface.tsx`：同页文件/Agent 作品 Tabs；作品保留显式 preview/fixture 与原正式读取、错误及重试状态；
 - `src/ui/theme/`、`src/i18n/`、`src/ui/shell/`：主题、locale、草稿和 UI 偏好。
 
 这些数据不是服务端业务事实；完整分类见 [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)。

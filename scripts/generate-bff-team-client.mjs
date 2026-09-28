@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-team")
 const configPath = join(root, "openapi-ts.bff-team.config.ts")
-const expectedDigest = "87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6"
+const expectedDigest = "82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9"
 const operations = [
   ["GET", "/v1/team/members"],
   ["GET", "/v1/team/invitations"],

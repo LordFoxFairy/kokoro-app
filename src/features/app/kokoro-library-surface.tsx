@@ -2,6 +2,7 @@
 
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { artifactContentPath, type ArtifactList, type ArtifactRecord } from "@/contract/http"
 import type { SessionClient } from "@/engine/client"
 import { browserListClient } from "@/ui/shell/page-clients"
@@ -11,6 +12,7 @@ import { useMemo, useCallback, useEffect, useRef, useState, useSyncExternalStore
 import { useT } from "@/i18n/context"
 
 import { LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
+import { KokoroLibraryFiles } from "./kokoro-library-files"
 import { DEFAULT_URL_STATE, FILTERS, artifactFilter, type LibraryFilter, type LibraryUrlState } from "./kokoro-library-model"
 import styles from "./kokoro-library-surface.module.css"
 
@@ -100,17 +102,20 @@ async function previewDownloadArtifact(artifact: ArtifactRecord): Promise<boolea
   )
 }
 
-export function KokoroLibrarySurface({
+function KokoroArtifactLibrary({
   preview = false,
   onPrompt,
   onOpenSession,
   fixtureArtifacts,
-  initialFavoriteHashes = [],
+  favoriteHashes,
+  setFavoriteHashes,
   artifactClient,
   onFavoriteChange,
   downloadArtifact,
-}: KokoroLibrarySurfaceProps) {
-  const t = useT()
+}: KokoroLibrarySurfaceProps & {
+  favoriteHashes: ReadonlySet<string>
+  setFavoriteHashes: (next: ReadonlySet<string>) => void
+}) {
   // Only an explicit preview selects synthetic transport. Development with a
   // Product Session remains live and must show an unavailable BFF as an error.
   const useFixtureTransport = preview && !artifactClient && !fixtureArtifacts
@@ -118,7 +123,6 @@ export function KokoroLibrarySurface({
   const updateUrlState = useCallback((patch: Partial<LibraryUrlState>) => {
     writeUrlState({ ...readUrlState(), ...patch })
   }, [])
-  const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(initialFavoriteHashes))
   const fixtureSnapshot = useMemo(
     () => fixtureArtifacts === undefined ? undefined : appendUniqueArtifacts([], fixtureArtifacts),
     [fixtureArtifacts],
@@ -279,11 +283,7 @@ export function KokoroLibrarySurface({
   const showPagination = !isFixtureControlled && nextCursor !== undefined
 
   return (
-    <div className={styles.page} data-testid="library-page">
-      <header className={styles.header}>
-        <h1>{t("rail.navDatabase")}</h1>
-      </header>
-
+    <>
       <LibraryToolbar filter={filter} query={query} view={view} favoritesOnly={favoritesOnly} updateUrlState={updateUrlState} />
       <LibraryResults
         artifacts={artifacts}
@@ -306,6 +306,24 @@ export function KokoroLibrarySurface({
         {...(onPrompt === undefined ? {} : { onPrompt })}
         {...(onOpenSession === undefined ? {} : { onOpenSession })}
       />
-    </div>
+    </>
   )
+}
+
+export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
+  const t = useT()
+  // Keep local favorites for the lifetime of this Library page, without
+  // mounting or fetching Agent artifacts while the Files tab is active.
+  const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteHashes))
+  return <div className={styles.page} data-testid="library-page">
+    <header className={styles.header}><h1>{t("rail.navDatabase")}</h1></header>
+    <Tabs defaultValue="files" className={styles.libraryTabs}>
+      <TabsList aria-label={t("rail.navDatabase")} className={styles.libraryTabsList}>
+        <TabsTrigger value="files">{t("library.filesTab")}</TabsTrigger>
+        <TabsTrigger value="artifacts">{t("library.artifactsTab")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="files" className={styles.libraryTabPanel}><KokoroLibraryFiles preview={props.preview === true} /></TabsContent>
+      <TabsContent value="artifacts" className={styles.libraryTabPanel}><KokoroArtifactLibrary {...props} favoriteHashes={favoriteHashes} setFavoriteHashes={setFavoriteHashes} /></TabsContent>
+    </Tabs>
+  </div>
 }
