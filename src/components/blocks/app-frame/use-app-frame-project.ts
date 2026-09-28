@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useT } from "@/i18n/context"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
+import { createProject as createProjectRequest, ProjectCreateError } from "@/features/app/project-create"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { clearPendingDraft } from "@/ui/shell/use-draft"
 
@@ -25,6 +26,9 @@ export type AppFrameProjectOptions = {
   onOpenProject?: (projectRef: string, draft?: string) => void
 }
 
+type ProjectCreationIntent = { key: string; name: string; draft: string }
+type ProjectCreationState = { pending: boolean; error: boolean; retryable: boolean }
+
 /** Owns project-scoped draft handoff, instructions, resources, and mutations. */
 export function useAppFrameProject({
   projectRef,
@@ -39,6 +43,20 @@ export function useAppFrameProject({
   const t = useT()
   const [projectInstructions, setProjectInstructions] = useState("")
   const [projectInstructionHistory, setProjectInstructionHistory] = useState<readonly ProjectInstructionRevision[]>([])
+  const [projectCreation, setProjectCreation] = useState<ProjectCreationState>({ pending: false, error: false, retryable: false })
+  const creationIntentRef = useRef<ProjectCreationIntent | null>(null)
+  const creationInFlightRef = useRef(false)
+  const createdProjectRef = useRef<string | null>(null)
+  const latestDraftRef = useRef(draft)
+  const lastDirectDraftRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    latestDraftRef.current = draft
+  }, [draft])
+
+  useEffect(() => {
+    if (!projectWorkspace) lastDirectDraftRef.current = draft
+  }, [draft, projectWorkspace])
 
   useEffect(() => {
     // Direct Chat → project is a mounted route handoff, so the direct
@@ -56,6 +74,13 @@ export function useAppFrameProject({
       // capsule; otherwise a new project can reopen with the website fixture
       // prompt instead of the text the user just entered.
       if (handoffDraft !== null) updateDraft(handoffDraft)
+      else if (!draft && lastDirectDraftRef.current) {
+        // The existing-project rail link has no explicit envelope. Preserve
+        // its historical Direct Chat → project draft handoff without making
+        // the two route-neutral composer keys the same storage fact.
+        updateDraft(lastDirectDraftRef.current)
+      }
+      lastDirectDraftRef.current = null
     })
     return () => {
       active = false
@@ -194,14 +219,13 @@ export function useAppFrameProject({
       ? createPreviewProjectRef()
       : nextProjectRef
     writePendingProjectDraft(projectRefToOpen, handoffDraft)
-    // The direct inbox and the project overview intentionally share the
-    // pending draft key until a project-scoped session exists. Clear that
-    // source key before the mounted route transition, otherwise the project
-    // handoff effect sees the old draft and refuses to apply the one-shot
-    // project envelope. The envelope remains in sessionStorage if navigation
-    // is interrupted and is consumed by the destination route.
-    clearDraft()
-    clearPendingDraft()
+    // A project without a conversation has its own draft key. Clear the
+    // direct source only if it is still the draft handed off by this intent;
+    // a newer B edit must remain available when returning to Direct Chat.
+    if (handoffDraft === undefined || latestDraftRef.current === handoffDraft) {
+      clearDraft()
+      clearPendingDraft()
+    }
     if (onOpenProject) {
       onOpenProject(projectRefToOpen, handoffDraft)
       return
@@ -209,9 +233,74 @@ export function useAppFrameProject({
     navigateMountedSurface(`/app/project/${encodeURIComponent(projectRefToOpen)}`)
   }, [clearDraft, onOpenProject])
 
-  const createProject = useCallback(() => {
-    openProject("preview-project", draft)
-  }, [draft, openProject])
+  const finishProjectNavigation = useCallback((intent: ProjectCreationIntent) => {
+    const projectId = createdProjectRef.current
+    if (projectId === null) return
+    try {
+      openProject(projectId, intent.draft)
+      createdProjectRef.current = null
+      creationIntentRef.current = null
+      setProjectCreation({ pending: false, error: false, retryable: false })
+    } catch {
+      // The owner mutation succeeded. A navigation retry must use its returned
+      // identity, never issue another POST or abandon the original draft.
+      setProjectCreation({ pending: false, error: true, retryable: true })
+    }
+  }, [openProject])
+
+  const runCreateProject = useCallback(async (intent: ProjectCreationIntent) => {
+    if (creationInFlightRef.current) return
+    creationInFlightRef.current = true
+    setProjectCreation({ pending: true, error: false, retryable: false })
+    try {
+      const project = await createProjectRequest(intent.name, intent.key)
+      createdProjectRef.current = project.id
+    } catch (error) {
+      const retryable = !(error instanceof ProjectCreateError)
+        || error.status === undefined || error.status >= 500 || error.status === 429
+        || error.code === "project_create_invalid_response"
+        || (error.status === 409 && error.code === "idempotency_in_progress")
+      if (!retryable) creationIntentRef.current = null
+      setProjectCreation({ pending: false, error: true, retryable })
+      return
+    } finally {
+      creationInFlightRef.current = false
+    }
+    finishProjectNavigation(intent)
+  }, [finishProjectNavigation])
+
+  const createProject = useCallback((handoffDraft = draft) => {
+    if (creationInFlightRef.current) return
+    if (preview) {
+      openProject("preview-project", handoffDraft)
+      return
+    }
+    // An uncertain owner outcome cannot be converted into a fresh mutation by
+    // reopening rail or welcome: both are retry affordances for this intent.
+    const unresolvedIntent = creationIntentRef.current
+    if (unresolvedIntent) {
+      if (createdProjectRef.current === null) void runCreateProject(unresolvedIntent)
+      else finishProjectNavigation(unresolvedIntent)
+      return
+    }
+    const key = crypto.randomUUID()
+    const intent = { key, name: `${t("firstSite.newProject")} ${key.slice(0, 8)}`, draft: handoffDraft }
+    creationIntentRef.current = intent
+    void runCreateProject(intent)
+  }, [draft, finishProjectNavigation, openProject, preview, runCreateProject, t])
+
+  const retryProjectCreation = useCallback(() => {
+    const intent = creationIntentRef.current
+    if (intent && !creationInFlightRef.current) {
+      if (createdProjectRef.current === null) void runCreateProject(intent)
+      else finishProjectNavigation(intent)
+    }
+  }, [finishProjectNavigation, runCreateProject])
+
+  const openOrCreateProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
+    if (nextProjectRef === "preview-project") createProject(handoffDraft)
+    else openProject(nextProjectRef, handoffDraft)
+  }, [createProject, openProject])
 
   return {
     projectInstructions,
@@ -221,7 +310,9 @@ export function useAppFrameProject({
     listProjectResources,
     setProjectSkillEnabled,
     createProjectScheduledTask,
-    openProject,
+    openProject: openOrCreateProject,
     createProject,
+    projectCreation,
+    retryProjectCreation,
   }
 }

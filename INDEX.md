@@ -44,6 +44,7 @@
 | 文件 | 角色 |
 | --- | --- |
 | `src/contract/project-resource.ts`、`src/features/app/project-resource-list.ts`、`src/features/app/use-project-resources.ts` | 固定 BFF CLEAN 资源页面校验、同源 GET 与项目内有界分页/取消/失败状态 |
+| `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
 | `src/contract/agui-events.ts` | 校验 AG-UI frame 并投影到当前 reducer shape |
 | `src/contract/session-events.ts` | 当前内部 reducer event shape；live client 仍将其当兼容 wire 读取 |
 | `src/contract/{chat,control,artifacts,catalog,billing,scheduled}.ts` | browser-private JSON DTO 的 Zod schema |

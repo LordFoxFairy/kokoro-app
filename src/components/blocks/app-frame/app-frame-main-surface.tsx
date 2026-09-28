@@ -37,6 +37,8 @@ export type AppFrameMainSurfaceProps = {
   conversationHydrating: boolean
   conversationHydrationFailed: boolean
   machineError: string | null
+  projectCreation: { pending: boolean; error: boolean; retryable: boolean }
+  onRetryProjectCreation: () => void
   retryConversationHydration: () => void
   onOpenSettings: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
   shareClient: Pick<SessionClient, "createShare" | "revokeShare">
@@ -67,6 +69,8 @@ export function AppFrameMainSurface({
   conversationHydrating,
   conversationHydrationFailed,
   machineError,
+  projectCreation,
+  onRetryProjectCreation,
   retryConversationHydration,
   onOpenSettings,
   shareClient,
@@ -105,6 +109,21 @@ export function AppFrameMainSurface({
           // the owner so the canvas never shows two competing toggles.
           showNavigationTrigger={narrowWeb || (compactDesktopRail && railHidden)}
         />
+      ) : null}
+      {mounted && projectCreation.pending ? (
+        <div className={statusStyles.projectCreationNotice} role="status" data-testid="project-create-status">
+          {t("firstSite.projectCreating")}
+        </div>
+      ) : null}
+      {mounted && projectCreation.error ? (
+        <div className={statusStyles.projectCreationNotice} role="alert" data-testid="project-create-error">
+          <span>{t("firstSite.projectCreateFailed")}</span>
+          {projectCreation.retryable ? (
+            <Button type="button" variant="outline" size="sm" onClick={onRetryProjectCreation}>
+              {t("firstSite.retry")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
       <div
         className={statusStyles.timelineStage}

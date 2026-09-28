@@ -143,7 +143,7 @@ export function AppFrame({
   })
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
-  const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted)
+  const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted, projectRef)
   const project = useAppFrameProject({
     projectRef,
     projectWorkspace,
@@ -374,6 +374,8 @@ export function AppFrame({
       conversationHydrating={navigationState.conversationHydrating}
       conversationHydrationFailed={navigationState.conversationHydrationFailed}
       machineError={machine.error}
+      projectCreation={project.projectCreation}
+      onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}
       shareClient={shareClient}

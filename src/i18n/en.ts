@@ -102,6 +102,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "firstSite.noTasks": "Create a task to get started.",
   "firstSite.untitledTask": "Untitled task",
   "firstSite.retry": "Retry",
+  "firstSite.projectCreating": "Creating project…",
+  "firstSite.projectCreateFailed": "Project creation failed.",
   "firstSite.skillsPrompt": "Open the skills panel and help me add a skill to this workspace.",
   "firstSite.instructions": "Instructions",
   "firstSite.instructionsHint": "Set preferences Kokoro should follow in every task.",

@@ -1,5 +1,15 @@
 # Kokoro User Web 技术设计
 
+## W2 正式项目创建纵切（2026-09-28）
+
+当前态：rail `useAppFrameProject.createProject` 无条件生成 `preview-project-*`；欢迎页的“新建专案”也先生成 preview ref。正式模式因此跳转到 BFF 中不存在的项目。BFF 是 Project 唯一 writer，既有 `/api/hub/[...path]` 同源 adapter 已支持 POST 和透传 `Idempotency-Key`；Web 无 Project schema 或事务。
+
+目标态：显式 preview 仍只用本地 fixture。正式新建入口统一由现有 app-frame project hook 管理一次创建意图，保留点击时的草稿、唯一幂等 key 与请求 name；同一意图的并发点击不重发，未知结果后无论从错误条、rail 或欢迎页重进都用原 body/key 重试，且展示就近错误，不把 preview ref 当作成功。经 `/api/hub/projects` POST 到 BFF `/v1/projects`；只有严格校验 `ProjectResponse.data.project` 的 canonical `id`、`slug` 等字段后，才写入一次性 draft handoff 并按 `id` 导航。终态冲突才释放意图，新点击可使用新 key；Web 不静默把未知提交改成新意图。BFF 授权、幂等 receipt、slug 唯一性和持久状态不在 Web 复制。
+
+放置裁决：采用现有 app-frame hook（UI 意图/导航）、项目 consumer validator/client（wire 校验与同源 POST）、现有 hub adapter；不在欢迎页或 rail 自建第二 BFF client，不新建 API route/模块，也不把临时 create 状态保存为 Web Project 事实。新校验文件只因 ProjectResponse 与 resource 页面语义不同；生成 OpenAPI 保持 owner 原样。验证聚焦 unit/contract/UI，随后 Node22 `pnpm check`、生成 drift 与 diff check；真实 BFF 联调仍需 Root 在固定提交后执行。
+
+草稿归属：Direct Chat 的 `__pending__` 与尚无 conversation 的 `__project__:{projectRef}` 是不同本地编辑键。显式创建 handoff 一次性封套把 A 草稿写进 A 项目键；A 请求期间新编辑的 Direct B 草稿仍留 `__pending__`，返回 Direct 后可恢复。原有 Direct→既有项目 rail 导航无显式封套时，只在该项目没有草稿时复制最后的 Direct 草稿，不把两者重新共享一个键。BFF POST 已成功而导航回调失败时保存已确认 canonical id，重试只重新导航，绝不重发 mutation。consumer 对 BFF 将来增加的兼容字段容忍，但 id/slug 与必需 Project 字段严格校验。
+
 ## W2 项目资源 GET consumer 当前方案（2026-09-28）
 
 BFF 是 Project/owner 资源列表的唯一事实与授权入口，Storage 保留 Asset/CLEAN 事实。Web 无资源数据库、

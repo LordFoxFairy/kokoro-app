@@ -507,3 +507,18 @@ is strictly validated as `{data:{items:[CLEAN asset],next_cursor},meta}` with at
 ID, download URL, or Storage credential enters the Web list. `cursor` remains opaque and URL-encoded.
 HTTP failure or malformed 200 is a visible error, not an empty page; the user retries GET. Preview fixtures
 are explicit preview-only. The POST mutation contract remains unchanged.
+
+## W2 project create browser-private POST (2026-09-28)
+
+Current BFF `public` owner OpenAPI is `kokoro-bff/contract/openapi/v1/openapi.yaml` at
+`31c4803b3df0e90c031a97844f89df384ca1a35c` (byte-identical Web snapshot
+`src/generated/bff-public-openapi.yaml`, SHA-256 `87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`).
+Browser-private `POST /api/hub/projects` sends the owner `CreateProjectRequest` with required `name`
+and `Idempotency-Key`; existing same-origin Product Session adapter maps it to BFF `POST /v1/projects`.
+Only BFF HTTP 200 `ProjectResponse` with `data.project.id` and `slug` passing the local consumer
+validator can navigate to `/app/project/{id}`. The ID is canonical; slug is validated but not substituted.
+One unresolved user intent keeps the same key/name/draft across error-strip retry or rail/welcome re-entry. Preview creation is a separate
+fixture and never sends this mutation. Error response or malformed success stays on the current view.
+Compatible extra owner fields are ignored by the consumer validator; required Project identity fields
+remain mandatory. Once a valid owner 200 has returned, a failed navigation retry reuses that confirmed
+id and does not resend POST.

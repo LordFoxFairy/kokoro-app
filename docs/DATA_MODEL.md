@@ -314,6 +314,7 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 ### 2.3 sessionStorage 与 URL
 
 - `sessionStorage` 承载一次性 project draft handoff、creation intent 和 preview sequence；关闭 tab 后失效。
+- `kokoro.web.drafts` 中无会话的 Direct Chat 使用 `__pending__`；无会话项目使用 `__project__:{projectRef}`。后者只是本地编辑态，不是 BFF Project/Message 事实；显式 handoff 消费一次，避免创建 A 时随后编辑的 Direct B 草稿被覆盖。
 - URL/query/hash 承载可导航 surface、project/conversation 引用和非敏感筛选状态。
 - 旧 magic-link 申请/回调 route 已删除，Web 不再生成带 token 的旧 callback URL；固定 OIDC callback 使用独立的 `code/state/iss` 流程。
 - runtime JWT、refresh token、internal secret、tenant/site 不进入 URL。
@@ -322,6 +323,7 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 
 React state、query resource store、Chat engine 和 optimistic receipt projection 都是进程内/标签页内状态。
 刷新后必须从 URL、browser preference 或 BFF snapshot/event 恢复，不能把未持久化内存状态当成功事实。
+正式 Project 创建意图（一次点击的 key/name/draft、进行中和失败状态）仅在当前 app-frame 内存中用于防多击与同键显式重试；它不是 Project 记录。成功仅使用 BFF 回执的 canonical id，失败不写 URL 或 Project fixture。preview project sequence 与 sessionStorage 草稿 handoff 不进入正式 Project owner 数据。
 
 ## 3. Chat 数据投影
 

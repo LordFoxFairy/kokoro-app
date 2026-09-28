@@ -1353,6 +1353,8 @@ export const zh = {
   "firstSite.noTasks": "新建一个任务以开始",
   "firstSite.untitledTask": "未命名任务",
   "firstSite.retry": "重试",
+  "firstSite.projectCreating": "正在创建专案…",
+  "firstSite.projectCreateFailed": "专案创建失败。",
   "firstSite.add": "新增",
   "firstSite.edit": "编辑",
   "firstSite.cancel": "取消",

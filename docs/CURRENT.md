@@ -1,5 +1,7 @@
 # Kokoro User Web 当前状态
 
+W2-Web-Project-Create（2026-09-28，owner 门通过；Root 真组合待验）：基线正式创建错误生成 `preview-project-*`，导致后续 BFF GET/POST 找不到项目。现正式 rail/欢迎页新建统一经已有同源 `/api/hub/projects` POST 调 BFF 固定 owner 契约，严格解析 canonical ProjectResponse 后按 id 导航；显式 preview 保持 fixture，失败可见且未知结果从错误条、rail 或欢迎页重进均同 key/name/draft 重试。无会话项目与 Direct 草稿分键，A 创建期间编辑的 B 在返回 Direct 后可恢复；owner 成功但导航失败只重试导航，不再 POST。Node 22.22.2 先 RED 后 GREEN；`pnpm check` exit 0（contract 83/83、architecture 36/36、全量 Vitest 1511/1511、lint/typecheck/build）；独立端口 3429 Playwright 11 pass/1 预期 skip；BFF 生成 check 15 文件通过、OpenAPI SHA-256 固定 `87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`、`git diff --check` 通过。真实登录 Product Session + BFF 持久创建/幂等联调仍由 Root 在固定提交后验证，不以本仓 stub 测试代替。
+
 W2-Web-Project-Resources-GET（2026-09-28，工作树待 Root 审查）：当前 BFF owner `31c4803b3df0e90c031a97844f89df384ca1a35c`
 发布 GET `/v1/projects/{projectId}/resources`；Web 原样固定 public OpenAPI SHA-256
 `87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`。正式项目资源列表只从

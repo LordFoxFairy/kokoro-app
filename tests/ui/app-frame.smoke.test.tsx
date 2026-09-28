@@ -964,7 +964,7 @@ it("项目跳转时显式草稿覆盖遗留的 pending 胶囊文案", async () =
   render(
     <ThemeProvider>
       <LocaleProvider>
-        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -989,7 +989,7 @@ it("项目侧栏的新建专案菜单会进入新的项目工作区", async () =
   render(
     <ThemeProvider>
       <LocaleProvider>
-        <KokoroAppSurface engine={engine} />
+        <KokoroAppSurface engine={engine} preview />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -1012,7 +1012,7 @@ it("Direct Chat 展开侧栏后新建专案仍承接当前草稿", async () => {
   render(
     <ThemeProvider>
       <LocaleProvider>
-        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -1028,6 +1028,153 @@ it("Direct Chat 展开侧栏后新建专案仍承接当前草稿", async () => {
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByLabelText("对话输入")).toHaveValue("从 Chat 承接到新专案")
   })
+})
+
+it("正式新建专案只在 BFF canonical 回执后导航，多击不重复提交，承接点击时草稿", async () => {
+  buildEngine()
+  let finish!: (response: Response) => void
+  const createResponse = new Promise<Response>((resolve) => { finish = resolve })
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url === "/api/hub/projects" && init?.method === "POST") return createResponse
+    return Promise.resolve(new Response(JSON.stringify({ data: {}, meta: { request_id: "req-get" } }), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
+
+  fireEvent.change(await screen.findByLabelText("对话输入"), { target: { value: "A 草稿" } })
+  const trigger = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  const entry = await screen.findByRole("menuitem", { name: "新建专案" })
+  fireEvent.click(entry)
+  expect(window.location.pathname).not.toContain("preview-project")
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(1)
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(1)
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 草稿" } })
+
+  await act(async () => finish(new Response(JSON.stringify({
+    data: { project: { id: "project_canonical-a", slug: "new-project-a", name: "New project A", description: "", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" } },
+    meta: { request_id: "req-1" },
+  }), { status: 200 })))
+  await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_canonical-a"))
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 草稿"))
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(1)
+  vi.unstubAllGlobals()
+})
+
+it("正式新建未知结果后从 rail 重进仍复用原 key/name/draft，绝不导航假项目", async () => {
+  buildEngine()
+  let createCount = 0
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url !== "/api/hub/projects" || init?.method !== "POST") {
+      return Promise.resolve(new Response(JSON.stringify({ data: {}, meta: { request_id: "req-get" } }), { status: 200 }))
+    }
+    createCount += 1
+    // A malformed 200 has an uncertain commit outcome: retry the same key,
+    // never infer a project identity from a partial envelope.
+    if (createCount === 1) return Promise.resolve(new Response(JSON.stringify({ data: { project: { slug: "partial" } }, meta: { request_id: "req-uncertain" } }), { status: 200 }))
+    return Promise.resolve(new Response(JSON.stringify({
+      data: { project: { id: "project_canonical-b", slug: "new-project-b", name: "New project B", description: "", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" } },
+      meta: { request_id: "req-2" },
+    }), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
+  fireEvent.change(await screen.findByLabelText("对话输入"), { target: { value: "A 草稿" } })
+  const trigger = screen.getByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+
+  expect(await screen.findByTestId("project-create-error")).toHaveTextContent("专案创建失败")
+  expect(window.location.pathname).toBe("/")
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 草稿" } })
+  expect(screen.getByLabelText("对话输入")).toHaveValue("B 草稿")
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_canonical-b"))
+  const requests = fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST") as Array<[string, RequestInit]>
+  expect(requests).toHaveLength(2)
+  expect(requests[0]?.[1].headers).toEqual(requests[1]?.[1].headers)
+  expect(requests[0]?.[1].body).toBe(requests[1]?.[1].body)
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 草稿"))
+  vi.unstubAllGlobals()
+})
+
+it("正式欢迎页新建未知结果后重进仍复用原意图，不把 B 草稿放进 A 项目", async () => {
+  buildEngine()
+  let createCount = 0
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url !== "/api/hub/projects" || init?.method !== "POST") {
+      return Promise.resolve(new Response(JSON.stringify({ data: {}, meta: { request_id: "req-get" } }), { status: 200 }))
+    }
+    createCount += 1
+    if (createCount === 1) return Promise.resolve(new Response(JSON.stringify({ error: { code: "service_unavailable" } }), { status: 503 }))
+    return Promise.resolve(new Response(JSON.stringify({
+      data: { project: { id: "project_welcome-a", slug: "new-project-welcome-a", name: "New project A", description: "", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" } },
+      meta: { request_id: "req-2" },
+    }), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: /建立网站/ }))
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "A 网站草稿" } })
+  const trigger = screen.getByRole("button", { name: "新增到专案" })
+  fireEvent.pointerDown(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  expect(await screen.findByTestId("project-create-error")).toHaveTextContent("专案创建失败")
+  expect(window.location.pathname).toBe("/")
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 网站草稿" } })
+  expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿")
+  fireEvent.pointerDown(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_welcome-a"))
+  const requests = fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST") as Array<[string, RequestInit]>
+  expect(requests).toHaveLength(2)
+  expect(requests[0]?.[1].headers).toEqual(requests[1]?.[1].headers)
+  expect(requests[0]?.[1].body).toBe(requests[1]?.[1].body)
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 网站草稿"))
+  await act(async () => {
+    window.history.pushState(window.history.state, "", "/app")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  })
+  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿"))
+  vi.unstubAllGlobals()
+})
+
+it("owner 已创建但导航回调抛错时重试只重新导航，不再 POST", async () => {
+  buildEngine()
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url === "/api/hub/projects" && init?.method === "POST") {
+      return Promise.resolve(new Response(JSON.stringify({
+        data: { project: { id: "project_created-once", slug: "created-once", name: "New project", description: "", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" } },
+        meta: { request_id: "req-created" },
+      }), { status: 200 }))
+    }
+    return Promise.resolve(new Response(JSON.stringify({ data: {}, meta: { request_id: "req-get" } }), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  const onOpenProject = vi.fn()
+    .mockImplementationOnce(() => { throw new Error("navigation_interrupted") })
+    .mockImplementationOnce((id: string) => {
+      window.history.pushState(window.history.state, "", `/app/project/${id}`)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+  render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} onOpenProject={onOpenProject} /></LocaleProvider></ThemeProvider>)
+  const trigger = await screen.findByRole("button", { name: "新建专案" })
+  fireEvent.pointerDown(trigger, { button: 0 })
+  fireEvent.click(trigger)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  expect(await screen.findByTestId("project-create-error")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_created-once"))
+  expect(onOpenProject).toHaveBeenCalledTimes(2)
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(1)
+  vi.unstubAllGlobals()
 })
 
 it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {

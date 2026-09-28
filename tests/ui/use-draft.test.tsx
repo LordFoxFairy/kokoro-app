@@ -45,4 +45,17 @@ describe("useDraft persistence", () => {
     expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}"))
       .toEqual({ "conversation-2": "keep this before navigation" })
   })
+
+  it("keeps an empty project's draft separate from a newer direct-chat draft", () => {
+    const { result, rerender } = renderHook(
+      ({ projectRef }: { projectRef: string | undefined }) => useDraft(null, true, projectRef),
+      { initialProps: { projectRef: undefined as string | undefined } },
+    )
+    act(() => result.current.updateDraft("B direct draft"))
+    rerender({ projectRef: "project-a" })
+    act(() => result.current.updateDraft("A project draft"))
+    expect(result.current.draft).toBe("A project draft")
+    rerender({ projectRef: undefined })
+    expect(result.current.draft).toBe("B direct draft")
+  })
 })

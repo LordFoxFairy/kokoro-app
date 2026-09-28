@@ -264,6 +264,18 @@ it("新建专案动作会生成唯一的本地预览专案引用并承接聊天"
   expect(onOpenProject).toHaveBeenCalledWith(expect.stringMatching(/^preview-project-[a-z0-9-]+$/), "建立网站")
 })
 
+it("正式欢迎页的新建专案只上报创建意图，不预造 preview 项目", () => {
+  const onOpenProject = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome preview={false} draft="正式草稿" creationIntent="website" onOpenProject={onOpenProject} />
+    </LocaleProvider>,
+  )
+  fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
+  fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
+  expect(onOpenProject).toHaveBeenCalledWith("preview-project", "正式草稿")
+})
+
 it("创建类型更多按钮横向浏览隐藏选项", () => {
   const scrollTo = vi.fn()
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo })

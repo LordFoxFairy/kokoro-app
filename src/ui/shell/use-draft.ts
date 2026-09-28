@@ -56,8 +56,11 @@ export type DraftController = {
   clearDraft: () => void
 }
 
-export function useDraft(activeId: string | null, mounted: boolean): DraftController {
-  const draftKey = activeId ?? DRAFT_PENDING_KEY
+export function useDraft(activeId: string | null, mounted: boolean, projectRef?: string): DraftController {
+  // A project without a conversation is still a distinct composer. Reusing
+  // __pending__ here would overwrite a newer direct-chat draft during an
+  // asynchronous project-create handoff.
+  const draftKey = activeId ?? (projectRef ? `__project__:${encodeURIComponent(projectRef)}` : DRAFT_PENDING_KEY)
   const [draftEdit, setDraftEdit] = useState<{ key: string; value: string } | null>(null)
   const pendingWriteRef = useRef<{
     key: string

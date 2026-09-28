@@ -26,7 +26,7 @@ export function createPreviewProjectRef(): string {
  * The direct inbox is a standalone chat surface. Project workspaces use a
  * separate component because their task list and context are persistent.
  */
-type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings" | "onCreationIntentSelect" | "onOpenProject"> & {
+type DirectChatWelcomeProps = Pick<EmptyStateProps, "brandName" | "composer" | "draft" | "creationIntent" | "onOpenSettings" | "onCreationIntentSelect" | "onOpenProject" | "preview"> & {
   onPrompt?: EmptyStateProps["onPrompt"]
 }
 
@@ -39,6 +39,7 @@ export function KokoroDirectChatWelcome({
   onCreationIntentSelect,
   onOpenSettings,
   onOpenProject,
+  preview = true,
 }: DirectChatWelcomeProps = {}) {
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
   const [selectedCreationType, setSelectedCreationType] = useState<string | null>(null)
@@ -122,7 +123,7 @@ export function KokoroDirectChatWelcome({
       data-creation-type-selected={selectedCreationType ? "true" : undefined}
       aria-labelledby="kokoro-direct-chat-heading"
     >
-      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} creationIntent={creationIntent} selectedProject={selectedProject} setSelectedProject={setSelectedProject} selectedCreationType={selectedCreationType} setSelectedCreationType={setSelectedCreationType} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onCreationIntentSelect === undefined ? {} : { onCreationIntentSelect })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onOpenProject === undefined ? {} : { onOpenProject })} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} bannerIndex={bannerIndex} setBannerIndex={setBannerIndex} setBannerPaused={setBannerPaused} createPreviewProjectRef={createPreviewProjectRef} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
+      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} creationIntent={creationIntent} selectedProject={selectedProject} setSelectedProject={setSelectedProject} selectedCreationType={selectedCreationType} setSelectedCreationType={setSelectedCreationType} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onCreationIntentSelect === undefined ? {} : { onCreationIntentSelect })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onOpenProject === undefined ? {} : { onOpenProject })} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} bannerIndex={bannerIndex} setBannerIndex={setBannerIndex} setBannerPaused={setBannerPaused} createPreviewProjectRef={preview ? createPreviewProjectRef : () => "preview-project"} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
     </section>
   )
 }

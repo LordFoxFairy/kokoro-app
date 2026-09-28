@@ -114,7 +114,6 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                     {brandName}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => {
-                    setSelectedProject(t("firstSite.newProject"))
                     onOpenProject?.(createPreviewProjectRef(), draft)
                   }}>
                     {t("firstSite.newProject")}
