@@ -46,7 +46,7 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
-  it("allows the owner upload deadline only for one project resource POST", async () => {
+  it("allows the owner upload deadline only for Project resources and personal Library files", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"error":{"code":"resource_scan_pending"}}', {
       status: 503,
       headers: { "content-type": "application/json" },
@@ -64,12 +64,23 @@ describe("/api/hub/[...path] proxy", () => {
     expect(upload.maxRequestBytes).toBe(1024 * 1024)
     expect(new Headers(upload.headers).get("idempotency-key")).toBe("project-resource:key-1")
 
+    await POST(new Request("http://localhost/api/hub/library/files", {
+      method: "POST",
+      headers: { origin: "http://localhost", "idempotency-key": "personal-file:key-1" },
+      body,
+    }), params(["library", "files"]))
+    const [personalTarget, , personalUpload] = vi.mocked(requestWithDomain).mock.calls[1] as [string, string, { timeoutMs?: number; maxRequestBytes?: number; headers: Record<string, string> }]
+    expect(personalTarget).toBe("http://bff.test/v1/library/files")
+    expect(personalUpload.timeoutMs).toBe(50_000)
+    expect(personalUpload.maxRequestBytes).toBe(1024 * 1024)
+    expect(new Headers(personalUpload.headers).get("idempotency-key")).toBe("personal-file:key-1")
+
     await POST(new Request("http://localhost/api/hub/projects/project-1", {
       method: "POST",
       headers: { origin: "http://localhost", "content-type": "application/json" },
       body: "{}",
     }), params(["projects", "project-1"]))
-    const [, , ordinary] = vi.mocked(requestWithDomain).mock.calls[1] as [string, string, { timeoutMs?: number }]
+    const [, , ordinary] = vi.mocked(requestWithDomain).mock.calls[2] as [string, string, { timeoutMs?: number }]
     expect(ordinary.timeoutMs).toBeUndefined()
   })
   it("rejects an oversized project resource body before forwarding it", async () => {
@@ -80,6 +91,13 @@ describe("/api/hub/[...path] proxy", () => {
     }), params(["projects", "project-1", "resources"]))
     expect(response.status).toBe(413)
     expect(await response.json()).toMatchObject({ error: "request_body_too_large" })
+    expect(requestWithDomain).not.toHaveBeenCalled()
+
+    const personalResponse = await POST(new Request("http://localhost/api/hub/library/files", {
+      method: "POST", headers: { origin: "http://localhost", "idempotency-key": "personal-file:huge", "content-type": "multipart/form-data; boundary=fixture" },
+      body: new Uint8Array(1024 * 1024 + 1),
+    }), params(["library", "files"]))
+    expect(personalResponse.status).toBe(413)
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
   it("injects web-bff caller creds + envelope scope/user and projects to the BFF", async () => {
