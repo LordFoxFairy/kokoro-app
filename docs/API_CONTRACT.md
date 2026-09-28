@@ -1,5 +1,27 @@
 # Kokoro User Web API 契约策略
 
+## W2 Library 文件 consumer 设计门（2026-09-28；尚未实施）
+
+当前正式资料库仍消费 `/api/session/artifacts` 的 Agent `ArtifactRecord`；Web public 快照
+`src/generated/bff-public-openapi.yaml` SHA-256 为
+`87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`。新 BFF owner
+`a67ae2d06b52202f349305ae3723f6e296c087a1` 的唯一 public OpenAPI SHA-256 为
+`82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9`；本门不复制机器契约。
+
+目标文件页签：浏览器 `GET /api/hub/library?kind=file&limit=50[&cursor=opaque]`，经既有同源
+Product Session adapter 到 BFF `GET /v1/library`；`kind=file` 必填，不借无参或 `kind=artifact/all`
+语义。BFF 200 为 `{data:{items:[...],next_cursor:string|null},meta:{request_id}}`，单页最多 100；
+每项必须是 `kind:"file"`、`asset_id`、`filename`、`mime_type`、十进制字符串 `size_bytes`、
+`content_sha256`、`scan_state:"clean"`、RFC3339 `created_at`。Web 在新 OpenAPI 精确 pin/生成检查后
+以独立 Zod consumer 校验 `unknown`，仅向文件视图投影必要字段；不导入 Artifact 的 `content_hash`、
+`session_id` 或下载 URL。`next_cursor` 只作 opaque 分页位置，不作权限；Web 不提供 tenant/subject/scope。
+
+只有有效 200 且 `items:[]` 才显示空态；401/403/429、BFF `400 invalid_library_kind` 或
+`invalid_library_page`、`502 storage_response_invalid`、`503 storage_unavailable`、网络故障及坏 200
+均显示错误，不降级为 preview 空页、不自动重试。翻页失败保留已确认项并由用户重试原 cursor；
+切换页签/卸载取消迟到请求。文件上传、下载和 Agent Artifact 新 public 列表不在本契约，
+旧作品页签的 `/api/session/artifacts` 行为不变。此处是 consumer 设计，不是第二份可编辑 BFF OpenAPI。
+
 ## W1D-WEB-IAM-DIRECT-CUT browser-private 当前契约（2026-09-26，Root 集成待验）
 
 ### 切片前 operation 与当前结果

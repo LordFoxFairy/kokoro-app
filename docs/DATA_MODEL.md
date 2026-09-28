@@ -1,5 +1,18 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W2 Library 文件/作品分离（2026-09-28；设计未实施）
+
+当前 Library React 状态只有 Agent `ArtifactRecord(content_hash,session_id,title,...)`，正式来源是
+`/api/session/artifacts`；Web 不持有个人 Asset 模型。目标个人文件来自 BFF `kind=file` 的
+Storage CLEAN ASSET 投影，以 `asset_id` 为唯一列表身份；Agent 作品保留独立 `content_hash`/
+`session_id` 模型，不能用类型断言、可选字段或哈希下载动作合并两者。文件 `content_sha256`
+仅作 wire 边界校验，不作为列表身份或下载许可。
+
+文件页签只在 React 生命周期保存已确认页面、opaque cursor、loading/error 与当前页签状态；
+切换页签/卸载取消在途读取，刷新后重新向 BFF GET。无新增 Web SQL、Redis、localStorage、
+Asset/Artifact 副本、跨 owner join、上传 receipt 或持久 cursor。当前个人 Product 上传/下载未发布，
+不从 Project 上传、Artifact 下载或显式 preview 样本推造个人文件事实。
+
 ## W2 项目资源读取数据边界（2026-09-28）
 
 Web 不新增 schema、表、Redis key、持久缓存、receipt 或对象副本。BFF 拥有项目资源列表权限与 cursor，

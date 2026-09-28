@@ -1,5 +1,27 @@
 # Kokoro User Web 技术设计
 
+## W2 Library 个人文件页面设计门（2026-09-28；尚未实施）
+
+当前态：`/app/library` 的 `KokoroLibrarySurface` 仅显示 Agent `ArtifactRecord`，正式 GET 是
+`/api/session/artifacts`；开发环境也已不再隐式退回 preview。Web 固定的 BFF public OpenAPI 仍为
+`31c4803`/SHA-256 `87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`，
+不含 BFF 新 `kind=file` 成功契约。BFF owner `a67ae2d` 已发布 SHA-256
+`82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9`；本次仅记设计，未重钉、未改 UI。
+
+目标态：复用现有 Library 页面和成熟 shadcn `Tabs`，默认“个人文件”，另一页签“Agent 作品”保留原
+Artifact 读取、筛选、收藏、来源和下载语义。文件页签独立读取同源
+`GET /api/hub/library?kind=file&limit=50[&cursor=...]`，由现有 Product Session adapter 转 BFF
+`GET /v1/library`；只以 `asset_id` 标识文件，不把 Asset cast 成 `ArtifactRecord` 或复用
+`content_hash/session_id` 动作。文件列表仅投影已校验的文件名、类型、大小、创建时间；当前无个人
+Product 上传/下载契约，故无上传、下载或来源假按钮。显式 preview 可保持本地样本语义，但不能伪造正式成功页。
+
+放置裁决：采用现有 `kokoro-library-surface` 作页签组装，在同一 feature 拆文件列表/读取状态，
+在 `src/contract/` 增加独立文件 wire 校验；复用 `/api/hub/[...path]`，不新建 route、顶层模块或缓存。
+淘汰另建 `/app/files`（拆裂同一 Library 导航）和给 `ArtifactRecord` 添加可选 Asset 字段（混淆身份及生命周期）。
+首次/翻页分别有 loading、真实空页、错误与手动重试；切换页签/卸载取消请求并忽略迟到结果，
+按 `asset_id` 去重并阻止重复 cursor。后续代码片先固定 BFF 新 OpenAPI 原字节与生成检查，再写独立
+Zod consumer、组件测试及真登录浏览器隐私/刷新验收；此文档门不代表页面已可用。
+
 ## W2 正式项目创建纵切（2026-09-28）
 
 当前态：rail `useAppFrameProject.createProject` 无条件生成 `preview-project-*`；欢迎页的“新建专案”也先生成 preview ref。正式模式因此跳转到 BFF 中不存在的项目。BFF 是 Project 唯一 writer，既有 `/api/hub/[...path]` 同源 adapter 已支持 POST 和透传 `Idempotency-Key`；Web 无 Project schema 或事务。
