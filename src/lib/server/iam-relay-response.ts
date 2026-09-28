@@ -194,3 +194,36 @@ export function browserAuthorizeResponse(
   headers.set("location", location)
   return new Response(null, { status: 302, headers })
 }
+
+// The issuer may return a Better Auth JSON command or a native 302. Neither
+// points to a usable bare sign-in page; /login starts the fixed OIDC flow.
+export function browserLogoutConfirmationResponse(
+  upstream: IamRelayUpstream,
+  webOrigin: string,
+  secureCookies: boolean,
+  fallbackRequestId: string,
+): Response | null {
+  const native = nativeIamResponse(upstream, webOrigin, secureCookies, fallbackRequestId)
+  if (native === null) return null
+  if (upstream.status === 302) {
+    const location = upstream.headers.get("location")
+    if (location !== "/auth/sign-in" && location !== `${webOrigin}/auth/sign-in`) return null
+  } else if (upstream.status === 200) {
+    if (upstream.headers.has("location") ||
+      !/^application\/json(?:; charset=utf-8)?$/iu.test(upstream.headers.get("content-type") ?? "")) return null
+    try {
+      const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(upstream.body))
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return null
+      const fields = value as Record<string, unknown>
+      if (Object.keys(fields).sort().join(",") !== "redirect,url" || fields.redirect !== true ||
+        fields.url !== `${webOrigin}/auth/sign-in`) return null
+    } catch { return null }
+  } else return upstream.status >= 400 ? native : null
+
+  const headers = new Headers(native.headers)
+  headers.delete("content-length")
+  headers.delete("content-type")
+  headers.set("cache-control", "no-store")
+  headers.set("location", "/login")
+  return new Response(null, { status: 303, headers })
+}

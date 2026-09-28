@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { iamRelayConfig, matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { filterIssuerCookies, IAM_RELAY_POLICY, resolveBrowserIamGet } from "@/lib/server/iam-relay-policy"
-import { browserAuthorizeResponse, browserIamGetResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
+import { browserAuthorizeResponse, browserIamGetResponse, browserLogoutConfirmationResponse, nativeIamResponse } from "@/lib/server/iam-relay-response"
 import { requestIamRelay } from "@/lib/server/iam-relay-transport"
 
 export const runtime = "nodejs"
@@ -180,7 +180,7 @@ export async function POST(request: Request, context?: RouteContext): Promise<Re
       body: bytes, headers, signal: request.signal, timeoutMs: IAM_RELAY_POLICY.maxDurationMs,
       maxRequestBytes: 1024, maxResponseBytes: IAM_RELAY_POLICY.maxResponseBytes,
       maxHeaderBytes: IAM_RELAY_POLICY.maxHeaderBytes })
-    return nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id)
+    return browserLogoutConfirmationResponse(upstream, config.webOrigin, config.secureCookies, id)
       ?? errorResponse("iam_relay_response_invalid", 502, id)
   } catch { return errorResponse("iam_relay_unavailable", 503, id) }
 }

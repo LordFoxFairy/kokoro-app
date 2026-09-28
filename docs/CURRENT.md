@@ -1,5 +1,12 @@
 # Kokoro User Web 当前状态
 
+W1F-WEB-ISSUER-LOGOUT-POST-REDIRECT（2026-09-28，待 Root 真浏览器验收）：当前真实 IAM 的退出确认 POST 成功返回
+`200 application/json` 与精确 `{redirect:true,url:WEB_ORIGIN/auth/sign-in}`；此前 Web relay 原样显示 JSON。
+本仓已将**仅此固定确认 POST** 的成功 JSON 或固定 302 回执严格转换为无 body 的 303 `/login` 导航
+（裸 `/auth/sign-in` 没有 OAuth 签名参数会 404），保留 issuer 清理 Cookie 与安全头；异域、query/hash、
+编码路径、额外字段、畸形 JSON、错误状态均不触发转换。
+聚焦单元和真实 Next HTTP fixture 已从旧 302-only 切到 200 JSON 测试；3310 当前运行副本尚未由 Root 同步和复验。
+
 W2-WEB-LIBRARY-PERSONAL-UPLOAD-CODE 工作树（2026-09-28，待 Root 审查）：已将 BFF
 `8a90fdd9ec3809000924229bfc7b986ba8ba1522` public OpenAPI 原字节 SHA-256
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52` 固定为唯一 Web generated

@@ -189,8 +189,8 @@ describe("/iam/[...path] read-only relay", () => {
     const good = () => browserRequest(target, { method: "POST", headers: { origin: "https://web.example.test",
       "content-type": "application/x-www-form-urlencoded", cookie }, body: "action=confirm" })
     const response = await POST(good(), params(["oauth2", "end-session", "confirm"]))
-    expect(response.status).toBe(302)
-    expect(response.headers.get("location")).toBe("/auth/sign-in")
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe("/login")
     const call = requestIamRelay.mock.calls[0]?.[0]
     expect(call.url).toBe("http://bff.test/iam/oauth2/end-session/confirm")
     expect(call.headers.get("cookie")).toBe("kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=signed")
@@ -204,6 +204,83 @@ describe("/iam/[...path] read-only relay", () => {
     ]) expect((await POST(invalid, params(["oauth2", "end-session", "confirm"]))).status).toBeGreaterThanOrEqual(400)
     expect(requestIamRelay).toHaveBeenCalledTimes(1)
   })
+
+  it("converts only the issuer's exact successful logout JSON into a browser 303", async () => {
+    requestIamRelay.mockResolvedValue(upstream({ status: 200,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "issuer-logout" },
+      setCookies: [
+        "kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax",
+        "kokoro-issuer.session_token.oauth_logout_confirmation=; Path=/iam/oauth2/end-session/confirm; Max-Age=0; HttpOnly; SameSite=Lax",
+      ],
+      body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in" }),
+    }))
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
+      method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded",
+        cookie: "kokoro-issuer.session_token=issuer; kokoro-issuer.session_token.oauth_logout_confirmation=signed" },
+      body: "action=confirm",
+    }), params(["oauth2", "end-session", "confirm"]))
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe("/login")
+    expect(response.headers.get("content-type")).toBeNull()
+    expect(response.headers.get("content-length")).toBeNull()
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("x-request-id")).toBe("issuer-logout")
+    expect(response.headers.getSetCookie()).toHaveLength(2)
+    expect(await response.text()).toBe("")
+  })
+
+  it.each([
+    { redirect: true, url: "https://evil.example/auth/sign-in" },
+    { redirect: true, url: "https://web.example.test/auth/sign-in?next=evil" },
+    { redirect: true, url: "https://web.example.test/auth/sign-in#fragment" },
+    { redirect: true, url: "https://web.example.test/auth/%73ign-in" },
+    { redirect: true, url: "/auth/sign-in" },
+    { redirect: false, url: "https://web.example.test/auth/sign-in" },
+    { redirect: true, url: "https://web.example.test/auth/sign-in", extra: "drift" },
+  ])("rejects malformed issuer logout navigation without leaking cookies", async (payload) => {
+    requestIamRelay.mockResolvedValue(upstream({ status: 200, headers: { "content-type": "application/json" },
+      setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"],
+      body: JSON.stringify(payload) }))
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
+      method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded",
+        cookie: "kokoro-issuer.session_token.oauth_logout_confirmation=signed" }, body: "action=confirm",
+    }), params(["oauth2", "end-session", "confirm"]))
+    expect(response.status).toBe(502)
+    expect(response.headers.get("location")).toBeNull()
+    expect(response.headers.getSetCookie()).toEqual([])
+  })
+
+  it.each([
+    { status: 200, contentType: "text/html", body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in" }), expected: 502 },
+    { status: 200, contentType: "application/json", body: "{", expected: 502 },
+    { status: 401, contentType: "application/json", body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in" }), expected: 401 },
+  ])("never navigates on malformed or unsuccessful logout responses", async ({ status, contentType, body, expected }) => {
+    requestIamRelay.mockResolvedValue(upstream({ status, headers: { "content-type": contentType }, body }))
+    const { POST } = await import("@/app/iam/[...path]/route")
+    const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
+      method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded",
+        cookie: "kokoro-issuer.session_token.oauth_logout_confirmation=signed" }, body: "action=confirm",
+    }), params(["oauth2", "end-session", "confirm"]))
+    expect(response.status).toBe(expected)
+    expect(response.headers.get("location")).toBeNull()
+  })
+
+  it.each(["/auth/sign-in?next=evil", "https://evil.example/auth/sign-in", "/auth/%73ign-in"])(
+    "rejects non-fixed native logout redirects without forwarding cookies: %s", async (location) => {
+      requestIamRelay.mockResolvedValue(upstream({ status: 302, headers: { location },
+        setCookies: ["kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax"] }))
+      const { POST } = await import("@/app/iam/[...path]/route")
+      const response = await POST(browserRequest("https://web.example.test/iam/oauth2/end-session/confirm", {
+        method: "POST", headers: { origin: "https://web.example.test", "content-type": "application/x-www-form-urlencoded",
+          cookie: "kokoro-issuer.session_token.oauth_logout_confirmation=signed" }, body: "action=confirm",
+      }), params(["oauth2", "end-session", "confirm"]))
+      expect(response.status).toBe(502)
+      expect(response.headers.get("location")).toBeNull()
+      expect(response.headers.getSetCookie()).toEqual([])
+    },
+  )
 
   it("cuts off an application-visible slow confirmation stream within five seconds without opening BFF", async () => {
     const { POST } = await import("@/app/iam/[...path]/route")

@@ -325,11 +325,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           request.on("end", () => {
             expect(Buffer.concat(chunks).toString("utf8")).toBe("action=confirm")
             issuerSessionActive = false
-            response.writeHead(302, { location: "/auth/sign-in", "set-cookie": [
+            response.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "set-cookie": [
               "kokoro-issuer.session_token=; Path=/iam; Max-Age=0; HttpOnly; SameSite=Lax",
               "kokoro-issuer.session_token.oauth_logout_confirmation=; Path=/iam/oauth2/end-session/confirm; Max-Age=0; HttpOnly; SameSite=Lax",
             ] })
-            response.end()
+            response.end(JSON.stringify({ redirect: true, url: `http://localhost:${nextPort}/auth/sign-in` }))
           })
           return
         }
@@ -571,8 +571,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(rejected.status).toBe(403)
     const confirmed = await http(nextPort, "/iam/oauth2/end-session/confirm", "POST", "action=confirm",
       { origin: `http://localhost:${nextPort}`, cookie: `${issuerCookie}; ${confirmationCookie}` })
-    expect(confirmed.status).toBe(302)
-    expect(confirmed.headers.location).toBe("/auth/sign-in")
+    expect(confirmed.status).toBe(303)
+    expect(confirmed.headers.location).toBe("/login")
+    expect(confirmed.body).toBe("")
+    const nextLogin = await http(nextPort, confirmed.headers.location as string, "GET", "")
+    expect(nextLogin.status).toBe(302)
+    expect(nextLogin.headers.location).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
     const issuerAfter = cookieHeader(authorize, get, confirmed)
     expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerAfter })).body)
       .toContain('"session":null')
