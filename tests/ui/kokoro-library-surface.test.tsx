@@ -22,7 +22,11 @@ beforeEach(() => {
   routerPush.mockReset()
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 
 type LibraryProps = React.ComponentProps<typeof KokoroLibrarySurface>
 
@@ -255,6 +259,36 @@ it("注入的 live client 失败时显示错误，而不是静默伪装成空资
 
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("作品加载失败"))
   expect(screen.queryByTestId("library-empty-state")).not.toBeInTheDocument()
+})
+
+it("开发环境未注入 client 的正式资料库请求同源 live，失败可见且只在点击后重试", async () => {
+  vi.stubEnv("NODE_ENV", "development")
+  const fetchArtifacts = vi.fn()
+    .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ artifacts: [artifactAt(0)] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }))
+  vi.stubGlobal("fetch", fetchArtifacts)
+  renderLibrary({ fixtureArtifacts: undefined, preview: false })
+
+  await waitFor(() => expect(fetchArtifacts).toHaveBeenCalledWith("/api/session/artifacts", { cache: "no-store" }))
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("作品加载失败"))
+  expect(screen.queryByTestId("library-empty-state")).not.toBeInTheDocument()
+  expect(fetchArtifacts).toHaveBeenCalledTimes(1)
+
+  fireEvent.click(screen.getByRole("button", { name: "重新加载作品" }))
+  expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
+  expect(fetchArtifacts).toHaveBeenCalledTimes(2)
+})
+
+it("显式 preview 仍使用资料库 fixture transport，不请求正式同源 API", async () => {
+  const fetchArtifacts = vi.fn()
+  vi.stubGlobal("fetch", fetchArtifacts)
+  renderLibrary({ fixtureArtifacts: undefined, preview: true })
+
+  await screen.findByTestId("library-empty-state")
+  expect(fetchArtifacts).not.toHaveBeenCalled()
 })
 
 it("加载中保持与目录相同的三列卡片骨架，不用低高度横线占位", async () => {

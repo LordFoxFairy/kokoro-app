@@ -89,6 +89,7 @@
 - `src/core/`、`src/lib/persisted-store.ts`：受 Zod 校验的 browser store；
 - `src/dev/preview-transport.ts`：local/test 合成 Chat 历史；
 - `src/features/app/kokoro-scheduled-surface.tsx`：preview Scheduled localStorage；
+- `src/features/app/kokoro-library-surface.tsx`：资料库的显式 preview/fixture 与正式同源 live 加载、错误及重试状态；
 - `src/ui/theme/`、`src/i18n/`、`src/ui/shell/`：主题、locale、草稿和 UI 偏好。
 
 这些数据不是服务端业务事实；完整分类见 [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)。

@@ -111,11 +111,9 @@ export function KokoroLibrarySurface({
   downloadArtifact,
 }: KokoroLibrarySurfaceProps) {
   const t = useT()
-  // Local development can have an authenticated session before the library
-  // BFF is deployed. Only an un-injected client uses the synthetic transport;
-  // production and explicit client seams always retain live semantics.
-  const fixtureMode = preview || process.env.NODE_ENV !== "production"
-  const useFixtureTransport = fixtureMode && !artifactClient && !fixtureArtifacts
+  // Only an explicit preview selects synthetic transport. Development with a
+  // Product Session remains live and must show an unavailable BFF as an error.
+  const useFixtureTransport = preview && !artifactClient && !fixtureArtifacts
   const { filter, query, view, favoritesOnly } = useLibraryUrlState()
   const updateUrlState = useCallback((patch: Partial<LibraryUrlState>) => {
     writeUrlState({ ...readUrlState(), ...patch })
