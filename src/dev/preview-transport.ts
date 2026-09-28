@@ -425,8 +425,6 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
 
     // The live Manus baseline is an empty library for a new workspace. Keep
     // the route-level preview honest instead of inventing tenant artifacts;
-    // interaction tests inject explicit fixtureArtifacts when they need cards.
-    listArtifacts: () => Promise.resolve({ artifacts: [] }),
     createShare: () => Promise.resolve({ share_id: "shr_preview_0000000000000000000000000000" }),
     revokeShare: () => Promise.resolve({ ok: true as const }),
 

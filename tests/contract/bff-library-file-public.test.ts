@@ -6,8 +6,8 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "d5c868f8ab8b8a33750e1286e9d020ca72895641"
-const OWNER_SHA256 = "3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681"
+const OWNER_COMMIT = "55d3c9cd55386d9dcc074e893cc388924dd94c13"
+const OWNER_SHA256 = "8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b"
 
 it("pins the BFF owner Library file operation and distinct Asset wire", async () => {
   const bytes = await readFile(SNAPSHOT)
@@ -23,11 +23,14 @@ it("pins the BFF owner Library file operation and distinct Asset wire", async ()
     responses: Record<string, { content?: { "application/json": { schema: { $ref: string } } } }>
   }
   expect(get.operationId).toBe("listLibrary")
-  expect(get.parameters.find((parameter) => parameter.name === "kind")).toMatchObject({ required: true, schema: { enum: ["file"] } })
+  expect(get.parameters.find((parameter) => parameter.name === "kind")).toMatchObject({ required: true, schema: { enum: ["file", "artifact"] } })
   expect(get.parameters.find((parameter) => parameter.name === "limit")?.schema).toMatchObject({ minimum: 1, maximum: 100, default: 50 })
-  expect(get.responses["200"]?.content?.["application/json"].schema.$ref).toBe("#/components/schemas/LibraryFileListResponse")
-  expect(spec.components.schemas.LibraryFileListResponse).toMatchObject({
-    properties: { data: { properties: { items: { items: { required: expect.arrayContaining(["kind", "asset_id", "scan_state"]) } } } } },
+  expect(get.responses["200"]?.content?.["application/json"].schema.$ref).toBe("#/components/schemas/LibraryListResponse")
+  expect(spec.components.schemas.LibraryFilePage).toMatchObject({
+    properties: { items: { items: { $ref: "#/components/schemas/LibraryFileItem" } } },
+  })
+  expect(spec.components.schemas.LibraryFileItem).toMatchObject({
+    required: expect.arrayContaining(["kind", "asset_id", "scan_state"]),
   })
 })
 

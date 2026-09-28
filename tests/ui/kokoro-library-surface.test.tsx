@@ -11,11 +11,11 @@ vi.mock("next/navigation", () => ({
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroLibrarySurface } from "@/features/app/kokoro-library-surface"
 import styles from "@/features/app/kokoro-library-surface.module.css"
-import type { ArtifactList, ArtifactRecord } from "@/contract/http"
+import type { LibraryArtifact, LibraryArtifactPage } from "@/features/app/kokoro-library-artifact-client"
 
-const artifacts: ArtifactRecord[] = [
-  { content_hash: "hash-slide", session_id: "session-1", title: "季度汇报.pptx", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", size: 1024, created_at: "2026-08-30T12:00:00Z" },
-  { content_hash: "hash-doc", session_id: "session-2", title: "研究摘要.pdf", mime: "application/pdf", size: 2048, created_at: "2026-08-29T12:00:00Z" },
+const artifacts: LibraryArtifact[] = [
+  { conversationId: "session-1", artifactId: "artifact-slide", assetId: "asset-slide", artifactKind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", sizeBytes: "1024", deliveredAt: "2026-08-30T12:00:00Z" },
+  { conversationId: "session-2", artifactId: "artifact-doc", assetId: "asset-doc", artifactKind: "document", title: "研究摘要.pdf", filename: "研究摘要.pdf", mimeType: "application/pdf", sizeBytes: "2048", deliveredAt: "2026-08-29T12:00:00Z" },
 ]
 
 const fileOne = {
@@ -509,7 +509,7 @@ type LibraryRenderProps = Omit<Partial<LibraryProps>, "fixtureArtifacts"> & {
   fixtureArtifacts?: LibraryProps["fixtureArtifacts"] | undefined
 }
 
-function artifactAt(index: number): ArtifactRecord {
+function artifactAt(index: number): LibraryArtifact {
   const artifact = artifacts.at(index)
   if (artifact === undefined) {
     throw new Error(`Expected fixture artifact at index ${index}`)
@@ -607,7 +607,7 @@ it("进入 Agent 作品页签时注入的资料库 fixture 同步渲染", () => 
 })
 
 it("收藏作品跨个人文件页签切换保留，默认文件页签不预载作品", async () => {
-  const listArtifacts = vi.fn(async () => ({ artifacts }))
+  const listArtifacts = vi.fn(async () => ({ items: artifacts, nextCursor: null }))
   const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
   vi.stubGlobal("fetch", fetchFiles)
   render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} artifactClient={{ listArtifacts }} /></LocaleProvider>)
@@ -628,9 +628,9 @@ it("收藏作品跨个人文件页签切换保留，默认文件页签不预载�
 })
 
 it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略旧请求结果", async () => {
-  let resolveRequest: (value: ArtifactList) => void = () => {}
+  let resolveRequest: (value: LibraryArtifactPage) => void = () => {}
   const artifactClient = {
-    listArtifacts: vi.fn(() => new Promise<ArtifactList>((resolve) => { resolveRequest = resolve })),
+    listArtifacts: vi.fn(() => new Promise<LibraryArtifactPage>((resolve) => { resolveRequest = resolve })),
   }
   const initialProps: LibraryProps = { onPrompt: vi.fn(), artifactClient }
   const view = render(
@@ -647,7 +647,7 @@ it("资料库从异步加载切换为受控 fixture 时结束 loading 并忽略�
   expect(await screen.findByText("季度汇报.pptx")).toBeInTheDocument()
   expect(screen.queryByRole("status", { name: "正在加载作品…" })).not.toBeInTheDocument()
 
-  resolveRequest({ artifacts: [artifactAt(1)], next_cursor: "stale-cursor" })
+  resolveRequest({ items: [artifactAt(1)], nextCursor: "stale-cursor" })
   await waitFor(() => expect(screen.queryByText("研究摘要.pdf")).not.toBeInTheDocument())
   expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
 })
@@ -673,11 +673,11 @@ it("受控 fixture 接管失败的首屏请求时清除错误态", async () => {
 })
 
 it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", async () => {
-  let resolveMore: (value: ArtifactList) => void = () => {}
+  let resolveMore: (value: LibraryArtifactPage) => void = () => {}
   const listArtifacts = vi
-    .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
-    .mockImplementationOnce(() => new Promise<ArtifactList>((resolve) => { resolveMore = resolve }))
+    .fn<(cursor: string | null, _signal: AbortSignal) => Promise<LibraryArtifactPage>>()
+    .mockResolvedValueOnce({ items: [artifactAt(0)], nextCursor: "cursor-2" })
+    .mockImplementationOnce(() => new Promise<LibraryArtifactPage>((resolve) => { resolveMore = resolve }))
   const initialProps: LibraryProps = { onPrompt: vi.fn(), artifactClient: { listArtifacts } }
   const view = render(
     <LocaleProvider><KokoroLibrarySurface {...initialProps} /></LocaleProvider>,
@@ -695,7 +695,7 @@ it("受控 fixture 接管进行中的翻页时清除分页并忽略旧页面", a
   expect(await screen.findByText("研究摘要.pdf")).toBeInTheDocument()
   expect(screen.queryByTestId("library-pagination")).not.toBeInTheDocument()
 
-  resolveMore({ artifacts: [artifactAt(0)], next_cursor: "stale-cursor" })
+  resolveMore({ items: [artifactAt(0)], nextCursor: "stale-cursor" })
   await waitFor(() => expect(screen.queryByText("季度汇报.pptx")).not.toBeInTheDocument())
 })
 
@@ -714,7 +714,7 @@ it("无匹配筛选时给出明确空态并可一键恢复", async () => {
 })
 
 it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态", async () => {
-  const downloadArtifact = vi.fn(async () => false)
+  const downloadArtifact = vi.fn(async () => { throw new Error("preflight failed") })
   const onFavoriteChange = vi.fn()
   const onOpenSession = vi.fn()
   renderLibrary({ downloadArtifact, onFavoriteChange, onOpenSession })
@@ -729,7 +729,7 @@ it("收藏卡片、打开来源和下载失败均保持明确的可恢复状态"
 
   fireEvent.click(within(card).getByRole("button", { name: "下载 季度汇报.pptx" }))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("下载失败"))
-  expect(downloadArtifact).toHaveBeenCalledWith(artifactAt(0))
+  expect(downloadArtifact).toHaveBeenCalledWith(artifactAt(0), expect.any(AbortSignal))
 })
 
 it("卡片使用独立内容和动作布局，避免继承 Card 的空壳间距", async () => {
@@ -757,16 +757,16 @@ it("开发环境未注入 client 的正式资料库请求同源 live，失败可
   vi.stubEnv("NODE_ENV", "development")
   const fetchArtifacts = vi.fn()
     .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ artifacts: [artifactAt(0)] }), {
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { items: [{ kind: "artifact", conversation_id: "session-1", artifact_id: "artifact-slide", asset_id: "asset-slide", artifact_kind: "document", title: "季度汇报.pptx", filename: "季度汇报.pptx", mime_type: "application/pdf", size_bytes: "1024", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-08-30T12:00:00Z" }], next_cursor: null }, meta: { request_id: "req-1" } }), {
       status: 200,
       headers: { "content-type": "application/json" },
     }))
-  vi.stubGlobal("fetch", (url: string, options: RequestInit) => url.startsWith("/api/hub/library")
-    ? Promise.reject(new Error("fixture BFF unavailable"))
+  vi.stubGlobal("fetch", (url: string, options: RequestInit) => url.includes("kind=file")
+    ? Promise.resolve(new Response(JSON.stringify(filePage([])), { status: 200 }))
     : fetchArtifacts(url, options))
   renderLibrary({ fixtureArtifacts: undefined, preview: false })
 
-  await waitFor(() => expect(fetchArtifacts).toHaveBeenCalledWith("/api/session/artifacts", { cache: "no-store" }))
+  await waitFor(() => expect(fetchArtifacts).toHaveBeenCalledWith("/api/hub/library?kind=artifact&limit=50", expect.objectContaining({ cache: "no-store" })))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("作品加载失败"))
   expect(screen.queryByTestId("library-empty-state")).not.toBeInTheDocument()
   expect(fetchArtifacts).toHaveBeenCalledTimes(1)
@@ -786,9 +786,9 @@ it("显式 preview 仍使用资料库 fixture transport，不请求正式同源 
 })
 
 it("加载中保持与目录相同的三列卡片骨架，不用低高度横线占位", async () => {
-  let resolveRequest: (value: { artifacts: [] }) => void = () => {}
+  let resolveRequest: (value: { items: [], nextCursor: null }) => void = () => {}
   const artifactClient = {
-    listArtifacts: vi.fn(() => new Promise<{ artifacts: [] }>((resolve) => { resolveRequest = resolve })),
+    listArtifacts: vi.fn(() => new Promise<{ items: [], nextCursor: null }>((resolve) => { resolveRequest = resolve })),
   }
   renderLibrary({ fixtureArtifacts: undefined, artifactClient })
 
@@ -798,33 +798,33 @@ it("加载中保持与目录相同的三列卡片骨架，不用低高度横线�
   expect(screen.queryByTestId("library-loading-line")).not.toBeInTheDocument()
 
   await waitFor(() => expect(artifactClient.listArtifacts).toHaveBeenCalled())
-  resolveRequest({ artifacts: [] })
+  resolveRequest({ items: [], nextCursor: null })
   await waitFor(() => expect(screen.getByTestId("library-empty-state")).toBeInTheDocument())
 })
 
 it("通过 next_cursor 加载下一页，并在服务端重复游标时停止重复请求", async () => {
   const listArtifacts = vi
-    .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
-    .mockResolvedValueOnce({ artifacts: [artifactAt(1)], next_cursor: "cursor-2" })
+    .fn<(cursor: string | null, _signal: AbortSignal) => Promise<LibraryArtifactPage>>()
+    .mockResolvedValueOnce({ items: [artifactAt(0)], nextCursor: "cursor-2" })
+    .mockResolvedValueOnce({ items: [artifactAt(1)], nextCursor: "cursor-2" })
   renderLibrary({ fixtureArtifacts: undefined, artifactClient: { listArtifacts } })
 
   await screen.findByText("季度汇报.pptx")
   fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
   await screen.findByText("研究摘要.pdf")
 
-  expect(listArtifacts).toHaveBeenNthCalledWith(1)
-  expect(listArtifacts).toHaveBeenNthCalledWith(2, "cursor-2")
+  expect(listArtifacts).toHaveBeenNthCalledWith(1, null, expect.any(AbortSignal))
+  expect(listArtifacts).toHaveBeenNthCalledWith(2, "cursor-2", expect.any(AbortSignal))
   expect(screen.getAllByRole("listitem")).toHaveLength(2)
   expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument()
 })
 
 it("翻页失败时保留当前成果并提供明确的重试入口", async () => {
   const listArtifacts = vi
-    .fn<(cursor?: string) => Promise<ArtifactList>>()
-    .mockResolvedValueOnce({ artifacts: [artifactAt(0)], next_cursor: "cursor-2" })
+    .fn<(cursor: string | null, _signal: AbortSignal) => Promise<LibraryArtifactPage>>()
+    .mockResolvedValueOnce({ items: [artifactAt(0)], nextCursor: "cursor-2" })
     .mockRejectedValueOnce(new Error("offline"))
-    .mockResolvedValueOnce({ artifacts: [artifactAt(1)] })
+    .mockResolvedValueOnce({ items: [artifactAt(1)], nextCursor: null })
   renderLibrary({ fixtureArtifacts: undefined, artifactClient: { listArtifacts } })
 
   await screen.findByText("季度汇报.pptx")
@@ -835,12 +835,12 @@ it("翻页失败时保留当前成果并提供明确的重试入口", async () =
   fireEvent.click(screen.getByRole("button", { name: "重试加载更多" }))
   await screen.findByText("研究摘要.pdf")
   expect(screen.queryByText("更多成果加载失败，请重试。")).toBeNull()
-  expect(listArtifacts).toHaveBeenLastCalledWith("cursor-2")
+  expect(listArtifacts).toHaveBeenLastCalledWith("cursor-2", expect.any(AbortSignal))
 })
 
 it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async () => {
   const onPrompt = vi.fn()
-  renderLibrary({ initialFavoriteHashes: [], onPrompt })
+  renderLibrary({ initialFavoriteIds: [], onPrompt })
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
 
   fireEvent.click(screen.getByRole("button", { name: "仅显示收藏" }))
@@ -851,4 +851,25 @@ it("收藏筛选为空时 CTA 清除收藏筛选，不导航到新任务", async
   expect(window.location.search).not.toContain("favorites=1")
   expect(routerPush).not.toHaveBeenCalled()
   expect(onPrompt).not.toHaveBeenCalled()
+})
+
+it("正式作品页用二元 Product 列表，空页带 cursor 时继续加载而不走 hash Session API", async () => {
+  const liveArtifact = {
+    kind: "artifact", conversation_id: "conversation-1", artifact_id: "artifact-1", asset_id: "asset-1",
+    artifact_kind: "document", title: "正式报告", filename: "report.pdf", mime_type: "application/pdf",
+    size_bytes: "24", content_sha256: "a".repeat(64), source_run_id: "run-1", delivered_at: "2026-09-28T10:00:00Z",
+  }
+  const fetcher = vi.fn(async (input: string) => {
+    if (input.includes("kind=file")) return new Response(JSON.stringify(filePage([])), { status: 200 })
+    if (input.includes("cursor=continue-1")) return new Response(JSON.stringify({ data: { items: [liveArtifact], next_cursor: null }, meta: { request_id: "req-2" } }), { status: 200 })
+    if (input.includes("kind=artifact")) return new Response(JSON.stringify({ data: { items: [], next_cursor: "continue-1" }, meta: { request_id: "req-1" } }), { status: 200 })
+    throw new Error(`Unexpected legacy URL ${input}`)
+  })
+  vi.stubGlobal("fetch", fetcher)
+  renderLibrary({ fixtureArtifacts: undefined })
+  expect(await screen.findByRole("button", { name: "加载更多" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  expect(await screen.findByText("正式报告")).toBeInTheDocument()
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes("/api/session/artifacts"))).toBe(false)
+  expect(fetcher.mock.calls.some(([url]) => String(url).includes("kind=artifact&limit=50"))).toBe(true)
 })

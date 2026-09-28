@@ -913,6 +913,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.secretDeleteConfirm": "Löschen bestätigen",
   "library.retry": "Bibliothek neu laden",
   "library.downloading": "Wird heruntergeladen…",
+  "library.downloadStarted": "Download gestartet. Prüfen Sie das Ergebnis in den Browser-Downloads.",
   "library.downloadFailed": "Download fehlgeschlagen. Bitte erneut versuchen.",
   "shared.backHome": "Zurück zu Kokoro",
 

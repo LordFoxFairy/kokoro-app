@@ -46,6 +46,77 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
+  it("streams only the exact Artifact binary path with a 1 GiB ceiling and safe attachment headers", async () => {
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { status: 200, headers: {
+      "content-type": "application/octet-stream", "content-length": "3",
+      "content-disposition": "attachment; filename=\"report.bin\"; filename*=UTF-8''report.bin",
+      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
+      "x-request-id": "req_artifact_1", "x-owner-secret": "drop-me",
+    } }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-disposition")).toContain("report.bin")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("x-owner-secret")).toBeNull()
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+    const [target, , options] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, Record<string, unknown>]
+    expect(target).toBe("http://bff.test/v1/library/artifacts/conversation-1/artifact-1/content")
+    expect(options).toMatchObject({ maxResponseBytes: 1_073_741_824, maxErrorResponseBytes: 16_777_216, errorResponseTimeoutMs: 15_000, strictResponseLength: true, streamIdleTimeoutMs: expect.any(Number), streamTotalTimeoutMs: expect.any(Number) })
+  })
+
+  it("rejects Artifact query/alias, unsafe headers and a short binary stream", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const query = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content?x=1"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    expect(query.status).toBe(400)
+    const alias = await GET(new Request("http://localhost/api/hub/self/library/artifacts/conversation-1/artifact-1/content"), params(["self", "library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    expect(alias.status).toBe(404)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response("", { status: 302, headers: { location: "https://storage.invalid/object" } }))
+    const redirect = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    expect(redirect.status).toBe(502)
+    expect(redirect.headers.get("location")).toBeNull()
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array([1, 2]), { status: 200, headers: {
+      "content-type": "application/octet-stream", "content-length": "2", "content-disposition": "inline",
+      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "req_1",
+    } }))
+    const unsafe = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    expect(unsafe.status).toBe(502)
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array([1, 2]), { status: 200, headers: {
+      "content-type": "application/octet-stream", "content-length": "3", "content-disposition": "attachment; filename=\"report.bin\"; filename*=UTF-8''report.bin",
+      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "req_1",
+    } }))
+    const short = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
+    await expect(short.arrayBuffer()).rejects.toThrow()
+  })
+
+  it("rejects non-200 success codes and preserves only safe Artifact error headers", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const request = () => new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content")
+    const selector = () => params(["library", "artifacts", "conversation-1", "artifact-1", "content"])
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(null, { status: 204 }))
+    const emptySuccess = await GET(request(), selector())
+    expect(emptySuccess.status).toBe(502)
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response("partial", { status: 206 }))
+    const partial = await GET(request(), selector())
+    expect(partial.status).toBe(502)
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "admission_rate_limited" } }), {
+      status: 429, headers: { "content-type": "application/json", "x-request-id": "req_429", "retry-after": "12", "content-disposition": "attachment; filename=bad", "x-owner-secret": "drop" },
+    }))
+    const limited = await GET(request(), selector())
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get("x-request-id")).toBe("req_429")
+    expect(limited.headers.get("retry-after")).toBe("12")
+    expect(limited.headers.get("content-disposition")).toBeNull()
+    expect(limited.headers.get("x-owner-secret")).toBeNull()
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response("{}", { status: 503, headers: { "content-type": "application/json", "x-request-id": "bad id", "retry-after": "999999" } }))
+    const unavailable = await GET(request(), selector())
+    expect(unavailable.status).toBe(503)
+    expect(unavailable.headers.get("x-request-id")).toBeNull()
+    expect(unavailable.headers.get("retry-after")).toBeNull()
+  })
+
   it("returns fully verified personal download bytes and only the narrow safe headers", async () => {
     const bytes = new Uint8Array([0, 255, 1, 42])
     vi.mocked(requestWithDomain).mockResolvedValue(new Response(bytes, {

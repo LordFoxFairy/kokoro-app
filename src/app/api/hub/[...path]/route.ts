@@ -21,8 +21,9 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 // 也绝不转发浏览器可能伪造的 x-kokoro-* 身份头（新建 Headers 天然丢弃它们）。
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 const MAX_PERSONAL_DOWNLOAD_BYTES = 1_048_576
+const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
 
-function personalDownloadHeaders(headers: Headers): Headers | null {
+function safeDownloadHeaders(headers: Headers, maxBytes: number): Headers | null {
   const type = headers.get("content-type")
   const rawLength = headers.get("content-length")
   const disposition = headers.get("content-disposition")
@@ -31,7 +32,7 @@ function personalDownloadHeaders(headers: Headers): Headers | null {
   if (
     type === null || !/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(type)
     || rawLength === null || !/^(0|[1-9][0-9]*)$/u.test(rawLength)
-    || Number(rawLength) > MAX_PERSONAL_DOWNLOAD_BYTES
+    || Number(rawLength) > maxBytes
     || match === null || /["\\;]/u.test(match[1] ?? "")
     || headers.get("cache-control") !== "no-store"
     || headers.get("referrer-policy") !== "no-referrer"
@@ -55,8 +56,74 @@ function personalDownloadHeaders(headers: Headers): Headers | null {
   })
 }
 
+function personalDownloadHeaders(headers: Headers): Headers | null {
+  return safeDownloadHeaders(headers, MAX_PERSONAL_DOWNLOAD_BYTES)
+}
+
+function artifactDownloadHeaders(headers: Headers): Headers | null {
+  return safeDownloadHeaders(headers, MAX_ARTIFACT_DOWNLOAD_BYTES)
+}
+
 function invalidPersonalDownloadResponse(): Response {
   return NextResponse.json({ error: "library_file_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
+}
+
+function invalidArtifactDownloadResponse(): Response {
+  return NextResponse.json({ error: "library_artifact_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
+}
+
+function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number, signal: AbortSignal): ReadableStream<Uint8Array> {
+  const reader = source.getReader()
+  let total = 0
+  let closed = false
+  let onAbort: (() => void) | undefined
+  const cleanup = () => { if (onAbort) signal.removeEventListener("abort", onAbort) }
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      onAbort = () => {
+        if (closed) return
+        closed = true
+        void reader.cancel(signal.reason)
+        controller.error(signal.reason ?? new Error("artifact download cancelled"))
+        cleanup()
+      }
+      if (signal.aborted) onAbort()
+      else signal.addEventListener("abort", onAbort, { once: true })
+    },
+    async pull(controller) {
+      if (closed) return
+      try {
+        const result = await reader.read()
+        if (closed) return
+        if (result.done) {
+          closed = true
+          cleanup()
+          if (total !== length) controller.error(new Error("artifact download incomplete"))
+          else controller.close()
+          return
+        }
+        total += result.value.byteLength
+        if (total > length || total > MAX_ARTIFACT_DOWNLOAD_BYTES) {
+          closed = true
+          cleanup()
+          await reader.cancel(new Error("artifact download exceeded declared length"))
+          controller.error(new Error("artifact download exceeded declared length"))
+          return
+        }
+        controller.enqueue(result.value)
+      } catch (error) {
+        if (closed) return
+        closed = true
+        cleanup()
+        controller.error(error)
+      }
+    },
+    async cancel(reason) {
+      closed = true
+      cleanup()
+      await reader.cancel(reason)
+    },
+  })
 }
 
 function bffBusinessPath(path: string[]): string[] {
@@ -97,9 +164,15 @@ export async function proxyHubRequest(
   const businessPath = bffBusinessPath(path ?? [])
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
+  const artifactDownload = request.method === "GET" && businessPath.length === 5
+    && businessPath[0] === "library" && businessPath[1] === "artifacts" && businessPath[4] === "content"
   if (personalDownload && path[0] === "self") return NextResponse.json({ error: "not_found" }, { status: 404 })
+  if (artifactDownload && path[0] === "self") return NextResponse.json({ error: "not_found" }, { status: 404 })
   if (personalDownload && (search !== "" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[2] ?? ""))) {
     return NextResponse.json({ error: "invalid_library_file" }, { status: 400 })
+  }
+  if (artifactDownload && (search !== "" || ![businessPath[2], businessPath[3]].every((id) => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id ?? "")))) {
+    return NextResponse.json({ error: "invalid_library_artifact" }, { status: 400 })
   }
   const boundedFileUpload = request.method === "POST"
     && ((businessPath.length === 3 && businessPath[0] === "projects" && businessPath[2] === "resources")
@@ -137,6 +210,15 @@ export async function proxyHubRequest(
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
       ...(personalDownload ? { maxResponseBytes: MAX_PERSONAL_DOWNLOAD_BYTES } : {}),
+      ...(artifactDownload ? {
+        maxResponseBytes: MAX_ARTIFACT_DOWNLOAD_BYTES,
+        maxErrorResponseBytes: 16 * 1024 * 1024,
+        timeoutMs: 600_000,
+        streamTotalTimeoutMs: 1_800_000,
+        streamIdleTimeoutMs: 30_000,
+        errorResponseTimeoutMs: 15_000,
+        strictResponseLength: true,
+      } : {}),
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
@@ -159,6 +241,29 @@ export async function proxyHubRequest(
         return invalidPersonalDownloadResponse()
       }
     }
+  }
+
+  if (artifactDownload) {
+    if (upstream.status < 400 && upstream.status !== 200) {
+      await upstream.body?.cancel()
+      return invalidArtifactDownloadResponse()
+    }
+    if (upstream.status === 200) {
+      const safeHeaders = artifactDownloadHeaders(upstream.headers)
+      if (safeHeaders === null || upstream.body === null) {
+        await upstream.body?.cancel()
+        return invalidArtifactDownloadResponse()
+      }
+      return new Response(boundedArtifactBody(upstream.body, Number(safeHeaders.get("content-length")), request.signal), { status: 200, headers: safeHeaders })
+    }
+    const errorHeaders = new Headers({ "cache-control": "private, no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" })
+    const contentType = upstream.headers.get("content-type")
+    if (contentType !== null && /^application\/json(?:;\s*charset=utf-8)?$/iu.test(contentType)) errorHeaders.set("content-type", contentType)
+    const ownerRequestId = upstream.headers.get("x-request-id")
+    if (ownerRequestId !== null && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(ownerRequestId)) errorHeaders.set("x-request-id", ownerRequestId)
+    const retryAfter = upstream.headers.get("retry-after")
+    if (upstream.status === 429 && retryAfter !== null && /^[1-9][0-9]{0,4}$/u.test(retryAfter)) errorHeaders.set("retry-after", retryAfter)
+    return new Response(upstream.body, { status: upstream.status, headers: errorHeaders })
   }
 
   // 普通 Hub 响应只回传状态与内容类型，body 流式转发。

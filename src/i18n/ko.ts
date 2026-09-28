@@ -913,6 +913,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.secretDeleteConfirm": "삭제 확인",
   "library.retry": "라이브러리 새로고침",
   "library.downloading": "다운로드 중…",
+  "library.downloadStarted": "다운로드를 시작했습니다. 결과는 브라우저 다운로드 목록에서 확인하세요.",
   "library.downloadFailed": "다운로드에 실패했습니다. 다시 시도하세요.",
   "shared.backHome": "Kokoro로 돌아가기",
 

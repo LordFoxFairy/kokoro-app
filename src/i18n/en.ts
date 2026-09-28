@@ -961,6 +961,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "library.downloadAria": "Download {title}",
   "library.retryDownloadAria": "Retry download {title}",
   "library.downloading": "Downloading…",
+  "library.downloadStarted": "Download started. Check your browser downloads for the result.",
   "library.downloadFailed": "Download failed. Try again.",
   "library.openSource": "Open source session",
   "library.filterAria": "Filter artifact types",

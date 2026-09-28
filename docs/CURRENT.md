@@ -1,6 +1,28 @@
 # Kokoro User Web 当前状态
 
-## W2-WEB-AGENT-ARTIFACT-F2 文档门（2026-09-28；作品页尚未切换）
+## W2-WEB-AGENT-ARTIFACT-F2-CODE（2026-09-28；单仓门已验，真浏览器待验）
+
+正式 Library 作品页代码现从固定 BFF public `GET /v1/library?kind=artifact` 读取页级
+`oneOf`，用 `(conversation_id,artifact_id)` 跨页去重、详情预检、内容定位、收藏和来源导航；
+空页允许非空 cursor。Web 原字节固定 BFF `55d3c9cd55386d9dcc074e893cc388924dd94c13`
+OpenAPI SHA-256 `8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`，
+15 个派生 generated 文件 drift check 通过。作品页正式旧 `/api/session/artifacts` 列表与 hash 下载
+链已移除；Chat `deliveryPath`、Canvas 和 live/snapshot/replay 仍是独立旧链，未切二元 ID。
+
+精确 `/api/hub/library/artifacts/{conversation_id}/{artifact_id}/content` GET 以专用 1 GiB
+上限、总/空闲 deadline、Node pause/resume 背压、长度及 `response.complete` 校验、取消传播和
+下载安全头流式转发；最终 Proxy 仅精确无 query 路径维持 `no-referrer`。浏览器原生同源
+attachment 在详情预检后发起，页面仅显示“已发起”，不把预检当下载授权或把浏览器保存宣称成功。
+个人文件 1 MiB 缓冲和通用 Hub 16 MiB 默认不变。本仓直接 contract/UI/transport/Route 与真实
+Next HTTP 聚焦测试先 RED 后 GREEN；Node22 `pnpm check` exit0（contract 103、architecture 36、
+全量 Vitest 1585、lint/typecheck/build），独立 3452 Playwright 11 pass/1 既有 skip，
+`git diff --check` 通过。上述 E2E 是 Web 本仓治理回归，不是 Artifact 真下载验收。
+Root 还须在固定 Web/BFF/IAM/Agent/Storage 真组合用 Chromium 核对下载管理器原字节、刷新、
+同租户他人/错二元组私有负例；本仓工作树测试不等于完整 W2 或 Chat 已恢复。3310 未触碰。
+此外 BFF 当前作品下载对取回校验与出站传输共用 120 秒总 deadline；Web 的较长流时限
+不能覆盖此 owner 限制，慢链路 1 GiB 仍待 BFF 独立修复与真实验收。
+
+## W2-WEB-AGENT-ARTIFACT-F2 文档门历史基线（2026-09-28；代码前）
 
 Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 起始 clean：同一 Library 的个人文件
 下载已由 Root 真 Chromium 验收；**作品页仍使用** `/api/session/artifacts` 的

@@ -3,39 +3,36 @@
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { artifactContentPath, type ArtifactList, type ArtifactRecord } from "@/contract/http"
-import type { SessionClient } from "@/engine/client"
-import { browserListClient } from "@/ui/shell/page-clients"
-import { sessionBaseUrl } from "@/engine/config"
-import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
+import { downloadFetchedFile } from "@/engine/file-fetch"
 import { useMemo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useT } from "@/i18n/context"
 
 import { LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
+import { beginLibraryArtifactDownload, listLibraryArtifacts, type LibraryArtifact, type LibraryArtifactPage } from "./kokoro-library-artifact-client"
 import { KokoroLibraryFiles } from "./kokoro-library-files"
 import { useLibraryFileUpload } from "./kokoro-library-file-upload-state"
 import { DEFAULT_URL_STATE, FILTERS, artifactFilter, type LibraryFilter, type LibraryUrlState } from "./kokoro-library-model"
 import styles from "./kokoro-library-surface.module.css"
 
-type ArtifactClient = Pick<SessionClient, "listArtifacts">
-type ArtifactDownloader = (artifact: ArtifactRecord) => Promise<boolean>
+type ArtifactClient = { listArtifacts: (cursor: string | null, signal: AbortSignal) => Promise<LibraryArtifactPage> }
+type ArtifactDownloader = (artifact: LibraryArtifact, signal: AbortSignal) => Promise<void>
 
 export type KokoroLibrarySurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "onOpenSession"> & {
-  fixtureArtifacts?: readonly ArtifactRecord[]
-  initialFavoriteHashes?: readonly string[]
+  fixtureArtifacts?: readonly LibraryArtifact[]
+  initialFavoriteIds?: readonly string[]
   artifactClient?: ArtifactClient
-  onFavoriteChange?: (artifact: ArtifactRecord, next: ReadonlySet<string>) => void
+  onFavoriteChange?: (artifact: LibraryArtifact, next: ReadonlySet<string>) => void
   downloadArtifact?: ArtifactDownloader
 }
 
-function appendUniqueArtifacts(current: readonly ArtifactRecord[], additions: readonly ArtifactRecord[]): ArtifactRecord[] {
-  const byHash = new Map(current.map((artifact) => [artifact.content_hash, artifact]))
-  for (const artifact of additions) byHash.set(artifact.content_hash, artifact)
-  return [...byHash.values()]
+function artifactKey(artifact: LibraryArtifact): string {
+  return JSON.stringify([artifact.conversationId, artifact.artifactId])
 }
 
-function artifactUrl(contentHash: string): string {
-  return `${sessionBaseUrl()}${artifactContentPath(contentHash)}`
+function appendUniqueArtifacts(current: readonly LibraryArtifact[], additions: readonly LibraryArtifact[]): LibraryArtifact[] {
+  const byId = new Map(current.map((artifact) => [artifactKey(artifact), artifact]))
+  for (const artifact of additions) byId.set(artifactKey(artifact), artifact)
+  return [...byId.values()]
 }
 
 function readUrlState(): LibraryUrlState {
@@ -87,20 +84,17 @@ function writeUrlState(state: LibraryUrlState): void {
   window.dispatchEvent(new Event(LIBRARY_URL_STATE_EVENT))
 }
 
-async function defaultDownloadArtifact(artifact: ArtifactRecord): Promise<boolean> {
-  return downloadFetchedFile(await fileFetch(artifactUrl(artifact.content_hash)), artifact.title)
+async function defaultDownloadArtifact(artifact: LibraryArtifact, signal: AbortSignal): Promise<void> {
+  await beginLibraryArtifactDownload(artifact, signal)
 }
 
-async function previewDownloadArtifact(artifact: ArtifactRecord): Promise<boolean> {
+async function previewDownloadArtifact(artifact: LibraryArtifact): Promise<void> {
   const body = [
     `Kokoro preview artifact: ${artifact.title}`,
-    `content_hash: ${artifact.content_hash}`,
+    `artifact_id: ${artifact.artifactId}`,
     "This file is a local fixture for desktop interaction QA.",
   ].join("\n")
-  return downloadFetchedFile(
-    new Response(new Blob([body], { type: artifact.mime })),
-    artifact.title,
-  )
+  await downloadFetchedFile(new Response(new Blob([body], { type: artifact.mimeType })), artifact.filename)
 }
 
 function KokoroArtifactLibrary({
@@ -108,14 +102,14 @@ function KokoroArtifactLibrary({
   onPrompt,
   onOpenSession,
   fixtureArtifacts,
-  favoriteHashes,
-  setFavoriteHashes,
+  favoriteIds,
+  setFavoriteIds,
   artifactClient,
   onFavoriteChange,
   downloadArtifact,
 }: KokoroLibrarySurfaceProps & {
-  favoriteHashes: ReadonlySet<string>
-  setFavoriteHashes: (next: ReadonlySet<string>) => void
+  favoriteIds: ReadonlySet<string>
+  setFavoriteIds: (next: ReadonlySet<string>) => void
 }) {
   // Only an explicit preview selects synthetic transport. Development with a
   // Product Session remains live and must show an unavailable BFF as an error.
@@ -128,29 +122,36 @@ function KokoroArtifactLibrary({
     () => fixtureArtifacts === undefined ? undefined : appendUniqueArtifacts([], fixtureArtifacts),
     [fixtureArtifacts],
   )
-  const [loadedArtifacts, setLoadedArtifacts] = useState<ArtifactRecord[]>(() => fixtureSnapshot ?? [])
-  const [nextCursor, setNextCursor] = useState<string | undefined>()
+  const [loadedArtifacts, setLoadedArtifacts] = useState<LibraryArtifact[]>(() => fixtureSnapshot ?? [])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadMoreError, setLoadMoreError] = useState(false)
   const [loading, setLoading] = useState(() => fixtureSnapshot === undefined)
   const [error, setError] = useState(false)
-  const [downloadState, setDownloadState] = useState<Record<string, "loading" | "error">>({})
+  const [downloadState, setDownloadState] = useState<Record<string, "loading" | "error" | "started">>({})
   const requestSeqRef = useRef(0)
+  const listAbortRef = useRef<AbortController | null>(null)
+  const downloadAbortRef = useRef<Map<string, AbortController>>(new Map())
   const loadedCursorsRef = useRef<Set<string>>(new Set())
   const inFlightCursorRef = useRef<string | undefined>(undefined)
-  const client = useMemo<ArtifactClient>(() => artifactClient ?? browserListClient({ preview: useFixtureTransport }), [artifactClient, useFixtureTransport])
+  const client = useMemo<ArtifactClient>(() => artifactClient ?? (useFixtureTransport
+    ? { listArtifacts: async () => ({ items: [], nextCursor: null }) }
+    : { listArtifacts: listLibraryArtifacts }), [artifactClient, useFixtureTransport])
 
   const load = useCallback(async () => {
+    listAbortRef.current?.abort()
+    const controller = new AbortController()
+    listAbortRef.current = controller
     const requestSeq = ++requestSeqRef.current
     loadedCursorsRef.current.clear()
     inFlightCursorRef.current = undefined
     try {
-      const page: ArtifactList = fixtureArtifacts
-        ? { artifacts: [...fixtureArtifacts] }
-        : await client.listArtifacts()
+      const page: LibraryArtifactPage = fixtureArtifacts
+        ? { items: [...fixtureArtifacts], nextCursor: null }
+        : await client.listArtifacts(null, controller.signal)
       if (requestSeq !== requestSeqRef.current) return
-      setLoadedArtifacts(appendUniqueArtifacts([], page.artifacts))
-      setNextCursor(page.next_cursor)
+      setLoadedArtifacts(appendUniqueArtifacts([], page.items))
+      setNextCursor(page.nextCursor)
     } catch {
       if (requestSeq !== requestSeqRef.current) return
       // Only the explicit preview transport has an intentional empty result.
@@ -158,19 +159,22 @@ function KokoroArtifactLibrary({
       // never misread as a successful empty state in local development.
       if (useFixtureTransport) {
         setLoadedArtifacts([])
-        setNextCursor(undefined)
+        setNextCursor(null)
       } else {
         setError(true)
       }
     } finally {
-      if (requestSeq === requestSeqRef.current) setLoading(false)
+      if (requestSeq === requestSeqRef.current) {
+        listAbortRef.current = null
+        setLoading(false)
+      }
     }
   }, [client, fixtureArtifacts, useFixtureTransport])
 
   const reload = useCallback(() => {
     setLoading(true)
     setError(false)
-    setNextCursor(undefined)
+    setNextCursor(null)
     setLoadingMore(false)
     setLoadMoreError(false)
     void load()
@@ -178,29 +182,32 @@ function KokoroArtifactLibrary({
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursor
-    if (loadingMore || cursor === undefined) return
+    if (loadingMore || cursor === null) return
     if (inFlightCursorRef.current === cursor) return
     if (loadedCursorsRef.current.has(cursor)) {
-      setNextCursor(undefined)
+      setNextCursor(null)
       return
     }
 
     const requestSeq = ++requestSeqRef.current
+    const controller = new AbortController()
+    listAbortRef.current = controller
     inFlightCursorRef.current = cursor
     setLoadingMore(true)
     setLoadMoreError(false)
     try {
-      const page = await client.listArtifacts(cursor)
+      const page = await client.listArtifacts(cursor, controller.signal)
       if (requestSeq !== requestSeqRef.current) return
       loadedCursorsRef.current.add(cursor)
-      setLoadedArtifacts((current) => appendUniqueArtifacts(current, page.artifacts))
-      setNextCursor(page.next_cursor !== undefined && !loadedCursorsRef.current.has(page.next_cursor) ? page.next_cursor : undefined)
+      setLoadedArtifacts((current) => appendUniqueArtifacts(current, page.items))
+      setNextCursor(page.nextCursor !== null && !loadedCursorsRef.current.has(page.nextCursor) ? page.nextCursor : null)
     } catch {
       if (requestSeq !== requestSeqRef.current) return
       setLoadMoreError(true)
     } finally {
       if (requestSeq === requestSeqRef.current) {
         inFlightCursorRef.current = undefined
+        listAbortRef.current = null
         setLoadingMore(false)
       }
     }
@@ -217,12 +224,13 @@ function KokoroArtifactLibrary({
       // request. Clear its transport state so stale pagination and errors do
       // not leak into the controlled projection.
       requestSeqRef.current += 1
+      listAbortRef.current?.abort()
       loadedCursorsRef.current.clear()
       inFlightCursorRef.current = undefined
       // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize local transport state with the controlled fixture boundary.
       setLoading(false)
       setError(false)
-      setNextCursor(undefined)
+      setNextCursor(null)
       setLoadingMore(false)
       setLoadMoreError(false)
       return
@@ -232,47 +240,51 @@ function KokoroArtifactLibrary({
     // transport from this effect without adding a frame or microtask gate.
     setLoading(true)
     setError(false)
-    setNextCursor(undefined)
+    setNextCursor(null)
     setLoadingMore(false)
     setLoadMoreError(false)
     void load()
+    const activeDownloads = downloadAbortRef.current
     return () => {
       requestSeqRef.current += 1
+      listAbortRef.current?.abort()
+      for (const controller of activeDownloads.values()) controller.abort()
+      activeDownloads.clear()
     }
   }, [fixtureSnapshot, isFixtureControlled, load])
 
   const filteredArtifacts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
     return artifacts.filter((artifact) => {
-      const matchesFilter = filter === "all" || artifactFilter(artifact.mime, artifact.title) === filter
+      const matchesFilter = filter === "all" || artifactFilter(artifact.mimeType, artifact.title) === filter
       const matchesQuery = normalized === "" || artifact.title.toLocaleLowerCase().includes(normalized)
-      const matchesFavorites = !favoritesOnly || favoriteHashes.has(artifact.content_hash)
+      const matchesFavorites = !favoritesOnly || favoriteIds.has(artifactKey(artifact))
       return matchesFilter && matchesQuery && matchesFavorites
     })
-  }, [artifacts, favoriteHashes, favoritesOnly, filter, query])
+  }, [artifacts, favoriteIds, favoritesOnly, filter, query])
 
-  const download = useCallback(async (artifact: ArtifactRecord) => {
-    const hash = artifact.content_hash
-    if (downloadState[hash] === "loading") return
-    setDownloadState((current) => ({ ...current, [hash]: "loading" }))
+  const download = useCallback(async (artifact: LibraryArtifact) => {
+    const key = artifactKey(artifact)
+    if (downloadAbortRef.current.has(key)) return
+    const controller = new AbortController()
+    downloadAbortRef.current.set(key, controller)
+    setDownloadState((current) => ({ ...current, [key]: "loading" }))
     try {
-      const ok = await (downloadArtifact ?? (useFixtureTransport ? previewDownloadArtifact : defaultDownloadArtifact))(artifact)
-      setDownloadState((current) => {
-        const next = { ...current }
-        if (ok) delete next[hash]
-        else next[hash] = "error"
-        return next
-      })
+      await (downloadArtifact ?? (useFixtureTransport ? previewDownloadArtifact : defaultDownloadArtifact))(artifact, controller.signal)
+      if (!controller.signal.aborted) setDownloadState((current) => ({ ...current, [key]: "started" }))
     } catch {
-      setDownloadState((current) => ({ ...current, [hash]: "error" }))
+      if (!controller.signal.aborted) setDownloadState((current) => ({ ...current, [key]: "error" }))
+    } finally {
+      downloadAbortRef.current.delete(key)
     }
-  }, [downloadArtifact, downloadState, useFixtureTransport])
+  }, [downloadArtifact, useFixtureTransport])
 
-  const toggleFavorite = (artifact: ArtifactRecord) => {
-    const next = new Set(favoriteHashes)
-    if (next.has(artifact.content_hash)) next.delete(artifact.content_hash)
-    else next.add(artifact.content_hash)
-    setFavoriteHashes(next)
+  const toggleFavorite = (artifact: LibraryArtifact) => {
+    const next = new Set(favoriteIds)
+    const key = artifactKey(artifact)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    setFavoriteIds(next)
     onFavoriteChange?.(artifact, next)
   }
 
@@ -281,7 +293,7 @@ function KokoroArtifactLibrary({
   }
   const showLoading = !isFixtureControlled && loading
   const showError = !isFixtureControlled && error
-  const showPagination = !isFixtureControlled && nextCursor !== undefined
+  const showPagination = !isFixtureControlled && nextCursor !== null
 
   return (
     <>
@@ -291,7 +303,7 @@ function KokoroArtifactLibrary({
         filteredArtifacts={filteredArtifacts}
         view={view}
         favoritesOnly={favoritesOnly}
-        favoriteHashes={favoriteHashes}
+        favoriteIds={favoriteIds}
         hasActiveContentFilter={filter !== "all" || query.trim() !== ""}
         downloadState={downloadState}
         toggleFavorite={toggleFavorite}
@@ -316,7 +328,7 @@ export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
   const upload = useLibraryFileUpload()
   // Keep local favorites for the lifetime of this Library page, without
   // mounting or fetching Agent artifacts while the Files tab is active.
-  const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteHashes))
+  const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteIds))
   return <div className={styles.page} data-testid="library-page">
     <header className={styles.header}><h1>{t("rail.navDatabase")}</h1></header>
     <Tabs defaultValue="files" className={styles.libraryTabs}>
@@ -325,7 +337,7 @@ export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
         <TabsTrigger value="artifacts">{t("library.artifactsTab")}</TabsTrigger>
       </TabsList>
       <TabsContent value="files" className={styles.libraryTabPanel}><KokoroLibraryFiles preview={props.preview === true} upload={upload} /></TabsContent>
-      <TabsContent value="artifacts" className={styles.libraryTabPanel}><KokoroArtifactLibrary {...props} favoriteHashes={favoriteHashes} setFavoriteHashes={setFavoriteHashes} /></TabsContent>
+      <TabsContent value="artifacts" className={styles.libraryTabPanel}><KokoroArtifactLibrary {...props} favoriteIds={favoriteIds} setFavoriteIds={setFavoriteIds} /></TabsContent>
     </Tabs>
   </div>
 }

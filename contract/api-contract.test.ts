@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
-  artifactListSchema,
   errorResponseSchema,
   messageCreateParamsSchema,
   messageCreateReceiptSchema,
@@ -133,10 +132,9 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(runControlBodySchema.safeParse({ kind: "run.cancel", session_id: "session_1", tenant_id: "tenant_1" }).success).toBe(false)
   })
 
-  it("accepts flat session/artifact responses and rejects envelope or unknown-field drift", () => {
+  it("accepts flat session responses and rejects envelope or unknown-field drift", () => {
     expect(sessionSnapshotSchema.parse(sessionSnapshot).event_watermark).toBe(EVENT_CURSOR)
     expect(sessionListSchema.parse({ sessions: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
-    expect(artifactListSchema.parse({ artifacts: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
     expect(messageCreateReceiptSchema.parse({ run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" })).toBeTruthy()
     expect(runControlReceiptSchema.parse({
       run_id: "run_1",
@@ -148,7 +146,6 @@ describe("checked-in HTTP request and response contracts", () => {
 
     expect(sessionSnapshotSchema.safeParse({ ...sessionSnapshot, data: {} }).success).toBe(false)
     expect(sessionListSchema.safeParse({ sessions: [], next_cursor: null }).success).toBe(false)
-    expect(artifactListSchema.safeParse({ artifacts: [], extra: true }).success).toBe(false)
   })
 
   it("keeps BFF error bodies flat and non-empty", () => {
@@ -177,18 +174,12 @@ describe("checked-in SSE event union", () => {
 describe("cursor pagination and same-origin client paths", () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it("URL-encodes session and artifact cursors without changing their flat response contracts", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [], next_cursor: "next" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ artifacts: [], next_cursor: "next" }), { status: 200 }))
+  it("URL-encodes session cursors without resurrecting a hash Artifact list", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ sessions: [], next_cursor: "next" }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
-
     const client = createSessionClient({ baseUrl: "/api/session" })
     await expect(client.listSessions("cursor/2", { kind: "project", projectRef: "project/1" })).resolves.toMatchObject({ next_cursor: "next" })
-    await expect(client.listArtifacts("artifact cursor")).resolves.toMatchObject({ next_cursor: "next" })
-
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions?cursor=cursor%2F2&project_ref=project%2F1")
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/artifacts?cursor=artifact%20cursor")
   })
 
   it("keeps direct and project Chat on the same message/control contract with header-only message identity", async () => {

@@ -50,12 +50,6 @@ export function modelCandidatesPath(): string {
 export function agentCandidatesPath(): string {
   return `/agents`
 }
-export function artifactsPath(): string {
-  return `/artifacts`
-}
-export function artifactContentPath(contentHash: string): string {
-  return `/artifacts/${opaquePathSegment(contentHash)}`
-}
 export function sharePath(sessionId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/share`
 }

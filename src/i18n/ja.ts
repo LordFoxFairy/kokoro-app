@@ -973,6 +973,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.secretDeleteConfirm": "削除を確認",
   "library.retry": "ライブラリを再読み込み",
   "library.downloading": "ダウンロード中…",
+  "library.downloadStarted": "ダウンロードを開始しました。結果はブラウザーのダウンロード一覧で確認してください。",
   "library.downloadFailed": "ダウンロードに失敗しました。もう一度お試しください。",
   "shared.backHome": "Kokoro に戻る",
 

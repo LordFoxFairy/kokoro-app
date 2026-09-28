@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  artifactContentPath,
   controlPath,
   controlReceiptPath,
   deliveryPath,
@@ -29,6 +28,5 @@ describe("opaque HTTP path segments", () => {
     expect(controlReceiptPath(sessionId, runId, commandId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/runs/run%2Fa%3Fb%23c%2520/control/command%2Fa%3Fb%23c%2520")
     expect(sharePath(sessionId)).toBe("/sessions/session%2Fa%3Fb%23c%2520/share")
     expect(sharedSnapshotPath("share/a?b#c%20")).toBe("/shared/share%2Fa%3Fb%23c%2520")
-    expect(artifactContentPath(hash)).toBe("/artifacts/sha256%2Fa%3Fb%23c%2520")
   })
 })

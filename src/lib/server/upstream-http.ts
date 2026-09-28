@@ -34,6 +34,15 @@ export class UpstreamTimeoutError extends Error {
   }
 }
 
+export class UpstreamResponseIncompleteError extends Error {
+  readonly code = "upstream_response_incomplete"
+
+  constructor() {
+    super("upstream response ended before its declared body completed")
+    this.name = "UpstreamResponseIncompleteError"
+  }
+}
+
 function responseHeaders(input: IncomingHttpHeaders): Headers {
   const headers = new Headers()
   for (const [key, value] of Object.entries(input)) {
@@ -106,22 +115,39 @@ function nodeResponseStream(
   deadline: Deadline,
   maxBytes: number,
   idleTimeoutMs: number | undefined,
+  totalTimeoutMs: number | undefined,
+  declaredLength: number | null,
+  strictResponseLength: boolean,
   onDone: () => void,
 ): ReadableStream<Uint8Array> {
+  let paused = false
+  let finishStream: (() => void) | undefined
+  let restartStreamIdle: (() => void) | undefined
   return new ReadableStream<Uint8Array>({
     start(controller) {
       let total = 0
       let closed = false
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
+      const resetIdleTimer = () => {
+        if (totalTimeoutMs === undefined || idleTimeoutMs === undefined) return
+        clearTimeout(idleTimer)
+        if (paused) return
+        idleTimer = setTimeout(() => deadline.controller.abort(new UpstreamTimeoutError()), idleTimeoutMs)
+      }
+      restartStreamIdle = resetIdleTimer
       const finish = () => {
         if (closed) return
         closed = true
         deadline.controller.signal.removeEventListener("abort", onAbort)
+        clearTimeout(idleTimer)
         onDone()
       }
+      finishStream = finish
       const fail = (error: unknown) => {
         if (closed) return
         closed = true
         deadline.controller.signal.removeEventListener("abort", onAbort)
+        clearTimeout(idleTimer)
         onDone()
         controller.error(error)
       }
@@ -132,10 +158,11 @@ function nodeResponseStream(
         fail(error ?? new Error("upstream request aborted"))
       }
       const onData = (chunk: Buffer | string | Uint8Array) => {
-        if (idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
+        if (totalTimeoutMs === undefined && idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
+        else resetIdleTimer()
         const bytes = Buffer.from(chunk)
         total += bytes.byteLength
-        if (total > maxBytes) {
+        if (total > maxBytes || (strictResponseLength && declaredLength !== null && total > declaredLength)) {
           const error = new UpstreamResponseTooLargeError()
           response.destroy(error)
           client.destroy(error)
@@ -143,20 +170,41 @@ function nodeResponseStream(
           return
         }
         controller.enqueue(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+        if ((controller.desiredSize ?? 0) <= 0) {
+          paused = true
+          response.pause()
+          clearTimeout(idleTimer)
+        }
       }
       response.on("data", onData)
       response.once("end", () => {
+        if (strictResponseLength && (declaredLength === null || total !== declaredLength || !response.complete)) {
+          fail(new UpstreamResponseIncompleteError())
+          return
+        }
         finish()
         controller.close()
       })
-      response.once("error", fail)
+      response.once("error", (error) => fail(strictResponseLength ? new UpstreamResponseIncompleteError() : error))
+      response.once("close", () => {
+        if (!closed && !response.complete) fail(new UpstreamResponseIncompleteError())
+      })
       deadline.controller.signal.addEventListener("abort", onAbort, { once: true })
+      resetIdleTimer()
+    },
+    pull() {
+      if (paused) {
+        paused = false
+        restartStreamIdle?.()
+        response.resume()
+      }
     },
     cancel(reason) {
       const error = reason instanceof Error ? reason : undefined
+      finishStream?.()
       response.destroy(error)
       client.destroy(error)
-      onDone()
+      paused = false
     },
   })
 }
@@ -208,8 +256,14 @@ type RequestWithDomainOptions = {
   // SSE has a short connection deadline, then a renewable idle deadline.
   // Non-streaming responses retain the normal total deadline.
   streamIdleTimeoutMs?: number
+  streamTotalTimeoutMs?: number
+  // Status-specific error budgets keep large successful binaries from widening
+  // the resource limits of JSON/error streams on the same exact route.
+  errorResponseTimeoutMs?: number
+  strictResponseLength?: boolean
   maxRequestBytes?: number
   maxResponseBytes?: number
+  maxErrorResponseBytes?: number
 }
 
 /**
@@ -252,7 +306,16 @@ export function requestWithDomain(
     }, (response) => {
       responseStarted = true
       const length = contentLength(response.headers)
-      if (length !== null && length > maxResponseBytes) {
+      const strictResponseLength = options.strictResponseLength === true && response.statusCode === 200
+      const responseMaxBytes = response.statusCode === 200 ? maxResponseBytes : options.maxErrorResponseBytes ?? maxResponseBytes
+      if (strictResponseLength && length === null) {
+        response.resume()
+        const error = new UpstreamResponseIncompleteError()
+        client.destroy(error)
+        rejectOnce(error)
+        return
+      }
+      if (length !== null && length > responseMaxBytes) {
         response.resume()
         const error = new UpstreamResponseTooLargeError()
         client.destroy(error)
@@ -264,10 +327,15 @@ export function requestWithDomain(
         resolveOnce(new Response(null, { status: response.statusCode, headers: responseHeaders(response.headers) }))
         return
       }
-      const isEventStream = response.headers["content-type"]?.toString().toLowerCase().startsWith("text/event-stream") ?? false
-      const idleTimeoutMs = isEventStream ? options.streamIdleTimeoutMs : undefined
-      if (idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
-      const body = nodeResponseStream(response, client, deadline, maxResponseBytes, idleTimeoutMs, deadline.cleanup)
+      const isEventStream = options.errorResponseTimeoutMs === undefined || response.statusCode === 200
+        ? response.headers["content-type"]?.toString().toLowerCase().startsWith("text/event-stream") ?? false
+        : false
+      const successStream = response.statusCode === 200 && options.streamTotalTimeoutMs !== undefined
+      const idleTimeoutMs = isEventStream || successStream ? options.streamIdleTimeoutMs : undefined
+      if (successStream) deadline.restart(options.streamTotalTimeoutMs!)
+      else if (options.errorResponseTimeoutMs !== undefined && response.statusCode !== 200) deadline.restart(options.errorResponseTimeoutMs)
+      else if (idleTimeoutMs !== undefined) deadline.restart(idleTimeoutMs)
+      const body = nodeResponseStream(response, client, deadline, responseMaxBytes, idleTimeoutMs, successStream ? options.streamTotalTimeoutMs : undefined, length, strictResponseLength, deadline.cleanup)
       resolveOnce(new Response(body, { status: response.statusCode ?? 502, headers: responseHeaders(response.headers) }))
     })
     const onAbort = () => {

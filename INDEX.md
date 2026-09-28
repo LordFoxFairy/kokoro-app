@@ -1,6 +1,6 @@
 # Kokoro User Web 仓库索引
 
-状态：当前代码与治理入口，更新于 2026-09-23。
+状态：当前代码与治理入口，更新于 2026-09-28。
 
 ## 1. Owner 与非 Owner
 
@@ -30,7 +30,7 @@
 | `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
-| `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter；Hub 仅精确个人文件 `/library/files/{asset_id}/content` GET 返回校验后的同源二进制与下载安全头 |
+| `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter；Hub 精确个人文件 1 MiB 缓冲与 Artifact 二元 1 GiB 流式下载分别校验同源二进制及安全头 |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
 | `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；仅 authorize 200 redirect JSON 转受限浏览器 302；直接 browser POST 与 server-only 凭据路由拒绝 |
 | `src/app/iam/interactions/invitation/route.ts` | 邀请邮件的唯一静态入口：独立 issuer 登录/注册、recipient-only context、一次性 CSRF 接受/拒绝；`same-origin` Referrer-Policy 保留浏览器同源 POST Origin 且不向跨站发送邀请 URL；仅接受成功后转 Product `/login` |
@@ -45,6 +45,7 @@
 | --- | --- |
 | `src/contract/project-resource.ts`、`src/features/app/project-resource-list.ts`、`src/features/app/use-project-resources.ts` | 固定 BFF CLEAN 资源页面校验、同源 GET 与项目内有界分页/取消/失败状态 |
 | `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页与上传回执的独立 Zod 消费校验、同源列表 GET 与个人原字节下载；不复用 Artifact wire |
+| `src/contract/library-artifact.ts`、`src/features/app/kokoro-library-artifact-client.ts` | 固定 BFF 作品页级 oneOf/二元详情严格校验、同源列表/详情与原生 attachment 发起；不复用旧 hash 或个人 File wire |
 | `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的局部分页/取消/错误状态、GET 权威 Asset 列表及现有卡片的下载/取消/重试 |
 | `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
@@ -92,7 +93,7 @@
 - `src/core/`、`src/lib/persisted-store.ts`：受 Zod 校验的 browser store；
 - `src/dev/preview-transport.ts`：local/test 合成 Chat 历史；
 - `src/features/app/kokoro-scheduled-surface.tsx`：preview Scheduled localStorage；
-- `src/features/app/kokoro-library-surface.tsx`：同页文件/Agent 作品 Tabs；作品保留显式 preview/fixture 与原正式读取、错误及重试状态；
+- `src/features/app/kokoro-library-surface.tsx`：同页文件/Agent 作品 Tabs；正式作品消费 BFF Product 二元身份，显式 preview/fixture 独立，错误与重试可见；
 - `src/ui/theme/`、`src/i18n/`、`src/ui/shell/`：主题、locale、草稿和 UI 偏好。
 
 这些数据不是服务端业务事实；完整分类见 [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)。

@@ -1,6 +1,25 @@
 # Kokoro User Web API 契约策略
 
-## W2-WEB-AGENT-ARTIFACT-F2：作品页消费契约（2026-09-28；设计门，运行未切）
+## W2-WEB-AGENT-ARTIFACT-F2-CODE：当前消费契约（2026-09-28；工作树待审）
+
+本仓已将 BFF `55d3c9cd55386d9dcc074e893cc388924dd94c13` 的唯一 public
+OpenAPI 原字节固定到 `src/generated/bff-public-openapi.yaml`，SHA-256
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`；
+生成检查为 15 文件无漂移。正式作品 consumer 只读 `GET /api/hub/library?kind=artifact&limit=50`
+及其 opaque cursor、二元详情 `GET /api/hub/library/artifacts/{conversation_id}/{artifact_id}`，
+严格拒非空 File/混合页、坏项和错二元身份，允许 `items:[]` 带 `next_cursor`。
+详情预检非下载许可。内容只发起精确同源二元 `/content` 原生 attachment GET；Route 对
+200 校验 ≤1 GiB 长度及安全头后流式转发，非 200 不加下载成功头，3xx 拒绝。
+401/403/404/429/502/503 与坏 200 不降级为旧 hash/preview 空页；页面只能观察
+发起动作，不能观察浏览器保存完成或预检后的下载竞态。BFF 每次内容请求仍独立准入。
+个人文件 1 MiB 与通用 Hub 默认不变，Web 不另发布 Product contract。
+
+作品页正式旧 `/api/session/artifacts` 列表/内容消费者已删，Chat `deliveryPath`/Canvas
+仍保留；BFF live 已发布 `artifact_id/asset_id/artifact_kind`，而 Web Chat strict schema 与
+BFF 空 `deliveries` snapshot 尚未协同恢复，不能把旧 Chat 路径视为新 Artifact alias。
+Root 真浏览器及跨仓固定来源验收另行记录，不由本仓 contract 测试代替。
+
+## W2-WEB-AGENT-ARTIFACT-F2：作品页消费契约设计基线（2026-09-28；代码前）
 
 唯一机器来源是 BFF main `55d3c9cd55386d9dcc074e893cc388924dd94c13` 的
 `contract/openapi/v1/openapi.yaml`，原字节 SHA-256

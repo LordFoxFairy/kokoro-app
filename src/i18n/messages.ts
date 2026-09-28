@@ -859,6 +859,7 @@ export const zh = {
   "library.downloadAria": "下载 {title}",
   "library.retryDownloadAria": "重新下载 {title}",
   "library.downloading": "正在下载…",
+  "library.downloadStarted": "已发起下载，请在浏览器下载列表查看结果。",
   "library.downloadFailed": "下载失败，请重试。",
   "library.openSource": "查看来源会话",
   "library.filterAria": "筛选作品类型",

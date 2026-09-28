@@ -29,7 +29,7 @@ const STORAGE_KEY = "kokoro.web.conversations"
 // 会话清单/成果/分享/模型/agent 读客户端子集（SESS-LIST/MODEL-UX/AGENT-PRESET/SHARE/ARTIFACT-LIB）。
 export type ListClient = Pick<
   SessionClient,
-  "listSessions" | "listModels" | "listAgents" | "listArtifacts" | "createShare" | "revokeShare" | "renameSession"
+  "listSessions" | "listModels" | "listAgents" | "createShare" | "revokeShare" | "renameSession"
 >
 
 let pageHubClient: HubClient | null = null

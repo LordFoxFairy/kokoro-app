@@ -1,6 +1,28 @@
 # Kokoro User Web 技术设计
 
-## W2-WEB-AGENT-ARTIFACT-F2：作品页 Product 接入设计门（2026-09-28；尚未实施）
+## W2-WEB-AGENT-ARTIFACT-F2-CODE：作品页实施边界（2026-09-28；工作树待审）
+
+当前正式作品页在既有 shadcn Library 页签，经具名 Artifact consumer/client 从同源 Hub 读取
+BFF Product 页级 `oneOf`；空页也保留 cursor，`(conversation_id,artifact_id)` 是唯一去重、
+收藏、详情、下载与来源键，预览 fixture 不作为正式失败 fallback。`src/contract/library-artifact.ts`
+只校验 owner wire，`kokoro-library-artifact-client.ts` 只做浏览器同源读与原生 attachment 发起，
+`kokoro-library-surface/sections` 管理 React 生命周期内列表、翻页、取消、错误和已发起状态。
+已删除作品页正式 hash 列表/下载和无运行引用的旧 panel；个人文件页/1 MiB 下载不变。
+
+专用 Hub Artifact 内容分支在成功头发出前校验精确二元路径、无 query、长度 ≤1 GiB、
+Content-Disposition/Type、no-store/no-referrer/nosniff/request ID；只白名单回传安全头。
+`requestWithDomain` 对该流采用 600 秒建连、1,800 秒总时长、30 秒空闲计时、Node
+pause/resume 背压和严格长度/`response.complete`，Route 另计流字节并传播取消。
+上游短/超字节或断流会终止已发出的响应，不能把已发成功头撤回；原生浏览器下载管理器的保存
+结果也不回传 JS，因此 UI 只显示“已发起”。详情预检有可见 401/403/404/503 失败，但
+内容 GET 仍由 BFF 重新授权，预检到下载之间存在竞态。最终 Proxy 仅精确无 query Artifact
+GET 设 `Referrer-Policy:no-referrer`，不泛化给 Hub。Web 不存下载字节或持久 Artifact 事实。
+
+BFF live `delivery.created` 已有二元 ID，但 Web strict Chat schema 仍拒新字段，BFF snapshot
+仍 `deliveries: []`；Chat/Canvas 的身份与恢复须后续协同，不借 Library 成功宣布已切换。
+此代码片的直接测试与 Root 真浏览器门分别记录在 CURRENT；3310 和共享服务不由本片触碰。
+
+## W2-WEB-AGENT-ARTIFACT-F2：作品页 Product 接入设计基线（2026-09-28；代码前）
 
 **当前态与目标态。** Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 的正式 Library 作品页仍经
 `/api/session/artifacts` 读取 `ArtifactRecord(content_hash,session_id,...)`，以 hash 去重、下载和收藏，

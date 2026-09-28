@@ -23,23 +23,3 @@ export const deliverySchema = z
   })
   .strict()
 export type Delivery = z.infer<typeof deliverySchema>
-
-export const artifactRecordSchema = z
-  .object({
-    content_hash: z.string().min(1),
-    session_id: z.string().min(1),
-    title: z.string().min(1),
-    mime: z.string().min(1),
-    size: z.number().int(),
-    created_at: z.string().min(1),
-  })
-  .strict()
-export type ArtifactRecord = z.infer<typeof artifactRecordSchema>
-
-export const artifactListSchema = z
-  .object({
-    artifacts: z.array(artifactRecordSchema),
-    next_cursor: z.string().min(1).optional(),
-  })
-  .strict()
-export type ArtifactList = z.infer<typeof artifactListSchema>

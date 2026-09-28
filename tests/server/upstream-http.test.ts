@@ -8,6 +8,7 @@ import {
   requestWithDomain,
   UpstreamRequestTooLargeError,
   UpstreamResponseTooLargeError,
+  UpstreamResponseIncompleteError,
   UpstreamTimeoutError,
 } from "@/lib/server/upstream-http"
 
@@ -109,6 +110,87 @@ describe("server upstream transport", () => {
     expect(response.status).toBe(200)
     expect(receivedForwarded).toBe("host=dev.kokoro.localhost")
     expect(await response.text()).toContain("data: two")
+  })
+
+  it("rejects a short declared binary response instead of ending a successful body", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/octet-stream", "content-length": "8" })
+      response.write("abc")
+      setTimeout(() => response.destroy(), 10)
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/bytes`, "dev.kokoro.localhost", {
+      method: "GET", maxResponseBytes: 8, strictResponseLength: true, streamTotalTimeoutMs: 500, streamIdleTimeoutMs: 200,
+    })
+    await expect(response.arrayBuffer()).rejects.toBeInstanceOf(UpstreamResponseIncompleteError)
+  })
+
+  it("uses an idle deadline for a non-SSE binary stream", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/octet-stream", "content-length": "8" })
+      response.write("abc")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/bytes`, "dev.kokoro.localhost", {
+      method: "GET", maxResponseBytes: 8, strictResponseLength: true, streamTotalTimeoutMs: 500, streamIdleTimeoutMs: 20,
+    })
+    await expect(response.arrayBuffer()).rejects.toBeInstanceOf(UpstreamTimeoutError)
+  })
+
+  it("does not count a paused downstream consumer as upstream idle time", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/octet-stream", "content-length": "6" })
+      response.write("abc")
+      setTimeout(() => response.end("def"), 5)
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/bytes`, "dev.kokoro.localhost", {
+      method: "GET", maxResponseBytes: 6, strictResponseLength: true, streamTotalTimeoutMs: 500, streamIdleTimeoutMs: 20,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(await response.text()).toBe("abcdef")
+  })
+
+  it("keeps a chunked 503 on the short error-byte budget instead of the Artifact success budget", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(503, { "content-type": "application/json", "transfer-encoding": "chunked" })
+      response.write("12345")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/bytes`, "dev.kokoro.localhost", {
+      method: "GET", timeoutMs: 20, maxResponseBytes: 100, maxErrorResponseBytes: 4,
+      strictResponseLength: true, streamTotalTimeoutMs: 500, streamIdleTimeoutMs: 200,
+    })
+    expect(response.status).toBe(503)
+    await expect(response.text()).rejects.toBeInstanceOf(UpstreamResponseTooLargeError)
+  })
+
+  it("uses the short post-header error deadline for a stalled chunked 503", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(503, { "content-type": "application/json", "transfer-encoding": "chunked" })
+      response.write("{")
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/bytes`, "dev.kokoro.localhost", {
+      method: "GET", timeoutMs: 500, maxResponseBytes: 100, maxErrorResponseBytes: 4,
+      errorResponseTimeoutMs: 20, strictResponseLength: true, streamTotalTimeoutMs: 500, streamIdleTimeoutMs: 200,
+    })
+    await expect(response.text()).rejects.toBeInstanceOf(UpstreamTimeoutError)
   })
 
   it("keeps an active SSE stream beyond its connection deadline", async () => {

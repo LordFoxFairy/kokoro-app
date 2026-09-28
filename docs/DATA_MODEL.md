@@ -1,6 +1,18 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2-WEB-AGENT-ARTIFACT-F2 数据边界（2026-09-28；设计门，运行未切）
+## W2-WEB-AGENT-ARTIFACT-F2-CODE 当前数据边界（2026-09-28；工作树待审）
+
+正式作品页仅在 React 生命周期保存 BFF `kind=artifact` 页项、opaque cursor、加载/错误、
+AbortController、二元 `(conversation_id,artifact_id)` 收藏键及下载“已发起”提示；刷新重读
+owner，不把 cursor、`asset_id`、hash、文件名或详情预检当权限。原生同源 attachment
+不生成 1 GiB JS Blob/Object URL；Web server 只持有请求生命周期的有界流，不落磁盘。
+BFF 拥有 Conversation↔Artifact 关联与 Product 本人准入，Storage 拥有 FINAL/CLEAN Artifact、
+Asset/Blob/Scan 和原字节。Web 无新增 SQL/Redis/schema、持久缓存、receipt、签名 URL 或授权事实；
+Product Session/CSRF Redis 不变。个人 File 继续独立 `asset_id`/1 MiB 模型。
+Chat live strict schema、snapshot/replay 与 Canvas 仍保留旧 hash 数据链，不因 Library
+二元身份而迁移；BFF live 已有新 ID，但 snapshot `deliveries: []` 尚非可恢复作品视图。
+
+## W2-WEB-AGENT-ARTIFACT-F2 数据设计基线（2026-09-28；代码前）
 
 Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 的正式作品页仍把
 `ArtifactRecord(content_hash,session_id,...)` 作为列表/下载/收藏键，来自旧 `/api/session/artifacts`；

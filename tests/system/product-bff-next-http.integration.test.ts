@@ -191,6 +191,14 @@ export async function GET(): Promise<Response> {
     const aliased = await get(nextPort, undefined, "/api/hub/self/library/files/asset-1/content");
     const encodedSlash = await get(nextPort, undefined, "/api/hub/library/files/asset%2Fprivate/content");
     const doubleEncoded = await get(nextPort, undefined, `/api/hub/library/files/asset%253A${"a".repeat(64)}/content`);
+    const artifact = await get(nextPort, undefined, "/api/hub/library/artifacts/conversation-1/artifact-1/content");
+    const encodedArtifact = await get(nextPort, undefined, `/api/hub/library/artifacts/conversation-1/artifact%3A${"a".repeat(64)}/content`);
+    const encodedBothIds = await get(nextPort, undefined, `/api/hub/library/artifacts/conversation%3Aone/artifact%3A${"a".repeat(64)}/content`);
+    const artifactQuery = await get(nextPort, undefined, "/api/hub/library/artifacts/conversation-1/artifact-1/content?download=1");
+    const encodedArtifactQuery = await get(nextPort, undefined, `/api/hub/library/artifacts/conversation-1/artifact%3A${"a".repeat(64)}/content?download=1`);
+    const artifactAlias = await get(nextPort, undefined, "/api/hub/self/library/artifacts/conversation-1/artifact-1/content");
+    const encodedArtifactSlash = await get(nextPort, undefined, "/api/hub/library/artifacts/conversation-1/artifact%2Fprivate/content");
+    const doubleEncodedArtifact = await get(nextPort, undefined, `/api/hub/library/artifacts/conversation-1/artifact%253A${"a".repeat(64)}/content`);
     expect(personal.headers["referrer-policy"]).toBe("no-referrer");
     expect(encodedAsset.headers["referrer-policy"]).toBe("no-referrer");
     expect(ordinary.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
@@ -198,6 +206,14 @@ export async function GET(): Promise<Response> {
     expect(aliased.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
     expect(encodedSlash.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
     expect(doubleEncoded.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(artifact.headers["referrer-policy"]).toBe("no-referrer");
+    expect(encodedArtifact.headers["referrer-policy"]).toBe("no-referrer");
+    expect(encodedBothIds.headers["referrer-policy"]).toBe("no-referrer");
+    expect(artifactQuery.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(encodedArtifactQuery.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(artifactAlias.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(encodedArtifactSlash.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(doubleEncodedArtifact.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
   });
 
   it("returns controlled 503 when online inspection is unavailable and never connects to BFF", async () => {
