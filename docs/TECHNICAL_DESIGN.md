@@ -1,6 +1,27 @@
 # Kokoro User Web 技术设计
 
-## W2 个人文件可见上传代码片（2026-09-28；Web 单仓门通过，待 Root 审查）
+## W2 个人文件下载 Web consumer 设计门（2026-09-28；仅文档，代码未实施）
+
+**当前态。** Web main `224d473758041928a79acfa063eadb13cd779386` 的 `/app/library` 已有个人文件
+GET/上传及 shadcn 文件卡，但卡片没有下载动作；`/api/hub/[...path]` 只转发通用
+`content-type/cache-control/content-length`，Web generated public OpenAPI 仍固定下载前 BFF 来源
+`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。BFF owner main
+`d5c868f8ab8b8a33750e1286e9d020ca72895641` 已发布唯一 public OpenAPI 原字节 SHA-256
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681` 与
+`GET /v1/library/files/{asset_id}/content`；这是 **BFF 已实现、Web 尚未消费**，不等于浏览器可下载。
+
+- **Owner / 采用：** Web 仅在现有 `KokoroLibraryFiles` 个人文件卡复用 shadcn `Button` 和既有 `fileFetch`/`downloadFetchedFile`；文件卡保持单项下载中、失败、重试、取消状态。现有 Hub adapter 仅在精确 `GET /api/hub/library/files/{asset_id}/content` 增加二进制响应头校验/白名单透传。
+- **淘汰：** 不建 `/app/files` 新页、通用下载代理或第二条下载协议；不复用 Agent 作品 `content_hash/session_id` 与旧 Artifact 下载；不把 Storage 签名 URL 交给浏览器。
+- **依赖：** Browser → Web 同源 Hub adapter（当前 HttpOnly Product Session）→ BFF public GET → Storage owner；`asset_id` 来自已校验的个人列表项，但不是授权凭证，BFF 每次依当前 tenant/subject 重新准入并只返回 CLEAN ASSET 的完整已校验原字节。Web 不提交 tenant/subject、Storage scope 或凭据。
+- **状态/失败：** 按卡禁重复点击；卸载/切页取消在途请求且忽略迟到结果。只在 HTTP 200、有效下载头与完整 Blob 获取后触发已有锚点下载；就近展示 401/403、私有/失效 404、429、网络/502/503 与畸形响应，主动取消回到可操作状态，不把失败显示为空文件或上传失败。可重试错误由用户显式重试；404 不泄露文件所属信息。
+- **安全头/文件名：** 精确 GET 成功时只接受并转发经校验的 `Content-Disposition`、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`，以及现有类型/长度/`no-store`；不开放上游任意 header、重定向或跨源浏览器 fetch。锚点文件名使用已校验的当前文件项名称，不能把上游 header 原样注入 DOM；坏/缺失安全头不产生成功下载。
+
+先原字节固定 BFF OpenAPI commit/digest 与生成消费者，再实现精确 Hub GET、文件卡和直接测试；不新增页面、模块或
+持久事实。Web 单仓 Node22 `pnpm check`、独立端口 Playwright 与直接 200 原字节/404/坏 header/取消测试仅是本仓门；
+Root 还须在固定 BFF/Storage/IAM/MinIO/ClamAV 真组合用 Chromium **点击文件卡按钮** 核对原字节、刷新及同租户
+他人不可见，方可宣布该用户下载纵切闭环。Agent Artifact F2 是后续独立切片。
+
+## W2 个人文件可见上传代码片（2026-09-28；历史切片，已由 Root 验收）
 
 **代码前基线与 owner。** Web main `29673babe37d01a2fbf7d0347f99d8e04c22da16` 已在同一
 `/app/library` 用 shadcn Tabs 默认显示个人文件，另一页签保留 Agent 作品；个人列表由现有同源
@@ -24,7 +45,7 @@ OpenAPI 仍固定 BFF `a67ae2d` 只读版本。唯一新 public 写契约已由 
 目标交互为单文件选择、显示文件名与限额、显式提交/上传中/成功/错误/同键重试；不可用、键盘焦点、移动端与错误信息沿用本页 shadcn 语义样式。浏览器构造 multipart 后按**整段 body**计量，超出
 1,048,576 bytes 在提交前就近提示；`File.size` 仅可作预筛，BFF 与现有 Web adapter 的整体上限仍是最终裁决。刷新或重新选择文件是新意图，不能把未知结果的旧 key 自动套给不同文件；未知结果需明确保留当前页面的 File/key 供用户重试，不承诺浏览器重新载入后恢复原 File。正式模式不回退 preview。
 
-**当前工作树实现。** 已原字节重钉 BFF 新 OpenAPI，复用现有 shadcn 个人文件页签。`kokoro-library-file-upload-state` 在仍挂载的 Library 页面保存 File/key 与状态，`kokoro-library-file-upload-client` 先快速拒绝 `File.size > 1 MiB`，其余用原生 FormData 构造 Request、读取 clone 的实际完整 multipart 字节数，再发送原 Request；不手拼 boundary。CLEAN 回执仅递增刷新版本，既有文件 GET state 重新请求；GET 失败显示读错误，不插入 POST 回执。UI 聚焦与 native multipart contract 测试覆盖成功后 GET、读取失败、未知响应同键重试、可恢复 408/429/5xx/待扫/处理中 409、冲突/中止/感染终态、整个 multipart 超限、双击和页签切换、作品旧行为。Root 隔离 Node22 `pnpm check`（contract 99、architecture 36、Vitest 1546、lint/typecheck/build）与隔离 3447 Playwright 11 pass/1 既有 skip 已通过；跨用户隐私与 **UI 点击** 真 IAM→Web→BFF→Storage→MinIO/ClamAV Chromium 仍由 Root 固定 SHA 验收。本片无新路由/持久数据；个人下载和 Agent Artifact F2 均是后续独立契约/代码片，不借本片放按钮。
+**已发布实现。** 已原字节重钉当时 BFF 上传 OpenAPI，复用现有 shadcn 个人文件页签。`kokoro-library-file-upload-state` 在仍挂载的 Library 页面保存 File/key 与状态，`kokoro-library-file-upload-client` 先快速拒绝 `File.size > 1 MiB`，其余用原生 FormData 构造 Request、读取 clone 的实际完整 multipart 字节数，再发送原 Request；不手拼 boundary。CLEAN 回执仅递增刷新版本，既有文件 GET state 重新请求；GET 失败显示读错误，不插入 POST 回执。UI 聚焦与 native multipart contract 测试覆盖成功后 GET、读取失败、未知响应同键重试、可恢复 408/429/5xx/待扫/处理中 409、冲突/中止/感染终态、整个 multipart 超限、双击和页签切换、作品旧行为。Root 隔离 Node22 `pnpm check`（contract 99、architecture 36、Vitest 1546、lint/typecheck/build）与隔离 3447 Playwright 11 pass/1 既有 skip 已通过；固定 Root `0a9206969b2edfcf40bb8d5f0f2d85952995fb8f` 的真实 Chromium **UI 点击**上传、刷新、同租户他人私有、EICAR/同键回放和并发门已 PASS。本片无新路由/持久数据；BFF 下载 public 契约现已发布，但 Web 下载 consumer 与 Agent Artifact F2 均是后续独立代码片，不借上传片放按钮。
 
 ## W2 Library 个人文件页面代码片（2026-09-28；已发布的只读基线）
 
@@ -39,7 +60,7 @@ Artifact 读取、筛选、收藏、来源和下载语义。文件页签独立�
 `GET /api/hub/library?kind=file&limit=50[&cursor=...]`，由现有 Product Session adapter 转 BFF
 `GET /v1/library`；只以 `asset_id` 标识文件，不把 Asset cast 成 `ArtifactRecord` 或复用
 `content_hash/session_id` 动作。文件列表仅投影已校验的文件名、类型、大小、创建时间；此只读切片当时尚无个人
-Product 上传/下载契约，故未放上传、下载或来源假按钮。上传 public 契约现已发布但可见控件仍待上节代码门；显式 preview 可保持本地样本语义，但不能伪造正式成功页。
+Product 上传/下载契约，故当时未放上传、下载或来源假按钮。上传控件已在上节后续切片发布；BFF 下载 public 契约已发布但 Web 下载按钮仍待本次后续代码门。显式 preview 可保持本地样本语义，但不能伪造正式成功页。
 
 放置裁决：采用现有 `kokoro-library-surface` 作页签组装，在同一 feature 拆文件列表/读取状态，
 在 `src/contract/` 增加独立文件 wire 校验；复用 `/api/hub/[...path]`，不新建 route、顶层模块或缓存。

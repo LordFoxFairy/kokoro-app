@@ -1,6 +1,21 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2 个人文件可见上传数据边界（2026-09-28；Web 代码已实现，待 Root 审查）
+## W2 个人文件下载数据边界（2026-09-28；仅设计，Web 尚未实现）
+
+BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 已拥有
+`GET /v1/library/files/{asset_id}/content` 的个人授权与完整原字节返回；Storage 仍是 Asset/Scan/对象的唯一
+持久 owner。Web 文件卡只持有已校验个人 GET 项的 `asset_id`/显示名，以及 React 生命周期内当前卡的
+下载中/失败/取消状态、`AbortController` 和临时 Blob URL。Blob URL 在下载后或组件清理时释放；
+页面切换取消在途读取，刷新后从 owner GET 重新读取列表。不把 Blob、签名 URL、下载引用、文件名或
+下载成功状态写入 SQL、Redis、localStorage、IndexedDB、Cache API 或 Web 服务器磁盘。
+
+Web 无新增 Asset/Download/Artifact 事实、schema、migration、索引、事务、幂等 receipt、缓存或
+跨 owner JOIN；现有 Product Session/CSRF Redis 生命周期不变。文件 `asset_id` 只作请求定位，不能
+从它、内容 hash 或 Blob URL 推断授权；同租户不同成员的个人文件仍由 BFF/Storage 拒绝。
+Agent 作品 `content_hash/session_id` 模型及原下载状态保持独立，不能和个人 Asset 混存或共用许可。
+本门不修改生成契约/代码，后续 Web consumer 与 Root 真浏览器验收见对应技术/API 设计。
+
+## W2 个人文件可见上传数据边界（2026-09-28；历史切片，已由 Root 验收）
 
 代码前 Web main `29673babe37d01a2fbf7d0347f99d8e04c22da16` 只有个人文件只读页签及已限额的同源 POST adapter；BFF `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的新个人 Product POST OpenAPI 原字节 SHA-256 是
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。当前工作树上传控件只拥有浏览器一次交互的 `File`、该文件意图的稳定 `Idempotency-Key`、提交/待确认/可重试/终态错误状态和个人 GET 读取状态；待确认 File/key 在 Library feature 内存中跨页签切换保留，不依赖文件页签是否挂载。不创建 Web Asset、Upload、Scan、receipt、cursor、SQL、Redis、localStorage 或 IndexedDB 事实。用户换文件须建新意图；未知结果下原 File/key 只在当前页面内保留供显式同键重试，不承诺刷新浏览器后的文件恢复。
@@ -18,7 +33,7 @@ Storage CLEAN ASSET 投影，以 `asset_id` 为唯一列表身份；Agent 作品
 文件页签只在 React 生命周期保存已确认页面、opaque cursor、loading/error 与当前页签状态；
 切换页签/卸载取消在途读取，刷新后重新向 BFF GET。无新增 Web SQL、Redis、localStorage、
 Asset/Artifact 副本、跨 owner join、上传 receipt 或持久 cursor。个人 POST public 契约现已由 BFF 发布，
-当前工作树已有上节可见上传控件；个人下载未发布，不从 Project 上传、Artifact 下载或显式 preview 样本推造个人文件事实。
+上节可见上传控件已发布并由 Root 验收；BFF 下载 public 契约已发布，但 Web 下载 consumer 未实施，不从 Project 上传、Artifact 下载或显式 preview 样本推造个人文件事实。
 
 ## W2 项目资源读取数据边界（2026-09-28）
 

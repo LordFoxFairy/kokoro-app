@@ -1,5 +1,16 @@
 # Kokoro User Web 当前状态
 
+W2-WEB-PERSONAL-DOWNLOAD 文档门（2026-09-28，Web main
+`224d473758041928a79acfa063eadb13cd779386`）：BFF main
+`d5c868f8ab8b8a33750e1286e9d020ca72895641` 的 public OpenAPI 原字节 SHA-256
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681` 已发布个人文件
+`GET /v1/library/files/{asset_id}/content`；Web 当前 generated 仍是旧 digest
+`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`，个人文件卡无下载按钮，
+Hub adapter 未窄透传下载安全头。此门仅收敛 `TECHNICAL_DESIGN`、`API_CONTRACT`、`DATA_MODEL`
+与本 `CURRENT` 的当前/目标事实；未修改生成物、UI、adapter、测试、3310 或共享服务。
+下一片需精确重钉 BFF OpenAPI、复用 shadcn 文件卡与同源二进制 GET，验证坏 header/404/取消及
+真 Chromium 点击原字节和他人私有负例。个人上传与 Agent Artifact F2 不因这份文档升为下载闭环。
+
 W1F-WEB-ISSUER-LOGOUT-POST-REDIRECT（2026-09-28，待 Root 真浏览器验收）：当前真实 IAM 的退出确认 POST 成功返回
 `200 application/json` 与精确 `{redirect:true,url:WEB_ORIGIN/auth/sign-in}`；此前 Web relay 原样显示 JSON。
 本仓已将**仅此固定确认 POST** 的成功 JSON 或固定 302 回执严格转换为无 body 的 303 `/login` 导航
@@ -7,7 +18,7 @@ W1F-WEB-ISSUER-LOGOUT-POST-REDIRECT（2026-09-28，待 Root 真浏览器验收�
 编码路径、额外字段、畸形 JSON、错误状态均不触发转换。
 聚焦单元和真实 Next HTTP fixture 已从旧 302-only 切到 200 JSON 测试；3310 当前运行副本尚未由 Root 同步和复验。
 
-W2-WEB-LIBRARY-PERSONAL-UPLOAD-CODE 工作树（2026-09-28，待 Root 审查）：已将 BFF
+W2-WEB-LIBRARY-PERSONAL-UPLOAD-CODE 已发布验收（2026-09-28，Web main `cbae94d30582e6e16f0f8a8f6b8535920af6de32` 起）：已将 BFF
 `8a90fdd9ec3809000924229bfc7b986ba8ba1522` public OpenAPI 原字节 SHA-256
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52` 固定为唯一 Web generated
 快照；Team 派生 client 15 文件 drift check 通过且字节不变。个人文件页签新增 shadcn 单文件 Input/Button/Alert，
@@ -15,8 +26,9 @@ Library 页面级 File/key 意图跨页签卸载保留。`File.size > 1 MiB` 先
 ≤1 MiB，再发送同一个 Request；网络/408/429/5xx/待扫/处理中错误仅显式同键重试，扫描待定/处理中提示稍后同文件重试，冲突/中止/感染终态不提供同键重试。
 严格 CLEAN 200 不直接插卡，只触发本人 GET 重新加载；GET 失败显示读错误。Node22 `pnpm check`
 Root 隔离 Node22 复验通过：contract 99、architecture 36、Vitest 1546、lint/typecheck/build；隔离 3447 `pnpm test:e2e`
-11 pass/1 既有 skip，direct native multipart/特殊文件名及 UI 聚焦测试通过。Root 固定 SHA 的真 IAM/Chromium
-**UI 点击**上传、刷新、另一成员隐私及感染/未知结果/并发组合仍待复验；3310 未触碰。个人下载与
+11 pass/1 既有 skip，direct native multipart/特殊文件名及 UI 聚焦测试通过。Root 固定
+`0a9206969b2edfcf40bb8d5f0f2d85952995fb8f` 的真 IAM/Chromium **UI 点击**上传、刷新、另一成员隐私、
+EICAR/同键回放与并发门已 PASS；3310 未触碰。个人下载与
 Agent Artifact F2 不在此片，完整 Library/W2 不升绿。
 
 W2-WEB-LIBRARY-PERSONAL-UPLOAD 设计门历史基线（2026-09-28）：代码前 Web main

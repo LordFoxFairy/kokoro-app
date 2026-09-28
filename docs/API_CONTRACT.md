@@ -1,6 +1,32 @@
 # Kokoro User Web API 契约策略
 
-## W2 个人文件上传 consumer 代码片（2026-09-28；Web 单仓门通过，待 Root 审查）
+## W2 个人文件下载 consumer 目标契约（2026-09-28；Web 尚未实现）
+
+唯一可编辑 public 机器事实源为 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 的
+`contract/openapi/v1/openapi.yaml`，原字节 SHA-256
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`。该 owner 已发布
+`downloadLibraryFile`：`GET /v1/library/files/{asset_id}/content`，`public`/beta、`storage.library.read`、
+无幂等键；200 为上限 1,048,576 bytes 的完整二进制，含 `Content-Type`、`Content-Length`、
+`Content-Disposition`、`Cache-Control: no-store`、`Referrer-Policy: no-referrer`、
+`X-Content-Type-Options: nosniff`、`x-request-id`。BFF 的 400/401/403/404/429/502/503 仍使用 owner 错误
+契约；404 不能被 Web 改写为“文件列表为空”。Web 当前 generated 快照 digest 仍为
+`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`，本设计门不修改生成物或运行时。
+
+目标 browser-private 请求为 `GET /api/hub/library/files/{asset_id}/content`，无额外 query/body/客户端身份头，
+只通过现有在线 Product Session adapter 注入 BFF Bearer；浏览器不接触 Storage reference/签名 URL。
+仅该精确路径、GET、成功二进制响应增加上述下载安全头的严格校验与窄透传；既有通用 Hub header 白名单不
+泛化，`Cache-Control` 保持 private/no-store 语义，错误响应不带成功下载头。畸形/缺失安全头、坏长度、
+意外重定向或未完整取得内容不得进入文件下载；不能仅凭 `Content-Type`（例如用户上传的 JSON 文件）
+推断成功或失败。文件卡以已校验个人 GET 项的 `asset_id` 构造路径，
+但 BFF 仍须在每次请求重新校验 owner/ASSET/CLEAN，路径值本身不授予访问权。Web 可用已校验列表名称作为
+安全锚点文件名，不将 Content-Disposition 当 HTML；下载 Blob 未完整取得前不得宣称成功。
+
+运行状态须区分就近下载中、成功、可重试错误、私有/失效 404 与取消；主动取消回到可操作状态，不当作下载成功；重复点击禁发，切页/卸载取消，
+迟到结果不下载或污染别的卡。401/403 不伪装为空页，429/502/503/网络错误由用户明确重试；
+不自动走 Artifact hash URL 或 preview fallback。后续代码门须把 Web generated 原字节及 commit/digest
+精确重钉、更新直接 contract/adapter/UI 测试，再由 Root 进行真实 Chromium 按钮与原字节验收。
+
+## W2 个人文件上传 consumer 代码片（2026-09-28；历史切片，已由 Root 验收）
 
 唯一 public 机器事实源是 BFF owner `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的
 `contract/openapi/v1/openapi.yaml`，原字节 SHA-256
@@ -17,7 +43,7 @@
 | 可恢复 | 网络断开/响应未知、已发请求后的 408/429/全部 5xx（含 `503 library_file_scan_pending`）及 `409 idempotency_in_progress`：保留**同一 File、同一 key**，只在用户明确操作后重试，绝不自动换 key 或宣布成功；扫描待定/幂等处理中显示“稍后同文件重试”，不误报上传失败。401/403 的登录/准入错误不伪造空页或自动重试。 |
 | 终态 | `409 idempotency_conflict`、`409 file_upload_aborted` 与 `422 library_file_infected` 对本意图为终态，禁同键重试；400 非法文件/键、413 整体超限须就近显示并修正输入。未知/畸形 200 也不宣布成功，先保留原 File/key 供结果核对/明确同键重试。 |
 
-BFF 每次幂等重放仍须进行当前身份准入；个人 scope 由可信 tenant/subject 派生。Web 不用 GET cursor、内容 hash、POST key 或另一成员的 session 作访问许可；只读个人页与 Agent 作品页维持独立模型。下载、Agent Artifact F2 没有本片 public 契约，不能借 Project POST 或作品 hash 下载路径实现。此处是 consumer 行为，不复制 BFF 可编辑 OpenAPI；当前 UI 与 generated 回钉已在工作树实现，真实 UI 点击组合仍待 Root 验收。
+BFF 每次幂等重放仍须进行当前身份准入；个人 scope 由可信 tenant/subject 派生。Web 不用 GET cursor、内容 hash、POST key 或另一成员的 session 作访问许可；只读个人页与 Agent 作品页维持独立模型。BFF 下载 public 契约已由后续 owner 切片发布，但不属于本上传片；Agent Artifact F2 也不借 Project POST 或作品 hash 下载路径实现。此处是 consumer 行为，不复制 BFF 可编辑 OpenAPI；上传 UI 与 generated 回钉已发布，Root 固定真实 Chromium 上传点击门已通过；Web 下载按钮仍未实现。
 
 ## W2 Library 文件 consumer（2026-09-28；已发布的只读基线）
 
