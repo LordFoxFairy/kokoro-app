@@ -1,6 +1,13 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2 个人文件下载数据边界（2026-09-28；仅设计，Web 尚未实现）
+## W2 个人文件下载当前数据边界（2026-09-28；待 Root 真链验收）
+
+下载只在个人文件卡的 React 生命周期持有请求、`AbortController`、错误与临时 Blob URL；成功保存后释放 URL，
+取消或卸载中止请求。列表仍由 BFF 本人 GET 返回，下载由 BFF 每次重新授权并读取 Storage owner 的 CLEAN
+Asset 原字节。Web 不创建 SQL/Redis/schema/本地持久副本，不保存签名 URL、Blob、下载许可或新业务事实；
+Agent Artifact 模型与下载保持独立。本仓代码和直接测试已通过，Root 真浏览器授权/原字节负例待验。
+
+## W2 个人文件下载数据边界历史设计（2026-09-28；代码前）
 
 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 已拥有
 `GET /v1/library/files/{asset_id}/content` 的个人授权与完整原字节返回；Storage 仍是 Asset/Scan/对象的唯一

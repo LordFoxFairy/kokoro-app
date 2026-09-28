@@ -12,13 +12,16 @@ export function fileFetch(url: string, signal?: AbortSignal): Promise<Response> 
 
 // Authenticated download lifecycle shared by Canvas, timeline, and library:
 // enqueue the anchor download before releasing the temporary Blob URL.
-export async function downloadFetchedFile(response: Response, name: string): Promise<boolean> {
-  if (!response.ok) return false
-  const objectUrl = URL.createObjectURL(await response.blob())
+export async function downloadFetchedFile(response: Response, name: string, signal?: AbortSignal): Promise<boolean> {
+  if (!response.ok || signal?.aborted) return false
+  const blob = await response.blob()
+  if (signal?.aborted) return false
+  const objectUrl = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = objectUrl
   anchor.download = name
   try {
+    if (signal?.aborted) return false
     anchor.click()
   } finally {
     // Also release the URL if a browser rejects the synthetic click.

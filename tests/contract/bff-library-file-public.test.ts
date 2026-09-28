@@ -6,8 +6,8 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "8a90fdd9ec3809000924229bfc7b986ba8ba1522"
-const OWNER_SHA256 = "6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52"
+const OWNER_COMMIT = "d5c868f8ab8b8a33750e1286e9d020ca72895641"
+const OWNER_SHA256 = "3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681"
 
 it("pins the BFF owner Library file operation and distinct Asset wire", async () => {
   const bytes = await readFile(SNAPSHOT)
@@ -53,4 +53,30 @@ it("pins the single-file personal upload operation, whole-body limit and CLEAN r
   expect(spec.components.schemas.PersonalFileUploadResponse).toMatchObject({
     properties: { data: { properties: { file: { required: expect.arrayContaining(["kind", "asset_id", "scan_state"]) } } } },
   })
+})
+
+it("pins the private personal file binary download without redirect or idempotency", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as {
+    paths: Record<string, Record<string, unknown>>
+  }
+  const get = spec.paths["/v1/library/files/{asset_id}/content"]?.get as {
+    operationId: string
+    "x-kokoro-owner": string
+    "x-kokoro-idempotency": string
+    parameters: Array<{ name: string; in: string; required: boolean }>
+    responses: Record<string, { headers?: Record<string, unknown>; content?: Record<string, unknown> }>
+  }
+  expect(get.operationId).toBe("downloadLibraryFile")
+  expect(get["x-kokoro-owner"]).toBe("kokoro-bff")
+  expect(get["x-kokoro-idempotency"]).toBe("none")
+  expect(get.parameters).toContainEqual(expect.objectContaining({ name: "asset_id", in: "path", required: true }))
+  expect(get.responses["200"]?.headers).toEqual(expect.objectContaining({
+    "Content-Disposition": expect.any(Object),
+    "Content-Length": expect.any(Object),
+    "Referrer-Policy": expect.any(Object),
+    "X-Content-Type-Options": expect.any(Object),
+  }))
+  expect(get.responses["200"]?.content).toHaveProperty("*/*")
+  for (const status of ["400", "401", "403", "404", "429", "502", "503"]) expect(get.responses).toHaveProperty(status)
+  expect(get.responses).not.toHaveProperty("302")
 })

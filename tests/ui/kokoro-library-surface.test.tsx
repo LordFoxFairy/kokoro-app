@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -9,6 +10,7 @@ vi.mock("next/navigation", () => ({
 
 import { LocaleProvider } from "@/i18n/context"
 import { KokoroLibrarySurface } from "@/features/app/kokoro-library-surface"
+import styles from "@/features/app/kokoro-library-surface.module.css"
 import type { ArtifactList, ArtifactRecord } from "@/contract/http"
 
 const artifacts: ArtifactRecord[] = [
@@ -69,6 +71,17 @@ function installUploadRequestShim() {
   })
 }
 
+function installDownloadDomShim() {
+  const createObjectURL = vi.fn(() => "blob:library-test")
+  const revokeObjectURL = vi.fn()
+  vi.stubGlobal("URL", class extends URL {
+    static override createObjectURL = createObjectURL
+    static override revokeObjectURL = revokeObjectURL
+  })
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+  return { createObjectURL, click }
+}
+
 it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下载", async () => {
   const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([fileOne])), {
     status: 200,
@@ -82,8 +95,147 @@ it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下�
   expect(fetchFiles).toHaveBeenCalledWith("/api/hub/library?kind=file&limit=50", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
   expect(screen.getByTestId("library-files")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: "上传个人文件" })).toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: /下载私人备忘/u })).not.toBeInTheDocument()
+  expect(within(screen.getByTestId("library-files")).getByTestId("library-file-download")).toHaveAccessibleName("下载 私人备忘.pdf")
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
+})
+
+it("个人文件卡独立在窄屏改为两行网格，下载按钮换行且不挤压文件名", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(filePage([fileOne])), { status: 200 })))
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  expect(card.firstElementChild?.classList.contains(styles.fileCardMain ?? "__missing__")).toBe(true)
+  const css = readFileSync("src/features/app/kokoro-library-surface.module.css", "utf8")
+  expect(css).toMatch(/@media \(max-width: 48rem\)[\s\S]*?\.fileCardMain\s*\{\s*display: grid; grid-template-columns: 2rem minmax\(0, 1fr\)/u)
+  expect(css).toContain(".fileCardMain .fileDownloadControls { grid-column: 1 / -1; min-width: 0; }")
+  expect(css).toContain(".fileDownloadControls button { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }")
+})
+
+it("从个人文件卡点击同源 GET 后只下载完整原字节，并使用安全文件名", async () => {
+  const dom = installDownloadDomShim()
+  const bytes = new Uint8Array(2048).fill(71)
+  const fetchFiles = vi.fn((input: string | Request) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content"
+    ? Promise.resolve(new Response(bytes, { status: 200, headers: { "content-type": "application/pdf", "content-length": "2048" } }))
+    : Promise.resolve(new Response(JSON.stringify(filePage([fileOne])), { status: 200 })))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  await waitFor(() => expect(dom.click).toHaveBeenCalledTimes(1))
+  expect(fetchFiles).toHaveBeenCalledWith("/api/hub/library/files/asset-personal-1/content", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  expect(dom.createObjectURL).toHaveBeenCalledTimes(1)
+  const downloaded = dom.click.mock.instances[0] as HTMLAnchorElement
+  expect(downloaded.download).toBe("私人备忘.pdf")
+  expect(downloaded.href).toBe("blob:library-test")
+})
+
+it("下载响应字节少于已校验 Asset 大小时不触发保存", async () => {
+  const dom = installDownloadDomShim()
+  const fetchFiles = vi.fn((input: string | Request) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content"
+    ? Promise.resolve(new Response(new Uint8Array([1, 2]), { status: 200, headers: { "content-length": "2" } }))
+    : Promise.resolve(new Response(JSON.stringify(filePage([fileOne])), { status: 200 })))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  expect(await within(card).findByRole("alert")).toHaveTextContent("下载失败")
+  expect(dom.click.mock.instances.filter((anchor) => (anchor as HTMLAnchorElement).download !== "")).toHaveLength(0)
+})
+
+it("个人文件名只作为安全锚点名，不把路径片段写入下载目标", async () => {
+  const dom = installDownloadDomShim()
+  const unsafeName = { ...fileOne, filename: "../private.txt" }
+  const fetchFiles = vi.fn((input: string | Request) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content"
+    ? Promise.resolve(new Response(new Uint8Array(2048), { status: 200, headers: { "content-length": "2048" } }))
+    : Promise.resolve(new Response(JSON.stringify(filePage([unsafeName])), { status: 200 })))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  await waitFor(() => expect(dom.click).toHaveBeenCalledTimes(1))
+  const downloaded = dom.click.mock.instances[0] as HTMLAnchorElement
+  expect(downloaded.download).not.toMatch(/[\\/]/u)
+  expect(downloaded.download).not.toMatch(/^\./u)
+})
+
+it.each([404, 401, 502])("文件下载 %i 在同一私有卡就近显示错误，并只由用户重试", async (status) => {
+  installDownloadDomShim()
+  let downloads = 0
+  const fetchFiles = vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files/asset-personal-1/content") {
+      downloads++
+      return Promise.resolve(new Response(downloads === 1 ? "{}" : new Uint8Array(2048), {
+        status: downloads === 1 ? status : 200,
+        headers: downloads === 1 ? { "content-type": "application/json" } : { "content-type": "application/pdf", "content-length": "2048" },
+      }))
+    }
+    return Promise.resolve(new Response(JSON.stringify(filePage([fileOne])), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  const alert = await within(card).findByRole("alert")
+  expect(alert).toHaveTextContent(status === 404 ? "文件不可用或你无权访问" : status === 401 ? "登录已失效" : "下载失败")
+  expect(downloads).toBe(1)
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  await waitFor(() => expect(downloads).toBe(2))
+  await waitFor(() => expect(within(card).queryByRole("alert")).not.toBeInTheDocument())
+})
+
+it("下载中禁重复点击，显式取消及切换作品页签均中止在途请求", async () => {
+  const dom = installDownloadDomShim()
+  let resolveDownload: (response: Response) => void = () => {}
+  const fetchFiles = vi.fn((input: string | Request, init?: RequestInit) => {
+    void init
+    return requestUrl(input) === "/api/hub/library/files/asset-personal-1/content"
+      ? new Promise<Response>((resolve) => { resolveDownload = resolve })
+      : Promise.resolve(new Response(JSON.stringify(filePage([fileOne])), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  const button = within(card).getByTestId("library-file-download")
+  fireEvent.click(button)
+  fireEvent.click(button)
+  expect(button).toBeDisabled()
+  const calls = fetchFiles.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content")
+  expect(calls).toHaveLength(1)
+  const signal = (calls[0]?.[1] as { signal: AbortSignal }).signal
+  fireEvent.click(within(card).getByRole("button", { name: "取消下载" }))
+  expect(signal.aborted).toBe(true)
+  resolveDownload(new Response(new Uint8Array(2048), { status: 200, headers: { "content-length": "2048" } }))
+  await waitFor(() => expect(button).not.toBeDisabled())
+  expect(dom.click.mock.instances.filter((anchor) => (anchor as HTMLAnchorElement).download === "私人备忘.pdf")).toHaveLength(0)
+  fireEvent.click(button)
+  const nextCalls = fetchFiles.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content")
+  const nextSignal = (nextCalls[1]?.[1] as { signal: AbortSignal }).signal
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  expect(nextSignal.aborted).toBe(true)
+})
+
+it("完整响应已读取但共享下载 helper 尚在异步 Blob 阶段时取消，不触发锚点保存", async () => {
+  const dom = installDownloadDomShim()
+  const fetchFiles = vi.fn((input: string | Request) => requestUrl(input) === "/api/hub/library/files/asset-personal-1/content"
+    ? Promise.resolve(new Response(new Uint8Array(2048), { status: 200, headers: { "content-length": "2048" } }))
+    : Promise.resolve(new Response(JSON.stringify(filePage([fileOne])), { status: 200 })))
+  vi.stubGlobal("fetch", fetchFiles)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  const card = await screen.findByRole("listitem")
+  const originalBlob = Response.prototype.blob
+  let resolveHelperBlob: (blob: Blob) => void = () => {}
+  let blobReads = 0
+  vi.spyOn(Response.prototype, "blob").mockImplementation(function (this: Response) {
+    blobReads++
+    if (blobReads === 2) return new Promise<Blob>((resolve) => { resolveHelperBlob = resolve })
+    return originalBlob.call(this)
+  })
+  fireEvent.click(within(card).getByTestId("library-file-download"))
+  await waitFor(() => expect(blobReads).toBe(2))
+  fireEvent.click(within(card).getByRole("button", { name: "取消下载" }))
+  resolveHelperBlob(new Blob([new Uint8Array(2048)]))
+  await waitFor(() => expect(within(card).getByTestId("library-file-download")).not.toBeDisabled())
+  expect(dom.createObjectURL).not.toHaveBeenCalled()
+  expect(dom.click).not.toHaveBeenCalled()
 })
 
 it("用户点击单文件上传后只以重新读取的个人 GET 显示文件", async () => {
@@ -346,6 +498,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
 })

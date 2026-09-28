@@ -1,6 +1,16 @@
 # Kokoro User Web API 契约策略
 
-## W2 个人文件下载 consumer 目标契约（2026-09-28；Web 尚未实现）
+## W2 个人文件下载 consumer 当前契约（2026-09-28；待 Root 真链验收）
+
+Web generated public OpenAPI 已按 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 原字节固定为
+SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；Team 派生生成物 drift check 通过。
+浏览器仅调用 `GET /api/hub/library/files/{asset_id}/content`；该精确路径校验完整二进制、≤1 MiB、
+`Content-Type`、`Content-Length`、`Content-Disposition`、`Cache-Control: no-store`、
+`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff` 及安全、有界的 `x-request-id`，只转发窄白名单。Owner 非 200
+错误保持错误语义，重定向、缺失/坏 header、短 body 受控失败且不触发保存；404 就近呈现且不泄露归属。
+直接 contract/adapter/UI 测试及本仓 Node22 全门已通过；真 Chromium 按钮与原字节仍由 Root 验证。
+
+## W2 个人文件下载 consumer 设计门历史基线（2026-09-28；代码前）
 
 唯一可编辑 public 机器事实源为 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 的
 `contract/openapi/v1/openapi.yaml`，原字节 SHA-256
@@ -9,7 +19,7 @@
 无幂等键；200 为上限 1,048,576 bytes 的完整二进制，含 `Content-Type`、`Content-Length`、
 `Content-Disposition`、`Cache-Control: no-store`、`Referrer-Policy: no-referrer`、
 `X-Content-Type-Options: nosniff`、`x-request-id`。BFF 的 400/401/403/404/429/502/503 仍使用 owner 错误
-契约；404 不能被 Web 改写为“文件列表为空”。Web 当前 generated 快照 digest 仍为
+契约；404 不能被 Web 改写为“文件列表为空”。代码前 Web generated 快照 digest 为
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`，本设计门不修改生成物或运行时。
 
 目标 browser-private 请求为 `GET /api/hub/library/files/{asset_id}/content`，无额外 query/body/客户端身份头，

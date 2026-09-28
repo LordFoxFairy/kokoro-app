@@ -1,6 +1,14 @@
 # Kokoro User Web 当前状态
 
-W2-WEB-PERSONAL-DOWNLOAD 文档门（2026-09-28，Web main
+W2-WEB-PERSONAL-DOWNLOAD-CODE（2026-09-28，Web 代码已由 Root 审查，待真链验收）：已原字节固定 BFF
+`d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI SHA-256
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；生成 drift 15 文件通过。
+个人文件卡有 shadcn 下载、取消、就近错误/重试；精确同源 Hub GET 校验完整 ≤1 MiB 原字节与下载安全头，
+保留通用 Hub 取消传播，未混用 Artifact。Node22 `pnpm check` exit0（contract 100、architecture 36、
+Vitest 1582、lint/typecheck/build）；独立 3449 Playwright 11 pass/1 既有 skip。Root 固定来源真 Chromium
+点击按钮核对原字节、刷新与同租户他人私有负例尚未完成，因此完整纵切不升绿；3310 未触碰。
+
+W2-WEB-PERSONAL-DOWNLOAD 文档门历史基线（2026-09-28，Web main
 `224d473758041928a79acfa063eadb13cd779386`）：BFF main
 `d5c868f8ab8b8a33750e1286e9d020ca72895641` 的 public OpenAPI 原字节 SHA-256
 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681` 已发布个人文件

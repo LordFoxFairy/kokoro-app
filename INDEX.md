@@ -30,7 +30,7 @@
 | `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
-| `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter |
+| `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter；Hub 仅精确个人文件 `/library/files/{asset_id}/content` GET 返回校验后的同源二进制与下载安全头 |
 | `src/app/api/auth/`、`src/app/api/team/` | 当前认证/团队适配；仍含 IAM 直连缺口 |
 | `src/app/iam/[...path]/route.ts` | 固定 policy 的只读 IAM GET 同源 relay；仅 authorize 200 redirect JSON 转受限浏览器 302；直接 browser POST 与 server-only 凭据路由拒绝 |
 | `src/app/iam/interactions/invitation/route.ts` | 邀请邮件的唯一静态入口：独立 issuer 登录/注册、recipient-only context、一次性 CSRF 接受/拒绝；`same-origin` Referrer-Policy 保留浏览器同源 POST Origin 且不向跨站发送邀请 URL；仅接受成功后转 Product `/login` |
@@ -44,8 +44,8 @@
 | 文件 | 角色 |
 | --- | --- |
 | `src/contract/project-resource.ts`、`src/features/app/project-resource-list.ts`、`src/features/app/use-project-resources.ts` | 固定 BFF CLEAN 资源页面校验、同源 GET 与项目内有界分页/取消/失败状态 |
-| `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页与上传回执的独立 Zod 消费校验、同源 GET；不复用 Artifact wire |
-| `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的页签局部分页/取消/错误状态与 GET 权威 Asset 列表 |
+| `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页与上传回执的独立 Zod 消费校验、同源列表 GET 与个人原字节下载；不复用 Artifact wire |
+| `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的局部分页/取消/错误状态、GET 权威 Asset 列表及现有卡片的下载/取消/重试 |
 | `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
 | `src/contract/agui-events.ts` | 校验 AG-UI frame 并投影到当前 reducer shape |

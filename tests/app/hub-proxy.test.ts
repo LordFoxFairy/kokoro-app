@@ -46,6 +46,104 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
+  it("returns fully verified personal download bytes and only the narrow safe headers", async () => {
+    const bytes = new Uint8Array([0, 255, 1, 42])
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(bytes, {
+      status: 200,
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(bytes.byteLength),
+        "content-disposition": "attachment; filename=\"private.bin\"; filename*=UTF-8''private.bin",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-request-id": "req_download_1",
+        "x-owner-secret": "never-forward",
+      },
+    }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content"), params(["library", "files", "asset-1", "content"]))
+    expect(response.status).toBe(200)
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes)
+    expect(response.headers.get("content-disposition")).toContain("private.bin")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+    expect(response.headers.get("x-request-id")).toBe("req_download_1")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.headers.get("x-owner-secret")).toBeNull()
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/library/files/asset-1/content")
+  })
+
+  it.each([
+    [{ "content-disposition": "inline; filename=private.bin" }, 502],
+    [{ "referrer-policy": "unsafe-url" }, 502],
+    [{ "x-content-type-options": "" }, 502],
+    [{ "content-length": "3" }, 502],
+    [{ "x-request-id": "bad request id" }, 502],
+    [{ "x-request-id": "" }, 502],
+  ])("rejects invalid personal download owner metadata %o", async (overrides, expected) => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([1, 2]), {
+      status: 200,
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": "2",
+        "content-disposition": "attachment; filename=\"private.bin\"; filename*=UTF-8''private.bin",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-request-id": "req_download_1",
+        ...overrides,
+      },
+    }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content"), params(["library", "files", "asset-1", "content"]))
+    expect(response.status).toBe(expected)
+    expect(response.headers.get("content-disposition")).toBeNull()
+    expect(response.headers.get("x-request-id")).toBeNull()
+  })
+
+  it("rejects a personal 200 with no owner request id", async () => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([1, 2]), {
+      status: 200,
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": "2",
+        "content-disposition": "attachment; filename=\"private.bin\"; filename*=UTF-8''private.bin",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+      },
+    }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content"), params(["library", "files", "asset-1", "content"]))
+    expect(response.status).toBe(502)
+    expect(response.headers.get("content-disposition")).toBeNull()
+  })
+
+  it.each([404, 401, 502])("keeps personal download owner error %i without success headers", async (status) => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ error: { code: "library_file_not_found" } }), {
+      status,
+      headers: { "content-type": "application/json", "content-disposition": "attachment; filename=\"leak\"" },
+    }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content"), params(["library", "files", "asset-1", "content"]))
+    expect(response.status).toBe(status)
+    expect(response.headers.get("content-disposition")).toBeNull()
+  })
+
+  it("rejects redirects, extra query and self alias for personal content without exposing a download", async () => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://storage.invalid/private" } }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const redirected = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content"), params(["library", "files", "asset-1", "content"]))
+    expect(redirected.status).toBe(502)
+    expect(redirected.headers.get("location")).toBeNull()
+    const queried = await GET(new Request("http://localhost/api/hub/library/files/asset-1/content?download=1"), params(["library", "files", "asset-1", "content"]))
+    expect(queried.status).toBe(400)
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
+    const aliased = await GET(new Request("http://localhost/api/hub/self/library/files/asset-1/content"), params(["self", "library", "files", "asset-1", "content"]))
+    expect(aliased.status).toBe(404)
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
+  })
   it("allows the owner upload deadline only for Project resources and personal Library files", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"error":{"code":"resource_scan_pending"}}', {
       status: 503,
@@ -112,19 +210,17 @@ describe("/api/hub/[...path] proxy", () => {
     )
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
-    const res = await GET(
-      new Request("http://localhost/api/hub/self/skills/pool", {
-        headers: { cookie: sessionCookie() },
-      }),
-      params(["self", "skills", "pool"]),
-    )
+    const request = new Request("http://localhost/api/hub/self/skills/pool", {
+      headers: { cookie: sessionCookie() },
+    })
+    const res = await GET(request, params(["self", "skills", "pool"]))
     expect(res.status).toBe(200)
     expect(res.headers.get("cache-control")).toBe("private, no-store")
 
     const [target, domain, init] = vi.mocked(requestWithDomain).mock.calls[0] as [
       string,
       string,
-      { headers: Record<string, string> },
+      { headers: Record<string, string>; signal: AbortSignal },
     ]
     expect(target).toBe("http://bff.test/v1/skills/pool")
     expect(domain).toBe("dev.kokoro.localhost")
@@ -132,6 +228,7 @@ describe("/api/hub/[...path] proxy", () => {
     expect(init.headers["x-kokoro-internal-secret"]).toBe("svc-secret")
     expect(init.headers["x-kokoro-namespace"]).toBeUndefined()
     expect(init.headers["x-kokoro-principal-id"]).toBeUndefined()
+    expect(init.signal).toBe(request.signal)
   })
 
   it("fails closed when the business BFF base is omitted", async () => {

@@ -20,6 +20,44 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 // 仅透传 hub 实际需要的入站头（含 multipart 的 content-type+boundary）；绝不转发 cookie，
 // 也绝不转发浏览器可能伪造的 x-kokoro-* 身份头（新建 Headers 天然丢弃它们）。
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
+const MAX_PERSONAL_DOWNLOAD_BYTES = 1_048_576
+
+function personalDownloadHeaders(headers: Headers): Headers | null {
+  const type = headers.get("content-type")
+  const rawLength = headers.get("content-length")
+  const disposition = headers.get("content-disposition")
+  const requestId = headers.get("x-request-id")
+  const match = disposition === null ? null : /^attachment; filename="([\x20-\x7e]*)"; filename\*=UTF-8''([A-Za-z0-9._~!%-]+)$/u.exec(disposition)
+  if (
+    type === null || !/^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/iu.test(type)
+    || rawLength === null || !/^(0|[1-9][0-9]*)$/u.test(rawLength)
+    || Number(rawLength) > MAX_PERSONAL_DOWNLOAD_BYTES
+    || match === null || /["\\;]/u.test(match[1] ?? "")
+    || headers.get("cache-control") !== "no-store"
+    || headers.get("referrer-policy") !== "no-referrer"
+    || headers.get("x-content-type-options") !== "nosniff"
+    || requestId === null || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(requestId)
+  ) return null
+  try {
+    const filename = decodeURIComponent(match[2] ?? "")
+    if (filename.length === 0 || filename.length > 255 || /[\u0000-\u001f\u007f/\\]/u.test(filename)) return null
+  } catch {
+    return null
+  }
+  return new Headers({
+    "content-type": type,
+    "content-length": rawLength,
+    "content-disposition": disposition ?? "",
+    "cache-control": "private, no-store",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-request-id": requestId,
+  })
+}
+
+function invalidPersonalDownloadResponse(): Response {
+  return NextResponse.json({ error: "library_file_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
+}
 
 function bffBusinessPath(path: string[]): string[] {
   // Preserve the browser-facing Hub namespace and translate it only at the
@@ -57,6 +95,12 @@ export async function proxyHubRequest(
   const { path } = await context.params
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
+  const personalDownload = request.method === "GET" && businessPath.length === 4
+    && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
+  if (personalDownload && path[0] === "self") return NextResponse.json({ error: "not_found" }, { status: 404 })
+  if (personalDownload && (search !== "" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[2] ?? ""))) {
+    return NextResponse.json({ error: "invalid_library_file" }, { status: 400 })
+  }
   const boundedFileUpload = request.method === "POST"
     && ((businessPath.length === 3 && businessPath[0] === "projects" && businessPath[2] === "resources")
       || (businessPath.length === 2 && businessPath[0] === "library" && businessPath[1] === "files"))
@@ -92,13 +136,32 @@ export async function proxyHubRequest(
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
       signal: request.signal,
+      ...(personalDownload ? { maxResponseBytes: MAX_PERSONAL_DOWNLOAD_BYTES } : {}),
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
-  // 原样回传状态与内容类型，body 流式转发（错误码/审核态由展示层解析 hub 响应体决定）。
+  if (personalDownload) {
+    if (upstream.status >= 300 && upstream.status < 400) return invalidPersonalDownloadResponse()
+    if (upstream.status === 200) {
+      const safeHeaders = personalDownloadHeaders(upstream.headers)
+      if (safeHeaders === null) {
+        await upstream.body?.cancel()
+        return invalidPersonalDownloadResponse()
+      }
+      try {
+        const bytes = new Uint8Array(await upstream.arrayBuffer())
+        if (request.signal.aborted || bytes.byteLength !== Number(safeHeaders.get("content-length"))) return invalidPersonalDownloadResponse()
+        return new Response(bytes, { status: 200, headers: safeHeaders })
+      } catch {
+        return invalidPersonalDownloadResponse()
+      }
+    }
+  }
+
+  // 普通 Hub 响应只回传状态与内容类型，body 流式转发。
   const responseHeaders = new Headers()
   for (const name of ["content-type", "cache-control", "content-length"]) {
     const value = upstream.headers.get(name)

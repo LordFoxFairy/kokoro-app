@@ -1,8 +1,19 @@
 # Kokoro User Web 技术设计
 
-## W2 个人文件下载 Web consumer 设计门（2026-09-28；仅文档，代码未实施）
+## W2 个人文件下载 Web consumer 代码现状（2026-09-28；待 Root 真链验收）
 
-**当前态。** Web main `224d473758041928a79acfa063eadb13cd779386` 的 `/app/library` 已有个人文件
+Web 已原字节固定 BFF `d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI
+SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`，生成检查无漂移。
+正式 `/app/library` 个人文件卡已复用 shadcn Button 和既有 `fileFetch`/`downloadFetchedFile`，按卡提供下载、取消与失败重试；
+窄屏卡片仅对个人文件改为两行布局，文件名不与操作按钮争宽；异步 Blob 保存前再次核对取消信号。
+`/api/hub` 仅对精确个人文件 GET 校验 1 MiB 完整原字节、类型、长度及下载安全头，其他 Hub 请求仍无条件传播取消信号。
+本仓 Node22 `pnpm check` 通过（contract 100、architecture 36、Vitest 1582、lint/typecheck/build），
+独立 3449 Playwright 11 pass/1 既有 skip。Root 的固定来源真 Chromium 点击下载、原字节、刷新及他人私有负例仍待验；
+此处不宣布端到端下载闭环，Agent Artifact F2 未触碰。
+
+## W2 个人文件下载 Web consumer 设计门历史基线（2026-09-28；代码前）
+
+**代码前事实。** Web main `224d473758041928a79acfa063eadb13cd779386` 的 `/app/library` 已有个人文件
 GET/上传及 shadcn 文件卡，但卡片没有下载动作；`/api/hub/[...path]` 只转发通用
 `content-type/cache-control/content-length`，Web generated public OpenAPI 仍固定下载前 BFF 来源
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。BFF owner main
