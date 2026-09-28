@@ -1,6 +1,6 @@
 # Kokoro User Web API 契约策略
 
-## W2 个人文件下载 consumer 当前契约（2026-09-28；待 Root 真链验收）
+## W2 个人文件下载 consumer 当前契约（2026-09-28；个人下载真纵切已验收）
 
 Web generated public OpenAPI 已按 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 原字节固定为
 SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；Team 派生生成物 drift check 通过。
@@ -8,7 +8,7 @@ SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；Tea
 `Content-Type`、`Content-Length`、`Content-Disposition`、`Cache-Control: no-store`、
 `Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff` 及安全、有界的 `x-request-id`，只转发窄白名单。Owner 非 200
 错误保持错误语义，重定向、缺失/坏 header、短 body 受控失败且不触发保存；404 就近呈现且不泄露归属。
-直接 contract/adapter/UI 测试及本仓 Node22 全门已通过；真 Chromium 按钮与原字节仍由 Root 验证。
+直接 contract/adapter/UI 测试及本仓 Node22 全门已通过；Root 固定 `44ee670f` 的真 Chromium 两次按钮保存原字节、HTTP 安全头及他人同 asset 404 PASS。完整 Product/W2 边仍另验。
 
 ## W2 个人文件下载 consumer 设计门历史基线（2026-09-28；代码前）
 

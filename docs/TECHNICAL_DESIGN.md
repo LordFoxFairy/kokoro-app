@@ -1,15 +1,15 @@
 # Kokoro User Web 技术设计
 
-## W2 个人文件下载 Web consumer 代码现状（2026-09-28；待 Root 真链验收）
+## W2 个人文件下载 Web consumer 代码现状（2026-09-28；个人下载真纵切已验收）
 
 Web 已原字节固定 BFF `d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI
 SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`，生成检查无漂移。
 正式 `/app/library` 个人文件卡已复用 shadcn Button 和既有 `fileFetch`/`downloadFetchedFile`，按卡提供下载、取消与失败重试；
 窄屏卡片仅对个人文件改为两行布局，文件名不与操作按钮争宽；异步 Blob 保存前再次核对取消信号。
 `/api/hub` 仅对精确个人文件 GET 校验 1 MiB 完整原字节、类型、长度及下载安全头，其他 Hub 请求仍无条件传播取消信号。
-本仓 Node22 `pnpm check` 通过（contract 100、architecture 36、Vitest 1582、lint/typecheck/build），
-独立 3449 Playwright 11 pass/1 既有 skip。Root 的固定来源真 Chromium 点击下载、原字节、刷新及他人私有负例仍待验；
-此处不宣布端到端下载闭环，Agent Artifact F2 未触碰。
+本仓 Node22 `pnpm check` 通过（contract 100、architecture 36、Vitest 1583、lint/typecheck/build），
+独立 3449 Playwright 11 pass/1 既有 skip。Root 固定 `44ee670f` 的真实 IAM/Chromium/PG/Redis/MinIO/ClamAV 用户卡片两次下载原字节、320px 布局、刷新及他人404 PASS，运行自有资源清理完成；
+这仅验收个人下载纵切，完整 W2/Agent Artifact F2 等跨仓能力仍未闭环。
 
 ## W2 个人文件下载 Web consumer 设计门历史基线（2026-09-28；代码前）
 

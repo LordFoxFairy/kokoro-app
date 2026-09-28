@@ -1,19 +1,19 @@
 # Kokoro User Web 当前状态
 
-W2-WEB-PERSONAL-DOWNLOAD real Next 头部修正（2026-09-28，Web 源码已由 Root 复验，待真 Chromium）：
+W2-WEB-PERSONAL-DOWNLOAD 真链已验收（2026-09-28；仅个人文件下载纵切）：
 Route Handler 单测虽返回 `Referrer-Policy: no-referrer`，真实 Next 的全局 Proxy 曾将个人文件下载响应覆盖为
 `strict-origin-when-cross-origin`。现仅精确、无 query 的个人文件 GET 在 Proxy 最终响应设
 `no-referrer`，精确支持浏览器编码的 `asset%3A<64hex>`，不接受任意百分号转义或二次解码；
 通用 Hub、登录及全局默认不变。独立真实 Next HTTP 测试先 RED 后 GREEN，包含编码真资产路径与
-普通/query/self/编码斜杠/双编码路径负例。真 Product 200/浏览器原字节重验仍由 Root 执行，不能以此测试代替。
+普通/query/self/编码斜杠/双编码路径负例。Root 固定 `44ee670f9133dd1cf2c374bd62d56f4057c8343a`、Web `d7848de1ee053f1ec626e8858144893cf8633412`、BFF `d5c868f`、Storage `2d87e26`、IAM `4d98144` 的真实 IAM/Chromium/PG/Redis/MinIO/ClamAV 运行 `fee7b756c799f6e62691e8a3` PASS：本人文件卡两次保存原字节与文件名、安全头、刷新、320px 不溢出、同租户他人 GET 404；测试自有数据库/缓存键/进程/对象版本余量均为 0，专用空 bucket 已删除，3310 原预览未重启。其他 Product/Agent Artifact F2 及完整 W2 边仍未闭环。
 
-W2-WEB-PERSONAL-DOWNLOAD-CODE（2026-09-28，Web 代码已由 Root 审查，待真链验收）：已原字节固定 BFF
+W2-WEB-PERSONAL-DOWNLOAD-CODE 历史代码门（2026-09-28）：已原字节固定 BFF
 `d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI SHA-256
 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；生成 drift 15 文件通过。
 个人文件卡有 shadcn 下载、取消、就近错误/重试；精确同源 Hub GET 校验完整 ≤1 MiB 原字节与下载安全头，
 保留通用 Hub 取消传播，未混用 Artifact。Node22 `pnpm check` exit0（contract 100、architecture 36、
-Vitest 1582、lint/typecheck/build）；独立 3449 Playwright 11 pass/1 既有 skip。Root 固定来源真 Chromium
-点击按钮核对原字节、刷新与同租户他人私有负例尚未完成，因此完整纵切不升绿；3310 未触碰。
+Vitest 1583、lint/typecheck/build）；独立 3449 Playwright 11 pass/1 既有 skip。Root 固定来源真 Chromium
+点击按钮核对原字节、刷新与同租户他人私有负例的验收见上节；3310 未触碰。
 
 W2-WEB-PERSONAL-DOWNLOAD 文档门历史基线（2026-09-28，Web main
 `224d473758041928a79acfa063eadb13cd779386`）：BFF main
