@@ -99,6 +99,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     response.headers.set("Cache-Control", "no-store")
     response.headers.set("Referrer-Policy", path === "/iam/verify-email" ? "no-referrer" : "same-origin")
   }
+  // Only the personal binary GET suppresses referrer data at the final Next
+  // boundary. The client encodes the Storage asset:<sha256> colon as %3A;
+  // do not accept arbitrary percent escapes or double decoding here.
+  if (request.method === "GET" && request.nextUrl.search === ""
+    && /^\/api\/hub\/library\/files\/(?:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}|asset%3A[a-f0-9]{64})\/content$/u.test(path)) {
+    response.headers.set("Referrer-Policy", "no-referrer")
+  }
   if (shouldDisableCaching(path)) {
     response.headers.set("Cache-Control", "private, no-store, max-age=0")
     response.headers.set("Vary", "Cookie")

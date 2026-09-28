@@ -183,6 +183,23 @@ export async function GET(): Promise<Response> {
     expect(bffCalls).toBe(0);
   });
 
+  it("sets no-referrer only for the exact personal content GET at the real Next HTTP boundary", async () => {
+    const personal = await get(nextPort, undefined, "/api/hub/library/files/asset-1/content");
+    const encodedAsset = await get(nextPort, undefined, `/api/hub/library/files/asset%3A${"a".repeat(64)}/content`);
+    const ordinary = await get(nextPort, undefined, "/api/hub/library?kind=file");
+    const queried = await get(nextPort, undefined, "/api/hub/library/files/asset-1/content?download=1");
+    const aliased = await get(nextPort, undefined, "/api/hub/self/library/files/asset-1/content");
+    const encodedSlash = await get(nextPort, undefined, "/api/hub/library/files/asset%2Fprivate/content");
+    const doubleEncoded = await get(nextPort, undefined, `/api/hub/library/files/asset%253A${"a".repeat(64)}/content`);
+    expect(personal.headers["referrer-policy"]).toBe("no-referrer");
+    expect(encodedAsset.headers["referrer-policy"]).toBe("no-referrer");
+    expect(ordinary.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(queried.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(aliased.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(encodedSlash.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+    expect(doubleEncoded.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  });
+
   it("returns controlled 503 when online inspection is unavailable and never connects to BFF", async () => {
     const issued = await get(
       nextPort,

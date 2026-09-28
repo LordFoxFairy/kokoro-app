@@ -1,5 +1,12 @@
 # Kokoro User Web 当前状态
 
+W2-WEB-PERSONAL-DOWNLOAD real Next 头部修正（2026-09-28，Web 源码已由 Root 复验，待真 Chromium）：
+Route Handler 单测虽返回 `Referrer-Policy: no-referrer`，真实 Next 的全局 Proxy 曾将个人文件下载响应覆盖为
+`strict-origin-when-cross-origin`。现仅精确、无 query 的个人文件 GET 在 Proxy 最终响应设
+`no-referrer`，精确支持浏览器编码的 `asset%3A<64hex>`，不接受任意百分号转义或二次解码；
+通用 Hub、登录及全局默认不变。独立真实 Next HTTP 测试先 RED 后 GREEN，包含编码真资产路径与
+普通/query/self/编码斜杠/双编码路径负例。真 Product 200/浏览器原字节重验仍由 Root 执行，不能以此测试代替。
+
 W2-WEB-PERSONAL-DOWNLOAD-CODE（2026-09-28，Web 代码已由 Root 审查，待真链验收）：已原字节固定 BFF
 `d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI SHA-256
 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；生成 drift 15 文件通过。
