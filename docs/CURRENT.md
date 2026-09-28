@@ -1,21 +1,33 @@
 # Kokoro User Web 当前状态
 
-W2-WEB-LIBRARY-FILES 代码片（2026-09-28，Web 单仓门通过、待 Root 审查）：同一 `/app/library`
+W2-WEB-LIBRARY-PERSONAL-UPLOAD 设计门（2026-09-28）：当前 Web main
+`8debb35b6c9ad3c818282bb2fe3d828ca550d136` 已有默认个人文件的 shadcn Library Tabs、严格只读 GET
+与精确个人 POST 的同源 1 MiB/50 秒代理，但正式个人文件页**没有可见上传控件**；generated public
+OpenAPI 仍固定旧 BFF `a67ae2d`。BFF owner
+`8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的唯一新 `POST /v1/library/files` OpenAPI 原字节
+SHA-256 为 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`，Web 尚未回钉。
+Root 隔离真链已验同源直接 POST→CLEAN→个人 GET/刷新及同租户他人空页，**不是 UI 点击上传证据**。
+本次只收敛四份 Web 文档，未改 generated/runtime/UI/测试；后片须在现有文件页签实现单文件选择、整个
+multipart 1 MiB、每文件意图稳定 key、严格 CLEAN 回执后 GET 刷新，未知响应明确同键重试，感染及冲突/中止
+终态不误重试（`409 idempotency_in_progress` 除外），并以真实 Chromium 点击、刷新与隐私负例验收。
+下载、Agent Artifact F2 和感染/未知结果恢复/并发真实组合仍未完成；完整 Library/W2 不升绿。
+
+W2-WEB-LIBRARY-FILES 已发布只读基线（2026-09-28）：同一 `/app/library`
 已用 shadcn Tabs 默认显示个人文件，Agent 作品保留原 `/api/session/artifacts` 模型和操作；文件仅从
 `/api/hub/library?kind=file` 经 Product Session/BFF 读入，独立 Zod/`asset_id`/opaque cursor，
-真实空页、失败手动重试、切换取消与跨页去重，不呈现未发布的个人上传/下载动作。Web 已原字节固定
+真实空页、失败手动重试、切换取消与跨页去重，目前不呈现个人上传/下载动作。Web 已原字节固定
 BFF `a67ae2d` public OpenAPI SHA-256 `82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9`，
 Team 生成 drift 检查通过。Node22 隔离副本 `pnpm check` exit0（contract 84、architecture 36、
 Vitest 1521、lint/typecheck/build），独立端口 3444 `pnpm test:e2e` 11 pass/1 既有 skip。
-Root 固定来源的真登录、个人文件浏览器刷新/隐私仍待验；个人 Product 上传/下载及 Agent Artifact F2
-是另片未决，不能以本次文件列表宣称完整 Library 闭环。
+Root 随后已在固定来源真浏览器验个人文件刷新/隐私；个人可见上传、下载及 Agent Artifact F2
+仍是另片未决，不能以文件列表宣称完整 Library 闭环。上段单仓数字是当时基线证据，不代表本次文档门新跑。
 
 W2 个人文件 Product POST 的同源代理边界（2026-09-28）：BFF 已另片发布
 `POST /v1/library/files`，Web 尚无可见个人上传控件；现有 `/api/hub/library/files`
 仅将该精确 POST 与 Project resource POST 一样限定整段请求 1 MiB、上游 50 秒，
 避免默认 15 秒在真实扫描完成前断开。Root 在隔离副本 Node22 `pnpm check`
 通过（contract 84、architecture 36、Vitest 1521、lint/typecheck/build）；其余 Hub 路径
-仍使用默认边界。这不是上传 UI 或个人文件浏览器纵切的完成证据。
+仍使用默认边界。这不是上传 UI 点击的完成证据；同源直接 POST 的后续真链正向结果以上段当前记录为准。
 
 W2-WEB-LIBRARY-LIVE-TRUTH（2026-09-28，Root 已复验）：资料库不再以 development 环境自动选择 preview transport。未注入 client 的正式页面在开发与生产均请求同源 `/api/session/artifacts`；失败显示错误，只有用户点击才重试，不把服务不可用显示为空列表。显式 `preview` 和受控 `fixtureArtifacts` 仍保持样本语义。Root 在当前工作树独立运行 Node22 `pnpm check`：contract 83、architecture 36、Vitest 1513、lint/typecheck/build PASS；隔离 3441 端口 `pnpm test:e2e` 11 pass/1 既有 skip。本片不预接尚未发布的个人 Library API，也不改变 BFF 契约、样式或其他页面。
 
