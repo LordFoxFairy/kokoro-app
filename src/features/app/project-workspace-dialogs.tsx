@@ -47,6 +47,11 @@ export type ProjectWorkspaceDialogsProps = {
   resourceSearchRef: React.RefObject<HTMLInputElement | null>
   resourceInputRef: React.RefObject<HTMLInputElement | null>
   filteredResources: readonly ProjectResourcePreview[]
+  resourceListStatus: "loading" | "loadingMore" | "ready" | "error"
+  resourceListErrorCursor: string | null
+  resourceNextCursor: string | null
+  onRetryResourceList: () => void
+  onLoadMoreResources: () => void
   resourceUploads: readonly ResourceUploadIntent[]
   onRetryResourceUpload: (intent: ResourceUploadIntent) => void
   handleResourceFiles: (files: FileList) => Promise<void>
@@ -88,7 +93,7 @@ export function ProjectWorkspaceDialogs({
   brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
   instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesOpen, setResourcesOpen,
-  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceUploads, onRetryResourceUpload,
+  resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
   handleResourceFiles, skillsOpen, setSkillsOpen, skillQuery, setSkillQuery, setSkillFilter, skillBuilderEnabled,
   setSkillBuilderEnabled, skillVisible, onSetProjectSkillEnabled, websitesOpen, setWebsitesOpen, websiteQuery, setWebsiteQuery,
   selectedWebsiteId, setSelectedWebsiteId, linkedWebsiteId, setLinkedWebsiteId, filteredWebsites, scheduledOpen, setScheduledOpen,
@@ -124,7 +129,12 @@ export function ProjectWorkspaceDialogs({
       <DialogContent className={dialogStyles.resourcesDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}>
         <DialogTitle className={dialogStyles.resourcesDialogTitle}>{t("firstSite.filesAndResources")}</DialogTitle>
         <div className={dialogStyles.resourcesToolbar}><DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label={t("firstSite.filter")}><SlidersHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" sideOffset={4}><DropdownMenuItem onSelect={() => setResourceKind("all")}>{t("library.filterAll")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("file")}>{t("library.filterDocuments")}</DropdownMenuItem><DropdownMenuItem onSelect={() => setResourceKind("web")}>{t("firstSite.webResource")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu><label className={dialogStyles.resourcesSearch}><Search aria-hidden="true" /><Input ref={resourceSearchRef} aria-label={t("firstSite.searchResources")} placeholder={t("firstSite.searchResources")} value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} /></label></div>
-        {filteredResources.length > 0 ? <div className={dialogStyles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>{filteredResources.map((resource) => <div key={resource.id} className={dialogStyles.resourceRow} role="listitem">{resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}<span><strong>{resource.name}</strong><small>{resource.detail}</small></span></div>)}</div> : <div className={dialogStyles.resourcesEmpty}><File aria-hidden="true" /><p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.filesHint")}</p></div>}
+        {resourceListStatus === "loading" ? <p className={dialogStyles.resourceListState} role="status">{t("firstSite.resourceListLoading")}</p> : null}
+        {resourceListStatus === "error" && resourceListErrorCursor === null ? <div className={dialogStyles.resourceListState} role="alert"><p>{t("firstSite.resourceListFailed")}</p><Button type="button" variant="outline" onClick={onRetryResourceList}>{t("firstSite.retry")}</Button></div> : null}
+        {resourceListStatus !== "loading" && !(resourceListStatus === "error" && resourceListErrorCursor === null) ? filteredResources.length > 0 ? <div className={dialogStyles.resourceList} role="list" aria-label={t("firstSite.filesAndResources")}>{filteredResources.map((resource) => <div key={resource.id} className={dialogStyles.resourceRow} role="listitem">{resource.kind === "web" ? <Globe2 aria-hidden="true" /> : <File aria-hidden="true" />}<span><strong>{resource.name}</strong><small>{resource.detail}</small></span></div>)}</div> : <div className={dialogStyles.resourcesEmpty}><File aria-hidden="true" /><p>{resourceQuery.trim() ? t("firstSite.noMatchingResources") : t("firstSite.resourceListEmpty")}</p></div> : null}
+        {resourceListStatus === "error" && resourceListErrorCursor !== null ? <div className={dialogStyles.resourcePageState} role="alert"><span>{t("firstSite.resourceListFailed")}</span><Button type="button" variant="outline" onClick={onRetryResourceList}>{t("firstSite.retry")}</Button></div> : null}
+        {resourceListStatus === "loadingMore" ? <p className={dialogStyles.resourcePageState} role="status">{t("firstSite.resourceListLoading")}</p> : null}
+        {resourceListStatus === "ready" && resourceNextCursor !== null ? <Button type="button" variant="outline" className={dialogStyles.resourceLoadMore} onClick={onLoadMoreResources}>{t("firstSite.resourceLoadMore")}</Button> : null}
         {resourceUploads.length > 0 ? <div className={dialogStyles.resourceUploadList} aria-live="polite">{resourceUploads.map((intent) => <div key={intent.id} className={dialogStyles.resourceUploadRow}>
           <File aria-hidden="true" />
           <span><strong>{intent.file.name}</strong><small role={intent.status === "failed" ? "alert" : "status"}>{intent.status === "uploading" ? t("firstSite.resourceUploading") : t(intent.error === "resource_file_infected" ? "firstSite.resourceInfected" : intent.error === "idempotency_conflict" || intent.error === "resource_upload_aborted" ? "firstSite.resourceUploadRestart" : intent.error === "request_body_too_large" || intent.error === "upload_http_413" ? "firstSite.resourceTooLarge" : intent.retryable ? "firstSite.resourceUploadFailed" : "firstSite.resourceUploadRejected", { name: intent.file.name })}</small></span>

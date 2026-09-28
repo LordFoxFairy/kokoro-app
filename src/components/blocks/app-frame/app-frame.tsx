@@ -335,6 +335,8 @@ export function AppFrame({
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
     onUploadProjectResource: project.uploadProjectResource,
+    onListProjectResources: project.listProjectResources,
+    ...(projectRef === undefined ? {} : { projectRef }),
     onSetProjectSkillEnabled: project.setProjectSkillEnabled,
     onCreateProjectScheduledTask: project.createProjectScheduledTask,
     projectTask: projectTaskView,

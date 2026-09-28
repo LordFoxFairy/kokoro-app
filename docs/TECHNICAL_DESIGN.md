@@ -1,5 +1,24 @@
 # Kokoro User Web 技术设计
 
+## W2 项目资源 GET consumer 当前方案（2026-09-28）
+
+BFF 是 Project/owner 资源列表的唯一事实与授权入口，Storage 保留 Asset/CLEAN 事实。Web 无资源数据库、
+Redis cache、下载 URL、第二查询 API 或跨 owner join。BFF main `31c4803b3df0e90c031a97844f89df384ca1a35c`
+的 public OpenAPI 原始字节固定在 `src/generated/bff-public-openapi.yaml`（SHA-256
+`87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`）。
+
+当前代码路径：`useAppFrameProject` 按当前 projectRef 绑定读取回调 → browser-private `/api/hub/projects/{id}/resources`
+→ BFF GET；`src/features/app/project-resource-list.ts` 固定每页 50、只读 opaque cursor、`no-store`/AbortSignal，
+`src/contract/project-resource.ts` 严格校验 CLEAN 页面并投影 camelCase。`use-project-resources.ts` 仅持有
+页面内列表/请求状态，首次进入和项目变更重新 GET，取消旧请求且用请求序号拒绝迟到页；增量页以 assetId
+去重，错误不转成空页。浏览器不接触 tenant/actor 或 Storage URL。POST 200 仅确认该 mutation，随后 owner
+GET 成功才把资源加入持久列表；刷新失败显示 read 错误，不同键重发 POST。preview fixture 仅 explicit
+preview 模式使用，并纳入 workbench remount key 防止 live/preview 状态串用。
+
+放置裁决：复用现有 `/api/hub` 同源 adapter 和项目 feature；不在组件里直接拼上游 URL，也不新建
+GET route/缓存。读取 client 与上传 mutation 分文件，因请求方法、错误与测试边界独立；分页 React hook
+只管理界面状态，不拥有业务事实。失败恢复由用户重试 GET；不自动循环分页，不影响 BFF 的权限校验。
+
 ## W1D-WEB-IAM-DIRECT-CUT 当前实现（2026-09-26，Root 集成待验）
 
 ### Owner、切片前基线与当前职责

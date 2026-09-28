@@ -128,7 +128,7 @@ export function AppFrameMainSurface({
             // A new conversation is a fresh workbench, not a continuation of
             // the previous welcome surface. Project-local upload intents must
             // also remount when the project identity changes, even without a session.
-            key={projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId]) : activeId ?? "new-workspace"}
+            key={projectWorkspace ? JSON.stringify(["project", projectRef ?? null, activeId, emptyStateProps.preview ?? false]) : activeId ?? "new-workspace"}
             {...emptyStateProps}
           />
         )}

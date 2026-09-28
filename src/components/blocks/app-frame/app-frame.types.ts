@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react"
 
 import type { ModelCandidate } from "@/contract/http"
-import type { ProjectResourceUploadResult } from "@/contract/project-resource"
+import type { ProjectResourceListPage, ProjectResourceUploadResult } from "@/contract/project-resource"
 import type { SkillCard } from "@/hub/schemas"
 import type { SessionEngine } from "@/engine/machine"
 import type { SessionClient } from "@/engine/client"
@@ -125,6 +125,8 @@ export type EmptyStateProps = {
   projectInstructionHistory?: readonly ProjectInstructionRevision[]
   onSaveProjectInstructions?: (instructions: string) => Promise<void>
   onUploadProjectResource?: (file: File, idempotencyKey: string) => Promise<ProjectResourceUploadResult>
+  onListProjectResources?: (cursor: string | null, signal: AbortSignal) => Promise<ProjectResourceListPage>
+  projectRef?: string
   onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>
   onCreateProjectScheduledTask?: (task: ProjectScheduledTaskInput) => Promise<void>
   /** Site-owned welcome actions can hand off to shared workspace settings. */

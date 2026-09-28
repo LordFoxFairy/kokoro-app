@@ -25,7 +25,7 @@ artifact 可发布到 Developer API 门户。
 
 | 路径 | 角色 |
 | --- | --- |
-| `src/contract/project-resource.ts` | Pinned BFF project resource upload response consumer validation |
+| `src/contract/project-resource.ts` | Pinned BFF project resource upload/list response consumer validation |
 | `src/contract/agui-events.ts` | `@ag-ui/core` 校验后的 Kokoro metadata narrowing 与内部投影 |
 | `src/contract/{chat,control,artifacts,catalog,billing,scheduled}.ts` | JSON Zod schema |
 | `src/contract/paths.ts` | 同源 browser path helper |

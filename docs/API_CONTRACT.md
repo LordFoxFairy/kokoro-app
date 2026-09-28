@@ -496,3 +496,14 @@ file/key for explicit retry. A terminal infected result is shown without retry. 
 uses N independent owner requests, not an unsupported N-file body. GET project resources is a
 separate owner contract and not implemented by this mutation slice; preview resource fixtures are
 unchanged. The local Zod schema is a consumer validator, not a second editable public contract.
+
+## W2 project resource browser-private GET (2026-09-28)
+
+Owner BFF public OpenAPI commit `31c4803b3df0e90c031a97844f89df384ca1a35c`, exact vendor bytes
+SHA-256 `87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`.
+Browser `GET /api/hub/projects/{id}/resources?limit=50[&cursor=opaque]` forwards through the existing
+Product Session same-origin BFF adapter to BFF `GET /v1/projects/{projectId}/resources`. The response
+is strictly validated as `{data:{items:[CLEAN asset],next_cursor},meta}` with at most 100 items; no upload
+ID, download URL, or Storage credential enters the Web list. `cursor` remains opaque and URL-encoded.
+HTTP failure or malformed 200 is a visible error, not an empty page; the user retries GET. Preview fixtures
+are explicit preview-only. The POST mutation contract remains unchanged.

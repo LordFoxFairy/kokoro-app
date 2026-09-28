@@ -1,5 +1,13 @@
 # Kokoro User Web 当前状态
 
+W2-Web-Project-Resources-GET（2026-09-28，工作树待 Root 审查）：当前 BFF owner `31c4803b3df0e90c031a97844f89df384ca1a35c`
+发布 GET `/v1/projects/{projectId}/resources`；Web 原样固定 public OpenAPI SHA-256
+`87b1ff3a39f5fa0a67cabdf6b78df59697874bd817aa218ca676ec1472ec15e6`。正式项目资源列表只从
+BFF 经同源 `/api/hub` GET 读取 CLEAN/ASSET 页面，每页固定 50、opaque cursor 加载更多；初载、刷新、
+跨项目切换取消迟到请求，区分 loading/empty/error/retry。POST 成功不再把回执直接当可见持久列表，
+先刷新 owner GET；GET 失败显示错误，不伪装空态。`previewResources` 仅显式 preview 模式可见。
+无 Web SQL/Redis/缓存/跨 owner 读。Node 22.22.2 聚焦测试先 RED 后 GREEN；`pnpm contract` 78/78、`pnpm test:architecture` 36/36、`pnpm lint`、`pnpm typecheck`、全量 `pnpm test` 1500/1500、`pnpm build` 和 diff-check 均通过。Root 固定 SHA 的真组合/Chromium 仍待验；旧 P1 记录是当时切片历史。
+
 W1F-LOGIN-TLS-REWRITE（2026-09-28，待 Root 集成验证）：隔离 TLS 终止代理下，公开
 `https://HOST:PORT/auth/sign-in` 的表单 rewrite 曾被 `src/proxy.ts` 强制降为 `http:`，
 Next 将其作为外部 HTTP 代理请求而在真实登录首跳返回 500；仅删除强制降级也不足够，

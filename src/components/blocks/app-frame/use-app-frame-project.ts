@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useT } from "@/i18n/context"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
+import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { clearPendingDraft } from "@/ui/shell/use-draft"
 
@@ -150,6 +151,11 @@ export function useAppFrameProject({
     return uploadProjectResourceRequest(projectRef, file, idempotencyKey)
   }, [projectRef])
 
+  const listProjectResources = useCallback(async (cursor: string | null, signal: AbortSignal) => {
+    if (!projectRef) throw new Error("project_not_selected")
+    return listProjectResourcesRequest(projectRef, cursor, signal)
+  }, [projectRef])
+
   const setProjectSkillEnabled = useCallback(async (skill: string, enabled: boolean) => {
     if (!projectRef) return
     const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/skills/${encodeURIComponent(skill)}`, {
@@ -212,6 +218,7 @@ export function useAppFrameProject({
     projectInstructionHistory,
     saveProjectInstructions,
     uploadProjectResource,
+    listProjectResources,
     setProjectSkillEnabled,
     createProjectScheduledTask,
     openProject,

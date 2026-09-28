@@ -17,14 +17,15 @@ import { ProjectIdentity } from "./project-identity"
 import { ProjectTaskEmpty } from "./project-task-empty"
 import { KokoroProjectTaskWelcome } from "./kokoro-project-task-welcome"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
-import { previewResources, previewScheduledTasks, previewWebsites, type ProjectResourcePreview, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
+import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
+import { useProjectResources } from "./use-project-resources"
 import styles from "./kokoro-project-workspace.module.css"
 import layoutStyles from "./project-workspace-layout.module.css"
 
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
+  | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
 >
 
 export type ResourceUploadIntent = {
@@ -57,6 +58,9 @@ export function KokoroProjectWorkspace({
   projectInstructionHistory = [],
   onSaveProjectInstructions,
   onUploadProjectResource,
+  onListProjectResources,
+  projectRef,
+  preview = false,
   onSetProjectSkillEnabled,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
@@ -71,7 +75,7 @@ export function KokoroProjectWorkspace({
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
-  const [resourceItems, setResourceItems] = useState<readonly ProjectResourcePreview[]>(previewResources)
+  const resources = useProjectResources(projectRef, preview, onListProjectResources)
   const [resourceUploads, setResourceUploads] = useState<readonly ResourceUploadIntent[]>([])
   const activeResourceUploads = useRef(new Set<string>())
   const resourceInputRef = useRef<HTMLInputElement | null>(null)
@@ -124,7 +128,7 @@ export function KokoroProjectWorkspace({
     window.requestAnimationFrame(() => resourceInputRef.current?.click())
   }
 
-  const filteredResources = resourceItems.filter((resource) => {
+  const filteredResources = resources.items.filter((resource) => {
     const queryMatches = resourceQuery.trim().length === 0
       || `${resource.name} ${resource.detail}`.toLocaleLowerCase().includes(resourceQuery.trim().toLocaleLowerCase())
     return queryMatches && (resourceKind === "all" || resource.kind === resourceKind)
@@ -150,12 +154,7 @@ export function KokoroProjectWorkspace({
     try {
       if (!onUploadProjectResource) throw new ProjectResourceUploadError("upload_not_configured", false)
       const receipt = await onUploadProjectResource(intent.file, intent.key)
-      setResourceItems((current) => [{
-        id: receipt.assetId,
-        name: receipt.filename,
-        kind: "file",
-        detail: `${receipt.mimeType} · ${Math.max(1, Math.ceil(Number(receipt.sizeBytes) / 1024))} KB`,
-      }, ...current.filter((item) => item.id !== receipt.assetId)])
+      await resources.confirmUpload(receipt)
       setResourceUploads((current) => current.filter((item) => item.id !== intent.id))
     } catch (error) {
       const uploadError = error instanceof ProjectResourceUploadError ? error : null
@@ -413,6 +412,11 @@ export function KokoroProjectWorkspace({
         resourceSearchRef={resourceSearchRef}
         resourceInputRef={resourceInputRef}
         filteredResources={filteredResources}
+        resourceListStatus={resources.status}
+        resourceListErrorCursor={resources.errorCursor}
+        resourceNextCursor={resources.nextCursor}
+        onRetryResourceList={() => { void resources.retry() }}
+        onLoadMoreResources={() => { void resources.loadMore() }}
         resourceUploads={resourceUploads}
         onRetryResourceUpload={(intent) => { void submitResourceUpload(intent) }}
         handleResourceFiles={handleResourceFiles}

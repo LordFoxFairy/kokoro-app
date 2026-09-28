@@ -39,7 +39,7 @@ afterEach(cleanup)
 it("项目右栏使用固定的 75×64 空态插图且不进入读屏名称", () => {
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -72,7 +72,7 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
 
   const { rerender } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         {...baseProps}
         projectConversationsLoading
       />
@@ -84,7 +84,7 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
 
   rerender(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         {...baseProps}
         projectConversationsError
         onRetryProjectConversations={onRetryProjectConversations}
@@ -105,7 +105,7 @@ it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", as
 
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={onPrompt}
@@ -161,7 +161,7 @@ it("项目多选逐文件提交，部分失败可用原文件和原幂等键重�
     if (file.name === "two.txt" && ++secondAttempts === 1) throw new Error("HTTP 503")
     return { assetId: `asset-${file.name}`, filename: file.name, mimeType: "text/plain", sizeBytes: String(file.size) }
   })
-  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview
     brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
     onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
   /></LocaleProvider>)
@@ -194,7 +194,7 @@ it("项目多选逐文件提交，部分失败可用原文件和原幂等键重�
 
 it("终止性的文件审核失败不会伪造资源或显示无效重试", async () => {
   const onUploadProjectResource = vi.fn().mockRejectedValue(new ProjectResourceUploadError("resource_file_infected", false, 422))
-  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview
     brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
     onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
   /></LocaleProvider>)
@@ -211,7 +211,7 @@ it("终止性的文件审核失败不会伪造资源或显示无效重试", asyn
 
 it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件", async () => {
   const onUploadProjectResource = vi.fn().mockRejectedValue(new ProjectResourceUploadError("idempotency_conflict", false, 409))
-  const { container } = render(<LocaleProvider><KokoroProjectWorkspace
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview
     brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()}
     onUploadProjectResource={onUploadProjectResource} workspaceCapabilities={capabilities}
   /></LocaleProvider>)
@@ -228,7 +228,7 @@ it("不可恢复的幂等冲突不提供同键重试，提示重新选择文件"
 it("专案指令历史使用双栏版本 Dialog 并可切换正文", () => {
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -265,7 +265,7 @@ it("在项目页内打开独立技能 Dialog，并持久化技能启用状态", 
 
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -298,7 +298,7 @@ it("在项目页内打开独立技能 Dialog，并持久化技能启用状态", 
 it("资源卡的上传与搜索网络动作分别进入对应状态", async () => {
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -324,7 +324,7 @@ it("资源卡的上传与搜索网络动作分别进入对应状态", async () =
 it("资源筛选与技能搜索会实际过滤本地预览数据", () => {
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -354,7 +354,7 @@ it("技能启用状态保存失败时回滚视觉状态", async () => {
 
   const { container } = render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}
@@ -381,7 +381,7 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
   const onPrompt = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroProjectWorkspace brandName="Kokoro" composer={<div>composer</div>} onPrompt={onPrompt} workspaceCapabilities={capabilities} />
+      <KokoroProjectWorkspace preview brandName="Kokoro" composer={<div>composer</div>} onPrompt={onPrompt} workspaceCapabilities={capabilities} />
     </LocaleProvider>,
   )
 
@@ -396,7 +396,7 @@ it("网站入口打开项目级选择弹窗而不是向 Composer 注入提示词
 it("网站选择器可以搜索、选择并保存合成网站", async () => {
   render(
     <LocaleProvider>
-      <KokoroProjectWorkspace brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} />
+      <KokoroProjectWorkspace preview brandName="Kokoro" composer={<div>composer</div>} onPrompt={vi.fn()} workspaceCapabilities={capabilities} />
     </LocaleProvider>,
   )
 
@@ -418,7 +418,7 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
   const onCreateProjectScheduledTask = vi.fn().mockResolvedValue(undefined)
   render(
     <LocaleProvider>
-      <KokoroProjectWorkspace
+      <KokoroProjectWorkspace preview
         brandName="Kokoro"
         composer={<div>composer</div>}
         onPrompt={vi.fn()}

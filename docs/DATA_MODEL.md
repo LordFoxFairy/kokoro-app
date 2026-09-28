@@ -1,5 +1,13 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W2 项目资源读取数据边界（2026-09-28）
+
+Web 不新增 schema、表、Redis key、持久缓存、receipt 或对象副本。BFF 拥有项目资源列表权限与 cursor，
+Storage 拥有 Asset/CLEAN metadata；Web 只在 React 生命周期内保存当前页、opaque cursor、
+loading/error 和上传重试 File+key。切换项目或卸载时取消读取并清理 view state，迟到请求不能写回其他
+项目；页面刷新重新向 BFF GET，不能从本地 preview 或 POST 回执虚构持久列表。公开字段只用
+asset_id、filename、mime_type、size_bytes、created_at 的显示投影，内容哈希仅边界校验不展示。
+
 ## W1D-WEB-IAM-DIRECT-CUT 当前数据边界（2026-09-26，Root 集成待验）
 
 ### 切片前事实与当前结果

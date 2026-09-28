@@ -95,6 +95,10 @@ const composerFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const firstSiteFallback: Partial<Record<MessageKey, string>> = {
+  "firstSite.resourceListLoading": "Loading files…",
+  "firstSite.resourceListFailed": "Could not load files. Try again.",
+  "firstSite.resourceListEmpty": "No files or resources yet.",
+  "firstSite.resourceLoadMore": "Load more files",
   "firstSite.resourceUploading": "Uploading…",
   "firstSite.resourceUploadRestart": "Upload for {name} ended. Select the file again to start a new upload.",
   "firstSite.resourceUploadRejected": "{name} was not uploaded. Check the file or access permissions.",
