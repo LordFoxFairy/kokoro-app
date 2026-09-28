@@ -1,15 +1,17 @@
-import { spawn, type ChildProcess } from "node:child_process"
+import { execFileSync, spawn, type ChildProcess } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
+import { readFileSync } from "node:fs"
 import { cp, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
+import { createServer as createHttpsServer, request as httpsRequest } from "node:https"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
 import { createClient } from "redis"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-const WEB_ORIGIN = "https://web-proxy.example.test"
-const WEB_HOST = new URL(WEB_ORIGIN).host
+let WEB_ORIGIN = "https://localhost"
+let WEB_HOST = new URL(WEB_ORIGIN).host
 const SIGNED_QUERY = "?sig=%2BAb"
 
 type HttpResult = Readonly<{
@@ -34,7 +36,8 @@ async function unusedPort(): Promise<number> {
 
 function http(port: number, target: string, method = "GET", body = "", extra: Record<string, string> = {}): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
-    const request = httpRequest({ hostname: "127.0.0.1", port, path: target, method,
+    const request = httpsRequest({ hostname: "127.0.0.1", port, path: target, method,
+      servername: "localhost", rejectUnauthorized: false,
       headers: { host: WEB_HOST, "x-forwarded-proto": "https", ...extra,
         ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}) } }, (response) => {
       const chunks: Buffer[] = []
@@ -68,7 +71,7 @@ function csrfToken(response: HttpResult, issued: Set<string>): string {
   return token
 }
 
-describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next hop", { timeout: 30_000 }, () => {
+describe("IAM and RP origin admission behind a real local HTTPS reverse proxy", { timeout: 30_000 }, () => {
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379/9"
   const issuedCsrf = new Set<string>()
   const issuedStates = new Set<string>()
@@ -131,19 +134,11 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
       })
       const bffPort = await listen(bff)
       nextPort = await unusedPort()
-      const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
-      next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
-        cwd: root,
-        env: { ...process.env, KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
-          KOKORO_DOMAIN: WEB_HOST,
-          KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,
-          KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret", KOKORO_TENANT_ID: "tenant-one",
-          KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` },
-        stdio: ["ignore", "pipe", "pipe"],
-      })
-      next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
-      next.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
-      proxy = createServer((incoming, outgoing) => {
+      const keyPath = path.join(root, "proxy-key.pem")
+      const certPath = path.join(root, "proxy-cert.pem")
+      execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+        "-keyout", keyPath, "-out", certPath, "-subj", "/CN=localhost"], { stdio: "ignore" })
+      proxy = createHttpsServer({ key: readFileSync(keyPath), cert: readFileSync(certPath) }, (incoming, outgoing) => {
         const headers = { ...incoming.headers, "x-forwarded-proto": incoming.headers["x-forwarded-proto"] ?? "https" }
         const upstream = httpRequest({ hostname: "127.0.0.1", port: nextPort, method: incoming.method,
           path: incoming.url, headers }, (response) => {
@@ -154,6 +149,21 @@ describe("IAM and RP origin admission behind an HTTPS reverse proxy-style Next h
         incoming.pipe(upstream)
       })
       proxyPort = await listen(proxy)
+      WEB_ORIGIN = `https://localhost:${proxyPort}`
+      WEB_HOST = new URL(WEB_ORIGIN).host
+      const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
+      next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
+        cwd: root,
+        env: { ...process.env, NODE_EXTRA_CA_CERTS: certPath,
+          KOKORO_WEB_ORIGIN: WEB_ORIGIN, KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
+          KOKORO_DOMAIN: "localhost",
+          KOKORO_INTERNAL_SECRET_WEB_BFF: "proxy-fixture-secret", KOKORO_WEB_REDIS_URL: redisUrl,
+          KOKORO_OIDC_CLIENT_ID: "proxy-rp", KOKORO_OIDC_CLIENT_SECRET: "proxy-rp-secret", KOKORO_TENANT_ID: "tenant-one",
+          KOKORO_WEB_AUTH_SECRET: randomBytes(32).toString("hex"), NEXTAUTH_URL: `${WEB_ORIGIN}/api/auth` },
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+      next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
+      next.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
       for (let attempt = 0; attempt < 200; attempt += 1) {
         try { if ((await http(proxyPort, "/")).status !== 502) return } catch { /* wait for Next */ }
         await new Promise((resolve) => setTimeout(resolve, 50))

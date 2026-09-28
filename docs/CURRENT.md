@@ -1,5 +1,18 @@
 # Kokoro User Web 当前状态
 
+W1F-LOGIN-TLS-REWRITE（2026-09-28，待 Root 集成验证）：隔离 TLS 终止代理下，公开
+`https://HOST:PORT/auth/sign-in` 的表单 rewrite 曾被 `src/proxy.ts` 强制降为 `http:`，
+Next 将其作为外部 HTTP 代理请求而在真实登录首跳返回 500；仅删除强制降级也不足够，
+因为 Next 可能把 `request.url` 规范化为内部明文 listener 的端口。现在 rewrite 目标固定到已验证的
+`KOKORO_WEB_ORIGIN`，保留公开 HTTPS scheme、Host 与端口；Next 在内部 origin 不同时经同一真实 TLS
+入口转回表单路由，不向内部明文端口发 TLS 请求。
+不改签名 query、一次性 CSRF、真实 IAM 提交或可见 UI。Node22 定点回归先 RED 后 GREEN：
+HTTPS/非默认端口及内部 listener 端口归一化 rewrite、伪造内部 headers 直达 404 为 3/3；
+真实 Next HTTP fixture 中表单渲染和直达 404 为 2/2；本仓真实本地 TLS proxy 的 IAM/RP
+交互回归 5/5。`pnpm check` 通过（contract 69、architecture 36、Vitest 1481、lint/typecheck/build）；
+独立端口 Playwright 11 pass/1 预期 skip。真实 TLS Chromium + IAM/BFF/Product Session 联调仍由 Root 在固定提交后复验，
+此处不宣称完整登录链已经通过。
+
 W1F-LOGIN-SHADCN（2026-09-26，Web main `1fa25d2b4760dc428d3fcdf77628ba343a5bc3ff` 已发布）：`/login` 仍固定 Product OIDC 302→IAM 签名交互；正式 `/auth/sign-in` GET 已从手写 HTML 改为 Web Proxy 签发一次性 CSRF、内部 HMAC 证明 rewrite 到真实 Next/shadcn Card/Input/Button/Label/Alert 页面，内部页直达 404。POST 保留原始签名 query/issuer Cookie/Origin/BFF→IAM，HTML 401/429/503 通过短时加密反馈 303 回同一表单并签发新 CSRF；非 HTML 错误语义不变。Root Node22 `pnpm check` exit0（contract 69、architecture 36、Vitest 1478、lint/typecheck/build）；3310 隔离运行拷贝已按明确文件热同步，无重启，Root 全新 Chromium 实测 `/login` 302→302→200、真实 shadcn 输入 2、登录按钮 1、旧重试/连接状态 0，错误态仍同页且密码清空。当前只证明本地登录可见面与错误态；正式生产部署及完整跨仓登录/Platform 闭环不由此代替。
 
 W1E-IAM-0.6-RELAY-CONSUMER（2026-09-26，Root 复验后发布）：当前 Web 从 BFF `1105553cfc24d4f44a90f626132bc30323a77946`

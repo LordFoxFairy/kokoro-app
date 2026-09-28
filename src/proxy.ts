@@ -74,10 +74,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       headers.set("x-kokoro-sign-in-csrf", proof.token)
       if (feedback !== null) headers.set("x-kokoro-sign-in-feedback", Buffer.from(JSON.stringify(feedback)).toString("base64url"))
       headers.set("x-kokoro-sign-in-proof", signInViewProof(config.secret, config.webHost, query, proof.token))
-      const destination = new URL(`/auth/sign-in/form${query}`, request.url)
-      // Next's incoming URL may inherit HTTPS from a TLS-terminating proxy,
-      // while the in-process Next hop is HTTP. This is an internal rewrite.
-      destination.protocol = "http:"
+      const destination = new URL(`/auth/sign-in/form${query}`, config.webOrigin)
       response = NextResponse.rewrite(destination, { request: { headers } })
       response.headers.append("set-cookie", proof.cookie)
       if (request.cookies.has("kokoro_iam_signin_feedback")) response.headers.append("set-cookie", clearSignInFeedback(config.secureCookies))
