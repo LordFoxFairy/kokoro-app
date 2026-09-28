@@ -19,3 +19,11 @@ export const libraryFileListResponseSchema = z.object({
   }).strict(),
   meta: z.object({ request_id: z.string().min(1) }).strict(),
 }).strict()
+
+// Personal upload returns a CLEAN receipt without list-only created_at.
+export const libraryFileUploadResponseSchema = z.object({
+  data: z.object({
+    file: libraryFileSchema.omit({ created_at: true }),
+  }).strict(),
+  meta: z.object({ request_id: z.string().min(1) }).strict(),
+}).strict()

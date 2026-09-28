@@ -1,23 +1,23 @@
 # Kokoro User Web API 契约策略
 
-## W2 个人文件上传 consumer 设计门（2026-09-28；UI 尚未实施）
+## W2 个人文件上传 consumer 代码片（2026-09-28；Web 单仓门通过，待 Root 审查）
 
 唯一 public 机器事实源是 BFF owner `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的
 `contract/openapi/v1/openapi.yaml`，原字节 SHA-256
 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。其
-`POST /v1/library/files`（`uploadLibraryFile`）已发布；Web 当前只读 generated 快照仍固定旧 BFF
-`a67ae2d`，必须在代码门单轨原字节重钉并更新生成来源/直接 contract 断言。浏览器只调用已存在的
+`POST /v1/library/files`（`uploadLibraryFile`）已发布；代码前 Web 只读 generated 快照固定旧 BFF
+`a67ae2d`，当前工作树已单轨原字节重钉并更新生成来源/直接 contract 断言。浏览器只调用已存在的
 `POST /api/hub/library/files` browser-private 同源 adapter，服务端以当前 Product Session 转 BFF；
 不得浏览器直连 BFF/Storage 或自报 tenant、subject、personal scope、project ID。
 
 | 边界 | Web consumer 目标 |
 | --- | --- |
-| 请求 | 单文件 `multipart/form-data`，恰好一个 `files` part、无额外字段/query；必填每文件意图唯一且重试稳定的 `Idempotency-Key`（BFF 接受 1–191 位、无逗号和周围空白的可打印 ASCII）。整段 multipart body ≤1,048,576 bytes，不以 `File.size` 单独判定；Web adapter 已为该精确 POST 设置 1 MiB/50 秒，BFF 继续最终校验。 |
+| 请求 | 单文件 `multipart/form-data`，恰好一个 `files` part、无额外字段/query；必填每文件意图唯一且重试稳定的 `Idempotency-Key`（BFF 接受 1–191 位、无逗号和周围空白的可打印 ASCII）。`File.size > 1 MiB` 先快速拒绝，剩余文件仍须用原生 Request 的实际**整段** multipart body ≤1,048,576 bytes 判定，不以 `File.size` 单独放行；Web adapter 已为该精确 POST 设置 1 MiB/50 秒，BFF 继续最终校验。 |
 | 200 | 只接受 `{data:{file:{kind:"file",asset_id,filename,mime_type,size_bytes,content_sha256,scan_state:"clean"}},meta:{request_id}}` 的 BFF 成功形状，运行时严格校验并核当前文件名/大小；响应无 `created_at`、下载 URL 或 Artifact 字段。随后重新 `GET /api/hub/library?kind=file`；GET 成功才显示权威列表，GET 失败不得把 POST 回执当作持久已列项。 |
-| 可恢复 | 网络断开/响应未知、`503 library_file_scan_pending` 或依赖暂不可用、`409 idempotency_in_progress`：保留**同一 File、同一 key**，只在用户明确操作后重试，绝不自动换 key 或宣布成功。401/403 的登录/准入错误显示为权限/会话失败，不伪造空页或自动重试；429 按现有同源错误展示。 |
+| 可恢复 | 网络断开/响应未知、已发请求后的 408/429/全部 5xx（含 `503 library_file_scan_pending`）及 `409 idempotency_in_progress`：保留**同一 File、同一 key**，只在用户明确操作后重试，绝不自动换 key 或宣布成功；扫描待定/幂等处理中显示“稍后同文件重试”，不误报上传失败。401/403 的登录/准入错误不伪造空页或自动重试。 |
 | 终态 | `409 idempotency_conflict`、`409 file_upload_aborted` 与 `422 library_file_infected` 对本意图为终态，禁同键重试；400 非法文件/键、413 整体超限须就近显示并修正输入。未知/畸形 200 也不宣布成功，先保留原 File/key 供结果核对/明确同键重试。 |
 
-BFF 每次幂等重放仍须进行当前身份准入；个人 scope 由可信 tenant/subject 派生。Web 不用 GET cursor、内容 hash、POST key 或另一成员的 session 作访问许可；只读个人页与 Agent 作品页维持独立模型。下载、Agent Artifact F2 没有本片 public 契约，不能借 Project POST 或作品 hash 下载路径实现。此处是 consumer 行为，不复制 BFF 可编辑 OpenAPI；当前 UI 与 generated 回钉均待代码门。
+BFF 每次幂等重放仍须进行当前身份准入；个人 scope 由可信 tenant/subject 派生。Web 不用 GET cursor、内容 hash、POST key 或另一成员的 session 作访问许可；只读个人页与 Agent 作品页维持独立模型。下载、Agent Artifact F2 没有本片 public 契约，不能借 Project POST 或作品 hash 下载路径实现。此处是 consumer 行为，不复制 BFF 可编辑 OpenAPI；当前 UI 与 generated 回钉已在工作树实现，真实 UI 点击组合仍待 Root 验收。
 
 ## W2 Library 文件 consumer（2026-09-28；已发布的只读基线）
 

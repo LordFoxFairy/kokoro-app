@@ -5,8 +5,8 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const BFF_OWNER_COMMIT = "a67ae2d06b52202f349305ae3723f6e296c087a1"
-const BFF_PUBLIC_OPENAPI_SHA256 = "82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9"
+const BFF_OWNER_COMMIT = "8a90fdd9ec3809000924229bfc7b986ba8ba1522"
+const BFF_PUBLIC_OPENAPI_SHA256 = "6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 describe("pinned BFF Team public contract", () => {

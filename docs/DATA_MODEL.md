@@ -1,9 +1,9 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2 个人文件可见上传数据边界（2026-09-28；UI 尚未实施）
+## W2 个人文件可见上传数据边界（2026-09-28；Web 代码已实现，待 Root 审查）
 
-当前 Web main `8debb35b6c9ad3c818282bb2fe3d828ca550d136` 只有个人文件只读页签及已限额的同源 POST adapter；BFF `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的新个人 Product POST OpenAPI 原字节 SHA-256 是
-`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。目标上传控件仅拥有浏览器一次交互的 `File`、该文件意图的稳定 `Idempotency-Key`、提交/待确认/可重试/终态错误状态和个人 GET 读取状态；待确认 File/key 在 Library feature 内存中跨页签切换保留，不依赖文件页签是否挂载。不创建 Web Asset、Upload、Scan、receipt、cursor、SQL、Redis、localStorage 或 IndexedDB 事实。用户换文件须建新意图；未知结果下原 File/key 只在当前页面内保留供显式同键重试，不承诺刷新浏览器后的文件恢复。
+代码前 Web main `29673babe37d01a2fbf7d0347f99d8e04c22da16` 只有个人文件只读页签及已限额的同源 POST adapter；BFF `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的新个人 Product POST OpenAPI 原字节 SHA-256 是
+`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`。当前工作树上传控件只拥有浏览器一次交互的 `File`、该文件意图的稳定 `Idempotency-Key`、提交/待确认/可重试/终态错误状态和个人 GET 读取状态；待确认 File/key 在 Library feature 内存中跨页签切换保留，不依赖文件页签是否挂载。不创建 Web Asset、Upload、Scan、receipt、cursor、SQL、Redis、localStorage 或 IndexedDB 事实。用户换文件须建新意图；未知结果下原 File/key 只在当前页面内保留供显式同键重试，不承诺刷新浏览器后的文件恢复。
 
 BFF 从当前 Product Session 派生受信 tenant/subject 并持久化幂等 receipt；Storage 唯一写个人 Upload/Asset/Scan。Web 不从文件名、内容 hash、`asset_id`、幂等 key 或 POST 回执推断授权/持久可见性；严格 CLEAN 200 后重新读个人 GET，只有 owner 返回的本人 CLEAN ASSET 才进入列表。GET 失败保留可见错误，不写乐观假文件；同租户其他成员不共享个人文件。感染/冲突/中止不写假成功，可恢复未知结果保持同键；无跨 owner 事务、缓存失效任务或双写。整段 multipart 1 MiB 是传输约束而非新增持久数据。个人下载和 Agent Artifact F2 不在本片，作品 `content_hash/session_id` 生命周期不变。
 
@@ -18,7 +18,7 @@ Storage CLEAN ASSET 投影，以 `asset_id` 为唯一列表身份；Agent 作品
 文件页签只在 React 生命周期保存已确认页面、opaque cursor、loading/error 与当前页签状态；
 切换页签/卸载取消在途读取，刷新后重新向 BFF GET。无新增 Web SQL、Redis、localStorage、
 Asset/Artifact 副本、跨 owner join、上传 receipt 或持久 cursor。个人 POST public 契约现已由 BFF 发布，
-但可见上传控件仍待上节代码门；个人下载未发布，不从 Project 上传、Artifact 下载或显式 preview 样本推造个人文件事实。
+当前工作树已有上节可见上传控件；个人下载未发布，不从 Project 上传、Artifact 下载或显式 preview 样本推造个人文件事实。
 
 ## W2 项目资源读取数据边界（2026-09-28）
 

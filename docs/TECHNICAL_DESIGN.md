@@ -1,12 +1,12 @@
 # Kokoro User Web 技术设计
 
-## W2 个人文件可见上传设计门（2026-09-28；尚未实施 UI）
+## W2 个人文件可见上传代码片（2026-09-28；Web 单仓门通过，待 Root 审查）
 
-**当前态与 owner。** Web main `8debb35b6c9ad3c818282bb2fe3d828ca550d136` 已在同一
+**代码前基线与 owner。** Web main `29673babe37d01a2fbf7d0347f99d8e04c22da16` 已在同一
 `/app/library` 用 shadcn Tabs 默认显示个人文件，另一页签保留 Agent 作品；个人列表由现有同源
 `/api/hub/library?kind=file` 读取。现有 Hub adapter 已为精确
 `POST /api/hub/library/files` 设置整个请求体 1 MiB、上游 50 秒边界，Root 已通过隔离真实链验证
-同源 POST→CLEAN→个人 GET/刷新与同租户他人空页，但正式页面尚无上传控件，Web generated public
+同源 POST→CLEAN→个人 GET/刷新与同租户他人空页，但该基线正式页面尚无上传控件，Web generated public
 OpenAPI 仍固定 BFF `a67ae2d` 只读版本。唯一新 public 写契约已由 BFF owner
 `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 发布在
 `contract/openapi/v1/openapi.yaml`，原字节 SHA-256
@@ -18,13 +18,13 @@ OpenAPI 仍固定 BFF `a67ae2d` 只读版本。唯一新 public 写契约已由 
 | 采用 | 在既有 `kokoro-library-files` 的个人文件页签放可见的 shadcn Button/Input/Alert；同一 feature 的独立 upload client/交互状态负责单文件意图、同键重试和 GET 刷新；`src/contract/` 增加仅校验 BFF 上传回执的 wire schema；复用既有 Hub adapter，不增加 route。 |
 | 淘汰 | 新建 `/app/files` 页面会拆裂 Library；复用 Project scope/选择器会混淆个人与项目授权；复用 Artifact hash 下载或把 Asset cast 成作品会混淆身份；空泛 upload 框架没有独立 owner。 |
 | 依赖/事实 | Browser→Web `/api/hub/library/files`→BFF `POST /v1/library/files`→Storage；BFF 负责 Product 准入、幂等 receipt 与个人 scope，Storage 是 Upload/Asset/Scan 唯一 writer。Web 不传 tenant/subject/scope/project，不持久化 Asset 或扫描事实。 |
-| 失败恢复 | 每次**文件意图**持有唯一 `File` 与 `Idempotency-Key`，提交中禁双击；网络断开、响应未知、可恢复 503/待扫及 `409 idempotency_in_progress` 保留同一 File/key，明确由用户重试。`409 idempotency_conflict`、`409 file_upload_aborted` 和 `422 library_file_infected` 是该意图终态，不能以同键误重试。上传意图放在切换页签仍挂载的 Library feature 状态，不因 Radix 页签卸载丢失待确认 File/key；卸载页面或切新意图不得把迟到结果写回，不把未知结果声明成功。 |
+| 失败恢复 | 每次**文件意图**持有唯一 `File` 与 `Idempotency-Key`，提交中禁双击；网络断开、响应未知、已发请求后的 408/429/全部 5xx 及 `409 idempotency_in_progress` 保留同一 File/key，明确由用户重试；扫描待定和幂等处理中显示稍后同文件重试，不误报失败。`409 idempotency_conflict`、`409 file_upload_aborted` 和 `422 library_file_infected` 是该意图终态，不能以同键误重试。上传意图放在切换页签仍挂载的 Library feature 状态，不因 Radix 页签卸载丢失待确认 File/key；卸载页面或切新意图不得把迟到结果写回，不把未知结果声明成功。 |
 | 成功可见性 | 严格校验 200 回执的 `kind:file`、CLEAN、`asset_id`、文件名与大小后，重新调用个人 `GET /api/hub/library?kind=file`；只有 GET 返回的本人 CLEAN 项进入持久列表，GET 失败显示可重试读取错误，不把 POST 回执伪装成列表。 |
 
 目标交互为单文件选择、显示文件名与限额、显式提交/上传中/成功/错误/同键重试；不可用、键盘焦点、移动端与错误信息沿用本页 shadcn 语义样式。浏览器构造 multipart 后按**整段 body**计量，超出
 1,048,576 bytes 在提交前就近提示；`File.size` 仅可作预筛，BFF 与现有 Web adapter 的整体上限仍是最终裁决。刷新或重新选择文件是新意图，不能把未知结果的旧 key 自动套给不同文件；未知结果需明确保留当前页面的 File/key 供用户重试，不承诺浏览器重新载入后恢复原 File。正式模式不回退 preview。
 
-代码门应先原字节重钉 BFF 新 OpenAPI，再以独立 schema/client/状态与组件测试实现。验证覆盖成功后 GET、读取失败、未知响应同键重试、可恢复 503/待扫/处理中 409、冲突/中止/感染终态、整个 multipart 超限、双击和页签切换、他人不可见及作品旧行为；Node22 `pnpm check`、隔离 Playwright 后由 Root 以固定 SHA 的真 IAM→Web→BFF→Storage→MinIO/ClamAV Chromium **点击 UI** 验收。此文档门未修改 generated、runtime、测试或其他仓；个人下载和 Agent Artifact F2 均是后续独立契约/代码片，不借本片放按钮。
+**当前工作树实现。** 已原字节重钉 BFF 新 OpenAPI，复用现有 shadcn 个人文件页签。`kokoro-library-file-upload-state` 在仍挂载的 Library 页面保存 File/key 与状态，`kokoro-library-file-upload-client` 先快速拒绝 `File.size > 1 MiB`，其余用原生 FormData 构造 Request、读取 clone 的实际完整 multipart 字节数，再发送原 Request；不手拼 boundary。CLEAN 回执仅递增刷新版本，既有文件 GET state 重新请求；GET 失败显示读错误，不插入 POST 回执。UI 聚焦与 native multipart contract 测试覆盖成功后 GET、读取失败、未知响应同键重试、可恢复 408/429/5xx/待扫/处理中 409、冲突/中止/感染终态、整个 multipart 超限、双击和页签切换、作品旧行为。Root 隔离 Node22 `pnpm check`（contract 99、architecture 36、Vitest 1546、lint/typecheck/build）与隔离 3447 Playwright 11 pass/1 既有 skip 已通过；跨用户隐私与 **UI 点击** 真 IAM→Web→BFF→Storage→MinIO/ClamAV Chromium 仍由 Root 固定 SHA 验收。本片无新路由/持久数据；个人下载和 Agent Artifact F2 均是后续独立契约/代码片，不借本片放按钮。
 
 ## W2 Library 个人文件页面代码片（2026-09-28；已发布的只读基线）
 

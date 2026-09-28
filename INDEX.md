@@ -44,8 +44,9 @@
 | 文件 | 角色 |
 | --- | --- |
 | `src/contract/project-resource.ts`、`src/features/app/project-resource-list.ts`、`src/features/app/use-project-resources.ts` | 固定 BFF CLEAN 资源页面校验、同源 GET 与项目内有界分页/取消/失败状态 |
-| `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页的独立 Zod 消费校验与同源 GET；不复用 Artifact wire |
-| `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的页签局部分页/取消/错误状态与只读 Asset 列表 |
+| `src/contract/library-file.ts`、`src/features/app/kokoro-library-file-client.ts` | 固定 BFF 个人 CLEAN FILE 页与上传回执的独立 Zod 消费校验、同源 GET；不复用 Artifact wire |
+| `src/features/app/kokoro-library-file-state.ts`、`src/features/app/kokoro-library-files.tsx` | 个人文件的页签局部分页/取消/错误状态与 GET 权威 Asset 列表 |
+| `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
 | `src/contract/agui-events.ts` | 校验 AG-UI frame 并投影到当前 reducer shape |
 | `src/contract/session-events.ts` | 当前内部 reducer event shape；live client 仍将其当兼容 wire 读取 |

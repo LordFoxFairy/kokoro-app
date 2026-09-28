@@ -13,6 +13,7 @@ import { useT } from "@/i18n/context"
 
 import { LibraryResults, LibraryToolbar } from "./kokoro-library-sections"
 import { KokoroLibraryFiles } from "./kokoro-library-files"
+import { useLibraryFileUpload } from "./kokoro-library-file-upload-state"
 import { DEFAULT_URL_STATE, FILTERS, artifactFilter, type LibraryFilter, type LibraryUrlState } from "./kokoro-library-model"
 import styles from "./kokoro-library-surface.module.css"
 
@@ -312,6 +313,7 @@ function KokoroArtifactLibrary({
 
 export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
   const t = useT()
+  const upload = useLibraryFileUpload()
   // Keep local favorites for the lifetime of this Library page, without
   // mounting or fetching Agent artifacts while the Files tab is active.
   const [favoriteHashes, setFavoriteHashes] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteHashes))
@@ -322,7 +324,7 @@ export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
         <TabsTrigger value="files">{t("library.filesTab")}</TabsTrigger>
         <TabsTrigger value="artifacts">{t("library.artifactsTab")}</TabsTrigger>
       </TabsList>
-      <TabsContent value="files" className={styles.libraryTabPanel}><KokoroLibraryFiles preview={props.preview === true} /></TabsContent>
+      <TabsContent value="files" className={styles.libraryTabPanel}><KokoroLibraryFiles preview={props.preview === true} upload={upload} /></TabsContent>
       <TabsContent value="artifacts" className={styles.libraryTabPanel}><KokoroArtifactLibrary {...props} favoriteHashes={favoriteHashes} setFavoriteHashes={setFavoriteHashes} /></TabsContent>
     </Tabs>
   </div>

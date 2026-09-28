@@ -9,7 +9,7 @@ type ListFiles = (cursor: string | null, signal: AbortSignal) => Promise<Library
 const INITIAL: FileState = { items: [], nextCursor: null, phase: "loading" }
 
 /** Tab-local read state; unmount aborts the page and discards late results. */
-export function useLibraryFiles(listFiles: ListFiles = listLibraryFiles) {
+export function useLibraryFiles(refreshRevision = 0, listFiles: ListFiles = listLibraryFiles) {
   const [state, setState] = useState<FileState>(INITIAL)
   const requestId = useRef(0)
   const controllerRef = useRef<AbortController | null>(null)
@@ -55,7 +55,7 @@ export function useLibraryFiles(listFiles: ListFiles = listLibraryFiles) {
       requestSequence.current++
       controllerRef.current?.abort()
     }
-  }, [load])
+  }, [load, refreshRevision])
 
   const reload = useCallback(() => { void load(null) }, [load])
   const loadMore = useCallback(() => {

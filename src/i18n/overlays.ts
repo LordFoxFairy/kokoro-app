@@ -232,6 +232,19 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const libraryFallback: Partial<Record<MessageKey, string>> = {
+  "library.uploadChoose": "Choose a personal file",
+  "library.uploadSubmit": "Upload personal file",
+  "library.uploadRetry": "Retry the same file",
+  "library.uploading": "Uploading…",
+  "library.uploadHint": "One file; the entire upload request must be at most 1 MiB.",
+  "library.uploadComplete": "File passed scanning. Refreshing personal files.",
+  "library.uploadTooLarge": "The entire upload request exceeds 1 MiB. Choose a smaller file.",
+  "library.uploadInfected": "The file failed the safety scan. This upload has ended.",
+  "library.uploadConflict": "This upload key belongs to another file. Select a new file.",
+  "library.uploadAborted": "This upload has ended. Select the file again.",
+  "library.uploadPending": "The file is still being processed. Retry the same file later.",
+  "library.uploadUnknown": "The upload result is uncertain. Retry the same file.",
+  "library.uploadFailed": "Upload failed. Check the file or try again later.",
   "library.filterAria": "Filter artifact types",
   "library.filterAll": "All",
   "library.filterSlides": "Slides",

@@ -31,7 +31,45 @@ function filePage(items: readonly typeof fileOne[], nextCursor: string | null = 
   return { data: { items, next_cursor: nextCursor }, meta: { request_id: "req_library_1" } }
 }
 
-it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下载或上传动作", async () => {
+function cleanUploadReceipt(file: typeof fileOne = fileOne) {
+  return { data: { file: {
+    kind: file.kind,
+    asset_id: file.asset_id,
+    filename: file.filename,
+    mime_type: file.mime_type,
+    size_bytes: file.size_bytes,
+    content_sha256: file.content_sha256,
+    scan_state: file.scan_state,
+  } }, meta: { request_id: "req_upload_1" } }
+}
+
+function requestUrl(input: string | Request): string {
+  return typeof input === "string" ? input : new URL(input.url).pathname + new URL(input.url).search
+}
+
+// jsdom's FormData and Node's Request belong to different realms. UI tests
+// model only the native Request measurement; the Node contract test below
+// exercises real FormData serialization and multipart parsing.
+function installUploadRequestShim() {
+  vi.stubGlobal("Request", class {
+    readonly url: string
+    readonly method: string
+    readonly headers: Headers
+    readonly form: FormData
+    constructor(url: URL, init: RequestInit) {
+      this.url = String(url)
+      this.method = init.method ?? "GET"
+      this.headers = new Headers(init.headers)
+      this.form = init.body as FormData
+    }
+    clone() {
+      const file = this.form.get("files") as File
+      return { arrayBuffer: async () => new ArrayBuffer(file.size + 256) }
+    }
+  })
+}
+
+it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下载", async () => {
   const fetchFiles = vi.fn(async () => new Response(JSON.stringify(filePage([fileOne])), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -43,8 +81,182 @@ it("默认个人文件页签从同源 BFF 读取 Asset，且不借用作品下�
   await screen.findByText("私人备忘.pdf")
   expect(fetchFiles).toHaveBeenCalledWith("/api/hub/library?kind=file&limit=50", expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
   expect(screen.getByTestId("library-files")).toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: /上传|下载私人备忘/u })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "上传个人文件" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /下载私人备忘/u })).not.toBeInTheDocument()
   expect(screen.queryByTestId("library-artifacts")).not.toBeInTheDocument()
+})
+
+it("用户点击单文件上传后只以重新读取的个人 GET 显示文件", async () => {
+  installUploadRequestShim()
+  let resolveRefresh: (response: Response) => void = () => {}
+  let getCount = 0
+  const calls = vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files") return Promise.resolve(new Response(JSON.stringify(cleanUploadReceipt()), { status: 200 }))
+    if (++getCount === 1)
+      return Promise.resolve(new Response(JSON.stringify(filePage([])), { status: 200 }))
+    return new Promise<Response>((resolve) => { resolveRefresh = resolve })
+  })
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+
+  const file = new File([new Uint8Array(2048)], "私人备忘.pdf", { type: "application/pdf" })
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [file] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  await waitFor(() => expect(calls.mock.calls.some(([input]) => requestUrl(input) === "/api/hub/library/files")).toBe(true))
+  expect(screen.queryByText("私人备忘.pdf", { selector: "[data-asset-id] *" })).not.toBeInTheDocument()
+  await waitFor(() => expect(getCount).toBe(2))
+  resolveRefresh(new Response(JSON.stringify(filePage([fileOne])), { status: 200 }))
+  await screen.findByTestId("library-files")
+  expect(screen.getByText("私人备忘.pdf", { selector: "[data-asset-id] *" })).toBeInTheDocument()
+  const post = calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request
+  expect(post.method).toBe("POST")
+  expect(post.headers.get("Idempotency-Key")).toMatch(/^library-file:/u)
+})
+
+it("上传响应未知时切到作品再返回仍保留同一文件和键供显式重试", async () => {
+  installUploadRequestShim()
+  let postAttempts = 0
+  const calls = vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files") {
+      postAttempts++
+      return postAttempts === 1 ? Promise.reject(new Error("connection lost"))
+        : Promise.resolve(new Response(JSON.stringify(cleanUploadReceipt()), { status: 200 }))
+    }
+    return Promise.resolve(new Response(JSON.stringify(filePage(postAttempts >= 2 ? [fileOne] : [])), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File([new Uint8Array(2048)], "私人备忘.pdf", { type: "application/pdf" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
+  const firstKey = (calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request).headers.get("Idempotency-Key")
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  await screen.findByText("季度汇报.pptx")
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  expect(screen.getByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "重试上传同一文件" }))
+  await waitFor(() => expect(screen.getByTestId("library-files")).toHaveTextContent("私人备忘.pdf"))
+  const postCalls = calls.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files")
+  const secondKey = (postCalls[1]?.[0] as Request).headers.get("Idempotency-Key")
+  expect(secondKey).toBe(firstKey)
+})
+
+it("上传仍在途时切换作品页签，未知结果返回后保留原意图", async () => {
+  installUploadRequestShim()
+  let rejectUpload: (reason?: unknown) => void = () => {}
+  const calls = vi.fn((input: string | Request) => requestUrl(input) === "/api/hub/library/files"
+    ? new Promise<Response>((_resolve, reject) => { rejectUpload = reject })
+    : Promise.resolve(new Response(JSON.stringify(filePage([])), { status: 200 })))
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File(["hello"], "私人备忘.pdf", { type: "application/pdf" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  await waitFor(() => expect(calls.mock.calls.some(([input]) => requestUrl(input) === "/api/hub/library/files")).toBe(true))
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
+  await screen.findByText("季度汇报.pptx")
+  rejectUpload(new Error("connection lost"))
+  fireEvent.mouseDown(screen.getByRole("tab", { name: "个人文件" }), { button: 0, ctrlKey: false })
+  expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
+  expect(screen.getByText("私人备忘.pdf")).toBeInTheDocument()
+})
+
+it("扫描待定 503 只在明确点击时同键重试，双击不并发发送", async () => {
+  installUploadRequestShim()
+  let postAttempts = 0
+  const calls = vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files") {
+      postAttempts++
+      return Promise.resolve(new Response(JSON.stringify(postAttempts === 1
+        ? { error: { code: "library_file_scan_pending" } } : cleanUploadReceipt()), { status: postAttempts === 1 ? 503 : 200 }))
+    }
+    return Promise.resolve(new Response(JSON.stringify(filePage(postAttempts >= 2 ? [fileOne] : [])), { status: 200 }))
+  })
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File([new Uint8Array(2048)], "私人备忘.pdf", { type: "application/pdf" })] } })
+  const submit = screen.getByRole("button", { name: "上传个人文件" })
+  fireEvent.click(submit)
+  fireEvent.click(submit)
+  expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
+  expect(screen.getByRole("alert")).toHaveTextContent("仍在处理中")
+  expect(postAttempts).toBe(1)
+  const first = calls.mock.calls.find(([input]) => requestUrl(input) === "/api/hub/library/files")?.[0] as Request
+  fireEvent.click(screen.getByRole("button", { name: "重试上传同一文件" }))
+  await waitFor(() => expect(screen.getByTestId("library-files")).toHaveTextContent("私人备忘.pdf"))
+  const posts = calls.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files")
+  expect(posts).toHaveLength(2)
+  expect((posts[1]?.[0] as Request).headers.get("Idempotency-Key")).toBe(first.headers.get("Idempotency-Key"))
+})
+
+it("幂等请求仍在处理 409 显示同文件稍后重试，而非上传失败", async () => {
+  installUploadRequestShim()
+  const calls = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(filePage([])), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "idempotency_in_progress" } }), { status: 409 }))
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File(["hello"], "私人备忘.pdf", { type: "application/pdf" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  expect(await screen.findByRole("button", { name: "重试上传同一文件" })).toBeInTheDocument()
+  expect(screen.getByRole("alert")).toHaveTextContent("仍在处理中")
+  expect(calls).toHaveBeenCalledTimes(2)
+})
+
+it("CLEAN POST 后个人 GET 失败仍显示读取错误而不插入回执卡片", async () => {
+  installUploadRequestShim()
+  let getCount = 0
+  const calls = vi.fn((input: string | Request) => {
+    if (requestUrl(input) === "/api/hub/library/files")
+      return Promise.resolve(new Response(JSON.stringify(cleanUploadReceipt()), { status: 200 }))
+    getCount++
+    return Promise.resolve(getCount === 1
+      ? new Response(JSON.stringify(filePage([])), { status: 200 })
+      : new Response("{}", { status: 503 }))
+  })
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File([new Uint8Array(2048)], "私人备忘.pdf", { type: "application/pdf" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  expect(await screen.findByText("个人文件加载失败")).toBeInTheDocument()
+  expect(screen.queryByTestId("library-files")).not.toBeInTheDocument()
+  expect(calls.mock.calls.filter(([input]) => requestUrl(input) === "/api/hub/library/files")).toHaveLength(1)
+})
+
+it.each([
+  [409, "idempotency_conflict"],
+  [409, "file_upload_aborted"],
+  [422, "library_file_infected"],
+])("上传终态 %i %s 不提供同键重试", async (status, code) => {
+  installUploadRequestShim()
+  const calls = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(filePage([])), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code } }), { status }))
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File(["hello"], "私人备忘.pdf", { type: "application/pdf" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  expect(await screen.findByRole("alert")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试上传同一文件" })).not.toBeInTheDocument()
+  expect(calls).toHaveBeenCalledTimes(2)
+})
+
+it("整个 multipart 超过 1 MiB 时不发送上传请求", async () => {
+  installUploadRequestShim()
+  const calls = vi.fn(async () => new Response(JSON.stringify(filePage([])), { status: 200 }))
+  vi.stubGlobal("fetch", calls)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("library-files-empty")
+  fireEvent.change(screen.getByLabelText("选择个人文件"), { target: { files: [new File([new Uint8Array(1024 * 1024 - 8)], "almost.bin", { type: "application/octet-stream" })] } })
+  fireEvent.click(screen.getByRole("button", { name: "上传个人文件" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("1 MiB")
+  expect(calls).toHaveBeenCalledTimes(1)
 })
 
 it("个人文件仅在有效 200 空页显示空态，503 后明确错误并由点击重试", async () => {

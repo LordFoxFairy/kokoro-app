@@ -10,19 +10,29 @@ import { useLocale, useT } from "@/i18n/context"
 import { formatDeliveryTime } from "@/ui/canvas/canvas-panel"
 
 import { useLibraryFiles } from "./kokoro-library-file-state"
+import { KokoroLibraryFileUpload } from "./kokoro-library-file-upload"
+import type { LibraryUploadIntent } from "./kokoro-library-file-upload-state"
 import styles from "./kokoro-library-surface.module.css"
+
+type UploadProps = {
+  intent: LibraryUploadIntent | null
+  select: (file: File) => void
+  submit: () => void
+  refreshRevision: number
+}
 
 function FileEmpty() {
   const t = useT()
   return <section className={styles.stateRegion} data-testid="library-files-empty"><Empty className={styles.empty}><EmptyHeader><EmptyMedia variant="default" className={styles.emptyMedia}><FileText aria-hidden="true" /></EmptyMedia><EmptyTitle className={styles.emptyTitle}>{t("library.filesEmpty")}</EmptyTitle><EmptyDescription className={styles.emptyDescription}>{t("library.filesEmptyDescription")}</EmptyDescription></EmptyHeader></Empty></section>
 }
 
-function LiveFiles() {
+function LiveFiles({ upload }: { upload: UploadProps }) {
   const t = useT()
   const { locale } = useLocale()
-  const { items, nextCursor, phase, reload, loadMore } = useLibraryFiles()
+  const { items, nextCursor, phase, reload, loadMore } = useLibraryFiles(upload.refreshRevision)
 
   return <>
+    <KokoroLibraryFileUpload intent={upload.intent} onSelect={upload.select} onSubmit={upload.submit} />
     {phase === "loading" ? <div className={styles.stateRegion} role="status">{t("library.filesLoading")}</div> : null}
     {phase === "error" ? <div className={styles.stateRegion}><Alert variant="destructive" className={styles.errorState}><AlertDescription><span>{t("library.filesLoadError")}</span><Button type="button" variant="outline" size="sm" onClick={reload}>{t("library.filesRetry")}</Button></AlertDescription></Alert></div> : null}
     {phase === "ready" && items.length === 0 ? <FileEmpty /> : null}
@@ -32,6 +42,6 @@ function LiveFiles() {
 }
 
 /** Explicit preview stays local; live file pages never silently become an empty fixture. */
-export function KokoroLibraryFiles({ preview }: { preview: boolean }) {
-  return preview ? <FileEmpty /> : <LiveFiles />
+export function KokoroLibraryFiles({ preview, upload }: { preview: boolean; upload: UploadProps }) {
+  return preview ? <FileEmpty /> : <LiveFiles upload={upload} />
 }

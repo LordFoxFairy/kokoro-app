@@ -1,13 +1,25 @@
 # Kokoro User Web 当前状态
 
-W2-WEB-LIBRARY-PERSONAL-UPLOAD 设计门（2026-09-28）：当前 Web main
+W2-WEB-LIBRARY-PERSONAL-UPLOAD-CODE 工作树（2026-09-28，待 Root 审查）：已将 BFF
+`8a90fdd9ec3809000924229bfc7b986ba8ba1522` public OpenAPI 原字节 SHA-256
+`6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52` 固定为唯一 Web generated
+快照；Team 派生 client 15 文件 drift check 通过且字节不变。个人文件页签新增 shadcn 单文件 Input/Button/Alert，
+Library 页面级 File/key 意图跨页签卸载保留。`File.size > 1 MiB` 先快速拒绝，其余以原生 FormData→Request.clone() 实测整段 multipart
+≤1 MiB，再发送同一个 Request；网络/408/429/5xx/待扫/处理中错误仅显式同键重试，扫描待定/处理中提示稍后同文件重试，冲突/中止/感染终态不提供同键重试。
+严格 CLEAN 200 不直接插卡，只触发本人 GET 重新加载；GET 失败显示读错误。Node22 `pnpm check`
+Root 隔离 Node22 复验通过：contract 99、architecture 36、Vitest 1546、lint/typecheck/build；隔离 3447 `pnpm test:e2e`
+11 pass/1 既有 skip，direct native multipart/特殊文件名及 UI 聚焦测试通过。Root 固定 SHA 的真 IAM/Chromium
+**UI 点击**上传、刷新、另一成员隐私及感染/未知结果/并发组合仍待复验；3310 未触碰。个人下载与
+Agent Artifact F2 不在此片，完整 Library/W2 不升绿。
+
+W2-WEB-LIBRARY-PERSONAL-UPLOAD 设计门历史基线（2026-09-28）：代码前 Web main
 `8debb35b6c9ad3c818282bb2fe3d828ca550d136` 已有默认个人文件的 shadcn Library Tabs、严格只读 GET
 与精确个人 POST 的同源 1 MiB/50 秒代理，但正式个人文件页**没有可见上传控件**；generated public
 OpenAPI 仍固定旧 BFF `a67ae2d`。BFF owner
 `8a90fdd9ec3809000924229bfc7b986ba8ba1522` 的唯一新 `POST /v1/library/files` OpenAPI 原字节
 SHA-256 为 `6fa107540c6cc60ec8b45f1bcc19c8930f19c803b16f4c6d418c2edc9393fc52`，Web 尚未回钉。
 Root 隔离真链已验同源直接 POST→CLEAN→个人 GET/刷新及同租户他人空页，**不是 UI 点击上传证据**。
-本次只收敛四份 Web 文档，未改 generated/runtime/UI/测试；后片须在现有文件页签实现单文件选择、整个
+该文档门只收敛四份 Web 文档，未改 generated/runtime/UI/测试；后片须在现有文件页签实现单文件选择、整个
 multipart 1 MiB、每文件意图稳定 key、严格 CLEAN 回执后 GET 刷新，未知响应明确同键重试，感染及冲突/中止
 终态不误重试（`409 idempotency_in_progress` 除外），并以真实 Chromium 点击、刷新与隐私负例验收。
 下载、Agent Artifact F2 和感染/未知结果恢复/并发真实组合仍未完成；完整 Library/W2 不升绿。
@@ -15,7 +27,7 @@ multipart 1 MiB、每文件意图稳定 key、严格 CLEAN 回执后 GET 刷新�
 W2-WEB-LIBRARY-FILES 已发布只读基线（2026-09-28）：同一 `/app/library`
 已用 shadcn Tabs 默认显示个人文件，Agent 作品保留原 `/api/session/artifacts` 模型和操作；文件仅从
 `/api/hub/library?kind=file` 经 Product Session/BFF 读入，独立 Zod/`asset_id`/opaque cursor，
-真实空页、失败手动重试、切换取消与跨页去重，目前不呈现个人上传/下载动作。Web 已原字节固定
+真实空页、失败手动重试、切换取消与跨页去重；该只读基线当时不呈现个人上传/下载动作。Web 当时原字节固定
 BFF `a67ae2d` public OpenAPI SHA-256 `82df2303f9f86e9b4caa4b5965f930735740d8c044c955450e45406dc29cabb9`，
 Team 生成 drift 检查通过。Node22 隔离副本 `pnpm check` exit0（contract 84、architecture 36、
 Vitest 1521、lint/typecheck/build），独立端口 3444 `pnpm test:e2e` 11 pass/1 既有 skip。
