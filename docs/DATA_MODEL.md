@@ -1,5 +1,31 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W2-WEB-AGENT-ARTIFACT-F2 数据边界（2026-09-28；设计门，运行未切）
+
+Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 的正式作品页仍把
+`ArtifactRecord(content_hash,session_id,...)` 作为列表/下载/收藏键，来自旧 `/api/session/artifacts`；
+这不是 BFF main `55d3c9cd55386d9dcc074e893cc388924dd94c13` 已发布的 Product Artifact 身份。
+目标作品页只保存当前 React 生命周期的 BFF `kind=artifact` 页投影：
+`(conversation_id,artifact_id)` 是列表/详情/下载与跨页去重的二元身份；`asset_id`、`content_sha256`、
+`source_run_id`、标题、文件名、大小、`delivered_at` 均为经校验的显示/完整性字段，不提供授权。
+个人 File 仍用独立 `asset_id`/CLEAN ASSET 模型，不和作品拼为可选字段或按 MIME/hash 推断 kind。
+本次页级 `oneOf` 使空页可携带非空 cursor；已确认项、opaque cursor、请求代次、loading/partial/error、
+AbortController 仅在组件内存中，翻页失败保留原 cursor/已确认项，切页或身份变化丢弃迟到结果；
+刷新重新向 BFF 读取，不把 cursor 当快照/权限。收藏如保留仅属 Web 本地 UI 偏好，须从 hash 改成
+二元 ID 键；不可把收藏或下载成功持久化成 Artifact 可见性。显式 preview/fixture 与正式 owner 页分离。
+
+BFF 唯一保存 Conversation↔Artifact 关联并按当前本人 active Conversation/Storage FINAL CLEAN 重验；
+Storage 唯一保存 Artifact/Asset/Blob/Scan 事实与对象字节。Web 无 Artifact/Download 表、schema、migration、
+ORM、跨 owner SQL、事务、receipt、持久 cursor、签名 URL 副本或新 Redis key；现有 Product Session/CSRF
+Redis 生命周期不变。Web server 不落地 1 GiB 字节或持久临时文件，精确同源下载仅在请求生命周期持有
+有界流与取消状态；浏览器采用同源原生 attachment/下载管理器，不创建最大 1 GiB 的 JS Blob/Object URL，也不写
+localStorage/IndexedDB/Cache API 作为作品事实。页面只保留“已发起”交互状态，不能从导航推断磁盘保存成功；上游短字节、超限或断流由专用传输边界终止。
+
+Agent live `delivery.created` 已含作品 ID，但 Web strict Chat schema 仍拒该 payload；BFF chat snapshot
+`deliveries: []`，所以 Library Product 读取不能填补 Chat delivery/canvas 的恢复模型。先只替换作品页正式
+旧 hash 读取/下载；Chat/Canvas 二元身份、snapshot/replay 与各自旧路径删除需独立协同门。此四文档设计门
+不改生成文件、React 状态、数据库或正式运行链；固定来源与验收见同切片 API/技术/CURRENT。
+
 ## W2 个人文件下载当前数据边界（2026-09-28；个人下载真纵切已验收）
 
 下载只在个人文件卡的 React 生命周期持有请求、`AbortController`、错误与临时 Blob URL；成功保存后释放 URL，

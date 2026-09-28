@@ -1,5 +1,36 @@
 # Kokoro User Web 技术设计
 
+## W2-WEB-AGENT-ARTIFACT-F2：作品页 Product 接入设计门（2026-09-28；尚未实施）
+
+**当前态与目标态。** Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 的正式 Library 作品页仍经
+`/api/session/artifacts` 读取 `ArtifactRecord(content_hash,session_id,...)`，以 hash 去重、下载和收藏，
+并以 `session_id` 打开来源；这条旧作品路径不是 BFF 新 Product Artifact 的身份或授权依据。
+BFF main `55d3c9cd55386d9dcc074e893cc388924dd94c13` 已发布本人私有 FINAL CLEAN 作品
+`GET /v1/library?kind=artifact`、`GET /v1/library/artifacts/{conversation_id}/{artifact_id}` 和同二元路径的
+`/content`；唯一 public OpenAPI 原字节 SHA-256 为
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`。
+Web 当前 generated 仍是 BFF `d5c868f` 的
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`，未回钉本次作品契约。
+本门只改四份设计/CURRENT 文档，不把目标写成已运行事实。
+
+| 放置与依赖   | 裁决                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Owner / 采用 | BFF 拥有 Conversation↔Artifact 关联、Product API、当前 subject/active Conversation 准入；Storage 拥有 FINAL/CLEAN Artifact 元数据与原字节。Web 只在既有 `kokoro-library-surface`/`kokoro-library-sections` 作品页签、相邻具名单责 consumer client/state 与 `src/contract/` wire 校验，以及现有 Hub Route Handler 的**精确**作品 GET 分支实现浏览器视图；继续用 shadcn Tabs/Card/Button/Alert。Browser→Web HttpOnly Product Session/同源 `/api/hub`→BFF public→Storage，不直连 BFF/Storage。                                                                                                                                                                  |
+| 淘汰         | 不建第二 Library 页面或万能大对象代理；不把个人 `asset_id`、旧 `content_hash/session_id`、MIME 或 cursor 当 Artifact selector/权限，不复用个人文件 1 MiB 完整缓冲。作品页切换后删除其正式 `/api/session/artifacts` 读取、hash URL 和 hash 键控/降级；不留双轨。显式 preview/fixture 的样本语义单独保留，不作为正式失败 fallback。                                                                                                                                                                                                                                                                                                                            |
+| 列表与交互   | 作品页显式 `kind=artifact&limit=50`，只能消费页级 `oneOf` 的空页或非空纯 artifact 页；`items:[]` 也可能有非空 `next_cursor`，不能据此宣称全集为空或停止翻页。opaque cursor 只用于同查询/身份的下一页，不是快照和权限；跨页以 `(conversation_id,artifact_id)` 去重。按需用二元详情 GET 重核当前项；作品卡下载只由二元 `/content` 发起。切页/卸载取消在途列表、详情并忽略迟到响应；下载前可用二元详情 GET 给出可见预检错误，但内容 GET 仍由 BFF 重新授权且存在预检到下载的竞态。用同源原生 attachment 导航交给浏览器下载管理器流式保存，UI 只显示“已发起”，不虚称已保存完成或承诺页面切换可取消浏览器下载；加载、真空、空页待翻、失败/重试和下载发起各自可见。收藏若仍是本地 UI 偏好，应改键为二元 ID，不能沿用 hash；来源导航仅用经校验的 `conversation_id`。                                                                                           |
+| 有界字节     | 精确作品 `/content` 最大 `1,073,741,824` bytes（1 GiB），而非个人文件 `1,048,576` bytes，也非通用 Hub 默认 16 MiB/15 秒。Hub 专用 GET 在发成功头前校验 200 元信息、长度 `0..1 GiB` 和安全头，采用独立总时长与空闲 deadline、断连取消传播、1 GiB 累计上限与真实背压的**流式**同源转发，不在 Web 服务器 `arrayBuffer()`/Blob 全量缓冲、磁盘落副本或调高通用默认。现有 `requestWithDomain` 的 `onData` 直接 enqueue、未显式 pause/resume，非 SSE 也无独立 idle timeout，end 未核 `Content-Length`/`response.complete`；代码门须补齐 pause/resume 背压、独立总/空闲计时、声明长度与实际长度及完整结束核对；上游断流、超限、短字节必须终止响应，不能在 Web 伪装完整 200。浏览器采用原生 attachment，不走 `fileFetch().blob()` 的最大 1 GiB 内存缓冲；页面只知下载请求已发起，真实保存完成由浏览器管理器负责。BFF 已在发头前校验原对象长度/摘要并以每进程两个 spool 名额背压，Web 不能依赖它替代自身边界。                                                                                                                 |
+| 安全头/错误  | 只对精确路径、GET、无额外 query 窄透传已校验的 `Content-Type`、`Content-Length`、安全 `Content-Disposition`、`Cache-Control: no-store`、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`、`x-request-id`；最终 Next Proxy 也须对该精确路径保留 `no-referrer`。不跟 302、不暴露 ObjectStore URL/Cookie/Bearer/任意上游 header。401/403 与登录/固定租户准入分开呈现；同租户他人/错二元组/非 FINAL CLEAN 404 不泄露存在性；400 输入、429、502 owner/字节不可信、503 依赖或 `artifact_download_busy` 可见且按 owner `retryable`/`Retry-After` 提示，未知错误不自动降级旧 hash。BFF 每次列表/详情/内容 GET 重新准入；Web 不自报 tenant/subject。 |
+
+**Chat 边界不随 Library 隐式切换。** BFF live Agent `delivery.created` payload 已包含
+`artifact_id`、`asset_id`、`artifact_kind`，但 Web `src/core/chat-projection-event.ts` 的严格 payload schema
+仍只接受旧 hash/path/title/mime/size/note，正式 live 事件会被拒；`SessionDelivery`、Canvas 与卡片仍按 hash
+寻址。BFF `src/application/chat-service.ts` 当前 snapshot 返回 `deliveries: []`，不足以证明交付恢复。
+Library F2 可先独立消费 Product API；Chat live schema/投影、snapshot/replay 与 Canvas 二元 ID 需 BFF/Web
+另切协同并有恢复证据，不能由 Web 从 hash 猜 ID 或保留正式双读。只有新作品页的列表/详情/下载与负例通过
+当前 commit 和真 Chromium 门，才删除**作品页**旧正式路径；Chat/Canvas 旧路径的删除须等其各自新身份与恢复链验收。
+下一代码门先原字节重钉 BFF OpenAPI/生成 drift，再以直接 contract/adapter/UI/真实 Next 测试及 Root 真
+IAM→Web→BFF→Agent→Storage/MinIO/ClamAV 浏览器点击、浏览器下载管理器原字节与私有负例放行；本设计门不触 3310。
+
 ## W2 个人文件下载 Web consumer 代码现状（2026-09-28；个人下载真纵切已验收）
 
 Web 已原字节固定 BFF `d5c868f8ab8b8a33750e1286e9d020ca72895641` public OpenAPI

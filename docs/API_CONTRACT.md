@@ -1,5 +1,37 @@
 # Kokoro User Web API 契约策略
 
+## W2-WEB-AGENT-ARTIFACT-F2：作品页消费契约（2026-09-28；设计门，运行未切）
+
+唯一机器来源是 BFF main `55d3c9cd55386d9dcc074e893cc388924dd94c13` 的
+`contract/openapi/v1/openapi.yaml`，原字节 SHA-256
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`。
+Web 当前生成快照仍为 BFF `d5c868f`/SHA-256
+`3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`；本门不复制或手改
+owner OpenAPI/generated，也不宣称当前 UI 已使用新 API。后续代码门须从该固定 commit 原字节 pin、确定性
+重新生成并用 consumer contract 测试检验源 digest、operation、成功/错误和安全头。
+
+| Browser → Web browser-private                                            | BFF public 与 Web 消费边界                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/hub/library?kind=artifact&limit=50[&cursor=opaque]`            | 唯一 `GET /v1/library` / `listLibrary`；`kind` 必填且单值，仅 `file` 或 `artifact`，不接受省略、重复、`all`；作品页固定 `artifact`，`limit` 缺省 50、1–100，cursor 单值 1–4096。当前 subject/tenant 从在线 Product Session/BFF admission 获取，不接受浏览器身份 header/body。200 是 `{data:{items,next_cursor},meta:{request_id}}`；`data` 是**页级** `oneOf`：`items:[]` 空页、1–100 个纯 `kind:file`、或 1–100 个纯 `kind:artifact`。作品页必须拒绝非空 file/混合/坏 item；空页可仍带 `next_cursor`，需继续可见翻页，不与最终空态混同。cursor opaque、绑定 kind/tenant/subject/limit/位置但非快照或许可。                       |
+| `GET /api/hub/library/artifacts/{conversation_id}/{artifact_id}`         | `GET /v1/library/artifacts/{conversation_id}/{artifact_id}` / `getLibraryArtifact`；只用二元 selector 请求当前已授权详情。200 `{data:LibraryArtifactItem,meta:{request_id}}`；与列表项同身份/字段，运行时严格解析。`asset_id`、hash、`source_run_id`、`content_sha256` 均不得取代二元路径或作为授权。                                                                                                                                                                                                                                                                                                                             |
+| `GET /api/hub/library/artifacts/{conversation_id}/{artifact_id}/content` | `downloadLibraryArtifact`；无额外 query/body/客户端 Storage URL。BFF 200 为 `*/*` 原二进制，非 JSON、非 302，长度 `0..1,073,741,824` bytes。Web 只在**此精确 GET** 走专用有界流/真实背压/独立总与空闲 deadline/断连取消，检验 `Content-Type`、十进制 `Content-Length`、安全 `Content-Disposition`、`Cache-Control:no-store`、`Referrer-Policy:no-referrer`、`X-Content-Type-Options:nosniff`、`x-request-id`，最终 Proxy 不得覆盖 `no-referrer`；仅白名单同源返回。浏览器用同源原生 attachment 下载，不以 `fileFetch().blob()` 缓冲 1 GiB；UI 仅报告下载已发起，不宣称本地保存完成。短字节/超限/断流须终止流；下载文件名来自受校验的 owner 头，不执行 header 内容。个人 1 MiB 完整缓冲与通用 Hub 16 MiB/15 秒默认均不放宽。 |
+
+非空 Artifact item 的判别字段为 `kind:"artifact"`，身份 `conversation_id`+`artifact_id`；还包括
+`asset_id`、八值 `artifact_kind`、`title`、`filename`、`mime_type`、十进制 `size_bytes`、小写 64hex
+`content_sha256`、`source_run_id`、UTC `delivered_at`。Web 映射为单独视图类型，不能 cast 成旧
+`ArtifactRecord(content_hash,session_id,...)` 或个人 File。列表/详情/下载每次由 BFF 重验本人 active Conversation
+关联及 Storage FINAL/CLEAN；同租户他人/错二元组/不可见统一 404，固定 Product tenant 外 403；401 会话失效，
+400 非法 selector/query/cursor，429 准入限流，502 不可信 owner/对象，503 依赖故障或
+`artifact_download_busy` 均保留 BFF 稳定错误码与请求 ID，错误不套二进制成功头、不降级旧 hash/preview。
+下载前可用二元详情 GET 显示 401/403/404/503 等预检错误，但该结果不是 `/content` 授权，下载时仍重验且可能竞态失败。当前 transport `onData` 直接 enqueue、非 SSE 无独立空闲计时、end 未核 `Content-Length`/`response.complete`；代码门须实现 pause/resume 背压、独立总/空闲计时与短/超字节和完整结束核对。原生 `<a download>` 没有 JS HTTP/保存完成回执，预检后的 content 竞态或下载管理器失败不应被页面伪报为成功；若以后要求可见保存完成状态，应另设计 feature-detect 的流式 File System Access writer 与 fallback。分页错误保留已确认项与原 cursor 供显式重试，不能从 HTTP 200 外或坏 200 构造空列表；下载 503 busy
+是进程内两 spool 背压而非客户端获得排队许可。成功/失败均 `no-store`，不暴露签名引用或内部身份头。
+
+Agent live `delivery.created` **已有** `artifact_id/asset_id/artifact_kind`，但 Web 旧严格 Chat schema 会拒它；
+BFF 当前 chat snapshot `deliveries: []`。本切片只替换 Library 作品页正式列表/详情/内容路径；Chat delivery、Canvas
+及 snapshot/replay 的 schema、恢复和二元导航由后续 owner 协同切换，未切前不能把旧 Chat hash 描述成新 Product API
+的别名，也不能以 Library 读取成功证明 Chat 恢复。待作品页新合同/UI/真浏览器过门后删除该页旧
+`/api/session/artifacts` 与 hash 内容路径，不留正式双轨；Chat 旧路径有独立删除门。
+
 ## W2 个人文件下载 consumer 当前契约（2026-09-28；个人下载真纵切已验收）
 
 Web generated public OpenAPI 已按 BFF main `d5c868f8ab8b8a33750e1286e9d020ca72895641` 原字节固定为

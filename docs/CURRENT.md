@@ -1,5 +1,32 @@
 # Kokoro User Web 当前状态
 
+## W2-WEB-AGENT-ARTIFACT-F2 文档门（2026-09-28；作品页尚未切换）
+
+Web main `eaa7ebd56502cf05b6b402a8a013973c1904b8aa` 起始 clean：同一 Library 的个人文件
+下载已由 Root 真 Chromium 验收；**作品页仍使用** `/api/session/artifacts` 的
+`content_hash/session_id` 列表、hash 内容下载与 hash 键控视图。Web generated public OpenAPI 原字节
+仍是 BFF `d5c868f`/SHA-256 `3f8aba161444d8b617df7ff1789e698269a4a6dd2c8b2ae7b3aaadb331947681`。
+BFF main `55d3c9cd55386d9dcc074e893cc388924dd94c13` 已发布本人私有 FINAL CLEAN Artifact
+的 `GET /v1/library?kind=artifact`、二元详情与 1 GiB 原字节下载，public OpenAPI SHA-256
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`；Root
+Agent→Storage→BFF 组合有真 owner 证据，但使用 IAM 准入桩且 Web/正式浏览器未参与。
+
+本次仅收敛四份三设计/CURRENT 文档：目标是作品页精确回钉 BFF public 契约后从同源 `/api/hub`
+读取页级 `oneOf`（允许空页带 cursor）、按 `(conversation_id,artifact_id)` 定位详情/下载、以专用
+1 GiB 有界同源流、真实背压、独立总/空闲计时、完整结束及长度核对、安全头和断连取消代替旧 hash 与个人 1 MiB 缓冲；浏览器原生 attachment 不走 1 GiB Blob，UI 只可显示已发起而非已保存；个人文件 1 MiB 和通用
+Hub 16 MiB/15 秒边界不变。正式错误/401/403/404/429/502/503 均应可见，不把错误当空页或成功；
+Web 不新增持久 Artifact/Blob/授权事实，不自报 tenant/subject。代码、生成物、测试、当前用户 3310
+和别仓均未在此门修改，不能把设计写成用户已可用。下一门须先由 Root 审查并另授权代码文件集，
+再由 Web 单仓 Node22 `pnpm check`/隔离 `pnpm test:e2e`、Root 固定来源真
+IAM→Web→BFF→Agent→Storage/MinIO/ClamAV Chromium 点击后从下载管理器核对原字节及私有负例验收。
+
+Chat 与 Library 是独立断链：BFF live Agent `delivery.created` **已含** `artifact_id/asset_id/artifact_kind`，
+Web strict `chat-projection-event` 当前只收旧 hash/path/title/mime/size/note，会拒 live 新 payload；
+`SessionDelivery`/Canvas/卡片仍按 hash，而 BFF chat snapshot 当前 `deliveries: []`。本次 Library
+Product 接入可独立先做；不能误称 BFF live 缺 ID，也不能由 Web 猜 ID 或由作品页成功推断 Chat
+snapshot/replay 已恢复。作品页新列表/详情/下载真验收后才删该页正式旧 `/api/session/artifacts` 与 hash 下载；
+Chat/Canvas 的身份及旧路径删除须另有恢复与 owner 契约证据。完整 W2/EDGE 仍 broken。
+
 W2-WEB-PERSONAL-DOWNLOAD 真链已验收（2026-09-28；仅个人文件下载纵切）：
 Route Handler 单测虽返回 `Referrer-Policy: no-referrer`，真实 Next 的全局 Proxy 曾将个人文件下载响应覆盖为
 `strict-origin-when-cross-origin`。现仅精确、无 query 的个人文件 GET 在 Proxy 最终响应设
