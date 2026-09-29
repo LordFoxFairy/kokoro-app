@@ -566,6 +566,14 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     return { page, token, cookie, tenantIds }
   }
 
+  it("restarts an expired signed browser URL through real Next without a server error", async () => {
+    const response = await rawHttp(nextPort, "/auth/sign-in?exp=1&sig=%2BAb")
+    expect(response.status).toBe(303)
+    expect(response.headers.location).toBe("/login")
+    expect(response.headers["cache-control"]).toContain("no-store")
+    expect(receivedPaths).toEqual([])
+  })
+
   it("relays the canonical GET and rejects an untrusted Host without relying on Origin", async () => {
     const canonical = await rawHttp(nextPort, "/iam/jwks")
     expect(canonical.status).toBe(200)

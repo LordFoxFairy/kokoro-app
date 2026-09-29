@@ -63,9 +63,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const expiration = new URLSearchParams(query).getAll("exp")
     if (expiration.length === 1 && /^(0|[1-9][0-9]*)$/u.test(expiration[0] ?? "") &&
       Number(expiration[0]) <= Math.floor(Date.now() / 1_000)) {
-      return new NextResponse(null, { status: 303, headers: {
-        location: "/login", "cache-control": "no-store", "referrer-policy": "no-referrer",
-      } })
+      const redirect = NextResponse.redirect(new URL("/login", config.webOrigin), 303)
+      redirect.headers.set("cache-control", "no-store")
+      redirect.headers.set("referrer-policy", "no-referrer")
+      return redirect
     }
     let byteCount = 2
     for (const [name, value] of request.headers) byteCount += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
