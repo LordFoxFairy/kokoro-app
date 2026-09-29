@@ -7,30 +7,133 @@ import YAML from "yaml"
 
 const OWNER_COMMIT = "62daba37fc0267830d73590bb5a3499807d46fc6"
 const OWNER_SHA256 = "5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923"
+const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
-type Shape = { required?: string[]; additionalProperties?: boolean; properties?: Record<string, unknown> }
-type Operation = { operationId?: string; description?: string; "x-kokoro-empty-body"?: string }
+type Shape = {
+  required?: string[]
+  additionalProperties?: boolean
+  properties?: Record<string, Shape>
+  items?: { $ref?: string }
+  type?: string | string[]
+  const?: string
+  pattern?: string
+}
+type Response = {
+  $ref?: string
+  headers?: Record<string, { required?: boolean; schema?: { const?: string } }>
+  content?: Record<string, { schema?: { $ref?: string } }>
+}
+type Operation = {
+  operationId?: string
+  description?: string
+  "x-kokoro-empty-body"?: string
+  responses?: Record<string, Response>
+}
 type Spec = {
   paths: Record<string, Record<string, Operation>>
-  components: { schemas: Record<string, Shape>; parameters: Record<string, { name?: string; schema?: { enum?: string[] } }> }
+  components: {
+    schemas: Record<string, Shape>
+    parameters: Record<string, { name?: string; schema?: { enum?: string[] } }>
+    responses: Record<string, Response>
+  }
 }
 
-function exactShape(shape: Shape, fields: string[]): void {
-  expect(shape.required).toEqual(fields)
-  expect(Object.keys(shape.properties ?? {})).toEqual(fields)
-  expect(shape.additionalProperties).toBe(false)
+function operation(spec: Spec, path: string, method: string): Operation {
+  const value = spec.paths[path]?.[method]
+  if (!value) throw new Error(`missing BFF operation: ${method} ${path}`)
+  return value
 }
 
-function requiredShape(spec: Spec, name: string): Shape {
-  const shape = spec.components.schemas[name]
-  if (!shape) throw new Error(`missing BFF public schema: ${name}`)
-  return shape
+function shape(spec: Spec, name: string): Shape {
+  const value = spec.components.schemas[name]
+  if (!value) throw new Error(`missing BFF schema: ${name}`)
+  return value
+}
+
+function field(parent: Shape, name: string): Shape {
+  const value = parent.properties?.[name]
+  if (!value) throw new Error(`missing schema field: ${name}`)
+  return value
+}
+
+function exactShape(value: Shape, fields: string[]): void {
+  expect(value.required).toEqual(fields)
+  expect(Object.keys(value.properties ?? {})).toEqual(fields)
+  expect(value.additionalProperties).toBe(false)
+}
+
+function resolvedResponse(spec: Spec, value: Response | undefined): Response | undefined {
+  const ref = value?.$ref
+  if (!ref) return value
+  const name = /^#\/components\/responses\/([^/]+)$/u.exec(ref)?.[1]
+  return name ? spec.components.responses[name] : undefined
+}
+
+function assertGet(spec: Spec, path: string, id: string, successRef: string, errors: Record<string, string>): void {
+  const get = operation(spec, path, "get")
+  expect(get.operationId).toBe(id)
+  expect(Object.keys(get.responses ?? {}).sort()).toEqual(["200", ...Object.keys(errors)].sort())
+  for (const status of ["200", ...Object.keys(errors)]) {
+    const direct = get.responses?.[status]
+    if (status !== "200") expect(direct?.$ref).toBe(`#/components/responses/${errors[status]}`)
+    const response = resolvedResponse(spec, direct)
+    expect(response?.headers?.["x-request-id"]?.required).toBe(true)
+    expect(response?.headers?.["Cache-Control"]?.required).toBe(true)
+    expect(response?.headers?.["Cache-Control"]?.schema?.const).toBe("no-store")
+  }
+  expect(resolvedResponse(spec, get.responses?.["200"])?.content?.["application/json"]?.schema?.$ref).toBe(successRef)
+}
+
+function assertProjectionSemantics(spec: Spec): void {
+  const readErrors = {
+    "400": "PlatformProjectionReadBadRequest", "401": "PlatformProjectionReadUnauthorized",
+    "403": "PlatformProjectionReadForbidden", "429": "PlatformProjectionReadRateLimited",
+    "502": "PlatformProjectionReadBadGateway", "503": "PlatformProjectionReadUnavailable",
+  }
+  assertGet(spec, "/v1/skills", "listSkills", "#/components/schemas/SkillListResponse", readErrors)
+  assertGet(spec, "/v1/skills/{skill_id}", "getPublishedPersonalSkill", "#/components/schemas/PublishedPersonalSkillResponse", {
+    "400": "PublishedPersonalSkillBadRequest", "401": "PublishedPersonalSkillUnauthorized",
+    "403": "PublishedPersonalSkillForbidden", "404": "PublishedPersonalSkillNotFound",
+    "429": "PublishedPersonalSkillRateLimited", "502": "PublishedPersonalSkillBadGateway",
+    "503": "PublishedPersonalSkillUnavailable",
+  })
+  expect(operation(spec, "/v1/skills/{skill_id}", "get").responses?.["200"]?.$ref).toBe("#/components/responses/PublishedPersonalSkillOk")
+  assertGet(spec, "/v1/mcp/servers", "listMcpServers", "#/components/schemas/McpServerListResponse", readErrors)
+
+  expect(spec.components.parameters.CapabilitySkillScope?.name).toBe("scope_kind")
+  expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).toContain("personal")
+  expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("official")
+  expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("third_party")
+
+  const published = shape(spec, "PublishedPersonalSkillResource")
+  exactShape(published, ["skill_id", "source_ref", "revision", "status", "name", "summary", "tags"])
+  expect(field(published, "status").const).toBe("active")
+  expect(field(published, "revision").pattern).toBe("^[1-9][0-9]*$")
+  exactShape(shape(spec, "PublishedPersonalSkillResponse"), ["data"])
+
+  const skillList = shape(spec, "SkillListResponse")
+  exactShape(skillList, ["data"])
+  const skillData = field(skillList, "data")
+  expect(skillData.required).toEqual(["skills"])
+  expect(skillData.additionalProperties).toBe(false)
+  expect(field(skillData, "skills").items?.$ref).toBe("#/components/schemas/Skill")
+  expect(field(skillData, "next_cursor").type).toEqual(["string", "null"])
+  expect(shape(spec, "Skill").required).toEqual(expect.arrayContaining(["source_ref", "revision"]))
+
+  const mcpList = shape(spec, "McpServerListResponse")
+  exactShape(mcpList, ["data"])
+  const mcpData = field(mcpList, "data")
+  expect(mcpData.required).toEqual(["servers"])
+  expect(mcpData.additionalProperties).toBe(false)
+  expect(field(mcpData, "servers").items?.$ref).toBe("#/components/schemas/McpServerProjection")
+  expect(field(mcpData, "next_cursor").type).toBe("string")
+  exactShape(shape(spec, "McpServerProjection"), ["server_id", "provider_key", "server_identity", "transport", "declaration_digest", "status"])
 }
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
-  it("pins the BFF owner artifact and all six default-closed Skill commands", async () => {
-    const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-    expect(OWNER_COMMIT).toHaveLength(40)
+  it("pins exact owner bytes and six inactive Skill draft/publish operations", async () => {
+    const bytes = await readFile(SNAPSHOT)
+    expect(OWNER_COMMIT).toBe("62daba37fc0267830d73590bb5a3499807d46fc6")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     for (const [method, path, id] of [
@@ -41,43 +144,34 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       ["post", "/v1/skills/{skill_id}/validate", "validateSkillDraft"],
       ["post", "/v1/skills/{skill_id}/publish", "publishSkill"],
     ] as const) {
-      expect(spec.paths[path]?.[method]?.operationId).toBe(id)
-      expect(spec.paths[path]?.[method]?.description?.toLowerCase()).toMatch(/inactive|default-closed/)
+      expect(operation(spec, path, method).operationId).toBe(id)
+      expect(operation(spec, path, method).description?.toLowerCase()).toMatch(/inactive|default-closed/u)
     }
-    expect(spec.paths["/v1/skills/{skill_id}/publish"]?.post?.["x-kokoro-empty-body"]).toBe("required")
+    expect(operation(spec, "/v1/skills/{skill_id}/publish", "post")["x-kokoro-empty-body"]).toBe("required")
   })
 
-  it("keeps personal ACTIVE read, list scope, and owner-native MCP projection strict", async () => {
-    const spec = YAML.parse(await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"), "utf8")) as Spec
-    expect(spec.paths["/v1/skills/{skill_id}"]?.get?.operationId).toBe("getPublishedPersonalSkill")
-    expect(spec.paths["/v1/skills"]?.get?.operationId).toBe("listSkills")
-    expect(spec.paths["/v1/mcp/servers"]?.get?.operationId).toBe("listMcpServers")
-    expect(spec.components.parameters.CapabilitySkillScope?.name).toBe("scope_kind")
-    expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).toContain("personal")
-    expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("official")
-    expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("third_party")
-    exactShape(requiredShape(spec, "PublishedPersonalSkillResource"), ["skill_id", "source_ref", "revision", "status", "name", "summary", "tags"])
-    exactShape(requiredShape(spec, "McpServerProjection"), ["server_id", "provider_key", "server_identity", "transport", "declaration_digest", "status"])
-    expect(spec.components.schemas.Skill?.required).toContain("source_ref")
-    expect(spec.components.schemas.Skill?.required).toContain("revision")
-    exactShape(requiredShape(spec, "SkillListResponse"), ["data"])
-    exactShape(requiredShape(spec, "McpServerListResponse"), ["data"])
+  it("pins GET success refs, status-specific errors/headers and nested cursor/item shape", async () => {
+    assertProjectionSemantics(YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec)
   })
 
-  it("rejects former scope and fabricated MCP/Skill response fields as direct negative cases", async () => {
-    const spec = YAML.parse(await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"), "utf8")) as Spec
-    const published = structuredClone(requiredShape(spec, "PublishedPersonalSkillResource"))
-    published.properties = { ...published.properties, asset_ref: { type: "string" } }
-    expect(() => exactShape(published, ["skill_id", "source_ref", "revision", "status", "name", "summary", "tags"])).toThrow()
-    const mcp = structuredClone(requiredShape(spec, "McpServerProjection"))
-    mcp.properties = { ...mcp.properties, url: { type: "string" }, secret_ref: { type: "string" } }
-    expect(() => exactShape(mcp, ["server_id", "provider_key", "server_identity", "transport", "declaration_digest", "status"])).toThrow()
-    const list = structuredClone(requiredShape(spec, "SkillListResponse"))
-    list.properties = { ...list.properties, meta: { type: "object" } }
-    expect(() => exactShape(list, ["data"])).toThrow()
-    published.required = (published.required ?? []).filter((name) => name !== "source_ref")
-    expect(() => exactShape(published, ["skill_id", "source_ref", "revision", "status", "name", "summary", "tags"])).toThrow()
-    expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("official")
-    expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).not.toContain("third_party")
+  it("rejects actual parsed-spec mutations through the same consumer assertions", async () => {
+    const original = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+    const mutations: Array<(candidate: Spec) => void> = [
+      (candidate) => { operation(candidate, "/v1/skills/{skill_id}", "get").responses!["200"]!.$ref = "#/components/responses/ServiceUnavailable" },
+      (candidate) => { candidate.components.responses.PublishedPersonalSkillOk!.headers!["Cache-Control"]!.schema!.const = "public" },
+      (candidate) => { delete operation(candidate, "/v1/skills/{skill_id}", "get").responses!["404"] },
+      (candidate) => { operation(candidate, "/v1/skills/{skill_id}", "get").responses!["404"]!.$ref = "#/components/responses/PublishedPersonalSkillForbidden" },
+      (candidate) => { field(field(shape(candidate, "SkillListResponse"), "data"), "skills").items!.$ref = "#/components/schemas/SkillRevision" },
+      (candidate) => { field(field(shape(candidate, "SkillListResponse"), "data"), "next_cursor").type = "integer" },
+      (candidate) => { field(field(shape(candidate, "McpServerListResponse"), "data"), "servers").items!.$ref = "#/components/schemas/McpServer" },
+      (candidate) => { field(shape(candidate, "PublishedPersonalSkillResource"), "status").const = "draft" },
+      (candidate) => { shape(candidate, "McpServerProjection").properties!.secret_ref = { type: "string" } },
+      (candidate) => { candidate.components.parameters.CapabilitySkillScope!.schema!.enum!.push("official") },
+    ]
+    for (const mutate of mutations) {
+      const candidate = structuredClone(original)
+      mutate(candidate)
+      expect(() => assertProjectionSemantics(candidate)).toThrow()
+    }
   })
 })
