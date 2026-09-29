@@ -1,6 +1,48 @@
 # Kokoro User Web 技术设计
 
-## W2-WEB-AGENT-ARTIFACT-F2-CODE：作品页实施边界（2026-09-28；工作树待审）
+## S9-WEB-DOC：Chat Delivery / Canvas 二元消费设计门（2026-09-28；仅文档）
+
+**当前态。** Web main `102033e34be89ba0e9958447e4d4021fcbf257b7` 的 Library 作品页已使用
+`(conversation_id,artifact_id)` 与同源原生 attachment；Chat 是另一条未迁移链。`src/core/chat-projection-event.ts`
+仍按旧 hash/path 校验 `delivery.created`，`src/contract/artifacts.ts` 的 snapshot Delivery 也仍是旧形状；
+`src/core/{state,hydration,reducer}.ts`、`src/ui/thread/delivery-card.tsx`、
+`src/ui/shell/use-canvas-workspace.ts`、`src/ui/canvas/canvas-store.ts`、
+`src/ui/canvas/canvas-panel.tsx` 仍用 hash 去重/定位、
+`deliveryPath` 和 fetch→Blob/内嵌预览。当前 `AgUiChatTransport` 遇 HTTP 410 只回调错误，machine 进入 FAIL，
+尚不会因 `event_cursor_expired` 自动重取快照；run 终态的 `syncWorkspaceFiles` 直接整表替换 deliveries，
+未处理新 live 事件与较旧快照的竞态。不能把 Library 的已验收证据移作 Chat 证据。
+
+**Owner 与目标。** BFF main `bd1f794e7b1115d96965aa03d8a3a83a33c42fd7` 的 public OpenAPI
+SHA-256 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219` 是唯一机器契约；
+BFF 持久拥有 Conversation↔Artifact、最近 100 件快照、`deliveries_has_more`、同事务 AG-UI 水位与 replay，
+Storage 拥有 FINAL/CLEAN 原字节。Web 只在现有同源 adapter 后严格解析 wire、投影 React Chat/Canvas，
+不新增数据 owner、业务 SQL、Redis 或第二条 SSE。Browser→Web `/api/*`→BFF public→内部 owner；
+本人私有，Project/Team 不因同组自动共享。
+
+| 放置比较 | 裁决 |
+| --- | --- |
+| 采用既有 Chat / Canvas / Library 边界 | 在现有 `src/contract/{chat,artifacts}.ts` 与 AG-UI parser 严格解析；`src/core` 负责 live、replay、snapshot 统一二元投影；现有 thread 卡/Canvas 只管视图，调用既有 Library 二元详情与原生下载 helper。文件只按 wire、状态、视图各自变化原因扩展，不新建顶层目录。 |
+| 淘汰新建第二 Chat store / 复制 BFF 表 | 会产生双 cursor、重复事实和跨 owner 授权假象；`asset_id`、hash、path、MIME 只作经校验的来源/显示字段，不作选择器、去重或下载许可。不得从旧 hash 猜二元 ID。 |
+
+**恢复与交互。** 正式 `delivery.created` live/replay 先按完整 Agent 事件字段校验，以受校验
+AG-UI thread/session envelope 的 `session_id` 作 `conversation_id`，再只把
+`(conversation_id,artifact_id)`、kind、title、mime、size、run/time 投影为 `SessionDelivery`；
+snapshot 以 BFF 同事务 `deliveries + event_watermark` 水合，随后只回放水位后的 durable AG-UI。
+同二元 ID 重复帧/水合项只显示一件；相同 hash 的不同 artifact_id 必须保留两件。终态同步不得让较旧
+snapshot 覆盖并丢失新 live 项；须比较当前水位/代际并用二元 ID 对账。`event_cursor_expired` 的流建立
+HTTP 410 是 replay 过期，不是 Conversation 已删除：transport 必须保留稳定错误码供 machine 区分，
+停止旧流、重读当前本人快照/水位，再从新水位续流；
+重取失败显示可重试错误，绝不以空 Chat 或旧 hash 回退。快照最多 100 件，`deliveries_has_more=true`
+时 Chat/Canvas 提供现有 Library“查看全部作品”入口，而不是把 100 件冒称全集。
+
+**首片 UI 与删除。** 复用现有 shadcn 卡、Canvas 布局及 Library 交互，Chat 卡和 Canvas 先只显示
+metadata、本人二元详情、同源原生 attachment 下载；不让 1 GiB 内容进入 JS Blob、iframe、图片/媒体内嵌
+预览或 React state。详情预检不授予内容下载权，浏览器发起下载不代表已落盘；404/失效/网络/解析错误
+可见且不降级 preview。删除正式 `deliveryPath`、hash URL、fetch→Blob/内嵌二进制链与正式双读；
+显式 local/test preview fixture 保持隔离，不伪装正式 owner。个人 File/workspace file 原有小对象展示另属
+独立边界，不因删除 Delivery Blob 而误删。代码门需另锁文件集、TDD 及 Root 真浏览器验收，本门不触代码。
+
+## W2-WEB-AGENT-ARTIFACT-F2-CODE：作品页实施边界（2026-09-28；S9 前历史基线）
 
 当前正式作品页在既有 shadcn Library 页签，经具名 Artifact consumer/client 从同源 Hub 读取
 BFF Product 页级 `oneOf`；空页也保留 cursor，`(conversation_id,artifact_id)` 是唯一去重、

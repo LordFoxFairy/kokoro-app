@@ -1,6 +1,31 @@
 # Kokoro User Web API 契约策略
 
-## W2-WEB-AGENT-ARTIFACT-F2-CODE：当前消费契约（2026-09-28；工作树待审）
+## S9-WEB-DOC：Chat Delivery 消费契约（2026-09-28；仅文档）
+
+唯一 owner 机器源是 BFF main `bd1f794e7b1115d96965aa03d8a3a83a33c42fd7` 的
+`contract/openapi/v1/openapi.yaml`，原字节 SHA-256
+`a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`。
+Web main `102033e34be89ba0e9958447e4d4021fcbf257b7` 的 generated 仍固定旧 SHA-256
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`；
+本门不编辑 generated、Web Zod 或 BFF 契约，不声称当前 Chat 已能解析新响应。下一代码门先由固定
+BFF 来源确定性重生成并查 drift，再改消费解析，不能手工改 owner schema 副本。
+
+| 边界 | 目标消费规则 |
+| --- | --- |
+| `GET /api/session/sessions/{id}` → BFF `GET /v1/sessions/{id}` | 当前 Product Session 的本人 active Conversation/Project 准入由 BFF 实施。200 `data.deliveries` 为最近最多 100 件，按 `delivered_at DESC,artifact_id ASC`；`data.deliveries_has_more` **必填 boolean**，`data.event_watermark` 与 Delivery 来自同一 PostgreSQL 读快照。Web 不拿水位当授权；错误不构造空列表。 |
+| 每个 snapshot `Delivery` | **必填且无额外字段**：`conversation_id`、`artifact_id`、`asset_id`、八值 `artifact_kind`、`title`、`mime`、`size`（0..`Number.MAX_SAFE_INTEGER` 的安全整数）、`run_id`、UTC `created_at`。`(conversation_id,artifact_id)` 是唯一视图身份/Library selector；`asset_id` 非单独下载入口。snapshot 不要求 `tool_call_id`、`path`、`content_hash`。 |
+| `/api/session/sessions/{id}/events` AG-UI | BFF durable ledger cursor 是唯一 replay axis。`kokoro.delivery.created` 的 Agent live/replay payload 与 snapshot 不同：完整校验 ID、kind、`tool_call_id`、`path`、`content_hash`、title/mime/size 等生产字段；`conversation_id` 来自受校验的 AG-UI thread/session envelope，不从 hash/path 猜。保留 wire 协议严格性，但 UI 只投影必要字段，不能把 snapshot schema 套到 live 上。Web 当前 parser 尚拒这些新字段；不增加 legacy `SessionEvent` 网络 fallback。 |
+| 断线/GC | 普通断线按 `Last-Event-ID` 从确认 cursor 续流；流建立收到 BFF HTTP 410 `event_cursor_expired` 时保留稳定码供 machine 区分、丢弃旧 cursor，重新 GET 本人快照，并从返回 watermark 续流。与 snapshot GET 的 410/404“会话不存在/已删”分开。Web 当前 transport 将流 410 包成无 status 普通错误，machine 直接 FAIL，尚无该恢复。其他 HTTP、坏 200 或坏事件 fail loud，提供显式重试，不降级为 hash/preview。 |
+| Chat 卡/Canvas 动作 | 使用 Library 已发布的 `GET /api/hub/library/artifacts/{conversation_id}/{artifact_id}` 详情与同二元 `/content` 同源原生 attachment；每次由 BFF 重新授权，详情预检不保证下载仍可见。本人以外/错二元组不可见 404；Asset/hash/path 不是授权凭证。快照 `deliveries_has_more` 为真时显示现有 Library“查看全部作品”。 |
+
+同一二元 ID 的 live/replay/snapshot 去重；同 hash 不同 ID 均保留。终态 snapshot 对账需要兼顾
+同事务水位和在途 live 竞态，不能无条件以旧快照整表替换。Share snapshot 依 owner 契约保持
+`deliveries: []`、`deliveries_has_more: false`，不是个人 Artifact 分享许可。本切片不扩展 Share、Project
+授权，也不把个人 File `asset_id` 与作品联合。代码门覆盖坏字段/大小边界、双 ID、100+入口、410 恢复与
+原生下载/私有错误，并跑 Node22 contract、architecture、lint、typecheck、test、build、隔离 E2E 与 Root 真
+IAM→Chromium→Web→BFF→Agent→Storage 组合；本门仅要求文档/机器源核对及 `git diff --check`。
+
+## W2-WEB-AGENT-ARTIFACT-F2-CODE：作品页消费契约历史基线（2026-09-28）
 
 本仓已将 BFF `55d3c9cd55386d9dcc074e893cc388924dd94c13` 的唯一 public
 OpenAPI 原字节固定到 `src/generated/bff-public-openapi.yaml`，SHA-256

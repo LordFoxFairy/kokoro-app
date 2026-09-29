@@ -1,6 +1,32 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W2-WEB-AGENT-ARTIFACT-F2-CODE 当前数据边界（2026-09-28；工作树待审）
+## S9-WEB-DOC：Chat Delivery 浏览器投影（2026-09-28；仅文档）
+
+Web main `102033e34be89ba0e9958447e4d4021fcbf257b7` 的 Library 已用二元作品身份，
+Chat 的 `SessionDelivery`、快照 Zod、live reducer、Canvas 引用、下载仍使用旧 `contentHash/path`。
+Web generated BFF public 快照仍为 SHA-256
+`8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`；
+BFF main `bd1f794e7b1115d96965aa03d8a3a83a33c42fd7` 的新机器源 SHA-256
+`a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`
+已经提供同事务最近 100 件、`deliveries_has_more` 和 event watermark，但 Web 尚未消费。
+
+目标 `SessionDelivery` 只是页面内投影：`conversationId + artifactId` 为稳定复合键，另保留
+`assetId`、八值 `artifactKind`、`title`、`mime`、`size`、`runId`、`createdAt` 展示信息；
+live/replay 先验证完整 Agent payload，snapshot 验证独立九必填字段，然后归一到同一形状。
+`content_hash`、path、MIME、`asset_id`、文件名均不是身份/授权/去重键；同 hash 的两个 Artifact 必须
+成为两项。`deliveriesHasMore` 与最多 100 件仅是当前 Conversation 视图上限，完整历史归 BFF
+分页 Library，不能把省略/false 作为同一语义。`eventWatermark` 只供增量 replay；410 过期后丢弃
+旧水位重新读取快照。终态同步在内存中按水位/代际和二元 ID 与 live 对账，不能让较早快照删除较晚
+live 项，也不能把缓存过的 Canvas 二元引用在权限失效后视为仍可下载。
+
+Web 不保存新的 Artifact/Delivery/Download 表、schema、migration、SQL、Redis、IndexedDB 或
+localStorage 权威事实；不持有内容 Blob/iframe URL 或 Storage 签名 URL。Chat 卡/Canvas 只保留当前
+React 生命周期的 metadata、选择项、发起下载/失败状态与 AbortController；浏览器原生 attachment
+仅报告发起，BFF 每次详情/内容 GET 重新准入。BFF 唯一保存 Conversation↔Artifact 与 AG-UI
+ledger，Storage 唯一保存 FINAL/CLEAN 对象和字节；个人 File 独立 `asset_id` 模型不混入作品。
+预览样本可在显式 local/test fixture 隔离保留，不填正式失败空白。代码门另行实施并验证，本门不改变持久事实。
+
+## W2-WEB-AGENT-ARTIFACT-F2-CODE 数据边界历史基线（2026-09-28）
 
 正式作品页仅在 React 生命周期保存 BFF `kind=artifact` 页项、opaque cursor、加载/错误、
 AbortController、二元 `(conversation_id,artifact_id)` 收藏键及下载“已发起”提示；刷新重读

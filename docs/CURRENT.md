@@ -1,6 +1,27 @@
 # Kokoro User Web 当前状态
 
-## W2-WEB-AGENT-ARTIFACT-F2-CODE（2026-09-28；单仓门已验，真浏览器待验）
+## S9-WEB-DOC（2026-09-28；Web Chat 代码未迁移）
+
+Web main `102033e34be89ba0e9958447e4d4021fcbf257b7`、BFF owner main
+`bd1f794e7b1115d96965aa03d8a3a83a33c42fd7`；Web generated BFF public OpenAPI
+SHA-256 `8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b`，
+BFF 新 owner OpenAPI SHA-256 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`。
+Library 已二元读取与原生下载，Root 既有真浏览器纵切已验；但 Web Chat strict live schema、snapshot
+Delivery、reducer/终态同步、卡片/Canvas、旧 `deliveryPath` 及 Blob/内嵌预览未切。BFF 新 snapshot
+已经在同事务提供最近 100 件、`deliveries_has_more` 与水位，旧 W2 文档所述 BFF `deliveries: []`
+仅是当时基线，不再是 BFF 当前事实。Web 当前 `AgUiChatTransport` 遇 replay HTTP 410 会报错到
+machine FAIL，未重取快照；终态同步还可能以较旧 snapshot 整表覆盖新 live 作品。`EDGE-WEB-BFF`
+仍 broken；Chat/Canvas 不能从 Library 成功推断已闭环。
+
+本切片只更新 TECHNICAL_DESIGN、API_CONTRACT、DATA_MODEL、CURRENT 四文档，锁定二元归一、
+410 重水合、100+入口、Canvas metadata/本人详情/原生下载、正式 hash/Blob 删除与隔离 preview
+的目标；无运行代码、生成物、测试或服务变更。Root 审查通过后另授权 Web 代码切片：固定新 BFF
+OpenAPI、TDD、Node22 全门与隔离 E2E，再由 Root 固定来源真 IAM/Chromium/Agent/Storage Chat
+链分别核 live 帧、刷新快照、两件同 hash、Canvas 原字节/他人 404/窄屏；旧 cursor GC/410
+另由隔离 BFF/transport 恢复测试证明，不把此前只验 snapshot 的浏览器 runner 冒称 live/410 证据。Web 文档门
+不代表上述代码或端到端验收已完成；3310 不由本片触碰。
+
+## W2-WEB-AGENT-ARTIFACT-F2-CODE（2026-09-28；S9 前历史基线）
 
 正式 Library 作品页代码现从固定 BFF public `GET /v1/library?kind=artifact` 读取页级
 `oneOf`，用 `(conversation_id,artifact_id)` 跨页去重、详情预检、内容定位、收藏和来源导航；
