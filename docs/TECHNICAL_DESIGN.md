@@ -1,5 +1,22 @@
 # Kokoro User Web 技术设计
 
+## W3-WEB-SKILL-UPLOAD-DOC-GATE：个人 Skill ZIP 发布设计门（2026-09-29；仅文档）
+
+**当前态与 owner。** Web `main 317c74c2048829471b0c4196df98dd6d2dcf5e36` 的 `/app/skills` 和 Settings 共用 `src/ui/skills/skill-upload-dialog.tsx`；其 `HubClient.previewUpload/confirmUpload` 经 `/api/hub/self/skills/upload/{preview,confirm}` 发送 multipart，选择 namespace/多个 candidate，confirm 后直接显示 done。这不是单 ZIP 草稿、attempt 和发布链。Web 固定的 BFF OpenAPI 仍为 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`，不含新六操作；BFF `55ca6c1d8a7fbd0a21bea8d3539667a68d67e9d9` 唯一 public OpenAPI `0198220b75780c0c4ff08cdea59f57565f8ebffca5dfb2069dceb0fc25cf01c1` 已有六项默认关闭运行候选，Platform v4 仍 inactive。Web UI 尚未实施、Web 真 Chromium/CORS 未验。本门不更新机器契约、generated、代码或 lockfile。
+
+| §8 放置 / 依赖 | 裁决 |
+| --- | --- |
+| Owner 与目标职责 | Web 只持有用户选取的单个 `File`、本地摘要、命令 key、当前 attempt 描述符与交互状态；BFF 唯一公开 Product API/IAM admission，Platform 唯一 Skill/attempt/receipt/发布 outbox writer，Storage 唯一对象字节与扫描 owner。Browser→Web 同源 adapter→BFF→Platform/Storage 控制面；浏览器仅按签名引用向批准 ObjectStore public origin 直传原 ZIP。 |
+| 方案 A（采用） | 后续代码片沿现有 `SkillUploadDialog`、Skills/Settings 两入口、shadcn Dialog/Alert/Button、语义 design token 与同源 `/api/hub/*` adapter，更换 feature 消费 client、严格 wire parser 和交互状态；按各自变化原因拆文件，不建新模块/进程。 |
+| 方案 B（淘汰） | 沿旧 Hub preview/confirm 做 alias、继续 multipart/多 candidate/namespace，或让 Web/BFF 代理 ZIP 并持久化本地 receipt，会复制 owner 事实且无法对应当前 attempt/撤权/发布语义。正式路径须随代码片删除旧调用、schema、文案、测试和 fallback；显式隔离 fixture 不可冒充正式成功。 |
+| 数据/API 影响 | Web 无 Skill/Upload SQL、Redis、receipt、事务或生成 owner；不把文件字节、签名 URL、密钥、私有 asset 写入日志、持久浏览器存储或第二 contract。代码片先精确 pin BFF 唯一 OpenAPI、确定性重生成/校验，再写严格消费；旧生成快照不可被手改。 |
+
+**目标流程与状态。** Dialog 单 ZIP（`.zip`，`application/zip`；非 `.skill` 容器）和 `display_name/summary/tags`，先在浏览器校验非空、`1..33554432` 字节、文件名 UTF-8 最多 255 字节并算 lowercase SHA-256；BFF/owner 仍是最终裁决。新建 user-owned Draft→`GET` 当前 attempt/phase→`Begin`（首次无 `replaces_attempt_id`，只有明确替换当前非 validated attempt 才带当前 ID）→用完整短期 `transfer_reference` 向受控 ObjectStore origin `PUT` 原始 ZIP→`Complete` 回显 Begin 的 `attempt_id/upload_id/content_sha256/size_bytes`→`Validate` 带当前 `attempt_id`→零字节 body `Publish`。每个 mutation 持有独立单个 `Idempotency-Key`，同一意图只以原 body/key 显式重试；Get 不带 key。收到 `uploaded`/CLEAN 或 `valid=true` 只表示阶段进展；仅严格的 Publish 200 `{data:{source_ref,revision,status:"active",event_id,replayed}}` 才显示“已发布”并触发刷新。个人私有、固定 PERSONAL，不提供 visibility/tenant/asset/manifest 输入，也不把旧 Hub catalog 缓存当发布事实。
+
+**浏览器数据面与恢复。** PUT 必须使用 BFF 已校验的批准 public origin、签名 URL 与 `required_headers` 原样（当前仅 `content-type: application/zip`）；`credentials: "omit"`、`redirect: "error"`，不附 Cookie/Bearer，不重写 URL/headers；URL 过期或 PUT 结果未知时不推断对象已接收，先 Get 当前 attempt，并用原 Begin key/body 重新取得当前短期 reference 或显示明确重试。预检只放行获准 Web origin、PUT/Content-Type、无凭据；签名 URL 已签发后撤权不能瞬时收回，但新 Begin/Complete/Validate/Publish 均重新准入。断线、关闭 Dialog、刷新和请求取消不得把未知回执变成成功；同一页面保留 File、摘要、描述符和 key 以便同键重试，刷新后 `File` 不可恢复：Get 只给当前 phase/attempt/epoch，不给 hash/size/签名 URL。要完成原 attempt，须重选**同一文件**重算并核对 Begin 描述符；否则明确新 Begin 替换，绝不伪造 Complete。Publish ACK 未知且 key 尚在时保留同键重试；刷新丢失 key 时只显示“发布状态未知，需重新核对”，Get draft attempt/旧 Hub catalog 不证明 active，也不以新 key 盲发 Publish。`409` 进行中、有界 `429/5xx`、`412` stale/感染、撤权 `401/404`、坏回执 `502` 均按稳定错误码呈现；无静默自动创建新意图。
+
+**下一代码门与验证。** 先做旧路径/新 operation 的 RED，再更换正式 Dialog 与 generated consumer，覆盖键盘/focus-visible、reduced motion、窄屏、loading/empty/error/disabled/partial/reconnecting/success、取消与迟到响应；Node22 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、隔离 `pnpm test:e2e`。Root 另在独占 IAM→真 Chromium→Web→BFF→Platform→Storage/MinIO/ClamAV 验批准 origin 的 CORS preflight/PUT、CLEAN/INFECTED、错误 header/origin/过期、刷新、失联同键、撤权、替换和最终 active event；不触用户 3310。本片文档不构成上述代码或浏览器验收。
+
 ## S9-WEB-CODE 实施状态（待 Root 验收）
 
 下节 S9-WEB-DOC 保留代码前基线；当前工作树已在既有 Chat contract/core/engine 与 thread/Canvas 边界实施

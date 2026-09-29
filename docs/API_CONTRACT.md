@@ -1,5 +1,23 @@
 # Kokoro User Web API 契约策略
 
+## W3-WEB-SKILL-UPLOAD-DOC-GATE：个人 Skill ZIP 消费契约（2026-09-29；仅文档）
+
+BFF `55ca6c1d8a7fbd0a21bea8d3539667a68d67e9d9` 的唯一 `contract/openapi/v1/openapi.yaml` SHA-256 为 `0198220b75780c0c4ff08cdea59f57565f8ebffca5dfb2069dceb0fc25cf01c1`；它定义默认关闭、Platform v4 inactive 的六项 public 运行候选。Web 当前 generated 仍为旧 BFF SHA-256 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`，正式 Skill UI 仍用 `/api/hub/self/skills/upload/{preview,confirm}` multipart；本门只定义后续消费，不宣称 adapter/parser/UI 已换。机器字段、稳定错误码与 breaking 判断以 BFF 唯一 OpenAPI 为准，Web 下次代码片精确 pin/生成，不复制可编辑契约。
+
+| 同源调用 → BFF public | 后续严格消费 |
+| --- | --- |
+| `POST /api/hub/skills/drafts` → `POST /v1/skills/drafts` | 单个 `Idempotency-Key`；JSON 仅 `display_name,summary,tags`，当前 IAM user/tenant 为 owner。201 `{data:{skill_id,series_id,revision:1,status:"draft",replayed}}`；不从旧 namespace/candidates 反推。 |
+| `GET /api/hub/skills/{skill_id}/package-upload` → 同名 `/v1` | 无 key；200 `{data:{skill_id,attempt_epoch,phase,attempt_id?,upload_id?}}` 的 oneOf：`none` epoch `0`、`intent`、`upload_pending`、`uploaded`、`validated`、`aborted`。只读当前 draft attempt，不签 URL、不读取 active 发布事实。 |
+| `POST /api/hub/skills/{skill_id}/package-upload` → 同名 `/v1` | Begin 单 key；JSON 必需 `filename,mime_type:"application/zip",size_bytes,content_sha256`，仅明确替换时加 `replaces_attempt_id`。文件名 UTF-8 ≤255 bytes、size `1..33554432`、小写 64 位十六进制 SHA-256。201 只接受当前 `attempt_id/attempt_epoch/upload_id` 与 `transfer_reference:{url,method:"PUT",required_headers:{"content-type":"application/zip"},expires_at}`；`replayed` 不意味着 URL 可永久使用。 |
+| 直接 ObjectStore signed `PUT` | 不是 `/api/hub`、不经过 Web/BFF 字节代理；严格 URL/签名头、`credentials:omit`、`redirect:error`，发送原 ZIP bytes，不附应用 cookie/Bearer。批准 public origin 与 CORS 必须在真 Chromium 验证；浏览器不信任响应 body 作完成回执。 |
+| `POST /api/hub/skills/{skill_id}/package-upload/complete` → 同名 `/v1` | 独立单 key；JSON 恰为 `attempt_id,upload_id,content_sha256,size_bytes`，必须匹配 Begin/原 File。200 `phase:"uploaded"` 与 `scan_state: clean/pending/unknown` 不等于 ZIP validated。丢失原描述符/文件时重选并核对，或显式替换 attempt。 |
+| `POST /api/hub/skills/{skill_id}/validate` → 同名 `/v1` | 独立单 key；JSON 只含当前 `attempt_id`，不是空 body，也不带 asset/hash/manifest。200 `valid:true,content_digest,manifest_identity,skill_id,series_id,replayed` 仍非 active。 |
+| `POST /api/hub/skills/{skill_id}/publish` → 同名 `/v1` | 独立单 key；请求体精确 **零字节**，不是 `{}`、`null` 或空白，不设置会生成 JSON body 的调用封装；固定个人私有。200 仅 `source_ref=skill:<skill_id>`、正 uint64 十进制 `revision`、`status:"active"`、UUID `event_id`、boolean `replayed` 才是发布回执。 |
+
+六项控制面均从同源 Product Session 进入 BFF，当次包括 replay 重新 IAM/Platform owner 准入；不自报 tenant/owner/visibility。成功/错误分别严格 `{data}`/`{error:{code,message,retryable}}`，核 `x-request-id`、`Cache-Control:no-store`，不解析 message 分支、不暴露 Storage asset/secret。每个 mutation key 绑定单一原请求意图；未知 ACK 只可同 key/body 重试，`409 skill_command_in_progress` 显示等待/显式同键重试，`409 skill_idempotency_conflict` 不换 body 强试；`412 skill_precondition_failed` 包括旧 attempt、失效/感染等不可作成功；401/403/404、429、502、503 分别显示准入/限流/依赖错误。刷新后 Get 不能判定 Publish 是否成功，若遗失 Publish key/回执必须显示未知并使用 owner 正式发布读取能力核对；该读取能力**不在这六项候选中**，不得拿 Get 或旧 catalog 替代。此流程非列表、无分页/cursor；breaking 变更由 BFF owner 改唯一契约并重新 pin/生成，Web 不建第二 public schema。
+
+本片只验文档与路径；后续代码门需直接契约/生成 drift、严格 body/错误/私有负例及隔离 Playwright，Root 真 Chromium+CORS/PUT/撤权/同键/发布回执另验。默认关闭与 v4 inactive 不因 Web 文档解除。
+
 ## S9-WEB-CODE 消费状态（待 Root 验收）
 
 本仓 `src/generated/bff-public-openapi.yaml` 已原字节固定 BFF owner SHA-256

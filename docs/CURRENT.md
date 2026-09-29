@@ -1,5 +1,13 @@
 # Kokoro User Web 当前状态
 
+## W3-WEB-SKILL-UPLOAD-DOC-GATE（2026-09-29；仅文档候选）
+
+Web 当前 clean 基线 `main 317c74c2048829471b0c4196df98dd6d2dcf5e36`：`/app/skills` 与 Settings 仍共用旧 `SkillUploadDialog`，`HubClient` 仍把 `.zip/.skill` 经 `/api/hub/self/skills/upload/{preview,confirm}` multipart 送旧 Capability 路径并展示 namespace/多 candidate。`src/generated/bff-public-openapi.yaml` SHA-256 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219` 尚无新六操作。BFF `55ca6c1d8a7fbd0a21bea8d3539667a68d67e9d9` 的唯一 OpenAPI SHA-256 `0198220b75780c0c4ff08cdea59f57565f8ebffca5dfb2069dceb0fc25cf01c1` 已有 CreateDraft/Get/Begin/Complete/Validate/Publish 默认关闭运行候选；Root `4d338089` 真 owner 组合验过 Publish，但 Platform v4 inactive。**Web 新 UI、generated pin、真实 Chromium/CORS/PUT 均未实施/未验，产品未激活。**
+
+本门仅更新 TECHNICAL_DESIGN、API_CONTRACT、DATA_MODEL、CURRENT，固定单 ZIP→CreateDraft/Get/Begin→批准 ObjectStore origin 原字节无凭据 PUT→Complete→Validate→零字节 Publish；个人私有，仅 active+event 回执宣布成功。旧 preview/confirm、namespace、多 candidate、`.skill` 容器与直接 done 语义须在下一代码片正式路径一次移除，不留 fallback；复用现有 shadcn Dialog/语义 token，不建 Web SQL、receipt、Storage 字节代理或第二 contract。失联保留同键/原 File 意图，刷新后 Get 只核当前 draft attempt，Complete 缺原摘要/大小需重选同文件或显式替换，Publish key/ACK 丢失必须显示“状态未知/需重新核对”。
+
+后续唯一 Web writer 先精确 pin BFF OpenAPI/重生 consumer，RED→实现→Node22 contract/architecture/lint/typecheck/test/build/隔离 Playwright；Root 真 IAM→Chromium→Web→BFF→Platform→Storage/MinIO/ClamAV 验获准 origin CORS preflight/PUT、扫描、撤权、刷新、替换、同键与 active event。用户 3310 不由本门触碰；上述门禁未跑前不宣称浏览器全链闭环。
+
 ## S9-WEB-CODE 候选（2026-09-28；待 Root 集成与真实链验收）
 
 Web 工作树已将 BFF owner OpenAPI 原字节固定到 SHA-256
