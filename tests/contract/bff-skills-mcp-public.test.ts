@@ -10,6 +10,7 @@ const OWNER_SHA256 = "5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
+  $ref?: string
   required?: string[]
   additionalProperties?: boolean
   properties?: Record<string, Shape>
@@ -109,7 +110,9 @@ function assertProjectionSemantics(spec: Spec): void {
   exactShape(published, ["skill_id", "source_ref", "revision", "status", "name", "summary", "tags"])
   expect(field(published, "status").const).toBe("active")
   expect(field(published, "revision").pattern).toBe("^[1-9][0-9]*$")
-  exactShape(shape(spec, "PublishedPersonalSkillResponse"), ["data"])
+  const publishedResponse = shape(spec, "PublishedPersonalSkillResponse")
+  exactShape(publishedResponse, ["data"])
+  expect(field(publishedResponse, "data").$ref).toBe("#/components/schemas/PublishedPersonalSkillResource")
 
   const skillList = shape(spec, "SkillListResponse")
   exactShape(skillList, ["data"])
@@ -165,6 +168,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       (candidate) => { field(field(shape(candidate, "SkillListResponse"), "data"), "next_cursor").type = "integer" },
       (candidate) => { field(field(shape(candidate, "McpServerListResponse"), "data"), "servers").items!.$ref = "#/components/schemas/McpServer" },
       (candidate) => { field(shape(candidate, "PublishedPersonalSkillResource"), "status").const = "draft" },
+      (candidate) => { field(shape(candidate, "PublishedPersonalSkillResponse"), "data").$ref = "#/components/schemas/Skill" },
       (candidate) => { shape(candidate, "McpServerProjection").properties!.secret_ref = { type: "string" } },
       (candidate) => { candidate.components.parameters.CapabilitySkillScope!.schema!.enum!.push("official") },
     ]
