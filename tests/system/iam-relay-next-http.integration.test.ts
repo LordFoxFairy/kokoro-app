@@ -777,6 +777,20 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths).toEqual([])
   })
 
+  it("returns an expired browser form to a fresh login instead of exposing a JSON CSRF error", async () => {
+    const page = await signInPage()
+    const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
+    expect(cookie).toBeDefined()
+    const result = await rawPost(nextPort, "/auth/sign-in?sig=%2BAb",
+      `csrf_token=${"x".repeat(43)}&email=user%40example.test&password=secret`, {
+        origin: `http://localhost:${nextPort}`, cookie: cookie ?? "", accept: "text/html",
+      })
+    expect(result.status).toBe(303)
+    expect(result.headers.location).toBe("/login")
+    expect(result.body).toBe("")
+    expect(receivedPaths).toEqual([])
+  })
+
   it.each([401, 429, 503])("sanitizes sign-in %i before any continuation", async (status) => {
     signInStatus = status
     const page = await signInPage()

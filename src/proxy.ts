@@ -58,6 +58,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     if (config === null || !redisUrl) return new NextResponse(null, { status: 503, headers: { "cache-control": "no-store" } })
     if (!matchesCanonicalWebRequest(request, config, "GET")) return new NextResponse(null, { status: 403, headers: { "cache-control": "no-store" } })
     if (query === null) return new NextResponse(null, { status: 404, headers: { "cache-control": "no-store" } })
+    // A bookmarked IAM interaction is not a reusable login entry. Restart the
+    // fixed Product OIDC flow before rendering a form bound to an expired query.
+    const expiration = new URLSearchParams(query).getAll("exp")
+    if (expiration.length === 1 && /^(0|[1-9][0-9]*)$/u.test(expiration[0] ?? "") &&
+      Number(expiration[0]) <= Math.floor(Date.now() / 1_000)) {
+      return new NextResponse(null, { status: 303, headers: {
+        location: "/login", "cache-control": "no-store", "referrer-policy": "no-referrer",
+      } })
+    }
     let byteCount = 2
     for (const [name, value] of request.headers) byteCount += Buffer.byteLength(name) + Buffer.byteLength(value) + 4
     if (byteCount > IAM_RELAY_POLICY.maxHeaderBytes || request.body !== null) {

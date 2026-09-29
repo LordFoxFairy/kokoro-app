@@ -65,4 +65,14 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     expect(response.status).toBe(404)
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
+
+  it("restarts an expired signed sign-in navigation before issuing a new form proof", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request("/auth/sign-in?exp=1&sig=%2BAb"))
+
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe("/login")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
+  })
 })

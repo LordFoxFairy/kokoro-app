@@ -161,7 +161,18 @@ export async function POST(request: Request): Promise<Response> {
   const cookieToken = cookieValue(request.headers.get("cookie"), iamCsrfCookieName())
   try {
     const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, cookieToken, formToken: form.get("csrf_token") })
-    if (!valid) return errorResponse(403, "iam_interaction_csrf_rejected", id)
+    if (!valid) {
+      // A stale browser form must not strand the user on a raw JSON error or
+      // reuse an expired signed IAM interaction. Start a fresh fixed login;
+      // non-browser requests keep the explicit 403 contract.
+      if (request.headers.get("accept")?.includes("text/html")) {
+        return new Response(null, { status: 303, headers: {
+          location: "/login", "cache-control": "no-store", "referrer-policy": "no-referrer",
+          "x-request-id": id, "set-cookie": clearIamCsrfCookie(PAGE_PATH, config.secureCookies),
+        } })
+      }
+      return errorResponse(403, "iam_interaction_csrf_rejected", id)
+    }
   } catch {
     return errorResponse(503, "iam_interaction_unavailable", id)
   }
