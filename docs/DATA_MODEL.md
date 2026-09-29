@@ -11,7 +11,7 @@
 | 本次操作 key 与未知结果 | Web 每个 CreateDraft/Begin/Complete/Validate/Publish 意图各持一个 key 与原 body，禁止并发双击和改变 body 后复用；关闭/取消/迟到回调不得变已确认成功。页面生命周期可保留原 File/key 供同键重试；刷新丢失内存后先 GET 当前 draft，不能从 GET 推断 active/Publish event。 |
 | 发布显示 | 仅严格 Publish 200 active、`source_ref/revision/event_id` 为成功视图；validated/上传 CLEAN/旧 Hub catalog 不等于发布。ACK 未知且 key 丢失时显示未知并待正式 owner 发布读取，不创造本地 published 标记。个人私有固定 PERSONAL，非 Project/Team 共享。 |
 
-Get 仅有 current attempt 及可选 ID，没有原始 `content_sha256/size_bytes`、签名引用或 active 状态；Complete 恢复必须持有原描述符及原 File，刷新后要求用户重选同文件重算并核对，否则显式新 Begin 替换当前允许替换的 attempt。替换、感染、撤权和扫描未完成由 owner 当前状态/错误裁决；旧 attempt 的迟到 PUT/Complete/Validate 不提升为新 attempt。Browser→Web 同源 adapter→BFF→Platform/Storage 控制面，只有原始 ZIP signed PUT 例外直达批准 ObjectStore origin；不从 Web SQL 或缓存跨 owner 查询。无 Web canonical schema、迁移、事务、索引、retention 或 fresh-install 数据门；浏览器临时状态随会话卸载消失，敏感 URL 不持久化。本片不变更现有旧代码，后续代码切片须彻底删除正式 preview/confirm 状态/alias/测试并验证无双轨。
+Get 仅有 current attempt/phase 与按 phase 可选的 ID，没有原始 `content_sha256/size_bytes`、签名引用或 active 状态。刷新丢失 Begin key/reference 后，`intent`/`upload_pending` 不能续用原签名 PUT，只能在 owner 允许时显式新 Begin 替换；`uploaded` 可用 Get 的当前 attempt_id/upload_id 加用户重选原 File 后本地重算的 hash/size 发 Complete，原上传绑定由 owner 校验，Web 不与已丢失的 Begin 描述符比对。替换、感染、撤权和扫描未完成由 owner 当前状态/错误裁决；旧 attempt 的迟到 PUT/Complete/Validate 不提升为新 attempt。Browser→Web 同源 adapter→BFF→Platform/Storage 控制面，只有原始 ZIP signed PUT 例外直达批准 ObjectStore origin；不从 Web SQL 或缓存跨 owner 查询。无 Web canonical schema、迁移、事务、索引、retention 或 fresh-install 数据门；浏览器临时状态随会话卸载消失，敏感 URL 不持久化。本片不变更现有旧代码，后续代码切片须彻底删除正式 preview/confirm 状态/alias/测试并验证无双轨。
 
 ## S9-WEB-CODE 浏览器投影状态（待 Root 验收）
 
