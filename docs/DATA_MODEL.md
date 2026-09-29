@@ -1,17 +1,17 @@
 # Kokoro User Web 数据模型与 Owner
 
-## W3-WEB-SKILL-UPLOAD-DOC-GATE：Skill ZIP 浏览器状态与无 SQL 边界（2026-09-29；仅文档）
+## W3-WEB-SKILL-CONSUMER 第一阶段：Skill/MCP 无 Web 业务事实（2026-09-29）
 
-当前 Web `main 317c74c2048829471b0c4196df98dd6d2dcf5e36` 的 `SkillUploadDialog` 保存 preview namespace/candidates/selected 和 confirm 结果，`src/hub/client.ts` 调旧 multipart preview/confirm；这些均非正式 Skill owner 事实。BFF `55ca6c1d8a7fbd0a21bea8d3539667a68d67e9d9` 六公开运行候选默认关闭，Platform v4 inactive；Web generated 尚未 pin 新契约。文档门只规定目标模型，不把 UI 当已实现。
+当前 Web `main 74dcc101f6c457d10db4511365e6898f44f0e625` 的旧 `SkillUploadDialog` 仅保存 preview namespace/candidates/selected 与 confirm 显示，不是 Platform Skill 发布事实；旧 MCP URL/secret/revision 视图也不是新 BFF owner-native 投影。BFF `62daba37fc0267830d73590bb5a3499807d46fc6` public OpenAPI 已按 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923` 固定到 Web generated snapshot，但运行 UI 尚未切换，六项写候选 default-off、Platform v4 inactive。
 
-| 数据 / 生命周期 | 唯一 owner 与 Web 目标投影 |
+| 事实 / 生命周期 | 唯一 owner；Web 目标投影 |
 | --- | --- |
-| Draft、revision、current attempt/epoch/phase、validated package、active Skill、幂等 receipt 与 `skill.published` outbox | Platform 唯一持久 writer；BFF public 投影并先当次 IAM user/tenant admission；Web 只显示严格回执/当前 GET，不建表、schema、Redis、localStorage 权威副本或事务。 |
-| ZIP bytes、签名 PUT、扫描结果与对象健康 | Storage/ObjectStore owner；浏览器选中的原 `File`、SHA-256、size 与 Begin descriptor 只在交互生命周期内保存。Web/BFF 不代理 ZIP、不保存签名 URL、对象凭据或原文件到 IndexedDB/sessionStorage。 |
-| 本次操作 key 与未知结果 | Web 每个 CreateDraft/Begin/Complete/Validate/Publish 意图各持一个 key 与原 body，禁止并发双击和改变 body 后复用；关闭/取消/迟到回调不得变已确认成功。页面生命周期可保留原 File/key 供同键重试；刷新丢失内存后先 GET 当前 draft，不能从 GET 推断 active/Publish event。 |
-| 发布显示 | 仅严格 Publish 200 active、`source_ref/revision/event_id` 为成功视图；validated/上传 CLEAN/旧 Hub catalog 不等于发布。ACK 未知且 key 丢失时显示未知并待正式 owner 发布读取，不创造本地 published 标记。个人私有固定 PERSONAL，非 Project/Team 共享。 |
+| Skill 草稿、revision、当前 attempt/epoch/phase、validated package、PERSONAL/ACTIVE 发布、幂等 receipt 与 `skill.published` outbox | Platform 唯一持久 writer；BFF 当次 IAM admission 和 public 投影；Web 只保存当前 React 交互状态。个人列表 `scope_kind=personal` 保留 `source_ref/revision`，本人 by-ID 七安全字段可作为丢 Publish ACK 后的 ACTIVE 权威读回。 |
+| MCP 注册、声明、状态 | Platform owner；BFF public 只投影 `server_id/provider_key/server_identity/transport/declaration_digest/status`，Web 不从 URL、secret_ref、allowed_tools 或旧 revision 重建 owner 事实，也不据此提供无效启停/删除控件。 |
+| ZIP 原字节、签名 PUT 与 scan/object health | Storage/ObjectStore owner；原 File、大小、SHA-256、Begin descriptor、各命令 key/body 只在当前浏览器交互生命周期内；Web/BFF 不持久化 signed URL、字节或对象凭据。 |
+| 发布可见状态 | 严格 ACTIVE Publish 回执，或丢 key/ACK 后本人 by-ID 当前 ACTIVE；Get package-upload 的 current draft attempt、uploaded/CLEAN、validated 或旧 Hub catalog 均不构成发布事实。 |
 
-Get 仅有 current attempt/phase 与按 phase 可选的 ID，没有原始 `content_sha256/size_bytes`、签名引用或 active 状态。刷新丢失 Begin key/reference 后，`intent`/`upload_pending` 不能续用原签名 PUT，只能在 owner 允许时显式新 Begin 替换；`uploaded` 可用 Get 的当前 attempt_id/upload_id 加用户重选原 File 后本地重算的 hash/size 发 Complete，原上传绑定由 owner 校验，Web 不与已丢失的 Begin 描述符比对。替换、感染、撤权和扫描未完成由 owner 当前状态/错误裁决；旧 attempt 的迟到 PUT/Complete/Validate 不提升为新 attempt。Browser→Web 同源 adapter→BFF→Platform/Storage 控制面，只有原始 ZIP signed PUT 例外直达批准 ObjectStore origin；不从 Web SQL 或缓存跨 owner 查询。无 Web canonical schema、迁移、事务、索引、retention 或 fresh-install 数据门；浏览器临时状态随会话卸载消失，敏感 URL 不持久化。本片不变更现有旧代码，后续代码切片须彻底删除正式 preview/confirm 状态/alias/测试并验证无双轨。
+刷新后丢失 Begin key/reference 时，`intent`/`upload_pending` 不能续用原 PUT；`uploaded` 可重选原 File、重算 hash/size 后让 owner 验当前 attempt/upload 绑定。丢 Publish key/ACK 时 UI 必须先显示状态未知，使用本人 by-ID 权威核对，不能自动用新 key Publish。Web 不新增 canonical SQL schema、Redis 业务 key、索引、事务、receipt、retention 或跨 owner JOIN；没有 Web fresh-install 数据门。下一阶段才移除正式旧 preview/confirm、namespace/candidates、`.skill`、`official|third_party` 和 MCP 假字段/控件，本阶段只改文档/机器 pin/契约负例。Root 独立真 Chromium/CORS/Storage 组合未由本片证明。
 
 ## S9-WEB-CODE 浏览器投影状态（待 Root 验收）
 

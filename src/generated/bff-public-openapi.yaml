@@ -1958,24 +1958,45 @@ paths:
       responses:
         '200':
           description: Skill projections
+          headers:
+            x-request-id:
+              required: true
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              required: true
+              schema: { type: string, const: no-store }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SkillListResponse'
-        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '502': { $ref: '#/components/responses/BadGateway' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
-        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '429':
-          description: IAM session admission is rate limited
-          headers:
-            Retry-After:
-              description: Bounded delay in seconds before retrying admission
-              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/PlatformProjectionReadForbidden' }
+        '400': { $ref: '#/components/responses/PlatformProjectionReadBadRequest' }
+        '502': { $ref: '#/components/responses/PlatformProjectionReadBadGateway' }
+        '503': { $ref: '#/components/responses/PlatformProjectionReadUnavailable' }
+        '401': { $ref: '#/components/responses/PlatformProjectionReadUnauthorized' }
+        '429': { $ref: '#/components/responses/PlatformProjectionReadRateLimited' }
+  /v1/skills/{skill_id}:
+    get:
+      tags: [Skills]
+      operationId: getPublishedPersonalSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: product.skill.read_published_personal
+      summary: Read the current ACTIVE personal Skill by canonical ID
+      description: Current IAM Product user and tenant are projected to Platform; missing, non-owner, cross-tenant, non-PERSONAL, and non-ACTIVE Skills share the same 404 and installation is not required.
+      parameters:
+        - $ref: '#/components/parameters/PublishedPersonalSkillId'
+      responses:
+        '200': { $ref: '#/components/responses/PublishedPersonalSkillOk' }
+        '400': { $ref: '#/components/responses/PublishedPersonalSkillBadRequest' }
+        '401': { $ref: '#/components/responses/PublishedPersonalSkillUnauthorized' }
+        '403': { $ref: '#/components/responses/PublishedPersonalSkillForbidden' }
+        '404': { $ref: '#/components/responses/PublishedPersonalSkillNotFound' }
+        '429': { $ref: '#/components/responses/PublishedPersonalSkillRateLimited' }
+        '502': { $ref: '#/components/responses/PublishedPersonalSkillBadGateway' }
+        '503': { $ref: '#/components/responses/PublishedPersonalSkillUnavailable' }
   /v1/skills/pool:
     get:
       tags: [Skills]
@@ -1995,24 +2016,23 @@ paths:
       responses:
         '200':
           description: Skill pool
+          headers:
+            x-request-id:
+              required: true
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              required: true
+              schema: { type: string, const: no-store }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SkillPoolResponse'
-        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '502': { $ref: '#/components/responses/BadGateway' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
-        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '429':
-          description: IAM session admission is rate limited
-          headers:
-            Retry-After:
-              description: Bounded delay in seconds before retrying admission
-              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/PlatformProjectionReadForbidden' }
+        '400': { $ref: '#/components/responses/PlatformProjectionReadBadRequest' }
+        '502': { $ref: '#/components/responses/PlatformProjectionReadBadGateway' }
+        '503': { $ref: '#/components/responses/PlatformProjectionReadUnavailable' }
+        '401': { $ref: '#/components/responses/PlatformProjectionReadUnauthorized' }
+        '429': { $ref: '#/components/responses/PlatformProjectionReadRateLimited' }
   /v1/skills/catalog:
     get:
       tags: [Skills]
@@ -2032,24 +2052,23 @@ paths:
       responses:
         '200':
           description: Skill catalog
+          headers:
+            x-request-id:
+              required: true
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              required: true
+              schema: { type: string, const: no-store }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SkillCatalogResponse'
-        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '502': { $ref: '#/components/responses/BadGateway' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
-        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '429':
-          description: IAM session admission is rate limited
-          headers:
-            Retry-After:
-              description: Bounded delay in seconds before retrying admission
-              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/PlatformProjectionReadForbidden' }
+        '400': { $ref: '#/components/responses/PlatformProjectionReadBadRequest' }
+        '502': { $ref: '#/components/responses/PlatformProjectionReadBadGateway' }
+        '503': { $ref: '#/components/responses/PlatformProjectionReadUnavailable' }
+        '401': { $ref: '#/components/responses/PlatformProjectionReadUnauthorized' }
+        '429': { $ref: '#/components/responses/PlatformProjectionReadRateLimited' }
   /v1/skills/quota:
     get:
       tags: [Skills]
@@ -2059,14 +2078,8 @@ paths:
       x-kokoro-stability: beta
       x-kokoro-idempotency: none
       x-kokoro-permission: capability.skill.read
-      summary: Get skill quota
+      summary: Skill quota route is not exposed by the current Platform projection
       responses:
-        '200':
-          description: Skill quota
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SkillQuotaResponse'
         '403': { $ref: '#/components/responses/ServiceAuthFailed' }
         '401': { $ref: '#/components/responses/ServiceAuthFailed' }
         '429':
@@ -2079,6 +2092,244 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/skills/drafts:
+    post:
+      tags: [Skills]
+      operationId: createSkillDraft
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: product.skill.create_draft
+      summary: Create a user-owned Skill draft
+      description: Default-closed candidate contract pinned to inactive Platform v4 owner commit 263a28f1e55745bd1829a61f68228d775751adbc. The admitted IAM tenant and subject determine the user owner; isolated pre-activation verification does not activate the public Product route.
+      parameters:
+        - $ref: '#/components/parameters/SkillDraftIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSkillDraftRequest' }
+      responses:
+        '201':
+          description: Draft created or durably replayed by Platform
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Prevent storage of Skill mutation responses
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateSkillDraftResponse' }
+        '400': { $ref: '#/components/responses/SkillDraftBadRequest' }
+        '401': { $ref: '#/components/responses/SkillDraftUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillDraftForbidden' }
+        '409': { $ref: '#/components/responses/SkillDraftConflict' }
+        '412': { $ref: '#/components/responses/SkillDraftPreconditionFailed' }
+        '413': { $ref: '#/components/responses/SkillDraftPayloadTooLarge' }
+        '429': { $ref: '#/components/responses/SkillDraftRateLimited' }
+        '502': { $ref: '#/components/responses/SkillDraftBadGateway' }
+        '503': { $ref: '#/components/responses/SkillDraftUnavailable' }
+  /v1/skills/{skill_id}/package-upload:
+    get:
+      tags: [Skills]
+      operationId: getSkillPackageUpload
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: none
+      x-kokoro-permission: product.skill.get_package_upload
+      summary: Get the current user-owned draft Skill package upload state
+      description: Default-closed, inactive candidate route pinned to Platform owner commit 263a28f1e55745bd1829a61f68228d775751adbc and v4 artifact aggregate SHA-256 902f8f2c2fbeb95a441820c1cf16b0a9c793eadac7106f9fcd5e41e3878b7f79; not publicly activated. Every request requires current IAM user admission and Platform owner/draft checks. This read never signs an upload.
+      parameters:
+        - $ref: '#/components/parameters/SkillPackageUploadSkillId'
+      responses:
+        '200':
+          description: Current package attempt state
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Prevent storage of Skill package state
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetSkillPackageUploadResponse' }
+        '400': { $ref: '#/components/responses/SkillPackageUploadGetBadRequest' }
+        '401': { $ref: '#/components/responses/SkillPackageUploadGetUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillPackageUploadGetForbidden' }
+        '404': { $ref: '#/components/responses/SkillPackageUploadGetNotFound' }
+        '412': { $ref: '#/components/responses/SkillPackageUploadGetPreconditionFailed' }
+        '429': { $ref: '#/components/responses/SkillPackageUploadGetRateLimited' }
+        '502': { $ref: '#/components/responses/SkillPackageUploadGetBadGateway' }
+        '503': { $ref: '#/components/responses/SkillPackageUploadGetUnavailable' }
+    post:
+      tags: [Skills]
+      operationId: beginSkillPackageUpload
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: product.skill.begin_package_upload
+      summary: Begin or explicitly replace a user-owned draft Skill package upload
+      description: Inactive, default-closed candidate runtime route pinned to inactive Platform v4 owner commit 263a28f1e55745bd1829a61f68228d775751adbc and artifact aggregate SHA-256 902f8f2c2fbeb95a441820c1cf16b0a9c793eadac7106f9fcd5e41e3878b7f79; the public Product API is not activated. A single Idempotency-Key is required. Every call including same-key replay requires current IAM session and Platform owner/draft/attempt admission. A current pending replay may return a freshly signed short-lived PUT reference; it is never persisted in a BFF receipt. First Begin omits replaces_attempt_id and requires phase none. A new command may explicitly replace the current attempt in intent, upload_pending, uploaded or aborted, but not validated. The browser sends the ZIP bytes directly to the approved public ObjectStore origin using the exact required headers, credentials omit and redirects disabled; the BFF does not proxy bytes.
+      parameters:
+        - $ref: '#/components/parameters/SkillPackageUploadSkillId'
+        - $ref: '#/components/parameters/SkillPackageBeginIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BeginSkillPackageUploadRequest' }
+      responses:
+        '201':
+          description: Current pending upload intent created or authorized same-command replay with a fresh PUT reference
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Never cache an ephemeral signed PUT reference
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeginSkillPackageUploadResponse' }
+        '400': { $ref: '#/components/responses/SkillPackageBeginBadRequest' }
+        '401': { $ref: '#/components/responses/SkillPackageBeginUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillPackageBeginForbidden' }
+        '404': { $ref: '#/components/responses/SkillPackageBeginNotFound' }
+        '409': { $ref: '#/components/responses/SkillPackageBeginConflict' }
+        '412': { $ref: '#/components/responses/SkillPackageBeginPreconditionFailed' }
+        '413': { $ref: '#/components/responses/SkillPackageBeginPayloadTooLarge' }
+        '429': { $ref: '#/components/responses/SkillPackageBeginRateLimited' }
+        '502': { $ref: '#/components/responses/SkillPackageBeginBadGateway' }
+        '503': { $ref: '#/components/responses/SkillPackageBeginUnavailable' }
+  /v1/skills/{skill_id}/package-upload/complete:
+    post:
+      tags: [Skills]
+      operationId: completeSkillPackageUpload
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: product.skill.complete_package_upload
+      summary: Complete the current user-owned Skill package upload
+      description: Inactive public candidate with a real default-closed BFF Complete runtime route, pinned to inactive Platform v4 owner commit 263a28f1e55745bd1829a61f68228d775751adbc and artifact aggregate SHA-256 902f8f2c2fbeb95a441820c1cf16b0a9c793eadac7106f9fcd5e41e3878b7f79; the Product API is not publicly activated. The four body fields are untrusted echoes of the Begin descriptor, not authority. Every call including replay first requires current IAM user admission; Platform rechecks tenant, user owner, current Skill attempt and Storage upload/hash/size/scan. A clean scan only means uploaded, not ZIP validated. Get does not return hash or size, so refresh recovery requires the original descriptor or exact file re-selection and recomputation; otherwise start an explicit new Begin attempt.
+      parameters:
+        - $ref: '#/components/parameters/SkillPackageUploadSkillId'
+        - $ref: '#/components/parameters/SkillPackageCompleteIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompleteSkillPackageUploadRequest' }
+      responses:
+        '200':
+          description: Current upload completed or durably replayed; ZIP validation remains separate
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Never cache a Skill package command result
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompleteSkillPackageUploadResponse' }
+        '400': { $ref: '#/components/responses/SkillPackageCompleteBadRequest' }
+        '401': { $ref: '#/components/responses/SkillPackageCompleteUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillPackageCompleteForbidden' }
+        '404': { $ref: '#/components/responses/SkillPackageCompleteNotFound' }
+        '409': { $ref: '#/components/responses/SkillPackageCompleteConflict' }
+        '412': { $ref: '#/components/responses/SkillPackageCompletePreconditionFailed' }
+        '413': { $ref: '#/components/responses/SkillPackageCompletePayloadTooLarge' }
+        '429': { $ref: '#/components/responses/SkillPackageCompleteRateLimited' }
+        '502': { $ref: '#/components/responses/SkillPackageCompleteBadGateway' }
+        '503': { $ref: '#/components/responses/SkillPackageCompleteUnavailable' }
+  /v1/skills/{skill_id}/validate:
+    post:
+      tags: [Skills]
+      operationId: validateSkillDraft
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-permission: product.skill.validate_draft
+      summary: Validate the current uploaded ZIP package of a user-owned draft Skill
+      description: Inactive Product candidate with a default-closed BFF Validate runtime route, pinned to inactive Platform v4 owner commit 263a28f1e55745bd1829a61f68228d775751adbc and artifact aggregate SHA-256 902f8f2c2fbeb95a441820c1cf16b0a9c793eadac7106f9fcd5e41e3878b7f79; not publicly activated. The required attempt_id is an untrusted current-attempt selector, not authority; owner v4 Proto tag 7 and command digest 3.0.0 bind it. Every request including same-key replay first requires current IAM user admission, and Platform checks current tenant/user owner/draft/attempt, complete package binding, fresh Storage CLEAN/object health and ZIP V1 manifest. Scan clean or Complete uploaded does not imply validated; no caller asset/hash/size/manifest is accepted. Same-key unknown ACK recovery goes to the owner receipt with current admission, never a BFF receipt.
+      parameters:
+        - $ref: '#/components/parameters/SkillPackageUploadSkillId'
+        - $ref: '#/components/parameters/SkillValidateIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ValidateSkillDraftRequest' }
+      responses:
+        '200':
+          description: Current draft package validated or durably replayed; not published
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Never cache a Skill validation result
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidateSkillDraftResponse' }
+        '400': { $ref: '#/components/responses/SkillValidateBadRequest' }
+        '401': { $ref: '#/components/responses/SkillValidateUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillValidateForbidden' }
+        '404': { $ref: '#/components/responses/SkillValidateNotFound' }
+        '409': { $ref: '#/components/responses/SkillValidateConflict' }
+        '412': { $ref: '#/components/responses/SkillValidatePreconditionFailed' }
+        '413': { $ref: '#/components/responses/SkillValidatePayloadTooLarge' }
+        '429': { $ref: '#/components/responses/SkillValidateRateLimited' }
+        '502': { $ref: '#/components/responses/SkillValidateBadGateway' }
+        '503': { $ref: '#/components/responses/SkillValidateUnavailable' }
+  /v1/skills/{skill_id}/publish:
+    post:
+      tags: [Skills]
+      operationId: publishSkill
+      x-kokoro-owner: kokoro-bff
+      x-kokoro-visibility: public
+      x-kokoro-stability: beta
+      x-kokoro-idempotency: required
+      x-kokoro-empty-body: required
+      x-kokoro-fixed-visibility: personal
+      x-kokoro-permission: product.skill.publish
+      summary: Publish the current validated ZIP package of a user-owned draft Skill
+      description: Default-closed BFF runtime candidate pinned to inactive Platform v4 owner commit 263a28f1e55745bd1829a61f68228d775751adbc and artifact aggregate SHA-256 902f8f2c2fbeb95a441820c1cf16b0a9c793eadac7106f9fcd5e41e3878b7f79; the named Publish route exists but the candidate is not publicly activated. This command accepts exactly zero request-body bytes, including no JSON object, whitespace, null, visibility, asset, manifest, tenant or owner. The BFF fixes owner visibility to PERSONAL(1) and calls Platform only after current IAM user admission, including same-key replay. Platform alone checks current user owner/draft/validated package and fresh Storage CLEAN/object health, then atomically activates the Skill, keeps one durable receipt and appends one skill.published outbox event. Same-key healthy replay returns the same event_id, while a distinct command on active Skill fails. Unknown ACK recovery re-admits the user and retries the same owner command; no BFF receipt or outbox is added. Validated is not yet active, and this candidate is not publicly activated.
+      parameters:
+        - $ref: '#/components/parameters/SkillPackageUploadSkillId'
+        - $ref: '#/components/parameters/SkillPublishIdempotencyKey'
+      responses:
+        '200':
+          description: Skill is active or the same healthy publication is durably replayed
+          headers:
+            x-request-id:
+              description: Correlation identifier for this request
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              description: Never cache a Skill publication result
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublishSkillResponse' }
+        '400': { $ref: '#/components/responses/SkillPublishBadRequest' }
+        '401': { $ref: '#/components/responses/SkillPublishUnauthorized' }
+        '403': { $ref: '#/components/responses/SkillPublishForbidden' }
+        '404': { $ref: '#/components/responses/SkillPublishNotFound' }
+        '409': { $ref: '#/components/responses/SkillPublishConflict' }
+        '412': { $ref: '#/components/responses/SkillPublishPreconditionFailed' }
+        '413': { $ref: '#/components/responses/SkillPublishPayloadTooLarge' }
+        '429': { $ref: '#/components/responses/SkillPublishRateLimited' }
+        '502': { $ref: '#/components/responses/SkillPublishBadGateway' }
+        '503': { $ref: '#/components/responses/SkillPublishUnavailable' }
   /v1/skills/{name}/revisions:
     parameters:
       - $ref: '#/components/parameters/SkillNameOnly'
@@ -2275,24 +2526,23 @@ paths:
       responses:
         '200':
           description: MCP server list
+          headers:
+            x-request-id:
+              required: true
+              schema: { type: string, minLength: 1, maxLength: 128 }
+            Cache-Control:
+              required: true
+              schema: { type: string, const: no-store }
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/McpServerListResponse'
-        '403': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '502': { $ref: '#/components/responses/BadGateway' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
-        '401': { $ref: '#/components/responses/ServiceAuthFailed' }
-        '429':
-          description: IAM session admission is rate limited
-          headers:
-            Retry-After:
-              description: Bounded delay in seconds before retrying admission
-              schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/PlatformProjectionReadForbidden' }
+        '400': { $ref: '#/components/responses/PlatformProjectionReadBadRequest' }
+        '502': { $ref: '#/components/responses/PlatformProjectionReadBadGateway' }
+        '503': { $ref: '#/components/responses/PlatformProjectionReadUnavailable' }
+        '401': { $ref: '#/components/responses/PlatformProjectionReadUnauthorized' }
+        '429': { $ref: '#/components/responses/PlatformProjectionReadRateLimited' }
     post:
       tags: [MCP]
       operationId: registerMcpServer
@@ -3303,6 +3553,69 @@ components:
       schema:
         type: string
         enum: [telegram, line, slack]
+    SkillDraftIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Must occur exactly once. It is not trimmed or comma-joined.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E]+$'
+    SkillPackageUploadSkillId:
+      name: skill_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+    SkillPackageBeginIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: One printable 1–128 character value, never trimmed or comma-joined. Scoped to operation, admitted tenant/user and skill_id; changing request semantics with the same key conflicts.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E]+$'
+    SkillPackageCompleteIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: One printable 1–128 character value, never trimmed or comma-joined. Scoped to Complete, admitted tenant/user and skill_id; different command bytes under one key conflict.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E]+$'
+    SkillValidateIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: One printable 1–128 character value, never trimmed or comma-joined; scoped to validation operation, admitted tenant/user and skill_id.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E]+$'
+    SkillPublishIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: One printable 1–128 character value, never trimmed or comma-joined; scoped to publish operation, admitted tenant/user and skill_id. The body must have zero bytes.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E]+$'
+    PublishedPersonalSkillId:
+      name: skill_id
+      in: path
+      required: true
+      description: Canonical Platform Skill identifier; never a source_ref, package asset, or installation identifier.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -3310,6 +3623,342 @@ components:
       schema:
         type: string
   schemas:
+    CreateSkillDraftRequest:
+      type: object
+      required: [display_name, summary, tags]
+      additionalProperties: false
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '.*\S.*'
+          description: Runtime enforcement counts UTF-16 code units; OpenAPI maxLength alone is not the implementation rule.
+        summary:
+          type: string
+          maxLength: 65535
+          description: Runtime enforcement counts UTF-16 code units.
+        tags:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '.*\S.*'
+          description: Order is preserved and participates in the command digest; runtime lengths use UTF-16 code units.
+    SkillDraftResource:
+      type: object
+      required: [skill_id, series_id, revision, status, replayed]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        series_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        revision: { type: integer, const: 1 }
+        status: { type: string, enum: [draft] }
+        replayed: { type: boolean }
+    CreateSkillDraftResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillDraftResource' }
+    SkillDraftErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key, request_body_too_large, service_auth_failed, session_authentication_required, session_invalid, session_forbidden, session_rate_limited, product_tenant_not_configured, product_tenant_forbidden, skill_idempotency_conflict, skill_command_in_progress, skill_precondition_failed, skill_rate_limited, iam_admission_unavailable, skill_dependency_unavailable, skill_response_invalid]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillDraftErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillDraftErrorDetail' }
+    SkillPackageUploadState:
+      type: object
+      required: [skill_id, attempt_epoch, phase]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        attempt_epoch: { type: string }
+        phase: { type: string, enum: [none, intent, upload_pending, uploaded, validated, aborted] }
+        attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        upload_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+      oneOf:
+        - properties:
+            phase: { const: none }
+            attempt_epoch: { const: '0' }
+            attempt_id: false
+            upload_id: false
+        - required: [attempt_id]
+          properties:
+            phase: { const: intent }
+            attempt_epoch: { $ref: '#/components/schemas/SkillPackageUploadPositiveEpoch' }
+            attempt_id: { type: string }
+            upload_id: false
+        - required: [attempt_id, upload_id]
+          properties:
+            phase: { enum: [upload_pending, uploaded, validated] }
+            attempt_epoch: { $ref: '#/components/schemas/SkillPackageUploadPositiveEpoch' }
+            attempt_id: { type: string }
+            upload_id: { type: string }
+        - required: [attempt_id]
+          properties:
+            phase: { const: aborted }
+            attempt_epoch: { $ref: '#/components/schemas/SkillPackageUploadPositiveEpoch' }
+            attempt_id: { type: string }
+    SkillPackageUploadPositiveEpoch:
+      type: string
+      description: Decimal unsigned 64-bit value from 1 through 18446744073709551615, without leading zeroes.
+      pattern: '^(?:[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$'
+    GetSkillPackageUploadResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillPackageUploadState' }
+    SkillPackageUploadGetErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, service_auth_failed, session_authentication_required, session_invalid, session_forbidden, session_rate_limited, product_tenant_not_configured, product_tenant_forbidden, skill_not_found, skill_precondition_failed, skill_rate_limited, iam_admission_unavailable, skill_dependency_unavailable, skill_response_invalid]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillPackageUploadGetErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillPackageUploadGetErrorDetail' }
+    BeginSkillPackageUploadRequest:
+      type: object
+      required: [filename, mime_type, size_bytes, content_sha256]
+      additionalProperties: false
+      properties:
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          x-maxUtf8: 255
+          pattern: '^(?!\.{1,2}$)(?!\s)(?!.*\s$)[^/\\\u0000-\u001f\u007f]+$'
+        mime_type: { type: string, const: application/zip }
+        size_bytes: { type: integer, minimum: 1, maximum: 33554432 }
+        content_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        replaces_attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+    SkillPackageBeginTransferReference:
+      type: object
+      required: [url, method, required_headers, expires_at]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Short-lived signed ObjectStore public URL; the default-closed BFF candidate runtime matches an approved exact origin and rejects credentials and fragments. Browser PUT must reject redirects.
+        method: { type: string, const: PUT }
+        required_headers:
+          type: object
+          minProperties: 1
+          maxProperties: 1
+          propertyNames: { const: content-type }
+          additionalProperties: { type: string, const: application/zip }
+        expires_at: { type: string, format: date-time }
+    SkillPackageBeginResource:
+      type: object
+      required: [skill_id, attempt_id, attempt_epoch, upload_id, transfer_reference, replayed]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        attempt_epoch: { $ref: '#/components/schemas/SkillPackageUploadPositiveEpoch' }
+        upload_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        transfer_reference: { $ref: '#/components/schemas/SkillPackageBeginTransferReference' }
+        replayed: { type: boolean }
+    BeginSkillPackageUploadResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillPackageBeginResource' }
+    SkillPackageBeginErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key, request_body_too_large, session_authentication_required, session_invalid, service_auth_failed, session_forbidden, product_tenant_forbidden, product_tenant_not_configured, session_rate_limited, skill_rate_limited, skill_not_found, skill_idempotency_conflict, skill_command_in_progress, skill_precondition_failed, skill_response_invalid, iam_admission_unavailable, skill_dependency_unavailable]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillPackageBeginErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillPackageBeginErrorDetail' }
+    CompleteSkillPackageUploadRequest:
+      type: object
+      required: [attempt_id, upload_id, content_sha256, size_bytes]
+      additionalProperties: false
+      properties:
+        attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        upload_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        content_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        size_bytes: { type: integer, minimum: 1, maximum: 33554432 }
+    SkillPackageCompleteResource:
+      type: object
+      required: [skill_id, attempt_id, attempt_epoch, upload_id, phase, replayed, content_sha256, scan_state]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        attempt_epoch: { $ref: '#/components/schemas/SkillPackageUploadPositiveEpoch' }
+        upload_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        phase: { type: string, const: uploaded }
+        replayed: { type: boolean }
+        content_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        scan_state: { type: string, enum: [clean, pending, unknown] }
+    CompleteSkillPackageUploadResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillPackageCompleteResource' }
+    SkillPackageCompleteErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key, request_body_too_large, session_authentication_required, session_invalid, service_auth_failed, session_forbidden, product_tenant_forbidden, product_tenant_not_configured, session_rate_limited, skill_rate_limited, skill_not_found, skill_idempotency_conflict, skill_command_in_progress, skill_precondition_failed, skill_response_invalid, iam_admission_unavailable, skill_dependency_unavailable]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillPackageCompleteErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillPackageCompleteErrorDetail' }
+    ValidateSkillDraftRequest:
+      type: object
+      required: [attempt_id]
+      additionalProperties: false
+      properties:
+        attempt_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+    SkillValidateResource:
+      type: object
+      required: [skill_id, series_id, valid, content_digest, manifest_identity, replayed]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        series_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        valid: { type: boolean, const: true }
+        content_digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        manifest_identity: { type: string, pattern: '^zip-v1:sha256:[a-f0-9]{64}$' }
+        replayed: { type: boolean }
+    ValidateSkillDraftResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillValidateResource' }
+    SkillValidateErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key, request_body_too_large, session_authentication_required, session_invalid, service_auth_failed, session_forbidden, product_tenant_forbidden, product_tenant_not_configured, session_rate_limited, skill_rate_limited, skill_not_found, skill_idempotency_conflict, skill_command_in_progress, skill_precondition_failed, skill_response_invalid, iam_admission_unavailable, skill_dependency_unavailable]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillValidateErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillValidateErrorDetail' }
+    SkillPublishRevision:
+      type: string
+      description: Decimal unsigned 64-bit Skill revision from 1 through 18446744073709551615, without leading zeroes.
+      pattern: '^(?:[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4]|18446744073709551615)$'
+    SkillPublishResource:
+      type: object
+      required: [source_ref, revision, status, event_id, replayed]
+      additionalProperties: false
+      properties:
+        source_ref: { type: string, pattern: '^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        revision: { $ref: '#/components/schemas/SkillPublishRevision' }
+        status: { type: string, const: active }
+        event_id: { type: string, format: uuid }
+        replayed: { type: boolean }
+    PublishSkillResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/SkillPublishResource' }
+    SkillPublishErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key, request_body_too_large, session_authentication_required, session_invalid, service_auth_failed, session_forbidden, product_tenant_forbidden, product_tenant_not_configured, session_rate_limited, skill_rate_limited, skill_not_found, skill_idempotency_conflict, skill_command_in_progress, skill_precondition_failed, skill_response_invalid, iam_admission_unavailable, skill_dependency_unavailable]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    SkillPublishErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/SkillPublishErrorDetail' }
+    PublishedPersonalSkillResource:
+      type: object
+      required: [skill_id, source_ref, revision, status, name, summary, tags]
+      additionalProperties: false
+      properties:
+        skill_id: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        source_ref: { type: string, pattern: '^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$' }
+        revision: { type: string, pattern: '^[1-9][0-9]*$' }
+        status: { type: string, const: active }
+        name: { type: string }
+        summary: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    PublishedPersonalSkillResponse:
+      type: object
+      required: [data]
+      additionalProperties: false
+      properties:
+        data: { $ref: '#/components/schemas/PublishedPersonalSkillResource' }
+    PublishedPersonalSkillErrorDetail:
+      type: object
+      required: [code, message, retryable]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [invalid_skill_request, service_auth_failed, session_authentication_required, session_invalid, session_forbidden, session_rate_limited, product_tenant_not_configured, product_tenant_forbidden, skill_not_found, skill_rate_limited, iam_admission_unavailable, skill_dependency_unavailable, skill_response_invalid]
+        message: { type: string, minLength: 1 }
+        retryable: { type: boolean }
+    PublishedPersonalSkillErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error: { $ref: '#/components/schemas/PublishedPersonalSkillErrorDetail' }
     PersonalFileUploadResponse:
       type: object
       additionalProperties: false
@@ -4502,75 +5151,80 @@ components:
       additionalProperties: true
     Skill:
       type: object
-      required: [name, description, content_hash, scope]
+      required: [source_ref, name, description, content_hash, scope, revision, enabled, categories]
+      additionalProperties: false
       properties:
+        source_ref: { type: string }
         name: { type: string }
         description: { type: string }
         content_hash: { type: string }
-        scope: { type: string }
-        source_url: { type: string }
+        scope: { type: string, enum: [personal, project, organization, session, unknown] }
+        revision: { type: string, pattern: '^[1-9][0-9]*$' }
         enabled: { type: boolean }
         installed: { type: boolean }
         categories:
           type: array
           items: { type: string }
-        updated_at: { type: integer }
+    PlatformProjectionReadErrorResponse:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              enum: [invalid_query_parameter, service_auth_failed, session_authentication_required, session_invalid, session_forbidden, session_rate_limited, product_tenant_not_configured, product_tenant_forbidden, iam_admission_unavailable, skill_dependency_unavailable, skill_response_invalid]
+            message: { type: string, minLength: 1 }
+            retryable: { type: boolean }
     SkillListResponse:
       type: object
-      required: [data, meta]
+      required: [data]
+      additionalProperties: false
       properties:
         data:
           type: object
           required: [skills]
+          additionalProperties: false
           properties:
             skills:
               type: array
               items: { $ref: '#/components/schemas/Skill' }
             next_cursor:
               type: [string, 'null']
-        meta: { $ref: '#/components/schemas/RequestMeta' }
     SkillPoolResponse:
       type: object
-      required: [data, meta]
+      required: [data]
+      additionalProperties: false
       properties:
         data:
           type: object
           required: [skills]
+          additionalProperties: false
           properties:
             skills:
               type: array
               items: { $ref: '#/components/schemas/Skill' }
             next_cursor:
               type: [string, 'null']
-        meta: { $ref: '#/components/schemas/RequestMeta' }
     SkillCatalogResponse:
       type: object
-      required: [data, meta]
+      required: [data]
+      additionalProperties: false
       properties:
         data:
           type: object
-          required: [skills, next_cursor]
+          required: [skills]
+          additionalProperties: false
           properties:
             skills:
               type: array
               items: { $ref: '#/components/schemas/Skill' }
             next_cursor:
               type: [string, 'null']
-        meta: { $ref: '#/components/schemas/RequestMeta' }
-    SkillQuotaResponse:
-      type: object
-      required: [data, meta]
-      properties:
-        data:
-          type: object
-          required: [namespace, package_count, package_bytes, max_packages, max_bytes]
-          properties:
-            namespace: { type: string }
-            package_count: { type: integer }
-            package_bytes: { type: integer }
-            max_packages: { type: integer }
-            max_bytes: { type: integer }
-        meta: { $ref: '#/components/schemas/RequestMeta' }
     SkillRevision:
       type: object
       required: [scope, name, revision, content_hash, package_size, source, created_at]
@@ -4634,6 +5288,19 @@ components:
         secret_ref:
           type: [string, 'null']
         enabled: { type: boolean }
+    McpServerProjection:
+      type: object
+      required: [server_id, provider_key, server_identity, transport, declaration_digest, status]
+      additionalProperties: false
+      properties:
+        server_id: { type: string }
+        provider_key: { type: string }
+        server_identity: { type: string }
+        transport:
+          type: string
+          enum: [stdio, streamable_http, sse_compat, unknown]
+        declaration_digest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        status: { type: string, enum: [registered, disabled, unknown] }
     McpServerRequest:
       type: object
       required: [name, transport, url, allowed_tools]
@@ -4651,18 +5318,19 @@ components:
           type: [string, 'null']
     McpServerListResponse:
       type: object
-      required: [data, meta]
+      required: [data]
+      additionalProperties: false
       properties:
         data:
           type: object
           required: [servers]
+          additionalProperties: false
           properties:
             servers:
               type: array
-              items: { $ref: '#/components/schemas/McpServer' }
+              items: { $ref: '#/components/schemas/McpServerProjection' }
             next_cursor:
               type: string
-        meta: { $ref: '#/components/schemas/RequestMeta' }
     McpServerResponse:
       type: object
       required: [data, meta]
@@ -4810,6 +5478,1369 @@ components:
               const: true
         meta: { $ref: '#/components/schemas/RequestMeta' }
   responses:
+    PlatformProjectionReadBadRequest:
+      description: Product projection read returned HTTP 400
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_query_parameter] }
+    PlatformProjectionReadUnauthorized:
+      description: Product projection read returned HTTP 401
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    PlatformProjectionReadForbidden:
+      description: Product projection read returned HTTP 403
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    PlatformProjectionReadRateLimited:
+      description: Product projection read returned HTTP 429
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+        Retry-After:
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited] }
+    PlatformProjectionReadBadGateway:
+      description: Product projection read returned HTTP 502
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    PlatformProjectionReadUnavailable:
+      description: Product projection read returned HTTP 503
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PlatformProjectionReadErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillPackageUploadGetBadRequest:
+      description: Invalid strict path, query, body or header
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request] }
+    SkillPackageUploadGetUnauthorized:
+      description: Service or current IAM session authentication failed
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    SkillPackageUploadGetForbidden:
+      description: Current Product identity is forbidden
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    SkillPackageUploadGetNotFound:
+      description: Skill is absent or invisible to this tenant or owner
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    SkillPackageUploadGetPreconditionFailed:
+      description: Skill is not a current draft
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_precondition_failed] }
+    SkillPackageUploadGetRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying; malformed or absent IAM headers are not forwarded
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited, skill_rate_limited] }
+    SkillPackageUploadGetBadGateway:
+      description: Platform returned invalid pinned data
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    SkillPackageUploadGetUnavailable:
+      description: Current IAM or Platform dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill package state
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageUploadGetErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillPackageBeginBadRequest:
+      description: Invalid strict request or Idempotency-Key
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key] }
+    SkillPackageBeginUnauthorized:
+      description: Current IAM user session authentication failed
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    SkillPackageBeginForbidden:
+      description: Service or current Product identity is forbidden
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    SkillPackageBeginNotFound:
+      description: Skill is absent or invisible to this tenant or owner
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    SkillPackageBeginConflict:
+      description: Command identity conflicts or a current command is in progress
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_idempotency_conflict, skill_command_in_progress] }
+    SkillPackageBeginPreconditionFailed:
+      description: Skill, attempt or upload no longer satisfies Begin
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_precondition_failed] }
+    SkillPackageBeginPayloadTooLarge:
+      description: The bounded JSON command body is too large
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [request_body_too_large] }
+    SkillPackageBeginRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying; absent or malformed upstream values are not forwarded
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited, skill_rate_limited] }
+    SkillPackageBeginBadGateway:
+      description: Platform returned an invalid pinned response or signed PUT reference
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    SkillPackageBeginUnavailable:
+      description: Current IAM or Platform dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageBeginErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillPackageCompleteBadRequest:
+      description: Invalid strict request or Idempotency-Key
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key] }
+    SkillPackageCompleteUnauthorized:
+      description: Current IAM user session authentication failed
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    SkillPackageCompleteForbidden:
+      description: Service or current Product identity is forbidden
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    SkillPackageCompleteNotFound:
+      description: Skill is absent or invisible to this tenant or owner
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    SkillPackageCompleteConflict:
+      description: Command identity conflicts or a current command is in progress
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_idempotency_conflict, skill_command_in_progress] }
+    SkillPackageCompletePreconditionFailed:
+      description: Skill, attempt or upload no longer satisfies Complete
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_precondition_failed] }
+    SkillPackageCompletePayloadTooLarge:
+      description: The bounded JSON command body is too large
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [request_body_too_large] }
+    SkillPackageCompleteRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying; absent or malformed upstream values are not forwarded
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited, skill_rate_limited] }
+    SkillPackageCompleteBadGateway:
+      description: Platform returned an invalid pinned response or owner completion response
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    SkillPackageCompleteUnavailable:
+      description: Current IAM or Platform dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPackageCompleteErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillValidateBadRequest:
+      description: Invalid strict request or Idempotency-Key
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key] }
+    SkillValidateUnauthorized:
+      description: Current IAM user session authentication failed
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    SkillValidateForbidden:
+      description: Service or current Product identity is forbidden
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    SkillValidateNotFound:
+      description: Skill is absent or invisible to this tenant or owner
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    SkillValidateConflict:
+      description: Command identity conflicts or a current command is in progress
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_idempotency_conflict, skill_command_in_progress] }
+    SkillValidatePreconditionFailed:
+      description: Current draft, attempt, scan or ZIP V1 manifest does not satisfy validation
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_precondition_failed] }
+    SkillValidatePayloadTooLarge:
+      description: The bounded JSON command body is too large
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [request_body_too_large] }
+    SkillValidateRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying; absent or malformed upstream values are not forwarded
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited, skill_rate_limited] }
+    SkillValidateBadGateway:
+      description: Platform returned an invalid pinned validation response
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    SkillValidateUnavailable:
+      description: Current IAM or Platform dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill package command result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillValidateErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillPublishBadRequest:
+      description: Invalid zero-byte request body or Idempotency-Key
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request, idempotency_key_required, invalid_idempotency_key] }
+    SkillPublishUnauthorized:
+      description: Current IAM user session authentication failed
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    SkillPublishForbidden:
+      description: Service or current Product identity is forbidden
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    SkillPublishNotFound:
+      description: Skill is absent or invisible to this tenant or owner
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    SkillPublishConflict:
+      description: Command identity conflicts or a current command is in progress
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_idempotency_conflict, skill_command_in_progress] }
+    SkillPublishPreconditionFailed:
+      description: Current Skill, package, visibility or fresh Storage state does not permit publication
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_precondition_failed] }
+    SkillPublishPayloadTooLarge:
+      description: The non-empty request body exceeds the bounded transport limit
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [request_body_too_large] }
+    SkillPublishRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying; absent or malformed upstream values are not forwarded
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [session_rate_limited, skill_rate_limited] }
+    SkillPublishBadGateway:
+      description: Platform returned an invalid pinned publication response
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    SkillPublishUnavailable:
+      description: Current IAM, Platform or Storage dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Never cache a Skill publication result
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SkillPublishErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    PublishedPersonalSkillOk:
+      description: Current ACTIVE personal Skill safe projection
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PublishedPersonalSkillResponse' }
+    PublishedPersonalSkillBadRequest:
+      description: Malformed canonical Skill identifier
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [invalid_skill_request] }
+    PublishedPersonalSkillUnauthorized:
+      description: Product session authentication failed
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [session_authentication_required, session_invalid] }
+    PublishedPersonalSkillForbidden:
+      description: Trusted service or admitted Product tenant is forbidden
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [service_auth_failed, session_forbidden, product_tenant_forbidden] }
+    PublishedPersonalSkillNotFound:
+      description: Skill is absent or hidden by ownership, tenant, scope, or ACTIVE-state policy
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [skill_not_found] }
+    PublishedPersonalSkillRateLimited:
+      description: IAM Product session admission is rate limited
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+        Retry-After:
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [session_rate_limited] }
+    PublishedPersonalSkillBadGateway:
+      description: Platform returned an invalid projection
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [skill_response_invalid] }
+    PublishedPersonalSkillUnavailable:
+      description: Required Product admission or Platform projection is unavailable
+      headers:
+        x-request-id:
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          required: true
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/PublishedPersonalSkillErrorResponse'
+              - type: object
+                properties:
+                  error:
+                    properties:
+                      code: { type: string, enum: [product_tenant_not_configured, iam_admission_unavailable, skill_dependency_unavailable] }
+    SkillDraftBadRequest:
+      description: Invalid strict body or Idempotency-Key
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftUnauthorized:
+      description: Service or IAM session authentication rejected the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftForbidden:
+      description: The admitted Product identity may not create this draft
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftConflict:
+      description: Platform command identity conflict or command in progress
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftPreconditionFailed:
+      description: The owner state does not permit draft creation
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftPayloadTooLarge:
+      description: The request body exceeded the bounded admission limit
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftRateLimited:
+      description: IAM or Platform rate limited the request
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Optional bounded delay in seconds before retrying
+          required: false
+          schema: { type: string, pattern: '^[1-9][0-9]{0,4}$' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftBadGateway:
+      description: Platform returned a response outside the pinned contract
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
+    SkillDraftUnavailable:
+      description: IAM admission or the Platform dependency is unavailable
+      headers:
+        x-request-id:
+          description: Correlation identifier for this request
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        Cache-Control:
+          description: Prevent storage of Skill mutation responses
+          schema: { type: string, const: no-store }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/SkillDraftErrorResponse' }
     BadRequest:
       description: Invalid request
       content:

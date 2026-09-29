@@ -7,7 +7,7 @@ import YAML from "yaml"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923")
   const spec = YAML.parse(bytes.toString()) as {
     paths: Record<string, Record<string, unknown>>
     components: { schemas: Record<string, unknown> }

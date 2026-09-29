@@ -1,30 +1,17 @@
-# Kokoro User Web API 契约策略
+# Kokoro User Web API 与协议契约
 
-## W3-WEB-SKILL-UPLOAD-DOC-GATE：个人 Skill ZIP 消费契约（2026-09-29；仅文档）
+## W3-WEB-SKILL-CONSUMER 第一阶段：BFF public 原字节 pin（2026-09-29）
 
-BFF `55ca6c1d8a7fbd0a21bea8d3539667a68d67e9d9` 的唯一 `contract/openapi/v1/openapi.yaml` SHA-256 为 `0198220b75780c0c4ff08cdea59f57565f8ebffca5dfb2069dceb0fc25cf01c1`；它定义默认关闭、Platform v4 inactive 的六项 public 运行候选。Web 当前 generated 仍为旧 BFF SHA-256 `a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`，正式 Skill UI 仍用 `/api/hub/self/skills/upload/{preview,confirm}` multipart；本门只定义后续消费，不宣称 adapter/parser/UI 已换。机器字段、稳定错误码与 breaking 判断以 BFF 唯一 OpenAPI 为准，Web 下次代码片精确 pin/生成，不复制可编辑契约。
+唯一可编辑机器源是 BFF `62daba37fc0267830d73590bb5a3499807d46fc6` 的 `contract/openapi/v1/openapi.yaml`；Web `src/generated/bff-public-openapi.yaml` 只保存原字节 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923`，Team client 仍由现有生成器从该 snapshot 派生，Web 不建另一份 public schema。本阶段更新 pin、文档与直接 contract 负例，**不改正式同源 route/client/parser/UI**。当前这些运行代码仍使用旧 preview/confirm 与 MCP/Skill 形状，不能将新机器契约误述为已消费。
 
-| 同源调用 → BFF public | 后续严格消费 |
+| BFF 唯一 public 边界 | 下一运行片的严格消费义务（本阶段只 pin） |
 | --- | --- |
-| `POST /api/hub/skills/drafts` → `POST /v1/skills/drafts` | 单个 `Idempotency-Key`；JSON 仅 `display_name,summary,tags`，当前 IAM user/tenant 为 owner。201 `{data:{skill_id,series_id,revision:1,status:"draft",replayed}}`；不从旧 namespace/candidates 反推。 |
-| `GET /api/hub/skills/{skill_id}/package-upload` → 同名 `/v1` | 无 key；200 `{data:{skill_id,attempt_epoch,phase,attempt_id?,upload_id?}}` 的 oneOf：`none` epoch `0`、`intent`、`upload_pending`、`uploaded`、`validated`、`aborted`。只读当前 draft attempt，不签 URL、不读取 active 发布事实。 |
-| `POST /api/hub/skills/{skill_id}/package-upload` → 同名 `/v1` | Begin 单 key；JSON 必需 `filename,mime_type:"application/zip",size_bytes,content_sha256`，仅明确替换时加 `replaces_attempt_id`。文件名 UTF-8 ≤255 bytes、size `1..33554432`、小写 64 位十六进制 SHA-256。201 只接受当前 `attempt_id/attempt_epoch/upload_id` 与 `transfer_reference:{url,method:"PUT",required_headers:{"content-type":"application/zip"},expires_at}`；`replayed` 不意味着 URL 可永久使用。 |
-| 直接 ObjectStore signed `PUT` | 不是 `/api/hub`、不经过 Web/BFF 字节代理；严格 URL/签名头、`credentials:omit`、`redirect:error`，发送原 ZIP bytes，不附应用 cookie/Bearer。批准 public origin 与 CORS 必须在真 Chromium 验证；浏览器不信任响应 body 作完成回执。 |
-| `POST /api/hub/skills/{skill_id}/package-upload/complete` → 同名 `/v1` | 独立单 key；JSON 恰为 `attempt_id,upload_id,content_sha256,size_bytes`，由 owner 核对原 Begin/上传绑定。200 `phase:"uploaded"` 与 `scan_state: clean/pending/unknown` 不等于 ZIP validated。刷新后仅在 Get 为 `uploaded` 时，使用当前 attempt_id/upload_id 与重选原 File 本地重算的 hash/size 组装 Complete；Web 不声称与已丢失的 Begin 描述符完成比对。Get 为 `intent`/`upload_pending` 且 Begin key/reference 已失时不继续原 PUT，只在 owner 允许时显式新 Begin 替换。 |
-| `POST /api/hub/skills/{skill_id}/validate` → 同名 `/v1` | 独立单 key；JSON 只含当前 `attempt_id`，不是空 body，也不带 asset/hash/manifest。200 `valid:true,content_digest,manifest_identity,skill_id,series_id,replayed` 仍非 active。 |
-| `POST /api/hub/skills/{skill_id}/publish` → 同名 `/v1` | 独立单 key；请求体精确 **零字节**，不是 `{}`、`null` 或空白，不设置会生成 JSON body 的调用封装；固定个人私有。200 仅 `source_ref=skill:<skill_id>`、正 uint64 十进制 `revision`、`status:"active"`、UUID `event_id`、boolean `replayed` 才是发布回执。 |
+| `GET /v1/skills?scope_kind=personal[&cursor=...]` | 当次 IAM subject/tenant；只把 owner 返回的个人 ACTIVE 投影作为个人页权威列表，保留 `source_ref` 与正 `revision`，不使用旧 `scope=official|third_party`、pool/catalog 代替；opaque cursor 原样继续。成功 strict `{data:{skills,next_cursor?}}`，无旧 `{data,meta}` 双读。 |
+| `GET /v1/skills/{skill_id}` | 本人 PERSONAL/ACTIVE 且不要求安装；200 只取 `skill_id/source_ref/revision/status/name/summary/tags` 七字段，非本人/非 ACTIVE/跨租户 404。发布 ACK/key 遗失时此读可核已 ACTIVE，Get package-upload 不可替代。 |
+| CreateDraft / Get / Begin / Complete / Validate / Publish | 六项写候选 BFF default-off、Platform v4 inactive。目标为单 ZIP→Draft/Get/Begin→签名原字节 PUT→Complete→Validate→零 body Publish；每个 mutation 原 key/body 同键重试，当前 IAM/owner 重验。`uploaded`/`valid=true` 非发布成功；严格 Publish ACTIVE/event 回执或本人 by-ID 才显示完成。未知 ACK 显式未知，失效/感染/旧 attempt、坏回执不得转成功。 |
+| `GET /v1/mcp/servers` | 仅 owner-native `server_id/provider_key/server_identity/transport/declaration_digest/status` 六字段，strict `{data:{servers,next_cursor?}}`。URL、revision、allowed_tools、secret_ref 与旧启停/删除展示不是当前读投影；不可伪造为可操作连接。 |
 
-六项控制面均从同源 Product Session 进入 BFF，当次包括 replay 重新 IAM/Platform owner 准入；不自报 tenant/owner/visibility。成功/错误分别严格 `{data}`/`{error:{code,message,retryable}}`，核 `x-request-id`、`Cache-Control:no-store`，不解析 message 分支、不暴露 Storage asset/secret。每个 mutation key 绑定单一原请求意图；未知 ACK 只可同 key/body 重试，`409 skill_command_in_progress` 显示等待/显式同键重试，`409 skill_idempotency_conflict` 不换 body 强试；`412 skill_precondition_failed` 包括旧 attempt、失效/感染等不可作成功；401/403/404、429、502、503 分别显示准入/限流/依赖错误。刷新后 Get 不能判定 Publish 是否成功，若遗失 Publish key/回执必须显示未知并使用 owner 正式发布读取能力核对；该读取能力**不在这六项候选中**，不得拿 Get 或旧 catalog 替代。此流程非列表、无分页/cursor；breaking 变更由 BFF owner 改唯一契约并重新 pin/生成，Web 不建第二 public schema。
-
-本片只验文档与路径；后续代码门需直接契约/生成 drift、严格 body/错误/私有负例及隔离 Playwright，Root 真 Chromium+CORS/PUT/撤权/同键/发布回执另验。默认关闭与 v4 inactive 不因 Web 文档解除。
-
-## S9-WEB-CODE 消费状态（待 Root 验收）
-
-本仓 `src/generated/bff-public-openapi.yaml` 已原字节固定 BFF owner SHA-256
-`a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`；派生 client 只经生成器检查。
-Chat 严格解析 snapshot Delivery 九必填字段与 `deliveries_has_more`、Agent live 完整事件字段；
-仅 replay HTTP 410 的 `event_cursor_expired` 是可重快照信号，snapshot GET 410 仍表示软删。
-正式下载复用既有 Library 本人二元详情/内容 GET；下节文档门是代码前基线，Root 真链未验。
+浏览器业务请求仍只走 Web `/api/*` 同源 Product Session adapter→BFF；ZIP bytes 唯一例外是按 BFF 受控短期签名引用发往批准 ObjectStore public origin 的直接 `PUT`，`credentials: omit`、`redirect: error`，原样 headers、无 Cookie/Bearer；Web/BFF 不代理 ZIP。401/403/404/409/412/429/502/503、`x-request-id`、`Cache-Control:no-store` 与错误 `{error:{code,message,retryable}}` 以 owner OpenAPI/运行行为为准，不从 message 推断恢复分支。下阶段旧 preview/confirm、`scope=official|third_party`、`.skill` 多候选和 MCP 假字段需同 UI 切片删除，不能保留 fallback。真正 CORS preflight/PUT、ACTIVE 刷新列表/by-ID、撤权/感染/过期/坏回执仍须 Root 隔离 Chromium 真链核验；六项写候选不能因本 pin 自动打开。旧 W3-WEB-SKILL-UPLOAD-DOC-GATE 的 BFF `55ca6c1`/SHA `0198220b` 只是历史文档门来源。
 
 ## S9-WEB-DOC：Chat Delivery 消费契约（2026-09-28；仅文档）
 
