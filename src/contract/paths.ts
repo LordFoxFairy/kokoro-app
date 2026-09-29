@@ -23,9 +23,6 @@ export function eventsPath(sessionId: string): string {
 export function filePath(sessionId: string, path: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/files/${path}`
 }
-export function deliveryPath(sessionId: string, contentHash: string): string {
-  return `/sessions/${opaquePathSegment(sessionId)}/deliveries/${opaquePathSegment(contentHash)}`
-}
 export function controlPath(sessionId: string, runId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/runs/${opaquePathSegment(runId)}/control`
 }

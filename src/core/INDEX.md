@@ -11,7 +11,7 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   activeRunId/lastSeq/resumeCursor/files/deliveries/meta + seenEventIds 内存去重集）、`createSessionStreamState`、
   `SessionStep`（thinking/tool/subagent/text 按 seq 有序，非按 kind 归桶）、
   `SessionToolCall`/`ToolStatus`（含结构化终态 stale-*/cancelled，零 UI 文案）、
-  `SessionMessage`/`SessionSubagent`/`SessionDelivery`（成果=冻结结论，contentHash 内容寻址）
+  `SessionMessage`/`SessionSubagent`/`SessionDelivery`（成果以 conversationId + artifactId 标识）
   及契约派生类型别名。
 - `reducer.ts`
   - `applyChatProjectionEvents(state, events)`：批量折叠——event_id 幂等去重、整批一次顶层快照、
@@ -54,4 +54,5 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 
 - message.user 三态吸收（id 命中更新 / 本地 echo 就地改 id / 新建）：SSE 常跑赢 HTTP 回执。
 - tool.returned 不得把已 rejected 的工具降级为 done（拒绝文案 is_error=false 回流）。
-- delivery.created 以 contentHash 幂等（非 event_id）：snapshot 水合后回放同一成果事件不重复入账。
+- delivery.created 以 `(conversationId, artifactId)` 幂等（非 hash）；同 hash 的不同成果保留两件。
+- snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。

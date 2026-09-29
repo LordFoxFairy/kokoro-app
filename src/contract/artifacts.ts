@@ -13,11 +13,13 @@ export type WorkspaceFile = z.infer<typeof workspaceFileSchema>
 
 export const deliverySchema = z
   .object({
-    content_hash: z.string().min(1),
-    path: z.string().min(1),
+    conversation_id: z.string().min(1),
+    artifact_id: z.string().min(1),
+    asset_id: z.string().min(1),
+    artifact_kind: z.enum(["document", "code", "image", "audio", "video", "data", "archive", "other"]),
     title: z.string().min(1),
     mime: z.string().min(1),
-    size: z.number().int(),
+    size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     run_id: z.string().min(1),
     created_at: z.string().min(1),
   })

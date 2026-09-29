@@ -14,6 +14,7 @@ import { createSessionStreamState, type SessionStreamState } from "@/core/state"
 import {
   awaitingPayload,
   makeEvent,
+  makeDeliveryPayload,
   makeSnapshot,
   makeSnapshotDelivery,
   resetFixtureSeq,
@@ -476,93 +477,50 @@ describe("subagent 生命周期", () => {
   })
 })
 
-describe("delivery.created 归约（成果累积）", () => {
-  it("append：payload 字段映射 + createdAt 取信封 timestamp + note 透传", () => {
-    const state = applyChatProjectionEvent(
-      createSessionStreamState(),
-      makeEvent(
-        "delivery.created",
-        {
-          path: "out/report.md",
-          title: "调研报告",
-          mime: "text/markdown",
-          size: 2048,
-          content_hash: "hash_a",
-          note: "第二轮成果",
-        },
-        { timestamp: "2026-07-09T08:00:00Z" },
-      ),
-    )
-    expect(state.deliveries).toEqual([
-      {
-        contentHash: "hash_a",
-        path: "out/report.md",
-        title: "调研报告",
-        mime: "text/markdown",
-        size: 2048,
-        createdAt: "2026-07-09T08:00:00Z",
-        note: "第二轮成果",
-      },
-    ])
+describe("delivery.created binary owner projection", () => {
+  it("maps complete live claim and envelope identity", () => {
+    const state = applyChatProjectionEvent(createSessionStreamState(), makeEvent(
+      "delivery.created",
+      makeDeliveryPayload({ artifact_id: "artifact_a", note: "第二轮成果" }),
+      { timestamp: "2026-07-09T08:00:00Z" },
+    ))
+    expect(state.deliveries).toEqual([{
+      conversationId: "ses_1", artifactId: "artifact_a", assetId: "asset_1",
+      artifactKind: "document", title: "调研报告", mime: "text/markdown", size: 2048,
+      runId: "run_1", createdAt: "2026-07-09T08:00:00Z", note: "第二轮成果",
+    }])
   })
 
-  it("contentHash 幂等：同 hash 不同 event_id 只入账一次；不同 hash 依序累积", () => {
-    const base = {
-      path: "out/report.md",
-      title: "调研报告",
-      mime: "text/markdown",
-      size: 2048,
-    }
+  it("dedupes the same binary ID but preserves two different IDs with one hash", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
-      makeEvent("delivery.created", { ...base, content_hash: "hash_a" }),
-      makeEvent("delivery.created", { ...base, content_hash: "hash_a" }),
-      makeEvent("delivery.created", { ...base, title: "终稿", content_hash: "hash_b" }),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a" })),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a" })),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_b", title: "终稿" })),
     ])
-    expect(state.deliveries.map((d) => d.contentHash)).toEqual(["hash_a", "hash_b"])
+    expect(state.deliveries.map((d) => d.artifactId)).toEqual(["artifact_a", "artifact_b"])
     expect(state.deliveries[1]?.title).toBe("终稿")
   })
 
-  it("copy-on-write：折叠不改入参 state 的 deliveries 引用与内容", () => {
-    const before = applyChatProjectionEvent(
-      createSessionStreamState(),
-      makeEvent("delivery.created", {
-        path: "out/a.md",
-        title: "A",
-        mime: "text/markdown",
-        size: 1,
-        content_hash: "hash_a",
-      }),
-    )
-    const beforeDeliveries = before.deliveries
-    const after = applyChatProjectionEvent(
-      before,
-      makeEvent("delivery.created", {
-        path: "out/b.md",
-        title: "B",
-        mime: "text/markdown",
-        size: 2,
-        content_hash: "hash_b",
-      }),
-    )
-    expect(before.deliveries).toBe(beforeDeliveries)
+  it("is copy-on-write", () => {
+    const before = applyChatProjectionEvent(createSessionStreamState(), makeEvent(
+      "delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a" }),
+    ))
+    const original = before.deliveries
+    const after = applyChatProjectionEvent(before, makeEvent(
+      "delivery.created", makeDeliveryPayload({ artifact_id: "artifact_b" }),
+    ))
+    expect(before.deliveries).toBe(original)
     expect(before.deliveries).toHaveLength(1)
     expect(after.deliveries).toHaveLength(2)
   })
 
-  it("snapshot 水合的成果与重放事件同 hash：不重复入账", () => {
-    const hydrated = stateFromSnapshot(
-      makeSnapshot({ deliveries: [makeSnapshotDelivery({ content_hash: "hash_a" })] }),
-    )
-    const state = applyChatProjectionEvent(
-      hydrated,
-      makeEvent("delivery.created", {
-        path: "out/report.md",
-        title: "调研报告",
-        mime: "text/markdown",
-        size: 2048,
-        content_hash: "hash_a",
-      }),
-    )
+  it("does not duplicate an owner snapshot entry on replay", () => {
+    const hydrated = stateFromSnapshot(makeSnapshot({
+      sessionId: "ses_1", deliveries: [makeSnapshotDelivery({ conversation_id: "ses_1", artifact_id: "artifact_a" })],
+    }))
+    const state = applyChatProjectionEvent(hydrated, makeEvent(
+      "delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a" }),
+    ))
     expect(state.deliveries).toHaveLength(1)
   })
 })

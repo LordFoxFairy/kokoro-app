@@ -29,6 +29,7 @@ import styles from "./thread.module.css"
 const NO_DECISIONS: Record<string, ToolDecision> = {}
 
 export type ConversationThreadProps = {
+  preview?: boolean
   brandName?: string
   onOpenFile?: (path: string) => void
   // 成果卡点击 → canvas 打开冻结预览；工具 pill 点击 → canvas 打开参数/结果详情。
@@ -100,6 +101,7 @@ export function ConversationThread(props: ConversationThreadProps) {
 }
 
 function ConversationThreadSurface({
+  preview = false,
   brandName,
   sessionId,
   onOpenFile,
@@ -262,6 +264,8 @@ function ConversationThreadSurface({
             <DeliverySection
               sessionId={sessionId}
               deliveries={thread.deliveries}
+              hasMore={thread.deliveriesHasMore}
+              preview={preview}
               onOpen={onOpenDelivery}
             />
           </MessageScrollerItem>

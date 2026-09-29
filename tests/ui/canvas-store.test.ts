@@ -16,7 +16,7 @@ import {
   toggleCanvasFullscreen,
 } from "@/ui/canvas/canvas-store"
 
-import { makeEvent } from "../core/fixtures"
+import { makeDeliveryPayload, makeEvent } from "../core/fixtures"
 
 beforeEach(resetCanvasStore)
 
@@ -53,10 +53,10 @@ describe("开合与会话级记忆", () => {
   it("再次打开内容覆盖此前的手动关闭（点击产物即打开意图）", () => {
     openCanvas("conv_1", FILE_REF)
     closeCanvas("conv_1")
-    openCanvas("conv_1", { kind: "delivery", contentHash: "hash_a" })
+    openCanvas("conv_1", { kind: "delivery", conversationId: "ses_1", artifactId: "artifact_a" })
     expect(canvasSlot(readCanvasState(), "conv_1")).toMatchObject({
       open: true,
-      content: { kind: "delivery", contentHash: "hash_a" },
+      content: { kind: "delivery", conversationId: "ses_1", artifactId: "artifact_a" },
     })
   })
 
@@ -92,20 +92,14 @@ describe("resolveCanvasContent（引用 → 线程活数据）", () => {
     })
   })
 
-  it("delivery：按 contentHash 命中；缺位返回 null（不渲染悬空面板）", () => {
+  it("delivery：按二元 ID 命中；缺位返回 null（不渲染悬空面板）", () => {
     const thread = applyChatProjectionEvent(
       createSessionStreamState(),
-      makeEvent("delivery.created", {
-        path: "out/report.md",
-        title: "调研报告",
-        mime: "text/markdown",
-        size: 2048,
-        content_hash: "hash_a",
-      }),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a" })),
     )
-    const hit = resolveCanvasContent({ kind: "delivery", contentHash: "hash_a" }, thread)
+    const hit = resolveCanvasContent({ kind: "delivery", conversationId: "ses_1", artifactId: "artifact_a" }, thread)
     expect(hit?.kind === "delivery" ? hit.delivery.title : null).toBe("调研报告")
-    expect(resolveCanvasContent({ kind: "delivery", contentHash: "hash_x" }, thread)).toBeNull()
+    expect(resolveCanvasContent({ kind: "delivery", conversationId: "ses_1", artifactId: "artifact_x" }, thread)).toBeNull()
   })
 
   it("tool：优先线程活数据（结果回流即更新），线程缺位用点击时快照兜底", () => {

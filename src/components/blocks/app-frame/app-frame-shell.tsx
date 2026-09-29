@@ -26,6 +26,7 @@ type Thread = EngineSnapshot["thread"]
 type RailProps = Omit<WorkspaceRailProps, "withinProvider">
 
 export type AppFrameShellProps = {
+  preview?: boolean
   webSkin: NonNullable<AppFrameProps["webSkin"]>
   narrowWeb: boolean
   compactDesktopRail: boolean
@@ -52,6 +53,7 @@ export type AppFrameShellProps = {
 
 /** Owns the shadcn shell geometry: rail, main panel, optional Canvas, and overlays. */
 export function AppFrameShell({
+  preview = false,
   webSkin,
   narrowWeb,
   compactDesktopRail,
@@ -185,10 +187,12 @@ export function AppFrameShell({
                     className={styles.canvasPanel}
                   >
                     <ContextPanel
+                      preview={preview}
                       sessionId={activeId}
                       content={canvas.resolvedCanvas}
                       files={thread.files}
                       deliveries={thread.deliveries}
+                      deliveriesHasMore={thread.deliveriesHasMore}
                       todos={thread.todos}
                       focusScopeRef={shellRef}
                       fullscreen={canvas.fullscreen}

@@ -65,6 +65,7 @@ type SnapshotInput = {
   pendingPauses?: SessionSnapshot["pending_pauses"]
   files?: SessionSnapshot["files"]
   deliveries?: SessionSnapshot["deliveries"]
+  deliveriesHasMore?: boolean
   eventWatermark?: EventCursor | null
 }
 
@@ -83,6 +84,7 @@ export function makeSnapshot(input: SnapshotInput = {}): SessionSnapshot {
     pending_pauses: input.pendingPauses ?? [],
     files: input.files ?? [],
     deliveries: input.deliveries ?? [],
+    deliveries_has_more: input.deliveriesHasMore ?? false,
     event_watermark: input.eventWatermark ?? null,
   })
 }
@@ -91,13 +93,32 @@ export function makeSnapshotDelivery(
   overrides: Partial<SessionSnapshot["deliveries"][number]> = {},
 ): SessionSnapshot["deliveries"][number] {
   return {
-    content_hash: "hash_1",
-    path: "out/report.md",
+    conversation_id: "conv_1",
+    artifact_id: "artifact_1",
+    asset_id: "asset_1",
+    artifact_kind: "document",
     title: "调研报告",
     mime: "text/markdown",
     size: 2048,
     run_id: "run_1",
     created_at: "2026-07-02T00:00:02Z",
+    ...overrides,
+  }
+}
+
+export function makeDeliveryPayload(
+  overrides: Partial<PayloadOf<"delivery.created">> = {},
+): PayloadOf<"delivery.created"> {
+  return {
+    artifact_id: "artifact_1",
+    asset_id: "asset_1",
+    artifact_kind: "document",
+    tool_call_id: "tool_1",
+    path: "out/report.md",
+    title: "调研报告",
+    mime: "text/markdown",
+    size: 2048,
+    content_hash: "a".repeat(64),
     ...overrides,
   }
 }

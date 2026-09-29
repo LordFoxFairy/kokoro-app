@@ -421,6 +421,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "canvas.toolResult": "Result",
   "canvas.toolNoDetail": "No arguments or result for this call yet.",
   "delivery.heading": "Deliveries",
+  "delivery.viewAll": "View all creations",
   "delivery.openAria": "Open delivery {title}",
   "artifact.loadingPreview": "Loading preview…",
   "artifact.cannotPreview": "Cannot preview — please download.",

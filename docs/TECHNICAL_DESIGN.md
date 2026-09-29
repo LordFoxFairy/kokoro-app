@@ -1,5 +1,11 @@
 # Kokoro User Web 技术设计
 
+## S9-WEB-CODE 实施状态（待 Root 验收）
+
+下节 S9-WEB-DOC 保留代码前基线；当前工作树已在既有 Chat contract/core/engine 与 thread/Canvas 边界实施
+二元 Delivery、稳定 410 重水合、终态 live/快照去重、100+ Library 作品入口和正式原生下载。
+未增第二 store/owner 或新目录。Root 固定来源真浏览器与 GC/410 owner 组合验收仍待执行，不能以本仓测试代替。
+
 ## S9-WEB-DOC：Chat Delivery / Canvas 二元消费设计门（2026-09-28；仅文档）
 
 **当前态。** Web main `102033e34be89ba0e9958447e4d4021fcbf257b7` 的 Library 作品页已使用

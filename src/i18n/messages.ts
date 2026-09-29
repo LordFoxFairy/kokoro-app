@@ -278,6 +278,7 @@ export const zh = {
   "canvas.toolNoDetail": "该调用暂无参数与结果。",
   // delivery 成果卡（会话流尾部成果区）
   "delivery.heading": "成果",
+  "delivery.viewAll": "查看全部作品",
   "delivery.openAria": "打开成果 {title}",
   // artifact 产物预览
   "artifact.loadingPreview": "加载预览…",

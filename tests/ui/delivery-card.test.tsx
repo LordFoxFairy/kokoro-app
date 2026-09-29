@@ -1,108 +1,59 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 
+vi.mock("@/features/app/kokoro-library-artifact-client", () => ({
+  beginLibraryArtifactDownload: vi.fn(),
+}))
+
+import { beginLibraryArtifactDownload } from "@/features/app/kokoro-library-artifact-client"
 import { LocaleProvider } from "@/i18n/context"
 import { DeliverySection } from "@/ui/thread/delivery-card"
 
 const delivery = {
-  contentHash: "hash_report",
-  path: "out/report.pdf",
-  title: "调研报告",
-  mime: "application/pdf",
-  size: 2048,
-  runId: "run_1",
-  createdAt: "2026-07-02T00:00:01.000Z",
+  conversationId: "session_1", artifactId: "artifact_1", assetId: "asset_1", artifactKind: "document" as const,
+  title: "Report", mime: "application/pdf", size: 2048, runId: "run_1", createdAt: "2026-07-02T00:00:01.000Z",
 }
+const download = vi.mocked(beginLibraryArtifactDownload)
 
-afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 
-it("通过鉴权 Blob 下载成果，并延迟释放 object URL", async () => {
-  const fetchMock = vi.fn().mockResolvedValue({
-    ok: true,
-    blob: async () => new Blob(["pdf"], { type: "application/pdf" }),
-  })
+it("uses the owner binary selector and native download helper, never the old hash Blob path", async () => {
+  download.mockResolvedValue()
+  const fetchMock = vi.fn()
   vi.stubGlobal("fetch", fetchMock)
-  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:delivery")
-  const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
-
-  render(
-    <LocaleProvider>
-      <DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} />
-    </LocaleProvider>,
-  )
-
+  render(<LocaleProvider><DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} /></LocaleProvider>)
   fireEvent.click(screen.getByRole("button", { name: "Download" }))
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-    "/api/session/sessions/session_1/deliveries/hash_report",
-    { cache: "no-store" },
-  ))
-  expect(revoke).not.toHaveBeenCalled()
-  await waitFor(() => expect(revoke).toHaveBeenCalledWith("blob:delivery"))
+  await waitFor(() => expect(download).toHaveBeenCalledWith(delivery, expect.any(AbortSignal)))
+  expect(fetchMock).not.toHaveBeenCalled()
 })
 
-it("下载进行中锁定当前成果动作并显示进行中文案", async () => {
-  let resolveFetch: ((value: { ok: boolean; blob: () => Promise<Blob> }) => void) | undefined
-  const fetchMock = vi.fn().mockReturnValue(new Promise((resolve) => { resolveFetch = resolve }))
-  vi.stubGlobal("fetch", fetchMock)
-
-  render(
-    <LocaleProvider>
-      <DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} />
-    </LocaleProvider>,
-  )
-
+it("shows retry after owner detail preflight failure", async () => {
+  let reject: ((error: Error) => void) | undefined
+  download.mockReturnValueOnce(new Promise((_resolve, rejectPromise) => { reject = rejectPromise }))
+  render(<LocaleProvider><DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} /></LocaleProvider>)
   const button = screen.getByRole("button", { name: "Download" })
   fireEvent.click(button)
-  expect(button).toBeDisabled()
-  expect(button).toHaveAttribute("aria-busy", "true")
-  expect(button).toHaveTextContent("Downloading")
-
-  resolveFetch?.({ ok: true, blob: async () => new Blob(["pdf"]) })
-  await waitFor(() => expect(button).not.toBeDisabled())
+  expect(download).toHaveBeenCalledTimes(1)
+  reject?.(new Error("not found"))
+  await waitFor(() => expect(screen.getByRole("button", { name: "Retry download" })).toBeInTheDocument())
+  expect(screen.getByRole("alert")).toHaveTextContent("Download failed")
 })
 
-it("状态提交前的双击也只发起一次下载", async () => {
-  let resolveFetch: ((value: { ok: boolean; blob: () => Promise<Blob> }) => void) | undefined
-  const fetchMock = vi.fn().mockReturnValue(new Promise((resolve) => { resolveFetch = resolve }))
-  vi.stubGlobal("fetch", fetchMock)
-
-  render(
-    <LocaleProvider>
-      <DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} />
-    </LocaleProvider>,
-  )
-
-  const button = screen.getByRole("button", { name: "Download" })
-  fireEvent.click(button)
-  fireEvent.click(button)
-  expect(fetchMock).toHaveBeenCalledTimes(1)
-
-  resolveFetch?.({ ok: true, blob: async () => new Blob(["pdf"]) })
-  await waitFor(() => expect(button).not.toBeDisabled())
+it("shows the Library creations deep link when snapshot has older deliveries", () => {
+  render(<LocaleProvider><DeliverySection sessionId="session_1" deliveries={[delivery]} hasMore onOpen={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("link", { name: "View all creations" })).toHaveAttribute("href", "/app/library?tab=artifacts")
 })
 
-it("成果下载失败后把当前动作变成可重试按钮", async () => {
-  const fetchMock = vi.fn().mockRejectedValue(new Error("network down"))
-  vi.stubGlobal("fetch", fetchMock)
-
-  render(
-    <LocaleProvider>
-      <DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} />
-    </LocaleProvider>,
-  )
-
-  const button = screen.getByRole("button", { name: "Download" })
-  fireEvent.click(button)
-
-  await waitFor(() => {
-    expect(screen.getByRole("alert")).toHaveTextContent("Download failed")
-    expect(screen.getByRole("button", { name: "Retry download" })).toBeInTheDocument()
-  })
-  expect(fetchMock).toHaveBeenCalledTimes(1)
-
-  fireEvent.click(screen.getByRole("button", { name: "Retry download" }))
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+it("cancels an in-flight owner detail preflight without showing a download failure", async () => {
+  download.mockImplementationOnce((_selector, signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(new DOMException("Cancelled", "AbortError")), { once: true })
+  }))
+  render(<LocaleProvider><DeliverySection sessionId="session_1" deliveries={[delivery]} onOpen={vi.fn()} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "Download" }))
+  const signal = download.mock.calls[0]?.[1]
+  expect(signal?.aborted).toBe(false)
+  fireEvent.click(screen.getByRole("button", { name: "Cancel download" }))
+  expect(signal?.aborted).toBe(true)
+  await waitFor(() => expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument())
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 })

@@ -15,3 +15,4 @@
 ## 陷阱
 - 失败双源：机器错误态与 agent 裁决的 run.failed 终态都要显式呈现。
 - 402（credit_insufficient）走计费专用说明 + 价格入口，不复用通用失败文案。
+- Delivery 卡以二元 ID 打开 Canvas/原生同源下载，详情失败可重试/取消；`has_more` 直达 Library 作品页。

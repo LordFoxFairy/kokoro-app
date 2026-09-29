@@ -64,6 +64,20 @@ function readUrlSnapshot(): string {
   return typeof window === "undefined" ? DEFAULT_URL_SNAPSHOT : JSON.stringify(readUrlState())
 }
 
+function readLibraryTab(): string {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "artifacts"
+    ? "artifacts"
+    : "files"
+}
+
+function writeLibraryTab(tab: string): void {
+  const url = new URL(window.location.href)
+  if (tab === "artifacts") url.searchParams.set("tab", "artifacts")
+  else url.searchParams.delete("tab")
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+  window.dispatchEvent(new Event(LIBRARY_URL_STATE_EVENT))
+}
+
 function useLibraryUrlState(): LibraryUrlState {
   const snapshot = useSyncExternalStore(subscribeUrlState, readUrlSnapshot, () => DEFAULT_URL_SNAPSHOT)
   return useMemo(() => JSON.parse(snapshot) as LibraryUrlState, [snapshot])
@@ -325,13 +339,14 @@ function KokoroArtifactLibrary({
 
 export function KokoroLibrarySurface(props: KokoroLibrarySurfaceProps) {
   const t = useT()
+  const activeTab = useSyncExternalStore(subscribeUrlState, readLibraryTab, () => "files")
   const upload = useLibraryFileUpload()
   // Keep local favorites for the lifetime of this Library page, without
   // mounting or fetching Agent artifacts while the Files tab is active.
   const [favoriteIds, setFavoriteIds] = useState<ReadonlySet<string>>(() => new Set(props.initialFavoriteIds))
   return <div className={styles.page} data-testid="library-page">
     <header className={styles.header}><h1>{t("rail.navDatabase")}</h1></header>
-    <Tabs defaultValue="files" className={styles.libraryTabs}>
+    <Tabs value={activeTab} onValueChange={writeLibraryTab} className={styles.libraryTabs}>
       <TabsList aria-label={t("rail.navDatabase")} className={styles.libraryTabsList}>
         <TabsTrigger value="files">{t("library.filesTab")}</TabsTrigger>
         <TabsTrigger value="artifacts">{t("library.artifactsTab")}</TabsTrigger>

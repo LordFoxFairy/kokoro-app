@@ -1,5 +1,13 @@
 # Kokoro User Web API 契约策略
 
+## S9-WEB-CODE 消费状态（待 Root 验收）
+
+本仓 `src/generated/bff-public-openapi.yaml` 已原字节固定 BFF owner SHA-256
+`a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`；派生 client 只经生成器检查。
+Chat 严格解析 snapshot Delivery 九必填字段与 `deliveries_has_more`、Agent live 完整事件字段；
+仅 replay HTTP 410 的 `event_cursor_expired` 是可重快照信号，snapshot GET 410 仍表示软删。
+正式下载复用既有 Library 本人二元详情/内容 GET；下节文档门是代码前基线，Root 真链未验。
+
 ## S9-WEB-DOC：Chat Delivery 消费契约（2026-09-28；仅文档）
 
 唯一 owner 机器源是 BFF main `bd1f794e7b1115d96965aa03d8a3a83a33c42fd7` 的

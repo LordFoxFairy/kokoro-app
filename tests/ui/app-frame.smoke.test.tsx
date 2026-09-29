@@ -28,6 +28,7 @@ import { SessionClientError } from "@/engine/client"
 
 import {
   awaitingPayload,
+  makeDeliveryPayload,
   makeEvent,
   makePendingPause,
   makeSnapshot,
@@ -1916,20 +1917,8 @@ it("成果链路：delivery.created → 尾部成果卡 → canvas 打开 → �
     client.lastStream().emit([
       makeEvent("run.created", { run_id: "run_1" }),
       makeEvent("message.completed", { segment_id: "seg_1", content: "成果已交付。" }),
-      makeEvent("delivery.created", {
-        path: "out/report.bin",
-        title: "调研报告",
-        mime: "application/octet-stream",
-        size: 4096,
-        content_hash: "hash_a",
-      }),
-      makeEvent("delivery.created", {
-        path: "out/appendix.bin",
-        title: "附录资料",
-        mime: "application/octet-stream",
-        size: 2048,
-        content_hash: "hash_b",
-      }),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_a", title: "调研报告", mime: "application/octet-stream", size: 4096 })),
+      makeEvent("delivery.created", makeDeliveryPayload({ artifact_id: "artifact_b", title: "附录资料", mime: "application/octet-stream", size: 2048 })),
       makeEvent("run.completed", { status: "completed" }),
     ])
     await settle()
@@ -1946,8 +1935,8 @@ it("成果链路：delivery.created → 尾部成果卡 → canvas 打开 → �
   const panel = screen.getByLabelText("canvas 详情 调研报告")
   expect(panel).toBeInTheDocument()
   expect(screen.getByRole("separator", { name: "调整工作区宽度" })).toHaveAttribute("aria-valuetext", "480px")
-  // 非文本成果给下载态（冻结副本仍可下载，不做内嵌预览）。
-  expect(screen.getByText(/暂不支持内嵌预览/)).toBeInTheDocument()
+  // Delivery stays metadata-only; no Blob/iframe inline preview is mounted.
+  expect(within(panel).getAllByText(/application\/octet-stream/)).toHaveLength(2)
   expect(within(panel).getByRole("button", { name: "下载" })).toBeInTheDocument()
   expect(within(panel).getByRole("button", { name: "全屏" })).toBeInTheDocument()
 

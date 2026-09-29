@@ -51,9 +51,8 @@
   awaiting-hitl 不设时限）、`REATTACH_TIMEOUT_MS`（90s 兜底）。
 - `config.ts`：`sessionBaseUrl()`——同源 BFF 代理前缀 `/api/session`（AUTH-P0）；浏览器不再
   直连 Web 同源 BFF 的 Chat projection，真实业务服务地址留服务端代理，`SESSION_PROXY_BASE` 常量。
-- `file-fetch.ts`（client 组件）：`fileFetch`/`useFileBlob`——files/deliveries 走同源
-  `/api/session` 代理，鉴权由 httpOnly 信封 cookie 自动携带（前端不持 token）；仍 fetch→blob
-  →object URL 供预览/下载（结果被替换/卸载即 revoke；loading 为键控派生，无 effect 同步 setState）。
+- `file-fetch.ts`（client 组件）：`fileFetch`/`useFileBlob` 仅供 workspace File 小对象及隔离 preview；
+  正式 Delivery 复用 Library 二元详情/浏览器原生 attachment，不经 `/api/session` hash/Blob。
 - `use-session-engine.ts`（client 组件）：`useSessionEngine(engine|null)`——全仓唯一
   React 接缝（useSyncExternalStore）。
 
@@ -66,7 +65,8 @@
 ## 运行时约束
 
 - 三重代际守卫（stream/hydrate/filesSync）：关流/切会话后迟到回调一律丢弃。
-- run 收尾对账吸收 snapshot.files 与 snapshot.deliveries（成果整表替换，contentHash 同形）。
+- run 收尾对账吸收 snapshot.files、snapshot.deliveries/has_more；以二元 ID 合并同步期间晚到 live，
+  避免旧快照抹掉新成果。仅稳定 `event_cursor_expired` HTTP 410 重快照再续 watermark。
 - 事件微任务窗口批量折叠一次（replay 洪峰不逐事件快照）。
 - control body 不携带旧的 `decision_id`；cancel/resume/steer 均通过 `Idempotency-Key` 传递
   稳定 command identity。resume 重试不得换新 command id；body 保持

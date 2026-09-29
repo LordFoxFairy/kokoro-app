@@ -257,6 +257,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "canvas.toolResult": "resultado",
   "canvas.toolNoDetail": "Esta chamada ainda não possui parâmetros e resultados.",
   "delivery.heading": "Conquistas",
+  "delivery.viewAll": "Ver todas as criações",
   "delivery.openAria": "Resultados abertos {title}",
   "artifact.loadingPreview": "Carregando visualização…",
   "artifact.cannotPreview": "Não foi possível visualizar. Faça o download para visualizar.",

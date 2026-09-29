@@ -96,6 +96,7 @@ export const sessionSnapshotSchema = z
     pending_pauses: z.array(pendingPauseSchema),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
+    deliveries_has_more: z.boolean(),
     event_watermark: eventCursorSchema.nullable(),
   })
   .strict()

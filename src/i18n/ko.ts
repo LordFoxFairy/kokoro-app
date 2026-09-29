@@ -257,6 +257,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "canvas.toolResult": "결과",
   "canvas.toolNoDetail": "이 호출에는 아직 매개변수와 결과가 없습니다.",
   "delivery.heading": "업적",
+  "delivery.viewAll": "모든 작품 보기",
   "delivery.openAria": "결과 열기 {title}",
   "artifact.loadingPreview": "미리보기 로드 중…",
   "artifact.cannotPreview": "미리 볼 수 없습니다. 보려면 다운로드하세요.",

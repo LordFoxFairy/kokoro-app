@@ -125,12 +125,15 @@ const toolReturnedPayload = z
 
 const deliveryCreatedPayload = z
   .object({
+    artifact_id: z.string().min(1),
+    asset_id: z.string().min(1),
+    artifact_kind: z.enum(["document", "code", "image", "audio", "video", "data", "archive", "other"]),
+    tool_call_id: z.string().min(1),
     path: z.string().min(1),
     title: z.string().min(1),
     mime: z.string().min(1),
-    size: z.number().int(),
-    // 成果冻结键：deliveries/<namespace>/<content_hash> 内容寻址,永不漂移；由 deliver 工具归档时计算,emitter 在 tool.returned 后追发本事件。
-    content_hash: z.string().min(1),
+    size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    content_hash: z.string().regex(/^[a-f0-9]{64}$/u),
     note: z.string().optional(),
   })
   .strict()

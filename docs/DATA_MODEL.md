@@ -1,5 +1,12 @@
 # Kokoro User Web 数据模型与 Owner
 
+## S9-WEB-CODE 浏览器投影状态（待 Root 验收）
+
+当前工作树 `SessionDelivery` 使用 `(conversationId,artifactId)` 身份及 BFF 九字段投影；
+`deliveriesHasMore` 为页面截断标记，复合键去重而非 hash 去重。Web 仍无 Artifact 表、SQL、Redis
+或持久字节事实；Canvas/卡片只持 metadata 与取消中的二元详情请求，内容交由浏览器原生 attachment。
+下节 S9-WEB-DOC 为代码前历史基线，本仓测试不代表 Root 真链验收。
+
 ## S9-WEB-DOC：Chat Delivery 浏览器投影（2026-09-28；仅文档）
 
 Web main `102033e34be89ba0e9958447e4d4021fcbf257b7` 的 Library 已用二元作品身份，

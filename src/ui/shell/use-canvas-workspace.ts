@@ -58,7 +58,7 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
   const openDelivery = useCallback(
     (delivery: SessionDelivery) => {
       if (activeId !== null) {
-        openCanvas(activeId, { kind: "delivery", contentHash: delivery.contentHash })
+        openCanvas(activeId, { kind: "delivery", conversationId: delivery.conversationId, artifactId: delivery.artifactId })
       }
     },
     [activeId],
@@ -83,7 +83,7 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
   const onSelectDelivery = useCallback(
     (delivery: SessionDelivery) => {
       if (activeId !== null) {
-        openCanvas(activeId, { kind: "delivery", contentHash: delivery.contentHash })
+        openCanvas(activeId, { kind: "delivery", conversationId: delivery.conversationId, artifactId: delivery.artifactId })
       }
     },
     [activeId],

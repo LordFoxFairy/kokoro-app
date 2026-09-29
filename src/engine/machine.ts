@@ -122,6 +122,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // 水合代际守卫：切会话后迟到的 snapshot 一律丢弃。
   let hydrateGeneration = 0
+  let cursorResetAttempts = 0
+  let recoveringExpiredCursor = false
   // 文件同步代际守卫：同会话连续 run 收尾的乱序 snapshot 回来，只认最新一次。
   let filesSyncGeneration = 0
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
@@ -209,6 +211,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         // Cursor belongs to the durable AG-UI ledger, not to the reducer seq.
         // Preserve it even when a partial tool-args frame has no projection.
         thread = { ...thread, resumeCursor: cursor }
+        cursorResetAttempts = 0
       },
       onEvents: handleStreamEvents,
       onStreamError: (error) => {
@@ -216,6 +219,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         clearReattachTimer()
+        if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
+          cursorResetAttempts += 1
+          recoveringExpiredCursor = true
+          hydrate(sessionId, true)
+          return
+        }
         machine = transition(machine, { type: "FAIL", error: error.message })
         notify()
       },
@@ -227,6 +236,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function syncWorkspaceFiles(sessionId: string): void {
     filesSyncGeneration += 1
     const generation = filesSyncGeneration
+    const cursorAtStart = thread.resumeCursor
     execution
       .fetchSnapshot(sessionId)
       .then((sessionSnapshot) => {
@@ -238,11 +248,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ) {
           return
         }
+        const snapshotDeliveries = sessionSnapshot.deliveries.map(deliveryFromSnapshot)
+        const liveAdvanced = thread.resumeCursor !== cursorAtStart
+        const deliveries = liveAdvanced
+          ? [...new Map([...snapshotDeliveries, ...thread.deliveries].map((item) => [JSON.stringify([item.conversationId, item.artifactId]), item])).values()]
+          : snapshotDeliveries
         thread = {
           ...thread,
           files: sessionSnapshot.files,
-          // 成果=内容寻址的服务端读模型：整表替换即对账（live 事件先行入账的条目同 hash 同形）。
-          deliveries: sessionSnapshot.deliveries.map(deliveryFromSnapshot),
+          // Owner snapshot is authoritative unless a newer live cursor has advanced.
+          deliveries,
+          deliveriesHasMore: liveAdvanced ? thread.deliveriesHasMore || sessionSnapshot.deliveries_has_more : sessionSnapshot.deliveries_has_more,
         }
         notify()
       })
@@ -282,7 +298,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
-  function hydrate(sessionId: string): void {
+  function hydrate(sessionId: string, afterExpiredCursor = false): void {
     hydrateGeneration += 1
     const generation = hydrateGeneration
     if (!hydrating) {
@@ -296,12 +312,34 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         if (sessionSnapshot === null) {
+          if (afterExpiredCursor) {
+            // A stream existed before GC; a subsequent missing snapshot means
+            // the conversation is gone, not a newly created local draft.
+            evictActiveConversation()
+            return
+          }
           // 服务端无此会话（本地新建未开聊）：空线程即真态。
           hydrating = false
           notify()
           return
         }
+        if (afterExpiredCursor) {
+          // The owner snapshot supersedes the old stream's run and approvals.
+          // Otherwise REATTACH rejects a changed run while streaming/HITL.
+          closeStream()
+          clearReattachTimer()
+          machine = transition(machine, { type: "RESET" })
+          staging.clear()
+          resumeCommandIds.clear()
+          resumeInFlight.clear()
+        }
+        const previousCursor = thread.resumeCursor
         thread = stateFromSnapshot(sessionSnapshot)
+        // A different owner watermark proves this was a new GC window. Keep
+        // the retry cap only when the owner repeats the same expired cursor.
+        if (afterExpiredCursor && thread.resumeCursor !== previousCursor) {
+          cursorResetAttempts = 0
+        }
         syncActiveEntry()
         // Snapshot 与 event_watermark 同事务视图；只续 watermark 之后的 durable
         // AG-UI frame，避免刷新时双读完整事件史。
@@ -331,6 +369,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             }
           }
         }
+        if (afterExpiredCursor) recoveringExpiredCursor = false
         hydrating = false
         notify()
       })
@@ -345,6 +384,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         // fail-loud：水合失败进状态机错误态，不渲染半真半假的本地线程。
+        if (afterExpiredCursor) recoveringExpiredCursor = false
         hydrating = false
         machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
         notify()
@@ -408,7 +448,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function submit(content: string): void {
     const trimmed = content.trim()
-    if (disposed || !trimmed) {
+    if (disposed || recoveringExpiredCursor || !trimmed) {
       return
     }
     notice = null
@@ -471,7 +511,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function retry(): void {
-    if (disposed || !store) {
+    if (disposed || recoveringExpiredCursor || !store) {
       return
     }
     const lastUser = [...thread.messages].reverse().find((message) => message.role === "user")
@@ -502,7 +542,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function stageToolDecision(runId: string, toolId: string, decision: ToolDecision): void {
-    if (disposed || !store || machine.phase !== "awaiting-hitl" || machine.runId !== runId) {
+    if (disposed || recoveringExpiredCursor || !store || machine.phase !== "awaiting-hitl" || machine.runId !== runId) {
       return
     }
     const sessionId = store.activeId
@@ -524,10 +564,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const commandId = resumeCommandIds.get(runId) ?? createId("command")
     resumeCommandIds.set(runId, commandId)
     resumeInFlight.add(runId)
+    const controlGeneration = hydrateGeneration
+    const currentControl = () => !disposed && store?.activeId === sessionId &&
+      hydrateGeneration === controlGeneration && machine.runId === runId &&
+      resumeCommandIds.get(runId) === commandId
     execution
       .resumeRun({ sessionId, runId, decisions, commandId })
       .then(() => {
-        if (disposed) {
+        if (!currentControl()) {
           return
         }
         machine = transition(machine, { type: "RESUME_SENT" })
@@ -541,7 +585,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         notify()
       })
       .catch((error: unknown) => {
-        if (disposed) {
+        if (!currentControl()) {
           return
         }
         // 网络失败允许重试，但在下一次点击前必须解除在途闸门。
@@ -567,6 +611,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
+    recoveringExpiredCursor = false
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
@@ -750,6 +795,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // 都失效，且必须同步结束 loading，否则旧请求永远悬挂在 hydrating=true。
     hydrateGeneration += 1
     hydrating = false
+    recoveringExpiredCursor = false
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })

@@ -7,14 +7,15 @@ import { Spinner } from "@/components/ui/spinner"
 import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "lucide-react"
 
 // 右侧 canvas 工作区面板：会话在左、内容在右（三栏第三栏）。
-// 内容体按来源分派：file=可变直读（重开即最新）、delivery=冻结成果（hash 寻址）、
+// 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
 // tool=参数/结果详情、node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
 import { type RefObject, useEffect, useRef, useState } from "react"
 
-import { deliveryPath, filePath } from "@/contract/http"
+import { filePath } from "@/contract/http"
 import { sessionBaseUrl } from "@/engine/config"
 import { downloadFetchedFile, fileFetch } from "@/engine/file-fetch"
+import { beginLibraryArtifactDownload } from "@/features/app/kokoro-library-artifact-client"
 import type { SessionDelivery, SessionTodo, WorkspaceFileEntry } from "@/core/state"
 import { useLocale } from "@/i18n/context"
 import { PreviewBody, formatBytes } from "@/ui/thread/artifact-card"
@@ -28,18 +29,7 @@ export function fileUrl(sessionId: string, path: string): string {
   return `${sessionBaseUrl()}${filePath(sessionId, "__P__")}`.replace("__P__", encoded)
 }
 
-export function deliveryUrl(sessionId: string, contentHash: string): string {
-  // The preview transport emits a local delivery fixture instead of pretending that the
-  // session BFF has a backing object. Keeping this decision in the URL
-  // builder makes preview download and preview rendering use the same path;
-  // the real app continues to use the authenticated delivery endpoint.
-  if (contentHash.startsWith("preview-")) {
-    return `/api/dev/preview-files/${encodeURIComponent(contentHash)}`
-  }
-  return `${sessionBaseUrl()}${deliveryPath(sessionId, contentHash)}`
-}
-
-// 下载走鉴权 fetch → blob（<a href> 直连端点鉴权开启后 401）。
+// Workspace File is a distinct small-object flow; Delivery uses native BFF attachment.
 async function downloadFile(url: string, name: string): Promise<boolean> {
   return downloadFetchedFile(await fileFetch(url), name)
 }
@@ -82,6 +72,8 @@ function contentTitle(content: ResolvedCanvasContent): string {
 
 export type CanvasPanelProps = {
   sessionId: string
+  preview?: boolean
+  deliveriesHasMore?: boolean
   content: ResolvedCanvasContent
   files: WorkspaceFileEntry[]
   deliveries: SessionDelivery[]
@@ -98,6 +90,8 @@ export type CanvasPanelProps = {
 
 export function CanvasPanel({
   sessionId,
+  preview = false,
+  deliveriesHasMore = false,
   content,
   files,
   deliveries,
@@ -118,6 +112,7 @@ export function CanvasPanel({
   // request synchronously too, otherwise a fast double click can download
   // the same authenticated blob twice.
   const activeDownloadRef = useRef<string | null>(null)
+  const downloadControllerRef = useRef<AbortController | null>(null)
   const previewHeadingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(view)
   const title = contentTitle(content)
@@ -125,10 +120,16 @@ export function CanvasPanel({
     content.kind === "file"
       ? `file:${content.file.path}`
       : content.kind === "delivery"
-        ? `delivery:${content.delivery.contentHash}`
+        ? `delivery:${JSON.stringify([content.delivery.conversationId, content.delivery.artifactId])}`
         : content.kind === "tool"
           ? `tool:${content.tool.id}`
           : `node:${content.title}`
+
+  useEffect(() => () => {
+    downloadControllerRef.current?.abort()
+    downloadControllerRef.current = null
+    activeDownloadRef.current = null
+  }, [contentKey])
 
   const currentDownloadState = downloadState.key === contentKey ? downloadState.status : "idle"
   const completedTodoCount = todos.filter((todo) => todo.status === "completed").length
@@ -147,17 +148,18 @@ export function CanvasPanel({
     return () => window.cancelAnimationFrame(frame)
   }, [view])
 
-  // 下载入口按来源取 URL：file=可变当前态；delivery=冻结副本。tool/node 无下载面。
+  // File and Delivery have separate byte lifecycles and authorization paths.
   const download =
     content.kind === "file"
       ? {
+          kind: "file" as const,
           url: fileUrl(sessionId, content.file.path),
           name: content.file.path.split("/").at(-1) ?? content.file.path,
         }
       : content.kind === "delivery"
         ? {
-            url: deliveryUrl(sessionId, content.delivery.contentHash),
-            name: content.delivery.path.split("/").at(-1) ?? content.delivery.title,
+            kind: "delivery" as const,
+            delivery: content.delivery,
           }
         : null
 
@@ -206,40 +208,59 @@ export function CanvasPanel({
               type="button"
               className={styles.action}
               aria-label={
-                currentDownloadState === "loading"
+                currentDownloadState === "loading" && download?.kind === "delivery" && !preview
+                  ? t("library.cancelDownload")
+                  : currentDownloadState === "loading"
                   ? t("canvas.downloading")
                   : currentDownloadState === "error"
                     ? t("canvas.retryDownload")
                   : t("canvas.download")
               }
               title={
-                currentDownloadState === "loading"
+                currentDownloadState === "loading" && download?.kind === "delivery" && !preview
+                  ? t("library.cancelDownload")
+                  : currentDownloadState === "loading"
                   ? t("canvas.downloading")
                   : currentDownloadState === "error"
                     ? t("canvas.retryDownload")
                     : t("canvas.download")
               }
-              disabled={currentDownloadState === "loading"}
+              disabled={currentDownloadState === "loading" && (download?.kind !== "delivery" || preview)}
               aria-busy={currentDownloadState === "loading"}
               onClick={() => {
+                if (currentDownloadState === "loading" && download.kind === "delivery" && !preview) {
+                  downloadControllerRef.current?.abort()
+                  return
+                }
                 if (activeDownloadRef.current === contentKey) {
                   return
                 }
                 activeDownloadRef.current = contentKey
                 setDownloadState({ key: contentKey, status: "loading" })
-                void downloadFile(download.url, download.name)
+                const controller = download.kind === "delivery" && !preview ? new AbortController() : null
+                downloadControllerRef.current = controller
+                const action = download.kind === "file"
+                  ? downloadFile(download.url, download.name)
+                  : preview
+                    ? fileFetch(`/api/dev/preview-files/${encodeURIComponent(download.delivery.artifactId)}`)
+                        .then((response) => downloadFetchedFile(response, download.delivery.title))
+                    : beginLibraryArtifactDownload(download.delivery, controller!.signal).then(() => true)
+                void action
                   .then((ok) => setDownloadState({ key: contentKey, status: ok ? "idle" : "error" }))
-                  .catch(() => setDownloadState({ key: contentKey, status: "error" }))
+                  .catch(() => setDownloadState({ key: contentKey, status: controller?.signal.aborted ? "idle" : "error" }))
                   .finally(() => {
                     if (activeDownloadRef.current === contentKey) {
                       activeDownloadRef.current = null
+                      downloadControllerRef.current = null
                     }
                   })
               }}
             >
               {currentDownloadState === "loading" ? <Spinner aria-hidden="true" /> : <Download data-icon="inline-start" aria-hidden="true" />}
               <span className={styles.actionLabel}>
-                {currentDownloadState === "loading"
+                {currentDownloadState === "loading" && download.kind === "delivery" && !preview
+                  ? t("library.cancelDownload")
+                  : currentDownloadState === "loading"
                   ? t("canvas.downloading")
                   : currentDownloadState === "error"
                     ? t("canvas.retryDownload")
@@ -285,6 +306,7 @@ export function CanvasPanel({
             selected={content}
             files={files}
             deliveries={deliveries}
+            deliveriesHasMore={deliveriesHasMore}
             locale={locale}
             onSelectFile={(file) => {
               onSelectFile(file)
@@ -329,6 +351,7 @@ function WorkspaceList({
   selected,
   files,
   deliveries,
+  deliveriesHasMore,
   locale,
   onSelectFile,
   onSelectDelivery,
@@ -336,6 +359,7 @@ function WorkspaceList({
   selected: ResolvedCanvasContent
   files: WorkspaceFileEntry[]
   deliveries: SessionDelivery[]
+  deliveriesHasMore: boolean
   locale: string
   onSelectFile: (file: WorkspaceFileEntry) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
@@ -352,9 +376,9 @@ function WorkspaceList({
       ) : (
         <ul className={styles.tree}>
           {deliveries.map((delivery) => {
-            const selectedDelivery = selected.kind === "delivery" && selected.delivery.contentHash === delivery.contentHash
+            const selectedDelivery = selected.kind === "delivery" && selected.delivery.conversationId === delivery.conversationId && selected.delivery.artifactId === delivery.artifactId
             return (
-              <li key={delivery.contentHash}>
+              <li key={JSON.stringify([delivery.conversationId, delivery.artifactId])}>
                 <Button
                   variant="ghost"
                   type="button"
@@ -376,6 +400,7 @@ function WorkspaceList({
           })}
         </ul>
       )}
+      {deliveriesHasMore ? <Button variant="link" asChild><a href="/app/library?tab=artifacts">{t("delivery.viewAll")}</a></Button> : null}
       <p className={styles.groupHeading}>{t("canvas.filesHeading")}</p>
       {files.length === 0 ? (
         <Empty className={styles.inlineEmpty}>
@@ -428,18 +453,13 @@ function ContentBody({
     }
     case "delivery": {
       const { delivery } = content
-      // 成果预览：交 PreviewBody 按 mime 分派——文本(markdown/json/csv/code)直显、图片/音视频内嵌媒体，
-      // 真不支持的格式才回落 unsupported。冻结字节走 deliveryUrl。
+      // The first formal slice exposes owner metadata only; no 1 GiB Blob/iframe/media preview.
       return (
         <div className={styles.deliveryBody}>
           {delivery.note !== undefined && delivery.note !== "" ? (
             <p className={styles.deliveryNote}>{delivery.note}</p>
           ) : null}
-          <PreviewBody
-            url={deliveryUrl(sessionId, delivery.contentHash)}
-            mime={delivery.mime}
-            name={delivery.title}
-          />
+          <p>{delivery.artifactKind} · {delivery.mime} · {formatBytes(delivery.size)}</p>
         </div>
       )
     }

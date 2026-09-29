@@ -349,11 +349,15 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理一份预览成果。" }),
         envelope("message.completed", { segment_id: segmentId, content: "预览成果已准备好。" }),
         envelope("delivery.created", {
+          artifact_id: "preview-delivery-report",
+          asset_id: "preview-asset-report",
+          artifact_kind: "document",
+          tool_call_id: "preview-deliver-tool",
           path: "out/preview-report.pdf",
           title: "预览调研报告",
           mime: "application/pdf",
           size: 24_576,
-          content_hash: "preview-delivery-report",
+          content_hash: "a".repeat(64),
           note: "这是本地预览成果，用于检查 Canvas 布局与操作状态。",
         }),
         envelope("run.completed", { status: "completed" }),
@@ -462,6 +466,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         pending_pauses: [],
         files: [],
         deliveries: [],
+        deliveries_has_more: false,
         // Preview has no independently materialized message snapshot, so a
         // refresh deliberately replays its local projection history.
         event_watermark: null,

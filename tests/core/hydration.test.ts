@@ -42,7 +42,7 @@ describe("stateFromSnapshot", () => {
       makeSnapshot({
         deliveries: [
           makeSnapshotDelivery({
-            content_hash: "hash_9",
+            artifact_id: "artifact_9",
             title: "终稿",
             created_at: "2026-07-09T10:00:00Z",
           }),
@@ -51,11 +51,14 @@ describe("stateFromSnapshot", () => {
     )
     expect(state.deliveries).toEqual([
       {
-        contentHash: "hash_9",
-        path: "out/report.md",
+        conversationId: "conv_1",
+        artifactId: "artifact_9",
+        assetId: "asset_1",
+        artifactKind: "document",
         title: "终稿",
         mime: "text/markdown",
         size: 2048,
+        runId: "run_1",
         createdAt: "2026-07-09T10:00:00Z",
       },
     ])

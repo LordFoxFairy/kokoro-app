@@ -53,7 +53,11 @@ const eventFixtures: Array<[string, Record<string, unknown>]> = [
   ],
   [
     "delivery.created",
-    { path: "deliveries/report.pdf", title: "Report", mime: "application/pdf", size: 12, content_hash: "hash_1" },
+    {
+      artifact_id: "artifact_1", asset_id: "asset_1", artifact_kind: "document", tool_call_id: "tool_1",
+      path: "deliveries/report.pdf", title: "Report", mime: "application/pdf", size: 12,
+      content_hash: "a".repeat(64),
+    },
   ],
   ["todo.updated", { todos: [{ content: "Ship contract", status: "in_progress" }] }],
   [
@@ -90,6 +94,7 @@ const sessionSnapshot = {
   pending_pauses: [],
   files: [],
   deliveries: [],
+  deliveries_has_more: false,
   event_watermark: EVENT_CURSOR,
 }
 

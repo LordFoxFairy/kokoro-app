@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
 const BFF_OWNER_COMMIT = "55d3c9cd55386d9dcc074e893cc388924dd94c13"
-const BFF_PUBLIC_OPENAPI_SHA256 = "8a0849dcf3ae557d5f3166ad624c5eea9f42bc0b65c7a6ae7fda1741224d567b"
+const BFF_PUBLIC_OPENAPI_SHA256 = "a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 describe("pinned BFF project resource contract", () => {

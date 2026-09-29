@@ -52,6 +52,22 @@ describe("AgUiChatTransport", () => {
     vi.unstubAllGlobals()
   })
 
+  it("preserves only the stable owner event_cursor_expired 410 for snapshot recovery", async () => {
+    for (const body of [
+      { error: { code: "event_cursor_expired" }, meta: { request_id: "req_1" } },
+      { error: { code: "session_deleted" }, meta: { request_id: "req_2" } },
+    ]) {
+      const transport = new AgUiChatTransport({
+        eventsUrl: () => "/api/session/sessions/session-1/events",
+        fetcher: () => Promise.resolve(new Response(JSON.stringify(body), { status: 410, headers: { "content-type": "application/json" } })),
+      })
+      const error = await new Promise<unknown>((resolve) => {
+        transport.openProjectionEvents({ chatId: "session-1", resumeCursor: CURSOR, onFrame: vi.fn(), onStreamError: resolve })
+      })
+      expect(error).toMatchObject({ reason: "http", code: body.error.code === "event_cursor_expired" ? "event_cursor_expired" : null })
+    }
+  })
+
   it("projects one complete BFF assistant turn with its emitted terminal fields", async () => {
     const cursors = [1, 2, 3, 4, 5].map((index) => `agui_${index.toString(16).padStart(32, "0")}`)
     const events = [

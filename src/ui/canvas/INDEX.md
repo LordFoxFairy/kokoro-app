@@ -14,3 +14,4 @@
 ## 陷阱
 - 槽按会话键隔离：切会话即读回各自的槽，无需 effect 清理。
 - 「closed」只由用户手动关闭记账；重开入口读残留内容。
+- 正式 Delivery 槽只保存二元 metadata 引用；不内嵌 1 GiB Blob/iframe，下载由 Library 二元详情与原生附件完成；workspace File 小对象仍独立预览。

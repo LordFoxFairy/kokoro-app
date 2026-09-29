@@ -6,7 +6,7 @@ vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { LocaleProvider } from "@/i18n/context"
 import { FileChip, PreviewBody } from "@/ui/thread/artifact-card"
-import { deliveryUrl, fileUrl } from "@/ui/canvas/canvas-panel"
+import { fileUrl } from "@/ui/canvas/canvas-panel"
 
 describe("FileChip / PreviewBody / fileUrl", () => {
   beforeEach(() => {
@@ -28,15 +28,6 @@ describe("FileChip / PreviewBody / fileUrl", () => {
   it("fileUrl：files 端点 + 逐段编码", () => {
     expect(fileUrl("ses_1", "media/我的 文件.wav")).toBe(
       "http://s.local/sessions/ses_1/files/media/%E6%88%91%E7%9A%84%20%E6%96%87%E4%BB%B6.wav",
-    )
-  })
-
-  it("preview delivery：开发成果使用本地 fixture，不伪造 session BFF 请求", () => {
-    expect(deliveryUrl("ses_1", "preview-delivery-report")).toBe(
-      "/api/dev/preview-files/preview-delivery-report",
-    )
-    expect(deliveryUrl("ses_1", "sha256:report")).toBe(
-      "http://s.local/sessions/ses_1/deliveries/sha256%3Areport",
     )
   })
 

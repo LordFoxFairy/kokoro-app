@@ -317,6 +317,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "canvas.toolResult": "結果",
   "canvas.toolNoDetail": "この呼び出しにはパラメータと結果がまだありません。",
   "delivery.heading": "業績",
+  "delivery.viewAll": "すべての作品を見る",
   "delivery.openAria": "結果を開く {title}",
   "artifact.loadingPreview": "プレビューを読み込み中…",
   "artifact.cannotPreview": "プレビューはできません。ダウンロードして表示してください。",

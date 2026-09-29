@@ -399,19 +399,22 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       // 穷尽 switch 须显式接收；当前无子代理详情视图消费此通道，不参与状态归约。
       break
     case "delivery.created": {
-      // 成果累积：contentHash 内容寻址幂等（重放/乱序重复投递只入账一次）。
+      // Replayed source IDs and snapshot entries converge on the owner binary key.
       const payload = event.payload
-      if (draft.state.deliveries.some((d) => d.contentHash === payload.content_hash)) {
+      if (draft.state.deliveries.some((d) => d.conversationId === event.session_id && d.artifactId === payload.artifact_id)) {
         break
       }
       draft.state.deliveries = [
         ...draft.state.deliveries,
         {
-          contentHash: payload.content_hash,
-          path: payload.path,
+          conversationId: event.session_id,
+          artifactId: payload.artifact_id,
+          assetId: payload.asset_id,
+          artifactKind: payload.artifact_kind,
           title: payload.title,
           mime: payload.mime,
           size: payload.size,
+          runId: event.run_id,
           createdAt: event.timestamp,
           ...(payload.note !== undefined ? { note: payload.note } : {}),
         },
@@ -451,6 +454,7 @@ export function applyChatProjectionEvents(
           stepsByRun: { ...state.stepsByRun },
           files: state.files,
           deliveries: state.deliveries,
+          deliveriesHasMore: state.deliveriesHasMore,
           runStatus: state.runStatus,
           runError: state.runError,
           activeRunId: state.activeRunId,

@@ -244,6 +244,22 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
           continue
         }
 
+        if (response.status === 410) {
+          let code: string | null = null
+          try {
+            const body: unknown = await response.json()
+            if (typeof body === "object" && body !== null && "error" in body) {
+              const error = body.error
+              if (typeof error === "object" && error !== null && "code" in error && error.code === "event_cursor_expired") {
+                code = "event_cursor_expired"
+              }
+            }
+          } catch {
+            // A malformed error is not a GC recovery signal.
+          }
+          fail(new SessionClientError("http", `GET ${this.#eventsUrl(args.chatId)} failed with status 410`, code))
+          return
+        }
         if (!response.ok || response.body === null) {
           fail(new SessionClientError("http", `GET ${this.#eventsUrl(args.chatId)} failed with status ${response.status}`))
           return

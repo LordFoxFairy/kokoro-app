@@ -1,5 +1,16 @@
 # Kokoro User Web 当前状态
 
+## S9-WEB-CODE 候选（2026-09-28；待 Root 集成与真实链验收）
+
+Web 工作树已将 BFF owner OpenAPI 原字节固定到 SHA-256
+`a224b186813615467b6c045d3be83082d3e164e140d6da9722bf3f8d7e33b219`，Chat live/replay/snapshot
+按 `(conversation_id,artifact_id)` 归一；仅 HTTP 410 且稳定码 `event_cursor_expired` 重取 snapshot，
+终态对账保护同步期间新 live，`deliveries_has_more` 导航 Library 作品页。Chat 卡/Canvas 正式路径只取
+二元详情并发起原生同源下载，删除旧 hash/path/Blob Delivery 路径；显式 preview 仍为隔离 fixture。
+Root 独立 Node22 `pnpm check` 已通过：契约 105、架构 36、单测/集成 1599、lint/typecheck/build；
+独立审查发现的 410 旧 run/空快照/迟到控制回调问题已用 RED→GREEN 直接测试修复。本仓 Playwright 不是 IAM→Agent→Storage 真链，
+也不证明 live/刷新/私有 404/下载管理器原字节。下节 S9-WEB-DOC 是代码前历史快照。
+
 ## S9-WEB-DOC（2026-09-28；Web Chat 代码未迁移）
 
 Web main `102033e34be89ba0e9958447e4d4021fcbf257b7`、BFF owner main

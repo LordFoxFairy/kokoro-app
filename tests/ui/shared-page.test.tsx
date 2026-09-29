@@ -32,6 +32,7 @@ const snapshot = {
   pending_pauses: [],
   files: [],
   deliveries: [],
+  deliveries_has_more: false,
   event_watermark: null,
 }
 

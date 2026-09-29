@@ -241,6 +241,7 @@ export function AppFrame({
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
 
   const conversationProps: ConversationThreadProps = {
+    preview,
     ...(brandName === undefined ? {} : { brandName }),
     sessionId: activeId,
     thread,
@@ -473,6 +474,7 @@ export function AppFrame({
 
   return (
     <AppFrameShell
+      preview={preview}
       webSkin={resolvedWebSkin}
       narrowWeb={narrowWeb}
       compactDesktopRail={layout.compactDesktopRail}

@@ -536,6 +536,16 @@ function renderLibrary(props: LibraryRenderProps = {}) {
   fireEvent.mouseDown(screen.getByRole("tab", { name: "Agent 作品" }), { button: 0, ctrlKey: false })
 }
 
+it("Chat 的查看全部作品深链直接选中作品页签，不先请求个人文件", async () => {
+  window.history.replaceState(null, "", "/app/library?tab=artifacts")
+  const fetchMock = vi.fn()
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><KokoroLibrarySurface onPrompt={vi.fn()} fixtureArtifacts={artifacts} /></LocaleProvider>)
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Agent 作品" })).toHaveAttribute("data-state", "active"))
+  expect(screen.getByTestId("library-artifacts")).toBeInTheDocument()
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
 it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同步 URL", async () => {
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toBeInTheDocument())
@@ -543,7 +553,7 @@ it("加载资料库后可筛选、搜索、收藏和切换列表视图，并同�
   expect(screen.getAllByRole("listitem")).toHaveLength(2)
   fireEvent.click(screen.getByRole("radio", { name: "投影片" }))
   expect(screen.getAllByRole("listitem")).toHaveLength(1)
-  expect(window.location.search).toBe("?type=slides")
+  expect(window.location.search).toBe("?tab=artifacts&type=slides")
 
   fireEvent.click(screen.getByRole("radio", { name: "清单视图" }))
   expect(screen.getByTestId("library-artifacts")).toHaveAttribute("data-view", "list")
@@ -564,7 +574,7 @@ it("已挂载时收到站内 surface 导航事件会重新读取资料库 URL �
   renderLibrary()
   await waitFor(() => expect(screen.getByTestId("library-empty-state")).toBeInTheDocument())
 
-  window.history.pushState(null, "", "/app/library")
+  window.history.pushState(null, "", "/app/library?tab=artifacts")
   fireEvent(window, new Event("kokoro:surface-navigation"))
 
   await waitFor(() => expect(screen.getByTestId("library-artifacts")).toHaveAttribute("data-view", "grid"))

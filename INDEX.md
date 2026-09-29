@@ -115,6 +115,9 @@
 
 ## 7. 验证入口
 
+S9 Chat Delivery 候选的当前/目标态见 `docs/CURRENT.md` 顶部；正式成果卡/Canvas 复用
+BFF Library 二元详情及原生同源附件，不再使用旧 hash 下载。真实 IAM/Agent/Storage 浏览器链由 Root 独立验收。
+
 ```bash
 pnpm contract
 pnpm test:architecture

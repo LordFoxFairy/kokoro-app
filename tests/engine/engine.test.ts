@@ -9,8 +9,10 @@ import type { RunControlReceipt } from "@/contract/http"
 import {
   awaitingPayload,
   makeEvent,
+  makeDeliveryPayload,
   makePendingPause,
   makeSnapshot,
+  makeSnapshotDelivery,
   resetFixtureSeq,
 } from "../core/fixtures"
 import {
@@ -29,6 +31,7 @@ const CURSOR_3 = "agui_00000000000000000000000000000003"
 const CURSOR_7 = "agui_00000000000000000000000000000007"
 const CURSOR_12 = "agui_0000000000000000000000000000000c"
 const CURSOR_20 = "agui_00000000000000000000000000000014"
+const CURSOR_30 = "agui_0000000000000000000000000000001e"
 
 function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs?: number, scope?: SessionScope) {
   client = createFakeClient()
@@ -478,6 +481,186 @@ describe("停止与放弃", () => {
 
 describe("snapshot-first 水合与中断恢复", () => {
   const SEEDED = addConversation(null, "conv_9", 500)
+
+  it("GC 410 only: refetches the owner snapshot and resumes its new watermark", async () => {
+    buildEngine(SEEDED)
+    client.snapshotCalls.length = 0
+    let watermark = CURSOR_7
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_9", eventWatermark: watermark, deliveriesHasMore: true,
+      deliveries: [makeSnapshotDelivery({ conversation_id: "conv_9", artifact_id: "artifact_1" })],
+    }))
+    engine.dispose()
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    await settle()
+    expect(client.lastStream().resumeCursor).toBe(CURSOR_7)
+    expect(thread().deliveriesHasMore).toBe(true)
+    watermark = CURSOR_12
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+    expect(client.snapshotCalls).toEqual(["conv_9", "conv_9"])
+    expect(client.lastStream().resumeCursor).toBe(CURSOR_12)
+    expect(thread().deliveries.map((item) => item.artifactId)).toEqual(["artifact_1"])
+
+    client.lastStream().fail(new SessionClientError("http", "410 other"))
+    await settle()
+    expect(client.snapshotCalls).toHaveLength(2)
+    expect(engine.getSnapshot().machine.phase).toBe("error")
+  })
+
+  it("GC 410 replaces an obsolete streaming run with the terminal owner snapshot", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_1" })
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_1", eventWatermark: CURSOR_12 }))
+
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "idle", runId: null })
+    expect(client.lastStream().resumeCursor).toBe(CURSOR_12)
+  })
+
+  it("GC 410 replaces an obsolete awaiting run with the new owner run", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    client.lastStream().emit([makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"]))])
+    await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("awaiting-hitl")
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_1", eventWatermark: CURSOR_20,
+      activeRun: { run_id: "run_2", status: "running" },
+    }))
+
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "reattaching", runId: "run_2" })
+    expect(client.lastStream().resumeCursor).toBe(CURSOR_20)
+  })
+
+  it("ignores a previous run's late resume receipt after GC reattaches a new approval", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    client.lastStream().emit([makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"]))])
+    await settle()
+    let resolveControl: ((value: RunControlReceipt) => void) | undefined
+    client.nextControl = () => new Promise((resolve) => { resolveControl = resolve })
+    engine.stageToolDecision("run_1", "tool_1", { type: "approve" })
+    expect(client.controlCalls).toHaveLength(1)
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_1", eventWatermark: CURSOR_20,
+      activeRun: { run_id: "run_2", status: "waiting_input" },
+      pendingPauses: [makePendingPause({ run_id: "run_2", tool_id: "tool_2" })],
+    }))
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "awaiting-hitl", runId: "run_2" })
+
+    resolveControl?.({ run_id: "run_1", command_id: "old", request_digest: "sha256:old", status: "succeeded", replayed: false })
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "awaiting-hitl", runId: "run_2" })
+  })
+
+  it("ignores a previous run's late stale-control failure after GC reattaches a new approval", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    client.lastStream().emit([makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"]))])
+    await settle()
+    let rejectControl: ((reason: Error) => void) | undefined
+    client.nextControl = () => new Promise((_resolve, reject) => { rejectControl = reject })
+    engine.stageToolDecision("run_1", "tool_1", { type: "approve" })
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_1", eventWatermark: CURSOR_20,
+      activeRun: { run_id: "run_2", status: "waiting_input" },
+      pendingPauses: [makePendingPause({ run_id: "run_2", tool_id: "tool_2" })],
+    }))
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+    const stream = client.lastStream()
+    const snapshotCount = client.snapshotCalls.length
+
+    rejectControl?.(new Error("no_pending_pause"))
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "awaiting-hitl", runId: "run_2" })
+    expect(client.lastStream()).toBe(stream)
+    expect(client.snapshotCalls).toHaveLength(snapshotCount)
+  })
+
+  it("freezes old run submit and approval actions while a 410 snapshot is pending", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    client.lastStream().emit([makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"]))])
+    await settle()
+    let resolveSnapshot: ((value: ReturnType<typeof makeSnapshot>) => void) | undefined
+    client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+
+    engine.submit("stale steer")
+    engine.stageToolDecision("run_1", "tool_1", { type: "approve" })
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.controlCalls).toHaveLength(0)
+
+    resolveSnapshot?.(makeSnapshot({ sessionId: "conv_1", eventWatermark: CURSOR_20 }))
+    await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+  })
+
+  it("GC 410 evicts a disappeared conversation rather than retaining private delivery metadata", async () => {
+    buildEngine()
+    engine.submit("work")
+    await settle()
+    client.lastStream().emit([makeEvent("delivery.created", makeDeliveryPayload(), { session_id: "conv_1" })])
+    await settle()
+    expect(thread().deliveries).toHaveLength(1)
+    client.nextSnapshot = () => Promise.resolve(null)
+
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    await settle()
+
+    expect(thread().deliveries).toHaveLength(0)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(engine.getSnapshot().store?.activeId).not.toBe("conv_1")
+  })
+
+  it("separate idle GC windows recover after each snapshot advances its watermark", async () => {
+    buildEngine(SEEDED)
+    let watermark = CURSOR_7
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: watermark }))
+    engine.dispose()
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    await settle()
+
+    for (const next of [CURSOR_12, CURSOR_20, CURSOR_30]) {
+      watermark = next
+      client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+      await settle()
+      expect(client.lastStream().resumeCursor).toBe(next)
+      expect(engine.getSnapshot().machine.phase).toBe("idle")
+    }
+  })
+
+  it("stops a broken owner that repeatedly returns the same expired watermark", async () => {
+    buildEngine(SEEDED)
+    client.snapshotCalls.length = 0
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_7 }))
+    engine.dispose()
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    await settle()
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+      await settle()
+    }
+    expect(client.snapshotCalls).toHaveLength(3)
+    expect(engine.getSnapshot().machine.phase).toBe("error")
+  })
 
   it("启动即 GET snapshot；无服务端会话（null）停留空态，不开流", async () => {
     buildEngine(SEEDED)

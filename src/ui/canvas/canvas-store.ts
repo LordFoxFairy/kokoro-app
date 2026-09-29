@@ -16,7 +16,7 @@ import type {
 // node 槽是通用 ReactNode 插槽——canvas 不绑死任何单一产物类型。
 export type CanvasContentRef =
   | { kind: "file"; path: string }
-  | { kind: "delivery"; contentHash: string }
+  | { kind: "delivery"; conversationId: string; artifactId: string }
   // 工具详情：runId+toolId 定位活数据；snapshot 为线程态缺位时的兜底显示。
   | { kind: "tool"; runId: string; toolId: string; snapshot: SessionToolCall }
   | { kind: "node"; title: string; node: ReactNode }
@@ -122,7 +122,7 @@ export function resolveCanvasContent(
       return { kind: "file", file: known ?? { path: ref.path, mime: "text/plain", bytes: 0 } }
     }
     case "delivery": {
-      const delivery = thread.deliveries.find((d) => d.contentHash === ref.contentHash)
+      const delivery = thread.deliveries.find((d) => d.conversationId === ref.conversationId && d.artifactId === ref.artifactId)
       return delivery ? { kind: "delivery", delivery } : null
     }
     case "tool": {
