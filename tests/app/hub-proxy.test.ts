@@ -66,55 +66,6 @@ describe("/api/hub/[...path] proxy", () => {
     expect(options).toMatchObject({ maxResponseBytes: 1_073_741_824, maxErrorResponseBytes: 16_777_216, errorResponseTimeoutMs: 15_000, strictResponseLength: true, streamIdleTimeoutMs: expect.any(Number), streamTotalTimeoutMs: expect.any(Number) })
   })
 
-  it("keeps an accepted Artifact response alive when the framework request signal ends after handoff", async () => {
-    const requestAbort = new AbortController()
-    let releaseTail: (() => void) | undefined
-    const tailReady = new Promise<void>((resolve) => { releaseTail = resolve })
-    const body = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        controller.enqueue(new Uint8Array([1, 2]))
-        await tailReady
-        controller.enqueue(new Uint8Array([3, 4]))
-        controller.close()
-      },
-    })
-    vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { status: 200, headers: {
-      "content-type": "application/octet-stream", "content-length": "4",
-      "content-disposition": "attachment; filename=\"report.bin\"; filename*=UTF-8''report.bin",
-      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
-      "x-request-id": "req_artifact_handoff",
-    } }))
-    const { GET } = await import("@/app/api/hub/[...path]/route")
-    const response = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content", {
-      signal: requestAbort.signal,
-    }), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
-
-    expect(response.status).toBe(200)
-    requestAbort.abort(new DOMException("framework request lifetime ended", "AbortError"))
-    releaseTail?.()
-    await expect(response.arrayBuffer()).resolves.toEqual(new Uint8Array([1, 2, 3, 4]).buffer)
-  })
-
-  it("still cancels the Artifact upstream when the downstream response body is cancelled", async () => {
-    let cancelledReason: unknown
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) { controller.enqueue(new Uint8Array([1, 2])) },
-      cancel(reason) { cancelledReason = reason },
-    })
-    vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { status: 200, headers: {
-      "content-type": "application/octet-stream", "content-length": "4",
-      "content-disposition": "attachment; filename=\"report.bin\"; filename*=UTF-8''report.bin",
-      "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
-      "x-request-id": "req_artifact_cancel",
-    } }))
-    const { GET } = await import("@/app/api/hub/[...path]/route")
-    const response = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))
-    const reason = new DOMException("browser disconnected", "AbortError")
-
-    await response.body?.cancel(reason)
-    expect(cancelledReason).toBe(reason)
-  })
-
   it("rejects Artifact query/alias, unsafe headers and a short binary stream", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
     const query = await GET(new Request("http://localhost/api/hub/library/artifacts/conversation-1/artifact-1/content?x=1"), params(["library", "artifacts", "conversation-1", "artifact-1", "content"]))

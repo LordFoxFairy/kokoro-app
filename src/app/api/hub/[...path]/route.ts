@@ -72,11 +72,24 @@ function invalidArtifactDownloadResponse(): Response {
   return NextResponse.json({ error: "library_artifact_invalid_response" }, { status: 502, headers: { "cache-control": "private, no-store" } })
 }
 
-function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number): ReadableStream<Uint8Array> {
+function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number, signal: AbortSignal): ReadableStream<Uint8Array> {
   const reader = source.getReader()
   let total = 0
   let closed = false
+  let onAbort: (() => void) | undefined
+  const cleanup = () => { if (onAbort) signal.removeEventListener("abort", onAbort) }
   return new ReadableStream<Uint8Array>({
+    start(controller) {
+      onAbort = () => {
+        if (closed) return
+        closed = true
+        void reader.cancel(signal.reason)
+        controller.error(signal.reason ?? new Error("artifact download cancelled"))
+        cleanup()
+      }
+      if (signal.aborted) onAbort()
+      else signal.addEventListener("abort", onAbort, { once: true })
+    },
     async pull(controller) {
       if (closed) return
       try {
@@ -84,6 +97,7 @@ function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number)
         if (closed) return
         if (result.done) {
           closed = true
+          cleanup()
           if (total !== length) controller.error(new Error("artifact download incomplete"))
           else controller.close()
           return
@@ -91,6 +105,7 @@ function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number)
         total += result.value.byteLength
         if (total > length || total > MAX_ARTIFACT_DOWNLOAD_BYTES) {
           closed = true
+          cleanup()
           await reader.cancel(new Error("artifact download exceeded declared length"))
           controller.error(new Error("artifact download exceeded declared length"))
           return
@@ -99,11 +114,13 @@ function boundedArtifactBody(source: ReadableStream<Uint8Array>, length: number)
       } catch (error) {
         if (closed) return
         closed = true
+        cleanup()
         controller.error(error)
       }
     },
     async cancel(reason) {
       closed = true
+      cleanup()
       await reader.cancel(reason)
     },
   })
@@ -186,26 +203,12 @@ export async function proxyHubRequest(
   }
 
   let upstream: Response
-  let upstreamSignal = request.signal
-  let detachArtifactRequestAbort: (() => void) | undefined
-  if (artifactDownload) {
-    // Next's incoming request signal can end after a native attachment has
-    // already received its response headers. Bridge it only while waiting for
-    // upstream admission/headers; after handoff, downstream stream cancellation
-    // is the authoritative disconnect signal and still cancels the Node body.
-    const controller = new AbortController()
-    const abort = () => controller.abort(request.signal.reason)
-    if (request.signal.aborted) abort()
-    else request.signal.addEventListener("abort", abort, { once: true })
-    upstreamSignal = controller.signal
-    detachArtifactRequestAbort = () => request.signal.removeEventListener("abort", abort)
-  }
   try {
     upstream = await requestWithDomain(target, config.domain, {
       method: request.method,
       headers: Object.fromEntries(headers.entries()),
       ...(body !== undefined ? { body } : {}),
-      signal: upstreamSignal,
+      signal: request.signal,
       ...(personalDownload ? { maxResponseBytes: MAX_PERSONAL_DOWNLOAD_BYTES } : {}),
       ...(artifactDownload ? {
         maxResponseBytes: MAX_ARTIFACT_DOWNLOAD_BYTES,
@@ -220,8 +223,6 @@ export async function proxyHubRequest(
     })
   } catch {
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
-  } finally {
-    detachArtifactRequestAbort?.()
   }
 
   if (personalDownload) {
@@ -253,7 +254,7 @@ export async function proxyHubRequest(
         await upstream.body?.cancel()
         return invalidArtifactDownloadResponse()
       }
-      return new Response(boundedArtifactBody(upstream.body, Number(safeHeaders.get("content-length"))), { status: 200, headers: safeHeaders })
+      return new Response(boundedArtifactBody(upstream.body, Number(safeHeaders.get("content-length")), request.signal), { status: 200, headers: safeHeaders })
     }
     const errorHeaders = new Headers({ "cache-control": "private, no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff" })
     const contentType = upstream.headers.get("content-type")
