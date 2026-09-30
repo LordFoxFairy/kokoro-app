@@ -229,7 +229,9 @@ async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T): 
   } catch (error) {
     throw new HubClientError(isAbortError(error) ? "aborted" : "network", describeUnknown(error), null, null)
   }
-  if (response.headers.get("cache-control") !== "no-store" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")) {
+  if (response.headers.get("cache-control") !== "no-store"
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
+    || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
     throw new HubClientError("parse", "invalid BFF read response headers", null, response.status)
   }
   let raw: unknown

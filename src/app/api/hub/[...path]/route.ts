@@ -22,6 +22,15 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 const MAX_PERSONAL_DOWNLOAD_BYTES = 1_048_576
 const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
+const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
+const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
+
+function projectionError(status: 400 | 401 | 502 | 503, code: string, requestId: string): Response {
+  return NextResponse.json(
+    { error: { code, message: code, retryable: status >= 500 } },
+    { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
+  )
+}
 
 function safeDownloadHeaders(headers: Headers, maxBytes: number): Headers | null {
   const type = headers.get("content-type")
@@ -137,35 +146,42 @@ export async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
-  const config = productBffConfig()
-  if (config === null) {
-    return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
-  }
-  if (config.bffBaseUrl == null) {
-    // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
-    return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
-  }
-  if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
-    return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
-  }
-  const requestId = request.headers.get("x-kokoro-request-id") || crypto.randomUUID()
-  let claims
-  try {
-    claims = await admittedProductSession(request, config)
-  } catch {
-    return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
-  }
-  if (claims === null) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
-  }
-
   const { path } = await context.params
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
   const personalSkillListRead = request.method === "GET" && path[0] === "self" && businessPath.length === 1 && businessPath[0] === "skills"
   const personalSkillIdRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills"
+    && !["pool", "catalog", "quota"].includes(businessPath[1] ?? "")
   const mcpProjectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "servers"
   const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpProjectionRead
+  const incomingRequestId = request.headers.get("x-kokoro-request-id")
+  const requestId = publicProjectionRead
+    ? incomingRequestId !== null && PROJECTION_REQUEST_ID.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID()
+    : incomingRequestId || crypto.randomUUID()
+  const config = productBffConfig()
+  if (config === null) {
+    if (publicProjectionRead) return projectionError(503, "auth_not_configured", requestId)
+    return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
+  }
+  if (config.bffBaseUrl == null) {
+    // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
+    if (publicProjectionRead) return projectionError(503, "hub_not_configured", requestId)
+    return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
+  }
+  if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
+    return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
+  }
+  let claims
+  try {
+    claims = await admittedProductSession(request, config)
+  } catch {
+    if (publicProjectionRead) return projectionError(503, "session_unavailable", requestId)
+    return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
+  }
+  if (claims === null) {
+    if (publicProjectionRead) return projectionError(401, "unauthenticated", requestId)
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+  }
   if (request.method === "GET" && path[0] === "self" && (
     (businessPath[0] === "skills" && ["pool", "catalog", "quota"].includes(businessPath[1] ?? ""))
     || (businessPath[0] === "mcp" && businessPath[1] === "secrets")
@@ -177,7 +193,7 @@ export async function proxyHubRequest(
       || (personalSkillListRead && query.get("scope_kind") !== "personal")
       || (query.has("cursor") && (query.get("cursor") === "" || (query.get("cursor")?.length ?? 0) > 4096))
       || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
-    if (invalidQuery) return NextResponse.json({ error: "invalid_projection_read" }, { status: 400, headers: { "cache-control": "no-store" } })
+    if (invalidQuery) return projectionError(400, "invalid_projection_read", requestId)
   }
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
@@ -239,6 +255,7 @@ export async function proxyHubRequest(
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
+    if (publicProjectionRead) return projectionError(502, "hub_unreachable", requestId)
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
@@ -285,16 +302,17 @@ export async function proxyHubRequest(
 
   if (publicProjectionRead) {
     const upstreamRequestId = upstream.headers.get("x-request-id")
+    const upstreamContentType = upstream.headers.get("content-type")
     if (upstream.status >= 300 && upstream.status < 400
       || upstream.headers.get("cache-control") !== "no-store"
       || upstreamRequestId === null
-      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(upstreamRequestId)) {
+      || !PROJECTION_REQUEST_ID.test(upstreamRequestId)
+      || upstreamContentType === null
+      || !JSON_MEDIA_TYPE.test(upstreamContentType)) {
       await upstream.body?.cancel()
-      return NextResponse.json({ error: "invalid_projection_response" }, { status: 502, headers: { "cache-control": "no-store" } })
+      return projectionError(502, "invalid_projection_response", requestId)
     }
-    const projectionHeaders = new Headers({ "cache-control": "no-store", "x-request-id": upstreamRequestId })
-    const type = upstream.headers.get("content-type")
-    if (type !== null) projectionHeaders.set("content-type", type)
+    const projectionHeaders = new Headers({ "cache-control": "no-store", "x-request-id": upstreamRequestId, "content-type": upstreamContentType })
     return new Response(upstream.body, { status: upstream.status, headers: projectionHeaders })
   }
 

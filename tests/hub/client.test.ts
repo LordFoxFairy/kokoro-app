@@ -15,6 +15,20 @@ afterEach(() => {
 })
 
 describe("hub client", () => {
+  it("rejects non-JSON success and error projection bodies but accepts UTF-8 JSON", async () => {
+    const headers = { "cache-control": "no-store", "x-request-id": "req-json" }
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { ...headers, "content-type": "text/plain" } }))
+      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired","retryable":false}}', { status: 401, headers: { ...headers, "content-type": "text/plain" } }))
+      .mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { ...headers, "content-type": "application/json; charset=utf-8" } }))
+      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired","retryable":false}}', { status: 401, headers: { ...headers, "content-type": "application/json; charset=utf-8" } })))
+    const client = createHubClient()
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 401 })
+    expect(await client.listPersonalSkills()).toEqual({ skills: [] })
+    await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
+  })
+
   it("reads personal Skill pages by opaque cursor and resolves ACTIVE by ID without old catalog", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(publicResponse({ data: { skills: [{ source_ref: "skill:skill-1", name: "Mine", description: "Private", content_hash: "digest", scope: "personal", revision: "2", enabled: true, categories: [] }], next_cursor: "opaque-next" } }))
