@@ -1,5 +1,66 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PERSONAL：五本人安装 API 消费目标（2026-09-30；文档门）
+
+Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e` 尚未消费安装 API。唯一 public 机器源为 BFF
+`67755d16ff0f40ea02d71a6dad7108507a04766a` 的 `contract/openapi/v1/openapi.yaml`，SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；下列是 consumer 义务，不是第二可编辑 schema。
+BFF 已固定 Platform `6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1；Web 不复制内部摘要、receipt codec、Proto 或 IAM metadata。
+当前 Web snapshot 仍为571b51de；后续原字节 repin 与 strict runtime/UI 必须分别验证，文档不等于接通。
+
+### 路径、身份与命令
+
+browser-private 前缀 `/api/hub/self/skill-installations` 唯一映射 public `/v1/skill-installations`，无非 self alias。
+五个 operationId 固定为 owner 的 installPersonalSkill、listPersonalSkillInstallations、getPersonalSkillInstallation、
+setPersonalSkillInstallationEnabled、removePersonalSkillInstallation。除以下精确方法/路径外不经通用 fallback 透传。
+
+| 请求 | consumer 义务 | 成功 |
+| --- | --- | --- |
+| POST 集合 | strict JSON 仅 exact source_ref；单个有效 Idempotency-Key；无 query | 200 `{data:mutation}` |
+| GET 集合 | 可选 enabled/installed/limit/cursor，拒重复/未知 query、body 与 mutation key | 200 `{data:installation[],meta?:{next_cursor}}` |
+| GET `/{installation_id}` | exact ID；无 query/body/key | 200 `{data:installation}` |
+| PUT `/{installation_id}/enabled` | strict JSON 仅 required boolean enabled；单个 key；无 query | 200 `{data:mutation}` |
+| DELETE `/{installation_id}` | 单个 key；零 body、无 query；不得吞掉入站 body 再转发 | 200 `{data:mutation}`，非204 |
+
+Identity 沿现 Product Session/service 身份，浏览器只交业务 selector，不交 tenant/subject/target/proof/包字段。
+BFF 每次含 replay 检查 current IAM；其内部 trusted subject 由 BFF 构造，不由 Web 转发浏览器自报头。
+source_ref 仅一次 skill: 前缀与 canonical ID，exact、不 trim/按名称推导/补最新 revision；installation_id 不能替换成 source 或 series ID。
+POST/PUT 原始 JSON ≤65,536 bytes；key 为 owner 的1–128可打印非逗号字符规则，unknown/null/boolean字符串拒绝。
+public 没有 expected_revision、If-Match 或 generation 字段；CAS/fresh snapshot 是 Platform 内部行为，不新建 Web 前置协议。
+
+### 安全响应与分页
+
+- installation 按 owner schema 严格八个必填字段和可选 removed_at：installation_id/source_ref/series_id/revision、
+  installed/enabled、installed_at/updated_at；不接 tenant、subject、asset/hash、manifest、signed URL 或内部 reason。
+  revision 是1..2^64-1的十进制字符串，不转 JS Number；时间为合法 UTC RFC3339 Z，缺失不变 null/epoch。
+  removed 态 installed=false、enabled=false、removed_at present；installed=true 无 removed_at；保持 owner 时间序约束。
+- mutation 严格 installation/change/replayed 及可选 event_id，change 只允许 owner 七值。
+  unchanged 必无 event_id；其他值必须有首个合法 event_id。不以 response.ok 或空 ACK 推导成功。
+- List 不使用旧 Skill `{data:{skills,next_cursor}}` 或 legacy meta.request_id。
+  next_cursor absent 时整个 meta absent；present 空串/null/未知字段拒绝。
+  limit 省略50、合法1–100；cursor 非空且≤4096 UTF-8 bytes，opaque、不 trim/解码。
+  installed/enabled 缺失表示不筛选（含 removed），false 与缺失不同；固定 installation_id ASC keyset、非 snapshot。
+  cursor 绑定本人权限/filters/surface，筛选改变重置；每页重新授权，不将 cursor 当许可或在 Web 后过滤模拟 owner 分页。
+- 所有成功与错误都核 JSON media、owner 专属状态、`Cache-Control: no-store`、有界 `x-request-id`。
+  禁 redirect；只保留批准 header，429 的合法有界 Retry-After 可透出。
+  现普通 Hub 改写 private,no-store/丢 request ID 的分支不适用于本操作组。
+
+### 错误、取消与 unknown ACK
+
+strict error-only `{error:{code,message,retryable}}` 按唯一 OpenAPI 的逐状态 code 校验：400输入，413超限，401 session，
+403禁止，404本人不可见，409幂等冲突/进行中，412前置失败，429限流，502坏 owner 响应，503依赖/配置，504 deadline。
+List 没有404/409/412成功恢复猜测；Get 与 mutation 按各 operation 专属错误集。分支不读 message；UI 只显示本地安全文案，
+保留 code/retryable/request ID 供确定性处理。adapter 自身配置/准入/transport 错误也使用对应严格 envelope，不回旧字符串错误。
+现请求有限 deadline 与 AbortSignal 继续贯穿，取消写请求不证明服务端回滚；不因20秒 BFF预算扩大所有 Hub timeout。
+
+每个 mutation 冻结原 key、method/path/body。未知 ACK 只显式同键重试，不自动换键、使用旧服务或本地合成成功。
+receipt replay 是历史提交结果而非当前 snapshot；取得合法 ACK 后 Get 当前 installation，当前读失败只显示待核，不重发已确认命令。
+Install 未知且无 ID 仅同键重试；刷新丢 key 后只读取当前页，不由列表推造 receipt。401/403停止自动动作，409/412复核当前状态。
+管理读无需 source 持续健康；false/remove 仍交 owner，Web 不先以公开 Skill 404或不健康阻止降权。
+Publish 与安装、安装与 Run 选择无隐式调用；installed/enabled 不构成未来执行授权。
+
+下一精确文件/RED与门禁见 TECHNICAL_DESIGN 同名节；本片只改四文档，没有 repin、运行消费或真实组合完成声明。
+
 ## WEB-PRODUCT-IA-CODE 当前消费者（2026-09-30；待 Root 验收）
 
 基线 `7087225`。网络 API/contract/generated 未改：Conversation engine/project_ref、Project create frozen intent、

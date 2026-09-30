@@ -1,5 +1,80 @@
 # Kokoro User Web 技术设计
 
+## WEB-PERSONAL：安装管理文档门（2026-09-30；尚未实施）
+
+本节是下一消费者切片的当前方案，不代表代码已接入。Web 基线
+`14a54b4b8da68b37d83a13402bc8abb87001574e`；唯一 public owner 固定 BFF
+`67755d16ff0f40ea02d71a6dad7108507a04766a`，其 `contract/openapi/v1/openapi.yaml`
+原字节 SHA-256 为 `40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`。
+BFF 已固定 Platform `6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1；Web 不消费内部
+Proto、command digest、proof 或 Storage 接口。下方旧 pin/未激活记录是对应历史切片，不覆盖本节目标。
+
+### 当前事实与放置门
+
+| 项 | 当前/目标结论 |
+| --- | --- |
+| Owner | Web 唯一 writer 只管视图、交互状态、同源 adapter；BFF 管 public API/current IAM admission；Platform 管 installation、CAS、receipt/outbox。发布、安装管理、Run 选择三个生命周期独立。 |
+| 当前事实 | 正式 `features/app/kokoro-skills-surface.tsx` 与 `ui/skills/skills-panel.tsx` 都挂载 `PersonalSkillsRead`；它只展示本人 ACTIVE Skill、详情与发布。`hub/client.ts` 无五个本人安装方法，旧 `setSkillEnabled(name, scope)` 是旧路径；generated snapshot 仍 pin BFF571b51de。 |
+| 目标职责 | 同一 Skills surface 明确区分“本人已发布”与“本人安装”；前者保留发布与显式 Install，后者独立分页、Get 当前状态、启用/停用/移除。安装记录不含 name 时展示 exact source_ref，不猜名称/最新 revision，也不为填名称阻塞停用/移除。 |
+| 位置 A，采用 | 扩现有 `hub/schemas.ts` 的纯 consumer schema、`hub/client.ts` 的具名 installation transport、`ui/skills/personal-skills-read.tsx` 的组件内状态、既有 Hub route 的严格 operation 分支；保持各自既有职责。 |
+| 位置 B，淘汰 | 新顶层 installation module/store/page 会复制既有 Skills surface；塞入 `personal-skill-publish-flow.ts` 会把发布与安装绑定。均不采用，也不为本片新建目录/框架。 |
+| 粒度 | 五个具名安装方法与旧 preview name 接口分离；不使用现无正文 `mutate()` 丢弃 receipt。复用现 shadcn 组件，不重写 preview catalog 或 Chat engine。 |
+| 依赖/生命周期 | Browser → `/api/hub/self/skill-installations` 及具名子路径 → BFF `/v1/skill-installations`；用现 Product Session/Origin/可信 header 构造，不接受浏览器 tenant/subject/proof。当前安装页请求可取消，卸载/换页使迟到结果失效。 |
+| 数据/API | 无 Web 持久业务事实、SQL/Redis schema 或跨 owner 读。public 无 expected_revision、If-Match/generation；不新增 public CAS。Platform 唯一负责事务、fresh source/package 与 CAS。 |
+| 删除项 | 不保留正式安装 name/scope alias、空 stub、旧 pool/catalog fallback；新路径拒绝非 self alias/未知子路径。原显式 preview 数据不成为正式安装结果；不顺带重写 preview 能力。 |
+| 验证 | 本片四文档静态一致性与 hash；代码后续 RED→GREEN、contract/生成漂移、architecture、lint/typecheck、pure tests/build；真 IAM/BFF/Platform/Storage 与浏览器由 Root 独立门证明。 |
+
+### 请求、交互与恢复
+
+- 正式 Hub catch-all 当前对新路径落普通分支：丢 request ID/Retry-After、改写 no-store，DELETE body 被忽略。
+  后续必须给五方法具名严格分支；GET/DELETE 的非法 body 应拒绝，不静默清空；保持现有有界 transport/deadline/取消，
+  不放宽其他 Hub 请求限额。输入、状态/错误、response header 与 envelope 按 API_CONTRACT 本节单一方案。
+- 发布列表和安装列表分别取数；不从 Skill list 可选 installed/enabled 位重建 installation，也不把安装空页当公开技能库。
+  安装列表默认明确请求 installed=true、limit=50；筛选支持全部/true/false 的 presence，切换重置 cursor/history。
+  每次仅取一页，不后台抓全库。loading、empty、error、permission、partial、busy、unknown ACK、success 显式区分。
+- 当前 mounted 管理视图内同一 installation 的 mutation 串行；提交立即锁定原意图并禁用冲突动作。
+  这不是跨页签锁或服务端 CAS。不同页签并发仍由 owner 决定，409/412 重新读取，不猜 generation 或自动换 key。
+- 每个新用户意图生成一个 key，冻结 method、path、原 body；网络失败/超时/取消表示结果可能未知。
+  只有显式重试复用同 key/参数；不自动重试 mutation，不把成功 HTTP 状态但坏 receipt 当成功。
+- 200 receipt 校验后仅说明原命令已提交；尤其 replay 保留历史状态。随后 Get 当前 installation，必要时刷新当前页；
+  Get 失败呈现“命令已确认、当前状态待核”，不重发已确认命令，也不以旧 ACK 覆盖当前状态。
+  Install ACK 未知且尚无 installation_id 时只同 key 重试；不得假造 ID。关闭弹窗再打开不重建当前 mounted 组件的意图。
+- 页面刷新/卸载丢失内存 key 时只 Get/List 当前状态，不凭 source_ref 匹配宣称原 receipt 已恢复、不自动新 key mutation。
+  401/403 不自动重发；404 不推断他人存在；409 conflict 与 in-progress 按稳定 code 区分；412 让用户复核当前状态。
+- Publish 成功只刷新已发布列表；不 auto-install/enable。Install/enable 不创建 Run、不触发模型、不改 Chat refs。
+  管理 GET 或 installed/enabled 也不是未来执行授权证明，Agent/Platform 仍每次执行重新判定。
+
+### 下一代码片精确文件集（待 Root 另授）
+
+全部路径相对于本仓；本片未修改这些代码。
+
+| 类别 | 既有文件/生成检查范围 |
+| --- | --- |
+| 核心 | `src/hub/schemas.ts`、`src/hub/client.ts`、`src/ui/skills/personal-skills-read.tsx`、`src/app/api/hub/[...path]/route.ts`。schema 保持纯校验；client 保持 transport/error；组件只持浏览器状态。 |
+| 固定来源 | `src/generated/bff-public-openapi.yaml` 原字节替换；`scripts/generate-bff-team-client.mjs` 更新 digest；现 `src/generated/bff-team/` 15 文件仅按原生成器检查/生成，预计 Team 操作无语义变化。不扩 Team SDK 到 Skills、不手改生成物。 |
+| pin/contract 测试 | `tests/contract/bff-skills-mcp-public.test.ts` 加五方法 strict 语义；`tests/contract/bff-team-public.test.ts`、`bff-library-file-public.test.ts`、`bff-library-artifact-public.test.ts`、`bff-project-create-public.test.ts`、`bff-project-resource-public.test.ts` 仅同步共同 snapshot 来源并保留原断言。 |
+| 直接测试 | `tests/hub/client.test.ts`、`tests/app/hub-proxy.test.ts`、`tests/ui/kokoro-skills-surface.test.tsx`、`tests/ui/skills-panel.test.tsx`、`tests/ui/personal-skill-publish-dialog.test.tsx`；分别覆盖 transport、同源、两正式入口与 Publish 不自动安装。 |
+| i18n | `src/i18n/messages.ts`、`en.ts`、`de.ts`、`es.ts`、`fr.ts`、`ja.ts`、`ko.ts`、`pt.ts`、`ru.ts`；`tests/i18n/resolve.test.ts`。仅准确安装/未知结果文案，保留95%门。 |
+| 文档/地图 | 本四文档；代码落地时 `INDEX.md`、`src/ui/skills/INDEX.md` 仅更新实际既有入口职责，不创建第二地图。 |
+
+无需修改 AppFrame、Chat/AG-UI、draft/upload 状态机、Platform/BFF 代码、依赖/锁或新 store。
+若实施发现需要越出表中职责，先回 Root 裁决；本表不是当前代码写入授权。
+
+下一片先 RED：新列表 envelope/headers、DELETE 非空拒绝、false presence、未知 ACK 同键、历史 receipt 与当前 GET 相反、
+取消/迟到响应、发布零安装与安装零 Run。然后 Node22 执行：
+
+```bash
+pnpm exec vitest run tests/hub/client.test.ts tests/app/hub-proxy.test.ts tests/ui/kokoro-skills-surface.test.tsx tests/ui/skills-panel.test.tsx tests/ui/personal-skill-publish-dialog.test.tsx tests/i18n/resolve.test.ts --maxWorkers=2
+pnpm contract
+pnpm test:architecture
+pnpm lint
+pnpm typecheck
+pnpm exec vitest run --exclude '**/*.integration.test.ts' --maxWorkers=2
+pnpm build
+```
+
+这些是后续命令而非本片已通过证据；真实浏览器/owner 组合另由 Root 调度，不触当前受管服务。
+
 ## WEB-PRODUCT-IA-CODE（2026-09-30；代码候选，待 Root 验收）
 
 实施基线 `7087225`，下节保留代码前放置门。当前候选在既有文件内清除 `onCreateTask`/`onReorderTasks` 与 Conversation 混用，

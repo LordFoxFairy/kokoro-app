@@ -1,5 +1,46 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PERSONAL：安装管理状态归属（2026-09-30；目标文档门）
+
+Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e`，目标固定 BFF
+`67755d16ff0f40ea02d71a6dad7108507a04766a` public OpenAPI SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；其 Platform 固定
+`6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1。当前 Web 尚无安装状态机，旧 snapshot 571b51de/preview installed 不证明消费。
+
+| 事实/临时状态 | 唯一归属与生命周期 |
+| --- | --- |
+| Skill/Draft/发布 | Platform 持久 owner；当前本人 ACTIVE 列表可作为显式 Install 的 source selector，不等于已安装。 |
+| installation/current generation/启停/removed | Platform 唯一持久 owner；Web 只保存最新 Get/List 的九字段安全投影（其中 removed_at 可选）。无第二安装表/store。 |
+| 原命令 ACK/幂等/CAS/outbox | Platform receipt、事务与事件 owner；BFF public 投影。Web 不复制摘要或将 request ID/event ID 当 mutation key。 |
+| tenant/subject/权限 | current IAM 与 BFF trusted context；Web 内存记录、cursor、source_ref 与 installed/enabled 均不是授权。 |
+| 已发布页/安装页 | 组件内两个独立状态，含 loading/error/ready、当前筛选与 opaque cursor/history；安装默认显式 installed=true、limit50。筛选改变重置翻页，不抓全量后自行分页。 |
+| 进行中的意图 | 当前 mounted 组件内冻结 method/resource/body/key、请求 generation/AbortController、busy/unknown/acknowledged/refresh-error。每个 installation 本视图串行；非跨页签互斥。 |
+
+无 SQL canonical schema、migration、索引、业务 Redis key、安装 localStorage/IndexedDB、server cache 或跨 owner JOIN。
+现 session/CSRF Redis 生命周期不变。本片无 fresh-install 数据门，不创建空 schema。
+
+### 内存转换与丢失边界
+
+1. idle → submitting：新明确意图生成一次 key，冻结 exact 参数；冲突控件 disabled。
+2. 网络/超时/取消 → unknown：取消网络不等于取消已提交业务。保留原 key/参数供显式同键重试；
+   不乐观落安装/启用/移除成功，不生成第二意图绕过未知结果。
+3. strict 200 receipt → acknowledged → refreshing：历史 ACK 的 change/event/replayed 是原提交结果，
+   不覆盖 current read。Get/List 成功才更新当前视图；Get 失败是“命令已确认、当前状态待核”，不是 mutation 失败重发。
+4. receipt replay 后当前 installation 可能已 disabled/removed/升级，以新 Get 为准；读失败不回填旧 ACK 当当前事实。
+   Install 未知且无 ID 时只同键重试，不按 source_ref 猜安装 ID。
+5. 弹窗关闭/重开保留当前父组件生命周期内的未知意图；卸载/整页刷新丢失它，只读取 owner 当前状态。
+   不用列表匹配证明历史命令已执行、不自动新 key 补写。组件卸载/换页 abort 且 generation fence 拒迟到结果。
+6. 401/403停止动作；404不泄露存在性；409/412展示明确冲突/前置失败并允许读取当前状态，
+   不制造 expected_revision/If-Match。不同页签/同用户并发的正确性仍由 Platform CAS/receipt 保证。
+
+安装管理表示按 installation_id 键控；source_ref 是固定 Skill 引用，series_id/revision 不充当 installation ID。
+启停/移除不依赖名称或公开 source 详情成功；removed 始终 disabled，读到 removed 是管理状态而非消失。
+List 的 optional meta.next_cursor 保持 absence，不变 null/空串；默认不筛选时包括 removed，false不等于缺失。
+
+发布流程既有 File/attempt/原 key 状态保持独立：Publish 不建立安装；安装不选择或启动 Run。
+Chat 有序 exact selected_skill_source_refs 与每 Run 冻结逻辑完全不改，未来执行仍由 Agent/Platform重新授权。
+下一切片文件表与验证见 TECHNICAL_DESIGN；本节没有声明实现、持久化或端到端通过。
+
 ## WEB-PRODUCT-IA-CODE 当前内存状态（2026-09-30；待 Root 验收）
 
 基线 `7087225`。正式 Project scheduled 初始项为空且不显示 preview 选择器/编辑器；样例与合成 ID 仅在显式 preview 夹具内，

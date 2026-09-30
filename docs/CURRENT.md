@@ -1,5 +1,37 @@
 # Kokoro User Web 当前状态
 
+## WEB-PERSONAL-DOC-WRITE（2026-09-30；仅文档门，待 Root 审查）
+
+基线 Web clean main `14a54b4b8da68b37d83a13402bc8abb87001574e`。本片唯一写集为
+TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL/CURRENT；没有代码、generated、依赖/锁、Git index/commit、服务或数据操作。
+
+当前事实：正式 Skills 两个入口共用 PersonalSkillsRead，只读本人 ACTIVE 列表/详情并提供已有发布流程，
+无本人 installation consumer；旧 name/scope setSkillEnabled 不用于本次正式 API。snapshot 仍 pin BFF
+`571b51de2057905c74c78ac966c8cf5ac11eca93`，SHA-256
+`f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90`。
+
+已核下一固定来源：BFF `67755d16ff0f40ea02d71a6dad7108507a04766a` public OpenAPI，SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；其 consumer 固定 Platform
+`6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1。源码/机器读核不等于此 Web 已实现或真实五方法组合已过。
+Root 对上轮 IA 的验收 commit 为14a54b4；下节 IA“候选/待验”保留的是当时交付记录，不是当前未提交源码。
+
+### 本文档门已确定
+
+- 沿既有 Hub/PersonalSkillsRead，独立管理已发布与本人安装；无新 module/store/owner/协议。
+- 五方法严格消费、单键原意图、取消与 unknown ACK、replay 后 Get current；不丢 receipt、不发明 public CAS。
+- List 的 top-level data array/optional meta、过滤 presence/keyset、removed disabled、隐私与逐状态错误/头均与 BFF 一致。
+- 当前通用 Hub 对新路径会丢 request ID/Retry-After、改写 no-store、略过 DELETE body，须具名严格分支后才接 UI。
+- Publish 不 auto-install；安装不启 Run/改 refs；公开目录、preview 或空页 stub 不代表可用安装能力。
+- 下一精确既有源码/生成 pin/i18n/测试范围与命令已列 TECHNICAL_DESIGN，仍须 Root 单独授写。
+
+### 本片验证与未完成
+
+本片实际执行只读文件/来源核查、owner OpenAPI `sha256sum`、四文档边界一致性检查、`git diff --check` 与四文件 hash。
+没有运行代码门或真实服务。Root 后续独立运行 `pnpm contract`、`pnpm test:architecture` 审核文档门；
+代码授权后再按 TECHNICAL_DESIGN 的 Node22 聚焦/pure/lint/typecheck/build 命令验收。
+真实当前 IAM/BFF/Platform/Storage、跨页签/撤权/ACK lost 与浏览器交互仍待 Root 组合，不触当前3310受管进程或付费模型。
+没有新 owner/public 契约裁决项；开放项为文档门审查、代码文件集授权、repin/runtime/UI实施、独立验证与产品激活证据。
+
 ## WEB-PRODUCT-IA-CODE（2026-09-30；已实施候选，待 Root 独立验收）
 
 基线 `main 7087225`；本片 Web 唯一 writer、Root 管提交。Conversation 相关 callback alias 已删除，专案会话/排序/加载/错误/
