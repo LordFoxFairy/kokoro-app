@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createSessionStreamState, type RunErrorCode, type SessionStreamState } from "@/core/state"
+import { createSessionStreamState, type RunErrorCode, type SessionDelivery, type SessionStreamState } from "@/core/state"
 import { LocaleProvider } from "@/i18n/context"
 import { zh, type MessageKey } from "@/i18n/messages"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
@@ -84,6 +84,80 @@ describe("failureCopyKey — 闭集 7 码逐码本地化", () => {
 })
 
 describe("ConversationThread 失败卡渲染", () => {
+  const delivery: SessionDelivery = {
+    conversationId: "ses_1", artifactId: "artifact_1", assetId: "asset_1", artifactKind: "document",
+    title: "Report", mime: "application/pdf", size: 2048, runId: "run_1", createdAt: "2026-09-30T00:00:00Z",
+  }
+
+  it.each([
+    { name: "空成果且无更多页", sessionId: "ses_1", deliveries: [], hasMore: false, canOpen: true, visible: false },
+    { name: "无会话且空成果", sessionId: null, deliveries: [], hasMore: false, canOpen: true, visible: false },
+    { name: "无会话且已有成果", sessionId: null, deliveries: [delivery], hasMore: false, canOpen: true, visible: false },
+    { name: "无会话且有更多页", sessionId: null, deliveries: [], hasMore: true, canOpen: true, visible: false },
+    { name: "有效会话且有更多页", sessionId: "ses_1", deliveries: [], hasMore: true, canOpen: true, visible: true },
+    { name: "有效会话且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: true, visible: true },
+    { name: "无打开动作且已有成果", sessionId: "ses_1", deliveries: [delivery], hasMore: false, canOpen: false, visible: false },
+  ])("成果滚动项仅在成果区可渲染时存在：$name", ({ sessionId, deliveries, hasMore, canOpen, visible }) => {
+    const { container } = render(
+      <ConversationThread
+        sessionId={sessionId}
+        thread={{ ...createSessionStreamState(), deliveries, deliveriesHasMore: hasMore }}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed={false}
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        {...(canOpen ? { onOpenDelivery: vi.fn() } : {})}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+    const wrapper = container.querySelector('[data-message-id="deliveries"]')
+    if (visible) {
+      expect(wrapper).not.toBeNull()
+      expect(wrapper?.querySelector("section")).not.toBeNull()
+    } else {
+      expect(wrapper).toBeNull()
+    }
+  })
+
+  it("清除空成果滚动项时保留重复用户、空失败助手轮与失败卡", () => {
+    const thread = failedThread("internal_error", "diagnostic")
+    const { container } = render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={{ ...thread, messages: [
+          { id: "m_u1", role: "user", content: "same persisted prompt", runId: "m_u1" },
+          { id: "m_u2", role: "user", content: "same persisted prompt", runId: "m_u2" },
+          { id: "m_a", role: "assistant", content: "", runId: "run_1" },
+        ] }}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        onOpenDelivery={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+    expect(container.querySelector('[data-message-id="m_u1"]')).toHaveTextContent("same persisted prompt")
+    expect(container.querySelector('[data-message-id="m_u2"]')).toHaveTextContent("same persisted prompt")
+    expect(container.querySelector('[data-message-id="run_1"]')).not.toBeNull()
+    expect(container.querySelector('[data-message-id="run-error"]')).not.toBeNull()
+    expect(container.querySelector('[data-message-id="deliveries"]')).toBeNull()
+  })
+
   it("桌面任务态的助手答案可复制当前轮真实文本", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })

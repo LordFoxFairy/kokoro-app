@@ -1,5 +1,17 @@
 # Kokoro User Web 技术设计
 
+## WEB-VISUAL-CURRENT-AUDIT：全指针输入表面与真实成果滚动项
+
+基线 `bef68a0386a902bbe4747c5795d8222d1d91fa51` 的 Composer 仅在聚焦或 fine pointer 分支去除 textarea 阴影；coarse pointer 失焦态继承共享 Textarea 的 `shadow-xs`。Root 已在现有真实页面启用 touch emulation 并确认该 computed 状态。目标由现有 `src/ui/composer/composer.module.css` 的基础 `.input` 明确 `box-shadow: none`，不改共享 primitive、普通模式焦点环、响应式几何或其他表单。
+
+Root 本轮真实 forced-colors 复验进一步确认：textarea 的透明 2px outline 被浏览器映射为系统 Highlight，与 shell outline 同时绘制。当前方案仅在既有 `@media (forced-colors: active)` 内把局部 `.input:focus-visible` 的 outline 设为 none；同一 shell 继续提供替代的 `2px solid Highlight`、`2px` offset 并关闭 shadow。普通模式仍保留透明 textarea outline，不设置 `forced-color-adjust`，不修改共享 Textarea。此替代焦点边界修正此前只核验 shell 系统色而未排除 textarea 系统色内框的设计遗漏。
+
+CSS architecture 门继续禁止无替代的 `outline: none/0`。现有 `tests/architecture/css-quality.test.mjs` 只在精确 Composer 文件中识别完整的两条 forced-colors 规则：shell 的指定 `:has(.input:focus-visible)` selector 同时提供 Highlight 2px outline、2px offset 和 shadow none，局部 `.input:focus-visible` 才可移交 outline。只剔除这一条输入声明后继续对全部剩余源执行原禁令，不对白名单文件整体跳检，不通过改写 CSS 规避正则。缺 shell、错误 selector/scope、错误 outline/offset、缺 shadow 与普通模式另加禁用 outline 的突变必须失败。
+
+ConversationThread 已有成果区在无成果且无更多页、或 `sessionId=null` 时由 DeliverySection 返回 null，但父级仍创建带间距的 MessageScrollerItem。目标在现有 `src/ui/thread/conversation-thread.tsx` 的 wrapper 使用与子组件一致的边界：存在打开动作、非 null 会话，且成果非空或还有更多页才渲染。采用父级条件而不是 CSS 隐藏或改 scroller primitive；后两者会保留虚假滚动项或影响全部消息。该局部修复不改变消息顺序、内容、身份、空失败助手轮、重复用户事实或失败卡，也不修改 API/contract/owner 数据。
+
+可见焦点继续由 textarea 的 `:focus-visible` 驱动同一圆角 shell；文本控件在鼠标或程序聚焦后也可能匹配该伪类，因此不宣称这是只限键盘的提示。本片不更改主动聚焦行为。测试锁定基础去阴影、成果 empty/null/hasMore/nonempty/no-callback 边界与失败事实保留；Root 负责完整门禁及真实触屏/桌面、多行、焦点和消息不变复验。
+
 ## WEB-COMPOSER-SINGLE-FOCUS：单一焦点表面
 
 Composer 继续由 textarea 的 `:focus-visible` 驱动圆角 shell 焦点提示，不改为 `:focus-within`，也不改变输入自增高、控件、阅读轴或响应式几何。Web shell 在聚焦时把原静态边框设为透明，只绘制一条 `2px var(--ring)` 外环；textarea 自身仍无可见内框，因此不会由边框与半透明阴影叠成双圈。当前实测 `--ring` 是带 42% alpha 的 `#1a1a1a6b`，本片不改全局 token，也不宣称其对比度已经通过额外 WCAG 实测。由于 forced-colors 会抑制 box shadow，高对比模式改由同一 shell 绘制唯一的 `2px solid Highlight` outline、`2px` offset，并关闭 shadow；不设置 `forced-color-adjust`。该切片仅由既有 Composer CSS 与聚焦测试承接，不改 shadcn Textarea primitive、公开契约或业务消息事实。
@@ -25,7 +37,7 @@ writer本片不启动服务或浏览器；Root 以真实历史线程验收390/64
 
 ## WEB-COMPOSER-VISUAL-ALIGN：输入焦点与会话阅读轴
 
-Web Composer 继续由既有 `ui/composer` 拥有输入表面，AppFrame CSS 只负责站点布局。Textarea 的 2px outline 保持透明以保留 forced-colors 语义，不再绘制零圆角的可见内部焦点框；键盘 `focus-visible` 通过 `:has()` 把 token ring 提升到已有圆角 form shell，鼠标焦点不额外着色。Thread 的 MessageScrollerContent 是同时携带 content/inner 标记的同一节点，因此只保留一条 48rem 阅读轴，与 thread Composer 同宽，不建立虚假的嵌套 46rem 轨道。
+Web Composer 继续由既有 `ui/composer` 拥有输入表面，AppFrame CSS 只负责站点布局。Textarea 的 2px outline 保持透明以保留 forced-colors 语义，不再绘制零圆角的可见内部焦点框；`focus-visible` 通过 `:has()` 把 token ring 提升到已有圆角 form shell。该伪类由浏览器判断，文本控件在鼠标或程序聚焦后也可能匹配，不保证仅键盘触发。Thread 的 MessageScrollerContent 是同时携带 content/inner 标记的同一节点，因此只保留一条 48rem 阅读轴，与 thread Composer 同宽，不建立虚假的嵌套 46rem 轨道。
 
 桌面视口保留 2rem 阅读留白；手机已有 thread shell 安全 gutter，只增加 0.125rem 光学校准，不再叠加桌面 2rem。滚动容器、stable scrollbar gutter、用户/assistant事实、空 assistant、间距、消息顺序和 owner contract均不变。验证锁定键盘焦点归属、48rem单轴及767px边界，并由Root真实390px/桌面浏览器复核几何。
 

@@ -1,5 +1,19 @@
 # Kokoro User Web 当前状态
 
+## WEB-VISUAL-CURRENT-AUDIT Root 已验收（2026-09-30）
+
+Root 最终 Node22.22.2 `pnpm check` actual exit0：contract109、architecture49、全量1822/lint/typecheck/build；日志 `/tmp/kokoro-web-visual-current-root-r3-check.log`。独立R3审查0/0/0、7/7冻结hash匹配。真实3310复验coarse/fine的focus/blur、390px与默认1280px、Shift+Enter两行54px不提交：textarea shadow none、无横溢；高对比textarea outline-style none且shell solid2px系统色替代保留。空deliveries Item=0，其他七个消息项全文逐项严格不变，包括重复user/历史空assistant/失败卡；不冒称完整产品链闭环。媒体、touch和viewport override已恢复，草稿清空；没有重启、模型调用或数据改写。最终矩阵 `/tmp/kokoro-web-visual-current-real-matrix-r2.json`；截图 `/tmp/kokoro-composer-current-desktop-after-r2.png`、`/tmp/kokoro-composer-coarse-mobile-after-r2.png`、`/tmp/kokoro-composer-forced-colors-after-r2.png`。下面候选/待验描述保留为当时阶段记录，由本段最终验收后继。
+
+基线 `main bef68a0386a902bbe4747c5795d8222d1d91fa51`。Root 真实 touch emulation 已确认 coarse pointer 失焦 textarea 继承 primitive `shadow-xs`，桌面 fine pointer 的无阴影不覆盖此状态。本候选在 Composer 基础 `.input` 明确去阴影，保留共享 Textarea、普通模式单一 shell ring 及输入几何。ConversationThread 的成果 wrapper 现在仅在有打开动作、非 null 会话，且有成果或更多页时存在，与 DeliverySection 的可渲染边界一致；不再为返回 null 的成果区创建虚假滚动项。重复 user、空失败 assistant 和失败卡均保留，未过滤、去重或隐藏 owner 事实。
+
+Node22.22.2 精准 RED 两文件为6失败/72通过：缺基础去阴影及empty/null wrapper边界；日志 `/tmp/kokoro-web-visual-current-red-r2.log`。首次保护断言误把 taskTitle 算成第三个用户同文案，已改为按真实 user messageId 断言后重跑 RED，不改生产行为。GREEN Composer/ConversationFailure/DeliveryCard/AppFrame 四文件151/151通过，日志 `/tmp/kokoro-web-visual-current-green.log`；`pnpm lint`、`pnpm typecheck` 均 exit0，日志分别为 `/tmp/kokoro-web-visual-current-lint.log`、`/tmp/kokoro-web-visual-current-typecheck.log`。Writer 不运行完整 check、浏览器、服务、模型或数据操作；完整门禁、运行副本同步和真实视觉复验由 Root 负责，尚不标为已验收。
+
+Root 随后的完整 Node22 check 已实际通过 contract109、architecture37、1809 tests、lint/typecheck/build，但真实 forced-colors 聚焦态发现 textarea 透明 2px outline 与 shell outline 同时被系统色 Highlight 绘制；此前 shell-only 高对比记录不证明没有内框。本轮返修仅在 forced-colors media 中设置局部 `.input:focus-visible { outline: none; }`，以现有 shell 的系统色 2px outline/2px offset 作为唯一替代焦点，不设置 `forced-color-adjust`。新精准 RED 为1失败/78通过，日志 `/tmp/kokoro-web-visual-current-forced-red.log`；返修后四目标文件152/152通过，日志 `/tmp/kokoro-web-visual-current-forced-green.log`。彼时该返修后的完整 check 与真实高对比截图待 Root 执行，不沿用返修前完整门作为最终通过证据；后继 R2 结果见下段。
+
+Root R2 后继真实页面已确认 forced-colors textarea outline-style 为 none、shell 为 solid 2px，coarse/fine 四态无输入阴影且消息 exact 不变；但 R2 完整 check 实际 exit1：contract109通过，architecture1失败/36通过，日志 `/tmp/kokoro-web-visual-current-root-r2-check.log`。原 architecture 门全局禁止所有 outline:none，未识别同 shell 替代焦点。本轮只扩既有 CSS quality 测试，精确支持 Composer 的两规则 forced-colors 移交契约，并仅移除该一条局部声明后继续执行剩余源的原禁止；未改 CSS 写法规避门禁，未整文件豁免。新增正例与11个突变/错误文件负例；精准 RED2失败/12通过，日志 `/tmp/kokoro-web-visual-current-focus-contract-red.log`；随后 architecture49与相关 UI152合计201/201通过，日志 `/tmp/kokoro-web-visual-current-focus-contract-green.log`；该 architecture 文件 ESLint exit0，日志 `/tmp/kokoro-web-visual-current-focus-contract-lint.log`。修后最终完整 check 仍由 Root 重跑，当前不标为已验收。
+
+焦点提示由 `:focus-visible` 判断，文本控件在鼠标或程序聚焦后也可能匹配；本候选不声称只限键盘，也未改变主动聚焦与持续外环的行为。完整 failure/retry/重复 user 的 owner 修复仍是后继任务，本片不代表全部产品闭环。
+
 ## WEB-COMPOSER-SINGLE-FOCUS Root已验收
 
 Root最终R2显式Node22.22.2完整 `pnpm check` actual exit0：contract109、architecture37、1800tests（44.86s）、lint/typecheck/build全部通过；日志 `/tmp/kokoro-web-single-focus-root-r2-final-check.log`。独立四文件审查P0/P1/P2=0/0/0。Root仅将exact HEAD baseline确认过的owned runtime单个CSS更新，无重启/模型/数据修改。真实IAB鼠标/Tab焦点单2px环、blur shadow none，textarea border0/no shadow，1280px composer x282/w768，390px x16/w358，无横向溢出；forced-colors实际active时shell系统色outline2px/offset2px、shadow none，随后恢复正常媒体/默认viewport。消息article全文数组严格相等。矩阵 `/tmp/kokoro-composer-single-focus-real-matrix.json`，截图 `/tmp/kokoro-composer-single-focus-{desktop,mobile,forced-colors}.jpg`。刷新后旧重复user仍可见；在本次视口切换后另出现通用failed提示，不改/隐藏，精确failure/retry与状态持久消费仍是后继owner任务，不把CSS验收称全能力闭环。

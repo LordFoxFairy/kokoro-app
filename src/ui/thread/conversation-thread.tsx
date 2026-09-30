@@ -259,7 +259,7 @@ function ConversationThreadSurface({
         ) : null}
 
         {/* 成果区：会话流尾部聚合本会话全部成果（终态一目了然，不用翻消息流）。 */}
-        {onOpenDelivery ? (
+        {onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore) ? (
           <MessageScrollerItem messageId="deliveries">
             <DeliverySection
               sessionId={sessionId}

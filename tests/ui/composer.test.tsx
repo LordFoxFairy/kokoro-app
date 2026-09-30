@@ -700,7 +700,21 @@ describe("Composer 状态契约", () => {
 })
 
 
-it("编辑器把键盘焦点环画在圆角 shell，textarea 不出现直角内框", () => {
+it("编辑器基础输入表面去除阴影，不依赖 fine pointer 或聚焦态", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
+  const baseInput = css.match(/^\.input\s*\{([^}]*)\}/m)?.[1]
+  expect(baseInput).toBeDefined()
+  expect(baseInput).toMatch(/box-shadow:\s*none;/)
+})
+
+it("高对比模式由 shell 替代输入框的系统色 outline，保留唯一可见焦点", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
+  expect(css).toMatch(/@media \(forced-colors: active\)\s*\{\s*\.wrap \.composer:has\(\.input:focus-visible\)\s*\{[^}]*outline: 2px solid Highlight;[^}]*outline-offset: 2px;[^}]*box-shadow: none;\s*\}\s*\.input:focus-visible\s*\{[^}]*outline: none;/)
+  expect(css).toMatch(/\.input:focus-visible\s*\{[^}]*outline: 2px solid transparent;/)
+  expect(css).not.toContain("forced-color-adjust")
+})
+
+it("编辑器把可见焦点环画在圆角 shell，textarea 不出现直角内框", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
   expect(css).not.toContain(".composer:focus-within")
   expect(css).toMatch(/\.input:focus-visible\s*\{[^}]*outline: 2px solid transparent;/)
