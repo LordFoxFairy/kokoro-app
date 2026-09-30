@@ -79,7 +79,7 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
     </LocaleProvider>,
   )
 
-  expect(screen.getByRole("status")).toHaveTextContent("正在加载任务…")
+  expect(screen.getByRole("status")).toHaveTextContent("正在加载会话…")
   expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
 
   rerender(
@@ -92,7 +92,7 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
     </LocaleProvider>,
   )
 
-  expect(screen.getByRole("alert")).toHaveTextContent("任务暂时无法加载。")
+  expect(screen.getByRole("alert")).toHaveTextContent("会话暂时无法加载。")
   fireEvent.click(screen.getByRole("button", { name: "重试" }))
   expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
   expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
@@ -451,4 +451,21 @@ it("定时任务入口打开选择弹窗和编辑器，并提交项目级任务"
   expect(screen.getByRole("dialog")).toHaveTextContent("每日简报")
   fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+})
+
+it("正式专案任务入口到独立任务页，不提供样例选择或本地成功", () => {
+  const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview={false} projectRef="project-real" onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
+  const card = contextCard(container, "scheduled")
+  const link = within(card).getByRole("link")
+  expect(link).toHaveAttribute("href", "/app/scheduled")
+  expect(screen.queryByText("每日简报")).not.toBeInTheDocument()
+  expect(within(card).queryByRole("button")).not.toBeInTheDocument()
+})
+
+it("新的专案会话欢迎面使用 Conversation DOM 与标题关联", () => {
+  render(<LocaleProvider><KokoroProjectWorkspace projectConversation onPrompt={vi.fn()} composer={<textarea aria-label="测试输入" />} /></LocaleProvider>)
+  const surface = document.querySelector('[data-slot="project-conversation-welcome"]')
+  expect(surface).toBeInTheDocument()
+  expect(surface).toHaveAttribute("aria-labelledby", "kokoro-project-conversation-heading")
+  expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
 })

@@ -253,12 +253,12 @@
  * expose a fine-pointer viewport below 768 CSS pixels, and hiding the task
  * surface there leaves only an empty shell because its composer is owned by
  * this route state. */
-.projectTaskSurface,
-.projectTaskContent {
+.projectConversationSurface,
+.projectConversationContent {
   min-width: 0;
 }
 
-.projectTaskSurface {
+.projectConversationSurface {
   display: flex;
   min-height: 0;
   flex: 1;
@@ -267,21 +267,21 @@
   padding: 6.5rem 2rem 6rem;
 }
 
-.projectTaskContent {
+.projectConversationContent {
   width: min(48rem, 100%);
   margin-inline: auto;
 }
 
-.projectTaskIntro {
+.projectConversationIntro {
   text-align: center;
 }
 
-.projectTaskIntro > span {
+.projectConversationIntro > span {
   color: var(--muted-foreground);
   font-size: 0.78rem;
 }
 
-.projectTaskIntro h1 {
+.projectConversationIntro h1 {
   margin: 0.75rem 0 0;
   color: var(--foreground);
   font-family: var(--font-serif);
@@ -290,29 +290,29 @@
   line-height: 1.2;
 }
 
-.projectTaskIntro p {
+.projectConversationIntro p {
   margin: 0.65rem auto 0;
   color: var(--muted-foreground);
   font-size: 0.86rem;
   line-height: 1.45;
 }
 
-.projectTaskComposer {
+.projectConversationComposer {
   margin-top: 2.75rem;
 }
 
-.projectTaskComposer :global([data-slot="composer"]),
-.projectTaskComposer :global([data-slot="composer-wrap"]),
-.projectTaskComposer :global([data-slot="composer-wrap"] form) {
+.projectConversationComposer :global([data-slot="composer"]),
+.projectConversationComposer :global([data-slot="composer-wrap"]),
+.projectConversationComposer :global([data-slot="composer-wrap"] form) {
   width: 100%;
 }
 
-.projectTaskComposer :global([data-slot="composer-wrap"]) {
+.projectConversationComposer :global([data-slot="composer-wrap"]) {
   padding-inline: 0;
   padding-bottom: 0;
 }
 
-.projectTaskComposer :global([data-slot="composer-wrap"] form) {
+.projectConversationComposer :global([data-slot="composer-wrap"] form) {
   min-height: 7.1rem;
 }
 

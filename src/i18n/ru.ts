@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "firstSite.startConversation": "Начать диалог в этом проекте",
+  "firstSite.currentProject": "Текущий проект",
+  "firstSite.conversationsLoading": "Загрузка диалогов…",
+  "firstSite.conversationsError": "Диалоги временно недоступны.",
+  "firstSite.independentScheduledTasks": "Запланированные задачи управляются отдельно от диалогов проекта.",
+  "firstSite.openScheduledTasks": "Открыть запланированные задачи",
+  "rail.conversationSort": "Сортировать диалоги",
   "firstSite.keepProjectOrganized": "Поддерживайте порядок на сайте",
   "firstSite.keepProjectOrganizedHint": "Храните задачи, версии и обновления в одном месте.",
   "firstSite.addToProject": "Добавить в проект",

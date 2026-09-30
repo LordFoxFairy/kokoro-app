@@ -1,5 +1,37 @@
 # Kokoro User Web 当前状态
 
+## WEB-PRODUCT-IA-CODE（2026-09-30；已实施候选，待 Root 独立验收）
+
+基线 `main 7087225`；本片 Web 唯一 writer、Root 管提交。Conversation 相关 callback alias 已删除，专案会话/排序/加载/错误/
+空态/输入提示按会话命名，ScheduledTask 仍独立 live surface；Project scheduled 正式卡只导航 `/app/scheduled`，
+不装载 preview task、不挂假选择/保存弹窗、不以缺 callback 或丢弃回执生成正式成功。显式 preview 保留隔离样本。
+无 projectRef 不猜 `/app/project/kokoro`；welcome 新建意图单独 callback 走既有 owner createProject 与 frozen retry，
+新建后的 opaque ID/草稿保留，展开/收起菜单不将 UI Event 当草稿；已知项目 shortcut 使用“当前专案”，不假称全集/真实名称。
+移除首页硬编码广告轮播/计时器；未接通 Figma/Shopify/内建整合只留显式 preview，welcome 默认正式模式。
+保留真实聊天提示与 brand 插值；Composer 只保留编辑器 token focus ring，既有 autogrow/IME/Shift+Enter 不改。
+仅增加本片七个准确翻译 key 到现语言包，复用已有私密/空态 key，覆盖率门不降低。
+
+Node 22.22.2 实测：新增正式行为 RED **5 failed/88 passed**；旧 CSS 双 focus 负例 RED **1 failed/56 skipped**（按名字聚焦）；
+收起菜单 callback Event 负例 RED **1 failed**。最终直接 **7 files/232 passed**；完整非 integration `--maxWorkers=2`
+**154 files/1581 passed**；contract **108 passed/18 files**（含生成漂移校验）；architecture **37 passed/4 files**；
+lint、typecheck、build、git diff --check 全部 exit 0。首次全门 **1578 passed/1 failed** 为新 key 导致 ko 覆盖率
+1464/1547 低于95%，Root 追加批准七个现 overlay 后精确补翻译，原门完整重跑通过，未放宽断言。
+日志 `/tmp/kokoro-web-ia-red.log`、`/tmp/kokoro-web-ia-focus-red.log`、`/tmp/kokoro-web-ia-menu-red.log`、
+`/tmp/kokoro-web-ia-green.log`、`/tmp/kokoro-web-ia-unit-final.log`、`/tmp/kokoro-web-ia-final-*.log`。
+
+命名审查返修：上一候选 1P1/1P2 未放行；DOM/data-test/aria/CSS 与本地组件统一 Conversation 命名，快捷图标为 MessageSquare，
+命令菜单 onNewChat 使用会话文案。原位 rename 为 `kokoro-project-conversation-welcome.tsx` / `project-conversation-empty.tsx`，
+旧文件删除且唯一 imports 同步，不留 alias/双文件；INDEX 无旧引用因此未改。
+先 DOM/图标两例 RED **2 failed/67 passed**，命令菜单 RED **1 failed/8 passed**；新候选相关 **8 files/243 passed**，
+完整 pure **154 files/1583 passed**，contract **108**、architecture **37**、lint/typecheck/build/diff check 全部重新通过。
+日志 `/tmp/kokoro-web-ia-naming-{red,green,unit,contract,test-architecture,lint,typecheck,build}.log` 与
+`/tmp/kokoro-web-ia-command-red.log`。全 src/tests 的旧 conversation task selector/组件命名零命中，剩余 task loading/error
+调用仅属真正 ScheduledTask。上文 1581/232 是返修前候选证据，不作为最终放行门。
+
+本片仅原位重命名两文件，无新目录/依赖/持久 store/网络契约/generated；所有测试进程已退出，未启动应用服务、访问共享 PG/Redis/3310 或用户浏览器。
+纯测试的 CSS/输入断言不等于实际浏览器焦点与窄屏验收；Root 仍需固定来源审查/提交/真实用户流程。
+完整 Project 集合/真实名称与项目专属任务过滤仍属后继消费者，未宣称本片完成；下节是代码前文档门历史。
+
 ## WEB-PRODUCT-IA（2026-09-30；仅文档门，未实施 UI）
 
 基线 clean `main 79f19df`。本次只修改 TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL/CURRENT：

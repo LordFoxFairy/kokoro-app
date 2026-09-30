@@ -24,6 +24,7 @@ type Revision = NonNullable<EmptyStateProps["projectInstructionHistory"]>[number
 type DialogChange = (setOpen: (open: boolean) => void) => (open: boolean) => void
 
 export type ProjectWorkspaceDialogsProps = {
+  preview: boolean
   brandName?: string
   instructionsOpen: boolean
   setInstructionsOpen: Dispatch<SetStateAction<boolean>>
@@ -90,7 +91,7 @@ export type ProjectWorkspaceDialogsProps = {
 }
 
 export function ProjectWorkspaceDialogs({
-  brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
+  preview, brandName, instructionsOpen, setInstructionsOpen, instructions, setInstructions, instructionsSaving, setInstructionsSaving,
   instructionsError, setInstructionsError, instructionsHistoryOpen, setInstructionsHistoryOpen, selectedInstructionRevision,
   setSelectedInstructionRevision, projectInstructionHistory, onSaveProjectInstructions, resourcesOpen, setResourcesOpen,
   resourceQuery, setResourceQuery, setResourceKind, resourceSearchRef, resourceInputRef, filteredResources, resourceListStatus, resourceListErrorCursor, resourceNextCursor, onRetryResourceList, onLoadMoreResources, resourceUploads, onRetryResourceUpload,
@@ -156,11 +157,11 @@ export function ProjectWorkspaceDialogs({
       <DialogContent className={dialogStyles.projectPickerDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}><DialogTitle className={dialogStyles.projectPickerTitle}>{t("firstSite.addWebsiteToProject")}</DialogTitle><label className={dialogStyles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchWebsites")} placeholder={t("firstSite.searchWebsites")} value={websiteQuery} onChange={(event) => setWebsiteQuery(event.target.value)} /></label>{filteredWebsites.length > 0 ? <div className={dialogStyles.projectPickerList} role="list" aria-label={t("firstSite.searchWebsites")}>{filteredWebsites.map((website) => { const selected = selectedWebsiteId === website.id || linkedWebsiteId === website.id; return <button key={website.id} type="button" className={dialogStyles.projectPickerRow} aria-pressed={selected} data-selected={selected || undefined} onClick={() => setSelectedWebsiteId(website.id)}><SquareCode aria-hidden="true" /><span><strong>{website.name}</strong><small>{website.detail}</small></span></button> })}</div> : <div className={dialogStyles.projectPickerEmpty}><SquareCode aria-hidden="true" /><span>{t("firstSite.noWebsites")}</span></div>}<DialogFooter className={dialogStyles.projectPickerFooter}><DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button type="button" disabled={!selectedWebsiteId} onClick={() => { setLinkedWebsiteId(selectedWebsiteId); onContextDialogChange(setWebsitesOpen)(false) }}>{t("firstSite.save")}</Button></DialogFooter></DialogContent>
     </Dialog>
 
-    <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
+    {preview ? <Dialog open={scheduledOpen} onOpenChange={onContextDialogChange(setScheduledOpen)}>
       <DialogContent className={dialogStyles.projectPickerDialog} overlayClassName={dialogStyles.instructionsOverlay ?? ""} closeLabel={t("shell.closeDialog")}><DialogTitle className={dialogStyles.projectPickerTitle}>{t("firstSite.projectScheduledTasks")}</DialogTitle><div className={dialogStyles.scheduledPickerToolbar}><label className={dialogStyles.projectPickerSearch}><Search aria-hidden="true" /><Input aria-label={t("firstSite.searchScheduledTasks")} placeholder={t("firstSite.searchScheduledTasks")} value={scheduledQuery} onChange={(event) => setScheduledQuery(event.target.value)} /></label><Button type="button" variant="outline" onClick={() => setScheduledEditorOpen(true)}><Plus />{t("firstSite.createNewItem")}</Button></div>{filteredScheduledTasks.length > 0 ? <div className={dialogStyles.projectPickerList} role="list" aria-label={t("firstSite.searchScheduledTasks")}>{filteredScheduledTasks.map((task) => { const selected = selectedScheduledId === task.id || linkedScheduledId === task.id; return <button key={task.id} type="button" className={dialogStyles.projectPickerRow} aria-pressed={selected} data-selected={selected || undefined} onClick={() => setSelectedScheduledId(task.id)}><Clock3 aria-hidden="true" /><span><strong>{task.title}</strong><small>{task.time} · {task.prompt}</small></span></button> })}</div> : <div className={dialogStyles.projectPickerEmpty}><Clock3 aria-hidden="true" /><span>{t("firstSite.noScheduledTasks")}</span></div>}<DialogFooter className={dialogStyles.projectPickerFooter}><DialogClose asChild><Button type="button" variant="outline">{t("firstSite.cancel")}</Button></DialogClose><Button type="button" disabled={!selectedScheduledId} onClick={() => { setLinkedScheduledId(selectedScheduledId); onContextDialogChange(setScheduledOpen)(false) }}>{t("firstSite.save")}</Button></DialogFooter></DialogContent>
-    </Dialog>
+    </Dialog> : null}
 
-    <ScheduledTaskEditorDialogBridge open={scheduledEditorOpen} onOpenChange={setScheduledEditorOpen} brandName={brandName ?? "Kokoro"} onSave={onCreateProjectScheduledTask} />
+    {preview ? <ScheduledTaskEditorDialogBridge open={scheduledEditorOpen} onOpenChange={setScheduledEditorOpen} brandName={brandName ?? "Kokoro"} onSave={onCreateProjectScheduledTask} /> : null}
   </>
 }
 

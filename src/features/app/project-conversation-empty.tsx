@@ -7,14 +7,14 @@ import { useT } from "@/i18n/context"
 
 import styles from "./kokoro-project-workspace.module.css"
 
-export function ProjectTaskEmpty() {
+export function ProjectConversationEmpty() {
   const t = useT()
 
   return (
     <Empty className={styles.emptyConversation}>
       <EmptyMedia><MessageSquareDashed aria-hidden="true" /></EmptyMedia>
       <EmptyHeader>
-        <EmptyTitle>{t("firstSite.noTasks")}</EmptyTitle>
+        <EmptyTitle>{t("firstSite.noProjectConversations")}</EmptyTitle>
       </EmptyHeader>
     </Empty>
   )

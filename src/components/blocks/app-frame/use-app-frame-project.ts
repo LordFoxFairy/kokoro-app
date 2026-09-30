@@ -13,7 +13,7 @@ import {
   takePendingProjectDraft,
   writePendingProjectDraft,
 } from "./app-frame-helpers"
-import type { ProjectInstructionRevision, ProjectScheduledTaskInput } from "./app-frame.types"
+import type { ProjectInstructionRevision } from "./app-frame.types"
 
 export type AppFrameProjectOptions = {
   projectRef: string | undefined
@@ -191,33 +191,8 @@ export function useAppFrameProject({
     if (!response.ok) throw new Error(`project_skill_update_failed:${response.status}`)
   }, [projectRef])
 
-  const createProjectScheduledTask = useCallback(async (task: ProjectScheduledTaskInput) => {
-    if (!projectRef) return
-    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/scheduled-tasks`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "Idempotency-Key": `project-scheduled:${projectRef}:${crypto.randomUUID()}` },
-      body: JSON.stringify({
-        title: task.title,
-        prompt: task.prompt,
-        frequency: task.frequency,
-        time: task.time,
-        expires_at: task.expiresAt,
-        auto_approve: task.autoApprove,
-      }),
-    })
-    if (!response.ok) throw new Error(`project_scheduled_task_create_failed:${response.status}`)
-  }, [projectRef])
-
   const openProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
-    // The preview adapter has no project-create endpoint. A fixed fixture ref
-    // made the rail + appear inert after the first click because the browser
-    // was already on the same route and any existing fixture draft won over
-    // the handoff. Allocate a fresh opaque ref for every explicit “new
-    // project” action; real hosts can still inject onOpenProject with their
-    // server-created ref.
-    const projectRefToOpen = nextProjectRef === "preview-project"
-      ? createPreviewProjectRef()
-      : nextProjectRef
+    const projectRefToOpen = nextProjectRef
     writePendingProjectDraft(projectRefToOpen, handoffDraft)
     // A project without a conversation has its own draft key. Clear the
     // direct source only if it is still the draft handed off by this intent;
@@ -272,7 +247,7 @@ export function useAppFrameProject({
   const createProject = useCallback((handoffDraft = draft) => {
     if (creationInFlightRef.current) return
     if (preview) {
-      openProject("preview-project", handoffDraft)
+      openProject(createPreviewProjectRef(), handoffDraft)
       return
     }
     // An uncertain owner outcome cannot be converted into a fresh mutation by
@@ -297,11 +272,6 @@ export function useAppFrameProject({
     }
   }, [finishProjectNavigation, runCreateProject])
 
-  const openOrCreateProject = useCallback((nextProjectRef: string, handoffDraft?: string) => {
-    if (nextProjectRef === "preview-project") createProject(handoffDraft)
-    else openProject(nextProjectRef, handoffDraft)
-  }, [createProject, openProject])
-
   return {
     projectInstructions,
     projectInstructionHistory,
@@ -309,8 +279,7 @@ export function useAppFrameProject({
     uploadProjectResource,
     listProjectResources,
     setProjectSkillEnabled,
-    createProjectScheduledTask,
-    openProject: openOrCreateProject,
+    openProject,
     createProject,
     projectCreation,
     retryProjectCreation,

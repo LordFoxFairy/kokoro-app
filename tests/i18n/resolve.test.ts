@@ -87,3 +87,13 @@ describe("i18n 语言包完整性（构建期可校验）", () => {
     expect(resolveMessage("ko", "rail.navMcp")).toBe("연결")
   })
 })
+
+
+it("信息架构新增会话语义在全部上线语言有明确翻译", () => {
+  const keys = ["firstSite.startConversation", "firstSite.currentProject", "firstSite.conversationsLoading",
+    "firstSite.conversationsError", "firstSite.independentScheduledTasks", "firstSite.openScheduledTasks", "rail.conversationSort"] as const
+  for (const locale of LOCALES) {
+    if (locale === "zh") continue
+    for (const key of keys) expect(OVERLAYS[locale][key], `${locale}:${key}`).toBeTruthy()
+  }
+})

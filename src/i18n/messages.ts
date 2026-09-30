@@ -24,6 +24,13 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
   // rail 侧栏
+  "firstSite.startConversation": "在此专案开始会话",
+  "firstSite.currentProject": "当前专案",
+  "firstSite.conversationsLoading": "正在加载会话…",
+  "firstSite.conversationsError": "会话暂时无法加载。",
+  "firstSite.independentScheduledTasks": "定时任务独立管理，不是此专案的会话列表。",
+  "firstSite.openScheduledTasks": "打开定时任务",
+  "rail.conversationSort": "排序会话",
   "rail.brandSub": "こころ",
   "rail.railAria": "会话导航",
   "rail.searchAria": "搜索会话",

@@ -1,5 +1,27 @@
 # Kokoro User Web 技术设计
 
+## WEB-PRODUCT-IA-CODE（2026-09-30；代码候选，待 Root 验收）
+
+实施基线 `7087225`，下节保留代码前放置门。当前候选在既有文件内清除 `onCreateTask`/`onReorderTasks` 与 Conversation 混用，
+projectConversation 本地状态、专案会话列表/空态/加载/错误/排序/创建按钮均用会话语义；新会话仍走原 engine。
+AppFrame 缺 projectRef 不再生成 `/app/project/kokoro`；已知 projectHref 仅提供“当前专案”路由快捷项，不冒充已读全集或真实专案名称。
+创建专案在展开/收起 rail 与 welcome 都沿原 createProject；菜单事件不当草稿，welcome 显式 onCreateProject 和 onOpenProject 分离，
+原 key/body 冻结、未知结果重试、owner ID 后导航与草稿移交门保留，不再用 preview sentinel 表示正式创建。
+
+正式 Project 的 scheduled 卡链接现 `/app/scheduled`，描述明确任务独立管理；正式不装载样例任务、不挂旧选择/编辑弹窗、
+不调用丢弃 owner ACK 的旧项目 scheduled hook。原 preview 选择/编辑仅显式 preview 可见且保存前重核 preview；其可选 callback 仅作夹具，
+不在 AppFrame 生产接线。项目专属任务消费依然待后继，不宣称首片覆盖其 owner 读写。
+首页移除硬编码五页推广及定时器/圆点；Figma/Shopify/内建集成展示仅显式 preview，默认 welcome 为正式模式。
+保留真实聊天提示词与新建专案入口、带 brand 插值的站点欢迎文案；不把提示词当已接通集成。
+Composer 只在真实 Textarea 保留语义 token outline，删除容器额外 ring；高度/提交逻辑不改。
+Root 追加批准既有 `app-frame-composer.tsx` 切专案 placeholder 到 conversation key，以及七个已有 locale overlay
+只补本片七个新增 key；复用已有私密/空态文案，95% 覆盖门保持原值。
+
+本片无新目录/store/依赖/owner/wire/生成物；审查追加把 Conversation 的 DOM/data-test/aria/CSS selector 统一到 conversation，
+并在原 features/app 位置将两个 task 命名文件原子重命名为 conversation，旧文件删除、不保留 alias；快捷图标用 MessageSquare。
+命令菜单 onNewChat 也用准确会话文案，action/focus 不改。真实 Project 全集、项目名称/专属调度列表的后继消费者缺口保持。
+验证结果见 CURRENT；纯测试不替代 Root 当前浏览器/真 owner 验收。
+
 ## WEB-PRODUCT-IA：信息架构与正式入口设计门（2026-09-30；仅文档，待 Root 授权代码）
 
 基线 `main 79f19df`，当前无本片 UI 实现。Conversation 独立且可属于 Project；Project 是独立容器与详情/筛选上下文；
@@ -22,7 +44,7 @@ ScheduledTask 是 BFF 的调度产品定义；Agent Run 是执行实例。四者
 1. **入口与假成功清除，同一自洽片**：
    - `src/components/blocks/workspace-rail/workspace-rail-types.ts`、`workspace-rail-shell.tsx`、`workspace-rail-session-list.tsx`、`workspace-rail-navigation.tsx`、`workspace-rail-actions.ts`：会话命名/排序/创建统一；移除 task alias，明确独立任务导航，不从 projectHref 合成品牌项目。
    - `src/components/blocks/app-frame/app-frame.tsx`、`app-frame.types.ts`、`app-frame-main-surface.tsx`、`use-app-frame-actions.ts`、`use-app-frame-project.ts`：只传真实 projectRef；project conversation 的内部状态命名不冒充 task；删除正式伪 scheduled callback 链与 preview sentinel 进入 live 创建路径，保留正式 createProject 冻结重试。
-   - `src/features/app/kokoro-project-workspace.tsx`、`project-workspace-model.ts`、`project-workspace-dialogs.tsx`、`project-task-empty.tsx`、`kokoro-project-task-welcome.tsx`：项目会话明确标识；正式项目不挂假 scheduled editor/list，独立任务跳转现正式 surface。preview-only 夹具可隔离，不能弥补正式列表缺失。
+   - `src/features/app/kokoro-project-workspace.tsx`、`project-workspace-model.ts`、`project-workspace-dialogs.tsx`、`project-conversation-empty.tsx`、`kokoro-project-conversation-welcome.tsx`：项目会话明确标识；正式项目不挂假 scheduled editor/list，独立任务跳转现正式 surface。preview-only 夹具可隔离，不能弥补正式列表缺失。
    - `src/features/app/kokoro-welcome.tsx`、`kokoro-welcome-content.tsx`：去掉未接通广告/无效轮播状态；所有保留品牌文案传 `{ brand: brandName }`；正式 project 动作只显式调用新建或已知 ID 打开，不生成 preview ID。
    - `src/ui/composer/composer.module.css`：沿语义 token 仅保留一个可见编辑焦点边界；不改全局 Textarea 影响其他表单，不删除按钮自身键盘焦点。
    - `src/i18n/messages.ts`、`en.ts`：新增准确的 project conversation 文案并切换调用；不要修改仍属真正任务功能的共用 task 文案。其他 locale 缺词按现翻译机制，任何新增具体 overlay 需列入授权，禁止批量无关翻译。

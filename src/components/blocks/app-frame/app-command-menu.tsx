@@ -122,7 +122,7 @@ export function AppCommandMenu({
         <CommandGroup heading={t("shell.commandWorkspace")}>
           <CommandItem onSelect={() => run(onNewChat, true)}>
             <MessageSquarePlus />
-            <span>{t("firstSite.newTask")}</span>
+            <span>{t("rail.newChat")}</span>
             <CommandShortcut>{t("rail.newChatShortcut")}</CommandShortcut>
           </CommandItem>
           {commandNavigation.map(({ key, label, tab, href, icon: Icon }) => (

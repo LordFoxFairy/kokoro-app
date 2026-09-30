@@ -198,7 +198,7 @@ export function AppFrame({
   const modeLocked = hasMessages
   const canSend = draft.trim().length > 0
   const conversations = conversationsCtl.conversations
-  const projectTaskView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
+  const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
     featureFlags,
@@ -334,10 +334,10 @@ export function AppFrame({
     onListProjectResources: project.listProjectResources,
     ...(projectRef === undefined ? {} : { projectRef }),
     onSetProjectSkillEnabled: project.setProjectSkillEnabled,
-    onCreateProjectScheduledTask: project.createProjectScheduledTask,
-    projectTask: projectTaskView,
+    projectConversation: projectConversationView,
     onOpenSettings: overlays.openSettings,
     onOpenProject: project.openProject,
+    onCreateProject: project.createProject,
     onCreateMcp: overlays.openMcpCreate,
     onCreateCustomApi: overlays.openCustomApiCreate,
     onCreateSkillWithAi: actions.startSkillCreationFromSettings,
@@ -361,7 +361,7 @@ export function AppFrame({
       standaloneSurface={standaloneSurface}
       projectWorkspace={projectWorkspace}
       projectRef={projectRef}
-      projectTaskView={projectTaskView}
+      projectConversationView={projectConversationView}
       resolvedRailCollapsed={layout.resolvedRailCollapsed}
       narrowWeb={narrowWeb}
       compactDesktopRail={layout.compactDesktopRail}
@@ -399,7 +399,7 @@ export function AppFrame({
     ...(navigation === undefined ? {} : { navigation }),
     ...(featureFlags === undefined ? {} : { featureFlags }),
     chatHref,
-    projectHref: projectRef ? `/app/project/${encodeURIComponent(projectRef)}` : "/app/project/kokoro",
+    ...(projectRef === undefined ? {} : { projectHref: `/app/project/${encodeURIComponent(projectRef)}` }),
     projectActive: projectWorkspace,
     onCreateProject: project.createProject,
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),

@@ -2,7 +2,7 @@
 
 import { type Dispatch, type MouseEvent, type PointerEvent, type RefObject, type ReactNode, type SetStateAction } from "react"
 import Link from "next/link"
-import { Folder, ListTodo, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
+import { Folder, MessageSquare, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
 
 import { BrandMark } from "@/components/blocks/brand-mark/brand-mark"
 import { Button } from "@/components/ui/button"
@@ -202,7 +202,6 @@ export type WorkspaceRailNavigationProps = {
   projectPickerOpen: boolean
   setProjectPickerOpen: Dispatch<SetStateAction<boolean>>
   onCreateProject?: () => void
-  onCreateTask: () => void
   onNewChat: () => void
   closeNavigation: () => void
   onOpenSettings: (tab: SettingsTab) => void
@@ -231,7 +230,6 @@ export function WorkspaceRailNavigation({
   projectPickerOpen,
   setProjectPickerOpen,
   onCreateProject,
-  onCreateTask,
   onNewChat,
   closeNavigation,
   onOpenSettings,
@@ -270,8 +268,8 @@ export function WorkspaceRailNavigation({
             size="lg"
             className={cn(navigationStyles.navItem, "text-sidebar-primary font-semibold")}
             type="button"
-            data-testid="rail-new-task"
-            data-navigation-section="new-task"
+            data-testid="rail-new-conversation"
+            data-navigation-section="new-conversation"
             onPointerDown={markPointerFocus}
             onClick={() => { onNewChat(); closeNavigation() }}
           >
@@ -350,7 +348,7 @@ export function WorkspaceRailNavigation({
         </SidebarGroupContent>
       </SidebarGroup> : null}
 
-      {projectHref || projects !== undefined ? <SidebarGroup className={cn(navigationStyles.navGroup, navigationStyles.projectGroup)} data-desktop-projects="true">
+      {projectHref || projects !== undefined || onCreateProject ? <SidebarGroup className={cn(navigationStyles.navGroup, navigationStyles.projectGroup)} data-desktop-projects="true">
         {!compactDesktop ? <SidebarGroupLabel className={cn(railStyles.navGroupLabel, navigationStyles.navGroupLabel)}>
           <span>{t("firstSite.projects")}</span>
           <DropdownMenu>
@@ -360,7 +358,7 @@ export function WorkspaceRailNavigation({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={4} className={navigationStyles.projectMenu}>
-              <DropdownMenuItem {...(onCreateProject === undefined ? {} : { onSelect: () => onCreateProject() })}>
+              <DropdownMenuItem disabled={!onCreateProject} {...(onCreateProject === undefined ? {} : { onSelect: () => onCreateProject() })}>
                 <Folder aria-hidden="true" />
                 {t("firstSite.newProject")}
               </DropdownMenuItem>
@@ -378,6 +376,7 @@ export function WorkspaceRailNavigation({
                     </SidebarMenuButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="right" align="start" sideOffset={10} className={navigationStyles.projectMenu}>
+                    {onCreateProject ? <DropdownMenuItem onSelect={() => onCreateProject()}><Plus aria-hidden="true" />{t("firstSite.newProject")}</DropdownMenuItem> : null}
                     {orderedProjects.map((project) => {
                       const active = project.active ?? (projectActive && project.href === projectHref)
                       return (
@@ -444,28 +443,28 @@ export function WorkspaceRailNavigation({
             </SidebarMenu>
           )}
           {projectActive || projectHref ? (
-            <SidebarMenu className={itemStyles.projectTaskShortcut}>
+            <SidebarMenu className={itemStyles.projectConversationShortcut}>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild type="button" className={navigationStyles.navItem} data-testid="rail-project-task" data-navigation-section="project-task">
+                <SidebarMenuButton asChild type="button" className={navigationStyles.navItem} data-testid="rail-project-conversation" data-navigation-section="project-conversation">
                   {projectActive ? (
                     <button
                       type="button"
-                      aria-label={t("firstSite.tasks")}
+                      aria-label={t("firstSite.projectConversations")}
                       onPointerDown={markPointerFocus}
-                      onClick={() => { onCreateTask(); closeNavigation() }}
+                      onClick={() => { onNewChat(); closeNavigation() }}
                     >
-                      <ListTodo className={railStyles.icon} aria-hidden="true" />
+                      <MessageSquare className={railStyles.icon} aria-hidden="true" />
                     </button>
                   ) : projectHref !== undefined ? (
                     <Link
                       href={projectHref}
                       {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                      aria-label={t("firstSite.tasks")}
+                      aria-label={t("firstSite.projectConversations")}
                       onPointerDown={markPointerFocus}
                       onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}
                       onClick={closeNavigation}
                     >
-                      <ListTodo className={railStyles.icon} aria-hidden="true" />
+                      <MessageSquare className={railStyles.icon} aria-hidden="true" />
                     </Link>
                   ) : null}
                 </SidebarMenuButton>

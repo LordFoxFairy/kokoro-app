@@ -1,5 +1,15 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PRODUCT-IA-CODE 当前内存状态（2026-09-30；待 Root 验收）
+
+基线 `7087225`。正式 Project scheduled 初始项为空且不显示 preview 选择器/编辑器；样例与合成 ID 仅在显式 preview 夹具内，
+保存路径也核 preview。正式任务事实只来自现独立 live surface/owner client，不从 Conversation 生成或以 title/time 合成。
+`projectConversation` 只表达专案内会话的 UI 布局，Conversation ID/Project ID/ScheduledTask ID/Run ID 保持独立。
+对应 Conversation DOM/CSS/组件也使用同一语义，不保留 task 命名 alias；纯文件重命名不迁移任何 owner 数据。
+已知项目 route shortcut 显示“当前专案”，未读全集/名称不填品牌或固定 kokoro；正式创建后仍使用 owner ID。
+welcome 默认正式、仅显式 preview 才允许本地 preview project 生成；正式新建是具名 callback，不传 sentinel。
+无新增持久层、缓存、关系表或迁移；原草稿与单意图重试机制保留。下节是实施前文档基线，后继 Project 全集与专属任务缺口不变。
+
 ## WEB-PRODUCT-IA：资源身份与内存投影（2026-09-30；仅文档）
 
 基线 Web `79f19df`。本门和目标首片均无新持久化 owner、SQL/schema/migration、Redis namespace、业务缓存或 store。

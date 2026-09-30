@@ -18,7 +18,7 @@
 .sectionActions { display: flex; align-items: center; gap: 0.125rem; }
 .sectionAction { flex: 0 0 auto; margin: 0 0.25rem 0 0.5rem; color: var(--muted-foreground); }
 .sectionAction:hover { color: var(--foreground); }
-.projectTaskShortcut { display: none; }
+.projectConversationShortcut { display: none; }
 .emptyDirectList { display: flex; }
 .empty,
 .listNotice { margin: 0; padding: 0.4rem 0.65rem; color: var(--muted-foreground); font-size: 0.82rem; }
@@ -44,7 +44,7 @@
 /* A wide desktop rail shows its scoped list; compact navigation owns the
  * project/task shortcuts instead. Stable data attributes keep this rule
  * independent from the CSS module that renders the navigation shell. */
-[data-desktop-rail="true"][data-collapsed="false"] .projectTaskShortcut,
+[data-desktop-rail="true"][data-collapsed="false"] .projectConversationShortcut,
 [data-desktop-rail="true"][data-collapsed="false"] .emptyDirectList { display: none; }
 [data-navigation-section="project"] .itemSelect { padding-right: 0.55rem; }
 
@@ -65,7 +65,7 @@
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRename { right: 2.8rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemDeleteAction { right: 0.25rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .itemRenameInput { min-height: 2.75rem; }
-  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectTaskShortcut { display: flex; }
+  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectConversationShortcut { display: flex; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -29,16 +29,12 @@ export type WorkspaceRailProps = {
   projectActive?: boolean
   /** Optional host action for the project-creation menu entry. */
   onCreateProject?: () => void
-  /** Optional project collection. Undefined keeps the legacy single-project fixture. */
+  /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
   projects?: readonly WorkspaceRailProject[]
   /** Receives the stable project order after a pointer/keyboard reorder. */
   onReorderProjects?: (projectIds: string[]) => void
-  /** Optional task-specific action; falls back to onNewChat for compatibility. */
-  onCreateTask?: () => void
   /** Receives the stable order for the currently scoped conversation list. */
   onReorderConversations?: (conversationIds: string[]) => void
-  /** Alias for hosts that name project-scoped conversations “tasks”. */
-  onReorderTasks?: (conversationIds: string[]) => void
   /** Route-owned active state for direct and catalog destinations. */
   activeNavigationKey?: string
   conversations: ConversationSummary[]

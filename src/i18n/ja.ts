@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "firstSite.startConversation": "このプロジェクトで会話を始める",
+  "firstSite.currentProject": "現在のプロジェクト",
+  "firstSite.conversationsLoading": "会話を読み込み中…",
+  "firstSite.conversationsError": "会話を一時的に読み込めません。",
+  "firstSite.independentScheduledTasks": "定期タスクはプロジェクトの会話とは別に管理されます。",
+  "firstSite.openScheduledTasks": "定期タスクを開く",
+  "rail.conversationSort": "会話を並べ替え",
   "firstSite.keepProjectOrganized": "ウェブサイトを整理",
   "firstSite.keepProjectOrganizedHint": "タスク、バージョン、更新を1か所にまとめます。",
   "firstSite.addToProject": "プロジェクトに追加",

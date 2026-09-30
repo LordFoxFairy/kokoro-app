@@ -115,9 +115,9 @@ it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊�
   expect(onToggleCollapse).not.toHaveBeenCalled()
 })
 
-it("专案与任务使用独立清单，专案加号只创建专案，任务加号只创建任务", async () => {
+it("专案与会话使用独立清单，专案加号只创建专案，会话加号只创建会话", async () => {
   const onCreateProject = vi.fn()
-  const onCreateTask = vi.fn()
+  const onNewChat = vi.fn()
   renderRail({
     projects: [
       { id: "project_a", name: "产品规划", href: "/app/project/product", active: true },
@@ -126,7 +126,7 @@ it("专案与任务使用独立清单，专案加号只创建专案，任务加�
     projectHref: "/app/project/product",
     projectActive: true,
     onCreateProject,
-    onCreateTask,
+    onNewChat,
     conversations: [{ id: "task_a", title: "整理需求" }],
   })
 
@@ -134,16 +134,16 @@ it("专案与任务使用独立清单，专案加号只创建专案，任务加�
   expect(projects).toHaveAttribute("aria-label", "专案")
   expect(within(projects as HTMLElement).getByText("产品规划")).toBeInTheDocument()
   expect(within(projects as HTMLElement).getByText("发布清单")).toBeInTheDocument()
-  expect(screen.getByRole("navigation", { name: "任务" })).toHaveAttribute("data-conversation-list", "project-conversation")
+  expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
   expect(screen.getByText("整理需求")).toBeInTheDocument()
 
   const newProject = screen.getByRole("button", { name: "新建专案" })
   fireEvent.pointerDown(newProject, { button: 0 })
   fireEvent.click(newProject)
   fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
-  fireEvent.click(screen.getByTestId("rail-new-project-task"))
+  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
   expect(onCreateProject).toHaveBeenCalledTimes(1)
-  expect(onCreateTask).toHaveBeenCalledTimes(1)
+  expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
 it("会话指针拖动只在当前清单内排序，并向宿主上报稳定顺序", () => {
@@ -194,7 +194,7 @@ it("会话键盘拖动提供可访问的抓取、上下移动和取消", () => {
 
 it("专案清单和任务清单分别支持键盘排序，不会互相移动", () => {
   const onReorderProjects = vi.fn()
-  const onReorderTasks = vi.fn()
+  const onReorderConversations = vi.fn()
   renderRail({
     projects: [
       { id: "project_a", name: "产品规划", href: "/app/project/product", active: true },
@@ -207,7 +207,7 @@ it("专案清单和任务清单分别支持键盘排序，不会互相移动", (
       { id: "task_b", title: "第二个任务" },
     ],
     onReorderProjects,
-    onReorderTasks,
+    onReorderConversations,
   })
 
   const project = screen.getByTestId("rail-project")
@@ -216,13 +216,13 @@ it("专案清单和任务清单分别支持键盘排序，不会互相移动", (
   fireEvent.keyDown(project, { key: "ArrowDown" })
   fireEvent.keyDown(project, { key: " " })
   expect(onReorderProjects).toHaveBeenCalledWith(["project_b", "project_a"])
-  expect(onReorderTasks).not.toHaveBeenCalled()
+  expect(onReorderConversations).not.toHaveBeenCalled()
 
   const task = screen.getByRole("button", { name: "第一个任务" })
   task.focus()
   fireEvent.keyDown(task, { key: " " })
   fireEvent.keyDown(task, { key: "ArrowDown" })
-  expect(onReorderTasks).toHaveBeenCalledWith(["task_b", "task_a"])
+  expect(onReorderConversations).toHaveBeenCalledWith(["task_b", "task_a"])
 })
 
 it("选择新建专案后完成路由与草稿承接，并把焦点留在展开态的加号", async () => {
@@ -316,7 +316,7 @@ it("直接会话桌面页保持聊天语义，不被渲染为专案任务", () =
     activeId: "chat_direct_1",
   })
 
-  expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
   const chats = screen.getByRole("navigation", { name: "直接会话" })
   expect(chats).toHaveAttribute("data-conversation-list", "direct")
@@ -339,7 +339,7 @@ it("空的直接会话桌面页仍保留独立会话分区", () => {
   expect(within(chats).queryByText("任务")).toBeNull()
 })
 
-it("收起态不复制直接会话 stop，并保留专案任务和底部账户锚点", () => {
+it("收起态不复制直接会话 stop，并保留专案会话和底部账户锚点", () => {
   renderRail({
     collapsed: true,
     projectHref: "/app/project/kokoro",
@@ -348,13 +348,13 @@ it("收起态不复制直接会话 stop，并保留专案任务和底部账户�
 
   expect(screen.queryByTestId("rail-direct-chat")).toBeNull()
   expect(screen.getByTestId("rail-project")).toHaveAttribute("data-navigation-section", "project")
-  expect(screen.getByTestId("rail-project-task")).toHaveAttribute("data-navigation-section", "project-task")
+  expect(screen.getByTestId("rail-project-conversation")).toHaveAttribute("data-navigation-section", "project-conversation")
   expect(screen.getByTestId("rail-utility-device")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-notifications")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-account")).toHaveAttribute("data-rail-anchor", "account")
 })
 
-it("当前专案的任务图标创建新任务，不重复导航到当前专案", () => {
+it("当前专案的会话图标创建新会话，不重复导航到当前专案", () => {
   const onNewChat = vi.fn()
   renderRail({
     projectHref: "/app/project/kokoro",
@@ -362,7 +362,7 @@ it("当前专案的任务图标创建新任务，不重复导航到当前专案"
     onNewChat,
   })
 
-  const task = screen.getByTestId("rail-project-task")
+  const task = screen.getByTestId("rail-project-conversation")
   expect(task.querySelector("a")).toBeNull()
   fireEvent.click(task)
   expect(onNewChat).toHaveBeenCalledTimes(1)
@@ -405,7 +405,7 @@ it("Manus 紧凑 stop 清单只保留一个工作区气泡入口", () => {
     ],
   })
 
-  expect(screen.getByTestId("rail-new-task")).toBeInTheDocument()
+  expect(screen.getByTestId("rail-new-conversation")).toBeInTheDocument()
   for (const key of ["agent", "skills", "mcp", "scheduled", "library"]) {
     expect(screen.getByTestId(`rail-${key}`)).toBeInTheDocument()
   }
@@ -428,7 +428,7 @@ it("收起态导航保留无文字的可访问入口名称", () => {
     projectHref: "/app/project/kokoro",
   })
 
-  expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Agent" })).toHaveAttribute("href", "/app/agents")
   expect(screen.getByRole("link", { name: "技能" })).toHaveAttribute("href", "/app/skills")
   expect(screen.getByRole("link", { name: "已排程" })).toHaveAttribute("href", "/app/scheduled?tab=calendar")
@@ -444,9 +444,9 @@ it("展开态不为已显示文字的菜单保留 Radix tooltip trigger", () => 
     projectHref: "/app/project/kokoro",
   })
 
-  expect(screen.getByTestId("rail-new-task")).not.toHaveAttribute("data-state")
+  expect(screen.getByTestId("rail-new-conversation")).not.toHaveAttribute("data-state")
   expect(screen.getByTestId("rail-agent")).not.toHaveAttribute("data-state")
-  expect(screen.getByTestId("rail-project-task")).not.toHaveAttribute("data-state")
+  expect(screen.getByTestId("rail-project-conversation")).not.toHaveAttribute("data-state")
 })
 
 it("收起态不保留隐藏标签或会话操作按钮", () => {
@@ -614,9 +614,9 @@ it("专案侧栏保留直接会话入口，并以专案会话作为独立列表"
     activeId: null,
   })
 
-  expect(screen.getByRole("navigation", { name: "任务" })).toHaveAttribute("data-conversation-list", "project-conversation")
+  expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
   expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
-  expect(screen.getByText("任务")).toBeInTheDocument()
+  expect(screen.getByText("专案会话")).toBeInTheDocument()
   expect(screen.queryByText("没有匹配的会话")).toBeNull()
 })
 
@@ -628,7 +628,7 @@ it("专案侧栏渲染已由专案范围筛选的会话，而不是隐藏会话�
     activeId: "task_project_1",
   })
 
-  const tasks = screen.getByRole("navigation", { name: "任务" })
+  const tasks = screen.getByRole("navigation", { name: "专案会话" })
   expect(tasks).toHaveAttribute("data-conversation-list", "project-conversation")
   expect(within(tasks).getByText("整理发布清单")).toBeInTheDocument()
 })
@@ -691,7 +691,7 @@ it("桌面确认删除后把焦点交给稳定的新对话入口", async () => {
   fireEvent.click(screen.getByRole("button", { name: "确认删除" }))
 
   expect(onDeleteConversation).toHaveBeenCalledWith("ses_1")
-  await waitFor(() => expect(screen.getByRole("button", { name: /新建任务/ })).toHaveFocus())
+  await waitFor(() => expect(screen.getByRole("button", { name: /新对话/ })).toHaveFocus())
 })
 
 it("空题与未改动不触发请求", () => {
@@ -807,7 +807,7 @@ it("品牌入口使用真实的直接会话导航语义", () => {
 
 it("侧栏操作按钮默认是 action，不会提交外层表单", () => {
   renderRail()
-  expect(screen.getByRole("button", { name: /新建任务/ })).toHaveAttribute("type", "button")
+  expect(screen.getByRole("button", { name: /新对话/ })).toHaveAttribute("type", "button")
   expect(screen.getByLabelText("重命名会话 旧标题")).toHaveAttribute("type", "button")
   expect(screen.getByLabelText("删除会话 旧标题")).toHaveAttribute("type", "button")
 })
@@ -927,4 +927,34 @@ it("会话清单加载态暴露 status，错误态暴露 alert", () => {
   cleanup()
   renderRail({ conversations: [], listError: true, onRetryList: vi.fn() })
   expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
+})
+
+it("专案会话仍叫会话，独立任务导航不调用新建会话", () => {
+  const onNewChat = vi.fn()
+  renderRail({ projectActive: true, projectHref: "/app/project/owner-id", onNewChat,
+    conversations: [{ id: "conversation-id", title: "真实会话" }], navigation: [{ key: "scheduled", label: "定时任务" }] })
+  expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
+  expect(screen.getAllByRole("button", { name: "新对话" })).toHaveLength(2)
+  fireEvent.click(screen.getByRole("link", { name: "定时任务" }))
+  expect(onNewChat).not.toHaveBeenCalled()
+})
+
+it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿", async () => {
+  const onCreateProject = vi.fn()
+  renderRail({ collapsed: true, onCreateProject })
+  const picker = screen.getByTestId("rail-project")
+  fireEvent.pointerDown(picker, { button: 0 })
+  fireEvent.click(picker)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+  expect(onCreateProject).toHaveBeenCalledExactlyOnceWith()
+})
+
+it("会话入口 DOM 和图标不再使用任务身份", () => {
+  renderRail({ projectHref: "/app/project/owner-id", projectActive: true })
+  expect(screen.getByTestId("rail-new-conversation")).toHaveAttribute("data-navigation-section", "new-conversation")
+  const shortcut = screen.getByTestId("rail-project-conversation")
+  expect(shortcut).toHaveAttribute("data-navigation-section", "project-conversation")
+  expect(shortcut.querySelector(".lucide-message-square")).not.toBeNull()
+  expect(shortcut.querySelector(".lucide-list-todo")).toBeNull()
+  expect(screen.getByTestId("rail-new-project-conversation")).toBeInTheDocument()
 })

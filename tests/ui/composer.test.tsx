@@ -1,4 +1,5 @@
 // Composer 模型选择器（MODEL-UX）：候选下拉渲染 + 选择回调（wire "provider:name"）+ 首条锁定态 + 空候选隐藏。
+import { readFileSync } from "node:fs"
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createRef, type FormEvent, useState } from "react"
@@ -113,8 +114,8 @@ describe("Composer model selector", () => {
   })
 
   it("站点可以为专案上下文投影专属输入提示", () => {
-    renderComposer({ placeholder: "在此专案启动任务" })
-    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("placeholder", "在此专案启动任务")
+    renderComposer({ placeholder: "在此专案开始会话" })
+    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("placeholder", "在此专案开始会话")
   })
 
   it("网站创作意图显示固定选中胶囊，普通聊天不显示", () => {
@@ -689,4 +690,26 @@ describe("Composer 状态契约", () => {
     expect(screen.getByRole("button", { name: /locked this turn/i })).toBeDisabled()
   })
 
+})
+
+
+it("编辑器只有一处 token focus ring，保留 reduced-motion 与窄屏换行", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
+  expect(css).not.toContain(".composer:focus-within")
+  expect(css).toMatch(/\.input:focus-visible\s*\{[^}]*box-shadow: none;[^}]*outline: 2px solid var\(--ring\)/)
+  expect(css).toContain("@media (prefers-reduced-motion: reduce)")
+  expect(css).toContain("@container composer (max-width: 24rem)")
+})
+
+it("原生 Textarea 多行增高并在删除内容后收缩", () => {
+  const props = renderComposer()
+  const input = screen.getByRole("textbox") as HTMLTextAreaElement
+  let height = 112
+  Object.defineProperty(input, "scrollHeight", { configurable: true, get: () => height })
+  fireEvent.change(input, { target: { value: "第一行\n第二行\n第三行" } })
+  expect(input.style.height).toBe("112px")
+  expect(props.onDraftChange).toHaveBeenCalledWith("第一行\n第二行\n第三行")
+  height = 32
+  fireEvent.change(input, { target: { value: "短句" } })
+  expect(input.style.height).toBe("32px")
 })

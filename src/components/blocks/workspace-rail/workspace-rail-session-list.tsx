@@ -37,7 +37,7 @@ export type WorkspaceRailSessionListProps = {
   onRetryList?: () => void
   hasMore: boolean
   onLoadMore: () => void
-  onCreateTask: () => void
+  onNewChat: () => void
   closeNavigation: () => void
   onSelectConversation: (id: string) => void
   onRequestDelete: (conversation: ConversationSummary) => void
@@ -53,7 +53,7 @@ export type WorkspaceRailSessionListProps = {
   dragOverKey: string | null
 }
 
-/** Owns the route-scoped conversation/task list and its local presentation state. */
+/** Owns the route-scoped conversation list and its local presentation state. */
 export function WorkspaceRailSessionList({
   projectActive,
   compactDesktop,
@@ -69,7 +69,7 @@ export function WorkspaceRailSessionList({
   onRetryList,
   hasMore,
   onLoadMore,
-  onCreateTask,
+  onNewChat,
   closeNavigation,
   onSelectConversation,
   onRequestDelete,
@@ -85,48 +85,48 @@ export function WorkspaceRailSessionList({
   dragOverKey,
 }: WorkspaceRailSessionListProps) {
   const t = useT()
-  const [taskOrder, setTaskOrder] = useState<"recent" | "name">("recent")
+  const [conversationOrder, setConversationOrder] = useState<"recent" | "name">("recent")
   const filtered = filterConversations(conversations, query)
-  const ordered = taskOrder === "name"
+  const ordered = conversationOrder === "name"
     ? [...filtered].sort((left, right) => left.title.localeCompare(right.title))
     : filtered
 
   return (
     <nav
       className={cn(itemStyles.list, !projectActive && !hasConversations && itemStyles.emptyDirectList)}
-      aria-label={projectActive ? t("firstSite.tasks") : t("rail.directChatsAria")}
+      aria-label={projectActive ? t("firstSite.projectConversations") : t("rail.directChatsAria")}
       data-conversation-list={projectActive ? "project-conversation" : "direct"}
     >
       {!compactDesktop ? (
         <>
           <div className={itemStyles.sectionRow}>
             {/* `conversations` is already scope-filtered by the host. */}
-            <p className={itemStyles.section}>{projectActive ? t("firstSite.tasks") : t("rail.directChats")}</p>
+            <p className={itemStyles.section}>{projectActive ? t("firstSite.projectConversations") : t("rail.directChats")}</p>
             {projectActive ? (
               <div className={itemStyles.sectionActions}>
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   className={itemStyles.sectionAction}
-                  aria-label={t("firstSite.newTask")}
-                  data-testid="rail-new-project-task"
+                  aria-label={t("rail.newChat")}
+                  data-testid="rail-new-project-conversation"
                   type="button"
-                  onClick={() => { onCreateTask(); closeNavigation() }}
+                  onClick={() => { onNewChat(); closeNavigation() }}
                 >
                   <Plus aria-hidden="true" />
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-xs" className={itemStyles.sectionAction} aria-label={t("rail.taskSort")}>
+                    <Button variant="ghost" size="icon-xs" className={itemStyles.sectionAction} aria-label={t("rail.conversationSort")}>
                       <ListFilter aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" sideOffset={4}>
-                    <DropdownMenuLabel>{t("rail.taskSort")}</DropdownMenuLabel>
+                    <DropdownMenuLabel>{t("rail.conversationSort")}</DropdownMenuLabel>
                     <DropdownMenuRadioGroup
-                      value={taskOrder}
+                      value={conversationOrder}
                       onValueChange={(value) => {
-                        if (value === "recent" || value === "name") setTaskOrder(value)
+                        if (value === "recent" || value === "name") setConversationOrder(value)
                       }}
                     >
                       <DropdownMenuRadioItem value="recent">{t("rail.sortRecent")}</DropdownMenuRadioItem>

@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "firstSite.startConversation": "이 프로젝트에서 대화 시작",
+  "firstSite.currentProject": "현재 프로젝트",
+  "firstSite.conversationsLoading": "대화를 불러오는 중…",
+  "firstSite.conversationsError": "대화를 일시적으로 불러올 수 없습니다.",
+  "firstSite.independentScheduledTasks": "예약 작업은 프로젝트 대화와 별도로 관리됩니다.",
+  "firstSite.openScheduledTasks": "예약 작업 열기",
+  "rail.conversationSort": "대화 정렬",
   "firstSite.keepProjectOrganized": "웹사이트를 체계적으로 관리하세요",
   "firstSite.keepProjectOrganizedHint": "작업, 버전 및 업데이트를 한곳에 보관하세요.",
   "firstSite.addToProject": "프로젝트에 추가",

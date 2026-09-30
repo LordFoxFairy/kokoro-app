@@ -14,7 +14,6 @@ import {
 
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "@/components/ui/sidebar"
-import { DEFAULT_BRAND } from "@/config/brand"
 import { useT } from "@/i18n/context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
@@ -51,9 +50,7 @@ export function WorkspaceRailShell({
   onCreateProject,
   projects,
   onReorderProjects,
-  onCreateTask,
   onReorderConversations,
-  onReorderTasks,
   activeNavigationKey,
   conversations,
   activeId,
@@ -87,7 +84,7 @@ export function WorkspaceRailShell({
     if (isMobile) setOpenMobile(false)
   }, [isMobile, setOpenMobile])
 
-  const newSessionLabel = t("firstSite.newTask")
+  const newSessionLabel = t("rail.newChat")
   const fallbackBrandMark = (
     <BrandFallback
       {...(brandMark === undefined ? {} : { mark: brandMark })}
@@ -102,11 +99,11 @@ export function WorkspaceRailShell({
     if (!projectHref) return []
     return [{
       id: projectHref,
-      name: brandName ?? DEFAULT_BRAND.name,
+      name: t("firstSite.currentProject"),
       href: projectHref,
       active: projectActive,
     }]
-  }, [brandName, projectActive, projectHref, projects])
+  }, [projectActive, projectHref, projects, t])
 
   const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
   const {
@@ -119,10 +116,8 @@ export function WorkspaceRailShell({
     projectItems,
     conversations,
     conversationScopeKey,
-    projectActive,
     ...(onReorderProjects === undefined ? {} : { onReorderProjects }),
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
-    ...(onReorderTasks === undefined ? {} : { onReorderTasks }),
   })
 
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -335,7 +330,6 @@ export function WorkspaceRailShell({
             projectPickerOpen={projectPickerOpen}
             setProjectPickerOpen={setProjectPickerOpen}
             {...(onCreateProject === undefined ? {} : { onCreateProject })}
-            onCreateTask={onCreateTask ?? onNewChat}
             onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onOpenSettings={openSettings}
@@ -366,7 +360,7 @@ export function WorkspaceRailShell({
             {...(onRetryList === undefined ? {} : { onRetryList })}
             hasMore={hasMore}
             onLoadMore={onLoadMore}
-            onCreateTask={onCreateTask ?? onNewChat}
+            onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onSelectConversation={onSelectConversation}
             onRequestDelete={onRequestDelete}

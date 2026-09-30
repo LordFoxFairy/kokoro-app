@@ -128,9 +128,12 @@ export type EmptyStateProps = {
   onListProjectResources?: (cursor: string | null, signal: AbortSignal) => Promise<ProjectResourceListPage>
   projectRef?: string
   onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>
+  /** Explicit preview fixture callback only; formal tasks use the independent live surface. */
   onCreateProjectScheduledTask?: (task: ProjectScheduledTaskInput) => Promise<void>
   /** Site-owned welcome actions can hand off to shared workspace settings. */
   onOpenSettings?: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
+  /** Explicit creation intent, separate from opening an owner-issued project ID. */
+  onCreateProject?: (draft?: string) => void
   /** Project picker handoff used by the direct welcome surface. */
   onOpenProject?: (projectRef: string, draft?: string) => void
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
@@ -147,8 +150,8 @@ export type EmptyStateProps = {
   workspaceCapabilities?: WorkspaceCapabilities
   /** Project route renders the project workbench instead of the direct-chat home. */
   projectWorkspace?: boolean
-  /** Desktop project task route keeps a fresh task distinct from the project overview. */
-  projectTask?: boolean
+  /** Desktop project conversation route keeps a fresh conversation distinct from the project overview. */
+  projectConversation?: boolean
   /** Session share capability for project-style desktop headers. */
   shareClient?: Pick<SessionClient, "createShare" | "revokeShare">
 }

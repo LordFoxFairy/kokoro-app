@@ -218,7 +218,7 @@ it("Kokoro 直接会话首页以 Composer 为主，而项目入口不替代该�
     expect(screen.queryByRole("button", { name: /指令/ })).toBeNull()
     const kokoroLinks = screen.getAllByRole("link", { name: "Kokoro" })
     expect(kokoroLinks.find((link) => link.getAttribute("href") === "/app")).toBeDefined()
-    expect(kokoroLinks.find((link) => link.getAttribute("href") === "/app/project/kokoro")).toBeDefined()
+    expect(kokoroLinks.find((link) => link.getAttribute("href") === "/app/project/kokoro")).toBeUndefined()
   })
 })
 
@@ -236,7 +236,7 @@ it("站点路由把直接会话与专案内会话投影为两个独立工作区"
   await waitFor(() => {
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(document.querySelector('[data-slot="direct-chat-welcome"]')).toBeNull()
-    expect(screen.getByRole("navigation", { name: "任务" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
     expect(screen.getAllByRole("link", { name: "Kokoro" }).some((link) => link.getAttribute("href") === "/app")).toBe(true)
   })
 })
@@ -433,7 +433,7 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
 
   await waitFor(() => {
     expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
-    expect(screen.getByRole("navigation", { name: "任务" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
     expect(screen.getByRole("form", { name: "消息编辑区" })).toBeInTheDocument()
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByText("文件和资源")).toBeInTheDocument()
@@ -499,7 +499,7 @@ it("切换会话使用无刷新 URL 状态，并支持新建会话清理地址",
     expect(engine.getSnapshot().store?.activeId).toBe("conv_b")
   })
 
-  fireEvent.click(screen.getByTestId("rail-new-task"))
+  fireEvent.click(screen.getByTestId("rail-new-conversation"))
   await waitFor(() => {
     expect(window.location.search).toBe("")
     expect(engine.getSnapshot().store?.activeId).not.toBe("conv_b")
@@ -788,7 +788,7 @@ it("项目 conversation 深链水合期间保留可见加载面，不误画空�
   )
 
   await waitFor(() => expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument())
-  expect(screen.queryByTestId("project-task-welcome")).toBeNull()
+  expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
   expect(engine.getSnapshot().hydrating).toBe(true)
 
   await act(async () => {
@@ -796,7 +796,7 @@ it("项目 conversation 深链水合期间保留可见加载面，不误画空�
     await settle()
   })
 
-  await waitFor(() => expect(document.querySelector('[data-slot="project-task-welcome"]')).toBeInTheDocument())
+  await waitFor(() => expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeInTheDocument())
   expect(engine.getSnapshot().hydrating).toBe(false)
 })
 
@@ -830,7 +830,7 @@ it.each([
     project: true,
     reason: "http" as const,
     detail: "snapshot_failed",
-    emptyTestId: "project-task-welcome",
+    emptyTestId: "project-conversation-welcome",
   },
   {
     label: "direct snapshot network error",
@@ -870,7 +870,7 @@ it.each([
   // 会话列表和当前会话可能同时出现错误提示，断言必须限定在当前会话错误面板内。
   expect(conversationError).toHaveTextContent("会话列表加载失败")
   expect(within(conversationError).getByRole("button", { name: "重试" })).toBeEnabled()
-  expect(screen.queryByTestId("project-task-welcome")).toBeNull()
+  expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
 
   fireEvent.click(within(conversationError).getByRole("button", { name: "重试" }))
 
@@ -950,12 +950,12 @@ it("进入无 conversation 的项目 overview 时不承接 direct 线程", async
   expect(document.querySelector('[data-slot="conversation-timeline"]')).toBeNull()
 })
 
-it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项目 Chat", async () => {
+it("Direct Chat 承接到项目后保留草稿，并在新会话入口进入项目 Chat", async () => {
   buildEngine()
   render(
     <ThemeProvider>
       <LocaleProvider>
-        <KokoroAppSurface engine={engine} />
+        <KokoroAppSurface engine={engine} preview />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -968,16 +968,16 @@ it("Direct Chat 承接到项目后保留草稿，并在新任务入口进入项�
   fireEvent.pointerDown(projectPicker, { button: 0 })
   fireEvent.pointerUp(projectPicker, { button: 0 })
   fireEvent.click(projectPicker)
-  const projectLink = await screen.findByRole("menuitem", { name: "Kokoro" })
+  const projectLink = await screen.findByRole("menuitem", { name: "新建专案" })
   fireEvent.click(projectLink)
 
   await waitFor(() => {
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByLabelText("对话输入")).toHaveValue("交给 Kokoro 项目继续处理")
   })
-  await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Kokoro" })).toBeNull())
+  await waitFor(() => expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull())
 
-  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  fireEvent.click(screen.getByTestId("rail-new-conversation"))
   await waitFor(() => expect(window.location.search).toMatch(/^\?conversation=conv_/))
   fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "项目首条消息" } })
   fireEvent.click(screen.getByLabelText("发送消息"))
@@ -1408,7 +1408,7 @@ it("live manifest 未声明的工作区能力不会传给 site surface", async (
   })
 })
 
-it("待创建网站模式在刷新挂载后恢复，并由新建任务清除", async () => {
+it("待创建网站模式在刷新挂载后恢复，并由新建会话清除", async () => {
   buildEngine()
   window.sessionStorage.setItem("kokoro.web.pending-creation-intent", "website")
 
@@ -1425,7 +1425,7 @@ it("待创建网站模式在刷新挂载后恢复，并由新建任务清除", a
   )
 
   await waitFor(() => expect(screen.getByTestId("creation-intent")).toHaveTextContent("website"))
-  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  fireEvent.click(screen.getByRole("button", { name: "新对话" }))
   await waitFor(() => expect(screen.getByTestId("creation-intent")).toHaveTextContent("none"))
   expect(window.sessionStorage.getItem("kokoro.web.pending-creation-intent")).toBeNull()
 })
@@ -1625,7 +1625,7 @@ it("命令菜单新建对话后把焦点交给 Composer", async () => {
   )
 
   fireEvent.keyDown(window, { key: "k", ctrlKey: true })
-  fireEvent.click(screen.getByRole("option", { name: /新建任务|New task/i }))
+  fireEvent.click(screen.getByRole("option", { name: /新对话|New chat/i }))
   await act(async () => {
     await new Promise((resolve) => window.setTimeout(resolve, 250))
   })
@@ -1656,11 +1656,11 @@ it("侧栏新对话按钮直接把焦点交给 Composer", () => {
     </ThemeProvider>,
   )
 
-  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  fireEvent.click(screen.getByRole("button", { name: "新对话" }))
   expect(screen.getByLabelText("对话输入")).toHaveFocus()
 })
 
-it("独立目录页点击新建任务返回直接会话并挂载 Composer", async () => {
+it("独立目录页点击新建会话返回直接会话并挂载 Composer", async () => {
   buildEngine()
   mockedPathname.value = "/app/agents"
   window.history.replaceState(window.history.state, "", "/app/agents")
@@ -1674,7 +1674,7 @@ it("独立目录页点击新建任务返回直接会话并挂载 Composer", asyn
   )
 
   expect(screen.getByTestId("agents-surface")).toBeInTheDocument()
-  fireEvent.click(screen.getByRole("button", { name: "新建任务" }))
+  fireEvent.click(screen.getByRole("button", { name: "新对话" }))
 
   await waitFor(() => {
     expect(window.location.pathname).toBe("/app")
@@ -1684,12 +1684,12 @@ it("独立目录页点击新建任务返回直接会话并挂载 Composer", asyn
   await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
 })
 
-it("专案页点击新建任务切换到任务视图并聚焦 Composer", async () => {
+it("专案页点击新建会话切换到会话视图并聚焦 Composer", async () => {
   buildEngine()
-  function ProjectTaskProbe({ projectTask, composer }: EmptyStateProps) {
+  function ProjectConversationProbe({ projectConversation, composer }: EmptyStateProps) {
     return (
       <div>
-        <output data-testid="project-task-state">{projectTask ? "task" : "overview"}</output>
+        <output data-testid="project-conversation-state">{projectConversation ? "conversation" : "overview"}</output>
         {composer}
       </div>
     )
@@ -1701,7 +1701,7 @@ it("专案页点击新建任务切换到任务视图并聚焦 Composer", async (
         <AppFrame
           engine={engine}
           chatHref="/app"
-          emptyState={ProjectTaskProbe}
+          emptyState={ProjectConversationProbe}
           emptyStateOwnsComposer
           projectWorkspace
           projectRef="kokoro"
@@ -1710,20 +1710,20 @@ it("专案页点击新建任务切换到任务视图并聚焦 Composer", async (
     </ThemeProvider>,
   )
 
-  fireEvent.click(screen.getByTestId("rail-new-task"))
+  fireEvent.click(screen.getByTestId("rail-new-conversation"))
   await waitFor(() => {
-    expect(screen.getByTestId("project-task-state")).toHaveTextContent("task")
+    expect(screen.getByTestId("project-conversation-state")).toHaveTextContent("conversation")
     expect(window.location.search).toMatch(/^\?conversation=conv_/)
   })
   await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
 })
 
-it("专案 Composer 首次发送后承接到当前任务视图", async () => {
+it("专案 Composer 首次发送后承接到当前会话视图", async () => {
   buildEngine()
-  function ProjectTaskProbe({ projectTask, composer }: EmptyStateProps) {
+  function ProjectConversationProbe({ projectConversation, composer }: EmptyStateProps) {
     return (
       <div>
-        <output data-testid="project-task-state">{projectTask ? "task" : "overview"}</output>
+        <output data-testid="project-conversation-state">{projectConversation ? "conversation" : "overview"}</output>
         {composer}
       </div>
     )
@@ -1735,7 +1735,7 @@ it("专案 Composer 首次发送后承接到当前任务视图", async () => {
         <AppFrame
           engine={engine}
           chatHref="/app"
-          emptyState={ProjectTaskProbe}
+          emptyState={ProjectConversationProbe}
           emptyStateOwnsComposer
           projectWorkspace
           projectRef="kokoro"
@@ -1764,7 +1764,7 @@ it("命令菜单新建对话后立即打开设置不会被延迟焦点回收打�
     )
 
     fireEvent.keyDown(window, { key: "k", ctrlKey: true })
-    fireEvent.click(screen.getByRole("option", { name: /新建任务|New task/i }))
+    fireEvent.click(screen.getByRole("option", { name: /新对话|New chat/i }))
     fireEvent.keyDown(window, { key: "k", ctrlKey: true })
     fireEvent.click(screen.getByRole("option", { name: /外观|Appearance/i }))
 
@@ -2143,4 +2143,19 @@ it("result_review 待批帧渲染审核卡：结果只读、三动作齐备、�
     kind: "run.resume",
     decisions: [{ type: "approve", tool_id: "tool_1" }],
   })
+})
+
+
+it("Composer 保留 IME 确认与 Shift+Enter，普通 Enter 仅提交一次", async () => {
+  buildEngine()
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+  const input = await screen.findByRole("textbox", { name: "对话输入" })
+  fireEvent.change(input, { target: { value: "输入法候选" } })
+  const submit = vi.spyOn(engine, "submit")
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true })
+  fireEvent.keyDown(input, { key: "Enter", shiftKey: true })
+  expect(submit).not.toHaveBeenCalled()
+  expect(input).toHaveValue("输入法候选")
+  fireEvent.keyDown(input, { key: "Enter" })
+  expect(submit).toHaveBeenCalledExactlyOnceWith("输入法候选")
 })

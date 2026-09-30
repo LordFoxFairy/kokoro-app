@@ -16,21 +16,10 @@ import coreStyles from "./kokoro-welcome-direct-core.module.css"
 import promotionStyles from "./kokoro-welcome-direct-promotion.module.css"
 import responsiveStyles from "./kokoro-welcome-direct-responsive.module.css"
 
-export const desktopBanners = [
-  { title: "firstSite.desktopBanner", hint: "firstSite.desktopBannerHint", kind: "workspace" },
-  { title: "firstSite.promptWebsite", hint: "firstSite.websitesHint", kind: "website" },
-  { title: "firstSite.scheduledTasks", hint: "firstSite.scheduledTasksHint", kind: "schedule" },
-  { title: "settings.integration.slack.name", hint: "settings.integration.slack.description", kind: "integration" },
-  { title: "settings.integration.zapier.name", hint: "settings.integration.zapier.description", kind: "integration" },
-] as const
-
 type DirectWelcomeContentProps = {
   brandName: string
   composer?: ReactNode
   draft: string
-  creationIntent?: EmptyStateProps["creationIntent"]
-  selectedProject: string | null
-  setSelectedProject: Dispatch<SetStateAction<string | null>>
   selectedCreationType: string | null
   setSelectedCreationType: Dispatch<SetStateAction<string | null>>
   creationTypesScrolled: boolean
@@ -40,26 +29,21 @@ type DirectWelcomeContentProps = {
   onPrompt?: EmptyStateProps["onPrompt"]
   onCreationIntentSelect?: EmptyStateProps["onCreationIntentSelect"]
   onOpenSettings?: EmptyStateProps["onOpenSettings"]
-  onOpenProject?: EmptyStateProps["onOpenProject"]
+  onCreateProject?: EmptyStateProps["onCreateProject"]
+  preview: boolean
   websiteCreation: boolean
   appCreation: boolean
   showDraftProjectContext: boolean
   showDirectPrompts: boolean
   showStarterCards: boolean
   creativeIntent: "presentation" | "design" | "game" | null
-  bannerIndex: number
-  setBannerIndex: Dispatch<SetStateAction<number>>
-  setBannerPaused: Dispatch<SetStateAction<boolean>>
-  createPreviewProjectRef: () => string
   promptSelectedRef: React.RefObject<boolean | null>
   creationTypesRef: React.RefObject<HTMLDivElement | null>
   referenceInputRef: React.RefObject<HTMLInputElement | null>
 }
 
-export function DirectWelcomeContent({ brandName, composer, draft, creationIntent, selectedProject, setSelectedProject, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onOpenProject, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, bannerIndex, setBannerIndex, setBannerPaused, createPreviewProjectRef, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
+export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
   const t = useT()
-  const hasDraft = draft.trim().length > 0
-  const activeBanner = desktopBanners[bannerIndex] ?? desktopBanners[0]
   return (
       <div className={cn(coreStyles.directContent, responsiveStyles.directContent)}>
         <div className={cn(coreStyles.directIntro, responsiveStyles.directIntro)}>
@@ -82,7 +66,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
 
         <div className={cn(coreStyles.directComposer, responsiveStyles.directComposer)}>
           {composer}
-          {showDraftProjectContext ? (
+          {showDraftProjectContext && (preview || onCreateProject) ? (
             <div className={coreStyles.draftProjectContext}>
               <span className={coreStyles.draftProjectIcon} aria-hidden="true"><Folder /></span>
               <div className={coreStyles.draftProjectCopy}>
@@ -96,8 +80,9 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                     variant="outline"
                     size="sm"
                     className={coreStyles.draftProjectAction}
+                    disabled={!onCreateProject}
                   >
-                    {selectedProject ?? t("firstSite.addToProject")}
+                    {t("firstSite.addToProject")}
                     <ChevronDown aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -107,14 +92,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                   sideOffset={6}
                 >
                   <DropdownMenuItem onSelect={() => {
-                    setSelectedProject(brandName)
-                    onOpenProject?.("kokoro", draft)
-                  }}>
-                    <Folder data-icon="inline-start" aria-hidden="true" />
-                    {brandName}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => {
-                    onOpenProject?.(createPreviewProjectRef(), draft)
+                    onCreateProject?.(draft)
                   }}>
                     {t("firstSite.newProject")}
                   </DropdownMenuItem>
@@ -183,7 +161,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
           <section className={coreStyles.creationOptions} aria-labelledby="kokoro-creation-options-heading">
             <div className={coreStyles.creationOptionsHeader}>
               <p id="kokoro-creation-options-heading">{t("firstSite.whatToBuild")}</p>
-              <div className={coreStyles.creationReferences}>
+              {preview ? <div className={coreStyles.creationReferences}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -217,7 +195,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                     setReferenceStatus(fileName ?? null)
                   }}
                 />
-              </div>
+              </div> : null}
             </div>
             <span className="sr-only" role="status" aria-live="polite">{referenceStatus ?? ""}</span>
             <div className={coreStyles.creationTypesFrame}>
@@ -245,7 +223,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                   <Button key={label} type="button" variant="outline" className={coreStyles.creationType} onClick={() => setSelectedCreationType(label)}>
                     <TypeIcon aria-hidden="true" />
                     <span>{t(label)}</span>
-                    {badge ? (
+                    {badge && preview ? (
                       <span className={coreStyles.creationBadge}>
                         <span aria-hidden="true">·</span>
                         <ShopifyMark />
@@ -294,7 +272,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                 </div>
               </div>
             ) : null}
-            <div className={coreStyles.integrationPreview}>
+            {preview ? <div className={coreStyles.integrationPreview}>
               <div className={coreStyles.integrationCopy}>
                 <strong>{t("firstSite.builtInIntegrations")} <ChevronRight aria-hidden="true" /></strong>
                 <div className={coreStyles.integrationChips}>
@@ -318,7 +296,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
                   <i /><i /><i />
                 </span>
               </div>
-            </div>
+            </div> : null}
           </section>
         ) : null}
 
@@ -335,45 +313,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, creationInten
 
         {showStarterCards && creativeIntent ? <CreationWorkflowSurface intent={creativeIntent} {...(onPrompt === undefined ? {} : { onPrompt })} /> : null}
 
-        {!hasDraft && !creationIntent ? <div
-          className={cn(promotionStyles.desktopCarousel, responsiveStyles.desktopCarousel)}
-          role="region"
-          aria-label={t("firstSite.desktopBanner", { brand: brandName })}
-          onMouseEnter={() => setBannerPaused(true)}
-          onMouseLeave={() => setBannerPaused(false)}
-          onFocusCapture={() => setBannerPaused(true)}
-          onBlurCapture={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) setBannerPaused(false)
-          }}
-        >
-          <div className={cn(promotionStyles.desktopBanner, responsiveStyles.desktopBanner)} key={activeBanner.title} data-slot="welcome-promotion" aria-live="polite">
-          <div className={promotionStyles.desktopBannerCopy}>
-            <strong>{t(activeBanner.title)}</strong>
-            <span>{t(activeBanner.hint)}</span>
-          </div>
-          <div className={promotionStyles.desktopBannerArtwork} data-banner-kind={activeBanner.kind} aria-hidden="true">
-            <span className={promotionStyles.desktopBannerWindow}>
-              <span className={promotionStyles.desktopBannerWindowBar}><i /><i /><i /></span>
-              <b>{activeBanner.kind === "website" ? "AI website builder" : "Kokoro workspace"}</b>
-              <span className={promotionStyles.desktopBannerChart}><i /><i /><i /></span>
-              <span className={promotionStyles.desktopBannerService}><i />{activeBanner.kind === "schedule" ? "Tasks" : "Workspace"}</span>
-            </span>
-            <span className={promotionStyles.desktopBannerStand} />
-          </div>
-          </div>
-          <div className={cn(promotionStyles.bannerDots, responsiveStyles.bannerDots)}>
-            {desktopBanners.map((banner, index) => (
-              <button
-                key={banner.title}
-                type="button"
-                data-active={index === bannerIndex || undefined}
-                aria-label={`${index + 1} / ${desktopBanners.length}`}
-                aria-current={index === bannerIndex ? "true" : undefined}
-                onClick={() => setBannerIndex(index)}
-              />
-            ))}
-          </div>
-        </div> : null}
+
       </div>
   )
 }

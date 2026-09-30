@@ -42,7 +42,7 @@ function creationPlaceholder(
   hasMessages: boolean,
   intent: CreationIntent | null,
 ): string | undefined {
-  if (projectWorkspace && !hasMessages) return t("firstSite.startTask")
+  if (projectWorkspace && !hasMessages) return t("firstSite.startConversation")
   if (projectWorkspace || hasMessages) return undefined
   switch (intent) {
     case "website":

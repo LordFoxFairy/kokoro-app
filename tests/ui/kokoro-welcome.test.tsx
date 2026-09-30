@@ -13,7 +13,7 @@ beforeEach(() => {
 it("直接会话空态使用 Manus 式聊天欢迎面，而不是项目上下文卡片", () => {
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome />
+      <KokoroDirectChatWelcome preview />
     </LocaleProvider>,
   )
 
@@ -30,7 +30,7 @@ it("计划状态使用文字、分隔线和升级动作三段结构", () => {
   const onOpenSettings = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome onOpenSettings={onOpenSettings} />
+      <KokoroDirectChatWelcome preview onOpenSettings={onOpenSettings} />
     </LocaleProvider>,
   )
 
@@ -42,25 +42,17 @@ it("计划状态使用文字、分隔线和升级动作三段结构", () => {
   expect(onOpenSettings).toHaveBeenCalledWith("subscription")
 })
 
-it("首页推广区使用五项可切换轮播而不是静态伪圆点", () => {
-  render(
-    <LocaleProvider>
-      <KokoroDirectChatWelcome />
-    </LocaleProvider>,
-  )
-
-  expect(screen.getByText("创作你自己的游戏")).toBeInTheDocument()
-  const secondSlide = screen.getByRole("button", { name: "2 / 5" })
-  fireEvent.click(secondSlide)
-  expect(document.querySelector('[data-slot="welcome-promotion"] strong')).toHaveTextContent("建立网站")
-  expect(secondSlide).toHaveAttribute("aria-current", "true")
+it("首页不再用硬编码轮播宣称已接通能力", () => {
+  render(<LocaleProvider><KokoroDirectChatWelcome preview /></LocaleProvider>)
+  expect(document.querySelector('[data-slot="welcome-promotion"]')).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "2 / 5" })).not.toBeInTheDocument()
 })
 
 it("建立网站入口把网站意图交给壳层以显示选中胶囊", () => {
   const onPrompt = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome onPrompt={onPrompt} />
+      <KokoroDirectChatWelcome preview onPrompt={onPrompt} />
     </LocaleProvider>,
   )
 
@@ -73,7 +65,7 @@ it("能力胶囊只切换创作模式，不把示例提示词误填进编辑器"
   const onCreationIntentSelect = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome onPrompt={onPrompt} onCreationIntentSelect={onCreationIntentSelect} />
+      <KokoroDirectChatWelcome preview onPrompt={onPrompt} onCreationIntentSelect={onCreationIntentSelect} />
     </LocaleProvider>,
   )
 
@@ -86,7 +78,7 @@ it("能力胶囊只切换创作模式，不把示例提示词误填进编辑器"
 it("显式网站意图切换为专案归档与创建类型布局", () => {
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="帮我建立一个产品网站" creationIntent="website" />
+      <KokoroDirectChatWelcome preview draft="帮我建立一个产品网站" creationIntent="website" />
     </LocaleProvider>,
   )
 
@@ -104,7 +96,7 @@ it("显式网站意图切换为专案归档与创建类型布局", () => {
 it("网站创建区默认直接进入内建整合，不插入灵感层级", () => {
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="建立网站" creationIntent="website" />
+      <KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" />
     </LocaleProvider>,
   )
 
@@ -116,7 +108,7 @@ it("网站分类点击只展开 Manus 式灵感层级，选中前不改写草稿
   const onPrompt = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="" creationIntent="website" onPrompt={onPrompt} />
+      <KokoroDirectChatWelcome preview draft="" creationIntent="website" onPrompt={onPrompt} />
     </LocaleProvider>,
   )
 
@@ -132,7 +124,7 @@ it("网站分类点击只展开 Manus 式灵感层级，选中前不改写草稿
 it("网站创建空态仍保留专案归档轨道并禁用空提交", () => {
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome creationIntent="website" />
+      <KokoroDirectChatWelcome preview creationIntent="website" />
     </LocaleProvider>,
   )
 
@@ -149,7 +141,7 @@ it("切换网站模式后把欢迎页滚动位置恢复到 Manus 的顶部轴", 
   const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined)
   const { rerender } = render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome />
+      <KokoroDirectChatWelcome preview />
     </LocaleProvider>,
   )
 
@@ -159,7 +151,7 @@ it("切换网站模式后把欢迎页滚动位置恢复到 Manus 的顶部轴", 
 
   rerender(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="建立网站" creationIntent="website" />
+      <KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" />
     </LocaleProvider>,
   )
 
@@ -172,7 +164,7 @@ it("应用意图保留能力入口并显示五条应用示例，不渲染旧推�
   const onPrompt = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome creationIntent="app" onPrompt={onPrompt} />
+      <KokoroDirectChatWelcome preview creationIntent="app" onPrompt={onPrompt} />
     </LocaleProvider>,
   )
 
@@ -187,7 +179,7 @@ it("应用意图保留能力入口并显示五条应用示例，不渲染旧推�
 it("普通非空草稿不显示网站上下文，也不混入空态快捷入口", () => {
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="帮我整理今天的工作" />
+      <KokoroDirectChatWelcome preview draft="帮我整理今天的工作" />
     </LocaleProvider>,
   )
 
@@ -199,14 +191,14 @@ it("普通非空草稿不显示网站上下文，也不混入空态快捷入口"
 it("关闭网站胶囊后保留草稿，但移除网站上下文和空态快捷入口", () => {
   const { rerender } = render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="描述你想要建立的网站" creationIntent="website" />
+      <KokoroDirectChatWelcome preview draft="描述你想要建立的网站" creationIntent="website" />
     </LocaleProvider>,
   )
 
   expect(screen.getByText("让你的网站井然有序")).toBeInTheDocument()
   rerender(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="描述你想要建立的网站" />
+      <KokoroDirectChatWelcome preview draft="描述你想要建立的网站" />
     </LocaleProvider>,
   )
 
@@ -215,42 +207,24 @@ it("关闭网站胶囊后保留草稿，但移除网站上下文和空态快捷�
   expect(screen.queryByRole("group", { name: "选一个场景开始，或直接把想法说给我" })).toBeNull()
 })
 
-it("专案归档入口使用菜单选择并回显目标专案", () => {
-  render(
-    <LocaleProvider>
-      <KokoroDirectChatWelcome brandName="Kokoro" draft="建立网站" creationIntent="website" />
-    </LocaleProvider>,
-  )
-
-  const trigger = screen.getByRole("button", { name: "新增到专案" })
-  fireEvent.pointerDown(trigger)
-  fireEvent.click(screen.getByRole("menuitem", { name: "Kokoro" }))
-  expect(screen.getByRole("button", { name: "Kokoro" })).toBeInTheDocument()
+it("预览缺创建回调时入口禁用，不产生伪专案选择", () => {
+  render(<LocaleProvider><KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: "新增到专案" })).toBeDisabled()
+  expect(screen.queryByRole("menuitem")).not.toBeInTheDocument()
 })
 
-it("专案菜单选择会把聊天承接到对应的专案回调", () => {
-  const onOpenProject = vi.fn()
-  render(
-    <LocaleProvider>
-      <KokoroDirectChatWelcome
-        brandName="Kokoro"
-        draft="建立网站"
-        creationIntent="website"
-        onOpenProject={onOpenProject}
-      />
-    </LocaleProvider>,
-  )
-
+it("专案菜单不以品牌猜测已有专案身份", () => {
+  render(<LocaleProvider><KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" onOpenProject={vi.fn()} /></LocaleProvider>)
   fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
-  fireEvent.click(screen.getByRole("menuitem", { name: "Kokoro" }))
-  expect(onOpenProject).toHaveBeenCalledWith("kokoro", "建立网站")
+  expect(screen.queryByRole("menuitem", { name: "Kokoro" })).not.toBeInTheDocument()
+  expect(screen.getByRole("menuitem", { name: "新建专案" })).toBeInTheDocument()
 })
 
 it("新建专案动作会生成唯一的本地预览专案引用并承接聊天", () => {
   const onOpenProject = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome
+      <KokoroDirectChatWelcome preview
         brandName="Kokoro"
         draft="建立网站"
         creationIntent="website"
@@ -265,15 +239,15 @@ it("新建专案动作会生成唯一的本地预览专案引用并承接聊天"
 })
 
 it("正式欢迎页的新建专案只上报创建意图，不预造 preview 项目", () => {
-  const onOpenProject = vi.fn()
+  const onCreateProject = vi.fn()
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome preview={false} draft="正式草稿" creationIntent="website" onOpenProject={onOpenProject} />
+      <KokoroDirectChatWelcome preview={false} draft="正式草稿" creationIntent="website" onCreateProject={onCreateProject} />
     </LocaleProvider>,
   )
   fireEvent.pointerDown(screen.getByRole("button", { name: "新增到专案" }))
   fireEvent.click(screen.getByRole("menuitem", { name: "新建专案" }))
-  expect(onOpenProject).toHaveBeenCalledWith("preview-project", "正式草稿")
+  expect(onCreateProject).toHaveBeenCalledWith("正式草稿")
 })
 
 it("创建类型更多按钮横向浏览隐藏选项", () => {
@@ -281,7 +255,7 @@ it("创建类型更多按钮横向浏览隐藏选项", () => {
   Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo })
   render(
     <LocaleProvider>
-      <KokoroDirectChatWelcome draft="建立网站" creationIntent="website" />
+      <KokoroDirectChatWelcome preview draft="建立网站" creationIntent="website" />
     </LocaleProvider>,
   )
 
@@ -295,4 +269,28 @@ it("创建类型更多按钮横向浏览隐藏选项", () => {
   fireEvent.click(screen.getByRole("button", { name: "上一组" }))
   expect(scrollTo).toHaveBeenLastCalledWith({ behavior: "smooth", left: 0 })
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo")
+})
+
+it("正式首页不宣传未接通集成且品牌文案完成插值", () => {
+  const { container } = render(<LocaleProvider><KokoroDirectChatWelcome preview={false} brandName="Mori" /></LocaleProvider>)
+  expect(container.textContent).not.toContain("{brand}")
+  expect(container.textContent).toContain("Mori")
+  expect(screen.queryByRole("button", { name: "4 / 5" })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Slack|Zapier/)).not.toBeInTheDocument()
+})
+
+it("正式欢迎页没有创建回调时不生成或打开猜测项目", () => {
+  const onOpenProject = vi.fn()
+  render(<LocaleProvider><KokoroDirectChatWelcome preview={false} draft="草稿" creationIntent="website" onOpenProject={onOpenProject} /></LocaleProvider>)
+  expect(screen.queryByRole("button", { name: "新增到专案" })).not.toBeInTheDocument()
+  expect(onOpenProject).not.toHaveBeenCalled()
+})
+
+
+it("正式网站提示流程不展示虚构 Figma/Shopify 与内建集成", () => {
+  render(<LocaleProvider><KokoroDirectChatWelcome preview={false} creationIntent="website" onCreateProject={vi.fn()} /></LocaleProvider>)
+  expect(screen.queryByRole("button", { name: "从 Figma 汇入" })).not.toBeInTheDocument()
+  expect(document.querySelector('[data-slot="shopify-mark"]')).not.toBeInTheDocument()
+  expect(screen.queryByText("强大的内建整合")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新增到专案" })).toBeEnabled()
 })

@@ -92,7 +92,7 @@ it("桌面 shell 发布唯一 300/52 轨道契约和 rail seam", () => {
   setDesktopViewport(1280)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   expect(shell).not.toBeNull()
   expect(shell).toHaveStyle({
     "--sidebar-width": "300px",
@@ -112,7 +112,7 @@ it("800px 仍是宽桌面收起轨道，展开收起的焦点都留在实际可�
   setDesktopViewport(800)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).not.toHaveAttribute("data-rail-hidden")
@@ -142,7 +142,7 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
@@ -171,7 +171,7 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   setDesktopViewport(768)
   mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
     expect(shell?.querySelectorAll('[data-web-navigation-trigger="true"]')).toHaveLength(1)
@@ -190,7 +190,7 @@ it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () 
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   const compactTrigger = await waitFor(() => {
     const target = shell?.querySelector<HTMLButtonElement>('[data-web-navigation-trigger="true"]')
     expect(target).not.toBeNull()
@@ -221,11 +221,16 @@ it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () 
 it("桌面直接会话使用 scoped inbox，不复制 primary rail stop", () => {
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
   expect(screen.queryByTestId("rail-direct-chat")).toBeNull()
   expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveAttribute("data-conversation-list", "direct")
 
-  expect(screen.getByTestId("rail-new-task").closest('[data-slot="sidebar-wrapper"]')).toBe(shell)
+  expect(screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')).toBe(shell)
   expect(shell).toHaveAttribute("data-rail-collapsed", "true")
   expect(shell?.querySelectorAll('[data-slot="sidebar-container"]')).toHaveLength(1)
+})
+
+it("正式壳没有项目身份时不生成默认 kokoro 专案链接", () => {
+  mountFrame({ preview: false })
+  expect(document.querySelector('a[href="/app/project/kokoro"]')).not.toBeInTheDocument()
 })

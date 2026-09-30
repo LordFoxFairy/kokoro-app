@@ -1,5 +1,16 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PRODUCT-IA-CODE 当前消费者（2026-09-30；待 Root 验收）
+
+基线 `7087225`。网络 API/contract/generated 未改：Conversation engine/project_ref、Project create frozen intent、
+ScheduledTask live client/同源 `/api/scheduled-tasks` 继续现契约。只删除 Web 正式 Project 未解析 ACK 的 scheduled callback 接线，
+其卡片导航独立 `/app/scheduled`；无新增、重命名或伪造 owner endpoint。项目专属 POST 契约仍属于 BFF，未来消费者须解析其真实回执。
+内部 welcome `onCreateProject(draft?)` 与 `onOpenProject(ownerId,draft?)` 分离；不再把 preview sentinel 当正式创建命令。
+rail 删除 onCreateTask→onNewChat / onReorderTasks alias；任务导航不提交 Chat。
+审查返修同步 Conversation 的 DOM/data-test/aria/CSS 与组件文件名；命令菜单 new chat 文案对齐，非网络协议变更。缺 owner project ID 不发猜测项目请求。
+Preview 夹具隔离、缺 callback 不宣称正式成功；无 auth、deadline、幂等、权限或错误门放宽。
+下节文档门中的“当前”描述为实施前基线，代码候选与实测边界以本节/CURRENT 为准。
+
 ## WEB-PRODUCT-IA：既有资源入口消费边界（2026-09-30；仅文档）
 
 基线 Web `79f19df`；本门不编辑 contract/generated，不新增 endpoint 或 owner wire。固定机器来源仍是

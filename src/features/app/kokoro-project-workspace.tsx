@@ -2,6 +2,7 @@
 
 import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload, Wrench } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import { useCallback, useRef, useState, type MouseEvent } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -14,8 +15,8 @@ import { ProjectResourceUploadError } from "./project-resource-upload"
 
 import { ProjectContextCard, ProjectContextSection } from "./project-context-card"
 import { ProjectIdentity } from "./project-identity"
-import { ProjectTaskEmpty } from "./project-task-empty"
-import { KokoroProjectTaskWelcome } from "./kokoro-project-task-welcome"
+import { ProjectConversationEmpty } from "./project-conversation-empty"
+import { KokoroProjectConversationWelcome } from "./kokoro-project-conversation-welcome"
 import { ProjectWorkspaceDialogs } from "./project-workspace-dialogs"
 import { previewScheduledTasks, previewWebsites, type ProjectScheduledPreview, type ResourceKind } from "./project-workspace-model"
 import { useProjectResources } from "./use-project-resources"
@@ -25,7 +26,7 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectTask" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
+  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
 >
 
 export type ResourceUploadIntent = {
@@ -53,7 +54,7 @@ export function KokoroProjectWorkspace({
   activeProjectConversationId,
   onSelectProjectConversation,
   workspaceCapabilities,
-  projectTask = false,
+  projectConversation = false,
   projectInstructions = "",
   projectInstructionHistory = [],
   onSaveProjectInstructions,
@@ -90,7 +91,7 @@ export function KokoroProjectWorkspace({
   const [linkedWebsiteId, setLinkedWebsiteId] = useState<string | null>(null)
   const [scheduledOpen, setScheduledOpen] = useState(false)
   const [scheduledQuery, setScheduledQuery] = useState("")
-  const [scheduledItems, setScheduledItems] = useState<readonly ProjectScheduledPreview[]>(previewScheduledTasks)
+  const [scheduledItems, setScheduledItems] = useState<readonly ProjectScheduledPreview[]>(preview ? previewScheduledTasks : [])
   const [selectedScheduledId, setSelectedScheduledId] = useState<string | null>(null)
   const [linkedScheduledId, setLinkedScheduledId] = useState<string | null>(null)
   const [scheduledEditorOpen, setScheduledEditorOpen] = useState(false)
@@ -188,6 +189,7 @@ export function KokoroProjectWorkspace({
     expiresAt?: string
     autoApprove: boolean
   }) => {
+    if (!preview) throw new Error("preview_only")
     await onCreateProjectScheduledTask?.(task)
     const created: ProjectScheduledPreview = {
       id: `scheduled-${task.title}-${task.time}`,
@@ -203,8 +205,8 @@ export function KokoroProjectWorkspace({
     setLinkedScheduledId(created.id)
   }
 
-  if (projectTask) {
-    return <KokoroProjectTaskWelcome composer={composer} />
+  if (projectConversation) {
+    return <KokoroProjectConversationWelcome composer={composer} />
   }
 
   return (
@@ -222,8 +224,8 @@ export function KokoroProjectWorkspace({
 
         {capabilities?.projectConversations ? (
           <section className={cn(styles.conversations, layoutStyles.conversations)} aria-labelledby="project-conversation-heading">
-            <h2 id="project-conversation-heading">{t("firstSite.tasks")}</h2>
-            <p>{t("firstSite.tasksPrivate")}</p>
+            <h2 id="project-conversation-heading">{t("firstSite.projectConversations")}</h2>
+            <p>{t("firstSite.projectConversationsPrivate")}</p>
             {projectConversationsLoading ? (
               <div className={styles.conversationState} data-testid="project-conversations-loading" aria-busy="true">
                 <div className={styles.conversationLoadingRows} aria-hidden="true">
@@ -231,11 +233,11 @@ export function KokoroProjectWorkspace({
                   <Skeleton className={styles.conversationLoadingRow} />
                   <Skeleton className={styles.conversationLoadingRowShort} />
                 </div>
-                <p className={styles.conversationLoadingMessage} role="status">{t("firstSite.tasksLoading")}</p>
+                <p className={styles.conversationLoadingMessage} role="status">{t("firstSite.conversationsLoading")}</p>
               </div>
             ) : projectConversationsError ? (
               <div className={styles.conversationState} data-testid="project-conversations-error" role="alert" aria-labelledby="project-conversations-error-title">
-                <p id="project-conversations-error-title" className={styles.conversationErrorMessage}>{t("firstSite.tasksError")}</p>
+                <p id="project-conversations-error-title" className={styles.conversationErrorMessage}>{t("firstSite.conversationsError")}</p>
                 <Button type="button" variant="outline" onClick={onRetryProjectConversations} disabled={!onRetryProjectConversations}>
                   {t("firstSite.retry")}
                 </Button>
@@ -256,7 +258,7 @@ export function KokoroProjectWorkspace({
                 ))}
               </div>
             ) : (
-              <ProjectTaskEmpty />
+              <ProjectConversationEmpty />
             )}
           </section>
         ) : null}
@@ -363,7 +365,13 @@ export function KokoroProjectWorkspace({
             }}
           />
         ) : null}
-        {capabilities?.scheduledTasks ? (
+        {capabilities?.scheduledTasks && !preview ? (
+          <Card data-context-kind="scheduled"><CardHeader><CardTitle>{t("firstSite.scheduledTasks")}</CardTitle></CardHeader>
+            <CardContent><p>{t("firstSite.independentScheduledTasks")}</p></CardContent>
+            <CardFooter><Button asChild variant="outline"><Link href="/app/scheduled">{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
+          </Card>
+        ) : null}
+        {capabilities?.scheduledTasks && preview ? (
           <ProjectContextCard
             kind="scheduled"
             title={t("firstSite.scheduledTasks")}
@@ -389,6 +397,7 @@ export function KokoroProjectWorkspace({
       </aside>
 
       <ProjectWorkspaceDialogs
+        preview={preview}
         {...(brandName === undefined ? {} : { brandName })}
         instructionsOpen={instructionsOpen}
         setInstructionsOpen={setInstructionsOpen}

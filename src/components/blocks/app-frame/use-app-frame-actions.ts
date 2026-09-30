@@ -70,7 +70,7 @@ export function useAppFrameActions({
       // engine before the next render. Update both URL and route projection at
       // the user action boundary; replaceState alone does not notify App
       // Router, so waiting for a route effect would leave the overview painted
-      // beside a newly-created task.
+      // beside a newly-created conversation.
       const projectConversationId = engine.getSnapshot().store?.activeId ?? null
       if (projectConversationId !== null) {
         syncConversationUrl(projectConversationId, "replace")
@@ -123,7 +123,7 @@ export function useAppFrameActions({
   const startNewChatWithUrl = useCallback(() => {
     setDeploymentIntent(null)
     // Catalog pages share this mounted shell with the direct inbox. Starting
-    // a task from Agent/Skills/etc. must leave the catalog surface; merely
+    // a conversation from Agent/Skills/etc. must leave the catalog surface; merely
     // clearing `conversation` keeps the catalog mounted and looks like a
     // dead button because its landing content has no Composer.
     if (standaloneSurface) {
@@ -131,8 +131,8 @@ export function useAppFrameActions({
     }
     startNewChat()
     if (projectWorkspace) {
-      // The project overview stays at `/app/project/{ref}`. A fresh task gets
-      // its own opaque conversation route, which makes task creation and the
+      // The project overview stays at `/app/project/{ref}`. A fresh conversation gets
+      // its own opaque conversation route, which makes conversation creation and the
       // persistent project surface independently addressable.
       const nextProjectConversationId = engine?.getSnapshot().store?.activeId ?? null
       syncConversationUrl(nextProjectConversationId, "push")
@@ -184,7 +184,7 @@ export function useAppFrameActions({
     // of leaving it on the document body or on a stale navigation action.
     startNewChatWithUrl()
     if (standaloneSurface || projectWorkspace) {
-      // Catalog navigation and project-task creation both replace the empty
+      // Catalog navigation and project-conversation creation both replace the empty
       // surface in the next React commit. Let the fresh Composer mount before
       // handing it focus; otherwise the click succeeds but focus stays on the
       // rail (or falls back to document.body).

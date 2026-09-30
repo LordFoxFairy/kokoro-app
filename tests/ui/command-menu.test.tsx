@@ -170,7 +170,7 @@ it("从命令菜单新建对话时不把焦点抢回命令触发按钮", async (
   render(<Harness />)
 
   fireEvent.click(triggerRef.current!)
-  fireEvent.click(screen.getByRole("option", { name: /新建任务|New task/i }))
+  fireEvent.click(screen.getByRole("option", { name: /新对话|New chat/i }))
   await waitFor(() => expect(onNewChat).toHaveBeenCalledTimes(1))
   expect(triggerRef.current).not.toHaveFocus()
 })

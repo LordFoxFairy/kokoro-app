@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "firstSite.startConversation": "Démarrer une conversation dans ce projet",
+  "firstSite.currentProject": "Projet actuel",
+  "firstSite.conversationsLoading": "Chargement des conversations…",
+  "firstSite.conversationsError": "Les conversations sont temporairement indisponibles.",
+  "firstSite.independentScheduledTasks": "Les tâches planifiées sont gérées séparément des conversations du projet.",
+  "firstSite.openScheduledTasks": "Ouvrir les tâches planifiées",
+  "rail.conversationSort": "Trier les conversations",
   "firstSite.keepProjectOrganized": "Gardez votre site organisé",
   "firstSite.keepProjectOrganizedHint": "Regroupez tâches, versions et mises à jour au même endroit.",
   "firstSite.addToProject": "Ajouter au projet",

@@ -76,10 +76,8 @@ export type WorkspaceRailActionsProps = {
   projectItems: readonly WorkspaceRailProject[]
   conversations: readonly ConversationSummary[]
   conversationScopeKey: string
-  projectActive: boolean
   onReorderProjects?: (projectIds: string[]) => void
   onReorderConversations?: (conversationIds: string[]) => void
-  onReorderTasks?: (conversationIds: string[]) => void
 }
 
 /** Owns local ordering state and pointer/keyboard reorder gestures. */
@@ -87,10 +85,8 @@ export function useWorkspaceRailActions({
   projectItems,
   conversations,
   conversationScopeKey,
-  projectActive,
   onReorderProjects,
   onReorderConversations,
-  onReorderTasks,
 }: WorkspaceRailActionsProps) {
   const projectIds = useMemo(() => projectItems.map((project) => project.id), [projectItems])
   const conversationIds = useMemo(() => conversations.map((conversation) => conversation.id), [conversations])
@@ -114,11 +110,8 @@ export function useWorkspaceRailActions({
   }, [conversationOrder, projectOrder])
 
   const notifyConversationOrder = useCallback((next: string[]) => {
-    const onReorder = projectActive
-      ? onReorderTasks ?? onReorderConversations
-      : onReorderConversations ?? onReorderTasks
-    onReorder?.(next)
-  }, [onReorderConversations, onReorderTasks, projectActive])
+    onReorderConversations?.(next)
+  }, [onReorderConversations])
 
   const commitOrder = useCallback((kind: RailDragKind, next: string[]) => {
     if (kind === "project") {

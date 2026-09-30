@@ -2,7 +2,6 @@
 .wrap { container: composer / inline-size; display: flex; min-width: 0; flex-shrink: 0; flex-direction: column; align-items: center; gap: 0.35rem; padding: 0 1.25rem max(1rem, env(safe-area-inset-bottom)); background: var(--background); }
 .disclaimer { width: min(var(--content-width), 100%); margin: -0.05rem 0 0; color: var(--muted-foreground); font-size: 0.68rem; line-height: 1.25; text-align: center; }
 .composer { position: relative; display: flex; flex-direction: column; width: min(var(--content-width), 100%); gap: 0.45rem; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); padding: 0.75rem 0.85rem 0.65rem; box-shadow: none; transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
-.composer:focus-within { border-color: color-mix(in srgb, var(--primary) 22%, var(--border) 78%); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 7%, transparent); }
 .controls { display: flex; min-width: 0; align-items: center; justify-content: flex-start; gap: 0.5rem; }
 .leadingActions { display: flex; min-width: 2rem; align-items: center; gap: 0.25rem; }
 .leadingActions button { border-radius: 999px; color: color-mix(in srgb, var(--foreground) 72%, var(--primary) 28%); }
@@ -42,7 +41,7 @@
 .input::-webkit-scrollbar { display: none; }
 .input::placeholder { color: color-mix(in srgb, var(--foreground) 55%, transparent); }
 .input:focus { border-color: transparent; box-shadow: none; }
-.input:focus-visible { border-color: transparent; box-shadow: inset 0 0 0 1px var(--ring); outline: 2px solid var(--ring); outline-offset: -2px; }
+.input:focus-visible { border-color: transparent; box-shadow: none; outline: 2px solid var(--ring); outline-offset: -2px; }
 .input:disabled { color: color-mix(in srgb, var(--foreground) 55%, transparent); }
 
 @media (max-width: 680px) {
@@ -61,7 +60,7 @@
   .wrap[data-desktop-web="true"] .input { padding: 0.0625rem 0.5rem 0 1rem; }
   .controls { min-height: 2rem; }
   .input { flex: 1 1 auto; min-height: 0; }
-  .wrap[data-desktop-web="true"][data-empty-workspace="true"] .composer { gap: 0.75rem; border-color: rgb(0 0 0 / 20%); border-radius: 1.375rem; padding: 0.75rem 0; }
+  .wrap[data-desktop-web="true"][data-empty-workspace="true"] .composer { gap: 0.75rem; border-color: var(--border); border-radius: 1.375rem; padding: 0.75rem 0; }
   .wrap[data-desktop-web="true"][data-empty-workspace="true"] .input { padding-right: 1rem; padding-left: 1rem; }
   .wrap[data-desktop-web="true"][data-empty-workspace="true"] .controls { padding-inline: 0.75rem; }
 }
