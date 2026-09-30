@@ -54,6 +54,13 @@ afterEach(() => {
 })
 
 describe("Composer model selector", () => {
+  it("fast 输入使用中性提示，不作免费或扣点承诺", () => {
+    renderComposer({ mode: "fast" })
+    const input = screen.getByRole("textbox", { name: "Chat input" })
+    expect(input).toHaveAttribute("placeholder", "Tell me what's on your mind.")
+    expect(input.getAttribute("placeholder")).not.toMatch(/free|credit|免费|点数|积分/iu)
+  })
+
   it("selectedModel=null 时高亮缺省候选（is_default）", () => {
     renderComposer()
     expect(screen.getByText("claude-sonnet-4-6")).toBeTruthy()

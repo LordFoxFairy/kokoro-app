@@ -293,9 +293,6 @@
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="task-stage"]) {
     display: none;
   }
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="credit-note"]) {
-    display: inline-flex;
-  }
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="user-message-body"]),
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="markdown-message"]) {
     font-size: 1rem;

@@ -5,7 +5,6 @@ import type { SessionMessage, SessionStep, SessionToolCall } from "@/core/state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, Copy } from "lucide-react"
 import { useState } from "react"
@@ -135,11 +134,6 @@ export function AssistantTurn({
           <span className={styles.assistantIdentityMark} data-slot="assistant-identity-mark">K</span>
           <span>{t("firstSite.kokoro", { brand: brandName })}</span>
         </div>
-        {taskTitle ? (
-          <Badge variant="outline" className={styles.creditNote} data-slot="credit-note">
-            {t("thread.creditNote")}
-          </Badge>
-        ) : null}
         {showReconnectStrip ? (
           <div className={styles.turnReconnect} data-anchor="reconnecting">
             {t("thread.reconnecting")}

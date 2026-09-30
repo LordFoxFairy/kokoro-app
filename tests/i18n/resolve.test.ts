@@ -106,3 +106,29 @@ it("本人安装管理与未知结果文案在全部语言中明确覆盖", () =
     for (const key of keys) expect(OVERLAYS[locale][key], `${locale}:${key}`).toBeTruthy()
   }
 })
+
+
+describe("无 owner 事实时不承诺收费方式", () => {
+  const neutral = {
+    zh: "向 FixtureBrand 提问任何问题",
+    en: "Ask FixtureBrand anything",
+    de: "Frage FixtureBrand alles",
+    es: "Pregúntale cualquier cosa a FixtureBrand",
+    fr: "Posez n’importe quelle question à FixtureBrand",
+    ja: "FixtureBrand に何でも質問できます",
+    ko: "FixtureBrand에게 무엇이든 물어보세요",
+    pt: "Pergunte qualquer coisa ao FixtureBrand",
+    ru: "Спросите FixtureBrand о чем угодно",
+  } as const
+
+  it.each(LOCALES)("%s 的提问提示仅插值品牌，不宣称免费或扣点", (locale) => {
+    expect(resolveMessage(locale, "composer.directPlaceholder", { brand: "FixtureBrand" })).toBe(neutral[locale])
+  })
+
+  it("删除所有语言的静态收费 Badge key，不保留孤立翻译", () => {
+    expect(Object.hasOwn(zh, "thread.creditNote")).toBe(false)
+    for (const overlay of Object.values(OVERLAYS)) {
+      expect(Object.hasOwn(overlay, "thread.creditNote")).toBe(false)
+    }
+  })
+})

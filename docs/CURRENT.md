@@ -1,5 +1,22 @@
 # Kokoro User Web 当前状态
 
+## WEB-BILLING-TRUTH（2026-09-30；实施候选，待 Root 独立验收）
+
+基线 `main 752aff9d0744cd55c556079a08a2a28e393e50e4`。正式助手首轮原仅因 taskTitle 有值即显示收费 Badge，
+并无 server billing decision；中文宣称免费、其他语言反称消耗积分，均无本次费用事实依据。
+本片删除该 Badge/唯一 import、两处 CSS 文件中的专用规则及九语言 `thread.creditNote`；
+九语言 `composer.directPlaceholder` 仅保留中性提问与品牌插值，不替换为另一扣费承诺。
+当前 fast Composer 使用既有中性 `composer.placeholder`，未新增旧 key 调用；任务标题、正文、复制、键盘/IME 均保留。
+
+本片不改余额 DTO、402 错误传递、SDK、owner 或账户数据；未充值、未入账、未证明正常预留/结算/释放计费链。
+余额契约漂移及标准错误 code 消费另待 owner-first 切片。真实余额不足入口不隐藏，健康/服务/模型不触碰。
+实际 Node22.22.2 RED：真实带 taskTitle 助手 render 与九语言断言共11失败81通过。
+GREEN：聚焦 UI/i18n 3文件92通过；contract 18文件109通过；architecture 4文件37通过；
+完整非 integration `pnpm exec vitest run --exclude '**/*.integration.test.ts' --maxWorkers=2` 为154文件1665通过，无skip；
+`pnpm lint`、`pnpm typecheck`、`pnpm build`、`git diff --check` 全exit0。日志前缀 `/tmp/kokoro-web-billing-truth-`。
+真实浏览器/integration/账户充值/扣费链未执行，本任务未授权服务、数据或模型调用；纯门不替代 Root 独立验收。
+
+
 ## WEB-PERSONAL-CODE（2026-09-30；实施候选，待 Root 独立验收）
 
 基线 `main 49adb4bae88e45fc40489c2d297775e08a70faa4`；Web唯一writer，Root负责index/提交。

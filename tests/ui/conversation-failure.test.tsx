@@ -116,6 +116,10 @@ describe("ConversationThread 失败卡渲染", () => {
     )
 
     expect(container.querySelector('[data-slot="assistant-identity-mark"]')).toBeTruthy()
+    expect(container.querySelector('[data-slot="task-stage"]')).toHaveTextContent("draft a plan")
+    expect(container.querySelector('[data-slot="credit-note"]')).toBeNull()
+    expect(container.querySelector('[data-slot="badge"]')).toBeNull()
+    expect(container.querySelector('[data-slot="markdown-message"]')).toHaveTextContent("Here is the plan.")
     fireEvent.click(screen.getByRole("button", { name: tr("thread.copyAnswer") }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Here is the plan."))
   })
