@@ -1,5 +1,15 @@
 # Kokoro User Web 技术设计
 
+## WEB-FAILED-SNAPSHOT-RESTORE：权威 snapshot 的通用失败恢复
+
+**Owner 与当前事实。** Web `core/hydration.ts` 是 BFF session snapshot 到本地 `SessionStreamState` 的唯一水合 owner。基线 `840fa7e0ff9c4d241daca0c297b120f34821018e` 会保留 message 内容、run 关联、步骤和 watermark，却丢弃机器契约已经提供的 `messages[].status=failed`，并从初始 `runStatus=idle/runError=null` 开始；watermark 前已经消费的 `RUN_ERROR` 不会再次 replay，因此刷新或重新水合会移除 live 阶段的通用错误卡和手动重试入口。
+
+**窄恢复规则。** 按 snapshot 的 owner-ordered `messages` 数组只检查最后一项：它必须同时是 `role=assistant`、`status=failed`，且 snapshot 不含 `active_run`、不存在 `status=pending` 的 `pending_pauses`，才将水合结果设为 `runStatus=failed`。`runError` 固定 `null`；不从空正文、run ID、历史帧或旧内存猜 code/message/retryable，也不重放 watermark 前事件。尾项为新 user、completed/pending/streaming assistant、空 messages、存在 active run 或未决 pause 时均保持非失败，防止历史失败污染新一轮或 HITL。
+
+**放置与生命周期。** 采用既有 `src/core/hydration.ts`，因为判定完全来自一次合法 snapshot，且 reducer/machine/UI 已能呈现 `runStatus=failed` 并由最后一条 user message执行显式 retry。淘汰在 machine 跨会话保留旧内存错误、在组件猜空 assistant、自动重跑或新增兼容 store。该变化不修改 AG-UI transport、BFF OpenAPI、SQL、generated、UI 设计或 i18n。
+
+**验证门。** 文档门后先在既有 hydration/machine tests 锁定 failed 尾项恢复及反例，再只改 hydration；必要 UI smoke 只验证通用错误卡和现有 retry callback。Node 22 完整 `pnpm check` 与隔离 E2E 后，Root 另以真实失败→reload→手动 retry 组合验收。具体安全 code/message/retryable 仍由 Agent 发布、BFF 投影的后继机器契约提供，本片不冒充精准失败传播完成。
+
 ## WEB-PERSONAL-CODE（2026-09-30；已实施候选，待 Root 验收）
 
 基线 `49adb4bae88e45fc40489c2d297775e08a70faa4`。下节是已批准的历史文档门；本节才描述当前候选代码。

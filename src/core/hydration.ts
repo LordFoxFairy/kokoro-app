@@ -27,6 +27,7 @@ export function deliveryFromSnapshot(delivery: Delivery): SessionDelivery {
 
 export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState {
   const snapshotMessages = snapshot.messages ?? []
+  const tailMessage = snapshotMessages.at(-1)
   const activeAssistants = snapshotMessages.filter((message) => message.role === "assistant" &&
     message.run_id !== undefined && message.run_id === snapshot.active_run?.run_id &&
     (message.status === "pending" || message.status === "streaming"))
@@ -40,6 +41,8 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     ...(message === candidate ? { awaitingTextSegment: true } : {}),
   }))
   const pending = snapshot.pending_pauses.filter((pause) => pause.status === "pending")
+  const restoresFailedRun = tailMessage?.role === "assistant" && tailMessage.status === "failed" &&
+    snapshot.active_run === undefined && pending.length === 0
   const pendingIdsByRun = new Map<string, string[]>()
   for (const pause of pending) {
     const ids = pendingIdsByRun.get(pause.run_id) ?? []
@@ -81,6 +84,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
 
   return {
     ...createSessionStreamState(),
+    ...(restoresFailedRun ? { runStatus: "failed" as const } : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
     activeRunId: snapshot.active_run?.run_id ?? null,
     messages,

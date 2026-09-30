@@ -1,5 +1,17 @@
 # Kokoro User Web 验收矩阵
 
+## Failed snapshot restore（实现候选）
+
+| ID | 验收条件 | 当前状态 |
+| --- | --- | --- |
+| FSR-01 | messages尾项为failed assistant，且无active run/pending pause时，水合为通用failed、`runError=null` | 定点GREEN；resolved/cancelled/expired pause不阻挡 |
+| FSR-02 | 尾部新user、后续completed/pending/streaming、空snapshot、active run或pending pause均不恢复历史failed | 定点GREEN |
+| FSR-03 | messages/steps/files/deliveries/watermark保持原事实，不重放旧frame、不猜code/message或自动retry | 定点GREEN |
+| FSR-04 | 既有通用错误卡可见，手动retry使用最后user；真实failure→reload→retry | 纯machine GREEN；Root真实组合待验 |
+
+机器契约与SQL本片无变化；精确安全 failure 字段须由 Agent→BFF 后继契约单独验收。
+Node22 hydration/machine 51/51、`pnpm check`（contract 109、architecture 37、全量 Vitest 1799、lint/typecheck/build）均通过；未运行浏览器或真实服务。
+
 状态：2026-09-03。本文定义可执行验收，不把目标、preview 或历史报告写成当前生产证据。
 
 状态标签：

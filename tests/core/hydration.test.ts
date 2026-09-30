@@ -1,6 +1,7 @@
 // snapshot 水合规格：当前读模型 + opaque AG-UI watermark 组成一致续流起点。
 import { describe, expect, it } from "vitest"
 
+import { parseSessionSnapshot, type SessionSnapshot } from "@/contract/http"
 import { stateFromSnapshot } from "@/core/hydration"
 import { applyChatProjectionEvents } from "@/core/reducer"
 import { buildThreadItems, groupSegments } from "@/core/projections"
@@ -9,6 +10,75 @@ import { AgUiEventMapper } from "@/engine/agui-event-mapper"
 import { makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
 
 describe("stateFromSnapshot", () => {
+  const failedHistory = (content: string): NonNullable<SessionSnapshot["messages"]> => [
+    { message_id: "user_1", role: "user" as const, content: "try this", status: "completed" as const, created_at: "2026-07-02T00:00:00Z" },
+    { message_id: "assistant_1", role: "assistant" as const, run_id: "run_failed", content, status: "failed" as const, created_at: "2026-07-02T00:00:01Z" },
+  ]
+
+  it.each(["", "partial answer"])("restores a trailing failed assistant (%j) without inventing an error payload", (content) => {
+    const cursor = "agui_0000000000000000000000000000002a"
+    const delivery = makeSnapshotDelivery({ run_id: "run_failed" })
+    const state = stateFromSnapshot(makeSnapshot({
+      messages: failedHistory(content),
+      files: [{ path: "out/partial.md", mime: "text/markdown", bytes: 7 }],
+      deliveries: [delivery], deliveriesHasMore: true, eventWatermark: cursor,
+    }))
+    expect(state.runStatus).toBe("failed")
+    expect(state.runError).toBeNull()
+    expect(state.messages.map(({ role, content: text, runId }) => ({ role, content: text, runId }))).toEqual([
+      { role: "user", content: "try this", runId: "user_1" },
+      { role: "assistant", content, runId: "run_failed" },
+    ])
+    expect(state.stepsByRun.run_failed).toEqual([{ kind: "text", seq: -1, segmentId: "assistant_1" }])
+    expect(state.files).toEqual([{ path: "out/partial.md", mime: "text/markdown", bytes: 7 }])
+    expect(state.deliveries).toEqual([expect.objectContaining({ artifactId: delivery.artifact_id, runId: "run_failed" })])
+    expect(state.deliveriesHasMore).toBe(true)
+    expect(state.resumeCursor).toBe(cursor)
+  })
+
+  it.each<[
+    string,
+    NonNullable<SessionSnapshot["messages"]>,
+    SessionSnapshot["active_run"] | undefined,
+    SessionSnapshot["pending_pauses"],
+  ]>([
+    ["newer user", [...failedHistory("failed"), { message_id: "user_2", role: "user" as const, content: "next", status: "completed" as const, created_at: "2026-07-02T00:00:02Z" }], undefined, []],
+    ["completed assistant", [{ ...failedHistory("done")[1]!, status: "completed" as const }], undefined, []],
+    ["pending assistant", [{ ...failedHistory("pending")[1]!, status: "pending" as const }], undefined, []],
+    ["streaming assistant", [{ ...failedHistory("streaming")[1]!, status: "streaming" as const }], undefined, []],
+    ["active run", failedHistory("failed"), { run_id: "run_failed", status: "running" as const }, []],
+    ["pending pause", failedHistory("failed"), undefined, [makePendingPause({ run_id: "run_failed" })]],
+    ["empty messages", [], undefined, []],
+  ])("does not restore stale failure for %s", (_label, messages, activeRun, pendingPauses) => {
+    const state = stateFromSnapshot(makeSnapshot({ messages, activeRun, pendingPauses }))
+    expect(state.runStatus).toBe("idle")
+    expect(state.runError).toBeNull()
+  })
+
+  it.each(["resolved", "cancelled", "expired"] as const)(
+    "restores failure when the historical pause is %s",
+    (status) => {
+      const state = stateFromSnapshot(makeSnapshot({
+        messages: failedHistory("partial"),
+        pendingPauses: [makePendingPause({ status })],
+      }))
+      expect(state.runStatus).toBe("failed")
+      expect(state.runError).toBeNull()
+    },
+  )
+
+  it("treats an omitted messages field as empty history", () => {
+    const snapshot = parseSessionSnapshot({
+      session: { session_id: "conv_1", title: "server title", owner_id: "local-user",
+        created_at: "2026-07-02T00:00:00Z", updated_at: "2026-07-02T00:00:01Z" },
+      pending_pauses: [], files: [], deliveries: [], deliveries_has_more: false, event_watermark: null,
+    })
+    const state = stateFromSnapshot(snapshot)
+    expect(state.runStatus).toBe("idle")
+    expect(state.runError).toBeNull()
+    expect(state.messages).toEqual([])
+  })
+
   it("hydrates messages, pending approval, and the opaque resume cursor", () => {
     const cursor = "agui_0000000000000000000000000000002a"
     const state = stateFromSnapshot(

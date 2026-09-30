@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest"
 
+import { addConversation, type ConversationStore } from "@/core/conversations"
 import {
   IDLE_MACHINE,
+  createSessionEngine,
   transition,
   type MachineEvent,
   type MachineState,
 } from "@/engine/machine"
+
+import { makeSnapshot } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, settle } from "./fakes"
 
 function state(partial: Partial<MachineState>): MachineState {
   return { ...IDLE_MACHINE, ...partial }
@@ -60,5 +65,54 @@ describe("transition 全迁移矩阵", () => {
     const second = transition(first, { type: "SUBMIT" })
     expect(first.phase).toBe("submitting")
     expect(second).toBe(first)
+  })
+})
+
+describe("failed snapshot hydration", () => {
+  const cursor = "agui_0000000000000000000000000000002a"
+
+  it("keeps a same-watermark failed tail retryable across hydration without creating a message", async () => {
+    const client = createFakeClient()
+    const storage = createMemoryStorage<ConversationStore>(addConversation(null, "conv_1", 1_000))
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      messages: [
+        { message_id: "user_1", role: "user", content: "retry me", status: "completed", created_at: "2026-07-02T00:00:00Z" },
+        { message_id: "assistant_1", role: "assistant", run_id: "run_failed", content: "partial", status: "failed", created_at: "2026-07-02T00:00:01Z" },
+      ], eventWatermark: cursor,
+    }))
+    const first = createSessionEngine({ client, storage, now: () => 1_000, createId: (prefix) => `${prefix}_first` })
+    await settle()
+    expect(first.getSnapshot().thread).toMatchObject({ runStatus: "failed", runError: null, resumeCursor: cursor })
+    expect(client.createCalls).toHaveLength(0)
+    expect(client.lastStream().resumeCursor).toBe(cursor)
+    first.dispose()
+
+    const second = createSessionEngine({ client, storage, now: () => 2_000, createId: (prefix) => `${prefix}_second` })
+    await settle()
+    expect(second.getSnapshot().thread).toMatchObject({ runStatus: "failed", runError: null, resumeCursor: cursor })
+    expect(client.createCalls).toHaveLength(0)
+    second.retry()
+    await settle()
+    expect(client.createCalls).toEqual([
+      expect.objectContaining({ sessionId: "conv_1", body: expect.objectContaining({ content: "retry me" }) }),
+    ])
+    second.dispose()
+  })
+
+  it("does not fabricate a retry prompt when failed history has no user message", async () => {
+    const client = createFakeClient()
+    const storage = createMemoryStorage<ConversationStore>(addConversation(null, "conv_1", 1_000))
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      messages: [{ message_id: "assistant_1", role: "assistant", run_id: "run_failed", content: "partial",
+        status: "failed", created_at: "2026-07-02T00:00:01Z" }], eventWatermark: cursor,
+    }))
+    const engine = createSessionEngine({ client, storage, now: () => 1_000,
+      createId: (prefix) => `${prefix}_missing_user` })
+    await settle()
+    expect(client.createCalls).toHaveLength(0)
+    engine.retry()
+    await settle()
+    expect(client.createCalls).toHaveLength(0)
+    engine.dispose()
   })
 })

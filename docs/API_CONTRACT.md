@@ -1,5 +1,11 @@
 # Kokoro User Web API 与协议契约
 
+## Failed snapshot hydration（不改机器契约）
+
+BFF v1 snapshot 已合法提供 owner-ordered `messages[]`，每项包含闭集 `status`（含 `failed`）、role、content、created_at 与 optional run_id；现契约没有 terminal failure 的 code/message/retryable 字段。Web 只在数组最后一项为 failed assistant、`active_run` 缺失且没有 pending pause 时恢复本地通用 failed 状态，`runError=null`。该判定不改变请求、响应、watermark、SSE replay、schema 或生成物，也不把 BFF message status扩写成 Agent错误分类。
+
+后续 user 或非 failed assistant 是更新的 owner 顺序事实，必须阻止旧失败恢复；active run 与 pending pause 分别表示在途执行/HITL，同样优先于历史 failed。具体错误文案继续只来自 live `RUN_ERROR`；刷新后在 Agent→BFF 发布安全 typed failure 契约前仅展示既有通用失败文案和手动 retry，不解析或展示上游原始异常。
+
 ## WEB-PERSONAL-CODE 当前候选（2026-09-30；待 Root 验收）
 
 Web 基线49adb4b；目标文档门已落实到既有 client/schema/同源 route/UI，下面的“尚未消费/旧 pin”属于历史设计基线。

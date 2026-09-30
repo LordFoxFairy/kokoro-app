@@ -1,5 +1,18 @@
 # Kokoro User Web 数据模型与 Owner
 
+## Failed snapshot 的本地派生状态
+
+Web 不新增持久化事实、表、缓存或 localStorage 字段。输入事实仍是一次 BFF snapshot 中按 owner 顺序排列的 `messages`、optional `active_run`、`pending_pauses` 与 `event_watermark`。本地派生函数为：
+
+```text
+restoreFailed = last(messages).role == assistant
+             && last(messages).status == failed
+             && active_run is absent
+             && pending_pauses has no status=pending
+```
+
+`restoreFailed=true` 只生成内存 `runStatus=failed, runError=null`；messages、steps、files、deliveries、cursor 和 run identity 原样水合。数组为空、尾部新 user、尾部 assistant 为 completed/pending/streaming、存在 active run 或未决 pause时为 false。Web 不保存或合成 failure code/message；精确失败分类仍等待 Agent owner机器事实经 BFF安全投影。
+
 ## WEB-PERSONAL-CODE 当前内存状态（2026-09-30；候选）
 
 基线49adb4b，固定BFF67755d16/OpenAPI SHA-256

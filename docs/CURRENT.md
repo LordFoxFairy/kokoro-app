@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## WEB-FAILED-SNAPSHOT-RESTORE 实现候选（2026-09-30）
+
+基线 `840fa7e0ff9c4d241daca0c297b120f34821018e` 的 live reducer 能显示 `RUN_ERROR`，但 snapshot 水合丢弃已有 `messages[].status=failed`，且 watermark 前终态不会再次 replay。本候选已在唯一 hydration owner 实现最小恢复：仅当 owner-ordered messages 尾项是 failed assistant、没有 active run、没有 `status=pending` pause时恢复本地通用 failed；`runError=null`，尾部新 user/后续成功或在途/HITL 均不得被历史失败污染，resolved/cancelled/expired 历史 pause 不阻挡恢复。
+
+Node22 定点测试先以目标状态 RED 3 fail/45 pass，再以历史非 pending pause 边界 RED 3 fail/17 pass，最终 hydration/machine 51/51通过；`pnpm check` exit 0（contract 109、architecture 37、全量 Vitest 1799、lint/typecheck/build）。未改机器契约、生成物或依赖，也未运行服务、浏览器或数据库。真实 IAB failure→reload→manual retry仍由Root后继组合验收；Agent→BFF安全精确 failure code/message/retryable 契约仍开放，本片不替代它。
+
 ## WEB-BILLING-TRUTH（2026-09-30；实施候选，待 Root 独立验收）
 
 基线 `main 752aff9d0744cd55c556079a08a2a28e393e50e4`。正式助手首轮原仅因 taskTitle 有值即显示收费 Badge，
