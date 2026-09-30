@@ -62,6 +62,41 @@ it("rechecks a lost Publish ACK by ID on resume without a new draft or publish k
   expect(client.publishDraft.mock.calls[0]).toEqual(client.publishDraft.mock.calls[1])
 })
 
+it("replays the identical zero-byte Publish key after a second authoritative 404, not a new Draft", async () => {
+  const { client, session, options } = fixture()
+  client.publishDraft.mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))
+    .mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))
+  client.getPublished.mockRejectedValueOnce(new HubClientError("http", "not found", "skill_not_found", 404))
+    .mockRejectedValueOnce(new HubClientError("http", "not found", "skill_not_found", 404))
+  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient, session, options)).rejects.toMatchObject({ name: "SkillPublishUncertain" })
+  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient, session, options)).resolves.toEqual({ source_ref: "skill:mine", revision: "1" })
+  expect(client.getPublished).toHaveBeenCalledTimes(2)
+  expect(client.publishDraft).toHaveBeenCalledTimes(3)
+  expect(client.publishDraft.mock.calls[0]).toEqual(client.publishDraft.mock.calls[1])
+  expect(client.publishDraft.mock.calls[1]).toEqual(client.publishDraft.mock.calls[2])
+  expect(client.createDraft).toHaveBeenCalledTimes(1)
+})
+
+it.each([401, 403])("never resends Publish when a resumed authoritative read returns %s", async (status) => {
+  const { client, session, options } = fixture()
+  client.publishDraft.mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))
+    .mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))
+  client.getPublished.mockRejectedValueOnce(new HubClientError("http", "not found", "skill_not_found", 404))
+    .mockRejectedValueOnce(new HubClientError("http", "revoked", status === 401 ? "session_authentication_required" : "session_forbidden", status))
+  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient, session, options)).rejects.toMatchObject({ name: "SkillPublishUncertain" })
+  await expect(runPersonalSkillPublishSession(client as unknown as SkillPublishClient, session, options)).rejects.toMatchObject({ reason: "http", status })
+  expect(client.publishDraft).toHaveBeenCalledTimes(2)
+  expect(client.createDraft).toHaveBeenCalledTimes(1)
+})
+
+it("rejects a Draft command over the owner's 65,536-byte raw-body limit before allocating a publish intention", () => {
+  expect(() => createPersonalSkillPublishSession({ file: new File(["zip"], "mine.zip"), display_name: "Mine", summary: "S".repeat(65535), tags: [] })).toThrowError(expect.objectContaining({ code: "request_body_too_large", status: 413 }))
+})
+
+it.each([" a.zip", `${"界".repeat(85)}.zip`])("rejects owner-invalid ZIP filename %s before CreateDraft", (filename) => {
+  expect(() => createPersonalSkillPublishSession({ file: new File(["zip"], filename), display_name: "Mine", summary: "", tags: [] })).toThrowError(expect.objectContaining({ code: "invalid_skill_request", status: 400 }))
+})
+
 it.each([401, 403])("preserves owner authorization status %s during by-ID recovery", async (status) => {
   const { client, session, options } = fixture()
   client.publishDraft.mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null)).mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null))

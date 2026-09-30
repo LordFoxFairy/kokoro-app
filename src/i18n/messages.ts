@@ -414,6 +414,8 @@ export const zh = {
   "skills.publishCancel": "取消上传",
   "skills.publishClose": "关闭",
   "skills.publishError": "发布未完成。请检查文件或稍后重新开始。",
+  "skills.publishInvalidFile": "ZIP 文件名不符合要求：不能有首尾空格、路径字符，UTF-8 最多 255 字节。请重新选择文件。",
+  "skills.publishMetadataTooLarge": "名称、简介和标签的请求总量超过 65,536 字节。请缩短内容后重试。",
   "skills.publishPending": "上传正在扫描中，稍后可用同一次尝试继续验证。",
   "skills.publishAuth": "当前登录或权限已失效。重新登录后可重试同一次尝试。",
   "skills.publishRestart": "当前尝试已被 owner 拒绝，需要明确重新开始。",

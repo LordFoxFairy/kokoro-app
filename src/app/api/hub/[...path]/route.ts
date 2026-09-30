@@ -22,9 +22,9 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 const MAX_PERSONAL_DOWNLOAD_BYTES = 1_048_576
 const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
-// Draft permits 65,535 UTF-16 summary units, 100 × 128 tag units and a
-// 255-unit name. Even six-byte JSON escapes for every unit stay below 512 KiB.
-const MAX_SKILL_COMMAND_BYTES = 512 * 1024
+// BFF CreateDraft owner reads at most 65,536 raw JSON bytes, independent of
+// the per-field UTF-16 maxima in its public schema.
+const MAX_SKILL_COMMAND_BYTES = 65_536
 const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
 const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 
@@ -168,6 +168,9 @@ export async function proxyHubRequest(
   const { path } = await context.params
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
+  if (path[0] !== "self" && (businessPath[0] === "skills" || businessPath[0] === "mcp" && businessPath[1] === "servers")) {
+    return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+  }
   const personalSkillListRead = request.method === "GET" && path[0] === "self" && businessPath.length === 1 && businessPath[0] === "skills"
   const personalSkillIdRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills"
     && !["pool", "catalog", "quota"].includes(businessPath[1] ?? "")

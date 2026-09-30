@@ -44,3 +44,19 @@ it("keeps one pending scan attempt and its original ZIP across close/reopen, the
   expect(client.completeUpload).toHaveBeenCalledTimes(1)
   expect(client.publishDraft).toHaveBeenCalledTimes(1)
 })
+
+it.each([
+  [" a.zip", "", /ZIP 文件名不符合要求/],
+  ["mine.zip", "S".repeat(65535), /请求总量超过 65,536 字节/],
+] as const)("shows an editable local preflight error for %s without creating a Draft", (filename, summary, message) => {
+  const createDraft = vi.fn()
+  render(<LocaleProvider><PersonalSkillPublishDialog open onOpenChange={vi.fn()} client={{ createDraft } as unknown as SkillPublishClient} onPublished={vi.fn()} /></LocaleProvider>)
+  const dialog = screen.getByTestId("personal-skill-publish-dialog")
+  fireEvent.change(within(dialog).getByLabelText(/ZIP 文件/), { target: { files: [new File(["zip"], filename, { type: "application/zip" })] } })
+  fireEvent.change(within(dialog).getByLabelText("技能名称"), { target: { value: "Mine" } })
+  fireEvent.change(within(dialog).getByLabelText("简介"), { target: { value: summary } })
+  fireEvent.submit(dialog.querySelector("form")!)
+  expect(within(dialog).getByRole("alert")).toHaveTextContent(message)
+  expect(within(dialog).getByLabelText(/ZIP 文件/)).not.toBeDisabled()
+  expect(createDraft).not.toHaveBeenCalled()
+})

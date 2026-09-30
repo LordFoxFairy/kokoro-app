@@ -242,6 +242,8 @@ const skillPublishFallback: Partial<Record<MessageKey, string>> = {
   "skills.publishCancel": "Cancel upload",
   "skills.publishClose": "Close",
   "skills.publishError": "Publishing did not finish. Check the file or start again later.",
+  "skills.publishInvalidFile": "The ZIP filename has invalid spacing, path characters, or more than 255 UTF-8 bytes. Choose another file.",
+  "skills.publishMetadataTooLarge": "The name, summary and tags exceed the 65,536-byte request limit. Shorten them and retry.",
   "skills.publishPending": "The upload is still scanning. Continue the same attempt later.",
   "skills.publishAuth": "Your session or access has changed. Sign in and retry the same attempt.",
   "skills.publishRestart": "The owner rejected this attempt. Start a new attempt explicitly.",

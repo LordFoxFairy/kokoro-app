@@ -14,7 +14,7 @@ import { useT } from "@/i18n/context"
 
 import { createPersonalSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
 
-type Status = { kind: "idle" } | { kind: "running"; stage: PublishStage } | { kind: "pending" } | { kind: "error" } | { kind: "auth" } | { kind: "restart" } | { kind: "uncertain"; skillId: string } | { kind: "success"; sourceRef: string; revision: string }
+type Status = { kind: "idle" } | { kind: "running"; stage: PublishStage } | { kind: "pending" } | { kind: "error" } | { kind: "invalidFile" } | { kind: "tooLarge" } | { kind: "auth" } | { kind: "restart" } | { kind: "uncertain"; skillId: string } | { kind: "success"; sourceRef: string; revision: string }
 
 export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash }: {
   open: boolean
@@ -55,8 +55,10 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
       try {
         currentSession = createPersonalSkillPublishSession({ file, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean) })
         setSession(currentSession)
-      } catch {
-        setStatus({ kind: "error" })
+      } catch (error) {
+        if (error instanceof HubClientError && error.code === "request_body_too_large") setStatus({ kind: "tooLarge" })
+        else if (error instanceof HubClientError && error.code === "invalid_skill_request") setStatus({ kind: "invalidFile" })
+        else setStatus({ kind: "error" })
         return
       }
     }
@@ -100,6 +102,8 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
         {status.kind === "running" ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{t(`skills.publishStage.${status.stage}`)}</p> : null}
         {status.kind === "pending" ? <Alert role="status"><AlertDescription>{t("skills.publishPending")}</AlertDescription></Alert> : null}
         {status.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription></Alert> : null}
+        {status.kind === "invalidFile" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishInvalidFile")}</AlertDescription></Alert> : null}
+        {status.kind === "tooLarge" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishMetadataTooLarge")}</AlertDescription></Alert> : null}
         {status.kind === "auth" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishAuth")}</AlertDescription></Alert> : null}
         {status.kind === "restart" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishRestart")}</AlertDescription></Alert> : null}
         {status.kind === "uncertain" ? <Alert role="alert"><AlertDescription>{t("skills.publishUnknown")} ({status.skillId})</AlertDescription></Alert> : null}

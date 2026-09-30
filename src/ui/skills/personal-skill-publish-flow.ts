@@ -1,5 +1,5 @@
 import { HubClientError } from "@/hub/client"
-import { createSkillDraftRequestSchema } from "@/hub/schemas"
+import { createSkillDraftRequestSchema, skillZipFilenameSchema } from "@/hub/schemas"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 
 export type PublishStage = "hashing" | "draft" | "upload" | "scanning" | "validating" | "publishing" | "checking"
@@ -56,13 +56,14 @@ async function defaultHash(file: File): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer())
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
 }
-async function recoverPublished(client: SkillPublishClient, id: string, signal?: AbortSignal): Promise<PublishReceipt> {
+async function recoverPublished(client: SkillPublishClient, id: string, signal?: AbortSignal): Promise<PublishReceipt | null> {
   try {
     const published = await client.getPublished(id, signal)
     assertCurrent(signal)
     assertSame(published.skill_id === id && published.source_ref === `skill:${id}` && published.status === "active")
     return { source_ref: published.source_ref, revision: published.revision }
   } catch (error) {
+    if (error instanceof HubClientError && error.reason === "http" && error.status === 404 && error.code === "skill_not_found") return null
     if (error instanceof HubClientError && (error.reason === "aborted" || error.reason === "http" && [401, 403].includes(error.status ?? 0))) throw error
     if (signal?.aborted) assertCurrent(signal)
     throw new SkillPublishUncertain(id)
@@ -72,8 +73,10 @@ async function recoverPublished(client: SkillPublishClient, id: string, signal?:
 export function createPersonalSkillPublishSession(input: PublishInput): PersonalSkillPublishSession {
   const body = createSkillDraftRequestSchema.parse({ display_name: input.display_name, summary: input.summary, tags: input.tags })
   if (!/\.zip$/iu.test(input.file.name) || input.file.size < 1 || input.file.size > 33554432 || !["", "application/zip", "application/x-zip-compressed"].includes(input.file.type)) {
-    throw new HubClientError("parse", "Select one ZIP package up to 32 MiB", null, null)
+    throw new HubClientError("parse", "Select one ZIP package up to 32 MiB", "invalid_skill_request", 400)
   }
+  if (!skillZipFilenameSchema.safeParse(input.file.name).success) throw new HubClientError("parse", "Invalid ZIP filename", "invalid_skill_request", 400)
+  if (new TextEncoder().encode(JSON.stringify(body)).byteLength > 65_536) throw new HubClientError("parse", "Skill draft metadata exceeds 65,536 bytes", "request_body_too_large", 413)
   return {
     input: { ...body, file: input.file },
     keys: { draft: key(), begin: key(), complete: key(), validate: key(), publish: key() },
@@ -170,8 +173,14 @@ export async function runPersonalSkillPublishSession(
     assertCurrent(signal)
     if (session.publishAttempted) {
       onStage?.("checking")
-      session.receipt = await recoverPublished(client, draft.skill_id, signal)
-      return session.receipt
+      const recovered = await recoverPublished(client, draft.skill_id, signal)
+      if (recovered !== null) {
+        session.receipt = recovered
+        return recovered
+      }
+      // A second explicit check has confirmed that this draft is still not
+      // ACTIVE. Replay the original zero-byte Publish with the original key;
+      // never create a new Draft or key for this browser intention.
     }
     onStage?.("publishing")
     session.publishAttempted = true
@@ -188,8 +197,10 @@ export async function runPersonalSkillPublishSession(
         throw error
       }
       onStage?.("checking")
-      session.receipt = await recoverPublished(client, draft.skill_id, signal)
-      return session.receipt
+      const recovered = await recoverPublished(client, draft.skill_id, signal)
+      if (recovered === null) throw new SkillPublishUncertain(draft.skill_id)
+      session.receipt = recovered
+      return recovered
     }
   } finally {
     session.running = false

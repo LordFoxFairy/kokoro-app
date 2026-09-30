@@ -2,7 +2,7 @@
 
 ## W3 第二阶段 B：上传意图只在浏览器内存（2026-09-29）
 
-Web 仅在当前 Skills 页面组件生命周期保存 File、metadata、SHA-256、AbortController、当前阶段及单意图 mutation key/body；关闭并重开 Dialog 不产生新 key，整页刷新才丢失临时引用。不把草稿、attempt、scan、receipt、签名 URL、ZIP bytes 写进 SQL/Redis/localStorage/IndexedDB。Platform 是 Skill/attempt/幂等/ACTIVE 事实 owner，Storage/ObjectStore 是原字节/scan owner，BFF 是 IAM 准入与 public 投影 owner。Complete 的 pending/unknown 是 partial；继续前复核 owner 当前 attempt，已替换则要求明确重开。刷新后不能按旧 attempt 猜可续传或按 CLEAN/validated 猜发布；未知 Publish ACK 要本人 ACTIVE by-ID 核回，401/403 不是普通未知。旧 preview fixture 数据无授权/发布语义。Web 无 canonical schema、事务、迁移、索引或 fresh-install 数据门。六项写候选仍 default-off；Root 真 owner 组合与 CORS/感染/撤权验收独立。
+Web 仅在当前 Skills 页面组件生命周期保存 File、metadata、SHA-256、AbortController、当前阶段及单意图 mutation key/body；关闭并重开 Dialog 不产生新 key，整页刷新才丢失临时引用。不把草稿、attempt、scan、receipt、签名 URL、ZIP bytes 写进 SQL/Redis/localStorage/IndexedDB。Platform 是 Skill/attempt/幂等/ACTIVE 事实 owner，Storage/ObjectStore 是原字节/scan owner，BFF 是 IAM 准入与 public 投影 owner。Complete 的 pending/unknown 是 partial；继续前复核 owner 当前 attempt，已替换则要求明确重开。刷新后不能按旧 attempt 猜可续传或按 CLEAN/validated 猜发布；未知 Publish ACK 首轮 by-ID 404 不证明完成，后续显式再查仍 404 才同键重发零 body；401/403 原码保留。Draft 字段各自允许的组合仍受 owner 65,536 原始字节限额，Web 前置预检不保存额外事实。旧 preview fixture 数据无授权/发布语义。Web 无 canonical schema、事务、迁移、索引或 fresh-install 数据门。六项写候选仍 default-off；Root 真 owner 组合与 CORS/感染/撤权验收独立。
 
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A：只读浏览器投影（2026-09-29）
 

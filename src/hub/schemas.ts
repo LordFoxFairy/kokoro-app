@@ -120,8 +120,9 @@ export const skillUploadStateSchema = z.discriminatedUnion("phase", [
   z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("validated"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
   z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("aborted"), attempt_id: skillCommandId, upload_id: skillCommandId.optional() }).strict(),
 ])
+export const skillZipFilenameSchema = z.string().min(1).max(255).refine((value) => new TextEncoder().encode(value).length <= 255 && !/^\.{1,2}$/u.test(value) && value.trim() === value && !/[\\/\u0000-\u001f\u007f]/u.test(value))
 export const beginSkillUploadRequestSchema = z.object({
-  filename: z.string().min(1).max(255).refine((value) => new TextEncoder().encode(value).length <= 255 && !/^\.{1,2}$/u.test(value) && value.trim() === value && !/[\\/\u0000-\u001f\u007f]/u.test(value)),
+  filename: skillZipFilenameSchema,
   mime_type: z.literal("application/zip"),
   size_bytes: z.number().int().min(1).max(33554432),
   content_sha256: sha256,
