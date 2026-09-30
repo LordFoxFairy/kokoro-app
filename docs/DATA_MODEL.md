@@ -1,5 +1,9 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W3 第二阶段 B：上传意图只在浏览器内存（2026-09-29）
+
+Web 仅在当前 Dialog 生命周期保存 File、metadata、SHA-256、AbortController、当前阶段及单意图 mutation key/body；不把草稿、attempt、scan、receipt、签名 URL、ZIP bytes 写进 SQL/Redis/localStorage/IndexedDB。Platform 是 Skill/attempt/幂等/ACTIVE 事实 owner，Storage/ObjectStore 是原字节/scan owner，BFF 是 IAM 准入与 public 投影 owner。浏览器刷新即丢临时引用：不能按旧 attempt 猜可续传或按 CLEAN/validated 猜发布；未知 Publish ACK 要本人 ACTIVE by-ID 核回，否则标记未知。旧 preview fixture 数据无授权/发布语义。Web 无 canonical schema、事务、迁移、索引或 fresh-install 数据门。六项写候选仍 default-off；Root 真 owner 组合与 CORS/感染/撤权验收独立。
+
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A：只读浏览器投影（2026-09-29）
 
 Web 只持内存中的个人 Skill/MCP 页、opaque cursor、详情请求状态；BFF/Platform 仍分别拥有 public projection 与 Skill/MCP 持久事实。个人 Skill `source_ref/revision`、本人 ACTIVE by-ID 七字段只来自当次 BFF 读回，MCP 仅六 owner-native 字段；旧 pool/catalog、URL/secret/revision/allowed_tools 和 preview confirm 不是发布事实。错误不写入空页，不缓存为授权；组件卸载/详情关闭使迟到结果失效。无新增 Web schema、事务、Redis key、receipt、对象字节或第二 owner。单 ZIP 上传状态机、批准 origin PUT 与 ACTIVE Publish ACK 尚未实施，六项写候选仍关闭；下节第一阶段描述仅是历史基线。

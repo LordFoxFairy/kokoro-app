@@ -8,11 +8,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import type { HubClient } from "@/hub/client"
+import { createSkillPublishClient } from "@/hub/skill-publish-client"
 import type { PersonalSkillPage, PublishedPersonalSkill } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
+import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 
 type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: PersonalSkillPage }
 type DetailState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; skill: PublishedPersonalSkill } | null
+const publishClient = createSkillPublishClient()
 
 export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }: {
   client: HubClient
@@ -25,6 +28,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
   const [generation, setGeneration] = useState(0)
   const [pageState, setPageState] = useState<PageState>({ kind: "loading" })
   const [detail, setDetail] = useState<DetailState>(null)
+  const [publishOpen, setPublishOpen] = useState(false)
   const detailRequest = useRef(0)
 
   useEffect(() => () => { detailRequest.current += 1 }, [])
@@ -53,7 +57,10 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
     <section className="space-y-4" data-testid="personal-skills-read">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">{t("skills.title")}</h1>
-        {!embedded && onOpenSettings ? <Button type="button" variant="outline" onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => setPublishOpen(true)}>{t("skills.publishTitle")}</Button>
+          {!embedded && onOpenSettings ? <Button type="button" variant="outline" onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
+        </div>
       </header>
       {pageState.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("skills.loading")}</div> : null}
       {pageState.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("skills.retry")}</Button></Alert> : null}
@@ -93,6 +100,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
         </DialogContent>
       </Dialog>
+      <PersonalSkillPublishDialog open={publishOpen} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )
 }

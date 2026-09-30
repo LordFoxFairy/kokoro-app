@@ -207,6 +207,11 @@ export async function proxyHubRequest(
     if (publicSkillBoundary) return projectionError("unauthenticated", requestId)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
+  // The multipart preview/confirm and GitHub pseudo-publish routes belong to
+  // explicit local fixtures only; they are not a production publish fallback.
+  if (path[0] === "self" && businessPath[0] === "skills" && ["upload", "github"].includes(businessPath[1] ?? "")) {
+    return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+  }
   if (request.method === "GET" && path[0] === "self" && (
     (businessPath[0] === "skills" && ["pool", "catalog", "quota"].includes(businessPath[1] ?? ""))
     || (businessPath[0] === "mcp" && businessPath[1] === "secrets")
@@ -334,9 +339,13 @@ export async function proxyHubRequest(
   if (publicSkillBoundary) {
     const upstreamRequestId = upstream.headers.get("x-request-id")
     const upstreamContentType = upstream.headers.get("content-type")
-    const expectedSuccess = skillDraftPost || skillWritePost && businessPath[2] === "package-upload" && businessPath.length === 3 ? 201 : 200
+    const expectedSuccess = skillDraftPost || (skillWritePost && businessPath[2] === "package-upload" && businessPath.length === 3) ? 201 : 200
+    const allowedSkillErrors = skillDraftPost ? [400, 401, 403, 409, 412, 413, 429, 502, 503]
+      : skillUploadGet ? [400, 401, 403, 404, 412, 429, 502, 503]
+        : [400, 401, 403, 404, 409, 412, 413, 429, 502, 503]
     if (upstream.status >= 200 && upstream.status < 300 && upstream.status !== expectedSuccess
       || upstream.status >= 300 && upstream.status < 400
+      || (skillDraftPost || skillUploadGet || skillWritePost) && upstream.status >= 400 && !allowedSkillErrors.includes(upstream.status)
       || upstream.headers.get("cache-control") !== "no-store"
       || upstreamRequestId === null
       || !PROJECTION_REQUEST_ID.test(upstreamRequestId)

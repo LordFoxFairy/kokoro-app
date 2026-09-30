@@ -521,4 +521,14 @@ describe("/api/hub/[...path] proxy", () => {
     expect(response.status).toBe(502)
     expect(await response.json()).toMatchObject({ error: { code: "skill_response_invalid" } })
   })
+
+  it("does not forward retired multipart preview/confirm or GitHub pseudo-publish routes", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    for (const path of [["self", "skills", "upload", "preview"], ["self", "skills", "upload", "confirm"], ["self", "skills", "github", "import"]]) {
+      const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", body: "unused" }), params(path))
+      expect(response.status).toBe(404)
+      expect(response.headers.get("cache-control")).toBe("no-store")
+    }
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  })
 })

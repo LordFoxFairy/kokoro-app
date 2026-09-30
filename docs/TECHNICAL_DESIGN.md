@@ -1,5 +1,13 @@
 # Kokoro User Web 技术设计
 
+## W3 第二阶段 B：正式单 ZIP 上传/发布消费（2026-09-29；待 Root 真链验收）
+
+**当前/目标与放置。** 基线 Web clean `98aad4cddb231ef7d1363f00630b9b41f51a743f`，BFF public owner/pin `62daba37fc0267830d73590bb5a3499807d46fc6`。在现有 `src/hub/schemas.ts` 增严格消费者 schema，`src/hub/skill-publish-client.ts` 单独承载七个同源/PUT 网络边界，`src/ui/skills/personal-skill-publish-flow.ts` 承载单次意图状态机，`personal-skill-publish-dialog.tsx` 承载 shadcn 交互；`personal-skills-read.tsx` 同时为正式 Skills 与 Settings 入口。扩展同源 Hub route，不新建顶层模块/第二 contract/业务持久层。相较把状态机塞进旧 preview/confirm 或 HubClient 大文件，此拆分把 wire、命令编排、UI 三种变化原因隔开；旧 preview fixture 仍隔离，正式页不显示旧 namespace/candidates/`.skill`/GitHub 伪发布。
+
+Browser→Web same-origin→BFF→Platform/Storage；例外仅 BFF 受控短期签名 ObjectStore PUT。Web 拒绝 URL 凭据/fragment/过期、HTTPS→HTTP mixed-content 和非本地 HTTP；仅本地 loopback HTTP 页面→loopback HTTP ObjectStore 允许开发。BFF 负责精确 public origin allowlist，Web 不向 URL 转移应用凭据；PUT 原 File、唯一必需 `content-type`，`credentials:omit`、`redirect:error`、`no-referrer`。正式环境 Root 另验双 HTTPS origin/CORS。Web 无 SQL/Redis、签名 URL/receipt 持久化、跨 owner import 或第二 API。
+
+单次意图为 metadata/文件 SHA→CreateDraft→Get 确认 `none`→Begin→PUT→Complete 对齐 skill/attempt/epoch/upload/hash→Validate 绑定 attempt→Publish 零 body。各 mutation 先分配一枚 key 与冻结 body，网络丢失只同键同 body 重放；刷新丢 key/reference 后不自动续传。取消 AbortController 并抑制迟到成功；旧 attempt/phase、感染或验证失败不自动跳到 Publish；CLEAN/validated 不是成功。Publish 回执须 `status:active`、`source_ref:skill:<draft-id>`、正 revision/event UUID，丢 ACK/坏回执仅按本人 ACTIVE by-ID 重核；不可核显示未知，不发新 key。正式六项 BFF 写候选仍 default-off，Platform v4 inactive，代码接线不是产品激活。Node22 本仓门加隔离 Playwright，Root 真 owner 链另验。
+
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A：正式只读投影（2026-09-29）
 
 Web `53760a2c4c9b0420e2a8bb4db8be66d8160169af` 起始 clean；本切仅扩展现有 `src/hub/{client,schemas}.ts`、同源 Hub route、`src/features/app/kokoro-skills-surface.tsx` 与 `src/ui/{skills,mcp}`，把 Skill/MCP 只读展示分为各自独立视图文件。相较新建顶层模块或第二 contract，这保留一个 Web adapter 与 BFF 唯一 public pin。正式入口不用旧 pool/catalog、URL/secret 假投影和无效 MCP 控件；显式 preview fixture 的旧 UI 隔离保留，上传 preview/confirm 及六项写候选本切不改变。Browser→Web same-origin→BFF→Platform；无 Web SQL、Redis、owner receipt、第二协议或直连。请求状态只在组件中，cursor 作为 opaque 字符串原样传递；详情七字段与请求 Skill ID 一致才展示。旧只读 GET route 封闭，严格 200/error envelope、安全头与状态失败不降级为旧数据。下一切再替换上传状态机与 preview-only 旧代码，不能将只读验收当发布完成。

@@ -1,5 +1,11 @@
 # Kokoro User Web API 与协议契约
 
+## W3 第二阶段 B：正式 Skill 写候选消费（2026-09-29；待 Root 真链验收）
+
+BFF 唯一 public OpenAPI owner `62daba37fc0267830d73590bb5a3499807d46fc6`，Web 原字节 pin SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923`，无第二可编辑契约。浏览器业务只向同源 `/api/hub/self/skills/*` 请求；同源 route 把 CreateDraft、Get package-upload、Begin、Complete、Validate、Publish 转到 BFF `/v1/skills/*`，携 Product Session/service 身份而不接受浏览器自报 tenant。严格 JSON media、`no-store`、安全 request ID、`{data}`/`{error:{code,message,retryable}}`，成功 201/200 按 operation；零字节 Publish 不带 JSON/body，Idempotency-Key 单次意图稳定且符合 owner 1–128 printable 规则。拒绝旧 multipart preview/confirm 作为正式写回执。
+
+Begin 返回 `url/method=PUT/required_headers={content-type:application/zip}/expires_at`；Web 仅用短期引用原 File 直 PUT，不追加 Cookie/Bearer/header、禁重定向。HTTPS 页面到 HTTP URL 必拒；开发仅 loopback HTTP→loopback HTTP，BFF 另对 ObjectStore public origin 作精确 allowlist。Get `none/intent/upload_pending/uploaded/validated/aborted` 是 attempt 状态，Begin/Complete/Validate 均不能证明发布。唯一完成判断是 strict `PublishSkillResponse.data` ACTIVE 且匹配 draft ID，或本人 `GET /v1/skills/{id}` 的 ACTIVE 七字段权威核回；401/403/404、感染、旧 attempt、无效 phase、未知 ACK 均不走旧 pool/catalog fallback。六写候选在 BFF 仍 default-off/Platform v4 inactive；Root 真 HTTPS/CORS/Storage 浏览器链另验。
+
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A：正式 GET 消费（2026-09-29）
 
 BFF 唯一 public OpenAPI `62daba37fc0267830d73590bb5a3499807d46fc6`、Web 原字节 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923` 未变。正式同源 `/api/hub/self/skills?scope_kind=personal[&cursor]`、`/api/hub/self/skills/{id}`、`/api/hub/self/mcp/servers[?cursor]` 分别代理 BFF `/v1/skills`、by-ID、`/v1/mcp/servers`；不得直接访问 Platform。严格 `200 {data}`、`Cache-Control: no-store`、`x-request-id`，错误必须为 `{error:{code,message,retryable}}`，未知/缺失字段、旧 `{data,meta}`、redirect 和错误状态均失败；不从旧 pool/catalog 补读。Skill 列表保留 `source_ref/revision/next_cursor`；本人 ACTIVE by-ID 只取七安全字段，响应 ID/source_ref 与请求一致；404 不推断为未发布之外的事实。MCP 只投影六 owner-native 字段，不读 URL/secret/revision/allowed_tools，也不呈现无效启停/删除。旧 pool/catalog/quota、MCP secrets GET 在正式同源 route 拒绝；显式 preview fixture 与旧上传 preview/confirm 暂留到上传切片，非正式发布证据。六项新写 API 仍 default-off，本切不发请求。

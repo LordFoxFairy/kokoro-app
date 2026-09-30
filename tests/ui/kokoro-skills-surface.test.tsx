@@ -25,6 +25,19 @@ it("renders live personal ACTIVE Skills from the BFF page and verifies a selecte
   expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/self/skills?scope_kind=personal", "/api/hub/self/skills/mine-1"])
 })
 
+it("shows only the formal single-ZIP publish entry in live Skills, not preview/confirm or GitHub import", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { skills: [], next_cursor: null } }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_list" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByTestId("personal-skills-read")
+  fireEvent.click(screen.getByRole("button", { name: "发布个人技能" }))
+  const dialog = await screen.findByTestId("personal-skill-publish-dialog")
+  expect(within(dialog).getByLabelText(/ZIP 文件/)).toHaveAttribute("accept", ".zip,application/zip")
+  expect(within(dialog).getByLabelText("技能名称")).toBeInTheDocument()
+  expect(within(dialog).queryByText(/GitHub|候选|\.skill/)).toBeNull()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
 function renderSkills(onOpenSettings = vi.fn(), onCreateSkillWithAi = vi.fn(), onTrySkill = vi.fn()) {
   render(
     <LocaleProvider>

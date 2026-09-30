@@ -1,5 +1,8 @@
 # ui/skills — 技能面板
 
+## W3 第二阶段 B 当前边界
+正式 `/app/skills` 与 Settings Skills 共用 `personal-skills-read.tsx` 的单 ZIP 发布入口；`personal-skill-publish-dialog.tsx` 只管本地输入/阶段，`personal-skill-publish-flow.ts` 只管 CreateDraft→Get→Begin→PUT→Complete→Validate→Publish 的同意图编排。网络/签名 PUT 和严格 wire 在 `src/hub/skill-publish-client.ts`。只有 ACTIVE Publish 回执或本人 by-ID 核回显示发布。旧 `SkillUploadDialog`/GitHub import/preview-confirm 仍仅显式 preview fixture；下文旧说明只适用于 preview，不是正式 API。六项 BFF 写候选 default-off，真浏览器 owner 验收另门。
+
 ## W3 第二阶段 A 当前边界
 正式 `/app/skills` 与 Settings Skills 经 `personal-skills-read.tsx` 只读 BFF 本人 `scope_kind=personal` 页、opaque cursor、source_ref/revision，并以 ACTIVE by-ID 七字段打开详情。旧 `skills-panel.tsx` 池/目录/启停、`SkillUploadDialog` preview/confirm 仅显式 preview fixture 可见；上传正式切换待下一片，旧 done 不是发布事实。以下旧职责、组件和陷阱均只描述 preview fixture，不是当前正式读协议。
 

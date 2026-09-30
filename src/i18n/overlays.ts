@@ -231,6 +231,28 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
   "skills.thirdParty": "Third-party",
 }
 
+const skillPublishFallback: Partial<Record<MessageKey, string>> = {
+  "skills.publishTitle": "Publish personal skill",
+  "skills.publishDescription": "Choose one ZIP package. Success appears only after an ACTIVE publish receipt.",
+  "skills.publishFile": "ZIP file (up to 32 MiB)",
+  "skills.publishName": "Skill name",
+  "skills.publishSummary": "Summary",
+  "skills.publishTags": "Tags (comma-separated)",
+  "skills.publishAction": "Upload and publish",
+  "skills.publishCancel": "Cancel upload",
+  "skills.publishClose": "Close",
+  "skills.publishError": "Publishing did not finish. Check the file or start again later.",
+  "skills.publishUnknown": "The publish result is unconfirmed. Do not upload again yet. Skill ID",
+  "skills.publishSuccess": "Personal skill published",
+  "skills.publishStage.hashing": "Checking file…",
+  "skills.publishStage.draft": "Creating draft…",
+  "skills.publishStage.upload": "Uploading original ZIP…",
+  "skills.publishStage.scanning": "Checking upload…",
+  "skills.publishStage.validating": "Validating skill…",
+  "skills.publishStage.publishing": "Publishing…",
+  "skills.publishStage.checking": "Confirming publish result…",
+}
+
 const libraryFallback: Partial<Record<MessageKey, string>> = {
   "library.uploadChoose": "Choose a personal file",
   "library.uploadSubmit": "Upload personal file",
@@ -293,12 +315,12 @@ const notificationFallback: Partial<Record<MessageKey, string>> = {
 // zh 是源字典(住 messages.ts),自身无 overlay;其余各挂 MT 生成(可人工精修)的增量覆盖。
 export const OVERLAYS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   zh: {},
-  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...en },
-  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...ja },
-  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...ko },
-  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...es },
-  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...fr },
-  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...de },
-  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...pt },
-  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...libraryFallback, ...notificationFallback, ...ru },
+  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...en },
+  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ja },
+  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ko },
+  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...es },
+  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...fr },
+  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...de },
+  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...pt },
+  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ru },
 }

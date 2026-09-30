@@ -23,7 +23,14 @@ const skillErrorCodes = z.enum([
 ])
 const errorSchema = z.object({ error: z.object({ code: skillErrorCodes, message: z.string().min(1), retryable: z.boolean() }).strict() }).strict()
 
-async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" | "POST", status: 200 | 201, schema: T, body?: object, key?: string, signal?: AbortSignal): Promise<z.infer<T>> {
+type CommandErrorFamily = "draft" | "uploadGet" | "mutation"
+const allowedErrorStatuses: Record<CommandErrorFamily, ReadonlySet<number>> = {
+  draft: new Set([400, 401, 403, 409, 412, 413, 429, 502, 503]),
+  uploadGet: new Set([400, 401, 403, 404, 412, 429, 502, 503]),
+  mutation: new Set([400, 401, 403, 404, 409, 412, 413, 429, 502, 503]),
+}
+
+async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" | "POST", status: 200 | 201, family: CommandErrorFamily, schema: T, body?: object, key?: string, signal?: AbortSignal): Promise<z.infer<T>> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers["content-type"] = "application/json"
   if (key !== undefined) headers["idempotency-key"] = key
@@ -40,8 +47,12 @@ async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" |
   let raw: unknown
   try { raw = await response.json() } catch { throw new HubClientError("parse", "invalid Skill JSON", null, response.status) }
   if (response.status !== status) {
+    if (!allowedErrorStatuses[family].has(response.status)) throw new HubClientError("parse", "unexpected Skill response status", null, response.status)
     const parsed = errorSchema.safeParse(raw)
-    if (!parsed.success) throw new HubClientError("parse", "invalid Skill error envelope", null, response.status)
+    if (!parsed.success || family === "draft" && parsed.data.error.code === "skill_not_found"
+      || family === "uploadGet" && ["idempotency_key_required", "invalid_idempotency_key", "request_body_too_large", "skill_idempotency_conflict", "skill_command_in_progress"].includes(parsed.data.error.code)) {
+      throw new HubClientError("parse", "invalid Skill error envelope", null, response.status)
+    }
     throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status)
   }
   const parsed = z.object({ data: schema }).strict().safeParse(raw)
@@ -77,9 +88,9 @@ export type SkillPublishClient = {
 
 export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? "https://localhost/"): SkillPublishClient {
   return {
-    createDraft: (body, key, signal) => publicCommand("/self/skills/drafts", "POST", 201, skillDraftSchema, createSkillDraftRequestSchema.parse(body), key, signal),
-    getUpload: (id, signal) => publicCommand(path(id, "/package-upload"), "GET", 200, skillUploadStateSchema, undefined, undefined, signal),
-    beginUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload"), "POST", 201, beginSkillUploadSchema, beginSkillUploadRequestSchema.parse(body), key, signal),
+    createDraft: (body, key, signal) => publicCommand("/self/skills/drafts", "POST", 201, "draft", skillDraftSchema, createSkillDraftRequestSchema.parse(body), key, signal),
+    getUpload: (id, signal) => publicCommand(path(id, "/package-upload"), "GET", 200, "uploadGet", skillUploadStateSchema, undefined, undefined, signal),
+    beginUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload"), "POST", 201, "mutation", beginSkillUploadSchema, beginSkillUploadRequestSchema.parse(body), key, signal),
     putPackage: async (reference, file, signal) => {
       const url = approvedTransferUrl(reference, pageUrl)
       let response: Response
@@ -91,9 +102,9 @@ export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? 
       } catch { throw new HubClientError(signal?.aborted ? "aborted" : "network", "package transfer did not complete", null, null) }
       if (!response.ok) throw new HubClientError("http", "package transfer rejected", null, response.status)
     },
-    completeUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload/complete"), "POST", 200, completeSkillUploadSchema, completeSkillUploadRequestSchema.parse(body), key, signal),
-    validateDraft: (id, attemptId, key, signal) => publicCommand(path(id, "/validate"), "POST", 200, validateSkillDraftSchema, { attempt_id: attemptId }, key, signal),
-    publishDraft: (id, key, signal) => publicCommand(path(id, "/publish"), "POST", 200, publishSkillDraftSchema, undefined, key, signal),
+    completeUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload/complete"), "POST", 200, "mutation", completeSkillUploadSchema, completeSkillUploadRequestSchema.parse(body), key, signal),
+    validateDraft: (id, attemptId, key, signal) => publicCommand(path(id, "/validate"), "POST", 200, "mutation", validateSkillDraftSchema, { attempt_id: attemptId }, key, signal),
+    publishDraft: (id, key, signal) => publicCommand(path(id, "/publish"), "POST", 200, "mutation", publishSkillDraftSchema, undefined, key, signal),
     getPublished: (id) => createHubClient().getPublishedPersonalSkill(id),
   }
 }

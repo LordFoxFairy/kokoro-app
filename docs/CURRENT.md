@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## W3-WEB-SKILL-CONSUMER 第二阶段 B（2026-09-29；Web 代码切片，待 Root 验收）
+
+从 clean Web `98aad4cddb231ef7d1363f00630b9b41f51a743f` 实施正式单 ZIP 发布入口；BFF public owner `62daba37fc0267830d73590bb5a3499807d46fc6` 与原字节 pin 不变。正式 `/app/skills` 和 Settings Skills 共用 `PersonalSkillsRead` 的新发布 Dialog：浏览器校验单 `.zip`、大小和 SHA-256，经同源 `/api/hub` 依次调用 CreateDraft、Get package-upload、Begin、Complete、Validate、零字节 Publish；ZIP 原 File 只按受控短期签名引用直接 PUT ObjectStore，`credentials:omit`、`redirect:error`、唯一 `content-type:application/zip`。本地仅 loopback HTTP 页面→loopback HTTP ObjectStore 允许；正式 HTTPS 页面拒绝 HTTP mixed-content。BFF 仍负责精确批准 ObjectStore origin，Web 不传 Cookie/Bearer 或自建 allowlist。每条 mutation 在一次意图中固定 key/body，网络丢失最多同键重放一次；只有 strict ACTIVE Publish 回执或本人 ACTIVE by-ID 核回才标记发布，CLEAN/validated/Get/旧 pool 不构成成功。旧 preview/confirm、`.skill`、namespace/多候选与 GitHub 导入仍限显式 preview fixture，正式页没有 fallback。
+
+当前 BFF 六项写候选仍 default-off、Platform v4 仍 inactive；UI 已接契约不代表当前开发环境能发布。真正 HTTPS 双 origin CORS/原字节 PUT、IAM/Storage/感染/撤权/刷新/过期引用由 Root 隔离 Chromium 门验；本仓测试不能替代。浏览器不持久化草稿/key/reference/receipt；刷新丢失当前意图后不会以旧 phase 猜成功。旧 attempt 阻止继续，丢 Publish ACK 且本人 by-ID 不可核时提示未知，不自动发新 Publish key。
+
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A（2026-09-29；正式只读消费，待 Root 验收）
 
 基线 Web `53760a2c4c9b0420e2a8bb4db8be66d8160169af`；BFF 唯一 public owner 仍为 `62daba37fc0267830d73590bb5a3499807d46fc6`，原字节 pin 未变。正式 `/app/skills` 和 Settings Skills 现在只从同源 `GET /api/hub/self/skills?scope_kind=personal` 读取本人列表，原样使用 opaque cursor，保留 `source_ref/revision`；打开详情另以本人 ACTIVE by-ID 七字段读取，客户端校验响应 ID 与请求 ID 一致。正式 MCP 面只读取 owner-native `server_id/provider_key/server_identity/transport/declaration_digest/status` 六字段，旧 URL、secret、revision、allowed_tools 与无效启停/删除控件不进入正式视图。严格解析、`no-store`/request ID、401/403/404/owner 错误不转空列表；浏览器仍只经 Web 同源 adapter 到 BFF，不直连 owner。旧 pool/catalog/quota 与 MCP secrets 的同源 GET 已封闭，旧 UI/客户端仅限显式 preview fixture 保留，不可作为正式发布事实。
