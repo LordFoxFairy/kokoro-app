@@ -1,5 +1,21 @@
 # Kokoro User Web 当前状态
 
+## WEB-CHAT-CURRENT-FEEDBACK 源码门通过，页面视觉待验（2026-09-30）
+
+Root在主工作树独立执行 Node22.22.2 `pnpm check`，actual exit0：contract109、architecture49、全量1823、lint/typecheck/build通过，日志 `/tmp/kokoro-web-chat-current-feedback-root-check.log`；独立四文件审查P0/P1/P2=0/0/0。精准Prettier当前四文件与其HEAD基线均exit1，未扩大格式化范围；`git diff --check`通过。当前受管3310 PID65590不重启，仅同步目标Thread CSS；浏览器通道仍超时，视觉与输入框用户反馈尚未验收，不以本段静态结果替代。
+
+基线 `main 65e328755774080fc37a4d12d2b9f9b2e21a22bf`。本候选仅删除 Thread 按 message ID `:user` 后缀给所有命中
+用户项施加 `2.75rem/-2.75rem` margin 与 `translateY` 的布局规则；首项顶部呼吸继续由现 AppFrame
+`MessageScrollerItem:first-child` 规则唯一拥有。消息内容、顺序、重复用户事实、空失败助手轮、失败卡、滚动 primitive、
+Composer 与契约均未修改。
+
+Node22.22.2 精准测试先得到预期 RED：1失败/69跳过，日志
+`/tmp/kokoro-web-chat-current-feedback-red.log`；删除错误 scope 后同一目标为1通过/69跳过，日志
+`/tmp/kokoro-web-chat-current-feedback-target-green.log`。AppFrame smoke、Conversation failure、Composer 与 CSS architecture
+相关回归共163/163通过，日志 `/tmp/kokoro-web-chat-current-feedback-related-green.log`。当前 IAB 的焦点、导航与截图通道持续
+超时，未取得 fresh desktop/mobile 视觉证据；旧截图和历史输入框矩阵不作为本候选页面验收，失败卡宽度与未知输入内框也未在
+本片盲改。
+
 ## WEB-VISUAL-CURRENT-AUDIT Root 已验收（2026-09-30）
 
 Root 最终 Node22.22.2 `pnpm check` actual exit0：contract109、architecture49、全量1822/lint/typecheck/build；日志 `/tmp/kokoro-web-visual-current-root-r3-check.log`。独立R3审查0/0/0、7/7冻结hash匹配。真实3310复验coarse/fine的focus/blur、390px与默认1280px、Shift+Enter两行54px不提交：textarea shadow none、无横溢；高对比textarea outline-style none且shell solid2px系统色替代保留。空deliveries Item=0，其他七个消息项全文逐项严格不变，包括重复user/历史空assistant/失败卡；不冒称完整产品链闭环。媒体、touch和viewport override已恢复，草稿清空；没有重启、模型调用或数据改写。最终矩阵 `/tmp/kokoro-web-visual-current-real-matrix-r2.json`；截图 `/tmp/kokoro-composer-current-desktop-after-r2.png`、`/tmp/kokoro-composer-coarse-mobile-after-r2.png`、`/tmp/kokoro-composer-forced-colors-after-r2.png`。下面候选/待验描述保留为当时阶段记录，由本段最终验收后继。

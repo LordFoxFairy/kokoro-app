@@ -18,6 +18,15 @@ it("对话列按 Composer 合成 gutter 在全部宽度保持同一 48rem 阅读
   expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > div > form\[aria-label\]\s*\{[^}]*width: min\(48rem, 100%\);/)
 })
 
+it("首条消息顶部呼吸只由 AppFrame 几何拥有，不按消息 ID 后缀改写后续轮间距", () => {
+  const appFrameCss = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
+  const threadCss = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
+
+  expect(appFrameCss).toMatch(/\[data-slot="message-scroller-item"\]:first-child\)\s*\{[^}]*margin-block-start: 0\.875rem;[^}]*margin-block-end: -0\.875rem;/)
+  expect(threadCss).not.toContain('[data-message-id$=":user"]')
+  expect(threadCss).not.toMatch(/\[data-message-id\$=":user"\][^{]*\{[^}]*(?:margin-top:\s*2\.75rem|margin-bottom:\s*-2\.75rem|transform:\s*translateY\(0\.5rem\))/)
+})
+
 // canvas 面板构造下载 URL 需要 base URL（本文件不发真实请求，仅 URL 拼接）。
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 // AppFrame 的错误恢复卡（余额/套餐）改为路由跳设置中心,需 mock next/navigation。

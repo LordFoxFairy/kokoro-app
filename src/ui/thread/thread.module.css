@@ -1229,17 +1229,6 @@
 }
 
 @media (min-width: 0px) {
-  /* Manus gives the first user turn a quiet top breathing zone, while the
-     assistant answer keeps its document position. Translate only the visual
-     user capsule so the thread's scroll geometry remains stable. The task
-     title row is retained for semantics/data but is visually suppressed: the
-     persistent progress disclosure below the thread is the single status
-     surface in the Web layout. */
-  .thread[data-desktop-web="true"] [data-slot="message-scroller-item"][data-message-id$=":user"] {
-    margin-top: 2.75rem;
-    margin-bottom: -2.75rem;
-    transform: translateY(0.5rem);
-  }
   .thread[data-desktop-web="true"] .taskStage {
     display: none;
   }

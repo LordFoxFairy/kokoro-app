@@ -1,5 +1,16 @@
 # Kokoro User Web 技术设计
 
+## WEB-CHAT-CURRENT-FEEDBACK：首条消息顶部几何唯一归属
+
+基线 `65e328755774080fc37a4d12d2b9f9b2e21a22bf` 同时存在两条用户消息纵向规则：AppFrame 以
+`MessageScrollerItem:first-child` 拥有首项顶部呼吸，Thread 却按未进入 UI 契约的 message ID `:user` 后缀给所有
+命中项施加正负 margin 与 translate。后者既不能稳定识别角色，又会把“首条”规则扩散到后续用户轮次，形成不对称空位。
+
+本候选删除 Thread 的 ID 后缀布局规则，只保留既有 AppFrame `:first-child` 几何作为唯一 owner；不改消息 DOM、身份、
+顺序、重复事实、失败卡、滚动 primitive、Composer 或机器契约。测试同时锁定 AppFrame 首项 margin 仍在，并禁止 Thread
+重新以该 ID 后缀及其正负 margin/translate 组合参与布局。浏览器通道当前持续超时，fresh desktop/mobile 截图、滚动位置与
+实际轮间距仍由 Root 恢复通道后验收；源码候选不代表输入内框、失败卡或整体会话视觉已经完成。
+
 ## WEB-VISUAL-CURRENT-AUDIT：全指针输入表面与真实成果滚动项
 
 基线 `bef68a0386a902bbe4747c5795d8222d1d91fa51` 的 Composer 仅在聚焦或 fine pointer 分支去除 textarea 阴影；coarse pointer 失焦态继承共享 Textarea 的 `shadow-xs`。Root 已在现有真实页面启用 touch emulation 并确认该 computed 状态。目标由现有 `src/ui/composer/composer.module.css` 的基础 `.input` 明确 `box-shadow: none`，不改共享 primitive、普通模式焦点环、响应式几何或其他表单。
