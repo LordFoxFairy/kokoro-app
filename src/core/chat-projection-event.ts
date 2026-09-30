@@ -50,6 +50,8 @@ const messageDeltaPayload = z
     segment_id: z.string().min(1),
     // 流上文本恒为 assistant，无 role 字段；角色由 segment 归属决定。
     delta: z.string(),
+    // Internal provenance only; omitted on ordinary text deltas.
+    text_boundary: z.enum(["start", "end"]).optional(),
   })
   .strict()
 

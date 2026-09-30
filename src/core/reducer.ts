@@ -50,6 +50,14 @@ function updateStep(
   return true
 }
 
+function closeSnapshotContinuation(draft: Draft, runId: string): void {
+  for (const [index, message] of draft.state.messages.entries()) {
+    if (message.runId === runId && message.awaitingTextSegment) {
+      draft.state.messages[index] = { ...message, awaitingTextSegment: false }
+    }
+  }
+}
+
 function applyAssistantText(
   draft: Draft,
   event: EventOf<"message.delta"> | EventOf<"message.completed">,
@@ -57,14 +65,34 @@ function applyAssistantText(
   const { messages } = draft.state
   const segmentId = event.payload.segment_id
   const incoming = event.kind === "message.completed" ? event.payload.content : event.payload.delta
-  const index = messages.findIndex((message) => message.id === segmentId)
+  const boundary = event.kind === "message.delta" ? event.payload.text_boundary : undefined
+  if (boundary === "start") {
+    // A new segment is not a continuation of the pre-watermark prefix.
+    closeSnapshotContinuation(draft, event.run_id)
+  }
+  let index = messages.findIndex((message) => message.role === "assistant" &&
+    message.runId === event.run_id && message.id === segmentId)
+  if (index < 0 && boundary !== "start" && draft.state.activeRunId === event.run_id) {
+    const candidates = messages.flatMap((message, candidateIndex) =>
+      message.role === "assistant" && message.runId === event.run_id && message.awaitingTextSegment
+        ? [candidateIndex] : [])
+    const candidateIndex = candidates.length === 1 ? candidates[0] : undefined
+    const prefix = candidateIndex === undefined ? undefined : messages[candidateIndex]
+    if (prefix !== undefined && candidateIndex !== undefined) {
+      index = candidateIndex
+      messages[index] = { ...prefix, id: segmentId, awaitingTextSegment: false }
+      const steps = stepsOf(draft, event.run_id)
+      updateStep(steps, (step) => step.kind === "text" && step.segmentId === prefix.id,
+        (step) => ({ ...step, segmentId }))
+    }
+  }
   if (index >= 0) {
     const existing = messages[index]
     if (existing !== undefined) {
       // completed 覆盖累计增量（replay 后不残留半句）；delta 追加。
       const content =
         event.kind === "message.completed" ? incoming : `${existing.content}${incoming}`
-      messages[index] = { ...existing, content }
+      messages[index] = { ...existing, content, ...(existing.awaitingTextSegment ? { awaitingTextSegment: false } : {}) }
     }
     return
   }
@@ -277,6 +305,7 @@ function applyRunTerminal(
   draft: Draft,
   event: EventOf<"run.completed"> | EventOf<"run.failed">,
 ): void {
+  closeSnapshotContinuation(draft, event.run_id)
   const steps = stepsOf(draft, event.run_id)
   const closed = closeOpenTools(steps, (status) =>
     status === "awaiting" ? "stale-awaiting" : "stale-running",

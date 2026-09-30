@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
+import { stateFromSnapshot } from "@/core/hydration"
 import { buildThreadItems, groupSegments } from "@/core/projections"
 import { applyChatProjectionEvents, appendUserMessage } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
 
-import { makeEvent, resetFixtureSeq } from "./fixtures"
+import { makeEvent, makeSnapshot, resetFixtureSeq } from "./fixtures"
 
 beforeEach(resetFixtureSeq)
 
@@ -76,4 +77,25 @@ describe("groupSegments", () => {
   ])("%s → %d 段", (_label, steps, expected) => {
     expect(groupSegments(steps)).toHaveLength(expected)
   })
+})
+
+
+it("keeps snapshot text then post-watermark tool and new text segments in real order", () => {
+  const initial = stateFromSnapshot(makeSnapshot({
+    activeRun: { run_id: "run_1", status: "running" },
+    messages: [{ message_id: "durable", role: "assistant", run_id: "run_1", content: "earlier",
+      status: "streaming", created_at: "2026-07-02T00:00:00Z" }],
+  }))
+  const state = applyChatProjectionEvents(initial, [
+    makeEvent("tool.invoked", { segment_id: "tool_seg", tool_id: "tool", name: "search", args: {} }, { seq: 11 }),
+    makeEvent("message.delta", { segment_id: "new_seg", delta: "", text_boundary: "start" }, { seq: 12 }),
+    makeEvent("message.delta", { segment_id: "new_seg", delta: "later" }, { seq: 13 }),
+    makeEvent("tool.returned", { segment_id: "tool_seg", tool_id: "tool", name: "search", result: "done", is_error: false }, { seq: 14 }),
+  ])
+  const turn = buildThreadItems(state)[0]
+  if (turn?.kind !== "assistant-turn") throw new Error("expected assistant turn")
+  const segments = groupSegments(turn.steps)
+  expect(segments.map((segment) => segment.segmentId)).toEqual(["durable", "tool_seg", "new_seg"])
+  expect(segments.map((segment) => turn.messagesById[segment.segmentId]?.content ?? "")).toEqual(["earlier", "", "later"])
+  expect(segments[1]?.tools[0]?.status).toBe("done")
 })

@@ -710,6 +710,33 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(client.lastStream()).toMatchObject({ sessionId: "conv_9", resumeCursor: CURSOR_7 })
   })
 
+  it("resumes a nonempty snapshot prefix once, advances the cursor, and keeps terminal text", async () => {
+    buildEngine(SEEDED)
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_9", activeRun: { run_id: "run_9", status: "running" }, eventWatermark: CURSOR_12,
+      messages: [{ message_id: "durable", role: "assistant", run_id: "run_9", content: "Hello! How can ",
+        status: "streaming", created_at: "2026-07-02T00:00:00Z" }],
+    }))
+    engine.dispose()
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    await settle()
+    expect(client.lastStream().resumeCursor).toBe(CURSOR_12)
+    const content = makeEvent("message.delta", { segment_id: "wire", delta: "I assist you today?" }, { run_id: "run_9", seq: 13 })
+    client.lastStream().emit([content, content])
+    await settle()
+    expect(thread().messages).toHaveLength(1)
+    expect(thread().messages[0]?.content).toBe("Hello! How can I assist you today?")
+    client.lastStream().emit([
+      makeEvent("message.delta", { segment_id: "wire", delta: "", text_boundary: "end" }, { run_id: "run_9", seq: 14 }),
+      makeEvent("run.completed", { status: "completed" }, { run_id: "run_9", seq: 20 }),
+    ])
+    await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(thread().resumeCursor).toBe(CURSOR_20)
+    expect(thread().messages).toHaveLength(1)
+    expect(thread().messages[0]).toMatchObject({ snapshotMessageId: "durable", content: "Hello! How can I assist you today?" })
+  })
+
   it("快照带在途 run：锚定重连并从 opaque watermark 续流", async () => {
     buildEngine(SEEDED)
     client.nextSnapshot = () =>

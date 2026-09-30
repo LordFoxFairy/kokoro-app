@@ -5,6 +5,7 @@ import type { Delivery, SessionSnapshot } from "@/contract/http"
 import {
   createSessionStreamState,
   type SessionDelivery,
+  type SessionMessage,
   type SessionStep,
   type SessionStreamState,
 } from "./state"
@@ -25,11 +26,18 @@ export function deliveryFromSnapshot(delivery: Delivery): SessionDelivery {
 }
 
 export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState {
-  const messages = (snapshot.messages ?? []).map((message) => ({
+  const snapshotMessages = snapshot.messages ?? []
+  const activeAssistants = snapshotMessages.filter((message) => message.role === "assistant" &&
+    message.run_id !== undefined && message.run_id === snapshot.active_run?.run_id &&
+    (message.status === "pending" || message.status === "streaming"))
+  const candidate = activeAssistants.length === 1 ? activeAssistants[0] : undefined
+  const messages: SessionMessage[] = snapshotMessages.map((message) => ({
     id: message.message_id,
     role: message.role,
     content: message.content,
     runId: message.run_id ?? message.message_id,
+    ...(message.role === "assistant" ? { snapshotMessageId: message.message_id } : {}),
+    ...(message === candidate ? { awaitingTextSegment: true } : {}),
   }))
   const pending = snapshot.pending_pauses.filter((pause) => pause.status === "pending")
   const pendingIdsByRun = new Map<string, string[]>()
@@ -39,6 +47,14 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     pendingIdsByRun.set(pause.run_id, ids)
   }
   const stepsByRun: Record<string, SessionStep[]> = {}
+  // Snapshot text precedes all post-watermark frames. These negative local
+  // positions are render anchors, not fabricated owner event sequence/cursors.
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== "assistant") continue
+    const steps = stepsByRun[message.runId] ?? []
+    steps.push({ kind: "text", seq: index - messages.length, segmentId: message.id })
+    stepsByRun[message.runId] = steps
+  }
   for (const [index, pause] of pending.entries()) {
     const steps = stepsByRun[pause.run_id] ?? []
     steps.push({

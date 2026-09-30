@@ -614,3 +614,62 @@ describe("run.failed 错误三层语义", () => {
     expect(s2.runError).toBeNull()
   })
 })
+
+
+describe("snapshot prefix association", () => {
+  function prefix(active = true, count = 1) {
+    return stateFromSnapshot(makeSnapshot({
+      ...(active ? { activeRun: { run_id: "run_1", status: "running" } } : {}),
+      messages: Array.from({ length: count }, (_, index) => ({
+        message_id: `durable_${index}`, role: "assistant" as const, run_id: "run_1", content: `prefix ${index}`,
+        status: active ? "streaming" as const : "completed" as const, created_at: "2026-07-02T00:00:00Z",
+      })),
+    }))
+  }
+
+  it("binds END without adding an empty segment or losing the durable identity", () => {
+    const initial = prefix()
+    const ended = applyChatProjectionEvent(initial,
+      makeEvent("message.delta", { segment_id: "wire", delta: "", text_boundary: "end" }))
+    expect(ended.messages).toHaveLength(1)
+    expect(ended.messages[0]).toMatchObject({ id: "wire", snapshotMessageId: "durable_0", content: "prefix 0", awaitingTextSegment: false })
+    expect(ended.stepsByRun.run_1).toEqual([{ kind: "text", seq: -1, segmentId: "wire" }])
+    expect(initial.messages[0]?.id).toBe("durable_0")
+    expect(initial.stepsByRun.run_1?.[0]?.segmentId).toBe("durable_0")
+  })
+
+  it("new START cannot claim the prefix, including when later CONTENT has no boundary", () => {
+    const state = applyChatProjectionEvents(prefix(), [
+      makeEvent("message.delta", { segment_id: "new", delta: "", text_boundary: "start" }),
+      makeEvent("message.delta", { segment_id: "new", delta: "new text" }),
+      makeEvent("message.delta", { segment_id: "new", delta: "", text_boundary: "end" }),
+    ])
+    expect(state.messages.map((message) => [message.id, message.content])).toEqual([
+      ["durable_0", "prefix 0"], ["new", "new text"],
+    ])
+    expect(state.messages[0]?.awaitingTextSegment).toBe(false)
+  })
+
+  it.each(["terminal", "other-run", "ambiguous"])("does not infer a prefix association for %s", (mode) => {
+    const initial = prefix(mode !== "terminal", mode === "ambiguous" ? 2 : 1)
+    const next = applyChatProjectionEvent(initial,
+      makeEvent("message.delta", { segment_id: "wire", delta: "new" }, { run_id: mode === "other-run" ? "run_2" : "run_1" }))
+    expect(next.messages.slice(0, initial.messages.length)).toEqual(initial.messages)
+    expect(next.messages.at(-1)).toMatchObject({ id: "wire", content: "new" })
+    expect(next.messages).toHaveLength(initial.messages.length + 1)
+  })
+
+  it("same render ID in another run never overwrites the snapshot prefix", () => {
+    const next = applyChatProjectionEvent(prefix(),
+      makeEvent("message.delta", { segment_id: "durable_0", delta: "other" }, { run_id: "run_2" }))
+    expect(next.messages.map((message) => [message.runId, message.content])).toEqual([
+      ["run_1", "prefix 0"], ["run_2", "other"],
+    ])
+  })
+
+  it("terminal clears an unclaimed association without replacing partial content", () => {
+    const terminal = applyChatProjectionEvent(prefix(), makeEvent("run.completed", { status: "completed" }))
+    expect(terminal.activeRunId).toBeNull()
+    expect(terminal.messages[0]).toMatchObject({ content: "prefix 0", awaitingTextSegment: false })
+  })
+})

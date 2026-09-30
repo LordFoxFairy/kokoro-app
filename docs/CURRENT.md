@@ -1,5 +1,26 @@
 # Kokoro User Web 当前状态
 
+## WEB-CHAT-RELOAD-CONTINUATION（2026-09-30；代码切片，待 Root 验收）
+
+基线 `9590a741448923c63eb4f4ff46379135d21061bd`。纯测试已稳定复现：在途 snapshot 的 durable message_id 与
+后续 AG-UI segment_id 不同，导致前缀和续文分成两个 Markdown segments，续文反而先显示；不是两条 owner 消息。
+现在水合为已知文本建立早于水位后事件的本地显示锚点，仅唯一同 run、pending/streaming 的未认领前缀可续写。
+内部保留 snapshotMessageId，并将显示锚点关联到接续 segment；不修改网络 ID、snapshot wire、事件水位或 owner 状态。
+mapper 在内部投影保留 START/END 边界：新 START 不认领旧前缀，终态关闭待认领状态；完整 snapshot、其他 run、多个候选不盲拼。
+已有 text/tool 的显示次序、重复事件幂等和终态 partial 保留；不改 UI/projections/transport，不重播水位前历史。
+
+Node 22.22.2 实测：契约 snapshot＋真实 mapper CONTENT/END＋最终投影先 RED（1 failed/3 passed）。
+独立审查追加：同 run 已完成历史不应参与在途候选唯一性判断；1 条及 3 条 completed＋唯一 streaming 的两例
+先 RED（2 failed/5 passed），修复为先按 role/run/pending|streaming 过滤再判断唯一，历史身份/顺序保持不变；
+两个 streaming 仍不盲拼。最终相关 5 文件 **144 passed**；非 integration 测试 `--maxWorkers=2`
+**1570 passed / 154 files**；contract **108 passed**及生成校验通过；architecture **37 passed**；
+lint、typecheck、build、diff check 通过，以上均在候选筛选返修后重跑。
+此前候选首次默认并发非 integration 测试有既有 invitation visual 三例 5 秒 timeout
+（1564 passed/3 failed），未改其测试/期限；最终降低并发完整门通过。
+
+本片未启动应用服务或访问 PG/Redis/3310；真实用户生成中刷新、终态和完成后刷新由 Root 独立验收。
+当前 snapshot 未提供的完整历史过程仍不在 Web 重建范围；不声称恢复 owner 未提供的历史片段。
+
 ## WEB-EXPIRED-SUBMIT（2026-09-30；代码切片，待 Root 验收）
 
 基线 `1dc211bb61030926177b72b3dff2061562a1015b`。签名交互 GET/POST 现在复用现有 target helper 的到期判断；

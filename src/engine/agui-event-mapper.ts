@@ -309,6 +309,7 @@ export class AgUiEventMapper {
           projectionEvent: projectionEnvelope(cursor, event, "message.delta", {
             segment_id: event.messageId,
             delta: "",
+            text_boundary: "start",
           }),
           uiMessageChunks: [{ type: "text-start", id: event.messageId }],
           terminal: false,
@@ -331,6 +332,7 @@ export class AgUiEventMapper {
           projectionEvent: projectionEnvelope(cursor, event, "message.delta", {
             segment_id: event.messageId,
             delta: "",
+            text_boundary: "end",
           }),
           uiMessageChunks: [{ type: "text-end", id: event.messageId }],
           terminal: false,

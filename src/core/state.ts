@@ -20,7 +20,11 @@ export type SessionMessage = {
   content: string
   // 该消息所属 run；用于把同一 run 的连续 assistant 段归并到一个 turn（用户消息以自身 id 充当）。
   runId: string
-  // snapshot 水合出的在途 assistant 占位：首个后续文本事件按 run 认领它续写（认领即摘除标记）。
+  // id is the local render anchor. A resumed segment may rebind that anchor;
+  // retain the distinct durable BFF identity rather than rewriting the wire DTO.
+  snapshotMessageId?: string
+  // Only the unique assistant prefix of an active snapshot run can be claimed.
+  awaitingTextSegment?: boolean
 }
 
 // 结构化终态收口：stale-*（run 终态时仍悬挂）与 cancelled（用户停止）零 UI 文案，人话由渲染层生成。

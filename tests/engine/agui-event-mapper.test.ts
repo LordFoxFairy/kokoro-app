@@ -338,3 +338,16 @@ describe("AgUiEventMapper", () => {
     })).toThrow()
   })
 })
+
+
+it.each(["START", "END"] as const)("retains TEXT_MESSAGE_%s internally without changing AI SDK chunks", (boundary) => {
+  const mapped = new AgUiEventMapper().map(CURSORS.start, {
+    type: `TEXT_MESSAGE_${boundary}`, timestamp: 1, messageId: "wire",
+    ...(boundary === "START" ? { role: "assistant" } : {}),
+    metadata: metadata("boundary", 1),
+  })
+  expect(mapped.projectionEvent).toMatchObject({
+    kind: "message.delta", payload: { segment_id: "wire", delta: "", text_boundary: boundary.toLowerCase() },
+  })
+  expect(mapped.uiMessageChunks).toEqual([{ type: boundary === "START" ? "text-start" : "text-end", id: "wire" }])
+})
