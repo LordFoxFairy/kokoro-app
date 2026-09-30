@@ -43,12 +43,12 @@ it("never treats a lost Publish ACK or validation as success without ACTIVE by-I
     completeUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", phase: "uploaded", replayed: false, content_sha256: "a".repeat(64), scan_state: "clean" }),
     validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: "a".repeat(64), manifest_identity: `zip-v1:sha256:${"a".repeat(64)}`, replayed: false }),
     publishDraft: vi.fn().mockRejectedValue(new Error("lost ACK")),
-    getPublished: vi.fn().mockRejectedValue(new HubClientError("http", "revoked", "session_forbidden", 403)),
+    getPublished: vi.fn().mockRejectedValue(new HubClientError("http", "not found", "skill_not_found", 404)),
   }
   const input = { file: new File(["zip"], "mine.zip"), display_name: "Mine", summary: "", tags: [] }
   const options = { hash: async () => "a".repeat(64) }
   await expect(publishPersonalSkill(client as unknown as SkillPublishClient, input, options)).rejects.toMatchObject({ name: "SkillPublishUncertain", skillId: "mine" })
-  expect(client.getPublished).toHaveBeenCalledWith("mine")
+  expect(client.getPublished).toHaveBeenCalledWith("mine", undefined)
   client.getPublished.mockResolvedValueOnce({ skill_id: "mine", source_ref: "skill:mine", revision: "1", status: "active", name: "Mine", summary: "", tags: [] })
   await expect(publishPersonalSkill(client as unknown as SkillPublishClient, input, options)).resolves.toEqual({ source_ref: "skill:mine", revision: "1" })
 })

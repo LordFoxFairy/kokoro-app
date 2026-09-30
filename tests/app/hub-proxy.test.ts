@@ -531,4 +531,20 @@ describe("/api/hub/[...path] proxy", () => {
     }
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
+
+  it("forwards the owner-legal maximal Draft metadata without the former 64 KiB self-413", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const tags = Array.from({ length: 100 }, (_, index) => `${index}`.padEnd(128, "\u0000"))
+    const body = JSON.stringify({ display_name: '"'.repeat(255), summary: "\u0000".repeat(65535), tags })
+    expect(new TextEncoder().encode(body).length).toBeGreaterThan(64 * 1024)
+    expect(new TextEncoder().encode(body).length).toBeLessThan(512 * 1024)
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"skill_id":"mine","series_id":"series","revision":1,"status":"draft","replayed":false}}', { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-draft" } }))
+    const response = await POST(new Request("http://localhost/api/hub/self/skills/drafts", { method: "POST", headers: { "idempotency-key": "draft-key", "content-type": "application/json" }, body }), params(["self", "skills", "drafts"]))
+    expect(response.status).toBe(201)
+    expect((vi.mocked(requestWithDomain).mock.calls[0]?.[2] as { body?: ArrayBuffer }).body?.byteLength).toBe(new TextEncoder().encode(body).length)
+
+    const oversized = await POST(new Request("http://localhost/api/hub/self/skills/drafts", { method: "POST", headers: { "idempotency-key": "draft-key", "content-type": "application/json" }, body: "X".repeat(512 * 1024 + 1) }), params(["self", "skills", "drafts"]))
+    expect(oversized.status).toBe(413)
+    expect(await oversized.json()).toMatchObject({ error: { code: "request_body_too_large" } })
+  })
 })

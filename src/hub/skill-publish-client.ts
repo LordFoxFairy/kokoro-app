@@ -83,7 +83,7 @@ export type SkillPublishClient = {
   completeUpload: (id: string, body: CompleteSkillUploadRequest, key: string, signal?: AbortSignal) => Promise<z.infer<typeof completeSkillUploadSchema>>
   validateDraft: (id: string, attemptId: string, key: string, signal?: AbortSignal) => Promise<z.infer<typeof validateSkillDraftSchema>>
   publishDraft: (id: string, key: string, signal?: AbortSignal) => Promise<z.infer<typeof publishSkillDraftSchema>>
-  getPublished: (id: string) => Promise<PublishedPersonalSkill>
+  getPublished: (id: string, signal?: AbortSignal) => Promise<PublishedPersonalSkill>
 }
 
 export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? "https://localhost/"): SkillPublishClient {
@@ -105,6 +105,6 @@ export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? 
     completeUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload/complete"), "POST", 200, "mutation", completeSkillUploadSchema, completeSkillUploadRequestSchema.parse(body), key, signal),
     validateDraft: (id, attemptId, key, signal) => publicCommand(path(id, "/validate"), "POST", 200, "mutation", validateSkillDraftSchema, { attempt_id: attemptId }, key, signal),
     publishDraft: (id, key, signal) => publicCommand(path(id, "/publish"), "POST", 200, "mutation", publishSkillDraftSchema, undefined, key, signal),
-    getPublished: (id) => createHubClient().getPublishedPersonalSkill(id),
+    getPublished: (id, signal) => createHubClient().getPublishedPersonalSkill(id, signal),
   }
 }

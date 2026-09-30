@@ -93,3 +93,15 @@ it("rejects infected/fake-complete or stale upload phase shapes before Publish",
   expect(skillUploadStateSchema.safeParse({ skill_id: "mine", attempt_epoch: "0", phase: "none", attempt_id: "old" }).success).toBe(false)
   expect(skillUploadStateSchema.safeParse({ skill_id: "mine", attempt_epoch: "2", phase: "upload_pending", attempt_id: "old" }).success).toBe(false)
 })
+
+it("propagates cancellation to the authoritative by-ID recovery GET", async () => {
+  const controller = new AbortController()
+  const fetchMock = vi.fn().mockImplementation((_path: string, init: RequestInit) => {
+    expect(init.signal).toBe(controller.signal)
+    controller.abort()
+    return Promise.reject(new DOMException("cancelled", "AbortError"))
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  await expect(createSkillPublishClient().getPublished("mine", controller.signal)).rejects.toMatchObject({ reason: "aborted" })
+  expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skills/mine", expect.objectContaining({ signal: controller.signal }))
+})

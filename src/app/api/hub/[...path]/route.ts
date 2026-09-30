@@ -22,6 +22,9 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 const FORWARD_HEADERS = ["accept", "content-type", "idempotency-key"] as const
 const MAX_PERSONAL_DOWNLOAD_BYTES = 1_048_576
 const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
+// Draft permits 65,535 UTF-16 summary units, 100 × 128 tag units and a
+// 255-unit name. Even six-byte JSON escapes for every unit stay below 512 KiB.
+const MAX_SKILL_COMMAND_BYTES = 512 * 1024
 const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
 const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 
@@ -258,7 +261,7 @@ export async function proxyHubRequest(
   let body: ArrayBuffer | undefined
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
     try {
-      body = await readBoundedRequestBody(request, boundedFileUpload ? 1024 * 1024 : publicSkillBoundary ? 64 * 1024 : undefined)
+      body = await readBoundedRequestBody(request, boundedFileUpload ? 1024 * 1024 : publicSkillBoundary ? MAX_SKILL_COMMAND_BYTES : undefined)
       if (skillWritePost && businessPath[2] === "publish" && body.byteLength !== 0) return projectionError("invalidSkillRequest", requestId)
     } catch (error) {
       if (publicSkillBoundary) return projectionError(error instanceof UpstreamRequestTooLargeError ? "tooLarge" : "invalidSkillRequest", requestId)

@@ -30,6 +30,8 @@ it("shows only the formal single-ZIP publish entry in live Skills, not preview/c
   vi.stubGlobal("fetch", fetchMock)
   render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} /></LocaleProvider>)
   await screen.findByTestId("personal-skills-read")
+  expect(screen.queryByRole("button", { name: "上传技能" })).toBeNull()
+  expect(screen.queryByText("从 GitHub 导入")).toBeNull()
   fireEvent.click(screen.getByRole("button", { name: "发布个人技能" }))
   const dialog = await screen.findByTestId("personal-skill-publish-dialog")
   expect(within(dialog).getByLabelText(/ZIP 文件/)).toHaveAttribute("accept", ".zip,application/zip")

@@ -6,7 +6,7 @@
 
 Browser→Web same-origin→BFF→Platform/Storage；例外仅 BFF 受控短期签名 ObjectStore PUT。Web 拒绝 URL 凭据/fragment/过期、HTTPS→HTTP mixed-content 和非本地 HTTP；仅本地 loopback HTTP 页面→loopback HTTP ObjectStore 允许开发。BFF 负责精确 public origin allowlist，Web 不向 URL 转移应用凭据；PUT 原 File、唯一必需 `content-type`，`credentials:omit`、`redirect:error`、`no-referrer`。正式环境 Root 另验双 HTTPS origin/CORS。Web 无 SQL/Redis、签名 URL/receipt 持久化、跨 owner import 或第二 API。
 
-单次意图为 metadata/文件 SHA→CreateDraft→Get 确认 `none`→Begin→PUT→Complete 对齐 skill/attempt/epoch/upload/hash→Validate 绑定 attempt→Publish 零 body。各 mutation 先分配一枚 key 与冻结 body，网络丢失只同键同 body 重放；刷新丢 key/reference 后不自动续传。取消 AbortController 并抑制迟到成功；旧 attempt/phase、感染或验证失败不自动跳到 Publish；CLEAN/validated 不是成功。Publish 回执须 `status:active`、`source_ref:skill:<draft-id>`、正 revision/event UUID，丢 ACK/坏回执仅按本人 ACTIVE by-ID 重核；不可核显示未知，不发新 key。正式六项 BFF 写候选仍 default-off，Platform v4 inactive，代码接线不是产品激活。Node22 本仓门加隔离 Playwright，Root 真 owner 链另验。
+单次意图为 metadata/文件 SHA→CreateDraft→Get 确认 `none`→Begin→PUT→Complete 对齐 skill/attempt/epoch/upload/hash→Validate 绑定 attempt→Publish 零 body。各 mutation 先分配一枚 key 与冻结 body，网络丢失只同键同 body 重放；同页关闭重开保留会话状态，过期 URL 只以同键 Begin replay 刷新；整页刷新丢 key/reference 后不自动续传。Complete 的 `pending/unknown` 明确停在扫描中，用户显式复核 Get 的当前 attempt/epoch/upload 后才以同一 Validate key 继续；失配要求明确重新开始，412/409 不推断发布。取消 AbortController（含 by-ID 恢复 GET）并抑制迟到成功；感染或验证失败不自动跳到 Publish；CLEAN/validated 不是成功。Publish 回执须 `status:active`、`source_ref:skill:<draft-id>`、正 revision/event UUID，丢 ACK/坏回执仅按本人 ACTIVE by-ID 重核；404/传输/解析不确定，401/403 原码保留且 fail-closed，不发新 Publish key。同源 route 的 512 KiB 命令限额覆盖 owner 合法 Draft 元数据最坏 JSON 转义。正式六项 BFF 写候选仍 default-off，Platform v4 inactive，代码接线不是产品激活。Node22 本仓门加隔离 Playwright，Root 真 owner 链另验。
 
 ## W3-WEB-SKILL-CONSUMER 第二阶段 A：正式只读投影（2026-09-29）
 

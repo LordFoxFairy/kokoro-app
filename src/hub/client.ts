@@ -222,10 +222,10 @@ const publicReadErrorSchema = z.object({ error: z.object({
   retryable: z.boolean(),
 }).strict() }).strict()
 
-async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T): Promise<z.infer<T>> {
+async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T, signal?: AbortSignal): Promise<z.infer<T>> {
   let response: Response
   try {
-    response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error" })
+    response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error", ...(signal === undefined ? {} : { signal }) })
   } catch (error) {
     throw new HubClientError(isAbortError(error) ? "aborted" : "network", describeUnknown(error), null, null)
   }
@@ -279,7 +279,7 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 
 export type HubClient = {
   listPersonalSkills: (cursor?: string) => Promise<PersonalSkillPage>
-  getPublishedPersonalSkill: (id: string) => Promise<PublishedPersonalSkill>
+  getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<PublishedPersonalSkill>
   listMcpProjections: (cursor?: string) => Promise<McpProjectionPage>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
@@ -341,8 +341,8 @@ export function createHubClient(): HubClient {
       if (cursor !== undefined) query.set("cursor", cursor)
       return requestPublicRead(`${personalSkillsPath}?${query}`, personalSkillPageSchema)
     },
-    getPublishedPersonalSkill: async (id) => {
-      const skill = await requestPublicRead(publishedPersonalSkillPath(id), publishedPersonalSkillSchema)
+    getPublishedPersonalSkill: async (id, signal) => {
+      const skill = await requestPublicRead(publishedPersonalSkillPath(id), publishedPersonalSkillSchema, signal)
       if (skill.skill_id !== id || skill.source_ref !== `skill:${id}`) {
         throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
       }
