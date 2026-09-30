@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## W3-WEB-SKILL-CONSUMER 第二阶段 A（2026-09-29；正式只读消费，待 Root 验收）
+
+基线 Web `53760a2c4c9b0420e2a8bb4db8be66d8160169af`；BFF 唯一 public owner 仍为 `62daba37fc0267830d73590bb5a3499807d46fc6`，原字节 pin 未变。正式 `/app/skills` 和 Settings Skills 现在只从同源 `GET /api/hub/self/skills?scope_kind=personal` 读取本人列表，原样使用 opaque cursor，保留 `source_ref/revision`；打开详情另以本人 ACTIVE by-ID 七字段读取，客户端校验响应 ID 与请求 ID 一致。正式 MCP 面只读取 owner-native `server_id/provider_key/server_identity/transport/declaration_digest/status` 六字段，旧 URL、secret、revision、allowed_tools 与无效启停/删除控件不进入正式视图。严格解析、`no-store`/request ID、401/403/404/owner 错误不转空列表；浏览器仍只经 Web 同源 adapter 到 BFF，不直连 owner。旧 pool/catalog/quota 与 MCP secrets 的同源 GET 已封闭，旧 UI/客户端仅限显式 preview fixture 保留，不可作为正式发布事实。
+
+**未完成：** 单 ZIP CreateDraft→Publish 上传状态机没有实施；现有 `SkillUploadDialog` 的 `.zip/.skill` preview/confirm 仍是旧态，仅 preview fixture 隔离显示，不能称为正式发布。六项写候选仍 default-off、Platform v4 inactive。真 IAM/Chromium/Storage/CORS 与 ACTIVE 发布恢复由下一写入片和 Root 隔离验收；本片的本仓测试不能代替该真链。
+
 ## W3-WEB-SKILL-CONSUMER 第一阶段（2026-09-29；文档与机器 pin，非运行切换）
 
 开工 Web `main 74dcc101f6c457d10db4511365e6898f44f0e625`、工作树 clean；本阶段把 BFF 唯一 public OpenAPI `62daba37fc0267830d73590bb5a3499807d46fc6` 原字节固定到 `src/generated/bff-public-openapi.yaml`，SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923`，并更新派生 Team drift pin 与直接 Skills/MCP 负例。BFF 已有个人 `scope_kind=personal` 列表（保留 `source_ref/revision`）、本人未安装 ACTIVE by-ID、owner-native MCP 六字段；六个 Skill 写候选仍**默认关闭**，Platform v4 仍 inactive。机器快照更新不是前端调用激活。

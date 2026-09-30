@@ -17,6 +17,9 @@ const OWN: SkillCard = { name: "my-skill", description: "mine", content_hash: "h
 
 function makeClient(overrides: Partial<HubClient> = {}): HubClient {
   return {
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn(),
+    listMcpProjections: vi.fn().mockResolvedValue({ servers: [] }),
     listSkillPool: vi.fn().mockResolvedValue([OFFICIAL, OWN]),
     listSkillCatalog: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
     skillQuota: vi.fn().mockResolvedValue({
@@ -42,13 +45,13 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
 }
 
 function renderPanel(client: HubClient, onTogglePin = vi.fn(), onClose = vi.fn()) {
-  return render(<SkillsPanel client={client} onClose={onClose} pinned={[]} onTogglePin={onTogglePin} />, {
+  return render(<SkillsPanel preview client={client} onClose={onClose} pinned={[]} onTogglePin={onTogglePin} />, {
     wrapper: LocaleProvider,
   })
 }
 
 function renderEmbedded(client: HubClient) {
-  return render(<SkillsContent client={client} pinned={[]} onTogglePin={vi.fn()} embedded />, {
+  return render(<SkillsContent preview client={client} pinned={[]} onTogglePin={vi.fn()} embedded />, {
     wrapper: LocaleProvider,
   })
 }
@@ -151,7 +154,7 @@ describe("SkillsPanel", () => {
     const onTrySkill = vi.fn()
     render(
       <LocaleProvider>
-        <SkillsContent client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
+        <SkillsContent preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
       </LocaleProvider>,
     )
     await screen.findByText("brainstorming")
@@ -173,7 +176,7 @@ describe("SkillsPanel", () => {
     ]
     render(
       <LocaleProvider>
-        <SkillsContent client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
+        <SkillsContent preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
       </LocaleProvider>,
     )
     await screen.findByText("brainstorming")

@@ -1,5 +1,9 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W3-WEB-SKILL-CONSUMER 第二阶段 A：只读浏览器投影（2026-09-29）
+
+Web 只持内存中的个人 Skill/MCP 页、opaque cursor、详情请求状态；BFF/Platform 仍分别拥有 public projection 与 Skill/MCP 持久事实。个人 Skill `source_ref/revision`、本人 ACTIVE by-ID 七字段只来自当次 BFF 读回，MCP 仅六 owner-native 字段；旧 pool/catalog、URL/secret/revision/allowed_tools 和 preview confirm 不是发布事实。错误不写入空页，不缓存为授权；组件卸载/详情关闭使迟到结果失效。无新增 Web schema、事务、Redis key、receipt、对象字节或第二 owner。单 ZIP 上传状态机、批准 origin PUT 与 ACTIVE Publish ACK 尚未实施，六项写候选仍关闭；下节第一阶段描述仅是历史基线。
+
 ## W3-WEB-SKILL-CONSUMER 第一阶段：Skill/MCP 无 Web 业务事实（2026-09-29）
 
 当前 Web `main 74dcc101f6c457d10db4511365e6898f44f0e625` 的旧 `SkillUploadDialog` 仅保存 preview namespace/candidates/selected 与 confirm 显示，不是 Platform Skill 发布事实；旧 MCP URL/secret/revision 视图也不是新 BFF owner-native 投影。BFF `62daba37fc0267830d73590bb5a3499807d46fc6` public OpenAPI 已按 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923` 固定到 Web generated snapshot，但运行 UI 尚未切换，六项写候选 default-off、Platform v4 inactive。

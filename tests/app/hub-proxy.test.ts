@@ -46,6 +46,33 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
+  it("preserves BFF personal Skill and MCP read request IDs while rejecting old scope and redirects", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { skills: [], next_cursor: null } }), {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_skill_1" },
+    }))
+    const list = await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), params(["self", "skills"]))
+    expect(list.status).toBe(200)
+    expect(list.headers.get("cache-control")).toBe("no-store")
+    expect(list.headers.get("x-request-id")).toBe("req_skill_1")
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/skills?scope_kind=personal")
+
+    const oldScope = await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), params(["self", "skills"]))
+    expect(oldScope.status).toBe(400)
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
+
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "skill_not_found", message: "hidden", retryable: false } }), {
+      status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_skill_2" },
+    }))
+    const hidden = await GET(new Request("http://localhost/api/hub/self/skills/skill-1"), params(["self", "skills", "skill-1"]))
+    expect(hidden.status).toBe(404)
+    expect(hidden.headers.get("x-request-id")).toBe("req_skill_2")
+
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://invalid.example" } }))
+    const redirect = await GET(new Request("http://localhost/api/hub/self/mcp/servers"), params(["self", "mcp", "servers"]))
+    expect(redirect.status).toBe(502)
+    expect(redirect.headers.get("location")).toBeNull()
+  })
   it("streams only the exact Artifact binary path with a 1 GiB ceiling and safe attachment headers", async () => {
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
     vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { status: 200, headers: {
@@ -271,29 +298,31 @@ describe("/api/hub/[...path] proxy", () => {
   })
   it("injects web-bff caller creds + envelope scope/user and projects to the BFF", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(
-      new Response('{"data":{"skills":[]}}', {
+      new Response('{"data":{"skills":[],"next_cursor":null}}', {
         status: 200,
         headers: {
           "content-type": "application/json",
-          "cache-control": "public, max-age=3600",
+          "cache-control": "no-store",
+          "x-request-id": "req-personal-list",
         },
       }),
     )
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
-    const request = new Request("http://localhost/api/hub/self/skills/pool", {
+    const request = new Request("http://localhost/api/hub/self/skills?scope_kind=personal", {
       headers: { cookie: sessionCookie() },
     })
-    const res = await GET(request, params(["self", "skills", "pool"]))
+    const res = await GET(request, params(["self", "skills"]))
     expect(res.status).toBe(200)
-    expect(res.headers.get("cache-control")).toBe("private, no-store")
+    expect(res.headers.get("cache-control")).toBe("no-store")
+    expect(res.headers.get("x-request-id")).toBe("req-personal-list")
 
     const [target, domain, init] = vi.mocked(requestWithDomain).mock.calls[0] as [
       string,
       string,
       { headers: Record<string, string>; signal: AbortSignal },
     ]
-    expect(target).toBe("http://bff.test/v1/skills/pool")
+    expect(target).toBe("http://bff.test/v1/skills?scope_kind=personal")
     expect(domain).toBe("dev.kokoro.localhost")
     expect(init.headers["x-kokoro-service"]).toBe("web-bff")
     expect(init.headers["x-kokoro-internal-secret"]).toBe("svc-secret")
@@ -320,18 +349,18 @@ describe("/api/hub/[...path] proxy", () => {
 
   it("never forwards a browser-supplied scope header (identity from envelope only)", async () => {
     vi.mocked(requestWithDomain).mockResolvedValue(
-      new Response('{"data":{"skills":[]}}', {
+      new Response('{"data":{"skills":[],"next_cursor":null}}', {
         status: 200,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req-scope" },
       }),
     )
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
     await GET(
-      new Request("http://localhost/api/hub/self/skills/pool", {
+      new Request("http://localhost/api/hub/self/skills?scope_kind=personal", {
         headers: { cookie: sessionCookie(), "x-kokoro-namespace": "team_evil" },
       }),
-      params(["self", "skills", "pool"]),
+      params(["self", "skills"]),
     )
     const [, domain, init] = vi.mocked(requestWithDomain).mock.calls[0] as [
       string,

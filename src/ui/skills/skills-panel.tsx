@@ -33,6 +33,7 @@ import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 import { GithubImportDialog } from "./github-import-dialog"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { SkillDetailDialog } from "./skill-detail-dialog"
+import { PersonalSkillsRead } from "./personal-skills-read"
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target
@@ -72,6 +73,7 @@ type Pool = { skills: SkillCard[]; quota: SkillQuota | null }
 
 type SkillsPanelProps = {
   client: HubClient
+  preview?: boolean
   brandName?: string
   onClose: () => void
   pinned: readonly string[]
@@ -79,7 +81,7 @@ type SkillsPanelProps = {
   onTrySkill?: (skill: SkillCard, prompt?: string) => void
 }
 
-export function SkillsPanel({ client, brandName, onClose, pinned, onTogglePin, onTrySkill }: SkillsPanelProps) {
+export function SkillsPanel({ client, preview = false, brandName, onClose, pinned, onTogglePin, onTrySkill }: SkillsPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -112,6 +114,7 @@ export function SkillsPanel({ client, brandName, onClose, pinned, onTogglePin, o
         </header>
         <SkillsContent
           client={client}
+          preview={preview}
           {...(brandName === undefined ? {} : { brandName })}
           pinned={pinned}
           onTogglePin={onTogglePin}
@@ -124,6 +127,7 @@ export function SkillsPanel({ client, brandName, onClose, pinned, onTogglePin, o
 
 type SkillsContentProps = {
   client: HubClient
+  preview?: boolean
   brandName?: string
   pinned: readonly string[]
   onTogglePin: (name: string) => void
@@ -133,7 +137,12 @@ type SkillsContentProps = {
   onCreateWithAi?: () => void
 }
 
-export function SkillsContent({ client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
+export function SkillsContent(props: SkillsContentProps) {
+  if (props.preview !== true) return <PersonalSkillsRead client={props.client} embedded={props.embedded ?? false} />
+  return <PreviewSkillsContent {...props} />
+}
+
+function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const githubReturnFocusRef = useRef<HTMLElement | null>(null)

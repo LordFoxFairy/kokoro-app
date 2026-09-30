@@ -1,5 +1,11 @@
 # Kokoro User Web API 与协议契约
 
+## W3-WEB-SKILL-CONSUMER 第二阶段 A：正式 GET 消费（2026-09-29）
+
+BFF 唯一 public OpenAPI `62daba37fc0267830d73590bb5a3499807d46fc6`、Web 原字节 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923` 未变。正式同源 `/api/hub/self/skills?scope_kind=personal[&cursor]`、`/api/hub/self/skills/{id}`、`/api/hub/self/mcp/servers[?cursor]` 分别代理 BFF `/v1/skills`、by-ID、`/v1/mcp/servers`；不得直接访问 Platform。严格 `200 {data}`、`Cache-Control: no-store`、`x-request-id`，错误必须为 `{error:{code,message,retryable}}`，未知/缺失字段、旧 `{data,meta}`、redirect 和错误状态均失败；不从旧 pool/catalog 补读。Skill 列表保留 `source_ref/revision/next_cursor`；本人 ACTIVE by-ID 只取七安全字段，响应 ID/source_ref 与请求一致；404 不推断为未发布之外的事实。MCP 只投影六 owner-native 字段，不读 URL/secret/revision/allowed_tools，也不呈现无效启停/删除。旧 pool/catalog/quota、MCP secrets GET 在正式同源 route 拒绝；显式 preview fixture 与旧上传 preview/confirm 暂留到上传切片，非正式发布证据。六项新写 API 仍 default-off，本切不发请求。
+
+第一阶段条目以下为历史 pin 门；本节才是当前只读运行状态。
+
 ## W3-WEB-SKILL-CONSUMER 第一阶段：BFF public 原字节 pin（2026-09-29）
 
 唯一可编辑机器源是 BFF `62daba37fc0267830d73590bb5a3499807d46fc6` 的 `contract/openapi/v1/openapi.yaml`；Web `src/generated/bff-public-openapi.yaml` 只保存原字节 SHA-256 `5553b798446c8b764fc33d3ccdba6185c3c308213f712cdcf34e751166e0e923`，Team client 仍由现有生成器从该 snapshot 派生，Web 不建另一份 public schema。本阶段更新 pin、文档与直接 contract 负例，**不改正式同源 route/client/parser/UI**。当前这些运行代码仍使用旧 preview/confirm 与 MCP/Skill 形状，不能将新机器契约误述为已消费。

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { SkillDetailDialog } from "@/ui/skills/skill-detail-dialog"
+import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
@@ -115,7 +116,12 @@ function formatUsage(index: number, t: (key: MessageKey, values?: Record<string,
 
 type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
 
-export function KokoroSkillsSurface({ preview = false, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
+export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
+  if (props.preview !== true) return <PersonalSkillsRead client={browserHubClient()} {...(props.onOpenSettings === undefined ? {} : { onOpenSettings: props.onOpenSettings })} />
+  return <PreviewKokoroSkillsSurface {...props} />
+}
+
+function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const client = useMemo(() => browserHubClient({ preview }), [preview])
   const catalog = useResource<SkillCatalog>(`${CATALOG_KEY}/${preview ? "preview" : "live"}`, useCallback(() => listAllCatalog(client), [client]))

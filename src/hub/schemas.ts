@@ -64,6 +64,42 @@ export const skillCatalogSchema = z
   .strict()
 export type SkillCatalog = z.infer<typeof skillCatalogSchema>
 
+// BFF public read projections. These are consumer validators, not editable owner contracts.
+const publishedSkillId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
+const positiveRevision = z.string().regex(/^[1-9][0-9]*$/u)
+export const personalSkillListItemSchema = z.object({
+  source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u),
+  name: z.string(),
+  description: z.string(),
+  content_hash: z.string(),
+  scope: z.literal("personal"),
+  revision: positiveRevision,
+  enabled: z.boolean(),
+  installed: z.boolean().optional(),
+  categories: z.array(z.string()),
+}).strict()
+export type PersonalSkillListItem = z.infer<typeof personalSkillListItemSchema>
+export const personalSkillPageSchema = z.object({
+  skills: z.array(personalSkillListItemSchema),
+  next_cursor: z.string().nullable().optional(),
+}).strict()
+export type PersonalSkillPage = z.infer<typeof personalSkillPageSchema>
+export const publishedPersonalSkillSchema = z.object({
+  skill_id: publishedSkillId,
+  source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u),
+  revision: positiveRevision,
+  status: z.literal("active"),
+  name: z.string(),
+  summary: z.string(),
+  tags: z.array(z.string()),
+}).strict()
+export type PublishedPersonalSkill = z.infer<typeof publishedPersonalSkillSchema>
+export const personalSkillsPath = "/self/skills"
+export function publishedPersonalSkillPath(id: string): string {
+  if (!publishedSkillId.safeParse(id).success) throw new Error("invalid Skill ID")
+  return `${personalSkillsPath}/${encodeURIComponent(id)}`
+}
+
 // —— 配额 ——
 
 export const skillQuotaSchema = z
@@ -189,6 +225,21 @@ const mcpServerViewSchema = z
   })
   .strict()
 export type McpServerView = z.infer<typeof mcpServerViewSchema>
+
+export const mcpProjectionSchema = z.object({
+  server_id: z.string(),
+  provider_key: z.string(),
+  server_identity: z.string(),
+  transport: z.enum(["stdio", "streamable_http", "sse_compat", "unknown"]),
+  declaration_digest: z.string().regex(/^[a-f0-9]{64}$/u),
+  status: z.enum(["registered", "disabled", "unknown"]),
+}).strict()
+export type McpProjection = z.infer<typeof mcpProjectionSchema>
+export const mcpProjectionPageSchema = z.object({
+  servers: z.array(mcpProjectionSchema),
+  next_cursor: z.string().optional(),
+}).strict()
+export type McpProjectionPage = z.infer<typeof mcpProjectionPageSchema>
 
 export const mcpServerPoolSchema = z.object({ servers: z.array(mcpServerViewSchema) }).strict()
 export const mcpServerRegisteredSchema = z.object({ server: mcpServerViewSchema }).strict()

@@ -2,8 +2,8 @@
 // 转发到 kokoro-hub 的 self 面。scope 恒取自密封信封的 namespace，绝不透传浏览器参数当 scope；
 // 浏览器只见同源 `/api/hub/*`，runtime 凭据与 namespace 身份全留服务端。变更类请求校验同源 Origin。
 //
-// 路径约定：浏览器调 `/api/hub/self/skills/pool` → BFF `/v1/skills/pool`
-// （BFF 承接原 Hub self 面）。上传走 multipart：透传浏览器 content-type（含 boundary），
+// 路径约定：浏览器调 `/api/hub/self/skills?scope_kind=personal` → BFF `/v1/skills?scope_kind=personal`。
+// 上传旧态仍走 multipart：透传浏览器 content-type（含 boundary），
 // 不强制 application/json。
 
 import { NextResponse } from "next/server"
@@ -162,6 +162,23 @@ export async function proxyHubRequest(
   const { path } = await context.params
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
+  const personalSkillListRead = request.method === "GET" && path[0] === "self" && businessPath.length === 1 && businessPath[0] === "skills"
+  const personalSkillIdRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills"
+  const mcpProjectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "servers"
+  const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpProjectionRead
+  if (request.method === "GET" && path[0] === "self" && (
+    (businessPath[0] === "skills" && ["pool", "catalog", "quota"].includes(businessPath[1] ?? ""))
+    || (businessPath[0] === "mcp" && businessPath[1] === "secrets")
+  )) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+  if (publicProjectionRead) {
+    const query = new URLSearchParams(search)
+    const allowed = personalSkillListRead ? ["scope_kind", "cursor"] : mcpProjectionRead ? ["cursor"] : []
+    const invalidQuery = [...query.keys()].some((key) => !allowed.includes(key) || query.getAll(key).length !== 1)
+      || (personalSkillListRead && query.get("scope_kind") !== "personal")
+      || (query.has("cursor") && (query.get("cursor") === "" || (query.get("cursor")?.length ?? 0) > 4096))
+      || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
+    if (invalidQuery) return NextResponse.json({ error: "invalid_projection_read" }, { status: 400, headers: { "cache-control": "no-store" } })
+  }
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
   const artifactDownload = request.method === "GET" && businessPath.length === 5
@@ -264,6 +281,21 @@ export async function proxyHubRequest(
     const retryAfter = upstream.headers.get("retry-after")
     if (upstream.status === 429 && retryAfter !== null && /^[1-9][0-9]{0,4}$/u.test(retryAfter)) errorHeaders.set("retry-after", retryAfter)
     return new Response(upstream.body, { status: upstream.status, headers: errorHeaders })
+  }
+
+  if (publicProjectionRead) {
+    const upstreamRequestId = upstream.headers.get("x-request-id")
+    if (upstream.status >= 300 && upstream.status < 400
+      || upstream.headers.get("cache-control") !== "no-store"
+      || upstreamRequestId === null
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(upstreamRequestId)) {
+      await upstream.body?.cancel()
+      return NextResponse.json({ error: "invalid_projection_response" }, { status: 502, headers: { "cache-control": "no-store" } })
+    }
+    const projectionHeaders = new Headers({ "cache-control": "no-store", "x-request-id": upstreamRequestId })
+    const type = upstream.headers.get("content-type")
+    if (type !== null) projectionHeaders.set("content-type", type)
+    return new Response(upstream.body, { status: upstream.status, headers: projectionHeaders })
   }
 
   // 普通 Hub 响应只回传状态与内容类型，body 流式转发。

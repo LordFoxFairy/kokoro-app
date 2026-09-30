@@ -1,7 +1,7 @@
 // hub self 面 HTTP 客户端：同源 `/api/hub/*` BFF 代理（注入 web-bff 凭据 + 信封 scope/user）。
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
 
-import { ZodError, type ZodTypeAny, type z } from "zod"
+import { z, ZodError, type ZodTypeAny } from "zod"
 
 import {
   HUB_BASE,
@@ -54,6 +54,14 @@ import {
   type UploadConfirm,
   type UploadPreview,
   type GithubImportResult,
+  mcpProjectionPageSchema,
+  personalSkillPageSchema,
+  personalSkillsPath,
+  publishedPersonalSkillPath,
+  publishedPersonalSkillSchema,
+  type McpProjectionPage,
+  type PersonalSkillPage,
+  type PublishedPersonalSkill,
 } from "./schemas"
 
 export type HubFailureReason = "network" | "http" | "parse" | "aborted"
@@ -208,6 +216,38 @@ async function requestData<T extends ZodTypeAny>(
   return parseData(response, inner)
 }
 
+const publicReadErrorSchema = z.object({ error: z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+  retryable: z.boolean(),
+}).strict() }).strict()
+
+async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T): Promise<z.infer<T>> {
+  let response: Response
+  try {
+    response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error" })
+  } catch (error) {
+    throw new HubClientError(isAbortError(error) ? "aborted" : "network", describeUnknown(error), null, null)
+  }
+  if (response.headers.get("cache-control") !== "no-store" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")) {
+    throw new HubClientError("parse", "invalid BFF read response headers", null, response.status)
+  }
+  let raw: unknown
+  try {
+    raw = await response.json()
+  } catch (error) {
+    throw new HubClientError("parse", describeUnknown(error), null, response.status)
+  }
+  if (response.status !== 200) {
+    const parsed = publicReadErrorSchema.safeParse(raw)
+    if (!parsed.success) throw new HubClientError("parse", "invalid BFF read error", null, response.status)
+    throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status)
+  }
+  const parsed = z.object({ data: inner }).strict().safeParse(raw)
+  if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
+  return parsed.data.data as z.infer<T>
+}
+
 function withOptionalSignal(init: RequestInit, signal: AbortSignal | undefined): RequestInit {
   return signal === undefined ? init : { ...init, signal }
 }
@@ -236,6 +276,9 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 }
 
 export type HubClient = {
+  listPersonalSkills: (cursor?: string) => Promise<PersonalSkillPage>
+  getPublishedPersonalSkill: (id: string) => Promise<PublishedPersonalSkill>
+  listMcpProjections: (cursor?: string) => Promise<McpProjectionPage>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
   skillQuota: () => Promise<SkillQuota>
@@ -291,6 +334,19 @@ function uploadForm(zip: Blob, names: string[] | null): FormData {
 
 export function createHubClient(): HubClient {
   return {
+    listPersonalSkills: (cursor) => {
+      const query = new URLSearchParams({ scope_kind: "personal" })
+      if (cursor !== undefined) query.set("cursor", cursor)
+      return requestPublicRead(`${personalSkillsPath}?${query}`, personalSkillPageSchema)
+    },
+    getPublishedPersonalSkill: async (id) => {
+      const skill = await requestPublicRead(publishedPersonalSkillPath(id), publishedPersonalSkillSchema)
+      if (skill.skill_id !== id || skill.source_ref !== `skill:${id}`) {
+        throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
+      }
+      return skill
+    },
+    listMcpProjections: (cursor) => requestPublicRead(`${mcpServersPath}${cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`}`, mcpProjectionPageSchema),
     listSkillPool: async () => (await requestData(skillPoolPath, skillPoolSchema)).skills,
     listSkillCatalog: (params = {}) => {
       const search = new URLSearchParams()

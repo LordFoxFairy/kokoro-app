@@ -122,6 +122,19 @@ export function createPreviewHubClient(): HubClient {
   const previewGithub = (repository: string, signal?: AbortSignal): Promise<GithubImportResult> =>
     abortable(signal, () => githubPreviewFor(repository))
   return {
+    listPersonalSkills: () => Promise.resolve({ skills: skills.filter((skill) => skill.scope === "personal").map((skill, index) => ({
+      source_ref: `skill:preview-${index + 1}`, name: skill.name, description: skill.description,
+      content_hash: skill.content_hash, scope: "personal" as const, revision: "1", enabled: skill.enabled ?? true,
+      categories: skill.categories ?? [],
+    })), next_cursor: null }),
+    getPublishedPersonalSkill: (id) => {
+      const skill = skills.filter((item) => item.scope === "personal")[Number(id.replace(/^preview-/u, "")) - 1]
+      return skill ? Promise.resolve({ skill_id: id, source_ref: `skill:${id}`, revision: "1", status: "active" as const, name: skill.name, summary: skill.description, tags: [] }) : Promise.reject(new Error("preview Skill not found"))
+    },
+    listMcpProjections: () => Promise.resolve({ servers: servers.map((server, index) => ({
+      server_id: `preview-${index + 1}`, provider_key: "preview", server_identity: server.name,
+      transport: "streamable_http" as const, declaration_digest: "0".repeat(64), status: server.enabled ? "registered" as const : "disabled" as const,
+    })) }),
     listSkillPool: () => Promise.resolve(skills),
     listSkillCatalog: ({ scope, query } = {}): Promise<SkillCatalog> => {
       const installedByKey = new Map(skills.map((skill) => [skillKey(skill), skill]))

@@ -11,6 +11,20 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
+it("renders live personal ACTIVE Skills from the BFF page and verifies a selected card by ID", async () => {
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { skills: [{ source_ref: "skill:mine-1", name: "Mine", description: "Private summary", content_hash: "digest", scope: "personal", revision: "3", enabled: true, categories: [] }], next_cursor: null } }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_list" } }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: { skill_id: "mine-1", source_ref: "skill:mine-1", revision: "3", status: "active", name: "Mine", summary: "Private summary", tags: [] } }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_detail" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} /></LocaleProvider>)
+
+  expect(await screen.findByText("Mine")).toBeInTheDocument()
+  expect(screen.getByText(/skill:mine-1.*3/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: /Mine/ }))
+  expect(await screen.findByText("Private summary")).toBeInTheDocument()
+  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/self/skills?scope_kind=personal", "/api/hub/self/skills/mine-1"])
+})
+
 function renderSkills(onOpenSettings = vi.fn(), onCreateSkillWithAi = vi.fn(), onTrySkill = vi.fn()) {
   render(
     <LocaleProvider>

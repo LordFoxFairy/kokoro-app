@@ -38,6 +38,9 @@ const SECRET: McpSecret = {
 
 function makeClient(overrides: Partial<HubClient> = {}): HubClient {
   return {
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn(),
+    listMcpProjections: vi.fn().mockResolvedValue({ servers: [] }),
     listSkillPool: vi.fn(),
     listSkillCatalog: vi.fn(),
     skillQuota: vi.fn(),
@@ -57,7 +60,7 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
 }
 
 function renderPanel(client: HubClient, onClose = vi.fn()) {
-  return render(<McpPanel client={client} onClose={onClose} />, { wrapper: LocaleProvider })
+  return render(<McpPanel preview client={client} onClose={onClose} />, { wrapper: LocaleProvider })
 }
 
 function openRegister(nameValue: string, urlValue: string) {
@@ -69,6 +72,21 @@ function openRegister(nameValue: string, urlValue: string) {
 afterEach(cleanup)
 
 describe("McpPanel", () => {
+  it("renders only owner-native MCP projection fields without mutation controls", async () => {
+    const server = { server_id: "server-1", provider_key: "provider", server_identity: "search", transport: "streamable_http" as const, declaration_digest: "a".repeat(64), status: "registered" as const }
+    const client = makeClient({ listMcpProjections: vi.fn().mockResolvedValue({ servers: [server] }) })
+    render(<McpContent client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
+
+    const row = await screen.findByTestId("mcp-projection")
+    expect(row).toHaveTextContent("server-1")
+    expect(row).toHaveTextContent("provider")
+    expect(row).toHaveTextContent("search")
+    expect(row).toHaveTextContent("streamable_http")
+    expect(row).toHaveTextContent("registered")
+    expect(row).toHaveTextContent("a".repeat(64))
+    expect(screen.queryByRole("button", { name: /Enable|Disable|Delete|Register/ })).toBeNull()
+    expect(client.listMcpServers).not.toHaveBeenCalled()
+  })
   it("direct MCP creator selects each reference layout and restores trigger focus", async () => {
     const client = makeClient()
     function Harness() {
@@ -153,7 +171,7 @@ describe("McpPanel", () => {
       listMcpServers: vi.fn().mockResolvedValue([]),
       listMcpSecrets: vi.fn().mockResolvedValue([]),
     })
-    render(<McpContent client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
+    render(<McpContent preview client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
 
     const empty = await screen.findByTestId("mcp-empty")
     expect(empty.querySelector("svg")).toHaveClass("lucide-cable")
@@ -185,7 +203,7 @@ describe("McpPanel", () => {
       listMcpSecrets: vi.fn().mockResolvedValue([]),
       registerCustomMcp,
     })
-    render(<McpContent client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
+    render(<McpContent preview client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
     await screen.findByTestId("mcp-empty")
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })

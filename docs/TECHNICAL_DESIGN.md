@@ -1,5 +1,11 @@
 # Kokoro User Web 技术设计
 
+## W3-WEB-SKILL-CONSUMER 第二阶段 A：正式只读投影（2026-09-29）
+
+Web `53760a2c4c9b0420e2a8bb4db8be66d8160169af` 起始 clean；本切仅扩展现有 `src/hub/{client,schemas}.ts`、同源 Hub route、`src/features/app/kokoro-skills-surface.tsx` 与 `src/ui/{skills,mcp}`，把 Skill/MCP 只读展示分为各自独立视图文件。相较新建顶层模块或第二 contract，这保留一个 Web adapter 与 BFF 唯一 public pin。正式入口不用旧 pool/catalog、URL/secret 假投影和无效 MCP 控件；显式 preview fixture 的旧 UI 隔离保留，上传 preview/confirm 及六项写候选本切不改变。Browser→Web same-origin→BFF→Platform；无 Web SQL、Redis、owner receipt、第二协议或直连。请求状态只在组件中，cursor 作为 opaque 字符串原样传递；详情七字段与请求 Skill ID 一致才展示。旧只读 GET route 封闭，严格 200/error envelope、安全头与状态失败不降级为旧数据。下一切再替换上传状态机与 preview-only 旧代码，不能将只读验收当发布完成。
+
+验证为 Node22 contract、architecture、lint、typecheck、test、build 及隔离 Playwright；Root 固定来源真 Chromium/Storage/CORS 验收仍独立进行。下节为第一阶段历史文档门，不能再当正式只读现状。
+
 ## W3-WEB-SKILL-CONSUMER 第一阶段：固定 owner 契约，保留运行基线（2026-09-29）
 
 | §8 放置项 | 当前裁决 |

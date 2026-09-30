@@ -349,6 +349,7 @@ export function SettingsModal({
       {panelTab === "skills" ? (
         <SkillsContent
           client={hubClient}
+          preview={preview}
           brandName={resolvedBrandName}
           pinned={pinnedSkills}
           onTogglePin={togglePinned}
@@ -357,7 +358,7 @@ export function SettingsModal({
           embedded
         />
       ) : null}
-      {panelTab === "mcp" ? <McpContent client={hubClient} embedded {...(brandName === undefined ? {} : { brandName })} /> : null}
+      {panelTab === "mcp" ? <McpContent client={hubClient} preview={preview} embedded {...(brandName === undefined ? {} : { brandName })} /> : null}
       {panelTab === "team" ? (
         <TeamContent
           client={teamClient}

@@ -20,11 +20,12 @@ export { McpCreateDialog } from "./mcp-create-dialog"
 
 type McpPanelProps = {
   client: HubClient
+  preview?: boolean
   onClose: () => void
   brandName?: string
 }
 
-export function McpPanel({ client, onClose, brandName }: McpPanelProps) {
+export function McpPanel({ client, preview = false, onClose, brandName }: McpPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -43,7 +44,7 @@ export function McpPanel({ client, onClose, brandName }: McpPanelProps) {
             <p className={styles.subtitle}>{t("mcp.subtitle")}</p>
           </div>
         </header>
-        <McpContent client={client} {...(brandName === undefined ? {} : { brandName })} />
+        <McpContent client={client} preview={preview} {...(brandName === undefined ? {} : { brandName })} />
       </DialogContent>
     </Dialog>
   )

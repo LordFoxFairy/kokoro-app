@@ -14,14 +14,21 @@ import styles from "./mcp-panel.module.css"
 import { MCP_KEY, type McpData } from "./mcp-panel-model"
 import { ServersTab } from "./mcp-servers-tab"
 import { SecretsTab } from "./mcp-secrets-tab"
+import { McpProjectionRead } from "./mcp-projection-read"
 
 export type McpContentProps = {
   client: HubClient
+  preview?: boolean
   embedded?: boolean
   brandName?: string
 }
 
-export function McpContent({ client, embedded = false, brandName = "Workspace" }: McpContentProps) {
+export function McpContent(props: McpContentProps) {
+  if (props.preview !== true) return <McpProjectionRead client={props.client} />
+  return <PreviewMcpContent {...props} />
+}
+
+function PreviewMcpContent({ client, embedded = false, brandName = "Workspace" }: McpContentProps) {
   const t = useT()
   const [tab, setTab] = useState<"servers" | "secrets">("servers")
   const activeTabRef = useRef<HTMLButtonElement | null>(null)

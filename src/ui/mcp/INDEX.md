@@ -1,5 +1,8 @@
 # ui/mcp — 连接面板
 
+## W3 第二阶段 A 当前边界
+正式 Settings/MCP 与面板经 `mcp-projection-read.tsx` 只渲染 BFF 六个 owner-native 字段、opaque cursor；URL、secret、revision、allowed_tools 和启停/删除不进入正式视图。以下旧池、凭据、操作控件只服务显式 preview fixture，非 BFF 当前 public 投影。
+
 ## 职责
 hub self 面 MCP server 池（注册/启停/软删）+ 凭据 handle 管理（创建/列表/删除，值只进不出）。
 

@@ -42,6 +42,9 @@ vi.mock("@/ui/shell/page-clients", () => ({
   }),
   // account/appearance/chat tab 不调用下列客户端；仅需存在 export 供模块 import。
   browserHubClient: () => ({
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [{ source_ref: "skill:mine", name: "我的技能", description: "Personal", content_hash: "digest", scope: "personal", revision: "2", enabled: true, categories: [] }], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn().mockResolvedValue({ skill_id: "mine", source_ref: "skill:mine", revision: "2", status: "active", name: "我的技能", summary: "Personal", tags: [] }),
+    listMcpProjections: vi.fn().mockResolvedValue({ servers: [{ server_id: "server-1", provider_key: "provider", server_identity: "Owner MCP", transport: "streamable_http", declaration_digest: "a".repeat(64), status: "registered" }] }),
     listSkillPool: vi.fn().mockResolvedValue([
       { name: "YouTube 影片研究", description: "利用第一手影片证据强化深度研究。", content_hash: "preview:youtube", scope: "official", enabled: false, updated_at: Date.UTC(2026, 7, 28) },
       { name: "Typst PDF 制作工具", description: "使用 Typst 生成专业、高品质的 PDF 文件。", content_hash: "preview:typst", scope: "official", enabled: true, updated_at: Date.UTC(2026, 7, 28) },
@@ -119,6 +122,17 @@ afterEach(() => {
 })
 
 describe("SettingsModal 设置中心模态", () => {
+  it("正式 Skills/MCP 设置只呈现 owner 只读投影", async () => {
+    renderSettings()
+    fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
+    expect(await screen.findByText("我的技能")).toBeInTheDocument()
+    expect(screen.queryByRole("switch")).toBeNull()
+    fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
+    expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "删除" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "启用" })).toBeNull()
+  })
+
   it("非预览账户退出调用 Product signout，而不是旧 logout", async () => {
     renderSettings()
     fireEvent.click(screen.getByTestId("settings-logout"))
@@ -649,14 +663,14 @@ describe("SettingsModal 设置中心模态", () => {
   })
 
   it("内嵌业务面板把横向 gutter 交给 Settings ScrollArea", async () => {
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
     expect(await screen.findByTestId("settings-panel-skills")).toBeInTheDocument()
     expect(document.querySelector('[data-embedded="true"]')).not.toBeNull()
   })
 
   it("技能设置使用双列目录、范围筛选和可用状态开关", async () => {
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
 
     expect(await screen.findByText("YouTube 影片研究")).toBeInTheDocument()
@@ -668,7 +682,7 @@ describe("SettingsModal 设置中心模态", () => {
   })
 
   it("技能创建菜单与浏览目录保持独立交互", async () => {
-    renderSettings(() => {}, undefined, false, undefined, "skills", vi.fn())
+    renderSettings(() => {}, undefined, true, undefined, "skills", vi.fn())
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
     await screen.findByText("YouTube 影片研究")
 
@@ -688,7 +702,7 @@ describe("SettingsModal 设置中心模态", () => {
 
   it("使用 AI 创建技能交给共享 Composer，而不是误打开上传页", async () => {
     const onCreateSkillWithAi = vi.fn()
-    renderSettings(() => {}, undefined, false, undefined, "skills", onCreateSkillWithAi)
+    renderSettings(() => {}, undefined, true, undefined, "skills", onCreateSkillWithAi)
     await screen.findByText("YouTube 影片研究")
 
     fireEvent.keyDown(screen.getByRole("button", { name: "创建" }), { key: "Enter" })
@@ -699,7 +713,7 @@ describe("SettingsModal 设置中心模态", () => {
   })
 
   it("连接器目录支持搜索、分类、添加状态并在关闭后返回浏览入口", async () => {
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
 
     const browse = await screen.findByRole("button", { name: "浏览连接器" })
@@ -767,7 +781,7 @@ describe("SettingsModal 设置中心模态", () => {
 
   it("自订 API 保存失败时保留表单和弹窗并显示错误", async () => {
     registerCustomApi.mockRejectedValueOnce(new Error("fixture rejection"))
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
     fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }))
     const catalog = await screen.findByRole("dialog", { name: "连接器" })
@@ -791,7 +805,7 @@ describe("SettingsModal 设置中心模态", () => {
   })
 
   it("自订 MCP 使用参考字段、动态 header 和单一发布菜单", async () => {
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
 
     fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }))
@@ -824,7 +838,7 @@ describe("SettingsModal 设置中心模态", () => {
   })
 
   it("JSON 导入与 URL 添加使用独立流程，而不是复用 Custom MCP 表单", async () => {
-    renderSettings()
+    renderSettings(() => {}, undefined, true)
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
     fireEvent.click(await screen.findByRole("button", { name: "浏览连接器" }))
     let catalog = await screen.findByRole("dialog", { name: "连接器" })
@@ -977,6 +991,7 @@ describe("SettingsModal 设置中心模态", () => {
         <LocaleProvider>
           <SettingsModal
             initialTab="account"
+            preview
             onClose={() => {}}
             onTabChange={onTabChange}
           />
