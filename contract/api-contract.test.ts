@@ -106,13 +106,19 @@ describe("checked-in HTTP request and response contracts", () => {
       model: "model_1",
       agent: "general",
       thinking: true,
-      pinned_skills: ["skill_1"],
+      selected_skill_source_refs: ["skill:skill_1"],
       mcp_servers: ["server_1"],
       project_ref: "project_1",
     })).toMatchObject({ idempotency_key: "request_1", content: "hello" })
 
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", tenant_id: "tenant_1" }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", thinking: "medium" }).success).toBe(false)
+    expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", pinned_skills: ["skill_1"] }).success).toBe(false)
+    for (const invalid of ["skill:skill_1\n", "skill:skill_1\r", "skill:skill_1\u2028", " skill:skill_1", "skill:"]) {
+      expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: [invalid] }).success).toBe(false)
+    }
+    expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: ["skill:a", "skill:a"] }).success).toBe(false)
+    expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: Array.from({ length: 17 }, (_, index) => `skill:s${index}`) }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "", content: "hello" }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "" }).success).toBe(false)
   })
@@ -201,10 +207,11 @@ describe("cursor pagination and same-origin client paths", () => {
     const client = createSessionClient({ baseUrl: "/api/session" })
     await client.listSessions(undefined, { kind: "direct" })
     await client.listSessions(undefined, { kind: "project", projectRef: "project/1" })
-    await client.createMessage("direct_session", { idempotency_key: "direct_1", content: "hello" })
+    await client.createMessage("direct_session", { idempotency_key: "direct_1", content: "hello", selected_skill_source_refs: [] })
     await client.createMessage("project_session", {
       idempotency_key: "project_1",
       content: "project task",
+      selected_skill_source_refs: [],
       project_ref: "project/1",
     })
     await client.sendControl("direct_session", "run_1", { kind: "run.cancel", session_id: "direct_session" }, "cancel_1")
@@ -220,8 +227,8 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/session/sessions/project_session/messages")
     expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/session/sessions/direct_session/runs/run_1/control")
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/session/sessions/project_session/runs/run_2/control")
-    expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({ content: "hello" })
-    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({ content: "project task", project_ref: "project/1" })
+    expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({ content: "hello", selected_skill_source_refs: [] })
+    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({ content: "project task", selected_skill_source_refs: [], project_ref: "project/1" })
     expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("direct_1")
     expect(new Headers((fetchMock.mock.calls[3]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("project_1")
     expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel", session_id: "direct_session" })
@@ -240,7 +247,7 @@ describe("cursor pagination and same-origin client paths", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
     const client = createSessionClient({ baseUrl: "/api/session" })
-    const intent = { idempotency_key: "stable-intent", content: "retry me", model: "model_1" }
+    const intent = { idempotency_key: "stable-intent", content: "retry me", model: "model_1", selected_skill_source_refs: [] }
     await expect(client.createMessage("session_1", intent)).rejects.toMatchObject({ reason: "network" })
     await expect(client.createMessage("session_1", intent)).resolves.toEqual(receipt)
     const sent = fetchMock.mock.calls.map(([, init]) => ({
@@ -248,8 +255,8 @@ describe("cursor pagination and same-origin client paths", () => {
       body: JSON.parse((init as RequestInit).body as string),
     }))
     expect(sent).toEqual([
-      { key: "stable-intent", body: { content: "retry me", model: "model_1" } },
-      { key: "stable-intent", body: { content: "retry me", model: "model_1" } },
+      { key: "stable-intent", body: { content: "retry me", model: "model_1", selected_skill_source_refs: [] } },
+      { key: "stable-intent", body: { content: "retry me", model: "model_1", selected_skill_source_refs: [] } },
     ])
   })
 

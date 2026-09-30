@@ -14,7 +14,6 @@ import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
 import { useConversationList } from "@/ui/shell/use-conversation-list"
 import { useDraft } from "@/ui/shell/use-draft"
-import { removePinned, usePinnedSkills } from "@/ui/shell/use-pinned-skills"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import type { WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
 import type { AppCommandMenuProps } from "./app-command-menu"
@@ -119,7 +118,6 @@ export function AppFrame({
     accountTriggerRef,
   })
 
-  const pinnedSkills = usePinnedSkills(engine)
   const selectors = useComposerSelectors(engine, { preview })
 
   const focusComposer = useCallback(() => {
@@ -171,7 +169,6 @@ export function AppFrame({
     focusComposer,
     closeSettings: overlays.closeSettings,
     brandName,
-    pinnedSkills,
     commandNewChatTimerRef: overlays.commandNewChatTimerRef,
   })
   const { openCommand } = overlays
@@ -303,8 +300,6 @@ export function AppFrame({
     mode,
     onModeChange: (next) => engine?.setMode(next),
     modeLocked,
-    pinnedSkills,
-    onUnpinSkill: removePinned,
     models: selectors.models,
     hideModelSelector: !hasMessages && (!projectedCreationIntent || projectedCreationIntent === "website" || projectedCreationIntent === "app"),
     selectedModel: selectors.selectedModel,
@@ -439,7 +434,6 @@ export function AppFrame({
     <AppFrameOverlaySurfaces
       mounted={mounted}
       settingsTab={navigationState.settingsTab}
-      engine={engine}
       brandName={brandName}
       preview={preview}
       onCloseSettings={overlays.closeSettings}

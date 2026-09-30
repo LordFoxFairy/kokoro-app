@@ -80,7 +80,7 @@ describe("提交链路", () => {
     expect(client.createCalls).toHaveLength(1)
     expect(client.createCalls[0]).toEqual({
       sessionId: "conv_1",
-      body: { idempotency_key: "idem_3", content: "hello agent", thinking: false },
+      body: { idempotency_key: "idem_3", content: "hello agent", thinking: false, selected_skill_source_refs: [] },
     })
     expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_1" })
     expect(client.lastStream()).toMatchObject({ sessionId: "conv_1", resumeCursor: null })
@@ -973,7 +973,7 @@ describe("失败重试", () => {
     engine.setMode("thinking")
     engine.setModel("model_original")
     engine.setAgent("agent_original")
-    engine.setPinnedSkills(["skill_original"])
+    engine.setSelectedSkillSourceRefs(["skill:original.v1"])
     client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
     engine.submit("hello")
     await settle()
@@ -982,7 +982,7 @@ describe("失败重试", () => {
     engine.setMode("fast")
     engine.setModel("model_new")
     engine.setAgent("agent_new")
-    engine.setPinnedSkills(["skill_new"])
+    engine.setSelectedSkillSourceRefs(["skill:new.v1"])
     client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
     engine.retry()
     await settle()
@@ -991,7 +991,7 @@ describe("失败重试", () => {
     expect(client.createCalls[1]).toEqual(client.createCalls[0])
     expect(client.createCalls[0]?.body).toMatchObject({
       idempotency_key: expect.any(String), content: "hello", thinking: true,
-      model: "model_original", agent: "agent_original", pinned_skills: ["skill_original"],
+      model: "model_original", agent: "agent_original", selected_skill_source_refs: ["skill:original.v1"],
     })
   })
 

@@ -145,6 +145,19 @@ describe("Web governance boundary", () => {
     expect(teamClient).not.toContain("switchTeam")
   })
 
+  it("keeps legacy name-based Skill pins out of the formal runtime", async () => {
+    expect(await exists("src/ui/shell/use-pinned-skills.ts")).toBe(false)
+    const sourceRoot = path.join(root, "src")
+    const entries = await readdir(sourceRoot, { recursive: true })
+    const violations: string[] = []
+    for (const entry of entries) {
+      if (!/\.tsx?$/u.test(entry) || entry.startsWith(`generated${path.sep}`)) continue
+      const source = await readFile(path.join(sourceRoot, entry), "utf8")
+      if (/kokoro\.web\.pinned_skills|\bpinned_skills\b|setPinnedSkills/u.test(source)) violations.push(entry)
+    }
+    expect(violations).toEqual([])
+  })
+
   it.each(["ci.yml", "cloudflare.yml", "release-image.yml"])("runs %s tests with isolated Redis service", async (name) => {
     const workflow = await readFile(path.join(root, ".github", "workflows", name), "utf8")
     const verify = workflow.split(/\n  verify:\n/u)[1]?.split(/\n  (?:deploy|publish):\n/u)[0]

@@ -68,6 +68,33 @@ function buildEngine(initial: ConversationStore | null = null) {
   })
 }
 
+it("旧名称 pin 与 preview 挂载不会污染正式 typed Skill wire", async () => {
+  window.localStorage.setItem("kokoro.web.pinned_skills", JSON.stringify(["legacy-name"]))
+  buildEngine()
+  const view = render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" preview />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+
+  view.rerender(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame engine={engine} chatHref="/app" preview={false} />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+  act(() => engine.submit("formal request"))
+  await settle()
+
+  expect(client.createCalls).toHaveLength(1)
+  expect(client.createCalls[0]?.body).toMatchObject({ selected_skill_source_refs: [] })
+  expect(client.createCalls[0]?.body).not.toHaveProperty("pinned_skills")
+  expect(window.localStorage.getItem("kokoro.web.pinned_skills")).toBe(JSON.stringify(["legacy-name"]))
+})
+
 it("工作台可见按钮都具备可读名称，分隔条具备键盘语义", () => {
   buildEngine()
   render(

@@ -1,6 +1,6 @@
 # Kokoro User Web 技术设计
 
-## W3-WEB-CHAT-SKILL-SELECTION 文档门（2026-09-29；代码未实施）
+## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；代码已实施，待 Root 验收）
 
 | §8 放置项 | 当前裁决 |
 | --- | --- |

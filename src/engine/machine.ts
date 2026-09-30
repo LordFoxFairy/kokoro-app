@@ -112,8 +112,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // resurrected by the delayed response.
   const cancelledSubmissions = new Map<string, string>()
   let notice: NoticeSpec | null = null
-  // 固定技能（UI 偏好，shell 持久化后经 setPinnedSkills 注入）：非空即随 messageCreate 上 wire。
-  let pinnedSkills: string[] = []
+  // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
+  let selectedSkillSourceRefs: string[] = []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
   let selectedModel: string | null = null
   // 选中 agent（AGENT-PRESET，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 agent
@@ -396,7 +396,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       mode,
       model: selectedModel,
       agent: selectedAgent,
-      pinnedSkills: [...pinnedSkills],
+      selectedSkillSourceRefs: [...selectedSkillSourceRefs],
     }
   }
 
@@ -404,7 +404,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function beginRun(args: CreateMessageArgs): void {
     const submission = {
       ...args,
-      options: { ...args.options, pinnedSkills: [...args.options.pinnedSkills] },
+      options: { ...args.options, selectedSkillSourceRefs: [...args.options.selectedSkillSourceRefs] },
     }
     pendingSubmission = submission
     const { sessionId, idempotencyKey } = submission
@@ -738,11 +738,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     notify()
   }
 
-  function setPinnedSkills(names: readonly string[]): void {
+  function setSelectedSkillSourceRefs(sourceRefs: readonly string[]): void {
     if (disposed) {
       return
     }
-    pinnedSkills = [...names]
+    selectedSkillSourceRefs = [...sourceRefs]
   }
 
   function setModel(model: string | null): void {
@@ -834,7 +834,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     newConversation,
     deleteConversation,
     setMode,
-    setPinnedSkills,
+    setSelectedSkillSourceRefs,
     setModel,
     setAgent,
     dispose,

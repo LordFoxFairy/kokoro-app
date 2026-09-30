@@ -31,8 +31,6 @@ function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {})
     mode: "fast" as const,
     onModeChange: vi.fn(),
     modeLocked: false,
-    pinnedSkills: [],
-    onUnpinSkill: vi.fn(),
     models: MODELS,
     selectedModel: null,
     onModelChange: vi.fn(),
@@ -691,20 +689,4 @@ describe("Composer 状态契约", () => {
     expect(screen.getByRole("button", { name: /locked this turn/i })).toBeDisabled()
   })
 
-  it("固定技能 chip 的移除按钮只移除对应技能", () => {
-    const props = renderComposer({ pinnedSkills: ["research", "writer"] })
-    fireEvent.click(screen.getByRole("button", { name: "Unpin research" }))
-    expect(props.onUnpinSkill).toHaveBeenCalledTimes(1)
-    expect(props.onUnpinSkill).toHaveBeenCalledWith("research")
-  })
-
-  it("长技能名保留完整 hover 文案并允许 chip 截断", () => {
-    const longName = "a-very-long-skill-name-that-must-not-push-the-composer-controls-out-of-view"
-    renderComposer({ pinnedSkills: [longName] })
-
-    const name = screen.getByText(longName)
-    expect(name).toHaveAttribute("title", longName)
-    expect(name.className).toContain("pinnedName")
-    expect(name.parentElement?.className).toContain("pinnedChip")
-  })
 })

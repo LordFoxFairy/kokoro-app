@@ -33,6 +33,7 @@ describe("preview transport control loop", () => {
 
     await client.createMessage("preview-write-session", {
       idempotency_key: "preview-write-1",
+      selected_skill_source_refs: [],
       content: "一次提交",
     })
 
@@ -45,6 +46,7 @@ describe("preview transport control loop", () => {
     const eventIds: string[] = []
     const receipt = await client.createMessage("preview-session", {
       idempotency_key: "preview-message-1",
+      selected_skill_source_refs: [],
       content: "!hitl",
     })
     client.openEvents({
@@ -78,6 +80,7 @@ describe("preview transport control loop", () => {
     let awaiting = false
     const receipt = await client.createMessage("preview-reject-session", {
       idempotency_key: "preview-reject-message-1",
+      selected_skill_source_refs: [],
       content: "!hitl",
     })
     client.openEvents({
@@ -111,6 +114,7 @@ describe("preview transport control loop", () => {
     const failures: Array<{ code: string; message: string }> = []
     const receipt = await client.createMessage("preview-invalid-failure-session", {
       idempotency_key: "preview-invalid-failure-message-1",
+      selected_skill_source_refs: [],
       content: "!fail:network",
     })
     client.openEvents({
@@ -139,6 +143,7 @@ describe("preview transport control loop", () => {
 
     await firstClient.createMessage(sessionId, {
       idempotency_key: `${sessionId}:message-1`,
+      selected_skill_source_refs: [],
       content: "项目页刷新后仍然显示这条消息",
       project_ref: "kokoro",
     })
@@ -176,6 +181,7 @@ describe("preview transport control loop", () => {
 
     const firstA = await client.createMessage(sessionA, {
       idempotency_key: `${sessionA}:message-1`,
+      selected_skill_source_refs: [],
       content: "会话 A",
     })
     const firstAEvents: string[] = []
@@ -191,6 +197,7 @@ describe("preview transport control loop", () => {
 
     const firstB = await client.createMessage(sessionB, {
       idempotency_key: `${sessionB}:message-1`,
+      selected_skill_source_refs: [],
       content: "会话 B",
     })
     const firstBEvents: string[] = []

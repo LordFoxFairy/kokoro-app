@@ -11,7 +11,6 @@ import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
-import { togglePinned } from "@/ui/shell/use-pinned-skills"
 import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
@@ -34,7 +33,6 @@ export type AppFrameActionsOptions = {
   focusComposer: () => void
   closeSettings: () => void
   brandName: string | undefined
-  pinnedSkills: readonly string[]
   commandNewChatTimerRef: MutableRefObject<number | null>
 }
 
@@ -55,7 +53,6 @@ export function useAppFrameActions({
   focusComposer,
   closeSettings,
   brandName,
-  pinnedSkills,
   commandNewChatTimerRef,
 }: AppFrameActionsOptions) {
   const t = useT()
@@ -227,12 +224,10 @@ export function useAppFrameActions({
   }, [closeSettings, engine, focusComposer, startNewChatWithUrl, t, updateDraft])
 
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
-    // Manus' skill detail CTA is a chat handoff, not a second detail dialog:
-    // keep the skill pinned, start a fresh direct session, and seed one
-    // inspectable example prompt so the user can edit it before submitting.
+    // Preview's name-based Try action may seed editable text, but it must not
+    // mutate the formal engine's typed Skill source selection.
     closeSettings()
     startNewChatWithUrl()
-    if (!pinnedSkills.includes(skill.name)) togglePinned(skill.name)
     const nextPrompt = prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name })
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
     if (nextSessionId) stashConversationDraft(nextSessionId, nextPrompt)
@@ -240,7 +235,7 @@ export function useAppFrameActions({
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => focusComposer())
     })
-  }, [brandName, closeSettings, engine, focusComposer, pinnedSkills, startNewChatWithUrl, t, updateDraft])
+  }, [brandName, closeSettings, engine, focusComposer, startNewChatWithUrl, t, updateDraft])
 
   const dismissCreationIntent = useCallback(() => {
     setDeploymentIntent(null)

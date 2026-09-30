@@ -1,9 +1,9 @@
 # Kokoro User Web API 与协议契约
 
-## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；目标消费合同）
+## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；当前消费合同，待 Root 验收）
 
 BFF public 唯一 owner 为 `571b51de2057905c74c78ac966c8cf5ac11eca93`，其 OpenAPI 原字节 SHA-256 是
-`f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90`；Web 下一代码片更新只读 snapshot，
+`f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90`；Web 已更新只读 snapshot 与生成校验 digest，
 不建立第二可编辑契约。`MessageCreateRequest` clean-slate 删除旧 `pinned_skills`，改为
 `selected_skill_source_refs`。Web 每次创建消息都显式发送该数组，包括无选择时的 `[]`；不得发送 alias、显示名称、
 `null` 或省略来维持旧语义。
@@ -16,7 +16,7 @@ BFF public 唯一 owner 为 `571b51de2057905c74c78ac966c8cf5ac11eca93`，其 Ope
 `pinned_skills`、重复、17 项、数组 JSON 超 4 KiB、前后空白/空 suffix 与多余字段。
 
 个人 Skill GET 的 `source_ref/revision` 仅给选择标签与 exact identity；它不是 installed/enabled/executable proof。
-当前正式页面没有选择入口，Agent 非空 reader 也未接，因此本文只冻结下一消费者行为，不宣称非空请求可执行。preview 名称动作
+当前正式页面没有选择入口，Agent 非空 reader 也未接，因此当前只提供 typed consumer/default `[]`，不宣称非空请求可执行。preview 名称动作
 不进入此 wire；旧 `kokoro.web.pinned_skills` 不读取、不迁移、不作 fallback。
 
 ## W3 第二阶段 B：正式 Skill 写候选消费（2026-09-29；待 Root 真链验收）

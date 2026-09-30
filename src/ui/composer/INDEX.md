@@ -10,7 +10,7 @@
 - `environmentSelectorPlacement`：项目线程桌面态可将环境入口锚定到编辑器上方；默认仍位于工具行。
 
 ## 协作者
-上游：`@/ui/shell`（draft、submit/keydown、selectors、pinnedSkills）。
+上游：`@/ui/shell`（draft、submit/keydown、selectors）；typed Skill source 选择尚无正式 UI 入口。
 
 ## 陷阱
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。

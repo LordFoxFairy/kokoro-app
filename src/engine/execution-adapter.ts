@@ -20,7 +20,7 @@ export type MessageExecutionOptions = {
   mode: AgentMode
   model: string | null
   agent: string | null
-  pinnedSkills: readonly string[]
+  selectedSkillSourceRefs: readonly string[]
 }
 
 export type CreateMessageArgs = {
@@ -76,7 +76,7 @@ export function buildMessageCreateParams(args: {
     thinking: options.mode === "thinking",
     ...(options.model !== null ? { model: options.model } : {}),
     ...(options.agent !== null ? { agent: options.agent } : {}),
-    ...(options.pinnedSkills.length > 0 ? { pinned_skills: [...options.pinnedSkills] } : {}),
+    selected_skill_source_refs: [...options.selectedSkillSourceRefs],
     ...(args.scope.kind === "project" ? { project_ref: args.scope.projectRef } : {}),
   }
 }

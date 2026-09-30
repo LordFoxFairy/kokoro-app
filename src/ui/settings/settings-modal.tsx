@@ -22,13 +22,10 @@ import { Cable, Check, ChevronRight, ChevronsUpDown, CircleHelp, CreditCard, Glo
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   browserBillingClient,
-  browserEngine,
   browserHubClient,
   browserPricingClient,
   browserTeamClient,
 } from "@/ui/shell/page-clients"
-import { togglePinned, usePinnedSkills } from "@/ui/shell/use-pinned-skills"
-import type { SessionEngine } from "@/engine/machine"
 import { SkillsContent } from "@/ui/skills/skills-panel"
 import type { SkillCard } from "@/hub/schemas"
 import { McpContent } from "@/ui/mcp/mcp-panel"
@@ -127,8 +124,6 @@ export function normalizeSettingsTab(value: string | null | undefined): Settings
 }
 
 type SettingsModalProps = {
-  /** Reuse the shell's scope-owned engine; project settings must not create a direct-chat engine. */
-  engine?: SessionEngine | null
   // 服务端按 host 解析的站点品牌名(SITE-REAL);缺省回退 Kokoro。
   brandName?: string
   preview?: boolean
@@ -147,7 +142,6 @@ type SettingsModalProps = {
 }
 
 export function SettingsModal({
-  engine,
   brandName,
   preview = false,
   initialTab,
@@ -180,11 +174,12 @@ export function SettingsModal({
   // instead of a process singleton.
   const hubClient = useMemo(() => browserHubClient({ preview }), [preview])
   const teamClient = useMemo(() => browserTeamClient({ preview }), [preview])
-  const pinnedSkillsEngine = useMemo(
-    () => engine === undefined ? browserEngine({ preview }) : engine,
-    [engine, preview],
-  )
-  const pinnedSkills = usePinnedSkills(pinnedSkillsEngine)
+  // Preview-only name toggles stay local to this mounted fixture. Formal
+  // Chat selection is exact source_ref state owned by the engine, not a name store.
+  const [previewPinnedSkills, setPreviewPinnedSkills] = useState<readonly string[]>([])
+  const togglePreviewPinnedSkill = (name: string): void => {
+    setPreviewPinnedSkills((current) => current.includes(name) ? current.filter((item) => item !== name) : [...current, name])
+  }
 
   useEffect(() => {
     const wasOpen = domainUpgradeWasOpenRef.current
@@ -351,8 +346,8 @@ export function SettingsModal({
           client={hubClient}
           preview={preview}
           brandName={resolvedBrandName}
-          pinned={pinnedSkills}
-          onTogglePin={togglePinned}
+          pinned={preview ? previewPinnedSkills : []}
+          onTogglePin={preview ? togglePreviewPinnedSkill : () => {}}
           {...(onTrySkill === undefined ? {} : { onTrySkill })}
           {...(onCreateSkillWithAi === undefined ? {} : { onCreateWithAi: onCreateSkillWithAi })}
           embedded

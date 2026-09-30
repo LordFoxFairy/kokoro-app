@@ -22,7 +22,7 @@ describe("session execution adapter", () => {
         mode: "thinking",
         model: "openai:gpt-5",
         agent: "planner",
-        pinnedSkills: ["research"],
+        selectedSkillSourceRefs: ["skill:research.v1"],
       },
     })
 
@@ -35,11 +35,25 @@ describe("session execution adapter", () => {
           thinking: true,
           model: "openai:gpt-5",
           agent: "planner",
-          pinned_skills: ["research"],
+          selected_skill_source_refs: ["skill:research.v1"],
           project_ref: "project_1",
         },
       },
     ])
+  })
+
+  it("always sends an explicit empty typed Skill selection", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+
+    await adapter.createMessage({
+      sessionId: "session_1",
+      content: "hello",
+      idempotencyKey: "idem_empty",
+      options: { mode: "fast", model: null, agent: null, selectedSkillSourceRefs: [] },
+    })
+
+    expect(client.createCalls[0]?.body.selected_skill_source_refs).toEqual([])
   })
 
   it("关闭旧流后丢弃其迟到事件，只交付新流批次", async () => {

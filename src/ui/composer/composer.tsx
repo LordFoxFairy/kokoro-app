@@ -8,7 +8,6 @@ import { useT } from "@/i18n/context"
 import { CreationIntentPill, type CreationIntent } from "./creation-intent-pill"
 import { ComposerEnvironment } from "./composer-environment"
 import { modelLabel, modelNewBadgeLabel, modelSelector, modelTriggerLabel } from "./composer-model"
-import { ComposerPinnedSkills } from "./composer-pinned-skills"
 import { ComposerSelectors } from "./composer-selectors"
 import { ComposerSubmitAction } from "./composer-submit-action"
 import { ComposerVoiceActions } from "./composer-voice-actions"
@@ -36,8 +35,6 @@ export type ComposerProps = {
   mode: AgentMode
   onModeChange: (mode: AgentMode) => void
   modeLocked: boolean
-  pinnedSkills: readonly string[]
-  onUnpinSkill: (name: string) => void
   models: readonly ModelCandidate[]
   hideModelSelector?: boolean
   preferredModelSelector?: string
@@ -68,7 +65,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, pinnedSkills, onUnpinSkill, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, agents, selectedAgent, onAgentChange, agentLocked, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, agents, selectedAgent, onAgentChange, agentLocked, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const modeLabel = modeLabelText(t, mode)
   const creationIntentLabel = creationLabel(t, creationIntent)
@@ -108,7 +105,6 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
 
   return (
     <div className={styles.wrap} data-slot="composer-wrap" data-desktop-web="true" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} data-creation-intent={creationIntent}>
-      <ComposerPinnedSkills skills={pinnedSkills} onUnpinSkill={onUnpinSkill} />
       <form className={styles.composer} aria-label={t("composer.editArea")} aria-busy={isStreaming} data-state={isStreaming ? "running" : "idle"} data-voice-state={voiceInput.state === "listening" || voiceInput.state === "transcribing" ? voiceInput.state : undefined} onSubmit={onSubmit}>
         {projectWorkspace && environmentSelectorPlacement === "floating" ? <ComposerEnvironment label={environmentLabel} floating /> : null}
         <Textarea ref={composerRef} className={styles.input} data-slot="composer-input" data-settings-return-target="composer" aria-label={t("composer.inputAria")} placeholder={placeholder ?? t("composer.placeholder")} rows={1} maxLength={MAX_INPUT_LENGTH} value={draft} onChange={(event: ChangeEvent<HTMLTextAreaElement>) => { onDraftChange(event.target.value); resizeComposer(event.currentTarget) }} onKeyDown={onKeyDown} />

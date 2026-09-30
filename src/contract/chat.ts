@@ -106,6 +106,22 @@ export function parseSessionSnapshot(input: unknown): SessionSnapshot {
   return sessionSnapshotSchema.parse(input)
 }
 
+const skillSourceRefSchema = z.string().regex(
+  /^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u,
+)
+
+const selectedSkillSourceRefsSchema = z
+  .array(skillSourceRefSchema)
+  .max(16)
+  .superRefine((refs, context) => {
+    if (new Set(refs).size !== refs.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Skill source refs must be unique" })
+    }
+    if (new TextEncoder().encode(JSON.stringify(refs)).byteLength > 4096) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Skill source refs exceed 4096 JSON bytes" })
+    }
+  })
+
 export const messageCreateParamsSchema = z
   .object({
     idempotency_key: z.string().min(1),
@@ -113,7 +129,7 @@ export const messageCreateParamsSchema = z
     model: z.string().min(1).optional(),
     agent: z.string().min(1).optional(),
     thinking: z.boolean().optional(),
-    pinned_skills: z.array(z.string().min(1)).optional(),
+    selected_skill_source_refs: selectedSkillSourceRefsSchema.default([]),
     mcp_servers: z.array(z.string().min(1)).optional(),
     // Opaque project ownership for a project's first task. Tenant/site
     // identity is resolved by the BFF and is deliberately not browser data.

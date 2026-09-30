@@ -57,8 +57,8 @@ export type SessionEngine = {
   newConversation: () => void
   deleteConversation: (id: string) => void
   setMode: (mode: AgentMode) => void
-  // 输入框固定技能（UI 偏好）：随每次开跑/插话上 wire 为 messageCreate.pinned_skills。
-  setPinnedSkills: (names: readonly string[]) => void
+  // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
+  setSelectedSkillSourceRefs: (sourceRefs: readonly string[]) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
   // 选中 agent（AGENT-PRESET）：首条消息上 wire 为 messageCreate.agent。

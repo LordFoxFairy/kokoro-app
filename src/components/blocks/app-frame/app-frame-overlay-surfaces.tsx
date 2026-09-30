@@ -3,7 +3,6 @@ import type { ComponentType, RefObject } from "react"
 import { CustomApiDialog } from "@/ui/mcp/connector-catalog-dialog"
 import { McpCreateDialog, type McpCreateMode } from "@/ui/mcp/mcp-panel"
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal"
-import type { SessionEngine } from "@/engine/machine"
 import type { SkillCard } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 
@@ -12,7 +11,6 @@ import type { AppCommandMenuProps } from "./app-command-menu"
 export type AppFrameOverlaySurfacesProps = {
   mounted: boolean
   settingsTab: SettingsTab | null
-  engine: SessionEngine | null
   brandName: string | undefined
   preview: boolean
   onCloseSettings: () => void
@@ -38,7 +36,6 @@ export type AppFrameOverlaySurfacesProps = {
 export function AppFrameOverlaySurfaces({
   mounted,
   settingsTab,
-  engine,
   brandName,
   preview,
   onCloseSettings,
@@ -65,7 +62,6 @@ export function AppFrameOverlaySurfaces({
       {mounted && settingsTab !== null ? (
         <SettingsModal
           key={settingsTab}
-          engine={engine}
           {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
           preview={preview}

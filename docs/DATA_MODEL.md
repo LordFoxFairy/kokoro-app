@@ -2,8 +2,8 @@
 
 ## W3 Chat Skill 选择：当前/目标（2026-09-29）
 
-当前全局 `localStorage` key `kokoro.web.pinned_skills` 保存名称并由 `usePinnedSkills` 注入正式 engine；这是待删除的错误身份通道，
-不是 Skill、安装或用户授权事实。目标只在当前 Web 会话内存持有有序、唯一的 exact `source_ref`（最多 16 项、单项最长
+旧全局 `localStorage` key `kokoro.web.pinned_skills` 曾保存名称并由 `usePinnedSkills` 注入正式 engine；该 hook/store 与正式 name wire 已删除，
+遗留 key 不读取、不迁移，也不是 Skill、安装或用户授权事实。当前只在 Web 会话内存持有有序、唯一的 exact `source_ref`（最多 16 项、单项最长
 197 个字符、数组 compact UTF-8 JSON 最多 4096 字节），显示名与 revision 只是当次个人列表投影。提交开始后把选择复制进 pending submission；未知响应重试复用冻结副本，
 不得从当前 UI 或旧 browser key 重采样。刷新可丢失未提交选择，不建立 localStorage、Redis、SQL、receipt 或跨设备恢复。
 
