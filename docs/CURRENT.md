@@ -1,5 +1,19 @@
 # Kokoro User Web 当前状态
 
+## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；文档门，代码未实施）
+
+基线 Web clean `12f9dff909b8e2e8694a96f510676f90d375ecdc`；BFF 已验 `571b51de2057905c74c78ac966c8cf5ac11eca93`，
+public OpenAPI SHA-256 `f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90`。当前正式个人 Skill 读已保留
+`source_ref/revision`，但没有 Chat 选择入口；全局 `usePinnedSkills` 仍读取 `kokoro.web.pinned_skills` 的名称并注入 engine，
+`execution-adapter` 仍发送旧 `pinned_skills`，会被新版 BFF 以 400 拒绝。
+
+目标是 clean-slate 改为 exact `selected_skill_source_refs`：无选择也显式 `[]`，最多 16 个、有序唯一、单项最长 197 个字符且数组 compact UTF-8 JSON ≤4096 B，
+不 trim/拼前缀/规范化；pending submission 冻结选择，未知响应的同键重试复用原数组。代码片将删除旧 store 读取、name 注入和旧 wire，
+不读取或迁移遗留 key；preview 名称动作保持隔离。本次只更新既有五文档，没有修改 runtime、generated snapshot、测试、UI、依赖或服务。
+
+Agent `dd34a48` 已要求 typed refs，但非空 reader 尚未接通；本片不伪造正式可执行 Skill 入口。完整 PersonalSkillsRead
+选择 UI、安装/启用裁决和非空执行链仍是后续必须交付项。Web 不新增 SQL/Redis/安装事实，3310 未操作。
+
 ## W3-WEB-SKILL-CONSUMER 第二阶段 B（2026-09-29；Web 代码切片，待 Root 验收）
 
 从 clean Web `98aad4cddb231ef7d1363f00630b9b41f51a743f` 实施正式单 ZIP 发布入口；BFF public owner `62daba37fc0267830d73590bb5a3499807d46fc6` 与原字节 pin 不变。正式 `/app/skills` 和 Settings Skills 共用 `PersonalSkillsRead` 的新发布 Dialog：浏览器校验单 `.zip`、大小和 SHA-256，经同源 `/api/hub` 依次调用 CreateDraft、Get package-upload、Begin、Complete、Validate、零字节 Publish；ZIP 原 File 只按受控短期签名引用直接 PUT ObjectStore，`credentials:omit`、`redirect:error`、唯一 `content-type:application/zip`。本地仅 loopback HTTP 页面→loopback HTTP ObjectStore 允许；正式 HTTPS 页面拒绝 HTTP mixed-content。BFF 仍负责精确批准 ObjectStore origin，Web 不传 Cookie/Bearer 或自建 allowlist。每条 mutation 在一次意图中固定 key/body，网络丢失最多同键重放一次；只有 strict ACTIVE Publish 回执或本人 ACTIVE by-ID 核回才标记发布，CLEAN/validated/Get/旧 pool 不构成成功。旧 preview/confirm、`.skill`、namespace/多候选与 GitHub 导入仍限显式 preview fixture，正式页没有 fallback。

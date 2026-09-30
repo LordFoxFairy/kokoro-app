@@ -24,6 +24,12 @@
 | SCOPE-01 | UI/CSS/React runtime 未修改 | `git diff --name-only <base>...HEAD` | 无对应路径变更 |
 | VER-01 | 本仓全套低风险门禁执行 | lint/typecheck/test/build | 每项有当前 commit 的 exit code |
 | VER-02 | Root 静态审计提取 `kokoro` 切片 | Root audit JSON | 文档缺失项清零；其余缺口如实报告 |
+| SKSEL-DOC-01 | 五份当前文档对齐 BFF `571b51de` 与 OpenAPI SHA `f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90` | `git diff --check` + 人工核对 | 当前/目标、owner、删除项、下一文件集和未决 reader 一致；不声称代码已实施 |
+| SKSEL-CTR-01 | Chat wire clean-slate 使用 `selected_skill_source_refs` | 下一代码片 contract/unit | 始终数组；默认 `[]`；旧 `pinned_skills`、alias 与多余字段失败 |
+| SKSEL-VAL-01 | exact refs 边界 | 下一代码片 contract/unit | no-trim、完整锚定 pattern、有序唯一、最多 16、单项 ≤197 字符、数组 compact UTF-8 JSON ≤4096 B；边界正负例通过 |
+| SKSEL-RET-01 | pending submission 冻结选择 | 下一代码片 engine test | 同键未知响应重试保持原 content/ref 顺序；之后 UI 改选不改变在途请求 |
+| SKSEL-ISO-01 | 旧 browser/preview 不污染正式请求 | 下一代码片 architecture/UI/e2e | `kokoro.web.pinned_skills` 不读取/迁移；preview 名称不进入 engine；正式旧 store/wire 0 残留 |
+| SKSEL-E2E-01 | 非空 Skill 真执行 | Root 隔离 Web→BFF→Agent→Platform/Storage | **未决**：Agent reader、安装/启用裁决完成后才可通过；本次文档门与空数组 Chat 不替代 |
 
 ## 2. 架构与契约验收
 

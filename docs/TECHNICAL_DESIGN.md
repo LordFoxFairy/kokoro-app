@@ -1,5 +1,27 @@
 # Kokoro User Web 技术设计
 
+## W3-WEB-CHAT-SKILL-SELECTION 文档门（2026-09-29；代码未实施）
+
+| §8 放置项 | 当前裁决 |
+| --- | --- |
+| Owner / 当前事实 | Web clean `main 12f9dff909b8e2e8694a96f510676f90d375ecdc` 是本片唯一 writer；BFF `571b51de2057905c74c78ac966c8cf5ac11eca93` 是 public Chat owner，其 OpenAPI 原字节 SHA-256 为 `f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90`。正式 `PersonalSkillsRead` 已返回 `source_ref/revision`，但没有 Chat 选择入口。现有 `usePinnedSkills` 从全局 `localStorage` 的 `kokoro.web.pinned_skills` 读显示名称并注入 engine；`execution-adapter` 仍发送旧 `pinned_skills`，面对新版 BFF 会得到 400。 |
+| 目标职责 / API | Web 只把用户明确选择的 exact `source_ref` 作为当前会话的交互状态，提交为 `selected_skill_source_refs`；显示名只作标签。未选择时 wire 也始终是 `[]`。一次 pending submission 冻结有序选择，未知响应后的同键重试复用原内容和原选择，不读取后来 UI 状态。Web 不判断 installed/enabled/executable。 |
+| 方案 A（采用） | 延续现有 `src/contract/chat.ts`、engine execution options/frozen submission、composer 与既有 shadcn 组件；用 `sourceRef` 作 identity，在现有文件职责内收敛。选择是当前会话内存态，不建新 store、顶层目录、进程或持久层。 |
+| 方案 B（淘汰） | 不把 name 拼成 `skill:<name>`，不双读/迁移旧 localStorage，不保留 `pinned_skills` alias，不把个人发布列表或 preview 固定动作伪装成已安装可执行选择；这些做法会造成身份猜测、兼容双轨或越过 Agent/Platform 裁决。 |
+| 依赖 / 数据 / 删除 | Browser → Web same-origin adapter → BFF；无 Web SQL、Redis、安装事实或第二 public contract。代码片删除正式 `usePinnedSkills` store 读取、name→engine 注入和旧 wire；显式 preview 名称动作继续隔离且不得进入正式 engine。旧 key 不读取、不迁移，留在用户浏览器的历史值也不得影响请求。 |
+| 验证 | 代码片按 RED→GREEN 覆盖旧 localStorage/preview 不污染正式请求、exact refs、默认 `[]`、顺序去重/16 项/4 KiB/无 trim、pending 冻结与未知响应原选择重试；执行 contract、architecture、lint、typecheck、test、build 和隔离 e2e。普通 Chat 真产品链与非空 Skill 可执行性由 Root/后续 Agent reader 组合另验。 |
+
+`selected_skill_source_refs` 的 Web 校验与 BFF 一致：数组最多 16 项、保持用户顺序且唯一；每项必须是 exact
+`skill:<SkillId>`，不得 trim、大小写折叠或规范化；须匹配 owner 的完整锚定 pattern，单项最长 197 个字符，且整个数组的
+compact UTF-8 JSON 不超过 4096 字节。无选择仍发送显式空数组。该字段只冻结选择，不是授权、安装或包可用证明；Agent
+`dd34a48` 的非空 reader 尚未接通，因此本片不新增假可执行入口，完整选择→安装/启用→执行仍为后续必交付链。
+
+下一代码片的预计文件集是 `src/generated/bff-public-openapi.yaml`、现有 BFF snapshot 校验脚本、
+`src/contract/chat.ts`、`src/engine/{engine-types,execution-adapter,machine}.ts`、
+`src/components/blocks/app-frame/{app-frame,use-app-frame-actions}.tsx`、现有 composer/个人 Skill 读视图与相邻
+contract/engine/UI/architecture/e2e 测试；`src/ui/shell/use-pinned-skills.ts` 在调用清零后删除，Settings 中旧固定名称入口删除或保持
+preview-only。精确文件以代码前 RED 调查为准，越出该集合须重新过放置门。
+
 ## W3 第二阶段 B：正式单 ZIP 上传/发布消费（2026-09-29；待 Root 真链验收）
 
 **当前/目标与放置。** 基线 Web clean `98aad4cddb231ef7d1363f00630b9b41f51a743f`，BFF public owner/pin `62daba37fc0267830d73590bb5a3499807d46fc6`。在现有 `src/hub/schemas.ts` 增严格消费者 schema，`src/hub/skill-publish-client.ts` 单独承载七个同源/PUT 网络边界，`src/ui/skills/personal-skill-publish-flow.ts` 承载单次意图状态机，`personal-skill-publish-dialog.tsx` 承载 shadcn 交互；`personal-skills-read.tsx` 同时为正式 Skills 与 Settings 入口。扩展同源 Hub route，不新建顶层模块/第二 contract/业务持久层。相较把状态机塞进旧 preview/confirm 或 HubClient 大文件，此拆分把 wire、命令编排、UI 三种变化原因隔开；旧 preview fixture 仍隔离，正式页不显示旧 namespace/candidates/`.skill`/GitHub 伪发布。

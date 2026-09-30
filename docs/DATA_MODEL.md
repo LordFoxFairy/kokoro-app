@@ -1,5 +1,16 @@
 # Kokoro User Web 数据模型与 Owner
 
+## W3 Chat Skill 选择：当前/目标（2026-09-29）
+
+当前全局 `localStorage` key `kokoro.web.pinned_skills` 保存名称并由 `usePinnedSkills` 注入正式 engine；这是待删除的错误身份通道，
+不是 Skill、安装或用户授权事实。目标只在当前 Web 会话内存持有有序、唯一的 exact `source_ref`（最多 16 项、单项最长
+197 个字符、数组 compact UTF-8 JSON 最多 4096 字节），显示名与 revision 只是当次个人列表投影。提交开始后把选择复制进 pending submission；未知响应重试复用冻结副本，
+不得从当前 UI 或旧 browser key 重采样。刷新可丢失未提交选择，不建立 localStorage、Redis、SQL、receipt 或跨设备恢复。
+
+Platform 仍唯一拥有 Skill/Source/Installation/Enablement，BFF 拥有 public Chat request/outbox，Agent 拥有 Run 与执行前解析。
+Web 的选择不证明可执行；当前 Agent 非空 reader 未接，完整选择执行链仍未完成。旧 key 不迁移、不双读；显式 preview
+fixture 可保留名称动作，但不得写入正式 engine 或 `selected_skill_source_refs`。
+
 ## W3 第二阶段 B：上传意图只在浏览器内存（2026-09-29）
 
 Web 仅在当前 Skills 页面组件生命周期保存 File、metadata、SHA-256、AbortController、当前阶段及单意图 mutation key/body；关闭并重开 Dialog 不产生新 key，整页刷新才丢失临时引用。不把草稿、attempt、scan、receipt、签名 URL、ZIP bytes 写进 SQL/Redis/localStorage/IndexedDB。Platform 是 Skill/attempt/幂等/ACTIVE 事实 owner，Storage/ObjectStore 是原字节/scan owner，BFF 是 IAM 准入与 public 投影 owner。Complete 的 pending/unknown 是 partial；继续前复核 owner 当前 attempt，已替换则要求明确重开。刷新后不能按旧 attempt 猜可续传或按 CLEAN/validated 猜发布；未知 Publish ACK 首轮 by-ID 404 不证明完成，后续显式再查仍 404 才同键重发零 body；401/403 原码保留。Draft 字段各自允许的组合仍受 owner 65,536 原始字节限额，Web 前置预检不保存额外事实。旧 preview fixture 数据无授权/发布语义。Web 无 canonical schema、事务、迁移、索引或 fresh-install 数据门。六项写候选仍 default-off；Root 真 owner 组合与 CORS/感染/撤权验收独立。
@@ -433,7 +444,7 @@ Web 不复制这些表、DTO 或状态机，也不通过数据库 JOIN 获取跨
 
 | 类别 | 示例 key | 语义 |
 | --- | --- | --- |
-| UI preference | `kokoro.theme`、`kokoro.locale`、`kokoro.web.chat-prefs`、`kokoro.web.pinned_skills` | 本浏览器偏好，可清除、可重建 |
+| UI preference | `kokoro.theme`、`kokoro.locale`、`kokoro.web.chat-prefs` | 本浏览器偏好，可清除、可重建；`kokoro.web.pinned_skills` 是待删除且不得再读取/迁移的旧名称通道 |
 | Draft/local projection | `kokoro.web.drafts`、`kokoro.web.conversations`、`kokoro.web.process-disclosure` | 编辑草稿或有限 UI 索引；不是 Message/Conversation 事实源 |
 | Preview fixture | `kokoro.preview.sessions.v1`、`kokoro.preview.scheduled-tasks` | local/test 合成数据；production 不启用 |
 | Preview project state | `kokoro.preview.project.<ref>.instructions` 等 | 合成项目编辑状态；不是跨设备 Project 事实 |
