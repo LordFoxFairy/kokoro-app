@@ -395,3 +395,70 @@ export const skillUploadPreviewPath = "/self/skills/upload/preview"
 export const skillUploadConfirmPath = "/self/skills/upload/confirm"
 export const skillGithubPreviewPath = "/self/skills/github/preview"
 export const skillGithubImportPath = "/self/skills/github/import"
+
+// BFF personal installation projection; never an execution authorization cache.
+export const installationIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
+export const installationSourceSchema = z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
+export const installationKeySchema = z.string().regex(/^[\x21-\x2b\x2d-\x7e]{1,128}(?![\s\S])/u)
+const installationInstant = z.string().datetime().refine((value) => value.endsWith("Z") && Number.isFinite(Date.parse(value)))
+export const personalInstallationSchema = z.object({
+  installation_id: installationIdSchema, source_ref: installationSourceSchema, series_id: installationIdSchema,
+  revision: z.string().max(20).refine((value) => /^[1-9][0-9]{0,19}(?![\s\S])/u.test(value) && BigInt(value) <= BigInt("18446744073709551615")), installed: z.boolean(), enabled: z.boolean(), installed_at: installationInstant,
+  updated_at: installationInstant, removed_at: installationInstant.optional(),
+}).strict().refine((value) => value.installed ? value.removed_at === undefined : !value.enabled && value.removed_at !== undefined)
+  .refine((value) => Date.parse(value.updated_at) >= Date.parse(value.installed_at)
+    && (value.removed_at === undefined || Date.parse(value.removed_at) >= Date.parse(value.installed_at)))
+export type PersonalInstallation = z.infer<typeof personalInstallationSchema>
+export const installationReceiptSchema = z.object({
+  installation: personalInstallationSchema,
+  change: z.enum(["installed", "upgraded", "reinstalled", "enabled", "disabled", "removed", "unchanged"]),
+  event_id: installationIdSchema.optional(), replayed: z.boolean(),
+}).strict().refine((value) => value.change === "unchanged" ? value.event_id === undefined : value.event_id !== undefined)
+export type InstallationReceipt = z.infer<typeof installationReceiptSchema>
+const installationCursor = z.string().min(1).refine((value) => new TextEncoder().encode(value).byteLength <= 4096)
+export const installationPageSchema = z.object({
+  data: z.array(personalInstallationSchema).max(100),
+  meta: z.object({ next_cursor: installationCursor }).strict().optional(),
+}).strict().refine((value) => new Set(value.data.map((item) => item.installation_id)).size === value.data.length)
+export type InstallationPage = z.infer<typeof installationPageSchema>
+export const installationListQuerySchema = z.object({
+  installed: z.boolean().optional(), enabled: z.boolean().optional(), limit: z.number().int().min(1).max(100).optional(), cursor: installationCursor.optional(),
+}).strict()
+export type InstallationListQuery = z.infer<typeof installationListQuerySchema>
+export const installationInstallRequestSchema = z.object({ source_ref: installationSourceSchema }).strict()
+export const installationEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict()
+export const installationErrorSchema = z.object({ error: z.object({
+  code: z.string().min(1).max(128), message: z.string().min(1).max(1024), retryable: z.boolean(),
+}).strict() }).strict()
+export type InstallationOperation = "install" | "list" | "get" | "setEnabled" | "remove"
+export const installationErrorCodes: Readonly<Record<number, readonly string[]>> = {
+  400: ["invalid_skill_installation_request", "skill_installation_idempotency_key_required"],
+  401: ["session_authentication_required", "session_invalid"],
+  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_installation_forbidden"],
+  404: ["skill_installation_not_found"],
+  409: ["skill_installation_idempotency_conflict", "skill_installation_command_in_progress"],
+  412: ["skill_installation_precondition_failed"], 413: ["request_body_too_large"],
+  429: ["session_rate_limited", "skill_installation_rate_limited"],
+  502: ["skill_installation_response_invalid"],
+  503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_installation_dependency_unavailable"],
+  504: ["skill_installation_dependency_timeout"],
+}
+export function installationErrorAllowed(operation: InstallationOperation, status: number, code: string): boolean {
+  return !(operation === "list" && [404, 409, 412].includes(status))
+    && !(operation === "get" && [409, 412].includes(status))
+    && (installationErrorCodes[status]?.includes(code) ?? false)
+}
+export function installationResponseSchema(operation: InstallationOperation) {
+  return operation === "list" ? installationPageSchema
+    : operation === "get" ? z.object({ data: personalInstallationSchema }).strict()
+      : z.object({ data: installationReceiptSchema }).strict()
+}
+
+
+export function installationReceiptMatches(operation: "install" | "setEnabled" | "remove", value: InstallationReceipt, identity: string, enabled?: boolean): boolean {
+  const changes = operation === "install" ? ["installed", "upgraded", "reinstalled", "unchanged"] : operation === "remove" ? ["removed", "unchanged"] : [enabled ? "enabled" : "disabled", "unchanged"]
+  return (operation === "install" ? value.installation.installed && value.installation.source_ref === identity : value.installation.installation_id === identity)
+    && changes.includes(value.change)
+    && (operation !== "remove" || !value.installation.installed)
+    && (operation !== "setEnabled" || value.installation.installed && value.installation.enabled === enabled)
+}

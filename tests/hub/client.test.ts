@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createHubClient, HubClientError } from "@/hub/client"
+import { createHubClient, createSkillInstallationClient, HubClientError } from "@/hub/client"
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } })
@@ -485,5 +485,92 @@ describe("hub client", () => {
     const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(path).toBe("/api/hub/self/mcp/servers/my-tools")
     expect(init.method).toBe("DELETE")
+  })
+})
+
+
+describe("personal installation consumer", () => {
+  const installation = { installation_id: "install-1", source_ref: "skill:mine-1", series_id: "series-1", revision: "18446744073709551615", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00.000Z", updated_at: "2026-09-30T10:00:00.000Z" }
+  it("preserves list envelope, false presence, exact cursor and current GET identity", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: [installation], meta: { next_cursor: "opaque +/=" } })).mockResolvedValueOnce(publicResponse({ data: installation }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createSkillInstallationClient()
+    expect(await client.list({ installed: false, enabled: false, limit: 50, cursor: "opaque +/=" })).toEqual({ data: [installation], meta: { next_cursor: "opaque +/=" } })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("installed=false&enabled=false&limit=50&cursor=opaque+%2B%2F%3D")
+    expect(await client.get("install-1")).toEqual(installation)
+  })
+  it("keeps caller mutation key and parses real receipt instead of void", async () => {
+    const receipt = { installation, change: "installed", event_id: "event-1", replayed: true }
+    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: receipt }))
+    vi.stubGlobal("fetch", fetchMock)
+    expect(await createSkillInstallationClient().install("skill:mine-1", "frozen-key")).toEqual(receipt)
+    expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skill-installations", expect.objectContaining({ method: "POST", headers: { "content-type": "application/json", "idempotency-key": "frozen-key" }, body: '{"source_ref":"skill:mine-1"}', redirect: "error" }))
+  })
+})
+
+describe("personal installation strict boundaries", () => {
+  const item = { installation_id: "i1", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: false, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" }
+  it.each([
+    { ...item, tenant: "secret" }, { ...item, revision: "18446744073709551616" }, { ...item, revision: 1 },
+    { ...item, revision: "01" }, { ...item, revision: "invalid" }, { ...item, revision: "1.5" }, { ...item, revision: "1\n" }, { ...item, source_ref: "skill:skill:s1" }, { ...item, source_ref: "skill:s1\n" },
+    { ...item, installation_id: "i1\n" }, { ...item, installed: false }, { ...item, removed_at: null },
+    { ...item, installed: false, enabled: true, removed_at: "2026-09-30T11:00:00Z" },
+    { ...item, removed_at: "2026-09-30T11:00:00Z" }, { ...item, installed_at: "2026-02-30T10:00:00Z" },
+    { ...item, updated_at: "2026-09-29T10:00:00Z" }, { ...item, installed_at: "2026-09-30T10:00:00+00:00" },
+  ])("rejects malformed/private installation %#", async (data) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
+    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
+  })
+  it.each([
+    { data: [], meta: {} }, { data: [], meta: { next_cursor: null } }, { data: [], meta: { next_cursor: "" } },
+    { data: [], meta: { next_cursor: "é".repeat(2049) } }, { data: [item, item] }, { data: { installations: [] } },
+    { data: [], meta: { next_cursor: "next", has_more: true } },
+  ])("rejects invalid page presence or duplicate IDs %#", async (data) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse(data)))
+    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({ reason: "parse" })
+  })
+  it.each([
+    { installation: item, change: "unchanged", event_id: "e", replayed: true },
+    { installation: item, change: "installed", replayed: false },
+    { installation: item, change: "unexpected", event_id: "e", replayed: false },
+    { installation: item, change: "disabled", event_id: "e", replayed: false },
+    { installation: { ...item, source_ref: "skill:other" }, change: "installed", event_id: "e", replayed: false },
+  ])("rejects malformed or wrong-operation install ACK %#", async (data) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
+    await expect(createSkillInstallationClient().install("skill:s1", "key")).rejects.toMatchObject({ reason: "parse" })
+  })
+  it("sends false and empty DELETE correctly, preserves receipt and removed current read", async () => {
+    const removed = { ...item, installed: false, removed_at: "2026-09-30T10:00:00Z" }
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: { installation: item, change: "disabled", event_id: "e", replayed: false } }))
+      .mockResolvedValueOnce(publicResponse({ data: { installation: removed, change: "removed", event_id: "e2", replayed: false } }))
+      .mockResolvedValueOnce(publicResponse({ data: removed }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createSkillInstallationClient()
+    await client.setEnabled("i1", false, "disable-key")
+    await client.remove("i1", "remove-key")
+    expect(await client.get("i1")).toEqual(removed)
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "PUT", body: '{"enabled":false}' })
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE", headers: { "idempotency-key": "remove-key" } })
+    expect(fetchMock.mock.calls[1]?.[1]).not.toHaveProperty("body")
+  })
+  it("uses only legal operation/status error codes and keeps safe correlation/retry fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ error: { code: "skill_installation_not_found", message: "hidden", retryable: false } }, 404))
+      .mockResolvedValueOnce(publicResponse({ error: { code: "skill_installation_dependency_timeout", message: "SENTINEL", retryable: true } }, 504))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(createSkillInstallationClient().list()).rejects.toMatchObject({ reason: "parse", status: 404 })
+    await expect(createSkillInstallationClient().install("skill:s1", "key")).rejects.toMatchObject({ reason: "http", status: 504, code: "skill_installation_dependency_timeout", retryable: true, requestId: "request-1", message: "Installation request rejected" })
+  })
+  it("rejects invalid selectors before network and propagates cancellation", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (_path: string, init: RequestInit) => {
+      expect(init.signal).toBe(controller.signal)
+      controller.abort()
+      return publicResponse({ data: [] })
+    })
+    const controller = new AbortController()
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(createSkillInstallationClient().list({ limit: 0 })).rejects.toThrow()
+    await expect(createSkillInstallationClient().get("i1\n")).rejects.toThrow()
+    expect(fetchMock).not.toHaveBeenCalled()
+    await expect(createSkillInstallationClient().list({}, controller.signal)).rejects.toMatchObject({ reason: "aborted" })
   })
 })

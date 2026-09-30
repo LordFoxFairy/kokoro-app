@@ -4,6 +4,9 @@
 import { z, ZodError, type ZodTypeAny } from "zod"
 
 import {
+  installationIdSchema, installationKeySchema, installationSourceSchema, installationListQuerySchema,
+  installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
+  type InstallationOperation, type InstallationListQuery, type InstallationPage, type InstallationReceipt, type PersonalInstallation,
   HUB_BASE,
   hubDataSchema,
   hubErrorSchema,
@@ -71,13 +74,19 @@ export class HubClientError extends Error {
   // hub 稳定错误码（http 失败时尽力解析）：如 hub.skill_required / capability_registration_disabled。
   readonly code: string | null
   readonly status: number | null
+  readonly retryable: boolean
+  readonly requestId: string | null
+  readonly retryAfter: string | null
 
-  constructor(reason: HubFailureReason, message: string, code: string | null, status: number | null) {
+  constructor(reason: HubFailureReason, message: string, code: string | null, status: number | null, retryable = false, requestId: string | null = null, retryAfter: string | null = null) {
     super(message)
     this.name = "HubClientError"
     this.reason = reason
     this.code = code
     this.status = status
+    this.retryable = retryable
+    this.requestId = requestId
+    this.retryAfter = retryAfter
   }
 }
 
@@ -278,7 +287,7 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 }
 
 export type HubClient = {
-  listPersonalSkills: (cursor?: string) => Promise<PersonalSkillPage>
+  listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<PersonalSkillPage>
   getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<PublishedPersonalSkill>
   listMcpProjections: (cursor?: string) => Promise<McpProjectionPage>
   listSkillPool: () => Promise<SkillCard[]>
@@ -336,10 +345,10 @@ function uploadForm(zip: Blob, names: string[] | null): FormData {
 
 export function createHubClient(): HubClient {
   return {
-    listPersonalSkills: (cursor) => {
+    listPersonalSkills: (cursor, signal) => {
       const query = new URLSearchParams({ scope_kind: "personal" })
       if (cursor !== undefined) query.set("cursor", cursor)
-      return requestPublicRead(`${personalSkillsPath}?${query}`, personalSkillPageSchema)
+      return requestPublicRead(`${personalSkillsPath}?${query}`, personalSkillPageSchema, signal)
     },
     getPublishedPersonalSkill: async (id, signal) => {
       const skill = await requestPublicRead(publishedPersonalSkillPath(id), publishedPersonalSkillSchema, signal)
@@ -475,5 +484,75 @@ export function createHubClient(): HubClient {
         })
       ).handle,
     deleteMcpSecret: (handle) => mutate(mcpSecretPath(handle), "DELETE"),
+  }
+}
+
+
+export type SkillInstallationClient = {
+  list: (query?: InstallationListQuery, signal?: AbortSignal) => Promise<InstallationPage>
+  get: (id: string, signal?: AbortSignal) => Promise<PersonalInstallation>
+  install: (sourceRef: string, key: string, signal?: AbortSignal) => Promise<InstallationReceipt>
+  setEnabled: (id: string, enabled: boolean, key: string, signal?: AbortSignal) => Promise<InstallationReceipt>
+  remove: (id: string, key: string, signal?: AbortSignal) => Promise<InstallationReceipt>
+}
+
+export function createSkillInstallationClient(): SkillInstallationClient {
+  const base = "/api/hub/self/skill-installations"
+  const idPath = (id: string) => `${base}/${encodeURIComponent(installationIdSchema.parse(id))}`
+  const commandHeaders = (key: string, json: boolean) => ({ ...(json ? { "content-type": "application/json" } : {}), "idempotency-key": installationKeySchema.parse(key) })
+  async function request(operation: InstallationOperation, path: string, init: RequestInit, signal?: AbortSignal) {
+    if (signal?.aborted) throw new HubClientError("aborted", "Installation request cancelled", null, null)
+    let response: Response
+    try {
+      response = await fetch(path, { ...init, cache: "no-store", redirect: "error", ...(signal === undefined ? {} : { signal }) })
+    } catch {
+      throw new HubClientError(signal?.aborted ? "aborted" : "network", "Installation request did not complete", null, null)
+    }
+    const requestId = response.headers.get("x-request-id")
+    const retryAfter = response.status === 429 ? response.headers.get("retry-after") : null
+    if (response.headers.get("cache-control") !== "no-store" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
+      || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
+      || retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter)) {
+      throw new HubClientError("parse", "Invalid installation response headers", null, response.status)
+    }
+    let raw: unknown
+    try { raw = await response.json() } catch { throw new HubClientError(signal?.aborted ? "aborted" : "parse", "Invalid installation JSON", null, response.status) }
+    if (signal?.aborted) throw new HubClientError("aborted", "Installation request cancelled", null, response.status)
+    if (response.status !== 200) {
+      const error = installationErrorSchema.safeParse(raw)
+      if (!error.success || !installationErrorAllowed(operation, response.status, error.data.error.code)) throw new HubClientError("parse", "Invalid installation error", null, response.status)
+      throw new HubClientError("http", "Installation request rejected", error.data.error.code, response.status, error.data.error.retryable, requestId, retryAfter)
+    }
+    const result = installationResponseSchema(operation).safeParse(raw)
+    if (!result.success) throw new HubClientError("parse", "Invalid installation response", null, response.status)
+    return result.data
+  }
+  const receipt = async (operation: "install" | "setEnabled" | "remove", path: string, init: RequestInit, identity: string, enabled?: boolean, signal?: AbortSignal): Promise<InstallationReceipt> => {
+    const result = await request(operation, path, init, signal)
+    if (!("installation" in result.data)) throw new HubClientError("parse", "Invalid installation receipt", null, 200)
+    const value = result.data
+    if (!installationReceiptMatches(operation, value, identity, enabled)) throw new HubClientError("parse", "Installation receipt identity mismatch", null, 200)
+    return value
+  }
+  return {
+    list: async (query = {}, signal) => {
+      const input = installationListQuerySchema.parse(query)
+      const search = new URLSearchParams()
+      for (const [key, value] of Object.entries(input)) if (value !== undefined) search.set(key, String(value))
+      const result = await request("list", `${base}${search.size ? `?${search}` : ""}`, { method: "GET" }, signal)
+      if (!Array.isArray(result.data)) throw new HubClientError("parse", "Invalid installation list", null, 200)
+      return result as InstallationPage
+    },
+    get: async (id, signal) => {
+      const result = await request("get", idPath(id), { method: "GET" }, signal)
+      if (!("installation_id" in result.data) || result.data.installation_id !== id) throw new HubClientError("parse", "Installation identity mismatch", null, 200)
+      return result.data
+    },
+    install: (sourceRef, key, signal) => receipt("install", base, { method: "POST", headers: commandHeaders(key, true), body: JSON.stringify({ source_ref: installationSourceSchema.parse(sourceRef) }) }, sourceRef, undefined, signal),
+    setEnabled: (id, enabled, key, signal) => {
+      if (typeof enabled !== "boolean") throw new HubClientError("parse", "Invalid enabled state", null, null)
+      return receipt("setEnabled", `${idPath(id)}/enabled`, { method: "PUT", headers: commandHeaders(key, true), body: JSON.stringify({ enabled }) }, id, enabled, signal)
+    },
+    remove: (id, key, signal) => receipt("remove", idPath(id), { method: "DELETE", headers: commandHeaders(key, false) }, id, undefined, signal),
   }
 }

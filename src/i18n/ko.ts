@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "내가 게시한 스킬",
+  "skills.personal.installations": "내 설치 목록",
+  "skills.personal.install": "이 스킬 설치",
+  "skills.personal.installedFilter": "설치 상태",
+  "skills.personal.enabledFilter": "활성화 상태",
+  "skills.personal.all": "전체",
+  "skills.personal.installed": "설치됨",
+  "skills.personal.removed": "제거됨",
+  "skills.personal.enabled": "활성화됨",
+  "skills.personal.disabled": "비활성화됨",
+  "skills.personal.remove": "설치 제거",
+  "skills.personal.empty": "필터에 맞는 설치가 없습니다",
+  "skills.personal.unknown": "결과를 알 수 없습니다. 재시도는 새 작업을 만들지 않고 원래 요청을 재사용합니다.",
+  "skills.personal.confirmed": "명령이 확인되었습니다. 현재 상태를 확인해야 합니다.",
+  "skills.personal.checkCurrent": "현재 상태 확인",
+  "skills.personal.rejected": "요청이 거부되었습니다. 현재 상태를 확인하세요.",
+  "skills.personal.currentConfirmed": "현재 설치 상태를 확인했습니다",
+  "skills.personal.forbidden": "현재 계정에 권한이 없습니다. 로그인 상태를 확인하세요.",
+  "skills.personal.conflict": "충돌하거나 사전 조건을 충족하지 못했습니다. 현재 상태를 확인하세요.",
+
   "firstSite.startConversation": "이 프로젝트에서 대화 시작",
   "firstSite.currentProject": "현재 프로젝트",
   "firstSite.conversationsLoading": "대화를 불러오는 중…",

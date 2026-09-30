@@ -97,3 +97,12 @@ it("信息架构新增会话语义在全部上线语言有明确翻译", () => {
     for (const key of keys) expect(OVERLAYS[locale][key], `${locale}:${key}`).toBeTruthy()
   }
 })
+
+it("本人安装管理与未知结果文案在全部语言中明确覆盖", () => {
+  const keys = Object.keys(zh).filter((key) => key.startsWith("skills.personal.")) as Array<keyof typeof zh>
+  expect(keys).toHaveLength(19)
+  for (const locale of LOCALES) {
+    if (locale === "zh") continue
+    for (const key of keys) expect(OVERLAYS[locale][key], `${locale}:${key}`).toBeTruthy()
+  }
+})

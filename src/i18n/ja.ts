@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "公開済みのスキル",
+  "skills.personal.installations": "自分のインストール",
+  "skills.personal.install": "このスキルをインストール",
+  "skills.personal.installedFilter": "インストール状態",
+  "skills.personal.enabledFilter": "有効化状態",
+  "skills.personal.all": "すべて",
+  "skills.personal.installed": "インストール済み",
+  "skills.personal.removed": "削除済み",
+  "skills.personal.enabled": "有効",
+  "skills.personal.disabled": "無効",
+  "skills.personal.remove": "インストールを削除",
+  "skills.personal.empty": "条件に一致するインストールはありません",
+  "skills.personal.unknown": "結果は不明です。再試行では新しい操作を作らず、元のリクエストを再利用します。",
+  "skills.personal.confirmed": "コマンドは確認済みです。現在の状態を確認してください。",
+  "skills.personal.checkCurrent": "現在の状態を確認",
+  "skills.personal.rejected": "リクエストが拒否されました。現在の状態を確認してください。",
+  "skills.personal.currentConfirmed": "現在のインストール状態を確認しました",
+  "skills.personal.forbidden": "現在のアカウントには権限がありません。ログイン状態を確認してください。",
+  "skills.personal.conflict": "競合または前提条件が満たされていません。現在の状態を確認してください。",
+
   "firstSite.startConversation": "このプロジェクトで会話を始める",
   "firstSite.currentProject": "現在のプロジェクト",
   "firstSite.conversationsLoading": "会話を読み込み中…",

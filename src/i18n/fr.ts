@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "Mes Skills publiés",
+  "skills.personal.installations": "Mes installations",
+  "skills.personal.install": "Installer ce Skill",
+  "skills.personal.installedFilter": "État de l’installation",
+  "skills.personal.enabledFilter": "État d’activation",
+  "skills.personal.all": "Tous",
+  "skills.personal.installed": "Installé",
+  "skills.personal.removed": "Supprimé",
+  "skills.personal.enabled": "Activé",
+  "skills.personal.disabled": "Désactivé",
+  "skills.personal.remove": "Supprimer l’installation",
+  "skills.personal.empty": "Aucune installation ne correspond aux filtres",
+  "skills.personal.unknown": "Résultat inconnu. Réessayer réutilise la demande initiale sans créer une nouvelle opération.",
+  "skills.personal.confirmed": "Commande confirmée ; l’état actuel reste à vérifier.",
+  "skills.personal.checkCurrent": "Vérifier l’état actuel",
+  "skills.personal.rejected": "Demande rejetée. Vérifiez l’état actuel.",
+  "skills.personal.currentConfirmed": "État actuel de l’installation vérifié",
+  "skills.personal.forbidden": "Votre identité actuelle n’est pas autorisée. Vérifiez votre connexion.",
+  "skills.personal.conflict": "Conflit ou condition préalable non satisfaite. Vérifiez l’état actuel.",
+
   "firstSite.startConversation": "Démarrer une conversation dans ce projet",
   "firstSite.currentProject": "Projet actuel",
   "firstSite.conversationsLoading": "Chargement des conversations…",

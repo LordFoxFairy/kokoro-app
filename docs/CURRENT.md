@@ -1,5 +1,27 @@
 # Kokoro User Web 当前状态
 
+## WEB-PERSONAL-CODE（2026-09-30；实施候选，待 Root 独立验收）
+
+基线 `main 49adb4bae88e45fc40489c2d297775e08a70faa4`；Web唯一writer，Root负责index/提交。
+BFF `67755d16ff0f40ea02d71a6dad7108507a04766a` public原字节已固定，SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；其Platform6519ae9a/v5.0.1。
+Team原生成器 --write通过，15派生文件无字节变化；无手改generated、依赖/lock或owner代码。
+
+现正式Skills两个入口共用已发布/本人安装view，五具名client/strict同源分支已接；先Current IAM Product Session，
+不可信身份header不透传。List presence/分页、八必填+可选removed_at安全投影、receipt及错误安全头严格解析。
+unknown保留原key；历史receipt后Get current，读失败仅重读；取消/迟到fence/循环cursor拒绝有直接回归。
+已发布卡显式安装，发布不安装、安装不Chat/Run；源详情失效不先阻止降权。19新文案全九语种明确覆盖。
+四核心源码继续各自原职责，无新目录/store/helper，均低于任务卡粒度上限。
+
+实际RED：新同源头/DELETE body与安装入口2失败39通过；五方法client缺口2失败28通过；
+非前进cursor补充RED1失败18过滤skip；非法revision补充RED2失败15通过45过滤skip。
+Node22.22.2最终GREEN：直接6文件/221通过；contract18文件/109通过（含Team15生成漂移检查）；
+architecture4文件/37通过；lint/typecheck/build各exit0。完整非integration `--maxWorkers=2` 为154文件/1654通过、无skip。
+对应命令见TECHNICAL_DESIGN本片；integration/e2e未运行，因本任务只授纯门、不授共享基础设施或浏览器。
+中间typecheck曾发现新revision范围常量用了低target不支持的BigInt literal，已改现有BigInt构造器并完整重跑上述全部门。
+日志前缀 `/tmp/kokoro-web-personal-`。真实owner/浏览器、共享PG/Redis、3310、模型调用均未执行；
+没有启动/停止用户服务或操作Git index/commit。Root独立复验/提交/受管snapshot同步与真实产品链是后续门，不称全UI能力完成。
+
 ## WEB-PERSONAL-DOC-WRITE（2026-09-30；仅文档门，待 Root 审查）
 
 基线 Web clean main `14a54b4b8da68b37d83a13402bc8abb87001574e`。本片唯一写集为

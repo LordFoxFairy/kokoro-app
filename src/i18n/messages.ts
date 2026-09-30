@@ -23,6 +23,26 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "skills.personal.published": "本人已发布",
+  "skills.personal.installations": "本人安装",
+  "skills.personal.install": "安装此技能",
+  "skills.personal.installedFilter": "安装状态",
+  "skills.personal.enabledFilter": "启用状态",
+  "skills.personal.all": "全部",
+  "skills.personal.installed": "已安装",
+  "skills.personal.removed": "已移除",
+  "skills.personal.enabled": "已启用",
+  "skills.personal.disabled": "已停用",
+  "skills.personal.remove": "移除安装",
+  "skills.personal.empty": "暂无符合筛选条件的安装",
+  "skills.personal.unknown": "结果未知。重试将复用原请求，不会创建新操作。",
+  "skills.personal.confirmed": "命令已确认，当前状态仍待核对。",
+  "skills.personal.checkCurrent": "核对当前状态",
+  "skills.personal.rejected": "请求被拒绝，请核对当前状态。",
+  "skills.personal.currentConfirmed": "已核对当前安装状态",
+  "skills.personal.forbidden": "当前身份无权执行此操作，请检查登录状态。",
+  "skills.personal.conflict": "操作冲突或前置条件不满足，请核对当前状态。",
+
   // rail 侧栏
   "firstSite.startConversation": "在此专案开始会话",
   "firstSite.currentProject": "当前专案",

@@ -562,3 +562,99 @@ describe("/api/hub/[...path] proxy", () => {
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
 })
+
+it("personal installation reads preserve strict owner headers and reject DELETE bodies before upstream", async () => {
+  const { GET, DELETE } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: [] }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "installation-read" } }))
+  const response = await GET(new Request("http://localhost/api/hub/self/skill-installations?installed=false&limit=50"), params(["self", "skill-installations"]))
+  expect(response.headers.get("x-request-id")).toBe("installation-read")
+  expect(response.headers.get("cache-control")).toBe("no-store")
+  vi.mocked(requestWithDomain).mockClear()
+  const rejected = await DELETE(new Request("http://localhost/api/hub/self/skill-installations/install-1", { method: "DELETE", headers: { origin: "http://localhost", "idempotency-key": "remove-1" }, body: "{}" }), params(["self", "skill-installations", "install-1"]))
+  expect(rejected.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["GET", "?enabled=0", null, null], ["GET", "?installed=false&installed=true", null, null],
+  ["GET", "?scope=personal", null, null], ["GET", "?limit=0", null, null],
+  ["GET", "?cursor=", null, null], ["GET", "", "key", null],
+  ["POST", "?tenant=forged", "key", '{"source_ref":"skill:s1"}'],
+  ["POST", "", "key,second", '{"source_ref":"skill:s1"}'],
+  ["POST", "", "key", '{"source_ref":"skill:s1","subject":"forged"}'],
+  ["POST", "", "key", '{"source_ref":" skill:s1"}'],
+])("rejects illegal installation input %s %s before upstream", async (method, search, key, body) => {
+  const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route")
+  const response = await proxyHubRequest(new Request(`http://localhost/api/hub/self/skill-installations${search}`, { method: method!, headers: { origin: "http://localhost", "content-type": "application/json", ...(key ? { "idempotency-key": key } : {}) }, ...(body === null ? {} : { body }) }), params(["self", "skill-installations"]))
+  expect(response.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it("forwards only trusted installation headers, false body and safe retry response", async () => {
+  const { PUT } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ error: { code: "skill_installation_rate_limited", message: "Try later", retryable: true } }), { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "rate-1", "retry-after": "3", "set-cookie": "private=value" } }))
+  const controller = new AbortController()
+  const request = new Request("http://localhost/api/hub/self/skill-installations/i1/enabled", { method: "PUT", signal: controller.signal, headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen", "x-kokoro-subject": "forged", authorization: "Bearer forged", cookie: "private=browser" }, body: '{"enabled":false}' })
+  const response = await PUT(request, params(["self", "skill-installations", "i1", "enabled"]))
+  expect(response.status).toBe(429)
+  expect(response.headers.get("retry-after")).toBe("3")
+  expect(response.headers.get("set-cookie")).toBeNull()
+  const options = vi.mocked(requestWithDomain).mock.calls[0]?.[2]
+  expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "frozen" })
+  expect(options?.headers).not.toHaveProperty("x-kokoro-subject")
+  expect(options?.headers).not.toHaveProperty("cookie")
+  expect(options?.signal).toBe(request.signal)
+  expect(new TextDecoder().decode(options?.body)).toBe('{"enabled":false}')
+})
+
+it.each([301, 201, 204])("rejects unexpected installation response status %i", async (status) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(status === 204 ? null : '{"data":[]}', { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "read-1" } }))
+  const response = await GET(new Request("http://localhost/api/hub/self/skill-installations"), params(["self", "skill-installations"]))
+  expect(response.status).toBe(502)
+})
+
+it.each([
+  ["POST", ["self", "skill-installations"], "text/plain", '{"source_ref":"skill:s1"}'],
+  ["PUT", ["self", "skill-installations", "i1", "enabled"], "application/json", '{}'],
+  ["PUT", ["self", "skill-installations", "i1", "enabled"], "application/json", '{"enabled":"false"}'],
+  ["PUT", ["self", "skill-installations", "i1", "enabled"], "application/json", '{"enabled":false,"generation":1}'],
+] as const)("rejects invalid installation media/body %s %#", async (method, path, contentType, body) => {
+  const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route")
+  const response = await proxyHubRequest(new Request(`http://localhost/api/hub/${path.join("/")}`, { method, headers: { origin: "http://localhost", "content-type": contentType, "idempotency-key": "key" }, body }), params([...path]))
+  expect(response.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it("rejects installation aliases/unknown methods and foreign Origin before owner calls", async () => {
+  const { proxyHubRequest } = await import("@/app/api/hub/[...path]/route")
+  for (const path of [["skill-installations"], ["self", "skill-installations", "i1", "unknown"]]) {
+    expect((await proxyHubRequest(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path))).status).toBe(404)
+  }
+  expect((await proxyHubRequest(new Request("http://localhost/api/hub/self/skill-installations", { method: "PATCH" }), params(["self", "skill-installations"]))).status).toBe(404)
+  expect((await proxyHubRequest(new Request("http://localhost/api/hub/self/skill-installations", { method: "POST", headers: { origin: "https://evil.test" } }), params(["self", "skill-installations"]))).status).toBe(403)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it("does not forward mismatched installation identity or invalid error status/code pairs", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const responses = [
+    { status: 200, value: { data: { installation_id: "other", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" } } },
+    { status: 403, value: { error: { code: "skill_installation_dependency_timeout", message: "SENTINEL", retryable: true } } },
+    { status: 200, value: { data: [], private: "SENTINEL" } },
+  ]
+  for (const { status, value } of responses) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "read-1" } }))
+    const response = await GET(new Request("http://localhost/api/hub/self/skill-installations/i1"), params(["self", "skill-installations", "i1"]))
+    expect(response.status).toBe(502)
+    expect(await response.text()).not.toContain("SENTINEL")
+  }
+})
+
+it.each(["content-type", "cache-control", "x-request-id"])("fails closed on missing installation %s", async (name) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const headers = new Headers({ "content-type": "application/json", "cache-control": "no-store", "x-request-id": "read-1" })
+  headers.delete(name)
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"data":[]}', { headers }))
+  expect((await GET(new Request("http://localhost/api/hub/self/skill-installations"), params(["self", "skill-installations"]))).status).toBe(502)
+})

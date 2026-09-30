@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "Meine veröffentlichten Skills",
+  "skills.personal.installations": "Meine Installationen",
+  "skills.personal.install": "Skill installieren",
+  "skills.personal.installedFilter": "Installationsstatus",
+  "skills.personal.enabledFilter": "Aktivierungsstatus",
+  "skills.personal.all": "Alle",
+  "skills.personal.installed": "Installiert",
+  "skills.personal.removed": "Entfernt",
+  "skills.personal.enabled": "Aktiviert",
+  "skills.personal.disabled": "Deaktiviert",
+  "skills.personal.remove": "Installation entfernen",
+  "skills.personal.empty": "Keine Installationen entsprechen diesen Filtern",
+  "skills.personal.unknown": "Ergebnis unbekannt. Erneut versuchen verwendet die ursprüngliche Anfrage, ohne eine neue Aktion anzulegen.",
+  "skills.personal.confirmed": "Befehl bestätigt; der aktuelle Zustand muss noch geprüft werden.",
+  "skills.personal.checkCurrent": "Aktuellen Zustand prüfen",
+  "skills.personal.rejected": "Anfrage abgelehnt. Aktuellen Zustand prüfen.",
+  "skills.personal.currentConfirmed": "Aktueller Installationszustand geprüft",
+  "skills.personal.forbidden": "Ihre aktuelle Identität ist nicht berechtigt. Prüfen Sie Ihre Anmeldung.",
+  "skills.personal.conflict": "Konflikt oder unerfüllte Voraussetzung. Aktuellen Zustand prüfen.",
+
   "firstSite.startConversation": "Unterhaltung in diesem Projekt starten",
   "firstSite.currentProject": "Aktuelles Projekt",
   "firstSite.conversationsLoading": "Unterhaltungen werden geladen…",

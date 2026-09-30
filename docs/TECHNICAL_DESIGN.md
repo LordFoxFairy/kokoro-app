@@ -1,5 +1,29 @@
 # Kokoro User Web 技术设计
 
+## WEB-PERSONAL-CODE（2026-09-30；已实施候选，待 Root 验收）
+
+基线 `49adb4bae88e45fc40489c2d297775e08a70faa4`。下节是已批准的历史文档门；本节才描述当前候选代码。
+BFF public snapshot 已按 `67755d16ff0f40ea02d71a6dad7108507a04766a` 原字节 repin，SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；Platform 间接固定6519ae9a/v5.0.1，不引内部 SDK。
+
+原四源码职责保持：`hub/schemas.ts` 纯 strict projection/request/error/receipt binding；`hub/client.ts` 导出独立
+`createSkillInstallationClient` 五方法，旧 preview Hub 接口不作 fallback；既有 Hub route 增加具名严格安装分支；
+`PersonalSkillsRead` 承载已发布/本人安装两个 view。无新目录/helper/store/依赖或 owner。
+客户端保留 caller key、receipt、稳定 code/retryable/request ID/合法 Retry-After；不复用空正文 mutate，
+Get 不生成 mutation identity。adapter 保留原 Product Session/Origin/可信 header 构造、传递取消，固定65,536字节输入，
+保留既有有界 upstream transport（不扩大其他 Hub 预算）。非 self alias、额外路径/非法方法、query/key/body与坏 owner 表示都显式拒绝。
+
+安装页默认 installed=true/limit50、enabled省略，两个三态筛选用现 shadcn Select；过滤与翻页重置/取消，
+opaque cursor 不解码，重复/循环 continuation 显式 error 而非卡在 loading。只取当前页，无前端聚合全集。
+本 mounted surface 内一次一个动作，比每 installation 串行更保守；不是跨页签锁。单意图固定 key/method/resource/body，
+unknown仅显式原键重试；恢复中401/403仍保留原未知意图，禁止换键绕过。写 ACK 后只 Get current，读失败只允许再次读，
+历史 replay 不覆盖当前 disabled/removed。切视图/过滤/分页或卸载取消并拒迟到结果；纯 Get 取消不冒称已确认写命令。
+
+本人 ACTIVE 卡只增加显式 Install；发布回调只刷新发布页，安装动作不触 Run/Chat/refs。
+source 详情不是启停/移除前置，removed 管理记录可读。九语种仅新增19个安装/筛选/未知结果文案，95%门不改。
+Team15文件由原生成器 --write 后字节无差异，六份公共 snapshot 测试同步 pin 并保留旧断言。
+未改原上传/发布 flow、Chat/preview、其他仓或部署资源。验证证据见 CURRENT；真实产品链与浏览器仍由 Root 单独验收。
+
 ## WEB-PERSONAL：安装管理文档门（2026-09-30；尚未实施）
 
 本节是下一消费者切片的当前方案，不代表代码已接入。Web 基线

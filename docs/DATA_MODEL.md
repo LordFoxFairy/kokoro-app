@@ -1,5 +1,23 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PERSONAL-CODE 当前内存状态（2026-09-30；候选）
+
+基线49adb4b，固定BFF67755d16/OpenAPI SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`，间接Platform6519ae9a/v5.0.1。
+下节“尚无安装状态机”是历史设计基线，当前候选已实施以下纯浏览器状态；没有新增持久化owner。
+
+`PersonalSkillsRead` 分别保存已发布页与安装页、filter/cursor/history、generation/AbortController、冻结意图与动作状态。
+动作idle/busy/unknown/rejected/confirmed/ready区分未确认结果、明确拒绝与“ACK确认但current读失败”。
+同 mounted surface 串行动作；unknown保持原key，即使随后恢复请求被401/403拒绝也不释放成新意图。
+ACK成功只作为历史receipt，Get返回的current才更新显示；已确认后读失败/取消保留installation_id，重试只Get。
+List/Get不创建mutation key；取消/卸载通过controller与当前请求身份fence忽略迟到结果。
+
+filter缺失/true/false保持独立；默认installed=true/limit50，cursor仅当前页导航、不解码或缓存授权。
+重复continuation进入error；空页不是失败fallback。removed仍可Get，不从公开source缺失阻止降权。
+整页卸载丢失内存key后只读当前事实，不制造receipt恢复或自动补写；无SQL/Redis/localStorage/IndexedDB安装记录。
+Platform的CAS/receipt/outbox和BFF的current IAM/public投影仍唯一；发布不安装，安装不启动/选择Run，Chat refs原有语义未改。
+真实并发/撤权/浏览器验收由Root后验，当前纯测试不证明owner事务或产品激活。
+
 ## WEB-PERSONAL：安装管理状态归属（2026-09-30；目标文档门）
 
 Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e`，目标固定 BFF

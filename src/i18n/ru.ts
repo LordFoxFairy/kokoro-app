@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "Мои опубликованные навыки",
+  "skills.personal.installations": "Мои установки",
+  "skills.personal.install": "Установить навык",
+  "skills.personal.installedFilter": "Состояние установки",
+  "skills.personal.enabledFilter": "Состояние включения",
+  "skills.personal.all": "Все",
+  "skills.personal.installed": "Установлен",
+  "skills.personal.removed": "Удалён",
+  "skills.personal.enabled": "Включён",
+  "skills.personal.disabled": "Отключён",
+  "skills.personal.remove": "Удалить установку",
+  "skills.personal.empty": "Нет установок, соответствующих фильтрам",
+  "skills.personal.unknown": "Результат неизвестен. Повтор использует исходный запрос, не создавая новую операцию.",
+  "skills.personal.confirmed": "Команда подтверждена; текущее состояние ещё нужно проверить.",
+  "skills.personal.checkCurrent": "Проверить текущее состояние",
+  "skills.personal.rejected": "Запрос отклонён. Проверьте текущее состояние.",
+  "skills.personal.currentConfirmed": "Текущее состояние установки проверено",
+  "skills.personal.forbidden": "У текущей учётной записи нет прав. Проверьте вход в систему.",
+  "skills.personal.conflict": "Конфликт или невыполненное условие. Проверьте текущее состояние.",
+
   "firstSite.startConversation": "Начать диалог в этом проекте",
   "firstSite.currentProject": "Текущий проект",
   "firstSite.conversationsLoading": "Загрузка диалогов…",

@@ -4,6 +4,26 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "skills.personal.published": "My published Skills",
+  "skills.personal.installations": "My installations",
+  "skills.personal.install": "Install this Skill",
+  "skills.personal.installedFilter": "Installation status",
+  "skills.personal.enabledFilter": "Enabled status",
+  "skills.personal.all": "All",
+  "skills.personal.installed": "Installed",
+  "skills.personal.removed": "Removed",
+  "skills.personal.enabled": "Enabled",
+  "skills.personal.disabled": "Disabled",
+  "skills.personal.remove": "Remove installation",
+  "skills.personal.empty": "No installations match these filters",
+  "skills.personal.unknown": "Outcome unknown. Retry reuses the original request, without creating a new operation.",
+  "skills.personal.confirmed": "Command acknowledged; current state still needs verification.",
+  "skills.personal.checkCurrent": "Check current state",
+  "skills.personal.rejected": "Request rejected. Check current state.",
+  "skills.personal.currentConfirmed": "Current installation state verified",
+  "skills.personal.forbidden": "Your current identity is not authorized. Check your sign-in status.",
+  "skills.personal.conflict": "Conflict or unmet precondition. Check current state.",
+
   "notifications.title": "Notifications",
   "notifications.open": "Open notifications",
   "notifications.close": "Close notifications",

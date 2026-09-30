@@ -5,8 +5,8 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "571b51de2057905c74c78ac966c8cf5ac11eca93"
-const OWNER_SHA256 = "f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc0555edb0c90"
+const OWNER_COMMIT = "67755d16ff0f40ea02d71a6dad7108507a04766a"
+const OWNER_SHA256 = "40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -136,7 +136,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six inactive Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("571b51de2057905c74c78ac966c8cf5ac11eca93")
+    expect(OWNER_COMMIT).toBe("67755d16ff0f40ea02d71a6dad7108507a04766a")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     for (const [method, path, id] of [
@@ -178,4 +178,33 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       expect(() => assertProjectionSemantics(candidate)).toThrow()
     }
   })
+})
+
+it("pins the five Personal installation operations, safe projection and strict error-only headers", async () => {
+  const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
+  for (const [method, path, id, success, errors] of [
+    ["post", "/v1/skill-installations", "installPersonalSkill", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
+    ["get", "/v1/skill-installations", "listPersonalSkillInstallations", "SkillInstallationListSuccess", [400, 401, 403, 413, 429, 502, 503, 504]],
+    ["get", "/v1/skill-installations/{installation_id}", "getPersonalSkillInstallation", "SkillInstallationReadSuccess", [400, 401, 403, 404, 413, 429, 502, 503, 504]],
+    ["delete", "/v1/skill-installations/{installation_id}", "removePersonalSkillInstallation", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
+    ["put", "/v1/skill-installations/{installation_id}/enabled", "setPersonalSkillInstallationEnabled", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
+  ] as const) {
+    const value = operation(spec, path, method)
+    expect(value.operationId).toBe(id)
+    expect(Object.keys(value.responses ?? {}).sort()).toEqual(["200", ...errors.map(String)].sort())
+    expect(value.responses?.["200"]?.$ref).toBe(`#/components/responses/${success}`)
+    for (const response of Object.values(value.responses ?? {})) {
+      const resolved = resolvedResponse(spec, response)
+      expect(resolved?.headers?.["x-request-id"]?.required).toBe(true)
+      expect(resolved?.headers?.["Cache-Control"]?.schema?.const).toBe("no-store")
+    }
+  }
+  expect(Object.keys(shape(spec, "SkillInstallation").properties ?? {})).toEqual(["installation_id", "source_ref", "series_id", "revision", "installed", "enabled", "installed_at", "updated_at", "removed_at"])
+  expect(shape(spec, "SkillInstallation").required).not.toContain("removed_at")
+  expect(shape(spec, "SkillInstallation").additionalProperties).toBe(false)
+  const page = shape(spec, "SkillInstallationListEnvelope")
+  expect(page.required).toEqual(["data"])
+  expect(field(page, "data").type).toBe("array")
+  expect(field(page, "meta").required).toEqual(["next_cursor"])
+  expect(Object.keys(field(page, "meta").properties ?? {})).toEqual(["next_cursor"])
 })

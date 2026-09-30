@@ -1,5 +1,23 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PERSONAL-CODE 当前候选（2026-09-30；待 Root 验收）
+
+Web 基线49adb4b；目标文档门已落实到既有 client/schema/同源 route/UI，下面的“尚未消费/旧 pin”属于历史设计基线。
+唯一 public snapshot 已固定 BFF `67755d16ff0f40ea02d71a6dad7108507a04766a`，原字节 SHA-256
+`40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`，间接 Platform6519ae9a/v5.0.1。
+Web 没有第二可编辑 public contract、内部 SDK 或 owner 摘要。
+
+正式 `/api/hub/self/skill-installations` 五方法已具名严格映射唯一 `/v1/skill-installations`：Install/SetEnabled/Remove
+保留原单个 key、body和200 receipt；List/Get无body/key，DELETE拒body而非吞掉。strict media/query/presence/尺寸、
+请求身份由原 Product admission构造，浏览器 subject/token/Cookie 不透传为可信 owner metadata。
+两边均验证九字段安全表示、uint64 decimal/UTC/removed disabled、receipt change/event/请求身份绑定和 operation-specific error。
+所有有效 owner 响应保留 no-store/request ID，429仅合法 Retry-After；redirect/非200成功/额外字段/不匹配身份与code/status均拒绝。
+无 public CAS 字段、自动mutation重试、旧name入口fallback或本地合成 ACK。
+
+List使用唯一 top-level data array/optional meta.next_cursor，三态filter与opaque cursor保持。unknown同键恢复；
+已确认receipt之后Get current，失败只重读，不重复命令。Publish与Install、安装管理与Run选择没有隐式调用。
+取消沿既有有限transport传播，不宣称服务端回滚。实际代码门见CURRENT；当前文档不等于已激活或真实五方法浏览器链通过。
+
 ## WEB-PERSONAL：五本人安装 API 消费目标（2026-09-30；文档门）
 
 Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e` 尚未消费安装 API。唯一 public 机器源为 BFF

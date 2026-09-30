@@ -10,7 +10,11 @@ import { NextResponse } from "next/server"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
-import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError } from "@/lib/server/upstream-http"
+import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError, UpstreamTimeoutError } from "@/lib/server/upstream-http"
+
+import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationEnabledRequestSchema,
+  installationListQuerySchema, installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
+  type InstallationOperation } from "@/hub/schemas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -161,11 +165,98 @@ function bffBusinessPath(path: string[]): string[] {
   return path
 }
 
+// Dedicated Product installation boundary; never the permissive legacy Hub branch.
+async function proxyInstallation(request: Request, path: string[]): Promise<Response> {
+  const supplied = request.headers.get("x-kokoro-request-id")
+  const requestId = supplied !== null && PROJECTION_REQUEST_ID.test(supplied) ? supplied : crypto.randomUUID()
+  const fail = (status: number, code: string, retryable = false) => NextResponse.json({ error: { code, message: code, retryable } }, { status, headers: { "cache-control": "no-store", "x-request-id": requestId } })
+  if (path[0] !== "self") return fail(404, "skill_installation_not_found")
+  const operation: InstallationOperation | null = path.length === 2 ? request.method === "POST" ? "install" : request.method === "GET" ? "list" : null
+    : path.length === 3 ? request.method === "GET" ? "get" : request.method === "DELETE" ? "remove" : null
+      : path.length === 4 && path[3] === "enabled" && request.method === "PUT" ? "setEnabled" : null
+  if (operation === null) return fail(404, "skill_installation_not_found")
+  const mutation = ["install", "setEnabled", "remove"].includes(operation)
+  if (mutation && !sameOriginOk(request)) return fail(403, "session_forbidden")
+  const config = productBffConfig()
+  if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured")
+  let claims
+  try { claims = await admittedProductSession(request, config) } catch { return fail(503, "iam_admission_unavailable", true) }
+  if (claims === null) return fail(401, "session_authentication_required")
+  const query = new URL(request.url).searchParams
+  if (path.length > 2 && !installationIdSchema.safeParse(path[2]).success) return fail(400, "invalid_skill_installation_request")
+  if (operation === "list") {
+    if ([...query.keys()].some((key) => !["installed", "enabled", "limit", "cursor"].includes(key) || query.getAll(key).length !== 1)) return fail(400, "invalid_skill_installation_request")
+    const values: Record<string, unknown> = {}
+    for (const [key, value] of query) {
+      if (key === "installed" || key === "enabled") {
+        if (value !== "true" && value !== "false") return fail(400, "invalid_skill_installation_request")
+        values[key] = value === "true"
+      } else if (key === "limit") {
+        if (!/^[1-9][0-9]{0,2}(?![\s\S])/u.test(value)) return fail(400, "invalid_skill_installation_request")
+        values[key] = Number(value)
+      } else values[key] = value
+    }
+    if (!installationListQuerySchema.safeParse(values).success) return fail(400, "invalid_skill_installation_request")
+  } else if (query.size) return fail(400, "invalid_skill_installation_request")
+  const key = request.headers.get("idempotency-key")
+  if (mutation ? !installationKeySchema.safeParse(key).success : key !== null) return fail(400, mutation ? "skill_installation_idempotency_key_required" : "invalid_skill_installation_request")
+  let expectedIdentity = path[2] ?? ""
+  let expectedEnabled: boolean | undefined
+  let body: ArrayBuffer
+  try { body = await readBoundedRequestBody(request, 65_536) } catch (error) {
+    return fail(error instanceof UpstreamRequestTooLargeError ? 413 : 400, error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "invalid_skill_installation_request")
+  }
+  if (operation === "install" || operation === "setEnabled") {
+    if (!JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")) return fail(400, "invalid_skill_installation_request")
+    try {
+      const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body))
+      const parsed = (operation === "install" ? installationInstallRequestSchema : installationEnabledRequestSchema).safeParse(value)
+      if (!parsed.success) return fail(400, "invalid_skill_installation_request")
+      if ("source_ref" in parsed.data) expectedIdentity = parsed.data.source_ref
+      else expectedEnabled = parsed.data.enabled
+    } catch { return fail(400, "invalid_skill_installation_request") }
+  } else if (body.byteLength !== 0) return fail(400, "invalid_skill_installation_request")
+  const headers = productBffHeaders(config, claims, requestId)
+  if (mutation && key !== null) headers.set("idempotency-key", key)
+  if (operation === "install" || operation === "setEnabled") headers.set("content-type", "application/json")
+  let upstream: Response
+  try {
+    upstream = await requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${path.slice(1).map(encodeURIComponent).join("/")}${query.size ? `?${query}` : ""}`, config.domain, {
+      method: request.method, headers: Object.fromEntries(headers), signal: request.signal,
+      ...(["install", "setEnabled"].includes(operation) ? { body } : {}),
+    })
+  } catch (error) {
+    return error instanceof UpstreamTimeoutError ? fail(504, "skill_installation_dependency_timeout", true) : fail(503, "skill_installation_dependency_unavailable", true)
+  }
+  const upstreamId = upstream.headers.get("x-request-id")
+  const retryAfter = upstream.status === 429 ? upstream.headers.get("retry-after") : null
+  if (!JSON_MEDIA_TYPE.test(upstream.headers.get("content-type") ?? "") || upstream.headers.get("cache-control") !== "no-store"
+    || upstreamId === null || !PROJECTION_REQUEST_ID.test(upstreamId)
+    || retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter)) {
+    await upstream.body?.cancel()
+    return fail(502, "skill_installation_response_invalid")
+  }
+  let raw: unknown
+  try { raw = await upstream.json() } catch { return fail(502, "skill_installation_response_invalid") }
+  if (upstream.status === 200) {
+    const parsed = installationResponseSchema(operation).safeParse(raw)
+    if (!parsed.success) return fail(502, "skill_installation_response_invalid")
+    const value = parsed.data.data
+    if (operation === "get" && (!("installation_id" in value) || value.installation_id !== expectedIdentity)
+      || operation !== "get" && operation !== "list" && (!("installation" in value) || !installationReceiptMatches(operation, value, expectedIdentity, expectedEnabled))) return fail(502, "skill_installation_response_invalid")
+  } else {
+    const error = installationErrorSchema.safeParse(raw)
+    if (!error.success || !installationErrorAllowed(operation, upstream.status, error.data.error.code)) return fail(502, "skill_installation_response_invalid")
+  }
+  return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "no-store", "x-request-id": upstreamId, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
+}
+
 export async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params
+  if (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skill-installations") return proxyInstallation(request, path)
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
   if (path[0] !== "self" && (businessPath[0] === "skills" || businessPath[0] === "mcp" && businessPath[1] === "servers")) {
