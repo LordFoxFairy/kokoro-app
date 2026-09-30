@@ -16,3 +16,10 @@ export function rawIamSignInQuery(absolute: string): string | null {
   ) return null
   return query
 }
+
+/** This early expiry check does not validate or normalize IAM's signed query. */
+export function isIamSignInExpired(query: string): boolean {
+  const expiration = new URLSearchParams(query).getAll("exp")
+  return expiration.length === 1 && /^(0|[1-9][0-9]*)$/u.test(expiration[0] ?? "") &&
+    Number(expiration[0]) <= Math.floor(Date.now() / 1_000)
+}

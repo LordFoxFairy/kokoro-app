@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
-import { createHash, randomUUID } from "node:crypto"
+import { EventEmitter } from "node:events"
+import { randomUUID } from "node:crypto"
 import { cp, mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
@@ -8,9 +9,9 @@ import { createClient } from "redis"
 import { chromium } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { iamCsrfKeyPrefix } from "@/lib/server/iam-interaction-csrf"
+import { iamCsrfKeyPrefix, issueIamInteractionCsrf } from "@/lib/server/iam-interaction-csrf"
 import { issuerCookieAfter, prepareInteraction } from "@/lib/server/iam-interaction-route"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
@@ -110,8 +111,9 @@ async function waitForNext(port: number, diagnostics: () => string): Promise<voi
 }
 
 async function stop(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  await new Promise<void>((resolve) => {
+  const exited = () => child.exitCode !== null || child.signalCode !== null
+  if (exited()) return
+  await new Promise<void>((resolve, reject) => {
     let forcedExit: ReturnType<typeof setTimeout> | undefined
     let settled = false
     const finish = () => {
@@ -119,14 +121,26 @@ async function stop(child: ChildProcess): Promise<void> {
       settled = true
       clearTimeout(fallback)
       if (forcedExit !== undefined) clearTimeout(forcedExit)
-      resolve()
+      child.removeListener("exit", observeExit)
+      child.removeListener("error", observeExit)
+      if (exited()) resolve()
+      else reject(new Error("Next fixture process did not exit"))
+    }
+    const observeExit = () => { if (exited()) finish() }
+    const signal = (value: NodeJS.Signals) => {
+      // A rejected/failed signal is not proof of quiescence. Keep observing
+      // terminal state until the bounded escalation deadline.
+      try { child.kill(value) } catch { observeExit() }
     }
     const fallback = setTimeout(() => {
-      child.kill("SIGKILL")
       forcedExit = setTimeout(finish, 1_000)
+      signal("SIGKILL")
+      observeExit()
     }, 5_000)
-    child.once("exit", finish)
-    if (!child.kill("SIGTERM")) finish()
+    child.once("exit", observeExit)
+    child.on("error", observeExit)
+    signal("SIGTERM")
+    observeExit()
   })
 }
 
@@ -177,7 +191,6 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   const receivedPaths: string[] = []
   const receivedCookies: Array<string | undefined> = []
   const receivedBodies: string[] = []
-  const issuedCsrfTokens = new Set<string>()
   let signInStatus = 200
   let authorizePayload: unknown = { redirect: true, url: "" }
   let authorizeCookies: string[] = []
@@ -225,39 +238,70 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     }
   }
 
-  async function cleanupResources(): Promise<void> {
+  async function cleanupResources(dispose = disposeNextState): Promise<void> {
     const errors: unknown[] = []
     if (next !== undefined) {
       const child = next
-      next = undefined
-      try { await stop(child) } catch (error) { errors.push(error) }
+      try { await stop(child); next = undefined } catch (error) { errors.push(error) }
     }
     if (bff !== undefined) {
       const server = bff
-      bff = undefined
-      try { await close(server) } catch (error) { errors.push(error) }
+      try { await close(server); bff = undefined } catch (error) { errors.push(error) }
     }
+    if (next === undefined) {
+      try { await dispose() } catch (error) { errors.push(error) }
+    }
+    if (errors.length > 0) throw new AggregateError(errors, "failed to clean IAM relay Next fixture")
+  }
+
+  async function disposeNextState(): Promise<void> {
+    const errors: unknown[] = []
     if (fixtureRoot !== undefined) {
       const directory = fixtureRoot
-      fixtureRoot = undefined
-      try { await rm(directory, { recursive: true, force: true }) } catch (error) { errors.push(error) }
+      try { await rm(directory, { recursive: true, force: true }); fixtureRoot = undefined } catch (error) { errors.push(error) }
     }
-    if (nextPort !== 0 && issuedCsrfTokens.size > 0) {
+    if (nextPort !== 0) {
       const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
       client.on("error", () => undefined)
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const prefix = iamCsrfKeyPrefix(`http://localhost:${nextPort}`)
-        const keys = [...issuedCsrfTokens].map((token) => `${prefix}${createHash("sha256").update(token).digest("hex")}`)
+        // Register every key issued by this isolated origin, including browser
+        // redirects whose Set-Cookie never passes through the raw HTTP helpers.
+        const keys = await ownCsrfKeys()
         await Promise.race([
-          (async () => { await client.connect(); await client.del(keys) })(),
+          (async () => { await client.connect(); if (keys.length > 0) await client.del(keys) })(),
           new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("test Redis cleanup deadline")), 2_000) }),
         ])
       } catch (error) { errors.push(error) }
       finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
+      try { expect(await ownCsrfKeys()).toEqual([]) } catch (error) { errors.push(error) }
     }
     if (errors.length > 0) throw new AggregateError(errors, "failed to clean IAM relay Next fixture")
   }
+
+  it("retains the active Next handle and never disposes its directory or CSRF keys", async () => {
+    vi.useFakeTimers()
+    const liveNext = next
+    const liveBff = bff
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null, signalCode: null, kill: vi.fn(() => false),
+    })
+    const dispose = vi.fn(async () => undefined)
+    next = child as unknown as ChildProcess
+    bff = undefined
+    try {
+      const cleaning = cleanupResources(dispose)
+      const outcome = cleaning.then(() => null, (error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(await outcome).toBeInstanceOf(AggregateError)
+      expect(next).toBe(child)
+      expect(dispose).not.toHaveBeenCalled()
+    } finally {
+      next = liveNext
+      bff = liveBff
+      vi.useRealTimers()
+    }
+  })
 
   beforeAll(async () => {
     try {
@@ -416,7 +460,7 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     verifyEmailBody = "verified"
   })
 
-  afterAll(cleanupResources)
+  afterAll(() => cleanupResources())
 
   it("starts Product OIDC from the server login route", async () => {
     const response = await rawHttp(nextPort, "/login")
@@ -541,8 +585,6 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
 
   async function signInPage(): Promise<HttpResult> {
     const page = await rawHttp(nextPort, "/auth/sign-in?sig=%2BAb")
-    const token = page.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
-    if (token !== undefined) issuedCsrfTokens.add(token)
     return page
   }
 
@@ -562,7 +604,6 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     const cookie = (page.headers["set-cookie"] as string[] | undefined)?.find((value) => value.startsWith("kokoro_iam_csrf="))?.split(";")[0]
     const tenantIds = page.body.match(/name="tenant_ids" value="([^"]*)"/u)?.[1] ?? ""
     if (token === undefined || cookie === undefined) throw new Error(`interaction proof missing for ${path}: ${page.status}`)
-    issuedCsrfTokens.add(token)
     return { page, token, cookie, tenantIds }
   }
 
@@ -785,6 +826,59 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(receivedPaths).toEqual([])
   })
 
+  it.each(["text/html", "application/json"])("rejects expired signed POST with valid CSRF before credentials (%s)", async (accept) => {
+    const query = "?exp=1&sig=%2BAb"
+    const proof = await issueIamInteractionCsrf({
+      redisUrl, webOrigin: `http://localhost:${nextPort}`, path: "/auth/sign-in",
+      method: "POST", query, issuerCookie: "", secureCookies: false,
+    })
+    const response = await rawPost(nextPort, `/auth/sign-in${query}`,
+      new URLSearchParams({ csrf_token: proof.token, email: "user@example.test", password: "secret" }).toString(), {
+        origin: `http://localhost:${nextPort}`, cookie: proof.cookie.split(";", 1)[0]!, accept,
+      })
+    expect(receivedPaths).toEqual([])
+    expect(response.status).toBe(accept === "text/html" ? 303 : 403)
+    expect(response.headers.location).toBe(accept === "text/html" ? "/login" : undefined)
+    expect(response.headers["cache-control"]).toContain("no-store")
+  })
+
+  it("submits an old native DOM with expired CSRF into a fresh form without a CSP violation", async () => {
+    const browser = await chromium.launch({ headless: true })
+    const violations: string[] = []
+    try {
+      const context = await browser.newContext()
+      const page = await context.newPage()
+      await page.exposeFunction("recordFormCspViolation", (directive: string) => violations.push(directive))
+      await page.addInitScript(() => {
+        document.addEventListener("securitypolicyviolation", (event) => {
+          void (window as unknown as { recordFormCspViolation: (directive: string) => Promise<void> })
+            .recordFormCspViolation(event.effectiveDirective)
+        })
+      })
+      await page.goto(`http://localhost:${nextPort}/auth/sign-in?sig=%2BAb`)
+      const oldToken = await page.locator('input[name="csrf_token"]').inputValue()
+      await context.clearCookies({ name: "kokoro_iam_csrf" })
+      authorizePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/sign-in?sig=fresh` }
+      await page.getByLabel("邮箱").fill("user@example.test")
+      await page.getByLabel("密码").fill("secret")
+      const login = page.waitForResponse((response) => new URL(response.url()).pathname === "/login")
+      const post = page.waitForResponse((response) => response.request().method() === "POST")
+      await page.getByRole("button", { name: "登录" }).click()
+      expect((await post).status()).toBe(303)
+      expect((await login).status()).toBe(302)
+      await page.waitForURL(`http://localhost:${nextPort}/auth/sign-in?sig=fresh`)
+      await expect.poll(() => page.getByRole("heading", { name: "欢迎回来" }).isVisible()).toBe(true)
+      expect(await page.locator('input[name="csrf_token"]').inputValue()).not.toBe(oldToken)
+      expect(await page.getByLabel("密码").inputValue()).toBe("")
+      expect(receivedPaths.some((value) => value.startsWith("/iam/oauth2/authorize?"))).toBe(true)
+      expect(receivedPaths).not.toContain("/iam/sign-in/email")
+      expect(receivedPaths).not.toContain("/iam/oauth2/continue")
+      expect(violations).toEqual([])
+    } finally {
+      await browser.close()
+    }
+  }, 30_000)
+
   it("returns an expired browser form to a fresh login instead of exposing a JSON CSRF error", async () => {
     const page = await signInPage()
     const cookie = (page.headers["set-cookie"] as string[] | undefined)?.[0]?.split(";")[0]
@@ -964,7 +1058,6 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(innerConsent.status).toBe(200)
     const consentToken = innerConsent.body.match(/name="csrf_token" value="([A-Za-z0-9_-]+)"/u)?.[1]
     expect(consentToken).toBeDefined()
-    if (consentToken !== undefined) issuedCsrfTokens.add(consentToken)
     jar.absorb(innerConsent)
     const consented = await rawPost(nextPort, "/iam/interactions/consent?sig=%2BAb&scope=openid",
       `csrf_token=${consentToken}&decision=agree`, {
@@ -1276,5 +1369,38 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect(result.body).not.toContain("must-not-reach-browser")
     expect((result.headers["set-cookie"] as string[] | undefined)?.some((value) => value.includes("kokoro-issuer"))).not.toBe(true)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
+  })
+})
+
+
+describe("Next fixture shutdown confirmation", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each([false, true])("rejects an active child after bounded signals (TERM accepted: %s)", async (accepted) => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null, signalCode: null, kill: vi.fn(() => accepted),
+    })
+    const stopped = stop(child as unknown as ChildProcess)
+    const outcome = stopped.then(() => null, (error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(await outcome).toEqual(new Error("Next fixture process did not exit"))
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM")
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL")
+    expect(child.listenerCount("exit")).toBe(0)
+  })
+
+  it("accepts only an observed terminal child and cancels escalation", async () => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null, signalCode: null, kill: vi.fn(() => true),
+    })
+    const stopped = stop(child as unknown as ChildProcess)
+    child.exitCode = 0
+    child.emit("exit", 0, null)
+    await stopped
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect(child.listenerCount("exit")).toBe(0)
   })
 })

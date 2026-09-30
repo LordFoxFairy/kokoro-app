@@ -76,3 +76,25 @@ describe("HTTPS issuer sign-in Proxy rewrite", () => {
     expect(issueIamInteractionCsrf).not.toHaveBeenCalled()
   })
 })
+
+
+describe("signed sign-in expiration boundary", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each([
+    ["?exp=0&sig=%2BAb", true],
+    ["?exp=999&sig=%2BAb", true],
+    ["?exp=1000&sig=%2BAb", true],
+    ["?exp=1001&sig=%2BAb", false],
+    ["?sig=%2BAb", false],
+    ["?exp=1&exp=2000&sig=%2BAb", false],
+    ["?exp=01&sig=%2BAb", false],
+    ["?exp=-1&sig=%2BAb", false],
+    ["?exp=invalid&sig=%2BAb", false],
+  ])("checks canonical expiry without changing signed bytes (%s)", async (query, expired) => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000_999)
+    const { isIamSignInExpired, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
+    expect(isIamSignInExpired(query)).toBe(expired)
+    expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${query}`)).toBe(query)
+  })
+})

@@ -47,7 +47,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   let response: NextResponse
   if (path === "/auth/sign-in" && request.method === "GET") {
     const [{ iamRelayConfig, matchesCanonicalWebRequest }, { filterIssuerCookies, IAM_RELAY_POLICY },
-      { issueIamInteractionCsrf }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery }] = await Promise.all([
+      { issueIamInteractionCsrf }, { readSignInFeedback, clearSignInFeedback }, { rawIamSignInQuery, isIamSignInExpired }] = await Promise.all([
       import("@/lib/server/iam-relay-config"), import("@/lib/server/iam-relay-policy"),
       import("@/lib/server/iam-interaction-csrf"), import("@/lib/server/iam-sign-in-feedback"),
       import("@/lib/server/iam-sign-in-target"),
@@ -60,9 +60,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     if (query === null) return new NextResponse(null, { status: 404, headers: { "cache-control": "no-store" } })
     // A bookmarked IAM interaction is not a reusable login entry. Restart the
     // fixed Product OIDC flow before rendering a form bound to an expired query.
-    const expiration = new URLSearchParams(query).getAll("exp")
-    if (expiration.length === 1 && /^(0|[1-9][0-9]*)$/u.test(expiration[0] ?? "") &&
-      Number(expiration[0]) <= Math.floor(Date.now() / 1_000)) {
+    if (isIamSignInExpired(query)) {
       const redirect = NextResponse.redirect(new URL("/login", config.webOrigin), 303)
       redirect.headers.set("cache-control", "no-store")
       redirect.headers.set("referrer-policy", "no-referrer")

@@ -6,7 +6,7 @@ import { filterIssuerCookies, IAM_RELAY_POLICY } from "@/lib/server/iam-relay-po
 import { nativeIamResponse, validIamInteractionNavigation } from "@/lib/server/iam-relay-response"
 import { requestIamRelay, type IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 import { issueSignInFeedback } from "@/lib/server/iam-sign-in-feedback"
-import { IAM_SIGN_IN_PATH, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
+import { IAM_SIGN_IN_PATH, isIamSignInExpired, rawIamSignInQuery } from "@/lib/server/iam-sign-in-target"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -161,7 +161,7 @@ export async function POST(request: Request): Promise<Response> {
   const cookieToken = cookieValue(request.headers.get("cookie"), iamCsrfCookieName())
   try {
     const valid = await consumeIamInteractionCsrf({ redisUrl, webOrigin: config.webOrigin, path: PAGE_PATH, method: "POST", query, issuerCookie, cookieToken, formToken: form.get("csrf_token") })
-    if (!valid) {
+    if (!valid || isIamSignInExpired(query)) {
       // A stale browser form must not strand the user on a raw JSON error or
       // reuse an expired signed IAM interaction. Start a fresh fixed login;
       // non-browser requests keep the explicit 403 contract.

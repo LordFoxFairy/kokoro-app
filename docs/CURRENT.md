@@ -1,5 +1,28 @@
 # Kokoro User Web 当前状态
 
+## WEB-EXPIRED-SUBMIT（2026-09-30；代码切片，待 Root 验收）
+
+基线 `1dc211bb61030926177b72b3dff2061562a1015b`。签名交互 GET/POST 现在复用现有 target helper 的到期判断；
+POST 保留严格同源、原始 query 和一次性 CSRF 消费，在调用 IAM 凭据/continue 前阻断已到期交互。
+HTML 返回 303 `/login` 启动新 OIDC，非 HTML 保留 403；没有延长期限、重新签名或认证旁路。
+该边界缺口由隔离 fixture 证明，不代表已定位用户当前浏览器点击失败的根因。
+
+Node 22.22.2 实测：expired query + 有效 CSRF 的 HTML/JSON 两例先 RED（仍调用凭据及 continue），修复后
+相关 system 文件和 expiry unit 初验 **73 passed**；原生旧 DOM 失效 CSRF 点击后经 `/login` 到新表单、token 改变、
+无 CSP violation。测试停止独占 Next/mock BFF 后登记动态 origin 精确 prefix 下全部 CSRF keys 并清理、断言余量 0，
+覆盖浏览器反馈 GET 漏登记。仅复用 Redis DB 7，不接当前 3310 或真实 IAM。
+
+本片实际门：非 integration 测试 **1555 passed**（154 files）；contract **108 passed**／生成校验通过；
+architecture **37 passed**；lint、typecheck、build、diff check 通过。
+其他 integration、完整 Playwright E2E、当前 3310 的真实 IAM/用户可见提交由 Root 后续验收，本片未运行。
+
+关闭确认返修：既有 fixture 曾把 TERM 返回 false 或 KILL 后等待到期当作停止成功；三个确定性 fake child/cleanup
+负例先 RED。现在只有 `exitCode/signalCode` 终态才完成 stop，TERM 5 秒＋KILL 1 秒仍未退出则抛错并保留 Next handle，
+跳过其临时目录/CSRF 清理；独立 BFF 关闭成功后才释放 handle。未创建真实拒杀进程。
+返修后同一 system/expiry 两文件 **77 passed**，lint、typecheck、diff check 再次通过；真实 fixture 关闭与精确 CSRF 余量零
+断言通过。本次只改变测试生命周期及此状态记录，生产认证代码未再修改；其他门沿上述首片实测，未重复运行。
+
+
 ## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；代码切片，待 Root 验收）
 
 基线 Web clean `12f9dff909b8e2e8694a96f510676f90d375ecdc`；BFF 已验 `571b51de2057905c74c78ac966c8cf5ac11eca93`，
