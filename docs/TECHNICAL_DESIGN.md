@@ -1,5 +1,18 @@
 # Kokoro User Web 技术设计
 
+## WEB-EMPTY-FAILED-TURN：空失败助手轮与反馈共用滚动项
+
+`ConversationThread` 继续拥有消息项和普通/余额不足失败反馈的唯一组合边界。只有失败已落定、没有流式或重连、没有
+HITL、末项确为最后一条持久化 assistant 所属 run、该轮所有正文均为精确空串、所有 step 均为 text，且当前没有可渲染
+成果区时，既有失败反馈才嵌入该 assistant 的原 `MessageScrollerItem`。空 `article`、run identity 和
+`data-message-id="run-error"` / `credit-error` 查询 hook 均保留，失败反馈不会再创建相邻的第二个滚动项，因此不需要以
+负 margin 或 CSS 隐藏抵消双份轮间距。
+
+普通和余额不足分支仍复用同一份失败反馈 JSX 放置逻辑；`Alert` 的 `role=alert`、标题、普通详情与定位 ref、重试以及计费
+三动作不变。只要有正文或过程、失败不再位于持久化消息尾部、存在孤立过程、正在流式/重连/HITL、有可渲染成果，或没有
+持久化 assistant，就继续使用原独立失败滚动项。该局部布局归并不改消息、成果、重试协议、Composer、共享 scroller、CSS
+或机器契约；真实页面间距和用户所见输入内框仍须 Root 取得 fresh 浏览器证据。
+
 ## WEB-FAILURE-FEEDBACK-FLAT：会话内失败反馈不伪装成第二输入卡
 
 `ConversationThread` 继续拥有普通失败与余额不足失败的可见反馈，既有 shadcn `Alert` 继续拥有 `role=alert`、标题、详情和动作语义。本局部修复只在既有 Thread CSS 把失败反馈收敛为 `fit-content`、`max-width: 100%` 的内联内容块，并去掉外层卡片的 border、background、shadow 与 padding；窄栏仍可在 100% 内换行，详情和所有按钮保持键盘可达。共享 `AlertTitle` 的单行 clamp 只在 `.error :global([data-slot="alert-title"])` 作用域内解除，保证长标题完整换行而不改 shared primitive。消息顺序、重复用户事实、空失败助手轮、重试/计费动作、Composer、滚动与机器契约均不改变；真实浏览器视觉仍由 Root 后继验收。

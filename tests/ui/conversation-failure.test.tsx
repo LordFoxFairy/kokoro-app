@@ -39,6 +39,16 @@ function failedThread(code: RunErrorCode, message: string): SessionStreamState {
   }
 }
 
+function emptyFailedThread(): SessionStreamState {
+  return {
+    ...failedThread("internal_error", "diagnostic"),
+    messages: [
+      { id: "m_u", role: "user", content: "do the thing", runId: "m_u" },
+      { id: "m_a", role: "assistant", content: "", runId: "run_1" },
+    ],
+  }
+}
+
 function renderFailure(thread: SessionStreamState, onRetry = vi.fn()) {
   return render(
     <ConversationThread
@@ -128,7 +138,7 @@ describe("ConversationThread 失败卡渲染", () => {
     }
   })
 
-  it("清除空成果滚动项时保留重复用户、空失败助手轮与失败卡", () => {
+  it("空终态助手轮保留消息身份并在同一滚动项承接唯一普通失败反馈", () => {
     const thread = failedThread("internal_error", "diagnostic")
     const { container } = render(
       <ConversationThread
@@ -155,9 +165,150 @@ describe("ConversationThread 失败卡渲染", () => {
     )
     expect(container.querySelector('[data-message-id="m_u1"]')).toHaveTextContent("same persisted prompt")
     expect(container.querySelector('[data-message-id="m_u2"]')).toHaveTextContent("same persisted prompt")
-    expect(container.querySelector('[data-message-id="run_1"]')).not.toBeNull()
-    expect(container.querySelector('[data-message-id="run-error"]')).not.toBeNull()
+    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run_1"]')
+    const feedback = container.querySelector('[data-message-id="run-error"]')
+    expect(assistantItem?.querySelector("article")).not.toBeNull()
+    expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)
+    expect(container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id="run-error"]')).toHaveLength(0)
     expect(container.querySelector('[data-message-id="deliveries"]')).toBeNull()
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
+    expect(screen.getByRole("button", { name: tr("fail.showDetail") })).toBeEnabled()
+  })
+
+  it("空终态助手轮在同一滚动项承接唯一余额不足反馈及全部动作", () => {
+    const { container } = render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={emptyFailedThread()}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed
+        creditRejected
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run_1"]')
+    const feedback = container.querySelector('[data-message-id="credit-error"]')
+    expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)
+    expect(container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id="credit-error"]')).toHaveLength(0)
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
+    expect(screen.getByRole("button", { name: tr("billing.viewPricing") })).toBeEnabled()
+    expect(screen.getByRole("button", { name: tr("billing.viewBalance") })).toBeEnabled()
+    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: "有正文",
+      thread: () => failedThread("internal_error", "diagnostic"),
+      props: {},
+    },
+    {
+      name: "空白正文并非精确空串",
+      thread: () => ({
+        ...emptyFailedThread(),
+        messages: [
+          { id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" },
+          { id: "m_a", role: "assistant" as const, content: " ", runId: "run_1" },
+        ],
+      }),
+      props: {},
+    },
+    {
+      name: "有思考过程",
+      thread: () => ({
+        ...emptyFailedThread(),
+        stepsByRun: {
+          run_1: [{ kind: "thinking" as const, seq: 1, segmentId: "m_a", text: "working" }],
+        },
+      }),
+      props: {},
+    },
+    {
+      name: "失败助手后还有持久化用户消息",
+      thread: () => ({
+        ...emptyFailedThread(),
+        messages: [
+          ...emptyFailedThread().messages,
+          { id: "m_u2", role: "user" as const, content: "new request", runId: "m_u2" },
+        ],
+      }),
+      props: {},
+    },
+    {
+      name: "仅有孤立过程而无持久化助手",
+      thread: () => ({
+        ...emptyFailedThread(),
+        messages: [{ id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" }],
+        stepsByRun: {
+          run_1: [{ kind: "thinking" as const, seq: 1, segmentId: "thinking_1", text: "working" }],
+        },
+      }),
+      props: {},
+    },
+    {
+      name: "重试已进入流式",
+      thread: emptyFailedThread,
+      props: { isStreaming: true },
+    },
+    {
+      name: "正在重连",
+      thread: emptyFailedThread,
+      props: { isReconnecting: true },
+    },
+    {
+      name: "HITL仍活跃",
+      thread: emptyFailedThread,
+      props: { hitlRunId: "run_1" },
+    },
+    {
+      name: "成果区可渲染",
+      thread: () => ({ ...emptyFailedThread(), deliveries: [delivery] }),
+      props: { onOpenDelivery: vi.fn() },
+    },
+    {
+      name: "没有持久化助手",
+      thread: () => ({
+        ...emptyFailedThread(),
+        messages: [{ id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" }],
+        stepsByRun: {},
+      }),
+      props: {},
+    },
+  ])("$name 时保留独立失败滚动项", ({ thread, props }) => {
+    const { container } = render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={thread()}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+        {...props}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    const feedbackItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run-error"]')
+    expect(feedbackItem).not.toBeNull()
+    expect(feedbackItem?.querySelector('[role="alert"]')).not.toBeNull()
+    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
   })
 
   it("失败反馈按内容收敛且不恢复成第二个输入卡", () => {

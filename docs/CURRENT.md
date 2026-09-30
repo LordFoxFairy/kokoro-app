@@ -1,5 +1,21 @@
 # Kokoro User Web 当前状态
 
+## WEB-EMPTY-FAILED-TURN 源码验收通过，fresh 视觉待验（2026-09-30）
+
+Root 独立 Node22.22.2完整 `pnpm check` 实际exit0：contract109、architecture49、全量1836（40.87s）、lint/typecheck/build通过；日志 `/tmp/kokoro-web-empty-failed-turn-root-check.log`。Root用HEAD组件与候选tests真实复现RED2失败/30通过并finally恢复原候选，日志 `/tmp/kokoro-web-empty-failed-turn-root-red.log`；冻结四文件独立审查P0/P1/P2=0/0/0。这里只验收源码切片；当前浏览器读取/截图仍超时，输入框内方框和整体视觉仍未验，不宣称本片已闭环整个聊天体验。
+
+基线 `main f9587ac9a008c7183b875e096be504fb5c0b69ef`。本候选仅在既有 `ConversationThread` 内把满足严格终态边界的
+空失败 assistant 与原失败反馈放入同一 `MessageScrollerItem`，保留空 `article`、run identity、失败查询 hook、
+`role=alert`、详情定位、普通重试及余额不足三动作；不以负 margin、CSS 隐藏或消息过滤消除间距。有正文/过程、旧失败、
+孤立过程、流式/重连/HITL、可渲染成果或无持久化 assistant 时仍保留独立失败滚动项。Composer、CSS、共享 primitive、
+owner 数据与机器契约未改。
+
+Node22.22.2 精准测试先得到预期 RED：2失败/30通过，日志
+`/tmp/kokoro-web-empty-failed-turn-red.log`；实现后目标文件32/32通过，日志
+`/tmp/kokoro-web-empty-failed-turn-target.log`。`pnpm lint` 与 `pnpm typecheck` 均 exit0，日志分别为
+`/tmp/kokoro-web-empty-failed-turn-lint.log`、`/tmp/kokoro-web-empty-failed-turn-typecheck.log`。writer未运行完整
+check、build、服务或浏览器；当前 fresh 页面间距与输入框视觉仍待Root验收，不把纯测试结果称为整体聊天布局完成。
+
 ## WEB-FAILURE-FEEDBACK-FLAT 源码验收通过，真实视觉待验（2026-09-30）
 
 Root在本仓显式Node22.22.2完整 `pnpm check` actual exit0：contract109、architecture49、全量1825（41.43s）、lint/typecheck/build通过；日志 `/tmp/kokoro-web-failure-feedback-root-check.log`。独立四文件冻结审查P0/P1/P2=0/0/0，Root核4/4SHA一致。Root另临时用HEAD CSS复现定点RED 1失败/20通过，并finally恢复候选，再定点GREEN21/21；日志 `/tmp/kokoro-web-failure-feedback-root-{red,target-green}.log`。未运行Playwright/fresh浏览器视觉；用户当前输入框方框仍待定位，不用本片代码验收代替整体UI闭环。

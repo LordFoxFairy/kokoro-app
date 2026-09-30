@@ -195,6 +195,98 @@ function ConversationThreadSurface({
   // 合成一个无内容的 live 脚手架轮，让 AssistantTurn 渲染「就近 live 成形线」，
   // 绝不在提交与首 token 之间留空帧。一旦首个 step/text 到达，buildThreadItems 即接管，脚手架退场。
   const showScaffoldTurn = isStreaming && items[items.length - 1]?.kind !== "assistant-turn"
+  const hasRenderableDeliveries = Boolean(
+    onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore),
+  )
+  const terminalItem = items.at(-1)
+  const terminalMessage = thread.messages.at(-1)
+  const embedFailureFeedback = Boolean(
+    hasFailed
+      && !isStreaming
+      && !isReconnecting
+      && hitlRunId === null
+      && !hasRenderableDeliveries
+      && terminalItem?.kind === "assistant-turn"
+      && terminalMessage?.role === "assistant"
+      && terminalItem.runId === terminalMessage.runId
+      && Object.values(terminalItem.messagesById).length > 0
+      && Object.values(terminalItem.messagesById).every((message) => message.content === "")
+      && terminalItem.steps.every((step) => step.kind === "text"),
+  )
+  const failureMessageId = creditRejected ? "credit-error" : "run-error"
+  const failureFeedback = !hasFailed ? null : (
+    <div
+      {...(creditRejected ? {} : { ref: errorCardRef })}
+      data-message-id={embedFailureFeedback ? failureMessageId : undefined}
+    >
+      {creditRejected ? (
+        <Alert variant="destructive" className={styles.error}>
+          <AlertTitle>{t("billing.creditRejected")}</AlertTitle>
+          <AlertDescription className={styles.errorLayout}>
+            <div className={styles.errorBody}>
+              <span>{t("billing.creditPricing")}</span>
+            </div>
+            <div className={styles.errorActions}>
+              <Button variant="outline" className={styles.retry} type="button" onClick={onOpenPricing}>
+                {t("billing.viewPricing")}
+              </Button>
+              <Button variant="outline" className={styles.retry} type="button" onClick={onOpenBilling}>
+                {t("billing.viewBalance")}
+              </Button>
+              <Button
+                variant="outline"
+                className={styles.retry}
+                type="button"
+                disabled={isStreaming}
+                aria-busy={isStreaming}
+                onClick={onRetry}
+              >
+                {isStreaming ? <Spinner aria-hidden="true" /> : null}
+                {t("thread.retry")}
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert variant="destructive" className={styles.error}>
+          <AlertTitle>{t(failureCopyKey(thread.runError))}</AlertTitle>
+          <AlertDescription className={styles.errorLayout}>
+            <div className={styles.errorBody}>
+              {/* internal_error 额外反馈指引：重试仍失败时引导用户把详情反馈给我们。 */}
+              {thread.runError?.code === "internal_error" ? (
+                <span className={styles.errorHint}>{t("fail.internalHint")}</span>
+              ) : null}
+              {/* message 原文折叠可展开（兜底展示，绝不裸露错误码）。 */}
+              {thread.runError?.message ? (
+                <Collapsible className={styles.errorDetail} onOpenChange={handleErrorDetailChange}>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="link" className={styles.errorDetailTrigger}>
+                      <ChevronRight data-icon="inline-start" aria-hidden="true" />
+                      <span>{t("fail.showDetail")}</span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <pre>{thread.runError.message}</pre>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : null}
+            </div>
+            <Button
+              variant="outline"
+              className={styles.retry}
+              type="button"
+              disabled={isStreaming}
+              aria-busy={isStreaming}
+              onClick={onRetry}
+            >
+              {isStreaming ? <Spinner aria-hidden="true" /> : null}
+              {t("thread.retry")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
 
   return (
     <MessageScroller
@@ -218,25 +310,28 @@ function ConversationThreadSurface({
             {item.kind === "user" ? (
               <MessageBubble message={item.message} />
             ) : (
-              <AssistantTurn
-                {...(brandName === undefined ? {} : { brandName })}
-                sessionId={sessionId}
-                {...(onOpenFile === undefined ? {} : { onOpenFile })}
-                {...(onOpenTool === undefined ? {} : { onOpenTool: (tool: SessionToolCall) => onOpenTool(item.runId, tool) })}
-                steps={item.steps}
-                messagesById={item.messagesById}
-                isLive={item.runId === liveRunId}
-                reconnecting={item.runId === liveRunId && isReconnecting}
-                mode={mode}
-                stagedDecisions={stagingByRun[item.runId] ?? NO_DECISIONS}
-                hitlActive={item.runId === hitlRunId}
-                controlError={item.runId === hitlRunId ? controlError : null}
-                {...(onToolDecision === undefined ? {} : { onToolDecision: (toolId: string, decision: ToolDecision) => onToolDecision(item.runId, toolId, decision) })}
-                {...(onCancelRun === undefined || item.runId !== hitlRunId ? {} : { onCancelRun })}
-                taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
-                  ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
-                  : ""}
-              />
+              <>
+                <AssistantTurn
+                  {...(brandName === undefined ? {} : { brandName })}
+                  sessionId={sessionId}
+                  {...(onOpenFile === undefined ? {} : { onOpenFile })}
+                  {...(onOpenTool === undefined ? {} : { onOpenTool: (tool: SessionToolCall) => onOpenTool(item.runId, tool) })}
+                  steps={item.steps}
+                  messagesById={item.messagesById}
+                  isLive={item.runId === liveRunId}
+                  reconnecting={item.runId === liveRunId && isReconnecting}
+                  mode={mode}
+                  stagedDecisions={stagingByRun[item.runId] ?? NO_DECISIONS}
+                  hitlActive={item.runId === hitlRunId}
+                  controlError={item.runId === hitlRunId ? controlError : null}
+                  {...(onToolDecision === undefined ? {} : { onToolDecision: (toolId: string, decision: ToolDecision) => onToolDecision(item.runId, toolId, decision) })}
+                  {...(onCancelRun === undefined || item.runId !== hitlRunId ? {} : { onCancelRun })}
+                  taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
+                    ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
+                    : ""}
+                />
+                {embedFailureFeedback && itemIndex === items.length - 1 ? failureFeedback : null}
+              </>
             )}
           </MessageScrollerItem>
         ))}
@@ -271,77 +366,8 @@ function ConversationThreadSurface({
           </MessageScrollerItem>
         ) : null}
 
-        {hasFailed && creditRejected ? (
-          <MessageScrollerItem messageId="credit-error">
-            <Alert variant="destructive" className={styles.error}>
-              <AlertTitle>{t("billing.creditRejected")}</AlertTitle>
-              <AlertDescription className={styles.errorLayout}>
-                <div className={styles.errorBody}>
-                  <span>{t("billing.creditPricing")}</span>
-                </div>
-                <div className={styles.errorActions}>
-                  <Button variant="outline" className={styles.retry} type="button" onClick={onOpenPricing}>
-                    {t("billing.viewPricing")}
-                  </Button>
-                  <Button variant="outline" className={styles.retry} type="button" onClick={onOpenBilling}>
-                    {t("billing.viewBalance")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={styles.retry}
-                    type="button"
-                    disabled={isStreaming}
-                    aria-busy={isStreaming}
-                    onClick={onRetry}
-                  >
-                    {isStreaming ? <Spinner aria-hidden="true" /> : null}
-                    {t("thread.retry")}
-                  </Button>
-                </div>
-              </AlertDescription>
-            </Alert>
-          </MessageScrollerItem>
-        ) : hasFailed ? (
-          <MessageScrollerItem messageId="run-error">
-            <div ref={errorCardRef}>
-            <Alert variant="destructive" className={styles.error}>
-              <AlertTitle>{t(failureCopyKey(thread.runError))}</AlertTitle>
-              <AlertDescription className={styles.errorLayout}>
-                <div className={styles.errorBody}>
-                  {/* internal_error 额外反馈指引：重试仍失败时引导用户把详情反馈给我们。 */}
-                  {thread.runError?.code === "internal_error" ? (
-                    <span className={styles.errorHint}>{t("fail.internalHint")}</span>
-                  ) : null}
-                  {/* message 原文折叠可展开（兜底展示，绝不裸露错误码）。 */}
-                  {thread.runError?.message ? (
-                    <Collapsible className={styles.errorDetail} onOpenChange={handleErrorDetailChange}>
-                      <CollapsibleTrigger asChild>
-                        <Button type="button" variant="link" className={styles.errorDetailTrigger}>
-                          <ChevronRight data-icon="inline-start" aria-hidden="true" />
-                          <span>{t("fail.showDetail")}</span>
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <pre>{thread.runError.message}</pre>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : null}
-                </div>
-                <Button
-                  variant="outline"
-                  className={styles.retry}
-                  type="button"
-                  disabled={isStreaming}
-                  aria-busy={isStreaming}
-                  onClick={onRetry}
-                >
-                  {isStreaming ? <Spinner aria-hidden="true" /> : null}
-                  {t("thread.retry")}
-                </Button>
-              </AlertDescription>
-            </Alert>
-            </div>
-          </MessageScrollerItem>
+        {failureFeedback && !embedFailureFeedback ? (
+          <MessageScrollerItem messageId={failureMessageId}>{failureFeedback}</MessageScrollerItem>
         ) : null}
 
       </MessageScrollerContent>
