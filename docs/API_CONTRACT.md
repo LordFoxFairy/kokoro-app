@@ -8,7 +8,9 @@ BFF public 唯一 owner 为 `571b51de2057905c74c78ac966c8cf5ac11eca93`，其 Ope
 `selected_skill_source_refs`。Web 每次创建消息都显式发送该数组，包括无选择时的 `[]`；不得发送 alias、显示名称、
 `null` 或省略来维持旧语义。
 
-每项为 exact `skill:<SkillId>`：不得 trim/规范化，须匹配 `^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$`；
+每项为 exact `skill:<SkillId>`：不得 trim/规范化，须匹配
+`^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])`；使用绝对末尾断言，尾随 LF、CR 或 Unicode
+换行均拒绝，不得以 `$` 代替；
 最多 16 项、有序唯一、单项最多 197 个字符，整个数组的 compact UTF-8 JSON 最多 4096 字节。选择顺序进入 BFF request digest。Web 在提交开始时冻结 content、idempotency key 与该数组；网络结果未知或
 用户显式重试必须复用同一集合，不能采样重试时的新选择。同 key 不同选择由 BFF 409 拒绝。严格 consumer 同时拒绝旧
 `pinned_skills`、重复、17 项、数组 JSON 超 4 KiB、前后空白/空 suffix 与多余字段。
