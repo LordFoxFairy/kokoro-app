@@ -25,9 +25,23 @@ const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
 const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
 const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 
-function projectionError(status: 400 | 401 | 502 | 503, code: string, requestId: string): Response {
+type ProjectionFault = "configuration" | "bffNotConfigured" | "iamUnavailable" | "unauthenticated" | "invalidQuery" | "invalidSkillRequest" | "bffUnavailable" | "invalidOwnerResponse"
+type ProjectionLocalCode = "product_tenant_not_configured" | "skill_dependency_unavailable" | "iam_admission_unavailable" | "session_authentication_required" | "invalid_query_parameter" | "invalid_skill_request" | "skill_response_invalid"
+const PROJECTION_FAILURES = {
+  configuration: { status: 503, code: "product_tenant_not_configured", retryable: false },
+  bffNotConfigured: { status: 503, code: "skill_dependency_unavailable", retryable: false },
+  iamUnavailable: { status: 503, code: "iam_admission_unavailable", retryable: true },
+  unauthenticated: { status: 401, code: "session_authentication_required", retryable: false },
+  invalidQuery: { status: 400, code: "invalid_query_parameter", retryable: false },
+  invalidSkillRequest: { status: 400, code: "invalid_skill_request", retryable: false },
+  bffUnavailable: { status: 503, code: "skill_dependency_unavailable", retryable: true },
+  invalidOwnerResponse: { status: 502, code: "skill_response_invalid", retryable: false },
+} as const satisfies Record<ProjectionFault, { status: 400 | 401 | 502 | 503; code: ProjectionLocalCode; retryable: boolean }>
+
+function projectionError(fault: ProjectionFault, requestId: string): Response {
+  const { status, code, retryable } = PROJECTION_FAILURES[fault]
   return NextResponse.json(
-    { error: { code, message: code, retryable: status >= 500 } },
+    { error: { code, message: code, retryable } },
     { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
   )
 }
@@ -160,12 +174,12 @@ export async function proxyHubRequest(
     : incomingRequestId || crypto.randomUUID()
   const config = productBffConfig()
   if (config === null) {
-    if (publicProjectionRead) return projectionError(503, "auth_not_configured", requestId)
+    if (publicProjectionRead) return projectionError("configuration", requestId)
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
   if (config.bffBaseUrl == null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
-    if (publicProjectionRead) return projectionError(503, "hub_not_configured", requestId)
+    if (publicProjectionRead) return projectionError("bffNotConfigured", requestId)
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
@@ -175,11 +189,11 @@ export async function proxyHubRequest(
   try {
     claims = await admittedProductSession(request, config)
   } catch {
-    if (publicProjectionRead) return projectionError(503, "session_unavailable", requestId)
+    if (publicProjectionRead) return projectionError("iamUnavailable", requestId)
     return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
   }
   if (claims === null) {
-    if (publicProjectionRead) return projectionError(401, "unauthenticated", requestId)
+    if (publicProjectionRead) return projectionError("unauthenticated", requestId)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
   if (request.method === "GET" && path[0] === "self" && (
@@ -193,7 +207,7 @@ export async function proxyHubRequest(
       || (personalSkillListRead && query.get("scope_kind") !== "personal")
       || (query.has("cursor") && (query.get("cursor") === "" || (query.get("cursor")?.length ?? 0) > 4096))
       || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
-    if (invalidQuery) return projectionError(400, "invalid_projection_read", requestId)
+    if (invalidQuery) return projectionError(personalSkillIdRead ? "invalidSkillRequest" : "invalidQuery", requestId)
   }
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
@@ -255,7 +269,7 @@ export async function proxyHubRequest(
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
-    if (publicProjectionRead) return projectionError(502, "hub_unreachable", requestId)
+    if (publicProjectionRead) return projectionError("bffUnavailable", requestId)
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
@@ -310,7 +324,7 @@ export async function proxyHubRequest(
       || upstreamContentType === null
       || !JSON_MEDIA_TYPE.test(upstreamContentType)) {
       await upstream.body?.cancel()
-      return projectionError(502, "invalid_projection_response", requestId)
+      return projectionError("invalidOwnerResponse", requestId)
     }
     const projectionHeaders = new Headers({ "cache-control": "no-store", "x-request-id": upstreamRequestId, "content-type": upstreamContentType })
     return new Response(upstream.body, { status: upstream.status, headers: projectionHeaders })

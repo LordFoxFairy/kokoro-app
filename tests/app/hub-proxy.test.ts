@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import YAML from "yaml"
 
 import { requestWithDomain } from "@/lib/server/upstream-http"
 import type { ProductBffConfig } from "@/lib/server/product-bff"
@@ -20,6 +23,17 @@ const ENV = {
   KOKORO_DOMAIN: "dev.kokoro.localhost",
   KOKORO_BFF_BASE_URL: "http://bff.test",
   KOKORO_INTERNAL_SECRET_WEB_BFF: "svc-secret",
+}
+
+const pinnedSpec = YAML.parse(readFileSync(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"), "utf8")) as {
+  components: { schemas: {
+    PlatformProjectionReadErrorResponse: { properties: { error: { properties: { code: { enum: string[] } } } } }
+    PublishedPersonalSkillErrorDetail: { properties: { code: { enum: string[] } } }
+  } }
+}
+const ownerErrorCodes = {
+  projection: pinnedSpec.components.schemas.PlatformProjectionReadErrorResponse.properties.error.properties.code.enum,
+  byId: pinnedSpec.components.schemas.PublishedPersonalSkillErrorDetail.properties.code.enum,
 }
 
 // A retired cookie must never be promoted into a Product Session.
@@ -47,21 +61,29 @@ afterEach(() => {
 })
 
 describe("/api/hub/[...path] proxy", () => {
-  async function expectProjectionError(response: Response, status: number, code: string, expectedRequestId?: string) {
+  it("keeps list/MCP query errors separate from by-ID request errors in the pinned owner enums", () => {
+    expect(ownerErrorCodes.projection).toContain("invalid_query_parameter")
+    expect(ownerErrorCodes.projection).not.toContain("invalid_skill_request")
+    expect(ownerErrorCodes.byId).toContain("invalid_skill_request")
+    expect(ownerErrorCodes.byId).not.toContain("invalid_query_parameter")
+  })
+
+  async function expectProjectionError(response: Response, status: number, code: string, retryable: boolean, expectedRequestId?: string, ownerKind: "projection" | "byId" = "projection") {
     expect(response.status).toBe(status)
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("content-type")).toMatch(/^application\/json/u)
     const requestId = response.headers.get("x-request-id")
     expect(requestId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u)
     if (expectedRequestId) expect(requestId).toBe(expectedRequestId)
-    expect(await response.json()).toEqual({ error: { code, message: code, retryable: status >= 500 } })
+    expect(ownerErrorCodes[ownerKind]).toContain(code)
+    expect(await response.json()).toEqual({ error: { code, message: code, retryable } })
   }
 
   it("emits typed local errors for projection config, IAM, query, network, and invalid owner branches", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
     const path = params(["self", "skills"])
     delete process.env.KOKORO_WEB_AUTH_SECRET
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal", { headers: { "x-kokoro-request-id": "client-valid" } }), path), 503, "auth_not_configured", "client-valid")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal", { headers: { "x-kokoro-request-id": "client-valid" } }), path), 503, "product_tenant_not_configured", false, "client-valid")
     process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET
 
     const productBff = await import("@/lib/server/product-bff")
@@ -69,22 +91,24 @@ describe("/api/hub/[...path] proxy", () => {
       bffBaseUrl: null, domain: "dev.kokoro.localhost", internalSecret: "svc-secret",
       session: { redisUrl: ENV.KOKORO_WEB_REDIS_URL, webOrigin: ENV.KOKORO_WEB_ORIGIN, secret: ENV.KOKORO_WEB_AUTH_SECRET },
     } as unknown as ProductBffConfig)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 503, "hub_not_configured")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 503, "skill_dependency_unavailable", false)
     configSpy.mockRestore()
 
     currentProductSession.mockRejectedValueOnce(new Error("IAM down"))
     const invalidId = await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal", { headers: { "x-kokoro-request-id": "bad request id" } }), path)
-    await expectProjectionError(invalidId, 503, "session_unavailable")
+    await expectProjectionError(invalidId, 503, "iam_admission_unavailable", true)
     expect(invalidId.headers.get("x-request-id")).not.toBe("bad request id")
 
     currentProductSession.mockResolvedValueOnce(null)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 401, "unauthenticated")
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), path), 400, "invalid_projection_read")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 401, "session_authentication_required", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), path), 400, "invalid_query_parameter", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/mcp/servers?cursor="), params(["self", "mcp", "servers"])), 400, "invalid_query_parameter", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/bad%20id"), params(["self", "skills", "bad id"])), 400, "invalid_skill_request", false, undefined, "byId")
 
     vi.mocked(requestWithDomain).mockRejectedValueOnce(new Error("BFF down"))
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "hub_unreachable")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 503, "skill_dependency_unavailable", true)
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { "content-type": "application/json" } }))
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "invalid_projection_response")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "skill_response_invalid", false)
   })
 
   it("accepts only JSON media type for successful and error owner projections", async () => {
@@ -94,7 +118,7 @@ describe("/api/hub/[...path] proxy", () => {
       vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(status === 200 ? '{"data":{"skills":[]}}' : '{"error":{"code":"skill_not_found","message":"hidden","retryable":false}}', {
         status, headers: { "content-type": "text/plain", "cache-control": "no-store", "x-request-id": "owner-request" },
       }))
-      await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "invalid_projection_response")
+      await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "skill_response_invalid", false)
     }
     for (const status of [200, 404]) {
       vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(status === 200 ? '{"data":{"skills":[]}}' : '{"error":{"code":"skill_not_found","message":"hidden","retryable":false}}', {
