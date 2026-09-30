@@ -1,5 +1,30 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PRODUCT-IA：既有资源入口消费边界（2026-09-30；仅文档）
+
+基线 Web `79f19df`；本门不编辑 contract/generated，不新增 endpoint 或 owner wire。固定机器来源仍是
+`src/generated/bff-public-openapi.yaml`，同源 path/schema 仍是 `src/contract/` 与现 route adapter。
+
+| UI 意图 | 已存在边界 / 目标消费 |
+| --- | --- |
+| 独立会话 / 专案内会话 | 复用 Chat engine、既有 `project_ref` 与 conversation 列表过滤；归属可选，不把 Conversation ID 当 ScheduledTask/Run ID。原 Chat 幂等、AG-UI 与水位完全保留。 |
+| 新建/打开专案 | 现 `features/app/project-create.ts` → `/api/hub/projects` → BFF `/v1/projects`；严格 owner 回执 ID 后打开 `/app/project/{id}`。未知 ACK 复用原意图；导航失败只重试已得 ID，不重发创建。品牌、slug 猜测、`kokoro`、preview sentinel 不提供真实项目身份。 |
+| 独立任务 | 现 `/app/scheduled` → ScheduledTaskSurface live client → `/api/scheduled-tasks` → BFF `/v1/scheduled-tasks`，现 get/update/delete/retry 子路径保持。既有严格请求/回执 schema、mutation key 与失败状态复用；不新建“任务=新聊天”别名。 |
+| 项目调度 | 固定 public 已有 POST `/v1/projects/{projectId}/scheduled-tasks`，要求 Idempotency-Key，返回 ScheduledTaskResponse；当前 useAppFrameProject 仅验 HTTP ok 丢弃回执，Project UI 合成 ID，不能当真实成功。首片移除正式嵌入假流程，任务导航去独立 live surface；后继若接项目创建，必须沿此 owner 回执和精确输入，不假造新协议。 |
+
+**严守两个差异。** `/v1/projects/{projectId}/tasks` 返回 TaskListResponse，不等于 Conversation list，
+也不等于 ScheduledTaskListResponse；不因路径里有 tasks 就挪用。现 ScheduledTask public 允许 project_id，
+但 Web 独立 client 的视图投影未保留它，列表接口消费没有项目筛选；因此首片不声称任务页面已按 Project 过滤，
+不通过猜 ID/标题或前端合成关系提供该承诺。完整项目集合消费者也尚未接入 rail，不把假单项目当集合。
+
+浏览器只用同源 adapter；tenant/actor/owner 权限来自当前 Product Session/BFF，不由 UI body 自报。
+HTTP 401/403/404/429/依赖错误仍保持现 contract 语义，loading/error 不转成功或预览数据；网络结果未知不发新副作用身份。
+正式 UI 只有真实 owner ACK/经校验读取才宣称资源创建，入口存在不证明 Scheduler/Agent 已执行。
+新入口沿站点有效导航与既有 mounted surface，不改公开 route 语义或添加兼容 alias。
+
+验收建议：现 contract、architecture、ScheduledTask client/surface 行为门保持；首片组件 RED 覆盖导航意图不混用、
+缺 callback/错误无假成功、真实 owner ID 才导航、preview 不污染正式请求。当前文档门未执行真 owner/E2E。
+
 ## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；当前消费合同，待 Root 验收）
 
 BFF public 唯一 owner 为 `571b51de2057905c74c78ac966c8cf5ac11eca93`，其 OpenAPI 原字节 SHA-256 是

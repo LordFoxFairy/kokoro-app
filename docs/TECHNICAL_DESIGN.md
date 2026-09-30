@@ -1,5 +1,42 @@
 # Kokoro User Web 技术设计
 
+## WEB-PRODUCT-IA：信息架构与正式入口设计门（2026-09-30；仅文档，待 Root 授权代码）
+
+基线 `main 79f19df`，当前无本片 UI 实现。Conversation 独立且可属于 Project；Project 是独立容器与详情/筛选上下文；
+ScheduledTask 是 BFF 的调度产品定义；Agent Run 是执行实例。四者身份与生命周期不互换。下表是下一切片设计，不是验收事实。
+
+| §8 项 | 结论 |
+| --- | --- |
+| Owner / writer | Web 只负责语义、导航、交互和经校验的 owner 投影；本片唯一 writer 为 Web 负责人，Root 管 index/提交。BFF 拥有 Conversation/Project/ScheduledTask，Agent 拥有 Run，Scheduler 拥有调度执行事实。 |
+| 当前事实 | rail 把 project scoped conversations 叫 tasks，`onCreateTask ?? onNewChat` 和 `onReorderTasks` 混用；AppFrame 无 projectRef 时生成 `/app/project/kokoro`。Project 页面不论 preview 都注入 `previewScheduledTasks`，可选 create callback 未配置也合成本地 task ID；welcome 五项轮播含未连接 Slack/Zapier 且标题/hint 未传 brand。Composer 已用 shadcn Textarea、scrollHeight 自动高度和 IME/Shift+Enter，但容器 focus-within 与 textarea focus-visible 同时绘制。 |
+| 目标职责 | 新会话仅调用 Conversation engine；新专案沿现 createProject 的 owner ID/幂等意图；任务独立进入已存在 `/app/scheduled` live surface，不借新聊天实现“新任务”。正式 Project 页面只展示已授权的真实 project context、project conversations 与资源；不造 scheduled 行/关联。首页保留真实聊天提示与有正式入口的操作，不把提示词称为已安装能力。 |
+| 方案 A（采用） | 在既有 workspace-rail/AppFrame、features/app 与 ui/composer 按各自职责收敛。既有 ScheduledTaskSurface/client 接正式任务；现 mounted-surface navigation 与单 AppGate 保持，避免新页再挂第二 engine。 |
+| 方案 B（淘汰） | 新任务聚合模块、第二 store、用 Conversation 包装 Task、复制 ScheduledTask 编辑器/协议，或靠 UI 假 ID 补缺失 owner 数据；这些增加并行事实与无效成功。无需新文件、目录、框架或持久层。 |
+| 依赖 / 生命周期 | Browser → 同源 adapter → BFF。组件仅持当前选中资源、草稿、loading/error/pending；切换身份/资源后迟到响应不得写回。Project 创建已存在冻结 key/body、失败保留草稿与仅导航重试，继续复用。Chat replay/水位/Run 状态本片不改。 |
+| 数据/API | 不改网络字段、生成 pin、数据库、Redis、身份或权限。Project/Conversation opaque ID 只来自已验证路径/owner；品牌、标题、preview ID 不是资源身份。任务失败保留失败态，不转为空列表、假 ACK 或本地新增行。详见同片 API/DATA_MODEL。 |
+| 删除项 | 正式 onCreateTask→onNewChat 与 onReorderTasks alias、conversation 的 tasks/newTask 标签、猜测项目链接/preview ID 进入正式路径、正式 scheduled fixtures 与合成 ID/关联、未接通集成广告、无有效入口的推广计时/控件及重复 focus ring。显式 preview 数据仅在 preview 分支使用，不作 live fallback。 |
+| 验证 | 先现测试稳定 RED，随后组件/契约/architecture、lint/typecheck/build、非 integration 全门；Root 固定来源真浏览器另验键盘、窄屏、焦点、输入与真实 owner 成功/失败。SQL/schema 不适用。 |
+
+### 下一最小代码切片建议（均既有文件，Root 审查后另授）
+
+1. **入口与假成功清除，同一自洽片**：
+   - `src/components/blocks/workspace-rail/workspace-rail-types.ts`、`workspace-rail-shell.tsx`、`workspace-rail-session-list.tsx`、`workspace-rail-navigation.tsx`、`workspace-rail-actions.ts`：会话命名/排序/创建统一；移除 task alias，明确独立任务导航，不从 projectHref 合成品牌项目。
+   - `src/components/blocks/app-frame/app-frame.tsx`、`app-frame.types.ts`、`app-frame-main-surface.tsx`、`use-app-frame-actions.ts`、`use-app-frame-project.ts`：只传真实 projectRef；project conversation 的内部状态命名不冒充 task；删除正式伪 scheduled callback 链与 preview sentinel 进入 live 创建路径，保留正式 createProject 冻结重试。
+   - `src/features/app/kokoro-project-workspace.tsx`、`project-workspace-model.ts`、`project-workspace-dialogs.tsx`、`project-task-empty.tsx`、`kokoro-project-task-welcome.tsx`：项目会话明确标识；正式项目不挂假 scheduled editor/list，独立任务跳转现正式 surface。preview-only 夹具可隔离，不能弥补正式列表缺失。
+   - `src/features/app/kokoro-welcome.tsx`、`kokoro-welcome-content.tsx`：去掉未接通广告/无效轮播状态；所有保留品牌文案传 `{ brand: brandName }`；正式 project 动作只显式调用新建或已知 ID 打开，不生成 preview ID。
+   - `src/ui/composer/composer.module.css`：沿语义 token 仅保留一个可见编辑焦点边界；不改全局 Textarea 影响其他表单，不删除按钮自身键盘焦点。
+   - `src/i18n/messages.ts`、`en.ts`：新增准确的 project conversation 文案并切换调用；不要修改仍属真正任务功能的共用 task 文案。其他 locale 缺词按现翻译机制，任何新增具体 overlay 需列入授权，禁止批量无关翻译。
+   - 直接测试 `tests/ui/workspace-rail.test.tsx`、`app-frame-rail.test.tsx`、`app-frame.smoke.test.tsx`、`kokoro-project-workspace.test.tsx`、`kokoro-welcome.test.tsx`、`composer.test.tsx`；必要现 `tests/i18n/resolve.test.ts`、`no-hardcoded-ui.test.ts` 和 `src/components/blocks/workspace-rail/workspace-rail-split.test.mjs` 同步准确语义断言。
+2. **后继真实 Project 集合/专属调度消费单独授写**：目前 rail 有 projects 注入接口，但 AppFrame 没有 typed Project list 消费；现 ProjectIdentity 仍按品牌显示。首片删除猜测项目而不伪称已完成完整列表/详情名称。若需所有项目列表、项目专属 ScheduledTask 列表/回执接线，先给既有 client/schema/read-state 的精确扩展集；不在首片引入项目持久 store，也不把个人 task 全集当项目列表。已知 projectRef 的独立页面/Conversation 过滤保留。
+
+首片 RED 必须覆盖：project conversation 的创建/选择仍操作同一 Conversation ID；“任务”入口不调用 startNewChat；
+缺 projectRef 无 `/app/project/kokoro`/preview 链接；正式 Project 无每日简报 fixture、callback 缺失/失败不新增记录；
+正式欢迎页无 Slack/Zapier 推广、非默认品牌无裸 `{brand}`；真实 Textarea 自动增高/收缩、IME Enter 不发、Shift+Enter 换行、
+普通 Enter 只提交一次；焦点环唯一且按钮/键盘仍可见、reduced motion 与窄屏无溢出。失败/loading/empty/disabled 必须有独立断言。
+
+无新的 owner/不可逆 public 语义待裁决；本门仅请求 Root 确定上述首片精确授权。Project 全集/专属任务的未接通消费者明确留待后继，
+不是通过删除数据或改名宣布完成；用户已定资源分离方向不再反问。
+
 ## W3-WEB-CHAT-SKILL-SELECTION（2026-09-29；代码已实施，待 Root 验收）
 
 | §8 放置项 | 当前裁决 |

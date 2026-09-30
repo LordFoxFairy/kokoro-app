@@ -1,5 +1,21 @@
 # Kokoro User Web 当前状态
 
+## WEB-PRODUCT-IA（2026-09-30；仅文档门，未实施 UI）
+
+基线 clean `main 79f19df`。本次只修改 TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL/CURRENT：
+已核现 rail conversation/task 混名与 callback alias、猜测 `/app/project/kokoro`、Project 无条件 scheduled fixtures/合成成功、
+首页未接通集成广告及缺 brand 插值、Composer 双 focus 绘制。目标明确 Conversation/Project/ScheduledTask/Run 分离，
+沿既有 owner/同源 adapter 与 shadcn，不新建 UI 框架/store/协议。
+
+下一首片建议先清除错误语义、正式假任务/无效入口、品牌占位和重复焦点环；独立任务复用现 `/app/scheduled` live surface，
+不把个人任务列表当项目列表。当前缺 typed Project 全集 rail 消费、ScheduledTask client 未保留 project_id，后继精确 owner 消费
+另授；不以删假数据声称完整产品实现。精确既有文件清单、RED 用例与两种放置比较已写同片技术设计。
+
+本门未改代码/contract/generated/锁/index/服务，未运行用户浏览器/3310 或真 owner 数据；文档 diff 与当前既有机器/架构门
+Node 22.22.2 实测：contract 108 passed/18 files（含生成漂移校验）、architecture 37 passed/4 files、git diff --check 通过；
+它们仅确认现基线机器/边界门，未证明目标 UI。lint/typecheck/build/全测试本次文档门未重跑。
+Root 审查三面并授权后才进入代码 RED→GREEN；不能引用上一 Chat 续流门宣称本片 UI 已通过。
+
 ## WEB-CHAT-RELOAD-CONTINUATION（2026-09-30；代码切片，待 Root 验收）
 
 基线 `9590a741448923c63eb4f4ff46379135d21061bd`。纯测试已稳定复现：在途 snapshot 的 durable message_id 与

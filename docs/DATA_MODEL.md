@@ -1,5 +1,27 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PRODUCT-IA：资源身份与内存投影（2026-09-30；仅文档）
+
+基线 Web `79f19df`。本门和目标首片均无新持久化 owner、SQL/schema/migration、Redis namespace、业务缓存或 store。
+现 Product Session/CSRF 与 Chat durable replay 边界不变。
+
+| 事实 | 唯一 owner / Web 投影约束 |
+| --- | --- |
+| Conversation 与可选 Project 归属 | BFF；Web 仅保存 active ID、列表页与当前 project_ref 过滤上下文。专案内会话仍是会话，其排序/草稿不成为 ScheduledTask。 |
+| Project | BFF；独立 opaque ID、详情、资源与指令。Web 仅经现 owner 请求读写；品牌/标题/preview ID 不作主键。创建中冻结 key/body 与草稿是暂态意图，成功后保存 owner ID 供导航重试。 |
+| ScheduledTask | BFF 产品定义；Scheduler 是其调度基础设施 owner，Agent Run 是执行 owner。列表/创建回执身份来自 BFF，Web 不按 title/time 合成 ID，不按 Conversation 数量重建任务。 |
+| Run | Agent；Web 经 BFF AG-UI 显示当前执行/终态，不把一次 Run 和长期 ScheduledTask 或 Conversation 混为同一资源。 |
+| 首页与 Composer | 品牌由站点上下文，能力可见性来自已接通正式入口；草稿/焦点/高度是浏览器交互，不是集成状态、部署或任务成功事实。 |
+
+当前 Project 组件无条件载入 `previewScheduledTasks`，可选 callback 后合成 scheduled ID/linked ID；目标首片删除正式路径这些事实伪造，
+preview fixtures 只在显式 preview 内；正式空态是无已确认资源，不是“每日简报”样本。当前 ScheduledTask client 未保留 project_id、
+Project rail 未接 typed 全集，不在内存建立猜测关系表或用 localStorage 弥补。独立任务 live 页继续用既有 owner 列表/命令；
+项目专属任务关系和完整 Project 集合是后继消费者切片，不能宣称首片已有其完整视图。
+
+资源切换时清掉不再匹配的显示暂态、抑制迟到响应；已确认数据失败时可保留并显式报错，不将错误写为空成功。
+历史 preview/alias 不迁移、不双读，正式页面不读其数据当业务事实。本片不改变 owner receipt、幂等保存周期或数据库事务。
+技术放置/首片文件与失败门见同片 TECHNICAL_DESIGN；网络唯一来源见 API_CONTRACT，三者不引入新契约。
+
 ## W3 Chat Skill 选择：当前/目标（2026-09-29）
 
 旧全局 `localStorage` key `kokoro.web.pinned_skills` 曾保存名称并由 `usePinnedSkills` 注入正式 engine；该 hook/store 与正式 name wire 已删除，
