@@ -8,11 +8,14 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const mockedPathname = vi.hoisted(() => ({ value: "/app" }))
 
-it("对话列与 Composer 同为 48rem，移动端不继承桌面 2rem 视口边距", () => {
+it("对话列按 Composer 合成 gutter 在全部宽度保持同一 48rem 阅读轴", () => {
   const css = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
   expect(css).not.toContain("width: min(46rem, 100%);")
-  expect(css).toMatch(/@media \(min-width: 768px\)\s*\{\s*\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] :global\(\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-inline: 2rem;/)
-  expect(css).toMatch(/@media \(max-width: 767px\)\s*\{\s*\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] :global\(\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-inline: 0\.125rem;/)
+  expect(css).toMatch(/@media \(min-width: 961px\)\s*\{\s*\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] :global\(\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-inline: 3rem;/)
+  expect(css).toMatch(/@media \(min-width: 961px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > \[data-slot="composer-wrap"\]\s*\{[^}]*padding-inline: 1\.5rem;/)
+  expect(css).toMatch(/@media \(min-width: 641px\) and \(max-width: 960px\)\s*\{\s*\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] :global\(\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-inline: 1rem;/)
+  expect(css).toMatch(/@media \(max-width: 640px\)\s*\{\s*\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] :global\(\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-inline: 0\.125rem;/)
+  expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > div > form\[aria-label\]\s*\{[^}]*width: min\(48rem, 100%\);/)
 })
 
 // canvas 面板构造下载 URL 需要 base URL（本文件不发真实请求，仅 URL 拼接）。

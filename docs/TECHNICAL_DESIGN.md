@@ -1,5 +1,24 @@
 # Kokoro User Web 技术设计
 
+## WEB-READING-AXIS-ALLWIDTH：全宽度会话阅读轴
+
+**Owner 与当前事实。** Web AppFrame 继续拥有站点级会话布局，Composer 继续拥有输入表面。基线
+`7c2b4d700c8a4399fae68012c1db7423d790abd7` 在大桌面和390px手机已对齐，但中间宽度使用固定2rem消息
+viewport padding，与 Composer 的分段合成 gutter 不一致：Root 实测700px正文 x2/w696、Composer x16/w668；
+800px收起侧栏正文 x84/w684、Composer x68/w716；961px展开300px侧栏正文 x332/w597、Composer x348/w565。
+
+**最小布局规则。** 保留 MessageScrollerContent 与 form 的48rem上限，不改组件结构。961px以上显式把 Web thread
+Composer wrap 统一为1.5rem，避免 pointer 类型把合成 gutter 改成44px；form 已有额外1.5rem，因此消息 viewport
+使用3rem。641–960px 的 Composer shell 已拥有1rem gutter，消息 viewport 同为1rem，同时 form 继续以
+`min(48rem, 100%)` 封顶；不能用 `width: 100%` 在960px附近突破正文上限。640px以下继续复用 thread shell安全
+gutter，只保留0.125rem光学内缩。原有768px以上0.25rem顶部呼吸线单独保留，不把水平断点扩散成垂直行为变化。
+
+采用既有 `app-frame-main.module.css`，因为这是 AppFrame 响应式几何的唯一现有 owner；不把站点规则写回共享 Composer，
+也不新增 wrapper、JavaScript 测宽或第二套48rem常量。输入焦点 shell、滚动容器、消息事实、retry、owner/API/data 均不变。
+纯样式回归锁定三个水平区间及大屏 pointer 无关的 wrap gutter；现有本地 preview thread 可做 Playwright 几何矩阵，
+writer本片不启动服务或浏览器；Root 以真实历史线程验收390/640/641/700/767/768/800/960/961/1280、明确的
+展开/收起侧栏状态、横向溢出和消息全文不变。
+
 ## WEB-COMPOSER-VISUAL-ALIGN：输入焦点与会话阅读轴
 
 Web Composer 继续由既有 `ui/composer` 拥有输入表面，AppFrame CSS 只负责站点布局。Textarea 的 2px outline 保持透明以保留 forced-colors 语义，不再绘制零圆角的可见内部焦点框；键盘 `focus-visible` 通过 `:has()` 把 token ring 提升到已有圆角 form shell，鼠标焦点不额外着色。Thread 的 MessageScrollerContent 是同时携带 content/inner 标记的同一节点，因此只保留一条 48rem 阅读轴，与 thread Composer 同宽，不建立虚假的嵌套 46rem 轨道。

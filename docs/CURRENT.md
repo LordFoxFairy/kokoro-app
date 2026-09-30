@@ -1,5 +1,34 @@
 # Kokoro User Web 当前状态
 
+## WEB-READING-AXIS-ALLWIDTH Root已验收（2026-09-30）
+
+基线 `7c2b4d700c8a4399fae68012c1db7423d790abd7` 的48rem正文与 Composer 只在宽桌面上因上限偶然重合；
+Root 真实页面复现700px正文 x2/w696、Composer x16/w668，800px收起侧栏正文 x84/w684、Composer x68/w716，
+以及961px展开300px侧栏正文 x332/w597、Composer x348/w565。本候选只在 AppFrame CSS 按 Composer 已有合成
+gutter 分段设置消息 viewport：961px以上3rem并显式统一 Web thread wrap 为1.5rem，641–960px为1rem，
+640px以下为0.125rem；48rem上限、768px以上顶部呼吸线、圆角 shell 焦点、滚动和消息事实均保持不变。
+
+Node22纯样式回归先 RED（目标文件69项中1失败、68通过，缺少新断点规则），实现后69/69通过；完整
+`pnpm check` exit 0：contract 109、architecture 37、全量 Vitest 1800、lint/typecheck/build 均通过。日志为
+`/tmp/kokoro-web-reading-axis-red-node22.log`、`/tmp/kokoro-web-reading-axis-green.log`、
+`/tmp/kokoro-web-reading-axis-check.log`。
+首候选虽通过上述纯门，Root真实10宽度矩阵仍在960px收起侧栏复现正文 x122/w768、Composer x68/w876；
+原因是max960覆盖把 form 设成100%，只给正文保留48rem上限。后继纯回归先再次 RED（1失败、68通过），再把该
+既有声明收敛为 `min(48rem, 100%)`，不改 gutter、焦点、滚动或消息事实；日志为
+`/tmp/kokoro-web-reading-axis-cap-red.log` 与 `/tmp/kokoro-web-reading-axis-cap-green.log`。
+二次完整门首跑在既有真实Next HTTP integration的5秒预算超时，实际1799/1800，contract109、architecture37、
+lint/typecheck均已过，日志 `/tmp/kokoro-web-reading-axis-cap-check.log`；该文件随后隔离3/3通过，日志
+`/tmp/kokoro-web-reading-axis-cap-http-retry.log`。已启动的完整重跑最终exit 0：contract109、architecture37、
+全量1800、lint/typecheck/build均通过，日志 `/tmp/kokoro-web-reading-axis-cap-check-rerun.log`，未隐去首跑失败。
+
+Root独立Node22.22.2完整 `pnpm check` exit0：contract109、architecture37、1800 tests、lint/typecheck/build全部通过；日志 `/tmp/kokoro-web-reading-axis-root-final-check.log`。独立只读冻结终审P0/P1/P2=0/0/0。Root只补本段验收记录，CSS/两tests/TECH冻结字节未变。修后截图 `/tmp/kokoro-web-reading-axis-desktop-final.jpg`、`/tmp/kokoro-web-reading-axis-mobile-final.jpg`；重复user/空失败轮次与深链仍独立开放，不称全部产品闭环。
+
+本地 preview Playwright 源码覆盖390/640/641/700/767/768/800/960/961/1280与侧栏状态，writer未运行浏览器或服务。
+Root 对真实历史线程的最终矩阵全部通过：390/640左右轨漂移0.40625px，其余宽度为0；800/960明确collapsed，
+961/1280明确expanded，无横向溢出且消息全文严格相等。首轮driver只用不完整AX差异判断展开按钮，导致961实际仍
+collapsed；Root已改为完整状态核对并直接点击后重测，该问题属于测试driver而非生产布局。受管runtime仅同步CSS，
+未重启或调用新模型。
+
 ## WEB-COMPOSER-VISUAL-ALIGN 实现候选（2026-09-30）
 
 基线 `5058ae2c400dd8be1964bba5df03fd7ce5b52133` 的 Composer 把焦点环画在零圆角 textarea 内部，形成直角方框；同一个 MessageScrollerContent 又被48rem和后声明的46rem规则重复定宽，桌面实际 Composer 768px、内容736px。手机 thread shell 已有横向gutter，仍额外继承桌面2rem viewport padding，进一步压缩正文。

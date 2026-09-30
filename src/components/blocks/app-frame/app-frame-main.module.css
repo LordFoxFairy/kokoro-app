@@ -161,7 +161,7 @@
     padding: 0 0 0.85rem;
   }
   .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
-    width: 100%;
+    width: min(48rem, 100%);
     gap: 0.2rem;
     /* Keep the active composer at Manus' two-row height. The welcome editor
        remains compact; only a submitted conversation gets the taller top
@@ -248,18 +248,34 @@
   display: none;
 }
 
-/* Match Manus' conversation column rather than allowing shared viewport
- * padding to push the thread inward. Viewport width, not the desktop marker,
- * owns the desktop/mobile spacing boundary below. */
-@media (min-width: 768px) {
+/* Keep the conversation and Composer on one 48rem reading axis. Below the
+ * cap, the viewport inset mirrors the Composer's composed outer gutter:
+ * wrap + form above 960px, Composer shell from 641px through 960px, and the
+ * existing thread shell plus two-pixel optical inset on phones. */
+@media (min-width: 961px) {
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-    padding-inline: 2rem;
+    padding-inline: 3rem;
     /* Manus uses a 4px breathing line below its 56px chrome before the first
        user turn; the conversation owns all later vertical spacing. */
     padding-top: 0.25rem;
   }
+  .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > [data-slot="composer-wrap"] {
+    /* Normalize the Web thread gutter across pointer types. The form adds
+       the matching 1.5rem inset, so the composed outer gutter is 3rem. */
+    padding-inline: 1.5rem;
+  }
 }
-@media (max-width: 767px) {
+@media (min-width: 641px) and (max-width: 960px) {
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+    padding-inline: 1rem;
+  }
+}
+@media (min-width: 768px) and (max-width: 960px) {
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+    padding-top: 0.25rem;
+  }
+}
+@media (max-width: 640px) {
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
     /* The thread shell already supplies the phone gutter. Keep only the same
        two-pixel optical inset as the Composer so their visible tracks align. */

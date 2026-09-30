@@ -14,6 +14,16 @@ async function mockProductLogout(page: Page) {
   })
 }
 
+async function readingAxisDrift(page: Page) {
+  const content = await page.locator('[data-slot="message-scroller-content"]').boundingBox()
+  const composer = await page.locator('form[aria-label="Message editor"]').boundingBox()
+  if (!content || !composer) return Number.POSITIVE_INFINITY
+  return Math.max(
+    Math.abs(content.x - composer.x),
+    Math.abs(content.x + content.width - composer.x - composer.width),
+  )
+}
+
 test.describe("Web production boundary", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"))
@@ -87,5 +97,50 @@ test.describe("Web production boundary", () => {
       scrollWidth: document.documentElement.scrollWidth,
     }))
     expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
+  })
+
+  test("keeps the preview thread and Composer on one reading axis across responsive widths", async ({ page, isMobile }) => {
+    test.skip(isMobile, "the matrix controls the desktop Chromium viewport and rail state explicitly")
+    test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the geometry fixture is available only on the local preview server")
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.getByRole("textbox", { name: "Chat input" }).fill("Check the responsive reading axis")
+    await page.getByRole("button", { name: "Send message" }).click()
+    await expect(page.locator('[data-slot="message-scroller-content"]')).toBeVisible()
+
+    const shell = page.locator('[data-slot="sidebar-wrapper"]')
+    const cases = [
+      { width: 390, rail: "automatic" },
+      { width: 640, rail: "automatic" },
+      { width: 641, rail: "automatic" },
+      { width: 700, rail: "automatic" },
+      { width: 767, rail: "automatic" },
+      { width: 768, rail: "automatic" },
+      { width: 800, rail: "collapsed" },
+      { width: 960, rail: "collapsed" },
+      { width: 961, rail: "expanded" },
+      { width: 1280, rail: "expanded" },
+    ] as const
+
+    for (const item of cases) {
+      await page.setViewportSize({ width: item.width, height: 900 })
+      if (item.rail === "collapsed" && (await shell.getAttribute("data-rail-collapsed")) !== "true") {
+        await page.getByRole("button", { name: "Collapse sidebar" }).click()
+      }
+      if (item.rail === "expanded" && (await shell.getAttribute("data-rail-collapsed")) !== "false") {
+        await page.getByRole("button", { name: "Expand sidebar" }).click()
+      }
+      if (item.rail !== "automatic") {
+        await expect(shell).toHaveAttribute("data-rail-collapsed", item.rail === "collapsed" ? "true" : "false")
+      }
+
+      await expect.poll(() => readingAxisDrift(page), { message: `${item.width}px reading-axis drift` }).toBeLessThanOrEqual(1)
+      const dimensions = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }))
+      expect(dimensions.scrollWidth, `${item.width}px horizontal overflow`).toBeLessThanOrEqual(dimensions.clientWidth)
+    }
   })
 })
