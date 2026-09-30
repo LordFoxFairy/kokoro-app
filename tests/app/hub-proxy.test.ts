@@ -478,4 +478,47 @@ describe("/api/hub/[...path] proxy", () => {
     )
     expect(res.status).toBe(403)
   })
+
+  it("keeps formal Skill draft/Publish commands on a typed no-store owner boundary", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const draftPath = params(["self", "skills", "drafts"])
+    const draftUrl = "http://localhost/api/hub/self/skills/drafts"
+    delete process.env.KOKORO_WEB_AUTH_SECRET
+    const config = await POST(new Request(draftUrl, { method: "POST", headers: { "idempotency-key": "draft-key", "content-type": "application/json" }, body: "{}" }), draftPath)
+    expect(config.status).toBe(503)
+    expect(config.headers.get("cache-control")).toBe("no-store")
+    expect(await config.json()).toMatchObject({ error: { code: "product_tenant_not_configured", retryable: false } })
+    process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET
+
+    const wrongOrigin = await POST(new Request(draftUrl, { method: "POST", headers: { origin: "https://evil.example", "idempotency-key": "draft-key", "content-type": "application/json" }, body: "{}" }), draftPath)
+    expect(wrongOrigin.status).toBe(403)
+    expect(await wrongOrigin.json()).toMatchObject({ error: { code: "session_forbidden" } })
+
+    const publishPath = params(["self", "skills", "mine", "publish"])
+    const publishUrl = "http://localhost/api/hub/self/skills/mine/publish"
+    const nonempty = await POST(new Request(publishUrl, { method: "POST", headers: { "idempotency-key": "publish-key" }, body: "{}" }), publishPath)
+    expect(nonempty.status).toBe(400)
+    expect(await nonempty.json()).toMatchObject({ error: { code: "invalid_skill_request" } })
+    expect(requestWithDomain).not.toHaveBeenCalled()
+
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"source_ref":"skill:mine","revision":"1","status":"active","event_id":"550e8400-e29b-41d4-a716-446655440000","replayed":false}}', {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-publish" },
+    }))
+    const published = await POST(new Request(publishUrl, { method: "POST", headers: { "idempotency-key": "publish-key" } }), publishPath)
+    expect(published.status).toBe(200)
+    expect(published.headers.get("x-request-id")).toBe("owner-publish")
+    expect(published.headers.get("cache-control")).toBe("no-store")
+    const [, , init] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, { body?: ArrayBuffer; headers: Record<string, string> }]
+    expect(init.body?.byteLength).toBe(0)
+    expect(init.headers["idempotency-key"]).toBe("publish-key")
+    expect(init.headers["content-type"]).toBeUndefined()
+  })
+
+  it("rejects a non-JSON formal command owner response before the browser sees it", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{}}', { status: 201, headers: { "content-type": "text/plain", "cache-control": "no-store", "x-request-id": "owner-draft" } }))
+    const response = await POST(new Request("http://localhost/api/hub/self/skills/drafts", { method: "POST", headers: { "idempotency-key": "draft-key", "content-type": "application/json" }, body: "{}" }), params(["self", "skills", "drafts"]))
+    expect(response.status).toBe(502)
+    expect(await response.json()).toMatchObject({ error: { code: "skill_response_invalid" } })
+  })
 })

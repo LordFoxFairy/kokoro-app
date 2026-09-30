@@ -25,18 +25,20 @@ const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
 const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
 const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 
-type ProjectionFault = "configuration" | "bffNotConfigured" | "iamUnavailable" | "unauthenticated" | "invalidQuery" | "invalidSkillRequest" | "bffUnavailable" | "invalidOwnerResponse"
-type ProjectionLocalCode = "product_tenant_not_configured" | "skill_dependency_unavailable" | "iam_admission_unavailable" | "session_authentication_required" | "invalid_query_parameter" | "invalid_skill_request" | "skill_response_invalid"
+type ProjectionFault = "configuration" | "bffNotConfigured" | "iamUnavailable" | "unauthenticated" | "forbidden" | "invalidQuery" | "invalidSkillRequest" | "tooLarge" | "bffUnavailable" | "invalidOwnerResponse"
+type ProjectionLocalCode = "product_tenant_not_configured" | "skill_dependency_unavailable" | "iam_admission_unavailable" | "session_authentication_required" | "session_forbidden" | "invalid_query_parameter" | "invalid_skill_request" | "request_body_too_large" | "skill_response_invalid"
 const PROJECTION_FAILURES = {
   configuration: { status: 503, code: "product_tenant_not_configured", retryable: false },
   bffNotConfigured: { status: 503, code: "skill_dependency_unavailable", retryable: false },
   iamUnavailable: { status: 503, code: "iam_admission_unavailable", retryable: true },
   unauthenticated: { status: 401, code: "session_authentication_required", retryable: false },
+  forbidden: { status: 403, code: "session_forbidden", retryable: false },
   invalidQuery: { status: 400, code: "invalid_query_parameter", retryable: false },
   invalidSkillRequest: { status: 400, code: "invalid_skill_request", retryable: false },
+  tooLarge: { status: 413, code: "request_body_too_large", retryable: false },
   bffUnavailable: { status: 503, code: "skill_dependency_unavailable", retryable: true },
   invalidOwnerResponse: { status: 502, code: "skill_response_invalid", retryable: false },
-} as const satisfies Record<ProjectionFault, { status: 400 | 401 | 502 | 503; code: ProjectionLocalCode; retryable: boolean }>
+} as const satisfies Record<ProjectionFault, { status: 400 | 401 | 403 | 413 | 502 | 503; code: ProjectionLocalCode; retryable: boolean }>
 
 function projectionError(fault: ProjectionFault, requestId: string): Response {
   const { status, code, retryable } = PROJECTION_FAILURES[fault]
@@ -168,32 +170,41 @@ export async function proxyHubRequest(
     && !["pool", "catalog", "quota"].includes(businessPath[1] ?? "")
   const mcpProjectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "servers"
   const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpProjectionRead
+  const formalSkillId = businessPath[1] ?? ""
+  const skillUploadGet = request.method === "GET" && path[0] === "self" && businessPath.length === 3 && businessPath[0] === "skills" && businessPath[2] === "package-upload"
+  const skillDraftPost = request.method === "POST" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills" && businessPath[1] === "drafts"
+  const skillWritePost = request.method === "POST" && path[0] === "self" && businessPath[0] === "skills" && (
+    businessPath.length === 3 && ["package-upload", "validate", "publish"].includes(businessPath[2] ?? "")
+    || businessPath.length === 4 && businessPath[2] === "package-upload" && businessPath[3] === "complete"
+  )
+  const publicSkillBoundary = publicProjectionRead || skillUploadGet || skillDraftPost || skillWritePost
   const incomingRequestId = request.headers.get("x-kokoro-request-id")
-  const requestId = publicProjectionRead
+  const requestId = publicSkillBoundary
     ? incomingRequestId !== null && PROJECTION_REQUEST_ID.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID()
     : incomingRequestId || crypto.randomUUID()
   const config = productBffConfig()
   if (config === null) {
-    if (publicProjectionRead) return projectionError("configuration", requestId)
+    if (publicSkillBoundary) return projectionError("configuration", requestId)
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
   if (config.bffBaseUrl == null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
-    if (publicProjectionRead) return projectionError("bffNotConfigured", requestId)
+    if (publicSkillBoundary) return projectionError("bffNotConfigured", requestId)
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
+    if (publicSkillBoundary) return projectionError("forbidden", requestId)
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   }
   let claims
   try {
     claims = await admittedProductSession(request, config)
   } catch {
-    if (publicProjectionRead) return projectionError("iamUnavailable", requestId)
+    if (publicSkillBoundary) return projectionError("iamUnavailable", requestId)
     return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
   }
   if (claims === null) {
-    if (publicProjectionRead) return projectionError("unauthenticated", requestId)
+    if (publicSkillBoundary) return projectionError("unauthenticated", requestId)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
   if (request.method === "GET" && path[0] === "self" && (
@@ -208,6 +219,10 @@ export async function proxyHubRequest(
       || (query.has("cursor") && (query.get("cursor") === "" || (query.get("cursor")?.length ?? 0) > 4096))
       || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
     if (invalidQuery) return projectionError(personalSkillIdRead ? "invalidSkillRequest" : "invalidQuery", requestId)
+  }
+  if (skillUploadGet || skillDraftPost || skillWritePost) {
+    if (search !== "" || ((skillUploadGet || skillWritePost) && !PROJECTION_REQUEST_ID.test(formalSkillId))) return projectionError("invalidSkillRequest", requestId)
+    if ((skillDraftPost || skillWritePost) && !/^[\x21-\x2B\x2D-\x7E]{1,128}$/u.test(request.headers.get("idempotency-key") ?? "")) return projectionError("invalidSkillRequest", requestId)
   }
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
@@ -238,8 +253,10 @@ export async function proxyHubRequest(
   let body: ArrayBuffer | undefined
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
     try {
-      body = await readBoundedRequestBody(request, boundedFileUpload ? 1024 * 1024 : undefined)
+      body = await readBoundedRequestBody(request, boundedFileUpload ? 1024 * 1024 : publicSkillBoundary ? 64 * 1024 : undefined)
+      if (skillWritePost && businessPath[2] === "publish" && body.byteLength !== 0) return projectionError("invalidSkillRequest", requestId)
     } catch (error) {
+      if (publicSkillBoundary) return projectionError(error instanceof UpstreamRequestTooLargeError ? "tooLarge" : "invalidSkillRequest", requestId)
       return NextResponse.json(
         {
           error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
@@ -269,7 +286,7 @@ export async function proxyHubRequest(
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
     })
   } catch {
-    if (publicProjectionRead) return projectionError("bffUnavailable", requestId)
+    if (publicSkillBoundary) return projectionError("bffUnavailable", requestId)
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
@@ -314,10 +331,12 @@ export async function proxyHubRequest(
     return new Response(upstream.body, { status: upstream.status, headers: errorHeaders })
   }
 
-  if (publicProjectionRead) {
+  if (publicSkillBoundary) {
     const upstreamRequestId = upstream.headers.get("x-request-id")
     const upstreamContentType = upstream.headers.get("content-type")
-    if (upstream.status >= 300 && upstream.status < 400
+    const expectedSuccess = skillDraftPost || skillWritePost && businessPath[2] === "package-upload" && businessPath.length === 3 ? 201 : 200
+    if (upstream.status >= 200 && upstream.status < 300 && upstream.status !== expectedSuccess
+      || upstream.status >= 300 && upstream.status < 400
       || upstream.headers.get("cache-control") !== "no-store"
       || upstreamRequestId === null
       || !PROJECTION_REQUEST_ID.test(upstreamRequestId)
