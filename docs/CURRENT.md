@@ -1,5 +1,13 @@
 # Kokoro User Web 当前状态
 
+## WEB-FAILURE-FEEDBACK-FLAT 源码验收通过，真实视觉待验（2026-09-30）
+
+Root在本仓显式Node22.22.2完整 `pnpm check` actual exit0：contract109、architecture49、全量1825（41.43s）、lint/typecheck/build通过；日志 `/tmp/kokoro-web-failure-feedback-root-check.log`。独立四文件冻结审查P0/P1/P2=0/0/0，Root核4/4SHA一致。Root另临时用HEAD CSS复现定点RED 1失败/20通过，并finally恢复候选，再定点GREEN21/21；日志 `/tmp/kokoro-web-failure-feedback-root-{red,target-green}.log`。未运行Playwright/fresh浏览器视觉；用户当前输入框方框仍待定位，不用本片代码验收代替整体UI闭环。
+
+基线 `main 5b77798be7a407c3f0a82d47841f1e141021de02`。本候选仅在既有 Thread owner 内把普通失败与余额不足 Alert 从固定48rem圆角阴影卡收敛为 `fit-content`、`max-width: 100%` 的透明无边框内容块；局部解除共享标题的单行 clamp，使长标题可换行。`role=alert`、标题、详情、普通重试、计费三动作、键盘焦点、窄栏换行、重复用户、空失败助手轮及消息顺序均保留；Composer、shared Alert primitive、契约和运行数据未改。
+
+Node22.22.2 精准测试先得到预期 RED：1失败/20通过，日志 `/tmp/kokoro-web-failure-feedback-worker-red.log`；实现后同一目标21/21通过，CSS architecture 14/14通过，`pnpm lint` 与 `pnpm typecheck` 最终均exit0，日志前缀 `/tmp/kokoro-web-failure-feedback-worker-`。首次 typecheck 暴露测试正则使用不匹配本仓target的 dotAll flag并exit2，已只收敛测试表达式后复跑通过。writer未运行全量、build、服务或浏览器；当前浏览器通道持续超时，失败反馈实际桌面/窄屏视觉及用户所见输入内框仍待Root fresh复验，不以源码与单测宣称整体UI完成。
+
 ## WEB-CHAT-CURRENT-FEEDBACK 源码门通过，页面视觉待验（2026-09-30）
 
 Root在主工作树独立执行 Node22.22.2 `pnpm check`，actual exit0：contract109、architecture49、全量1823、lint/typecheck/build通过，日志 `/tmp/kokoro-web-chat-current-feedback-root-check.log`；独立四文件审查P0/P1/P2=0/0/0。精准Prettier当前四文件与其HEAD基线均exit1，未扩大格式化范围；`git diff --check`通过。当前受管3310 PID65590不重启，仅同步目标Thread CSS；浏览器通道仍超时，视觉与输入框用户反馈尚未验收，不以本段静态结果替代。

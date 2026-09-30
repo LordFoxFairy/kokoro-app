@@ -1,4 +1,6 @@
 // ERROR-UX（Wave5）：run.failed 分类文案 + 恢复引导 + message 原文折叠。
+import { readFileSync } from "node:fs"
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -156,6 +158,47 @@ describe("ConversationThread 失败卡渲染", () => {
     expect(container.querySelector('[data-message-id="run_1"]')).not.toBeNull()
     expect(container.querySelector('[data-message-id="run-error"]')).not.toBeNull()
     expect(container.querySelector('[data-message-id="deliveries"]')).toBeNull()
+  })
+
+  it("失败反馈按内容收敛且不恢复成第二个输入卡", () => {
+    const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
+    expect(css).toMatch(
+      /\.error\s*\{[^}]*width:\s*fit-content;[^}]*max-width:\s*100%;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*padding:\s*0;[^}]*box-shadow:\s*none;[^}]*\}/u,
+    )
+    expect(css).toMatch(
+      /\.error\s+:global\(\[data-slot="alert-title"\]\)\s*\{[^}]*display:\s*block;[^}]*overflow:\s*visible;[^}]*-webkit-line-clamp:\s*unset;[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*\}/u,
+    )
+    expect(css).not.toMatch(
+      /\.thread\[data-desktop-web="true"\]\s+\.error\s*\{[^}]*(?:box-shadow|border-radius|background|padding):/u,
+    )
+  })
+
+  it("余额不足反馈保留 alert 标题、说明与全部动作", () => {
+    render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={failedThread("internal_error", "diagnostic")}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed
+        creditRejected
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent(tr("billing.creditRejected"))
+    expect(alert).toHaveTextContent(tr("billing.creditPricing"))
+    expect(screen.getByRole("button", { name: tr("billing.viewPricing") })).toBeEnabled()
+    expect(screen.getByRole("button", { name: tr("billing.viewBalance") })).toBeEnabled()
+    expect(screen.getByRole("button", { name: tr("thread.retry") })).toBeEnabled()
   })
 
   it("桌面任务态的助手答案可复制当前轮真实文本", async () => {

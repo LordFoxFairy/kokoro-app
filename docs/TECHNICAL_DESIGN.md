@@ -1,5 +1,9 @@
 # Kokoro User Web 技术设计
 
+## WEB-FAILURE-FEEDBACK-FLAT：会话内失败反馈不伪装成第二输入卡
+
+`ConversationThread` 继续拥有普通失败与余额不足失败的可见反馈，既有 shadcn `Alert` 继续拥有 `role=alert`、标题、详情和动作语义。本局部修复只在既有 Thread CSS 把失败反馈收敛为 `fit-content`、`max-width: 100%` 的内联内容块，并去掉外层卡片的 border、background、shadow 与 padding；窄栏仍可在 100% 内换行，详情和所有按钮保持键盘可达。共享 `AlertTitle` 的单行 clamp 只在 `.error :global([data-slot="alert-title"])` 作用域内解除，保证长标题完整换行而不改 shared primitive。消息顺序、重复用户事实、空失败助手轮、重试/计费动作、Composer、滚动与机器契约均不改变；真实浏览器视觉仍由 Root 后继验收。
+
 ## WEB-CHAT-CURRENT-FEEDBACK：首条消息顶部几何唯一归属
 
 基线 `65e328755774080fc37a4d12d2b9f9b2e21a22bf` 同时存在两条用户消息纵向规则：AppFrame 以

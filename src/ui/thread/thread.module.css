@@ -1137,9 +1137,22 @@
 /* —— 这轮失败提示 + 重试 —— */
 
 .error {
-  width: min(100%, 48rem);
+  width: fit-content;
   align-self: flex-start;
-  max-width: min(100%, 48rem);
+  max-width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.error :global([data-slot="alert-title"]) {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Alert owns the semantic error surface; this row only controls the action
@@ -1270,11 +1283,6 @@
   .thread[data-desktop-web="true"] .toolInputFields { gap: 0.7rem; }
   .thread[data-desktop-web="true"] .toolInputLabel { gap: 0.35rem; color: var(--muted-foreground); }
   .thread[data-desktop-web="true"] .toolFieldLabel { color: var(--foreground); }
-
-  .thread[data-desktop-web="true"] .error {
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-xs);
-  }
 
   .thread[data-desktop-web="true"] .errorLayout { align-items: center; gap: 1rem; }
   .thread[data-desktop-web="true"] .errorBody { gap: 0.45rem; }
