@@ -74,7 +74,11 @@
 }
 
 /* Keep the keyboard ring above later empty-workspace and pointer borders. */
-.wrap .composer:has(.input:focus-visible) { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 28%, transparent); }
+.wrap .composer:has(.input:focus-visible) { border-color: transparent; box-shadow: 0 0 0 2px var(--ring); }
+
+@media (forced-colors: active) {
+  .wrap .composer:has(.input:focus-visible) { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
+}
 
 @container composer (max-width: 34rem) {
   .controls { flex-wrap: wrap; }

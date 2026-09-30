@@ -1,5 +1,9 @@
 # Kokoro User Web 技术设计
 
+## WEB-COMPOSER-SINGLE-FOCUS：单一焦点表面
+
+Composer 继续由 textarea 的 `:focus-visible` 驱动圆角 shell 焦点提示，不改为 `:focus-within`，也不改变输入自增高、控件、阅读轴或响应式几何。Web shell 在聚焦时把原静态边框设为透明，只绘制一条 `2px var(--ring)` 外环；textarea 自身仍无可见内框，因此不会由边框与半透明阴影叠成双圈。当前实测 `--ring` 是带 42% alpha 的 `#1a1a1a6b`，本片不改全局 token，也不宣称其对比度已经通过额外 WCAG 实测。由于 forced-colors 会抑制 box shadow，高对比模式改由同一 shell 绘制唯一的 `2px solid Highlight` outline、`2px` offset，并关闭 shadow；不设置 `forced-color-adjust`。该切片仅由既有 Composer CSS 与聚焦测试承接，不改 shadcn Textarea primitive、公开契约或业务消息事实。
+
 ## WEB-READING-AXIS-ALLWIDTH：全宽度会话阅读轴
 
 **Owner 与当前事实。** Web AppFrame 继续拥有站点级会话布局，Composer 继续拥有输入表面。基线

@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## WEB-COMPOSER-SINGLE-FOCUS Root已验收
+
+Root最终R2显式Node22.22.2完整 `pnpm check` actual exit0：contract109、architecture37、1800tests（44.86s）、lint/typecheck/build全部通过；日志 `/tmp/kokoro-web-single-focus-root-r2-final-check.log`。独立四文件审查P0/P1/P2=0/0/0。Root仅将exact HEAD baseline确认过的owned runtime单个CSS更新，无重启/模型/数据修改。真实IAB鼠标/Tab焦点单2px环、blur shadow none，textarea border0/no shadow，1280px composer x282/w768，390px x16/w358，无横向溢出；forced-colors实际active时shell系统色outline2px/offset2px、shadow none，随后恢复正常媒体/默认viewport。消息article全文数组严格相等。矩阵 `/tmp/kokoro-composer-single-focus-real-matrix.json`，截图 `/tmp/kokoro-composer-single-focus-{desktop,mobile,forced-colors}.jpg`。刷新后旧重复user仍可见；在本次视口切换后另出现通用failed提示，不改/隐藏，精确failure/retry与状态持久消费仍是后继owner任务，不把CSS验收称全能力闭环。
+
+以 Web `30545c55625fb257ac17ce2199e8fa1000f3ecae` 为基线，当时实施候选仅把 Composer shell 的焦点样式从 ring 色边框加 `3px` halo 收敛为透明边框加单一 `2px var(--ring)` 外环；forced-colors 下同一 shell 使用唯一的 `2px solid Highlight` outline、`2px` offset并关闭shadow。保留 textarea 透明 outline、`:focus-visible`、布局几何、控件与 reduced-motion，不设置 `forced-color-adjust`。Root此前真实computed事实为白色card、`--ring=#1a1a1a6b`，旧halo为`rgba(26,26,26,.11749)`；该候选没有改全局配色，也不把该事实写成WCAG对比验收。Node `22.22.2` 普通单环先得到预期RED（57 passed / 1 failed），实现后58/58；Root随后对初候选完整 `pnpm check` 实测contract 109、architecture 37、全量1800、lint、typecheck与build均通过，但独立审查发现该初候选在forced-colors会因shadow受抑制而失去可见shell边界。高对比返修再次精准RED（57 passed / 1 failed）并GREEN（58/58），彼时最终完整门与真实浏览器复验待Root执行，结果见本节首段。本段不代表整体产品验收。
+
 ## WEB-READING-AXIS-ALLWIDTH Root已验收（2026-09-30）
 
 基线 `7c2b4d700c8a4399fae68012c1db7423d790abd7` 的48rem正文与 Composer 只在宽桌面上因上限偶然重合；
