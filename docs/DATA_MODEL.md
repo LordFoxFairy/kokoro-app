@@ -6,6 +6,7 @@
 遗留 key 不读取、不迁移，也不是 Skill、安装或用户授权事实。当前只在 Web 会话内存持有有序、唯一的 exact `source_ref`（最多 16 项、单项最长
 197 个字符、数组 compact UTF-8 JSON 最多 4096 字节），显示名与 revision 只是当次个人列表投影。提交开始后把选择复制进 pending submission；未知响应重试复用冻结副本，
 不得从当前 UI 或旧 browser key 重采样。刷新可丢失未提交选择，不建立 localStorage、Redis、SQL、receipt 或跨设备恢复。
+active conversation identity 变化即清空选择；删除非 active 会话不改变当前选择，pending submission 已冻结的未知 ACK 重试仍保留原序。
 
 Platform 仍唯一拥有 Skill/Source/Installation/Enablement，BFF 拥有 public Chat request/outbox，Agent 拥有 Run 与执行前解析。
 Web 的选择不证明可执行；当前 Agent 非空 reader 未接，完整选择执行链仍未完成。旧 key 不迁移、不双读；显式 preview

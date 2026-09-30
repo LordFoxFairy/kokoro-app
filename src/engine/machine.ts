@@ -611,6 +611,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
+    const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
     closeStream()
     clearReattachTimer()
@@ -619,6 +620,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    if (previousSessionId !== next.activeId) {
+      selectedSkillSourceRefs = []
+    }
     thread = createSessionStreamState()
     hydrating = shouldHydrate
     commitStore(next)
@@ -685,6 +689,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    selectedSkillSourceRefs = []
     thread = createSessionStreamState()
     hydrating = false
     commitStore(next)
@@ -803,6 +808,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    selectedSkillSourceRefs = []
     thread = createSessionStreamState()
     store = external
     if (external?.activeId) {

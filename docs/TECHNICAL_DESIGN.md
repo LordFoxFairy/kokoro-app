@@ -15,6 +15,8 @@
 `skill:<SkillId>`，不得 trim、大小写折叠或规范化；须匹配 owner 的完整锚定 pattern，单项最长 197 个字符，且整个数组的
 compact UTF-8 JSON 不超过 4096 字节。无选择仍发送显式空数组。该字段只冻结选择，不是授权、安装或包可用证明；Agent
 `dd34a48` 的非空 reader 尚未接通，因此本片不新增假可执行入口，完整选择→安装/启用→执行仍为后续必交付链。
+选择内存绑定当前 active conversation identity：切换、打开另一会话、新建、删除 active 后回退或外部删除 active 时清空；
+同一会话的无操作激活与已冻结的未知 ACK 重试不重采样、不清空原提交序列。
 
 下一代码片的预计文件集是 `src/generated/bff-public-openapi.yaml`、现有 BFF snapshot 校验脚本、
 `src/contract/chat.ts`、`src/engine/{engine-types,execution-adapter,machine}.ts`、

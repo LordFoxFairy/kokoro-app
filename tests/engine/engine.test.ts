@@ -1031,6 +1031,48 @@ describe("失败重试", () => {
   })
 })
 
+describe("typed Skill 选择的会话边界", () => {
+  const twoConversations: ConversationStore = {
+    activeId: "conv_a",
+    conversations: [
+      { id: "conv_a", title: "A", updatedAt: 2, mode: "fast" },
+      { id: "conv_b", title: "B", updatedAt: 1, mode: "fast" },
+    ],
+  }
+
+  it("新建或切换到不同会话时清空上一会话选择", async () => {
+    buildEngine(twoConversations)
+    await settle()
+    engine.setSelectedSkillSourceRefs(["skill:a.v1"])
+    engine.selectConversation("conv_b")
+    await settle()
+    engine.submit("from B")
+    await settle()
+    expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual([])
+
+    engine.setSelectedSkillSourceRefs(["skill:b.v1"])
+    engine.newConversation()
+    engine.submit("from new")
+    await settle()
+    expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual([])
+  })
+
+  it("删除非活跃会话保留当前选择，删除活跃会话则清空", async () => {
+    buildEngine(twoConversations)
+    await settle()
+    engine.setSelectedSkillSourceRefs(["skill:a.v1"])
+    engine.deleteConversation("conv_b")
+    engine.submit("still A")
+    await settle()
+    expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual(["skill:a.v1"])
+
+    engine.deleteConversation("conv_a")
+    engine.submit("fallback")
+    await settle()
+    expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual([])
+  })
+})
+
 describe("模式驱动 wire（thinking）", () => {
   it("空首屏选 thinking：落 pendingMode、首会话承接、thinking=true 随 POST 上 wire、开聊锁定", async () => {
     buildEngine()

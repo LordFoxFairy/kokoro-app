@@ -10,6 +10,7 @@ public OpenAPI SHA-256 `f49023882315a4f46e46e95595a02eaa7bb85475d5f46d2b945bc055
 当前代码已 clean-slate 改为 exact `selected_skill_source_refs`：无选择也显式 `[]`，最多 16 个、有序唯一、单项最长 197 个字符且数组 compact UTF-8 JSON ≤4096 B，
 不 trim/拼前缀/规范化；pending submission 冻结选择，未知响应的同键重试复用原数组。BFF `571b51de` 原字节 snapshot 与生成校验 digest 已更新。
 旧 store/hook、name 注入、Composer chip 和旧 wire 已删除；遗留 localStorage key 不读取、不迁移，preview 名称动作只在 mounted fixture 内存中。
+typed 选择按 active conversation identity 隔离；新建/切换/active 删除回退会清空，删除非 active 与同一 pending 未知 ACK 重试保留当前冻结值。
 
 Agent `dd34a48` 已要求 typed refs，但非空 reader 尚未接通；正式 UI 因此仍不提供选择/执行入口。完整 PersonalSkillsRead
 选择 UI、安装/启用裁决和非空执行链仍是后续必须交付项。Web 不新增 SQL/Redis/安装事实，3310 未操作。
