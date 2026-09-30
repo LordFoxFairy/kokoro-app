@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## WEB-COMPOSER-VISUAL-ALIGN 实现候选（2026-09-30）
+
+基线 `5058ae2c400dd8be1964bba5df03fd7ce5b52133` 的 Composer 把焦点环画在零圆角 textarea 内部，形成直角方框；同一个 MessageScrollerContent 又被48rem和后声明的46rem规则重复定宽，桌面实际 Composer 768px、内容736px。手机 thread shell 已有横向gutter，仍额外继承桌面2rem viewport padding，进一步压缩正文。
+
+本候选把键盘可见焦点环移到圆角 Composer shell，textarea保留透明 2px outline 的 forced-colors 语义而不再显示内部方框；会话与Composer统一48rem阅读轴。桌面仍保留2rem viewport留白，767px以下只保留0.125rem光学内缩并复用外层安全gutter。未修改消息、retry、owner/API/data、滚动机制或空assistant事实。Node22目标断言先 RED（2个目标测试失败、125通过），最终定点 Composer/AppFrame/CSS architecture 为129/129通过；`pnpm check` exit 0（contract 109、architecture 37、全量 Vitest 1800、lint/typecheck/build）。日志为 `/tmp/kokoro-web-composer-align-red.log`、`/tmp/kokoro-web-composer-align-final-targeted.log` 和 `/tmp/kokoro-web-composer-align-check.log`。Root独立最终 Node22.22.2 `pnpm check` exit0：contract109、architecture37、全量1800 tests、lint/typecheck/build；日志 `/tmp/kokoro-web-composer-align-root-node22-check.log`。原生 IAB 正式页面桌面 content/form 均x282/768px，390px窄屏 content x15.59/358.81px与form x16/358px，无document横向溢出；欢迎/线程焦点均移到圆角shell，textarea透明outline。多行高度38→100→38px、Shift+Enter不提交、Tab控件可达。仅同步受管运行目录两CSS，无服务重启或模型调用。截图 `/tmp/kokoro-composer-mobile-after.jpg`、`/tmp/kokoro-composer-welcome-after.jpg`；独立源码审查返修后0/0/0。单独prettier检查六文件FAIL（包含现有格式基线，本片未整文件格式化），不冒称所有格式门通过。验欢迎页时另发现新会话后deep-link被清空，已另行只读调查；重复user与空failed assistant事实仍未闭环，未隐藏或去重。
+
 ## WEB-FAILED-SNAPSHOT-RESTORE 实现候选（2026-09-30）
 
 基线 `840fa7e0ff9c4d241daca0c297b120f34821018e` 的 live reducer 能显示 `RUN_ERROR`，但 snapshot 水合丢弃已有 `messages[].status=failed`，且 watermark 前终态不会再次 replay。本候选已在唯一 hydration owner 实现最小恢复：仅当 owner-ordered messages 尾项是 failed assistant、没有 active run、没有 `status=pending` pause时恢复本地通用 failed；`runError=null`，尾部新 user/后续成功或在途/HITL 均不得被历史失败污染，resolved/cancelled/expired 历史 pause 不阻挡恢复。

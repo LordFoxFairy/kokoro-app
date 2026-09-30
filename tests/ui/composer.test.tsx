@@ -700,10 +700,12 @@ describe("Composer 状态契约", () => {
 })
 
 
-it("编辑器只有一处 token focus ring，保留 reduced-motion 与窄屏换行", () => {
+it("编辑器把键盘焦点环画在圆角 shell，textarea 不出现直角内框", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
   expect(css).not.toContain(".composer:focus-within")
-  expect(css).toMatch(/\.input:focus-visible\s*\{[^}]*box-shadow: none;[^}]*outline: 2px solid var\(--ring\)/)
+  expect(css).toMatch(/\.input:focus-visible\s*\{[^}]*outline: 2px solid transparent;/)
+  expect(css).toMatch(/\.wrap \.composer:has\(\.input:focus-visible\)\s*\{[^}]*border-color: var\(--ring\);[^}]*box-shadow:/)
+  expect(css.indexOf(".wrap .composer:has(.input:focus-visible)")).toBeGreaterThan(css.indexOf('[data-empty-workspace="true"] .composer'))
   expect(css).toContain("@media (prefers-reduced-motion: reduce)")
   expect(css).toContain("@container composer (max-width: 24rem)")
 })

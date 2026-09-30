@@ -1,5 +1,11 @@
 # Kokoro User Web 技术设计
 
+## WEB-COMPOSER-VISUAL-ALIGN：输入焦点与会话阅读轴
+
+Web Composer 继续由既有 `ui/composer` 拥有输入表面，AppFrame CSS 只负责站点布局。Textarea 的 2px outline 保持透明以保留 forced-colors 语义，不再绘制零圆角的可见内部焦点框；键盘 `focus-visible` 通过 `:has()` 把 token ring 提升到已有圆角 form shell，鼠标焦点不额外着色。Thread 的 MessageScrollerContent 是同时携带 content/inner 标记的同一节点，因此只保留一条 48rem 阅读轴，与 thread Composer 同宽，不建立虚假的嵌套 46rem 轨道。
+
+桌面视口保留 2rem 阅读留白；手机已有 thread shell 安全 gutter，只增加 0.125rem 光学校准，不再叠加桌面 2rem。滚动容器、stable scrollbar gutter、用户/assistant事实、空 assistant、间距、消息顺序和 owner contract均不变。验证锁定键盘焦点归属、48rem单轴及767px边界，并由Root真实390px/桌面浏览器复核几何。
+
 ## WEB-FAILED-SNAPSHOT-RESTORE：权威 snapshot 的通用失败恢复
 
 **Owner 与当前事实。** Web `core/hydration.ts` 是 BFF session snapshot 到本地 `SessionStreamState` 的唯一水合 owner。基线 `840fa7e0ff9c4d241daca0c297b120f34821018e` 会保留 message 内容、run 关联、步骤和 watermark，却丢弃机器契约已经提供的 `messages[].status=failed`，并从初始 `runStatus=idle/runError=null` 开始；watermark 前已经消费的 `RUN_ERROR` 不会再次 replay，因此刷新或重新水合会移除 live 阶段的通用错误卡和手动重试入口。

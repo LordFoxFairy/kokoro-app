@@ -248,31 +248,32 @@
   display: none;
 }
 
-/* The desktop Web contract remains active in a narrow split window. Match
- * Manus' conversation column rather than allowing the shared responsive
- * padding to push the thread 7px inward. This selector is explicitly gated
- * by the desktop marker and therefore does not alter the phone shell. */
-.main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
-  padding-inline: 2rem;
-  /* Manus uses a 4px breathing line below its 56px chrome before the first
-     user turn; the conversation owns all later vertical spacing. */
-  padding-top: 0.25rem;
+/* Match Manus' conversation column rather than allowing shared viewport
+ * padding to push the thread inward. Viewport width, not the desktop marker,
+ * owns the desktop/mobile spacing boundary below. */
+@media (min-width: 768px) {
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+    padding-inline: 2rem;
+    /* Manus uses a 4px breathing line below its 56px chrome before the first
+       user turn; the conversation owns all later vertical spacing. */
+    padding-top: 0.25rem;
+  }
+}
+@media (max-width: 767px) {
+  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-viewport"]) {
+    /* The thread shell already supplies the phone gutter. Keep only the same
+       two-pixel optical inset as the Composer so their visible tracks align. */
+    padding-inline: 0.125rem;
+  }
 }
 .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-content"]) {
-  /* The scroller primitive's content wrapper sits above `.inner`; without
-     this cap it expands to the full 2K main panel and defeats the centered
-     conversation measure below. Use the exact Composer width as the shared
-     desktop reading track while narrow desktop windows naturally fill. */
+  /* One DOM node carries both content and conversation-inner markers. Keep
+     its single cap at the exact Composer width so desktop and narrow-window
+     reading tracks share one centered measure. */
   width: min(48rem, 100%);
   margin-inline: auto;
   gap: 1.75rem;
 }
-.main[data-desktop-web="true"][data-web-view="thread"] :global([data-conversation-thread-inner="true"]) {
-  /* Manus keeps answers on a 736px reading line within the 768px Composer
-     and progress track, giving long responses an intentional 16px inset. */
-  width: min(46rem, 100%);
-}
-
   .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-item"]:first-child) {
     /* The shadcn scroller reserves a 44px previous-item peek by default.
        Manus leaves a smaller lead-in above the first user turn; preserve the

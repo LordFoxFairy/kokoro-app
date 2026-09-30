@@ -41,7 +41,7 @@
 .input::-webkit-scrollbar { display: none; }
 .input::placeholder { color: color-mix(in srgb, var(--foreground) 55%, transparent); }
 .input:focus { border-color: transparent; box-shadow: none; }
-.input:focus-visible { border-color: transparent; box-shadow: none; outline: 2px solid var(--ring); outline-offset: -2px; }
+.input:focus-visible { border-color: transparent; box-shadow: none; outline: 2px solid transparent; }
 .input:disabled { color: color-mix(in srgb, var(--foreground) 55%, transparent); }
 
 @media (max-width: 680px) {
@@ -72,6 +72,9 @@
   .controls { min-width: 0; flex-wrap: wrap; }
   .wrap[data-desktop-web="true"] .trailingActions { margin-left: 0; }
 }
+
+/* Keep the keyboard ring above later empty-workspace and pointer borders. */
+.wrap .composer:has(.input:focus-visible) { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 28%, transparent); }
 
 @container composer (max-width: 34rem) {
   .controls { flex-wrap: wrap; }
