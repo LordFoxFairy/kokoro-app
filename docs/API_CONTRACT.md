@@ -1,15 +1,92 @@
 # Kokoro User Web API 与协议契约
 
-## Failed snapshot hydration（不改机器契约）
+## WEB-FAILURE3-DESIGN：BFF public 2.0 安全失败（2026-09-30；目标 consumer）
+
+唯一机器来源是 BFF `ccb8e144` 的 public OpenAPI `2.0.0`，SHA-256
+`ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`。本候选已将该文件原字节固定到
+`src/generated/bff-public-openapi.yaml`，并由独立 generator 导出带 exact provenance 的 failure tuple；该 generated artifact
+不是第二份可编辑 schema，也不为旧 public 1.0 增加 alias/fallback。generator 的模块导入是 pure inspect/render，只有作为
+真实入口执行时才接受固定的 `--write/--check`。HTTP 路径仍为 `/v1`，运行时 consumer 尚未接线。
+
+### Message safe profile
+
+`GET /v1/sessions/{id}`、`GET /v1/sessions/{id}/messages` 与合法 `GET /v1/shared/{share_id}` 共用唯一
+`ChatMessage.failure`：
+
+```json
+{"source":"agent","code":"model_unavailable","retryable":true}
+```
+
+对象必须恰有 `source/code/retryable`，`source` 恒为 `agent`。code 闭集是
+`token_budget_exceeded | recursion_limit_exceeded | assembly_failed | enqueue_failed | dispatch_exhausted |
+contract_incompatible | internal_error | model_unavailable | dependency_unavailable | model_access_denied`。
+十码的 `false` 全合法；只有 `model_unavailable` 与 `dependency_unavailable` 还允许 `true`，故机器合法集合恰为 12 tuple。
+
+failure 存在时 Message 必须同时满足 `role=assistant`、`status=failed`、`run_id` 存在且 trim 后非空。failure 缺失仍可表示
+cancel/BFF dispatch/delete 等 failed assistant；缺失不是 `null`，Web 不补 `internal_error`。Web 不接收/展示
+`payload_json`、provider message、exception、stack、owner status、`error_kind` 或额外键。
+
+BFF public `ChatMessage.role` 还合法包含 `system`，但现 Web runtime/render 只支持 user/assistant。本片不静默丢弃或把 system
+改写成 assistant，也不借 failure 工作扩展全部 chat rendering：generator/contract test 必须保留 owner 的 system 枚举并证明
+system+failure 被 presence guard 拒绝；runtime 对无 failure 的 system 仍 fail-closed，列为独立 consumer follow-up。
+
+### verified Agent `RUN_ERROR`
+
+```json
+{
+  "type": "RUN_ERROR",
+  "threadId": "CONVERSATION_ID",
+  "runId": "RUN_ID",
+  "code": "model_unavailable",
+  "message": "Agent run failed",
+  "metadata": {"kokoro": {
+    "event_id": "EVENT_ID",
+    "seq": 42,
+    "session_id": "CONVERSATION_ID",
+    "run_id": "RUN_ID",
+    "timestamp": "2026-09-30T00:00:00.000Z",
+    "failure": {"source":"agent","code":"model_unavailable","retryable":true}
+  }}
+}
+```
+
+Web 要求 top-level/nested code、thread/session 与 run identity 全部相等，message 精确为固定安全文本；顶层没有
+`retryable`。解析成功后只传播 nested safe profile，不传播 `message`。snapshot 与 live 的 profile 是同一个业务值，reload
+不得从 watermark 前事件补猜。
+
+### BFF-owned dispatch `RUN_ERROR`
+
+BFF permanent launch failure 仍是标准 AG-UI `RUN_ERROR`，但语义不是 Agent failure：metadata 带
+`source_owner="kokoro-bff"`，`seq` 是 `^[1-9][0-9]*$` 十进制字符串且可能超过 JS safe integer，frame 没有
+`metadata.kokoro.failure`；message 固定 `Agent launch could not be confirmed`，top-level code 是 BFF 本地 launch code。
+该分支必须同时满足 `threadId===metadata.kokoro.session_id`、非空 `runId===metadata.kokoro.run_id`、top-level code
+存在且为 nonblank opaque string，以及 message 精确匹配固定文本。Web 不枚举 BFF launch code。BFF durable payload 到 SSE
+不重写这些字段。Web 只以 exact source owner/shape 识别内部 dispatch terminal，保留 string source sequence 作
+identity/order metadata，不显示或分类其 code/message，不把它放进 Agent tuple 或 numeric `lastSeq`。不同的非空
+thread/session、run identity、blank/missing code 或 message mismatch 都 fail-closed。
+
+其他 RUN_ERROR 不通过 unknown fallback；取消继续使用既有 canonical cancellation 语义，不伪造成 failure。网络仍只有 AG-UI，
+不新增 CUSTOM error、旧 envelope 或第二协议。
+
+### 可见动作边界
+
+public 2.0 没有 retry terminal command。`retryable` 只用于安全说明，不授权 Web 重新 POST 原 user；Agent 4/BFF 2.1 正式
+发布前，snapshot/live/shared 的 Agent terminal、dispatch terminal 与无 profile generic terminal 都没有 retry mutation。
+Web 仅对 create-message 尚未取得 receipt 的 transport-unknown 以原 idempotency key 和冻结 body 恢复，不能把该行为写成
+Run retry。Share 永远只读。
+
+## Failed snapshot hydration（历史 public 1.0 基线；由上节 public 2.0 目标后继）
+
+本节记录 `WEB-FAILED-SNAPSHOT-RESTORE` 当时的窄恢复，不是当前 failure3 目标或正式 retry 依据。
 
 BFF v1 snapshot 已合法提供 owner-ordered `messages[]`，每项包含闭集 `status`（含 `failed`）、role、content、created_at 与 optional run_id；现契约没有 terminal failure 的 code/message/retryable 字段。Web 只在数组最后一项为 failed assistant、`active_run` 缺失且没有 pending pause 时恢复本地通用 failed 状态，`runError=null`。该判定不改变请求、响应、watermark、SSE replay、schema 或生成物，也不把 BFF message status扩写成 Agent错误分类。
 
 后续 user 或非 failed assistant 是更新的 owner 顺序事实，必须阻止旧失败恢复；active run 与 pending pause 分别表示在途执行/HITL，同样优先于历史 failed。具体错误文案继续只来自 live `RUN_ERROR`；刷新后在 Agent→BFF 发布安全 typed failure 契约前仅展示既有通用失败文案和手动 retry，不解析或展示上游原始异常。
 
-## WEB-PERSONAL-CODE 当前候选（2026-09-30；待 Root 验收）
+## WEB-PERSONAL-CODE 历史候选（2026-09-30）
 
-Web 基线49adb4b；目标文档门已落实到既有 client/schema/同源 route/UI，下面的“尚未消费/旧 pin”属于历史设计基线。
-唯一 public snapshot 已固定 BFF `67755d16ff0f40ea02d71a6dad7108507a04766a`，原字节 SHA-256
+Web 基线49adb4b；本节只记录当时 client/schema/同源 route/UI 切片，不覆盖顶部 public 2.0 当前来源。
+当时唯一 public snapshot 固定 BFF `67755d16ff0f40ea02d71a6dad7108507a04766a`，原字节 SHA-256
 `40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`，间接 Platform6519ae9a/v5.0.1。
 Web 没有第二可编辑 public contract、内部 SDK 或 owner 摘要。
 
@@ -24,9 +101,9 @@ List使用唯一 top-level data array/optional meta.next_cursor，三态filter�
 已确认receipt之后Get current，失败只重读，不重复命令。Publish与Install、安装管理与Run选择没有隐式调用。
 取消沿既有有限transport传播，不宣称服务端回滚。实际代码门见CURRENT；当前文档不等于已激活或真实五方法浏览器链通过。
 
-## WEB-PERSONAL：五本人安装 API 消费目标（2026-09-30；文档门）
+## WEB-PERSONAL：五本人安装 API 消费目标（2026-09-30；历史文档门）
 
-Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e` 尚未消费安装 API。唯一 public 机器源为 BFF
+Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e` 当时尚未消费安装 API。当时唯一 public 机器源为 BFF
 `67755d16ff0f40ea02d71a6dad7108507a04766a` 的 `contract/openapi/v1/openapi.yaml`，SHA-256
 `40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；下列是 consumer 义务，不是第二可编辑 schema。
 BFF 已固定 Platform `6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1；Web 不复制内部摘要、receipt codec、Proto 或 IAM metadata。

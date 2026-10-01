@@ -1,6 +1,40 @@
 # Kokoro User Web 数据模型与 Owner
 
-## Failed snapshot 的本地派生状态
+## WEB-FAILURE3-DESIGN：安全失败内存模型（2026-09-30；目标）
+
+Web 不新增 SQL、Redis、IndexedDB、localStorage、receipt 或 failure 持久副本。BFF Message 与 AG-UI ledger 仍是唯一持久
+事实；本候选已固定 BFF `ccb8e144` public `2.0.0` 原字节（SHA-256
+`ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`）并生成唯一 12 tuple，后继运行时只维护页面生命周期
+投影。generated tuple 是 owner schema 的派生物，不是 Web 持久事实或第二码表；pure generator import 不写 artifact 或任何
+浏览器/服务端状态，只有显式固定 CLI 模式更新或核对该派生文件。
+
+| 输入事实 | Web 内存投影 | 禁止推导 |
+| --- | --- | --- |
+| Message.failure 三键 + assistant/failed/nonblank run | `{kind:"agent",profile}`，snapshot/reload/share 同值 | 不从 failed、空正文、run_id 或 code string 补 profile |
+| Agent RUN_ERROR exact nested profile | 同一 `{kind:"agent",profile}` | 不保存/展示 top-level message、error_kind、raw payload；不 unknown→internal_error |
+| BFF dispatch RUN_ERROR，source_owner + decimal string seq，无 failure | `{kind:"dispatch"}`，sourceSequence 保持 string | 不转 Number、不写 numeric lastSeq、不使用 BFF launch code 作为 Agent code |
+| failed Message 无 failure | `{kind:"generic"}` | 不猜 cancel/dispatch/delete 的具体原因，不造 retryability |
+| completed/cancelled/active/HITL | 既有状态 | 不因历史 failure 污染 newer user/active run/pending pause |
+
+`runStatus` 继续表示 settled/active UI 相位；新的 closed terminal failure union 取代旧 raw `runError`。所有十码 false 与
+availability 两码 true 共 12 tuple 由 pinned OpenAPI 生成常量，runtime snapshot/live schema 复用；不存在第二手写码表。
+`seenEventIds` 继续按 event_id 去重。Agent numeric seq 继续参与原步骤排序/`lastSeq`；BFF dispatch 的任意精度十进制
+sourceSequence 只作该 source identity，不与 Agent 序列比较。
+
+tail restore 仍须满足：最后 owner-ordered Message 为 failed assistant、无 active_run、无 pending pause。若有 profile 则精确
+恢复 agent；若没有只恢复 generic。SharedThread 只读取相同 helper，不复制另一套 failure 归类。AG-UI frame GC 后，
+snapshot/list/Share 仍从 Message.failure 得到安全 profile；GC 不清 Message 事实。
+
+BFF public 合法的无 failure system Message 仍是现 Web user/assistant render 边界之外的已知 public consumer drift。本片不
+丢弃或改写它，也不为通过 failure 门扩建第三种消息 UI；runtime 继续 fail-closed，后继独立切片必须决定 system 的可见语义。
+
+`retryable` 不落本地 command queue，也不是 mutation capability。Agent/dispatch/generic terminal 在 public 2.0 下均无 Web
+retry command；create-message receipt 未知时保留的原 key/body 是提交幂等恢复，不是 terminal retry。正式 retry 的 parent、
+新 run、旧 user identity 与 fence 由尚未发布的 Agent 4/BFF 2.1 另行拥有，本节不提前建模。
+
+## Failed snapshot 的本地派生状态（历史 public 1.0 基线）
+
+本节记录旧 snapshot 只有 status 时的派生；当前 public 2.0 failure 目标以上节为准。
 
 Web 不新增持久化事实、表、缓存或 localStorage 字段。输入事实仍是一次 BFF snapshot 中按 owner 顺序排列的 `messages`、optional `active_run`、`pending_pauses` 与 `event_watermark`。本地派生函数为：
 
@@ -13,9 +47,9 @@ restoreFailed = last(messages).role == assistant
 
 `restoreFailed=true` 只生成内存 `runStatus=failed, runError=null`；messages、steps、files、deliveries、cursor 和 run identity 原样水合。数组为空、尾部新 user、尾部 assistant 为 completed/pending/streaming、存在 active run 或未决 pause时为 false。Web 不保存或合成 failure code/message；精确失败分类仍等待 Agent owner机器事实经 BFF安全投影。
 
-## WEB-PERSONAL-CODE 当前内存状态（2026-09-30；候选）
+## WEB-PERSONAL-CODE 历史内存状态（2026-09-30）
 
-基线49adb4b，固定BFF67755d16/OpenAPI SHA-256
+基线49adb4b，当时固定BFF67755d16/OpenAPI SHA-256
 `40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`，间接Platform6519ae9a/v5.0.1。
 下节“尚无安装状态机”是历史设计基线，当前候选已实施以下纯浏览器状态；没有新增持久化owner。
 
@@ -31,9 +65,9 @@ filter缺失/true/false保持独立；默认installed=true/limit50，cursor仅�
 Platform的CAS/receipt/outbox和BFF的current IAM/public投影仍唯一；发布不安装，安装不启动/选择Run，Chat refs原有语义未改。
 真实并发/撤权/浏览器验收由Root后验，当前纯测试不证明owner事务或产品激活。
 
-## WEB-PERSONAL：安装管理状态归属（2026-09-30；目标文档门）
+## WEB-PERSONAL：安装管理状态归属（2026-09-30；历史目标文档门）
 
-Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e`，目标固定 BFF
+Web 基线 `14a54b4b8da68b37d83a13402bc8abb87001574e`，当时目标固定 BFF
 `67755d16ff0f40ea02d71a6dad7108507a04766a` public OpenAPI SHA-256
 `40578534da44dff8fcb7bb6812d43753542528b379d684a19100c35a62c60114`；其 Platform 固定
 `6519ae9a7dba63586474d2860f6725d3165b701e` v5.0.1。当前 Web 尚无安装状态机，旧 snapshot 571b51de/preview installed 不证明消费。

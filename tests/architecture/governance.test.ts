@@ -179,7 +179,7 @@ describe("Web governance boundary", () => {
     const packageJson: unknown = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
 
     expect(packageSchema.parse(packageJson).scripts).toEqual({
-      contract: "pnpm contract:check:bff-team && vitest run contract tests/contract",
+      contract: "pnpm contract:check:bff-team && pnpm contract:check:bff-agent-failure && vitest run contract tests/contract",
       "test:architecture": "vitest run tests/architecture",
     })
   })
