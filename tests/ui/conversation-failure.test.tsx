@@ -4,29 +4,38 @@ import { readFileSync } from "node:fs"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createSessionStreamState, type RunErrorCode, type SessionDelivery, type SessionStreamState } from "@/core/state"
+import { stateFromSnapshot } from "@/core/hydration"
+import { applyChatProjectionEvent } from "@/core/reducer"
+import { createSessionStreamState, type SessionDelivery, type SessionStreamState } from "@/core/state"
+import { BFF_AGENT_FAILURE_TUPLES, type BffAgentFailureTuple } from "@/generated/bff-agent-failure"
 import { LocaleProvider } from "@/i18n/context"
-import { zh, type MessageKey } from "@/i18n/messages"
+import { LOCALE_STORAGE_KEY, zh, type MessageKey } from "@/i18n/messages"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
 import { ConversationThread, failureCopyKey, type ConversationThreadProps } from "@/ui/thread/conversation-thread"
+
+import {
+  expectedAgentFailureZhCopy,
+  expectedZhCopy,
+  makeDispatchFailureEvent,
+  makeFailedSnapshot,
+} from "../core/fixtures"
 
 // LocaleProvider 水合后按 navigator.languages 协商语言（jsdom 通常 en）——按同一协商取译文断言，
 // 不写死语言，避免测试与运行环境语言绑定。
 const LOCALE = negotiateLocale(null, typeof navigator !== "undefined" ? [...navigator.languages] : [])
 const tr = (key: MessageKey): string => resolveMessage(LOCALE, key)
 
-const CODES: RunErrorCode[] = [
-  "token_budget_exceeded",
-  "recursion_limit_exceeded",
-  "assembly_failed",
-  "enqueue_failed",
-  "dispatch_exhausted",
-  "contract_incompatible",
-  "internal_error",
-]
+type AgentFailureCode = BffAgentFailureTuple["code"]
+const CODES = [...new Set(BFF_AGENT_FAILURE_TUPLES.map((profile) => profile.code))]
 
-function failedThread(code: RunErrorCode, message: string): SessionStreamState {
-  const thread = createSessionStreamState()
+function failureProfile(code: AgentFailureCode): BffAgentFailureTuple {
+  const profile = BFF_AGENT_FAILURE_TUPLES.find((candidate) => candidate.code === code && !candidate.retryable)
+  if (profile === undefined) throw new Error(`missing generated Agent failure profile: ${code}`)
+  return profile
+}
+
+function failedThreadWithProfile(profile: BffAgentFailureTuple): SessionStreamState {
+  const thread = stateFromSnapshot(makeFailedSnapshot(profile))
   return {
     ...thread,
     messages: [
@@ -34,14 +43,16 @@ function failedThread(code: RunErrorCode, message: string): SessionStreamState {
       { id: "m_a", role: "assistant", content: "working…", runId: "run_1" },
     ],
     stepsByRun: { run_1: [] },
-    runStatus: "failed",
-    runError: { code, message },
   }
+}
+
+function failedThread(code: AgentFailureCode): SessionStreamState {
+  return failedThreadWithProfile(failureProfile(code))
 }
 
 function emptyFailedThread(): SessionStreamState {
   return {
-    ...failedThread("internal_error", "diagnostic"),
+    ...failedThread("internal_error"),
     messages: [
       { id: "m_u", role: "user", content: "do the thing", runId: "m_u" },
       { id: "m_a", role: "assistant", content: "", runId: "run_1" },
@@ -57,6 +68,7 @@ function renderFailure(thread: SessionStreamState, onRetry = vi.fn()) {
       isStreaming={false}
       isReconnecting={false}
       hasFailed
+      canRetryPendingSubmission={false}
       creditRejected={false}
       onOpenBilling={vi.fn()}
       onOpenPricing={vi.fn()}
@@ -262,6 +274,7 @@ function renderGeometryThread(
       isStreaming={false}
       isReconnecting={false}
       hasFailed={false}
+      canRetryPendingSubmission={false}
       creditRejected={false}
       onOpenBilling={vi.fn()}
       onOpenPricing={vi.fn()}
@@ -290,28 +303,34 @@ function settledMessages(messages: SessionStreamState["messages"]): SessionStrea
 
 afterEach(() => {
   cleanup()
+  window.localStorage.removeItem(LOCALE_STORAGE_KEY)
   activeGeometryHarness?.restore()
   activeGeometryHarness = null
   vi.restoreAllMocks()
 })
 
-describe("failureCopyKey — 闭集 7 码逐码本地化", () => {
+describe("failureCopyKey — generated 10-code safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
-      const key = failureCopyKey({ code, message: "x" })
+      const key = failureCopyKey(failedThread(code).runError)
       expect(key).not.toBe("fail.generic")
       expect(zh[key]).toBeTruthy()
     }
   })
 
-  it("七码映射两两不同（无碰撞）", () => {
-    const keys = CODES.map((code) => failureCopyKey({ code, message: "x" }))
+  it("十码映射两两不同（无碰撞）", () => {
+    const keys = CODES.map((code) => failureCopyKey(failedThread(code).runError))
     expect(new Set(keys).size).toBe(CODES.length)
   })
 
-  it("未知码与 null 兜底通用句", () => {
-    expect(failureCopyKey({ code: "totally_unknown", message: "x" })).toBe("fail.generic")
+  it("generic 与 null 终态使用通用安全文案", () => {
+    expect(failureCopyKey(stateFromSnapshot(makeFailedSnapshot(null)).runError)).toBe("fail.generic")
     expect(failureCopyKey(null)).toBe("fail.generic")
+  })
+
+  it("中文安全文案不承诺重发原消息或暴露错误详情", () => {
+    expect(expectedZhCopy("fail.dispatch")).not.toMatch(/重试|重新发送/u)
+    expect(expectedZhCopy("fail.internalHint")).not.toMatch(/重试|详情/u)
   })
 })
 
@@ -423,7 +442,7 @@ describe("ConversationThread 紧凑线程几何", () => {
     expect(harness.zeroScrollCalls()).toHaveLength(0)
   })
 
-  it("嵌入失败反馈仍参与 fit；展开详情后由详情锚点独占阅读位置", () => {
+  it("嵌入安全失败反馈参与 fit 且不提供 raw detail 动作", () => {
     const harness = geometry()
     const { container } = renderGeometryThread(emptyFailedThread(), {
       hasFailed: true,
@@ -433,18 +452,8 @@ describe("ConversationThread 紧凑线程几何", () => {
     harness.scrollTo.mockClear()
     act(() => harness.flushFrames())
     expect(harness.zeroScrollCalls()).toHaveLength(1)
-
-    harness.scrollTo.mockClear()
-    fireEvent.click(screen.getByRole("button", { name: tr("fail.showDetail") }))
-    act(() => harness.flushFrames())
-    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
-    if (observer) {
-      act(() => {
-        harness.trigger(observer)
-        harness.flushFrames()
-      })
-    }
-    expect(harness.zeroScrollCalls()).toHaveLength(0)
+    expect(container.querySelector('[data-slot="collapsible"]')).toBeNull()
+    expect(elements.items).toHaveLength(2)
   })
 
   it("ResizeObserver 仅在不 fit 变 fit 时清 spacer，变长不跳尾且卸载清理 pending frame", () => {
@@ -514,6 +523,7 @@ describe("ConversationThread 失败卡渲染", () => {
         isStreaming={false}
         isReconnecting={false}
         hasFailed={false}
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -536,7 +546,7 @@ describe("ConversationThread 失败卡渲染", () => {
   })
 
   it("空终态助手轮保留消息身份并在同一滚动项承接唯一普通失败反馈", () => {
-    const thread = failedThread("internal_error", "diagnostic")
+    const thread = failedThread("internal_error")
     const { container } = render(
       <ConversationThread
         sessionId="ses_1"
@@ -548,6 +558,7 @@ describe("ConversationThread 失败卡渲染", () => {
         isStreaming={false}
         isReconnecting={false}
         hasFailed
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -569,22 +580,24 @@ describe("ConversationThread 失败卡渲染", () => {
     expect(container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id="run-error"]')).toHaveLength(0)
     expect(container.querySelector('[data-message-id="deliveries"]')).toBeNull()
     expect(screen.getAllByRole("alert")).toHaveLength(1)
-    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
-    expect(screen.getByRole("button", { name: tr("fail.showDetail") })).toBeEnabled()
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+    expect(container.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
 
-  it("空终态助手轮在同一滚动项承接唯一余额不足反馈及全部动作", () => {
-    const { container } = render(
+  it("pre-admission 余额不足独立保留补款、定价与原意图恢复动作", () => {
+    const onRetry = vi.fn()
+    render(
       <ConversationThread
         sessionId="ses_1"
-        thread={emptyFailedThread()}
+        thread={createSessionStreamState()}
         isStreaming={false}
         isReconnecting={false}
         hasFailed
+        canRetryPendingSubmission
         creditRejected
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
-        onRetry={vi.fn()}
+        onRetry={onRetry}
         mode="fast"
         stagingByRun={{}}
         hitlRunId={null}
@@ -592,21 +605,48 @@ describe("ConversationThread 失败卡渲染", () => {
       />,
       { wrapper: LocaleProvider },
     )
-
-    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run_1"]')
-    const feedback = container.querySelector('[data-message-id="credit-error"]')
-    expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)
-    expect(container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id="credit-error"]')).toHaveLength(0)
     expect(screen.getAllByRole("alert")).toHaveLength(1)
     expect(screen.getByRole("button", { name: tr("billing.viewPricing") })).toBeEnabled()
     expect(screen.getByRole("button", { name: tr("billing.viewBalance") })).toBeEnabled()
-    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
+    fireEvent.click(screen.getByRole("button", { name: tr("thread.retry") }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("未获receipt的transport错误保留同key冻结意图恢复入口", () => {
+    const onRetry = vi.fn()
+    const thread = {
+      ...createSessionStreamState(),
+      messages: [{ id: "usr_pending", role: "user" as const, content: "pending intent", runId: "usr_pending" }],
+    }
+    render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={thread}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed
+        canRetryPendingSubmission
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={onRetry}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+    const retry = screen.getByRole("button", { name: tr("thread.retry") })
+    expect(retry).toBeEnabled()
+    fireEvent.click(retry)
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
   it.each([
     {
       name: "有正文",
-      thread: () => failedThread("internal_error", "diagnostic"),
+      thread: () => failedThread("internal_error"),
       props: {},
     },
     {
@@ -689,6 +729,7 @@ describe("ConversationThread 失败卡渲染", () => {
         isStreaming={false}
         isReconnecting={false}
         hasFailed
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -705,7 +746,7 @@ describe("ConversationThread 失败卡渲染", () => {
     const feedbackItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run-error"]')
     expect(feedbackItem).not.toBeNull()
     expect(feedbackItem?.querySelector('[role="alert"]')).not.toBeNull()
-    expect(screen.getAllByRole("button", { name: tr("thread.retry") })).toHaveLength(1)
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
   })
 
   it("失败反馈按内容收敛且不恢复成第二个输入卡", () => {
@@ -725,10 +766,11 @@ describe("ConversationThread 失败卡渲染", () => {
     render(
       <ConversationThread
         sessionId="ses_1"
-        thread={failedThread("internal_error", "diagnostic")}
+        thread={createSessionStreamState()}
         isStreaming={false}
         isReconnecting={false}
         hasFailed
+        canRetryPendingSubmission
         creditRejected
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -768,6 +810,7 @@ describe("ConversationThread 失败卡渲染", () => {
         isStreaming={false}
         isReconnecting={false}
         hasFailed={false}
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -790,7 +833,7 @@ describe("ConversationThread 失败卡渲染", () => {
   })
 
   it("流式助手轮不以 atomic=true 重复播报整轮内容", () => {
-    const thread = failedThread("internal_error", "streaming diagnostic")
+    const thread = failedThread("internal_error")
     render(
       <ConversationThread
         sessionId="ses_1"
@@ -798,6 +841,7 @@ describe("ConversationThread 失败卡渲染", () => {
         isStreaming
         isReconnecting={false}
         hasFailed={false}
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -814,56 +858,76 @@ describe("ConversationThread 失败卡渲染", () => {
 
   it("每个闭集码渲染对应本地化人话（绝不裸露错误码）", () => {
     for (const code of CODES) {
-      renderFailure(failedThread(code, "raw diagnostic"))
-      const key = failureCopyKey({ code, message: "x" })
-      expect(screen.getByText(tr(key))).toBeTruthy()
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+      renderFailure(failedThread(code))
+      expect(screen.getByText(expectedAgentFailureZhCopy(code))).toBeTruthy()
       // 裸码绝不出现在可见文案里。
       expect(screen.queryByText(code)).toBeNull()
       cleanup()
     }
   })
 
-  it("message 原文折叠可展开", () => {
-    const scrollIntoView = vi.fn()
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
-      callback(0)
-      return 1
-    })
-    HTMLElement.prototype.scrollIntoView = scrollIntoView
-    renderFailure(failedThread("internal_error", "boom at line 42"))
-    fireEvent.click(screen.getByRole("button", { name: tr("fail.showDetail") }))
-    const detail = screen.getByText("boom at line 42")
-    expect(detail.tagName.toLowerCase()).toBe("pre")
-    expect(screen.getByText(tr("fail.showDetail"))).toBeTruthy()
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "auto" })
+  it("不渲染 producer 原文或详情动作", () => {
+    renderFailure(failedThread("internal_error"))
+    expect(screen.queryByText("boom at line 42")).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
 
   it("internal_error 额外给反馈指引", () => {
-    renderFailure(failedThread("internal_error", "boom"))
+    renderFailure(failedThread("internal_error"))
     expect(screen.getByText(tr("fail.internalHint"))).toBeTruthy()
   })
 
   it("非 internal_error 不显示反馈指引", () => {
-    renderFailure(failedThread("enqueue_failed", "boom"))
+    renderFailure(failedThread("enqueue_failed"))
     expect(screen.queryByText(tr("fail.internalHint"))).toBeNull()
   })
 
-  it("重试按钮触发 onRetry（重发原消息）", () => {
-    const onRetry = vi.fn()
-    renderFailure(failedThread("dispatch_exhausted", "boom"), onRetry)
-    fireEvent.click(screen.getByText(tr("thread.retry")))
-    expect(onRetry).toHaveBeenCalledTimes(1)
+  it.each(BFF_AGENT_FAILURE_TUPLES)(
+    "$code retryable=$retryable 终态都不提供重发原消息动作",
+    (profile) => {
+      const onRetry = vi.fn()
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+      renderFailure(failedThreadWithProfile(profile), onRetry)
+      expect(screen.getByText(expectedAgentFailureZhCopy(profile.code))).toBeTruthy()
+      expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+      expect(onRetry).not.toHaveBeenCalled()
+      cleanup()
+    },
+  )
+
+  it("dispatch terminal 使用安全只读反馈且没有 retry/detail", () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+    const thread = applyChatProjectionEvent(
+      createSessionStreamState(),
+      makeDispatchFailureEvent("9007199254740993123456789"),
+    )
+    renderFailure(thread)
+    expect(screen.getByRole("alert")).toBeTruthy()
+    expect(screen.getByText(expectedZhCopy("fail.generic"))).toBeTruthy()
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
 
-  it("重试已进入流式态后锁定按钮，避免重复创建 run", () => {
+  it("generic terminal 使用安全只读反馈且没有 retry/detail", () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+    renderFailure(stateFromSnapshot(makeFailedSnapshot(null)))
+    expect(screen.getByRole("alert")).toBeTruthy()
+    expect(screen.getByText(expectedZhCopy("fail.generic"))).toBeTruthy()
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
+  })
+
+  it("流式边界也不重新暴露 terminal retry 动作", () => {
     const onRetry = vi.fn()
     render(
       <ConversationThread
         sessionId="ses_1"
-        thread={failedThread("dispatch_exhausted", "boom")}
+        thread={failedThread("dispatch_exhausted")}
         isStreaming
         isReconnecting={false}
         hasFailed
+        canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
         onOpenPricing={vi.fn()}
@@ -875,10 +939,7 @@ describe("ConversationThread 失败卡渲染", () => {
       />,
       { wrapper: LocaleProvider },
     )
-    const retry = screen.getByRole("button", { name: tr("thread.retry") })
-    expect(retry).toBeDisabled()
-    expect(retry).toHaveAttribute("aria-busy", "true")
-    fireEvent.click(retry)
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
     expect(onRetry).not.toHaveBeenCalled()
   })
 })

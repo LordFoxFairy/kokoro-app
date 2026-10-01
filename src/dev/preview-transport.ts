@@ -2,10 +2,9 @@
 
 import {
   parseChatProjectionEvent,
-  RUN_FAILURE_CODES,
-  type RunFailureCode,
   type ChatProjectionEvent,
 } from "@/core/chat-projection-event"
+import type { AgentFailureProfile } from "@/contract/agent-failure"
 import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
 import type { RunControlReceipt, SessionSnapshot } from "@/contract/http"
 import {
@@ -14,6 +13,7 @@ import {
   type SessionClient,
 } from "@/engine/client"
 import { SessionClientError } from "@/engine/client-error"
+import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 // 仅当显式设置 NEXT_PUBLIC_SESSION_PREVIEW=1 时提供假流客户端；否则返回 null（走真实链路）。
 // 单例缓存：清单客户端与引擎客户端共享同一份内存会话（否则各持一份 Map，侧栏永远看不到已开会话）。
 let previewSingleton: SessionClient | null = null
@@ -78,7 +78,7 @@ function readPersistedSessions(): Map<string, PersistedPreviewSession> {
         : []
       const seq = Math.max(
         "seq" in value && typeof value.seq === "number" && Number.isInteger(value.seq) ? value.seq : 0,
-        ...history.map((event) => event.seq),
+        ...history.flatMap((event) => ("seq" in event ? [event.seq] : [])),
       )
       const title = "title" in value && typeof value.title === "string" ? value.title : ""
       const updatedAt = "updatedAt" in value && typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString()
@@ -109,8 +109,22 @@ function previewCursor(sequence: number): EventCursor {
   return eventCursorSchema.parse(`agui_${sequence.toString(16).padStart(32, "0")}`)
 }
 
-function isRunFailureCode(value: string): value is RunFailureCode {
-  return RUN_FAILURE_CODES.some((code) => code === value)
+function previewSequence(event: ChatProjectionEvent): number {
+  if ("seq" in event) return event.seq
+  throw new SessionClientError("parse", "Preview history cannot contain BFF dispatch failures")
+}
+
+function previewFailureProfile(content: string): AgentFailureProfile | null {
+  const match = /^!fail:([a-z_]+)/.exec(content.trim())
+  if (!match) return null
+  const code = match[1]
+  const profile = BFF_AGENT_FAILURE_TUPLES.find(
+    (candidate) => candidate.code === code && !candidate.retryable,
+  )
+  if (!profile) {
+    throw new SessionClientError("parse", `Unknown preview failure code: ${code ?? ""}`)
+  }
+  return profile
 }
 
 // Keep the local catalogue small and deterministic, while still projecting
@@ -228,7 +242,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     }
     const event = session.queued.shift()
     if (event) {
-      subscriber.onCursor(previewCursor(event.seq))
+      subscriber.onCursor(previewCursor(previewSequence(event)))
       subscriber.onEvent(event)
     }
     const timer = setTimeout(() => {
@@ -269,7 +283,13 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     }
   }
 
-  const enqueueRun = (sessionId: string, runId: string, content: string, projectRef?: string): void => {
+  const enqueueRun = (
+    sessionId: string,
+    runId: string,
+    content: string,
+    failureProfile: AgentFailureProfile | null,
+    projectRef?: string,
+  ): void => {
     const session = sessionFor(sessionId)
     const envelope = makeEnvelope(sessionId, runId)
     const segmentId = `${runId}:seg_1`
@@ -365,25 +385,12 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       drainActive(session)
       return
     }
-    const failMatch = /^!fail:([a-z_]+)/.exec(content.trim())
-    if (failMatch) {
-      const requestedCode = failMatch[1]
-      if (requestedCode === undefined) return
-      // Keep the preview command forgiving: a typo must exercise the normal
-      // error card, not throw from parseChatProjectionEvent inside a timer callback.
-      // Real SSE payloads remain strict and are rejected by engine/client.ts.
-      const code: RunFailureCode = isRunFailureCode(requestedCode)
-        ? requestedCode
-        : "internal_error"
+    if (failureProfile) {
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理预览回复。" }),
-        envelope("run.failed", {
-          code,
-          error_kind: "PreviewSyntheticError",
-          message: `Synthetic failure for preview: ${requestedCode}${code === requestedCode ? "" : " (using internal_error)"}\n  at previewTransport.enqueueRun (dev harness)`,
-        }),
+        envelope("run.failed", { profile: failureProfile }),
       ])
       drainActive(session)
       return
@@ -433,10 +440,11 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     revokeShare: () => Promise.resolve({ ok: true as const }),
 
     createMessage: async (sessionId, body) => {
+      const failureProfile = previewFailureProfile(body.content)
       await ensureRestored()
       runCounter += 1
       const runId = `run_preview_${runCounter}`
-      enqueueRun(sessionId, runId, body.content, body.project_ref)
+      enqueueRun(sessionId, runId, body.content, failureProfile, body.project_ref)
       return {
         run_id: runId,
         user_message_id: `${runId}:user`,
@@ -452,7 +460,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       let activeRunId: string | null = null
       for (const event of session.history) {
         if (event.kind === "run.created") activeRunId = event.payload.run_id
-        if (event.kind === "run.completed" || event.kind === "run.failed") activeRunId = null
+        if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") activeRunId = null
       }
       return {
         session: {
@@ -536,7 +544,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         // different conversation or an earlier stream.
         const resumeIndex = resumeCursor === null
           ? -1
-          : session.history.findIndex((event) => previewCursor(event.seq) === resumeCursor)
+          : session.history.findIndex((event) => previewCursor(previewSequence(event)) === resumeCursor)
         if (resumeCursor !== null && resumeIndex < 0) {
           onStreamError(new SessionClientError("parse", "preview AG-UI cursor does not belong to this Chat"))
           return

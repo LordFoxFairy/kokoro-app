@@ -1,6 +1,7 @@
 // 纯状态模型：零 I/O 零 React；内部投影类型与 AG-UI wire DTO 分离。
 
 import type { EventCursor } from "@/contract/agui-events"
+import type { AgentFailureProfile } from "@/contract/agent-failure"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 
 type EventOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEvent, { kind: K }>
@@ -12,7 +13,11 @@ type AwaitingKind = EventOf<"tool.awaiting_approval">["payload"]["kind"]
 type ToolRisk = NonNullable<EventOf<"tool.awaiting_approval">["payload"]["risk"]>
 type SubagentSource = EventOf<"subagent.started">["payload"]["source"]
 type RunCompletedStatus = EventOf<"run.completed">["payload"]["status"]
-export type RunErrorCode = EventOf<"run.failed">["payload"]["code"]
+
+export type RunFailure =
+  | { kind: "agent"; profile: AgentFailureProfile }
+  | { kind: "dispatch" }
+  | { kind: "generic" }
 
 export type SessionMessage = {
   id: string
@@ -116,8 +121,8 @@ export type SessionStreamState = {
   todos: SessionTodo[]
   stepsByRun: Record<string, SessionStep[]>
   runStatus: "idle" | RunCompletedStatus | "failed"
-  // 最近一次 run.failed 的契约三层错误（code=按码文案键 / message=兜底原文）；非失败态恒 null。
-  runError: { code: RunErrorCode; message: string } | null
+  // 已验证的安全失败分类；不保存 producer message、exception 或 stack。
+  runError: RunFailure | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
   activeRunId: string | null
   // Internal source order is retained for deterministic projection only; it is

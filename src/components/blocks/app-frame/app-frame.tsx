@@ -194,6 +194,7 @@ export function AppFrame({
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
   const hasFailed = !isStreaming && (machine.phase === "error" || thread.runStatus === "failed")
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
+  const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
   const mode = store ? activeMode(store) : pendingMode
   const modeLocked = hasMessages
   const canSend = draft.trim().length > 0
@@ -245,6 +246,7 @@ export function AppFrame({
     isStreaming,
     isReconnecting: machine.phase === "reattaching",
     hasFailed,
+    canRetryPendingSubmission,
     creditRejected,
     onOpenBilling: () => overlays.openSettings("credits"),
     onOpenPricing: () => overlays.openSettings("subscription"),

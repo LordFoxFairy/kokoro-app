@@ -12,7 +12,7 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   `SessionStep`（thinking/tool/subagent/text 按 seq 有序，非按 kind 归桶）、
   `SessionToolCall`/`ToolStatus`（含结构化终态 stale-*/cancelled，零 UI 文案）、
   `SessionMessage`/`SessionSubagent`/`SessionDelivery`（成果以 conversationId + artifactId 标识）
-  及契约派生类型别名。
+  及契约派生类型别名；`RunFailure` 是 agent safe profile / dispatch / generic 的 closed union，不保存 raw error）。
 - `reducer.ts`
   - `applyChatProjectionEvents(state, events)`：批量折叠——event_id 幂等去重、整批一次顶层快照、
     可变草稿逐事件折叠（修 replay O(n²)）；全部重复时原样返回入参（引用相等表达幂等）。
@@ -23,7 +23,8 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   渲染层唯一读取模型）、`groupSegments`/`Segment`（turn 内按 segmentId 聚合过程）。
 - `hydration.ts`：`stateFromSnapshot`——从 BFF 同一事务 snapshot 水合
   messages/pending pauses/meta/files/deliveries/activeRunId，并保存 `event_watermark` 为
-  `resumeCursor`；随后只续 watermark 之后的 AG-UI ledger frame。`deliveryFromSnapshot`——
+  `resumeCursor`；尾部 settled failed assistant 在无 active/HITL 时按 Message.failure 恢复 agent 或 generic safe failure，
+  随后只续 watermark 之后的 AG-UI ledger frame。`deliveryFromSnapshot`——
   snapshot delivery 的 snake→camel 投影（engine run 收尾对账复用）。
 - `conversations.ts`：`ConversationStore` 列表索引纯操作（add/touch/select/remove/
   setActiveMode/sortedConversations/conversationTitle）；`AgentMode`（纯 UI 偏好，不上 wire）。
@@ -38,7 +39,8 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 ## 运行时约束
 
 - 折叠幂等靠内部 projection `event_id`（即 AG-UI frame cursor）；`lastSeq` 只维护内部
-  source 顺序，网络续流只使用不可解析的 `resumeCursor`。
+  Agent numeric source 顺序，BFF dispatch 的十进制 string `sourceSequence` 不进入 `lastSeq`；网络续流只使用不可解析的
+  `resumeCursor`。
 - 终态 runStatus/runError 是单槽投影：仅在无在途锚点或终态属在途 run 时写——
   reattach 全量回放里历史 run 的终态不得覆写在途 run。
 - `insertOrdered` 按 (seq, 到达先后) 稳定插入；乱序/部分 replay 时 awaiting/returned

@@ -2190,3 +2190,17 @@ it("Composer 保留 IME 确认与 Shift+Enter，普通 Enter 仅提交一次", a
   fireEvent.keyDown(input, { key: "Enter" })
   expect(submit).toHaveBeenCalledExactlyOnceWith("输入法候选")
 })
+
+it("已获receipt后的stream error不显示未获回执恢复动作", async () => {
+  buildEngine()
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "post receipt" } })
+  fireEvent.click(screen.getByLabelText("发送消息"))
+  await act(settle)
+
+  act(() => client.lastStream().fail(new SessionClientError("network", "stream lost after receipt")))
+  await act(settle)
+
+  expect(screen.getByRole("alert")).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+})

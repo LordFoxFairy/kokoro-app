@@ -1,12 +1,13 @@
 # Kokoro User Web API 与协议契约
 
-## WEB-FAILURE3-DESIGN：BFF public 2.0 安全失败（2026-09-30；目标 consumer）
+## WEB-FAILURE3：BFF public 2.0 安全失败（2026-10-01；运行时候选）
 
 唯一机器来源是 BFF `ccb8e144` 的 public OpenAPI `2.0.0`，SHA-256
 `ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`。本候选已将该文件原字节固定到
 `src/generated/bff-public-openapi.yaml`，并由独立 generator 导出带 exact provenance 的 failure tuple；该 generated artifact
 不是第二份可编辑 schema，也不为旧 public 1.0 增加 alias/fallback。generator 的模块导入是 pure inspect/render，只有作为
-真实入口执行时才接受固定的 `--write/--check`。HTTP 路径仍为 `/v1`，运行时 consumer 尚未接线。
+真实入口执行时才接受固定的 `--write/--check`。HTTP 路径仍为 `/v1`；当前运行时候选已接入下述 Message 与 AG-UI
+严格分支，不增加旧版 fallback 或第二协议，最终状态以 Root 对冻结源码的独立复验为准。
 
 ### Message safe profile
 

@@ -109,16 +109,29 @@ describe("preview transport control loop", () => {
     expect(completed).toEqual(["completed"])
   })
 
-  it("normalizes an unknown preview failure code instead of breaking the event drain", async () => {
+  it("rejects an unknown preview failure code before creating message or session history", async () => {
     const client = createPreviewClient({ stepMs: 0 })
-    const failures: Array<{ code: string; message: string }> = []
-    const receipt = await client.createMessage("preview-invalid-failure-session", {
+    await expect(client.createMessage("preview-invalid-failure-session", {
       idempotency_key: "preview-invalid-failure-message-1",
       selected_skill_source_refs: [],
       content: "!fail:network",
+    })).rejects.toThrow("Unknown preview failure code: network")
+
+    await expect(client.fetchSnapshot("preview-invalid-failure-session")).resolves.toBeNull()
+    await expect(client.listSessions()).resolves.toEqual({ sessions: [] })
+    expect(window.localStorage.getItem("kokoro.preview.sessions.v1")).toBeNull()
+  })
+
+  it("projects a known preview failure from the generated non-retryable profile", async () => {
+    const client = createPreviewClient({ stepMs: 0 })
+    const failures: Array<{ profile: { code: string; retryable: boolean } }> = []
+    const receipt = await client.createMessage("preview-known-failure-session", {
+      idempotency_key: "preview-known-failure-message-1",
+      selected_skill_source_refs: [],
+      content: "!fail:model_unavailable",
     })
     client.openEvents({
-      sessionId: "preview-invalid-failure-session",
+      sessionId: "preview-known-failure-session",
       resumeCursor: null,
       onCursor: () => {},
       onEvent: (event) => {
@@ -129,9 +142,7 @@ describe("preview transport control loop", () => {
 
     await waitFor(() => failures.length === 1)
     expect(failures[0]).toEqual({
-      code: "internal_error",
-      error_kind: "PreviewSyntheticError",
-      message: "Synthetic failure for preview: network (using internal_error)\n  at previewTransport.enqueueRun (dev harness)",
+      profile: { source: "agent", code: "model_unavailable", retryable: false },
     })
     expect(receipt.run_id).toContain("run_")
   })

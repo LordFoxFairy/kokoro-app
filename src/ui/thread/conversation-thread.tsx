@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   MessageScroller,
@@ -10,13 +9,14 @@ import {
   MessageScrollerViewport,
   useMessageScroller,
 } from "@/components/ui/message-scroller"
-import { ArrowDown, ChevronRight } from "lucide-react"
+import { ArrowDown } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 
+import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
 import { buildThreadItems } from "@/core/projections"
-import type { SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
+import type { RunFailure, SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
@@ -79,6 +79,7 @@ export type ConversationThreadProps = {
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
+  canRetryPendingSubmission: boolean
   // 402：run 被 credit_insufficient 拒——失败处改给计费专用说明 + 查看余额入口（不用通用失败文案）。
   creditRejected: boolean
   onOpenBilling: () => void
@@ -99,9 +100,8 @@ export type ConversationThreadProps = {
   showTaskTitle?: boolean
 }
 
-// 失败讲人话：契约失败码 → 文案 key。闭集 7 码逐码本地化，未知码兜底通用句。i18n 在渲染处按码取译。
-export function failureCopyKey(runError: { code: string; message: string } | null): MessageKey {
-  switch (runError?.code) {
+function agentFailureCopyKey(code: AgentFailureCode): MessageKey {
+  switch (code) {
     case "token_budget_exceeded":
       return "fail.tokenBudget"
     case "recursion_limit_exceeded":
@@ -116,9 +116,21 @@ export function failureCopyKey(runError: { code: string; message: string } | nul
       return "fail.contract"
     case "internal_error":
       return "fail.internal"
-    default:
-      return "fail.generic"
+    case "model_unavailable":
+      return "fail.modelUnavailable"
+    case "dependency_unavailable":
+      return "fail.dependencyUnavailable"
+    case "model_access_denied":
+      return "fail.modelAccessDenied"
+    default: {
+      const exhaustive: never = code
+      return exhaustive
+    }
   }
+}
+
+export function failureCopyKey(runError: RunFailure | null): MessageKey {
+  return runError?.kind === "agent" ? agentFailureCopyKey(runError.profile.code) : "fail.generic"
 }
 
 export function ConversationThread(props: ConversationThreadProps) {
@@ -148,6 +160,7 @@ function ConversationThreadSurface({
   isStreaming,
   isReconnecting,
   hasFailed,
+  canRetryPendingSubmission,
   creditRejected,
   onOpenBilling,
   onOpenPricing,
@@ -163,28 +176,8 @@ function ConversationThreadSurface({
   const t = useT()
   const { scrollToStart } = useMessageScroller()
   const threadRootRef = useRef<HTMLDivElement | null>(null)
-  const errorCardRef = useRef<HTMLDivElement | null>(null)
-  const [openErrorKey, setOpenErrorKey] = useState<string | null>(null)
-  const failedRunId = [...thread.messages].reverse().find((message) => message.role === "assistant")?.runId ?? ""
-  const errorKey = thread.runError
-    ? `${failedRunId}\u0000${thread.runError.code}\u0000${thread.runError.message}`
-    : null
-  const errorDetailOpen = openErrorKey !== null && openErrorKey === errorKey
   // 把扁平 messages + 有序 steps 折成线程项：用户气泡 / assistant 轮（一个 runId 一轮）。
   const items = buildThreadItems(thread)
-
-  // Expanding a long diagnostic changes the scroll height. On short mobile
-  // viewports the primitive otherwise keeps the old bottom anchor, leaving
-  // the title and disclosure trigger above the viewport while only the raw
-  // stack trace remains visible. Re-anchor the error card itself so recovery
-  // controls stay understandable and reachable after the expansion.
-  const handleErrorDetailChange = (open: boolean) => {
-    setOpenErrorKey(open ? errorKey : null)
-    if (!open) return
-    window.requestAnimationFrame(() => {
-      errorCardRef.current?.scrollIntoView({ block: "start", behavior: "auto" })
-    })
-  }
 
   // 流式中：最后一个 assistant 轮是当前在途的那一轮——唯一带「实时」语义的 turn。
   let liveRunId: string | undefined
@@ -222,10 +215,7 @@ function ConversationThreadSurface({
   )
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
   const failureFeedback = !hasFailed ? null : (
-    <div
-      {...(creditRejected ? {} : { ref: errorCardRef })}
-      data-message-id={embedFailureFeedback ? failureMessageId : undefined}
-    >
+    <div data-message-id={embedFailureFeedback ? failureMessageId : undefined}>
       {creditRejected ? (
         <Alert variant="destructive" className={styles.error}>
           <AlertTitle>{t("billing.creditRejected")}</AlertTitle>
@@ -240,6 +230,32 @@ function ConversationThreadSurface({
               <Button variant="outline" className={styles.retry} type="button" onClick={onOpenBilling}>
                 {t("billing.viewBalance")}
               </Button>
+              {canRetryPendingSubmission ? (
+                <Button
+                  variant="outline"
+                  className={styles.retry}
+                  type="button"
+                  disabled={isStreaming}
+                  aria-busy={isStreaming}
+                  onClick={onRetry}
+                >
+                  {isStreaming ? <Spinner aria-hidden="true" /> : null}
+                  {t("thread.retry")}
+                </Button>
+              ) : null}
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert variant="destructive" className={styles.error}>
+          <AlertTitle>{t(failureCopyKey(thread.runError))}</AlertTitle>
+          <AlertDescription className={styles.errorLayout}>
+            <div className={styles.errorBody}>
+              {thread.runError?.kind === "agent" && thread.runError.profile.code === "internal_error" ? (
+                <span className={styles.errorHint}>{t("fail.internalHint")}</span>
+              ) : null}
+            </div>
+            {canRetryPendingSubmission ? (
               <Button
                 variant="outline"
                 className={styles.retry}
@@ -251,44 +267,7 @@ function ConversationThreadSurface({
                 {isStreaming ? <Spinner aria-hidden="true" /> : null}
                 {t("thread.retry")}
               </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Alert variant="destructive" className={styles.error}>
-          <AlertTitle>{t(failureCopyKey(thread.runError))}</AlertTitle>
-          <AlertDescription className={styles.errorLayout}>
-            <div className={styles.errorBody}>
-              {/* internal_error 额外反馈指引：重试仍失败时引导用户把详情反馈给我们。 */}
-              {thread.runError?.code === "internal_error" ? (
-                <span className={styles.errorHint}>{t("fail.internalHint")}</span>
-              ) : null}
-              {/* message 原文折叠可展开（兜底展示，绝不裸露错误码）。 */}
-              {thread.runError?.message ? (
-                <Collapsible className={styles.errorDetail} onOpenChange={handleErrorDetailChange}>
-                  <CollapsibleTrigger asChild>
-                    <Button type="button" variant="link" className={styles.errorDetailTrigger}>
-                      <ChevronRight data-icon="inline-start" aria-hidden="true" />
-                      <span>{t("fail.showDetail")}</span>
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <pre>{thread.runError.message}</pre>
-                  </CollapsibleContent>
-                </Collapsible>
-              ) : null}
-            </div>
-            <Button
-              variant="outline"
-              className={styles.retry}
-              type="button"
-              disabled={isStreaming}
-              aria-busy={isStreaming}
-              onClick={onRetry}
-            >
-              {isStreaming ? <Spinner aria-hidden="true" /> : null}
-              {t("thread.retry")}
-            </Button>
+            ) : null}
           </AlertDescription>
         </Alert>
       )}
@@ -302,10 +281,10 @@ function ConversationThreadSurface({
 
   // The native scroller uses a spacer to end-align compact content. Clear that
   // artificial range only when every rendered item really fits. Active runs,
-  // reconnects, approvals, and an expanded diagnostic retain their own scroll
+  // reconnects and approvals retain their own scroll
   // ownership; long settled content is never pushed to either edge here.
   useEffect(() => {
-    if (isStreaming || isReconnecting || hitlRunId !== null || errorDetailOpen) return
+    if (isStreaming || isReconnecting || hitlRunId !== null) return
     const root = threadRootRef.current
     const viewport = root?.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')
     const content = root?.querySelector<HTMLElement>('[data-slot="message-scroller-content"]')
@@ -354,7 +333,7 @@ function ConversationThreadSurface({
       observer.disconnect()
       if (frame !== null) window.cancelAnimationFrame(frame)
     }
-  }, [errorDetailOpen, geometryItemIdentity, hitlRunId, isReconnecting, isStreaming, scrollToStart])
+  }, [geometryItemIdentity, hitlRunId, isReconnecting, isStreaming, scrollToStart])
 
   return (
     <MessageScroller
@@ -362,7 +341,6 @@ function ConversationThreadSurface({
       className={styles.thread}
       data-state={isStreaming ? "streaming" : "settled"}
       data-desktop-web="true"
-      data-error-detail={errorDetailOpen ? "open" : undefined}
     >
       <MessageScrollerViewport
         className={styles.viewport}

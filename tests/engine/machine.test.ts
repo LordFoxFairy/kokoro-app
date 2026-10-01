@@ -9,7 +9,7 @@ import {
   type MachineState,
 } from "@/engine/machine"
 
-import { makeSnapshot } from "../core/fixtures"
+import { AGENT_FAILURE_PROFILES, makeFailedSnapshot, makeSnapshot } from "../core/fixtures"
 import { createFakeClient, createMemoryStorage, settle } from "./fakes"
 
 function state(partial: Partial<MachineState>): MachineState {
@@ -71,32 +71,51 @@ describe("transition 全迁移矩阵", () => {
 describe("failed snapshot hydration", () => {
   const cursor = "agui_0000000000000000000000000000002a"
 
-  it("keeps a same-watermark failed tail retryable across hydration without creating a message", async () => {
+  it.each(AGENT_FAILURE_PROFILES)(
+    "keeps $code retryable=$retryable identical across same-watermark reload without resubmitting user text",
+    async (profile) => {
     const client = createFakeClient()
     const storage = createMemoryStorage<ConversationStore>(addConversation(null, "conv_1", 1_000))
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
-      messages: [
-        { message_id: "user_1", role: "user", content: "retry me", status: "completed", created_at: "2026-07-02T00:00:00Z" },
-        { message_id: "assistant_1", role: "assistant", run_id: "run_failed", content: "partial", status: "failed", created_at: "2026-07-02T00:00:01Z" },
-      ], eventWatermark: cursor,
-    }))
+    client.nextSnapshot = () => Promise.resolve(makeFailedSnapshot(profile, { eventWatermark: cursor }))
     const first = createSessionEngine({ client, storage, now: () => 1_000, createId: (prefix) => `${prefix}_first` })
     await settle()
-    expect(first.getSnapshot().thread).toMatchObject({ runStatus: "failed", runError: null, resumeCursor: cursor })
+    expect(first.getSnapshot().thread).toMatchObject({
+      runStatus: "failed", runError: { kind: "agent", profile }, resumeCursor: cursor,
+    })
     expect(client.createCalls).toHaveLength(0)
     expect(client.lastStream().resumeCursor).toBe(cursor)
     first.dispose()
 
     const second = createSessionEngine({ client, storage, now: () => 2_000, createId: (prefix) => `${prefix}_second` })
     await settle()
-    expect(second.getSnapshot().thread).toMatchObject({ runStatus: "failed", runError: null, resumeCursor: cursor })
+    expect(second.getSnapshot().thread).toMatchObject({
+      runStatus: "failed", runError: { kind: "agent", profile }, resumeCursor: cursor,
+    })
     expect(client.createCalls).toHaveLength(0)
     second.retry()
     await settle()
-    expect(client.createCalls).toEqual([
-      expect.objectContaining({ sessionId: "conv_1", body: expect.objectContaining({ content: "retry me" }) }),
-    ])
+    expect(client.createCalls).toHaveLength(0)
     second.dispose()
+    },
+  )
+
+  it("does not resubmit the original user for a generic failed snapshot", async () => {
+    const client = createFakeClient()
+    const storage = createMemoryStorage<ConversationStore>(addConversation(null, "conv_1", 1_000))
+    client.nextSnapshot = () => Promise.resolve(makeFailedSnapshot(null, { eventWatermark: cursor }))
+    const engine = createSessionEngine({ client, storage, now: () => 1_000,
+      createId: (prefix) => `${prefix}_generic_user` })
+    await settle()
+    expect(engine.getSnapshot().thread).toMatchObject({
+      runStatus: "failed", runError: { kind: "generic" }, resumeCursor: cursor,
+    })
+    expect(engine.getSnapshot().thread.messages).toContainEqual(expect.objectContaining({
+      role: "user", content: "retry me",
+    }))
+    engine.retry()
+    await settle()
+    expect(client.createCalls).toHaveLength(0)
+    engine.dispose()
   })
 
   it("does not fabricate a retry prompt when failed history has no user message", async () => {
@@ -109,6 +128,7 @@ describe("failed snapshot hydration", () => {
     const engine = createSessionEngine({ client, storage, now: () => 1_000,
       createId: (prefix) => `${prefix}_missing_user` })
     await settle()
+    expect(engine.getSnapshot().thread.runError).toEqual({ kind: "generic" })
     expect(client.createCalls).toHaveLength(0)
     engine.retry()
     await settle()

@@ -9,7 +9,6 @@ import {
   parseAgUiEvent,
   type AgUiEvent,
   type EventCursor,
-  type KokoroAgUiMetadata,
 } from "@/contract/agui-events"
 import {
   parseChatProjectionEvent,
@@ -108,7 +107,11 @@ function toolArguments(tool: ToolCallState): Record<string, unknown> | null {
   return tool.argumentsText.length === 0 ? {} : jsonRecord(tool.argumentsText)
 }
 
-function uiMetadata(cursor: EventCursor, metadata: KokoroAgUiMetadata): KokoroUiMessageMetadata {
+function numericMessageMetadata(cursor: EventCursor, event: AgUiEvent): KokoroUiMessageMetadata {
+  const metadata = event.metadata.kokoro
+  if (typeof metadata.seq !== "number") {
+    throw new Error(`${event.type} does not carry Agent sequence metadata`)
+  }
   return {
     cursor,
     sourceEventId: metadata.event_id,
@@ -134,6 +137,9 @@ function projectionEnvelope(
   payload: unknown,
 ): ChatProjectionEvent {
   const metadata = event.metadata.kokoro
+  if (typeof metadata.seq !== "number") {
+    throw new Error(`${kind} requires numeric Agent sequence metadata`)
+  }
   return parseChatProjectionEvent({
     event_id: cursor,
     seq: metadata.seq,
@@ -222,10 +228,10 @@ export class AgUiEventMapper {
     const cursor = eventCursorSchema.parse(cursorInput)
     const event = parseAgUiEvent(input)
     const metadata = event.metadata.kokoro
-    const messageMetadata = uiMetadata(cursor, metadata)
 
     switch (event.type) {
       case EventType.RUN_STARTED: {
+        const messageMetadata = numericMessageMetadata(cursor, event)
         this.#clearRun(metadata.session_id, event.runId)
         const projectionEvent = projectionEnvelope(cursor, event, "run.created", {
           run_id: event.runId,
@@ -241,6 +247,7 @@ export class AgUiEventMapper {
         }
       }
       case EventType.RUN_FINISHED: {
+        const messageMetadata = numericMessageMetadata(cursor, event)
         this.#clearRun(metadata.session_id, event.runId)
         const cancelled = event.status === "cancelled"
         const usage = event.usage?.[0]
@@ -266,37 +273,44 @@ export class AgUiEventMapper {
       case EventType.RUN_ERROR: {
         const runId = requiredRunId(event)
         const openTools = this.#clearRun(metadata.session_id, runId)
-        if (event.code === "cancelled") {
-          const projectionEvent = projectionEnvelope(cursor, event, "run.completed", {
-            status: "cancelled",
-            token_usage: null,
+        const toolErrors = openTools.map((tool) => ({
+          type: "tool-output-error" as const,
+          toolCallId: tool.toolCallId,
+          errorText: "Tool did not complete",
+          dynamic: true,
+        }))
+        if ("source_owner" in metadata) {
+          const projectionEvent = parseChatProjectionEvent({
+            event_id: cursor,
+            sourceSequence: metadata.seq,
+            session_id: metadata.session_id,
+            run_id: runId,
+            timestamp: metadata.timestamp,
+            kind: "run.dispatch_failed",
+            payload: {},
           })
           return {
             cursor,
             projectionEvent,
             uiMessageChunks: [
-              { type: "finish-step" },
-              { type: "finish", finishReason: "other", messageMetadata },
+              ...toolErrors,
+              { type: "finish", finishReason: "error" },
             ],
             terminal: true,
           }
         }
+        if (!("failure" in metadata)) {
+          throw new Error("Agent RUN_ERROR requires verified failure metadata")
+        }
+        const messageMetadata = numericMessageMetadata(cursor, event)
         const projectionEvent = projectionEnvelope(cursor, event, "run.failed", {
-          code: event.code ?? "internal_error",
-          error_kind: "agent_error",
-          message: event.message,
+          profile: metadata.failure,
         })
         return {
           cursor,
           projectionEvent,
           uiMessageChunks: [
-            ...openTools.map((tool) => ({
-              type: "tool-output-error" as const,
-              toolCallId: tool.toolCallId,
-              errorText: event.message,
-              dynamic: true,
-            })),
-            { type: "error", errorText: event.message },
+            ...toolErrors,
             { type: "finish", finishReason: "error", messageMetadata },
           ],
           terminal: true,
@@ -442,6 +456,7 @@ export class AgUiEventMapper {
         }
       }
       case EventType.CUSTOM: {
+        const messageMetadata = numericMessageMetadata(cursor, event)
         const projectionEvent = customProjection(cursor, event)
         return {
           cursor,

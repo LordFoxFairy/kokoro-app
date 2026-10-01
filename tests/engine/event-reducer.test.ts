@@ -7,7 +7,7 @@ import {
   reduceProjectionEvents,
 } from "@/engine/event-reducer"
 
-import { makeEvent } from "../core/fixtures"
+import { makeDispatchFailureEvent, makeEvent } from "../core/fixtures"
 
 describe("engine event reducer", () => {
   it("按 event_id 幂等折叠，并保留乱序事件的 seq 顺序", () => {
@@ -60,6 +60,51 @@ describe("engine event reducer", () => {
 
     expect(result.machine).toEqual(IDLE_MACHINE)
     expect(result.settledRunId).toBe("run_1")
+  })
+
+  it("BFF dispatch 终态保留任意精度 sourceSequence 且不推进 Agent lastSeq", () => {
+    const sourceSequence = "9007199254740993123456789"
+    const openTool = makeEvent(
+      "tool.invoked",
+      { segment_id: "seg_1", tool_id: "tool_1", name: "search", args: {} },
+      { seq: 7, event_id: "evt_open_tool", session_id: "session-1", run_id: "run_1" },
+    )
+    const dispatchTerminal = makeDispatchFailureEvent(sourceSequence, {
+      event_id: "agui_00000000000000000000000000000009",
+      session_id: "session-1", run_id: "run_1", timestamp: "2026-09-02T12:00:00.000Z",
+    })
+    const result = reduceProjectionEvents({
+      thread: createSessionStreamState(),
+      machine: { ...IDLE_MACHINE, phase: "reattaching", runId: "run_1" },
+      events: [openTool, dispatchTerminal],
+    })
+    expect(result.thread.lastSeq).toBe(7)
+    expect(result.thread.runStatus).toBe("failed")
+    expect(result.thread.runError).toEqual({ kind: "dispatch" })
+    expect(result.machine).toEqual(IDLE_MACHINE)
+    expect(result.settledRunId).toBe("run_1")
+    expect(dispatchTerminal).toMatchObject({ sourceSequence })
+    expect(result.thread.stepsByRun["run_1"]).toContainEqual(expect.objectContaining({
+      kind: "tool",
+      tool: expect.objectContaining({ id: "tool_1", status: "error" }),
+    }))
+  })
+
+  it("历史 dispatch 终态不覆写当前 run 锚点、phase 或 failure", () => {
+    const dispatchTerminal = makeDispatchFailureEvent("9007199254740993123456790", {
+      event_id: "agui_0000000000000000000000000000000a",
+      session_id: "session-1", run_id: "run_old", timestamp: "2026-09-02T12:00:00.000Z",
+    })
+    const result = reduceProjectionEvents({
+      thread: { ...createSessionStreamState(), activeRunId: "run_new", lastSeq: 11 },
+      machine: { ...IDLE_MACHINE, phase: "reattaching", runId: "run_new" },
+      events: [dispatchTerminal],
+    })
+    expect(result.thread).toMatchObject({
+      activeRunId: "run_new", lastSeq: 11, runStatus: "idle", runError: null,
+    })
+    expect(result.machine).toMatchObject({ phase: "reattaching", runId: "run_new" })
+    expect(result.settledRunId).toBeNull()
   })
 
   it("把服务端回执 id 对齐到最后一个本地用户 echo", () => {

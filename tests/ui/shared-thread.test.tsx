@@ -3,8 +3,12 @@ import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 
 import type { SessionSnapshot } from "@/contract/http"
+import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 import { LocaleProvider } from "@/i18n/context"
+import { LOCALE_STORAGE_KEY } from "@/i18n/messages"
 import { SharedThread } from "@/ui/shared/shared-thread"
+
+import { expectedAgentFailureZhCopy, expectedZhCopy, makeFailedSnapshot } from "../core/fixtures"
 
 function snapshot(): SessionSnapshot {
   return {
@@ -42,5 +46,29 @@ describe("SharedThread", () => {
     render(<SharedThread snapshot={empty} />, { wrapper: LocaleProvider })
     // 无消息也不抛（只读空线程）。
     expect(screen.queryByText("hello from user")).toBeNull()
+  })
+
+  it.each(BFF_AGENT_FAILURE_TUPLES)(
+    "renders the safe shared $code retryable=$retryable failure without mutation or raw details",
+    (profile) => {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+      render(<SharedThread snapshot={makeFailedSnapshot(profile)} />, { wrapper: LocaleProvider })
+      expect(screen.getByRole("alert")).toBeTruthy()
+      expect(screen.getByText(expectedAgentFailureZhCopy(profile.code))).toBeTruthy()
+      expect(screen.queryByText(profile.code)).toBeNull()
+      expect(screen.queryByText("Agent run failed")).toBeNull()
+      expect(screen.queryByRole("button", { name: expectedZhCopy("thread.retry") })).toBeNull()
+      expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
+    },
+  )
+
+  it("renders a failureless persisted failure as generic safe read-only feedback", () => {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, "zh")
+    render(<SharedThread snapshot={makeFailedSnapshot(null)} />, { wrapper: LocaleProvider })
+    expect(screen.getByRole("alert")).toBeTruthy()
+    expect(screen.getByText(expectedZhCopy("fail.generic"))).toBeTruthy()
+    expect(screen.queryByText("Agent run failed")).toBeNull()
+    expect(screen.queryByRole("button", { name: expectedZhCopy("thread.retry") })).toBeNull()
+    expect(document.querySelector('[data-slot="collapsible"]')).toBeNull()
   })
 })

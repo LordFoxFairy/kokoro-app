@@ -1,20 +1,20 @@
 # Kokoro User Web 技术设计
 
-## WEB-FAILURE3-DESIGN：BFF public 2.0 安全失败消费（2026-09-30；机器 pin/generator 候选）
+## WEB-FAILURE3：BFF public 2.0 安全失败消费（2026-10-01；运行时候选）
 
 本节基线是 Web main `399f863277f6b62e42772042bc940c62f33dc724`。唯一 public owner 已发布 BFF
 `ccb8e144` 的 OpenAPI `2.0.0`，原字节 SHA-256 为
 `ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`。本候选已把该原字节固定到 Web，并由独立
 generator 校验 exact digest/version/ChatMessage fragment 后生成带 provenance 的 12 tuple；Team 生成器复用同一 snapshot，
-15 个既有派生文件逐字节不变。运行时 `messageRecordSchema` 仍没有 `failure`，AG-UI parser 也仍会拒绝当前 BFF 自有
-dispatch failure 的 string `seq` 与 `source_owner`，所以机器 pin 完成不等于 consumer 已接入。
+15 个既有派生文件逐字节不变。当前运行时候选已让 Message、Agent RUN_ERROR 与 BFF dispatch RUN_ERROR 分别通过严格
+schema 进入同一 closed failure 投影；机器 pin 仍是唯一 tuple 来源，不等同于 Root 最终组合验收。
 
 ### 放置门与唯一来源
 
 | 项 | 结论 |
 | --- | --- |
 | Owner | BFF 拥有 Message/public snapshot/list/share 与 durable AG-UI；Agent 拥有 failure code/retryability；Web 只拥有严格消费、内存投影、本地化与可见动作。 |
-| 当前事实 | public 2.0 原字节与 generated 12 tuple 已是候选；live `RUN_ERROR` 仍被压成旧 `{code,error_kind,message}` 并可能展示 `message`，snapshot 仍只从 `status=failed` 恢复通用失败，SharedThread 强制 `hasFailed=false`，`engine.retry()` 对已终态 run 以新 key 重发最后一条 user。 |
+| 当前事实 | public 2.0 原字节与 generated 12 tuple 已固定；运行时候选已删除旧 raw failure 投影/详情，snapshot、live 与 Share 复用 safe profile，dispatch 独立，terminal mutation 与未获 receipt 的同键恢复已经分离。 |
 | 目标职责 | snapshot、reload、合法 Share 与 verified Agent live frame 都投影同一 `{source:"agent",code,retryable}`；BFF dispatch terminal 独立投影为内部 `run.dispatch_failed`；两者都不展示 raw `message`、`error_kind` 或本地 launch code。 |
 | 位置 A（采用） | 新 `src/contract/agent-failure.ts` 只承载 safe failure schema/type；新窄 generator 从固定 BFF `ChatMessage.failure` 导出唯一 12 tuple 常量到 `src/generated/bff-agent-failure.ts`。`chat.ts` 和 `agui-events.ts` 复用该 schema，各自仍拥有 snapshot 与 wire envelope。 |
 | 位置 B（淘汰） | 不把码表继续放在 `core/chat-projection-event.ts`，否则 wire、snapshot 与 UI 各自漂移；不把 failure 生成塞进 Team client generator，因为 Team operation SDK 与 failure tuple 是两个变化原因。Team generator 只更新同一原字节 digest，并证明现有 15 个 Team 派生文件无字节变化。 |
@@ -59,9 +59,9 @@ null
   校验该 owner 枚举，failure guard 必须证明 system+failure 非法；但无 failure 的 system Message 仍由现 runtime fail-closed，
   不静默丢弃或改写成 assistant。它作为独立 public consumer drift 后续处理，不借 failure 切片扩展全部 chat UI。
 
-### 后继分阶段精确文件集（均尚未授权）
+### 分阶段文件集与当前状态
 
-本次只交四文档。后继不得把以下总清单当成一次性源码授权；每门冻结并由 Root 审查后再放下一门：
+下列阶段记录本目标的实施边界；机器 pin 已提交，strict runtime/core/engine/UI 当前是待 Root 独立验收的源码候选：
 
 1. **最小 tests-only RED**：只改现 `contract/api-contract.test.ts` 与
    `tests/contract/agui-events.test.ts`。前者经当前 `sessionSnapshotSchema/chatProjectionEventSchema` 写 12 个合法 Message
@@ -91,7 +91,8 @@ null
 ### 先 RED 的验收矩阵
 
 1. pin：当前候选已固定 BFF public 2.0 原字节；Team 15 文件逐字节不变，failure generator 的 `--check` 拒绝 owner-byte
-   与 generated drift，pure inspector 对 version/shape/presence 的逐项 mutation 失败。运行时两份 contract RED 尚未 GREEN。
+   与 generated drift，pure inspector 对 version/shape/presence 的逐项 mutation 失败。运行时 contract RED 已由 strict
+   Message/AG-UI consumer 收敛，仍以本轮完整门和 Root 复验为最终证据。
 2. tuple：全部 10 个 code 的 `retryable=false` 与 availability 两码的 `true`（共 12 tuple）逐项通过；其余 8 个
    `true`、unknown/null/missing/extra 逐项拒绝。
 3. Message：failure 只允许 assistant+failed+非空 run；partial profile、user/system、pending/streaming/completed、空 run

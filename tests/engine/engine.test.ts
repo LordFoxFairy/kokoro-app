@@ -7,8 +7,11 @@ import type { SessionScope } from "@/engine/session-scope"
 import type { RunControlReceipt } from "@/contract/http"
 
 import {
+  AGENT_FAILURE_PROFILES,
   awaitingPayload,
+  makeAgentFailureEvent,
   makeEvent,
+  makeDispatchFailureEvent,
   makeDeliveryPayload,
   makePendingPause,
   makeSnapshot,
@@ -121,6 +124,108 @@ describe("提交链路", () => {
       sessionId: "conv_1",
       resumeCursor: CURSOR_7,
     })
+  })
+
+  it("A 提交取消后 B 正在提交时，A 的迟到拒绝不污染 B", async () => {
+    buildEngine()
+    let rejectA!: (reason?: unknown) => void
+    let resolveB!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve, reject) => {
+      if (client.createCalls.length === 1) {
+        rejectA = reject
+      } else {
+        resolveB = resolve
+      }
+    })
+
+    engine.submit("submission A")
+    engine.newConversation()
+    engine.submit("submission B")
+    const bSessionId = client.createCalls[1]?.sessionId
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+
+    rejectA(new Error("late A rejection"))
+    await settle()
+
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+    expect(engine.getSnapshot().machine.error).toBeNull()
+    expect(thread().messages.at(-1)).toMatchObject({ role: "user", content: "submission B" })
+
+    resolveB(makeReceipt("run_b"))
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_b" })
+    expect(client.lastStream().sessionId).toBe(bSessionId)
+  })
+
+  it("同会话 A cancelRun 后 B 正在提交时，A 的迟到拒绝不污染 B", async () => {
+    buildEngine()
+    let rejectA!: (reason?: unknown) => void
+    let resolveB!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve, reject) => {
+      if (client.createCalls.length === 1) {
+        rejectA = reject
+      } else {
+        resolveB = resolve
+      }
+    })
+
+    engine.submit("submission A")
+    engine.cancelRun()
+    engine.submit("submission B")
+    expect(client.createCalls[0]?.sessionId).toBe(client.createCalls[1]?.sessionId)
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+
+    rejectA(new Error("late A rejection"))
+    await settle()
+
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+    expect(engine.getSnapshot().machine.error).toBeNull()
+    expect(thread().messages.at(-1)).toMatchObject({ role: "user", content: "submission B" })
+
+    resolveB(makeReceipt("run_b"))
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_b" })
+    expect(client.lastStream()).toMatchObject({ sessionId: client.createCalls[1]?.sessionId })
+  })
+
+  it("同会话 A 回执跨 S→T→S 迟到时，不得清除 B 或开启 A 的流", async () => {
+    buildEngine({
+      activeId: "session_s",
+      conversations: [
+        { id: "session_s", title: "S", updatedAt: 2, mode: "fast" },
+        { id: "session_t", title: "T", updatedAt: 1, mode: "fast" },
+      ],
+    })
+    await settle()
+    let resolveA!: (receipt: ReturnType<typeof makeReceipt>) => void
+    let resolveB!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve) => {
+      if (client.createCalls.length === 1) {
+        resolveA = resolve
+      } else {
+        resolveB = resolve
+      }
+    })
+
+    engine.submit("submission A")
+    engine.selectConversation("session_t")
+    await settle()
+    engine.selectConversation("session_s")
+    await settle()
+    engine.submit("submission B")
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+
+    resolveA(makeReceipt("run_a"))
+    await settle()
+
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+    expect(client.streams).toHaveLength(0)
+    expect(thread().messages.at(-1)).toMatchObject({ role: "user", content: "submission B" })
+
+    resolveB(makeReceipt("run_b"))
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_b" })
+    expect(client.lastStream()).toMatchObject({ sessionId: "session_s" })
   })
 
   it("专案会话的每次消息均携带不透明 project_ref", async () => {
@@ -981,18 +1086,24 @@ describe("失败重试", () => {
     client.nextCreate = () => Promise.reject(new SessionClientError("http", "status 500"))
     engine.submit("hello")
     await settle()
-    expect(engine.getSnapshot().machine.phase).toBe("error")
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "error" },
+      canRetryPendingSubmission: true,
+    })
 
     client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
     engine.retry()
     await settle()
     expect(client.createCalls).toHaveLength(2)
-    expect(client.createCalls[1]?.body.content).toBe("hello")
-    expect(client.createCalls[1]?.body.idempotency_key).toBe(
-      client.createCalls[0]?.body.idempotency_key,
-    )
+    expect(client.createCalls[1]).toEqual(client.createCalls[0])
+    expect(client.createCalls[0]?.body).toEqual({
+      idempotency_key: expect.any(String), content: "hello", thinking: false, selected_skill_source_refs: [],
+    })
     expect(thread().messages).toHaveLength(1)
-    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_retry" })
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "streaming", runId: "run_retry" },
+      canRetryPendingSubmission: false,
+    })
   })
 
   it("未获回执重试冻结首发完整意图，偏好变化不改变同 key 的请求摘要", async () => {
@@ -1022,26 +1133,47 @@ describe("失败重试", () => {
     })
   })
 
-  it("run.failed 终态后 retry：换新 idempotency_key 重新开跑（旧 run 已真实失败）", async () => {
+  it.each([
+    AGENT_FAILURE_PROFILES.find((profile) => profile.code === "internal_error")!,
+    AGENT_FAILURE_PROFILES.find((profile) => profile.code === "model_unavailable" && profile.retryable)!,
+  ])("Agent terminal $code retryable=$retryable 后 retry 不重发原 user", async (profile) => {
     buildEngine()
     engine.submit("job")
     await settle()
     client.lastStream().emit([
       makeEvent("run.created", { run_id: "run_1" }),
-      makeEvent("run.failed", { code: "internal_error", error_kind: "boom", message: "agent exploded" }),
+      makeAgentFailureEvent(profile),
     ])
     await settle()
     expect(thread().runStatus).toBe("failed")
-    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(thread().runError).toEqual({ kind: "agent", profile })
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "idle" },
+      canRetryPendingSubmission: false,
+    })
 
     engine.retry()
-    expect(thread().runStatus).toBe("idle")
     await settle()
-    expect(client.createCalls).toHaveLength(2)
-    expect(client.createCalls[1]?.body.content).toBe("job")
-    expect(client.createCalls[1]?.body.idempotency_key).not.toBe(
-      client.createCalls[0]?.body.idempotency_key,
-    )
+    expect(client.createCalls).toHaveLength(1)
+    expect(thread().runError).toEqual({ kind: "agent", profile })
+  })
+
+  it("BFF dispatch terminal 后 retry 不重发原 user", async () => {
+    buildEngine()
+    engine.submit("job")
+    await settle()
+    client.lastStream().emit([
+      makeDispatchFailureEvent("9007199254740993123456789", {
+        event_id: CURSOR_7, session_id: "conv_1", run_id: "run_1",
+      }),
+    ], [CURSOR_7])
+    await settle()
+    expect(thread().runStatus).toBe("failed")
+    expect(thread().runError).toEqual({ kind: "dispatch" })
+
+    engine.retry()
+    await settle()
+    expect(client.createCalls).toHaveLength(1)
   })
 
   it.each([

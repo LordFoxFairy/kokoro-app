@@ -10,7 +10,8 @@ import {
   sessionSnapshotSchema,
 } from "@/contract/http"
 import { resumeDecisionSchema } from "@/contract/control"
-import { RUN_FAILURE_CODES, chatProjectionEventSchema } from "@/core/chat-projection-event"
+import { AGENT_FAILURE_CODES as RUNTIME_AGENT_FAILURE_CODES } from "@/contract/agent-failure"
+import { chatProjectionEventSchema } from "@/core/chat-projection-event"
 import { createSessionClient } from "@/engine/client"
 
 const eventEnvelope = {
@@ -23,6 +24,25 @@ const eventEnvelope = {
 
 const EVENT_CURSOR = "agui_0000000000000000000000000000002a"
 const NEXT_EVENT_CURSOR = "agui_0000000000000000000000000000002b"
+
+const AGENT_FAILURE_CODES = [
+  "token_budget_exceeded",
+  "recursion_limit_exceeded",
+  "assembly_failed",
+  "enqueue_failed",
+  "dispatch_exhausted",
+  "contract_incompatible",
+  "internal_error",
+  "model_unavailable",
+  "dependency_unavailable",
+  "model_access_denied",
+] as const
+
+const AGENT_FAILURE_TUPLES = [
+  ...AGENT_FAILURE_CODES.map((code) => ({ source: "agent" as const, code, retryable: false })),
+  { source: "agent" as const, code: "model_unavailable" as const, retryable: true },
+  { source: "agent" as const, code: "dependency_unavailable" as const, retryable: true },
+] as const
 
 const eventFixtures: Array<[string, Record<string, unknown>]> = [
   ["session.created", { title: "New session", owner_id: "user_1" }],
@@ -80,7 +100,7 @@ const eventFixtures: Array<[string, Record<string, unknown>]> = [
     { segment_id: "segment_1", subagent_id: "subagent_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false },
   ],
   ["run.completed", { status: "completed", token_usage: { input_tokens: 1, output_tokens: 2 } }],
-  ["run.failed", { code: "internal_error", error_kind: "Error", message: "run failed" }],
+  ["run.failed", { profile: { source: "agent", code: "internal_error", retryable: false } }],
 ]
 
 const sessionSnapshot = {
@@ -166,6 +186,101 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(errorResponseSchema.safeParse({ error: "" }).success).toBe(false)
     expect(errorResponseSchema.safeParse({ error: "unauthenticated", requestId: "req_1" }).success).toBe(false)
   })
+
+  it.each(AGENT_FAILURE_TUPLES)(
+    "accepts the published safe Message failure tuple $code retryable=$retryable",
+    (failure) => {
+      expect(sessionSnapshotSchema.safeParse({
+        ...sessionSnapshot,
+        messages: [{
+          message_id: "assistant_failed",
+          role: "assistant",
+          content: "partial answer",
+          status: "failed",
+          created_at: "2026-09-30T00:00:00.000Z",
+          run_id: "run_failed",
+          failure,
+        }],
+      }).success).toBe(true)
+    },
+  )
+
+  it("keeps Message failure optional for a failed assistant with a run", () => {
+    expect(sessionSnapshotSchema.safeParse({
+      ...sessionSnapshot,
+      messages: [{
+        message_id: "assistant_failed_without_profile",
+        role: "assistant",
+        content: "",
+        status: "failed",
+        created_at: "2026-09-30T00:00:00.000Z",
+        run_id: "run_failed",
+      }],
+    }).success).toBe(true)
+  })
+
+  it.each([
+    ["user role", { role: "user" }],
+    ["system role", { role: "system" }],
+    ["pending status", { status: "pending" }],
+    ["streaming status", { status: "streaming" }],
+    ["completed status", { status: "completed" }],
+    ["missing run", { run_id: undefined }],
+    ["empty run", { run_id: "" }],
+    ["blank run", { run_id: "   " }],
+  ] as const)("rejects a Message failure with %s", (_label, override) => {
+    expect(sessionSnapshotSchema.safeParse({
+      ...sessionSnapshot,
+      messages: [{
+        message_id: "invalid_failure_message",
+        role: "assistant",
+        content: "",
+        status: "failed",
+        created_at: "2026-09-30T00:00:00.000Z",
+        run_id: "run_failed",
+        failure: AGENT_FAILURE_TUPLES[0],
+        ...override,
+      }],
+    }).success).toBe(false)
+  })
+
+  it.each([
+    { source: "agent", code: "model_unavailable", retryable: true, extra: "raw" },
+    { source: "agent", code: "unknown_failure", retryable: false },
+    { source: "owner", code: "internal_error", retryable: false },
+    { source: "agent", code: "internal_error" },
+    null,
+  ])("rejects an invalid Message failure profile %#", (failure) => {
+    expect(sessionSnapshotSchema.safeParse({
+      ...sessionSnapshot,
+      messages: [{
+        message_id: "invalid_failure_profile",
+        role: "assistant",
+        content: "",
+        status: "failed",
+        created_at: "2026-09-30T00:00:00.000Z",
+        run_id: "run_failed",
+        failure,
+      }],
+    }).success).toBe(false)
+  })
+
+  it.each(AGENT_FAILURE_CODES.filter(
+    (code) => code !== "model_unavailable" && code !== "dependency_unavailable",
+  ))("rejects retryable=true for the permanent Message failure %s", (code) => {
+    expect(sessionSnapshotSchema.safeParse({
+      ...sessionSnapshot,
+      messages: [{
+        message_id: "invalid_retryable_failure",
+        role: "assistant",
+        content: "",
+        status: "failed",
+        created_at: "2026-09-30T00:00:00.000Z",
+        run_id: "run_failed",
+        failure: { source: "agent", code, retryable: true },
+      }],
+    }).success).toBe(false)
+  })
 })
 
 describe("checked-in SSE event union", () => {
@@ -177,8 +292,8 @@ describe("checked-in SSE event union", () => {
   it("rejects negative watermarks, unknown event fields, and unstable failure codes", () => {
     expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, seq: -1, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
     expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, extra: true, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
-    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, kind: "run.failed", payload: { code: "unknown_failure", error_kind: "Error", message: "failed" } }).success).toBe(false)
-    expect(RUN_FAILURE_CODES).toContain("contract_incompatible")
+    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, kind: "run.failed", payload: { profile: { source: "agent", code: "unknown_failure", retryable: false } } }).success).toBe(false)
+    expect(RUNTIME_AGENT_FAILURE_CODES).toContain("contract_incompatible")
   })
 })
 

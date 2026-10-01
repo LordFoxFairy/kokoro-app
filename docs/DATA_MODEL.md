@@ -1,10 +1,10 @@
 # Kokoro User Web 数据模型与 Owner
 
-## WEB-FAILURE3-DESIGN：安全失败内存模型（2026-09-30；目标）
+## WEB-FAILURE3：安全失败内存模型（2026-10-01；运行时候选）
 
 Web 不新增 SQL、Redis、IndexedDB、localStorage、receipt 或 failure 持久副本。BFF Message 与 AG-UI ledger 仍是唯一持久
 事实；本候选已固定 BFF `ccb8e144` public `2.0.0` 原字节（SHA-256
-`ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`）并生成唯一 12 tuple，后继运行时只维护页面生命周期
+`ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773`）并生成唯一 12 tuple，当前运行时候选只维护页面生命周期
 投影。generated tuple 是 owner schema 的派生物，不是 Web 持久事实或第二码表；pure generator import 不写 artifact 或任何
 浏览器/服务端状态，只有显式固定 CLI 模式更新或核对该派生文件。
 

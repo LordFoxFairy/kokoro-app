@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { AgUiEventMapper } from "@/engine/agui-event-mapper"
+import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 
 const CURSORS = {
   start: "agui_00000000000000000000000000000001",
@@ -280,24 +281,59 @@ describe("AgUiEventMapper", () => {
     })
   })
 
-  it("maps a canonical cancelled run error to run.completed with cancelled status", () => {
-    const mapped = new AgUiEventMapper().map(CURSORS.terminal, {
+  it("rejects the unpublished cancelled RUN_ERROR fallback", () => {
+    expect(() => new AgUiEventMapper().map(CURSORS.terminal, {
       type: "RUN_ERROR",
       timestamp: 5,
+      threadId: "session-1",
+      runId: "run-1",
       code: "cancelled",
       message: "Run cancelled",
       metadata: metadata("agent-cancelled", 10),
-    })
+    })).toThrow()
+  })
 
-    expect(mapped.terminal).toBe(true)
-    expect(mapped.projectionEvent).toMatchObject({
-      kind: "run.completed",
-      payload: { status: "cancelled" },
+  it.each(BFF_AGENT_FAILURE_TUPLES)(
+    "maps the safe Agent $code retryable=$retryable profile without raw diagnostics",
+    (failure) => {
+      const mapped = new AgUiEventMapper().map(CURSORS.terminal, {
+        type: "RUN_ERROR", timestamp: 5, threadId: "session-1", runId: "run-1",
+        code: failure.code, message: "Agent run failed",
+        metadata: { kokoro: { ...metadata("agent-error", 10).kokoro, failure } },
+      })
+      expect(mapped.terminal).toBe(true)
+      expect(mapped.projectionEvent).toMatchObject({ kind: "run.failed", payload: { profile: failure } })
+      expect(mapped.projectionEvent).not.toHaveProperty("payload.message")
+      expect(mapped.projectionEvent).not.toHaveProperty("payload.error_kind")
+      expect(mapped.uiMessageChunks).not.toContainEqual(expect.objectContaining({ errorText: "Agent run failed" }))
+    },
+  )
+
+  it("keeps a BFF dispatch source sequence as an exact string outside Agent ordering", () => {
+    const sourceSequence = "9007199254740993123456789"
+    const mapper = new AgUiEventMapper()
+    mapper.map(CURSORS.start, {
+      type: "TOOL_CALL_START", timestamp: 1, toolCallId: "dispatch-tool", toolCallName: "search",
+      metadata: metadata("agent-tool-before-dispatch", 9),
     })
-    expect(mapped.uiMessageChunks).toEqual([
-      { type: "finish-step" },
-      { type: "finish", finishReason: "other", messageMetadata: expect.objectContaining({ cursor: CURSORS.terminal }) },
-    ])
+    const mapped = mapper.map(CURSORS.terminal, {
+      type: "RUN_ERROR", timestamp: 5, threadId: "session-1", runId: "run-1",
+      code: "new_opaque_launch_failure", message: "Agent launch could not be confirmed",
+      metadata: { kokoro: {
+        event_id: "dispatch-error", seq: sourceSequence, source_owner: "kokoro-bff",
+        session_id: "session-1", run_id: "run-1", timestamp: "2026-09-02T12:00:00.000Z",
+      } },
+    })
+    expect(mapped.terminal).toBe(true)
+    expect(mapped.projectionEvent).toMatchObject({ kind: "run.dispatch_failed", sourceSequence, run_id: "run-1" })
+    expect(mapped.projectionEvent).not.toHaveProperty("seq")
+    expect(mapped.projectionEvent).not.toHaveProperty("payload.profile")
+    expect(mapped.uiMessageChunks).not.toContainEqual(
+      expect.objectContaining({ errorText: "Agent launch could not be confirmed" }),
+    )
+    expect(mapped.uiMessageChunks).toContainEqual(expect.objectContaining({
+      type: "tool-output-error", toolCallId: "dispatch-tool", dynamic: true,
+    }))
   })
 
   it("marks open tool output as an error when the run terminates with an error", () => {
@@ -313,18 +349,24 @@ describe("AgUiEventMapper", () => {
     const mapped = mapper.map(CURSORS.terminal, {
       type: "RUN_ERROR",
       timestamp: 5,
+      threadId: "session-1",
+      runId: "run-1",
       code: "internal_error",
-      message: "Tool execution failed",
-      metadata: metadata("agent-error", 10),
+      message: "Agent run failed",
+      metadata: { kokoro: {
+        ...metadata("agent-error", 10).kokoro,
+        failure: { source: "agent", code: "internal_error", retryable: false },
+      } },
     })
 
-    expect(mapped.projectionEvent).toMatchObject({ kind: "run.failed" })
-    expect(mapped.uiMessageChunks).toContainEqual({
-      type: "tool-output-error",
-      toolCallId: "tool-failed",
-      errorText: "Tool execution failed",
-      dynamic: true,
+    expect(mapped.projectionEvent).toMatchObject({
+      kind: "run.failed",
+      payload: { profile: { source: "agent", code: "internal_error", retryable: false } },
     })
+    expect(mapped.uiMessageChunks).toContainEqual(
+      expect.objectContaining({ type: "tool-output-error", toolCallId: "tool-failed", dynamic: true }),
+    )
+    expect(mapped.uiMessageChunks).not.toContainEqual(expect.objectContaining({ errorText: "Agent run failed" }))
     expect(mapped.uiMessageChunks).not.toContainEqual(expect.objectContaining({ type: "tool-output-available" }))
   })
 

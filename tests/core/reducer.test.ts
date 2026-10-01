@@ -12,13 +12,17 @@ import {
 import { createSessionStreamState, type SessionStreamState } from "@/core/state"
 
 import {
+  AGENT_FAILURE_PROFILES,
   awaitingPayload,
+  makeAgentFailureEvent,
   makeEvent,
   makeDeliveryPayload,
   makeSnapshot,
   makeSnapshotDelivery,
   resetFixtureSeq,
 } from "./fixtures"
+
+const INTERNAL_FAILURE = AGENT_FAILURE_PROFILES.find((profile) => profile.code === "internal_error")!
 
 beforeEach(resetFixtureSeq)
 
@@ -171,7 +175,7 @@ describe("activeRunId 显式锚定（snapshot 置位、终态清空）", () => {
     )
     state = applyChatProjectionEvent(
       state,
-      makeEvent("run.failed", { code: "internal_error", error_kind: "x", message: "boom" }, { run_id: "run_old" }),
+      makeAgentFailureEvent(INTERNAL_FAILURE, { run_id: "run_old" }),
     )
     expect(state.activeRunId).toBe("run_new")
   })
@@ -183,7 +187,7 @@ describe("activeRunId 显式锚定（snapshot 置位、终态清空）", () => {
     expect(state.runStatus).toBe("idle")
     state = applyChatProjectionEvent(
       state,
-      makeEvent("run.failed", { code: "internal_error", error_kind: "x", message: "boom" }, { run_id: "run_old" }),
+      makeAgentFailureEvent(INTERNAL_FAILURE, { run_id: "run_old" }),
     )
     // 在途 run_new 仍在跑，历史 run_old 失败不得把 thread 置 failed（否则 UI 弹历史假失败卡）。
     expect(state.runStatus).toBe("idle")
@@ -399,7 +403,7 @@ describe("终态收口：结构化 status、零 UI 文案", () => {
     ])
     state = applyChatProjectionEvent(
       state,
-      makeEvent("run.failed", { code: "internal_error", error_kind: "agent", message: "died" }),
+      makeAgentFailureEvent(INTERNAL_FAILURE),
     )
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe("error")
     expect(state.runStatus).toBe("failed")
@@ -554,7 +558,7 @@ describe("边界矩阵", () => {
   it("appendUserMessage 复位 runStatus/todos 且不进 seenEventIds", () => {
     let state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("todo.updated", { todos: [{ content: "x", status: "pending" }] }),
-      makeEvent("run.failed", { code: "internal_error", error_kind: "agent", message: "boom" }),
+      makeAgentFailureEvent(INTERNAL_FAILURE),
     ])
     state = appendUserMessage(state, { id: "usr_1", content: "again" })
     expect(state.runStatus).toBe("idle")
@@ -595,19 +599,16 @@ describe("Schema 崩溃矩阵（契约入站防线）", () => {
 })
 
 
-describe("run.failed 错误三层语义", () => {
-  it("失败码与原文进入状态，供 UI 按码呈现；完成态清空", () => {
+describe("run.failed safe failure 投影", () => {
+  it.each(AGENT_FAILURE_PROFILES)("只保留 $code retryable=$retryable profile，完成态清空", (profile) => {
     const s1 = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("run.created", { run_id: "run_f" }, { run_id: "run_f", seq: 1 }),
-      makeEvent(
-        "run.failed",
-        { code: "assembly_failed", error_kind: "ValueError", message: "unknown tools" },
-        { run_id: "run_f", seq: 2 },
-      ),
+      makeAgentFailureEvent(profile, { run_id: "run_f", seq: 2 }),
     ])
     expect(s1.runStatus).toBe("failed")
-    expect(s1.runError).toEqual({ code: "assembly_failed", message: "unknown tools" })
-    // 新一轮完成后失败态清空（不残留上一轮的失败卡文案）。
+    expect(s1.runError).toEqual({ kind: "agent", profile })
+    expect(s1.runError).not.toHaveProperty("message")
+    expect(s1.runError).not.toHaveProperty("error_kind")
     const s2 = applyChatProjectionEvents(s1, [
       makeEvent("run.completed", { status: "completed", token_usage: null }, { run_id: "run_g", seq: 3 }),
     ])

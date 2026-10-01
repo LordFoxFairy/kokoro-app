@@ -4,6 +4,7 @@ import { z } from "zod"
 import { eventCursorSchema } from "./agui-events"
 import { resumeDecisionSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
+import { agentFailureProfileSchema } from "./agent-failure"
 
 export const riskSchema = z
   .object({
@@ -38,8 +39,21 @@ export const messageRecordSchema = z
     status: z.enum(["pending", "streaming", "completed", "failed"]),
     created_at: z.string().min(1),
     run_id: z.string().min(1).optional(),
+    failure: agentFailureProfileSchema.optional(),
   })
   .strict()
+  .superRefine((message, context) => {
+    if (message.failure === undefined) return
+    if (message.role !== "assistant") {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["role"], message: "failure requires assistant role" })
+    }
+    if (message.status !== "failed") {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["status"], message: "failure requires failed status" })
+    }
+    if (message.run_id === undefined || message.run_id.trim().length === 0) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["run_id"], message: "failure requires a nonblank run_id" })
+    }
+  })
 export type MessageRecord = z.infer<typeof messageRecordSchema>
 
 export const activeRunSchema = z

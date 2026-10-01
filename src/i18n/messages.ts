@@ -344,19 +344,19 @@ export const zh = {
   "thread.verbActive": "{verb}中…",
   "thread.verbActiveShort": "{verb}中",
   "thread.retry": "重试",
-  // run.failed 按码文案（P2 失败可读性；未知码回退通用句）
+  // run.failed 按已发布安全码展示，不把未知 producer 错误降级成内部错误。
   "fail.tokenBudget": "这一轮超出了用量预算，已自动停止。可以精简任务后重试。",
   "fail.recursion": "这一轮步骤过多触发了保护熔断。换个更具体的说法再试一次。",
   "fail.assembly": "这个空间的配置有误，本轮无法启动——请联系管理员检查配置。",
   "fail.enqueue": "服务暂时不可用，这一轮没能开始。稍后重试即可。",
-  "fail.dispatch": "多次尝试都没能把这一轮送达执行，已经放弃。点重试会重新发送刚才那条消息。",
+  "fail.dispatch": "这一轮没能送达执行，已安全结束。",
   "fail.contract": "客户端与服务端版本不兼容，这一轮无法执行——请刷新页面，若仍不行请联系管理员。",
   "fail.internal": "出了点内部问题，这一轮没能完成。",
+  "fail.modelUnavailable": "当前模型暂时不可用，这一轮已停止。",
+  "fail.dependencyUnavailable": "执行所需的服务暂时不可用，这一轮已停止。",
+  "fail.modelAccessDenied": "当前账号没有使用这个模型的权限，请联系管理员。",
   "fail.generic": "这一轮没能完成，稍后再试一次。",
-  // 内部错误的额外指引：重试仍失败时引导反馈
-  "fail.internalHint": "如果重试后仍然失败，请把这段详情反馈给我们。",
-  // 原始错误信息折叠（兜底展示，绝不裸露错误码）
-  "fail.showDetail": "查看错误详情",
+  "fail.internalHint": "如果问题持续，请联系支持团队并提供会话时间。",
   // 模式菜单提示
   "mode.labelFast": "快速",
   "mode.labelThinking": "深度思考",

@@ -303,13 +303,14 @@ function closeOpenTools(
 
 function applyRunTerminal(
   draft: Draft,
-  event: EventOf<"run.completed"> | EventOf<"run.failed">,
+  event: EventOf<"run.completed"> | EventOf<"run.failed"> | EventOf<"run.dispatch_failed">,
 ): void {
   closeSnapshotContinuation(draft, event.run_id)
   const steps = stepsOf(draft, event.run_id)
-  const closed = closeOpenTools(steps, (status) =>
-    status === "awaiting" ? "stale-awaiting" : "stale-running",
-  )
+  const failed = event.kind !== "run.completed"
+  const closed = closeOpenTools(steps, (status) => failed
+    ? "error"
+    : status === "awaiting" ? "stale-awaiting" : "stale-running")
   if (closed) {
     draft.state.stepsByRun[event.run_id] = closed
   }
@@ -317,11 +318,11 @@ function applyRunTerminal(
   // activeRunId 恒 null）或该终态正属在途 run 时才写；reattach 全量回放里历史 run 的终态
   // 不得覆写在途 run，否则在途 run 若走客户端 TIMEOUT 收口就会弹出历史 run 的假失败卡。
   if (draft.state.activeRunId === null || draft.state.activeRunId === event.run_id) {
-    draft.state.runStatus =
-      event.kind === "run.completed" ? event.payload.status : "failed"
-    draft.state.runError =
-      event.kind === "run.failed"
-        ? { code: event.payload.code, message: event.payload.message }
+    draft.state.runStatus = event.kind === "run.completed" ? event.payload.status : "failed"
+    draft.state.runError = event.kind === "run.failed"
+      ? { kind: "agent", profile: event.payload.profile }
+      : event.kind === "run.dispatch_failed"
+        ? { kind: "dispatch" }
         : null
   }
   if (draft.state.activeRunId === event.run_id) {
@@ -452,6 +453,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
     }
     case "run.completed":
     case "run.failed":
+    case "run.dispatch_failed":
       applyRunTerminal(draft, event)
       break
     default: {
@@ -495,7 +497,7 @@ export function applyChatProjectionEvents(
       }
     }
     draft.state.seenEventIds.add(event.event_id)
-    if (event.seq > draft.state.lastSeq) {
+    if ("seq" in event && event.seq > draft.state.lastSeq) {
       draft.state.lastSeq = event.seq
     }
     applyEvent(draft, event)

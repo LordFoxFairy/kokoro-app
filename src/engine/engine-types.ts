@@ -29,6 +29,8 @@ export type EngineSnapshot = {
   staging: Record<string, Record<string, ToolDecision>>
   // 服务端 snapshot 尚未回到当前 active session，UI 用它保留 loading surface。
   hydrating: boolean
+  // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
+  canRetryPendingSubmission: boolean
 }
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
@@ -41,13 +43,14 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   pendingMode: "fast",
   staging: {},
   hydrating: false,
+  canRetryPendingSubmission: false,
 }
 
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
   submit: (content: string) => void
-  // 失败后重试：按最后一条用户消息原文重新开跑，不追加重复的用户气泡。
+  // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
   retry: () => void
   cancelRun: () => void
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void

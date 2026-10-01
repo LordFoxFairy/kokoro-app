@@ -84,7 +84,14 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
 
   return {
     ...createSessionStreamState(),
-    ...(restoresFailedRun ? { runStatus: "failed" as const } : {}),
+    ...(restoresFailedRun
+      ? {
+          runStatus: "failed" as const,
+          runError: tailMessage.failure === undefined
+            ? { kind: "generic" as const }
+            : { kind: "agent" as const, profile: tailMessage.failure },
+        }
+      : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
     activeRunId: snapshot.active_run?.run_id ?? null,
     messages,

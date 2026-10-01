@@ -25,7 +25,8 @@
     cursor、事件批次和错误。
 - `engine-types.ts`
   - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`、`SessionEngine`、`EngineDeps`（SSR 首帧和
-    引擎依赖契约）；瞬态通知发 i18n key 不落文案。
+    引擎依赖契约）；`canRetryPendingSubmission` 只暴露同会话、未获 create receipt 且仍处于合法 error 相位的恢复能力；
+    瞬态通知发 i18n key 不落文案。
 - `client.ts`：`createSessionClient({baseUrl}) → SessionClient`——全部入站过
   contract zod，失败以 `SessionClientError`（network/http/parse）上抛零静默降级；
   baseUrl+path 直接拼接（非 new URL，保住 `/api/session` 前缀）；AUTH-P0 起客户端不持
@@ -39,7 +40,8 @@
   同一 chat 的同一 UIMessage id/content 重送复用 key，新 id 或内容变化换 key。
 - `agui-event-mapper.ts`：把已校验 AG-UI frame 分别映射成 AI SDK `UIMessageChunk` 与
   `ChatProjectionEvent`；BFF 终帧的 cancelled status 与工具结果的 isError 保留到两种本地视图；
-  wire DTO 不进入 core/UI model。
+  verified Agent RUN_ERROR 只传播 safe profile，BFF dispatch RUN_ERROR 独立保存 string sourceSequence；两者都不把 raw
+  message/code 送入 core/UI model。
 - `session-scope.ts`：`SessionScope` 将用户直接会话与一个 opaque `projectRef` 的专案任务
   分开。浏览器仅发送 `scope=direct` 或 `project_ref`；部署上下文一律由 BFF 从服务端
   `KOKORO_DOMAIN` 生成的受信 `Forwarded` 与 httpOnly 信封派生。每个 scope 使用独立引擎与

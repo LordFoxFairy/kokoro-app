@@ -56,7 +56,7 @@ export function transition(state: MachineState, event: MachineEvent): MachineSta
       if (event.runId !== state.runId || !ACTIVE_PHASES.includes(state.phase)) {
         return state
       }
-      if (event.kind === "run.completed" || event.kind === "run.failed") {
+      if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") {
         return { phase: "idle", runId: null, error: null }
       }
       if (event.kind === "tool.awaiting_approval") {

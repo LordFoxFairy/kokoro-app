@@ -7,7 +7,7 @@ import { applyChatProjectionEvents } from "@/core/reducer"
 import { buildThreadItems, groupSegments } from "@/core/projections"
 import { AgUiEventMapper } from "@/engine/agui-event-mapper"
 
-import { makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
+import { AGENT_FAILURE_PROFILES, makeFailedSnapshot, makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
 
 describe("stateFromSnapshot", () => {
   const failedHistory = (content: string): NonNullable<SessionSnapshot["messages"]> => [
@@ -24,7 +24,7 @@ describe("stateFromSnapshot", () => {
       deliveries: [delivery], deliveriesHasMore: true, eventWatermark: cursor,
     }))
     expect(state.runStatus).toBe("failed")
-    expect(state.runError).toBeNull()
+    expect(state.runError).toEqual({ kind: "generic" })
     expect(state.messages.map(({ role, content: text, runId }) => ({ role, content: text, runId }))).toEqual([
       { role: "user", content: "try this", runId: "user_1" },
       { role: "assistant", content, runId: "run_failed" },
@@ -35,6 +35,40 @@ describe("stateFromSnapshot", () => {
     expect(state.deliveriesHasMore).toBe(true)
     expect(state.resumeCursor).toBe(cursor)
   })
+
+  it.each(AGENT_FAILURE_PROFILES)(
+    "restores the published $code retryable=$retryable profile without raw diagnostics",
+    (profile) => {
+      const state = stateFromSnapshot(makeFailedSnapshot(profile))
+      expect(state.runStatus).toBe("failed")
+      expect(state.runError).toEqual({ kind: "agent", profile })
+      expect(state.runError).not.toHaveProperty("message")
+      expect(state.runError).not.toHaveProperty("error_kind")
+    },
+  )
+
+  it.each(AGENT_FAILURE_PROFILES)(
+    "does not restore $code retryable=$retryable behind active, HITL, or newer owner facts",
+    (profile) => {
+      const failed = makeFailedSnapshot(profile)
+      const states = [
+        stateFromSnapshot({ ...failed, active_run: { run_id: "run_failed", status: "running" } }),
+        stateFromSnapshot({ ...failed, pending_pauses: [makePendingPause({ run_id: "run_failed" })] }),
+        stateFromSnapshot({
+          ...failed,
+          messages: [
+            ...(failed.messages ?? []),
+            { message_id: "user_2", role: "user", content: "newer request", status: "completed",
+              created_at: "2026-07-02T00:00:02Z" },
+          ],
+        }),
+      ]
+      for (const state of states) {
+        expect(state.runStatus).toBe("idle")
+        expect(state.runError).toBeNull()
+      }
+    },
+  )
 
   it.each<[
     string,
@@ -63,7 +97,7 @@ describe("stateFromSnapshot", () => {
         pendingPauses: [makePendingPause({ status })],
       }))
       expect(state.runStatus).toBe("failed")
-      expect(state.runError).toBeNull()
+      expect(state.runError).toEqual({ kind: "generic" })
     },
   )
 

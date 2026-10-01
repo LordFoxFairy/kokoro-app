@@ -134,12 +134,26 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const listeners = new Set<() => void>()
   let snapshot: EngineSnapshot = buildSnapshot()
 
+  function canRetryPendingSubmission(): boolean {
+    return machine.phase === "error" && machine.error !== null && pendingSubmission !== null &&
+      store?.activeId === pendingSubmission.sessionId
+  }
+
   function buildSnapshot(): EngineSnapshot {
     const stagingView: Record<string, Record<string, ToolDecision>> = {}
     for (const [runId, decisions] of staging) {
       stagingView[runId] = Object.fromEntries(decisions)
     }
-    return { machine, notice, store, thread, pendingMode, staging: stagingView, hydrating }
+    return {
+      machine,
+      notice,
+      store,
+      thread,
+      pendingMode,
+      staging: stagingView,
+      hydrating,
+      canRetryPendingSubmission: canRetryPendingSubmission(),
+    }
   }
 
   function notify(): void {
@@ -427,7 +441,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           return
         }
         // 回执落地前用户已重置/切换：丢弃迟到回执，不复活旧轮。
-        if (disposed || machine.phase !== "submitting" || store?.activeId !== sessionId) {
+        if (
+          disposed ||
+          pendingSubmission !== submission ||
+          machine.phase !== "submitting" ||
+          store?.activeId !== sessionId
+        ) {
           return
         }
         pendingSubmission = null
@@ -438,7 +457,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
       .catch((error: unknown) => {
         cancelledSubmissions.delete(idempotencyKey)
-        if (disposed || machine.phase !== "submitting") {
+        if (
+          disposed ||
+          pendingSubmission !== submission ||
+          machine.phase !== "submitting" ||
+          store?.activeId !== sessionId
+        ) {
           return
         }
         machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
@@ -511,34 +535,19 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function retry(): void {
-    if (disposed || recoveringExpiredCursor || !store) {
+    if (disposed || recoveringExpiredCursor || !store || !canRetryPendingSubmission()) {
       return
     }
-    const lastUser = [...thread.messages].reverse().find((message) => message.role === "user")
-    if (!lastUser) {
-      return
-    }
+    const pending = pendingSubmission
+    if (pending === null) return
     const before = machine
     machine = transition(machine, { type: "SUBMIT" })
     if (machine === before) {
       return
     }
-    // 复位上一轮 run.failed 留下的终态标记；消息与历史步骤原样保留。
-    if (thread.runStatus !== "idle") {
-      thread = { ...thread, runStatus: "idle" }
-    }
     notify()
-    // 未获回执的同文重试复用 idempotency_key（服务端命中即重放 receipt，不造重复 run）；
-    // 已回执后的失败重试换新 key（上一 run 已真实存在并失败）。
-    const pending = pendingSubmission
-    beginRun(pending !== null && pending.sessionId === store.activeId && pending.content === lastUser.content
-      ? pending
-      : {
-          sessionId: store.activeId,
-          content: lastUser.content,
-          idempotencyKey: createId("idem"),
-          options: messageExecutionOptions(activeMode(store)),
-        })
+    // 未获回执的恢复只复用原始冻结意图；不根据消息历史合成新 key/body。
+    beginRun(pending)
   }
 
   function stageToolDecision(runId: string, toolId: string, decision: ToolDecision): void {

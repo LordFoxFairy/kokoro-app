@@ -50,6 +50,7 @@
 | `src/features/app/kokoro-library-file-upload-{client,state}.ts`、`kokoro-library-file-upload.tsx` | 原生 multipart 整体限额/同源 POST、跨页签 File/key 意图与 shadcn 单文件上传 UI；只在 CLEAN 回执后触发 GET |
 | `src/contract/project-create.ts`、`src/features/app/project-create.ts`、`src/components/blocks/app-frame/use-app-frame-project.ts` | 固定 BFF ProjectResponse consumer 校验、同源 POST 与正式/预览创建意图区分；仅 canonical id 导航 |
 | `src/contract/agui-events.ts` | 严格解析 AG-UI wire frame；不拥有 reducer 投影 |
+| `src/contract/agent-failure.ts` | 从 generated owner tuple 派生唯一 safe Agent failure schema/type；不维护第二码表 |
 | `src/core/chat-projection-event.ts` | Web 内部 Chat 投影事件 schema；不是 wire contract |
 | `src/contract/{chat,control,artifacts,catalog,billing,scheduled}.ts` | browser-private JSON DTO 的 Zod schema |
 | `src/contract/paths.ts` | 同源路径 helper |
@@ -57,8 +58,8 @@
 | `src/generated/bff-public-openapi.yaml`、`src/generated/bff-agent-failure.ts` | 固定 BFF public owner 原字节与由其生成的 safe failure 12 tuple/provenance |
 | `scripts/generate-bff-agent-failure.mjs`、`tests/contract/bff-agent-failure-public.test.ts` | import-safe exact pin 的 pure inspector/renderer、`--write/--check` 与独立语义 mutation/drift 门 |
 | `src/engine/client.ts` | `/api/session` JSON/SSE client、cursor 与重连 |
-| `src/engine/machine.ts` | Chat 状态机与 snapshot/event reconciliation |
-| `src/core/reducer.ts` | 纯 UI 投影 |
+| `src/engine/machine.ts` | Chat 状态机与 snapshot/event reconciliation；仅未获 create receipt 的冻结意图可同键恢复 |
+| `src/core/reducer.ts` | 纯 UI 投影；Agent/dispatch/generic 使用 closed failure union，dispatch string sourceSequence 不进入 numeric lastSeq |
 | `contract/README.md` | owner、visibility、version、generation、breaking、provenance |
 | `contract/api-contract.test.ts`、`tests/contract/` | contract 回归 |
 

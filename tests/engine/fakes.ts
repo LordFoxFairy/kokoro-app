@@ -109,7 +109,14 @@ export function createFakeClient(): FakeClient {
         closed: false,
         emit: (events, cursors = []) => {
           for (const [index, event] of events.entries()) {
-            args.onCursor(cursors[index] ?? cursorForSequence(event.seq))
+            let cursor = cursors[index]
+            if (cursor === undefined) {
+              if (!("seq" in event)) {
+                throw new Error("dispatch failure events require an explicit cursor")
+              }
+              cursor = cursorForSequence(event.seq)
+            }
+            args.onCursor(cursor)
             args.onEvent(event)
           }
         },

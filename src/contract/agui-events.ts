@@ -4,8 +4,12 @@
 import { EventSchemas, EventType, RunFinishedOutcomeSchema } from "@ag-ui/core"
 import { z } from "zod"
 
+import { agentFailureCodeSchema, agentFailureProfileSchema } from "./agent-failure"
+
 export const eventCursorSchema = z.string().regex(/^agui_[0-9a-f]{32}$/u)
 export type EventCursor = z.infer<typeof eventCursorSchema>
+
+const nonblankString = z.string().min(1).refine((value) => value.trim().length > 0, "must not be blank")
 
 export const kokoroAgUiMetadataSchema = z
   .object({
@@ -17,6 +21,24 @@ export const kokoroAgUiMetadataSchema = z
   })
   .strict()
 
+const agentRunErrorMetadataSchema = kokoroAgUiMetadataSchema
+  .extend({
+    run_id: nonblankString,
+    failure: agentFailureProfileSchema,
+  })
+  .strict()
+
+const dispatchRunErrorMetadataSchema = z
+  .object({
+    event_id: z.string().min(1),
+    seq: z.string().regex(/^[1-9][0-9]*$/u),
+    source_owner: z.literal("kokoro-bff"),
+    session_id: z.string().min(1),
+    run_id: nonblankString,
+    timestamp: z.string().datetime({ offset: true }),
+  })
+  .strict()
+
 const base = z
   .object({
     timestamp: z.number().int().nonnegative(),
@@ -24,31 +46,59 @@ const base = z
   })
   .strict()
 
-const eventSchema = z.discriminatedUnion("type", [
-  base.extend({
-    type: z.literal(EventType.RUN_STARTED),
-    threadId: z.string().min(1),
-    runId: z.string().min(1),
-  }),
-  base.extend({
-    type: z.literal(EventType.RUN_FINISHED),
-    threadId: z.string().min(1),
-    runId: z.string().min(1),
-    // BFF's completed/cancelled projection carries an explicit status and
-    // canonical AG-UI outcome. Keep both declared rather than accepting
-    // arbitrary top-level fields from an untrusted stream.
-    status: z.enum(["completed", "cancelled"]).optional(),
-    result: z.unknown().optional(),
-    outcome: RunFinishedOutcomeSchema.optional(),
-    usage: z.array(z.record(z.unknown())).optional(),
-  }),
-  base.extend({
+const runStartedSchema = base.extend({
+  type: z.literal(EventType.RUN_STARTED),
+  threadId: z.string().min(1),
+  runId: z.string().min(1),
+})
+
+const runFinishedSchema = base.extend({
+  type: z.literal(EventType.RUN_FINISHED),
+  threadId: z.string().min(1),
+  runId: z.string().min(1),
+  // BFF's completed/cancelled projection carries an explicit status and
+  // canonical AG-UI outcome. Keep both declared rather than accepting
+  // arbitrary top-level fields from an untrusted stream.
+  status: z.enum(["completed", "cancelled"]).optional(),
+  result: z.unknown().optional(),
+  outcome: RunFinishedOutcomeSchema.optional(),
+  usage: z.array(z.record(z.unknown())).optional(),
+})
+
+const agentRunErrorSchema = z
+  .object({
     type: z.literal(EventType.RUN_ERROR),
-    threadId: z.string().min(1).optional(),
-    runId: z.string().min(1).optional(),
-    message: z.string().min(1),
-    code: z.string().min(1).optional(),
-  }),
+    timestamp: z.number().int().nonnegative(),
+    threadId: z.string().min(1),
+    runId: nonblankString,
+    message: z.literal("Agent run failed"),
+    code: agentFailureCodeSchema,
+    metadata: z.object({ kokoro: agentRunErrorMetadataSchema }).strict(),
+  })
+  .strict()
+  .superRefine((event, context) => {
+    if (event.code !== event.metadata.kokoro.failure.code) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["code"], message: "code must match metadata failure" })
+    }
+  })
+
+const dispatchRunErrorSchema = z
+  .object({
+    type: z.literal(EventType.RUN_ERROR),
+    timestamp: z.number().int().nonnegative(),
+    threadId: z.string().min(1),
+    runId: nonblankString,
+    message: z.literal("Agent launch could not be confirmed"),
+    code: nonblankString,
+    metadata: z.object({ kokoro: dispatchRunErrorMetadataSchema }).strict(),
+  })
+  .strict()
+
+const eventSchema = z.union([
+  runStartedSchema,
+  runFinishedSchema,
+  agentRunErrorSchema,
+  dispatchRunErrorSchema,
   base.extend({
     type: z.literal(EventType.TEXT_MESSAGE_START),
     messageId: z.string().min(1),
@@ -98,14 +148,14 @@ export const agUiEventSchema = eventSchema.superRefine((event, context) => {
     return
   }
   const metadata = event.metadata.kokoro
-  if (event.threadId !== undefined && event.threadId !== metadata.session_id) {
+  if (event.threadId !== metadata.session_id) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["threadId"],
       message: "threadId must match metadata.kokoro.session_id",
     })
   }
-  if (event.runId !== undefined && event.runId !== metadata.run_id) {
+  if (event.runId !== metadata.run_id) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["runId"],

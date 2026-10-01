@@ -3,6 +3,8 @@
 
 import { z } from "zod"
 
+import { agentFailureProfileSchema } from "@/contract/agent-failure"
+
 const todoSchema = z
   .object({
     content: z.string().min(1),
@@ -225,29 +227,13 @@ const runCompletedPayload = z
   })
   .strict()
 
-/** Stable failure codes shared by the wire contract and the local preview
- * harness. Keeping the list in one place prevents a fixture typo from
- * throwing inside an async event drain and leaving the Composer stuck. */
-export const RUN_FAILURE_CODES = [
-  "token_budget_exceeded",
-  "recursion_limit_exceeded",
-  "assembly_failed",
-  "enqueue_failed",
-  "dispatch_exhausted",
-  "contract_incompatible",
-  "internal_error",
-] as const
-
-export type RunFailureCode = (typeof RUN_FAILURE_CODES)[number]
-
 const runFailedPayload = z
   .object({
-    // 三层错误语义：code=稳定错误码（web 按码本地化的键，闭集枚举）；error_kind=诊断用异常类名（观测/排障，不作展示）；message=人读原文（未知码/未译码的兜底展示，绝不裸露 key）。
-    code: z.enum(RUN_FAILURE_CODES),
-    error_kind: z.string().min(1),
-    message: z.string().min(1),
+    profile: agentFailureProfileSchema,
   })
   .strict()
+
+const dispatchRunFailedPayload = z.object({}).strict()
 
 const envelope = z
   .object({
@@ -281,6 +267,15 @@ export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("subagent.tool.returned"), payload: subagentToolReturnedPayload }),
   envelope.extend({ kind: z.literal("run.completed"), payload: runCompletedPayload }),
   envelope.extend({ kind: z.literal("run.failed"), payload: runFailedPayload }),
+  z.object({
+    event_id: z.string().min(1),
+    sourceSequence: z.string().regex(/^[1-9][0-9]*$/u),
+    session_id: z.string().min(1),
+    run_id: z.string().min(1),
+    timestamp: z.string().min(1),
+    kind: z.literal("run.dispatch_failed"),
+    payload: dispatchRunFailedPayload,
+  }).strict(),
 ])
 
 export type ChatProjectionEvent = z.infer<typeof chatProjectionEventSchema>
