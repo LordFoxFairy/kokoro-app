@@ -1,5 +1,21 @@
 # Kokoro User Web 当前状态
 
+## WEB-UNIFORM-TURN-GAP 源码候选，真实视觉待验（2026-09-30）
+
+Root独立显式Node22.22.2/pnpm11.25完整 `pnpm check` exit0：contract109、architecture49、全量1836（41.01s）、lint/typecheck/build通过，日志 `/tmp/kokoro-web-uniform-turn-gap-root-node22-check.log`。四冻结hash重验一致，独立审查P0/P1/P2=0/0/0。首次自动shell误用Node24的检查已终止自有进程组并消费exit143，不列为门禁通过；首次worker目标文件的任务外导航超时日志保留，相同命令随后两次70/70。本片只验收源码：当前IAB用户tab6绑定仍20秒超时，fresh输入内框与完整视觉/滚动尚未验，完整Playwright未运行。
+
+基线 `main 8205fa003d5ea269741df359d4d6881dd0f1e0f8`。本候选仅删除 AppFrame 对首个
+`MessageScrollerItem` 的 `0.875rem/-0.875rem` margin 补丁；顶部留白继续由 viewport padding 拥有，全部相邻滚动项
+继续使用 content 的统一 `1.75rem` gap。Thread 按 message ID 后缀改写间距的旧规则仍被禁止。Composer、消息内容与身份、
+失败反馈/成果归组、HITL、共享 scroller 行为和机器契约均未修改。
+
+Node22.22.2 精准测试先得到预期 RED：1失败/69通过，日志 `/tmp/kokoro-web-uniform-turn-gap-red.log`；删除首项补丁后
+同一目标70/70通过，审查加固为禁止整个首项 selector 后仍为70/70，日志 `/tmp/kokoro-web-uniform-turn-gap-green.log`、
+`/tmp/kokoro-web-uniform-turn-gap-review-green.log`；最终 `pnpm lint` exit0，日志 `/tmp/kokoro-web-uniform-turn-gap-final-lint.log`。
+其间一次目标全文件复跑在既有新建专案导航等待处超时（69通过/1失败），立即同命令复跑70/70，原失败日志保留为
+`/tmp/kokoro-web-uniform-turn-gap-final-target.log`，未改该行为或放宽断言。writer未运行完整check、build、服务或浏览器；
+当前输入框内方框、实际轮间距和滚动位置仍待Root取得fresh页面证据，不把CSS源码断言称为视觉验收。
+
 ## WEB-EMPTY-FAILED-TURN 源码验收通过，fresh 视觉待验（2026-09-30）
 
 Root 独立 Node22.22.2完整 `pnpm check` 实际exit0：contract109、architecture49、全量1836（40.87s）、lint/typecheck/build通过；日志 `/tmp/kokoro-web-empty-failed-turn-root-check.log`。Root用HEAD组件与候选tests真实复现RED2失败/30通过并finally恢复原候选，日志 `/tmp/kokoro-web-empty-failed-turn-root-red.log`；冻结四文件独立审查P0/P1/P2=0/0/0。这里只验收源码切片；当前浏览器读取/截图仍超时，输入框内方框和整体视觉仍未验，不宣称本片已闭环整个聊天体验。
@@ -29,9 +45,9 @@ Node22.22.2 精准测试先得到预期 RED：1失败/20通过，日志 `/tmp/ko
 Root在主工作树独立执行 Node22.22.2 `pnpm check`，actual exit0：contract109、architecture49、全量1823、lint/typecheck/build通过，日志 `/tmp/kokoro-web-chat-current-feedback-root-check.log`；独立四文件审查P0/P1/P2=0/0/0。精准Prettier当前四文件与其HEAD基线均exit1，未扩大格式化范围；`git diff --check`通过。当前受管3310 PID65590不重启，仅同步目标Thread CSS；浏览器通道仍超时，视觉与输入框用户反馈尚未验收，不以本段静态结果替代。
 
 基线 `main 65e328755774080fc37a4d12d2b9f9b2e21a22bf`。本候选仅删除 Thread 按 message ID `:user` 后缀给所有命中
-用户项施加 `2.75rem/-2.75rem` margin 与 `translateY` 的布局规则；首项顶部呼吸继续由现 AppFrame
-`MessageScrollerItem:first-child` 规则唯一拥有。消息内容、顺序、重复用户事实、空失败助手轮、失败卡、滚动 primitive、
-Composer 与契约均未修改。
+用户项施加 `2.75rem/-2.75rem` margin 与 `translateY` 的布局规则；该历史阶段仍保留 AppFrame 首项 margin，后续已由
+本文件顶部 WEB-UNIFORM-TURN-GAP 收敛为 viewport 顶部留白与 content 统一 gap。消息内容、顺序、重复用户事实、空失败助手轮、
+失败卡、滚动 primitive、Composer 与契约均未修改。
 
 Node22.22.2 精准测试先得到预期 RED：1失败/69跳过，日志
 `/tmp/kokoro-web-chat-current-feedback-red.log`；删除错误 scope 后同一目标为1通过/69跳过，日志

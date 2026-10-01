@@ -17,16 +17,17 @@ HITL、末项确为最后一条持久化 assistant 所属 run、该轮所有正�
 
 `ConversationThread` 继续拥有普通失败与余额不足失败的可见反馈，既有 shadcn `Alert` 继续拥有 `role=alert`、标题、详情和动作语义。本局部修复只在既有 Thread CSS 把失败反馈收敛为 `fit-content`、`max-width: 100%` 的内联内容块，并去掉外层卡片的 border、background、shadow 与 padding；窄栏仍可在 100% 内换行，详情和所有按钮保持键盘可达。共享 `AlertTitle` 的单行 clamp 只在 `.error :global([data-slot="alert-title"])` 作用域内解除，保证长标题完整换行而不改 shared primitive。消息顺序、重复用户事实、空失败助手轮、重试/计费动作、Composer、滚动与机器契约均不改变；真实浏览器视觉仍由 Root 后继验收。
 
-## WEB-CHAT-CURRENT-FEEDBACK：首条消息顶部几何唯一归属
+## WEB-UNIFORM-TURN-GAP：viewport 顶部留白与统一轮间距
 
-基线 `65e328755774080fc37a4d12d2b9f9b2e21a22bf` 同时存在两条用户消息纵向规则：AppFrame 以
-`MessageScrollerItem:first-child` 拥有首项顶部呼吸，Thread 却按未进入 UI 契约的 message ID `:user` 后缀给所有
-命中项施加正负 margin 与 translate。后者既不能稳定识别角色，又会把“首条”规则扩散到后续用户轮次，形成不对称空位。
+AppFrame 是 Web 会话页面几何的 owner：`MessageScrollerViewport` 独占首项上方的页面留白，
+`MessageScrollerContent` 以统一 `1.75rem` gap 分隔全部相邻滚动项。首项不再用正向 start margin 加负向 end margin
+改写 flex gap；该组合会把第一组 user/assistant 间距压成后续轮次的一半，而本地 shadcn primitive 的
+`scrollPreviousItemPeek` 只参与滚动坐标，不提供需要 CSS 抵消的首项 margin。
 
-本候选删除 Thread 的 ID 后缀布局规则，只保留既有 AppFrame `:first-child` 几何作为唯一 owner；不改消息 DOM、身份、
-顺序、重复事实、失败卡、滚动 primitive、Composer 或机器契约。测试同时锁定 AppFrame 首项 margin 仍在，并禁止 Thread
-重新以该 ID 后缀及其正负 margin/translate 组合参与布局。浏览器通道当前持续超时，fresh desktop/mobile 截图、滚动位置与
-实际轮间距仍由 Root 恢复通道后验收；源码候选不代表输入内框、失败卡或整体会话视觉已经完成。
+本片仅删除 AppFrame 的 `MessageScrollerItem:first-child` margin 补丁，继续禁止 Thread 按 message ID 后缀参与布局。
+消息 DOM、身份、顺序、重复事实、失败反馈与成果归组、HITL、共享 scroller 行为、Composer 和机器契约均不变。
+静态测试锁定 viewport 顶部 padding、content 统一 gap 及两类首项/ID 后缀负 margin 不再出现；真实桌面与窄屏像素、
+滚动位置和用户所见输入框仍由 Root 后继浏览器验收，源码断言不替代视觉证据。
 
 ## WEB-VISUAL-CURRENT-AUDIT：全指针输入表面与真实成果滚动项
 

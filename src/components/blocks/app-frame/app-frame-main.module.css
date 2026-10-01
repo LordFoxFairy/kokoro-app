@@ -290,14 +290,6 @@
   margin-inline: auto;
   gap: 1.75rem;
 }
-  .main[data-desktop-web="true"][data-web-view="thread"] :global([data-slot="message-scroller-item"]:first-child) {
-    /* The shadcn scroller reserves a 44px previous-item peek by default.
-       Manus leaves a smaller lead-in above the first user turn; preserve the
-       primitive's compensating negative margin while reducing only the
-       visible top offset for this desktop Web skin. */
-    margin-block-start: 0.875rem;
-    margin-block-end: -0.875rem;
-  }
   /* Manus does not repeat the product identity inside every assistant turn.
      The workspace header already owns the brand; showing a second serif
      “K Kokoro” row makes the answer look like a branded card and creates a

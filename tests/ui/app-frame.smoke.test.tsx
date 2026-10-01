@@ -18,11 +18,13 @@ it("对话列按 Composer 合成 gutter 在全部宽度保持同一 48rem 阅读
   expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > div > form\[aria-label\]\s*\{[^}]*width: min\(48rem, 100%\);/)
 })
 
-it("首条消息顶部呼吸只由 AppFrame 几何拥有，不按消息 ID 后缀改写后续轮间距", () => {
+it("viewport 独占顶部呼吸且所有会话项保持统一轮间距", () => {
   const appFrameCss = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
   const threadCss = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
 
-  expect(appFrameCss).toMatch(/\[data-slot="message-scroller-item"\]:first-child\)\s*\{[^}]*margin-block-start: 0\.875rem;[^}]*margin-block-end: -0\.875rem;/)
+  expect(appFrameCss).toMatch(/\[data-slot="message-scroller-viewport"\]\)\s*\{[^}]*padding-top: 0\.25rem;/)
+  expect(appFrameCss).toMatch(/\[data-slot="message-scroller-content"\]\)\s*\{[^}]*gap: 1\.75rem;/)
+  expect(appFrameCss).not.toMatch(/\[data-slot="message-scroller-item"\]:first-child\)\s*\{/)
   expect(threadCss).not.toContain('[data-message-id$=":user"]')
   expect(threadCss).not.toMatch(/\[data-message-id\$=":user"\][^{]*\{[^}]*(?:margin-top:\s*2\.75rem|margin-bottom:\s*-2\.75rem|transform:\s*translateY\(0\.5rem\))/)
 })
