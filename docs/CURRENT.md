@@ -1,5 +1,15 @@
 # Kokoro User Web 当前状态
 
+## WEB-PROJECT-FLOW：合法空页解析与状态优先级源码已验（2026-10-01）
+
+基线main e17c039；18文件窄片，BFF public3 SessionListResponse required string|null准确消费，view显式null→undefined，preview/fixtures同shape；项目conversation loading/error先于welcome。不建optional/nullish兼容，不改同源adapter、scope、SQL、failure artifact或用户数据。
+
+Root实际RED9失败/113通过；首完整门旧2fixture缺cursor导致contract1失败/218通过；随后AppFrame完整2失败/2062通过，定点3通过却整文件仍2失败/70通过。根因是恢复用例没有独立list成功fixture且共享pageListClient/in-flight；仅这两用例使用稳定独立ListClient，finally恢复spy，不增加timeout/重试/reset或放宽原snapshot/URL断言。整文件72/72后fresh完整check exit0：contract219、architecture50、全test2064/163文件、lint/typecheck/build通过；preview Playwright14通过/4既定项目跳过（13.7s），后置typecheck exit0且生成路径自动恢复。日志 `/tmp/kokoro-web-project-flow-{red,check,check-r2,check-r3,check-r4,check-r5,frame-all,frame-r5,e2e,final-typecheck}.log` 保留全部失败。
+
+独立源码审查18hash最终0/0/0，TECH旧文件计数由Root同步为9test/fixture。受管3310 PID65590/parent65119未重启：仅四个本片精确变更，旧chat/preview failure片字节未混入；backup/manifest `/tmp/kokoro-web-project-runtime-{backup,sync.json}`。真实tab6展开侧栏已显示会话清单而不是加载失败；截图 `/tmp/kokoro-web-project-flow-user-page.jpg`。34117已退出，无PG/Redis/模型调用/用户数据修改。
+
+用户当前截图仍显示原问题重复两条、完整回答旁的失败/重试反馈；该界面未验为正确，不能把本片称ChatGPT风格/正规retry/全部闭环。后继优先真实同会话执行串行队列与原user attempt模型，随后按用户确认的ChatGPT简洁反馈风格落地；不靠隐藏错误/过滤历史消息伪造完成。
+
 ## WEB-BFF-PUBLIC3：public 3.0.0 consumer 源码已验（2026-10-01）
 
 基线Web main `9c428bf8cfdbdafae1d0cc0c3ed807fa8defa591`。当前源码已把旧public 2.0 pin替换为BFF owner commit

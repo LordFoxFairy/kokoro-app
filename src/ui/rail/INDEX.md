@@ -14,4 +14,5 @@
 
 ## 陷阱
 - 清单真源是 session `GET /sessions`（换浏览器见同列表）；localStorage 不再作清单真源。
+- Owner wire 的 `next_cursor` 必填且末页为 `null`；`useSessionList` 只在 view 边界将其显式映射为无 continuation。
 - `useSessionList` 是分页 accumulator 惯用法，不走 `@/lib/query`（无限滚动累加自持游标）。

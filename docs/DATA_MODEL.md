@@ -1,5 +1,15 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PROJECT-FLOW：空页cursor与项目状态投影（2026-10-01；已验证源码切片）
+
+BFF持久拥有项目会话清单与opaque cursor；Web不保存第二份清单事实。正式wire是
+`{sessions: SessionListItem[], next_cursor: string | null}`且两键必填。解析后仅在页面生命周期view中把owner null显式映射为
+内部`cursor=undefined/hasMore=false`；string原样用于下一页请求，不解码、不合成、不持久化。合法空页是
+`entries=[]/error=false/hasMore=false`，只有解析或取数失败才进入error。
+
+项目conversation route、list loading/error与welcome均是内存UI状态：loading/error优先，成功且settled才允许empty welcome。
+本片没有SQL schema、migration、事务、索引、Redis、localStorage/IndexedDB新增项或跨owner JOIN；preview只实现同一正式wire。
+
 ## WEB-BFF-PUBLIC3：无持久化变化的两角色消费（2026-10-01；已验证源码基线）
 
 当前源码已把旧public 2.0 snapshot替换为BFF owner commit

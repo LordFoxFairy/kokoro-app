@@ -423,6 +423,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           .filter(([, s]) => s.started && (scope.kind === "project" ? s.projectRef === scope.projectRef : s.projectRef === null))
           .map(([id, s]) => ({ session_id: id, title: s.title || id, updated_at: s.updatedAt }))
           .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)),
+        next_cursor: null,
       }
     },
 

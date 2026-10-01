@@ -1,5 +1,21 @@
 # Kokoro User Web 技术设计
 
+## WEB-PROJECT-FLOW：项目会话清单空页与状态优先级（2026-10-01；已验证源码切片）
+
+真实项目清单返回HTTP 200与`{sessions:[],next_cursor:null}`，但Web把合法owner wire的`next_cursor`误建模为optional
+string，解析失败后被list controller投影成error；项目conversation视图又无条件早返回welcome，使侧栏错误与main空态并存。
+
+| 项 | 裁决 |
+| --- | --- |
+| Owner | BFF拥有SessionListResponse与会话事实；Web拥有browser-private严格解析、分页view投影和项目状态UI。同源adapter只解包BFF envelope，不改字段。 |
+| Wire | `data`必须包含`sessions`与`next_cursor`；cursor仅为string或null，null表示无下一页。缺失、undefined、错误类型及额外字段拒绝；空串是owner已发布的string值并原样保留。 |
+| View | `useSessionList`唯一边界显式执行`cursor === null ? undefined : cursor`，内部继续以undefined表示无continuation；禁止`??`兼容、optional wire或代理删除null。 |
+| Preview/UI | preview返回同一正式shape并在末页显式给null。projectConversation仅在list非loading且非error时显示welcome；loading/error优先复用现有状态与重试。 |
+| 数据/API | Web无SQL、Redis或browser storage新事实；不改BFF、同源route、用户数据、provider、计费、HTTP path/scope与项目identity。 |
+| 预计文件 | 生产仅`src/contract/chat.ts`、`src/ui/rail/use-session-list.ts`、`src/dev/preview-transport.ts`、`src/features/app/kokoro-project-workspace.tsx`；对应九个现test/fixture文件取得RED/GREEN。额外改面须先裁决。 |
+
+Root已完成行为RED→GREEN与完整Web门（contract219/architecture50/tests2064、lint/typecheck/build），preview Playwright14通过/4既定跳过；受管3310精确窄同步后实际侧栏清单恢复。未运行模型/PG组合，本片不关闭重复user、历史失败反馈、队列或整体产品端到端。
+
 ## WEB-BFF-PUBLIC3：BFF public 3.0.0 正式消费者对齐（2026-10-01；已验证源码基线）
 
 Web main `9c428bf8cfdbdafae1d0cc0c3ed807fa8defa591` 的旧 public 2.0 pin 已在当前源码中替换；唯一来源是 BFF

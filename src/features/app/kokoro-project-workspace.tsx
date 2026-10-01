@@ -205,7 +205,7 @@ export function KokoroProjectWorkspace({
     setLinkedScheduledId(created.id)
   }
 
-  if (projectConversation) {
+  if (projectConversation && !projectConversationsLoading && !projectConversationsError) {
     return <KokoroProjectConversationWelcome composer={composer} />
   }
 

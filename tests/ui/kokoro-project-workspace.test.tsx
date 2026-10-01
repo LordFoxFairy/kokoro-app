@@ -98,6 +98,45 @@ it("项目任务列表区分加载态和错误态，并提供重试入口", () =
   expect(screen.queryByText("新建一个任务以开始")).not.toBeInTheDocument()
 })
 
+it("项目会话路由优先显示清单错误而不是误报空会话", () => {
+  const onRetryProjectConversations = vi.fn()
+  const { rerender } = render(
+    <LocaleProvider>
+      <KokoroProjectWorkspace preview
+        brandName="Kokoro"
+        composer={<div>composer</div>}
+        onPrompt={vi.fn()}
+        workspaceCapabilities={capabilities}
+        projectConversation
+        projectConversationsError
+        onRetryProjectConversations={onRetryProjectConversations}
+      />
+    </LocaleProvider>,
+  )
+
+  expect(screen.getByTestId("project-conversations-error")).toHaveTextContent("会话暂时无法加载。")
+  expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
+  expect(screen.queryByText("还没有专案会话。新建一个会话以开始。")).toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  expect(onRetryProjectConversations).toHaveBeenCalledTimes(1)
+
+  rerender(
+    <LocaleProvider>
+      <KokoroProjectWorkspace preview
+        brandName="Kokoro"
+        composer={<div>composer</div>}
+        onPrompt={vi.fn()}
+        workspaceCapabilities={capabilities}
+        projectConversation
+        projectConversationsLoading
+      />
+    </LocaleProvider>,
+  )
+  expect(screen.getByTestId("project-conversations-loading")).toHaveTextContent("正在加载会话…")
+  expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeNull()
+  expect(screen.queryByText("还没有专案会话。新建一个会话以开始。")).toBeNull()
+})
+
 it("在项目页内打开指令 Dialog 并通过项目保存回调持久化", async () => {
   const onPrompt = vi.fn()
   const onSaveProjectInstructions = vi.fn().mockResolvedValue(undefined)

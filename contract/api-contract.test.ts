@@ -166,6 +166,8 @@ describe("checked-in HTTP request and response contracts", () => {
   it("accepts flat session responses and rejects envelope or unknown-field drift", () => {
     expect(sessionSnapshotSchema.parse(sessionSnapshot).event_watermark).toBe(EVENT_CURSOR)
     expect(sessionListSchema.parse({ sessions: [], next_cursor: "CURSOR" }).next_cursor).toBe("CURSOR")
+    expect(sessionListSchema.parse({ sessions: [], next_cursor: "" }).next_cursor).toBe("")
+    expect(sessionListSchema.parse({ sessions: [], next_cursor: null }).next_cursor).toBeNull()
     expect(messageCreateReceiptSchema.parse({ run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" })).toBeTruthy()
     expect(runControlReceiptSchema.parse({
       run_id: "run_1",
@@ -176,7 +178,10 @@ describe("checked-in HTTP request and response contracts", () => {
     })).toMatchObject({ run_id: "run_1", command_id: "command_1", status: "succeeded" })
 
     expect(sessionSnapshotSchema.safeParse({ ...sessionSnapshot, data: {} }).success).toBe(false)
-    expect(sessionListSchema.safeParse({ sessions: [], next_cursor: null }).success).toBe(false)
+    expect(sessionListSchema.safeParse({ sessions: [] }).success).toBe(false)
+    expect(sessionListSchema.safeParse({ sessions: [], next_cursor: undefined }).success).toBe(false)
+    expect(sessionListSchema.safeParse({ sessions: [], next_cursor: 1 }).success).toBe(false)
+    expect(sessionListSchema.safeParse({ sessions: [], next_cursor: null, has_more: false }).success).toBe(false)
   })
 
   it("keeps BFF error bodies flat and non-empty", () => {
@@ -311,8 +316,8 @@ describe("cursor pagination and same-origin client paths", () => {
   it("keeps direct and project Chat on the same message/control contract with header-only message identity", async () => {
     const receipt = { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [], next_cursor: null }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [], next_cursor: null }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run_1", command_id: "cancel_1", request_digest: "sha256:cancel", status: "succeeded", replayed: false }), { status: 200 }))

@@ -16,8 +16,8 @@ afterEach(() => {
 
 describe("useSessionList", () => {
   it("shares an in-flight first-page request between concurrent mounts", async () => {
-    let resolve!: (value: { sessions: ReturnType<typeof item>[], next_cursor?: string }) => void
-    const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor?: string }>((done) => {
+    let resolve!: (value: { sessions: ReturnType<typeof item>[], next_cursor: string | null }) => void
+    const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: string | null }>((done) => {
       resolve = done
     })
     const listSessions = vi.fn().mockReturnValue(firstPage)
@@ -26,7 +26,7 @@ describe("useSessionList", () => {
     const second = renderHook(() => useSessionList(client, 0))
 
     expect(listSessions).toHaveBeenCalledTimes(1)
-    resolve({ sessions: [item("shared", "t1")] })
+    resolve({ sessions: [item("shared", "t1")], next_cursor: null })
     await waitFor(() => expect(first.result.current.entries).toHaveLength(1))
     await waitFor(() => expect(second.result.current.entries).toHaveLength(1))
     first.unmount()
@@ -49,7 +49,7 @@ describe("useSessionList", () => {
     const listSessions = vi
       .fn()
       .mockResolvedValueOnce({ sessions: [item("a", "t1")], next_cursor: "cur_2" })
-      .mockResolvedValueOnce({ sessions: [item("b", "t2")] })
+      .mockResolvedValueOnce({ sessions: [item("b", "t2")], next_cursor: null })
     const client = { listSessions } as Pick<SessionClient, "listSessions">
     const { result } = renderHook(() => useSessionList(client, 0))
     await waitFor(() => expect(result.current.entries).toHaveLength(1))
@@ -63,8 +63,8 @@ describe("useSessionList", () => {
   it("refetches the first page when refreshSignal changes", async () => {
     const listSessions = vi
       .fn()
-      .mockResolvedValueOnce({ sessions: [item("a", "t1")] })
-      .mockResolvedValueOnce({ sessions: [item("a", "t1"), item("c", "t3")] })
+      .mockResolvedValueOnce({ sessions: [item("a", "t1")], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [item("a", "t1"), item("c", "t3")], next_cursor: null })
     const client = { listSessions } as Pick<SessionClient, "listSessions">
     const { result, rerender } = renderHook(
       ({ signal }: { signal: number }) => useSessionList(client, signal),
@@ -83,13 +83,35 @@ describe("useSessionList", () => {
     expect(result.current.entries).toEqual([])
   })
 
+  it("treats an owner-null cursor as a successful terminal empty page", async () => {
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [], next_cursor: null })
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const { result } = renderHook(() => useSessionList(client, 0))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.entries).toEqual([])
+    expect(result.current.error).toBe(false)
+    expect(result.current.hasMore).toBe(false)
+  })
+
+  it("preserves an owner string cursor without treating an empty string as null", async () => {
+    const listSessions = vi
+      .fn()
+      .mockResolvedValueOnce({ sessions: [], next_cursor: "" })
+      .mockResolvedValueOnce({ sessions: [], next_cursor: null })
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const { result } = renderHook(() => useSessionList(client, 0))
+    await waitFor(() => expect(result.current.hasMore).toBe(true))
+    act(() => result.current.loadMore())
+    await waitFor(() => expect(listSessions).toHaveBeenNthCalledWith(2, "", DIRECT_SESSION_SCOPE))
+  })
+
   it("scope 切换时在新清单返回前不显示上一个 workspace 的会话", async () => {
-    let resolveProject!: (value: { sessions: ReturnType<typeof item>[] }) => void
-    const projectPage = new Promise<{ sessions: ReturnType<typeof item>[] }>((resolve) => {
+    let resolveProject!: (value: { sessions: ReturnType<typeof item>[], next_cursor: null }) => void
+    const projectPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: null }>((resolve) => {
       resolveProject = resolve
     })
     const listSessions = vi.fn()
-      .mockResolvedValueOnce({ sessions: [item("direct-a", "t1")] })
+      .mockResolvedValueOnce({ sessions: [item("direct-a", "t1")], next_cursor: null })
       .mockReturnValueOnce(projectPage)
     const client = { listSessions } as Pick<SessionClient, "listSessions">
     const { result, rerender } = renderHook(
@@ -101,19 +123,19 @@ describe("useSessionList", () => {
 
     rerender({ scope: { kind: "project", projectRef: "project-a" } })
     expect(result.current.entries).toEqual([])
-    resolveProject({ sessions: [item("project-a-task", "t2")] })
+    resolveProject({ sessions: [item("project-a-task", "t2")], next_cursor: null })
     await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a-task"]))
   })
 
   it("scope 切换后旧 workspace 的 loadMore 回执不清空新清单", async () => {
-    let resolveDirectMore!: (value: { sessions: ReturnType<typeof item>[] }) => void
-    const directMore = new Promise<{ sessions: ReturnType<typeof item>[] }>((resolve) => {
+    let resolveDirectMore!: (value: { sessions: ReturnType<typeof item>[], next_cursor: null }) => void
+    const directMore = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: null }>((resolve) => {
       resolveDirectMore = resolve
     })
     const listSessions = vi.fn()
       .mockResolvedValueOnce({ sessions: [item("direct-a", "t1")], next_cursor: "direct-cursor" })
       .mockReturnValueOnce(directMore)
-      .mockResolvedValueOnce({ sessions: [item("project-a", "t2")] })
+      .mockResolvedValueOnce({ sessions: [item("project-a", "t2")], next_cursor: null })
     const client = { listSessions } as Pick<SessionClient, "listSessions">
     const { result, rerender } = renderHook(
       ({ scope }: { scope: typeof DIRECT_SESSION_SCOPE | { kind: "project"; projectRef: string } }) =>
@@ -126,7 +148,7 @@ describe("useSessionList", () => {
     rerender({ scope: { kind: "project", projectRef: "project-a" } })
     await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a"]))
 
-    resolveDirectMore({ sessions: [item("direct-b", "t3")] })
+    resolveDirectMore({ sessions: [item("direct-b", "t3")], next_cursor: null })
     await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a"]))
   })
 })

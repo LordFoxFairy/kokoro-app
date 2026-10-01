@@ -99,7 +99,7 @@ describe("/api/session/[...path] proxy", () => {
     requestWithDomain.mockResolvedValue(
       new Response(
         JSON.stringify({
-          data: { sessions: [] },
+          data: { sessions: [], next_cursor: null },
           meta: { request_id: "req_1" },
         }),
         { status: 200, headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } },
@@ -128,7 +128,7 @@ describe("/api/session/[...path] proxy", () => {
     expect(new Headers(init.headers).get("x-kokoro-principal-id")).toBeNull()
     expect(res.headers.get("x-request-id")).toBe("req_1")
     expect(res.headers.get("cache-control")).toBe("private, no-store")
-    expect(await res.json()).toEqual({ sessions: [] })
+    expect(await res.json()).toEqual({ sessions: [], next_cursor: null })
   })
 
   it("fails closed when the BFF base is omitted", async () => {

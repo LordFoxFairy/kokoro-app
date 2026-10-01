@@ -56,6 +56,7 @@ import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
 import { SessionClientError } from "@/engine/client"
+import * as pageClients from "@/ui/shell/page-clients"
 
 import {
   awaitingPayload,
@@ -97,6 +98,14 @@ function buildEngine(initial: ConversationStore | null = null) {
     now: () => 1_000,
     createId: (prefix) => `${prefix}_${(idCounter += 1)}`,
   })
+}
+
+function stubSuccessfulSessionList() {
+  const listClient = {
+    ...client,
+    listSessions: vi.fn().mockResolvedValue({ sessions: [], next_cursor: null }),
+  }
+  return vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
 }
 
 it("旧名称 pin 与 preview 挂载不会污染正式 typed Skill wire", async () => {
@@ -809,26 +818,31 @@ it("项目 conversation 深链水合期间保留可见加载面，不误画空�
   client.nextSnapshot = () => new Promise((resolve) => {
     resolveSnapshot = resolve
   })
+  const listClientSpy = stubSuccessfulSessionList()
 
-  render(
-    <ThemeProvider>
-      <LocaleProvider>
-        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
-      </LocaleProvider>
-    </ThemeProvider>,
-  )
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
 
-  await waitFor(() => expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument())
-  expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
-  expect(engine.getSnapshot().hydrating).toBe(true)
+    await waitFor(() => expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument())
+    expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
+    expect(engine.getSnapshot().hydrating).toBe(true)
 
-  await act(async () => {
-    resolveSnapshot?.(null)
-    await settle()
-  })
+    await act(async () => {
+      resolveSnapshot?.(null)
+      await settle()
+    })
 
-  await waitFor(() => expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeInTheDocument())
-  expect(engine.getSnapshot().hydrating).toBe(false)
+    await waitFor(() => expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeInTheDocument())
+    expect(engine.getSnapshot().hydrating).toBe(false)
+  } finally {
+    listClientSpy.mockRestore()
+  }
 })
 
 it("项目 conversation 深链被拒后回退到 overview，不永久停在 loading 面", async () => {
@@ -884,32 +898,37 @@ it.each([
     }
     return Promise.resolve(null)
   }
+  const listClientSpy = stubSuccessfulSessionList()
 
-  render(
-    <ThemeProvider>
-      <LocaleProvider>
-        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
-      </LocaleProvider>
-    </ThemeProvider>,
-  )
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
 
-  const conversationError = await waitFor(() => {
-    const surface = screen.getByTestId("app-frame-conversation-error")
-    expect(surface).toBeInTheDocument()
-    return surface
-  })
-  // 会话列表和当前会话可能同时出现错误提示，断言必须限定在当前会话错误面板内。
-  expect(conversationError).toHaveTextContent("会话列表加载失败")
-  expect(within(conversationError).getByRole("button", { name: "重试" })).toBeEnabled()
-  expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
+    const conversationError = await waitFor(() => {
+      const surface = screen.getByTestId("app-frame-conversation-error")
+      expect(surface).toBeInTheDocument()
+      return surface
+    })
+    // 当前会话 snapshot 错误独立于成功的会话清单，重试必须仍绑定原深链。
+    expect(conversationError).toHaveTextContent("会话列表加载失败")
+    expect(within(conversationError).getByRole("button", { name: "重试" })).toBeEnabled()
+    expect(screen.queryByTestId("project-conversation-welcome")).toBeNull()
 
-  fireEvent.click(within(conversationError).getByRole("button", { name: "重试" }))
+    fireEvent.click(within(conversationError).getByRole("button", { name: "重试" }))
 
-  await waitFor(() => expect(client.snapshotCalls.filter((id) => id.endsWith("snapshot_failed"))).toHaveLength(2))
-  await waitFor(() => expect(document.querySelector(`[data-slot="${emptyTestId}"]`)).toBeInTheDocument())
-  expect(window.location.pathname).toBe(routePathname)
-  expect(window.location.search).toBe(project ? "?conversation=project_snapshot_failed" : "?conversation=direct_snapshot_failed")
-  expect(screen.queryByTestId("app-frame-conversation-error")).toBeNull()
+    await waitFor(() => expect(client.snapshotCalls.filter((id) => id.endsWith("snapshot_failed"))).toHaveLength(2))
+    await waitFor(() => expect(document.querySelector(`[data-slot="${emptyTestId}"]`)).toBeInTheDocument())
+    expect(window.location.pathname).toBe(routePathname)
+    expect(window.location.search).toBe(project ? "?conversation=project_snapshot_failed" : "?conversation=direct_snapshot_failed")
+    expect(screen.queryByTestId("app-frame-conversation-error")).toBeNull()
+  } finally {
+    listClientSpy.mockRestore()
+  }
 })
 
 it("direct conversation 深链被拒后清理 conversation URL 并回到新对话", async () => {

@@ -118,7 +118,7 @@ describe("preview transport control loop", () => {
     })).rejects.toThrow("Unknown preview failure code: network")
 
     await expect(client.fetchSnapshot("preview-invalid-failure-session")).resolves.toBeNull()
-    await expect(client.listSessions()).resolves.toEqual({ sessions: [] })
+    await expect(client.listSessions()).resolves.toEqual({ sessions: [], next_cursor: null })
     expect(window.localStorage.getItem("kokoro.preview.sessions.v1")).toBeNull()
   })
 

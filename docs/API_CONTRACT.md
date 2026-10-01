@@ -1,5 +1,15 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PROJECT-FLOW：Session list 正式空页（2026-10-01；已验证源码切片）
+
+BFF public 3.0.0 `SessionListResponse.data`要求`required:[sessions,next_cursor]`：`sessions`是数组，`next_cursor`是
+string或null，null唯一表示没有下一页。真实同源响应`{sessions:[],next_cursor:null}`合法；Web同源adapter仅从
+成功envelope解包`data`并原样返回，不删除或改写null。
+
+目标`sessionListSchema`接受required nullable，拒绝缺失/undefined、错误类型与额外键；空串作为已发布string原样保留，不保留optional旧shape，也不以
+nullish兼容隐藏producer漂移。正式与preview transport使用同一flat browser-private DTO。分页view只在解析后显式将null映射为
+内部无continuation。本片不改path、`project_ref`、BFF envelope、snapshot、AG-UI、failure、operation或retry合同。
+
 ## WEB-BFF-PUBLIC3：唯一 public 3.0.0 上游（2026-10-01；已验证源码基线）
 
 当前源码已删除旧public 2.0 pin；机器来源为BFF owner commit

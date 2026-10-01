@@ -2,6 +2,51 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createSessionClient } from "@/engine/client"
 
+describe("listSessions：owner required nullable cursor", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("accepts the formal HTTP 200 terminal page", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ sessions: [], next_cursor: null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listSessions()).resolves.toEqual({
+      sessions: [],
+      next_cursor: null,
+    })
+  })
+
+  it("preserves every published string cursor including an empty string", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ sessions: [], next_cursor: "" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listSessions()).resolves.toEqual({
+      sessions: [],
+      next_cursor: "",
+    })
+  })
+
+  it.each([
+    { sessions: [] },
+    { sessions: [], next_cursor: undefined },
+    { sessions: [], next_cursor: 1 },
+    { sessions: [], next_cursor: null, has_more: false },
+  ])("rejects non-owner page shape %#", async (body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).listSessions()).rejects.toThrow()
+  })
+})
+
 describe("fetchSnapshot：会话不存在/已软删都优雅缺席（不 fail-loud）", () => {
   afterEach(() => vi.unstubAllGlobals())
 

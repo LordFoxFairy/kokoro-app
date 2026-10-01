@@ -98,7 +98,7 @@ export type SessionListItem = z.infer<typeof sessionListItemSchema>
 export const sessionListSchema = z
   .object({
     sessions: z.array(sessionListItemSchema),
-    next_cursor: z.string().min(1).optional(),
+    next_cursor: z.string().nullable(),
   })
   .strict()
 export type SessionList = z.infer<typeof sessionListSchema>

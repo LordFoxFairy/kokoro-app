@@ -77,7 +77,7 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
       return {
         scopeKey: currentScopeKey,
         entries: page.sessions.map(toEntry),
-        cursor: page.next_cursor,
+        cursor: page.next_cursor === null ? undefined : page.next_cursor,
         loading: false,
         loadingMore: false,
         error: false,
@@ -114,7 +114,7 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
             ...cur,
             scopeKey: requestScopeKey,
             entries: [...cur.entries, ...page.sessions.map(toEntry)],
-            cursor: page.next_cursor,
+            cursor: page.next_cursor === null ? undefined : page.next_cursor,
             loadingMore: false,
           }))
         })

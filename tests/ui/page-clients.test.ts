@@ -11,7 +11,7 @@ describe("页面 Chat client transport selection", () => {
   it("显式 live 模式不被开发环境的 preview 开关劫持", async () => {
     vi.stubEnv("NEXT_PUBLIC_SESSION_PREVIEW", "1")
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ sessions: [] }), { status: 200 }),
+      new Response(JSON.stringify({ sessions: [], next_cursor: null }), { status: 200 }),
     )
     vi.stubGlobal("fetch", fetchMock)
 
