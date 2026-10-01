@@ -14,12 +14,9 @@ import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
 
 import type { AppCommandMenuProps } from "./app-command-menu"
 
-export type ProjectConversationStatus = "queued" | "running" | "waiting" | "completed" | "failed"
-
 export type ProjectConversation = {
   id: string
   title: string
-  status?: ProjectConversationStatus
   updatedAt?: number
 }
 

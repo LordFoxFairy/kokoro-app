@@ -265,19 +265,6 @@ export function AppFrame({
   const projectConversations: NonNullable<EmptyStateProps["projectConversations"]> = conversations.map((conversation) => ({
     id: conversation.id,
     title: conversation.title,
-    status: conversation.id === activeId
-      ? machine.phase === "awaiting-hitl"
-        ? "waiting"
-        : isStreaming
-          ? "running"
-          : hasFailed
-            ? "failed"
-            : thread.messages.length > 0
-              ? "completed"
-              : "queued"
-      : conversation.title.length > 0
-        ? "completed"
-        : "queued",
   }))
 
   const composerProps: AppFrameComposerProps = {

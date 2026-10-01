@@ -1,5 +1,11 @@
 # Kokoro User Web 当前状态
 
+## WEB-EMPTY-STATUS：移除未发布的专案 run 状态推断（2026-10-01；源码门已验）
+
+专案会话清单只投影 BFF 已发布的 `id/title`；Web 不再从空标题、当前会话或本地 machine phase 合成 `queued/running/waiting/completed/failed`。删除 producer 与未消费的状态类型，不留兼容字段。本片不新增 durable queued wire，不改变 Conversation、Message、HITL、取消或 terminal retry 语义。
+
+Node22 真正聚焦 RED→GREEN；Root 冻结源码复验两 UI 文件 90/90、完整测试 2065/2065、contract 219/219、architecture 50/50、lint/typecheck/build exit0。隔离端口34118 的现 preview Chromium 门 14通过/4既定条件跳过（13.5秒），后置typecheck0；不是实际 IAM/模型/用户3310端到端。独立四路径审查0/0/0，Root仅更新本段实测证据。自有浏览器服务已退出，报告保存在 `/tmp/kokoro-web-empty-status-{playwright-report,test-results}`；用户3310未重启、运行副本尚未切换。日志 `/tmp/kokoro-web-empty-status-root-*.log`。
+
 ## WEB-PROJECT-FLOW：合法空页解析与状态优先级源码已验（2026-10-01）
 
 基线main e17c039；18文件窄片，BFF public3 SessionListResponse required string|null准确消费，view显式null→undefined，preview/fixtures同shape；项目conversation loading/error先于welcome。不建optional/nullish兼容，不改同源adapter、scope、SQL、failure artifact或用户数据。

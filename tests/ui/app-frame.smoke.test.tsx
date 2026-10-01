@@ -1768,6 +1768,46 @@ it("专案页点击新建会话切换到会话视图并聚焦 Composer", async (
   await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveFocus())
 })
 
+it("专案清单不从标题或本地相位伪造 durable run status", async () => {
+  buildEngine()
+  const listClient = {
+    ...client,
+    listSessions: vi.fn().mockResolvedValue({
+      sessions: [{ session_id: "conv_empty", title: "空白会话", updated_at: "2026-10-01T00:00:00Z" }],
+      next_cursor: null,
+    }),
+  }
+  const listSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
+  function ProjectConversationStatusProbe({ projectConversations }: EmptyStateProps) {
+    const first = projectConversations?.[0]
+    return (
+      <output data-testid="project-conversation-status">
+        {projectConversations?.length ?? 0}:{first && "status" in first ? "present" : "absent"}
+      </output>
+    )
+  }
+
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <AppFrame
+            engine={engine}
+            chatHref="/app"
+            emptyState={ProjectConversationStatusProbe}
+            projectWorkspace
+            projectRef="kokoro"
+          />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId("project-conversation-status")).toHaveTextContent("1:absent"))
+  } finally {
+    listSpy.mockRestore()
+  }
+})
+
 it("专案 Composer 首次发送后承接到当前会话视图", async () => {
   buildEngine()
   function ProjectConversationProbe({ projectConversation, composer }: EmptyStateProps) {
