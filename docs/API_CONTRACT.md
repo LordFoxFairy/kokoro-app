@@ -1,5 +1,72 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-PROJECT-READ-R42：指令历史复用已发布 wire（仅设计与 RED，2026-10-01）
+
+独立审查发现原指令读取仍有未经 schema/boundary 校验的第二 GET，旧 data??payload 与 array assertion 不是当前 owner 协议。
+本修补不变 public3.0.0/293dfe artifact acd92e pin，不新增 auth 字段、route、分页或 contract 版本。
+现 GET /api/hub/projects/{id}/instruction-revisions 对应 GET /v1/projects/{projectId}/instruction-revisions，
+operationId=listProjectInstructionRevisions，project.read，public/beta；路径 ProjectId 已由 owner 参数定义，当前无分页。
+ProjectInstructionRevisionResponse 是 data.items + RequestMeta；每条 required id/instruction/updated_at/actor_name/current，
+分别 string/string/date-time/string/boolean。consumer 在唯一 project.ts 校验开放 additive 字段与闭合 RequestMeta，
+UI 映射 updated_at→updatedAt（瞬时点 epoch ms）、actor_name→actorName；不直接断言成 camelCase 数组。
+现 PATCH /api/hub/projects/{id} 仍对应原 UpdateProjectInstructionRequest（instruction）与 ProjectResponse，原 Idempotency-Key 保留。
+正式指令只消费已验证 Project detail/集合的 instruction，零额外 detail GET；历史 GET/PATCH 同读取边界、取消和 10 秒 deadline，
+迟到旧身份响应不更新 UI，错误不制造空成功或正式历史记录。旧 fallback 删除但功能保留；本阶段尚未实施。
+
+### R43 固定 wire 消费候选进度（2026-10-01）
+
+现 project.ts 已验证 required revision snake_case 字段、data.items 与闭合 RequestMeta；开放 additive shape 保持。
+GET history 与 PATCH 均用现同源路径、no-store/AbortSignal/10秒 fetch+body deadline，PATCH 原 instruction/Idempotency-Key 保持，
+响应 ProjectResponse 的 id 必须匹配请求；当代 ACK 仅刷新正式 GET，不把请求正文或随机 revision 当持久事实。
+正式 instruction 来自 validated current Project；无新 route/owner/version/pin/generated。固定生成物两项 --check exit0。
+
+## WEB-PROJECT-READ-R40：固定 owner 读取已接入候选（2026-10-01）
+
+Root 批准 D0 后，Web 用现 GET /api/hub/projects[/id] 接固定 public3.0.0 owner artifact；版本/commit/digest/generated 原字节未改。
+共享 contract/project.ts 保留 Project 原字符串与 required/optional/date-time；Project/envelope 接受 additive 字段，RequestMeta 闭合且
+request_id 长度 1–256。创建与读取共用唯一 ProjectResponse，旧创建 schema 路径删除；创建本地导航身份 guard 与原幂等不变。
+读取无 body/身份 header/Idempotency-Key/分页；opaque id 仅 segment 编码，detail 回执 id 必须与请求一致。
+每请求 GET/no-store/取消与 10 秒 deadline（含响应体）；取消/失败不是空成功，无自动重试或第二协议。
+受信 subject 仅在页面的 Project 读取边界内保留；本地代际不上 wire，不替代 BFF 每次授权。401/403 及详情404 停用读取重试，
+429/503/网络/JSON/shape 错误只给安全失败反馈与显式重试，不显示 upstream payload。
+
+原创建和新 list/get consumer/owner-pin 断言已定点通过；完整门、真实登录浏览器与 owner 组合证据由 Root 后继验收。
+下方 D0 保留为固定边界与历史阶段证据，禁止据候选宣称发布闭环。
+
+## WEB-PROJECT-READ-D0-R39：固定正式 Project 读取边界（2026-10-01；仅文档候选）
+
+本段是当前 Project read D0，替代历史 mock 描述的实施依据，不宣称已接通 consumer。事实源是 BFF
+contract/openapi/v1/openapi.yaml；目录 v1 不等于 info 版本。当前发布 pin 为 public **3.0.0**，owner commit
+`293dfe7638e5dea0df2bee6dfdd8483b53fc9df6`，整文件 SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`。
+Web src/generated/bff-public-openapi.yaml、该 owner commit 的 blob 和当前 BFF main
+`759bfe0a8c521946cae31a74b6426f43b063bae1` 的此契约实读原字节相同；当前 BFF 八项 dirty 不属于新发布事实。
+现 tests/contract/bff-project-create-public.test.ts 与 scripts/generate-bff-agent-failure.mjs 已固定同 pin；本 D0 不更新 generated。
+
+| 浏览器私有边界 | 正式 BFF owner 操作 | 机器响应/限制 |
+| --- | --- | --- |
+| GET /api/hub/projects | GET /v1/projects，listProjects，public/beta，project.read | ProjectListResponse；当前无 cursor/limit 参数，响应无 next_cursor，不能合成分页。 |
+| GET /api/hub/projects/{id} | GET /v1/projects/{projectId}，getProject，public/beta，project.read | ProjectResponse；opaque id 按路径 segment 编码；不把 slug/品牌/会话标题当 id 或建立 UI alias。 |
+
+同源 hub adapter 已经使用 admittedProductSession/productBffHeaders 转发上述路径；身份来自 Product Session/BFF admission，
+浏览器不直连 owner，不提交 tenant/actor/header 身份。读取只有 GET、no-store、取消与有界 deadline；没有 mutation、
+Idempotency-Key、第二协议或新 route。原创建 POST/同键意图、项目 SessionScope 与 AG-UI 不变。
+
+后继共享 consumer schema 必须从该固定 Project、ProjectListResponse、ProjectResponse、RequestMeta 定义校验，
+不从历史 mock 文档复制字段；保 required/optional、类型与 date-time 约束，id/name 原字值不 trim、重命名或派生。
+Project 及其 envelope 的额外字段按机器定义的开放性处理，不擅自 strict 拒 additive 字段；RequestMeta 的
+additionalProperties:false 与 RequestId 约束保持。consumer 不是第二可编辑公开 contract；create 与 read 共用唯一 shape。
+
+错误保持分层：401/403 是身份/权限拒绝，清旧读取数据并停止使用；detail 404 是该项目不可见/不存在，不填空详情；
+429/503/网络失败及无效 JSON/shape 为明确 error，可显式再 GET，但无自动无限重试或 fallback。GET 被取消不生成空成功，
+响应是否写回由本地读取 generation、controller、当前 projectRef 与 authenticated boundary 共同裁决。
+list 成功 projects=[] 才为 empty；当前无 continuation、无合并多页或“已加载全部分页”的声明。
+
+后继扩现两个 project contract tests 核 list/get 的 path、ref、permission、无分页事实及完整 pin，并锁共享 schema 及创建回归；
+UI 先 RED 再实现，Root 后跑 pnpm contract/test:architecture/lint/typecheck/test/build 与真实登录浏览器。
+当前 /api/auth/session 已有 subject；只把其受信投影保留到本地 Project 读取代际，不新增 wire/token/tenant 字段。
+身份 generation 的内部装配与四文档一致性待 Root 审查，未运行契约检查或浏览器验收。
+
 ## WEB-IDLE-TERMINAL-P1-R26：订阅生命周期不改变 wire（2026-10-01；源码候选）
 
 本片不修改 public 3.0、同源 route、AG-UI frame、cursor、receipt、generated 或错误 envelope。BFF terminal ledger head 的

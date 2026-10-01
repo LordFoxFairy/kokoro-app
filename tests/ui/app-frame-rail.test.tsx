@@ -234,3 +234,249 @@ it("正式壳没有项目身份时不生成默认 kokoro 专案链接", () => {
   mountFrame({ preview: false })
   expect(document.querySelector('a[href="/app/project/kokoro"]')).not.toBeInTheDocument()
 })
+
+it("已登录正式壳从同源 Project 列表显示两个独立项目，而非品牌或当前项目占位", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { AppGate } = await import("@/ui/auth/app-gate")
+  const engineFactory = vi.spyOn(pageClients, "browserEngine").mockReturnValue(engine)
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  const projects = [
+    {
+      id: "project_read_alpha",
+      name: "研究项目甲",
+      slug: "research-alpha",
+      description: "甲的独立项目",
+      created_at: "2026-10-01T00:00:00.000Z",
+      updated_at: "2026-10-01T00:00:00.000Z",
+    },
+    {
+      id: "project_read_beta",
+      name: "研究项目乙",
+      slug: "research-beta",
+      description: "乙的独立项目",
+      created_at: "2026-10-01T00:00:00.000Z",
+      updated_at: "2026-10-01T00:00:00.000Z",
+    },
+  ]
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input)
+    const path = new URL(url, window.location.origin).pathname
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET")
+    if (path === "/api/auth/session" && method === "GET") {
+      return Response.json({
+        authenticated: true,
+        subject: "project-read-user",
+        expires_at: "2027-01-01T00:00:00.000Z",
+      })
+    }
+    if (path === "/api/hub/projects" && method === "GET") {
+      return Response.json({ data: { projects }, meta: { request_id: "req_project_read_r40" } })
+    }
+    // Optional presentation is unavailable; it must not select preview data.
+    return Response.json({ error: { code: "unavailable" } }, { status: 503 })
+  })
+
+  render(
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppGate brandName="站点品牌" />
+      </LocaleProvider>
+    </ThemeProvider>,
+  )
+  await screen.findByRole("textbox", { name: "对话输入" })
+  expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", { cache: "no-store" })
+  expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
+  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+
+  const alpha = await screen.findByRole("link", { name: "研究项目甲" })
+  const beta = screen.getByRole("link", { name: "研究项目乙" })
+  expect(alpha).toHaveAttribute("href", "/app/project/project_read_alpha")
+  expect(beta).toHaveAttribute("href", "/app/project/project_read_beta")
+  expect(alpha.closest("[data-project-id]")).toHaveAttribute("data-project-id", "project_read_alpha")
+  expect(beta.closest("[data-project-id]")).toHaveAttribute("data-project-id", "project_read_beta")
+  expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(2)
+  expect(document.querySelector('a[href="/app/project/kokoro"]')).not.toBeInTheDocument()
+  expect(document.querySelector('[data-project-list] a[aria-label="站点品牌"]')).not.toBeInTheDocument()
+})
+
+const projectReadFixtures = [
+  { id: "project_read_alpha", name: "研究项目甲", slug: "alpha", description: "", created_at: "2026-10-01T00:00:00.000Z", updated_at: "2026-10-01T00:00:00.000Z" },
+  { id: "project_read_beta", name: "研究项目乙", slug: "beta", description: "", created_at: "2026-10-01T00:00:00.000Z", updated_at: "2026-10-01T00:00:00.000Z" },
+]
+
+function projectReadEnvelope(projects = projectReadFixtures) {
+  return Response.json({ data: { projects }, meta: { request_id: "req_project_read_lifecycle" } })
+}
+
+async function mountAuthenticatedProjectRail(
+  read: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+  session: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader" }),
+) {
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { AppGate } = await import("@/ui/auth/app-gate")
+  vi.spyOn(pageClients, "browserEngine").mockReturnValue(engine)
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input)
+    const path = new URL(url, window.location.origin).pathname
+    if (path === "/api/auth/session") return session()
+    if (path === "/api/hub/projects") return read(input, init)
+    return Response.json({ error: { code: "unavailable" } }, { status: 503 })
+  })
+  const view = render(<ThemeProvider><LocaleProvider><AppGate brandName="站点品牌" /></LocaleProvider></ThemeProvider>)
+  await screen.findByRole("textbox", { name: "对话输入" })
+  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+  return { ...view, fetchMock }
+}
+
+it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项目且不伪装为空集合", async (failure) => {
+  let calls = 0
+  await mountAuthenticatedProjectRail(async () => {
+    calls++
+    return calls === 1 ? projectReadEnvelope() : failure === "401"
+      ? Response.json({ error: { code: "unauthenticated" } }, { status: 401 })
+      : Response.json({ data: { projects: [{ id: "broken" }] }, meta: { request_id: "req_broken" } })
+  })
+  await screen.findByRole("link", { name: "研究项目甲" })
+  expect(calls).toBe(1)
+  act(() => window.dispatchEvent(new Event("focus")))
+  await screen.findByTestId("projects-error")
+  expect(calls).toBe(2)
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("link", { name: "研究项目乙" })).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
+  expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
+  const retry = screen.getByTestId("projects-error").querySelector("button")
+  if (failure === "401") expect(retry).toBeDisabled()
+  else expect(retry).toBeEnabled()
+})
+
+it("只有成功读取 projects=[] 才呈现专案空态", async () => {
+  let calls = 0
+  await mountAuthenticatedProjectRail(async () => { calls++; return projectReadEnvelope([]) })
+  expect(await screen.findByTestId("projects-empty")).toHaveTextContent("暂无专案。")
+  expect(calls).toBe(1)
+  expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
+  expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
+})
+
+it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能复活项目或重挂 Chat", async () => {
+  let resolveOld: (response: Response) => void = () => { throw new Error("old read not pending") }
+  let resolveSession: (response: Response) => void = () => { throw new Error("session not pending") }
+  let calls = 0
+  let checks = 0
+  const signals: (AbortSignal | null | undefined)[] = []
+  const disposal = vi.spyOn(engine, "dispose")
+  await mountAuthenticatedProjectRail(async (_input, init) => {
+    signals.push(init?.signal)
+    calls++
+    if (calls === 2) return new Promise<Response>((resolve) => { resolveOld = resolve })
+    return projectReadEnvelope(calls === 1 ? projectReadFixtures : projectReadFixtures.slice(1))
+  }, async () => {
+    checks++
+    if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
+    return Response.json({ authenticated: true, subject: "same-reader" })
+  })
+  await screen.findByRole("link", { name: "研究项目甲" })
+  const composer = screen.getByRole("textbox", { name: "对话输入" })
+  act(() => window.dispatchEvent(new Event("focus")))
+  await waitFor(() => expect(calls).toBe(2))
+  act(() => window.dispatchEvent(new Event("focus")))
+  await waitFor(() => expect(checks).toBe(3))
+  expect(signals[1]?.aborted).toBe(true)
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
+  await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "same-reader" })) })
+  await screen.findByRole("link", { name: "研究项目乙" })
+  expect(calls).toBe(3)
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBe(composer)
+  expect(disposal).not.toHaveBeenCalled()
+})
+
+it("正式健康集合切入显式 preview 后取消旧代际，不请求正式集合也不复用旧项目", async () => {
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  let resolvePending: (response: Response) => void = () => { throw new Error("no pending read") }
+  let calls = 0
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    if (String(input) !== "/api/hub/projects") return Response.json({}, { status: 503 })
+    calls++
+    return calls === 2 ? new Promise<Response>((resolve) => { resolvePending = resolve }) : projectReadEnvelope()
+  })
+  let boundary = { admitted: true, subject: "preview-isolation-reader", generation: 1 }
+  const frame = (preview: boolean) => <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" preview={preview} projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>
+  const view = render(frame(false))
+  await screen.findByRole("link", { name: "研究项目甲" })
+  const reads = () => fetchMock.mock.calls.filter(([input]) => String(input) === "/api/hub/projects")
+  expect(reads()).toHaveLength(1)
+  boundary = { ...boundary, generation: 2 }
+  view.rerender(frame(false))
+  await waitFor(() => expect(reads()).toHaveLength(2))
+  const signal = reads()[1]?.[1]?.signal
+  view.rerender(frame(true))
+  await act(async () => { await Promise.resolve() })
+  expect(signal?.aborted).toBe(true)
+  expect(reads()).toHaveLength(2)
+  await act(async () => { resolvePending(projectReadEnvelope()); await Promise.resolve() })
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  view.rerender(frame(false))
+  await screen.findByRole("link", { name: "研究项目甲" })
+  expect(reads()).toHaveLength(3)
+})
+
+it("创建成功只触发正式 GET 刷新，不把 ACK 当全集，原草稿仍一次承接", async () => {
+  let reads = 0
+  let writes = 0
+  let resolveRefresh: (response: Response) => void = () => { throw new Error("no pending refresh") }
+  const view = await mountAuthenticatedProjectRail(async (_input, init) => {
+    if (init?.method === "POST") {
+      writes++
+      expect(init.headers).toEqual({ "content-type": "application/json", "Idempotency-Key": expect.any(String) })
+      return Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_create" } })
+    }
+    reads++
+    if (reads === 1) return projectReadEnvelope([])
+    return new Promise<Response>((resolve) => { resolveRefresh = resolve })
+  })
+  try {
+    await screen.findByTestId("projects-empty")
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "保持创建时的草稿" } })
+    const trigger = screen.getByRole("button", { name: "新建专案" })
+    fireEvent.pointerDown(trigger, { button: 0 })
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    await waitFor(() => expect(reads).toBe(2))
+    expect(writes).toBe(1)
+    expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+    expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
+    await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_read_alpha"))
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("保持创建时的草稿"))
+    await act(async () => { resolveRefresh(projectReadEnvelope()) })
+    await screen.findByRole("link", { name: "研究项目甲" })
+    expect(screen.getByRole("heading", { name: "研究项目甲" })).toBeInTheDocument()
+    expect(writes).toBe(1)
+    expect(reads).toBe(2)
+  } finally {
+    view.unmount()
+    window.history.replaceState(window.history.state, "", "/")
+  }
+})
+
+it("健康正式列表在 session 401 登出后撤销，既不留下项目链接也不改为 preview", async () => {
+  let reads = 0
+  let checks = 0
+  await mountAuthenticatedProjectRail(async () => { reads++; return projectReadEnvelope() }, async () => {
+    checks++
+    return checks === 1 ? Response.json({ authenticated: true, subject: "logout-reader" }) : Response.json({ authenticated: false }, { status: 401 })
+  })
+  await screen.findByRole("link", { name: "研究项目甲" })
+  act(() => window.dispatchEvent(new Event("focus")))
+  await waitFor(() => expect(screen.queryByRole("textbox", { name: "对话输入" })).not.toBeInTheDocument())
+  expect(checks).toBe(2)
+  expect(reads).toBe(1)
+  expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
+  expect(document.querySelector('a[href*="preview-project"]')).toBeNull()
+})

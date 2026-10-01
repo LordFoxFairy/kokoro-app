@@ -199,6 +199,9 @@ export type WorkspaceRailNavigationProps = {
   projectActive: boolean
   projects?: readonly WorkspaceRailProject[]
   orderedProjects: WorkspaceRailProject[]
+  projectListStatus?: "blocked" | "loading" | "ready" | "error"
+  projectListRetryable?: boolean
+  onRetryProjects?: () => void
   projectPickerOpen: boolean
   setProjectPickerOpen: Dispatch<SetStateAction<boolean>>
   onCreateProject?: () => void
@@ -227,6 +230,9 @@ export function WorkspaceRailNavigation({
   projectActive,
   projects,
   orderedProjects,
+  projectListStatus,
+  projectListRetryable = false,
+  onRetryProjects,
   projectPickerOpen,
   setProjectPickerOpen,
   onCreateProject,
@@ -254,6 +260,18 @@ export function WorkspaceRailNavigation({
     settingsTab: registeredNavigationRoute(item.key)?.settingsTab,
     href: registeredNavigationRoute(item.key)?.href,
   }))
+  const projectReadFeedback = projectListStatus === "loading" ? (
+    <p role="status" data-testid="projects-loading">{t("firstSite.projectsLoading")}</p>
+  ) : projectListStatus === "error" ? (
+    <div role="alert" data-testid="projects-error">
+      <p>{t("firstSite.projectsError")}</p>
+      <Button type="button" variant="ghost" size="sm" onClick={onRetryProjects} disabled={!onRetryProjects || !projectListRetryable}>{t("firstSite.retry")}</Button>
+    </div>
+  ) : projectListStatus === "ready" && orderedProjects.length === 0 ? (
+    <p role="status" data-testid="projects-empty">{t("firstSite.projectsEmpty")}</p>
+  ) : projectListStatus === "blocked" ? (
+    <p role="status" data-testid="projects-blocked">{t("firstSite.projectsUnavailable")}</p>
+  ) : null
 
   return (
     <nav className={navigationStyles.nav} aria-label={t("rail.navAria")}>
@@ -376,6 +394,7 @@ export function WorkspaceRailNavigation({
                     </SidebarMenuButton>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent side="right" align="start" sideOffset={10} className={navigationStyles.projectMenu}>
+                    {projectReadFeedback}
                     {onCreateProject ? <DropdownMenuItem onSelect={() => onCreateProject()}><Plus aria-hidden="true" />{t("firstSite.newProject")}</DropdownMenuItem> : null}
                     {orderedProjects.map((project) => {
                       const active = project.active ?? (projectActive && project.href === projectHref)
@@ -406,6 +425,7 @@ export function WorkspaceRailNavigation({
             </SidebarMenu>
           ) : (
             <SidebarMenu data-project-list="true" aria-label={t("firstSite.projects")}>
+              {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
               {orderedProjects.map((project) => {
                 const active = project.active ?? (projectActive && project.href === projectHref)
                 const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`

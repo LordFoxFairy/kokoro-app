@@ -754,7 +754,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
       const signout = await http(nextPort, "/api/auth/signout", "POST", form,
         { origin: `http://localhost:${nextPort}`, cookie })
-      expect(signout.status).toBe(200)
+      expect(signout.status, responseDiagnostic("signout", signout, outputStart, pathStart)).toBe(200)
       expect(JSON.parse(signout.body)).toMatchObject({ remote_revocation: "unconfirmed" })
       expect(paths.filter((item) => item === "/iam/oauth2/revoke")).toHaveLength(revokesBefore)
       releaseRefresh?.()

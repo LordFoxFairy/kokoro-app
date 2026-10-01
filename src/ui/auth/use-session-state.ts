@@ -6,10 +6,14 @@
 
 import { useEffect, useState } from "react"
 
+/** Local read lifecycle only; BFF still authorizes every Project request. */
+export type ProjectReadBoundary = { admitted: boolean; subject: string | null; generation: number }
+
 export type SessionState = "checking" | "pass" | "anonymous"
 export type SessionProbe = {
   state: SessionState
   mode: "checking" | "preview" | "authenticated"
+  projectReadBoundary: ProjectReadBoundary
 }
 
 // Preview mode is an explicit local-only opt-in. It is safe to start in the
@@ -18,11 +22,11 @@ export type SessionProbe = {
 // session decision before mounting the workbench.
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
-type ResolvedSessionMode = "authenticated" | "preview" | "anonymous"
+type ResolvedSession = { mode: "authenticated" | "anonymous"; subject: string | null }
 
-let sessionProbeInflight: Promise<ResolvedSessionMode> | null = null
+let sessionProbeInflight: Promise<ResolvedSession> | null = null
 
-function requestSessionMode(): Promise<ResolvedSessionMode> {
+function requestSessionMode(): Promise<ResolvedSession> {
   if (sessionProbeInflight !== null) return sessionProbeInflight
 
   // Keep the request shared across Strict Mode effect replay, focus events and
@@ -31,13 +35,15 @@ function requestSessionMode(): Promise<ResolvedSessionMode> {
   const request = Promise.resolve()
     .then(async () => {
       const response = await fetch("/api/auth/session", { cache: "no-store" })
-      if (!response.ok) return "anonymous" as const
+      if (!response.ok) return { mode: "anonymous" as const, subject: null }
       const raw: unknown = await response.json()
-      return typeof raw === "object" && raw !== null && (raw as { authenticated?: unknown }).authenticated === true
-        ? "authenticated"
-        : "anonymous"
+      if (typeof raw !== "object" || raw === null || (raw as { authenticated?: unknown }).authenticated !== true) {
+        return { mode: "anonymous" as const, subject: null }
+      }
+      const subject = (raw as { subject?: unknown }).subject
+      return { mode: "authenticated" as const, subject: typeof subject === "string" && subject.length > 0 ? subject : null }
     })
-    .catch(() => "anonymous" as const)
+    .catch(() => ({ mode: "anonymous" as const, subject: null }))
   sessionProbeInflight = request
   const clear = (): void => {
     if (sessionProbeInflight === request) sessionProbeInflight = null
@@ -46,23 +52,30 @@ function requestSessionMode(): Promise<ResolvedSessionMode> {
   return request
 }
 
-function probeFromMode(mode: ResolvedSessionMode): SessionProbe {
-  if (mode === "anonymous") {
-    return { state: "anonymous", mode: "checking" }
-  }
-  return { state: "pass", mode }
-}
-
 export function useSessionProbe(): SessionProbe {
-  const [probe, setProbe] = useState<SessionProbe>(() =>
-    EXPLICIT_PREVIEW ? { state: "pass", mode: "preview" } : { state: "checking", mode: "checking" },
-  )
+  const [probe, setProbe] = useState<SessionProbe>(() => ({
+    state: EXPLICIT_PREVIEW ? "pass" : "checking",
+    mode: EXPLICIT_PREVIEW ? "preview" : "checking",
+    projectReadBoundary: { admitted: false, subject: null, generation: 0 },
+  }))
 
   useEffect(() => {
     if (EXPLICIT_PREVIEW) return
     let live = true
+    let generation = 0
     const check = (): void => {
-      void requestSessionMode().then((resolved) => live && setProbe(probeFromMode(resolved)))
+      const currentGeneration = ++generation
+      // Preserve the mounted Chat while revoking Project reads, even when a
+      // recheck returns the same subject. This generation never goes on wire.
+      setProbe((current) => ({ ...current, projectReadBoundary: { admitted: false, subject: null, generation: currentGeneration } }))
+      void requestSessionMode().then((resolved) => {
+        if (!live || generation !== currentGeneration) return
+        setProbe({
+          state: resolved.mode === "authenticated" ? "pass" : "anonymous",
+          mode: resolved.mode === "authenticated" ? "authenticated" : "checking",
+          projectReadBoundary: { admitted: resolved.mode === "authenticated" && resolved.subject !== null, subject: resolved.subject, generation: currentGeneration },
+        })
+      })
     }
     check()
     // 聚焦、重新可见和每两分钟重查在线 Product Session；过期或撤销后转匿名闸，
@@ -77,6 +90,7 @@ export function useSessionProbe(): SessionProbe {
     const timer = setInterval(onVisible, 120_000)
     return () => {
       live = false
+      generation++
       window.removeEventListener("focus", check)
       document.removeEventListener("visibilitychange", onVisible)
       clearInterval(timer)

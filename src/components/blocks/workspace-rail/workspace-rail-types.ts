@@ -31,6 +31,9 @@ export type WorkspaceRailProps = {
   onCreateProject?: () => void
   /** Owner-confirmed project collection. A known projectHref alone is only a current-route shortcut. */
   projects?: readonly WorkspaceRailProject[]
+  projectListStatus?: "blocked" | "loading" | "ready" | "error"
+  projectListRetryable?: boolean
+  onRetryProjects?: () => void
   /** Receives the stable project order after a pointer/keyboard reorder. */
   onReorderProjects?: (projectIds: string[]) => void
   /** Receives the stable order for the currently scoped conversation list. */

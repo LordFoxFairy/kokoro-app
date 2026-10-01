@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "firstSite.projectsLoading": "Loading projects…",
+  "firstSite.projectsError": "Projects could not be loaded.",
+  "firstSite.projectsEmpty": "No projects yet.",
+  "firstSite.projectsUnavailable": "Project unavailable",
   "skills.personal.published": "My published Skills",
   "skills.personal.installations": "My installations",
   "skills.personal.install": "Install this Skill",

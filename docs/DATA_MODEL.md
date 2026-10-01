@@ -1,5 +1,58 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-PROJECT-READ-R42：指令历史同代际收敛（仅设计与 RED，2026-10-01）
+
+R40 原指令/历史局部 state 尚按 projectRef 隔离，未按身份读取代际隔离，且旧 PATCH 可在新身份 append 本地历史；这是未闭环 P1，
+不是新的数据 owner。Project.instruction 与 instruction revisions 仍由 BFF 唯一持久拥有；不新增 SQL/缓存/浏览器持久数据。
+后继正式指令复用当前 validated Project，历史是同 auth generation + projectRef 的独立 loading/ready/error 投影。
+每次核验开始、身份/项目变化、登出及卸载即时清空并取消；detail/history/controller 与保存意图的旧结果均不得写回新代际。
+保存 ACK 后当前仍有效才触发正式 GET 刷新；不以本地 Date.now/“You”合成历史 owner 事实。UI wire 映射只转换时间/字段命名。
+现编辑器、历史 dialog 的本地输入/选择/错误/saving 属于相同 Project context，旧保存 finally 也不能清掉新身份 saving；
+保留现编辑/历史/资源能力，不重挂 Chat。preview 本地记录继续在显式边界内，不能成为正式失败回退。
+本阶段两个真实 AppFrame RED 与 canonical history fixture 保持原测试断言；源码待 Root 授权。
+
+### R43 页面内投影候选进度（2026-10-01）
+
+history/detail 共享 read key 并各持 controller；auth generation/subject/admitted/projectRef/preview 与不可用态决定 editor context。
+换代同步隐藏旧指令/历史，取消旧 GET/PATCH；旧保存 scope 的 ACK 与旧 editor setter 均不能写新 context。
+保存成功只 refresh 当代 GET，正式历史不合成；preview 的明确本地存储仍保留。没有 SQL/schema/事务/Redis/cache 或 owner 变化。
+当前是 worker 源码候选，未据此宣称生产资源或浏览器隔离已验收。
+
+## WEB-PROJECT-READ-R40：页面读取投影已实现候选（2026-10-01）
+
+BFF 仍是唯一 Project 持久 owner；Web 没有数据库/新持久缓存。collection/detail 只保在现页面 hook 内，
+分别控制请求，读取身份代际与每次刷新共同裁决写回；详情选择另有对象代际，A→B→A 不复用旧 A。
+每次 session 核验开始立即撤销 admitted、换代、隐藏并清旧投影及取消请求；同 subject 再核验也重读；失败/登出/卸载清理。
+成功 projects=[] 才是空态，错误/取消/未获身份不是空；canonical name/time 供正式详情，不合成作者或“今天更新”。
+已有完整集合可复用详情，未在集合的深链才读取 detail；改 conversation title 不改 Project 身份。
+创建成功只触发正式读取刷新；原冻结创建 key/name/draft、一次 handoff、SessionScope 与会话 rename 保持。
+preview 不读取或继承正式投影。无 SQL/schema/Redis/localStorage/IndexedDB、新 auth wire 或分页事实。
+
+生命周期与创建/会话回归已定点验证，候选待 Root 集成；下方 D0 保留为批准设计与历史阶段状态。
+
+## WEB-PROJECT-READ-D0-R39：项目集合与详情只读投影（2026-10-01；未实施）
+
+BFF 唯一持久拥有 Project 的 id/name/slug/description/instruction/时间事实；Web 只消费 public 3.0.0 固定 pin
+（owner 293dfe7638e5dea0df2bee6dfdd8483b53fc9df6，SHA-256 acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b）。
+Project、Conversation、ScheduledTask 身份独立；改会话标题、品牌、排序或草稿不会更新 Project。
+本 D0 没有 SQL/schema/事务/Redis/持久缓存/localStorage/IndexedDB/新 auth wire；后继 plain files 见 TECHNICAL_DESIGN 同片。
+
+| 页面内投影 | 生命周期与约束 |
+| --- | --- |
+| Project collection | loading → ready（非空/空）或 error。只有当代已校验 GET 成功才写入；不从 projectHref、会话清单、创建意图或 preview 合成行。当前 owner List 没有 cursor，零分页状态。 |
+| 当前 Project detail | 按当前 canonical projectRef 与独立请求代际选择；集合已有完整 Project 时可复用，缺项的深链才 GET detail。A→B 立即取消/隐藏 A 详情，迟到回执不污染 B；404/403 不填品牌/通用名。 |
+| 读取身份边界 | 唯一 AppGate 现在线 session probe 的受信 subject 与本地 generation/admitted，只决定页面读取生命周期，不作权限证据，不上项目请求 body/query。每次重新核验开始递增代际并清空项目投影，成功后重新读，失败/登出/卸载同样清空；同 subject 也不复用旧代际。 |
+| 创建意图 | 继续现 use-app-frame-project 冻结 key/name/draft、同键重试与一次草稿 handoff。成功仅触发只读刷新；创建 ACK 不是已加载全集，不把未获 GET 的临时项目插进集合。 |
+| 会话清单/草稿 | 继续现 direct/project SessionScope、generation 和 useDraft 分键；读取 Project 不重挂 Chat engine，不改变首条会话创建、URL handoff 或会话重命名。 |
+
+不设跨用户/模块级 Project cache；controller 与内存数组都归本页面读取 hook，分别取消 collection/detail。
+no-store、有界 deadline 与 generation 检查共同防止取消、重试、身份核验及切项目后的旧响应写回；授权仍由 BFF 每次在线验证。
+现 useSessionProbe 丢弃 /api/auth/session 的 subject，只有布尔 pass，尚不能证明旧用户读取隔离；后继内部投影/装配必须补齐且经测试，
+不能仅按 projectRef 当用户缓存 key。正式失败/loading 不回退 preview；preview 数据有显式 preview 边界，不持有正式 owner 身份。
+
+待验断言：合法空集合不等于失败；错误不保留可操作旧项目；A/B detail 乱序隔离；身份代际变化时取消且清空，两次同 subject 核验
+也不得接纳旧响应；会话 rename 不改变项目名称；创建 draft/key/handoff 与会话 scope 原回归保持。当前只有文档候选，无资源/浏览器证据。
+
 ## WEB-IDLE-TERMINAL-P1-R26：settled subscription 生命周期（2026-10-01；源码候选）
 
 没有新增持久化事实。snapshot `active_run` 与本页 receipt run id 仍是 Web 可消费的可信 active identity；只有 identity 存在时才持有

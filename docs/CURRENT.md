@@ -1,3 +1,68 @@
+## R44 Root 当前完整验收（2026-10-01）
+
+main343aea36冻结30path在Root前后逐hash完全匹配，独立审0P0/0P1/0P2。Root Node22.22.2完整pnpm check exit0：contract224/224、architecture50/50、163文件2136tests全部通过，lint/typecheck/Next build通过；full测试44.78s，日志/tmp/kokoro-web-project-r44-root-full-check.log。原RP500/welcome两次full失败日志保留，不因本次通过推定间歇问题永久消失。Root隔离3387 preview治理Playwright14pass/4条件skip，11.1s，/tmp/kokoro-web-project-r44-root-preview-e2e.log；已停止自身listener、报告移/tmp。这是preview响应式/阅读轴/Composer/a11y门，不是正规IAM登录、真实模型多轮/项目/账务的E2E证据。本片只验收Project读取与身份边界源码，不称完整产品闭环。后继采用完整accepted源码组合，不绕exact-source守卫。下方候选及RED记录保留历史。
+
+# WEB-PROJECT-READ-R42：独立审查指令/历史 P1，先 RED（2026-10-01）
+
+基线仍 main343aea36f15f0ed5b7b9f41a599c066b510b066a。Root 独立审查确认原 use-app-frame-project 指令/历史第二 GET 与迟到 PATCH
+绕过新身份 boundary/schema/取消/deadline；同 projectRef 重核 A→B/同 subject 时旧投影未清。这一 P1 尚未修，原 198 pass 不覆盖它。
+仅授权四文档补当前前缀与 tests/ui/kokoro-project-workspace.test.tsx 追加真实 AppFrame 两个 negative；源码继续冻结。
+固定 public3.0.0 owner 已发布 revision wire（id/instruction/updated_at/actor_name/current，data.items/RequestMeta），不发明历史字段。
+后继复用 validated Project.instruction，删除第二 detail GET 与双 shape fallback；历史/PATCH 同代际与 bounded I/O，保留编辑/历史/资源功能。
+
+原 Rail HEAD 的 expect 行数是52；此前 manifest61计入已接受的首次 RED 9行，两种基线应区分。HEAD原字节与首次RED完整前缀都保留，
+本阶段交付 corrected metadata 明确 HEAD52/acceptedRED61；不因计数修正改测试断言。单行 signout 安全诊断已独立交付 eb5224a2，状态200不变。
+本阶段纯 UI 回归实际 **2 fail / 18 pass**：第一例健康时 detail GET=2/history GET=1/PATCH=1，撤销 admitted 后旧指令/历史未清；第二例旧 detail signals=[null,true]、history=[null]，迟到 GET 写回旧投影。日志 /tmp/kokoro-project-read-r42-win01-instructions-red.log。
+本阶段没有资源/浏览器/服务/Git写入；Root 复现 RED、授权精准 GREEN 并独立完整门后再验收。下方 R40 是历史候选证据，不构成 P1 放行。
+Root 第二次完整 default test 实际 **3 fail / 2133 pass，42.25s**，日志 /tmp/kokoro-web-project-r42-root-full-test-r2.log；其中两项是本片 RED 的较早测试字节，最终局部两 RED 证据以上述 instructions-red.log 为准。第三项原欢迎页创建重入导航期望 /app/project/project_welcome-a、实际 '/'；本阶段只读追踪，无第二次 POST/callback/navigation 分段证据，具体根因待 Root 后继定点调查，原断言与源码均不改。本次 RP pending-refresh signout 通过，不抹去第一次 full 的500；完整门仍未通过，build未到达。
+
+## R43 Root 精准授权后的 GREEN 候选（2026-10-01）
+
+Root 三面门已读通过并真实复现冻结 workspace **2 failed/18 passed，2.65s**，日志 /tmp/kokoro-web-project-r43-root-boundary-red.log；
+授权七现源码，WIN01 唯一 writer。现删除正式第二 detail GET/fallback/合成 revision，history/PATCH 接同身份边界和完整 body 10秒取消；
+编辑器/历史/saving/error/selection 按 context 隔离，旧 ACK/finally 不写新 identity UI；preview、资源、创建/草稿/Chat 保持。
+纯 list/detail hook 默认不额外 history I/O，由真实 projectWorkspace 显式启用；首次回归因此暴露6个旧读取次数/权限回归，保留原断言后修正装配。
+最终 Node22 定点九文件 **204/204，17.47s**，含真实2新增 RED 转绿、原18 workspace与原81 smoke/资源/创建/身份/Rail；
+契约+架构 **274/274，13.95s**，全仓 lint（零warning）、直接 tsc --noEmit --incremental false、两项 generated --check 全 exit0。
+证据 /tmp/kokoro-project-read-r43-win01-{targeted-final,static-tests,lint-final,types-final,generated}.log。
+欢迎页原导航/A-B草稿/同键重试断言本次未修改且通过，但之前 Root full 失败的分段根因仍未证明，不以本次定点抹去风险；
+RP 原full500亦保留。源码/测试历史字节锁未放宽，Root后继 full/build/独立审/browser 后才验收；worker无Git/资源/服务/浏览器操作。
+
+
+# WEB-PROJECT-READ-R40：WIN01 精准 GREEN 待 Root 验收（2026-10-01）
+
+基线 main343aea36f15f0ed5b7b9f41a599c066b510b066a。Root 批准 D0 且复现原 RED 1fail/7pass 后授权唯一 writer；
+原 Rail 8 条测试全部保留，追加正式读取生命周期测试。现 candidate 接固定 BFF public3.0.0 artifact 的已有 hub GET，
+采用唯一共享 Project schema、只读 client/hook、canonical Rail 与名称/时间；旧创建 schema 删除且创建行为保持。
+每次 session 核验先撤销 Project 读、清空/取消并换代，含同 subject；Chat 不重挂；A→B/不同身份/迟到回执隔离，
+合法[] 独立空态，401/403 与 detail404 禁重试，坏 shape/网络失败无假空或 preview fallback，deadline 覆盖 body 并释放资源。
+创建 ACK 后重新 GET、不插临时行；原幂等/草稿一次承接/会话 scope/rename 保持。
+
+Node22 最终定点八文件 **198/198** 通过；固定 generated 检查、完整 contract **224/224** 与 architecture **50/50**、lint（零 warning）、直接 tsc --noEmit --incremental false 全 exit0。证据 /tmp/kokoro-project-read-r40-win01-{targeted-final,static-final}.json 与 final-gates.log。
+真实额外 RED：非协作 fetch 取消后 deadline timer 未释放、列表401后重试仍启用；均在保留断言后修复；详情401/403保留旧集合的 2RED 也已修复。
+源码候选未提交，Root 独立复验/完整门/登录浏览器仍待执行；未启动共享服务、PG/Redis/provider 或浏览器。
+没有修改 Billing 数字/阈值、机器 pin/generated、依赖、CSS、Chat engine 协议、其他 owner 或 Root 台账；原正文继续逐字保留。
+
+## WEB-PROJECT-READ-D0-R39：正式项目集合/详情读取设计候选（2026-10-01）
+
+原 WIN01 获准仅为 TECHNICAL_DESIGN/API_CONTRACT/DATA_MODEL/CURRENT 四文档追加当前 D0 前缀，原正文逐字保留。
+Web main343aea36f15f0ed5b7b9f41a599c066b510b066a 开始 clean；没有修改源码、测试、generated、依赖或 Git，未启动测试/浏览器/服务。
+真实缺口：AppFrame 没有正式 Project list consumer；rail-shell 仍以当前 projectHref/通用名称投影，ProjectIdentity 仍用品牌/相对时间文案。
+现会话 scope/代际、创建幂等/草稿 handoff、shadcn rail 保持，不借本片改 CSS/footer/Billing 单位或阈值。
+
+已只读核对 BFF listProjects/getProject 及 ProjectListResponse/ProjectResponse：public3.0.0，固定 owner
+293dfe7638e5dea0df2bee6dfdd8483b53fc9df6、整契约 SHA-256 acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b；
+Web snapshot/固定 owner blob/当前 BFF main759bfe0a8c521946cae31a74b6426f43b063bae1 契约原字节相同，未更新 pin，BFF 八 dirty 不接收。
+List 当前无 cursor/limit/next_cursor，采用一次正式 GET，不发明分页。路径为现 /api/hub/projects[/id] → BFF /v1/projects[/id]。
+
+候选采用现目录普通 shared Project schema/read client/独立读取 hook，不把集合与 detail 塞入创建 hook；正式名称仅来自 canonical id/name。
+loading/error/empty、取消/乱序、旧用户清理及 no-store/deadline 在三面中一致定义。另实读 /api/auth/session 已返回 subject，
+但现 useSessionProbe 仅保留布尔 mode；后继必须沿单 AppGate 提供 Project-only 读取代际/admitted，不重挂 Chat 或发明 auth wire。
+此内部装配、schema 迁移/删除、精确后继文件集及旧身份负例仍待 Root 审查；四文档候选不构成已通过文档门或实现授权。
+
+下一最小片：Root 审四 D0 后授现 tests/ui/app-frame-rail.test.tsx 先复现两 canonical 项目未展示的消费 RED，再分阶段授权共享 schema/client/read-state。
+创建草稿/会话过滤/身份探针/owner pin 的原断言必须保留，正式登录浏览器与完整门由 Root 后继执行。下方为既有历史证据，不能证明本 Project read 已完成。
+
 ## R35 首页虚构积分展示已移除（局部验收）
 
 Root frozen三路径hash全同，真实旧component+新tests RED **5fail/14pass**，candidate finally恢复；现三路径GREEN全门exit0：contract219/architecture50、lint/typecheck0、default **2109pass（180.24s）**、build0。独立Sol0P0/0P1/0P2；证据 /tmp/kokoro-web-home-credit-r35-root-evidence.json 与 /tmp/kokoro-web-home-credit-r35-root-red.log。删除无条件1000/Free/每日300 popover；首页现shadcn Button直开正式credits settings，缺callbackdisabled；其他升级/项目/分享/模型行为保留。7组dead CSS零引用并删除，原91行有效规则逐byte保持，Root仅收掉新EOF空行使diff门0。

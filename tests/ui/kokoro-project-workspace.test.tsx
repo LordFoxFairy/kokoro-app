@@ -508,3 +508,157 @@ it("新的专案会话欢迎面使用 Conversation DOM 与标题关联", () => {
   expect(surface).toHaveAttribute("aria-labelledby", "kokoro-project-conversation-heading")
   expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
 })
+
+it("正式项目标题/时间只消费 canonical detail，切换 loading/error 不保留品牌或旧名称", async () => {
+  const project = { id: "canonical-A", name: "真正的项目名", slug: "a", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T01:00:00Z" }
+  const retry = vi.fn()
+  const props = { brandName: "站点品牌", composer: <div>composer</div>, onPrompt: vi.fn(), preview: false, projectRef: project.id, onRetryProjectRead: retry }
+  const view = render(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "ready", data: project }} /></LocaleProvider>)
+  expect(screen.getByRole("heading", { name: "真正的项目名" })).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "站点品牌" })).toBeNull()
+  expect(document.querySelector("time")).toHaveAttribute("datetime", project.updated_at)
+  expect(screen.queryByText("今天更新")).toBeNull()
+  view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectRef="canonical-B" projectDetail={{ status: "loading" }} /></LocaleProvider>)
+  expect(screen.queryByRole("heading", { name: "真正的项目名" })).toBeNull()
+  expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载专案…")
+  view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "error", retryable: false }} /></LocaleProvider>)
+  expect(screen.getByTestId("project-detail-error")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "重试" })).toBeDisabled()
+  expect(screen.queryByRole("heading", { name: "真正的项目名" })).toBeNull()
+})
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/app/project/instruction-project",
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
+
+const instructionOwnerProject = {
+  id: "instruction-project", name: "Canonical instruction project", slug: "instructions", description: "",
+  instruction: "身份 A 的已加载指令", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z",
+}
+const instructionOwnerRevision = {
+  id: "revision-A", instruction: "身份 A 的已加载历史", updated_at: "2026-10-01T00:00:00Z", actor_name: "Actor A", current: true,
+}
+function instructionDetailResponse(instruction = instructionOwnerProject.instruction) {
+  return Response.json({ data: { project: { ...instructionOwnerProject, instruction } }, meta: { request_id: "req_instruction_detail" } })
+}
+function instructionHistoryResponse() {
+  // Exact pinned public 3.0.0 wire, not the old camelCase UI array assertion.
+  return Response.json({ data: { items: [instructionOwnerRevision] }, meta: { request_id: "req_instruction_history" } })
+}
+function pendingInstructionResponse() {
+  let resolve: (response: Response) => void = () => { throw new Error("response not pending") }
+  const promise = new Promise<Response>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+async function mountInstructionBoundary(
+  respond: (path: string, init?: RequestInit) => Promise<Response>,
+) {
+  const { AppFrame } = await import("@/components/blocks/app-frame/app-frame")
+  const { ThemeProvider } = await import("@/ui/theme/theme-context")
+  const pageClients = await import("@/ui/shell/page-clients")
+  const { createSessionEngine } = await import("@/engine/machine")
+  const { createFakeClient, createMemoryStorage } = await import("../engine/fakes")
+  const client = createFakeClient()
+  const engine = createSessionEngine({ client, storage: createMemoryStorage<import("@/core/conversations").ConversationStore>(null), now: () => 1_000 })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue(client)
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input)
+    const path = new URL(url, window.location.origin).pathname
+    if (path === "/api/hub/projects") return Response.json({ data: { projects: [] }, meta: { request_id: "req_instruction_list" } })
+    if (path.startsWith("/api/hub/projects/instruction-project")) return respond(path, init)
+    return Response.json({}, { status: 503 })
+  })
+  let latest: import("@/components/blocks/app-frame/app-frame").EmptyStateProps | undefined
+  function InstructionProjection(props: import("@/components/blocks/app-frame/app-frame").EmptyStateProps) {
+    latest = props
+    // The real AppFrame and its real hooks supply this observable UI projection.
+    return <output data-testid="instruction-owner-projection">{JSON.stringify({ instruction: props.projectInstructions ?? "", history: props.projectInstructionHistory ?? [] })}</output>
+  }
+  const ui = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
+    <ThemeProvider><LocaleProvider><AppFrame
+      engine={engine} preview={false} chatHref="/app" projectWorkspace projectRef="instruction-project"
+      projectReadBoundary={boundary} emptyState={InstructionProjection}
+      workspaceCapabilities={{ instructions: true, connectors: false, resources: false, skills: false, projectConversations: false }}
+    /></LocaleProvider></ThemeProvider>
+  )
+  const view = render(ui({ admitted: true, subject: "reader-A", generation: 1 }))
+  const projection = () => JSON.parse(screen.getByTestId("instruction-owner-projection").textContent ?? "{}") as {
+    instruction: string; history: Array<{ instruction: string }>
+  }
+  return { ...view, engine, fetchMock, ui, projection, latest: () => latest }
+}
+
+it("真实正式 AppFrame 在身份 A→B 开始核验时清已加载指令/历史，迟到 A PATCH 不写新身份", async () => {
+  const { act } = await import("@testing-library/react")
+  const patch = pendingInstructionResponse()
+  const readSignals: (AbortSignal | null | undefined)[] = []
+  let detailGets = 0
+  let histories = 0
+  let patches = 0
+  let subjectB = false
+  const view = await mountInstructionBoundary(async (path, init) => {
+    if (init?.method === "PATCH") { patches++; return patch.promise }
+    if (path.endsWith("/instruction-revisions")) {
+      histories++; readSignals.push(init?.signal)
+      return subjectB ? Response.json({ data: { items: [{ ...instructionOwnerRevision, id: "revision-B", instruction: "身份 B 的历史", actor_name: "Actor B" }] }, meta: { request_id: "req_history_B" } }) : instructionHistoryResponse()
+    }
+    detailGets++; readSignals.push(init?.signal)
+    return instructionDetailResponse(subjectB ? "身份 B 的指令" : instructionOwnerProject.instruction)
+  })
+  try {
+    await waitFor(() => expect(view.projection().instruction).toBe("身份 A 的已加载指令"))
+    await waitFor(() => expect(view.projection().history.map((item) => item.instruction)).toEqual(["身份 A 的已加载历史"]))
+    const initialDetailGets = detailGets
+    let save: Promise<void> | undefined
+    act(() => { save = view.latest()?.onSaveProjectInstructions?.("身份 A 的迟到编辑").catch(() => undefined) })
+    await waitFor(() => expect(patches).toBe(1))
+    view.rerender(view.ui({ admitted: false, subject: null, generation: 2 }))
+    expect(view.projection(), `healthy reads: detail=${detailGets}, history=${histories}, pendingPatch=${patches}`).toEqual({ instruction: "", history: [] })
+    subjectB = true
+    view.rerender(view.ui({ admitted: true, subject: "reader-B", generation: 3 }))
+    await waitFor(() => expect(view.projection().instruction).toBe("身份 B 的指令"))
+    await waitFor(() => expect(view.projection().history.map((item) => item.instruction)).toEqual(["身份 B 的历史"]))
+    await act(async () => { patch.resolve(instructionDetailResponse("身份 A 的迟到编辑")); await save })
+    expect(view.projection().instruction).toBe("身份 B 的指令")
+    expect(view.projection().history.map((item) => item.instruction)).toEqual(["身份 B 的历史"])
+    expect(initialDetailGets).toBe(1)
+    expect(detailGets).toBe(2)
+    expect(histories).toBe(2)
+    expect(readSignals.every((signal) => signal instanceof AbortSignal)).toBe(true)
+  } finally { view.unmount(); view.engine.dispose(); vi.restoreAllMocks() }
+})
+
+it("真实正式 AppFrame 同 subject 换代取消 A 待决详情/历史，迟到 GET 不复活旧指令且详情只读一次", async () => {
+  const { act } = await import("@testing-library/react")
+  const { settle } = await import("../engine/fakes")
+  const detail = pendingInstructionResponse()
+  const history = pendingInstructionResponse()
+  const detailSignals: (AbortSignal | null | undefined)[] = []
+  const historySignals: (AbortSignal | null | undefined)[] = []
+  let nextGeneration = false
+  const view = await mountInstructionBoundary(async (path, init) => {
+    if (path.endsWith("/instruction-revisions")) {
+      historySignals.push(init?.signal)
+      return nextGeneration ? Response.json({ data: { items: [] }, meta: { request_id: "req_new_history" } }) : (await history.promise).clone()
+    }
+    detailSignals.push(init?.signal)
+    return nextGeneration ? instructionDetailResponse("同 subject 新代际指令") : (await detail.promise).clone()
+  })
+  try {
+    await waitFor(() => expect(detailSignals.length).toBeGreaterThan(0))
+    await waitFor(() => expect(historySignals).toHaveLength(1))
+    view.rerender(view.ui({ admitted: false, subject: null, generation: 2 }))
+    expect(view.projection()).toEqual({ instruction: "", history: [] })
+    await act(async () => { detail.resolve(instructionDetailResponse()); history.resolve(instructionHistoryResponse()); await settle() })
+    expect(view.projection(), `old read signals: detail=${JSON.stringify(detailSignals.map((signal) => signal?.aborted ?? null))}, history=${JSON.stringify(historySignals.map((signal) => signal?.aborted ?? null))}`).toEqual({ instruction: "", history: [] })
+    expect(detailSignals).toHaveLength(1)
+    expect(detailSignals[0]?.aborted).toBe(true)
+    expect(historySignals[0]?.aborted).toBe(true)
+    nextGeneration = true
+    view.rerender(view.ui({ admitted: true, subject: "reader-A", generation: 3 }))
+    await waitFor(() => expect(detailSignals).toHaveLength(2))
+    await waitFor(() => expect(view.projection().instruction).toBe("同 subject 新代际指令"))
+  } finally { view.unmount(); view.engine.dispose(); vi.restoreAllMocks() }
+})

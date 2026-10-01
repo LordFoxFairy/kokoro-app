@@ -958,3 +958,28 @@ it("会话入口 DOM 和图标不再使用任务身份", () => {
   expect(shortcut.querySelector(".lucide-list-todo")).toBeNull()
   expect(screen.getByTestId("rail-new-project-conversation")).toBeInTheDocument()
 })
+
+it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", () => {
+  const { onRenameConversation } = renderRail({
+    brandName: "不属于项目的品牌",
+    projects: [{ id: "canonical-project", name: "独立项目名称", href: "/app/project/canonical-project" }],
+    projectListStatus: "ready",
+  })
+  fireEvent.click(screen.getByLabelText("重命名会话 旧标题"))
+  const input = screen.getByRole("textbox", { name: "会话标题" })
+  fireEvent.change(input, { target: { value: "新会话标题" } })
+  fireEvent.keyDown(input, { key: "Enter" })
+  expect(onRenameConversation).toHaveBeenCalledWith("ses_1", "新会话标题")
+  const project = screen.getByRole("link", { name: "独立项目名称" })
+  expect(project).toHaveAttribute("href", "/app/project/canonical-project")
+  expect(project.closest("[data-project-id]")).toHaveAttribute("data-project-id", "canonical-project")
+  expect(document.querySelector('[data-project-list] a[aria-label="新会话标题"]')).toBeNull()
+})
+
+it("正式 rail 只有当前路由而无集合时不造通用项目；显式 preview 仍独立", () => {
+  renderRail({ projectHref: "/app/project/deep-link", preview: false })
+  expect(document.querySelector('[data-project-list] [data-project-id]')).toBeNull()
+  cleanup()
+  renderRail({ projectHref: "/app/project/preview-project", preview: true })
+  expect(screen.getByRole("link", { name: "当前专案" })).toHaveAttribute("href", "/app/project/preview-project")
+})

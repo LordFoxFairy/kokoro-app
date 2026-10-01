@@ -37,6 +37,8 @@ import { useAppFrameLayout } from "./use-app-frame-layout"
 import { useAppFrameNavigation } from "./use-app-frame-navigation"
 import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
+import { useProjectList } from "@/features/app/use-project-list"
+import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 
 export type { AppCommandMenuProps }
 export type { AppFrameProps, EmptyStateProps, WorkspaceCapabilities } from "./app-frame.types"
@@ -60,6 +62,7 @@ export function AppFrame({
   hideWorkspaceHeader = false,
   projectWorkspace = false,
   projectRef,
+  projectReadBoundary,
   onOpenProject,
   activeNavigationKey,
   commandMenu: CommandMenu = AppCommandMenu,
@@ -143,6 +146,15 @@ export function AppFrame({
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted, projectRef)
+  const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
+  const refreshProjects = projectReads.refresh
+  const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
+    // Creation ACK navigates with the existing frozen draft; the collection
+    // still comes only from a fresh owner GET, never from the ACK itself.
+    refreshProjects()
+    if (onOpenProject) onOpenProject(id, handoffDraft)
+    else navigateMountedSurface(`/app/project/${encodeURIComponent(id)}`)
+  }, [onOpenProject, refreshProjects])
   const project = useAppFrameProject({
     projectRef,
     projectWorkspace,
@@ -151,7 +163,11 @@ export function AppFrame({
     draft,
     updateDraft,
     clearDraft,
-    ...(onOpenProject === undefined ? {} : { onOpenProject }),
+    onOpenProject: handleProjectOpen,
+    projectDetail: projectReads.current,
+    instructionHistory: projectReads.instructionHistory,
+    instructionContext: projectReads.context,
+    refreshProject: refreshProjects,
   })
 
   const actions = useAppFrameActions({
@@ -309,6 +325,11 @@ export function AppFrame({
   }
 
   const emptyStateProps: EmptyStateProps = {
+    projectInstructionContext: projectReads.context,
+    projectHistoryStatus: projectReads.instructionHistory.status,
+    projectHistoryRetryable: projectReads.instructionHistory.status === "error" && projectReads.instructionHistory.retryable,
+    projectDetail: projectReads.current,
+    onRetryProjectRead: refreshProjects,
     ...(brandName === undefined ? {} : { brandName }),
     preview,
     ...(scheduledTaskClient === undefined ? {} : { scheduledTaskClient }),
@@ -400,6 +421,14 @@ export function AppFrame({
     chatHref,
     ...(projectRef === undefined ? {} : { projectHref: `/app/project/${encodeURIComponent(projectRef)}` }),
     projectActive: projectWorkspace,
+    ...(!preview ? {
+      projects: projectReads.list.status === "ready" ? projectReads.list.data.map((item) => ({
+        id: item.id, name: item.name, href: `/app/project/${encodeURIComponent(item.id)}`, active: item.id === projectRef,
+      })) : [],
+      projectListStatus: projectReads.list.status,
+      projectListRetryable: projectReads.list.status === "error" && projectReads.list.retryable,
+      onRetryProjects: refreshProjects,
+    } : {}),
     onCreateProject: project.createProject,
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { useT } from "@/i18n/context"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
@@ -13,6 +13,9 @@ import {
   takePendingProjectDraft,
   writePendingProjectDraft,
 } from "./app-frame-helpers"
+import type { Project, ProjectInstructionRevisionWire } from "@/contract/project"
+import type { ProjectReadState } from "@/features/app/use-project-list"
+import { updateProjectInstructions } from "@/features/app/project-list"
 import type { ProjectInstructionRevision } from "./app-frame.types"
 
 export type AppFrameProjectOptions = {
@@ -23,6 +26,10 @@ export type AppFrameProjectOptions = {
   draft: string
   updateDraft: (value: string) => void
   clearDraft: () => void
+  projectDetail: ProjectReadState<Project>
+  instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
+  instructionContext: object
+  refreshProject: () => void
   onOpenProject?: (projectRef: string, draft?: string) => void
 }
 
@@ -39,10 +46,31 @@ export function useAppFrameProject({
   updateDraft,
   clearDraft,
   onOpenProject,
+  projectDetail,
+  instructionHistory,
+  instructionContext,
+  refreshProject,
 }: AppFrameProjectOptions) {
   const t = useT()
-  const [projectInstructions, setProjectInstructions] = useState("")
-  const [projectInstructionHistory, setProjectInstructionHistory] = useState<readonly ProjectInstructionRevision[]>([])
+  const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
+  const saveScopeRef = useRef<{ context: object; active: boolean; controllers: Set<AbortController> } | null>(null)
+  useLayoutEffect(() => {
+    const scope = { context: instructionContext, active: true, controllers: new Set<AbortController>() }
+    saveScopeRef.current = scope
+    return () => {
+      scope.active = false
+      for (const controller of scope.controllers) controller.abort()
+      scope.controllers.clear()
+    }
+  }, [instructionContext])
+  const projectInstructions = preview
+    ? previewProjection?.context === instructionContext ? previewProjection.instruction : ""
+    : projectDetail.status === "ready" ? projectDetail.data.instruction ?? "" : ""
+  const projectInstructionHistory = useMemo<readonly ProjectInstructionRevision[]>(() => preview
+    ? previewProjection?.context === instructionContext ? previewProjection.history : []
+    : instructionHistory.status === "ready" ? instructionHistory.data.map((item) => ({
+      id: item.id, instruction: item.instruction, updatedAt: Date.parse(item.updated_at), actorName: item.actor_name, current: item.current,
+    })) : [], [preview, previewProjection, instructionContext, instructionHistory])
   const [projectCreation, setProjectCreation] = useState<ProjectCreationState>({ pending: false, error: false, retryable: false })
   const creationIntentRef = useRef<ProjectCreationIntent | null>(null)
   const creationInFlightRef = useRef(false)
@@ -89,87 +117,46 @@ export function useAppFrameProject({
 
   useEffect(() => {
     let active = true
-    const load = async () => {
-      await Promise.resolve()
-      if (!projectRef) {
-        if (active) setProjectInstructions("")
-        if (active) setProjectInstructionHistory([])
-        return
+    queueMicrotask(() => {
+      if (!active || !preview || !projectRef) return
+      const value = window.localStorage.getItem(`kokoro.preview.project.${projectRef}.instructions`) ?? ""
+      const historyValue = window.localStorage.getItem(`kokoro.preview.project.${projectRef}.instruction-history`)
+      let history: ProjectInstructionRevision[] = []
+      if (historyValue) {
+        try {
+          const parsed = JSON.parse(historyValue)
+          if (Array.isArray(parsed)) history = parsed
+        } catch { history = [] }
       }
-      if (preview) {
-        const value = window.localStorage.getItem(`kokoro.preview.project.${projectRef}.instructions`) ?? ""
-        const historyValue = window.localStorage.getItem(`kokoro.preview.project.${projectRef}.instruction-history`)
-        let history: ProjectInstructionRevision[] = []
-        if (historyValue) {
-          try {
-            const parsed = JSON.parse(historyValue)
-            if (Array.isArray(parsed)) history = parsed
-          } catch {
-            history = []
-          }
-        }
-        if (history.length === 0 && value) {
-          history = [{ id: "preview-current", instruction: value, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }]
-        }
-        if (active) setProjectInstructions(value)
-        if (active) setProjectInstructionHistory(history)
-        return
+      if (history.length === 0 && value) {
+        history = [{ id: "preview-current", instruction: value, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }]
       }
-      try {
-        const [response, historyResponse] = await Promise.all([
-          fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}`, { cache: "no-store" }),
-          fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}/instruction-revisions`, { cache: "no-store" }),
-        ])
-        if (!response.ok) return
-        const payload = await response.json() as {
-          data?: { instruction?: unknown; project?: { instruction?: unknown } }
-          instruction?: unknown
-          project?: { instruction?: unknown }
-        }
-        const projection = payload.data ?? payload
-        const value = projection.instruction ?? projection.project?.instruction
-        if (active && typeof value === "string") setProjectInstructions(value)
-        if (historyResponse.ok) {
-          const historyPayload = await historyResponse.json() as { data?: { items?: unknown }; items?: unknown }
-          const historyProjection = historyPayload.data ?? historyPayload
-          if (active && Array.isArray(historyProjection.items)) {
-            setProjectInstructionHistory(historyProjection.items as ProjectInstructionRevision[])
-          }
-        }
-      } catch {
-        // Mutation errors remain visible in the editor; a failed read keeps
-        // the empty projection instead of inventing project instructions.
-      }
-    }
-    void load()
-    return () => {
-      active = false
-    }
-  }, [preview, projectRef, t])
+      setPreviewProjection({ context: instructionContext, instruction: value, history })
+    })
+    return () => { active = false }
+  }, [preview, projectRef, instructionContext, t])
 
   const saveProjectInstructions = useCallback(async (instructions: string) => {
-    if (!projectRef) return
+    const saveScope = saveScopeRef.current
+    if (!saveScope?.active || saveScope.context !== instructionContext || !projectRef) throw new DOMException("Aborted", "AbortError")
     if (preview) {
       window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instructions`, instructions)
       const revision: ProjectInstructionRevision = { id: crypto.randomUUID(), instruction: instructions, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }
-      setProjectInstructionHistory((current) => {
-        const next = [revision, ...current.map((item) => ({ ...item, current: false }))]
-        window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instruction-history`, JSON.stringify(next))
-        return next
-      })
-      setProjectInstructions(instructions)
+      const history = [revision, ...projectInstructionHistory.map((item) => ({ ...item, current: false }))]
+      window.localStorage.setItem(`kokoro.preview.project.${projectRef}.instruction-history`, JSON.stringify(history))
+      setPreviewProjection({ context: instructionContext, instruction: instructions, history })
       return
     }
-    const response = await fetch(`/api/hub/projects/${encodeURIComponent(projectRef)}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json", "Idempotency-Key": `project-instructions:${projectRef}:${crypto.randomUUID()}` },
-      body: JSON.stringify({ instruction: instructions }),
-    })
-    if (!response.ok) throw new Error(`project_instruction_update_failed:${response.status}`)
-    const revision: ProjectInstructionRevision = { id: crypto.randomUUID(), instruction: instructions, updatedAt: Date.now(), actorName: t("firstSite.you"), current: true }
-    setProjectInstructionHistory((current) => [revision, ...current.map((item) => ({ ...item, current: false }))])
-    setProjectInstructions(instructions)
-  }, [preview, projectRef, t])
+    if (projectDetail.status !== "ready") throw new Error("project_not_available")
+    const controller = new AbortController()
+    saveScope.controllers.add(controller)
+    try {
+      await updateProjectInstructions(projectRef, instructions, `project-instructions:${projectRef}:${crypto.randomUUID()}`, controller.signal)
+      if (!saveScope.active || controller.signal.aborted) throw new DOMException("Aborted", "AbortError")
+      // Only the current owner GET supplies instruction/history after an ACK.
+      refreshProject()
+    } finally { saveScope.controllers.delete(controller) }
+  }, [preview, projectRef, t, projectDetail, projectInstructionHistory, instructionContext, refreshProject])
 
   const uploadProjectResource = useCallback(async (file: File, idempotencyKey: string) => {
     if (!projectRef) throw new ProjectResourceUploadError("project_not_selected", false)

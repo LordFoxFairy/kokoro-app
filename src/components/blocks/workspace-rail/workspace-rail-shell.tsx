@@ -49,6 +49,9 @@ export function WorkspaceRailShell({
   projectActive = false,
   onCreateProject,
   projects,
+  projectListStatus,
+  projectListRetryable,
+  onRetryProjects,
   onReorderProjects,
   onReorderConversations,
   activeNavigationKey,
@@ -96,14 +99,14 @@ export function WorkspaceRailShell({
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
   const projectItems = useMemo(() => {
     if (projects !== undefined) return [...projects]
-    if (!projectHref) return []
+    if (!preview || !projectHref) return []
     return [{
       id: projectHref,
       name: t("firstSite.currentProject"),
       href: projectHref,
       active: projectActive,
     }]
-  }, [projectActive, projectHref, projects, t])
+  }, [preview, projectActive, projectHref, projects, t])
 
   const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
   const {
@@ -327,6 +330,9 @@ export function WorkspaceRailShell({
             projectActive={projectActive}
             {...(projects === undefined ? {} : { projects })}
             orderedProjects={orderedProjects}
+            {...(projectListStatus === undefined ? {} : { projectListStatus })}
+            {...(projectListRetryable === undefined ? {} : { projectListRetryable })}
+            {...(onRetryProjects === undefined ? {} : { onRetryProjects })}
             projectPickerOpen={projectPickerOpen}
             setProjectPickerOpen={setProjectPickerOpen}
             {...(onCreateProject === undefined ? {} : { onCreateProject })}

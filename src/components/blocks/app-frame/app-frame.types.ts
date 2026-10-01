@@ -9,6 +9,9 @@ import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
+import type { Project } from "@/contract/project"
+import type { ProjectReadState } from "@/features/app/use-project-list"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
 
@@ -50,6 +53,7 @@ export type WorkspaceCapabilities = {
 }
 
 export type AppFrameProps = {
+  projectReadBoundary?: ProjectReadBoundary
   // 测试注入缝：不传则使用页面级单例引擎。
   engine?: SessionEngine | null
   // 显式预览档：沿用完整 User Web 布局，但使用本地假传输。
@@ -96,6 +100,11 @@ export type AppFrameProps = {
 }
 
 export type EmptyStateProps = {
+  projectInstructionContext?: object
+  projectHistoryStatus?: "blocked" | "loading" | "ready" | "error"
+  projectHistoryRetryable?: boolean
+  projectDetail?: ProjectReadState<Project>
+  onRetryProjectRead?: () => void
   brandName?: string
   /** Route-owned desktop surfaces use the same preview/live transport as the shell. */
   preview?: boolean

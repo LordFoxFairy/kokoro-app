@@ -3,7 +3,7 @@
 import { Cable, ChevronDown, ChevronRight, ListFilter, MessageSquare, Plus, Upload, Wrench } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useCallback, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useRef, useState, type MouseEvent, type SetStateAction } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,8 +26,17 @@ import layoutStyles from "./project-workspace-layout.module.css"
 type ProjectWorkspaceProps = Pick<
   EmptyStateProps,
   "brandName" | "composer" | "onOpenSettings" | "onPrompt" | "projectConversations" | "projectConversationsLoading" | "projectConversationsError" | "onRetryProjectConversations" | "activeProjectConversationId" | "onSelectProjectConversation" | "workspaceCapabilities"
-  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask"
+  | "projectConversation" | "projectInstructions" | "projectInstructionHistory" | "onSaveProjectInstructions" | "onUploadProjectResource" | "onListProjectResources" | "projectRef" | "preview" | "onSetProjectSkillEnabled" | "onCreateProjectScheduledTask" | "projectDetail" | "onRetryProjectRead" | "projectInstructionContext" | "projectHistoryStatus" | "projectHistoryRetryable"
 >
+
+type InstructionEditorState = {
+  instructionsOpen: boolean
+  instructions: string
+  instructionsSaving: boolean
+  instructionsError: boolean
+  instructionsHistoryOpen: boolean
+  selectedInstructionRevision: string | null
+}
 
 export type ResourceUploadIntent = {
   id: string
@@ -62,17 +71,42 @@ export function KokoroProjectWorkspace({
   onListProjectResources,
   projectRef,
   preview = false,
+  projectDetail,
+  projectInstructionContext,
+  projectHistoryStatus,
+  projectHistoryRetryable,
+  onRetryProjectRead,
   onSetProjectSkillEnabled,
   onCreateProjectScheduledTask,
 }: ProjectWorkspaceProps) {
   const { locale, t } = useLocale()
   const capabilities = workspaceCapabilities
-  const [instructionsOpen, setInstructionsOpen] = useState(false)
-  const [instructions, setInstructions] = useState(projectInstructions)
-  const [instructionsSaving, setInstructionsSaving] = useState(false)
-  const [instructionsError, setInstructionsError] = useState(false)
-  const [instructionsHistoryOpen, setInstructionsHistoryOpen] = useState(false)
-  const [selectedInstructionRevision, setSelectedInstructionRevision] = useState<string | null>(null)
+  const instructionContext = projectInstructionContext ?? `${preview}:${projectRef ?? ""}`
+  const emptyInstructionEditor: InstructionEditorState = {
+    instructionsOpen: false, instructions: projectInstructions, instructionsSaving: false,
+    instructionsError: false, instructionsHistoryOpen: false, selectedInstructionRevision: null,
+  }
+  const [instructionEditor, setInstructionEditor] = useState({ context: instructionContext, state: emptyInstructionEditor })
+  // A context change resets before React commits the dialog. Each setter keeps
+  // its originating context, so an old save's catch/finally cannot edit B.
+  if (instructionEditor.context !== instructionContext) {
+    setInstructionEditor({ context: instructionContext, state: emptyInstructionEditor })
+  }
+  const editor = instructionEditor.context === instructionContext ? instructionEditor.state : emptyInstructionEditor
+  const { instructionsOpen, instructions, instructionsSaving, instructionsError, instructionsHistoryOpen, selectedInstructionRevision } = editor
+  const instructionSetter = <K extends keyof InstructionEditorState>(field: K) => (value: SetStateAction<InstructionEditorState[K]>) => {
+    setInstructionEditor((current) => {
+      if (current.context !== instructionContext) return current
+      const next = typeof value === "function" ? (value as (previous: InstructionEditorState[K]) => InstructionEditorState[K])(current.state[field]) : value
+      return { ...current, state: { ...current.state, [field]: next } }
+    })
+  }
+  const setInstructionsOpen = instructionSetter("instructionsOpen")
+  const setInstructions = instructionSetter("instructions")
+  const setInstructionsSaving = instructionSetter("instructionsSaving")
+  const setInstructionsError = instructionSetter("instructionsError")
+  const setInstructionsHistoryOpen = instructionSetter("instructionsHistoryOpen")
+  const setSelectedInstructionRevision = instructionSetter("selectedInstructionRevision")
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceQuery, setResourceQuery] = useState("")
   const [resourceKind, setResourceKind] = useState<ResourceKind>("all")
@@ -218,7 +252,7 @@ export function KokoroProjectWorkspace({
       aria-label={t("firstSite.projects")}
     >
       <div className={cn(styles.main, layoutStyles.main)}>
-        <ProjectIdentity {...(brandName === undefined ? {} : { brandName })} />
+        <ProjectIdentity preview={preview} {...(brandName === undefined ? {} : { brandName })} {...(projectDetail === undefined ? {} : { projectDetail })} {...(onRetryProjectRead === undefined ? {} : { onRetryProjectRead })} />
 
         <div className={cn(styles.composer, layoutStyles.composer)}>{composer}</div>
 
@@ -270,7 +304,7 @@ export function KokoroProjectWorkspace({
             {capabilities?.instructions ? (
               <CardHeader className={styles.cardHeader}>
                 <CardTitle className={styles.cardTitle}>
-                  <Button type="button" variant="ghost" size="sm" onClick={(event) => {
+                  <Button type="button" variant="ghost" size="sm" disabled={!preview && projectDetail !== undefined && projectDetail.status !== "ready"} onClick={(event) => {
                     rememberContextOpener(event)
                     setInstructions(projectInstructions)
                     setInstructionsError(false)
@@ -283,7 +317,14 @@ export function KokoroProjectWorkspace({
               </CardHeader>
             ) : null}
             {capabilities?.instructions ? (
-              <CardContent className={styles.cardDescription}>{t("firstSite.instructionsHint")}</CardContent>
+              <CardContent className={styles.cardDescription}>
+                {t("firstSite.instructionsHint")}
+                {!preview && projectHistoryStatus === "loading" ? <p role="status">{t("firstSite.projectsLoading")}</p> : null}
+                {!preview && projectHistoryStatus === "error" ? <div role="alert">
+                  <p>{t("firstSite.projectsError")}</p>
+                  <Button type="button" variant="outline" disabled={!projectHistoryRetryable || !onRetryProjectRead} onClick={onRetryProjectRead}>{t("firstSite.retry")}</Button>
+                </div> : null}
+              </CardContent>
             ) : null}
             {capabilities?.connectors ? (
               <CardFooter className={styles.connectorRow}>

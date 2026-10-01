@@ -1,4 +1,4 @@
-import { projectCreateResponseSchema } from "@/contract/project-create"
+import { projectResponseSchema } from "@/contract/project"
 
 export class ProjectCreateError extends Error {
   constructor(readonly code: string, readonly status?: number) {
@@ -35,7 +35,13 @@ export async function createProject(name: string, idempotencyKey: string): Promi
   } catch {
     throw new ProjectCreateError("project_create_invalid_response", response.status)
   }
-  const parsed = projectCreateResponseSchema.safeParse(payload)
+  const parsed = projectResponseSchema.safeParse(payload)
   if (!parsed.success) throw new ProjectCreateError("project_create_invalid_response", response.status)
+  const project = parsed.data.data.project
+  // Creation cannot navigate to a missing/preview identity. This is a local
+  // navigation guard, not an extra constraint on the owner's Project shape.
+  if (!project.id.trim() || !project.slug.trim() || !project.name || project.id.startsWith("preview-project")) {
+    throw new ProjectCreateError("project_create_invalid_response", response.status)
+  }
   return { id: parsed.data.data.project.id, slug: parsed.data.data.project.slug }
 }

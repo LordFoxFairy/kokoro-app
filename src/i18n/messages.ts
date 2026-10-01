@@ -46,6 +46,10 @@ export const zh = {
   // rail 侧栏
   "firstSite.startConversation": "在此专案开始会话",
   "firstSite.currentProject": "当前专案",
+  "firstSite.projectsLoading": "正在加载专案…",
+  "firstSite.projectsError": "专案暂时无法加载。",
+  "firstSite.projectsEmpty": "暂无专案。",
+  "firstSite.projectsUnavailable": "专案不可用",
   "firstSite.conversationsLoading": "正在加载会话…",
   "firstSite.conversationsError": "会话暂时无法加载。",
   "firstSite.independentScheduledTasks": "定时任务独立管理，不是此专案的会话列表。",

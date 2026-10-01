@@ -452,6 +452,9 @@ it("恢复了会话消息时目录路由仍保持独立，不被 ConversationThr
 
 it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer 与项目上下文", async () => {
   buildEngine()
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input) === "/api/hub/projects"
+    ? Response.json({ data: { projects: [{ id: "project_kokoro", name: "Kokoro", slug: "workspace", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }] }, meta: { request_id: "req_workspace" } })
+    : Response.json({}, { status: 503 }))
   render(
     <ThemeProvider>
       <LocaleProvider>
@@ -460,6 +463,7 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
           chatHref="/app"
           projectWorkspace
           projectRef="project_kokoro"
+          projectReadBoundary={{ admitted: true, subject: "workspace-reader", generation: 1 }}
           emptyState={KokoroProjectWorkspace}
           emptyStateOwnsComposer
         />
@@ -2475,3 +2479,6 @@ it("连接恢复条在窄屏保留换行、命中区、forced-colors 与既有fo
   expect(css).toMatch(/\.connectionStatus button\s*\{[^}]*min-height:\s*2\.75rem;/u)
   expect(css).toMatch(/@media \(forced-colors: active\)[\s\S]*?\.connectionStatus\s*\{[^}]*border-color:\s*CanvasText;/u)
 })
+
+// Project-read fixtures use spies, so every case restores its browser boundary.
+afterEach(() => vi.restoreAllMocks())

@@ -42,6 +42,7 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
       {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       {...(livePresentation ? { navigation: manifest.navigation, featureFlags: manifest.featureFlags } : {})}
       preview={probe.mode === "preview"}
+      projectReadBoundary={probe.projectReadBoundary}
       {...(probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
     />
   )

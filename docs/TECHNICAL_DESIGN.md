@@ -1,5 +1,126 @@
 # Kokoro User Web 技术设计
 
+## WEB-PROJECT-READ-R42：指令/历史边界漏接 P1（仅设计与 RED，2026-10-01）
+
+独立审查确认 R40 候选仍有第二条正式 detail GET：use-app-frame-project.ts 原指令 effect 不消费新 ProjectReadBoundary，
+按 projectRef/preview/t 取 detail+history，无 schema、AbortSignal 或 deadline；同 ref 的身份重核不清已加载指令/历史，
+迟到 GET/PATCH 仍能写旧 UI。198 个定点通过不覆盖这条有效旧路径，不能视为完整身份隔离；原 R40 源码现冻结待修。
+
+无需新 owner/目录/契约版本：后继复用 useProjectList 已校验 current Project 的 instruction，删除旧第二 detail GET 与 data??payload
+双形态解析。history 仍保有效功能，沿现同源 instruction-revisions 消费固定 ProjectInstructionRevisionResponse，以独立 controller、
+同身份/项目代际与 10 秒覆盖 body 的 deadline 读取；换代/核验开始/登出/取消即时清空，迟到响应零写，无假空或 preview fallback。
+PATCH 沿原 instruction/Idempotency-Key command，但同样有界取消并验证 owner ProjectResponse；旧身份 ACK 不得更新新投影。
+历史只由正式 GET 刷新，不在正式 UI 拼 actorName/Date.now 新记录。preview 的本地编辑/历史保留，不冒充正式事实。
+
+下一 GREEN 精确候选文件：contract/project.ts 扩 revision consumer schema；features/app/project-list.ts 扩 history GET/现 PATCH bounded client；
+use-project-list.ts 扩 history state/controller；components/blocks/app-frame/app-frame.tsx 与 app-frame.types.ts 只做 validated state、boundary 和 refresh 透传；
+use-app-frame-project.ts 删除正式旧读、接 canonical instruction/history 并保护保存换代；features/app/kokoro-project-workspace.tsx 只处理现编辑器/历史
+本地状态换代与迟到保存 UI，不重挂 Chat、不改资源契约、不移除编辑/历史/资源功能。无新文件；若需范围外 UI callback 先报 Root。
+
+本阶段仅四文档前缀与现 workspace 测试追加两个真实 AppFrame RED；未改上述源码，Root 复现并精准授权后才 GREEN。
+
+### R42/R43 当前放置表（R43 七文件已授权，候选待 Root 验收）
+
+| 项 | 结论 |
+| --- | --- |
+| Owner | BFF 唯一 Project/revision writer；Web 仅验证、投影及发既有 command。WIN01 R42 仅文档/tests，R43 唯一七文件源码 writer；Root 独占 Git、资源与集成。 |
+| 当前事实 | main343aea36f15f0ed5b7b9f41a599c066b510b066a 有 R40 未提交候选；新 read hook 与原 instruction effect 并存，健康 detail GET 实测两次。R42 原源码 hash 冻结，原测试正文保留。 |
+| 目标职责 | instruction/history 与名称共用同一正式身份/项目代际，撤销 admission 即隐藏/取消，晚 GET/PATCH 零写；编辑/历史/资源仍有效。 |
+| 目录方案 | 采用现 contract/project.ts、project-list.ts、use-project-list.ts 扩既有读取职责；淘汰在 use-app-frame-project.ts 再维持独立 detail/schema 的方案，避免双事实与身份生命周期漂移。 |
+| 粒度 | 仅扩上述七个现文件；不建目录、模块、进程或新文件。旧 mutation hook 保留创建/草稿/preview，只替换正式指令读写边界。 |
+| 依赖 | owner wire → consumer schema → bounded client → page read-state → AppFrame/editor；身份来自现 probe boundary，不反向依赖 Chat engine，不直连 owner。 |
+| 数据/API | 固定 public3.0.0 revision snake_case/data.items；PATCH 原 instruction/Idempotency-Key，ACK 校验 ProjectResponse 后刷新；无 SQL、缓存、contract/pin/generated 变更。 |
+| 删除项 | 正式第二 detail GET、data??payload/history array 断言、正式 Date.now/You 合成 revision；preview 本地能力保留。 |
+| 验证 | 当前 eslint/直接 tsc exit0；workspace 两新增 RED/原18 pass。后继沿现 UI/contract/architecture/lint/typecheck，再由 Root 完整 test/build/真实资源验收；SQL/schema 不适用。 |
+
+Root 第二次完整 default test 另暴露原欢迎页创建重入导航断言失败（pathname '/'，预期 /app/project/project_welcome-a）。
+只读追踪仍有 frozen intent → createProject → finishProjectNavigation → handleProjectOpen → mounted navigation 的完整路径；日志未记录
+第二次菜单是否进入 callback、POST 次数/结果、navigation 是否执行，尚不能把症状归因到 schema、refresh 或菜单。此项独立后继调查，
+保留原幂等 key/body、A/B 草稿和导航断言，不扩大本阶段写入集，不先放宽 waitFor 或改菜单交互。
+
+### R43 精准 GREEN 候选进度（2026-10-01）
+
+Root 读过三面并复现冻结两 RED（2failed/18passed）后，授权上述七现源码由 WIN01 唯一写入。
+现 instruction 复用 validated current Project，原第二 detail GET/双 shape fallback/正式合成 revision 已删除；history 独立 controller
+按同 key/projectRef 读取，只有正式 projectWorkspace 显式启用，纯 list/detail consumer 不发生额外 history I/O。
+PATCH 与 GET 复用 10 秒覆盖 body 的 bounded I/O；layout cleanup 撤销保存 scope/abort，迟到 ACK 不 refresh 新身份。
+编辑器/历史弹窗与保存/error/selection 以 context 隔离；旧 catch/finally setter 不改新 context，Chat 不重挂。
+preview 本地指令/历史、资源动作、创建原幂等/草稿/导航均保留。当前仅源码候选，Root 独立审查/完整门/browser 待验。
+
+## WEB-PROJECT-READ-R40：批准 D0 的源码候选（2026-10-01）
+
+Root 已放行四文档 D0 并复现 canonical 两项目缺失 RED；原 WIN01 在 main343aea36f15f0ed5b7b9f41a599c066b510b066a 接续唯一写入。
+采用原方案 B 三个普通文件：contract/project.ts 唯一 Project/list/detail consumer schema；features/app/project-list.ts 有界读取；
+use-project-list.ts 页面内 collection/detail 独立控制器与读取代际。旧 contract/project-create.ts 已删除，创建 client 复用唯一响应校验，
+原创建 identity/draft/handoff 保持。正式 Rail 仅映射 GET 的 canonical id/name；当前路由/品牌不再合成正式行。
+
+AppGate 沿原 session probe 透传 subject/admitted/generation；每次核验开始暂停并清除 Project 投影，同 subject 也换代；
+已登录 Chat 不重挂。读 client 用现同源 hub GET、no-store、AbortSignal、10 秒覆盖 fetch/body 的 deadline，取消立即释放计时器。
+集合刷新、身份变化及 A→B 都同步隐藏旧投影，effect cleanup 取消独立 controller，旧响应零写；已加载集合可供应当前详情。
+401/403 不留可操作旧项目且禁重试；详情 404 同样不可重试；其他读取错误显式有界重试，无 preview/通用名 fallback。
+创建 ACK 只触发 GET 刷新，不插临时行。preview 显式隔离；没有新增 route/auth wire/分页、CSS、Billing 或 Chat 协议。
+
+当前仅待 Root 独立集成与浏览器验收的候选；原 8 Rail 断言保留。下方 D0 是实施依据与历史阶段状态，不是当前通过声明。
+
+## WEB-PROJECT-READ-D0-R39：正式项目集合与详情名称（2026-10-01；文档候选，未实施）
+
+本段是项目读取的当前 D0，优先于下方历史 mock/品牌项目说明；不是源码、测试或浏览器验收。Web 基线 main
+`343aea36f15f0ed5b7b9f41a599c066b510b066a`，开始时 clean。BFF 当前 main
+`759bfe0a8c521946cae31a74b6426f43b063bae1` 有八项受保护未提交变更，本片不接收或修改它们。
+
+### 当前事实与目标
+
+AppFrame 只有当前 projectRef/projectHref，没有正式 Project list consumer；rail-shell 在没有 projects 时构造“当前项目”，
+ProjectIdentity 仍按站点品牌显示标题及“今天更新”等文案。useSessionList 已按 direct/project scope 和请求代际隔离；
+use-app-frame-project 已拥有创建幂等意图、草稿 handoff、指令与资源动作，不能把这两者当项目集合事实。
+目标是消费固定 BFF ProjectListResponse/ProjectResponse，以 canonical id/name 显示独立项目；Conversation rename、
+排序、标题、品牌和任务记录都不得改写项目身份。保持现 shadcn rail、单 Chat engine 与 AG-UI，不建第二组件/协议。
+
+### AGENTS §8 放置与粒度裁决
+
+| 项 | 当前 D0 结论 |
+| --- | --- |
+| Owner/writer | BFF 唯一拥有 Project 与持久 writer；Web 只拥有读取校验和页面内投影。本阶段 WIN01 仅四文档前缀，Root 唯一 Git/资源/集成负责人。 |
+| 当前事实 | 固定 public 3.0.0 OpenAPI 已有 listProjects/getProject；同源 hub adapter 已转发至 BFF。现 project-create.ts 两文件只承担创建；当前无列表/详情 read-state，未提交源码为零。 |
+| 目标职责 | GET 项目集合及当前项目详情，显式 loading/ready-empty/ready/error；给 rail 项目项、当前名称与受限导航，不承担创建、会话列表或授权事实。 |
+| 方案 A（淘汰） | 扩展现 contract/project-create.ts、features/app/project-create.ts 和 use-app-frame-project，加入 list/detail。会把创建重试、草稿与读取生命周期耦合，文件名及变化原因失真。 |
+| 方案 B（采用） | 在现 contract/、features/app/ 放普通文件：project.ts 是共享 Project/response consumer schema，project-list.ts 是 list/detail client，use-project-list.ts 是项目读取投影。无新目录/module/process。 |
+| hook 比较 | 不复用 use-app-frame-project 的写意图状态；独立 useProjectList 管集合与当前详情，分别持 controller/generation，统一归属 Project 只读投影。创建成功只触发刷新，不混入创建 callback 的临时行。 |
+| schema 粒度 | 将现 project-create.ts 的 Project/ProjectResponse 消费校验迁入 project.ts，同步更新 create client 并删除旧 schema 文件及 imports；不复制 Project shape、不留旧名 alias。此迁移仅是后继候选，不在本阶段执行。 |
+| 依赖 | Browser → /api/hub/projects[/id] → BFF /v1/projects[/id]。schema 只依赖 Zod 与固定 owner artifact；client 终止 wire，hook 返回本地 read-state；rail/identity 只消费已验证投影。不跨 sibling import，不从 session/title 推导 Project。 |
+| 数据/API | 固定 owner 版本/commit/digest，无 SQL/Redis/持久 store；GET 无写入幂等身份。Project List 当前无分页协议，不能猜 cursor/limit；详情错误不伪装为空集合。见同片 API/DATA_MODEL。 |
+| 删除项 | 正式 rail 的 currentProject 通用名 fallback、品牌代替项目名称、无 owner 字段依据的作者/“今天更新”事实；旧创建 schema 路径随共享 schema 迁移删除。显式 preview 独立，不作为正式失败回退。 |
+| 验证 | Root 先授现 app-frame-rail.test.tsx 的真实消费 RED；后继 contract/UI/architecture、lint/typecheck/build/full test，再由 Root 真浏览器验登录、切项目、空/失败/取消。SQL/schema 不适用。 |
+
+### 读取生命周期与身份边界
+
+集合首次读、显式重试或创建确认后刷新：清旧集合进入 loading，GET 只在当前 authenticated 读取边界可用时发起，
+有界 deadline（后继 client 以 10 秒为上限）、AbortSignal 与 no-store，不自动无限重试。成功空数组是 ready-empty；
+HTTP/网络/JSON/schema 错误是 error，保留显式重试而不生成“当前项目”或 preview 行。现 list 无 cursor，成功一次即当前集合，
+不显示 Load more；未来分页必须先有 owner 新 pin，不能借 SessionList/resource 的 cursor 语义。
+集合请求不随 direct/project 选择而丢失；当前详情按 projectRef 单独取消/换代，A→B 时立即隐藏 A 名称，迟到 A 响应无效。
+当前 id 存在于已验证集合时可复用同一 Project 投影；不在集合的直接深链才 GET detail，404/403 保持明确不可用且不补假行。
+未验证名称时显示 loading/error/不可用反馈，不以站点品牌或通用名冒充事实；详情采用 owner name 和时间，不合成作者/更新时间。
+
+身份不能只靠 projectRef/preview：现 /api/auth/session 已返回 subject，但 useSessionProbe 只保留 authenticated 布尔值。
+后继须沿唯一 AppGate 探针保留受信 subject，并提供仅供 Project 读取的本地 generation/admitted 边界：每次重新核验开始
+先暂停项目读、递增代际、取消并清空集合/详情；成功才以新代际读取，失败/登出/卸载清空。即使 subject 相同也换代，
+避免不可见的会话上下文变化复用旧数据。此边界只重置 Project 读取，不重挂 Chat、不传 token/tenant、不新增 auth wire。
+没有此边界的读取实现不通过旧用户数据隔离门；其内部 props 与探针测试仍须 Root 审查后授写。
+
+### 后继最小精确文件集（本阶段均未创建/修改）
+
+- 新普通文件：src/contract/project.ts、src/features/app/project-list.ts、src/features/app/use-project-list.ts。
+- schema 迁移：删除 src/contract/project-create.ts；修改 src/features/app/project-create.ts 与现 tests/contract/project-create.test.ts、tests/contract/bff-project-create-public.test.ts，保创建全部行为。
+- 读取装配：src/components/blocks/app-frame/app-frame.tsx、app-frame.types.ts；src/components/blocks/workspace-rail/workspace-rail-types.ts、workspace-rail-shell.tsx、workspace-rail-navigation.tsx。
+- 详情名称：src/features/app/kokoro-project-workspace.tsx、project-identity.tsx；状态文案限现 src/i18n/messages.ts、en.ts，不批量翻译。
+- 身份读取边界：src/ui/auth/use-session-state.ts、app-gate.tsx；同源 route/服务端 auth/schema 均不改，KokoroAppSurface 复用现 props 传递。
+- 先 RED：现 tests/ui/app-frame-rail.test.tsx；后继回归限现 tests/ui/use-session-state.test.tsx、app-frame.smoke.test.tsx、workspace-rail.test.tsx、kokoro-project-workspace.test.tsx、use-session-list.test.ts 与上述 contract tests。若实际装配需范围外文件，先报告 Root。
+
+三个先行断言：正式 GET 回两个 canonical 项目就显示两项准确 id/name，而非品牌/会话标题；项目选择及会话 rename 不改项目事实，
+A 详情迟到不能盖 B；旧身份代际/401/坏响应不能留下可操作旧项目或变成空成功，合法空集合才是 empty。Root 尚未运行这些 RED。
+下一门是四文档审查，不是实现授权；创建草稿 handoff、会话过滤、Billing formatter/阈值、CSS/footer 和机器 pin 全部保持。
+
 ## WEB-IDLE-TERMINAL-P1-R26：settled snapshot 不订阅 terminal ledger（2026-10-01；源码候选）
 
 BFF owner 明确以 terminal ledger head 的 SSE EOF 作为正常收口；Web transport 对 active stream 的 EOF 仍必须按最后 opaque cursor
