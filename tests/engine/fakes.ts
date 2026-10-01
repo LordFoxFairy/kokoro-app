@@ -17,6 +17,8 @@ export type FakeStream = {
   resumeCursor: EventCursor | null
   closed: boolean
   emit: (events: ChatProjectionEvent[], cursors?: readonly EventCursor[]) => void
+  reconnecting: () => void
+  connected: () => void
   fail: (error: SessionClientError) => void
 }
 
@@ -119,6 +121,12 @@ export function createFakeClient(): FakeClient {
             args.onCursor(cursor)
             args.onEvent(event)
           }
+        },
+        reconnecting: () => {
+          args.onReconnecting?.(stream.resumeCursor)
+        },
+        connected: () => {
+          args.onConnected?.()
         },
         fail: (error) => {
           args.onStreamError(error)

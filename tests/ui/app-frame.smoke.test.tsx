@@ -62,6 +62,7 @@ import {
   awaitingPayload,
   makeDeliveryPayload,
   makeEvent,
+  makeFailedSnapshot,
   makePendingPause,
   makeSnapshot,
   resetFixtureSeq,
@@ -2291,21 +2292,106 @@ it("同步拒绝不会清除既有创建意图", async () => {
   expect(window.sessionStorage.getItem("kokoro.web.pending-creation-intent")).toBe("website")
 })
 
-it("已获receipt后的stream error不显示未获回执恢复动作", async () => {
+it("已获receipt后的stream error显示独立连接恢复且不伪造run failure", async () => {
   buildEngine()
   const listClientSpy = stubSuccessfulSessionList()
   try {
     render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
-    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "post receipt" } })
+    const input = screen.getByLabelText("对话输入")
+    fireEvent.change(input, { target: { value: "post receipt" } })
     fireEvent.click(screen.getByLabelText("发送消息"))
     await act(settle)
 
     act(() => client.lastStream().fail(new SessionClientError("network", "stream lost after receipt")))
     await act(settle)
 
-    expect(screen.getByRole("alert")).toBeInTheDocument()
+    expect(screen.getByRole("status", { name: "连接暂时中断" })).toBeInTheDocument()
+    expect(document.querySelector('[data-message-id="run-error"]')).toBeNull()
     expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+    const reconnect = screen.getByRole("button", { name: "重新连接" })
+    expect(reconnect).toBeEnabled()
+    const createCount = client.createCalls.length
+    fireEvent.change(input, { target: { value: "keep this offline draft" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(input).toHaveValue("keep this offline draft")
+    expect(client.createCalls).toHaveLength(createCount)
+    expect(screen.getByLabelText("停止生成")).toBeEnabled()
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: engine.getSnapshot().store?.activeId ?? "conv_1",
+      activeRun: { run_id: "run_1", status: "running" },
+    }))
+    fireEvent.click(reconnect)
+    await act(settle)
+    expect(client.createCalls).toHaveLength(createCount)
+    act(() => client.lastStream().connected())
+    expect(screen.queryByRole("status", { name: "连接暂时中断" })).toBeNull()
   } finally {
     listClientSpy.mockRestore()
   }
+})
+
+it("direct restored conversation 的首次 snapshot 错误仍显示整 stage 读取失败", async () => {
+  const seeded = addConversation(null, "conv_initial_error", 500)
+  client = createFakeClient()
+  client.nextSnapshot = () => Promise.reject(new SessionClientError("network", "initial snapshot unavailable"))
+  engine = createSessionEngine({
+    client,
+    storage: createMemoryStorage<ConversationStore>(seeded),
+    now: () => 1_000,
+  })
+  const listClientSpy = stubSuccessfulSessionList()
+  try {
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    await act(settle)
+    expect(screen.getByTestId("app-frame-conversation-error")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "重试" })).toBeEnabled()
+    expect(document.querySelector('[data-message-id="run-error"]')).toBeNull()
+  } finally {
+    listClientSpy.mockRestore()
+  }
+})
+
+it("历史失败footer与后来成功正文不被429连接错误移动或复制", async () => {
+  const seeded = addConversation(null, "conv_1", 500)
+  client = createFakeClient()
+  const failed = makeFailedSnapshot(null, { content: "old partial" }).messages
+  client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+    sessionId: "conv_1",
+    messages: [
+      ...(failed ?? []),
+      { message_id: "user_2", role: "user", content: "later ask", status: "completed", created_at: "2026-07-02T00:00:02Z" },
+      { message_id: "assistant_2", role: "assistant", run_id: "run_new", content: "later complete answer", status: "completed", created_at: "2026-07-02T00:00:03Z" },
+    ],
+  }))
+  engine = createSessionEngine({
+    client,
+    storage: createMemoryStorage<ConversationStore>(seeded),
+    now: () => 1_000,
+  })
+  const listClientSpy = stubSuccessfulSessionList()
+  try {
+    const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    await act(settle)
+    expect(view.container.querySelectorAll('[data-run-failure="run_failed"]')).toHaveLength(1)
+    expect(screen.getByText("later complete answer")).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "复制回答" })).toHaveLength(2)
+
+    act(() => client.lastStream().fail(new SessionClientError("http", "status 429")))
+    await act(settle)
+
+    expect(view.container.querySelectorAll('[data-run-failure="run_failed"]')).toHaveLength(1)
+    expect(view.container.querySelector('[data-message-id="run-error"]')).toBeNull()
+    expect(screen.getByText("later complete answer")).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "复制回答" })).toHaveLength(2)
+    expect(screen.getByRole("status", { name: "连接暂时中断" })).toBeInTheDocument()
+  } finally {
+    listClientSpy.mockRestore()
+  }
+})
+
+it("连接恢复条在窄屏保留换行、命中区、forced-colors 与既有focus-visible按钮", () => {
+  const css = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-status.module.css`, "utf8")
+  expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.connectionStatus\s*\{[^}]*flex-wrap:\s*wrap;/u)
+  expect(css).toMatch(/\.connectionStatus button\s*\{[^}]*min-height:\s*2\.75rem;/u)
+  expect(css).toMatch(/@media \(forced-colors: active\)[\s\S]*?\.connectionStatus\s*\{[^}]*border-color:\s*CanvasText;/u)
 })

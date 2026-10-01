@@ -324,6 +324,8 @@ export const zh = {
   "subagent.runtimeCustom": "运行时自定义",
   "thread.running": "运行中",
   "thread.reconnecting": "重连中…",
+  "thread.connectionUnavailable": "连接暂时中断",
+  "thread.reconnect": "重新连接",
   "thread.formingAnswer": "正在整理回答",
   "thread.formingThinking": "正在思考",
   "thread.copyAnswer": "复制回答",

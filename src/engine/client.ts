@@ -53,6 +53,8 @@ export type OpenEventsArgs = {
   resumeCursor: EventCursor | null
   onCursor: (cursor: EventCursor) => void
   onEvent: (event: ChatProjectionEvent) => void
+  onReconnecting?: (cursor: EventCursor | null) => void
+  onConnected?: () => void
   // 入站载荷未过契约或流已不可恢复：交状态机转错误态。
   onStreamError: (error: SessionClientError) => void
 }
@@ -303,7 +305,7 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
 
     // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are
     // centralized in AgUiChatTransport; no reducer-shaped wire fallback exists.
-    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }) =>
+    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onReconnecting, onConnected, onStreamError }) =>
       agUiTransport.openProjectionEvents({
         chatId: sessionId,
         resumeCursor,
@@ -313,6 +315,8 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
             onEvent(frame.projectionEvent)
           }
         },
+        ...(onReconnecting === undefined ? {} : { onReconnecting }),
+        ...(onConnected === undefined ? {} : { onConnected }),
         onStreamError,
       }),
   }

@@ -359,6 +359,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "subagent.runtimeCustom": "ランタイムのカスタマイズ",
   "thread.running": "ランニング",
   "thread.reconnecting": "再接続中…",
+  "thread.connectionUnavailable": "接続が中断されました",
+  "thread.reconnect": "再接続",
   "thread.formingAnswer": "回答を照合する",
   "thread.formingThinking": "考え",
   "thread.verbFast": "対処する",

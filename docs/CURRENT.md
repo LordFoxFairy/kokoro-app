@@ -1,3 +1,48 @@
+## R26 Root 源码验收（2026-10-01）
+
+最终28路径 manifest51c56c6d已Root逐hash/范围复核；fresh Node22完整pnpm check exit0，contract219/219、architecture50/50、Vitest2096/2096、lint/typecheck/build通过，日志 /tmp/kokoro-web-connection-r26-root-check-final.log。独立审查原2P1和迟到receipt P2全部关闭，最终0P0/0P1/0P2。Root准备精确提交源码及同步自身运行副本；真实浏览器连接恢复、当前旧后端429原因与其他owner缺口仍需验证，不宣称组合发布/九owner闭环。
+
+## WEB-CONNECTION-R26：Root 拒收后的局部返修（2026-10-01；源码候选）
+
+Root 已逐 28 文件 hash 并以 Node22 重跑 R25 候选：contract 219/219、architecture 50/50、Vitest 2088/2088、lint/typecheck/build
+均通过；独立复审仍发现两项 P1，因此候选未提交、未同步运行。R26 同原 29 路径收紧：非 connected 窗口拒新 message/resume POST，
+保草稿/staging/Stop/cancel；reattach timer 只落本地 connection timeout 并保 active identity，等待 owner snapshot/event 收口。首次
+snapshot、pre-receipt 与 unattributed terminal 的可见性同时回归，不能把 `canRetryPendingSubmission` 当成全部 machine error 的展示条件。
+
+本节不改变已确认的 HTTP 429 证据，也不推断具体容量/lease 根因。R26 动态 RED 已覆盖 disconnected submit/resume/retry、410
+并发回调、切会话迟到结果、reattach timeout 与 direct initial snapshot；新增 pre-receipt snapshot 替换保留 exact optimistic user 的
+RED 为 1 failed/78 skipped（`/tmp/kokoro-web-connection-r26-red-preserve-intent.log`）。定点 GREEN 为 5 files、230/230
+（`/tmp/kokoro-web-connection-r26-green.log`），Node22 typecheck exit 0（`/tmp/kokoro-web-connection-r26-typecheck.log`）。最终 writer
+以 Node 22.22.2 执行一次完整 `pnpm check`，actual exit 0：contract 219/219、generated checks、architecture 50/50、lint、typecheck、
+Vitest 2094/2094 与 production build 全部通过（`/tmp/kokoro-web-connection-r26-full-check.log`）。28 个实际修改文件的冻结 manifest
+为 `/tmp/kokoro-web-connection-r26-worker-manifest.json`；仍待 Root 独立 hash/diff/复审/完整门与运行浏览器验证，当前不冒充真实组合已发布。
+
+Root 随后完成 28/28 hash、独立复审与 Node22 全门，原两项 P1 已关闭；最终 P2 竞态返修仅触及 `machine.ts`、其 engine 测试与本台账。
+当 410 recovery 的 owner snapshot 返回 null 时，engine 现在会放弃原 pending submission：若 accepted receipt 已暂存，立即对其 exact
+session/run 发一次 best-effort cancel；若 receipt 尚未返回，则登记 exact idempotency key/session，由同一 create promise 的 late receipt
+消费并取消。两条路径都不复活旧 stream、不污染 fallback thread，也不新增 message POST。两时序 RED 为 2 failed/79 skipped，GREEN
+为 2 passed/79 skipped（`/tmp/kokoro-web-connection-r26-late-receipt-{red,green}.log`）；完整 engine 81/81 与 typecheck 通过。最终 writer
+Node 22.22.2 `pnpm check` actual exit 0：contract 219/219、architecture 50/50、lint、typecheck、Vitest 2096/2096、production build
+全通过（`/tmp/kokoro-web-connection-r26-late-receipt-full-check.log`）。更新后的 28 文件 manifest 仍位于
+`/tmp/kokoro-web-connection-r26-worker-manifest.json`；本追加竞态修复待 Root 再次独立复审/全门/浏览器，未自行提交或同步运行。
+
+## WEB-CONNECTION-P1-R25：post-hydration 连接状态已与 Run terminal 分离（2026-10-01；候选待 Root 验收）
+
+基线 main `6e3858f37e44d1e169adeae789d14806d2ccf2f4` clean。本候选已把 transport 的 transient reconnect/connected 与 hard
+`network|http|parse` 传播为 engine 页面内存 connection state；已观察的 events **429/application-json** 现在属于 connection
+unavailable，不再把 machine 推为 Run error。AppFrame 保留历史/partial 正文、settled copy、exact/unattributed owner terminal、active
+identity、Stop 与未获 receipt 的同键恢复，只新增紧凑连接状态和 snapshot-first“重新连接”，零 user POST、零伪 retry、零
+`data-message-id="run-error"`。非法 frame/legacy envelope 仍 fail closed，无协议 fallback。429 的具体容量/lease 原因仍未知，未放宽
+限流，也未读取或展示 raw body/cookie/token/SSE payload。
+
+Node 22.22.2 TDD 实证：首轮定点 RED `/tmp/kokoro-web-connection-p1-r25-red.log` 为 4 files、7 failed/157 passed；实现后定点
+`/tmp/kokoro-web-connection-p1-r25-green.log` 为 4 files、164/164，UI/terminal 保真补充
+`/tmp/kokoro-web-connection-p1-r25-ui-green.log` 为 2 files、135/135，typecheck exit 0。完整
+`/tmp/kokoro-web-connection-p1-r25-check.log` exit 0：contract 219/219、generated checks 通过、architecture 50/50、lint、
+typecheck、全量 Vitest 2088/2088、Next build 均通过。覆盖旧失败+后来成功+429、active partial transient、parse fail closed、
+snapshot-first 无 POST、pre-receipt/无身份 terminal/initial snapshot 保留、410 recovery failure、窄屏/focus/ARIA/forced-colors。
+未启动服务、数据库、provider 或浏览器；Root 仍需独立 hash/diff/完整门与同步环境 desktop/mobile/reload 复验，候选不冒充真实组合已验收。
+
 ## WEB-CONNECTION-D0：Root 设计门与实际网络证据（2026-10-01）
 
 Root 核验四份文档 4/4 hash、授权范围与 ed496fd 基线，三设计一致；Node22 fresh `pnpm contract` **219/219**、两个生成物 check exit0，日志 `/tmp/kokoro-web-connection-d0-root-r25-contract.log`。D0 不代表源码实现完成。

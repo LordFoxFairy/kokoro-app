@@ -11,6 +11,7 @@ import { useT } from "@/i18n/context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 import {
+  AppFrameConnectionStatus,
   AppFrameConversationErrorSurface,
   AppFrameLoadingSurface,
 } from "./app-frame-status-surfaces"
@@ -37,6 +38,8 @@ export type AppFrameMainSurfaceProps = {
   conversationHydrating: boolean
   conversationHydrationFailed: boolean
   machineError: string | null
+  connection: EngineSnapshot["connection"]
+  onReconnect: () => void
   projectCreation: { pending: boolean; error: boolean; retryable: boolean }
   onRetryProjectCreation: () => void
   retryConversationHydration: () => void
@@ -69,6 +72,8 @@ export function AppFrameMainSurface({
   conversationHydrating,
   conversationHydrationFailed,
   machineError,
+  connection,
+  onReconnect,
   projectCreation,
   onRetryProjectCreation,
   retryConversationHydration,
@@ -124,6 +129,9 @@ export function AppFrameMainSurface({
             </Button>
           ) : null}
         </div>
+      ) : null}
+      {mounted && connection.status !== "connected" ? (
+        <AppFrameConnectionStatus connection={connection} onReconnect={onReconnect} />
       ) : null}
       <div
         className={statusStyles.timelineStage}

@@ -68,6 +68,94 @@ describe("AgUiChatTransport", () => {
     }
   })
 
+  it("reports a confirmed HTTP 429 as a hard stream failure, not as a reconnect", async () => {
+    const onConnected = vi.fn()
+    const onReconnecting = vi.fn()
+    const transport = new AgUiChatTransport({
+      eventsUrl: () => "/api/session/sessions/session-1/events",
+      fetcher: () => Promise.resolve(new Response("{}", {
+        status: 429,
+        headers: { "content-type": "application/json" },
+      })),
+    })
+
+    const error = await new Promise<unknown>((resolve) => {
+      transport.openProjectionEvents({
+        chatId: "session-1",
+        resumeCursor: CURSOR,
+        onFrame: vi.fn(),
+        onConnected,
+        onReconnecting,
+        onStreamError: resolve,
+      })
+    })
+
+    expect(error).toMatchObject({ reason: "http" })
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(onReconnecting).not.toHaveBeenCalled()
+  })
+
+  it("reports transient EOF recovery and clears it only after a valid SSE response reconnects", async () => {
+    const onConnected = vi.fn()
+    const onReconnecting = vi.fn()
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response(""))
+      .mockResolvedValueOnce(response(sse(TERMINAL_CURSOR, {
+        type: "RUN_FINISHED",
+        timestamp: 2,
+        threadId: "session-1",
+        runId: "run-1",
+        metadata: metadata("agent-terminal", 2),
+      })))
+    const transport = new AgUiChatTransport({
+      eventsUrl: () => "/api/session/sessions/session-1/events",
+      fetcher,
+      retryMs: 0,
+    })
+
+    let handle: { close: () => void } | null = null
+    await new Promise<void>((resolve, reject) => {
+      handle = transport.openProjectionEvents({
+        chatId: "session-1",
+        resumeCursor: CURSOR,
+        onFrame: (frame) => {
+          if (frame.terminal) {
+            handle?.close()
+            resolve()
+          }
+        },
+        onConnected,
+        onReconnecting,
+        onStreamError: reject,
+      })
+    })
+
+    expect(onConnected).toHaveBeenCalledTimes(2)
+    expect(onReconnecting).toHaveBeenCalledExactlyOnceWith(CURSOR)
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("last-event-id")).toBe(CURSOR)
+  })
+
+  it("fails closed on a malformed AG-UI frame without reconnect or legacy fallback", async () => {
+    const onReconnecting = vi.fn()
+    const transport = new AgUiChatTransport({
+      eventsUrl: () => "/api/session/sessions/session-1/events",
+      fetcher: () => Promise.resolve(response(`id: ${CURSOR}\ndata: {"legacy":"envelope"}\n\n`)),
+    })
+
+    const error = await new Promise<unknown>((resolve) => {
+      transport.openProjectionEvents({
+        chatId: "session-1",
+        resumeCursor: null,
+        onFrame: vi.fn(),
+        onReconnecting,
+        onStreamError: resolve,
+      })
+    })
+
+    expect(error).toMatchObject({ reason: "parse" })
+    expect(onReconnecting).not.toHaveBeenCalled()
+  })
+
   it("projects one complete BFF assistant turn with its emitted terminal fields", async () => {
     const cursors = [1, 2, 3, 4, 5].map((index) => `agui_${index.toString(16).padStart(32, "0")}`)
     const events = [

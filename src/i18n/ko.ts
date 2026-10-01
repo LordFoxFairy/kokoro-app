@@ -300,6 +300,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "subagent.runtimeCustom": "런타임 사용자 정의",
   "thread.running": "달리기",
   "thread.reconnecting": "다시 연결 중…",
+  "thread.connectionUnavailable": "연결이 중단되었습니다",
+  "thread.reconnect": "다시 연결",
   "thread.formingAnswer": "답변 대조",
   "thread.formingThinking": "생각",
   "thread.verbFast": "다루다",

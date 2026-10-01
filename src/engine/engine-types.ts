@@ -1,6 +1,6 @@
 // 引擎对外类型契约：只描述快照、依赖和用户动作，不承载运行时编排。
 
-import type { SessionClient } from "@/engine/client"
+import type { ClientFailureReason, SessionClient } from "@/engine/client"
 import type { AgentMode, ConversationStore } from "@/core/conversations"
 import type { SessionStreamState } from "@/core/state"
 import { createSessionStreamState } from "@/core/state"
@@ -16,6 +16,11 @@ export type NoticeSpec = {
   vars?: Readonly<Record<string, string | number>>
 }
 
+export type ConnectionAvailability =
+  | { status: "connected" }
+  | { status: "reconnecting" }
+  | { status: "unavailable"; reason: ClientFailureReason | "timeout" }
+
 export type EngineSnapshot = {
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
@@ -29,6 +34,8 @@ export type EngineSnapshot = {
   staging: Record<string, Record<string, ToolDecision>>
   // 服务端 snapshot 尚未回到当前 active session，UI 用它保留 loading surface。
   hydrating: boolean
+  // 已有可信 snapshot 后的页面连接可用性；不属于 Message/Run terminal。
+  connection: ConnectionAvailability
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryPendingSubmission: boolean
 }
@@ -43,6 +50,7 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   pendingMode: "fast",
   staging: {},
   hydrating: false,
+  connection: { status: "connected" },
   canRetryPendingSubmission: false,
 }
 
@@ -54,6 +62,8 @@ export type SessionEngine = {
   submit: (content: string) => boolean
   // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
   retry: () => void
+  // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
+  reconnect: () => void
   cancelRun: () => void
   stageToolDecision: (runId: string, toolId: string, decision: ToolDecision) => void
   selectConversation: (id: string) => void

@@ -300,6 +300,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "subagent.runtimeCustom": "Настройка времени выполнения",
   "thread.running": "Бег",
   "thread.reconnecting": "Повторное подключение…",
+  "thread.connectionUnavailable": "Соединение прервано",
+  "thread.reconnect": "Подключиться снова",
   "thread.formingAnswer": "Сопоставление ответов",
   "thread.formingThinking": "мышление",
   "thread.verbFast": "иметь дело с",

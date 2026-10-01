@@ -84,6 +84,7 @@ export function AppFrame({
     pendingMode,
     staging,
     hydrating,
+    connection,
     activeId,
   } = engineState
 
@@ -192,11 +193,15 @@ export function AppFrame({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
+  const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
+  const initialSnapshotFailed = machine.phase === "error"
+    && !canRetryPendingSubmission
+    && store !== null
+    && thread.messages.length === 0
   const hasFailed = !isStreaming && (
-    (machine.phase === "error" && thread.runStatus !== "failed") || thread.unattributedFailure !== null
+    machine.phase === "error" || thread.unattributedFailure !== null
   )
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
-  const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
   const mode = store ? activeMode(store) : pendingMode
   const modeLocked = hasMessages
   const canSend = draft.trim().length > 0
@@ -223,7 +228,7 @@ export function AppFrame({
   }, [engine, focusComposer])
 
   const retryConversationHydration = useCallback(() => {
-    const requestedConversationId = navigationState.resolvedConversationRouteId
+    const requestedConversationId = navigationState.resolvedConversationRouteId ?? activeId
     if (!engine || requestedConversationId === null) return
     const current = engine.getSnapshot()
     if (current.store?.activeId === requestedConversationId) {
@@ -235,7 +240,7 @@ export function AppFrame({
       }
     }
     engine.openConversation(requestedConversationId)
-  }, [engine, navigationState.resolvedConversationRouteId])
+  }, [activeId, engine, navigationState.resolvedConversationRouteId])
 
   const EmptyState = emptyState ?? DefaultEmptyState
   const shareClient: Pick<SessionClient, "createShare" | "revokeShare"> = browserListClient({ preview })
@@ -247,7 +252,7 @@ export function AppFrame({
     thread,
     isStreaming,
     currentRunId: machine.runId ?? thread.activeRunId,
-    isReconnecting: machine.phase === "reattaching",
+    isReconnecting: machine.phase === "reattaching" || connection.status === "reconnecting",
     hasFailed,
     canRetryPendingSubmission,
     creditRejected,
@@ -360,8 +365,10 @@ export function AppFrame({
       railHidden={layout.railHidden}
       showConversation={showConversation}
       conversationHydrating={navigationState.conversationHydrating}
-      conversationHydrationFailed={navigationState.conversationHydrationFailed}
+      conversationHydrationFailed={navigationState.conversationHydrationFailed || initialSnapshotFailed}
       machineError={machine.error}
+      connection={connection}
+      onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}

@@ -1,5 +1,41 @@
 # Kokoro User Web 技术设计
 
+## WEB-CONNECTION-R26：断连写闸与 reattach timeout 裁决（2026-10-01；源码候选）
+
+Root 对 R25 独立复审后补充两项局部不变量。第一，已有可信会话处于 `reconnecting` 或 `unavailable` 时，engine 必须同步拒绝新的
+message submit 与 HITL resume，不清草稿、不清已经暂存的 decision，也不制造 message/control POST；Stop/cancel 与 snapshot-first
+reconnect 仍可用。空新会话初始值仍是 connected，正常首条提交不被误挡。切会话、410 recovery 与迟到 snapshot/control/create callback
+继续使用 session/generation/machine identity 守卫，不能把旧会话或旧 run 复活到当前视图。
+
+第二，snapshot 恢复出 active run 后的 reattach 等待窗口耗尽只证明连接/对账不可用，不证明 Run terminal。timer 不再发送 machine
+`TIMEOUT` 令 active identity 消失，而是关闭失活 stream、保留 partial/active run/Stop，并把 connection 设为
+`unavailable(reason="timeout")`。用户显式重连仍只读 snapshot；owner 后继 snapshot/event 才能将该 run 收口为 completed/failed。
+`timeout` 是 Web 本地 reason，不扩写 client error、AG-UI 或任何 wire。
+
+AppFrame 对错误的展示不能只看 `canRetryPendingSubmission`：真实 unattributed terminal 继续显示线程级安全反馈；pre-receipt error
+继续显示原 key/body 恢复；首次 snapshot error 即使没有 conversation deep-link 也继续使用整 stage 读取错误。hard connection 与 timeout
+仍只使用紧凑 connection status，不产生 `run-error`。
+
+实现把 pre-receipt 的 optimistic user id 与冻结提交意图一同保存在 Web 内存；snapshot-first 对账替换 read model 时，receipt 尚未归还则
+恢复这条 exact local message，receipt 到达后再用 canonical `user_message_id` 对齐。该 id 不经过 execution adapter 上 wire，也不按正文
+做视觉去重；retry 仍复用首发 key/body。connection write gate、HITL staging、timer 与迟到回调继续集中在既有 engine owner 内。
+
+## WEB-CONNECTION-P1-R25：连接可用性正式实现（2026-10-01）
+
+现 engine snapshot 已加入页面生命周期 `connection` 判别联合：`connected | reconnecting | unavailable(reason)`。AG-UI transport
+只在通过 HTTP、body 与 SSE content-type 校验后发出 connected；fetch 拒绝/EOF 发出 reconnecting 并沿最后接受的 opaque cursor
+续流；429 等非成功 HTTP、非 SSE 与严格 frame parse 继续 fail closed，经 client/execution 代际守卫传到 engine 的 unavailable。
+这些信号不写 `runFailuresById`、`unattributedFailure` 或 machine Run terminal。
+
+合法 `event_cursor_expired` 和用户“重新连接”都执行同一 snapshot-first 只读恢复：恢复期间保留最后可信正文、exact footer、active
+run identity 与 Stop，禁止旧 run submit/approval；成功后用 owner snapshot 整体对账并从新 watermark 开流，失败只保持 connection
+unavailable。首次 snapshot 尚无可信 read model 时仍走原整 stage fail-loud；未获 create receipt 的原 key/body 恢复也保持原路径。
+
+AppFrame 只在 connection 非 connected 时显示紧凑状态条：reconnecting 为 polite status，unavailable 提供既有 shadcn Button 的“重新连接”；
+不创建 thread item、assistant article、`run-error` 或 terminal retry。状态条沿 token、窄屏换行、44px 命中区、Button focus-visible 与
+forced-colors 边框；历史 assistant 正文/copy/footer 与 Composer/Stop 不被遮蔽。本片未改 public/browser-private contract、core failure
+projection、generated、route、持久化或主题。
+
 ## WEB-CONNECTION-D0：水合后连接可用性与 Run terminal 分离（2026-10-01；仅设计门）
 
 当前源码在 snapshot 已成功、正文已经可读后仍从 `event_watermark` 打开 durable AG-UI stream；非 expired 的 HTTP 错误、

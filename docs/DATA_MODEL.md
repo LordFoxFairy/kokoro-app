@@ -1,5 +1,29 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-CONNECTION-R26：本地 timeout 与写闸（2026-10-01；源码候选）
+
+`EngineSnapshot.connection` 的 unavailable reason 在 Web 内存中扩为 `network | http | parse | timeout`；`timeout` 只描述 reattach
+观察窗耗尽，不是 Message/Run 状态，也不写 terminal map、machine error、持久 store 或 owner cursor。非 connected 是 engine 写闸输入：
+拒绝新 message/resume，但不删除 draft、staged decision、partial、active run identity 或 cancel 能力。
+
+切 conversation 重置为该新页面视图的 connected 初值并递增 hydration generation；旧 snapshot/control/create callback 不得写回。
+snapshot-first reconnect 后只以 owner active/terminal/read model 更新线程。无 SQL、Redis、localStorage、IndexedDB、schema、migration、
+retention 或跨设备事实变化。
+
+未获 receipt 的 `pendingSubmission` 在同一页面生命周期额外持有 optimistic user id，只用于 owner snapshot 替换期间恢复 exact local
+message，并在 receipt 后换成 canonical message id；它不持久化、不跨 conversation、不进入 wire，也不按 content 推断 owner identity。
+
+## WEB-CONNECTION-P1-R25：实际页面内存模型（2026-10-01）
+
+`EngineSnapshot.connection` 已实现为不落盘判别联合：`{status:"connected"}`、`{status:"reconnecting"}` 或
+`{status:"unavailable", reason:"network"|"http"|"parse"}`。切换/新建 conversation 重置页面连接视图；snapshot-first 恢复受既有
+session/generation 守卫保护。该字段不进入 Message、Run、`runFailuresById`、`unattributedFailure`、Conversation store、localStorage、
+IndexedDB、SQL、Redis 或 server cache；reload 仍由 owner snapshot 重建业务事实。
+
+reconnecting/unavailable 不改变最后可信 `thread`、owner watermark、active run identity、pending submission 或 terminal map。显式恢复成功
+才用 owner snapshot 对账 thread，并只从其 watermark 续流；恢复失败保留 read model。没有 schema、migration、事务、索引、retention、
+跨设备状态或 canonical data owner 变化。
+
 ## WEB-CONNECTION-D0：页面生命周期 connection availability（2026-10-01；仅设计门）
 
 BFF 继续持久拥有 Conversation、Message、durable AG-UI ledger 与 snapshot，Agent/BFF 继续拥有 Run terminal。Web 只新增当前页面

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { useT } from "@/i18n/context"
+import type { EngineSnapshot } from "@/engine/machine"
 
 import type { EmptyStateProps } from "./app-frame.types"
 import styles from "./app-frame-status.module.css"
@@ -39,6 +40,34 @@ export function AppFrameLoadingSurface() {
           <i />
         </span>
       </div>
+    </div>
+  )
+}
+
+export function AppFrameConnectionStatus({
+  connection,
+  onReconnect,
+}: {
+  connection: Exclude<EngineSnapshot["connection"], { status: "connected" }>
+  onReconnect: () => void
+}) {
+  const t = useT()
+  const unavailable = connection.status === "unavailable"
+  const label = unavailable ? t("thread.connectionUnavailable") : t("thread.reconnecting")
+  return (
+    <div
+      className={styles.connectionStatus}
+      data-connection-status={connection.status}
+      role="status"
+      aria-label={label}
+      aria-live="polite"
+    >
+      <span>{label}</span>
+      {unavailable ? (
+        <Button type="button" variant="outline" size="sm" onClick={onReconnect}>
+          {t("thread.reconnect")}
+        </Button>
+      ) : null}
     </div>
   )
 }

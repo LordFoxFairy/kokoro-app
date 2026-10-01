@@ -46,6 +46,8 @@ export type CancelRunArgs = {
 export type ExecutionStreamCallbacks = {
   onCursor: (cursor: EventCursor) => void
   onEvents: (events: readonly ChatProjectionEvent[]) => void
+  onReconnecting?: (cursor: EventCursor | null) => void
+  onConnected?: () => void
   onStreamError: (error: SessionClientError) => void
 }
 
@@ -161,6 +163,18 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
         }
         stream.buffer.push(event)
         scheduleFlush(stream)
+      },
+      onReconnecting: (cursor) => {
+        if (activeStream !== stream || stream.generation !== streamGeneration) {
+          return
+        }
+        callbacks.onReconnecting?.(cursor)
+      },
+      onConnected: () => {
+        if (activeStream !== stream || stream.generation !== streamGeneration) {
+          return
+        }
+        callbacks.onConnected?.()
       },
       onStreamError: (error) => {
         if (activeStream !== stream || stream.generation !== streamGeneration) {

@@ -2,6 +2,7 @@
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { EventCursor } from "@/contract/agui-events"
+import type { MessageCreateReceipt } from "@/contract/http"
 
 import {
   activeMode,
@@ -32,6 +33,7 @@ import {
 import {
   type EngineDeps,
   type EngineSnapshot,
+  type ConnectionAvailability,
   type NoticeSpec,
   type SessionEngine,
 } from "./engine-types"
@@ -84,6 +86,18 @@ function describeUnknown(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function connectionFailure(error: unknown): ConnectionAvailability {
+  return {
+    status: "unavailable",
+    reason: error instanceof SessionClientError ? error.reason : "network",
+  }
+}
+
+// Web-only delivery intent. The optimistic id never crosses the adapter; it
+// lets snapshot-first recovery restore the exact local user message until the
+// owner receipt supplies its canonical message id.
+type PendingSubmission = CreateMessageArgs & { optimisticUserId: string }
+
 export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const now = deps.now ?? (() => Date.now())
   const createId = deps.createId ?? defaultCreateId
@@ -98,6 +112,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // expose that work in the first snapshot instead of making the shell infer
   // it from an empty thread.
   let hydrating = store !== null
+  let connection: ConnectionAvailability = { status: "connected" }
   let pendingMode: AgentMode = "fast"
   const staging = new Map<string, StagedDecisions>()
   // resume 的幂等 command_id：control 失败重试复用同一 id，防双击/网络重试造成二次 resume。
@@ -106,7 +121,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // 以 run 为粒度加同步闸门，保证同一暂停帧始终只有一个 resume 请求在途。
   const resumeInFlight = new Set<string>()
   // 最近一次未获回执的完整提交意图：重试复用同一 key 与业务 body，保持 BFF digest 不变。
-  let pendingSubmission: CreateMessageArgs | null = null
+  let pendingSubmission: PendingSubmission | null = null
+  // create 回执可能与 expired-cursor snapshot recovery 并发；recovery 期间先暂存，
+  // 由 owner snapshot 建立新真态后再按 exact run identity 吸收，绝不抢开 stale stream。
+  let recoveredSubmission: PendingSubmission | null = null
+  let recoveredSubmissionError: string | null = null
+  let deferredCreateReceipt: { submission: PendingSubmission; receipt: MessageCreateReceipt } | null = null
   // Stop can arrive after POST has started but before its receipt. Remember
   // those keys so an accepted late run is cancelled instead of being
   // resurrected by the delayed response.
@@ -135,7 +155,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let snapshot: EngineSnapshot = buildSnapshot()
 
   function canRetryPendingSubmission(): boolean {
-    return machine.phase === "error" && machine.error !== null && pendingSubmission !== null &&
+    return connection.status === "connected" &&
+      machine.phase === "error" && machine.error !== null && pendingSubmission !== null &&
       store?.activeId === pendingSubmission.sessionId
   }
 
@@ -152,6 +173,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       pendingMode,
       staging: stagingView,
       hydrating,
+      connection,
       canRetryPendingSubmission: canRetryPendingSubmission(),
     }
   }
@@ -228,6 +250,20 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         cursorResetAttempts = 0
       },
       onEvents: handleStreamEvents,
+      onReconnecting: () => {
+        if (disposed || store?.activeId !== sessionId) {
+          return
+        }
+        connection = { status: "reconnecting" }
+        notify()
+      },
+      onConnected: () => {
+        if (disposed || store?.activeId !== sessionId) {
+          return
+        }
+        connection = { status: "connected" }
+        notify()
+      },
       onStreamError: (error) => {
         if (disposed) {
           return
@@ -236,10 +272,16 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         if (error.code === "event_cursor_expired" && cursorResetAttempts < 2 && store?.activeId === sessionId) {
           cursorResetAttempts += 1
           recoveringExpiredCursor = true
+          if (machine.phase === "submitting" && pendingSubmission !== null) {
+            recoveredSubmission = pendingSubmission
+            recoveredSubmissionError = null
+          }
+          connection = { status: "reconnecting" }
+          notify()
           hydrate(sessionId, true)
           return
         }
-        machine = transition(machine, { type: "FAIL", error: error.message })
+        connection = connectionFailure(error)
         notify()
       },
     })
@@ -303,19 +345,47 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
   }
 
+  function cancelAcceptedSubmission(sessionId: string, runId: string): void {
+    void execution
+      .cancelRun({ sessionId, runId, commandId: createId("command") })
+      .catch(() => {
+        // The local conversation has already been abandoned. Cancellation is
+        // best effort and must not resurrect its run or mutate the new thread.
+      })
+  }
+
+  function abandonPendingSubmission(): void {
+    const submission = pendingSubmission
+    if (submission === null) {
+      return
+    }
+    const deferred = deferredCreateReceipt
+    if (deferred !== null && deferred.submission === submission) {
+      cancelledSubmissions.delete(submission.idempotencyKey)
+      cancelAcceptedSubmission(submission.sessionId, deferred.receipt.run_id)
+    } else if (recoveredSubmissionError === null) {
+      // The create outcome is still unknown. Its promise callback consumes
+      // this exact key/session marker and cancels an accepted late receipt.
+      cancelledSubmissions.set(submission.idempotencyKey, submission.sessionId)
+    }
+    pendingSubmission = null
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
+  }
+
   function cancelPendingSubmission(): void {
     if (machine.phase !== "submitting" || !store || pendingSubmission === null) {
       return
     }
-    cancelledSubmissions.set(pendingSubmission.idempotencyKey, store.activeId)
-    pendingSubmission = null
+    abandonPendingSubmission()
   }
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false): void {
     hydrateGeneration += 1
     const generation = hydrateGeneration
-    if (!hydrating) {
+    if (!afterExpiredCursor && !hydrating) {
       hydrating = true
       notify()
     }
@@ -328,7 +398,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         if (sessionSnapshot === null) {
           if (afterExpiredCursor) {
             // A stream existed before GC; a subsequent missing snapshot means
-            // the conversation is gone, not a newly created local draft.
+            // the conversation is gone, not a newly created local draft. A
+            // concurrent create may still produce a late accepted receipt;
+            // cancel it against its original session without reviving this UI.
+            abandonPendingSubmission()
             evictActiveConversation()
             return
           }
@@ -349,6 +422,18 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         }
         const previousCursor = thread.resumeCursor
         thread = stateFromSnapshot(sessionSnapshot)
+        const submissionToRestore = recoveredSubmission
+        if (
+          afterExpiredCursor &&
+          submissionToRestore !== null &&
+          submissionToRestore === pendingSubmission &&
+          !thread.messages.some((message) => message.id === submissionToRestore.optimisticUserId)
+        ) {
+          thread = appendUserMessage(thread, {
+            id: submissionToRestore.optimisticUserId,
+            content: submissionToRestore.content,
+          })
+        }
         // A different owner watermark proves this was a new GC window. Keep
         // the retry cap only when the owner repeats the same expired cursor.
         if (afterExpiredCursor && thread.resumeCursor !== previousCursor) {
@@ -372,18 +457,30 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
               // 兜底窗口耗尽仍无终态：放弃续传，不永久卡在 streaming。待批帧不设时限。
               reattachTimer = setTimeout(() => {
                 reattachTimer = null
-                const timedOut = transition(machine, { type: "TIMEOUT" })
-                if (timedOut === machine) {
+                if (machine.phase !== "reattaching" || machine.runId !== plan.runId) {
                   return
                 }
-                machine = timedOut
                 closeStream()
+                connection = { status: "unavailable", reason: "timeout" }
                 notify()
               }, reattachTimeoutMs)
             }
           }
         }
-        if (afterExpiredCursor) recoveringExpiredCursor = false
+        if (afterExpiredCursor) {
+          recoveringExpiredCursor = false
+          const deferred = deferredCreateReceipt
+          if (deferred !== null && deferred.submission === pendingSubmission) {
+            applyRecoveredReceipt(deferred.submission, deferred.receipt)
+          } else if (
+            recoveredSubmission !== null &&
+            recoveredSubmission === pendingSubmission &&
+            recoveredSubmissionError !== null &&
+            machine.phase === "idle"
+          ) {
+            machine = transition(machine, { type: "FAIL", error: recoveredSubmissionError })
+          }
+        }
         hydrating = false
         notify()
       })
@@ -397,12 +494,41 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           evictActiveConversation()
           return
         }
-        // fail-loud：水合失败进状态机错误态，不渲染半真半假的本地线程。
-        if (afterExpiredCursor) recoveringExpiredCursor = false
+        if (afterExpiredCursor) {
+          // 已有可信 read model 的 replay/snapshot 恢复失败只改变连接可用性；
+          // 保留正文、active identity、Stop 与 owner terminal，等待显式 snapshot-first 恢复。
+          recoveringExpiredCursor = false
+          connection = connectionFailure(error)
+          notify()
+          return
+        }
+        // 首次水合失败仍 fail-loud：尚无可信线程，不渲染半真半假的本地内容。
         hydrating = false
         machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
         notify()
       })
+  }
+
+  function reconnect(): void {
+    if (
+      disposed ||
+      recoveringExpiredCursor ||
+      connection.status !== "unavailable" ||
+      store === null
+    ) {
+      return
+    }
+    recoveringExpiredCursor = true
+    if (pendingSubmission !== null) {
+      recoveredSubmission = pendingSubmission
+      recoveredSubmissionError = machine.phase === "error" ? machine.error : null
+    }
+    connection = { status: "reconnecting" }
+    closeStream()
+    clearReattachTimer()
+    notify()
+    // 只读恢复：owner snapshot 决定 active/terminal/read model，再从其 watermark 续流。
+    hydrate(store.activeId, true)
   }
 
   function messageExecutionOptions(mode: AgentMode): MessageExecutionOptions {
@@ -414,13 +540,37 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
   }
 
+  function applyRecoveredReceipt(submission: PendingSubmission, receipt: MessageCreateReceipt): void {
+    if (pendingSubmission !== submission || store?.activeId !== submission.sessionId) {
+      return
+    }
+    pendingSubmission = null
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
+    thread = reconcileUserMessageId(thread, receipt.user_message_id)
+    // Snapshot is authoritative when it already contains an active or settled
+    // assistant run. An otherwise idle snapshot may precede the accepted POST;
+    // anchor that exact receipt to the already-open watermark stream.
+    if (
+      machine.phase === "idle" &&
+      !thread.messages.some((message) => message.role === "assistant" && message.runId === receipt.run_id)
+    ) {
+      machine = transition(machine, { type: "SUBMIT" })
+      machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
+    }
+  }
+
   // POST messages 并处理回执/失败（submit 与 retry 共用的开跑尾段）。
-  function beginRun(args: CreateMessageArgs): void {
+  function beginRun(args: PendingSubmission): void {
     const submission = {
       ...args,
       options: { ...args.options, selectedSkillSourceRefs: [...args.options.selectedSkillSourceRefs] },
     }
     pendingSubmission = submission
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
     const { sessionId, idempotencyKey } = submission
     execution
       .createMessage(submission)
@@ -428,28 +578,32 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         const cancelledSessionId = cancelledSubmissions.get(idempotencyKey)
         if (cancelledSessionId === sessionId) {
           cancelledSubmissions.delete(idempotencyKey)
-          void execution
-            .cancelRun({
-              sessionId,
-              runId: receipt.run_id,
-              commandId: createId("command"),
-            })
-            .catch(() => {
-              // Local cancellation already settled the UI; the backend cancel
-              // is best effort for a receipt that arrived after the stop.
-            })
+          cancelAcceptedSubmission(sessionId, receipt.run_id)
           return
         }
         // 回执落地前用户已重置/切换：丢弃迟到回执，不复活旧轮。
         if (
           disposed ||
           pendingSubmission !== submission ||
-          machine.phase !== "submitting" ||
           store?.activeId !== sessionId
         ) {
           return
         }
+        if (recoveringExpiredCursor || connection.status !== "connected") {
+          deferredCreateReceipt = { submission, receipt }
+          return
+        }
+        if (machine.phase !== "submitting") {
+          if (recoveredSubmission === submission) {
+            applyRecoveredReceipt(submission, receipt)
+            notify()
+          }
+          return
+        }
         pendingSubmission = null
+        recoveredSubmission = null
+        recoveredSubmissionError = null
+        deferredCreateReceipt = null
         thread = reconcileUserMessageId(thread, receipt.user_message_id)
         machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
         openStream(sessionId, thread.resumeCursor)
@@ -465,14 +619,19 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ) {
           return
         }
-        machine = transition(machine, { type: "FAIL", error: describeUnknown(error) })
+        const detail = describeUnknown(error)
+        if (recoveringExpiredCursor || connection.status !== "connected") {
+          recoveredSubmission = submission
+          recoveredSubmissionError = detail
+        }
+        machine = transition(machine, { type: "FAIL", error: detail })
         notify()
       })
   }
 
   function submit(content: string): boolean {
     const trimmed = content.trim()
-    if (disposed || recoveringExpiredCursor || !trimmed) {
+    if (disposed || recoveringExpiredCursor || connection.status !== "connected" || !trimmed) {
       return false
     }
     notice = null
@@ -522,7 +681,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (!store) {
       store = addConversation(null, createId("conv"), now(), pendingMode)
     }
-    thread = appendUserMessage(thread, { id: createId("usr"), content: trimmed })
+    const optimisticUserId = createId("usr")
+    thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
     syncActiveEntry()
     notify()
     // 模式意图上 wire：thinking 档=true，fast=false 显式关。
@@ -531,12 +691,19 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       content: trimmed,
       idempotencyKey: createId("idem"),
       options: messageExecutionOptions(activeMode(store)),
+      optimisticUserId,
     })
     return true
   }
 
   function retry(): void {
-    if (disposed || recoveringExpiredCursor || !store || !canRetryPendingSubmission()) {
+    if (
+      disposed ||
+      recoveringExpiredCursor ||
+      connection.status !== "connected" ||
+      !store ||
+      !canRetryPendingSubmission()
+    ) {
       return
     }
     const pending = pendingSubmission
@@ -552,7 +719,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function stageToolDecision(runId: string, toolId: string, decision: ToolDecision): void {
-    if (disposed || recoveringExpiredCursor || !store || machine.phase !== "awaiting-hitl" || machine.runId !== runId) {
+    if (
+      disposed ||
+      recoveringExpiredCursor ||
+      connection.status !== "connected" ||
+      !store ||
+      machine.phase !== "awaiting-hitl" ||
+      machine.runId !== runId
+    ) {
       return
     }
     const sessionId = store.activeId
@@ -623,6 +797,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
+    connection = { status: "connected" }
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
@@ -630,6 +805,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
     if (previousSessionId !== next.activeId) {
       selectedSkillSourceRefs = []
     }
@@ -699,6 +877,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
+    connection = { status: "connected" }
     selectedSkillSourceRefs = []
     thread = createSessionStreamState()
     hydrating = false
@@ -811,6 +993,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     hydrateGeneration += 1
     hydrating = false
     recoveringExpiredCursor = false
+    connection = { status: "connected" }
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
@@ -818,6 +1001,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     resumeCommandIds.clear()
     resumeInFlight.clear()
     pendingSubmission = null
+    recoveredSubmission = null
+    recoveredSubmissionError = null
+    deferredCreateReceipt = null
     selectedSkillSourceRefs = []
     thread = createSessionStreamState()
     store = external
@@ -843,6 +1029,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     },
     submit,
     retry,
+    reconnect,
     cancelRun,
     stageToolDecision,
     selectConversation,

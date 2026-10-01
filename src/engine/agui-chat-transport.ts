@@ -39,6 +39,7 @@ export type OpenProjectionEventsArgs = {
   abortSignal?: AbortSignal
   onFrame: (frame: AgUiTransportFrame) => void
   onReconnecting?: (cursor: EventCursor | null) => void
+  onConnected?: () => void
   onStreamError: (error: SessionClientError) => void
 }
 
@@ -269,6 +270,7 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
           fail(new SessionClientError("parse", "AG-UI response is not text/event-stream"))
           return
         }
+        args.onConnected?.()
 
         const reader = response.body.getReader()
         const decoder = new TextDecoder()

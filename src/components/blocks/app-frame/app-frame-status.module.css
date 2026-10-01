@@ -17,6 +17,25 @@
   background: var(--background);
   font-size: 0.875rem;
 }
+.connectionStatus {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.5rem 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--muted-foreground);
+  background: var(--background);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.connectionStatus > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .loadingSurface {
   display: flex;
   flex: 1;
@@ -157,6 +176,12 @@
 
 @media (max-width: 960px) {
   .canvasReopen { min-height: 2.75rem; }
+  .connectionStatus { flex-wrap: wrap; }
+  .connectionStatus button { min-height: 2.75rem; }
+}
+
+@media (forced-colors: active) {
+  .connectionStatus { border-color: CanvasText; }
 }
 
 /* The stage, header, and Composer enter as one non-blocking desktop handoff. */

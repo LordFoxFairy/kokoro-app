@@ -300,6 +300,8 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "subagent.runtimeCustom": "Personnalisation de l'exécution",
   "thread.running": "En cours d'exécution",
   "thread.reconnecting": "Reconnexion…",
+  "thread.connectionUnavailable": "Connexion interrompue",
+  "thread.reconnect": "Se reconnecter",
   "thread.formingAnswer": "Rassembler les réponses",
   "thread.formingThinking": "pensée",
   "thread.verbFast": "traiter avec",

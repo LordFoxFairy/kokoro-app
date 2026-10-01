@@ -1,5 +1,29 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-CONNECTION-R26：非 connected 写入边界（2026-10-01；源码候选）
+
+本片仍是零 wire 变化。hydrated connection 为 reconnecting/unavailable 时，Web 不发送新的 message create 或 HITL resume；被拒动作不
+换 idempotency key、不清 Composer draft 或既有 staged decision。Stop/cancel 仍沿已发布 run control 契约，显式 reconnect 仍只有
+snapshot GET + watermark 后 events GET。空新会话默认 connected，首条正常 message create 契约不变。
+
+reattach 本地等待窗口耗尽不会合成 `RUN_ERROR`、failed Message 或 terminal receipt；`timeout` 仅为 Web connection reason。最终
+completed/failed 仍必须来自 owner snapshot/live/replay。首次 snapshot error、真实无身份 terminal 与 pre-receipt unknown 继续走既有
+独立展示/恢复约定；本片不修改 AG-UI、browser-private route、generated、client typed error 或 public 3.0。
+
+pre-receipt snapshot recovery 所保留的 optimistic user id 只存在 Web engine 内存，execution adapter 仍只序列化既有
+`idempotency_key/content/thinking/model/agent/selected_skill_source_refs/project_ref`；不存在新增 JSON 字段或第二种 retry wire。
+
+## WEB-CONNECTION-P1-R25：内部连接生命周期已落地（2026-10-01）
+
+本片机器契约为零变更：public 3.0、同源 route、AG-UI frame、opaque cursor、错误 envelope、幂等字段与 generated pin 全部不变。
+`onReconnecting`/`onConnected` 只是 transport→client→execution→engine 的 Web 内部生命周期 callback；429 等 hard HTTP 仍由既有
+typed `network | http | parse` 类别 fail closed，不解析或展示 response body、URL、frame、cookie、token 或 provider 文本。
+
+“重新连接”只发当前 conversation snapshot GET 和 watermark 后 events GET；不调用 message create、terminal retry 或 queued command，
+不合成 `RUN_ERROR`/failed Message/receipt。owner snapshot/live 后续给出的 active、completed、failed 与无身份 terminal 仍按原严格
+身份和 safe tuple 投影。首次 snapshot 失败与未获 create receipt 的同 key/body 恢复保持原契约；已获 receipt 后的 stream/replay
+错误不再借用二者的 UI 或动作。
+
 ## WEB-CONNECTION-D0：连接状态不扩写 owner terminal（2026-10-01；仅设计门）
 
 本目标不修改 public 3.0、browser-private route、AG-UI frame、opaque cursor、BFF envelope、幂等字段、generated artifact 或

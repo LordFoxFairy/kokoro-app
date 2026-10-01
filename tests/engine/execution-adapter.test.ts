@@ -88,6 +88,35 @@ describe("session execution adapter", () => {
     expect(batches[0]).toEqual([newEvent.event_id])
   })
 
+  it("只把当前流的 reconnecting/connected 生命周期交给 engine", () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+    const lifecycle: string[] = []
+
+    adapter.openStream("session_1", null, {
+      onCursor: () => {},
+      onEvents: () => {},
+      onReconnecting: () => lifecycle.push("old-reconnecting"),
+      onConnected: () => lifecycle.push("old-connected"),
+      onStreamError: () => {},
+    })
+    const oldStream = client.lastStream()
+    adapter.openStream("session_2", null, {
+      onCursor: () => {},
+      onEvents: () => {},
+      onReconnecting: () => lifecycle.push("new-reconnecting"),
+      onConnected: () => lifecycle.push("new-connected"),
+      onStreamError: () => {},
+    })
+
+    oldStream.reconnecting()
+    oldStream.connected()
+    client.lastStream().reconnecting()
+    client.lastStream().connected()
+
+    expect(lifecycle).toEqual(["new-reconnecting", "new-connected"])
+  })
+
   it("把 resume 与 cancel 统一送入带 command identity 的 control adapter", async () => {
     const client = createFakeClient()
     const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
