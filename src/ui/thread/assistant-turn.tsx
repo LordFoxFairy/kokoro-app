@@ -221,7 +221,7 @@ export function AssistantTurn({
             </div>
           )
         })}
-        {taskTitle && answerText ? (
+        {!isLive && answerText ? (
           <div className={styles.assistantActions} data-slot="assistant-actions">
             <Button
               type="button"

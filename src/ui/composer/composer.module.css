@@ -6,10 +6,9 @@
 .leadingActions { display: flex; min-width: 2rem; align-items: center; gap: 0.25rem; }
 .leadingActions button { border-radius: 999px; color: color-mix(in srgb, var(--foreground) 72%, var(--primary) 28%); }
 .leadingActions button:hover { background: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--foreground); }
-.wrap[data-desktop-web="true"] .leadingActions button { width: 2rem; height: 2rem; border: 1px solid rgb(0 0 0 / 6%); background: transparent; }
+.wrap[data-desktop-web="true"] .leadingActions button { width: 2rem; height: 2rem; background: transparent; }
 .wrap[data-desktop-web="true"] .leadingActions button:first-child { color: rgb(77 77 77); }
 .wrap[data-desktop-web="true"] .leadingActions button:first-child svg { width: 1.0625rem; height: 1.0625rem; }
-.wrap[data-desktop-web="true"] .leadingActions button + button { border: 0; outline: 1px solid rgb(0 0 0 / 6%); outline-offset: -1px; }
 .wrap[data-desktop-web="true"] .leadingActions { gap: 0.5rem; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] .controls { transform: none; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] .leadingActions button { width: 2rem; height: 2rem; }

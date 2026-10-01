@@ -721,6 +721,24 @@ it("编辑器基础输入表面去除阴影，不依赖 fine pointer 或聚焦�
   expect(baseInput).toMatch(/box-shadow:\s*none;/)
 })
 
+it("桌面前置 ghost 工具没有静态方框，并保留独立环境控件与可见焦点保障", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
+  const leadingTools = css.match(/^\.wrap\[data-desktop-web="true"\] \.leadingActions button\s*\{([^}]*)\}/m)?.[1]
+  expect(leadingTools).toBeDefined()
+  expect(leadingTools).toMatch(/width:\s*2rem;/)
+  expect(leadingTools).toMatch(/height:\s*2rem;/)
+  expect(leadingTools).toMatch(/background:\s*transparent;/)
+  expect(leadingTools).not.toMatch(/(?:border|outline)(?:-[a-z]+)?:/)
+  expect(css).not.toMatch(/\.leadingActions button \+ button\s*\{[^}]*(?:border|outline)(?:-[a-z]+)?:/)
+
+  const environmentControl = css.match(
+    /^\.wrap\[data-desktop-web="true"\]\[data-empty-workspace="true"\] \[data-environment-state="static"\]\s*\{([^}]*)\}/m,
+  )?.[1]
+  expect(environmentControl).toMatch(/outline:\s*1px solid rgb\(0 0 0 \/ 6%\);/)
+  expect(css).toContain("@media (forced-colors: active)")
+  expect(css).toMatch(/\.wrap \.composer:has\(\.input:focus-visible\)/)
+})
+
 it("高对比模式由 shell 替代输入框的系统色 outline，保留唯一可见焦点", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/composer/composer.module.css`, "utf8")
   expect(css).toMatch(/@media \(forced-colors: active\)\s*\{\s*\.wrap \.composer:has\(\.input:focus-visible\)\s*\{[^}]*outline: 2px solid Highlight;[^}]*outline-offset: 2px;[^}]*box-shadow: none;\s*\}\s*\.input:focus-visible\s*\{[^}]*outline: none;/)

@@ -832,6 +832,71 @@ describe("ConversationThread 失败卡渲染", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("Here is the plan."))
   })
 
+  it("每个已落定助手轮都可复制自己的真实文本，不依赖首轮任务标题", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    const thread = createSessionStreamState()
+    const withTwoAnswers: SessionStreamState = {
+      ...thread,
+      messages: [
+        { id: "m_u_1", role: "user", content: "draft a plan", runId: "m_u_1" },
+        { id: "m_a_1", role: "assistant", content: "First answer.", runId: "run_1" },
+        { id: "m_u_2", role: "user", content: "add the risks", runId: "m_u_2" },
+        { id: "m_a_2", role: "assistant", content: "Second answer with risks.", runId: "run_2" },
+      ],
+      stepsByRun: { run_1: [], run_2: [] },
+    }
+    render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={withTwoAnswers}
+        isStreaming={false}
+        isReconnecting={false}
+        hasFailed={false}
+        canRetryPendingSubmission={false}
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    const copyActions = screen.getAllByRole("button", { name: tr("thread.copyAnswer") })
+    expect(copyActions).toHaveLength(2)
+    fireEvent.click(copyActions[1]!)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("Second answer with risks."))
+  })
+
+  it("流式助手轮不提供复制完整答案动作", () => {
+    const thread = failedThread("internal_error")
+    render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={thread}
+        isStreaming
+        isReconnecting={false}
+        hasFailed={false}
+        canRetryPendingSubmission={false}
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+
+    expect(screen.queryByRole("button", { name: tr("thread.copyAnswer") })).toBeNull()
+  })
+
   it("流式助手轮不以 atomic=true 重复播报整轮内容", () => {
     const thread = failedThread("internal_error")
     render(

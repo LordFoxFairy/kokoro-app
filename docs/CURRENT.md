@@ -1,4 +1,24 @@
+## WEB-FOOTER-COMPOSER / OIDC-FIXTURE-R21：Root 独立验收（2026-10-01）
+
+Root核UI5冻结与OIDC第6路径hash一致，独立审查本片P0/P1=0。Root完整 `pnpm check` exit0：contract **219/219**、architecture **50/50**、完整测试 **2074/2074**、lint/typecheck/build成功，日志 `/tmp/kokoro-web-footer-oidc-r21-root-check-r2.log`。此前2072/1失败保留：authorize无Location时旧helper会GET首页，不证明callback500；本fixture校验relative target、先验authorize、受控首坏阶段诊断及断连终态barrier。未提高timeout/改生产auth。
+
+仅验收settled逐轮真实正文复制/streaming隐藏完整复制、ghost静态框删除并保留焦点，以及fixture精确路径/生命周期；分成UI5与OIDC1两个提交。既存readiness raw诊断不在本片清理，后续安全债务明确保留；不把测试修复宣称生产间歇认证根因已解决。用户3310尚未同步，本片不证明新后台组合或九owner真实模型/browser闭环。下方历史worker证据保留。
+
 # Kokoro User Web 当前状态
+
+## WEB-FOOTER-COMPOSER-R20：轮级复制与前置工具外观候选（2026-10-01）
+
+基线 main `9204bfe6139e496df5ebd99e4ceab9fb31fab5a7`。本片只调整既有 `AssistantTurn` 消息 footer 与 Composer
+CSS：每个已有正文且落定的助手轮均提供复制动作，复制该轮聚合文本，不再依赖只属于首轮的任务标题；live streaming
+轮不提前提供“复制完整回答”。桌面 Composer 的前置 ghost 工具保留既有 2rem 命中区、hover、共享 Button 的
+`focus-visible` 与 forced-colors 保障，但移除静态 border/outline；独立环境静态控件的 outline 保持不变。
+
+Node 22.22.2 定点 TDD 首先得到 footer 2失败/57跳过、Composer 1失败/61跳过；最小实现后分别为
+2通过/57跳过、1通过/61跳过。writer fresh `pnpm check` exit0：contract 219/219、architecture 50/50、
+lint/typecheck通过、163文件2073/2073、production build通过；日志
+`/tmp/kokoro-web-{footer-r20-red,composer-r20-red,footer-r20-green,composer-r20-green,footer-composer-r20-check}.log`。
+本片不改 failure/failedRunId 归属、不隐藏或去重真实消息、不新增 queued/retry wire，也未运行服务、provider、浏览器或
+Playwright；Root仍须独立复验后方可验收。
 
 ## WEB-COMPOSER-P0：同步提交接纳与停止入口（2026-10-01；本片源码与 preview 门已验）
 
