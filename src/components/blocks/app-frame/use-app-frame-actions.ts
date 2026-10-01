@@ -98,8 +98,8 @@ export function useAppFrameActions({
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter 发送 / Shift+Enter 换行；IME 合成期（拼音选词）的 Enter 只确认候选词，不发送。
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+    // IME 的 229 按键同样只确认候选词，即使该事件的 isComposing 已为 false。
+    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
       event.preventDefault()
       submitDraft()
     }

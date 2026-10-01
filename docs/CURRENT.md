@@ -1,3 +1,11 @@
+## WIN01-R31：IME 候选确认不误提交（2026-10-01）
+
+基线 main 30055e8947b1df679785c3bff43c358291ba84ba。现 AppFrame actions 在 isComposing 外显式拒绝 keyCode=229 的 Enter；直接及项目会话两例验证零 submit/create、草稿/URL/创建上下文保留，普通 Enter 随后精确一次发送，现 Shift+Enter 用例保持。不改 UI 框架、API/generated/计费/session 或新文件。
+
+Root 首轮定点81通过，但完整门真实 **2104 passed/1 failed**（项目上下文挂载 microtask 尚未清意图，按键前置断言抢跑）；保留 /tmp/kokoro-r31-web-root-full.log，build 未到达。原 writer 只为新测试加严格 waitFor storage+capsule 就绪，不修改生产或放宽结果。独立复审0P0/P1/P2。
+
+Root 最终 Node22.22.2 fresh pnpm check：contract **219/219**、architecture **50/50**、默认 **2105/2105**、lint/typecheck/build/diff-check 全退出0，日志 /tmp/kokoro-r31-web-root-full-r2.log；两 frozen hashes 前后一致。本片真实浏览器 IME/正式IAM/真实模型及收费组合未运行，当前3310离线，不声称聊天全路径闭环。只提交本两文件与本CURRENT，保留其他owner候选。
+
 ## Root R27 idle-terminal 切片验收（2026-10-01）
 
 基线c83f1b4；8文件rereview manifest 7ae902e1保持8/8 hash。Root在本仓固定Node22/pnpm11.25完整`pnpm check` exit0：contract219、architecture50、163files/2103tests全部通过、lint/typecheck/build成功；日志 `/tmp/kokoro-web-idle-terminal-r26-rereview-root-check.log`。独立复审0P0/0P1/0P2，initial hydrate/receipt-first P1已以4RED→5GREEN补齐。只修浏览器订阅生命周期：owner idle/settled零SSE、exact receipt与owner active决定单流；active EOF写闸/Stop/410 late身份保障不退。尚未在现3310实际浏览器验收；BFF queued snapshot及Agent审批新契约依赖不在此局部完成声明。Root负责精确8路径提交及同步已提交源码，未改provider/数据库/部署。

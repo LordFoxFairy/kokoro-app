@@ -2246,6 +2246,51 @@ it("Composer 保留 IME 确认与 Shift+Enter，普通 Enter 仅提交一次", a
   expect(submit).toHaveBeenCalledExactlyOnceWith("输入法候选")
 })
 
+it.each([false, true])("Composer 的 IME 229 确认不消费草稿或意图（projectWorkspace=%s）", async (projectWorkspace) => {
+  buildEngine()
+  const listClientSpy = stubSuccessfulSessionList()
+  const path = projectWorkspace ? "/app/project/project_ime" : "/app"
+  window.history.replaceState(window.history.state, "", path)
+  window.sessionStorage.setItem("kokoro.web.pending-creation-intent", "website")
+  try {
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectWorkspace={projectWorkspace} {...(projectWorkspace ? { projectRef: "project_ime" } : {})} /></LocaleProvider></ThemeProvider>)
+    const input = await screen.findByRole("textbox", { name: "对话输入" })
+    // Textarea 会先挂载；意图读取及项目清理各经一次 microtask。
+    // 等待上下文真正就绪后再输入，避免把挂载竞态误当成 IME 行为。
+    const expectedIntent = projectWorkspace ? null : "website"
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem("kokoro.web.pending-creation-intent")).toBe(expectedIntent)
+      if (projectWorkspace) {
+        expect(screen.queryByTestId("creation-intent-pill")).toBeNull()
+      } else {
+        expect(screen.getByTestId("creation-intent-pill")).toHaveAttribute("data-intent", "website")
+      }
+    })
+    fireEvent.change(input, { target: { value: "输入法候选" } })
+    const submit = vi.spyOn(engine, "submit")
+    const previousUrl = window.location.href
+    const confirm = new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, isComposing: false, bubbles: true, cancelable: true })
+    expect(confirm.keyCode).toBe(229)
+    expect(confirm.isComposing).toBe(false)
+
+    fireEvent(input, confirm)
+
+    expect(submit).not.toHaveBeenCalled()
+    expect(client.createCalls).toHaveLength(0)
+    expect(confirm.defaultPrevented).toBe(false)
+    expect(input).toHaveValue("输入法候选")
+    expect(window.sessionStorage.getItem("kokoro.web.pending-creation-intent")).toBe(expectedIntent)
+    expect(window.location.href).toBe(previousUrl)
+
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 13, isComposing: false })
+    expect(submit).toHaveBeenCalledExactlyOnceWith("输入法候选")
+    expect(client.createCalls).toHaveLength(1)
+    await act(settle)
+  } finally {
+    listClientSpy.mockRestore()
+  }
+})
+
 it("未获receipt时拒绝第二次提交并保留草稿，不产生额外POST", async () => {
   buildEngine()
   client.nextCreate = () => new Promise(() => {})
