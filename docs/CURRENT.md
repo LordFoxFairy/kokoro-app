@@ -1,5 +1,32 @@
 # Kokoro User Web 当前状态
 
+## WEB-COMPACT-GEOMETRY 源码验收，真实视觉待验（2026-09-30）
+
+Root 已在主工作树独立验证最终测试：HEAD 生产源码配最终测试真实 RED 为5失败/37通过，恢复候选源码后完整
+`pnpm check` 实际 exit0：contract109、architecture49、全量1846（45.14s）、lint/typecheck/build。日志
+`/tmp/kokoro-web-compact-geometry-root-red.log` 与 `/tmp/kokoro-web-compact-geometry-root-final-check.log`。
+独立终审 P0/P1/P2=0/0/0；HITL 测试独立性 P2 已修并取得 mutation RED，不延期。源码与测试最终冻结哈希保持。
+本次没有 fresh 浏览器视觉或完整 Playwright 证据，输入框内框和实际桌面/窄屏滚动仍未验收。
+
+基线 `main 13b881d242b59d23e18c0b0cd4f5fcb266cb3d60`、clean。本片只改既有 ConversationThread 的短线程
+滚动纠偏和现有 failure UI 测试：不再以恰好两项/末项高度猜 compact，而以全部真实滚动项（含成果/失败）的总跨度
+及 content/viewport padding 判断真正 fit；只在 settled、非重连、非 HITL、详情未展开时清原生 spacer。
+ResizeObserver 同时观察 viewport/content/items，单 rAF 合并，重复回调不重复 start；fit 后变长不跳尾，卸载完整清理。
+未改 Composer、shared primitive、消息/失败/成果事实、API、SQL、依赖或运行副本。
+
+Node22.22.2 测试先真实得到目标 RED：7 failed / 35 passed，覆盖三项短线程、长首项短末项、非有限/零 viewport、
+成果总高、stream/reconnect/HITL、嵌入失败详情和 resize/cleanup；日志
+`/tmp/kokoro-web-compact-geometry-red.log`。首个实现运行是 1 failed / 41 passed：成果用例的 spy 把原生
+`scrollToEnd(top=0)`误当成`scrollToStart`；保留该失败事实后，断言收敛到 start 的真实语义——spacer 是否被清除，
+没有删除成果反例。最终同一目标 42/42 通过，日志 `/tmp/kokoro-web-compact-geometry-green.log`；`pnpm lint` 与
+`pnpm typecheck` 均实际 exit0，日志 `/tmp/kokoro-web-compact-geometry-{lint,typecheck}.log`。writer 未运行完整
+`pnpm check`、Playwright、服务或浏览器；当前页面像素、输入框内框和全滚动体验仍待 Root 验收，不以 jsdom 几何冒充视觉完成。
+
+独立审查发现原 HITL 用例同时设置 `isStreaming=true`，会先被 streaming guard 截断，未单独证明 HITL guard。
+返修把该用例改为 settled + `hitlRunId`；临时只移除生产 HITL guard 后定点真实得到 1 failed / 1 passed /
+40 skipped，再立即恢复生产文件原 SHA，日志 `/tmp/kokoro-web-compact-geometry-hitl-guard-red.log`。该返修不改生产源码；
+最终目标门仍须在新测试 SHA 上重跑，不沿用返修前 Root 完整门。
+
 ## WEB-UNIFORM-TURN-GAP 源码候选，真实视觉待验（2026-09-30）
 
 Root独立显式Node22.22.2/pnpm11.25完整 `pnpm check` exit0：contract109、architecture49、全量1836（41.01s）、lint/typecheck/build通过，日志 `/tmp/kokoro-web-uniform-turn-gap-root-node22-check.log`。四冻结hash重验一致，独立审查P0/P1/P2=0/0/0。首次自动shell误用Node24的检查已终止自有进程组并消费exit143，不列为门禁通过；首次worker目标文件的任务外导航超时日志保留，相同命令随后两次70/70。本片只验收源码：当前IAB用户tab6绑定仍20秒超时，fresh输入内框与完整视觉/滚动尚未验，完整Playwright未运行。

@@ -1,14 +1,14 @@
 // ERROR-UX（Wave5）：run.failed 分类文案 + 恢复引导 + message 原文折叠。
 import { readFileSync } from "node:fs"
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createSessionStreamState, type RunErrorCode, type SessionDelivery, type SessionStreamState } from "@/core/state"
 import { LocaleProvider } from "@/i18n/context"
 import { zh, type MessageKey } from "@/i18n/messages"
 import { negotiateLocale, resolveMessage } from "@/i18n/resolve"
-import { ConversationThread, failureCopyKey } from "@/ui/thread/conversation-thread"
+import { ConversationThread, failureCopyKey, type ConversationThreadProps } from "@/ui/thread/conversation-thread"
 
 // LocaleProvider 水合后按 navigator.languages 协商语言（jsdom 通常 en）——按同一协商取译文断言，
 // 不写死语言，避免测试与运行环境语言绑定。
@@ -70,8 +70,228 @@ function renderFailure(thread: SessionStreamState, onRetry = vi.fn()) {
   )
 }
 
+type ObservedResize = {
+  callback: ResizeObserverCallback
+  disconnected: boolean
+  elements: Set<Element>
+}
+
+type GeometryHarness = ReturnType<typeof installGeometryHarness>
+
+let activeGeometryHarness: GeometryHarness | null = null
+
+function rect(top: number, height: number): DOMRect {
+  return {
+    bottom: top + height,
+    height,
+    left: 0,
+    right: 700,
+    top,
+    width: 700,
+    x: 0,
+    y: top,
+    toJSON: () => ({}),
+  }
+}
+
+function scrollTopFromCall(call: unknown[]): number | undefined {
+  const first = call[0]
+  if (typeof first === "object" && first !== null && "top" in first) {
+    const top = (first as ScrollToOptions).top
+    return typeof top === "number" ? top : undefined
+  }
+  return typeof call[1] === "number" ? call[1] : undefined
+}
+
+function installGeometryHarness() {
+  const originalResizeObserver = globalThis.ResizeObserver
+  const originalWindowResizeObserver = window.ResizeObserver
+  const originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTo")
+  const frames = new Map<number, FrameRequestCallback>()
+  const rects = new WeakMap<Element, DOMRect>()
+  const observers: ObservedResize[] = []
+  let nextFrame = 1
+
+  class FakeResizeObserver implements ResizeObserver {
+    readonly record: ObservedResize
+
+    constructor(callback: ResizeObserverCallback) {
+      this.record = { callback, disconnected: false, elements: new Set() }
+      observers.push(this.record)
+    }
+
+    observe(target: Element) {
+      this.record.elements.add(target)
+    }
+
+    unobserve(target: Element) {
+      this.record.elements.delete(target)
+    }
+
+    disconnect() {
+      this.record.disconnected = true
+      this.record.elements.clear()
+    }
+
+    takeRecords(): ResizeObserverEntry[] {
+      return []
+    }
+  }
+
+  globalThis.ResizeObserver = FakeResizeObserver
+  window.ResizeObserver = FakeResizeObserver
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    const id = nextFrame
+    nextFrame += 1
+    frames.set(id, callback)
+    return id
+  })
+  const cancelFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+    frames.delete(id)
+  })
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return rects.get(this) ?? rect(0, 0)
+  })
+  const scrollTo = vi.fn(function (this: HTMLElement, first: ScrollToOptions | number, second?: number) {
+    const top = typeof first === "object" ? first.top : second
+    if (typeof top === "number") this.scrollTop = top
+  })
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    writable: true,
+    value: scrollTo,
+  })
+
+  function flushFrames() {
+    let passes = 0
+    while (frames.size > 0) {
+      if (passes > 20) throw new Error("animation frame loop did not settle")
+      passes += 1
+      const pending = [...frames.values()]
+      frames.clear()
+      pending.forEach((callback) => callback(performance.now()))
+    }
+  }
+
+  function configure(
+    container: HTMLElement,
+    itemRects: readonly DOMRect[],
+    options: {
+      contentPadding?: readonly [number, number]
+      scrollTop?: number
+      spacerHeight?: number
+      viewportHeight?: number
+      viewportPadding?: readonly [number, number]
+    } = {},
+  ) {
+    const viewport = container.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')
+    const content = container.querySelector<HTMLElement>('[data-slot="message-scroller-content"]')
+    const items = [...container.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"]')]
+    const spacer = container.querySelector<HTMLElement>("[data-message-scroller-spacer]")
+    if (!viewport || !content || !spacer) throw new Error("message scroller geometry is missing")
+    if (items.length !== itemRects.length) {
+      throw new Error(`expected ${itemRects.length} items, received ${items.length}`)
+    }
+    const viewportHeight = options.viewportHeight ?? 600
+    const viewportPadding = options.viewportPadding ?? [20, 20]
+    const contentPadding = options.contentPadding ?? [10, 10]
+    Object.defineProperty(viewport, "clientHeight", { configurable: true, value: viewportHeight })
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      value: options.scrollTop ?? 80,
+      writable: true,
+    })
+    viewport.style.paddingTop = `${viewportPadding[0]}px`
+    viewport.style.paddingBottom = `${viewportPadding[1]}px`
+    content.style.paddingTop = `${contentPadding[0]}px`
+    content.style.paddingBottom = `${contentPadding[1]}px`
+    spacer.hidden = false
+    spacer.style.height = `${options.spacerHeight ?? 180}px`
+    rects.set(viewport, rect(0, viewportHeight))
+    rects.set(content, rect(0, viewportHeight))
+    rects.set(spacer, rect(0, options.spacerHeight ?? 180))
+    items.forEach((item, index) => rects.set(item, itemRects[index] ?? rect(0, 0)))
+    return { content, items, spacer, viewport }
+  }
+
+  function geometryObserver(elements: readonly Element[]): ObservedResize | undefined {
+    return observers.find((observer) => !observer.disconnected && elements.every((element) => observer.elements.has(element)))
+  }
+
+  function trigger(observer: ObservedResize) {
+    observer.callback([], observer as unknown as ResizeObserver)
+  }
+
+  function zeroScrollCalls() {
+    return scrollTo.mock.calls.filter((call) => scrollTopFromCall(call) === 0)
+  }
+
+  function restore() {
+    if (originalResizeObserver !== undefined) globalThis.ResizeObserver = originalResizeObserver
+    if (originalWindowResizeObserver !== undefined) window.ResizeObserver = originalWindowResizeObserver
+    if (originalScrollTo) {
+      Object.defineProperty(HTMLElement.prototype, "scrollTo", originalScrollTo)
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollTo")
+    }
+  }
+
+  return {
+    cancelFrame,
+    configure,
+    flushFrames,
+    frames,
+    geometryObserver,
+    observers,
+    rects,
+    restore,
+    scrollTo,
+    trigger,
+    zeroScrollCalls,
+  }
+}
+
+function renderGeometryThread(
+  thread: SessionStreamState,
+  overrides: Partial<ConversationThreadProps> = {},
+) {
+  return render(
+    <ConversationThread
+      sessionId="ses_geometry"
+      thread={thread}
+      isStreaming={false}
+      isReconnecting={false}
+      hasFailed={false}
+      creditRejected={false}
+      onOpenBilling={vi.fn()}
+      onOpenPricing={vi.fn()}
+      onRetry={vi.fn()}
+      mode="fast"
+      stagingByRun={{}}
+      hitlRunId={null}
+      controlError={null}
+      {...overrides}
+    />,
+    { wrapper: LocaleProvider },
+  )
+}
+
+function settledMessages(messages: SessionStreamState["messages"]): SessionStreamState {
+  return {
+    ...createSessionStreamState(),
+    messages,
+    stepsByRun: Object.fromEntries(
+      messages
+        .filter((message) => message.role === "assistant" && message.runId)
+        .map((message) => [message.runId as string, []]),
+    ),
+  }
+}
+
 afterEach(() => {
   cleanup()
+  activeGeometryHarness?.restore()
+  activeGeometryHarness = null
   vi.restoreAllMocks()
 })
 
@@ -92,6 +312,183 @@ describe("failureCopyKey — 闭集 7 码逐码本地化", () => {
   it("未知码与 null 兜底通用句", () => {
     expect(failureCopyKey({ code: "totally_unknown", message: "x" })).toBe("fail.generic")
     expect(failureCopyKey(null)).toBe("fail.generic")
+  })
+})
+
+describe("ConversationThread 紧凑线程几何", () => {
+  function geometry() {
+    activeGeometryHarness = installGeometryHarness()
+    return activeGeometryHarness
+  }
+
+  it("全部三个短滚动项连同双层上下 padding 都容得下时只清一次 spacer", () => {
+    const harness = geometry()
+    const thread = settledMessages([
+      { id: "m_u1", role: "user", content: "one", runId: "m_u1" },
+      { id: "m_a1", role: "assistant", content: "two", runId: "run_1" },
+      { id: "m_u2", role: "user", content: "three", runId: "m_u2" },
+    ])
+    const { container } = renderGeometryThread(thread)
+    const elements = harness.configure(container, [rect(30, 80), rect(138, 80), rect(246, 80)])
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(harness.zeroScrollCalls()).toHaveLength(1)
+
+    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
+    expect(observer).toBeDefined()
+    act(() => {
+      harness.trigger(observer as ObservedResize)
+      harness.flushFrames()
+    })
+    expect(harness.zeroScrollCalls()).toHaveLength(1)
+  })
+
+  it.each([
+    {
+      name: "首项很长而末项很短",
+      itemRects: [rect(30, 500), rect(558, 80)],
+      viewportHeight: 600,
+    },
+    {
+      name: "viewport clientHeight 为零",
+      itemRects: [rect(30, 80), rect(138, 80)],
+      viewportHeight: 0,
+    },
+    {
+      name: "Item 像素不是有限值",
+      itemRects: [rect(Number.NaN, 80), rect(138, 80)],
+      viewportHeight: 600,
+    },
+  ])("$name 时不清 spacer", ({ itemRects, viewportHeight }) => {
+    const harness = geometry()
+    const thread = settledMessages([
+      { id: "m_u", role: "user", content: "long prompt", runId: "m_u" },
+      { id: "m_a", role: "assistant", content: "short answer", runId: "run_1" },
+    ])
+    const { container } = renderGeometryThread(thread)
+    const elements = harness.configure(container, itemRects, { viewportHeight })
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(elements.spacer).not.toHaveAttribute("hidden")
+    expect(elements.spacer).toHaveStyle({ height: "180px" })
+  })
+
+  it("成果滚动项使总内容超高时不再只按末助手项误判", () => {
+    const harness = geometry()
+    const delivery: SessionDelivery = {
+      conversationId: "ses_geometry",
+      artifactId: "artifact_geometry",
+      assetId: "asset_geometry",
+      artifactKind: "document",
+      title: "Geometry report",
+      mime: "application/pdf",
+      size: 2048,
+      runId: "run_1",
+      createdAt: "2026-09-30T00:00:00Z",
+    }
+    const thread = {
+      ...settledMessages([
+        { id: "m_u", role: "user" as const, content: "prompt", runId: "m_u" },
+        { id: "m_a", role: "assistant" as const, content: "answer", runId: "run_1" },
+      ]),
+      deliveries: [delivery],
+    }
+    const { container } = renderGeometryThread(thread, { onOpenDelivery: vi.fn() })
+    const elements = harness.configure(container, [rect(30, 80), rect(138, 80), rect(246, 340)])
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(elements.spacer).not.toHaveAttribute("hidden")
+    expect(elements.spacer).toHaveStyle({ height: "180px" })
+  })
+
+  it.each([
+    { name: "流式", overrides: { isStreaming: true } },
+    { name: "重连", overrides: { isReconnecting: true } },
+    { name: "HITL", overrides: { hitlRunId: "run_1" } },
+  ])("$name 状态不取得紧凑滚动所有权", ({ overrides }) => {
+    const harness = geometry()
+    const thread = settledMessages([
+      { id: "m_u", role: "user", content: "prompt", runId: "m_u" },
+      { id: "m_a", role: "assistant", content: "answer", runId: "run_1" },
+    ])
+    const { container } = renderGeometryThread(thread, overrides)
+    const items = [...container.querySelectorAll('[data-slot="message-scroller-item"]')]
+    harness.configure(container, items.map((_, index) => rect(30 + index * 108, 80)))
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(harness.zeroScrollCalls()).toHaveLength(0)
+  })
+
+  it("嵌入失败反馈仍参与 fit；展开详情后由详情锚点独占阅读位置", () => {
+    const harness = geometry()
+    const { container } = renderGeometryThread(emptyFailedThread(), {
+      hasFailed: true,
+    })
+    const elements = harness.configure(container, [rect(30, 80), rect(138, 150)])
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(harness.zeroScrollCalls()).toHaveLength(1)
+
+    harness.scrollTo.mockClear()
+    fireEvent.click(screen.getByRole("button", { name: tr("fail.showDetail") }))
+    act(() => harness.flushFrames())
+    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
+    if (observer) {
+      act(() => {
+        harness.trigger(observer)
+        harness.flushFrames()
+      })
+    }
+    expect(harness.zeroScrollCalls()).toHaveLength(0)
+  })
+
+  it("ResizeObserver 仅在不 fit 变 fit 时清 spacer，变长不跳尾且卸载清理 pending frame", () => {
+    const harness = geometry()
+    const thread = settledMessages([
+      { id: "m_u", role: "user", content: "prompt", runId: "m_u" },
+      { id: "m_a", role: "assistant", content: "answer", runId: "run_1" },
+    ])
+    const rendered = renderGeometryThread(thread)
+    const elements = harness.configure(rendered.container, [rect(30, 500), rect(558, 80)])
+
+    harness.scrollTo.mockClear()
+    act(() => harness.flushFrames())
+    expect(harness.zeroScrollCalls()).toHaveLength(0)
+
+    const observer = harness.geometryObserver([elements.viewport, elements.content, ...elements.items])
+    expect(observer).toBeDefined()
+    harness.rects.set(elements.items[0] as Element, rect(30, 80))
+    harness.rects.set(elements.items[1] as Element, rect(138, 80))
+    act(() => {
+      harness.trigger(observer as ObservedResize)
+      harness.flushFrames()
+    })
+    expect(harness.zeroScrollCalls()).toHaveLength(1)
+
+    harness.scrollTo.mockClear()
+    harness.rects.set(elements.items[0] as Element, rect(30, 500))
+    harness.rects.set(elements.items[1] as Element, rect(558, 80))
+    act(() => {
+      harness.trigger(observer as ObservedResize)
+      harness.flushFrames()
+    })
+    expect(harness.scrollTo).not.toHaveBeenCalled()
+
+    elements.spacer.hidden = false
+    elements.spacer.style.height = "180px"
+    elements.viewport.scrollTop = 80
+    harness.rects.set(elements.items[0] as Element, rect(30, 80))
+    harness.rects.set(elements.items[1] as Element, rect(138, 80))
+    act(() => harness.trigger(observer as ObservedResize))
+    expect(harness.frames.size).toBeGreaterThan(0)
+    rendered.unmount()
+    expect(observer?.disconnected).toBe(true)
+    expect(harness.cancelFrame).toHaveBeenCalled()
   })
 })
 

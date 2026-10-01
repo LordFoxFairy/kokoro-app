@@ -1,5 +1,21 @@
 # Kokoro User Web 技术设计
 
+## WEB-COMPACT-GEOMETRY：只清除真正短线程的原生 spacer
+
+`ConversationThread` 继续拥有会话滚动编排，不修改共享 MessageScroller。旧纠偏只在恰好两个 projection item 时运行，
+并用末项高度/位置代替整段内容：长 user 加短 assistant 会被误判，三个以上短项会漏掉，HITL 中调用
+`scrollToStart` 还会把原生 scroller 从 bottom-following 切成 free-scrolling。本片改为读取当前 content 下全部真实
+`MessageScrollerItem`，包括成果和独立失败反馈；以所有项的首尾实际跨度（已含 gap）加 content/viewport 上下 padding，
+仅在总高度不超过 viewport（允许 0.5px 亚像素误差）时清除原生 spacer 并 start-align。零 viewport、非有限像素和空几何
+均失败关闭，不从 jsdom 默认零尺寸推导页面行为。
+
+该纠偏只在 settled、非 reconnect、非 HITL 且错误详情未展开时取得滚动所有权。流式、重连、批准过程、展开详情和
+真实长内容继续完全交给原生 scroller/详情锚点；fit 后内容变长也不反向跳到末尾。一个局部 ResizeObserver 观察
+viewport、content 与每个实际 item，回调合并到单个 animation frame；只有 spacer 仍大于 0.5px 或 scrollTop 大于
+0.5px 才调用 start，避免清 spacer 触发自身观察循环。组件卸载或边界切换时断开 observer 并取消 pending frame。
+消息内容、顺序、身份、轮间 `1.75rem` gap、失败/成果 DOM、Composer、API 与 owner 数据均不改变；真实视觉与输入框
+内框仍由 Root 后继浏览器验收。
+
 ## WEB-EMPTY-FAILED-TURN：空失败助手轮与反馈共用滚动项
 
 `ConversationThread` 继续拥有消息项和普通/余额不足失败反馈的唯一组合边界。只有失败已落定、没有流式或重连、没有

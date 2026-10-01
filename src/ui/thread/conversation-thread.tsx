@@ -27,6 +27,43 @@ import { MessageBubble } from "./message-bubble"
 import styles from "./thread.module.css"
 
 const NO_DECISIONS: Record<string, ToolDecision> = {}
+const COMPACT_GEOMETRY_EPSILON = 0.5
+
+function pixelValue(value: string): number | null {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function blockPadding(element: HTMLElement): number | null {
+  const style = window.getComputedStyle(element)
+  const start = pixelValue(style.paddingBlockStart || style.paddingTop)
+  const end = pixelValue(style.paddingBlockEnd || style.paddingBottom)
+  if (start === null || end === null || start < 0 || end < 0) return null
+  return start + end
+}
+
+function actualContentSpan(items: readonly HTMLElement[]): number | null {
+  let start = Number.POSITIVE_INFINITY
+  let end = Number.NEGATIVE_INFINITY
+  for (const item of items) {
+    const itemRect = item.getBoundingClientRect()
+    if (!Number.isFinite(itemRect.top) || !Number.isFinite(itemRect.bottom) || itemRect.bottom < itemRect.top) {
+      return null
+    }
+    start = Math.min(start, itemRect.top)
+    end = Math.max(end, itemRect.bottom)
+  }
+  const span = end - start
+  return Number.isFinite(span) && span > 0 ? span : null
+}
+
+function spacerHeight(spacer: HTMLElement | null): number | null {
+  if (!spacer) return 0
+  const rectHeight = spacer.getBoundingClientRect().height
+  const styleHeight = pixelValue(window.getComputedStyle(spacer).height)
+  const heights = [rectHeight, styleHeight].filter((height): height is number => height !== null && Number.isFinite(height))
+  return heights.length > 0 ? Math.max(...heights) : null
+}
 
 export type ConversationThreadProps = {
   preview?: boolean
@@ -149,36 +186,6 @@ function ConversationThreadSurface({
     })
   }
 
-  // The primitive keeps a spacer so long conversations can end-align. For a
-  // settled, single short turn that spacer is larger than the actual content,
-  // so default `end` alignment can hide the user's bubble above the viewport.
-  // Re-anchor only that compact state to the start; long turns and active
-  // streams retain the normal bottom-following behavior.
-  useEffect(() => {
-    if ((isStreaming && hitlRunId === null) || hasFailed || items.length !== 2) return
-    const frame = window.requestAnimationFrame(() => {
-      // Keep the compact-turn correction local to this thread. Shared/public
-      // views can be mounted beside the workspace, and a document-wide query
-      // would otherwise measure or scroll the first matching conversation.
-      const root = threadRootRef.current
-      const viewport = root?.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')
-      const messageItems = [...(root?.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"]') ?? [])]
-        .filter((element) => element.dataset.messageId !== "deliveries")
-      const lastMessage = messageItems.at(-1)
-      if (!viewport || !lastMessage) return
-      const viewportRect = viewport.getBoundingClientRect()
-      const lastRect = lastMessage.getBoundingClientRect()
-      // An inline approval is deliberately taller than a settled assistant
-      // turn, but it still fits above the Composer on a desktop viewport.
-      // Keep its initiating user message visible instead of bottom-anchoring
-      // the whole short exchange and clipping that context above the header.
-      const compactThreshold = hitlRunId !== null ? 0.9 : 0.65
-      const compact = lastRect.height < viewport.clientHeight * compactThreshold
-        && lastRect.bottom < viewportRect.top + viewport.clientHeight
-      if (compact) scrollToStart({ behavior: "auto" })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [hasFailed, hitlRunId, isStreaming, items.length, scrollToStart])
   // 流式中：最后一个 assistant 轮是当前在途的那一轮——唯一带「实时」语义的 turn。
   let liveRunId: string | undefined
   if (isStreaming) {
@@ -287,6 +294,67 @@ function ConversationThreadSurface({
       )}
     </div>
   )
+  const geometryItemIdentity = [
+    ...items.map((item) => item.kind === "user" ? `user:${item.message.id}` : `run:${item.runId}`),
+    hasRenderableDeliveries ? "deliveries" : "",
+    failureFeedback && !embedFailureFeedback ? failureMessageId : "",
+  ].join("\u0000")
+
+  // The native scroller uses a spacer to end-align compact content. Clear that
+  // artificial range only when every rendered item really fits. Active runs,
+  // reconnects, approvals, and an expanded diagnostic retain their own scroll
+  // ownership; long settled content is never pushed to either edge here.
+  useEffect(() => {
+    if (isStreaming || isReconnecting || hitlRunId !== null || errorDetailOpen) return
+    const root = threadRootRef.current
+    const viewport = root?.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')
+    const content = root?.querySelector<HTMLElement>('[data-slot="message-scroller-content"]')
+    if (!viewport || !content) return
+    const messageItems = [...content.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"]')]
+    if (messageItems.length === 0) return
+
+    let frame: number | null = null
+    const alignCompactContent = () => {
+      frame = null
+      const viewportHeight = viewport.clientHeight
+      const itemSpan = actualContentSpan(messageItems)
+      const viewportPadding = blockPadding(viewport)
+      const contentPadding = blockPadding(content)
+      const currentSpacerHeight = spacerHeight(
+        content.querySelector<HTMLElement>("[data-message-scroller-spacer]"),
+      )
+      const currentScrollTop = viewport.scrollTop
+      if (
+        !Number.isFinite(viewportHeight)
+        || viewportHeight <= 0
+        || itemSpan === null
+        || viewportPadding === null
+        || contentPadding === null
+        || currentSpacerHeight === null
+        || !Number.isFinite(currentScrollTop)
+      ) return
+      const occupiedHeight = itemSpan + viewportPadding + contentPadding
+      if (occupiedHeight > viewportHeight + COMPACT_GEOMETRY_EPSILON) return
+      if (
+        currentSpacerHeight <= COMPACT_GEOMETRY_EPSILON
+        && currentScrollTop <= COMPACT_GEOMETRY_EPSILON
+      ) return
+      scrollToStart({ behavior: "auto" })
+    }
+    const scheduleAlignment = () => {
+      if (frame !== null) return
+      frame = window.requestAnimationFrame(alignCompactContent)
+    }
+    const observer = new ResizeObserver(scheduleAlignment)
+    observer.observe(viewport)
+    observer.observe(content)
+    messageItems.forEach((item) => observer.observe(item))
+    scheduleAlignment()
+    return () => {
+      observer.disconnect()
+      if (frame !== null) window.cancelAnimationFrame(frame)
+    }
+  }, [errorDetailOpen, geometryItemIdentity, hitlRunId, isReconnecting, isStreaming, scrollToStart])
 
   return (
     <MessageScroller
