@@ -1,5 +1,28 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-FAILURE-PLACEMENT-D0：页面生命周期的 run failure 索引（2026-10-01；仅设计门）
+
+BFF 仍持久拥有 Conversation/Message/Project 归属与 snapshot，Agent/BFF ledger 仍拥有 Run terminal 事件。Web 没有数据库，且本目标
+不新增 canonical schema、SQL/migration、事务、Redis、localStorage、IndexedDB 或 server cache。目标 `runFailuresById` 只是当前
+页面的纯内存 read model，reload 时从 owner snapshot 重建，不能作为 owner receipt、授权或跨设备事实。
+
+| 输入事实 | 页面内存投影 | 生命周期/禁止推导 |
+| --- | --- | --- |
+| final assistant record = failed，nonblank `run_id`，strict failure | `runFailuresById[run_id]={failedRunId:run_id, kind:"agent", profile}` | 从 snapshot 重建；不保存 raw message/stack，不从 code 字符串补 tuple。 |
+| final assistant record = failed，nonblank `run_id`，无 failure | 同 key 的 `generic` | 只表示已确认失败；不猜 cancel/dispatch/provider 原因或 retryability。 |
+| verified Agent/BFF dispatch live terminal | exact event run key 的 `agent` / `dispatch` | replay 同 event 幂等；不按当前轮、正文或尾项改挂。 |
+| 同 run canonical completed | 删除该 run 的 failure | 只影响 exact key；不得清另一个历史失败。 |
+| failed assistant 无 `run_id` | 独立安全失败投影 | 不用 `message_id`、数组位置或 UI item id 伪造 `failedRunId`。 |
+| 未获 create receipt 的 frozen submission | 既有 pending intent/key/body | 与 terminal map 分离；同键恢复不是 Run retry。 |
+
+同 run 多段 assistant 以该 run 最后一条 owner-ordered assistant record 决定 snapshot terminal view；因此早期 completed 段不会覆盖
+后续 failed 段，后续 completed 也不会遗留旧 footer。partial/full/empty `content` 都只是正文，不参与失败判定。新 user 或新 active run
+不删除已确认历史项；Thread 仅以 `failedRunId === turn.runId` 放置。Conversation 切换用新 snapshot 替换整个页面 read model，不跨会话
+携带；Project 归属、ScheduledTask 与 Run 仍是独立资源，不建猜测关系。
+
+安全值继续沿现有 closed `agent | dispatch | generic` 与 generated strict tuples。当前 `runStatus` 可保留为机器当前相位，但不再作为
+历史 footer 的归属事实。没有发布 terminal retry/queued 模型，也不建立本地 retry queue、parent run、synthetic user 或假 receipt。
+
 ## WEB-COMPOSER-P0：仅浏览器瞬时接纳结果（2026-10-01；候选）
 
 同步accepted boolean不持久化、不进入snapshot、localStorage、IndexedDB、SQL或Redis；它仅决定当前事件处理是否消费受控草稿与

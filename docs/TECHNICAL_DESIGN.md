@@ -1,5 +1,84 @@
 # Kokoro User Web 技术设计
 
+## WEB-FAILURE-PLACEMENT-D0：按 Run 归属的紧凑失败 footer（2026-10-01；仅设计门）
+
+当前 `SessionStreamState.runError` 是“当前/最近一轮”的单槽，未保存 `failedRunId`；`ConversationThread` 又用尾项、空正文和
+`hasFailed` 猜失败应放在哪一轮。该组合会让已有 partial/full 正文的真实终态失败落成线程尾部独立红色提示，也可能在下一轮开始后
+误挂。目标不是改色或隐藏失败，而是让 owner 已确认的 terminal failure 以 exact run identity 成为对应助手轮的紧凑 footer。
+
+### AGENTS §8 放置表
+
+| 项 | 结论 |
+| --- | --- |
+| Owner | BFF 继续唯一拥有 Conversation、Message、Project 归属与 durable AG-UI；Agent/BFF 分别拥有已发布 failure source。Web `core` 只拥有 snapshot/live 的页面生命周期投影，Thread UI 只拥有可见放置。唯一 Web writer 仍在既有 `core`/`ui/thread` 边界。 |
+| 当前事实 | public 3.0 `ChatMessage` 已有 `status`、optional `run_id`、strict safe `failure`；verified Agent/BFF dispatch `RUN_ERROR` 都有 exact run identity。Web 水合只恢复尾部 failure，reducer 只写单槽 `runError`，Thread 仅把“尾部精确空正文”失败嵌入轮次，其余另起滚动项。`canRetryPendingSubmission` 已独立表示未获 create receipt 的同键恢复。 |
+| 目标职责 | `core` 按 exact `failedRunId` 保存每个已确认失败 run 的 safe failure；snapshot 与 live 生成同一内存值。`projections` 把该值只交给相同 `runId` 的 assistant turn；`AssistantTurn` 在正文/过程之后显示 compact footer。partial/full/空正文都保留，真实 terminal failure 也保留。 |
+| 目录方案 A（采用） | 扩展现 `src/core/{state,reducer,hydration,projections}.ts` 与现 `src/ui/thread/{conversation-thread,assistant-turn}.tsx`；必要样式仍放现 `thread.module.css`。这是既有状态 owner、纯投影和轮级 renderer，不新建 store/module。 |
+| 目录方案 B（淘汰） | 不在 `ConversationThread` 继续用最后一条消息、正文是否为空或文案相等推断归属；不新建 `failure-footer` 状态模块，也不把失败塞入 Composer/AppFrame CSS。视觉推断会误挂，独立模块则复制 run/message owner。 |
+| 粒度 | 现文件各自只增加其原职责内的一项：状态 shape、事件折叠、水合、线程派生和轮级 footer。若实现证明样式可完全复用，则不改 CSS；不因一个 footer 新建目录或组件。 |
+| 依赖 | contract → core → projection → Thread UI 单向保持；UI 不解析 OpenAPI，generated 不依赖 core/UI，Web 不直连 Agent。safe tuple 继续只来自 `contract/agent-failure.ts` 与 generated artifact。 |
+| 数据/API | Web 无数据库、canonical schema、SQL、Redis、localStorage 或 IndexedDB；失败索引只在当前页面内存，由 snapshot/replay 重建。public 3.0、AG-UI、同源 adapter、幂等 key 与 generated artifact均不改。 |
+| 删除项 | 实施时删除 `runError` 单槽对 terminal placement 的权威性、尾项/空正文 `embedFailureFeedback` 猜测及 terminal footer 上的伪 retry；不删除消息、不按正文去重、不吞 terminal error。未获 receipt 的提交恢复保持独立。 |
+| 验证 | 先对下列矩阵取得行为 RED，再跑 core/UI 定点、contract/architecture、lint/typecheck、完整 test/build；最终 desktop/mobile/focus 与 live/reload 由 Root 在获批代码切片复验。本 D0 不运行或冒称这些门。 |
+
+### 目标内存与清理规则
+
+- 用 `runFailuresById`（名称可在实现审查时等价收敛）替代无身份的 terminal 单槽；每个值都显式包含与 map key 相等的
+  `failedRunId` 和现有 closed `agent | dispatch | generic` safe failure。不得保存 producer message、stack、provider text 或本地 launch code。
+- snapshot 按 owner 顺序聚合同一 `run_id` 的 assistant records：该 run 最后一条 assistant record 为 `failed` 才投影 footer；若带
+  failure，沿用 strict safe tuple；若无 failure 但有 exact `run_id`，投影 generic。没有 exact `run_id` 的失败不得绑定到
+  `message_id` 伪造 run，仍以独立安全失败反馈保真。
+- live `run.failed` / `run.dispatch_failed` 只写 `event.run_id` 对应项；相同 run 的 `run.completed` 只清该项。新 user、新 active run
+  或其他 run 的 completed/failed 不清历史已确认项，也绝不把旧项改挂到新轮。`seenEventIds` 继续保证 replay 幂等。
+- `runStatus` 可继续表示当前机器相位，但不再决定 footer 归属；放置只比较 exact `failedRunId === assistantTurn.runId`。页面 reload
+  完全从 owner snapshot 重建，因此 live 与 reload 的 footer run、safe copy 和无 terminal action 必须相同。
+- pre-admission/transport-unknown 没有已确认 run terminal，继续走线程级反馈；只有
+  `canRetryPendingSubmission=true` 时可用原 idempotency key + 冻结 body 恢复。已 terminal 的 footer 即使 profile
+  `retryable=true` 也没有动作；public 3.0 未发布 terminal retry/queued command，不能用新 user submit 伪装。
+
+### 最小后继代码文件集（须 Root 再授权）
+
+生产预计只需现文件：
+
+```text
+src/core/state.ts
+src/core/reducer.ts
+src/core/hydration.ts
+src/core/projections.ts
+src/ui/thread/conversation-thread.tsx
+src/ui/thread/assistant-turn.tsx
+src/ui/thread/thread.module.css              # 仅现样式不足时
+src/components/blocks/app-frame/app-frame.tsx # 仅拆分未回执与terminal展示输入时
+src/ui/shared/shared-thread.tsx               # 仅props收敛所需
+```
+
+测试预计只需现文件：
+
+```text
+tests/core/reducer.test.ts
+tests/core/hydration.test.ts
+tests/core/projections.test.ts
+tests/ui/conversation-failure.test.tsx
+tests/ui/shared-thread.test.tsx
+tests/ui/app-frame.smoke.test.tsx              # 未回执同键恢复边界
+tests/architecture/css-quality.test.ts         # 仅CSS确有变化时
+```
+
+不改 `contract/`、`generated/`、同源 route、依赖/lock、i18n 码表或 BFF/Agent。实现发现现 public 3.0 无法给某类失败 exact run
+identity 时先回 Root/owner，而不是增加 consumer-only wire 或内容启发式。
+
+### 必须先 RED 的矩阵
+
+1. **empty failure**：空正文 failed run 仍有原 assistant turn，footer 在同一 `runId` item 内，只有一个安全反馈，不生成相邻空卡。
+2. **partial failure**：partial Markdown 原样保留且可复制，footer 紧随同一 turn；不把正文替换为错误、不另起线程尾 alert。
+3. **full failure**：完整回答仍可复制完整真实文本，同时显示真实 terminal footer；“看起来完整”不得被当 completed 或吞错。
+4. **completed**：同 run completed 无 footer；先 failed 后同 run completed 只清该 run，不能清其他历史 failed run。
+5. **多轮历史**：两个相同 user 文案保持两条 owner 消息；run A failure 只在 A，run B success 无失败；再开始 run C 不移动/复制 A footer。
+6. **stream/live**：live RUN_ERROR 以 frame exact run 归属；在途正文继续流式，terminal 后落 footer；历史 replay/重复 event 不重复 footer。
+7. **reload/snapshot**：同一会话 reload 后每个可归属 failed run 与 live 结果一致；无 `run_id` 的 generic 仍可见但不伪绑；active/HITL 不误恢复历史为当前失败。
+8. **动作**：terminal agent（含 `retryable=true`）、dispatch、generic 均无 retry；仅未获 create receipt 的 frozen intent 有同键恢复，点击不创建新 user 或新 key。
+9. **mobile/focus**：窄屏 footer 文案换行且无横溢；footer 无虚假可聚焦控件，线程级未回执 retry 与计费动作仍保留可见焦点、命中区和 aria 名称。
+
 ## WEB-COMPOSER-P0：接纳边界与停止可达性（2026-10-01；候选）
 
 | 项 | 裁决 |

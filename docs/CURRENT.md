@@ -1,3 +1,19 @@
+## WEB-FAILURE-PLACEMENT-D0：四文档设计门（2026-10-01；待 Root 审查）
+
+基线 Web main `d2b717501349c8d8c43c13c7682e218f999297e3` clean。本 D0 只对齐 TECHNICAL_DESIGN、API_CONTRACT、
+DATA_MODEL 与 CURRENT：目标以 exact `failedRunId` 建页面内存 run failure 索引，把 empty/partial/full 的真实 terminal failure
+放入对应 assistant turn 的 compact footer；正文、复制、重复 owner user 消息和真实 failure 全保留。snapshot/live/reload 使用同一
+run identity，后续 run 不继承或移动旧失败；无 exact run 的 generic 仍独立可见，不以消息文本、尾项或空正文猜归属。
+
+本设计继续使用 public 3.0 与现 strict safe tuples，不改 wire/generated/owner。已 terminal 的 Agent/dispatch/generic 没有 retry
+动作；仅未获 create receipt 的冻结意图可用原 key/body 恢复，不能以新 user submit 伪装 retry，也不声明 queued。Web 无数据库，
+目标状态仅为浏览器页面生命周期内存，reload 从 BFF owner snapshot 重建。
+
+本轮没有修改源码/测试/API生成物/主题，没有运行测试、build、服务、provider或浏览器，也没有提交。Root 先审放置表、最小后继
+文件集和 empty/partial/full/completed/多轮历史/stream/live reload/mobile/focus RED 矩阵，再决定是否授权单 writer 代码切片。
+先前 Root 的 contract219、architecture50、tests2074、lint/typecheck/build exit0 属于已提交 UI5/OIDC1 基线，不是本 D0 实现
+或新画面证据；3310 source 虽已同步但 CDP 观察超时，当前不宣称浏览器视觉验收。
+
 ## WEB-FOOTER-COMPOSER / OIDC-FIXTURE-R21：Root 独立验收（2026-10-01）
 
 Root核UI5冻结与OIDC第6路径hash一致，独立审查本片P0/P1=0。Root完整 `pnpm check` exit0：contract **219/219**、architecture **50/50**、完整测试 **2074/2074**、lint/typecheck/build成功，日志 `/tmp/kokoro-web-footer-oidc-r21-root-check-r2.log`。此前2072/1失败保留：authorize无Location时旧helper会GET首页，不证明callback500；本fixture校验relative target、先验authorize、受控首坏阶段诊断及断连终态barrier。未提高timeout/改生产auth。

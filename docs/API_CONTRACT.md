@@ -1,5 +1,25 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-FAILURE-PLACEMENT-D0：public 3.0 exact run 归属（2026-10-01；仅设计门）
+
+本目标不新增 wire。BFF public 3.0 `ChatMessage` 仍提供 `status`、optional `run_id` 与现有 strict
+`failure={source,code,retryable}`；failure presence guard 仍要求 assistant + failed + nonblank `run_id`。verified Agent
+`RUN_ERROR` 与 BFF-owned dispatch `RUN_ERROR` 已分别携带通过 identity 校验的 exact run id。Web 只把这些已发布身份映射为
+`failedRunId`，不得从 message text、空正文、数组尾项、`message_id` 或当前选中会话猜 run。
+
+- snapshot：同一 `run_id` 的最终 owner-ordered assistant record 为 failed 时，Web 可建立该 run 的 compact failure footer；safe
+  failure 存在则使用 strict tuple，不存在则为 generic。failed record 没有 `run_id` 时保留独立安全失败反馈，但不声称轮级归属。
+- live/replay：Agent `RUN_ERROR` 只使用已校验 top-level/nested 相等的 run identity；dispatch 同样只使用其 canonical identity。
+  profile/code/message/source 的既有严格规则不放宽，raw producer details 继续不进入 UI 状态。
+- completed：canonical completion 只关闭相同 run。另一个 run 的终态、新 user、Project 切换或正文相同都不是清除/迁移历史
+  failure 的协议信号；重复 `event_id` 不产生第二 footer。
+- action：public 3.0 没有 terminal retry 或 queued command。owner terminal 的 `retryable` 是分类，不是 Web mutation capability；
+  terminal footer没有重发动作。只有 create-message 未获 receipt 的 transport-unknown 意图可按现契约以原 key 和冻结 body 恢复，
+  该动作不得创建新 user 来冒充 retry。Project、Conversation、Message、ScheduledTask 与 Run identity 继续相互独立。
+
+因此后继实现不改 `src/contract/**`、`src/generated/**`、HTTP path、AG-UI frame、BFF envelope、幂等字段或版本 pin。若 owner
+snapshot 对某一 generic failure 未给 nonblank `run_id`，consumer 只能显示不归属的安全反馈，不能发明 3.1 字段或 fallback。
+
 ## WEB-COMPOSER-P0：无网络契约变化（2026-10-01；候选）
 
 `SessionEngine.submit` 的boolean是Web进程内调用结果，不是HTTP receipt或owner状态。false表示调用未进入既有create-message流程，
