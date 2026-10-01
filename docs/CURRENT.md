@@ -1,6 +1,37 @@
+## Root R27 idle-terminal 切片验收（2026-10-01）
+
+基线c83f1b4；8文件rereview manifest 7ae902e1保持8/8 hash。Root在本仓固定Node22/pnpm11.25完整`pnpm check` exit0：contract219、architecture50、163files/2103tests全部通过、lint/typecheck/build成功；日志 `/tmp/kokoro-web-idle-terminal-r26-rereview-root-check.log`。独立复审0P0/0P1/0P2，initial hydrate/receipt-first P1已以4RED→5GREEN补齐。只修浏览器订阅生命周期：owner idle/settled零SSE、exact receipt与owner active决定单流；active EOF写闸/Stop/410 late身份保障不退。尚未在现3310实际浏览器验收；BFF queued snapshot及Agent审批新契约依赖不在此局部完成声明。Root负责精确8路径提交及同步已提交源码，未改provider/数据库/部署。
+
 ## R26 Root 源码验收（2026-10-01）
 
 最终28路径 manifest51c56c6d已Root逐hash/范围复核；fresh Node22完整pnpm check exit0，contract219/219、architecture50/50、Vitest2096/2096、lint/typecheck/build通过，日志 /tmp/kokoro-web-connection-r26-root-check-final.log。独立审查原2P1和迟到receipt P2全部关闭，最终0P0/0P1/0P2。Root准备精确提交源码及同步自身运行副本；真实浏览器连接恢复、当前旧后端429原因与其他owner缺口仍需验证，不宣称组合发布/九owner闭环。
+
+## WEB-IDLE-TERMINAL-P1-R26：历史终态 SSE 生命周期返修（2026-10-01；源码候选）
+
+Root 在已验 Web `c83f1b4013` 同步运行副本后真实观察：历史 completed conversation 的 snapshot 正常，events 连续
+`200 text/event-stream` 后 EOF，Web 每 2 秒进入 reconnecting，generic Run error 为 0。静态链已确认 BFF 当前 route 与文档都规定
+terminal ledger head 合法关闭 SSE，而 Web hydrate 对任何非 null snapshot 无条件开流、transport 又把 EOF 作为 active 断连重试。
+
+本片仅在现 engine 生命周期收紧订阅：settled snapshot 零 SSE 且保持 connected/可继续 submit；snapshot active 或本页 exact receipt
+继续开流，active EOF 写闸、Stop、terminal frame、410 recovery 与 R26 late-receipt 两时序保持。BFF 尚未发布 queued reload identity，
+该缺口留给 owner 后继，不从 pending Message 猜测。
+
+本片 RED 先稳定复现 settled snapshot 仍开 SSE 的 3 个断言失败（`/tmp/kokoro-web-idle-terminal-r26-red.log`）；最小
+engine/UI GREEN 为 161/161（`/tmp/kokoro-web-idle-terminal-r26-targeted-green2.log`）。首次完整门真实暴露旧
+`machine.test.ts` 参数化 terminal failed snapshot 仍要求流的 12 个矛盾断言（2086/2098，
+`/tmp/kokoro-web-idle-terminal-r26-worker-check.log`），经 Root 精确扩围后改为保 failure tuple、connected 且零 SSE。
+随后 Node22 fresh `pnpm check`：contract 219/219、architecture 50/50、Vitest 2098/2098，lint、typecheck、build 均通过，
+日志 `/tmp/kokoro-web-idle-terminal-r26-worker-check-final.log`。以上仍是 worker 源码候选证据，待 Root 独立审查、复跑和真实浏览器旅程；
+不据此宣称旧 BFF queued reload 缺口或九 owner 组合闭环。
+
+Root 对上述候选独立复审又发现 initial hydrate/submit 竞态：create receipt 先于 snapshot 返回时会提前开流，随后 snapshot 覆盖
+optimistic user 并可能二次开流，receipt run 已由 snapshot 终态收口时还会错误保持 streaming。返修将 initial receipt 纳入同一
+deferred 顺序，先恢复 owner snapshot/canonical user，再区分 exact terminal、active identity 或旧 settled 视图，最后至多开一个流。
+参数化 RED 为 completed/failed 历史 × snapshot 含/不含 receipt run terminal 共 4/4 失败，日志
+`/tmp/kokoro-web-idle-terminal-r26-rereview-red.log`；最小修复及 receipt-first active 覆盖为 5/5，日志
+`/tmp/kokoro-web-idle-terminal-r26-rereview-green2.log`。返修后 Node22 fresh `pnpm check`：contract 219/219、architecture
+50/50、Vitest 2103/2103，lint、typecheck、build 均通过，日志
+`/tmp/kokoro-web-idle-terminal-r26-rereview-check.log`；仍待 Root 独立审查、复跑和 live 旅程。
 
 ## WEB-CONNECTION-R26：Root 拒收后的局部返修（2026-10-01；源码候选）
 

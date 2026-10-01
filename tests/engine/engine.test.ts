@@ -369,15 +369,22 @@ describe("提交链路", () => {
 
   it("unavailable 窗口也拒绝 pre-receipt retry 并保留原冻结意图", async () => {
     const seeded = addConversation(null, "conv_retry_gate", 500)
-    buildEngine(seeded)
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_retry_gate", eventWatermark: CURSOR_7 }))
-    engine.dispose()
+    client = createFakeClient()
+    storage = createMemoryStorage<ConversationStore>(seeded)
+    let resolveInitialSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveInitialSnapshot = resolve })
     engine = createSessionEngine({ client, storage, now: () => 1_000 })
-    await settle()
 
     let rejectCreate!: (reason: Error) => void
     client.nextCreate = () => new Promise((_resolve, reject) => { rejectCreate = reject })
     expect(engine.submit("unknown pre-receipt")).toBe(true)
+    resolveInitialSnapshot(makeSnapshot({
+      sessionId: "conv_retry_gate",
+      eventWatermark: CURSOR_7,
+      activeRun: { run_id: "run_snapshot_active", status: "running" },
+    }))
+    await settle()
+
     client.lastStream().fail(new SessionClientError("http", "status 429"))
     rejectCreate(new Error("create rejected"))
     await settle()
@@ -398,7 +405,6 @@ describe("提交链路", () => {
     }))
     engine.reconnect()
     await settle()
-    client.lastStream().connected()
     expect(engine.getSnapshot()).toMatchObject({
       machine: { phase: "error", error: "create rejected" },
       connection: { status: "connected" },
@@ -681,12 +687,180 @@ describe("停止与放弃", () => {
 describe("snapshot-first 水合与中断恢复", () => {
   const SEEDED = addConversation(null, "conv_9", 500)
 
+  it.each([
+    { historyStatus: "completed" as const, snapshotHasReceiptTerminal: false },
+    { historyStatus: "completed" as const, snapshotHasReceiptTerminal: true },
+    { historyStatus: "failed" as const, snapshotHasReceiptTerminal: false },
+    { historyStatus: "failed" as const, snapshotHasReceiptTerminal: true },
+  ])(
+    "initial $historyStatus history with receipt-first and terminal=$snapshotHasReceiptTerminal preserves owner snapshot before opening a stream",
+    async ({ historyStatus, snapshotHasReceiptTerminal }) => {
+      client = createFakeClient()
+      storage = createMemoryStorage<ConversationStore>(SEEDED)
+      let resolveSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+      client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+      const receipt = makeReceipt("run_receipt_first")
+      client.nextCreate = () => Promise.resolve(receipt)
+      engine = createSessionEngine({
+        client,
+        storage,
+        now: () => 1_000,
+        createId: (prefix) => `${prefix}_receipt_first`,
+      })
+
+      expect(engine.submit("new request while hydrating")).toBe(true)
+      await settle()
+      expect(client.createCalls).toHaveLength(1)
+      expect(client.streams).toHaveLength(0)
+
+      resolveSnapshot(makeSnapshot({
+        sessionId: "conv_9",
+        eventWatermark: CURSOR_20,
+        messages: [
+          {
+            message_id: "user_old",
+            role: "user",
+            content: "old request",
+            status: "completed",
+            created_at: "2026-07-02T00:00:00Z",
+          },
+          {
+            message_id: "assistant_old",
+            role: "assistant",
+            run_id: "run_old",
+            content: historyStatus === "failed" ? "old partial body" : "old completed body",
+            status: historyStatus,
+            created_at: "2026-07-02T00:00:01Z",
+          },
+          ...(snapshotHasReceiptTerminal
+            ? [
+                {
+                  message_id: receipt.user_message_id,
+                  role: "user" as const,
+                  content: "new request while hydrating",
+                  status: "completed" as const,
+                  created_at: "2026-07-02T00:00:02Z",
+                },
+                {
+                  message_id: receipt.assistant_message_id,
+                  role: "assistant" as const,
+                  run_id: receipt.run_id,
+                  content: "owner already completed receipt run",
+                  status: "completed" as const,
+                  created_at: "2026-07-02T00:00:03Z",
+                },
+              ]
+            : []),
+        ],
+      }))
+      await settle()
+
+      expect(thread().messages).toContainEqual(expect.objectContaining({
+        id: "assistant_old",
+        content: historyStatus === "failed" ? "old partial body" : "old completed body",
+      }))
+      expect(thread().messages.filter((message) => message.id === receipt.user_message_id)).toEqual([
+        expect.objectContaining({ role: "user", content: "new request while hydrating" }),
+      ])
+      expect(thread().messages.filter((message) => message.role === "user" && message.id.startsWith("usr_"))).toHaveLength(0)
+      expect(thread().runFailuresById.run_old).toEqual(
+        historyStatus === "failed"
+          ? { failedRunId: "run_old", kind: "generic" }
+          : undefined,
+      )
+      if (snapshotHasReceiptTerminal) {
+        expect(thread().messages).toContainEqual(expect.objectContaining({
+          id: receipt.assistant_message_id,
+          content: "owner already completed receipt run",
+        }))
+        expect(engine.getSnapshot().machine).toMatchObject({ phase: "idle", runId: null })
+        expect(client.streams).toHaveLength(0)
+      } else {
+        expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: receipt.run_id })
+        expect(client.streams).toHaveLength(1)
+        expect(client.lastStream()).toMatchObject({ sessionId: "conv_9", resumeCursor: CURSOR_20 })
+      }
+    },
+  )
+
+  it("initial receipt-first snapshot 的 exact active run 只按 owner watermark 开一个流", async () => {
+    client = createFakeClient()
+    storage = createMemoryStorage<ConversationStore>(SEEDED)
+    let resolveSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+    const receipt = makeReceipt("run_receipt_active")
+    client.nextCreate = () => Promise.resolve(receipt)
+    engine = createSessionEngine({
+      client,
+      storage,
+      now: () => 1_000,
+      createId: (prefix) => `${prefix}_receipt_active`,
+    })
+
+    expect(engine.submit("active while hydrating")).toBe(true)
+    await settle()
+    expect(client.streams).toHaveLength(0)
+
+    resolveSnapshot(makeSnapshot({
+      sessionId: "conv_9",
+      eventWatermark: CURSOR_20,
+      activeRun: { run_id: receipt.run_id, status: "running" },
+      messages: [
+        {
+          message_id: receipt.user_message_id,
+          role: "user",
+          content: "active while hydrating",
+          status: "completed",
+          created_at: "2026-07-02T00:00:00Z",
+        },
+        {
+          message_id: receipt.assistant_message_id,
+          role: "assistant",
+          run_id: receipt.run_id,
+          content: "owner partial",
+          status: "streaming",
+          created_at: "2026-07-02T00:00:01Z",
+        },
+      ],
+    }))
+    await settle()
+
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "reattaching", runId: receipt.run_id })
+    expect(thread().messages.filter((message) => message.id === receipt.user_message_id)).toHaveLength(1)
+    expect(thread().messages).toContainEqual(expect.objectContaining({
+      id: receipt.assistant_message_id,
+      content: "owner partial",
+    }))
+    expect(client.streams).toHaveLength(1)
+    expect(client.lastStream()).toMatchObject({ sessionId: "conv_9", resumeCursor: CURSOR_20 })
+  })
+
+  async function pendingCreateWithActiveHydration(content: string) {
+    client = createFakeClient()
+    storage = createMemoryStorage<ConversationStore>(SEEDED)
+    let resolveInitialSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveInitialSnapshot = resolve })
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    let resolveCreate!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((resolve) => { resolveCreate = resolve })
+    expect(engine.submit(content)).toBe(true)
+    resolveInitialSnapshot(makeSnapshot({
+      sessionId: "conv_9",
+      eventWatermark: CURSOR_7,
+      activeRun: { run_id: "run_snapshot_active", status: "running" },
+    }))
+    await settle()
+    expect(engine.getSnapshot().machine.phase).toBe("submitting")
+    return { resolveCreate, stream: client.lastStream() }
+  }
+
   it("GC 410 only: refetches the owner snapshot and resumes its new watermark", async () => {
     buildEngine(SEEDED)
     client.snapshotCalls.length = 0
     let watermark = CURSOR_7
     client.nextSnapshot = () => Promise.resolve(makeSnapshot({
       sessionId: "conv_9", eventWatermark: watermark, deliveriesHasMore: true,
+      activeRun: { run_id: "run_active", status: "running" },
       deliveries: [makeSnapshotDelivery({ conversation_id: "conv_9", artifact_id: "artifact_1" })],
     }))
     engine.dispose()
@@ -704,7 +878,7 @@ describe("snapshot-first 水合与中断恢复", () => {
     client.lastStream().fail(new SessionClientError("http", "410 other"))
     await settle()
     expect(client.snapshotCalls).toHaveLength(2)
-    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "reattaching", runId: "run_active" })
     expect(engine.getSnapshot().connection).toEqual({ status: "unavailable", reason: "http" })
   })
 
@@ -787,7 +961,7 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(thread().runFailuresById).toEqual({})
   })
 
-  it("GC 410 replaces an obsolete streaming run with the terminal owner snapshot", async () => {
+  it("GC 410 terminal snapshot closes the old subscription and the next receipt opens a fresh one", async () => {
     buildEngine()
     engine.submit("work")
     await settle()
@@ -798,7 +972,14 @@ describe("snapshot-first 水合与中断恢复", () => {
     await settle()
 
     expect(engine.getSnapshot().machine).toMatchObject({ phase: "idle", runId: null })
-    expect(client.lastStream().resumeCursor).toBe(CURSOR_12)
+    expect(engine.getSnapshot().connection).toEqual({ status: "connected" })
+    expect(client.streams).toHaveLength(1)
+
+    expect(engine.submit("next after recovered terminal")).toBe(true)
+    await settle()
+    expect(client.createCalls).toHaveLength(2)
+    expect(client.streams).toHaveLength(2)
+    expect(client.lastStream()).toMatchObject({ sessionId: "conv_1", resumeCursor: CURSOR_12 })
   })
 
   it("GC 410 replaces an obsolete awaiting run with the new owner run", async () => {
@@ -892,16 +1073,7 @@ describe("snapshot-first 水合与中断恢复", () => {
   })
 
   it("410 recovery pending 时旧 create receipt 不重开 stale stream，owner snapshot 最终获胜", async () => {
-    buildEngine(SEEDED)
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_7 }))
-    engine.dispose()
-    engine = createSessionEngine({ client, storage, now: () => 1_000 })
-    await settle()
-
-    let resolveCreate!: (receipt: ReturnType<typeof makeReceipt>) => void
-    client.nextCreate = () => new Promise((resolve) => { resolveCreate = resolve })
-    expect(engine.submit("pending before GC")).toBe(true)
-    const streamBeforeRecovery = client.lastStream()
+    const { resolveCreate, stream: streamBeforeRecovery } = await pendingCreateWithActiveHydration("pending before GC")
     let resolveSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
     client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
     streamBeforeRecovery.fail(new SessionClientError("http", "410", "event_cursor_expired"))
@@ -922,18 +1094,29 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(client.lastStream().resumeCursor).toBe(CURSOR_20)
   })
 
-  it("410 recovery 的 null snapshot 先返回时，late accepted receipt 只取消原 session run", async () => {
-    buildEngine(SEEDED)
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_7 }))
-    engine.dispose()
-    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+  it("410 recovery 的 settled snapshot 在 deferred exact receipt 落地后才开新流", async () => {
+    const { resolveCreate, stream } = await pendingCreateWithActiveHydration("receipt before settled snapshot")
+    let resolveSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+    stream.fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    const streamCountDuringRecovery = client.streams.length
+
+    resolveCreate(makeReceipt("run_deferred_after_idle"))
+    await settle()
+    expect(client.streams).toHaveLength(streamCountDuringRecovery)
+
+    resolveSnapshot(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_20 }))
     await settle()
 
-    let resolveCreate!: (receipt: ReturnType<typeof makeReceipt>) => void
-    client.nextCreate = () => new Promise((resolve) => { resolveCreate = resolve })
-    expect(engine.submit("pending before disappeared snapshot")).toBe(true)
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_deferred_after_idle" })
+    expect(client.streams).toHaveLength(streamCountDuringRecovery + 1)
+    expect(client.lastStream()).toMatchObject({ sessionId: "conv_9", resumeCursor: CURSOR_20 })
+  })
+
+  it("410 recovery 的 null snapshot 先返回时，late accepted receipt 只取消原 session run", async () => {
+    const { resolveCreate, stream } = await pendingCreateWithActiveHydration("pending before disappeared snapshot")
     client.nextSnapshot = () => Promise.resolve(null)
-    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    stream.fail(new SessionClientError("http", "410", "event_cursor_expired"))
     await settle()
 
     const fallbackSessionId = engine.getSnapshot().store?.activeId
@@ -956,18 +1139,10 @@ describe("snapshot-first 水合与中断恢复", () => {
   })
 
   it("410 recovery 已暂存 receipt 后 null snapshot 立即取消该 run", async () => {
-    buildEngine(SEEDED)
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_7 }))
-    engine.dispose()
-    engine = createSessionEngine({ client, storage, now: () => 1_000 })
-    await settle()
-
-    let resolveCreate!: (receipt: ReturnType<typeof makeReceipt>) => void
-    client.nextCreate = () => new Promise((resolve) => { resolveCreate = resolve })
-    expect(engine.submit("receipt before disappeared snapshot")).toBe(true)
+    const { resolveCreate, stream } = await pendingCreateWithActiveHydration("receipt before disappeared snapshot")
     let resolveSnapshot!: (snapshot: ReturnType<typeof makeSnapshot> | null) => void
     client.nextSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
-    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    stream.fail(new SessionClientError("http", "410", "event_cursor_expired"))
 
     resolveCreate(makeReceipt("run_deferred_before_null"))
     await settle()
@@ -993,7 +1168,11 @@ describe("snapshot-first 水合与中断恢复", () => {
     let seeded = addConversation(null, "conv_a", 100)
     seeded = addConversation(seeded, "conv_b", 200)
     buildEngine(seeded)
-    client.nextSnapshot = (sessionId) => Promise.resolve(makeSnapshot({ sessionId, eventWatermark: CURSOR_7 }))
+    client.nextSnapshot = (sessionId) => Promise.resolve(makeSnapshot({
+      sessionId,
+      eventWatermark: CURSOR_7,
+      activeRun: { run_id: sessionId === "conv_b" ? "run_b" : "run_a", status: "running" },
+    }))
     engine.dispose()
     engine = createSessionEngine({ client, storage, now: () => 1_000 })
     await settle()
@@ -1004,7 +1183,11 @@ describe("snapshot-first 水合与中断恢复", () => {
     let resolveReconnect!: (snapshot: ReturnType<typeof makeSnapshot>) => void
     client.nextSnapshot = (sessionId) => sessionId === "conv_b"
       ? new Promise((resolve) => { resolveReconnect = resolve })
-      : Promise.resolve(makeSnapshot({ sessionId: "conv_a", eventWatermark: CURSOR_20 }))
+      : Promise.resolve(makeSnapshot({
+          sessionId: "conv_a",
+          eventWatermark: CURSOR_20,
+          activeRun: { run_id: "run_a", status: "running" },
+        }))
     engine.reconnect()
     let rejectCancel!: (reason: Error) => void
     client.nextControl = () => new Promise((_resolve, reject) => { rejectCancel = reject })
@@ -1043,10 +1226,14 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(engine.getSnapshot().store?.activeId).not.toBe("conv_1")
   })
 
-  it("separate idle GC windows recover after each snapshot advances its watermark", async () => {
+  it("separate active GC windows recover after each snapshot advances its watermark", async () => {
     buildEngine(SEEDED)
     let watermark = CURSOR_7
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: watermark }))
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_9",
+      eventWatermark: watermark,
+      activeRun: { run_id: "run_active", status: "running" },
+    }))
     engine.dispose()
     engine = createSessionEngine({ client, storage, now: () => 1_000 })
     await settle()
@@ -1056,14 +1243,18 @@ describe("snapshot-first 水合与中断恢复", () => {
       client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
       await settle()
       expect(client.lastStream().resumeCursor).toBe(next)
-      expect(engine.getSnapshot().machine.phase).toBe("idle")
+      expect(engine.getSnapshot().machine).toMatchObject({ phase: "reattaching", runId: "run_active" })
     }
   })
 
   it("stops a broken owner that repeatedly returns the same expired watermark", async () => {
     buildEngine(SEEDED)
     client.snapshotCalls.length = 0
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_7 }))
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_9",
+      eventWatermark: CURSOR_7,
+      activeRun: { run_id: "run_active", status: "running" },
+    }))
     engine.dispose()
     engine = createSessionEngine({ client, storage, now: () => 1_000 })
     await settle()
@@ -1073,7 +1264,7 @@ describe("snapshot-first 水合与中断恢复", () => {
       await settle()
     }
     expect(client.snapshotCalls).toHaveLength(3)
-    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "reattaching", runId: "run_active" })
     expect(engine.getSnapshot().connection).toEqual({ status: "unavailable", reason: "http" })
   })
 
@@ -1085,7 +1276,7 @@ describe("snapshot-first 水合与中断恢复", () => {
     expect(client.streams).toHaveLength(0)
   })
 
-  it("快照有历史消息：开流全量回放重建线程（snapshot 只供 meta/files）", async () => {
+  it("settled 历史 snapshot 直接重建线程且零 SSE，下一条 receipt 才打开新流", async () => {
     buildEngine(SEEDED)
     client.nextSnapshot = () =>
       Promise.resolve(
@@ -1122,7 +1313,19 @@ describe("snapshot-first 水合与中断恢复", () => {
     ])
     expect(activeEntry().title).toBe("restored title")
     expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(engine.getSnapshot().connection).toEqual({ status: "connected" })
+    expect(client.streams).toHaveLength(0)
+
+    expect(engine.submit("continue from history")).toBe(true)
+    await settle()
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.streams).toHaveLength(1)
     expect(client.lastStream()).toMatchObject({ sessionId: "conv_9", resumeCursor: CURSOR_7 })
+    expect(thread().messages.map((message) => message.content)).toEqual([
+      "old ask",
+      "old answer",
+      "continue from history",
+    ])
   })
 
   it("resumes a nonempty snapshot prefix once, advances the cursor, and keeps terminal text", async () => {
@@ -1371,7 +1574,8 @@ describe("snapshot-first 水合与中断恢复", () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(engine.getSnapshot().machine).toMatchObject({ phase: "idle", runId: null })
       expect(thread().messages.at(-1)).toMatchObject({ content: "owner completed", runId: "run_9" })
-      expect(client.lastStream().resumeCursor).toBe(CURSOR_20)
+      expect(engine.getSnapshot().connection).toEqual({ status: "connected" })
+      expect(client.streams).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -1626,7 +1830,11 @@ describe("运行中插话（steer）", () => {
   it("expired cursor 正在重新水合时拒绝提交且不创建请求", async () => {
     const seeded = addConversation(null, "conv_recovering", 500)
     buildEngine(seeded)
-    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_recovering", eventWatermark: CURSOR_7 }))
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+      sessionId: "conv_recovering",
+      eventWatermark: CURSOR_7,
+      activeRun: { run_id: "run_active", status: "running" },
+    }))
     engine.dispose()
     engine = createSessionEngine({ client, storage, now: () => 1_000 })
     await settle()

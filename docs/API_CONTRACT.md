@@ -1,5 +1,19 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-IDLE-TERMINAL-P1-R26：订阅生命周期不改变 wire（2026-10-01；源码候选）
+
+本片不修改 public 3.0、同源 route、AG-UI frame、cursor、receipt、generated 或错误 envelope。BFF terminal ledger head 的
+`200 text/event-stream` 后 EOF 是已发布终态收口；Web 对 settled snapshot 不发 events GET。新 message receipt 或 snapshot
+`active_run` 提供 exact identity 后，Web 仍携带 snapshot watermark/最后确认 cursor 打开 events GET；active EOF 仍重连，终态 frame
+仍关闭。410 snapshot-first、pre-receipt 原 key/body、late accepted receipt cancel 与真实 owner terminal 全部保持。
+
+首次 snapshot 与 message create 并发时，即使 receipt 先返回，Web 也先等 snapshot：receipt 不触发额外 events GET。snapshot 已含该
+receipt run 终态时不再订阅；snapshot 仍为旧 settled 视图或给出 active identity 时，才分别以 receipt/`active_run` 打开唯一订阅。
+这是消费顺序约束，不新增 request、字段、状态或 fallback。
+
+BFF 当前尚未为 reload 的准入后/RUN_STARTED 前窗口发布 queued identity；Web 不从 pending Message、正文或数组位置推导它。本片只
+修复已证明 settled 的历史会话，不声称该 owner contract 缺口已闭环，也不建立第二协议或 idle polling。
+
 ## WEB-CONNECTION-R26：非 connected 写入边界（2026-10-01；源码候选）
 
 本片仍是零 wire 变化。hydrated connection 为 reconnecting/unavailable 时，Web 不发送新的 message create 或 HITL resume；被拒动作不

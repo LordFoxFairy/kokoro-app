@@ -1,5 +1,22 @@
 # Kokoro User Web 技术设计
 
+## WEB-IDLE-TERMINAL-P1-R26：settled snapshot 不订阅 terminal ledger（2026-10-01；源码候选）
+
+BFF owner 明确以 terminal ledger head 的 SSE EOF 作为正常收口；Web transport 对 active stream 的 EOF 仍必须按最后 opaque cursor
+重连。Web engine 因而不再为已由同事务 snapshot 证明 settled 的历史会话无条件开流：只有 snapshot `active_run` 建立的可信
+reattach identity，或本页 message create receipt 建立的 exact run identity，才持有 events subscription。settled snapshot 保持
+`connection=connected`、正文/footer/copy 与 Composer 可用；新 submit 获 receipt 后仍打开同一 AG-UI stream。
+
+hydrate 顺序固定为 owner snapshot 投影 → active reattach identity → 410 recovery 的 deferred receipt/原提交恢复 → 最终按
+`machine.runId` 决定是否开流。这样 snapshot idle 但 deferred accepted receipt 已给出 exact run 时仍会订阅，不误伤 R26 两种 late
+receipt 取消路径。active EOF 保持 reconnecting 写闸与 Stop；live terminal frame 仍由 reducer exact identity 收口并主动关流。禁止把
+所有 EOF 当成功、从 pending/正文猜 queued run、解除非 connected 写闸或新增轮询/fallback/wire。
+
+首次 hydrate 期间仍允许用户提交，但先返回的 create receipt 只暂存在 Web 内存，不得抢在 snapshot 前开流。snapshot 到达后先恢复
+owner 正文与 failure footer：若已含 receipt run 的 terminal assistant，则以 owner 终态收口且零 SSE；若给出 active identity，则按其
+watermark reattach；若仍是旧 settled 视图，则把 exact receipt 应用为新 active run。pending optimistic user 与 snapshot canonical user
+按 receipt message id 对账，只保留一份，最后至多打开一个流。
+
 ## WEB-CONNECTION-R26：断连写闸与 reattach timeout 裁决（2026-10-01；源码候选）
 
 Root 对 R25 独立复审后补充两项局部不变量。第一，已有可信会话处于 `reconnecting` 或 `unavailable` 时，engine 必须同步拒绝新的

@@ -421,13 +421,21 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           resumeInFlight.clear()
         }
         const previousCursor = thread.resumeCursor
+        const deferred = deferredCreateReceipt !== null && deferredCreateReceipt.submission === pendingSubmission
+          ? deferredCreateReceipt
+          : null
+        const deferredRunSettled = deferred !== null && (sessionSnapshot.messages ?? []).some(
+          (message) => message.role === "assistant" &&
+            message.run_id === deferred.receipt.run_id &&
+            (message.status === "completed" || message.status === "failed"),
+        )
         thread = stateFromSnapshot(sessionSnapshot)
-        const submissionToRestore = recoveredSubmission
+        const submissionToRestore = afterExpiredCursor ? recoveredSubmission : pendingSubmission
         if (
-          afterExpiredCursor &&
           submissionToRestore !== null &&
           submissionToRestore === pendingSubmission &&
-          !thread.messages.some((message) => message.id === submissionToRestore.optimisticUserId)
+          !thread.messages.some((message) => message.id === submissionToRestore.optimisticUserId) &&
+          (deferred === null || !thread.messages.some((message) => message.id === deferred.receipt.user_message_id))
         ) {
           thread = appendUserMessage(thread, {
             id: submissionToRestore.optimisticUserId,
@@ -440,9 +448,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           cursorResetAttempts = 0
         }
         syncActiveEntry()
-        // Snapshot 与 event_watermark 同事务视图；只续 watermark 之后的 durable
-        // AG-UI frame，避免刷新时双读完整事件史。
-        openStream(sessionId, thread.resumeCursor)
+        // A receipt can win the race against the initial snapshot. Reset the
+        // optimistic submitting phase so owner active/terminal state is
+        // applied first; the exact receipt is reconciled below without opening
+        // a pre-snapshot stream.
+        if (!afterExpiredCursor && deferred !== null) {
+          machine = transition(machine, { type: "RESET" })
+        }
         const plan = reattachPlanFromSnapshot(sessionSnapshot)
         if (plan) {
           const before = machine
@@ -469,10 +481,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         }
         if (afterExpiredCursor) {
           recoveringExpiredCursor = false
-          const deferred = deferredCreateReceipt
-          if (deferred !== null && deferred.submission === pendingSubmission) {
-            applyRecoveredReceipt(deferred.submission, deferred.receipt)
-          } else if (
+        }
+        if (deferred !== null) {
+          applyRecoveredReceipt(deferred.submission, deferred.receipt, deferredRunSettled)
+        } else if (afterExpiredCursor) {
+          if (
             recoveredSubmission !== null &&
             recoveredSubmission === pendingSubmission &&
             recoveredSubmissionError !== null &&
@@ -480,6 +493,16 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           ) {
             machine = transition(machine, { type: "FAIL", error: recoveredSubmissionError })
           }
+        }
+        // Snapshot 与 event_watermark 同事务视图。只有 owner active identity
+        // 或本页 exact receipt identity 才需要从 watermark 继续 durable AG-UI；
+        // terminal/idle head 会合法 EOF，不建立空闲重连轮询。
+        if (plan !== null || machine.runId !== null) {
+          openStream(sessionId, thread.resumeCursor)
+        } else {
+          closeStream()
+          clearReattachTimer()
+          connection = { status: "connected" }
         }
         hydrating = false
         notify()
@@ -540,7 +563,11 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
   }
 
-  function applyRecoveredReceipt(submission: PendingSubmission, receipt: MessageCreateReceipt): void {
+  function applyRecoveredReceipt(
+    submission: PendingSubmission,
+    receipt: MessageCreateReceipt,
+    ownerAlreadySettled = false,
+  ): void {
     if (pendingSubmission !== submission || store?.activeId !== submission.sessionId) {
       return
     }
@@ -551,10 +578,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     thread = reconcileUserMessageId(thread, receipt.user_message_id)
     // Snapshot is authoritative when it already contains an active or settled
     // assistant run. An otherwise idle snapshot may precede the accepted POST;
-    // anchor that exact receipt to the already-open watermark stream.
+    // anchor that exact receipt before hydrate decides whether to open a stream.
     if (
       machine.phase === "idle" &&
-      !thread.messages.some((message) => message.role === "assistant" && message.runId === receipt.run_id)
+      !ownerAlreadySettled
     ) {
       machine = transition(machine, { type: "SUBMIT" })
       machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
@@ -589,7 +616,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ) {
           return
         }
-        if (recoveringExpiredCursor || connection.status !== "connected") {
+        if (hydrating || recoveringExpiredCursor || connection.status !== "connected") {
           deferredCreateReceipt = { submission, receipt }
           return
         }

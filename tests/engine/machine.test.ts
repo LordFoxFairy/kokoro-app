@@ -85,7 +85,8 @@ describe("failed snapshot hydration", () => {
       resumeCursor: cursor,
     })
     expect(client.createCalls).toHaveLength(0)
-    expect(client.lastStream().resumeCursor).toBe(cursor)
+    expect(first.getSnapshot().connection).toEqual({ status: "connected" })
+    expect(client.streams).toHaveLength(0)
     first.dispose()
 
     const second = createSessionEngine({ client, storage, now: () => 2_000, createId: (prefix) => `${prefix}_second` })

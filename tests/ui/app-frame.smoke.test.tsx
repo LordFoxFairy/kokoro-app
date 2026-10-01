@@ -443,13 +443,8 @@ it("恢复了会话消息时目录路由仍保持独立，不被 ConversationThr
   )
 
   await act(settle)
-  await act(async () => {
-    client.lastStream().emit([
-      makeEvent("message.user", { message_id: "msg_catalog", content: "恢复的旧消息" }),
-    ])
-  })
-  await act(settle)
 
+  expect(client.streams).toHaveLength(0)
   expect(screen.getByTestId("catalog-probe")).toBeInTheDocument()
   expect(screen.queryByTestId("conversation-timeline")).toBeNull()
   expect(screen.queryByRole("form", { name: "消息编辑区" })).toBeNull()
@@ -2351,12 +2346,52 @@ it("direct restored conversation 的首次 snapshot 错误仍显示整 stage 读
   }
 })
 
+it("settled 历史会话零空闲 SSE，正文与复制保留且可继续发送", async () => {
+  const seeded = addConversation(null, "conv_settled", 500)
+  client = createFakeClient()
+  client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+    sessionId: "conv_settled",
+    eventWatermark: "agui_00000000000000000000000000000014",
+    messages: [
+      { message_id: "user_old", role: "user", content: "old ask", status: "completed", created_at: "2026-07-02T00:00:00Z" },
+      { message_id: "assistant_old", role: "assistant", run_id: "run_old", content: "old complete answer", status: "completed", created_at: "2026-07-02T00:00:01Z" },
+    ],
+  }))
+  engine = createSessionEngine({
+    client,
+    storage: createMemoryStorage<ConversationStore>(seeded),
+    now: () => 1_000,
+  })
+  const listClientSpy = stubSuccessfulSessionList()
+  try {
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    await act(settle)
+
+    expect(client.streams).toHaveLength(0)
+    expect(screen.getByText("old complete answer")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "复制回答" })).toBeEnabled()
+    expect(screen.queryByRole("status", { name: "正在重新连接" })).toBeNull()
+
+    const input = screen.getByLabelText("对话输入")
+    fireEvent.change(input, { target: { value: "continue after history" } })
+    fireEvent.click(screen.getByLabelText("发送消息"))
+    await act(settle)
+
+    expect(client.createCalls).toHaveLength(1)
+    expect(client.streams).toHaveLength(1)
+    expect(input).toHaveValue("")
+  } finally {
+    listClientSpy.mockRestore()
+  }
+})
+
 it("历史失败footer与后来成功正文不被429连接错误移动或复制", async () => {
   const seeded = addConversation(null, "conv_1", 500)
   client = createFakeClient()
   const failed = makeFailedSnapshot(null, { content: "old partial" }).messages
   client.nextSnapshot = () => Promise.resolve(makeSnapshot({
     sessionId: "conv_1",
+    activeRun: { run_id: "run_active", status: "running" },
     messages: [
       ...(failed ?? []),
       { message_id: "user_2", role: "user", content: "later ask", status: "completed", created_at: "2026-07-02T00:00:02Z" },

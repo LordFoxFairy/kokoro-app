@@ -1,5 +1,17 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-IDLE-TERMINAL-P1-R26：settled subscription 生命周期（2026-10-01；源码候选）
+
+没有新增持久化事实。snapshot `active_run` 与本页 receipt run id 仍是 Web 可消费的可信 active identity；只有 identity 存在时才持有
+页面内 events subscription。settled snapshot 的 Message、failure footer、watermark 与 copy 均保留，但连接视图为 connected 且没有
+空闲 SSE 句柄。新 receipt 建立 run identity 后重新订阅，terminal frame 后释放。
+
+queued reload 缺失 active identity 是 BFF 后继 owner 门；Web 不把 pending/streaming Message、正文、cursor 或 terminal marker 派生为
+queued Run。无 SQL、Redis、localStorage、IndexedDB、schema、retention 或跨设备事实变化。
+
+initial hydrate 与 create 并发期间的 pending submission、optimistic user 与 deferred exact receipt 仍仅是页面内存状态。snapshot
+canonical user 以 receipt `user_message_id` 对账；snapshot 已含 receipt run 终态时 owner 投影优先，不把 deferred receipt 重写为 active。
+
 ## WEB-CONNECTION-R26：本地 timeout 与写闸（2026-10-01；源码候选）
 
 `EngineSnapshot.connection` 的 unavailable reason 在 Web 内存中扩为 `network | http | parse | timeout`；`timeout` 只描述 reattach
