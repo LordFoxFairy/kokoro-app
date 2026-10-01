@@ -18,6 +18,15 @@ it("对话列按 Composer 合成 gutter 在全部宽度保持同一 48rem 阅读
   expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > div > form\[aria-label\]\s*\{[^}]*width: min\(48rem, 100%\);/)
 })
 
+it("窄屏 active Composer 复用本体紧凑内边距而不覆盖成额外顶部留白", () => {
+  const css = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
+  const rule = css.match(
+    /@media \(max-width: 960px\)[\s\S]*?\.main\[data-desktop-web="true"\]\[data-web-view="thread"\] > \[data-slot="composer"\] > div > form\[aria-label\]\s*\{([^}]*)\}/,
+  )?.[1]
+  expect(rule).toMatch(/padding:\s*0\.7rem 0\.85rem 0\.6rem;/)
+  expect(rule).not.toMatch(/padding:\s*1\.7rem 0\.85rem 0\.3rem;/)
+})
+
 it("viewport 独占顶部呼吸且所有会话项保持统一轮间距", () => {
   const appFrameCss = readFileSync(`${process.cwd()}/src/components/blocks/app-frame/app-frame-main.module.css`, "utf8")
   const threadCss = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")

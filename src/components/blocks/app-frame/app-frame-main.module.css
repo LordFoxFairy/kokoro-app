@@ -163,11 +163,9 @@
   .main[data-desktop-web="true"][data-web-view="thread"] > [data-slot="composer"] > div > form[aria-label] {
     width: min(48rem, 100%);
     gap: 0.2rem;
-    /* Keep the active composer at Manus' two-row height. The welcome editor
-       remains compact; only a submitted conversation gets the taller top
-       breathing room, which also lifts the progress bar without moving the
-       controls row. */
-    padding: 1.7rem 0.85rem 0.3rem;
+    /* Keep the narrow active editor on the same compact form rhythm as its
+       base surface instead of adding a second top inset at this breakpoint. */
+    padding: 0.7rem 0.85rem 0.6rem;
   }
   .main[data-desktop-web="true"] > [data-slot="composer"] > div > form[aria-label] textarea {
     width: 100%;
