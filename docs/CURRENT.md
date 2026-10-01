@@ -1,3 +1,9 @@
+## R35 首页虚构积分展示已移除（局部验收）
+
+Root frozen三路径hash全同，真实旧component+新tests RED **5fail/14pass**，candidate finally恢复；现三路径GREEN全门exit0：contract219/architecture50、lint/typecheck0、default **2109pass（180.24s）**、build0。独立Sol0P0/0P1/0P2；证据 /tmp/kokoro-web-home-credit-r35-root-evidence.json 与 /tmp/kokoro-web-home-credit-r35-root-red.log。删除无条件1000/Free/每日300 popover；首页现shadcn Button直开正式credits settings，缺callbackdisabled；其他升级/项目/分享/模型行为保留。7组dead CSS零引用并删除，原91行有效规则逐byte保持，Root仅收掉新EOF空行使diff门0。
+
+本轮没改credit比例/threshold/API/请求/账户数据，没有浏览器或正式Billing结果。1Credit=1e6单位已定，旧10000展示与嵌入Number/4位精度等待Billing单位artifact与消费者整片切换；未来首页余额必须来自正式summary，不以删除样例称余额已接线。此验收只该局部交互；完整能力/Wave0–7尚在推进。
+
 ## WIN01-R31：IME 候选确认不误提交（2026-10-01）
 
 基线 main 30055e8947b1df679785c3bff43c358291ba84ba。现 AppFrame actions 在 isComposing 外显式拒绝 keyCode=229 的 Enter；直接及项目会话两例验证零 submit/create、草稿/URL/创建上下文保留，普通 Enter 随后精确一次发送，现 Shift+Enter 用例保持。不改 UI 框架、API/generated/计费/session 或新文件。

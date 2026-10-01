@@ -34,7 +34,7 @@ describe("ShareButton", () => {
     expect(screen.queryByRole("dialog", { name: "Choose a Kokoro model" })).toBeNull()
   })
 
-  it("opens the home credit summary before routing to usage details", async () => {
+  it("opens formal credits settings directly from the empty workspace", () => {
     const onOpenSettings = vi.fn()
     render(
       <WorkspaceHeader
@@ -47,9 +47,58 @@ describe("ShareButton", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Credits & usage" }))
-    expect(await screen.findByText("Daily refresh credits")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "View usage" }))
-    expect(onOpenSettings).toHaveBeenCalledWith("credits")
+    expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("credits")
+  })
+
+  it("does not invent a home balance, free plan or daily refresh", () => {
+    render(
+      <WorkspaceHeader activeId={null} emptyWorkspace shareClient={makeClient()} onOpenSettings={vi.fn()} />,
+      { wrapper: LocaleProvider },
+    )
+
+    expect(screen.queryByText("1,000")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Credits & usage" }))
+    for (const sample of ["1,000", "Free", "Free credits", "300", "Daily refresh credits", "Refreshes to 300 every day at 00:00"]) {
+      expect(screen.queryByText(sample)).toBeNull()
+    }
+    expect(screen.queryByRole("dialog")).toBeNull()
+  })
+
+  it("disables the home credits entry when no settings callback exists", () => {
+    render(
+      <WorkspaceHeader activeId={null} emptyWorkspace shareClient={makeClient()} />,
+      { wrapper: LocaleProvider },
+    )
+
+    const credits = screen.getByRole("button", { name: "Credits & usage" })
+    expect(credits).toBeDisabled()
+    fireEvent.click(credits)
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(screen.queryByText("Daily refresh credits")).toBeNull()
+  })
+
+  it.each(["Enter", " "])("keeps native focus and activation for the home credits button (%s)", (key) => {
+    const onOpenSettings = vi.fn()
+    render(
+      <WorkspaceHeader activeId={null} emptyWorkspace shareClient={makeClient()} onOpenSettings={onOpenSettings} />,
+      { wrapper: LocaleProvider },
+    )
+
+    const credits = screen.getByRole("button", { name: "Credits & usage" })
+    expect(credits).toBeEnabled()
+    expect(credits).toHaveAttribute("type", "button")
+    expect(credits.tabIndex).toBe(0)
+    expect(credits).toHaveTextContent("Credits")
+    expect(credits).toHaveClass("focus-visible:ring-[3px]")
+    credits.focus()
+    expect(credits).toHaveFocus()
+    fireEvent.keyDown(credits, { key })
+    fireEvent.keyUp(credits, { key })
+    // jsdom does not synthesize the native button click from keyboard input.
+    // Dispatch that activation explicitly; do not add a custom key handler.
+    fireEvent.click(credits)
+    expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("credits")
+    expect(credits).not.toHaveAttribute("aria-haspopup")
   })
 
   it("uses the upgrade action in an active direct Web conversation", () => {
