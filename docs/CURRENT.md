@@ -1,5 +1,16 @@
 # Kokoro User Web 当前状态
 
+## WEB-COMPOSER-ACTION1：操作行真实浏览器修复（2026-10-01）
+
+基线 main `8a2d771e5ed106f93473ac3d1b5efb793b9b32ab`。Root在独占34117 preview fixture实际填写/提交后观察到宽屏发送按钮留在左侧。
+原因是VoiceActions从controls CSS Module引用不存在的trailingActions，而样式只在另一个Composer CSS Module；现把组内flex/color归回自身module，父布局只通过稳定voice-actions slot管理auto margin，并删除coarse触屏的反向reset。未改shadcn Textarea、消息/网络事实、API、SQL或依赖。
+
+Root真实TDD：桌面640右缘偏移386.8125px断言RED；第一版desktop绿色后独立审查发现触屏漏门，Pixel7/640偏移372.421875px也得到RED，再删reset。最终完整Playwright实际13通过/3按项目分工跳过（11.3s），桌面10档390–1280、触屏390/640右缘<=1px，轴线/无overflow断言保留；30张桌面PNG、4张触屏PNG及computed附件只保存在/tmp。Root已查看全页/blur/键盘focus/多行及触屏640图，按钮组回到右侧。日志：`/tmp/kokoro-composer-action1-{red,touch-red,final-e2e}.log`。
+
+Root最终Node22/pnpm11 `pnpm check` exit0：contract218、architecture49、全test2053（40.79s）、lint/typecheck/build通过，日志 `/tmp/kokoro-composer-action1-root-final-check.log`。首次check lint失败是本轮生成的playwright-report第三方trace assets被扫描（257错误/2773warning）；报告已迁到/tmp，后续CLI reporter=list，未放宽lint规则。独立终审P0/P1/P2=0/0/0。
+
+这些截图只证明当前源码的独立preview UI，不证明真实IAM/BFF/模型计费整链，也不等于已核对用户3310页面。fixture中textarea实测border0/shadow none且未出现用户所述输入内方框；原内方框及整体对话体验仍待当前用户页面/截图验收。本片只修复已经复现的操作行错位，不宣布整个产品完成。
+
 ## WEB-FAILURE3 运行时候选待 Root 验收（2026-10-01）
 
 基线 Web main `daaf45b`；BFF public 2.0 owner commit `ccb8e144`、OpenAPI SHA-256

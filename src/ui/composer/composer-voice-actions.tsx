@@ -19,7 +19,7 @@ export function ComposerVoiceActions({ emptyWorkspace, projectWorkspace, creatio
   const active = state === "listening" || state === "transcribing"
   const status = state === "listening" ? t("composer.voiceListening") : state === "transcribing" ? t("composer.voiceTranscribing") : state === "error" ? t("composer.voiceUnavailable") : ""
   return (
-    <div className={styles.trailingActions} aria-label={t("composer.voiceInput")}>
+    <div className={styles.trailingActions} data-slot="composer-voice-actions" aria-label={t("composer.voiceInput")}>
       {emptyWorkspace && !projectWorkspace && creationIntent === "website" ? null : <Button type="button" variant="ghost" size="icon-sm" disabled aria-label={t("composer.voiceMode")}><AudioWaveform aria-hidden="true" /></Button>}
       <Button type="button" variant="ghost" size="icon-sm" className={styles.voiceInput} data-state={state} aria-label={t(active ? "composer.voiceStop" : "composer.voiceInput")} aria-pressed={active} onPointerDown={(event) => {
         const pointerType = event.pointerType

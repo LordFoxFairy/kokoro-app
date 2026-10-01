@@ -24,6 +24,8 @@
 .sendStop:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .glyph { width: 1.15rem; height: 1.15rem; }
 .chevron { width: 0.85rem; height: 0.85rem; opacity: 0.7; }
+.trailingActions { display: flex; align-items: center; gap: 0.15rem; color: var(--muted-foreground); }
+.trailingActions button { color: inherit; }
 .voiceInput { width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: 999px; background: transparent; color: rgb(55 53 47 / 62%); transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard); }
 .voiceInput svg { width: 1rem; height: 1rem; }
 .voiceInput:hover, .voiceInput[data-state="listening"] { background: rgb(55 53 47 / 4%); color: rgb(55 53 47 / 82%); }

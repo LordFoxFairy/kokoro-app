@@ -60,6 +60,8 @@
 | `src/engine/client.ts` | `/api/session` JSON/SSE client、cursor 与重连 |
 | `src/engine/machine.ts` | Chat 状态机与 snapshot/event reconciliation；仅未获 create receipt 的冻结意图可同键恢复 |
 | `src/core/reducer.ts` | 纯 UI 投影；Agent/dispatch/generic 使用 closed failure union，dispatch string sourceSequence 不进入 numeric lastSeq |
+| `src/ui/composer/composer-voice-actions.tsx`、`composer-controls.module.css`、`composer.module.css` | VoiceActions自身flex/color由controls CSS Module维护；父Composer只通过voice-actions slot管理跨模块位置，发送/停止组在桌面及触屏贴右 |
+| `tests/e2e/web-governance.spec.ts` | 独占preview浏览器的桌面十档轴线/overflow/操作右缘与Pixel7两档触屏回归；成功截图及安全computed附件写入单次测试output，不进源码 |
 | `contract/README.md` | owner、visibility、version、generation、breaking、provenance |
 | `contract/api-contract.test.ts`、`tests/contract/` | contract 回归 |
 

@@ -99,7 +99,7 @@ test.describe("Web production boundary", () => {
     expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
   })
 
-  test("keeps the preview thread and Composer on one reading axis across responsive widths", async ({ page, isMobile }) => {
+  test("keeps the preview thread and Composer on one reading axis across responsive widths", async ({ page, isMobile }, testInfo) => {
     test.skip(isMobile, "the matrix controls the desktop Chromium viewport and rail state explicitly")
     test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the geometry fixture is available only on the local preview server")
 
@@ -110,6 +110,9 @@ test.describe("Web production boundary", () => {
     await expect(page.locator('[data-slot="message-scroller-content"]')).toBeVisible()
 
     const shell = page.locator('[data-slot="sidebar-wrapper"]')
+    const composer = page.locator('form[aria-label="Message editor"]')
+    const chatInput = page.getByRole("textbox", { name: "Chat input" })
+    const detailedEvidenceWidths = new Set([390, 768, 960, 961, 1280])
     const cases = [
       { width: 390, rail: "automatic" },
       { width: 640, rail: "automatic" },
@@ -141,6 +144,118 @@ test.describe("Web production boundary", () => {
         scrollWidth: document.documentElement.scrollWidth,
       }))
       expect(dimensions.scrollWidth, `${item.width}px horizontal overflow`).toBeLessThanOrEqual(dimensions.clientWidth)
+
+      if (await chatInput.evaluate((element) => element === document.activeElement)) {
+        await page.keyboard.press("Shift+Tab")
+      }
+      await expect(chatInput).not.toBeFocused()
+      await page.screenshot({
+        path: testInfo.outputPath(`thread-${item.width}.png`),
+        fullPage: true,
+      })
+      await composer.screenshot({ path: testInfo.outputPath(`composer-${item.width}-blur.png`) })
+
+      const computedStyleEvidence = await page.evaluate(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Chat input"]')
+        const form = document.querySelector<HTMLFormElement>('form[aria-label="Message editor"]')
+        const safeStyle = (element: Element | null) => {
+          if (!element) return null
+          const style = window.getComputedStyle(element)
+          return {
+            border: style.border,
+            boxShadow: style.boxShadow,
+            outline: style.outline,
+            outlineOffset: style.outlineOffset,
+            width: style.width,
+            maxWidth: style.maxWidth,
+            padding: style.padding,
+            borderRadius: style.borderRadius,
+          }
+        }
+        return {
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          textarea: safeStyle(textarea),
+          form: safeStyle(form),
+        }
+      })
+      await testInfo.attach(`composer-${item.width}-computed.json`, {
+        body: JSON.stringify(computedStyleEvidence, null, 2),
+        contentType: "application/json",
+      })
+
+      const controls = page.getByTestId("composer-controls")
+      const terminalAction = controls.locator(
+        '[data-composer-action="send"], [data-composer-action="stop"]',
+      )
+      await expect(terminalAction).toHaveCount(1)
+      const controlsBox = await controls.boundingBox()
+      const actionBox = await terminalAction.boundingBox()
+      expect(controlsBox, `${item.width}px Composer controls must be measurable`).not.toBeNull()
+      expect(actionBox, `${item.width}px Composer terminal action must be measurable`).not.toBeNull()
+      if (controlsBox && actionBox) {
+        const trailingEdgeDrift = Math.abs(
+          controlsBox.x + controlsBox.width - actionBox.x - actionBox.width,
+        )
+        expect(trailingEdgeDrift, `${item.width}px Composer action trailing-edge drift`).toBeLessThanOrEqual(1)
+      }
+
+      if (detailedEvidenceWidths.has(item.width)) {
+        let keyboardFocused = false
+        for (let tabIndex = 0; tabIndex < 40; tabIndex += 1) {
+          await page.keyboard.press("Tab")
+          if (await chatInput.evaluate((element) => element === document.activeElement)) {
+            keyboardFocused = true
+            break
+          }
+        }
+        expect(keyboardFocused, `${item.width}px keyboard focus did not reach Chat input`).toBe(true)
+        await expect(chatInput).toBeFocused()
+        await composer.screenshot({ path: testInfo.outputPath(`composer-${item.width}-focus.png`) })
+
+        await chatInput.fill("First line\nSecond line\nThird line")
+        await composer.screenshot({ path: testInfo.outputPath(`composer-${item.width}-multiline.png`) })
+        await chatInput.fill("")
+        await page.keyboard.press("Shift+Tab")
+        await expect(chatInput).not.toBeFocused()
+      }
+    }
+  })
+
+  test("keeps the Composer terminal action on the trailing edge at touch widths", async ({ page, isMobile }, testInfo) => {
+    test.skip(!isMobile, "the touch-width matrix runs only in the mobile browser project")
+    test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the geometry fixture is available only on the local preview server")
+
+    await page.setViewportSize({ width: 390, height: 900 })
+    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.getByRole("textbox", { name: "Chat input" }).fill("Check the touch Composer action")
+    await page.getByRole("button", { name: "Send message" }).click()
+    await expect(page.locator('[data-slot="message-scroller-content"]')).toBeVisible()
+
+    const composer = page.locator('form[aria-label="Message editor"]')
+    const controls = page.getByTestId("composer-controls")
+    const terminalAction = controls.locator(
+      '[data-composer-action="send"], [data-composer-action="stop"]',
+    )
+
+    for (const width of [390, 640]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.screenshot({
+        path: testInfo.outputPath(`mobile-thread-${width}.png`),
+        fullPage: true,
+      })
+      await composer.screenshot({ path: testInfo.outputPath(`mobile-composer-${width}.png`) })
+
+      await expect(terminalAction).toHaveCount(1)
+      const controlsBox = await controls.boundingBox()
+      const actionBox = await terminalAction.boundingBox()
+      expect(controlsBox, `${width}px touch Composer controls must be measurable`).not.toBeNull()
+      expect(actionBox, `${width}px touch Composer terminal action must be measurable`).not.toBeNull()
+      if (controlsBox && actionBox) {
+        const trailingEdgeDrift = Math.abs(
+          controlsBox.x + controlsBox.width - actionBox.x - actionBox.width,
+        )
+        expect(trailingEdgeDrift, `${width}px touch Composer action trailing-edge drift`).toBeLessThanOrEqual(1)
+      }
     }
   })
 })

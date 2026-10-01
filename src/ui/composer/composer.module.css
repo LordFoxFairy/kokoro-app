@@ -19,16 +19,12 @@
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-environment-state="static"] > svg[data-icon="inline-end"] { display: none; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-action="send"] { width: 2rem; height: 2rem; }
 .wrap[data-desktop-web="true"] .leadingActions button:hover { background: var(--accent); }
-.trailingActions { display: flex; align-items: center; gap: 0.15rem; color: var(--muted-foreground); }
-.trailingActions button { color: inherit; }
-
 /* The action stays anchored while selector controls wrap inside the cluster. */
 .controls > [data-composer-action="send"], .controls > [data-composer-action="stop"] { margin-left: auto; }
-.wrap[data-desktop-web="true"] .trailingActions { margin-left: auto; }
+.wrap[data-desktop-web="true"] [data-slot="composer-voice-actions"] { margin-left: auto; }
 .wrap[data-desktop-web="true"] .controls > [data-composer-action="send"], .wrap[data-desktop-web="true"] .controls > [data-composer-action="stop"] { margin-left: 0; }
 .wrap[data-desktop-web="true"] [data-composer-action="stop"], .wrap[data-desktop-web="true"] [data-composer-action="stop"]:hover, .wrap[data-desktop-web="true"] [data-composer-action="stop"]:focus-visible { background: var(--primary); color: var(--primary-foreground); box-shadow: none; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-action="send"] .glyph { width: 0.9375rem; height: 0.9375rem; }
-.wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .trailingActions { margin-left: auto; }
 .wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .controls > [data-composer-action="send"], .wrap[data-desktop-web="true"]:not([data-project-workspace="true"])[data-empty-workspace="true"] .controls > [data-composer-action="stop"] { margin-left: 0; width: 2rem; height: 2rem; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-control="model"] { order: -1; }
 .wrap[data-desktop-web="true"][data-empty-workspace="true"] [data-composer-control="mode"] { display: none; }
@@ -70,7 +66,6 @@
   .composer { border-radius: var(--radius-2xl); padding: 0.7rem 0.8rem 0.6rem; }
   .input { font-size: 0.95rem; }
   .controls { min-width: 0; flex-wrap: wrap; }
-  .wrap[data-desktop-web="true"] .trailingActions { margin-left: 0; }
 }
 
 /* Keep the keyboard ring above later empty-workspace and pointer borders. */
