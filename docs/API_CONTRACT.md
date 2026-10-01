@@ -2,6 +2,10 @@
 
 ## WEB-FAILURE-PLACEMENT-D0：public 3.0 exact run 归属（2026-10-01；仅设计门）
 
+P1 候选只消费既有 identity：snapshot `run_id` 与 verified live event `run_id` 进入同一内存索引；没有 exact identity 的
+generic 不归属。实现未修改 public 3.0 snapshot、AG-UI、同源 HTTP、generated pin 或幂等 contract；terminal footer 仍无 mutation，
+pre-receipt 恢复仍只复用原 key/body。
+
 本目标不新增 wire。BFF public 3.0 `ChatMessage` 仍提供 `status`、optional `run_id` 与现有 strict
 `failure={source,code,retryable}`；failure presence guard 仍要求 assistant + failed + nonblank `run_id`。verified Agent
 `RUN_ERROR` 与 BFF-owned dispatch `RUN_ERROR` 已分别携带通过 identity 校验的 exact run id。Web 只把这些已发布身份映射为

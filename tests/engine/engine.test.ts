@@ -1146,7 +1146,7 @@ describe("失败重试", () => {
     ])
     await settle()
     expect(thread().runStatus).toBe("failed")
-    expect(thread().runError).toEqual({ kind: "agent", profile })
+    expect(thread().runFailuresById.run_1).toEqual({ failedRunId: "run_1", kind: "agent", profile })
     expect(engine.getSnapshot()).toMatchObject({
       machine: { phase: "idle" },
       canRetryPendingSubmission: false,
@@ -1155,7 +1155,7 @@ describe("失败重试", () => {
     engine.retry()
     await settle()
     expect(client.createCalls).toHaveLength(1)
-    expect(thread().runError).toEqual({ kind: "agent", profile })
+    expect(thread().runFailuresById.run_1).toEqual({ failedRunId: "run_1", kind: "agent", profile })
   })
 
   it("BFF dispatch terminal 后 retry 不重发原 user", async () => {
@@ -1169,7 +1169,7 @@ describe("失败重试", () => {
     ], [CURSOR_7])
     await settle()
     expect(thread().runStatus).toBe("failed")
-    expect(thread().runError).toEqual({ kind: "dispatch" })
+    expect(thread().runFailuresById.run_1).toEqual({ failedRunId: "run_1", kind: "dispatch" })
 
     engine.retry()
     await settle()

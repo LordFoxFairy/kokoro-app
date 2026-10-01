@@ -80,7 +80,9 @@ describe("failed snapshot hydration", () => {
     const first = createSessionEngine({ client, storage, now: () => 1_000, createId: (prefix) => `${prefix}_first` })
     await settle()
     expect(first.getSnapshot().thread).toMatchObject({
-      runStatus: "failed", runError: { kind: "agent", profile }, resumeCursor: cursor,
+      runStatus: "failed",
+      runFailuresById: { run_failed: { failedRunId: "run_failed", kind: "agent", profile } },
+      resumeCursor: cursor,
     })
     expect(client.createCalls).toHaveLength(0)
     expect(client.lastStream().resumeCursor).toBe(cursor)
@@ -89,7 +91,9 @@ describe("failed snapshot hydration", () => {
     const second = createSessionEngine({ client, storage, now: () => 2_000, createId: (prefix) => `${prefix}_second` })
     await settle()
     expect(second.getSnapshot().thread).toMatchObject({
-      runStatus: "failed", runError: { kind: "agent", profile }, resumeCursor: cursor,
+      runStatus: "failed",
+      runFailuresById: { run_failed: { failedRunId: "run_failed", kind: "agent", profile } },
+      resumeCursor: cursor,
     })
     expect(client.createCalls).toHaveLength(0)
     second.retry()
@@ -107,7 +111,9 @@ describe("failed snapshot hydration", () => {
       createId: (prefix) => `${prefix}_generic_user` })
     await settle()
     expect(engine.getSnapshot().thread).toMatchObject({
-      runStatus: "failed", runError: { kind: "generic" }, resumeCursor: cursor,
+      runStatus: "failed",
+      runFailuresById: { run_failed: { failedRunId: "run_failed", kind: "generic" } },
+      resumeCursor: cursor,
     })
     expect(engine.getSnapshot().thread.messages).toContainEqual(expect.objectContaining({
       role: "user", content: "retry me",
@@ -128,7 +134,9 @@ describe("failed snapshot hydration", () => {
     const engine = createSessionEngine({ client, storage, now: () => 1_000,
       createId: (prefix) => `${prefix}_missing_user` })
     await settle()
-    expect(engine.getSnapshot().thread.runError).toEqual({ kind: "generic" })
+    expect(engine.getSnapshot().thread.runFailuresById.run_failed).toEqual({
+      failedRunId: "run_failed", kind: "generic",
+    })
     expect(client.createCalls).toHaveLength(0)
     engine.retry()
     await settle()

@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react"
 import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
 import { buildThreadItems } from "@/core/projections"
-import type { RunFailure, SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
+import type { AttributedRunFailure, RunFailure, SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
@@ -76,6 +76,8 @@ export type ConversationThreadProps = {
   sessionId: string | null
   thread: SessionStreamState
   isStreaming: boolean
+  // Engine machine runId is the live authority after receipt; snapshot activeRunId is its reload fallback.
+  currentRunId?: string | null
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
@@ -133,6 +135,22 @@ export function failureCopyKey(runError: RunFailure | null): MessageKey {
   return runError?.kind === "agent" ? agentFailureCopyKey(runError.profile.code) : "fail.generic"
 }
 
+function TerminalFailureFeedback({ failure }: { failure: AttributedRunFailure }) {
+  const t = useT()
+  return (
+    <div className={styles.runFailureFooter} data-run-failure={failure.failedRunId}>
+      <Alert variant="destructive" className={styles.error}>
+        <AlertTitle>{t(failureCopyKey(failure))}</AlertTitle>
+        {failure.kind === "agent" && failure.profile.code === "internal_error" ? (
+          <AlertDescription className={styles.errorBody}>
+            <span className={styles.errorHint}>{t("fail.internalHint")}</span>
+          </AlertDescription>
+        ) : null}
+      </Alert>
+    </div>
+  )
+}
+
 export function ConversationThread(props: ConversationThreadProps) {
   return (
     <MessageScrollerProvider
@@ -158,6 +176,7 @@ function ConversationThreadSurface({
   onOpenTool,
   thread,
   isStreaming,
+  currentRunId,
   isReconnecting,
   hasFailed,
   canRetryPendingSubmission,
@@ -180,42 +199,20 @@ function ConversationThreadSurface({
   const items = buildThreadItems(thread)
 
   // 流式中：最后一个 assistant 轮是当前在途的那一轮——唯一带「实时」语义的 turn。
-  let liveRunId: string | undefined
-  if (isStreaming) {
-    for (let i = items.length - 1; i >= 0; i -= 1) {
-      const item = items[i]
-      if (item?.kind === "assistant-turn") {
-        liveRunId = item.runId
-        break
-      }
-    }
-  }
+  const liveRunId = isStreaming ? currentRunId ?? thread.activeRunId ?? undefined : undefined
 
   // 提交后、首个 step/token 未到：在途轮还没产生任何可渲染项（最后一项仍是用户胶囊）。
   // 合成一个无内容的 live 脚手架轮，让 AssistantTurn 渲染「就近 live 成形线」，
   // 绝不在提交与首 token 之间留空帧。一旦首个 step/text 到达，buildThreadItems 即接管，脚手架退场。
-  const showScaffoldTurn = isStreaming && items[items.length - 1]?.kind !== "assistant-turn"
+  const showScaffoldTurn = isStreaming && (
+    liveRunId === undefined || !items.some((item) => item.kind === "assistant-turn" && item.runId === liveRunId)
+  )
   const hasRenderableDeliveries = Boolean(
     onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore),
   )
-  const terminalItem = items.at(-1)
-  const terminalMessage = thread.messages.at(-1)
-  const embedFailureFeedback = Boolean(
-    hasFailed
-      && !isStreaming
-      && !isReconnecting
-      && hitlRunId === null
-      && !hasRenderableDeliveries
-      && terminalItem?.kind === "assistant-turn"
-      && terminalMessage?.role === "assistant"
-      && terminalItem.runId === terminalMessage.runId
-      && Object.values(terminalItem.messagesById).length > 0
-      && Object.values(terminalItem.messagesById).every((message) => message.content === "")
-      && terminalItem.steps.every((step) => step.kind === "text"),
-  )
   const failureMessageId = creditRejected ? "credit-error" : "run-error"
   const failureFeedback = !hasFailed ? null : (
-    <div data-message-id={embedFailureFeedback ? failureMessageId : undefined}>
+    <div>
       {creditRejected ? (
         <Alert variant="destructive" className={styles.error}>
           <AlertTitle>{t("billing.creditRejected")}</AlertTitle>
@@ -248,10 +245,10 @@ function ConversationThreadSurface({
         </Alert>
       ) : (
         <Alert variant="destructive" className={styles.error}>
-          <AlertTitle>{t(failureCopyKey(thread.runError))}</AlertTitle>
+          <AlertTitle>{t(failureCopyKey(thread.unattributedFailure))}</AlertTitle>
           <AlertDescription className={styles.errorLayout}>
             <div className={styles.errorBody}>
-              {thread.runError?.kind === "agent" && thread.runError.profile.code === "internal_error" ? (
+              {thread.unattributedFailure?.kind === "agent" && thread.unattributedFailure.profile.code === "internal_error" ? (
                 <span className={styles.errorHint}>{t("fail.internalHint")}</span>
               ) : null}
             </div>
@@ -274,9 +271,9 @@ function ConversationThreadSurface({
     </div>
   )
   const geometryItemIdentity = [
-    ...items.map((item) => item.kind === "user" ? `user:${item.message.id}` : `run:${item.runId}`),
+    ...items.map((item) => item.kind === "user" ? `user:${item.message.id}` : item.anchorId),
     hasRenderableDeliveries ? "deliveries" : "",
-    failureFeedback && !embedFailureFeedback ? failureMessageId : "",
+    failureFeedback ? failureMessageId : "",
   ].join("\u0000")
 
   // The native scroller uses a spacer to end-align compact content. Clear that
@@ -349,8 +346,8 @@ function ConversationThreadSurface({
       <MessageScrollerContent data-conversation-thread-inner="true" className={styles.inner} aria-live="polite" aria-relevant="additions text">
         {items.map((item, itemIndex) => (
           <MessageScrollerItem
-            key={item.kind === "user" ? item.message.id : item.runId}
-            messageId={item.kind === "user" ? item.message.id : item.runId}
+            key={item.kind === "user" ? item.message.id : item.anchorId}
+            messageId={item.kind === "user" ? item.message.id : item.anchorId}
             scrollAnchor={item.kind === "assistant-turn" && item.runId === liveRunId}
           >
             {item.kind === "user" ? (
@@ -375,15 +372,20 @@ function ConversationThreadSurface({
                   taskTitle={showTaskTitle && itemIndex > 0 && !items.slice(0, itemIndex).some((previous) => previous.kind === "assistant-turn")
                     ? items.slice(0, itemIndex).reverse().find((previous) => previous.kind === "user")?.message.content ?? ""
                     : ""}
+                  {...(item.failure === undefined
+                    ? {}
+                    : { failureFooter: <TerminalFailureFeedback failure={item.failure} /> })}
                 />
-                {embedFailureFeedback && itemIndex === items.length - 1 ? failureFeedback : null}
               </>
             )}
           </MessageScrollerItem>
         ))}
 
         {showScaffoldTurn ? (
-          <MessageScrollerItem messageId="live-scaffold" scrollAnchor>
+          <MessageScrollerItem
+            messageId={liveRunId === undefined ? "assistant:pending-submission:live" : `assistant:${liveRunId}:live`}
+            scrollAnchor
+          >
             <AssistantTurn
               {...(brandName === undefined ? {} : { brandName })}
               sessionId={sessionId}
@@ -412,7 +414,7 @@ function ConversationThreadSurface({
           </MessageScrollerItem>
         ) : null}
 
-        {failureFeedback && !embedFailureFeedback ? (
+        {failureFeedback ? (
           <MessageScrollerItem messageId={failureMessageId}>{failureFeedback}</MessageScrollerItem>
         ) : null}
 

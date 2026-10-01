@@ -1,6 +1,7 @@
 // thread/segment 归组投影：纯派生，渲染层唯一的读取模型。
 
 import type {
+  AttributedRunFailure,
   SessionMessage,
   SessionStep,
   SessionStreamState,
@@ -13,9 +14,11 @@ export type ThreadItem =
   | { kind: "user"; message: SessionMessage }
   | {
       kind: "assistant-turn"
+      anchorId: string
       runId: string
       steps: SessionStep[]
       messagesById: Record<string, SessionMessage>
+      failure?: AttributedRunFailure
     }
 
 // 防御性恢复：若持久化快照缺少 text 步骤，按 assistant message 补齐渲染锚点。
@@ -57,6 +60,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
 
     // 收拢连续的同 runId assistant 消息，组成一个 turn 的文本段索引。
     const runId = message.runId
+    const anchorId = `assistant:${runId}:message:${message.id}`
     const messagesById: Record<string, SessionMessage> = {}
     while (i < state.messages.length) {
       const candidate = state.messages[i]
@@ -70,6 +74,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
     renderedRuns.add(runId)
     items.push({
       kind: "assistant-turn",
+      anchorId,
       runId,
       steps: withRestoredTextSteps(state.stepsByRun[runId] ?? [], messagesById),
       messagesById,
@@ -81,15 +86,41 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
     if (renderedRuns.has(runId)) {
       continue
     }
+    const steps = state.stepsByRun[runId] ?? []
+    const firstSegmentId = steps[0]?.segmentId ?? "process"
     items.push({
       kind: "assistant-turn",
+      anchorId: `assistant:${runId}:step:${firstSegmentId}`,
       runId,
-      steps: state.stepsByRun[runId] ?? [],
+      steps,
+      messagesById: {},
+    })
+    renderedRuns.add(runId)
+  }
+  // RUN_ERROR may arrive before the first text/process frame. Preserve the
+  // exact run as an empty assistant turn so its terminal footer has a truthful
+  // owner rather than falling back to a thread-level alert.
+  for (const runId of Object.keys(state.runFailuresById)) {
+    if (renderedRuns.has(runId)) continue
+    renderedRuns.add(runId)
+    items.push({
+      kind: "assistant-turn",
+      anchorId: `assistant:${runId}:failure`,
+      runId,
+      steps: [],
       messagesById: {},
     })
   }
 
-  return items
+  const lastTurnByRun = new Map<string, number>()
+  for (const [index, item] of items.entries()) {
+    if (item.kind === "assistant-turn") lastTurnByRun.set(item.runId, index)
+  }
+  return items.map((item, index) => {
+    if (item.kind !== "assistant-turn" || lastTurnByRun.get(item.runId) !== index) return item
+    const failure = state.runFailuresById[item.runId]
+    return failure === undefined ? item : { ...item, failure }
+  })
 }
 
 // 一个 turn 内按 segmentId 聚合的视图段：过程归到「催生其后那段答案」的段下。

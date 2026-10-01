@@ -20,7 +20,7 @@ export function SharedThread({ snapshot, brandName }: { snapshot: SessionSnapsho
       thread={thread}
       isStreaming={false}
       isReconnecting={false}
-      hasFailed={thread.runStatus === "failed"}
+      hasFailed={thread.unattributedFailure !== null}
       canRetryPendingSubmission={false}
       creditRejected={false}
       onOpenBilling={() => {}}

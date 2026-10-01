@@ -192,7 +192,9 @@ export function AppFrame({
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
-  const hasFailed = !isStreaming && (machine.phase === "error" || thread.runStatus === "failed")
+  const hasFailed = !isStreaming && (
+    (machine.phase === "error" && thread.runStatus !== "failed") || thread.unattributedFailure !== null
+  )
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
   const canRetryPendingSubmission = engine?.getSnapshot().canRetryPendingSubmission ?? false
   const mode = store ? activeMode(store) : pendingMode
@@ -244,6 +246,7 @@ export function AppFrame({
     sessionId: activeId,
     thread,
     isStreaming,
+    currentRunId: machine.runId ?? thread.activeRunId,
     isReconnecting: machine.phase === "reattaching",
     hasFailed,
     canRetryPendingSubmission,

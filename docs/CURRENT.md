@@ -1,3 +1,40 @@
+## WEB-FAILURE-P1-R24：Root 代码门验收（2026-10-01）
+
+Root frozen20/20 hash与范围复核、独立复审原3个P1关闭/P0=0/P1=0。Node22.22.2 fresh `pnpm check` exit0：contract219/219、architecture50/50、tests2079/2079、lint/typecheck/production build通过；日志 `/tmp/kokoro-web-failure-p1-root-r24-check-r2.log`。上一轮Root2076绿色仍被业务审查拒收，保留历史，不用测试绿掩盖缺陷。
+
+验收仅本片exact run failure/footer、稳定group anchor、明确live identity、process-only失败不重复与settled copy可见；不新增正式retry/queued，不吞失败或删除正文。尚未同步用户3310，浏览器desktop/mobile/focus/reload、provider/积分及全九owner组合仍待验。下面源码候选与worker验证为历史交付记录，非当前Root状态。
+
+## WEB-FAILURE-PLACEMENT-P1：exact run footer 源码候选（2026-10-01；待 Root 验收）
+
+基线为 D0 commit `2cb03500b05dfaddbd9296614f8dc8552e022581`。本候选删除 terminal placement 对旧 `runError` 单槽与
+尾项/空正文猜测的依赖，改以页面内存 `runFailuresById[failedRunId]` 统一 snapshot/live。每个 exact failed run 只在同 run 最后一个
+assistant group 显示一次 compact footer；empty/partial/full 正文、过程、settled copy、重复 owner user 消息与真实 terminal failure
+全部保留。相同 run completed 只清同 key，其他 run/new user 不误挂或清除；无 run id generic 继续独立安全可见。
+
+terminal Agent（含 `retryable=true`）、dispatch 与 generic footer 均没有重发动作；未获 create receipt 的 frozen intent 仍保留原
+key/body 恢复，余额/套餐动作保持线程级，未声明 public 3.0 不存在的 retry/queued。无新模块、文件、wire、generated、i18n、route、
+依赖、SQL、Redis 或 browser storage。
+
+TDD 第一轮 9 矩阵真实 RED 为10失败/175通过，随后获授权 core/UI 目标176/176、扩展 engine旧断言119/119及合并目标385/385
+通过；另发现 settled copy CSS 仍为 `display:none`，先取得1失败/55跳过再改为可见，随后1通过/55跳过。日志分别为
+`/tmp/kokoro-web-failure-placement-p1-{red,target-green,engine-green,target-final,copy-red,copy-green}.log`。Node24首次typecheck因五处
+旧engine test仍读已删除字段而exit2，Root批准只迁三现测试后，Node22.22.2 typecheck exit0；正式完整门结果由本片后续记录，不沿用
+D0的2074或Node24结果。最终 writer 在 Node22.22.2 只运行一次完整 `pnpm check`，actual exit0：contract219/219、
+architecture50/50、163文件2076/2076、lint/typecheck/production build全部通过；日志
+`/tmp/kokoro-web-failure-placement-p1-full-check.log`。未运行服务、provider、数据库、浏览器或Playwright；源码仍待Root冻结审查、
+独立完整门与真实desktop/mobile/focus/reload复验，当前不宣称视觉或跨owner闭环。
+
+R24 独立 review 的 3 个 P1 返修已纳入同一候选：live turn 只认 engine 当前 `runId`（receipt 后）或 snapshot
+`activeRunId`（reload fallback），不会让尾部 replay 的旧失败轮抢走 live anchor；同 run 被 user 分隔的多个 assistant group 使用首条
+message identity 形成稳定且唯一的 anchor，只在最后一组放一次 footer；仅 thinking/tool step 的失败 run 只投影一个保留过程与 footer 的
+turn。R24 mutation RED 为 5 失败/62 通过；最终精确回归为 6/6 通过（其余136按 name filter 跳过），日志
+`/tmp/kokoro-web-failure-p1-r24-{red,focused-green}.log`。中间合并目标曾出现 1 个与本片无关的欢迎页专案导航断言失败（388通过，
+`/tmp/kokoro-web-failure-p1-r24-target-green.log`），本片未改导航也不宣称已修；随后唯一一次最终 Node22.22.2 `pnpm check`
+actual exit0：contract219/219、architecture50/50、163文件2079/2079、lint/typecheck/production build全部通过，日志
+`/tmp/kokoro-web-failure-p1-r24-full-check.log`。Root 的旧 d2b live 同步只验证 ghost 工具边框为0、键盘 focus ring 为3px；当时独立红失败仍是
+未同步 P1 的画面，copy 点击后 CUA clipboard readback 为空，不能作为 exact 全文复制或本 R24 画面验收。R24 未启动服务、provider、数据库、
+浏览器或 Playwright，待 Root 冻结审查、独立完整门、同步后 desktop/mobile/focus/reload 复验。
+
 ## WEB-FAILURE-PLACEMENT-D0：四文档设计门（2026-10-01；待 Root 审查）
 
 基线 Web main `d2b717501349c8d8c43c13c7682e218f999297e3` clean。本 D0 只对齐 TECHNICAL_DESIGN、API_CONTRACT、

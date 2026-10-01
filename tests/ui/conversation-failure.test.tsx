@@ -18,6 +18,7 @@ import {
   expectedZhCopy,
   makeDispatchFailureEvent,
   makeFailedSnapshot,
+  makeSnapshot,
 } from "../core/fixtures"
 
 // LocaleProvider 水合后按 navigator.languages 协商语言（jsdom 通常 en）——按同一协商取译文断言，
@@ -43,6 +44,9 @@ function failedThreadWithProfile(profile: BffAgentFailureTuple): SessionStreamSt
       { id: "m_a", role: "assistant", content: "working…", runId: "run_1" },
     ],
     stepsByRun: { run_1: [] },
+    runFailuresById: {
+      run_1: { failedRunId: "run_1", kind: "agent", profile },
+    },
   }
 }
 
@@ -67,7 +71,7 @@ function renderFailure(thread: SessionStreamState, onRetry = vi.fn()) {
       thread={thread}
       isStreaming={false}
       isReconnecting={false}
-      hasFailed
+      hasFailed={thread.unattributedFailure !== null}
       canRetryPendingSubmission={false}
       creditRejected={false}
       onOpenBilling={vi.fn()}
@@ -312,19 +316,19 @@ afterEach(() => {
 describe("failureCopyKey — generated 10-code safe profile localization", () => {
   it("每个闭集码映射到一个存在的、非通用的文案键", () => {
     for (const code of CODES) {
-      const key = failureCopyKey(failedThread(code).runError)
+      const key = failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null)
       expect(key).not.toBe("fail.generic")
       expect(zh[key]).toBeTruthy()
     }
   })
 
   it("十码映射两两不同（无碰撞）", () => {
-    const keys = CODES.map((code) => failureCopyKey(failedThread(code).runError))
+    const keys = CODES.map((code) => failureCopyKey(failedThread(code).runFailuresById.run_1 ?? null))
     expect(new Set(keys).size).toBe(CODES.length)
   })
 
   it("generic 与 null 终态使用通用安全文案", () => {
-    expect(failureCopyKey(stateFromSnapshot(makeFailedSnapshot(null)).runError)).toBe("fail.generic")
+    expect(failureCopyKey(stateFromSnapshot(makeFailedSnapshot(null)).runFailuresById.run_failed ?? null)).toBe("fail.generic")
     expect(failureCopyKey(null)).toBe("fail.generic")
   })
 
@@ -445,7 +449,7 @@ describe("ConversationThread 紧凑线程几何", () => {
   it("嵌入安全失败反馈参与 fit 且不提供 raw detail 动作", () => {
     const harness = geometry()
     const { container } = renderGeometryThread(emptyFailedThread(), {
-      hasFailed: true,
+      hasFailed: false,
     })
     const elements = harness.configure(container, [rect(30, 80), rect(138, 150)])
 
@@ -508,6 +512,145 @@ describe("ConversationThread 失败卡渲染", () => {
   }
 
   it.each([
+    ["empty", ""],
+    ["partial", "partial answer"],
+    ["full", "This answer looks complete."],
+  ])("%s terminal 保留正文并把唯一失败 footer 放在 exact run 内", (_label, content) => {
+    const profile = failureProfile("internal_error")
+    const thread = {
+      ...createSessionStreamState(),
+      messages: [
+        { id: "u1", role: "user" as const, content: "same prompt", runId: "u1" },
+        { id: "a1", role: "assistant" as const, content, runId: "run_failed" },
+        { id: "u2", role: "user" as const, content: "same prompt", runId: "u2" },
+        { id: "a2", role: "assistant" as const, content: "newer success", runId: "run_success" },
+      ],
+      stepsByRun: {
+        run_failed: [{ kind: "text" as const, seq: 1, segmentId: "a1" }],
+        run_success: [{ kind: "text" as const, seq: 2, segmentId: "a2" }],
+      },
+      runFailuresById: {
+        run_failed: { failedRunId: "run_failed", kind: "agent" as const, profile },
+      },
+    }
+    const { container } = renderFailure(thread)
+    const failedTurn = container.querySelector('[data-message-id="assistant:run_failed:message:a1"]')
+    const successfulTurn = container.querySelector('[data-message-id="assistant:run_success:message:a2"]')
+    expect(container.querySelectorAll('[data-message-id="u1"], [data-message-id="u2"]')).toHaveLength(2)
+    expect(failedTurn?.querySelector('[data-run-failure="run_failed"]')).not.toBeNull()
+    expect(successfulTurn?.querySelector('[role="alert"]')).toBeNull()
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
+    expect(screen.queryByRole("button", { name: tr("thread.retry") })).toBeNull()
+    if (content) expect(failedTurn).toHaveTextContent(content)
+  })
+
+  it("同 run 多个 assistant 组只在最后一组放一次 footer", () => {
+    const profile = failureProfile("dependency_unavailable")
+    const thread = {
+      ...createSessionStreamState(),
+      messages: [
+        { id: "a1", role: "assistant" as const, content: "part one", runId: "run_a" },
+        { id: "u1", role: "user" as const, content: "persisted boundary", runId: "u1" },
+        { id: "a2", role: "assistant" as const, content: "part two", runId: "run_a" },
+      ],
+      stepsByRun: { run_a: [
+        { kind: "text" as const, seq: 1, segmentId: "a1" },
+        { kind: "text" as const, seq: 2, segmentId: "a2" },
+      ] },
+      runFailuresById: { run_a: { failedRunId: "run_a", kind: "agent" as const, profile } },
+    }
+    const { container } = renderFailure(thread)
+    const turns = container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id^="assistant:run_a:message:"]')
+    expect(turns).toHaveLength(2)
+    expect([...turns].map((turn) => turn.getAttribute("data-message-id"))).toEqual([
+      "assistant:run_a:message:a1",
+      "assistant:run_a:message:a2",
+    ])
+    expect(turns[0]?.querySelector('[data-run-failure="run_a"]')).toBeNull()
+    expect(turns[1]?.querySelectorAll('[data-run-failure="run_a"]')).toHaveLength(1)
+  })
+
+  it.each([
+    ["empty", ""],
+    ["with body", "historical partial"],
+  ])("active run identity keeps replayed old failure visible without stealing live anchor: %s", (_label, content) => {
+    const profile = failureProfile("model_unavailable")
+    const thread = {
+      ...createSessionStreamState(),
+      activeRunId: "run_new",
+      messages: [{ id: "old_answer", role: "assistant" as const, content, runId: "run_old" }],
+      stepsByRun: { run_old: [{ kind: "text" as const, seq: 1, segmentId: "old_answer" }] },
+      runFailuresById: {
+        run_old: { failedRunId: "run_old", kind: "agent" as const, profile },
+      },
+    }
+    const { container, rerender } = render(
+      <ConversationThread
+        sessionId="ses_1"
+        thread={thread}
+        isStreaming
+        isReconnecting={false}
+        hasFailed={false}
+        canRetryPendingSubmission={false}
+        creditRejected={false}
+        onOpenBilling={vi.fn()}
+        onOpenPricing={vi.fn()}
+        onRetry={vi.fn()}
+        mode="fast"
+        stagingByRun={{}}
+        hitlRunId={null}
+        controlError={null}
+      />,
+      { wrapper: LocaleProvider },
+    )
+    expect(container.querySelector('[data-run-failure="run_old"]')).not.toBeNull()
+    expect(container.querySelector('[data-message-id="assistant:run_old:message:old_answer"]'))
+      .toHaveAttribute("data-scroll-anchor", "false")
+    expect(container.querySelector('[data-message-id="assistant:run_new:live"]'))
+      .toHaveAttribute("data-scroll-anchor", "true")
+
+    rerender(
+      <LocaleProvider>
+        <ConversationThread
+          sessionId="ses_1"
+          thread={thread}
+          isStreaming
+          isReconnecting={false}
+          hasFailed={false}
+          canRetryPendingSubmission={false}
+          creditRejected={false}
+          onOpenBilling={vi.fn()}
+          onOpenPricing={vi.fn()}
+          onRetry={vi.fn()}
+          mode="fast"
+          stagingByRun={{}}
+          hitlRunId={null}
+          controlError={null}
+        />
+      </LocaleProvider>,
+    )
+    expect(container.querySelectorAll('[data-run-failure="run_old"]')).toHaveLength(1)
+    expect(container.querySelector('[data-message-id="assistant:run_new:live"]'))
+      .toHaveAttribute("data-scroll-anchor", "true")
+  })
+
+  it("compact footer 在窄栏可换行且没有 terminal 可聚焦动作", () => {
+    const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
+    expect(css).toMatch(/\.runFailureFooter\s*\{[^}]*max-width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/u)
+    const { container } = renderFailure(failedThread("model_unavailable"))
+    const footer = container.querySelector('[data-run-failure="run_1"]')
+    expect(footer?.querySelector('button, a, input, textarea, select, [tabindex]:not([tabindex="-1"])')).toBeNull()
+  })
+
+  it("partial/full terminal 的 settled copy footer 仍可见可操作", () => {
+    const css = readFileSync(`${process.cwd()}/src/ui/thread/thread.module.css`, "utf8")
+    expect(css).toMatch(/\.assistantActions\s*\{[^}]*display:\s*flex;/u)
+    const { container } = renderFailure(failedThread("dependency_unavailable"))
+    const turn = container.querySelector('[data-message-id="assistant:run_1:message:m_a"]')
+    expect(turn?.querySelector(`button[aria-label="${tr("thread.copyAnswer")}"]`)).not.toBeNull()
+  })
+
+  it.each([
     { name: "空成果且无更多页", sessionId: "ses_1", deliveries: [], hasMore: false, canOpen: true, visible: false },
     { name: "无会话且空成果", sessionId: null, deliveries: [], hasMore: false, canOpen: true, visible: false },
     { name: "无会话且已有成果", sessionId: null, deliveries: [delivery], hasMore: false, canOpen: true, visible: false },
@@ -557,7 +700,7 @@ describe("ConversationThread 失败卡渲染", () => {
         ] }}
         isStreaming={false}
         isReconnecting={false}
-        hasFailed
+        hasFailed={false}
         canRetryPendingSubmission={false}
         creditRejected={false}
         onOpenBilling={vi.fn()}
@@ -573,8 +716,8 @@ describe("ConversationThread 失败卡渲染", () => {
     )
     expect(container.querySelector('[data-message-id="m_u1"]')).toHaveTextContent("same persisted prompt")
     expect(container.querySelector('[data-message-id="m_u2"]')).toHaveTextContent("same persisted prompt")
-    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="run_1"]')
-    const feedback = container.querySelector('[data-message-id="run-error"]')
+    const assistantItem = container.querySelector('[data-slot="message-scroller-item"][data-message-id="assistant:run_1:message:m_a"]')
+    const feedback = container.querySelector('[data-run-failure="run_1"]')
     expect(assistantItem?.querySelector("article")).not.toBeNull()
     expect(feedback?.closest('[data-slot="message-scroller-item"]')).toBe(assistantItem)
     expect(container.querySelectorAll('[data-slot="message-scroller-item"][data-message-id="run-error"]')).toHaveLength(0)
@@ -643,89 +786,14 @@ describe("ConversationThread 失败卡渲染", () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it.each([
-    {
-      name: "有正文",
-      thread: () => failedThread("internal_error"),
-      props: {},
-    },
-    {
-      name: "空白正文并非精确空串",
-      thread: () => ({
-        ...emptyFailedThread(),
-        messages: [
-          { id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" },
-          { id: "m_a", role: "assistant" as const, content: " ", runId: "run_1" },
-        ],
-      }),
-      props: {},
-    },
-    {
-      name: "有思考过程",
-      thread: () => ({
-        ...emptyFailedThread(),
-        stepsByRun: {
-          run_1: [{ kind: "thinking" as const, seq: 1, segmentId: "m_a", text: "working" }],
-        },
-      }),
-      props: {},
-    },
-    {
-      name: "失败助手后还有持久化用户消息",
-      thread: () => ({
-        ...emptyFailedThread(),
-        messages: [
-          ...emptyFailedThread().messages,
-          { id: "m_u2", role: "user" as const, content: "new request", runId: "m_u2" },
-        ],
-      }),
-      props: {},
-    },
-    {
-      name: "仅有孤立过程而无持久化助手",
-      thread: () => ({
-        ...emptyFailedThread(),
-        messages: [{ id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" }],
-        stepsByRun: {
-          run_1: [{ kind: "thinking" as const, seq: 1, segmentId: "thinking_1", text: "working" }],
-        },
-      }),
-      props: {},
-    },
-    {
-      name: "重试已进入流式",
-      thread: emptyFailedThread,
-      props: { isStreaming: true },
-    },
-    {
-      name: "正在重连",
-      thread: emptyFailedThread,
-      props: { isReconnecting: true },
-    },
-    {
-      name: "HITL仍活跃",
-      thread: emptyFailedThread,
-      props: { hitlRunId: "run_1" },
-    },
-    {
-      name: "成果区可渲染",
-      thread: () => ({ ...emptyFailedThread(), deliveries: [delivery] }),
-      props: { onOpenDelivery: vi.fn() },
-    },
-    {
-      name: "没有持久化助手",
-      thread: () => ({
-        ...emptyFailedThread(),
-        messages: [{ id: "m_u", role: "user" as const, content: "do the thing", runId: "m_u" }],
-        stepsByRun: {},
-      }),
-      props: {},
-    },
-  ])("$name 时保留独立失败滚动项", ({ thread, props }) => {
+  it("无 run_id 的真实 generic 失败保留独立安全反馈", () => {
+    const thread = stateFromSnapshot(makeSnapshot({
+      messages: [{ message_id: "a_unknown", role: "assistant", content: "partial", status: "failed", created_at: "2026-07-02T00:00:01Z" }],
+    }))
     const { container } = render(
       <ConversationThread
         sessionId="ses_1"
-        thread={thread()}
+        thread={thread}
         isStreaming={false}
         isReconnecting={false}
         hasFailed
@@ -738,7 +806,6 @@ describe("ConversationThread 失败卡渲染", () => {
         stagingByRun={{}}
         hitlRunId={null}
         controlError={null}
-        {...props}
       />,
       { wrapper: LocaleProvider },
     )
@@ -879,6 +946,7 @@ describe("ConversationThread 失败卡渲染", () => {
         sessionId="ses_1"
         thread={thread}
         isStreaming
+        currentRunId="run_1"
         isReconnecting={false}
         hasFailed={false}
         canRetryPendingSubmission={false}
@@ -904,6 +972,7 @@ describe("ConversationThread 失败卡渲染", () => {
         sessionId="ses_1"
         thread={thread}
         isStreaming
+        currentRunId="run_1"
         isReconnecting={false}
         hasFailed={false}
         canRetryPendingSubmission={false}

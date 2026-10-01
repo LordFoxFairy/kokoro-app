@@ -314,16 +314,24 @@ function applyRunTerminal(
   if (closed) {
     draft.state.stepsByRun[event.run_id] = closed
   }
-  // 全局 runStatus/runError 是「当前/最近一轮」的单槽投影：仅在无在途锚点（live 收口，
-  // activeRunId 恒 null）或该终态正属在途 run 时才写；reattach 全量回放里历史 run 的终态
-  // 不得覆写在途 run，否则在途 run 若走客户端 TIMEOUT 收口就会弹出历史 run 的假失败卡。
+  if (event.kind === "run.completed") {
+    if (draft.state.runFailuresById[event.run_id] !== undefined) {
+      const next = { ...draft.state.runFailuresById }
+      delete next[event.run_id]
+      draft.state.runFailuresById = next
+    }
+  } else {
+    draft.state.runFailuresById = {
+      ...draft.state.runFailuresById,
+      [event.run_id]: event.kind === "run.failed"
+        ? { failedRunId: event.run_id, kind: "agent", profile: event.payload.profile }
+        : { failedRunId: event.run_id, kind: "dispatch" },
+    }
+  }
+  // runStatus 只表达当前/最近机器相位。历史 run terminal 可进入其 exact 索引，
+  // 但不得覆写当前在途 run 的全局相位。
   if (draft.state.activeRunId === null || draft.state.activeRunId === event.run_id) {
     draft.state.runStatus = event.kind === "run.completed" ? event.payload.status : "failed"
-    draft.state.runError = event.kind === "run.failed"
-      ? { kind: "agent", profile: event.payload.profile }
-      : event.kind === "run.dispatch_failed"
-        ? { kind: "dispatch" }
-        : null
   }
   if (draft.state.activeRunId === event.run_id) {
     draft.state.activeRunId = null
@@ -487,7 +495,8 @@ export function applyChatProjectionEvents(
           deliveries: state.deliveries,
           deliveriesHasMore: state.deliveriesHasMore,
           runStatus: state.runStatus,
-          runError: state.runError,
+          runFailuresById: state.runFailuresById,
+          unattributedFailure: state.unattributedFailure,
           activeRunId: state.activeRunId,
           lastSeq: state.lastSeq,
           resumeCursor: state.resumeCursor,
@@ -528,7 +537,6 @@ export function appendUserMessage(
     ],
     todos: [],
     runStatus: "idle",
-    runError: null,
   }
 }
 

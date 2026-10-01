@@ -134,7 +134,7 @@
 }
 
 .assistantActions {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 0.25rem;
   min-height: 2rem;
@@ -1132,6 +1132,12 @@
 }
 
 /* —— 这轮失败提示 + 重试 —— */
+
+.runFailureFooter {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 .error {
   width: fit-content;

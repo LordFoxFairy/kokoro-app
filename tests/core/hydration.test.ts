@@ -24,7 +24,7 @@ describe("stateFromSnapshot", () => {
       deliveries: [delivery], deliveriesHasMore: true, eventWatermark: cursor,
     }))
     expect(state.runStatus).toBe("failed")
-    expect(state.runError).toEqual({ kind: "generic" })
+    expect(state.runFailuresById.run_failed).toEqual({ failedRunId: "run_failed", kind: "generic" })
     expect(state.messages.map(({ role, content: text, runId }) => ({ role, content: text, runId }))).toEqual([
       { role: "user", content: "try this", runId: "user_1" },
       { role: "assistant", content, runId: "run_failed" },
@@ -36,14 +36,45 @@ describe("stateFromSnapshot", () => {
     expect(state.resumeCursor).toBe(cursor)
   })
 
+  it("indexes every exact failed run while a later completed run stays clean", () => {
+    const state = stateFromSnapshot(makeSnapshot({
+      messages: [
+        { message_id: "u1", role: "user", content: "same", status: "completed", created_at: "2026-07-02T00:00:00Z" },
+        { message_id: "a1", role: "assistant", run_id: "run_a", content: "partial A", status: "failed", failure: AGENT_FAILURE_PROFILES[0], created_at: "2026-07-02T00:00:01Z" },
+        { message_id: "u2", role: "user", content: "same", status: "completed", created_at: "2026-07-02T00:00:02Z" },
+        { message_id: "a2", role: "assistant", run_id: "run_b", content: "complete B", status: "completed", created_at: "2026-07-02T00:00:03Z" },
+        { message_id: "u3", role: "user", content: "third", status: "completed", created_at: "2026-07-02T00:00:04Z" },
+        { message_id: "a3", role: "assistant", run_id: "run_c", content: "full-looking C", status: "failed", created_at: "2026-07-02T00:00:05Z" },
+      ],
+    }))
+
+    expect(state.runFailuresById).toEqual({
+      run_a: { failedRunId: "run_a", kind: "agent", profile: AGENT_FAILURE_PROFILES[0] },
+      run_c: { failedRunId: "run_c", kind: "generic" },
+    })
+    expect(state.unattributedFailure).toBeNull()
+    expect(state.messages.filter(({ role }) => role === "user").map(({ content }) => content)).toEqual(["same", "same", "third"])
+  })
+
+  it("keeps a real failed assistant without run_id visible but unattributed", () => {
+    const state = stateFromSnapshot(makeSnapshot({
+      messages: [
+        { message_id: "a_unknown", role: "assistant", content: "partial", status: "failed", created_at: "2026-07-02T00:00:01Z" },
+      ],
+    }))
+
+    expect(state.runFailuresById).toEqual({})
+    expect(state.unattributedFailure).toEqual({ kind: "generic" })
+  })
+
   it.each(AGENT_FAILURE_PROFILES)(
     "restores the published $code retryable=$retryable profile without raw diagnostics",
     (profile) => {
       const state = stateFromSnapshot(makeFailedSnapshot(profile))
       expect(state.runStatus).toBe("failed")
-      expect(state.runError).toEqual({ kind: "agent", profile })
-      expect(state.runError).not.toHaveProperty("message")
-      expect(state.runError).not.toHaveProperty("error_kind")
+      expect(state.runFailuresById.run_failed).toEqual({ failedRunId: "run_failed", kind: "agent", profile })
+      expect(state.runFailuresById.run_failed).not.toHaveProperty("message")
+      expect(state.runFailuresById.run_failed).not.toHaveProperty("error_kind")
     },
   )
 
@@ -65,7 +96,11 @@ describe("stateFromSnapshot", () => {
       ]
       for (const state of states) {
         expect(state.runStatus).toBe("idle")
-        expect(state.runError).toBeNull()
+        const blocked = state.activeRunId === "run_failed" || state.stepsByRun.run_failed?.some(
+          (step) => step.kind === "tool" && step.tool.status === "awaiting",
+        )
+        if (blocked) expect(state.runFailuresById).toEqual({})
+        else expect(state.runFailuresById).toHaveProperty("run_failed")
       }
     },
   )
@@ -86,7 +121,9 @@ describe("stateFromSnapshot", () => {
   ])("does not restore stale failure for %s", (_label, messages, activeRun, pendingPauses) => {
     const state = stateFromSnapshot(makeSnapshot({ messages, activeRun, pendingPauses }))
     expect(state.runStatus).toBe("idle")
-    expect(state.runError).toBeNull()
+    if (_label === "active run" || _label === "pending pause") expect(state.runFailuresById).toEqual({})
+    else if (_label === "newer user") expect(state.runFailuresById).toHaveProperty("run_failed")
+    else expect(state.runFailuresById).toEqual({})
   })
 
   it.each(["resolved", "cancelled", "expired"] as const)(
@@ -97,7 +134,7 @@ describe("stateFromSnapshot", () => {
         pendingPauses: [makePendingPause({ status })],
       }))
       expect(state.runStatus).toBe("failed")
-      expect(state.runError).toEqual({ kind: "generic" })
+      expect(state.runFailuresById.run_failed).toEqual({ failedRunId: "run_failed", kind: "generic" })
     },
   )
 
@@ -109,7 +146,8 @@ describe("stateFromSnapshot", () => {
     })
     const state = stateFromSnapshot(snapshot)
     expect(state.runStatus).toBe("idle")
-    expect(state.runError).toBeNull()
+    expect(state.runFailuresById).toEqual({})
+    expect(state.unattributedFailure).toBeNull()
     expect(state.messages).toEqual([])
   })
 

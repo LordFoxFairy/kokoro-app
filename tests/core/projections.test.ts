@@ -5,7 +5,7 @@ import { buildThreadItems, groupSegments } from "@/core/projections"
 import { applyChatProjectionEvents, appendUserMessage } from "@/core/reducer"
 import { createSessionStreamState, type SessionStep } from "@/core/state"
 
-import { makeEvent, makeSnapshot, resetFixtureSeq } from "./fixtures"
+import { AGENT_FAILURE_PROFILES, makeEvent, makeSnapshot, resetFixtureSeq } from "./fixtures"
 
 beforeEach(resetFixtureSeq)
 
@@ -48,6 +48,56 @@ describe("buildThreadItems", () => {
     expect(turn.steps.some((step) => step.kind === "text" && step.segmentId === "seg_1")).toBe(
       true,
     )
+  })
+
+  it("同 run 出现多个 assistant 组时只把失败交给最后一组", () => {
+    const profile = AGENT_FAILURE_PROFILES[0]!
+    const state = {
+      ...createSessionStreamState(),
+      messages: [
+        { id: "a1", role: "assistant" as const, content: "part one", runId: "run_a" },
+        { id: "u1", role: "user" as const, content: "owner fact", runId: "u1" },
+        { id: "a2", role: "assistant" as const, content: "part two", runId: "run_a" },
+      ],
+      stepsByRun: { run_a: [
+        { kind: "text" as const, seq: 1, segmentId: "a1" },
+        { kind: "text" as const, seq: 2, segmentId: "a2" },
+      ] },
+      runFailuresById: {
+        run_a: { failedRunId: "run_a", kind: "agent" as const, profile },
+      },
+    }
+    const turns = buildThreadItems(state).filter((item) => item.kind === "assistant-turn")
+    expect(turns).toHaveLength(2)
+    expect(turns.map((turn) => turn.anchorId)).toEqual([
+      "assistant:run_a:message:a1",
+      "assistant:run_a:message:a2",
+    ])
+    expect(buildThreadItems(state).filter((item) => item.kind === "assistant-turn").map((turn) => turn.anchorId))
+      .toEqual(turns.map((turn) => turn.anchorId))
+    expect(turns[0]).not.toHaveProperty("failure")
+    expect(turns[1]).toMatchObject({ failure: { failedRunId: "run_a", kind: "agent", profile } })
+  })
+
+  it("thinking/tool-only failed run exactly once preserves process and footer", () => {
+    const profile = AGENT_FAILURE_PROFILES[0]!
+    const state = {
+      ...createSessionStreamState(),
+      stepsByRun: {
+        run_process: [{ kind: "thinking" as const, seq: 1, segmentId: "thinking_1", text: "working" }],
+      },
+      runFailuresById: {
+        run_process: { failedRunId: "run_process", kind: "agent" as const, profile },
+      },
+    }
+    const turns = buildThreadItems(state).filter((item) => item.kind === "assistant-turn")
+    expect(turns).toHaveLength(1)
+    expect(turns[0]).toMatchObject({
+      anchorId: "assistant:run_process:step:thinking_1",
+      runId: "run_process",
+      steps: [{ kind: "thinking", segmentId: "thinking_1", text: "working" }],
+      failure: { failedRunId: "run_process", kind: "agent", profile },
+    })
   })
 })
 

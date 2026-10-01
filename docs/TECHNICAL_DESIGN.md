@@ -2,6 +2,11 @@
 
 ## WEB-FAILURE-PLACEMENT-D0：按 Run 归属的紧凑失败 footer（2026-10-01；仅设计门）
 
+> P1 源码候选：现 `state/reducer/hydration/projections` 已以 `runFailuresById` + exact `failedRunId` 替代 terminal
+> placement 单槽；Thread projection 只把 failure 交给同 run 最后一个 assistant group，`AssistantTurn` 在 settled 正文/过程/复制
+> 之后放 compact footer。无 run id 的 generic 仍走独立安全反馈；AppFrame/Shared 只把未归属或 pre-receipt failure 交给线程级反馈。
+> 未新增 contract/generated/i18n/route/module，下面 D0 边界与矩阵继续是验收依据。
+
 当前 `SessionStreamState.runError` 是“当前/最近一轮”的单槽，未保存 `failedRunId`；`ConversationThread` 又用尾项、空正文和
 `hasFailed` 猜失败应放在哪一轮。该组合会让已有 partial/full 正文的真实终态失败落成线程尾部独立红色提示，也可能在下一轮开始后
 误挂。目标不是改色或隐藏失败，而是让 owner 已确认的 terminal failure 以 exact run identity 成为对应助手轮的紧凑 footer。

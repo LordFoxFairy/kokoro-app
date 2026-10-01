@@ -180,7 +180,7 @@ describe("activeRunId 显式锚定（snapshot 置位、终态清空）", () => {
     expect(state.activeRunId).toBe("run_new")
   })
 
-  it("历史 run 的终态不覆写在途 run 的全局 runStatus/runError", () => {
+  it("历史 run 的终态不覆写在途 run 的全局 runStatus，但保留 exact 历史索引", () => {
     let state = stateFromSnapshot(
       makeSnapshot({ activeRun: { run_id: "run_new", status: "running" } }),
     )
@@ -191,7 +191,9 @@ describe("activeRunId 显式锚定（snapshot 置位、终态清空）", () => {
     )
     // 在途 run_new 仍在跑，历史 run_old 失败不得把 thread 置 failed（否则 UI 弹历史假失败卡）。
     expect(state.runStatus).toBe("idle")
-    expect(state.runError).toBeNull()
+    expect(state.runFailuresById.run_old).toEqual({
+      failedRunId: "run_old", kind: "agent", profile: INTERNAL_FAILURE,
+    })
   })
 })
 
@@ -606,13 +608,42 @@ describe("run.failed safe failure 投影", () => {
       makeAgentFailureEvent(profile, { run_id: "run_f", seq: 2 }),
     ])
     expect(s1.runStatus).toBe("failed")
-    expect(s1.runError).toEqual({ kind: "agent", profile })
-    expect(s1.runError).not.toHaveProperty("message")
-    expect(s1.runError).not.toHaveProperty("error_kind")
+    expect(s1.runFailuresById.run_f).toEqual({ failedRunId: "run_f", kind: "agent", profile })
+    expect(s1.runFailuresById.run_f).not.toHaveProperty("message")
+    expect(s1.runFailuresById.run_f).not.toHaveProperty("error_kind")
     const s2 = applyChatProjectionEvents(s1, [
       makeEvent("run.completed", { status: "completed", token_usage: null }, { run_id: "run_g", seq: 3 }),
     ])
-    expect(s2.runError).toBeNull()
+    expect(s2.runFailuresById.run_f).toEqual({ failedRunId: "run_f", kind: "agent", profile })
+  })
+
+  it("indexes exact failed runs and only matching completion clears its own failure", () => {
+    const profile = AGENT_FAILURE_PROFILES[0]!
+    let state = applyChatProjectionEvents(createSessionStreamState(), [
+      makeAgentFailureEvent(profile, { run_id: "run_a", event_id: "fail_a", seq: 1 }),
+      makeAgentFailureEvent(profile, { run_id: "run_b", event_id: "fail_b", seq: 2 }),
+    ])
+    expect(state.runFailuresById).toEqual({
+      run_a: { failedRunId: "run_a", kind: "agent", profile },
+      run_b: { failedRunId: "run_b", kind: "agent", profile },
+    })
+
+    state = applyChatProjectionEvent(state,
+      makeEvent("run.completed", { status: "completed" }, { run_id: "run_b", event_id: "done_b", seq: 3 }))
+    expect(state.runFailuresById).toEqual({
+      run_a: { failedRunId: "run_a", kind: "agent", profile },
+    })
+
+    state = appendUserMessage(state, { id: "usr_next", content: "next" })
+    expect(state.runFailuresById).toHaveProperty("run_a")
+  })
+
+  it("deduplicates replayed terminal events without duplicating the run failure", () => {
+    const event = makeAgentFailureEvent(AGENT_FAILURE_PROFILES[0]!, {
+      run_id: "run_a", event_id: "same_failure", seq: 1,
+    })
+    const state = applyChatProjectionEvents(createSessionStreamState(), [event, event])
+    expect(Object.keys(state.runFailuresById)).toEqual(["run_a"])
   })
 })
 

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, Copy } from "lucide-react"
 import { useState } from "react"
+import type { ReactNode } from "react"
 
 import { MarkdownMessage } from "./markdown-message"
 import { SegmentProcess } from "./segment-process"
@@ -37,6 +38,7 @@ type AssistantTurnProps = {
   // ask_user 问答卡的取消 run 入口（透传到工具行）。
   onCancelRun?: () => void
   taskTitle?: string
+  failureFooter?: ReactNode
 }
 
 // 成形态内容：就近的「正在…」线索 + 脉冲点，占位与正文同一 answer 元素，
@@ -84,6 +86,7 @@ export function AssistantTurn({
   onToolDecision,
   onCancelRun,
   taskTitle,
+  failureFooter,
 }: AssistantTurnProps) {
   const t = useT()
   const segments = groupSegments(steps)
@@ -235,6 +238,7 @@ export function AssistantTurn({
             </Button>
           </div>
         ) : null}
+        {!isLive ? failureFooter : null}
       </div>
     </article>
   )

@@ -4,6 +4,8 @@
 import type { Delivery, SessionSnapshot } from "@/contract/http"
 import {
   createSessionStreamState,
+  type AttributedRunFailure,
+  type RunFailure,
   type SessionDelivery,
   type SessionMessage,
   type SessionStep,
@@ -50,6 +52,24 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     pendingIdsByRun.set(pause.run_id, ids)
   }
   const stepsByRun: Record<string, SessionStep[]> = {}
+  const finalAssistantByRun = new Map<string, NonNullable<SessionSnapshot["messages"]>[number]>()
+  let unattributedFailure: RunFailure | null = null
+  for (const message of snapshotMessages) {
+    if (message.role !== "assistant") continue
+    if (message.run_id === undefined) {
+      if (message.status === "failed") unattributedFailure = { kind: "generic" }
+      continue
+    }
+    finalAssistantByRun.set(message.run_id, message)
+  }
+  const runFailuresById: Record<string, AttributedRunFailure> = {}
+  for (const [runId, message] of finalAssistantByRun) {
+    if (message.status !== "failed") continue
+    if (snapshot.active_run?.run_id === runId || pending.some((pause) => pause.run_id === runId)) continue
+    runFailuresById[runId] = message.failure === undefined
+      ? { failedRunId: runId, kind: "generic" }
+      : { failedRunId: runId, kind: "agent", profile: message.failure }
+  }
   // Snapshot text precedes all post-watermark frames. These negative local
   // positions are render anchors, not fabricated owner event sequence/cursors.
   for (const [index, message] of messages.entries()) {
@@ -87,15 +107,14 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     ...(restoresFailedRun
       ? {
           runStatus: "failed" as const,
-          runError: tailMessage.failure === undefined
-            ? { kind: "generic" as const }
-            : { kind: "agent" as const, profile: tailMessage.failure },
         }
       : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
     activeRunId: snapshot.active_run?.run_id ?? null,
     messages,
     stepsByRun,
+    runFailuresById,
+    unattributedFailure,
     files: snapshot.files,
     deliveries: snapshot.deliveries.map(deliveryFromSnapshot),
     deliveriesHasMore: snapshot.deliveries_has_more,

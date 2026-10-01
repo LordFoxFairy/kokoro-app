@@ -80,7 +80,7 @@ describe("engine event reducer", () => {
     })
     expect(result.thread.lastSeq).toBe(7)
     expect(result.thread.runStatus).toBe("failed")
-    expect(result.thread.runError).toEqual({ kind: "dispatch" })
+    expect(result.thread.runFailuresById.run_1).toEqual({ failedRunId: "run_1", kind: "dispatch" })
     expect(result.machine).toEqual(IDLE_MACHINE)
     expect(result.settledRunId).toBe("run_1")
     expect(dispatchTerminal).toMatchObject({ sourceSequence })
@@ -101,8 +101,9 @@ describe("engine event reducer", () => {
       events: [dispatchTerminal],
     })
     expect(result.thread).toMatchObject({
-      activeRunId: "run_new", lastSeq: 11, runStatus: "idle", runError: null,
+      activeRunId: "run_new", lastSeq: 11, runStatus: "idle",
     })
+    expect(result.thread.runFailuresById.run_old).toEqual({ failedRunId: "run_old", kind: "dispatch" })
     expect(result.machine).toMatchObject({ phase: "reattaching", runId: "run_new" })
     expect(result.settledRunId).toBeNull()
   })

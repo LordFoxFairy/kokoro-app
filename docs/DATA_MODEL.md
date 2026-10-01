@@ -2,6 +2,10 @@
 
 ## WEB-FAILURE-PLACEMENT-D0：页面生命周期的 run failure 索引（2026-10-01；仅设计门）
 
+P1 候选已按本节建立纯内存 `runFailuresById` 与独立 `unattributedFailure`：前者只由 exact owner run identity 写入并按同 key
+completed 清除，后者只保留无法归属的真实 generic。旧 `runError` terminal 单槽已删除，不双写；新 user/其他 run 不移动或清除
+历史 exact failure。仍无 Web SQL/Redis/browser storage。
+
 BFF 仍持久拥有 Conversation/Message/Project 归属与 snapshot，Agent/BFF ledger 仍拥有 Run terminal 事件。Web 没有数据库，且本目标
 不新增 canonical schema、SQL/migration、事务、Redis、localStorage、IndexedDB 或 server cache。目标 `runFailuresById` 只是当前
 页面的纯内存 read model，reload 时从 owner snapshot 重建，不能作为 owner receipt、授权或跨设备事实。

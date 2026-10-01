@@ -19,6 +19,8 @@ export type RunFailure =
   | { kind: "dispatch" }
   | { kind: "generic" }
 
+export type AttributedRunFailure = RunFailure & { failedRunId: string }
+
 export type SessionMessage = {
   id: string
   role: "assistant" | "user"
@@ -121,8 +123,10 @@ export type SessionStreamState = {
   todos: SessionTodo[]
   stepsByRun: Record<string, SessionStep[]>
   runStatus: "idle" | RunCompletedStatus | "failed"
-  // 已验证的安全失败分类；不保存 producer message、exception 或 stack。
-  runError: RunFailure | null
+  // 已验证的安全失败按 owner run identity 索引；不保存 producer message、exception 或 stack。
+  runFailuresById: Record<string, AttributedRunFailure>
+  // public snapshot 允许 failed assistant 没有 run_id；保留真失败但不伪造轮级归属。
+  unattributedFailure: RunFailure | null
   // 在途 run 显式字段：snapshot 水合置位、匹配终态清空。
   activeRunId: string | null
   // Internal source order is retained for deterministic projection only; it is
@@ -143,7 +147,8 @@ export function createSessionStreamState(): SessionStreamState {
     todos: [],
     stepsByRun: {},
     runStatus: "idle",
-    runError: null,
+    runFailuresById: {},
+    unattributedFailure: null,
     activeRunId: null,
     lastSeq: 0,
     resumeCursor: null,
