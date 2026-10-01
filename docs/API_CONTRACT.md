@@ -1,5 +1,34 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-CONNECTION-D0：连接状态不扩写 owner terminal（2026-10-01；仅设计门）
+
+本目标不修改 public 3.0、browser-private route、AG-UI frame、opaque cursor、BFF envelope、幂等字段、generated artifact 或
+版本 pin。BFF/Agent 发布的 Message/Run terminal 仍是失败事实唯一来源；Web 在 snapshot 已成功后遇到 stream/replay availability
+错误，只能建立页面内存 connection 状态，不能合成 `RUN_ERROR`、failed Message、`failedRunId`、retry receipt 或新 user。
+
+协议与动作边界固定如下：
+
+- **exact terminal**：verified Agent/BFF `RUN_ERROR` 与 snapshot failed assistant 继续按既有 strict identity/safe tuple 进入相同
+  run footer；无 `run_id` 的真实 failed assistant 继续独立显示 generic。connection 错误不得覆盖、移动、清除或复制这些事实。
+- **pre-receipt**：create-message 尚未取得 receipt 的 transport-unknown 仍可用原 idempotency key 与冻结 body 恢复；取得 receipt 后的
+  stream failure 不再借用该动作，也不得重新 POST 最后一条 user。
+- **initial snapshot**：未得到可信 snapshot 的失败仍是会话读取失败；同源 adapter 与 owner status 保持 fail-loud，不回退 fixture。
+- **transient stream**：网络 fetch 拒绝或正常 EOF 继续用最后接受的 opaque cursor 重连；内部 reconnecting/connected callback 只是
+  Web transport 生命周期信号，不是新 wire。重复 cursor/frame 仍按既有规则去重。
+- **hard stream/replay**：非 expired HTTP、`response.body === null`、非 SSE content-type、严格 frame parse error 或 expired-cursor snapshot recovery
+  失败只产生 Web connection unavailable。坏 frame 必须 fail closed；不得尝试 reducer-shaped legacy envelope、第二协议或 preview fallback。
+- **显式 reconnect**：Web 重新执行当前 conversation 的 snapshot-first 流程，并且只从返回 watermark 续流；不调用 message create、
+  terminal retry 或 queued command。snapshot 的 active/terminal/pending 状态继续拥有恢复结果。
+
+用户界面不得展示 upstream URL、query、response body、SSE frame、raw exception、cookie、token 或 provider 文本。若后继为了诊断扩展
+内部 typed error，只允许稳定 `network | http | parse` 类别、受控 HTTP status、稳定 error code 与 request id；它们不是 Run failure
+profile，也不得写入 Message/terminal projection。Root 当前尚未取得真实失败请求的 status/content-type/error category，因此本 D0
+不把旧 BFF、503/502/429 或 parse drift 中任何一项写成已确认根因。
+
+验收必须证明：旧 failure + 后来 completed + stream hard error 时仍只有旧 exact footer；active partial 在 transient reconnect 中不
+terminal；parse hard error 显式恢复不产生 POST；pre-receipt、真实 unattributed terminal 与 initial snapshot error 均保持原语义；合法
+410 只走 snapshot recovery；非法 frame 继续拒绝且无 fallback。全部变化是 Web internal API，机器 contract 检查预期零 diff。
+
 ## WEB-FAILURE-PLACEMENT-D0：public 3.0 exact run 归属（2026-10-01；仅设计门）
 
 P1 候选只消费既有 identity：snapshot `run_id` 与 verified live event `run_id` 进入同一内存索引；没有 exact identity 的

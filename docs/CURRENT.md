@@ -1,3 +1,39 @@
+## WEB-CONNECTION-D0：Root 设计门与实际网络证据（2026-10-01）
+
+Root 核验四份文档 4/4 hash、授权范围与 ed496fd 基线，三设计一致；Node22 fresh `pnpm contract` **219/219**、两个生成物 check exit0，日志 `/tmp/kokoro-web-connection-d0-root-r25-contract.log`。D0 不代表源码实现完成。
+
+随后 Root 在临时 IAB tab17 实际复现：snapshot 200，events 多次 200/text-event-stream 后出现 **429/application-json**，request-id `1981e7ed-e435-4b34-b552-ffe54ddffe2d`；DOM 仍有 1 个 exact failure footer，同时新增 1 个线程级 run-error。直接触发类别为 HTTP hard failure，不是新 owner terminal；没有读取响应正文、cookie、token 或 SSE payload。当前仓 routes/agent.ts 有连接容量 429 分支，但运行后端是旧副本，本次没有读取具体 error code，故容量耗尽的具体原因仍待 owner 组合验证，不能推断为通用请求速率限制。billing summary 503、agents 404、runtime-manifest 404 是另行记录的组合缺口。tab17 已关闭，不留额外连接/进程，不改用户数据或页面。
+
+## WEB-CONNECTION-D0：post-hydration connection 状态设计门（2026-10-01；待 Root 审查）
+
+基线 Web main `ed496fd53621bfbf28b7a73780f7559e12bedc8a` clean。本 D0 只修改 TECHNICAL_DESIGN、API_CONTRACT、
+DATA_MODEL 与 CURRENT：snapshot 成功后的 AG-UI stream/replay availability 必须从 Run terminal 分离。owner exact footer、真实无身份
+generic、pre-receipt 原 key/body 恢复与 initial snapshot error 全部保留；post-hydration transient/hard connection 状态不得生成
+`run-error`、篡改正文/copy/active identity/Stop 或重新 POST user。显式恢复固定为 snapshot-first + owner watermark 续流，坏 frame
+继续 fail closed，无 legacy/fixture/第二协议 fallback。
+
+触发链已静态定位：历史 failed run 后存在更晚 completed assistant 时，水合会保留 exact `runFailuresById` 而 `runStatus` 非 failed；
+随后 stream hard error 把 engine machine 推入 `error`，现 AppFrame 把任意该状态映射为 Thread `hasFailed`，于是
+`unattributedFailure=null` 仍生成 `data-message-id="run-error"` 的通用 Run 文案。普通 fetch 断线/EOF 在 transport 内按 cursor 重连，
+不会直接走这条 hard-error 路径；可能的 hard 子类包括非 expired HTTP、非 SSE、严格 frame parse 或 cursor recovery snapshot 失败。
+Root 尚未安全取得真实请求的 status/content-type/error category，因此 503/502/429、旧 BFF contract drift 等都只是风险，不是已确认根因。
+
+运行证据边界：Root 将 committed 466 个 `src` 同步到自有 3310 Next 副本（9 个更新、无新文件，backend 未更新），在 IAB tab16
+desktop、390px 与 reload 观察到 known failed run 的同 article 唯一 footer、两处 copy、工具/textarea 边框0与键盘 focus 3px；但更晚
+正文轮之后出现独立线程级 generic，reload 初始仅 known footer，稍后 generic 再出现，其父项为 `data-message-id=run-error`、不在
+assistant article、无 `data-run-failure`、无 retry。截图 `/tmp/kokoro-web-r24-{desktop-reload,mobile}.jpg`，tab16 已关闭。
+该证据证明错误放置，不证明具体上游响应，也不等于 provider、积分或九 owner 组合验收。
+
+Root 后续脱敏观察中，snapshot 当前为200，events 连续多次为200且 content-type 是 `text/event-stream`，期间只看到真实 owner
+failed footer，generic 尚未复现；因此仍没有可归责的 hard stream 子类。同期 billing summary 503、agents 404 与 runtime-manifest 404
+属于旧组合各自缺口，不能混同为 events failure。观察只记录 status/content-type/request-id，不读取 token、cookie 或 SSE payload。
+README 仍称 AgUiChatTransport 未实现/使用 legacy SSE，属于后继文档同步问题，本 D0 不越过四文件范围修改。
+
+四文档已统一 owner、纯内存状态、无 wire/持久化变化、最小后继文件范围与 9 项 RED：旧失败+后来成功+hard error、active partial
+transient、parse hard error reconnect、pre-receipt、unattributed owner error、initial snapshot、410 replay recovery、mobile/focus/ARIA、
+坏帧 fail closed。D0 未写源码/测试/contract/generated/i18n/route，未运行 lint/typecheck/test/build、服务、provider、数据库或浏览器；
+待 Root 冻结审查后才放行单一 Web writer 代码阶段。
+
 ## WEB-FAILURE-P1-R24：Root 代码门验收（2026-10-01）
 
 Root frozen20/20 hash与范围复核、独立复审原3个P1关闭/P0=0/P1=0。Node22.22.2 fresh `pnpm check` exit0：contract219/219、architecture50/50、tests2079/2079、lint/typecheck/production build通过；日志 `/tmp/kokoro-web-failure-p1-root-r24-check-r2.log`。上一轮Root2076绿色仍被业务审查拒收，保留历史，不用测试绿掩盖缺陷。

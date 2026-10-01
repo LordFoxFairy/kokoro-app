@@ -1,5 +1,90 @@
 # Kokoro User Web 技术设计
 
+## WEB-CONNECTION-D0：水合后连接可用性与 Run terminal 分离（2026-10-01；仅设计门）
+
+当前源码在 snapshot 已成功、正文已经可读后仍从 `event_watermark` 打开 durable AG-UI stream；非 expired 的 HTTP 错误、
+非 SSE 响应、严格 frame 解析失败或 expired-cursor 恢复 snapshot 失败都会把 engine machine 推入通用 `error`。`AppFrame`
+随后把该 machine error 映射成线程尾 `run-error`，即使没有新的 owner terminal，也会显示“这一轮没能完成”。这会把
+post-hydration availability 误报为 Run 事实。普通 fetch 断线或 EOF 已由 transport 按 opaque cursor 重连，不属于 Run failure；
+本轮尚未实测触发错误的具体 HTTP status/content-type 或 parse 子类，不能把旧运行环境风险写成已确认上游原因。
+
+### AGENTS §8 放置表
+
+| 项 | 结论 |
+| --- | --- |
+| Owner | BFF/Agent 继续唯一拥有 durable AG-UI、Message 与 Run terminal；Web engine 只拥有当前浏览器页的连接可用性和 snapshot-first 恢复编排，AppFrame 只拥有非技术化状态呈现。 |
+| 当前事实 | `runFailuresById`/`unattributedFailure` 已分别保存 exact 与无身份 owner terminal；`pendingSubmission` 已独立保存未获 receipt 的原 key/body；初始 snapshot 失败已有全 stage error surface。缺陷只在 hydrated snapshot 后：stream hard error 经同一 machine `FAIL` 被 `hasFailed` 当成 Run generic。transport 已有内部 `onReconnecting` 钩子，但 client/execution/engine 未完整传播，也没有独立 connection state。 |
+| 目标职责 | 新增纯 Web 页面内存 connection availability，区分 connected、transient reconnecting 与 hard unavailable；它不得写入或清除 terminal map、正文、copy、active run identity、Stop、pending submission 或 owner cursor。显式恢复始终 snapshot-first，再从 owner watermark 续流。 |
+| 目录方案 A（采用） | 扩展既有 `engine` transport/client/execution/snapshot 编排，再由既有 AppFrame status surface 呈现；使用现 Button/Alert/status primitive 与 token，不新建业务模块或主题。职责仍是 network boundary → engine page state → shell status。 |
+| 目录方案 B（淘汰） | 不继续用 `machine.phase === "error"` 或 `runStatus` 推断 stream error 是某一轮失败，也不把 connection 文案塞进 AssistantTurn/footer；这两种做法都会复制或污染 Run owner 事实。 |
+| 粒度 | 连接状态是现 engine snapshot 的页面生命周期字段；现 transport callback 只需补齐 reconnect/connected/hard-error 信号。状态 surface 扩展现文件，不为单个提示新建目录。 |
+| 依赖 | AG-UI transport → SessionClient → execution adapter → engine snapshot → AppFrame 单向传播；core terminal projection 不反向依赖 transport。禁止 Web 直连 Agent、解析 provider 文本或接受 legacy envelope。 |
+| 数据/API | 无 SQL、Redis、localStorage、IndexedDB、server cache、public API、AG-UI frame、cursor 或 generated 变化。connection reason 只保留 Web 安全闭集（network/http/parse 等实现期收敛项），用户 UI 不显示 URL、response body、frame、token、cookie 或 raw exception。 |
+| 删除项 | 删除“所有 machine error 都是线程级 run-error”的映射及已获 receipt stream error 必须显示通用 Run alert 的旧测试断言；不删除真实 exact/unattributed terminal，也不删除 pre-receipt 同键恢复或 initial snapshot error。 |
+| 验证 | 先按下列矩阵取得 RED；代码后跑 engine/transport/AppFrame 定点、contract、architecture、lint、typecheck、完整 test/build，最后由 Root 在同步环境复验 desktop/mobile/focus/reload。D0 不运行测试或服务。 |
+
+### 状态与交互裁决
+
+1. **Owner terminal**：snapshot/live/replay 的 exact terminal 仍只进入 `runFailuresById[failedRunId]`；无 `run_id` 的真实
+   failed assistant 仍进入 `unattributedFailure`。两者的 footer/独立安全反馈、正文、过程与 settled copy 全部保留。
+2. **Pre-receipt submission unknown**：create-message 尚未取得 receipt 时仍保留 frozen intent、原 idempotency key 与原 body；
+   只有该状态提供现有恢复动作。它不是 Run retry，也不新建 user/message/key。
+3. **Initial snapshot failure**：会话尚无可信 snapshot 时继续使用现有整 stage 加载错误与重试入口，不拿空线程假装成功。
+4. **Post-hydration connection availability**：snapshot 一旦成功，后续 transient disconnect/EOF 只表示 `reconnecting`；历史正文、
+   exact footer、active run 与 Stop 继续可用。连接恢复后清除此状态，cursor 只能沿 owner opaque watermark 前进。
+5. **Hard stream/replay failure**：非 expired HTTP、非 SSE、严格 frame parse 或 cursor-recovery snapshot failure 进入独立
+   `unavailable`，而非 `run.failed`。使用既有 shell/status 组件显示紧凑、非技术化连接状态，不创建线程消息项、assistant article、
+   `data-message-id="run-error"` 或 `data-run-failure`。parse 仍 fail closed；不得吞错、接受坏 frame 或切换 legacy wire。
+6. **显式恢复**：用户触发连接恢复时重读当前 conversation snapshot，再从返回的 `event_watermark` 打开 AG-UI；不得重新 POST
+   最后一条 user，也不得调用 terminal retry。若 snapshot 显示 active run，则恢复 exact identity/Stop；若显示 terminal，按 owner
+   terminal 正常收口。并发/迟到回调继续受 session 与 generation 守卫。
+7. **文案与可访问性**：reconnecting 用 polite status；hard unavailable 可用现状态组件的清晰状态与“重新连接”动作，但不使用
+   “这一轮失败”措辞或展示 raw detail。按钮保持现 hit target、focus-visible、forced-colors 和窄屏换行；不重新设计主题。
+
+### 最小后继代码文件范围（须 Root 再授权）
+
+```text
+src/engine/agui-chat-transport.ts
+src/engine/client.ts
+src/engine/execution-adapter.ts
+src/engine/engine-types.ts
+src/engine/machine.ts
+src/components/blocks/app-frame/use-app-frame-engine.ts
+src/components/blocks/app-frame/app-frame.tsx
+src/components/blocks/app-frame/app-frame-main-surface.tsx
+src/components/blocks/app-frame/app-frame-status-surfaces.tsx
+src/components/blocks/app-frame/app-frame-status.module.css
+src/i18n/messages.ts + 现有 locale 对应键                         # 仅新增用户可见连接文案时
+tests/engine/agui-chat-transport.test.ts
+tests/engine/execution-adapter.test.ts
+tests/engine/engine.test.ts
+tests/engine/fakes.ts
+tests/ui/app-frame.smoke.test.tsx
+tests/ui/conversation-failure.test.tsx                           # 只保 terminal 保真/零伪 run-error
+```
+
+不改 `src/core` failure map、`src/contract/**`、`src/generated/**`、route、lockfile 或 BFF/Agent。若实现证明现状态组件可直接
+表达 connection 状态，则不改 CSS；若要保存 HTTP status/request id 供安全诊断，先由 Root 单独批准 typed client error 范围，且不得
+把 body、URL、cursor、frame 或身份材料放入用户 UI/持久状态。
+
+### 必须先 RED 的矩阵
+
+1. **旧失败 + 后来成功 + hard error**：旧 exact footer 恰一次，后来正文/copy 保留；独立 connection status 可见，零线程级
+   `run-error`，不把失败移动到后来 run。
+2. **active partial transient**：partial/过程、active identity 与 Stop 保留；断线为 reconnecting，按同 cursor 恢复后状态清除，
+   不生成 terminal/footer、不重复 frame/message。
+3. **parse hard error + reconnect**：坏 frame fail closed 且进入 unavailable；显式 snapshot-first reconnect 不 POST user，owner
+   后续 completed/failed 才按 exact run 收口。
+4. **pre-receipt**：create receipt 未确认仍显示原意图恢复，点击复用同 key/body；connection 状态不得盗用此动作。
+5. **unattributed owner error**：真实无 `run_id` failed assistant 仍显示独立 generic，不被 connection 状态吞掉或伪绑。
+6. **initial snapshot**：首次 snapshot HTTP/network/parse 失败仍使用现整 stage error；重试保持原深链与 scope。
+7. **410 replay recovery**：合法 `event_cursor_expired` 仍重读 snapshot；恢复 snapshot 失败归 connection unavailable，不产生 Run
+   generic；新 watermark 成功时只续新 cursor。
+8. **mobile/focus/ARIA**：desktop/mobile 无横溢；connection action 命中区与 focus-visible/forced-colors 保持；reconnecting 为 polite
+   status，hard unavailable 不重复播报 owner terminal。
+9. **坏帧与 legacy 风险**：非法 AG-UI frame/旧 envelope 继续拒绝，零 fallback、零 fixture、零 owner failure 伪造；安全诊断只断言
+   reason/status/request-id 类别，不断言或输出 response body、payload、cookie、token。
+
 ## WEB-FAILURE-PLACEMENT-D0：按 Run 归属的紧凑失败 footer（2026-10-01；仅设计门）
 
 > P1 源码候选：现 `state/reducer/hydration/projections` 已以 `runFailuresById` + exact `failedRunId` 替代 terminal
@@ -37,8 +122,9 @@
   或其他 run 的 completed/failed 不清历史已确认项，也绝不把旧项改挂到新轮。`seenEventIds` 继续保证 replay 幂等。
 - `runStatus` 可继续表示当前机器相位，但不再决定 footer 归属；放置只比较 exact `failedRunId === assistantTurn.runId`。页面 reload
   完全从 owner snapshot 重建，因此 live 与 reload 的 footer run、safe copy 和无 terminal action 必须相同。
-- pre-admission/transport-unknown 没有已确认 run terminal，继续走线程级反馈；只有
-  `canRetryPendingSubmission=true` 时可用原 idempotency key + 冻结 body 恢复。已 terminal 的 footer 即使 profile
+- pre-admission 且未获 create receipt 的 transport-unknown 没有已确认 run terminal，继续走线程级反馈；只有
+  `canRetryPendingSubmission=true` 时可用原 idempotency key + 冻结 body 恢复。receipt 后的 stream/replay availability 按上方
+  WEB-CONNECTION-D0 独立呈现，不再复用此反馈。已 terminal 的 footer 即使 profile
   `retryable=true` 也没有动作；public 3.0 未发布 terminal retry/queued command，不能用新 user submit 伪装。
 
 ### 最小后继代码文件集（须 Root 再授权）

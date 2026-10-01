@@ -1,5 +1,37 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-CONNECTION-D0：页面生命周期 connection availability（2026-10-01；仅设计门）
+
+BFF 继续持久拥有 Conversation、Message、durable AG-UI ledger 与 snapshot，Agent/BFF 继续拥有 Run terminal。Web 只新增当前页面
+生命周期的 connection availability；它不是 Message/Run 状态，不进入 `runFailuresById`、`unattributedFailure`、`runStatus`、
+localStorage、IndexedDB、SQL、Redis、server cache 或跨设备事实。reload 后仍先从 owner snapshot 重建全部业务事实。
+
+目标内存值使用现 engine snapshot 承载，具体类型名由代码审查收敛，但语义闭集固定：
+
+| 输入/阶段 | 页面内存 connection 视图 | 不变量 |
+| --- | --- | --- |
+| snapshot 成功且 stream 已接通 | `connected` | 不改变 owner watermark、messages、terminal map 或 active identity。 |
+| fetch 拒绝、EOF 后 transport 正按最后 cursor 恢复 | `reconnecting` | 是暂态 availability，不是 failed/terminal；保留 partial、Stop 与 copy。 |
+| 非 expired HTTP、非 SSE、严格 parse rejection | `unavailable` + 安全 reason 类别 | 不保存 raw URL/body/frame/exception，不生成 generic Run failure。 |
+| `event_cursor_expired` 后 snapshot recovery 在途 | `reconnecting`/recovering | 禁止提交沿现有守卫保持；owner snapshot 返回后整体替换 read model并续新 watermark。 |
+| cursor recovery snapshot 失败 | `unavailable` | 保留最后已确认 hydrated read model；不把旧 terminal 移到尾部，不把 active run本地判失败。 |
+| 显式 snapshot-first reconnect 成功 | `connected` | generation/session 守卫丢弃迟到结果；不创建 Message、Run、receipt 或新 idempotency key。 |
+
+connection 状态与三类现有失败并列而不合并：
+
+1. `runFailuresById[failedRunId]`：exact owner terminal；
+2. `unattributedFailure`：真实但无 exact run identity 的 owner terminal；
+3. `pendingSubmission`：未获 create receipt 的原提交意图/key/body；
+4. connection availability：snapshot 成功后的 stream/replay 可用性。
+
+只有第 3 类允许现有同键恢复；第 4 类的显式恢复只执行 snapshot/read/stream，不重新提交 user。第 4 类不得按消息文本、尾项、
+`runStatus`、machine error 文案或历史 failure 推导 `failedRunId`。连接恢复也不得清理第 1/2 类；owner 后续 canonical completed/failed
+仍按 exact run 更新 terminal map。若 unavailable 时 active run 仍存在，active identity 与 Stop 保留，最终状态等待 owner snapshot/frame。
+
+安全诊断字段若获 Root 批准，只能是页面内存中的稳定类别、受控 status/code/request id；不得保存 response body、SSE data、cursor、
+cookie、token、provider message、stack 或完整 URL。当前真实 HTTP/parse 子类未知，文档不预填值。无 canonical schema、migration、事务、
+索引、retention 或数据库 fresh-install 变化。
+
 ## WEB-FAILURE-PLACEMENT-D0：页面生命周期的 run failure 索引（2026-10-01；仅设计门）
 
 P1 候选已按本节建立纯内存 `runFailuresById` 与独立 `unattributedFailure`：前者只由 exact owner run identity 写入并按同 key
