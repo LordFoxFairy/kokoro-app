@@ -76,6 +76,17 @@ describe("Composer forced-colors focus handoff contract", () => {
   })
 })
 
+describe("thread Markdown list contract", () => {
+  const threadSource = readFileSync(path.join(root, "src/ui/thread/thread.module.css"), "utf8")
+
+  it("restores ordinary Markdown markers without adding bullets to GFM task lists", () => {
+    expect(threadSource).toMatch(/\.md\s+ul:not\(\[class~=["']contains-task-list["']\]\)\s*\{[^}]*list-style-type:\s*disc;?[^}]*\}/u)
+    expect(threadSource).toMatch(/\.md\s+ol:not\(\[class~=["']contains-task-list["']\]\)\s*\{[^}]*list-style-type:\s*decimal;?[^}]*\}/u)
+    expect(threadSource).not.toMatch(/(?:^|\n)\s*ul\s*\{[^}]*list-style-type:\s*disc;?[^}]*\}/u)
+    expect(threadSource).not.toMatch(/(?:^|\n)\s*ol\s*\{[^}]*list-style-type:\s*decimal;?[^}]*\}/u)
+  })
+})
+
 describe("production CSS quality", () => {
   it("keeps production CSS free of important declarations and hidden outlines", () => {
     for (const { relativePath, source } of readProductionCss()) {

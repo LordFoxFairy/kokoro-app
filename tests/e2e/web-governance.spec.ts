@@ -258,4 +258,144 @@ test.describe("Web production boundary", () => {
       }
     }
   })
+
+  test("keeps a long Markdown thread readable through the tail and a second turn", async ({ page, isMobile }, testInfo) => {
+    test.skip(isMobile, "the long-thread matrix controls the desktop Chromium viewport explicitly")
+    test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the long-thread fixture is available only on the local preview server")
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto("/app", { waitUntil: "networkidle" })
+    const chatInput = page.getByRole("textbox", { name: "Chat input" })
+    await chatInput.fill("!long")
+    await page.getByRole("button", { name: "Send message" }).click()
+
+    const markdown = page.locator('[data-slot="markdown-message"]').filter({ hasText: "网站需求梳理" })
+    await expect(markdown.getByRole("heading", { level: 2, name: "网站需求梳理" })).toBeVisible()
+    await expect(markdown.getByRole("heading", { level: 3, name: "建议的第一步" })).toBeVisible()
+    await expect(markdown.getByRole("heading", { level: 3, name: "交付清单" })).toBeVisible()
+    const listItems = markdown.locator("ul > li")
+    await expect(listItems).toHaveCount(4)
+    const listSemantics = await markdown.locator("ul").evaluate((list) => ({
+      listStyleType: window.getComputedStyle(list).listStyleType,
+      itemDisplays: [...list.querySelectorAll(":scope > li")].map((item) => window.getComputedStyle(item).display),
+    }))
+    expect(listSemantics.listStyleType).toBe("disc")
+    expect(listSemantics.itemDisplays).toEqual(["list-item", "list-item", "list-item", "list-item"])
+
+    const tailMarker = markdown.getByText("上线前体验检查项", { exact: true })
+    const composer = page.locator('form[aria-label="Message editor"]')
+    const viewport = page.locator('[data-slot="message-scroller-viewport"]')
+    const content = page.locator('[data-slot="message-scroller-content"]')
+    const backToLatest = page.getByRole("button", { name: /Back to latest|回到最新/u })
+    await expect(composer).toHaveAttribute("data-state", "idle")
+    for (const { width, height, requiresOverflow } of [
+      { width: 1280, height: 900, requiresOverflow: false },
+      { width: 390, height: 620, requiresOverflow: true },
+    ] as const) {
+      await page.setViewportSize({ width, height })
+      if (requiresOverflow) {
+        const scrollGeometry = await viewport.evaluate((element) => ({
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+        }))
+        expect(scrollGeometry.scrollHeight, `${width}px long thread must overflow its viewport`).toBeGreaterThan(
+          scrollGeometry.clientHeight,
+        )
+        await viewport.hover()
+        await page.mouse.wheel(0, -scrollGeometry.scrollHeight)
+        await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0)
+        await expect(backToLatest).toHaveAttribute("data-active", "true")
+        await expect(backToLatest).not.toHaveAttribute("inert", "")
+
+        const tailBeforeScroll = await tailMarker.boundingBox()
+        const viewportBeforeScroll = await viewport.boundingBox()
+        expect(tailBeforeScroll, `${width}px long-thread tail must be measurable before scrolling`).not.toBeNull()
+        expect(viewportBeforeScroll, `${width}px message viewport must be measurable before scrolling`).not.toBeNull()
+        if (tailBeforeScroll && viewportBeforeScroll) {
+          expect(
+            tailBeforeScroll.y + tailBeforeScroll.height,
+            `${width}px long-thread tail must begin outside the scroller view`,
+          ).toBeGreaterThan(viewportBeforeScroll.y + viewportBeforeScroll.height + 1)
+        }
+        await backToLatest.click()
+        await expect(backToLatest).toHaveAttribute("data-active", "false")
+        await expect(backToLatest).toHaveAttribute("inert", "")
+        await expect
+          .poll(
+            async () => {
+              const [tailBox, viewportBox, composerBox] = await Promise.all([
+                tailMarker.boundingBox(),
+                viewport.boundingBox(),
+                composer.boundingBox(),
+              ])
+              if (!tailBox || !viewportBox || !composerBox) return false
+              const tailBottom = tailBox.y + tailBox.height
+              return (
+                tailBox.y >= viewportBox.y - 1
+                && tailBottom <= viewportBox.y + viewportBox.height + 1
+                && tailBottom <= composerBox.y + 1
+              )
+            },
+            { message: `${width}px Back to latest must settle with the tail unobscured` },
+          )
+          .toBe(true)
+      } else {
+        await tailMarker.scrollIntoViewIfNeeded()
+      }
+      await expect(tailMarker).toBeVisible()
+      await expect.poll(() => readingAxisDrift(page), { message: `${width}px long-thread reading-axis drift` }).toBeLessThanOrEqual(1)
+
+      const geometry = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }))
+      expect(geometry.scrollWidth, `${width}px long-thread horizontal overflow`).toBeLessThanOrEqual(geometry.clientWidth)
+
+      const tailBox = await tailMarker.boundingBox()
+      const markdownBox = await markdown.boundingBox()
+      const contentBox = await content.boundingBox()
+      const viewportBox = await viewport.boundingBox()
+      const composerBox = await composer.boundingBox()
+      expect(tailBox, `${width}px long-thread tail must be measurable`).not.toBeNull()
+      expect(markdownBox, `${width}px long Markdown must be measurable`).not.toBeNull()
+      expect(contentBox, `${width}px message content must be measurable`).not.toBeNull()
+      expect(viewportBox, `${width}px message viewport must be measurable`).not.toBeNull()
+      expect(composerBox, `${width}px Composer must be measurable`).not.toBeNull()
+      if (tailBox && markdownBox && contentBox && viewportBox && composerBox) {
+        expect(markdownBox.x, `${width}px long Markdown must stay inside the content left edge`).toBeGreaterThanOrEqual(contentBox.x - 1)
+        expect(markdownBox.x + markdownBox.width, `${width}px long Markdown must stay inside the content right edge`).toBeLessThanOrEqual(contentBox.x + contentBox.width + 1)
+        expect(tailBox.y, `${width}px long-thread tail must stay below the scroller top`).toBeGreaterThanOrEqual(viewportBox.y - 1)
+        expect(tailBox.y + tailBox.height, `${width}px long-thread tail must be visible inside the scroller`).toBeLessThanOrEqual(viewportBox.y + viewportBox.height + 1)
+        expect(tailBox.y + tailBox.height, `${width}px Composer must not cover the long-thread tail`).toBeLessThanOrEqual(composerBox.y + 1)
+      }
+
+      await page.screenshot({ path: testInfo.outputPath(`thread-long-${width}.png`), fullPage: true })
+    }
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await chatInput.fill("Second turn after the long answer")
+    await page.getByRole("button", { name: "Send message" }).click()
+    await expect(page.getByText("预览模式：已收到「Second turn after the long answer」。", { exact: true })).toBeVisible()
+    await expect(composer).toHaveAttribute("data-state", "idle")
+
+    const items = page.locator('[data-slot="message-scroller-item"]')
+    await expect.poll(() => items.count()).toBeGreaterThanOrEqual(4)
+    const itemCount = await items.count()
+    const finalTurnBoxes = await Promise.all(
+      Array.from({ length: 4 }, (_value, index) => items.nth(itemCount - 4 + index).boundingBox()),
+    )
+    for (const [index, box] of finalTurnBoxes.entries()) {
+      expect(box, `final conversation item ${index + 1} must be measurable`).not.toBeNull()
+    }
+    const measurableBoxes = finalTurnBoxes.filter((box): box is NonNullable<typeof box> => box !== null)
+    if (measurableBoxes.length === 4) {
+      for (let index = 1; index < measurableBoxes.length; index += 1) {
+        const previousBox = measurableBoxes[index - 1]!
+        const currentBox = measurableBoxes[index]!
+        const gap = currentBox.y - previousBox.y - previousBox.height
+        expect(gap, `final conversation gap ${index} must keep the 28px rhythm`).toBeCloseTo(28, 0)
+      }
+    }
+    await page.screenshot({ path: testInfo.outputPath("thread-two-turn-1280.png"), fullPage: true })
+  })
 })

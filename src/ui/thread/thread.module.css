@@ -1055,6 +1055,12 @@
   margin: 0 0 0.65em;
   padding-left: 1.4em;
 }
+.md ul:not([class~="contains-task-list"]) {
+  list-style-type: disc;
+}
+.md ol:not([class~="contains-task-list"]) {
+  list-style-type: decimal;
+}
 .md li {
   margin: 0.2em 0;
 }

@@ -1,5 +1,26 @@
 # Kokoro User Web 当前状态
 
+## WEB-LONG-THREAD-VISUAL：列表排版源码与渲染回归已验（2026-10-01）
+
+基线 main `42df17b`。真实 preview 长文截图及 computed style 复现普通列表 marker 为none；唯一生产改动是在现Thread
+Markdown scope恢复普通UL disc/OL decimal，两者都以`[class~="contains-task-list"]`排除GFM checkbox任务列表，避免
+CSS Module局部class哈希。不改共享margin/padding、Composer、消息事实、API、SQL、全局reset或依赖。
+
+Root最终同源完整Playwright **14通过/4项目分工跳过（14.3s）**；Node22/pnpm11 `pnpm check` exit0，contract218、
+architecture50、全test **2054通过（45.55s）**、lint/typecheck/build通过。1280x900/390x620覆盖实际溢出、真实wheel
+脱离auto-follow、公开回到最新+smooth几何poll、尾部可见且不被Composer遮挡、同一阅读轴、无横溢和两轮全部三条28px
+相邻gap。Root已查看长文/窄屏/双轮PNG。独立终审P0/P1/P2=0/0/0；日志
+`/tmp/kokoro-long-thread-final-e2e-ol.log`、`/tmp/kokoro-long-thread-check-ol.log`。
+
+RED和失败证据保留：普通marker真实none≠disc；GFM UL及OL guard分别14通过/1失败；R2测试直接scrollTop被auto-follow
+恢复、R3误用opacity可见性、R4在smooth开始时测量，均只修测试语义，不改production滚动、不增timeout/阈值、不sleep。
+对应`/tmp/kokoro-long-thread-{css-red,red,gfm-red,gfm-ol-red}.log`及`final-e2e-r2/r3/r4.log`。
+
+Root仅把本片6行scoped marker及UL/OL排除精确同步受管3310，其他runtime字节保留，PID65590未重启，公共首页HTTP200；
+备份与hash在`/tmp/kokoro-long-thread-runtime-sync.json`。独占34117测试进程已退出，不访问PG/Redis/provider、不改变用户数据。
+这些preview回归不是当前用户tab或真实IAM/BFF/推理/计费组合验收；输入内方框及整个产品仍开放。
+Root正式全仓静态门当前仍137条研发规范失败，不以本片Web green宣称全仓上线完成。
+
 ## WEB-COMPOSER-ACTION1：操作行真实浏览器修复（2026-10-01）
 
 基线 main `8a2d771e5ed106f93473ac3d1b5efb793b9b32ab`。Root在独占34117 preview fixture实际填写/提交后观察到宽屏发送按钮留在左侧。
