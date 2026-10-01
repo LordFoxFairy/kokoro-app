@@ -9,7 +9,7 @@
 
 - `machine.ts`
   - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
-    steer POST，不动状态机）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
+    现 create-message 路径、不动状态机；同步返回本地是否接纳，供调用方在拒绝时保留草稿）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
     stageToolDecision / selectConversation / newConversation / deleteConversation / setMode /
     dispose。
   - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。

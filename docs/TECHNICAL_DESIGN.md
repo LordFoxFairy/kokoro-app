@@ -1,5 +1,16 @@
 # Kokoro User Web 技术设计
 
+## WEB-COMPOSER-P0：接纳边界与停止可达性（2026-10-01；候选）
+
+| 项 | 裁决 |
+| --- | --- |
+| Owner | Web engine拥有同步浏览器交互接纳结果；BFF仍拥有Message/Run admission，当前wire不变。 |
+| 当前事实 | machine已能同步拒绝非法SUBMIT，但旧`void` API使AppFrame仍清草稿；旧操作组件在运行中有草稿时用发送替换停止。 |
+| 采用方案 | `submit(content): boolean`只表示本地是否进入既有提交生命周期；AppFrame仅在true时清草稿、创建意图并更新项目会话URL。运行时并列stop与现发送按钮。 |
+| 淘汰方案 | 不以异步receipt决定是否清草稿，不建第二pending store，不禁用或删除既有运行中输入提交，也不把它改名为queued/正式steer。 |
+| 依赖/数据/API | 无新依赖、SQL、Redis、browser storage、wire、generated contract或owner字段；false路径零POST。 |
+| 验证 | engine返回值覆盖空白/disposed/submitting；AppFrame覆盖第二提交草稿/POST；Composer覆盖草稿非空时stop与send互不触发。 |
+
 ## WEB-PROJECT-FLOW：项目会话清单空页与状态优先级（2026-10-01；已验证源码切片）
 
 真实项目清单返回HTTP 200与`{sessions:[],next_cursor:null}`，但Web把合法owner wire的`next_cursor`误建模为optional

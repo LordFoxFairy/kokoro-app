@@ -1,5 +1,11 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-COMPOSER-P0：无网络契约变化（2026-10-01；候选）
+
+`SessionEngine.submit` 的boolean是Web进程内调用结果，不是HTTP receipt或owner状态。false表示调用未进入既有create-message流程，
+所以不得清除草稿、创建意图、改写项目conversation URL或发送请求；true仍使用已发布的同一消息端点与幂等键。运行中停止继续使用
+既有cancel control，运行中输入继续使用现有create-message路径。本片不声明queued、terminal retry或新的steer契约。
+
 ## WEB-PROJECT-FLOW：Session list 正式空页（2026-10-01；已验证源码切片）
 
 BFF public 3.0.0 `SessionListResponse.data`要求`required:[sessions,next_cursor]`：`sessions`是数组，`next_cursor`是

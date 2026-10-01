@@ -63,8 +63,15 @@ export function useAppFrameActions({
     if (!engine || !content || content.length > MAX_INPUT_LENGTH) {
       return
     }
-    // 流式中提交=运行中插话（engine 识别活跃相位走 steer，不打断本轮）。
-    engine.submit(content)
+    // 流式中提交继续沿现有 create-message 路径；queued/steer 的正式
+    // owner 语义尚未发布，本层只消费 engine 的同步接纳结果。
+    const accepted = engine.submit(content)
+    if (!accepted) {
+      // A synchronous guard (for example, a create receipt still in flight)
+      // leaves the user's draft and creation/route intent untouched.
+      focusComposer()
+      return
+    }
     if (projectWorkspace) {
       // A first project message creates its opaque conversation in the shared
       // engine before the next render. Update both URL and route projection at

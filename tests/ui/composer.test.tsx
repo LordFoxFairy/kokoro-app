@@ -669,11 +669,25 @@ describe("Composer 状态契约", () => {
     expect(props.onStop).toHaveBeenCalledTimes(1)
   })
 
-  it("流式中有草稿切换为可发送的插话动作", () => {
+  it("流式中有草稿时停止始终可达，发送动作仍独立保留", () => {
     const props = renderComposer({ draft: "补充一个例子", canSend: true, isStreaming: true })
+    const stop = screen.getByRole("button", { name: "Stop generating" })
     const send = screen.getByRole("button", { name: "Send interjection" })
+    expect(stop).toBeEnabled()
     expect(send).toBeEnabled()
+    fireEvent.click(stop)
+    expect(props.onStop).toHaveBeenCalledTimes(1)
+    expect(props.onSubmit).not.toHaveBeenCalled()
     fireEvent.click(send)
+    expect(props.onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("等待批准且有草稿时取消等待与发送动作互不替代", () => {
+    const props = renderComposer({ draft: "补充说明", canSend: true, isStreaming: true, isAwaitingApproval: true })
+    fireEvent.click(screen.getByRole("button", { name: "Cancel waiting" }))
+    expect(props.onStop).toHaveBeenCalledTimes(1)
+    expect(props.onSubmit).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Send interjection" }))
     expect(props.onSubmit).toHaveBeenCalledTimes(1)
   })
 

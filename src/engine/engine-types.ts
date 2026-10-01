@@ -49,7 +49,9 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
-  submit: (content: string) => void
+  // true only when this call synchronously accepted the intent into the local
+  // submission lifecycle. Callers must retain drafts and route intent on false.
+  submit: (content: string) => boolean
   // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
   retry: () => void
   cancelRun: () => void

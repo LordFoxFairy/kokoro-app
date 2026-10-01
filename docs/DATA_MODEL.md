@@ -1,5 +1,10 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-COMPOSER-P0：仅浏览器瞬时接纳结果（2026-10-01；候选）
+
+同步accepted boolean不持久化、不进入snapshot、localStorage、IndexedDB、SQL或Redis；它仅决定当前事件处理是否消费受控草稿与
+创建/路由意图。拒绝路径保留原React草稿，接纳路径沿既有草稿清理和owner请求。没有新增队列、receipt、Message或Run事实。
+
 ## WEB-PROJECT-FLOW：空页cursor与项目状态投影（2026-10-01；已验证源码切片）
 
 BFF持久拥有项目会话清单与opaque cursor；Web不保存第二份清单事实。正式wire是

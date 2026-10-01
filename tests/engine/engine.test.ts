@@ -1264,7 +1264,7 @@ describe("运行中插话（steer）", () => {
     expect(engine.getSnapshot().machine.phase).toBe("streaming")
     const streamsBefore = client.streams.length
 
-    engine.submit("改成国内市场")
+    expect(engine.submit("改成国内市场")).toBe(true)
     expect(thread().messages.filter((m) => m.role === "user").map((m) => m.content)).toEqual([
       "hello",
       "改成国内市场",
@@ -1278,11 +1278,35 @@ describe("运行中插话（steer）", () => {
 
   it("submitting 相位（未获回执）双发仍被拒：不误当插话", async () => {
     buildEngine()
-    engine.submit("hello")
-    engine.submit("过早的第二条")
+    expect(engine.submit("hello")).toBe(true)
+    expect(engine.submit("过早的第二条")).toBe(false)
     expect(thread().messages.filter((m) => m.role === "user")).toHaveLength(1)
     await settle()
     expect(client.createCalls).toHaveLength(1)
+  })
+
+  it("同步前置条件拒绝时明确返回 false 且不创建请求", () => {
+    buildEngine()
+    expect(engine.submit("   ")).toBe(false)
+    engine.dispose()
+    expect(engine.submit("disposed submission")).toBe(false)
+    expect(client.createCalls).toHaveLength(0)
+  })
+
+  it("expired cursor 正在重新水合时拒绝提交且不创建请求", async () => {
+    const seeded = addConversation(null, "conv_recovering", 500)
+    buildEngine(seeded)
+    client.nextSnapshot = () => Promise.resolve(makeSnapshot({ sessionId: "conv_recovering", eventWatermark: CURSOR_7 }))
+    engine.dispose()
+    engine = createSessionEngine({ client, storage, now: () => 1_000 })
+    await settle()
+    expect(client.streams).toHaveLength(1)
+
+    client.nextSnapshot = () => new Promise(() => {})
+    client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
+    const callsBefore = client.createCalls.length
+    expect(engine.submit("must wait for snapshot recovery")).toBe(false)
+    expect(client.createCalls).toHaveLength(callsBefore)
   })
 
   it("SSE message.user 先于插话回执到达：吸收本地 echo，无同 id 双份（真栈走查回归）", async () => {

@@ -470,10 +470,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       })
   }
 
-  function submit(content: string): void {
+  function submit(content: string): boolean {
     const trimmed = content.trim()
     if (disposed || recoveringExpiredCursor || !trimmed) {
-      return
+      return false
     }
     notice = null
     if (
@@ -482,8 +482,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         machine.phase === "awaiting-hitl" ||
         machine.phase === "reattaching")
     ) {
-      // 运行中插话：同端点再 POST（服务端识别活跃 run 转 run.steer）；
-      // 不动状态机、不重开事件流——回执 run_id 即当前 run，无新可锚定物。
+      // 运行中再次提交：沿现有 create-message 路径，不动状态机、不重开事件流。
+      // 正式 queued/steer owner 语义尚未发布，本地不据此虚构新的相位或网络契约。
       thread = appendUserMessage(thread, { id: createId("usr"), content: trimmed })
       notify()
       // 回执/失败必须锚回发起时的会话：POST 在途时切走 → 迟到回调不得落在别的会话线程上
@@ -511,13 +511,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           notice = { key: "steer.sendFailed", vars: { detail: describeUnknown(error) } }
           notify()
         })
-      return
+      return true
     }
     const before = machine
     machine = transition(machine, { type: "SUBMIT" })
     if (machine === before) {
       // 同步双发守卫：submitting 相位（回执未归）的提交直接拒绝。
-      return
+      return false
     }
     if (!store) {
       store = addConversation(null, createId("conv"), now(), pendingMode)
@@ -532,6 +532,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       idempotencyKey: createId("idem"),
       options: messageExecutionOptions(activeMode(store)),
     })
+    return true
   }
 
   function retry(): void {

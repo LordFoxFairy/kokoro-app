@@ -2250,16 +2250,62 @@ it("Composer 保留 IME 确认与 Shift+Enter，普通 Enter 仅提交一次", a
   expect(submit).toHaveBeenCalledExactlyOnceWith("输入法候选")
 })
 
+it("未获receipt时拒绝第二次提交并保留草稿，不产生额外POST", async () => {
+  buildEngine()
+  client.nextCreate = () => new Promise(() => {})
+  window.history.replaceState(window.history.state, "", "/app/project/project_keep")
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectWorkspace projectRef="project_keep" /></LocaleProvider></ThemeProvider>)
+  const input = await screen.findByRole("textbox", { name: "对话输入" })
+
+  fireEvent.change(input, { target: { value: "first request" } })
+  fireEvent.keyDown(input, { key: "Enter" })
+  expect(client.createCalls).toHaveLength(1)
+  const acceptedUrl = window.location.href
+
+  fireEvent.change(input, { target: { value: "keep this draft" } })
+  fireEvent.keyDown(input, { key: "Enter" })
+  expect(client.createCalls).toHaveLength(1)
+  expect(input).toHaveValue("keep this draft")
+  expect(input).toHaveFocus()
+  expect(window.location.href).toBe(acceptedUrl)
+
+  fireEvent.click(screen.getByRole("button", { name: "发送插话" }))
+  expect(client.createCalls).toHaveLength(1)
+  expect(input).toHaveValue("keep this draft")
+  expect(window.location.href).toBe(acceptedUrl)
+})
+
+it("同步拒绝不会清除既有创建意图", async () => {
+  buildEngine()
+  client.nextCreate = () => new Promise(() => {})
+  expect(engine.submit("already submitting")).toBe(true)
+  window.sessionStorage.setItem("kokoro.web.pending-creation-intent", "website")
+
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+  const input = await screen.findByRole("textbox", { name: "对话输入" })
+  fireEvent.change(input, { target: { value: "keep intent too" } })
+  fireEvent.keyDown(input, { key: "Enter" })
+
+  expect(client.createCalls).toHaveLength(1)
+  expect(input).toHaveValue("keep intent too")
+  expect(window.sessionStorage.getItem("kokoro.web.pending-creation-intent")).toBe("website")
+})
+
 it("已获receipt后的stream error不显示未获回执恢复动作", async () => {
   buildEngine()
-  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
-  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "post receipt" } })
-  fireEvent.click(screen.getByLabelText("发送消息"))
-  await act(settle)
+  const listClientSpy = stubSuccessfulSessionList()
+  try {
+    render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "post receipt" } })
+    fireEvent.click(screen.getByLabelText("发送消息"))
+    await act(settle)
 
-  act(() => client.lastStream().fail(new SessionClientError("network", "stream lost after receipt")))
-  await act(settle)
+    act(() => client.lastStream().fail(new SessionClientError("network", "stream lost after receipt")))
+    await act(settle)
 
-  expect(screen.getByRole("alert")).toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "重试" })).toBeNull()
+  } finally {
+    listClientSpy.mockRestore()
+  }
 })

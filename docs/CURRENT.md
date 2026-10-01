@@ -1,5 +1,19 @@
 # Kokoro User Web 当前状态
 
+## WEB-COMPOSER-P0：同步提交接纳与停止入口（2026-10-01；本片源码与 preview 门已验）
+
+`SessionEngine.submit` 现在同步返回是否接纳本次浏览器意图；空白、已释放、恢复水位期间或仍在等待 create receipt 的提交返回
+false，AppFrame 因而保留草稿、创建意图与当前 URL，且不产生额外 POST。真正接纳的首发与现有运行中输入仍沿原路径发送并清空草稿。
+运行中停止入口不再因草稿非空消失；发送与停止是两个独立按钮，停止不提交或清空草稿。本片不新增 queued、terminal retry、
+网络端点或持久事实，也不改变当前运行中 create-message 行为的 owner 语义。初始定点 RED 为4失败/200通过；扩展矩阵后定点
+207/207。Root首轮fresh完整门的contract219、architecture50、lint/typecheck均通过，但全test为2069通过/1失败：后置stream
+error用例同时收到共享list失败Alert。该用例现使用独立成功ListClient并在finally恢复spy，不隐藏生产list错误、不放宽唯一thread
+Alert/no-retry断言；整AppFrame文件75/75、fresh全test2070/2070通过。build与真实浏览器仍由Root最终复验。
+
+Root最终冻结复验：完整 `pnpm check` exit0，contract219/219、architecture50/50、lint/typecheck0、163文件2070/2070（38.72s）、build0；日志 `/tmp/kokoro-web-composer-p0-root-check-r2.log`。独立最终12hash审查P0/P1=0，原文件外无tracked变化。Root首次全测2069/1因测试无关共享list错误导致两个Alert，已用本用例独立成功ListClient及finally恢复隔离；未放宽唯一thread Alert/no retry断言，首次失败日志保留。此前writer OIDC500仅历史失败，本次fresh完整OIDC38通过，未改或放宽其实现。
+
+Root隔离preview端口34120现Playwright门14通过/4既定设备分工跳过（10.1s）、exit0；后置typecheck0，34120已退出，用户3310 PID65590未动。日志 `/tmp/kokoro-web-composer-p0-root-e2e.log`、`...-root-post-e2e-typecheck.log`，报告在 `/tmp/kokoro-web-composer-p0-root-playwright-report`。这不是实际IAM/真实模型/积分/用户3310端到端；不声称正式queued/原user retry/Thread整体视觉完成。
+
 ## WEB-EMPTY-STATUS：移除未发布的专案 run 状态推断（2026-10-01；源码门已验）
 
 专案会话清单只投影 BFF 已发布的 `id/title`；Web 不再从空标题、当前会话或本地 machine phase 合成 `queued/running/waiting/completed/failed`。删除 producer 与未消费的状态类型，不留兼容字段。本片不新增 durable queued wire，不改变 Conversation、Message、HITL、取消或 terminal retry 语义。

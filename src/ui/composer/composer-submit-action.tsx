@@ -14,11 +14,17 @@ type ComposerSubmitActionProps = {
 
 export function ComposerSubmitAction({ isStreaming, isAwaitingApproval, canSend, onStop }: ComposerSubmitActionProps) {
   const t = useT()
-  return isStreaming && !canSend ? (
+  const stop = isStreaming ? (
     <Button variant="outline" size="icon-sm" className={`${styles.send} ${styles.sendStop}`} data-composer-action="stop" type="button" aria-label={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} title={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} onClick={onStop}>
       {isAwaitingApproval ? <X className={styles.glyph} data-icon="inline-start" aria-hidden="true" /> : <Square className={styles.glyph} data-icon="inline-start" />}
     </Button>
-  ) : (
-    <Button variant="default" size="icon-sm" className={styles.send} data-composer-action="send" type="submit" aria-label={t(isStreaming ? "composer.sendSteer" : "composer.send")} disabled={!canSend}><ArrowUp className={styles.glyph} data-icon="inline-start" /></Button>
+  ) : null
+  return (
+    <>
+      {stop}
+      {!isStreaming || canSend ? (
+        <Button variant="default" size="icon-sm" className={styles.send} data-composer-action="send" type="submit" aria-label={t(isStreaming ? "composer.sendSteer" : "composer.send")} disabled={!canSend}><ArrowUp className={styles.glyph} data-icon="inline-start" /></Button>
+      ) : null}
+    </>
   )
 }
