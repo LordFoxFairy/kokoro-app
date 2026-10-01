@@ -34,6 +34,9 @@ async function unusedPort(): Promise<number> {
 }
 
 function http(port: number, target: string, method = "GET", body = "", extra: Record<string, string> = {}): Promise<HttpResult> {
+  if (typeof target !== "string" || !target.startsWith("/") || target.startsWith("//")) {
+    return Promise.reject(new Error("fixture HTTP target must be root-relative"))
+  }
   return new Promise((resolve, reject) => {
     const request = httpRequest({ hostname: "127.0.0.1", port, path: target, method,
       headers: { host: `localhost:${port}`, ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...extra } }, (response) => {
@@ -134,6 +137,71 @@ function jwt(privateKey: KeyObject, payload: Record<string, unknown>, algorithm:
   return `${body}.${sign(algorithm === "EdDSA" ? null : "RSA-SHA256", Buffer.from(body), privateKey).toString("base64url")}`
 }
 
+const KNOWN_DIAGNOSTIC_ERROR_CODES = new Set([
+  "iam_relay_body_rejected",
+  "iam_relay_cookie_invalid",
+  "iam_relay_credential_rejected",
+  "iam_relay_header_invalid",
+  "iam_relay_origin_rejected",
+  "iam_relay_request_too_large",
+  "iam_relay_response_invalid",
+  "iam_relay_route_not_found",
+  "iam_relay_unavailable",
+  "product_session_unavailable",
+  "rp_body_rejected",
+  "rp_callback_rejected",
+  "rp_credential_rejected",
+  "rp_origin_rejected",
+  "rp_request_too_large",
+  "rp_response_invalid",
+  "rp_transaction_rejected",
+  "rp_unavailable",
+])
+
+function knownErrorCode(body: string): string | null {
+  try {
+    const value: unknown = JSON.parse(body)
+    if (typeof value !== "object" || value === null || !("error" in value)) return null
+    const error = (value as { error?: unknown }).error
+    if (typeof error !== "object" || error === null || !("code" in error)) return null
+    const code = (error as { code?: unknown }).code
+    return typeof code === "string" && KNOWN_DIAGNOSTIC_ERROR_CODES.has(code) ? code : null
+  } catch {
+    return null
+  }
+}
+
+function headerValue(headers: HttpResult["headers"], name: string): string | null {
+  const value = headers[name]
+  return typeof value === "string" ? value : Array.isArray(value) ? value[0] ?? null : null
+}
+
+function safeLocationPath(headers: HttpResult["headers"]): string | null {
+  const value = headerValue(headers, "location")
+  if (value === null) return null
+  try { return new URL(value, "http://fixture.invalid").pathname }
+  catch { return "<invalid>" }
+}
+
+function bffPathnames(values: readonly string[]): string[] {
+  return values.map((value) => {
+    try { return new URL(value, "http://fixture.invalid").pathname }
+    catch { return "<invalid>" }
+  })
+}
+
+function nextErrorCategories(value: string): string[] {
+  const checks: readonly [string, RegExp][] = [
+    ["web_rp_error", /Web RP error:/u],
+    ["rp_signin_response_rejected", /Kokoro RP sign-in response rejected:/u],
+    ["rp_signin_start_threw", /Kokoro RP sign-in start threw/u],
+    ["next_compile_error", /Failed to compile|Module not found|Syntax Error/u],
+    ["next_runtime_error", /(?:^|\n)\s*(?:⨯|Error:)/u],
+    ["next_http_5xx", /\b(?:GET|POST) \/[^\s?]*(?:\?[^\s]*)? 5[0-9]{2}\b/u],
+  ]
+  return checks.filter(([, pattern]) => pattern.test(value)).map(([category]) => category)
+}
+
 describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }, () => {
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379/9"
   const clientId = "web-rp-fixture"
@@ -172,6 +240,28 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let invalidIdentityShape = false
   let slowIdentity = false
   let output = ""
+
+  function responseDiagnostic(
+    stage: string,
+    response: HttpResult,
+    outputStart: number,
+    pathStart: number,
+  ): string {
+    const requestId = headerValue(response.headers, "x-request-id")
+    const safeRequestId = requestId !== null && /^[A-Za-z0-9._:-]{1,128}$/u.test(requestId) ? requestId : null
+    const contentType = headerValue(response.headers, "content-type")
+    return `${stage} diagnostic: ${JSON.stringify({
+      stage,
+      status: response.status,
+      content_type: contentType !== null && /^[\x20-\x7e]{1,128}$/u.test(contentType) ? contentType : null,
+      request_id: safeRequestId,
+      error_code: knownErrorCode(response.body),
+      body_bytes: Buffer.byteLength(response.body),
+      location_path: safeLocationPath(response.headers),
+      bff_paths: bffPathnames(paths.slice(pathStart)),
+      next_error_categories: nextErrorCategories(output.slice(outputStart)),
+    })}`
+  }
 
   function sendJson(response: import("node:http").ServerResponse, endpoint: "token" | "userinfo" | "jwks", body: object): void {
     response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
@@ -405,6 +495,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     } finally { client.destroy() }
   }
 
+  it("rejects undefined and non-root-relative fixture HTTP targets instead of requesting the app root", async () => {
+    await expect(http(nextPort, undefined as unknown as string)).rejects.toThrow("fixture HTTP target must be root-relative")
+    await expect(http(nextPort, "api/auth/csrf")).rejects.toThrow("fixture HTTP target must be root-relative")
+  })
+
   it("keeps code exchange and userinfo server-only, then establishes an encrypted Product Session", async () => {
     const { signin, jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
@@ -585,41 +680,68 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   it("keeps BFF untouched while real Next has not received a complete slow confirmation body", async () => {
     const before = paths.length
     let responseStatus: number | undefined
-    await new Promise<void>((resolve) => {
-      const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort,
+    let replySettled: Promise<void> | undefined
+    const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort, agent: false,
         path: "/iam/oauth2/end-session/confirm", method: "POST",
         headers: { host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`,
           "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } }, (reply) => {
         responseStatus = reply.statusCode
+        replySettled = new Promise<void>((resolve) => {
+          let done = false
+          const finish = (): void => { if (!done) { done = true; resolve() } }
+          reply.once("end", finish)
+          reply.once("close", finish)
+        })
         reply.resume()
       })
-      browser.on("error", () => undefined)
-      browser.write("action=")
-      setTimeout(() => { browser.destroy(); resolve() }, 5_500)
-    })
+    const requestClosed = new Promise<void>((resolve) => browser.once("close", resolve))
+    browser.on("error", () => undefined)
+    browser.write("action=")
+    await new Promise((resolve) => setTimeout(resolve, 5_500))
+    browser.destroy()
+    await requestClosed
+    if (replySettled !== undefined) await replySettled
     expect(responseStatus === undefined || responseStatus === 400).toBe(true)
     expect(paths).toHaveLength(before)
+    expect((await http(nextPort, "/api/auth/csrf")).status).toBe(200)
   }, 8_000)
 
   it("does not relay a browser-disconnected logout confirmation form", async () => {
     const before = paths.length
-    const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort,
+    let replySettled: Promise<void> | undefined
+    const browser = httpRequest({ hostname: "127.0.0.1", port: nextPort, agent: false,
       path: "/iam/oauth2/end-session/confirm", method: "POST",
       headers: { host: `localhost:${nextPort}`, origin: `http://localhost:${nextPort}`,
-        "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } })
+        "content-type": "application/x-www-form-urlencoded", "transfer-encoding": "chunked" } }, (reply) => {
+      replySettled = new Promise<void>((resolve) => {
+        let done = false
+        const finish = (): void => { if (!done) { done = true; resolve() } }
+        reply.once("end", finish)
+        reply.once("close", finish)
+      })
+      reply.resume()
+    })
+    const requestClosed = new Promise<void>((resolve) => browser.once("close", resolve))
     browser.on("error", () => undefined)
-    browser.write("action=")
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise<void>((resolve) => { browser.write("action=", () => resolve()) })
     browser.destroy()
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    await requestClosed
+    if (replySettled !== undefined) await replySettled
     expect(paths).toHaveLength(before)
+    expect((await http(nextPort, "/api/auth/csrf")).status).toBe(200)
   })
 
   it("tombstones a pending refresh without sending its stale credential to revoke", async () => {
+    const outputStart = output.length
+    const pathStart = paths.length
     const { csrf, signin, jar, location } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
-    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
-    expect(callback.status, `pending-refresh callback Location: ${String(callback.headers.location ?? "<none>")}`).toBe(303)
+    expect(authorize.status, responseDiagnostic("authorize", authorize, outputStart, pathStart)).toBe(302)
+    const callbackLocation = headerValue(authorize.headers, "location")
+    expect(typeof callbackLocation, responseDiagnostic("authorize_location", authorize, outputStart, pathStart)).toBe("string")
+    if (callbackLocation === null) throw new Error(responseDiagnostic("authorize_location", authorize, outputStart, pathStart))
+    const callback = await http(nextPort, callbackLocation, "GET", "", { cookie: jar })
+    expect(callback.status, responseDiagnostic("callback", callback, outputStart, pathStart)).toBe(303)
     await recordProduct(callback)
     const cookie = cookieHeader(csrf, signin, callback)
     const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
