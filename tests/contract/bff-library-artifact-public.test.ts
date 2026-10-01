@@ -6,17 +6,20 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "ccb8e144d72e35d90f9edc23f8b3ed0c82fde98d"
-const OWNER_SHA256 = "ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773"
+const OWNER_COMMIT = "293dfe7638e5dea0df2bee6dfdd8483b53fc9df6"
+const OWNER_SHA256 = "acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b"
+const OWNER_VERSION = "3.0.0"
 
 it("pins the BFF Artifact Product page, binary and two-part selector", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("ccb8e144d72e35d90f9edc23f8b3ed0c82fde98d")
+  expect(OWNER_COMMIT).toBe("293dfe7638e5dea0df2bee6dfdd8483b53fc9df6")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
+    info: { version: string }
     paths: Record<string, Record<string, Record<string, unknown>>>
     components: { schemas: Record<string, Record<string, unknown>> }
   }
+  expect(spec.info.version).toBe(OWNER_VERSION)
   const list = spec.paths["/v1/library"]?.get
   expect(list?.operationId).toBe("listLibrary")
   expect(list?.parameters).toContainEqual(expect.objectContaining({ name: "kind", required: true, schema: { type: "string", enum: ["file", "artifact"] } }))

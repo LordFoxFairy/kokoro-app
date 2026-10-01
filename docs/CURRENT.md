@@ -1,5 +1,18 @@
 # Kokoro User Web 当前状态
 
+## WEB-BFF-PUBLIC3：public 3.0.0 consumer 源码已验（2026-10-01）
+
+基线Web main `9c428bf8cfdbdafae1d0cc0c3ed807fa8defa591`。当前源码已把旧public 2.0 pin替换为BFF owner commit
+`293dfe7638e5dea0df2bee6dfdd8483b53fc9df6` 已发布的 public `3.0.0` 原字节，SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`。ChatMessage 正式只有
+`user | assistant` 两角色，与现 Web runtime 一致；本片不恢复system，不改变failure 12 tuple、任何operation、取消或Share语义。
+
+Root已对七个现public contract tests取得真实RED（35通过/12失败，旧digest/system/generator语义失败且无导入错误；日志
+`/tmp/kokoro-web-public3-red.log`）。当前源码随后复制owner committed原字节到唯一snapshot，更新两个现generator固定值，
+执行两次获授权的`--write`再生failure artifact与Team输出；Team15与`/tmp/kokoro-web-public3-baseline.json`逐字节全不变。
+Web无SQL持久owner，本片不改schema、runtime业务源码或用户数据；Agent 4 / BFF 3.1 retry尚未发布，不提前开放terminal mutation。
+Root fresh `pnpm check` exit0：contract219、architecture50、全tests2055（41.02s）及lint/typecheck/build通过；完整preview Playwright14通过/4项目分工跳过（14.1s）。独立16hash终审P0/P1/P2=0/0/0；owner committed blob equality与Team15 equality由Root再核PASS。日志 `/tmp/kokoro-web-public3-check.log`、`/tmp/kokoro-web-public3-e2e.log`。真实IAM/BFF/Agent/provider/credit组合与3310激活仍待验，未热切或改数据；Root全仓标准仍137失败，main-only因受保护未提交变更FAIL（所有local/remote/head均main），不宣称全仓clean。下方 WEB-FAILURE3 只作为public 2.0历史记录保留。
+
 ## WEB-LONG-THREAD-VISUAL：列表排版源码与渲染回归已验（2026-10-01）
 
 基线 main `42df17b`。真实 preview 长文截图及 computed style 复现普通列表 marker 为none；唯一生产改动是在现Thread

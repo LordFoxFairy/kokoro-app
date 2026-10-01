@@ -1,5 +1,24 @@
 # Kokoro Web contract governance
 
+## WEB-BFF-PUBLIC3 当前 consumer pin（2026-10-01；已验证源码基线）
+
+当前源码已删除旧public 2.0 pin；唯一public来源是`kokoro-bff` owner commit
+`293dfe7638e5dea0df2bee6dfdd8483b53fc9df6` 的 OpenAPI `3.0.0`，原字节 SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`。该原字节固定到
+`src/generated/bff-public-openapi.yaml`。Team generator锁固定digest，failure inspector锁version与ChatMessage/failure语义；commit
+provenance由Root核对该commit的committed blob与snapshot原字节相等。不得手改snapshot/generated或维护第二pin。
+
+当前唯一snapshot已复制owner committed原字节；failure artifact由generator再生为两角色且保留12tuple，Team15再生文件与旧基线
+逐字节相等。Root fresh `pnpm check` exit0（contract219/architecture50/tests2055/lint/typecheck/build），完整preview Playwright14通过/4项目跳过；这些源码与preview证据不代表真实组合或3310已激活。
+
+public 3.0.0 的 `ChatMessage.role` 只有 `user | assistant`。Web现runtime本来就是两角色；消费迁移删除旧system来源断言，不加
+兼容、过滤、alias或fallback。所有公开path/operation、failure 12 tuple与AG-UI映射保持不变。Agent 4 / BFF public 3.1 retry
+尚未发布，本片没有terminal retry mutation。Web仍无SQL事实owner，contract更新不触碰schema或运行数据。
+
+实施继续复用 `scripts/generate-bff-{agent-failure,team-client}.mjs`、唯一snapshot/failure artifact及七个public contract test；
+Team 15派生文件只能由generator再生并证明逐字节不变。下方2026-09-03的“尚无活跃generator”描述是历史基线，已由本节
+现状取代；旧failure3/public2说明同样只属于历史来源。
+
 状态：2026-09-03 当前 browser-private contract 说明。
 
 ## Owner

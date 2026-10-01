@@ -9,9 +9,12 @@ import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const BFF_OWNER_COMMIT = "ccb8e144d72e35d90f9edc23f8b3ed0c82fde98d"
-const BFF_PUBLIC_OPENAPI_SHA256 = "ba10f89baf0fdd8cd4da58947b0411da8c84294dfe77e278533aeda59a905773"
-const BFF_PUBLIC_OPENAPI_VERSION = "2.0.0"
+import { messageRecordSchema } from "../../src/contract/chat"
+import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
+
+const BFF_OWNER_COMMIT = "293dfe7638e5dea0df2bee6dfdd8483b53fc9df6"
+const BFF_PUBLIC_OPENAPI_SHA256 = "acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b"
+const BFF_PUBLIC_OPENAPI_VERSION = "3.0.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -101,7 +104,7 @@ function mutateSpec(spec: FailureSpecFixture, mutate: (draft: FailureSpecFixture
 
 const SEMANTIC_MUTANTS: readonly [string, (draft: FailureSpecFixture) => void][] = [
   ["public version", (draft) => { draft.info.version = "2.0.1" }],
-  ["owner system role", (draft) => { draft.components.schemas.ChatMessage.properties.role.enum = ["user", "assistant"] }],
+  ["restored owner system role", (draft) => { draft.components.schemas.ChatMessage.properties.role.enum = ["user", "assistant", "system"] }],
   ["failure exact properties", (draft) => { draft.components.schemas.ChatMessage.properties.failure.properties.detail = { type: "string" } }],
   ["failure additional properties", (draft) => { draft.components.schemas.ChatMessage.properties.failure.additionalProperties = true }],
   ["failure required keys", (draft) => { draft.components.schemas.ChatMessage.properties.failure.required = ["source", "code"] }],
@@ -119,11 +122,11 @@ const SEMANTIC_MUTANTS: readonly [string, (draft: FailureSpecFixture) => void][]
 ]
 
 describe("pinned BFF Agent failure public contract", () => {
-  it("pins the exact owner public 2.0 OpenAPI bytes", async () => {
+  it("pins the exact owner public 3.0 OpenAPI bytes", async () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toHaveLength(40)
+    expect(BFF_OWNER_COMMIT).toBe("293dfe7638e5dea0df2bee6dfdd8483b53fc9df6")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -132,8 +135,8 @@ describe("pinned BFF Agent failure public contract", () => {
     const chat = (await readSpec()).components.schemas.ChatMessage
     const failure = chat.properties.failure
 
-    expect(chat.properties.role.enum).toEqual(["user", "assistant", "system"])
-    expect(failure, "public 2.0 ChatMessage.failure must be present").toBeDefined()
+    expect(chat.properties.role.enum).toEqual(["user", "assistant"])
+    expect(failure, "public 3.0 ChatMessage.failure must be present").toBeDefined()
     expect(failure.required).toEqual(["source", "code", "retryable"])
     expect(failure.additionalProperties).toBe(false)
     expect(Object.keys(failure.properties)).toEqual(["source", "code", "retryable"])
@@ -157,12 +160,21 @@ describe("pinned BFF Agent failure public contract", () => {
     ])
   })
 
-  it("derives the exact 12 safe tuples while retaining the owner system role", async () => {
+  it("derives the exact 12 safe tuples with the owner two-role contract", async () => {
     const generator = await loadGenerator()
     const inspected = generator.inspectBffAgentFailureContract(await readSpec())
 
-    expect(inspected.roles).toEqual(["user", "assistant", "system"])
+    expect(inspected.roles).toEqual(["user", "assistant"])
     expect(inspected.tuples).toEqual(EXPECTED_TUPLES)
+  })
+
+  it("keeps generated roles aligned with the runtime Message schema", () => {
+    expect(BFF_CHAT_MESSAGE_ROLES).toEqual(["user", "assistant"])
+    const record = { message_id: "message-1", content: "", status: "completed", created_at: "2026-10-01T00:00:00.000Z" }
+    for (const role of BFF_CHAT_MESSAGE_ROLES) {
+      expect(messageRecordSchema.safeParse({ ...record, role }).success).toBe(true)
+    }
+    expect(messageRecordSchema.safeParse({ ...record, role: "system" }).success).toBe(false)
   })
 
   it("keeps the checked-in derived artifact byte-identical to the pure renderer", async () => {

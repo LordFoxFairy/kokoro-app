@@ -1,5 +1,23 @@
 # Kokoro User Web API 与协议契约
 
+## WEB-BFF-PUBLIC3：唯一 public 3.0.0 上游（2026-10-01；已验证源码基线）
+
+当前源码已删除旧public 2.0 pin；机器来源为BFF owner commit
+`293dfe7638e5dea0df2bee6dfdd8483b53fc9df6` 的 committed OpenAPI `3.0.0`，原字节 SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`。Web 将原字节固定到唯一
+`src/generated/bff-public-openapi.yaml`。Team generator只锁固定digest，failure inspector另锁version与ChatMessage/failure语义；
+owner commit provenance由Root核对该commit的committed blob与snapshot原字节相等。当前snapshot已复制该committed原字节，
+failure artifact已再生为两角色且12tuple不变；Team15再生输出与旧基线逐字节相等。generated artifact不是第二份可编辑schema。
+
+- `ChatMessage.role` 的 owner 闭集是 `user | assistant`；删除旧来源的 `system` 约束，不建兼容 parser、静默过滤或角色改写。
+- `/v1` path 与全部 operation inventory 不变；Project、Team、Library、Skills/MCP 与 failure public测试只更换同一来源 pin。
+- `ChatMessage.failure` 三键、10 code、12个合法 tuple、presence guard、verified Agent `RUN_ERROR`、BFF dispatch
+  `RUN_ERROR`、取消与 Share 只读语义全部不变。
+- Agent 4 / BFF public 3.1 retry command 尚未发布；owner terminal 没有 Web retry mutation。本片不以3.0角色收敛提前实现retry。
+
+下方 WEB-FAILURE3 是 public 2.0 的历史实现记录；其 failure/dispatch 安全规则仍有效，但其中version、digest与system drift
+描述已由本节取代。
+
 ## WEB-FAILURE3：BFF public 2.0 安全失败（2026-10-01；运行时候选）
 
 唯一机器来源是 BFF `ccb8e144` 的 public OpenAPI `2.0.0`，SHA-256

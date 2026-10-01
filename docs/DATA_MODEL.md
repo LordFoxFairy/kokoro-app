@@ -1,5 +1,17 @@
 # Kokoro User Web 数据模型与 Owner
 
+## WEB-BFF-PUBLIC3：无持久化变化的两角色消费（2026-10-01；已验证源码基线）
+
+当前源码已把旧public 2.0 snapshot替换为BFF owner commit
+`293dfe7638e5dea0df2bee6dfdd8483b53fc9df6` 的 public `3.0.0` 原字节（SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`）。唯一数据语义变化是上游
+`ChatMessage.role` 来源闭集正式成为 `user | assistant`，与现 Web 内存消息模型一致；不保存、过滤或改写 system Message。
+
+本片没有 SQL canonical schema、migration、表、索引、事务、Redis namespace、browser storage或跨owner JOIN；BFF仍是
+Conversation/Message持久事实owner，Web只持有页面生命周期投影。failure 12 tuple、operation、AG-UI projection、cursor、
+idempotency与取消语义都不变。Agent 4 / BFF public 3.1 retry尚未发布，因此不新增retry queue、receipt或terminal mutation状态。
+下方 WEB-FAILURE3 是旧public 2.0来源下的历史实现记录；其内存failure模型保留，但旧pin/system drift不再代表当前目标。
+
 ## WEB-FAILURE3：安全失败内存模型（2026-10-01；运行时候选）
 
 Web 不新增 SQL、Redis、IndexedDB、localStorage、receipt 或 failure 持久副本。BFF Message 与 AG-UI ledger 仍是唯一持久

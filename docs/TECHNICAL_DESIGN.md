@@ -1,5 +1,27 @@
 # Kokoro User Web 技术设计
 
+## WEB-BFF-PUBLIC3：BFF public 3.0.0 正式消费者对齐（2026-10-01；已验证源码基线）
+
+Web main `9c428bf8cfdbdafae1d0cc0c3ed807fa8defa591` 的旧 public 2.0 pin 已在当前源码中替换；唯一来源是 BFF
+owner commit `293dfe7638e5dea0df2bee6dfdd8483b53fc9df6` 已提交的 public OpenAPI `3.0.0` 原字节，SHA-256
+`acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b`。该版本把 `ChatMessage.role` 收敛为唯一
+`user | assistant`；现 Web runtime 本来就是两角色，所以本片只替换 provenance/pin，不新增 system fallback、过滤或第三种 UI。
+
+| 项 | 当前文档门裁决 |
+| --- | --- |
+| Owner | BFF 唯一写 public OpenAPI、Conversation/Message 与 operation；Web 只固定 owner 原字节、生成 consumer artifact 并在 browser-private adapter/runtime 严格消费。 |
+| 当前事实 | 唯一 snapshot 已复制owner committed原字节；failure generator已按上述commit/digest/version/fingerprint再生两角色artifact，Team generator已按新digest再生且15文件与旧基线逐字节不变。下方 WEB-FAILURE3 是 public 2.0 历史实施记录，不是当前 pin。 |
+| 目标职责 | Root已执行冻结候选fresh contract/check与preview回归，真实组合仍待验；ChatMessage只接受user/assistant，所有operation、failure tuple与运行时failure投影保持不变。 |
+| 采用位置 | 继续使用现 `scripts/generate-bff-{agent-failure,team-client}.mjs`、`src/generated/bff-public-openapi.yaml`、failure artifact 与七个 public contract test；不新建 contract 中心或通用 pin 模块。 |
+| 粒度与删除 | 删除旧 public 2.0 pin 和 system 来源约束；禁止双读、alias、fallback及手改 generated。Team 15 个派生文件预期逐字节不变，差异必须先报告。 |
+| 依赖 | Browser → Web same-origin adapter → BFF `/v1` 保持；AG-UI仍是唯一 Agent 网络事件协议，Web不直连Agent或读取owner数据库。 |
+| 数据/API | Web 无 SQL/Redis/IndexedDB/localStorage 新 owner；不热更新应用 schema。public path、operation、failure与幂等边界不变。 |
+| 未发布能力 | Agent 4 / BFF public 3.1 terminal retry 尚未发布；本片不增加 retry mutation，也不改变未获 receipt 的既有提交恢复。 |
+| 后续验证 | tests-only已由Root取得旧pin/system语义RED；当前机器固定基线已完成owner原字节复制、两个generator write与Team15 byte equality。Root已通过generator check、全部contract219（含七public tests/system mutant）与完整Web门，preview14/4skip；真实组合仍待验。Team generator锁固定digest，failure inspector锁version/语义；commit provenance由Root核对该commit的committed blob与snapshot原字节相等。 |
+
+后续预计文件集严格限于任务卡列出的七个 `tests/contract/bff-*-public.test.ts`、两个 generator、
+`src/generated/bff-public-openapi.yaml` 与 `src/generated/bff-agent-failure.ts`；Team 15 文件只能由 generator 运行并证明字节不变。
+
 ## WEB-FAILURE3：BFF public 2.0 安全失败消费（2026-10-01；运行时候选）
 
 本节基线是 Web main `399f863277f6b62e42772042bc940c62f33dc724`。唯一 public owner 已发布 BFF
