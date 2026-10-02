@@ -36,7 +36,6 @@ export function KokoroDirectChatWelcome({
   draft = "",
   creationIntent,
   onPrompt,
-  onCreationIntentSelect,
   onOpenSettings,
   onOpenProject,
   onCreateProject,
@@ -113,7 +112,7 @@ export function KokoroDirectChatWelcome({
       data-creation-type-selected={selectedCreationType ? "true" : undefined}
       aria-labelledby="kokoro-direct-chat-heading"
     >
-      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} selectedCreationType={selectedCreationType} setSelectedCreationType={setSelectedCreationType} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onCreationIntentSelect === undefined ? {} : { onCreationIntentSelect })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onCreateProject !== undefined ? { onCreateProject } : preview && onOpenProject ? { onCreateProject: (value?: string) => onOpenProject(createPreviewProjectRef(), value) } : {})} preview={preview} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
+      <DirectWelcomeContent brandName={brandName} composer={composer} draft={draft} selectedCreationType={selectedCreationType} setSelectedCreationType={setSelectedCreationType} creationTypesScrolled={creationTypesScrolled} setCreationTypesScrolled={setCreationTypesScrolled} referenceStatus={referenceStatus} setReferenceStatus={setReferenceStatus} {...(onPrompt === undefined ? {} : { onPrompt })} {...(onOpenSettings === undefined ? {} : { onOpenSettings })} {...(onCreateProject !== undefined ? { onCreateProject } : preview && onOpenProject ? { onCreateProject: (value?: string) => onOpenProject(createPreviewProjectRef(), value) } : {})} preview={preview} websiteCreation={websiteCreation} appCreation={appCreation} showDraftProjectContext={showDraftProjectContext} showDirectPrompts={showDirectPrompts} showStarterCards={showStarterCards} creativeIntent={creativeIntent} promptSelectedRef={promptSelectedRef} creationTypesRef={creationTypesRef} referenceInputRef={referenceInputRef} />
     </section>
   )
 }

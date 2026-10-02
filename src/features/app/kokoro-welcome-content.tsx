@@ -27,7 +27,6 @@ type DirectWelcomeContentProps = {
   referenceStatus: string | null
   setReferenceStatus: Dispatch<SetStateAction<string | null>>
   onPrompt?: EmptyStateProps["onPrompt"]
-  onCreationIntentSelect?: EmptyStateProps["onCreationIntentSelect"]
   onOpenSettings?: EmptyStateProps["onOpenSettings"]
   onCreateProject?: EmptyStateProps["onCreateProject"]
   preview: boolean
@@ -42,12 +41,12 @@ type DirectWelcomeContentProps = {
   referenceInputRef: React.RefObject<HTMLInputElement | null>
 }
 
-export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onCreationIntentSelect, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
+export function DirectWelcomeContent({ brandName, composer, draft, selectedCreationType, setSelectedCreationType, creationTypesScrolled, setCreationTypesScrolled, referenceStatus, setReferenceStatus, onPrompt, onOpenSettings, onCreateProject, preview, websiteCreation, appCreation, showDraftProjectContext, showDirectPrompts, showStarterCards, creativeIntent, promptSelectedRef, creationTypesRef, referenceInputRef }: DirectWelcomeContentProps) {
   const t = useT()
   return (
       <div className={cn(coreStyles.directContent, responsiveStyles.directContent)}>
         <div className={cn(coreStyles.directIntro, responsiveStyles.directIntro)}>
-          <div className={cn(coreStyles.directPlan, responsiveStyles.directPlan)}>
+          {preview ? <div className={cn(coreStyles.directPlan, responsiveStyles.directPlan)}>
             <span>{t("firstSite.freePlan")}</span>
             <Separator orientation="vertical" className={cn(coreStyles.directPlanSeparator, responsiveStyles.directPlanSeparator)} />
             <Button
@@ -59,7 +58,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
             >
               {t("firstSite.upgrade")}
             </Button>
-          </div>
+          </div> : null}
           <h1 id="kokoro-direct-chat-heading">{t("firstSite.chatHeading")}</h1>
           <p>{t("firstSite.chatSubhead", { brand: brandName })}</p>
         </div>
@@ -111,16 +110,7 @@ export function DirectWelcomeContent({ brandName, composer, draft, selectedCreat
               size="sm"
               className={cn(coreStyles.directPrompt, responsiveStyles.directPrompt)}
               aria-label={`${t(title)} ${t(description)}`}
-              onClick={() => {
-                // The row is a capability switch. Keep the draft empty and
-                // let the selected workflow render its own Composer state;
-                // starter cards remain the place that inserts prompt text.
-                if (intent && onCreationIntentSelect) {
-                  onCreationIntentSelect(intent)
-                  return
-                }
-                onPrompt?.(t(prompt), intent)
-              }}
+              onClick={() => onPrompt?.(t(prompt), intent)}
             >
               <PromptIcon aria-hidden="true" />
               <span>{t(title)}</span>

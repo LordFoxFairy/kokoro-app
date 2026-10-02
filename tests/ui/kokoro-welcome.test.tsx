@@ -60,7 +60,7 @@ it("建立网站入口把网站意图交给壳层以显示选中胶囊", () => {
   expect(onPrompt).toHaveBeenCalledWith("描述你想要建立的网站", "website")
 })
 
-it("能力胶囊只切换创作模式，不把示例提示词误填进编辑器", () => {
+it("能力提示填写精确草稿和意图，不切换无正文创作模式", () => {
   const onPrompt = vi.fn()
   const onCreationIntentSelect = vi.fn()
   render(
@@ -71,8 +71,8 @@ it("能力胶囊只切换创作模式，不把示例提示词误填进编辑器"
 
   fireEvent.click(screen.getByRole("button", { name: "设计 找趋势、出结论、给建议" }))
 
-  expect(onCreationIntentSelect).toHaveBeenCalledWith("design")
-  expect(onPrompt).not.toHaveBeenCalled()
+  expect(onPrompt).toHaveBeenCalledExactlyOnceWith("帮我分析这份数据，找出关键趋势和可执行的结论。", "design")
+  expect(onCreationIntentSelect).not.toHaveBeenCalled()
 })
 
 it("显式网站意图切换为专案归档与创建类型布局", () => {
@@ -293,4 +293,64 @@ it("正式网站提示流程不展示虚构 Figma/Shopify 与内建集成", () =
   expect(document.querySelector('[data-slot="shopify-mark"]')).not.toBeInTheDocument()
   expect(screen.queryByText("强大的内建整合")).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "新增到专案" })).toBeEnabled()
+})
+
+it.each([
+  { label: "制作简报", prompt: "帮我写一篇关于「主题」的文章，风格专业、结构清晰。", intent: "presentation" as const },
+  { label: "建立网站", prompt: "描述你想要建立的网站", intent: "website" as const },
+  { label: "设计", prompt: "帮我分析这份数据，找出关键趋势和可执行的结论。", intent: "design" as const },
+  { label: "制作游戏", prompt: "帮我写一个「功能」的脚本，并说明如何运行和调整。", intent: "game" as const },
+])("正式 Home 的 $label 提示只填写精确草稿，不切换或启动其他产品动作", ({ label, prompt, intent }) => {
+  const onPrompt = vi.fn()
+  const onCreationIntentSelect = vi.fn()
+  const onCreateProject = vi.fn()
+  const onOpenProject = vi.fn()
+  const onOpenSettings = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome
+        preview={false}
+        onPrompt={onPrompt}
+        onCreationIntentSelect={onCreationIntentSelect}
+        onCreateProject={onCreateProject}
+        onOpenProject={onOpenProject}
+        onOpenSettings={onOpenSettings}
+      />
+    </LocaleProvider>,
+  )
+
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(label, "u") }))
+
+  expect({
+    promptCalls: onPrompt.mock.calls,
+    creationIntentCalls: onCreationIntentSelect.mock.calls,
+    createProjectCalls: onCreateProject.mock.calls,
+    openProjectCalls: onOpenProject.mock.calls,
+    settingsCalls: onOpenSettings.mock.calls,
+  }).toEqual({
+    promptCalls: [[prompt, intent]],
+    creationIntentCalls: [],
+    createProjectCalls: [],
+    openProjectCalls: [],
+    settingsCalls: [],
+  })
+})
+
+it("无 Billing owner 投影的正式 Home 不声明免费计划或升级套餐", () => {
+  const onOpenSettings = vi.fn()
+  render(
+    <LocaleProvider>
+      <KokoroDirectChatWelcome preview={false} onOpenSettings={onOpenSettings} />
+    </LocaleProvider>,
+  )
+
+  expect({
+    freePlanVisible: screen.queryByText("免费计划") !== null,
+    upgradeVisible: screen.queryByRole("button", { name: "升级" }) !== null,
+    settingsCalls: onOpenSettings.mock.calls,
+  }).toEqual({
+    freePlanVisible: false,
+    upgradeVisible: false,
+    settingsCalls: [],
+  })
 })

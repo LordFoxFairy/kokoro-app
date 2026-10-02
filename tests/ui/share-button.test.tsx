@@ -18,7 +18,7 @@ function makeClient(overrides: Partial<Pick<SessionClient, "createShare" | "revo
 afterEach(cleanup)
 
 describe("ShareButton", () => {
-  it("opens the desktop agent tier selector and applies the selected tier", async () => {
+  it("renders the workspace brand as read-only identity without a second model selector", () => {
     render(
       <WorkspaceHeader
         activeId="ses_1"
@@ -27,11 +27,11 @@ describe("ShareButton", () => {
       { wrapper: LocaleProvider },
     )
 
-    const trigger = screen.getByRole("button", { name: "Kokoro Workspace" })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole("radio", { name: /Kokoro 1\.6 Max/ }))
-    expect(trigger).toHaveTextContent("Kokoro 1.6 Max")
-    expect(screen.queryByRole("dialog", { name: "Choose a Kokoro model" })).toBeNull()
+    const brand = screen.getByText("Kokoro")
+    expect(brand).toHaveAttribute("data-slot", "workspace-brand")
+    expect(brand.closest("button")).toBeNull()
+    expect(screen.queryByRole("radio")).toBeNull()
+    expect(screen.queryByText(/Kokoro 1\.6/u)).toBeNull()
   })
 
   it("opens formal credits settings directly from the empty workspace", () => {
@@ -322,5 +322,31 @@ describe("ShareButton", () => {
     expect(screen.getByTestId("share-button")).toBeInTheDocument()
     fireEvent.click(screen.getByTestId("share-button"))
     await waitFor(() => expect(client.createShare).toHaveBeenLastCalledWith("ses_2"))
+  })
+})
+
+it("空正式 Home Header 不展示或切换未接 owner 的硬编码模型档位", () => {
+  const { container } = render(
+    <WorkspaceHeader
+      activeId={null}
+      emptyWorkspace
+      shareClient={makeClient()}
+      onOpenSettings={vi.fn()}
+    />,
+    { wrapper: LocaleProvider },
+  )
+  const fakeTierTrigger = screen.queryByRole("button", { name: "Kokoro Workspace" })
+  if (fakeTierTrigger) fireEvent.click(fakeTierTrigger)
+
+  expect({
+    fakeTierTriggerVisible: fakeTierTrigger !== null,
+    hardcodedTierVisible: /Kokoro 1\.6(?: Max| Lite)?/u.test(container.textContent ?? ""),
+    fakeTierRadioCount: screen.queryAllByRole("radio").length,
+    creditsEntryVisible: screen.queryByRole("button", { name: "Credits & usage" }) !== null,
+  }).toEqual({
+    fakeTierTriggerVisible: false,
+    hardcodedTierVisible: false,
+    fakeTierRadioCount: 0,
+    creditsEntryVisible: true,
   })
 })

@@ -1,3 +1,11 @@
+## R99 Home交互真实性切片（2026-10-02，Root已验收，发布结果见Git）
+
+基线main85403f340b6565aeb11d9aa6f90ea7d2ff906fe6；本切片仅正式Home提示填入draft/intent并聚焦、零自动submit/项目创建/计费；无Billing投影不显示Free/升级状态，preview样例明确隔离。全部Workspace Header只读品牌，删假1.6档位、本地tier state/radio及唯一消费CSS；真实Composer/System模型链不改，不保留双行为路径。
+
+- Root原93588真实RED：7fail/135pass/142total。原owner最终聚焦142/142；Root原21275 Node22完整pnpm check实际exit0：249contract/50architecture/163files2320tests、lint/typecheck/build通过，/tmp/kokoro-r99-root-web-home-check.log。752 tracked门前门后hash相同，已批准CSS删除按manifest记录。
+- 独立Sol7路径Spec/quality审查0P0/P1/P2，/tmp/kokoro-r99-web-home-final-review.md；三旧假行为assert迁移已批准，其余项目/分享/credits/owner断言保持。
+- 这是限定切片，不是完整Home、真实浏览器、两轮W2或积分闭环。Root新查到既有Home语义mapping：简报→文章、设计→数据分析、游戏→通用脚本；后继在原测试ID T-U01修复，不把本切片纯门当这些映射正确或全产品上线。
+
 ## R95 Root候选：终态连接准入与HTTP测试诊断（2026-10-02）
 
 Web正式基线main a6c651b1c22a86cacfe282486193d743fca3ca3a。本节记录发布前候选与源码验收，不表示真实浏览器或完整产品已通过；提交/发布结果以本仓Git和Root同task/progress实际记录为准。

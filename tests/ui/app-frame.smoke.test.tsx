@@ -477,7 +477,11 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
     expect(screen.getByRole("form", { name: "消息编辑区" })).toBeInTheDocument()
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByText("文件和资源")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Kokoro 工作区" })).toHaveTextContent("Kokoro 1.6")
+    const workspaceBrand = document.querySelector('[data-slot="workspace-brand"]')
+    expect(workspaceBrand).toHaveTextContent("Kokoro")
+    expect(workspaceBrand?.closest("button")).toBeNull()
+    expect(screen.queryByRole("button", { name: "Kokoro 工作区" })).toBeNull()
+    expect(screen.queryByText(/Kokoro 1\.6/u)).toBeNull()
     expect(screen.getByRole("heading", { name: "Kokoro" })).toBeInTheDocument()
   })
 })
@@ -3293,4 +3297,41 @@ r66Describe("R70 waiting hook preserves notification lifecycle", () => {
     expect(notification.construct).not.toHaveBeenCalled()
     expect(notification.requestPermission).not.toHaveBeenCalled()
   })
+})
+
+it("正式 Home 建议经真实 AppFrame 只填写草稿并聚焦，不自动发送、建项目或打开计费", async () => {
+  buildEngine()
+  const submit = vi.spyOn(engine, "submit")
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }))
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
+    const input = await screen.findByRole("textbox", { name: "对话输入" })
+    fireEvent.click(await screen.findByRole("button", { name: /制作简报/u }))
+    await waitFor(() => expect(input).toHaveFocus())
+
+    expect({
+      draft: (input as HTMLTextAreaElement).value,
+      focused: document.activeElement === input,
+      submitCalls: submit.mock.calls,
+      messagePosts: client.createCalls.length,
+      projectPosts: fetchMock.mock.calls.filter(([request, init]) =>
+        String(request) === "/api/hub/projects" && init?.method === "POST").length,
+      settingsOpen: screen.queryByTestId("settings-modal") !== null,
+    }).toEqual({
+      draft: "帮我写一篇关于「主题」的文章，风格专业、结构清晰。",
+      focused: true,
+      submitCalls: [],
+      messagePosts: 0,
+      projectPosts: 0,
+      settingsOpen: false,
+    })
+  } finally {
+    fetchMock.mockRestore()
+  }
 })
