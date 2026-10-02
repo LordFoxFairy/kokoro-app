@@ -745,12 +745,37 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await recordProduct(callback)
     const cookie = cookieHeader(csrf, signin, callback)
     const form = `csrfToken=${(JSON.parse(csrf.body) as { csrfToken: string }).csrfToken}`
-    const started = new Promise<void>((resolve) => { onRefreshStarted = resolve })
+    const refreshesBefore = paths.filter((item) => item === "/iam/oauth2/token").length
+    const started = new Promise<void>((resolve) => {
+      onRefreshStarted = () => { onRefreshStarted = undefined; resolve() }
+    })
     holdRefresh = true
     try {
       const refreshing = http(nextPort, "/api/auth/session", "POST", form,
         { origin: `http://localhost:${nextPort}`, cookie })
-      await started
+      const first = await Promise.race([
+        started.then(() => ({ kind: "started" as const })),
+        refreshing.then(
+          (response) => ({ kind: "response" as const, response }),
+          (error: unknown) => ({ kind: "rejection" as const, category:
+            error instanceof TypeError ? "type_error" :
+              error instanceof Error && error.name === "AbortError" ? "abort_error" :
+                error instanceof Error ? "error" : "non_error" }),
+        ),
+      ])
+      if (first.kind === "response") {
+        throw new Error(responseDiagnostic("refresh_before_token", first.response, outputStart, pathStart))
+      }
+      if (first.kind === "rejection") {
+        throw new Error(`refresh_before_token diagnostic: ${JSON.stringify({
+          stage: "refresh_before_token",
+          outcome: "rejected",
+          error_category: first.category,
+          bff_paths: bffPathnames(paths.slice(pathStart)),
+          next_error_categories: nextErrorCategories(output.slice(outputStart)),
+        })}`)
+      }
+      expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
       const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
       const signout = await http(nextPort, "/api/auth/signout", "POST", form,
         { origin: `http://localhost:${nextPort}`, cookie })
