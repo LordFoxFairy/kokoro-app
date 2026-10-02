@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useMemo, useRef, useState } from "react"
-import { Braces, Check, ChevronDown, ChevronLeft, ChevronRight, Globe, KeyRound, Plus, Search, Server } from "lucide-react"
+import { Braces, ChevronDown, ChevronLeft, ChevronRight, Globe, KeyRound, Search, Server } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -29,8 +29,6 @@ type CatalogSectionProps = {
   title: string
   description: string
   items: readonly ConnectorCatalogItem[]
-  added: ReadonlySet<string>
-  onToggle: (id: string) => void
 }
 
 function ConnectorIcon({ item, featured = false }: { item: ConnectorCatalogItem; featured?: boolean }) {
@@ -44,7 +42,7 @@ function ConnectorIcon({ item, featured = false }: { item: ConnectorCatalogItem;
   )
 }
 
-function CatalogSection({ title, description, items, added, onToggle }: CatalogSectionProps) {
+function CatalogSection({ title, description, items }: CatalogSectionProps) {
   const t = useT()
   const [page, setPage] = useState(0)
   const [showAll, setShowAll] = useState(false)
@@ -68,16 +66,12 @@ function CatalogSection({ title, description, items, added, onToggle }: CatalogS
       </header>
       <div className={styles.catalogGrid}>
         {visibleItems.length > 0
-          ? visibleItems.map((item) => {
-            const isAdded = added.has(item.id)
-            return (
-              <article className={styles.catalogItem} key={item.id}>
-                <ConnectorIcon item={item} />
-                <div className={styles.itemCopy}><strong>{item.name}</strong><p>{t(item.description)}</p></div>
-                <Button type="button" variant="outline" size="icon-sm" aria-label={isAdded ? t("plugins.removeConnector", { name: item.name }) : t("plugins.addConnector", { name: item.name })} data-added={isAdded || undefined} onClick={() => onToggle(item.id)}>{isAdded ? <Check /> : <Plus />}</Button>
-              </article>
-            )
-          })
+          ? visibleItems.map((item) => (
+            <article className={styles.catalogItem} key={item.id}>
+              <ConnectorIcon item={item} />
+              <div className={styles.itemCopy}><strong>{item.name}</strong><p>{t(item.description)}</p></div>
+            </article>
+          ))
           : <Empty className={styles.sectionEmpty} data-testid="plugins-section-empty">
             <EmptyHeader>
               <EmptyMedia variant="icon" aria-hidden="true"><Search /></EmptyMedia>
@@ -92,7 +86,6 @@ function CatalogSection({ title, description, items, added, onToggle }: CatalogS
 export function KokoroPluginsSurface({ onOpenSettings, onCreateMcp, onCreateCustomApi }: EmptyStateProps) {
   const t = useT()
   const [query, setQuery] = useState("")
-  const [added, setAdded] = useState<Set<string>>(() => new Set())
   const [featuredAtEnd, setFeaturedAtEnd] = useState(false)
   const createRef = useRef<HTMLButtonElement | null>(null)
   const featuredViewportRef = useRef<HTMLDivElement | null>(null)
@@ -149,13 +142,6 @@ export function KokoroPluginsSurface({ onOpenSettings, onCreateMcp, onCreateCust
       else scrollFeatured(event.key === "ArrowRight" ? "forward" : "backward")
     }
   }
-  const toggle = (id: string) => setAdded((current) => {
-    const next = new Set(current)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    return next
-  })
-
   return (
     <div className={styles.page} data-testid="plugins-page">
       <header className={styles.pageHeader}>
@@ -226,8 +212,8 @@ export function KokoroPluginsSurface({ onOpenSettings, onCreateMcp, onCreateCust
             </EmptyHeader>
           </Empty>
           : <>
-            <CatalogSection title={t("plugins.connectors")} description={t("plugins.connectorsDescription")} items={apps} added={added} onToggle={toggle} />
-            <CatalogSection title={t("plugins.dataSources")} description={t("plugins.dataSourcesDescription")} items={sources} added={added} onToggle={toggle} />
+            <CatalogSection title={t("plugins.connectors")} description={t("plugins.connectorsDescription")} items={apps} />
+            <CatalogSection title={t("plugins.dataSources")} description={t("plugins.dataSourcesDescription")} items={sources} />
           </>}
       </div>
     </div>

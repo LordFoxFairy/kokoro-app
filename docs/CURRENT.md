@@ -1,3 +1,9 @@
+## R85 Root：Plugins本地假成功已删除（2026-10-02）
+
+基线main52fdd8e。原WIN01只改现Plugins组件及测试：删除added Set/toggle、Add/Remove/data-added/checkmark，保发现信息、搜索、分页、轮播、空态、管理与现创建入口；未改CSS、engine、依赖、SQL或任何契约。Root真实RED2fail/8pass→独立Sol两文件0P0/P1/P2→Root完整Node22 pnpm check实际原52371终态exit0，日志/tmp/kokoro-r85-root-web-truth-full-check.log。RED测试全文冻结，750外围tracked文件在补此CURRENT/仓INDEX前字节完全相同。
+
+此片仅删除伪连接状态：static目录不是owner当前连接，现创建入口MCP mutation、能力选择/授权/执行链仍未闭环；W2精确product-send-click失败仍未定位，不将此门当实际模型或费用通过。Root负责4路径提交，worker已停写。
+
 ## R83 Root：发送可用性源码切片已验收（2026-10-02）
 
 基线 main a118ac8a76dc2e41a49511b739c31d5742ff510a。原WIN01八source/test冻结，独立Sol0P0/P1/P2，Root8hash/精确变更集匹配。原真实DOM RED1pass2fail保留：submitting/unavailable发送错误enabled；修后engine统一canSubmitMessage供snapshot/submit，Composer内容可见与disabled分开，保draft/Stop/connected streaming steer/FIFO。无wire/SQL/依赖/CSS或新状态机。Root仅补相邻engine/composer INDEX与此当前证据，旧正文保留。

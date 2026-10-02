@@ -10,8 +10,22 @@ beforeEach(() => {
 afterEach(cleanup)
 
 function renderPlugins(onOpenSettings = vi.fn(), onCreateMcp = vi.fn(), onCreateCustomApi = vi.fn()) {
-  render(<LocaleProvider><KokoroPluginsSurface onPrompt={vi.fn()} onOpenSettings={onOpenSettings} onCreateMcp={onCreateMcp} onCreateCustomApi={onCreateCustomApi} /></LocaleProvider>)
-  return { onOpenSettings, onCreateMcp, onCreateCustomApi }
+  const onPrompt = vi.fn()
+  const surface = () => <LocaleProvider><KokoroPluginsSurface onPrompt={onPrompt} onOpenSettings={onOpenSettings} onCreateMcp={onCreateMcp} onCreateCustomApi={onCreateCustomApi} /></LocaleProvider>
+  const view = render(surface())
+  return { ...view, onOpenSettings, onCreateMcp, onCreateCustomApi, rerenderPlugins: () => view.rerender(surface()) }
+}
+
+function catalogCard(name: string): HTMLElement {
+  const card = screen.getAllByRole("article").find((candidate) => candidate.querySelector("strong")?.textContent === name)
+  if (!card) throw new Error(`Expected catalog card: ${name}`)
+  return card
+}
+
+function expectNoLocalConnectionFact(card: HTMLElement, name: string) {
+  expect(within(card).queryByRole("button", { name: new RegExp(`^(新增|移除) ${name}$`) })).toBeNull()
+  expect(card.querySelector("[data-added]")).toBeNull()
+  expect(card.querySelector(".lucide-check")).toBeNull()
 }
 
 it("插件页呈现推荐、连接器和资料来源三个真实区域", () => {
@@ -29,15 +43,24 @@ it("插件页呈现推荐、连接器和资料来源三个真实区域", () => {
   expect(screen.getByRole("button", { name: "向前滚动" })).toBeInTheDocument()
 })
 
-it("搜索同时过滤连接器与资料来源，添加按钮回显状态", () => {
+it("搜索同时过滤连接器与资料来源，但无 owner mutation 时不公开本地新增或移除状态", () => {
   renderPlugins()
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索连接器、资料来源" }), { target: { value: "Gmail" } })
   expect(screen.getAllByText("Gmail").length).toBeGreaterThan(0)
   expect(screen.queryByText("GitHub")).toBeNull()
 
-  const add = screen.getByRole("button", { name: "新增 Gmail" })
-  fireEvent.click(add)
-  expect(screen.getByRole("button", { name: "移除 Gmail" })).toHaveAttribute("data-added", "true")
+  expectNoLocalConnectionFact(catalogCard("Gmail"), "Gmail")
+})
+
+it("重渲染不会把组件本地交互升级为持久连接事实", () => {
+  const { rerenderPlugins } = renderPlugins()
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索连接器、资料来源" }), { target: { value: "Gmail" } })
+  const legacyAdd = within(catalogCard("Gmail")).queryByRole("button", { name: "新增 Gmail" })
+  if (legacyAdd) fireEvent.click(legacyAdd)
+
+  rerenderPlugins()
+
+  expectNoLocalConnectionFact(catalogCard("Gmail"), "Gmail")
 })
 
 it("轮播连续点击使用待定目标，不会重复启动同一个位置", () => {
@@ -109,7 +132,7 @@ it("过滤后分页不会停留在已经不存在的页码", () => {
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索连接器、资料来源" }), { target: { value: "Gmail" } })
 
   expect(screen.getByText("Gmail")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "新增 Gmail" })).toBeInTheDocument()
+  expect(catalogCard("Gmail")).toBeInTheDocument()
 })
 
 it("管理连接器继续进入 MCP 设置能力", () => {

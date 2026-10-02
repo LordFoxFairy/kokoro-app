@@ -1,3 +1,9 @@
+## R85 Plugins目录真实度切片（2026-10-02）
+
+- `src/features/app/kokoro-plugins-surface.tsx`：发现目录、搜索、分页、轮播及已有管理入口；不拥有连接安装/授权事实，删除本地Set形成的Add/Remove/checkmark假成功。
+- `tests/ui/kokoro-plugins-surface.test.tsx`：锁无owner回执时不产生连接事实，保原目录/管理交互。
+- 实际Root门与尚未接通的MCP调用链见`docs/CURRENT.md` R85；此源码切片不是正式连接或整个用户旅程已完成。
+
 ## R79-WEB-PROJECT-D0 当前入口（2026-10-02；仅方案，待 Root 门审）
 
 Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下方历史阶段现状，旧正文保持原字节。项目关联创建尚未实施，当前只更新五份文档；同Root `docs/task.md` R79为唯一任务卡，不另建计划/ADR/目录。
