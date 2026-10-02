@@ -52,10 +52,10 @@ describe("BillingPanel", () => {
     })} embedded />, { wrapper: LocaleProvider })
 
     await screen.findByTestId("billing-balance")
-    expect(screen.getByTestId("billing-balance")).toHaveTextContent("1,000")
+    expect(screen.getByTestId("billing-balance")).toHaveTextContent("10")
     expect(screen.getByText("Credit history")).toBeTruthy()
     expect(screen.getByText("Free credits")).toBeTruthy()
-    expect(screen.getByText("Refreshes to 300 every day at 00:00")).toBeTruthy()
+    expect(screen.getByText("Refreshes to 3 every day at 00:00")).toBeTruthy()
     expect(screen.queryByText("On hold")).toBeNull()
     expect(screen.queryByText("Quota this cycle")).toBeNull()
     expect(screen.queryByTestId("billing-filter-spend")).toBeNull()
@@ -74,20 +74,20 @@ describe("BillingPanel", () => {
     expect(screen.getByTestId("billing-ledger")).toHaveAttribute("data-slot", "billing-ledger")
   })
 
-  it("renders balance and held in credits (1 积分 = 10000 micros)", async () => {
+  it("renders balance and held in credits (1 积分 = 1000000 micros)", async () => {
     renderPanel(makeClient())
     const balance = await screen.findByTestId("billing-balance")
-    // 12_500_000 micros / 10_000 = 1250 积分；500_000 / 10_000 = 50 积分。
-    expect(balance.textContent).toContain("1250")
-    expect(balance.textContent).toContain("50")
+    // 12_500_000 micros / 1_000_000 = 12.5 积分；500_000 / 1_000_000 = 0.5 积分。
+    expect(balance.textContent).toContain("12.5")
+    expect(balance.textContent).toContain("0.5")
   })
 
   it("colours ledger deltas by sign and localizes known reasons", async () => {
     renderPanel(makeClient())
     await screen.findByText("Model call")
-    const debit = screen.getByText("-25")
+    const debit = screen.getByText("-0.25")
     expect(debit.getAttribute("data-sign")).toBe("negative")
-    const credit = screen.getByText("+500")
+    const credit = screen.getByText("+5")
     expect(credit.getAttribute("data-sign")).toBe("positive")
     // 未知 reason 回退原文（不裸露 key）。
     expect(screen.getByText("top_up_custom")).toBeTruthy()
@@ -133,8 +133,8 @@ describe("BillingPanel", () => {
       }),
     )
     const quota = await screen.findByTestId("billing-quota")
-    // 300_000_000 / 10_000 = 30000 积分。
-    expect(quota.textContent).toContain("30000")
+    // 300_000_000 / 1_000_000 = 300 积分。
+    expect(quota.textContent).toContain("300")
   })
 
   it("renders balance trend sparkline when there are ≥2 entries", async () => {
@@ -143,7 +143,7 @@ describe("BillingPanel", () => {
   })
 
   it("warns on low balance and hides the warning when balance is healthy", async () => {
-    // 100_000 micros = 10 积分 < 50 积分阈值 → 预警。
+    // 100_000 micros = 0.1 积分 < 0.5 积分阈值 → 预警。
     renderPanel(
       makeClient({
         summary: vi.fn().mockResolvedValue({ balance_micros: "100000", held_micros: "0", quota_micros: null, quota_period: null }),
@@ -151,7 +151,7 @@ describe("BillingPanel", () => {
     )
     await screen.findByTestId("billing-low-balance")
     cleanup()
-    // 健康余额（1250 积分）→ 无预警。
+    // 健康余额（12.5 积分）→ 无预警。
     renderPanel(makeClient())
     await screen.findByTestId("billing-balance")
     expect(screen.queryByTestId("billing-low-balance")).toBeNull()
@@ -160,14 +160,14 @@ describe("BillingPanel", () => {
   it("filters to spend-only, hiding credit entries", async () => {
     renderPanel(makeClient())
     await screen.findByText("Model call")
-    // 初始全部：入账条目（+500）可见。
-    expect(screen.getByText("+500")).toBeTruthy()
+    // 初始全部：入账条目（+5）可见。
+    expect(screen.getByText("+5")).toBeTruthy()
     // 三个单选筛选按钮：全部 / 消费 / 入账 → 点「消费」。
     expect(screen.getAllByRole("radio")).toHaveLength(3)
     fireEvent.click(screen.getByTestId("billing-filter-spend"))
-    // 入账条目隐去，仅消费（-25）留存。
-    await waitFor(() => expect(screen.queryByText("+500")).toBeNull())
-    expect(screen.getByText("-25")).toBeTruthy()
+    // 入账条目隐去，仅消费（-0.25）留存。
+    await waitFor(() => expect(screen.queryByText("+5")).toBeNull())
+    expect(screen.getByText("-0.25")).toBeTruthy()
   })
 
   it("groups entries by day with a per-day net subtotal", async () => {
@@ -182,5 +182,105 @@ describe("BillingPanel", () => {
       throw new Error("Expected at least one billing day")
     }
     expect(firstDayHead.querySelector("[data-sign]")).toBeTruthy()
+  })
+})
+
+// R54: display-only target assertions, not BFF wallet wire or live billing acceptance.
+describe("R54 embedded billing precision and unknown owner facts", () => {
+  it.each([
+    ["1", "0.000001"],
+    ["9007199254740993", "9007199254.740993"],
+  ])("renders exact embedded balance for %s micros", async (micros, expected) => {
+    render(<BillingContent client={makeClient({
+      summary: vi.fn().mockResolvedValue({
+        balance_micros: micros,
+        held_micros: "0",
+        quota_micros: null,
+        quota_period: null,
+        plan_label: "Pro",
+        free_credit_micros: "0",
+      }),
+      ledger: vi.fn().mockResolvedValue({ entries: [] }),
+    })} embedded />, { wrapper: LocaleProvider })
+
+    const label = await screen.findByText("credits", { selector: "span" })
+    expect(label.parentElement?.querySelector("strong")?.textContent).toBe(expected)
+  })
+
+  it.each([
+    ["1", "+0.000001", "positive"],
+    ["-1", "-0.000001", "negative"],
+    ["9007199254740993", "+9007199254.740993", "positive"],
+    ["-9007199254740993", "-9007199254.740993", "negative"],
+  ])("renders exact signed embedded ledger delta for %s micros", async (micros, expected, sign) => {
+    render(<BillingContent client={makeClient({
+      ledger: vi.fn().mockResolvedValue({
+        entries: [{
+          entry_id: "r54-entry",
+          delta_micros: micros,
+          balance_after_micros: "9007199254740993",
+          reason: "model_call",
+          created_at: DAY_A,
+        }],
+      }),
+    })} embedded />, { wrapper: LocaleProvider })
+
+    const reason = await screen.findByText("Model call")
+    const amount = reason.closest("li")?.querySelector("[data-sign]")
+    expect(amount).toHaveAttribute("data-sign", sign)
+    expect(amount?.textContent).toBe(expected)
+  })
+
+  it("does not infer a Free plan when plan_label is absent", async () => {
+    render(<BillingContent client={makeClient({
+      summary: vi.fn().mockResolvedValue({
+        balance_micros: "1000000",
+        held_micros: "0",
+        quota_micros: null,
+        quota_period: null,
+        free_credit_micros: "0",
+      }),
+      ledger: vi.fn().mockResolvedValue({ entries: [] }),
+    })} embedded />, { wrapper: LocaleProvider })
+
+    await screen.findByText("credits", { selector: "span" })
+    const balance = screen.getByTestId("billing-balance")
+    expect(balance.querySelector("strong")?.textContent).toBe("—")
+    expect(screen.queryByText("Free", { exact: true })).toBeNull()
+  })
+
+  it("does not relabel all balance as free credits when free_credit_micros is absent", async () => {
+    render(<BillingContent client={makeClient({
+      summary: vi.fn().mockResolvedValue({
+        balance_micros: "2000000",
+        held_micros: "0",
+        quota_micros: null,
+        quota_period: null,
+        plan_label: "Pro",
+      }),
+      ledger: vi.fn().mockResolvedValue({ entries: [] }),
+    })} embedded />, { wrapper: LocaleProvider })
+
+    const label = await screen.findByText("Free credits")
+    expect(label.parentElement?.lastElementChild?.textContent).toBe("—")
+    expect(screen.getByText("Pro", { exact: true })).toBeTruthy()
+  })
+
+  it("preserves explicit Free plan and zero free-credit owner facts", async () => {
+    render(<BillingContent client={makeClient({
+      summary: vi.fn().mockResolvedValue({
+        balance_micros: "2000000",
+        held_micros: "0",
+        quota_micros: null,
+        quota_period: null,
+        plan_label: "Free",
+        free_credit_micros: "0",
+      }),
+      ledger: vi.fn().mockResolvedValue({ entries: [] }),
+    })} embedded />, { wrapper: LocaleProvider })
+
+    const label = await screen.findByText("Free credits")
+    expect(label.parentElement?.lastElementChild?.textContent).toBe("0")
+    expect(screen.getByText("Free", { exact: true })).toBeTruthy()
   })
 })

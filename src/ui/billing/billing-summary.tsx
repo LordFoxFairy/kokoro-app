@@ -4,9 +4,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { creditsToNumber, formatCredits } from "@/billing/format"
+import { formatCredits } from "@/billing/format"
 import type { BillingSummary as ContractBillingSummary } from "@/contract/http"
-import { useLocale, useT } from "@/i18n/context"
+import { useT } from "@/i18n/context"
 
 import { isLowBalance, quotaPeriodKey, type SummaryState } from "./billing-model"
 import panelStyles from "./billing-panel.module.css"
@@ -61,17 +61,14 @@ function SummaryError({ label, retryLabel, retrying, onRetry, embedded, ledgerLo
 
 function EmbeddedSummary({ summary, onOpenPricing }: { summary: ContractBillingSummary; onOpenPricing: (() => void) | undefined }) {
   const t = useT()
-  const { locale } = useLocale()
-  const formatter = new Intl.NumberFormat(locale === "zh" ? "zh-CN" : locale, { maximumFractionDigits: 4 })
-  const formatEmbeddedCredits = (micros: string) => formatter.format(creditsToNumber(micros))
 
   return (
     <div className={styles.embeddedBalanceContent}>
       <div className={styles.embeddedPlanHeader}>
         <strong>
-          {summary.plan_label?.trim().toLowerCase() === "free" || !summary.plan_label
+          {summary.plan_label?.trim().toLowerCase() === "free"
             ? t("billing.freeTier")
-            : summary.plan_label}
+            : summary.plan_label || "—"}
         </strong>
         {onOpenPricing ? <Button variant="default" size="sm" type="button" className={styles.balanceUpgrade} onClick={onOpenPricing}>{t("firstSite.upgrade")}</Button> : null}
       </div>
@@ -79,15 +76,15 @@ function EmbeddedSummary({ summary, onOpenPricing }: { summary: ContractBillingS
         <div className={styles.embeddedCreditRow}>
           <Sparkles aria-hidden="true" />
           <div className={styles.embeddedCreditCopy}>
-            <div className={styles.embeddedMetric}><span>{t("billing.creditUnit")}</span><strong>{formatEmbeddedCredits(summary.balance_micros)}</strong></div>
-            <div className={styles.embeddedMetricSubrow}><span>{t("settings.freeCredits")}</span><span>{formatEmbeddedCredits(summary.free_credit_micros ?? summary.balance_micros)}</span></div>
+            <div className={styles.embeddedMetric}><span>{t("billing.creditUnit")}</span><strong>{formatCredits(summary.balance_micros)}</strong></div>
+            <div className={styles.embeddedMetricSubrow}><span>{t("settings.freeCredits")}</span><span>{summary.free_credit_micros === undefined ? "—" : formatCredits(summary.free_credit_micros)}</span></div>
           </div>
         </div>
         <div className={styles.embeddedCreditRow}>
           <CalendarSync aria-hidden="true" />
           <div className={styles.embeddedCreditCopy}>
-            <div className={styles.embeddedMetric}><span>{t("billing.dailyRefresh")}</span><strong>{summary.daily_refresh_micros === null || summary.daily_refresh_micros === undefined ? "—" : formatEmbeddedCredits(summary.daily_refresh_micros)}</strong></div>
-            {summary.daily_refresh_micros && summary.daily_refresh_time ? <p className={styles.embeddedRefreshHint}>{t("billing.dailyRefreshHint", { time: summary.daily_refresh_time, credits: formatEmbeddedCredits(summary.daily_refresh_micros) })}</p> : null}
+            <div className={styles.embeddedMetric}><span>{t("billing.dailyRefresh")}</span><strong>{summary.daily_refresh_micros === null || summary.daily_refresh_micros === undefined ? "—" : formatCredits(summary.daily_refresh_micros)}</strong></div>
+            {summary.daily_refresh_micros && summary.daily_refresh_time ? <p className={styles.embeddedRefreshHint}>{t("billing.dailyRefreshHint", { time: summary.daily_refresh_time, credits: formatCredits(summary.daily_refresh_micros) })}</p> : null}
           </div>
         </div>
       </div>

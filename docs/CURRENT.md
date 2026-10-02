@@ -1,3 +1,9 @@
+## R58 Root 积分显示与未知事实验收（2026-10-01）
+
+本切片统一既已发布的10^6 micros/credit显示单位，不是加价倍率、现金兑换率或账务writer。金额文字沿BigInt字符串移位，embedded余额/流水不经Number/Intl舍入；非法金额、缺套餐和缺免费额度显示未知，只有明确Free/零额度事实才显示对应值。低余额阈值、计价、扣费、wire及adapter未修改。
+
+Root Node22.22.2：79定点全过（1.14s）；完整163files2193tests全部通过（48.03s），Next build exit0。日志/tmp/kokoro-web-r56-root-precision-green.log、/tmp/kokoro-web-r57-root-full-test.log、/tmp/kokoro-web-r57-root-build.log。五文件冻结独立源码审0P0/P1/P2，R52/R54新断言保持、原期望仅机械迁移。Root完整contract224/224、architecture50/50、lint/typecheck均exit0（/tmp/kokoro-web-r58-root-static.log）；本段不代替真实浏览器/正式钱包/计费用户链，BFF钱包契约与owner v2 HTTP仍后继。
+
 ## R44 Root 当前完整验收（2026-10-01）
 
 main343aea36冻结30path在Root前后逐hash完全匹配，独立审0P0/0P1/0P2。Root Node22.22.2完整pnpm check exit0：contract224/224、architecture50/50、163文件2136tests全部通过，lint/typecheck/Next build通过；full测试44.78s，日志/tmp/kokoro-web-project-r44-root-full-check.log。原RP500/welcome两次full失败日志保留，不因本次通过推定间歇问题永久消失。Root隔离3387 preview治理Playwright14pass/4条件skip，11.1s，/tmp/kokoro-web-project-r44-root-preview-e2e.log；已停止自身listener、报告移/tmp。这是preview响应式/阅读轴/Composer/a11y门，不是正规IAM登录、真实模型多轮/项目/账务的E2E证据。本片只验收Project读取与身份边界源码，不称完整产品闭环。后继采用完整accepted源码组合，不绕exact-source守卫。下方候选及RED记录保留历史。

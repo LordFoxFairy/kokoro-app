@@ -3,7 +3,7 @@ import Link from "next/link"
 import { useMemo } from "react"
 
 import type { BillingLedgerEntry } from "@/contract/http"
-import { formatSignedCredits, microSign, creditsToNumber } from "@/billing/format"
+import { formatSignedCredits, microSign } from "@/billing/format"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
@@ -51,10 +51,7 @@ function LedgerError({ message, retryLabel, retrying, embedded, onRetry }: { mes
 }
 
 function EmbeddedEntry({ entry, label }: { entry: BillingLedgerEntry; label: string }) {
-  const { locale } = useLocale()
-  const formatter = new Intl.NumberFormat(locale === "zh" ? "zh-CN" : locale, { maximumFractionDigits: 4 })
-  const value = creditsToNumber(entry.delta_micros)
-  const signed = value > 0 ? `+${formatter.format(value)}` : formatter.format(value)
+  const signed = formatSignedCredits(entry.delta_micros)
   return (
     <li className={styles.entry}>
       <div className={styles.entryMain}>{entry.conversation_id ? <Link className={styles.entryReason} href={`/app?conversation=${encodeURIComponent(entry.conversation_id)}`}>{label}</Link> : <span className={styles.entryReason}>{label}</span>}</div>
