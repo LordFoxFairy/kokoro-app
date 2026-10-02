@@ -433,11 +433,18 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         deliveriesHasMore: liveAdvanced ? thread.deliveriesHasMore || sessionSnapshot.deliveries_has_more : sessionSnapshot.deliveries_has_more,
       }
       if (machine.phase === "idle") {
+        const head = sessionSnapshot.execution_head
         // Never revive the exact observed terminal head from a stale RR view.
-        if (!sessionSnapshot.execution_head || sessionSnapshot.execution_head.run_id === settledRunId ||
-          terminalRead.runs.has(sessionSnapshot.execution_head.run_id) ||
-          observedTerminalRuns.has(JSON.stringify([sessionId, sessionSnapshot.execution_head.run_id]))) {
-          if (!liveAdvanced || sessionSnapshot.execution_head) closeStream()
+        if (!head) {
+          if (!liveAdvanced) {
+            // A successful owner read with no successor authorizes the quiet terminal
+            // state. Retire the terminal stream generation before reopening admission.
+            closeStream()
+            connection = { status: "connected" }
+          }
+        } else if (head.run_id === settledRunId || terminalRead.runs.has(head.run_id) ||
+          observedTerminalRuns.has(JSON.stringify([sessionId, head.run_id]))) {
+          closeStream()
         } else adoptOwnerSnapshot(sessionId, sessionSnapshot, liveAdvanced
           ? { deliveries: thread.deliveries, deliveriesHasMore: thread.deliveriesHasMore } : undefined)
       }

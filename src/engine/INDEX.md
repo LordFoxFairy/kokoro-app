@@ -68,6 +68,7 @@
 ## 运行时约束
 
 - 三重代际守卫（stream/hydrate/filesSync）：关流/切会话后迟到回调一律丢弃。
+- 已观察终态后，仅当前 session/generation 的成功权威快照在无 successor、无新 live 进度时关闭旧流并恢复 connected；活动或 successor 重连、缺失/失败快照仍不放行提交。
 - run 收尾对账吸收 snapshot.files、snapshot.deliveries/has_more；以二元 ID 合并同步期间晚到 live，
   避免旧快照抹掉新成果。仅稳定 `event_cursor_expired` HTTP 410 重快照再续 watermark。
 - 事件微任务窗口批量折叠一次（replay 洪峰不逐事件快照）。

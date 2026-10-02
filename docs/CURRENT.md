@@ -1,3 +1,12 @@
+## R95 Root候选：终态连接准入与HTTP测试诊断（2026-10-02）
+
+Web正式基线main a6c651b1c22a86cacfe282486193d743fca3ca3a。本节记录发布前候选与源码验收，不表示真实浏览器或完整产品已通过；提交/发布结果以本仓Git和Root同task/progress实际记录为准。
+
+- engine两个冻结候选：machine0928eaa5 / engine.test f45cd3f610。Root实际RED134项1失败/133通过（终态quiet owner快照后残留reconnecting、第二submit未发POST），修复保liveAdvanced/session/generation/active successor/null失败约束；仅无successor且未晚到live的权威终态读关闭旧流并恢复connected，不放宽canSubmitMessage。
+- 既有OIDC测试诊断候选8cb206b0：started与refresh HTTP提前终态race，复用安全responseDiagnostic、固定异常类别、one-shot并核一实际refresh请求；原tombstone/409/零stale revoke/退出状态和finally断言保留，无timeout/skip/重试变化。原writer39/39只为交付证据；Root后继完整门结果见下，独立最终审仍待收取。
+- 原Root完整门58933失败（2312通过/1欢迎页项目路由失败）和单worker55271失败（2312通过/1 OIDC30s超时）保留。Root完整app-frame95与原OIDC单例1pass/38名称过滤skip不代替整门；生产路径未据此盲改。日志与完整hash由Root同task/progress/test-cases记录。
+- Root当前原配置Node22完整pnpm check29612已实际exit0：249contract/50architecture、163files2313tests、lint/typecheck/build通过；/tmp/kokoro-r95-root-web-final-check.log。仓库无format脚本，diff-check0，不冒称执行不存在命令。源与三个production/test冻结，只有本CURRENT与engine INDEX补当前证据与职责；独立最终审0P0/P1/P2已收取（/tmp/kokoro-r95-web-final-review.md）；精确提交与Root组合发布结果见Git及Root同task/progress。真两轮W2、作品/刷新/他人拒绝与Billing仍后继，不能将纯门当真实运行通过。
+
 ## R93 Root消费验收（2026-10-02）
 
 Root在a52a623+冻结public6切片实际重跑Node22 pnpm check，原81297终态exit0：249contract、50architecture、163文件2309测试，lint/typecheck/build通过；日志/tmp/kokoro-r93-root-web-public6-check.log。独立Sol0P0/P1/P2、17授权/735外围与owner canonical原字节确认，报告/tmp/kokoro-r93-web-public6-review.md。仅固定BFF bb610ea/public6消费者，不修改UI或生命周期；Root组合/gitlink与真实浏览器尚待复验，不能声称用户旅程完成。

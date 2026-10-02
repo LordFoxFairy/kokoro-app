@@ -126,6 +126,151 @@ describe("提交链路", () => {
     })
   })
 
+  it("R94 restores a quiet terminal EOF to connected before admitting the second message", async () => {
+    buildEngine()
+    expect(engine.submit("first request")).toBe(true)
+    await settle()
+    const firstStream = client.lastStream()
+    let resolveTerminalSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveTerminalSnapshot = resolve })
+
+    firstStream.emit([
+      makeEvent("run.created", { run_id: "run_1" }),
+      makeEvent("message.delta", { segment_id: "seg_1", delta: "first answer" }),
+      makeEvent("run.completed", { status: "completed" }),
+    ], [CURSOR_3, CURSOR_7, CURSOR_12])
+    await settle()
+    expect(engine.getSnapshot().machine).toMatchObject({ phase: "idle", runId: null })
+
+    firstStream.reconnecting()
+    expect(engine.getSnapshot()).toMatchObject({
+      connection: { status: "reconnecting" },
+      canSubmitMessage: false,
+    })
+    resolveTerminalSnapshot(makeSnapshot({ sessionId: "conv_1", eventWatermark: CURSOR_12 }))
+    await settle()
+
+    const beforeSecond = engine.getSnapshot()
+    const accepted = engine.submit("second request")
+    expect({
+      connection: beforeSecond.connection,
+      canSubmitMessage: beforeSecond.canSubmitMessage,
+      accepted,
+      createContents: client.createCalls.map(({ body }) => body.content),
+      firstStreamClosed: firstStream.closed,
+      cursor: beforeSecond.thread.resumeCursor,
+      messages: beforeSecond.thread.messages.map(({ role, content }) => ({ role, content })),
+    }).toEqual({
+      connection: { status: "connected" },
+      canSubmitMessage: true,
+      accepted: true,
+      createContents: ["first request", "second request"],
+      firstStreamClosed: true,
+      cursor: CURSOR_12,
+      messages: [
+        { role: "user", content: "first request" },
+        { role: "assistant", content: "first answer" },
+      ],
+    })
+    await settle()
+    expect(client.lastStream()).toMatchObject({ closed: false, resumeCursor: CURSOR_12 })
+  })
+
+  it("R94 keeps a successor head blocked until its replacement stream connects and ignores old callbacks", async () => {
+    buildEngine()
+    expect(engine.submit("first request")).toBe(true)
+    await settle()
+    const firstStream = client.lastStream()
+    let resolveSuccessorSnapshot!: (snapshot: ReturnType<typeof makeSnapshot>) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveSuccessorSnapshot = resolve })
+
+    firstStream.emit([
+      makeEvent("run.created", { run_id: "run_1" }),
+      makeEvent("run.completed", { status: "completed" }),
+    ], [CURSOR_3, CURSOR_12])
+    await settle()
+    firstStream.reconnecting()
+    resolveSuccessorSnapshot(makeSnapshot({
+      sessionId: "conv_1",
+      eventWatermark: CURSOR_20,
+      activeRun: { run_id: "run_2", status: "running" },
+    }))
+    await settle()
+
+    const successorStream = client.lastStream()
+    expect(successorStream).not.toBe(firstStream)
+    expect(firstStream.closed).toBe(true)
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "streaming", runId: "run_2" },
+      connection: { status: "reconnecting" },
+      canSubmitMessage: false,
+    })
+    expect(engine.submit("blocked before successor connects")).toBe(false)
+    expect(client.createCalls).toHaveLength(1)
+
+    firstStream.connected()
+    firstStream.reconnecting()
+    expect(engine.getSnapshot().connection).toEqual({ status: "reconnecting" })
+    successorStream.connected()
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "streaming", runId: "run_2" },
+      connection: { status: "connected" },
+      canSubmitMessage: true,
+    })
+  })
+
+  it("R94 does not claim connected when the terminal reconciliation returns no owner snapshot", async () => {
+    buildEngine()
+    expect(engine.submit("first request")).toBe(true)
+    await settle()
+    const firstStream = client.lastStream()
+    let resolveMissingSnapshot!: (snapshot: ReturnType<typeof makeSnapshot> | null) => void
+    client.nextSnapshot = () => new Promise((resolve) => { resolveMissingSnapshot = resolve })
+
+    firstStream.emit([
+      makeEvent("run.created", { run_id: "run_1" }),
+      makeEvent("run.completed", { status: "completed" }),
+    ], [CURSOR_3, CURSOR_12])
+    await settle()
+    firstStream.reconnecting()
+    resolveMissingSnapshot(null)
+    await settle()
+
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "idle", runId: null },
+      connection: { status: "reconnecting" },
+      canSubmitMessage: false,
+    })
+    expect(engine.submit("must remain blocked without owner facts")).toBe(false)
+    expect(client.createCalls).toHaveLength(1)
+  })
+
+  it("R94 does not claim connected when terminal reconciliation fails", async () => {
+    buildEngine()
+    expect(engine.submit("first request")).toBe(true)
+    await settle()
+    const firstStream = client.lastStream()
+    let rejectTerminalSnapshot!: (reason?: unknown) => void
+    client.nextSnapshot = () => new Promise((_resolve, reject) => { rejectTerminalSnapshot = reject })
+
+    firstStream.emit([
+      makeEvent("run.created", { run_id: "run_1" }),
+      makeEvent("run.completed", { status: "completed" }),
+    ], [CURSOR_3, CURSOR_12])
+    await settle()
+    firstStream.reconnecting()
+    rejectTerminalSnapshot(new SessionClientError("network", "terminal snapshot unavailable"))
+    await settle()
+
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "idle", runId: null },
+      connection: { status: "reconnecting" },
+      canSubmitMessage: false,
+    })
+    expect(engine.submit("must remain blocked after failed read")).toBe(false)
+    expect(client.createCalls).toHaveLength(1)
+  })
+
   it("A 提交取消后 B 正在提交时，A 的迟到拒绝不污染 B", async () => {
     buildEngine()
     let rejectA!: (reason?: unknown) => void
