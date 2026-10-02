@@ -1,3 +1,13 @@
+## R76-WEB-PUBLIC5：无持久化 owner，当前投影保持（2026-10-02）
+
+Web main `28672f330df11cd55f7ff3f89f269acc3fe908cf` 的已发布 public4 会话/审批投影保持；本轮目标只消费已发布 BFF `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` / public5.0.0 / canonical SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。原 R65/历史正文 byte-equal，版本现状以本节与 CURRENT R76 为准。
+
+Web仍无业务数据库/SQL/canonical schema/migration/事务/Redis事实 owner，不建立空schema、跨owner JOIN或browser持久缓存。ScheduledTask/可选Project关联由 BFF 持久拥有，Schedule由Scheduler、Run由Agent拥有；public5的optional exact project_id不改变这些边界，也不等于Web会话scope/project_ref。现独立create Draft及UI没有project关联字段，本轮未新增该运行能力，不把generated pin当新业务writer。
+
+现 execution_head、full interaction、普通process/Message、exact optimistic admissions、frozen control intent、connection/cancellation、opaque watermark/source position、安全失败与Artifact二元身份的内存生命周期完全保留 R74实现；本轮不编辑这些source/tests。公共 schema4→5 diff 仅 Scheduled create与版本，原 ChatMessage fingerprint、安全12 tuple及Team9保持。四当前设计面共同约束既有生成器和consumer graph tests；root资源/e2e未验不能由fixture GREEN替代。实际命令、文件集、未决能力和冻结证据见 CURRENT R76。
+
+---
+
 ## R65-WEB-PUBLIC4-D0：无持久化 owner 的完整暂停与水位投影（目标态，仅文档）
 
 本前缀与TECH/API R65构成同一方案；下方历史数据正文byte-equal保留，不作为旧active_run/逐工具暂停实施依据。Web main06a1c86612d9557d83081bcb67e8fc539ae7eacb仍旧public3 consumer；目标BFF已发布3c08a422f3a6aa3cf204c308716cfa64f6d61bb2/public4.0.0，OpenAPI SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6。本轮仅四doc前缀，source/tests/pin/generated/存储未改。

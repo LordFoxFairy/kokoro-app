@@ -1,3 +1,31 @@
+## R77 Root 验收：固定 public5 消费组件通过
+
+Root 接收17文件冻结66fa8c3b161db991d8dcb34a5194ee39d78f6c21ee5523fcdbac2d578c8fa134，Astra最终freeze独立0P0/P1/P2；17hash实核、735保护保持。fresh Node22完整pnpm check exit0：244contract/50architecture/2275unit，0fail/0skip，lint/typecheck/build0；日志 /tmp/kokoro-web-r77-root-full-check.log。owner479d4e8/public5.0.0/3ce25a31精确原字节消费；Team15保持，safe12/fingerprint、原R74三P1源码/测试未变。
+
+Root 接管17文件提交与后继Root gitlink更新；这是固定消费者组件，不是浏览器/IAM/模型/文件或积分整链。project_id关联UI仍后继切片，未冒称可用；原0collect与真实RED13保留。
+
+## R76-WEB-PUBLIC5：固定消费者候选冻结（2026-10-02）
+
+Web 起始且当前 main `28672f330df11cd55f7ff3f89f269acc3fe908cf`，起始 clean、当前17个授权文件未提交；WIN01唯一writer，Root独占Git/index/commit、基础设施与最终验收。沿Root同一R76任务卡和既有D0生成路径，不新增计划、目录或产品能力。
+
+固定BFF已发布 main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` committed canonical public5.0.0，YAML SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。两generator正规 --write/--check通过；Team九操作与15生成文件保持起始字节，failure仅3 provenance字段变化，两roles/safe12 tuple及ChatMessage fingerprint `0ef4d13e0f9e383830e2d1cb65a391cb6fad67985bf3bc9dd3beeb0682beb41b`不变。
+
+### 实际验证与保护
+
+- tests-only真实RED：全部19文件collect，contract244项231pass/13fail/0skip；9项旧pin/provenance和4项新增owner创建graph失败。随后正规生成GREEN244。此前新EOF import语法错误的0collect日志保留，不算行为RED。
+- Node v22.22.2 / pnpm11.25.0，本工作树 `pnpm check` 句柄46248已完成exit0：两generator --check；contract19文件244通过；architecture4文件50通过；lint零warning；typecheck exit0；test163文件2275通过/0失败/0跳过（44.34s）；build exit0。完整日志 `/tmp/kokoro-web-r76-full-check.log`。本段为门禁后仅文档证据更新，未改变受验源码。
+- 752 tracked中仅17授权路径变化，其他735逐字节相同；七pin测试及两generator仅机械固定输入迁移，failure另两处版本展示label更新；原api-contract全文保持，仅EOF新增4个owner graph断言。四D0与contract README仅本轮前缀变化、旧全文保持。R74聊天、snapshot/水位、FIFO/并发receipt、failed control源码和行为断言、Scheduled运行源码、UI/routes/CSS/依赖全部原字节保留。index及untracked为空。
+- 精确17路径、bytes/SHA、735保护及旧正文证据见 `/tmp/kokoro-web-r76-public5-green-freeze.json`、`/tmp/kokoro-web-r76-scope-protection.json`；起始752 hashes `/tmp/kokoro-web-r76-baseline.json`；真实RED `/tmp/kokoro-web-r76-public5-actual-red.json`。owner语义保护 `/tmp/kokoro-web-r76-owner-semantic-protection.json` 证明仅CreateScheduledTaskRequest schema变化，Chat/Team operation对象不变。
+- gpt-5.6-sol只读审查绑定本轮17路径：0 P0/P1/P2；未写文件、Git、运行测试或资源。最终CURRENT仅替换此前阶段性状态；Root独立审查、主仓重验和提交仍待执行。
+
+### 未运行与后续owner
+
+public5 Scheduled create closed body移除enabled/status、五required及optional exact project_id。现独立create已发五必填且不发removed字段，本片不改运行source；Web Draft/client/live项目关联创建仍未实现，auto_approve仍按UI必填收窄，不声称完整映射所有owner可选输入。项目能力后续由Root另授范围。
+
+未运行pnpm test:e2e、浏览器/真实IAM/System/Ollama/Agent/Storage/Billing整链或SQL schema；没有启动、重启、清理共享资源，没有Git/index操作。源码/fixture门不替代真实旅程。候选待Root审验/集成/提交，WIN01冻结交接后停写。
+
+---
+
 ## R75 Root 独立验收：public4 会话与审批消费者源码
 
 Root 在本工作树 fresh `pnpm check` Node22 exit0：contract240、architecture50、unit2271pass/0fail/0skip、lint/typecheck/build0，日志 `/tmp/kokoro-web-r75-root-full-check.log`。原 Astra 逐项重审 R74 冻结68path、5授权delta、747保护及九冻结块，0P0/P1/P2；原三个P1已关闭。Root 接收完整切片准备提交，当前仍固定已发布 BFF3c08a422/public4/digest5561450b，不提前消费未发布public5。首次R70纯GREEN后的三P1记录保留；源码及测试验收不代表真实IAM→模型→刷新→文件→积分整链。实际浏览器/资源由Root后继独立验收，WIN01已停止写入。

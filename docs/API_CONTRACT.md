@@ -1,3 +1,15 @@
+## R76-WEB-PUBLIC5：唯一已发布 public 来源与消费边界（2026-10-02）
+
+当前批准消费目标为 BFF public5.0.0，published main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972`；唯一 canonical `contract/openapi/v1/openapi.yaml` / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。Web 起始 main `28672f330df11cd55f7ff3f89f269acc3fe908cf` 已发布 public4消费者；本前缀覆盖旧版本现状，原 R65/其后历史正文不变。
+
+沿原 exact-byte snapshot 与两个 generator，固定版本/commit/digest，不维护第二可编辑 OpenAPI、双轨、旧 owner alias 或 fallback。public5 仍只有 /v1；browser→同源→BFF 方向、受信身份、现 admission/opaque cursor/full pause/control/recovery、safe12/Message/Artifact 与 Team9 不变。BFF 上游 Product API public 与 Web browser-private 的可见性不混用。
+
+public5 新的 Scheduled create 机器事实源是 owner `CreateScheduledTaskRequest` 及 `POST /v1/scheduled-tasks`：五必填、closed body、可选 exact project_id，删除创建 enabled/status；状态修改仍属于既有 PATCH，不发明创建状态默认来源。Project不存在/不可见由 owner404，参数和幂等由 owner边界处理。详细字段不在本文复制第二份；新增EOF机器图断言锁定required/closed/精确关联/POST404，原 Chat/R74 断言原字节保持。
+
+现 Web 独立create builder 不发送被删字段，已经提供五必填，故本次无 scheduled源码迁移。新 project_id 关联没有 Web Draft/client/live项目创建入口，auto_approve 仍是当前 UI 投影必填；这不是全部public5输入均已由Web运行时schema表达的声明。关联新能力需另一个精确授权切片，不临时造 project_ref alias/透传未知字段。正规生成与门禁证据以 CURRENT R76 为准；真实owner/浏览器组合由 Root 验收。
+
+---
+
 ## R65-WEB-PUBLIC4-D0：固定已发布 public4 的消费边界（目标态，仅文档）
 
 本前缀与 TECHNICAL_DESIGN/DATA_MODEL 的 R65 是唯一当前目标；下方旧正文 byte-equal 保留历史，不据其实现 active_run、旧顶层 pending 或 decisions-only。本阶段仅四doc前缀，未改source/tests/pin/generated。当前 Web main06a1c86612d9557d83081bcb67e8fc539ae7eacb 仍消费public3；目标 BFF已发布main3c08a422f3a6aa3cf204c308716cfa64f6d61bb2，contract/openapi/v1/openapi.yaml public4.0.0 / SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6。完整machine是唯一API事实源；以下是consumer约束，不另建可编辑OpenAPI。

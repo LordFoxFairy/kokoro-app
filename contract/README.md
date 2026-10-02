@@ -1,3 +1,15 @@
+## R76-WEB-PUBLIC5 当前固定 consumer pin（2026-10-02；候选待 Root 验收）
+
+唯一 public 来源是 BFF 已发布 main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `5.0.0`，原字节 SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`，按该 committed blob 原样固定到 `src/generated/bff-public-openapi.yaml`。下方public4候选及更旧说明保留历史，不作为当前版本现状。
+
+沿既有两生成器正规 --write/--check：failure固定version/commit/digest，ChatMessage fingerprint保持 `0ef4d13e0f9e383830e2d1cb65a391cb6fad67985bf3bc9dd3beeb0682beb41b`；artifact只变3 provenance字段，两role/12 safe tuple字节不变。Team固定同整个owner5 canonical digest，九operation narrowed graph未变，15派生文件全与本轮起始HEAD byte-equal，未手改generated。
+
+public5唯一breaking语义增量为 Scheduled create：机器required五属性、closed keys、optional exact project_id、创建时禁enabled/status、Project404；仍/v1，无public4/5双读或alias/fallback。现Web独立create已发五必填且不发removed字段，因此本轮不改scheduled source/UI；它仍不是所有public5可选输入的完整镜像，新项目关联产品路径尚未实现，另需Root精确授权。Chat/R74 fullsnapshot+mapper baseline/watermark、并发exact optimistic receipt和failed control保护源码/行为断言原字节不动；safe12/Message/Artifact/Team9保持。
+
+Web起始 main `28672f330df11cd55f7ff3f89f269acc3fe908cf` clean。本轮 actual contract RED244=231pass/13fail后生成GREEN244/0；此前default import语法错误0collect不算行为RED，已修正且原日志保留。完整Node22门、独立审查、冻结及未运行边界以 CURRENT R76为准；Root独占Git/资源/正式组合验收。此片不声明真实浏览器、IAM、provider、Storage或Billing用户链已通过。
+
+---
+
 # Kokoro Web contract governance
 
 ## WEB-BFF-PUBLIC4 当前 consumer pin（2026-10-02；源码候选待 Root 集成）

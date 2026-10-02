@@ -555,3 +555,66 @@ describe("R66 public4 wire/head and closed resume", () => {
     expect(r66Resume().decisions.at(-1)?.value).toEqual({ text: "R66 input", optional: null })
   })
 })
+
+// R76 public5 owner create graph: independent tasks, optional exact Project ID.
+import { createHash as r76Hash } from "node:crypto"
+import { readFile as r76ReadFile } from "node:fs/promises"
+import r76Yaml from "yaml"
+
+async function r76PublicSpec() {
+  const bytes = await r76ReadFile("src/generated/bff-public-openapi.yaml")
+  const spec = r76Yaml.parse(bytes.toString("utf8")) as {
+    info: { version: string }
+    components: { schemas: Record<string, {
+      type: string; required: string[]; additionalProperties: boolean
+      properties: Record<string, { type: string; minLength?: number; pattern?: string }>
+    }> }
+    paths: Record<string, { post: {
+      parameters: Array<{ $ref: string }>
+      requestBody: { required: boolean; content: { "application/json": { schema: { $ref: string } } } }
+      responses: Record<string, { $ref?: string }>
+    } }>
+  }
+  return { bytes, spec }
+}
+
+describe("R76 public5 ScheduledTask owner creation graph", () => {
+  it("consumes the exact published public5 canonical bytes", async () => {
+    const { bytes, spec } = await r76PublicSpec()
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b")
+    expect(spec.info.version).toBe("5.0.0")
+  })
+
+  it("has five required create fields and rejects enabled/status as creation properties", async () => {
+    const create = (await r76PublicSpec()).spec.components.schemas.CreateScheduledTaskRequest!
+    expect(create.type).toBe("object")
+    expect(create.additionalProperties).toBe(false)
+    expect(create.required).toEqual(["title", "prompt", "frequency", "time", "timezone"])
+    expect(Object.keys(create.properties)).toEqual([
+      "project_id", "title", "prompt", "frequency", "time", "timezone", "next_run_at", "expires_at", "auto_approve",
+    ])
+    expect(create.properties.enabled).toBeUndefined()
+    expect(create.properties.status).toBeUndefined()
+    expect(create.required).not.toContain("project_id")
+    expect(create.required).not.toContain("auto_approve")
+  })
+
+  it("models exact nonempty optional project_id without a project_ref alias or trimming", async () => {
+    const create = (await r76PublicSpec()).spec.components.schemas.CreateScheduledTaskRequest!
+    const project = create.properties.project_id
+    expect(project).toMatchObject({ type: "string", minLength: 1 })
+    expect(create.properties.project_ref).toBeUndefined()
+    if (!project?.pattern) throw new Error("owner project_id must publish its exact boundary pattern")
+    const pattern = new RegExp(project.pattern, "u")
+    for (const valid of ["project_1", "slug-1", "项目", "internal space", "x"]) expect(pattern.test(valid)).toBe(true)
+    for (const invalid of ["", " ", "\t", " project_1", "project_1 ", "project_1\n", "\nproject_1"]) expect(pattern.test(invalid)).toBe(false)
+  })
+
+  it("keeps the existing create path and idempotency boundary with owner Project 404", async () => {
+    const post = (await r76PublicSpec()).spec.paths["/v1/scheduled-tasks"]!.post
+    expect(post.parameters).toEqual([{ $ref: "#/components/parameters/IdempotencyKey" }])
+    expect(post.requestBody.required).toBe(true)
+    expect(post.requestBody.content["application/json"].schema).toEqual({ $ref: "#/components/schemas/CreateScheduledTaskRequest" })
+    expect(post.responses["404"]).toEqual({ $ref: "#/components/responses/NotFound" })
+  })
+})

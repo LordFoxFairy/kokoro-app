@@ -1,3 +1,16 @@
+## R76-WEB-PUBLIC5：沿既有固定产物消费路径（2026-10-02）
+
+本节覆盖下方 R70/R65 的版本现状，不改写历史前缀/正文。Web 起点 main `28672f330df11cd55f7ff3f89f269acc3fe908cf` clean；唯一目标来源是已发布 BFF main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` 的 `contract/openapi/v1/openapi.yaml`，public5.0.0 / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。本轮继续 R65 放置表与既有两 generator，不新增计划/模块/目录/依赖/路由，不重做 UI。
+
+- BFF 是 public API 唯一事实 owner；Web 仍只拥有 browser-private 同源边界、固定 contract narrowing 与内存视图。owner4→5 的完整语义 diff 仅 Scheduled create graph 与版本；ChatMessage、safe failure12、execution_head/full pause/queued/control/FIFO/水位、Artifact 与 Team9 无语义变化。R74 的三项 P1 防护源代码和全部新旧行为断言保留原字节。
+- 采用既有 `src/generated/bff-public-openapi.yaml`、`scripts/generate-bff-{agent-failure,team-client}.mjs`、七个 public pin tests 和 `contract/api-contract.test.ts`。淘汰新增跨仓可编辑 contract 中心、另一个 generator 或手改派生物。canonical snapshot 只取该 published commit 的 exact bytes；failure 固定 commit/version/digest 与既有 fingerprint，Team 固定同 canonical digest（该 digest 绑定整个 version/owner blob），两者正规 --write/--check。
+- Scheduled create 的 public5 machine required 五字段、closed keys、optional exact `project_id`、禁止 create enabled/status、POST Project404 由 owner 定义；不是 project_ref alias。现 Web builder 已提供五必填及 auto_approve，按需 expires_at，不发送 removed 字段，当前独立任务创建无需源码修改。Web create schema 对 auto_approve 仍采用自身 UI 必填投影，并未镜像所有 owner optional 输入；Draft/client/project live 创建尚未实现新增 project_id 关联，本轮不把 pin 升级冒充该产品能力，不扩 source/UI。以后消费关联能力需 Root 精确另授。
+- 本次既有 generator 只调整 exact pin 输入；Team9 的 narrowed graph 与15派生文件应保持 byte-equal；failure artifact 只允许3 provenance字段变化，12 tuple/两角色及 ChatMessage fingerprint 不放宽。七 test 只机械更新 commit/version/digest；api-contract 原字节保留，仅 EOF 增加4 owner5 graph 负例。四 D0 与 contract README 只加当前前缀，旧正文保护。
+
+归属/粒度沿 R65 已批准决定，无新 API/SQL/事务/schema/tenant/cache/存储 owner；未运行命令不能作为证据。验证路径为实际 old consumer RED→正规生成→Node22 contract/architecture/lint/typecheck/test/build；Root 独占 Git/index/commit、资源、浏览器/e2e/真实 owner组合。当前实际状态、未决项与冻结证据以 CURRENT 的 R76 为准。
+
+---
+
 ## R70-WEB-PUBLIC4：已授权实现候选与窄范围扩展（2026-10-02）
 
 R65 三面与放置决定已沿 Root 精确授权实施；本节只记录实现归属与两个已明确批准的例外，不重开架构或扩大 owner。下方 R65 前缀及更早正文原字节保持，彼时“未实施”是阶段历史；当前状态与验收证据以 CURRENT 的 R70 节为准。
