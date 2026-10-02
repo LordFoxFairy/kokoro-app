@@ -1,3 +1,29 @@
+## R79-WEB-PROJECT-D0：无持久化 owner 的创建上下文（2026-10-02；目标态，待 Root 门审）
+
+与TECH/API R79一致，Web main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5` 已发布public5消费者但未实现本片关联UI。本阶段仅五文档前缀，原正文及全部运行投影保持。固定BFF `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` / public5.0.0 / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`，无新schema、数据库、事务或缓存owner。
+
+### 唯一事实与暂态生命周期
+
+| 对象 | owner/生命周期与约束 |
+| --- | --- |
+| Project、ScheduledTask及可选归属 | BFF唯一持久化writer；Scheduler拥有调度、Agent拥有Run。Web不写表、不跨owner SQL/JOIN、不复制关系表或BusinessStore。 |
+| 创建上下文 | 现浏览器URL /app/scheduled?project_id=<exact编码>#scheduled-tasks/new；只表达personal/project/invalid创建意图，不是授权/Project列表/Conversation scope。缺省personal，重复/空/无效不fallback；query不进入上游POST。 |
+| Draft/Record | 内部optional projectId，create body/owner wire optional exact project_id。草稿引用不证明项目存在；Record关联只从strict owner回执/读取映射，个人不存在该键。保持strict与无alias/no trim。 |
+| 编辑目标 | owner task ID＋实例身份；Patch不含projectId/project_id，不能因URL上下文更改归属。新增create schema字段必须显式从派生PATCH排除。 |
+| editor实例 | 上下文kind/exact引用/editing task ID或new的元组key；仅当前实例草稿、错误、保存状态、opener。切换清外层editing/prompt/opener，key卸载旧content；A→B→A或关闭重开均新生命周期。 |
+| mutation intent | 现client内存Idempotency-Key/body fingerprint；项目字段参与身份。unknown显式原body同key恢复，网络结果不写持久缓存、不自动POST，不把导航视为owner撤销。 |
+| owner列表读取 | 仍个人授权任务全集；成功且原实例仍当前时才GET。旧Promise不触发新context reload/loading/error/close，不本地插入任务。GET继续现requestSequence保护；404保草稿不reload。 |
+
+不把项目关联、草稿、回执或command identity写入localStorage/IndexedDB/sessionStorage、新server cache、Redis、关系store或日志；既有preview fixture只显式preview，不迁入live。浏览器URL可保非敏感exact引用，身份仍由受信session/BFF决定；个人导航不继承最近项目。close保query及host history，只移除本editor hash/history标记；重新打开是新实例草稿。
+
+### 删除/保护与验收
+
+后继替换缺字段/漏位置身份/无项目创建上下文；不恢复Project preview合成ID，不做第二liveeditor、关系猜测、project_ref alias、双轨或旧数据迁移。R74 execution head/full-state/水位/receipt/control/FIFO、safe12/fingerprint、Team15/9、依赖/SQL/owner仓与Chat scope全部保持；新关联不是聊天Scope变更，也不声明Project专属任务过滤。
+
+无Web持久化owner，故不存在本片canonical database schema、db:apply-schema/fresh install或跨仓事务门；不为D0创建空schema。机器契约已由owner发布且字节不变；运行时关联校验/mapper/PATCH与实例生命周期由TECH R79原15文件的真实RED→GREEN证明，当前尚未执行。Root独立门审及后继真实owner/browser/e2e验收仍未决；文档与hash保护不是功能完成证据。精确范围见TECH，actual当前阶段见CURRENT。
+
+---
+
 ## R76-WEB-PUBLIC5：无持久化 owner，当前投影保持（2026-10-02）
 
 Web main `28672f330df11cd55f7ff3f89f269acc3fe908cf` 的已发布 public4 会话/审批投影保持；本轮目标只消费已发布 BFF `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` / public5.0.0 / canonical SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。原 R65/历史正文 byte-equal，版本现状以本节与 CURRENT R76 为准。

@@ -13,9 +13,14 @@ function isIanaTimezone(value: string): boolean {
 
 const utcInstantSchema = z.string().datetime({ offset: false })
 const ianaTimezoneSchema = z.string().min(1).refine(isIanaTimezone, "Invalid IANA timezone")
+const projectReferenceSchema = z.string().min(1).refine(
+  (value) => value.trim() === value,
+  "Project reference must not contain leading or trailing whitespace",
+)
 
 export const scheduledTaskRecordSchema = z.object({
   id: z.string().min(1),
+  project_id: projectReferenceSchema.optional(),
   title: z.string().min(1),
   prompt: z.string().optional(),
   frequency: z.enum(["daily", "weekly"]),
@@ -33,6 +38,7 @@ export const scheduledTaskListResponseSchema = z.object({ tasks: z.array(schedul
 export type ScheduledTaskListResponse = z.infer<typeof scheduledTaskListResponseSchema>
 
 export const scheduledTaskCreateRequestSchema = z.object({
+  project_id: projectReferenceSchema.optional(),
   title: z.string().min(1),
   prompt: z.string().min(1),
   frequency: z.enum(["daily", "weekly"]),
@@ -43,7 +49,7 @@ export const scheduledTaskCreateRequestSchema = z.object({
 }).strict()
 export type ScheduledTaskCreateRequest = z.infer<typeof scheduledTaskCreateRequestSchema>
 
-export const scheduledTaskPatchRequestSchema = scheduledTaskCreateRequestSchema.partial().extend({
+export const scheduledTaskPatchRequestSchema = scheduledTaskCreateRequestSchema.omit({ project_id: true }).partial().extend({
   expires_at: utcInstantSchema.nullable().optional(),
   enabled: z.boolean().optional(),
   status: z.enum(["active", "paused", "failed"]).optional(),

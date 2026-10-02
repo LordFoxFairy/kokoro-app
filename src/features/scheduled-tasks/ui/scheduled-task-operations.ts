@@ -16,8 +16,9 @@ export function missingScheduledClientError(): Error {
   return new Error("Scheduled task client is not configured")
 }
 
-function createDraft(value: ScheduledTaskEditorValue): ScheduledTaskDraft {
+function createDraft(value: ScheduledTaskEditorValue, projectId?: string): ScheduledTaskDraft {
   return {
+    ...(projectId === undefined ? {} : { projectId }),
     title: value.title,
     prompt: value.prompt,
     frequency: value.frequency,
@@ -45,6 +46,8 @@ export async function saveScheduledTask(
   editingTask: ScheduledTaskRecord | null,
   value: ScheduledTaskEditorValue,
   reload: () => Promise<void>,
+  projectId?: string,
+  isCurrent: () => boolean = () => true,
 ): Promise<void> {
   if (editingTask) {
     const patch = updatePatch(value)
@@ -60,10 +63,10 @@ export async function saveScheduledTask(
     }
     if (!runtime.client) throw missingScheduledClientError()
     await runtime.client.updateScheduledTask(editingTask.id, patch)
-    await reload()
+    if (isCurrent()) await reload()
     return
   }
-  const draft = createDraft(value)
+  const draft = createDraft(value, runtime.mode === "live" ? projectId : undefined)
   if (runtime.mode === "preview") {
     await runtime.handlers.onSave?.(draft)
     await insertPreviewTask(draft)
@@ -76,7 +79,7 @@ export async function saveScheduledTask(
   }
   if (!runtime.client) throw missingScheduledClientError()
   await runtime.client.createScheduledTask(draft)
-  await reload()
+  if (isCurrent()) await reload()
 }
 
 export async function updateScheduledTaskStatus(

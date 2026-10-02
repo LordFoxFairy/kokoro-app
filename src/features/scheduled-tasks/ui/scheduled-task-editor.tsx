@@ -21,6 +21,8 @@ type ScheduledTaskEditorDialogProps = {
   initialTask?: ScheduledTaskInitial | null
   onSave?: (task: ScheduledTaskEditorValue) => Promise<void> | void
   returnFocusRef?: RefObject<HTMLElement | null>
+  contextKind?: "personal" | "project" | "invalid"
+  contextError?: boolean
 }
 
 export function ScheduledTaskEditorDialog({
@@ -31,6 +33,8 @@ export function ScheduledTaskEditorDialog({
   initialTask = null,
   onSave,
   returnFocusRef,
+  contextKind = "personal",
+  contextError = false,
 }: ScheduledTaskEditorDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -42,6 +46,8 @@ export function ScheduledTaskEditorDialog({
           onClose={() => onOpenChange(false)}
           {...(onSave === undefined ? {} : { onSave })}
           {...(returnFocusRef === undefined ? {} : { returnFocusRef })}
+          contextKind={contextKind}
+          contextError={contextError}
         />
       ) : null}
     </Dialog>
@@ -60,6 +66,8 @@ function ScheduledTaskEditorContent({
   onClose,
   onSave,
   returnFocusRef,
+  contextKind = "personal",
+  contextError = false,
 }: EditorContentProps) {
   const t = useT()
   const titleRef = useRef<HTMLInputElement | null>(null)
@@ -84,12 +92,19 @@ function ScheduledTaskEditorContent({
         {initialTask
           ? t("firstSite.editScheduledTask")
           : t("firstSite.addScheduledTask")}
+        {contextKind === "project"
+          ? ` · ${t("firstSite.currentProject")}`
+          : contextKind === "personal"
+            ? ` · ${t("firstSite.personalWorkspace")}`
+            : null}
       </DialogTitle>
       <ScheduledTaskEditorForm
         brandName={brandName}
         titleRef={titleRef}
         onSubmit={submission.submit}
         {...submission}
+        valid={submission.valid && !contextError}
+        saveError={submission.saveError || contextError}
       />
     </DialogContent>
   )

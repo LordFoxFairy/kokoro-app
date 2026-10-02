@@ -20,6 +20,7 @@ import type {
   ScheduledTaskRecord,
 } from "../model/scheduled-task";
 import { ScheduledTaskEditorDialog } from "./scheduled-task-editor";
+import type { ScheduledTaskCreationContext } from "./scheduled-task-location";
 
 type ScheduledTaskDialogsProps = {
   brandName: string;
@@ -29,6 +30,8 @@ type ScheduledTaskDialogsProps = {
   editingTask: ScheduledTaskInitial | null;
   canSave: boolean;
   onSave: (draft: ScheduledTaskEditorValue) => Promise<void>;
+  editorInstanceKey: string;
+  creationContext: ScheduledTaskCreationContext;
   returnFocusRef: RefObject<HTMLElement | null>;
   deleteTarget: ScheduledTaskRecord | null;
   setDeleteTarget: Dispatch<SetStateAction<ScheduledTaskRecord | null>>;
@@ -45,6 +48,8 @@ export function ScheduledTaskDialogs({
   editingTask,
   canSave,
   onSave,
+  editorInstanceKey,
+  creationContext,
   returnFocusRef,
   deleteTarget,
   setDeleteTarget,
@@ -56,12 +61,15 @@ export function ScheduledTaskDialogs({
   return (
     <>
       <ScheduledTaskEditorDialog
+        key={editorInstanceKey}
         open={editorOpen}
         onOpenChange={onEditorOpenChange}
         brandName={brandName}
         initialPrompt={initialPrompt}
         {...(canSave ? { onSave } : {})}
         initialTask={editingTask}
+        contextKind={creationContext.kind}
+        contextError={creationContext.kind === "invalid"}
         returnFocusRef={returnFocusRef}
       />
       <AlertDialog

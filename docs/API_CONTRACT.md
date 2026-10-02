@@ -1,3 +1,30 @@
+## R79-WEB-PROJECT-D0：项目创建上下文的精确消费合同（2026-10-02；目标态，待 Root 门审）
+
+与TECH/DATA R79一致，基线Web main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；本轮只写五文档前缀，runtime仍缺项目字段与live创建上下文。固定已发布BFF owner `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` public5.0.0 / YAML SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b` 不变；机器source仍是固定snapshot中的CreateScheduledTaskRequest、ScheduledTask和/v1/scheduled-tasks，不在本文复制整套字段/第二契约。下方旧方案仅历史，当前证据见CURRENT R79。
+
+### Browser-private导航不是public参数
+
+- 采用现Project卡→`/app/scheduled?project_id=<exact编码>#scheduled-tasks/new`→现独立Scheduled surface/editor。没有第二live项目编辑器，也不重新使用项目preview callback/合成任务。
+- Query仅浏览器创建上下文：缺省personal；project_id存在时必须恰一精确非空、无首尾空白值。重复/空/非法解码/context错误fail closed，明确显示错误/禁保存；不trim、去重、strip、猜最近项目或转personal。URL编码/一次解码只负责传输，不改变原引用；owner允许ID或slug，其可见性只由BFF裁决。
+- GET列表仍现个人授权全集，不追加项目筛选query、不把全集称为Project列表。tab/view变化保创建上下文；取消保query、移除editor hash/history标记；显式个人导航回无项目参数URL，旧上下文不泄漏。
+- Browser POST固定 `/api/scheduled-tasks` 无query，同源adapter按现raw body→BFF `/v1/scheduled-tasks` 无query；关联只在body `project_id`。上游collection POST禁止query，包括重复/空参数；不能复制浏览器URL search到mutation URL。tenant/subject/admission/权限保持受信session/BFF来源，不由UI填写。
+
+### Runtime narrowing与command语义
+
+create请求与record消费新增owner已存在optional exact project_id，内部Draft/Record为projectId，mapper显式双向转换。个人create不包含该键，项目create保持exact值；不存在project_ref alias。既有五必填、UI auto_approve必填、日期/时区/strict未知key规则保留，不声称本片镜像所有owner可选输入。
+
+PATCH为现任务字段更新，显式排除project_id：create新增字段不得被partial()继承到PATCH。Patch view model/serializer均不加projectId；编辑任务只用owner task ID，query不能变更归属。记录中的projectId是owner投影不是授权证明。创建enabled/status仍拒绝，现PATCH状态与expires null清除保持。
+
+现Idempotency-Key与body fingerprint复用；新增项目字段参与fingerprint，个人/不同Project分离。unknown network/parse只能显式原body原key重试，HTTP404明确失败不自动重试或退为个人。BFF `project_not_found` 404经现adapter/client保存typed status/code；UI安全错误保草稿/编辑器，不reload、不假ACK/本地任务。不存在/不可见不作不同UI探测。成功严格解码owner record后仅当前实例GET权威列表，不直接插入create结果。
+
+### 隔离、验证与breaking策略
+
+上下文kind/精确Project引用/编辑task ID构成无碰撞实例key；context/记录切换清editing/prompt/opener并卸载旧content。异步旧结果的close/error/reload都要当前实例守卫，A→B→A、项目→个人与撤销重开不能复用旧实例；不能把浏览器导航当owner取消。现列表requestSequence与命令身份保护保留。
+
+本片是public5已有能力的Web窄消费扩展，无public版本或机器契约变更、无dual-reader/legacy fallback。精确后继10源码/5测试与唯一已知href断言迁移见TECH R79；其余原assert保持。定向验证命令（后继获授后）：`pnpm exec vitest run tests/scheduled/contract-calendar.test.ts tests/scheduled/client.test.ts tests/scheduled/editor-history.test.tsx tests/ui/kokoro-project-workspace.test.tsx tests/ui/kokoro-scheduled-surface.test.tsx`，再 `pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`（或现 `pnpm check`）。当前均未执行，不引用R77门作为新UI证据；Root负责实际owner/browser/e2e。无schema命令，无generated再生成或新contract文件。
+
+---
+
 ## R76-WEB-PUBLIC5：唯一已发布 public 来源与消费边界（2026-10-02）
 
 当前批准消费目标为 BFF public5.0.0，published main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972`；唯一 canonical `contract/openapi/v1/openapi.yaml` / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。Web 起始 main `28672f330df11cd55f7ff3f89f269acc3fe908cf` 已发布 public4消费者；本前缀覆盖旧版本现状，原 R65/其后历史正文不变。

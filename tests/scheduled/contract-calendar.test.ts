@@ -107,3 +107,26 @@ describe("scheduled task runtime record guard", () => {
     expect(isScheduledTaskRecord({ ...requiredRecord, status: "done" })).toBe(false)
   })
 })
+
+describe("R80 project-associated scheduled task contract", () => {
+  it("accepts only an exact optional project_id on create and owner records while excluding it from patch", () => {
+    for (const project_id of ["project_1", "project slug", "项目/一"]) {
+      expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, project_id }).success).toBe(true)
+      expect(scheduledTaskRecordSchema.safeParse({ ...requiredRecord, project_id }).success).toBe(true)
+    }
+
+    for (const project_id of ["", " ", " project_1", "project_1 ", null]) {
+      expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, project_id }).success).toBe(false)
+      expect(scheduledTaskRecordSchema.safeParse({ ...requiredRecord, project_id }).success).toBe(false)
+    }
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, project_ref: "project_1" }).success).toBe(false)
+    expect(scheduledTaskPatchRequestSchema.safeParse({ project_id: "project_1" }).success).toBe(false)
+  })
+
+  it("keeps the runtime record guard aligned with the exact owner project reference", () => {
+    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: "project_1" })).toBe(true)
+    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: " project_1" })).toBe(false)
+    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: "project_1 " })).toBe(false)
+    expect(isScheduledTaskRecord({ ...requiredRecord, projectId: 42 })).toBe(false)
+  })
+})

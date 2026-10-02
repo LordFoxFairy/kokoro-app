@@ -409,7 +409,9 @@ export function KokoroProjectWorkspace({
         {capabilities?.scheduledTasks && !preview ? (
           <Card data-context-kind="scheduled"><CardHeader><CardTitle>{t("firstSite.scheduledTasks")}</CardTitle></CardHeader>
             <CardContent><p>{t("firstSite.independentScheduledTasks")}</p></CardContent>
-            <CardFooter><Button asChild variant="outline"><Link href="/app/scheduled">{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
+            <CardFooter><Button asChild variant="outline"><Link href={projectRef
+              ? `/app/scheduled?project_id=${encodeURIComponent(projectRef)}#scheduled-tasks/new`
+              : "/app/scheduled"}>{t("firstSite.openScheduledTasks")}</Link></Button></CardFooter>
           </Card>
         ) : null}
         {capabilities?.scheduledTasks && preview ? (

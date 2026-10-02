@@ -1,3 +1,63 @@
+## R79-WEB-PROJECT-D0：独立任务的项目创建上下文（2026-10-02；方案候选，待 Root 门审）
+
+本节与 API_CONTRACT/DATA_MODEL 的同名 R79 前缀构成一致目标；当前实现/证据只看 CURRENT R79。覆盖下方历史“项目关联后继未设计”的目标描述，不改写原正文。Web 基线 main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5` 已发布 public5 消费组件，本阶段仍未实现项目关联 UI。沿 Root 同一 `docs/task.md` R79-WEB-PROJECT-D0，WIN01唯一Web writer；Root独占门审、Git/index/commit、资源与最终验收。本阶段只有五文档新前缀，源码/测试/pin/generated/依赖/SQL均不写。
+
+固定事实源为已发布 BFF `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` / public5.0.0 / canonical SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`；不变更版本、digest、owner机器契约或生成器。本方案遵循Root AGENTS §8–9、TypeScript手册§1/4–6/8.4及现ADR0001/0002；不复制手册全文或另建计划中心。
+
+### 放置决定与当前/目标
+
+| §8 项 | 已确定结论 |
+| --- | --- |
+| Owner | Web只拥有浏览器创建上下文、草稿、错误与owner投影；BFF是Project/ScheduledTask及关联唯一writer，Scheduler拥有调度事实，Agent拥有Run。WIN01后继精确范围仍需Root另授。 |
+| 当前事实 | Web clean dc330a9；strict record/create缺project_id，Draft/Record/client无映射；create schema partial派生PATCH。正式Project卡只链接/app/scheduled；现location snapshot只有tab/hash，editor无项目实例身份。preview选择/合成记录仅显式preview，不作为live承接。 |
+| 目标职责 | 同一独立任务编辑器创建个人任务或显式关联现Project；个人列表仍是owner授权全集，不承诺Project专属列表。项目卡带精确创建上下文，不把Conversation当任务。 |
+| 位置A（采用） | 复用features/scheduled-tasks现model/client/location/editor/operations/dialog和features/app现Project卡。协议校验仍在contract/scheduled.ts；每文件只延伸既有变化原因，无新模块/store/目录。 |
+| 位置B（淘汰） | 在Project workspace/dialog中把preview编辑器接成第二live任务链。虽可接已有client，但会复制提交、history、回执与实例隔离，扩大Project orchestrator职责和测试面；不恢复旧合成ID/关系。 |
+| 粒度 | 普通既有文件内延伸，不建第二scheduler feature、Context service、Repository或通用helper；现模板/editor/form/样式复用。 |
+| 依赖 | Browser→现同源/api/scheduled-tasks→BFF/v1/scheduled-tasks。feature只依赖现model/schema/client/locale及UI，不直连内部owner或引用别仓源码/SQL。AppFrame/Chat engine不承接新的任务生命周期。 |
+| 数据/API | optional exact project_id只在create body与owner record消费；内部projectId。UI query不是BFF query或授权证明。PATCH显式排除归属；无新持久化、事务、缓存、tenant/actor自报、contract/generated变化。 |
+| 删除/替换 | 替换正式已知Project卡的无上下文创建链接；删除create/record对合法项目字段的遗漏及位置快照漏身份，不保旧新两条live创建路径、project_ref alias、trim/strip、隐式个人fallback。既有preview-only夹具保隔离，R74/P5有效职责保留。 |
+| 验证 | 先下表五现测试新增真实RED与个人/PATCH等合法控制，再Node22定向与pnpm check完整contract/architecture/lint/typecheck/test/build。SQL/schema不适用；真实BFF/浏览器/e2e/资源只由Root执行，不以fixture声称integration。 |
+
+### 路由、交互与失败恢复
+
+1. 正式已知projectRef的现卡深链 `/app/scheduled?project_id=<exact编码>#scheduled-tasks/new`；编码只用于URL传输，解析一次后的字符串保持精确，不按品牌、标题、最近项目或preview sentinel猜身份。缺项目引用仍可打开独立个人页，不生成关联引用。关联不是新Conversation scope。
+2. location沿现popstate/hashchange/kokoro:surface-navigation/位置事件订阅，snapshot纳入明确personal/project/invalid身份。缺project_id=personal；存在时只允许恰一非空且无首尾空白的值。重复（即使相同）、空、空白、非字符串输入和非法解析均为invalid、禁止保存并显示错误，不能当personal。字面字符串按owner精确规则处理，未知项目交owner404，不自行判授权。
+3. 个人普通入口 `/app/scheduled` 不带关联；从项目导航进入后创建只携当次明确query上下文，不能继承“最近项目”。tab切换保query；关闭editor只处理hash/本editor history标记，保host history及query；再次个人导航清关联。SSR默认不得在query读取前把project深链误发为personal。
+4. 新建编辑器展示明确项目或个人上下文；复用现语义文案、表单/token/键盘/焦点和reduced motion，不重做布局/CSS。失效上下文不发请求；404显示现安全保存错误并保草稿/编辑器，不自动删关联后重发个人任务。
+5. editor实例key采用无碰撞元组（上下文kind/exact Project引用/编辑task ID或new），不用可能碰撞的拼接字符串。上下文或编辑记录变化重建content，清外层editingTaskId/initialPrompt/openerRef，不把A编辑目标继承给B或把缺失编辑记录降为创建。A→B→A和关闭重开都是新的实例生命周期。
+6. 提交前冻结该实例的create body/项目引用或existing task ID。keyed卸载沿现mounted守卫保护close/error；异步operations还须在create/update await后、reload前检查原实例仍存活且当前，避免旧A触发B的reload/loading/error。旧结果不关闭新dialog、不覆盖草稿、插入记录或报旧错误；已发owner mutation不因导航假定已取消。GET本身继续用现requestSequence隔离迟响应。不新建持久store/第二摘要协议。
+7. 未知网络/parse结果只显式重试原body/原command identity；project_id进入现body fingerprint，使个人/A/B意图隔离，不自动POST或换关联复用旧key。成功回执经strict record校验后才对当前实例列表GET；失败/404不reload、不写preview/optimistic任务、不按title/time合成成功。
+8. 编辑现task只PATCH现任务字段，不加query项目归属；owner record的projectId只是已确认投影。来源query不能更改已有任务所属Project，状态/expiry与原有限重试/错误保护保留。
+
+### 后继精确范围：10 source＋5 tests（本轮仅方案，门审后另授）
+
+| 既有文件绝对路径 | 唯一变化原因/验收 |
+| --- | --- |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/contract/scheduled.ts` | create/record optional exact project_id；PATCH显式排除，保持strict与既有日期/时区校验 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/model/scheduled-task.ts` | Draft/Record optional projectId及其guard；Patch不增项目归属，编辑值不改变关系 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/api/scheduled-task-client.ts` | create body projectId→project_id与record逆向映射；无query，保持typed404/command identity |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/app/kokoro-project-workspace.tsx` | 正式已知projectRef的精确编码深链；不挂第二live编辑器、不改preview-only路径 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/scheduled-task-location.ts` | 位置snapshot包含personal/project/invalid创建上下文，接现history/events且不trim/fallback |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/scheduled-task-surface.tsx` | 只把有效位置上下文交现editor，保owner个人列表与preview/live边界，不宣称项目筛选 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/use-scheduled-task-editor.ts` | 创建上下文/编辑实例生命周期、清editing/prompt/opener、冻结提交与迟结果守卫 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/scheduled-task-operations.ts` | 创建才加关联，PATCH仍旧业务字段；当前实例才reload，不造本地成功 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/scheduled-task-dialogs.tsx` | 精确上下文＋编辑task ID元组实例key与现编辑器传参，不复制editor |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/features/scheduled-tasks/ui/scheduled-task-editor.tsx` | 现dialog的上下文可见性/实例绑定与卸载检查；复用现表单/焦点/键盘，不改样式 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/scheduled/contract-calendar.test.ts` | 合法/非法project_id、strict record/create、PATCH排除、旧时间/时区保护 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/scheduled/client.test.ts` | create与个人两路真实fetch body/回执映射/typed404/无query/独立key/未知结果同键恢复 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/scheduled/editor-history.test.tsx` | 深链、popstate/hash/surface事件、A→B→A/个人/撤销/记录切换、迟resolve/reject隔离 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/ui/kokoro-project-workspace.test.tsx` | 正式卡精确编码深链/缺引用不猜项目，旧preview测试保护 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/ui/kokoro-scheduled-surface.test.tsx` | 项目与个人client提交、404保草稿、成功才GET、无optimisticfake、编辑不改归属 |
+
+不改AppFrame/Chat/R74、project preview dialogs、page leaf、同源route源码、CSS/i18n主题、依赖/lockfile、generator/pin/generated/owner仓。复用现文案即可，不开翻译面；确有无法在上述集实现的职责时先报Root，不悄扩范围。唯一批准旧断言迁移候选是 `tests/ui/kokoro-project-workspace.test.tsx:499` 的正式已知项目href：从无query改为精确项目深链；相邻无样例/无第二editor断言及所有旧行为保护保留。新例在现测试EOF追加，不删/skip/放宽权限、错误、幂等、日期/时区、preview隔离或R74断言。
+
+### 阶段门与尚未执行证据
+
+本轮仅D0：五前缀范围、旧全文hash/字节保护、owner原blob与diff检查；Root独立Astra审查仍待执行，文档收敛不等于代码GREEN。后继先实际跑五测试RED，必须完整collect且控制有效，保每次失败日志，再给原15路径完整GREEN；pnpm check全部门与Root新源码tuple/e2e验收分别记录。没有Web canonical数据库schema、db:apply-schema或新machine artifact可生成；不能为门禁创建空schema/contract。
+
+---
+
 ## R76-WEB-PUBLIC5：沿既有固定产物消费路径（2026-10-02）
 
 本节覆盖下方 R70/R65 的版本现状，不改写历史前缀/正文。Web 起点 main `28672f330df11cd55f7ff3f89f269acc3fe908cf` clean；唯一目标来源是已发布 BFF main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` 的 `contract/openapi/v1/openapi.yaml`，public5.0.0 / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`。本轮继续 R65 放置表与既有两 generator，不新增计划/模块/目录/依赖/路由，不重做 UI。

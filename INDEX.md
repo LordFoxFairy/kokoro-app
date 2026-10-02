@@ -1,3 +1,16 @@
+## R79-WEB-PROJECT-D0 当前入口（2026-10-02；仅方案，待 Root 门审）
+
+Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下方历史阶段现状，旧正文保持原字节。项目关联创建尚未实施，当前只更新五份文档；同Root `docs/task.md` R79为唯一任务卡，不另建计划/ADR/目录。
+
+- 技术与精确后继10source＋5test职责：`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/docs/TECHNICAL_DESIGN.md` R79。
+- browser创建上下文/public5消费边界：`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/docs/API_CONTRACT.md` R79。
+- 无持久化owner与实例/回执生命周期：`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/docs/DATA_MODEL.md` R79。
+- actual阶段/未运行/Root门审：`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/docs/CURRENT.md` R79。
+
+采用现Project卡深链 `/app/scheduled?project_id=<exact编码>#scheduled-tasks/new`，在现独立Scheduled surface复用同editor；query不进入BFF POST，personal无关联，PATCH不改归属。现入口仍是project workspace、scheduled location/surface/editor/operations、contract/scheduled.ts与scheduled client/model，不新增第二live项目editor/store；owner任务列表仍个人全集，不称Project筛选。固定P5 blob/Team/safe12与R74保护保持。源码/测试授权、RED/GREEN和真实浏览器门均待Root后续放行。
+
+---
+
 # Kokoro User Web 仓库索引
 
 状态：当前代码与治理入口，更新于 2026-09-30。

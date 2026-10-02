@@ -1,3 +1,34 @@
+## R80 项目关联独立任务源码验收候选（2026-10-02）
+
+Root 当前验收基线 main dc330a99332be28bb74a4fa2d2196ba8425f9dc5；BFF479d4e8/public5.0.0 固定契约保持。R79五D0通过独立Astra；R80原15source/tests先真实RED66pass8fail→78GREEN。首次独立source审发现whole surface卸载后旧回执reload的P2，原writer再真实RED31pass2fail→聚焦33/定向83GREEN；两文件窄修后独立Astra复审0P0/P1/P2。Root fresh完整Node22 pnpm check实际exit0：246contract/50architecture/2294unit0fail0skip及lint/typecheck/build0，日志/tmp/kokoro-web-r80-p2-root-full-check.log。修前Root2290以下证据不替代本次新hash。
+
+完整候选为五D0+十source+五tests，P2新freeze b6dc3bf6；其余18候选及732外文件保护，合同/pin/generated/SQL/依赖未变。create/record严格可选project_id、PATCH排除、Project深链编码、personal/project/invalid上下文、实例/卸载迟回执隔离、404保草稿、未知结果原命令重试均由测试承接。不建第二editor/store、不造optimistic任务、不宣称列表按Project过滤。
+
+这是源码组件门，不是真实BFF/浏览器或整个用户/费用旅程验收。consent过期HTML裸JSON的独立P1仍后继两文件切片；实际W2 product-post尚待重新定位，完整Wave0–7和正式积分链未闭环。Root负责最终index审查/提交，旧文档正文保留如下。
+
+## R79-WEB-PROJECT-D0：五文档方案候选（2026-10-02；待 Root 独立门审）
+
+基线/当前 Web main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`，起始clean。Root沿同一R79任务卡批准仅docs/TECHNICAL_DESIGN.md、API_CONTRACT.md、DATA_MODEL.md、CURRENT.md与INDEX.md新前缀，WIN01唯一Web writer；Root独占Git/index/commit、资源、独立Astra审和放行。本阶段source/tests/generated/pin/依赖/SQL未改，无新目录/计划中心/ADR。
+
+R78只读确认缺口：record/create未声明project_id、Draft/Record/client遗漏映射，create.partial派生PATCH须排除关联；Project卡丢创建上下文，location缺项目身份，editor缺上下文/记录实例key。Root已采纳现独立Scheduled surface：精确项目深链→同现editor，query只浏览器上下文，body exact project_id，collection POST无query，personal不带关联；invalid不trim/fallback，PATCH禁止改归属。上下文/记录元组key及存活守卫覆盖close/error/reload、切换清editing/prompt/opener；404保草稿不reload/optimistic，success才GET个人owner全集，不宣称项目过滤。
+
+### 三面当前目标与精确后继范围
+
+- TECH R79：两可行位置比较，采用独立surface，淘汰第二Project liveeditor；列现10source＋5test绝对路径/职责、仅原正式已知Project href断言迁移、旧行为保护与后继门。
+- API R79：固定已发布BFF479d4e8/public5.0.0/3ce25a31；关联创建/record窄消费、PATCH排除、无query POST、typed404/命令身份与实例边界；不新public契约或改ownerblob。
+- DATA R79：无Web持久化owner/schema/事务/缓存，创建上下文/Draft/Record/editor/intent/读取仅当前URL或内存投影；不写关系store、不改变Chat scope。
+- INDEX R79：仅当前阶段和同一设计/现入口导航，不建立第二任务表。
+
+本轮实际验证只包括五文件diff范围、五份原全文suffix逐字节与起始hash保持、其余tracked字节保护、owner committed blob/consumer精确一致、index/untracked与git diff --check。最终精确bytes/SHA与检查证据交付 `/tmp/kokoro-web-r79-project-d0-freeze.json`。本段先写方案事实，冻结工具记录实际结果，不伪造lint/typecheck/test/build数量。
+
+### 未执行与未决项
+
+尚未执行项目行为RED、pnpm check、pnpm test:e2e、真实BFF/浏览器/模型/Storage旅程；本轮仅文档授权，无源码写权，故这些命令未运行。R77组件门仍属已发布P5，不代表R79关联UI通过。Root报告原W2句柄14891已exit1/product-post且cleanup完整；此为Root独立旅程事实，不由本worker复验，也不是本D0功能证据。
+
+三份目标方案已对齐，但D0仍待Root独立Astra审通过，不自授通过/代码权。无本片新owner/contract/schema未决；剩余门审、真实RED与原15文件GREEN、完整门、真实owner/browser/e2e及Git发布由Root放行/验收。Root另授后WIN01沿同一任务卡实施，不重复创建计划。冻结交接后停写。
+
+---
+
 ## R77 Root 验收：固定 public5 消费组件通过
 
 Root 接收17文件冻结66fa8c3b161db991d8dcb34a5194ee39d78f6c21ee5523fcdbac2d578c8fa134，Astra最终freeze独立0P0/P1/P2；17hash实核、735保护保持。fresh Node22完整pnpm check exit0：244contract/50architecture/2275unit，0fail/0skip，lint/typecheck/build0；日志 /tmp/kokoro-web-r77-root-full-check.log。owner479d4e8/public5.0.0/3ce25a31精确原字节消费；Team15保持，safe12/fingerprint、原R74三P1源码/测试未变。

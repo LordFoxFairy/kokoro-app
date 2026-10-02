@@ -46,6 +46,7 @@ function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
     frequency: task.frequency,
     time: task.time,
   }
+  if (task.project_id !== undefined) record.projectId = task.project_id
   if (task.prompt !== undefined) record.prompt = task.prompt
   if (task.timezone !== undefined) record.timezone = task.timezone
   if (task.next_run_at !== undefined) record.nextRun = task.next_run_at
@@ -67,6 +68,7 @@ function parseRequest<T>(parse: () => T): T {
 
 function createBody(draft: ScheduledTaskDraft) {
   return parseRequest(() => scheduledTaskCreateRequestSchema.parse({
+    ...(draft.projectId === undefined ? {} : { project_id: draft.projectId }),
     title: draft.title,
     prompt: draft.prompt,
     frequency: draft.frequency,

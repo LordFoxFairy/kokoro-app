@@ -99,3 +99,40 @@ it("replaces a direct editor deep link without navigating back", () => {
   expect(window.history.state).toEqual({ shell: "deep-link" })
   expect(back).not.toHaveBeenCalled()
 })
+
+it("preserves an exact project creation query while closing only the deep-link editor hash", () => {
+  window.history.replaceState(
+    { shell: "project-deep-link" },
+    "",
+    "/app/scheduled?tab=calendar&project_id=project%2F%E7%9C%9F%E5%AE%9E#scheduled-tasks/new",
+  )
+  const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined)
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
+
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "关闭对话框" }))
+
+  expect(window.location.pathname).toBe("/app/scheduled")
+  expect(window.location.search).toBe("?tab=calendar&project_id=project%2F%E7%9C%9F%E5%AE%9E")
+  expect(window.location.hash).toBe("")
+  expect(back).not.toHaveBeenCalled()
+})
+
+it("treats project context changes as new editor instances instead of retaining the old draft", async () => {
+  window.history.replaceState(null, "", "/app/scheduled?project_id=project-a#scheduled-tasks/new")
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
+  fireEvent.change(screen.getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "A draft" } })
+
+  window.history.pushState(null, "", "/app/scheduled?project_id=project-b#scheduled-tasks/new")
+  window.dispatchEvent(new Event("kokoro:surface-navigation"))
+
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue(""))
+})
+
+it("fails closed when the project query cannot be decoded exactly", () => {
+  window.history.replaceState(null, "", "/app/scheduled?project_id=%E0%A4%A#scheduled-tasks/new")
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" preview /></LocaleProvider>)
+
+  const dialog = screen.getByRole("dialog")
+  expect(within(dialog).getByRole("alert")).toBeInTheDocument()
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled()
+})

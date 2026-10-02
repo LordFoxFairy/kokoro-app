@@ -32,7 +32,7 @@ export function ScheduledTaskSurface(
   const runtime = resolveScheduledTaskRuntime(props);
   const { displayedTasks, loading, loadError, loadTasks } =
     useScheduledTaskSource(runtime);
-  const { view, editorOpen } = useScheduledLocation();
+  const { view, editorOpen, creationContext } = useScheduledLocation();
   const {
     calendarMonth,
     calendarTasks,
@@ -43,6 +43,7 @@ export function ScheduledTaskSurface(
     runtime,
     tasks: displayedTasks,
     editorOpen,
+    creationContext,
     reload: loadTasks,
   });
   const {
@@ -86,7 +87,7 @@ export function ScheduledTaskSurface(
         pendingMutation={pendingMutation}
         mutationError={mutationError}
         mutationBusy={mutationBusy}
-        canCreate={capabilities.canCreate}
+        canCreate={capabilities.canCreate && creationContext.kind !== "invalid"}
         canUpdate={capabilities.canUpdate}
         canRetry={capabilities.canRetry}
         canDelete={capabilities.canDelete}
@@ -105,8 +106,10 @@ export function ScheduledTaskSurface(
         onEditorOpenChange={editor.handleOpenChange}
         initialPrompt={editor.initialPrompt}
         editingTask={editor.editingTask}
-        canSave={editor.canSave}
+        canSave={editor.canSave && creationContext.kind !== "invalid"}
         onSave={editor.saveTask}
+        editorInstanceKey={editor.editorInstanceKey}
+        creationContext={creationContext}
         returnFocusRef={editor.openerRef}
         deleteTarget={deleteTarget}
         setDeleteTarget={setDeleteTarget}

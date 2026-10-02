@@ -160,3 +160,92 @@ describe("scheduled task HTTP client", () => {
     expect(nextKey).not.toBe(failedKey)
   })
 })
+
+describe("R80 scheduled task project association client", () => {
+  it("sends projectId only as project_id in the collection POST body and maps the owner receipt", async () => {
+    const projectTask = { ...wireTask, project_id: "project/真实" }
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ task: projectTask }), { status: 201 }))
+
+    const task = await createScheduledTaskClient(fetcher).createScheduledTask({
+      projectId: "project/真实",
+      title: "Project digest",
+      prompt: "Run it",
+      frequency: "daily",
+      time: "08:00",
+      timezone: "UTC",
+      autoApprove: false,
+    })
+
+    expect(fetcher).toHaveBeenCalledWith("/api/scheduled-tasks", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        project_id: "project/真实",
+        title: "Project digest",
+        prompt: "Run it",
+        frequency: "daily",
+        time: "08:00",
+        timezone: "UTC",
+        auto_approve: false,
+      }),
+    }))
+    expect(task).toMatchObject({ id: "scheduled_1", projectId: "project/真实" })
+  })
+
+  it("keeps personal create and patch free of project association and preserves typed project 404", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Project was not found", code: "project_not_found" }), { status: 404 }))
+    const client = createScheduledTaskClient(fetcher)
+    const personal = {
+      title: "Personal digest",
+      prompt: "Run it",
+      frequency: "daily" as const,
+      time: "08:00",
+      timezone: "UTC",
+      autoApprove: false,
+    }
+
+    await client.createScheduledTask(personal)
+    await client.updateScheduledTask("scheduled_1", { title: "Renamed" })
+    await expect(client.createScheduledTask({ ...personal, projectId: "missing" })).rejects.toMatchObject({
+      reason: "http",
+      status: 404,
+      code: "project_not_found",
+    })
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/scheduled-tasks")
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty("project_id")
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).not.toHaveProperty("project_id")
+    expect(fetcher.mock.calls[2]?.[0]).toBe("/api/scheduled-tasks")
+  })
+
+  it("keeps unknown project creates on their original command identity without sharing it across contexts", async () => {
+    const projectA = { ...wireTask, id: "scheduled_a", project_id: "project-a" }
+    const projectB = { ...wireTask, id: "scheduled_b", project_id: "project-b" }
+    const fetcher = vi.fn()
+      .mockRejectedValueOnce(new TypeError("connection reset"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: projectB }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ task: projectA }), { status: 201 }))
+    const client = createScheduledTaskClient(fetcher)
+    const draft = {
+      title: "Project digest",
+      prompt: "Run it",
+      frequency: "daily" as const,
+      time: "08:00",
+      timezone: "UTC",
+      autoApprove: false,
+    }
+
+    await expect(client.createScheduledTask({ ...draft, projectId: "project-a" })).rejects.toMatchObject({ reason: "network" })
+    await client.createScheduledTask({ ...draft, projectId: "project-b" })
+    await client.createScheduledTask({ ...draft, projectId: "project-a" })
+
+    const projectAKey = new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Idempotency-Key")
+    const projectBKey = new Headers(fetcher.mock.calls[1]?.[1]?.headers).get("Idempotency-Key")
+    const projectARetryKey = new Headers(fetcher.mock.calls[2]?.[1]?.headers).get("Idempotency-Key")
+    expect(projectAKey).toBeTruthy()
+    expect(projectBKey).not.toBe(projectAKey)
+    expect(projectARetryKey).toBe(projectAKey)
+  })
+})

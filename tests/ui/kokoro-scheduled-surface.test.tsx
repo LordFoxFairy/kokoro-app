@@ -863,3 +863,464 @@ it("日历星期标题跟随当前界面语言", async () => {
     expect(within(weekdays).getByText("Sun")).toBeInTheDocument(),
   );
 });
+
+it("项目深链只把精确关联交给 create，成功后才重新读取 owner 列表", async () => {
+  const created = {
+    id: "scheduled_project_1",
+    projectId: "project/真实",
+    title: "项目摘要",
+    prompt: "执行项目摘要",
+    frequency: "daily" as const,
+    time: "08:00",
+    timezone: "UTC",
+    autoApprove: false,
+  };
+  const listScheduledTasks = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([created]);
+  const createScheduledTask = vi.fn().mockResolvedValue(created);
+  window.history.replaceState(null, "", "/app/scheduled?tab=list&project_id=project%2F%E7%9C%9F%E5%AE%9E#scheduled-tasks/new");
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks, createScheduledTask })} /></LocaleProvider>);
+
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "项目摘要" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "执行项目摘要" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+
+  await waitFor(() => expect(createScheduledTask).toHaveBeenCalledWith(expect.objectContaining({ projectId: "project/真实" })));
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("项目摘要")).toBeInTheDocument();
+});
+
+it("个人创建不继承项目关联，project 404 保留草稿且不 reload 或 optimistic 插入", async () => {
+  const listScheduledTasks = vi.fn().mockResolvedValue([]);
+  const createScheduledTask = vi.fn().mockRejectedValue(Object.assign(new Error("Project was not found"), {
+    reason: "http",
+    status: 404,
+    code: "project_not_found",
+  }));
+  window.history.replaceState(null, "", "/app/scheduled?project_id=missing#scheduled-tasks/new");
+  const view = render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks, createScheduledTask })} /></LocaleProvider>);
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "保留草稿" } });
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "不降级个人任务" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+
+  await waitFor(() => expect(within(dialog).getByRole("alert")).toBeInTheDocument());
+  expect(within(dialog).getByRole("textbox", { name: "未读邮件摘要" })).toHaveValue("保留草稿");
+  expect(listScheduledTasks).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText("保留草稿", { selector: "strong" })).not.toBeInTheDocument();
+
+  view.unmount();
+  const personalCreate = vi.fn().mockResolvedValue({
+    id: "scheduled_personal",
+    title: "个人摘要",
+    frequency: "daily",
+    time: "08:00",
+  });
+  window.history.replaceState(null, "", "/app/scheduled#scheduled-tasks/new");
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks: vi.fn().mockResolvedValue([]), createScheduledTask: personalCreate })} /></LocaleProvider>);
+  const personalDialog = await screen.findByRole("dialog");
+  fireEvent.change(within(personalDialog).getByRole("textbox", { name: "未读邮件摘要" }), { target: { value: "个人摘要" } });
+  fireEvent.change(within(personalDialog).getByRole("textbox", { name: "汇总未读邮件并突出显示重要邮件" }), { target: { value: "个人提示" } });
+  fireEvent.click(within(personalDialog).getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(personalCreate).toHaveBeenCalled());
+  expect(personalCreate.mock.calls[0]?.[0]).not.toHaveProperty("projectId");
+});
+
+it("无效项目上下文不 fallback 为个人创建", async () => {
+  const createScheduledTask = vi.fn();
+  window.history.replaceState(null, "", "/app/scheduled?project_id=one&project_id=two#scheduled-tasks/new");
+  render(<LocaleProvider><ScheduledTaskSurface brandName="Kokoro" scheduledTaskClient={scheduledTaskClient({ listScheduledTasks: vi.fn().mockResolvedValue([]), createScheduledTask })} /></LocaleProvider>);
+
+  const dialog = await screen.findByRole("dialog");
+  expect(within(dialog).getByRole("alert")).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "保存" })).toBeDisabled();
+  expect(createScheduledTask).not.toHaveBeenCalled();
+});
+
+it("旧项目的迟到 create receipt 不关闭或 reload 新项目编辑器", async () => {
+  let resolveProjectA: ((value: {
+    id: string;
+    projectId: string;
+    title: string;
+    frequency: "daily";
+    time: string;
+  }) => void) | undefined;
+  const projectAReceipt = new Promise<{
+    id: string;
+    projectId: string;
+    title: string;
+    frequency: "daily";
+    time: string;
+  }>((resolve) => {
+    resolveProjectA = resolve;
+  });
+  const listScheduledTasks = vi.fn().mockResolvedValue([]);
+  const createScheduledTask = vi.fn().mockReturnValue(projectAReceipt);
+  window.history.replaceState(
+    null,
+    "",
+    "/app/scheduled?project_id=project-a#scheduled-tasks/new",
+  );
+  render(
+    <LocaleProvider>
+      <ScheduledTaskSurface
+        brandName="Kokoro"
+        scheduledTaskClient={scheduledTaskClient({
+          listScheduledTasks,
+          createScheduledTask,
+        })}
+      />
+    </LocaleProvider>,
+  );
+
+  const projectADialog = await screen.findByRole("dialog");
+  fireEvent.change(
+    within(projectADialog).getByRole("textbox", { name: "未读邮件摘要" }),
+    { target: { value: "项目 A" } },
+  );
+  fireEvent.change(
+    within(projectADialog).getByRole("textbox", {
+      name: "汇总未读邮件并突出显示重要邮件",
+    }),
+    { target: { value: "执行项目 A" } },
+  );
+  fireEvent.click(within(projectADialog).getByRole("button", { name: "保存" }));
+  await waitFor(() =>
+    expect(createScheduledTask).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: "project-a" }),
+    ),
+  );
+
+  window.history.pushState(
+    null,
+    "",
+    "/app/scheduled?project_id=project-b#scheduled-tasks/new",
+  );
+  fireEvent(window, new Event("kokoro:surface-navigation"));
+  const projectBDialog = await screen.findByRole("dialog");
+  const projectBTitle = within(projectBDialog).getByRole("textbox", {
+    name: "未读邮件摘要",
+  });
+  await waitFor(() => expect(projectBTitle).toHaveValue(""));
+  fireEvent.change(projectBTitle, { target: { value: "项目 B 草稿" } });
+
+  resolveProjectA?.({
+    id: "scheduled_project_a",
+    projectId: "project-a",
+    title: "项目 A",
+    frequency: "daily",
+    time: "08:00",
+  });
+
+  await waitFor(() => expect(projectBTitle).toHaveValue("项目 B 草稿"));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  expect(window.location.search).toBe("?project_id=project-b");
+  expect(window.location.hash).toBe("#scheduled-tasks/new");
+  expect(listScheduledTasks).toHaveBeenCalledTimes(1);
+});
+
+it("编辑 owner 任务时忽略 URL 项目创建上下文且不改变归属", async () => {
+  const ownerTask = {
+    id: "scheduled_existing",
+    projectId: "owner-project",
+    title: "既有项目任务",
+    prompt: "执行旧项目任务",
+    frequency: "daily" as const,
+    time: "08:00",
+    timezone: "UTC",
+    autoApprove: false,
+  };
+  const listScheduledTasks = vi
+    .fn()
+    .mockResolvedValueOnce([ownerTask])
+    .mockResolvedValueOnce([{ ...ownerTask, title: "更新后的任务" }]);
+  const createScheduledTask = vi.fn();
+  const updateScheduledTask = vi.fn().mockResolvedValue({
+    ...ownerTask,
+    title: "更新后的任务",
+  });
+  window.history.replaceState(
+    null,
+    "",
+    "/app/scheduled?tab=list&project_id=other-project",
+  );
+  render(
+    <LocaleProvider>
+      <ScheduledTaskSurface
+        brandName="Kokoro"
+        scheduledTaskClient={scheduledTaskClient({
+          listScheduledTasks,
+          createScheduledTask,
+          updateScheduledTask,
+        })}
+      />
+    </LocaleProvider>,
+  );
+
+  const card = await screen.findByRole("listitem");
+  fireEvent.pointerDown(
+    within(card).getByRole("button", { name: "排程任务选项 既有项目任务" }),
+  );
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }));
+  const dialog = screen.getByRole("dialog");
+  fireEvent.change(
+    within(dialog).getByRole("textbox", { name: "未读邮件摘要" }),
+    { target: { value: "更新后的任务" } },
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+
+  await waitFor(() =>
+    expect(updateScheduledTask).toHaveBeenCalledWith(
+      "scheduled_existing",
+      expect.not.objectContaining({ projectId: expect.anything() }),
+    ),
+  );
+  expect(createScheduledTask).not.toHaveBeenCalled();
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+});
+
+it.each(["resolve", "reject"] as const)(
+  "整个 surface 卸载后迟到 create %s 不 reload 旧 client 或污染新编辑器",
+  async (outcome) => {
+    const oldReceipt = deferredScheduledOperation<{
+      id: string;
+      projectId: string;
+      title: string;
+      frequency: "daily";
+      time: string;
+    }>();
+    const oldListScheduledTasks = vi.fn().mockResolvedValue([]);
+    const oldCreateScheduledTask = vi.fn().mockReturnValue(oldReceipt.promise);
+    window.history.replaceState(
+      null,
+      "",
+      "/app/scheduled?project_id=project-old",
+    );
+    const oldView = render(
+      <LocaleProvider>
+        <ScheduledTaskSurface
+          brandName="Kokoro"
+          scheduledTaskClient={scheduledTaskClient({
+            listScheduledTasks: oldListScheduledTasks,
+            createScheduledTask: oldCreateScheduledTask,
+          })}
+        />
+      </LocaleProvider>,
+    );
+
+    await waitFor(() => expect(oldListScheduledTasks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
+    const oldDialog = await screen.findByRole("dialog");
+    fireEvent.change(
+      within(oldDialog).getByRole("textbox", { name: "未读邮件摘要" }),
+      { target: { value: "旧项目任务" } },
+    );
+    fireEvent.change(
+      within(oldDialog).getByRole("textbox", {
+        name: "汇总未读邮件并突出显示重要邮件",
+      }),
+      { target: { value: "执行旧项目任务" } },
+    );
+    fireEvent.click(within(oldDialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(oldCreateScheduledTask).toHaveBeenCalledTimes(1));
+
+    oldView.unmount();
+    window.history.replaceState(
+      null,
+      "",
+      "/app/scheduled?project_id=project-new",
+    );
+    const newListScheduledTasks = vi.fn().mockResolvedValue([]);
+    render(
+      <LocaleProvider>
+        <ScheduledTaskSurface
+          brandName="Kokoro"
+          scheduledTaskClient={scheduledTaskClient({
+            listScheduledTasks: newListScheduledTasks,
+            createScheduledTask: vi.fn(),
+          })}
+        />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(newListScheduledTasks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
+    const newDialog = await screen.findByRole("dialog");
+    const newTitle = within(newDialog).getByRole("textbox", {
+      name: "未读邮件摘要",
+    });
+    fireEvent.change(newTitle, { target: { value: "新项目草稿" } });
+
+    if (outcome === "resolve") {
+      oldReceipt.resolve({
+        id: "scheduled_old",
+        projectId: "project-old",
+        title: "旧项目任务",
+        frequency: "daily",
+        time: "08:00",
+      });
+    } else {
+      oldReceipt.reject(new Error("late create failure"));
+    }
+    await flushScheduledOperation();
+
+    expect(oldListScheduledTasks).toHaveBeenCalledTimes(1);
+    expect(newTitle).toHaveValue("新项目草稿");
+    expect(within(newDialog).queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(window.location.search).toBe("?project_id=project-new");
+    expect(window.location.hash).toBe("#scheduled-tasks/new");
+  },
+);
+
+it.each(["resolve", "reject"] as const)(
+  "整个 surface 卸载后迟到 update %s 不 reload 旧 client 或污染新编辑器",
+  async (outcome) => {
+    const ownerTask = {
+      id: "scheduled_old_update",
+      projectId: "project-old",
+      title: "旧任务",
+      prompt: "执行旧任务",
+      frequency: "daily" as const,
+      time: "08:00",
+      timezone: "UTC",
+      autoApprove: false,
+    };
+    const oldReceipt = deferredScheduledOperation<typeof ownerTask>();
+    const oldListScheduledTasks = vi.fn().mockResolvedValue([ownerTask]);
+    const oldUpdateScheduledTask = vi.fn().mockReturnValue(oldReceipt.promise);
+    window.history.replaceState(
+      null,
+      "",
+      "/app/scheduled?tab=list&project_id=project-old",
+    );
+    const oldView = render(
+      <LocaleProvider>
+        <ScheduledTaskSurface
+          brandName="Kokoro"
+          scheduledTaskClient={scheduledTaskClient({
+            listScheduledTasks: oldListScheduledTasks,
+            updateScheduledTask: oldUpdateScheduledTask,
+          })}
+        />
+      </LocaleProvider>,
+    );
+
+    const oldCard = await screen.findByRole("listitem");
+    fireEvent.pointerDown(
+      within(oldCard).getByRole("button", { name: "排程任务选项 旧任务" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "编辑" }));
+    const oldDialog = screen.getByRole("dialog");
+    fireEvent.change(
+      within(oldDialog).getByRole("textbox", { name: "未读邮件摘要" }),
+      { target: { value: "旧任务更新" } },
+    );
+    fireEvent.click(within(oldDialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(oldUpdateScheduledTask).toHaveBeenCalledTimes(1));
+
+    oldView.unmount();
+    window.history.replaceState(
+      null,
+      "",
+      "/app/scheduled?project_id=project-new",
+    );
+    const newListScheduledTasks = vi.fn().mockResolvedValue([]);
+    render(
+      <LocaleProvider>
+        <ScheduledTaskSurface
+          brandName="Kokoro"
+          scheduledTaskClient={scheduledTaskClient({
+            listScheduledTasks: newListScheduledTasks,
+          })}
+        />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(newListScheduledTasks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
+    const newDialog = await screen.findByRole("dialog");
+    const newTitle = within(newDialog).getByRole("textbox", {
+      name: "未读邮件摘要",
+    });
+    fireEvent.change(newTitle, { target: { value: "新项目更新后草稿" } });
+
+    if (outcome === "resolve") {
+      oldReceipt.resolve({ ...ownerTask, title: "旧任务更新" });
+    } else {
+      oldReceipt.reject(new Error("late update failure"));
+    }
+    await flushScheduledOperation();
+
+    expect(oldListScheduledTasks).toHaveBeenCalledTimes(1);
+    expect(newTitle).toHaveValue("新项目更新后草稿");
+    expect(within(newDialog).queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  },
+);
+
+it("surface 仍挂载时 create 成功继续执行一次正常 owner reload", async () => {
+  const receipt = deferredScheduledOperation<{
+    id: string;
+    title: string;
+    frequency: "daily";
+    time: string;
+  }>();
+  const listScheduledTasks = vi.fn().mockResolvedValue([]);
+  const createScheduledTask = vi.fn().mockReturnValue(receipt.promise);
+  window.history.replaceState(
+    null,
+    "",
+    "/app/scheduled",
+  );
+  render(
+    <LocaleProvider>
+      <ScheduledTaskSurface
+        brandName="Kokoro"
+        scheduledTaskClient={scheduledTaskClient({
+          listScheduledTasks,
+          createScheduledTask,
+        })}
+      />
+    </LocaleProvider>,
+  );
+
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: /建立您的排程任务/ }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(
+    within(dialog).getByRole("textbox", { name: "未读邮件摘要" }),
+    { target: { value: "正常 reload" } },
+  );
+  fireEvent.change(
+    within(dialog).getByRole("textbox", {
+      name: "汇总未读邮件并突出显示重要邮件",
+    }),
+    { target: { value: "保持既有成功路径" } },
+  );
+  fireEvent.click(within(dialog).getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(createScheduledTask).toHaveBeenCalledTimes(1));
+
+  receipt.resolve({
+    id: "scheduled_connected",
+    title: "正常 reload",
+    frequency: "daily",
+    time: "08:00",
+  });
+
+  await waitFor(() => expect(listScheduledTasks).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+});
+
+function deferredScheduledOperation<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void = () => undefined;
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushScheduledOperation() {
+  await Promise.resolve();
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
+}

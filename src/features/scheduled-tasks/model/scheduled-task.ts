@@ -3,6 +3,7 @@ export type ScheduledTaskStatus = "active" | "paused" | "failed"
 
 export type ScheduledTaskRecord = {
   id: string
+  projectId?: string
   title: string
   prompt?: string
   frequency: ScheduledTaskFrequency
@@ -16,6 +17,7 @@ export type ScheduledTaskRecord = {
 }
 
 export type ScheduledTaskDraft = {
+  projectId?: string
   title: string
   prompt: string
   frequency: ScheduledTaskFrequency
@@ -49,6 +51,7 @@ export type ScheduledTaskClient = {
 export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRecord {
   if (typeof value !== "object" || value === null) return false
   if (!("id" in value) || typeof value.id !== "string" || value.id.length === 0) return false
+  if ("projectId" in value && value.projectId !== undefined && !isExactProjectReference(value.projectId)) return false
   if (!("title" in value) || typeof value.title !== "string" || value.title.length === 0) return false
   if (!("frequency" in value) || (value.frequency !== "daily" && value.frequency !== "weekly")) return false
   if (!("time" in value) || typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/u.test(value.time)) return false
@@ -59,6 +62,10 @@ export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRec
   if ("autoApprove" in value && value.autoApprove !== undefined && typeof value.autoApprove !== "boolean") return false
   if ("enabled" in value && value.enabled !== undefined && typeof value.enabled !== "boolean") return false
   return !("status" in value && value.status !== undefined && value.status !== "active" && value.status !== "paused" && value.status !== "failed")
+}
+
+function isExactProjectReference(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.trim() === value
 }
 
 function isUtcInstant(value: unknown): value is string {

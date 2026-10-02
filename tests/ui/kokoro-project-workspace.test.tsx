@@ -496,7 +496,7 @@ it("正式专案任务入口到独立任务页，不提供样例选择或本地�
   const { container } = render(<LocaleProvider><KokoroProjectWorkspace preview={false} projectRef="project-real" onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
   const card = contextCard(container, "scheduled")
   const link = within(card).getByRole("link")
-  expect(link).toHaveAttribute("href", "/app/scheduled")
+  expect(link).toHaveAttribute("href", "/app/scheduled?project_id=project-real#scheduled-tasks/new")
   expect(screen.queryByText("每日简报")).not.toBeInTheDocument()
   expect(within(card).queryByRole("button")).not.toBeInTheDocument()
 })
@@ -507,6 +507,18 @@ it("新的专案会话欢迎面使用 Conversation DOM 与标题关联", () => {
   expect(surface).toBeInTheDocument()
   expect(surface).toHaveAttribute("aria-labelledby", "kokoro-project-conversation-heading")
   expect(screen.getByRole("heading", { name: "新对话" })).toHaveAttribute("id", "kokoro-project-conversation-heading")
+})
+
+it("正式专案任务入口精确编码 opaque projectRef，缺少引用时不猜测关联", () => {
+  const encoded = render(<LocaleProvider><KokoroProjectWorkspace preview={false} projectRef="项目/one two" onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
+  expect(within(contextCard(encoded.container, "scheduled")).getByRole("link")).toHaveAttribute(
+    "href",
+    "/app/scheduled?project_id=%E9%A1%B9%E7%9B%AE%2Fone%20two#scheduled-tasks/new",
+  )
+  encoded.unmount()
+
+  const personal = render(<LocaleProvider><KokoroProjectWorkspace preview={false} onPrompt={vi.fn()} workspaceCapabilities={capabilities} /></LocaleProvider>)
+  expect(within(contextCard(personal.container, "scheduled")).getByRole("link")).toHaveAttribute("href", "/app/scheduled")
 })
 
 it("正式项目标题/时间只消费 canonical detail，切换 loading/error 不保留品牌或旧名称", async () => {
