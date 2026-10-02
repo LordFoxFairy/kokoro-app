@@ -1,3 +1,18 @@
+## R93 Root消费验收（2026-10-02）
+
+Root在a52a623+冻结public6切片实际重跑Node22 pnpm check，原81297终态exit0：249contract、50architecture、163文件2309测试，lint/typecheck/build通过；日志/tmp/kokoro-r93-root-web-public6-check.log。独立Sol0P0/P1/P2、17授权/735外围与owner canonical原字节确认，报告/tmp/kokoro-r93-web-public6-review.md。仅固定BFF bb610ea/public6消费者，不修改UI或生命周期；Root组合/gitlink与真实浏览器尚待复验，不能声称用户旅程完成。
+
+## R91-WEB-PUBLIC6 当前状态（2026-10-02；正规生成 GREEN，待 Root 验收）
+
+- Web HEAD 基线 `a52a6230e4f8e54f95b1f0322adbf1f187aacaae`；BFF owner 已发布 commit `bb610ea7262574772e1d8c309a6e03171d07d0a3`、OpenAPI `6.0.0`、canonical SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。
+- 精确17路径内已把 owner canonical 原始字节固定到 `src/generated/bff-public-openapi.yaml`，更新既有两 generator 的 pin，并正规生成 `src/generated/bff-agent-failure.ts`；Team15 正规 write 后全部 byte-equal。未改 runtime source、依赖、SQL 或生命周期三文件。
+- public6 集合语义：省略/空 scope=全部 admitted owner 可见 active Conversation；显式 direct=`project_ref IS NULL`；非空 project_ref=exact owned Project；direct+project_ref 在 lookup 前 `invalid_scope`/400；filter 变化丢弃旧 cursor。
+- runtime 当前已经显式发送 direct 或 project_ref，同源 adapter relay query；本轮没有新 collection 参数或 consumer6 runtime 改动。Safe12、ChatMessage fingerprint、Team9、R76 Scheduled create graph与其他 operation assertions 必须保留。
+- Node22 focused old-snapshot RED 已确认：8 files 全部收集，136 tests 中 123 passed / 13 failed；失败仅为 exact pin/派生 provenance 与新增 public6 listSessions graph。Root 同基线复跑后放行。worker 正规 generation write/check exit0，focused 8 files / 136 tests 全通过；随后完整 `pnpm check` exit0：contract 249、architecture 50、全测试 163 files / 2309 tests、lint、typecheck与build通过。日志 `/tmp/kokoro-r92-web-public6-generation.log`、`/tmp/kokoro-r92-web-public6-focused-green.log`、`/tmp/kokoro-r92-web-public6-full-check.log`。
+- R90 lifecycle commit `a52a6230e4f8e54f95b1f0322adbf1f187aacaae` 已在基线但不属于本 W01 交付；其三冻结文件保持原 hash。真实浏览器/owner组合、Root独立复验、Git/index/commit 尚未执行。
+
+---
+
 ## R90 Root验收：committed-effect会话引擎生命周期（2026-10-02）
 
 基线main5e538f69；原WIN01三路径冻结，Root实际tests-only RED原12482 exit1（2failed/91filtered，/tmp/kokoro-r90-root-web-aborted-render-red.log）证实aborted/delayed commit在render提前创建storage/snapshot/SSE/cache。effect内同步factory+retain并发布本hook局部lease；render仅匹配已committed scope/mode实例或null，不peek全局零owner缓存。保token/refcount、Strict/双owner/幂等cleanup、injected caller-owned、scope遮旧与最后owner释放。

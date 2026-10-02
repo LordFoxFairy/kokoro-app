@@ -1,3 +1,14 @@
+## R91-WEB-PUBLIC6：Conversation scope 数据边界（2026-10-02；正规生成 GREEN）
+
+Web 没有 Conversation、Project 或 cursor 的持久化 owner，也不创建数据库 schema。BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3` 的 public6（SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`）拥有 Conversation 与 nullable `project_ref` 关系、tenant/subject 可见性和集合分页事实。
+
+- direct 是 owner 条件 `project_ref IS NULL`，只能由显式 `scope=direct` 请求；省略或空 `scope` 是全部 authorized active Conversations。
+- 非空 `project_ref` 是 exact owned Project filter；它与 `scope=direct` 互斥，冲突先返回 `invalid_scope`/400，不用 Project 存在性改变错误优先级。
+- cursor 是绑定原 filter 的 opaque owner 值。scope、project_ref 或其他 filter 改变时丢弃 cursor，从第一页重取；Web 不本地推导归属、拼接游标或缓存成第二事实源。
+- resource route 的 project-bound authorization 保持原义；本轮没有 SQL、事务、幂等、缓存、retention 或 generated data model 变更。
+
+---
+
 ## R79-WEB-PROJECT-D0：无持久化 owner 的创建上下文（2026-10-02；目标态，待 Root 门审）
 
 与TECH/API R79一致，Web main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5` 已发布public5消费者但未实现本片关联UI。本阶段仅五文档前缀，原正文及全部运行投影保持。固定BFF `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` / public5.0.0 / SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`，无新schema、数据库、事务或缓存owner。

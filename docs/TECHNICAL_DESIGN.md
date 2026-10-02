@@ -1,3 +1,23 @@
+## R91-WEB-PUBLIC6：Conversation 集合 scope 消费（2026-10-02；正规生成 GREEN）
+
+本切片收敛 Web 对 BFF public6 的固定消费与机器断言；事实 owner 为 BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3`、OpenAPI `6.0.0`、canonical SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。tests/docs-only 阶段已先对 public5 snapshot 形成真实 RED，Root 复跑确认后才复制 owner 原始字节并沿既有两个 generator 正规生成；未改 runtime source。
+
+| §8 项 | 已确定结论 |
+| --- | --- |
+| Owner | BFF 是 Conversation 集合、`project_ref` 关系、授权筛选与 cursor 的唯一 writer；Web 只拥有 browser-private client、同源 query relay 与 UI projection。 |
+| 当前事实 | runtime `listSessions` 默认 `{ kind: "direct" }` 并显式发送 `scope=direct`；项目视图发送 exact `project_ref`；同源 adapter 原样转发 search。没有依赖省略 scope 来表达 direct。 |
+| 目标职责 | 固定 owner artifact、generator provenance 与机器断言已升级到 public6；不新增 collection 参数、alias、fallback、双读或 runtime 分支。 |
+| 目录方案 | 采用既有 `src/generated/bff-public-openapi.yaml`、两 generator、七 public pin tests 与 `contract/api-contract.test.ts`；淘汰第二份可编辑 schema、新 generator 或手写派生物。 |
+| 粒度 | 只改既有五文档、八测试、两 generator、canonical snapshot 与 failure 派生物；Team15 正规生成后 byte-equal。无新文件/目录。 |
+| 依赖 | Browser → Web same-origin adapter → BFF `/v1/sessions`；Web 不读取 owner 数据库、不从本地项目状态推导授权。 |
+| 数据/API | 省略或空 `scope` 返回 admitted tenant+subject 可见的全部 active Conversation；显式 `scope=direct` 仅返回 `project_ref IS NULL`；非空 `project_ref` 只返回该 owned Project。`scope=direct` 与非空 `project_ref` 互斥，并在 Project lookup 前以 `invalid_scope`/HTTP 400 失败。任一 filter 变化必须丢弃旧 cursor，从第一页开始。 |
+| 删除项 | 无 runtime 删除；禁止把 public5 默认行为、隐式 direct、旧 cursor 或 Web 本地项目归属作为兼容路径。 |
+| 验证 | 旧 snapshot RED 123/136 后，正规 write/check、focused 136/136 与完整 Node22 `pnpm check` 均 exit0。SQL/schema/browser smoke 不适用本切片。 |
+
+public6 除上述 `/v1/sessions` 查询语义、400 response 与两个 query parameter 描述外，不改变本消费者保护的 Safe12、ChatMessage fingerprint、Team9 或其他 operation graph。资源路由现有 project-bound authorization 不受集合参数描述变更影响。
+
+---
+
 ## R79-WEB-PROJECT-D0：独立任务的项目创建上下文（2026-10-02；方案候选，待 Root 门审）
 
 本节与 API_CONTRACT/DATA_MODEL 的同名 R79 前缀构成一致目标；当前实现/证据只看 CURRENT R79。覆盖下方历史“项目关联后继未设计”的目标描述，不改写原正文。Web 基线 main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5` 已发布 public5 消费组件，本阶段仍未实现项目关联 UI。沿 Root 同一 `docs/task.md` R79-WEB-PROJECT-D0，WIN01唯一Web writer；Root独占门审、Git/index/commit、资源与最终验收。本阶段只有五文档新前缀，源码/测试/pin/generated/依赖/SQL均不写。

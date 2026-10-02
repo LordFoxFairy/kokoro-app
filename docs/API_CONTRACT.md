@@ -1,3 +1,17 @@
+## R91-WEB-PUBLIC6：`GET /v1/sessions` 查询合同（2026-10-02；正规生成 GREEN）
+
+固定 owner 为 BFF `bb610ea7262574772e1d8c309a6e03171d07d0a3` / OpenAPI `6.0.0` / SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。机器事实源仍是 owner `contract/openapi/v1/openapi.yaml`；Web snapshot 现为该 canonical blob。更新前 public5 snapshot 已形成并保存 123 pass / 13 fail 的真实 RED。
+
+- `GET /v1/sessions` 省略 `scope` 或传空 `scope` 时，返回 admitted tenant 与 subject 可见的全部 active Conversation；不表示 direct。
+- 显式 `scope=direct` 只返回 `project_ref IS NULL`；非空 `project_ref` 只筛选该 owned Project。两者同时出现属于 `invalid_scope`，必须在 Project lookup 前返回 HTTP 400 `BadRequest`。
+- filter 任一变化后，调用方必须丢弃旧 cursor 并从第一页开始；cursor 绑定原查询，Web 不比较、改写或跨 filter 复用 opaque cursor。
+- `DirectScopeQuery` 只能是 `"" | "direct"`，没有默认值；`ProjectRefQuery` 为 optional、nonempty exact string。二者都不覆盖 admitted tenant/subject，资源路由保持原有 project-bound authorization。
+- 当前 runtime 已显式表达意图：默认 `listSessions({ kind: "direct" })` 发 `scope=direct`，项目集合发 exact `project_ref`，同源 adapter relay 原 query。故本切片不新增 API 参数、alias、fallback 或 runtime 改动。
+
+测试须固定 exact canonical bytes/version，并对 listSessions operation 的四个 parameter ref、400 response、描述语义及两个 component parameter schema 作机器断言；R76 Scheduled create graph、Safe12、ChatMessage fingerprint、Team9 与其余 operation graph原样保留。
+
+---
+
 ## R79-WEB-PROJECT-D0：项目创建上下文的精确消费合同（2026-10-02；目标态，待 Root 门审）
 
 与TECH/DATA R79一致，基线Web main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；本轮只写五文档前缀，runtime仍缺项目字段与live创建上下文。固定已发布BFF owner `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` public5.0.0 / YAML SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b` 不变；机器source仍是固定snapshot中的CreateScheduledTaskRequest、ScheduledTask和/v1/scheduled-tasks，不在本文复制整套字段/第二契约。下方旧方案仅历史，当前证据见CURRENT R79。

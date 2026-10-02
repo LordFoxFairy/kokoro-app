@@ -1,3 +1,13 @@
+## R91-WEB-PUBLIC6 当前 consumer pin（2026-10-02；正规生成 GREEN，待 Root 验收）
+
+唯一 public 来源为 BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `6.0.0`，canonical SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。该 owner 原始字节已固定到 Web `src/generated/bff-public-openapi.yaml`；旧 snapshot RED 经 Root 确认后，既有两 generator 已正规 write/check，不存在手改派生业务内容。
+
+public6 增量只收敛 `GET /v1/sessions`：省略/空 scope 返回 admitted tenant+subject 的全部 active Conversation，显式 direct 返回 `project_ref IS NULL`，非空 project_ref 返回 exact owned Project；direct 与 project_ref 互斥并在 lookup 前返回 `invalid_scope`/400，filter 变化须丢弃 cursor。当前 runtime 已显式发送 direct 或 project_ref，不新增参数或兼容路径。
+
+既有 Safe12、ChatMessage failure fingerprint、两 role、Team9、R76 Scheduled create graph与其余 operation graph保持。failure artifact 仅三个 provenance 字段变化；Team15 正规生成后逐字节不变。focused 136/136 与完整 Node22 `pnpm check` 已通过；runtime source未改，Root独立验收与真实浏览器组合仍待执行。
+
+---
+
 ## R76-WEB-PUBLIC5 当前固定 consumer pin（2026-10-02；候选待 Root 验收）
 
 唯一 public 来源是 BFF 已发布 main `479d4e8b0aeb438d2ec9cb3d4472130fc1a29972` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `5.0.0`，原字节 SHA-256 `3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b`，按该 committed blob 原样固定到 `src/generated/bff-public-openapi.yaml`。下方public4候选及更旧说明保留历史，不作为当前版本现状。

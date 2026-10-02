@@ -556,7 +556,7 @@ describe("R66 public4 wire/head and closed resume", () => {
   })
 })
 
-// R76 public5 owner create graph: independent tasks, optional exact Project ID.
+// R76 owner create graph preserved under the R91 public6 exact consumer pin.
 import { createHash as r76Hash } from "node:crypto"
 import { readFile as r76ReadFile } from "node:fs/promises"
 import r76Yaml from "yaml"
@@ -565,24 +565,41 @@ async function r76PublicSpec() {
   const bytes = await r76ReadFile("src/generated/bff-public-openapi.yaml")
   const spec = r76Yaml.parse(bytes.toString("utf8")) as {
     info: { version: string }
-    components: { schemas: Record<string, {
-      type: string; required: string[]; additionalProperties: boolean
-      properties: Record<string, { type: string; minLength?: number; pattern?: string }>
-    }> }
-    paths: Record<string, { post: {
-      parameters: Array<{ $ref: string }>
-      requestBody: { required: boolean; content: { "application/json": { schema: { $ref: string } } } }
-      responses: Record<string, { $ref?: string }>
-    } }>
+    components: {
+      schemas: Record<string, {
+        type: string; required: string[]; additionalProperties: boolean
+        properties: Record<string, { type: string; minLength?: number; pattern?: string }>
+      }>
+      parameters: Record<string, {
+        name: string
+        in: string
+        required: boolean
+        description: string
+        schema: { type: string; enum?: string[]; minLength?: number; default?: string }
+      }>
+    }
+    paths: Record<string, {
+      get: {
+        operationId: string
+        description: string
+        parameters: Array<{ $ref: string }>
+        responses: Record<string, { $ref?: string }>
+      }
+      post: {
+        parameters: Array<{ $ref: string }>
+        requestBody: { required: boolean; content: { "application/json": { schema: { $ref: string } } } }
+        responses: Record<string, { $ref?: string }>
+      }
+    }>
   }
   return { bytes, spec }
 }
 
-describe("R76 public5 ScheduledTask owner creation graph", () => {
-  it("consumes the exact published public5 canonical bytes", async () => {
+describe("R76 ScheduledTask owner creation graph under the public6 pin", () => {
+  it("consumes the exact published public6 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("3ce25a31d326a358d6e1d3c8ee33b5e07dbc34da13ee0933b3b5edf31531918b")
-    expect(spec.info.version).toBe("5.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129")
+    expect(spec.info.version).toBe("6.0.0")
   })
 
   it("has five required create fields and rejects enabled/status as creation properties", async () => {
@@ -616,5 +633,53 @@ describe("R76 public5 ScheduledTask owner creation graph", () => {
     expect(post.requestBody.required).toBe(true)
     expect(post.requestBody.content["application/json"].schema).toEqual({ $ref: "#/components/schemas/CreateScheduledTaskRequest" })
     expect(post.responses["404"]).toEqual({ $ref: "#/components/responses/NotFound" })
+  })
+})
+
+describe("R91 public6 Conversation collection query graph", () => {
+  it("publishes the exact listSessions filter parameters and invalid-scope response", async () => {
+    const get = (await r76PublicSpec()).spec.paths["/v1/sessions"]!.get
+    expect(get.operationId).toBe("listSessions")
+    expect(get.parameters).toEqual([
+      { $ref: "#/components/parameters/DirectScopeQuery" },
+      { $ref: "#/components/parameters/ProjectRefQuery" },
+      { $ref: "#/components/parameters/LimitQuery" },
+      { $ref: "#/components/parameters/CursorQuery" },
+    ])
+    expect(get.responses["400"]).toEqual({ $ref: "#/components/responses/BadRequest" })
+  })
+
+  it("documents full-list omission, explicit direct/project filtering, precedence, and cursor reset", async () => {
+    const description = (await r76PublicSpec()).spec.paths["/v1/sessions"]!.get.description
+    expect(description).toContain("Omitted or empty scope lists every active Conversation visible to the admitted tenant and subject")
+    expect(description).toContain("Explicit scope=direct lists only Conversations without a project_ref")
+    expect(description).toContain("A nonempty project_ref lists only that owned Project")
+    expect(description).toContain("mutually exclusive and return invalid_scope before Project lookup")
+    expect(description).toContain("discarding the previous cursor and starting from the first page")
+  })
+
+  it("keeps direct optional without an implicit default and project_ref optional but nonempty", async () => {
+    const parameters = (await r76PublicSpec()).spec.components.parameters
+    const direct = parameters.DirectScopeQuery!
+    expect(direct).toMatchObject({
+      name: "scope",
+      in: "query",
+      required: false,
+      schema: { type: "string", enum: ["", "direct"] },
+    })
+    expect(direct.schema.default).toBeUndefined()
+    expect(direct.description).toContain("omitted or empty keeps the admitted owner's full visible set")
+    expect(direct.description).toContain("direct restricts results to project_ref IS NULL")
+    expect(direct.description).toContain("never overrides the admitted tenant and subject")
+
+    const project = parameters.ProjectRefQuery!
+    expect(project).toMatchObject({
+      name: "project_ref",
+      in: "query",
+      required: false,
+      schema: { type: "string", minLength: 1 },
+    })
+    expect(project.description).toContain("cannot be combined with scope=direct on GET /v1/sessions")
+    expect(project.description).toContain("resource routes retain their existing project-bound authorization")
   })
 })
