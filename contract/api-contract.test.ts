@@ -53,20 +53,11 @@ const eventFixtures: Array<[string, Record<string, unknown>]> = [
   ["thinking.delta", { segment_id: "segment_1", delta: "thinking" }],
   ["tool.invoked", { segment_id: "segment_1", tool_id: "tool_1", name: "search", args: {} }],
   ["tool.output.delta", { segment_id: "segment_1", tool_id: "tool_1", name: "search", delta: "result" }],
-  [
-    "tool.awaiting_approval",
-    {
-      segment_id: "segment_1",
-      tool_id: "tool_1",
-      name: "search",
-      args: {},
-      description: "Approve search",
-      allowed_decisions: ["approve"],
-      kind: "tool_approval",
-      editable: false,
-      pending_tool_ids: ["tool_1"],
-    },
-  ],
+  ["interaction.state", {
+    interaction_revision: 1, pause_revision: 1, pause_ref: "pause_1", phase: "waiting", action_result: null,
+    groups: [{ group_id: "group_1", items: [{ item_id: "item_1", request_id: "request_1", kind: "tool_approval", allowed_decisions: ["approve"],
+      display: { name: "search", description: "Approve search", editable: false, input_schema: {} } }] }],
+  }],
   [
     "tool.returned",
     { segment_id: "segment_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false },
@@ -111,7 +102,6 @@ const sessionSnapshot = {
     created_at: "2026-08-31T12:00:00.000Z",
     updated_at: "2026-08-31T12:00:00.000Z",
   },
-  pending_pauses: [],
   files: [],
   deliveries: [],
   deliveries_has_more: false,
@@ -145,22 +135,22 @@ describe("checked-in HTTP request and response contracts", () => {
 
   it("accepts each HITL decision shape while keeping control bodies strict", () => {
     const decisions = [
-      { type: "approve", tool_id: "tool_1" },
-      { type: "edit", tool_id: "tool_1", args: { query: "updated" } },
-      { type: "reject", tool_id: "tool_1", reason: "not needed" },
-      { type: "respond", tool_id: "tool_1", response: "answer" },
-      { type: "submit", request_id: "request_1", value: { answer: "yes" } },
+      { type: "approve", item_id: "tool_1" },
+      { type: "edit", item_id: "tool_1", args: { query: "updated" } },
+      { type: "reject", item_id: "tool_1", reason: "not needed" },
+      { type: "respond", item_id: "tool_1", response: "answer" },
+      { type: "submit", item_id: "request_1", value: { answer: "yes" } },
     ]
 
     for (const decision of decisions) {
       expect(resumeDecisionSchema.safeParse(decision).success).toBe(true)
-      expect(runControlBodySchema.safeParse({ kind: "run.resume", session_id: "session_1", decisions: [decision] }).success).toBe(true)
+      expect(runControlBodySchema.safeParse({ kind: "run.resume", expected_pause_revision: 1, pause_ref: "pause_1", decisions: [decision] }).success).toBe(true)
     }
-    expect(runControlBodySchema.safeParse({ kind: "run.cancel", session_id: "session_1" }).success).toBe(true)
-    expect(runControlBodySchema.safeParse({ kind: "run.resume", session_id: "session_1", decisions: [] }).success).toBe(false)
-    expect(resumeDecisionSchema.safeParse({ type: "submit", request_id: "request_1", value: "yes" }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ kind: "run.cancel" }).success).toBe(true)
+    expect(runControlBodySchema.safeParse({ kind: "run.resume", expected_pause_revision: 1, pause_ref: "pause_1", decisions: [] }).success).toBe(false)
+    expect(resumeDecisionSchema.safeParse({ type: "submit", item_id: "request_1", value: "yes" }).success).toBe(false)
     expect(runControlBodySchema.safeParse({ kind: "run.pause", session_id: "session_1" }).success).toBe(false)
-    expect(runControlBodySchema.safeParse({ kind: "run.cancel", session_id: "session_1", tenant_id: "tenant_1" }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ kind: "run.cancel", expected_pause_revision: 1, pause_ref: "pause_1", tenant_id: "tenant_1" }).success).toBe(false)
   })
 
   it("accepts flat session responses and rejects envelope or unknown-field drift", () => {
@@ -334,11 +324,11 @@ describe("cursor pagination and same-origin client paths", () => {
       selected_skill_source_refs: [],
       project_ref: "project/1",
     })
-    await client.sendControl("direct_session", "run_1", { kind: "run.cancel", session_id: "direct_session" }, "cancel_1")
+    await client.sendControl("direct_session", "run_1", { kind: "run.cancel" }, "cancel_1")
     await client.sendControl("project_session", "run_2", {
       kind: "run.resume",
-      session_id: "project_session",
-      decisions: [{ type: "submit", request_id: "tool_1", value: { answer: "yes" } }],
+      expected_pause_revision: 1, pause_ref: "pause_1",
+      decisions: [{ type: "submit", item_id: "tool_1", value: { answer: "yes" } }],
     }, "resume_1")
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions?scope=direct")
@@ -351,12 +341,12 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({ content: "project task", selected_skill_source_refs: [], project_ref: "project/1" })
     expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("direct_1")
     expect(new Headers((fetchMock.mock.calls[3]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("project_1")
-    expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel", session_id: "direct_session" })
+    expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel" })
     expect(new Headers((fetchMock.mock.calls[4]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("cancel_1")
     expect(JSON.parse((fetchMock.mock.calls[5]?.[1] as RequestInit).body as string)).toEqual({
       kind: "run.resume",
-      session_id: "project_session",
-      decisions: [{ type: "submit", request_id: "tool_1", value: { answer: "yes" } }],
+      expected_pause_revision: 1, pause_ref: "pause_1",
+      decisions: [{ type: "submit", item_id: "tool_1", value: { answer: "yes" } }],
     })
     expect(new Headers((fetchMock.mock.calls[5]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("resume_1")
   })
@@ -443,5 +433,125 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(onCursor).toHaveBeenCalledWith(NEXT_EVENT_CURSOR)
     expect(onStreamError).not.toHaveBeenCalled()
     stream.close()
+  })
+})
+
+
+import {
+  makePublic4Decisions as r66Decisions,
+  makePublic4Interaction as r66Interaction,
+  makePublic4Resume as r66Resume,
+  makePublic4Snapshot as r66Snapshot,
+} from "../tests/core/fixtures"
+
+describe("R66 public4 wire/head and closed resume", () => {
+  it("keeps a legal unchanged create/receipt control before testing the breaking fields", () => {
+    expect(messageCreateParamsSchema.safeParse({
+      content: "R66 control", idempotency_key: "r66_create",
+      thinking: false, selected_skill_source_refs: [],
+    }).success).toBe(true)
+    expect(messageCreateReceiptSchema.safeParse({
+      run_id: "run_1", user_message_id: "r66_user", assistant_message_id: "r66_assistant",
+    }).success).toBe(true)
+    expect(runControlReceiptSchema.safeParse({
+      run_id: "run_1", command_id: "r66_control", request_digest: "sha256:r66",
+      status: "succeeded", replayed: false,
+    }).success).toBe(true)
+  })
+
+  it.each(["none", "queued", "active", "waiting", "resuming"] as const)(
+    "accepts the owner %s snapshot without old top-level pending fields",
+    (state) => {
+      const raw = r66Snapshot({ state })
+      const parsed = sessionSnapshotSchema.safeParse(raw)
+      expect(parsed.success).toBe(true)
+      if (!parsed.success) return
+      expect(parsed.data).toEqual(raw)
+      expect(parsed.data).not.toHaveProperty("active_run")
+      expect(parsed.data).not.toHaveProperty("pending_pauses")
+    },
+  )
+
+  it("rejects the legacy snapshot even when it still satisfies the old consumer", () => {
+    expect(sessionSnapshotSchema.safeParse({
+      ...r66Snapshot({ state: "none" }),
+      active_run: { run_id: "run_1", status: "running" }, pending_pauses: [],
+    }).success).toBe(false)
+  })
+
+  it.each(r66Decisions())("accepts the closed owner $type item_id decision", (decision) => {
+    expect(resumeDecisionSchema.safeParse(decision).success).toBe(true)
+    expect(resumeDecisionSchema.safeParse({ ...decision, private_fence: "forbidden" }).success).toBe(false)
+  })
+
+  it("accepts exact pause locators and rejects locator omissions and old public identity", () => {
+    const valid = r66Resume()
+    expect(runControlBodySchema.safeParse(valid).success).toBe(true)
+    for (const field of ["expected_pause_revision", "pause_ref"] as const) {
+      const invalid: Record<string, unknown> = { ...valid }
+      delete invalid[field]
+      expect(runControlBodySchema.safeParse(invalid).success).toBe(false)
+    }
+    expect(runControlBodySchema.safeParse({ ...valid, session_id: "conv_9" }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ ...valid, expected_pause_revision: Number.MAX_SAFE_INTEGER + 1 }).success).toBe(false)
+    expect(runControlBodySchema.safeParse({ ...valid, pause_ref: "" }).success).toBe(false)
+  })
+
+  it("rejects decisions-only/tool_id/request_id rather than keeping public3 aliases", () => {
+    expect(runControlBodySchema.safeParse({
+      kind: "run.resume", session_id: "conv_9",
+      decisions: [{ type: "approve", tool_id: "item_approve" }],
+    }).success).toBe(false)
+    expect(resumeDecisionSchema.safeParse({
+      type: "submit", request_id: "item_submit", value: { text: "answer" },
+    }).success).toBe(false)
+  })
+
+  it("checks complete cardinality, global uniqueness and display privacy after the legal control", () => {
+    const legal = r66Snapshot()
+    expect(sessionSnapshotSchema.safeParse(legal).success).toBe(true)
+    const state = r66Interaction()
+    const firstGroup = state.groups.at(0)
+    const firstItem = firstGroup?.items.at(0)
+    if (!firstGroup || !firstItem) throw new Error("R66 fixture requires two populated groups")
+    const invalidStates = [
+      { ...state, interaction_revision: Number.MAX_SAFE_INTEGER + 1 },
+      { ...state, pause_revision: 0, pause_ref: null },
+      { ...state, groups: [] },
+      { ...state, groups: [...state.groups, firstGroup] },
+      { ...state, groups: [{ ...firstGroup, items: [firstItem, firstItem] }] },
+      { ...state, groups: [{ ...firstGroup, items: [{ ...firstItem, args: { token: "private" } }] }] },
+      { ...state, groups: [{ ...firstGroup, items: [{ ...firstItem,
+        display: { ...firstItem.display, result_preview: "preview without provenance" },
+      }] }] },
+      { ...state, action_result: { command_id: "old", pause_revision: 3, kind: "accepted" } },
+    ]
+    for (const invalid of invalidStates) {
+      expect(sessionSnapshotSchema.safeParse({
+        ...legal, execution_head: { run_id: "run_1", state: "waiting", pending_pauses: [invalid] },
+      }).success).toBe(false)
+    }
+    for (const head of [
+      null,
+      { run_id: "run_1", state: "active", pending_pauses: [state] },
+      { run_id: "run_1", state: "waiting", pending_pauses: [] },
+      { run_id: "run_1", state: "waiting", pending_pauses: [state, state] },
+      { run_id: "run_1", state: "resuming", pending_pauses: [state] },
+    ]) expect(sessionSnapshotSchema.safeParse({ ...legal, execution_head: head }).success).toBe(false)
+  })
+
+  it("preserves omitted versus explicit nullable display/validation without changing business null", () => {
+    const state = r66Interaction()
+    const group = state.groups.at(0)
+    if (!group) throw new Error("R66 fixture requires a first group")
+    const items = group.items.map((item, index) => index === 0 ? {
+      ...item, validation: null,
+      display: { ...item.display, result_preview: null, truncated: null, source: null },
+    } : item)
+    const raw = r66Snapshot({ interaction: { ...state, groups: [{ ...group, items }, ...state.groups.slice(1)] } })
+    const parsed = sessionSnapshotSchema.safeParse(raw)
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data).toEqual(raw)
+    expect(r66Resume().decisions.at(-1)?.value).toEqual({ text: "R66 input", optional: null })
   })
 })

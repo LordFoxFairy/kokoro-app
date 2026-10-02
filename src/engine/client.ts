@@ -1,5 +1,6 @@
 // session HTTP/SSE 客户端：全部入站（含 POST 回执与 snapshot）过 contract Zod；失败以类型化错误上抛，零静默降级。
 
+import type { InteractionState } from "@/contract/control"
 import { ZodError } from "zod"
 
 import {
@@ -48,6 +49,7 @@ export type { ClientFailureReason }
 export type EventStreamHandle = { close: () => void }
 
 export type OpenEventsArgs = {
+  interactionBaselines?: Readonly<Record<string, InteractionState>>
   sessionId: string
   // BFF durable AG-UI ledger 的 opaque cursor；null 表示从当前 snapshot 之前没有可续点。
   resumeCursor: EventCursor | null
@@ -305,10 +307,11 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
 
     // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are
     // centralized in AgUiChatTransport; no reducer-shaped wire fallback exists.
-    openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onReconnecting, onConnected, onStreamError }) =>
+    openEvents: ({ sessionId, resumeCursor, interactionBaselines, onCursor, onEvent, onReconnecting, onConnected, onStreamError }) =>
       agUiTransport.openProjectionEvents({
         chatId: sessionId,
         resumeCursor,
+        ...(interactionBaselines === undefined ? {} : { interactionBaselines }),
         onFrame: (frame) => {
           onCursor(frame.cursor)
           if (frame.projectionEvent !== null) {

@@ -2,53 +2,36 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildResumeDecisions,
-  pendingToolIdsOf,
-  rejectedToolIds,
   stageDecision,
   type StagedDecisions,
   type ToolDecision,
 } from "@/engine/hitl-staging"
-import type { SessionStep } from "@/core/state"
+import { interactionStateSchema, type InteractionItem, type InteractionState } from "@/contract/control"
 
-function awaitingStep(toolId: string, pendingToolIds: string[]): SessionStep {
-  return {
-    kind: "tool",
-    seq: 1,
-    segmentId: "seg_1",
-    tool: { id: toolId, name: "w", args: {}, status: "awaiting", pendingToolIds },
-  }
+function items(ids: string[], allowed: InteractionItem["allowed_decisions"] = ["approve", "reject", "respond", "submit"]): InteractionItem[] {
+  return ids.map((id) => ({ item_id: id, request_id: `request:${id}`, kind: "tool_approval", allowed_decisions: allowed,
+    display: { name: "w", description: "public action", editable: false, input_schema: {} } }))
+}
+function collection(state: InteractionState | null): InteractionItem[] {
+  return state?.groups.flatMap((group) => group.items) ?? []
 }
 
 function staged(entries: [string, ToolDecision][]): StagedDecisions {
   return new Map(entries)
 }
 
-describe("pendingToolIdsOf：契约字段为唯一凑帧判据", () => {
-  it("从 awaiting 工具读取契约 pending_tool_ids", () => {
-    const steps = [awaitingStep("tool_1", ["tool_1", "tool_2"])]
-    expect(pendingToolIdsOf(steps)).toEqual(["tool_1", "tool_2"])
+describe("完整交互集合：owner groups 为唯一凑帧判据", () => {
+  it("从 full state 读取所有 groups/items，保留 owner 顺序", () => {
+    const state: InteractionState = { interaction_revision: 1, pause_revision: 1, pause_ref: "pause_1", phase: "waiting", action_result: null,
+      groups: [{ group_id: "g1", items: items(["tool_1"]) }, { group_id: "g2", items: items(["tool_2"]) }] }
+    expect(collection(state).map((item) => item.item_id)).toEqual(["tool_1", "tool_2"])
   })
-
-  it.each<[string, SessionStep[]]>([
-    ["无步骤", []],
-    ["无 awaiting 工具", [
-      {
-        kind: "tool",
-        seq: 1,
-        segmentId: "seg_1",
-        tool: { id: "tool_1", name: "w", args: {}, status: "done" },
-      },
-    ]],
-    ["awaiting 但缺契约字段（旧落盘）", [
-      {
-        kind: "tool",
-        seq: 1,
-        segmentId: "seg_1",
-        tool: { id: "tool_1", name: "w", args: {}, status: "awaiting" },
-      },
-    ]],
-  ])("%s → 空集合", (_label, steps) => {
-    expect(pendingToolIdsOf(steps)).toEqual([])
+  it("无 full state → 空集合", () => { expect(collection(null)).toEqual([]) })
+  it("非 pending owner 状态 → 空集合", () => {
+    expect(collection({ interaction_revision: 1, pause_revision: 0, pause_ref: null, phase: "active", action_result: null, groups: [] })).toEqual([])
+  })
+  it("pending 但缺完整集合的旧落盘被拒绝，不猜测待决项", () => {
+    expect(interactionStateSchema.safeParse({ interaction_revision: 1, pause_revision: 1, pause_ref: "pause_1", phase: "waiting", action_result: null }).success).toBe(false)
   })
 })
 
@@ -56,7 +39,7 @@ describe("buildResumeDecisions：凑齐才提交", () => {
   it("部分决策未凑齐返回 null", () => {
     const decisions = buildResumeDecisions(
       staged([["tool_1", { type: "approve" }]]),
-      ["tool_1", "tool_2"],
+      items(["tool_1", "tool_2"]),
     )
     expect(decisions).toBeNull()
   })
@@ -65,27 +48,27 @@ describe("buildResumeDecisions：凑齐才提交", () => {
     expect(buildResumeDecisions(staged([["tool_1", { type: "approve" }]]), [])).toBeNull()
   })
 
-  it("凑齐后按 pending_tool_ids 顺序产出契约决策（部分拒绝）", () => {
+  it("凑齐后按 groups/items 顺序产出契约决策（部分拒绝）", () => {
     const frame = staged([
       ["tool_2", { type: "reject" }],
       ["tool_1", { type: "approve" }],
       ["tool_3", { type: "respond", message: "use option b" }],
     ])
-    const decisions = buildResumeDecisions(frame, ["tool_1", "tool_2", "tool_3"])
+    const decisions = buildResumeDecisions(frame, items(["tool_1", "tool_2", "tool_3"]))
     expect(decisions).toEqual([
-      { type: "approve", tool_id: "tool_1" },
-      { type: "reject", tool_id: "tool_2" },
-      { type: "respond", tool_id: "tool_3", response: "use option b" },
+      { type: "approve", item_id: "tool_1" },
+      { type: "reject", item_id: "tool_2" },
+      { type: "respond", item_id: "tool_3", response: "use option b" },
     ])
-    expect(rejectedToolIds(frame, ["tool_1", "tool_2", "tool_3"])).toEqual(["tool_2"])
+    expect(decisions?.filter((decision) => decision.type === "reject").map((decision) => decision.item_id)).toEqual(["tool_2"])
   })
 
-  it("submit 决策映射为契约 SubmitDecision（锚字段 request_id=tool_id）", () => {
+  it("submit 决策映射为契约 SubmitDecision（锚字段 item_id）", () => {
     const frame = staged([["tool_1", { type: "submit", value: { otp: "123456" } }]])
-    expect(buildResumeDecisions(frame, ["tool_1"])).toEqual([
-      { type: "submit", request_id: "tool_1", value: { otp: "123456" } },
+    expect(buildResumeDecisions(frame, items(["tool_1"]))).toEqual([
+      { type: "submit", item_id: "tool_1", value: { otp: "123456" } },
     ])
-    expect(rejectedToolIds(frame, ["tool_1"])).toEqual([])
+    expect(buildResumeDecisions(frame, items(["tool_1"]))?.some((decision) => decision.type === "reject")).toBe(false)
   })
 
   it("stageDecision 不可变：改写决策产生新 Map 且可覆盖", () => {

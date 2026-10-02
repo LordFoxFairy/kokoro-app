@@ -5,9 +5,9 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "293dfe7638e5dea0df2bee6dfdd8483b53fc9df6"
-const OWNER_SHA256 = "acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b"
-const OWNER_VERSION = "3.0.0"
+const OWNER_COMMIT = "3c08a422f3a6aa3cf204c308716cfa64f6d61bb2"
+const OWNER_SHA256 = "5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6"
+const OWNER_VERSION = "4.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -138,7 +138,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six inactive Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("293dfe7638e5dea0df2bee6dfdd8483b53fc9df6")
+    expect(OWNER_COMMIT).toBe("3c08a422f3a6aa3cf204c308716cfa64f6d61bb2")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

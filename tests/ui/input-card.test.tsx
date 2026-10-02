@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { SessionToolCall } from "@/core/state"
+import type { InteractionItem } from "@/contract/control"
 import { LocaleProvider } from "@/i18n/context"
 import { InputCard } from "@/ui/hitl/input-card"
 import { ToolCallRow } from "@/ui/thread/tool-call-row"
@@ -20,21 +20,14 @@ const OTP_SCHEMA: Record<string, unknown> = {
   required: ["otp"],
 }
 
-function makeTool(overrides: Partial<SessionToolCall> = {}): SessionToolCall {
-  return {
-    id: "tool_1",
-    name: "mcp_call",
-    args: { message: "需要验证码" },
-    status: "awaiting",
-    awaitingKind: "input",
-    allowedDecisions: ["submit", "reject"],
-    inputSchema: OTP_SCHEMA,
-    pendingToolIds: ["tool_1"],
+function makeTool(overrides: Omit<Partial<InteractionItem>, "display"> & { display?: Partial<InteractionItem["display"]> } = {}): InteractionItem {
+  return { item_id: "tool_1", request_id: "request_1", kind: "input", allowed_decisions: ["submit", "reject"],
     ...overrides,
+    display: { name: "mcp_call", description: "需要验证码", editable: false, input_schema: OTP_SCHEMA, ...overrides.display },
   }
 }
 
-function renderCard(tool: SessionToolCall, onDecision = vi.fn()) {
+function renderCard(tool: InteractionItem, onDecision = vi.fn()) {
   const view = render(
     <InputCard tool={tool} hitlActive controlError={null} onDecision={onDecision} />,
     { wrapper: LocaleProvider },
@@ -123,14 +116,14 @@ describe("InputCard：提交", () => {
   })
 
   it("allowed_decisions 不含 reject 时无拒绝按钮", () => {
-    renderCard(makeTool({ allowedDecisions: ["submit"] }))
+    renderCard(makeTool({ allowed_decisions: ["submit"] }))
     expect(screen.queryByRole("button", { name: "拒绝" })).toBeNull()
   })
 })
 
 describe("InputCard：不认识的 schema 走 JSON 兜底", () => {
   const rawTool = makeTool({
-    inputSchema: { type: "object", properties: { blob: { type: "object" } } },
+    display: { input_schema: { type: "object", properties: { blob: { type: "object" } } } },
   })
 
   it("非法 JSON 拦截提交；改成合法对象后放行 parsed value", () => {
@@ -149,9 +142,9 @@ describe("InputCard：不认识的 schema 走 JSON 兜底", () => {
     })
   })
 
-  it("schema 缺席同样兜底为 JSON 编辑器", () => {
+  it("公开 schema 无可识别字段时使用 JSON 编辑器", () => {
     const tool = makeTool()
-    delete (tool as { inputSchema?: Record<string, unknown> }).inputSchema
+    tool.display.input_schema = {}
     renderCard(tool)
     expect(screen.getByRole("textbox", { name: "JSON 输入" })).toBeInTheDocument()
   })
@@ -169,7 +162,7 @@ describe("InputCard：校验失败重问", () => {
     rerender(
       <InputCard
         tool={makeTool({
-          args: { message: "需要验证码", validation_error: "'otp' is a required property" },
+          validation: { code: "json_schema_invalid", instance_path: ["otp"] },
         })}
         hitlActive
         controlError={null}
@@ -177,21 +170,15 @@ describe("InputCard：校验失败重问", () => {
       />,
     )
     expect(screen.getByRole("status")).toHaveTextContent("上次提交未通过校验")
-    expect(screen.getByRole("status")).toHaveTextContent("'otp' is a required property")
+    expect(screen.getByRole("status")).toHaveTextContent("json_schema_invalid: otp")
     expect(screen.getByRole("textbox")).toHaveValue("1234")
   })
 })
 
-describe("ToolCallRow：kind=input 分流到输入卡", () => {
-  it("awaitingKind=input 渲染动态表单卡，原始 args JSON 不重复展示", () => {
+describe("公开 input 卡与普通日志职责隔离", () => {
+  it("公开 input 渲染动态表单且不发明私有 args", () => {
     render(
-      <ToolCallRow
-        sessionId="ses_1"
-        tool={makeTool()}
-        hitlActive
-        controlError={null}
-        onDecision={vi.fn()}
-      />,
+      <InputCard tool={makeTool()} hitlActive controlError={null} onDecision={vi.fn()} />,
       { wrapper: LocaleProvider },
     )
     expect(screen.getByRole("group", { name: "Agent 请求补充输入" })).toBeInTheDocument()
@@ -202,17 +189,11 @@ describe("ToolCallRow：kind=input 分流到输入卡", () => {
 
   it("展开交互使用 shadcn Collapsible，并可由用户收起", () => {
     render(
-      <ToolCallRow
-        sessionId="ses_1"
-        tool={makeTool()}
-        hitlActive
-        controlError={null}
-        onDecision={vi.fn()}
-      />,
+      <ToolCallRow sessionId="ses_1" tool={{ id: "tool_1", name: "mcp_call", args: { query: "example" }, status: "running" }} />,
       { wrapper: LocaleProvider },
     )
 
-    const trigger = screen.getByRole("button", { name: "mcp_call" })
+    const trigger = screen.getByRole("button", { name: "mcp_callexample" })
     expect(trigger).toHaveAttribute("aria-expanded", "true")
     const controlledId = trigger.getAttribute("aria-controls")
     expect(controlledId).toBeTruthy()

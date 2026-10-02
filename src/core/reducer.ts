@@ -1,5 +1,7 @@
 // 事件折叠：event_id 幂等去重 + 批量折叠（可变草稿一次快照）+ never 穷尽守卫。
 
+import { assertInteractionRevision } from "./state"
+
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 
 import type {
@@ -157,49 +159,6 @@ function applyToolInvoked(draft: Draft, event: EventOf<"tool.invoked">): void {
   }
 }
 
-function applyToolAwaitingApproval(
-  draft: Draft,
-  event: EventOf<"tool.awaiting_approval">,
-): void {
-  const steps = stepsOf(draft, event.run_id)
-  const payload = event.payload
-  const meta = {
-    description: payload.description,
-    allowedDecisions: [...payload.allowed_decisions],
-    awaitingKind: payload.kind,
-    editable: payload.editable,
-    pendingToolIds: [...payload.pending_tool_ids],
-    ...(payload.risk !== undefined ? { risk: payload.risk } : {}),
-    ...(payload.input_schema !== undefined ? { inputSchema: payload.input_schema } : {}),
-    // result_review：工具已执行的待审结果预填 result，审核卡只读展示；returned 回流后覆盖为裁决结果。
-    ...(payload.result !== undefined ? { result: payload.result } : {}),
-  }
-  const updated = updateStep(
-    steps,
-    (step) => step.kind === "tool" && step.tool.id === payload.tool_id,
-    (step) =>
-      step.kind === "tool"
-        ? // args 一并刷新：kind=input 校验失败重问时 validation_error 随 args 重发（同 tool_id）。
-          { ...step, tool: { ...step.tool, args: payload.args, status: "awaiting", ...meta } }
-        : step,
-  )
-  if (!updated) {
-    // 无配对的 invoked（乱序/部分 replay）：补建 awaiting 步，防止审批 UI 丢失。
-    insertOrdered(steps, {
-      kind: "tool",
-      seq: event.seq,
-      segmentId: payload.segment_id,
-      tool: {
-        id: payload.tool_id,
-        name: payload.name,
-        args: payload.args,
-        status: "awaiting",
-        ...meta,
-      },
-    })
-  }
-}
-
 function applyToolReturned(draft: Draft, event: EventOf<"tool.returned">): void {
   const steps = stepsOf(draft, event.run_id)
   const payload = event.payload
@@ -274,9 +233,9 @@ function updateSubagent(
 // run 终态时把悬挂工具置结构化 stale 状态：避免永久挂起的批准按钮，文案由渲染层生成。
 function settleOpenTool(
   tool: SessionToolCall,
-  close: (status: "running" | "awaiting") => ToolStatus,
+  close: (status: "running") => ToolStatus,
 ): SessionToolCall | null {
-  if (tool.status !== "running" && tool.status !== "awaiting") {
+  if (tool.status !== "running") {
     return null
   }
   return { ...tool, status: close(tool.status) }
@@ -284,7 +243,7 @@ function settleOpenTool(
 
 function closeOpenTools(
   steps: SessionStep[],
-  close: (status: "running" | "awaiting") => ToolStatus,
+  close: (status: "running") => ToolStatus,
 ): SessionStep[] | null {
   let changed = false
   const next = steps.map((step) => {
@@ -305,12 +264,11 @@ function applyRunTerminal(
   draft: Draft,
   event: EventOf<"run.completed"> | EventOf<"run.failed"> | EventOf<"run.dispatch_failed">,
 ): void {
+  delete draft.state.interactionsByRun[event.run_id]
   closeSnapshotContinuation(draft, event.run_id)
   const steps = stepsOf(draft, event.run_id)
   const failed = event.kind !== "run.completed"
-  const closed = closeOpenTools(steps, (status) => failed
-    ? "error"
-    : status === "awaiting" ? "stale-awaiting" : "stale-running")
+  const closed = closeOpenTools(steps, () => failed ? "error" : "stale-running")
   if (closed) {
     draft.state.stepsByRun[event.run_id] = closed
   }
@@ -335,6 +293,7 @@ function applyRunTerminal(
   }
   if (draft.state.activeRunId === event.run_id) {
     draft.state.activeRunId = null
+    draft.state.executionHead = null
   }
 }
 
@@ -348,7 +307,11 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       }
       break
     case "run.created":
-      // 契约要求解析（event_id/seq 照常记账），不做投影：run 锚定由 receipt/snapshot 承担。
+      if (draft.state.activeRunId === null || (draft.state.activeRunId === event.run_id &&
+        (draft.state.executionHead === null || draft.state.executionHead.state === "queued"))) {
+        draft.state.activeRunId = event.run_id
+        draft.state.executionHead = { run_id: event.run_id, state: "active", pending_pauses: [] }
+      }
       break
     case "message.user": {
       // user 消息事件三态：id 命中 → 更新；本地 echo 尚未被 receipt 对齐（SSE 跑赢 HTTP
@@ -391,8 +354,23 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
     case "tool.output.delta":
       // 长执行工具增量：V1 不渲染（终值走 tool.returned）；canvas/终端视图（P1）再消费。
       break
-    case "tool.awaiting_approval":
-      applyToolAwaitingApproval(draft, event)
+    case "interaction.state": {
+      assertInteractionRevision(draft.state.interactionsByRun[event.run_id], event.payload)
+      draft.state.interactionsByRun[event.run_id] = event.payload
+      if (draft.state.activeRunId === null || draft.state.activeRunId === event.run_id) {
+        draft.state.activeRunId = event.run_id
+        const state = event.payload.phase === "terminal" ? "active" : event.payload.phase
+        draft.state.executionHead = { run_id: event.run_id, state,
+          pending_pauses: state === "active" ? [] : [event.payload] }
+      }
+      break
+    }
+    case "run.queued":
+      if (draft.state.activeRunId === null || (draft.state.activeRunId === event.run_id &&
+        (draft.state.executionHead === null || draft.state.executionHead.state === "queued"))) {
+        draft.state.activeRunId = event.run_id
+        draft.state.executionHead = { run_id: event.run_id, state: "queued", pending_pauses: [] }
+      }
       break
     case "tool.returned":
       applyToolReturned(draft, event)
@@ -498,6 +476,8 @@ export function applyChatProjectionEvents(
           runFailuresById: state.runFailuresById,
           unattributedFailure: state.unattributedFailure,
           activeRunId: state.activeRunId,
+          executionHead: state.executionHead,
+          interactionsByRun: { ...state.interactionsByRun },
           lastSeq: state.lastSeq,
           resumeCursor: state.resumeCursor,
           meta: state.meta,
@@ -538,32 +518,6 @@ export function appendUserMessage(
     todos: [],
     runStatus: "idle",
   }
-}
-
-// HITL：用户点「拒绝」时本地乐观把该 run 指定工具置 rejected（防拒绝回流被翻成绿勾 done）。
-// 只翻命中且仍 awaiting 的工具——同帧部分拒绝时，批准的工具不受影响继续运行。
-export function markToolRejected(
-  state: SessionStreamState,
-  runId: string,
-  toolIds: readonly string[],
-): SessionStreamState {
-  const steps = state.stepsByRun[runId]
-  if (!steps) {
-    return state
-  }
-  const rejectSet = new Set(toolIds)
-  let changed = false
-  const next = steps.map((step) => {
-    if (step.kind === "tool" && step.tool.status === "awaiting" && rejectSet.has(step.tool.id)) {
-      changed = true
-      return { ...step, tool: { ...step.tool, status: "rejected" as const } }
-    }
-    return step
-  })
-  if (!changed) {
-    return state
-  }
-  return { ...state, stepsByRun: { ...state.stepsByRun, [runId]: next } }
 }
 
 // 用户停止在途 run 的本地收口：悬挂工具置结构化 cancelled（停止即关流，后端终态来不及回流）。

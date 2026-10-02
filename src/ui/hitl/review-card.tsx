@@ -3,17 +3,17 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { useState } from "react"
 
-import type { SessionToolCall } from "@/core/state"
+import type { InteractionItem } from "@/contract/control"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 
 import styles from "../thread/thread.module.css"
 
 type ReviewCardProps = {
-  tool: SessionToolCall
+  tool: InteractionItem
   // 该工具已暂存的决策（引擎 staging 快照）；同帧未凑齐时先「已记录」。
   staged?: ToolDecision
-  // 本轮仍处 awaiting-hitl 相位才允许发决策；resume 已发出后按钮收口。
+  // owner waiting 才允许发决策；ACK 不消费卡片，durable resuming 禁新决策。
   hitlActive: boolean
   // control POST 失败：呈现错误并放开按钮允许重试（暂存仍在，重按即重发）。
   controlError: string | null
@@ -36,12 +36,12 @@ export function ReviewCard({
   // 已暂存且未报错即禁用（防连点双发）；POST 失败时放开允许重试。
   const disabled = !actionable || (decided && controlError === null)
   const submitting = decided && controlError === null
-  const allowedDecisions = tool.allowedDecisions ?? []
+  const allowedDecisions = tool.allowed_decisions ?? []
   const canApprove = allowedDecisions.includes("approve")
   const canRespond = allowedDecisions.includes("respond")
   const canReject = allowedDecisions.includes("reject")
   const replacementText = replacement.trim()
-  const prompt = tool.description || t("hitl.reviewHint")
+  const prompt = tool.display.description || t("hitl.reviewHint")
   const promptText = controlError
     ? t("hitl.decisionFailed")
     : decided || !hitlActive
@@ -59,7 +59,8 @@ export function ReviewCard({
         {promptText}
       </p>
       {/* 待审结果只读区：与 returned 结果同一视觉语言（人审的就是它）。 */}
-      <pre className={styles.toolResult}>{tool.result ?? ""}</pre>
+      <pre className={styles.toolResult}>{tool.display.result_preview ?? ""}</pre>
+      {typeof tool.display.result_preview === "string" ? <p>{t("hitl.previewSource", { source: tool.display.source ?? "" })}{tool.display.truncated ? ` · ${t("hitl.previewTruncated")}` : ""}</p> : null}
       {canRespond ? (
         <div className={styles.toolRespond}>
           <Input
@@ -74,14 +75,14 @@ export function ReviewCard({
             className={styles.toolRespondSend}
             disabled={disabled || replacementText.length === 0}
             aria-busy={submitting}
-            onClick={() => onDecision?.(tool.id, { type: "respond", message: replacementText })}
+            onClick={() => onDecision?.(tool.item_id, { type: "respond", message: replacementText })}
           >
             {submitting ? <Spinner aria-hidden="true" /> : null}
             {t("hitl.replace")}
           </Button>
         </div>
       ) : null}
-      {actionable && (canApprove || canReject) ? (
+      {onDecision !== undefined && (canApprove || canReject) ? (
         <div className={styles.toolApprovalActions}>
           {canApprove ? (
             <Button variant="default"
@@ -89,7 +90,7 @@ export function ReviewCard({
               className={styles.toolApprove}
               disabled={disabled}
               aria-busy={submitting}
-              onClick={() => onDecision(tool.id, { type: "approve" })}
+              onClick={() => onDecision?.(tool.item_id, { type: "approve" })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.adopt")}
@@ -101,7 +102,7 @@ export function ReviewCard({
               className={styles.toolReject}
               disabled={disabled}
               aria-busy={submitting}
-              onClick={() => onDecision(tool.id, { type: "reject" })}
+              onClick={() => onDecision?.(tool.item_id, { type: "reject" })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.reject")}

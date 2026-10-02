@@ -2,18 +2,10 @@
 
 import { z } from "zod"
 import { eventCursorSchema } from "./agui-events"
-import { resumeDecisionSchema } from "./control"
+import { resumeDecisionSchema, interactionStateSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
 
-export const riskSchema = z
-  .object({
-    level: z.string().min(1),
-    source: z.string().min(1),
-    reason: z.string().min(1),
-  })
-  .strict()
-export type Risk = z.infer<typeof riskSchema>
 
 export const sessionMetaSchema = z
   .object({
@@ -56,36 +48,17 @@ export const messageRecordSchema = z
   })
 export type MessageRecord = z.infer<typeof messageRecordSchema>
 
-export const activeRunSchema = z
-  .object({
-    run_id: z.string().min(1),
-    status: z.string().min(1),
-  })
-  .strict()
-export type ActiveRun = z.infer<typeof activeRunSchema>
-
-export const pendingPauseSchema = z
-  .object({
-    pause_id: z.string().min(1),
-    run_id: z.string().min(1),
-    tool_id: z.string().min(1),
-    segment_id: z.string().min(1),
-    tool_name: z.string().min(1),
-    kind: z.enum(["tool_approval", "ask_user_question", "result_review", "input"]),
-    args: z.record(z.unknown()),
-    description: z.string(),
-    allowed_decisions: z.array(z.enum(["approve", "edit", "reject", "respond", "submit"])),
-    risk: riskSchema.optional(),
-    editable: z.boolean(),
-    input_schema: z.record(z.unknown()).optional(),
-    result: z.string().optional(),
-    status: z.enum(["pending", "resolved", "cancelled", "expired"]),
-    decision: z.record(z.unknown()).optional(),
-    created_at: z.string().min(1),
-    resolved_at: z.string().min(1).optional(),
-  })
-  .strict()
+export const pendingPauseSchema = interactionStateSchema.refine((state) => state.phase === "waiting" || state.phase === "resuming")
 export type PendingPause = z.infer<typeof pendingPauseSchema>
+export const executionHeadSchema = z.object({
+  run_id: z.string().min(1), state: z.enum(["queued", "active", "waiting", "resuming"]), pending_pauses: z.array(pendingPauseSchema).max(1),
+}).strict().superRefine((head, context) => {
+  const pending = head.state === "waiting" || head.state === "resuming"
+  if (pending ? head.pending_pauses.length !== 1 || head.pending_pauses[0]?.phase !== head.state : head.pending_pauses.length !== 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Head must match its complete pending state" })
+  }
+})
+export type ExecutionHead = z.infer<typeof executionHeadSchema>
 export const sessionListItemSchema = z
   .object({
     session_id: z.string().min(1),
@@ -106,8 +79,7 @@ export const sessionSnapshotSchema = z
   .object({
     session: sessionMetaSchema,
     messages: z.array(messageRecordSchema).optional(),
-    active_run: activeRunSchema.optional(),
-    pending_pauses: z.array(pendingPauseSchema),
+    execution_head: executionHeadSchema.optional(),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
     deliveries_has_more: z.boolean(),
@@ -162,9 +134,9 @@ export const messageCreateReceiptSchema = z
 export type MessageCreateReceipt = z.infer<typeof messageCreateReceiptSchema>
 
 export const runControlBodySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("run.cancel"), session_id: z.string().min(1) }).strict(),
-  z.object({ kind: z.literal("run.resume"), session_id: z.string().min(1), decisions: z.array(resumeDecisionSchema).min(1) }).strict(),
-  z.object({ kind: z.literal("run.steer"), session_id: z.string().min(1), message_id: z.string().min(1), content: z.string().min(1) }).strict(),
+  z.object({ kind: z.literal("run.cancel") }).strict(),
+  z.object({ kind: z.literal("run.resume"), expected_pause_revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER), pause_ref: z.string().min(1), decisions: z.array(resumeDecisionSchema).min(1) }).strict(),
+  z.object({ kind: z.literal("run.steer"), message_id: z.string().min(1), content: z.string().min(1) }).strict(),
 ])
 export type RunControlBody = z.infer<typeof runControlBodySchema>
 

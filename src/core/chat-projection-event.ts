@@ -3,6 +3,7 @@
 
 import { z } from "zod"
 
+import { interactionStateSchema } from "@/contract/control"
 import { agentFailureProfileSchema } from "@/contract/agent-failure"
 
 const todoSchema = z
@@ -16,14 +17,6 @@ const tokenUsageSchema = z
   .object({
     input_tokens: z.number().int(),
     output_tokens: z.number().int(),
-  })
-  .strict()
-
-const riskSchema = z
-  .object({
-    level: z.string().min(1),
-    source: z.string().min(1),
-    reason: z.string().min(1),
   })
   .strict()
 
@@ -87,26 +80,6 @@ const toolOutputDeltaPayload = z
     name: z.string().min(1),
     // 长执行工具的增量输出（如 execute）；每工具累计上限同 result 护栏，超限静默停发（终值仍走 tool.returned）。
     delta: z.string(),
-  })
-  .strict()
-
-const toolAwaitingApprovalPayload = z
-  .object({
-    segment_id: z.string().min(1),
-    tool_id: z.string().min(1),
-    name: z.string().min(1),
-    args: z.record(z.unknown()),
-    description: z.string(),
-    allowed_decisions: z.array(z.enum(["approve", "edit", "reject", "respond", "submit"])),
-    kind: z.enum(["tool_approval", "ask_user_question", "result_review", "input"]),
-    // 面向 web 的风险摘要，非权限判断真源。
-    risk: riskSchema.optional(),
-    editable: z.boolean(),
-    input_schema: z.record(z.unknown()).optional(),
-    // 同帧完整待批 tool_id 列表；HITL『凑齐才提交』契约依据，web 读契约而非内嵌算法。
-    pending_tool_ids: z.array(z.string().min(1)),
-    // 仅 kind=result_review 时存在：待人工审核的已执行结果（payload 列表尾缀 ? = 该 kind 局部可选）。
-    result: z.string().optional(),
   })
   .strict()
 
@@ -248,13 +221,13 @@ const envelope = z
 export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("session.created"), payload: sessionCreatedPayload }),
   envelope.extend({ kind: z.literal("run.created"), payload: runCreatedPayload }),
+  envelope.extend({ kind: z.literal("interaction.state"), payload: interactionStateSchema }),
   envelope.extend({ kind: z.literal("message.user"), payload: messageUserPayload }),
   envelope.extend({ kind: z.literal("message.delta"), payload: messageDeltaPayload }),
   envelope.extend({ kind: z.literal("message.completed"), payload: messageCompletedPayload }),
   envelope.extend({ kind: z.literal("thinking.delta"), payload: thinkingDeltaPayload }),
   envelope.extend({ kind: z.literal("tool.invoked"), payload: toolInvokedPayload }),
   envelope.extend({ kind: z.literal("tool.output.delta"), payload: toolOutputDeltaPayload }),
-  envelope.extend({ kind: z.literal("tool.awaiting_approval"), payload: toolAwaitingApprovalPayload }),
   envelope.extend({ kind: z.literal("tool.returned"), payload: toolReturnedPayload }),
   envelope.extend({ kind: z.literal("delivery.created"), payload: deliveryCreatedPayload }),
   envelope.extend({ kind: z.literal("todo.updated"), payload: todoUpdatedPayload }),
@@ -267,6 +240,11 @@ export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("subagent.tool.returned"), payload: subagentToolReturnedPayload }),
   envelope.extend({ kind: z.literal("run.completed"), payload: runCompletedPayload }),
   envelope.extend({ kind: z.literal("run.failed"), payload: runFailedPayload }),
+  z.object({
+    event_id: z.string().min(1), sourceSequence: z.string().regex(/^[1-9][0-9]*$/u),
+    session_id: z.string().min(1), run_id: z.string().min(1), timestamp: z.string().min(1),
+    kind: z.literal("run.queued"), payload: z.object({ run_id: z.string().min(1), dispatch_sequence: z.string().regex(/^[1-9][0-9]*$/u) }).strict(),
+  }).strict(),
   z.object({
     event_id: z.string().min(1),
     sourceSequence: z.string().regex(/^[1-9][0-9]*$/u),

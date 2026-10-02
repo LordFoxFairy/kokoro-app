@@ -1,6 +1,8 @@
 // AG-UI adapter: validated wire frames become two independent local views:
 // Vercel AI SDK UIMessage chunks and the reducer's internal projection events.
 
+import type { InteractionState } from "@/contract/control"
+import { assertInteractionRevision } from "@/core/state"
 import { EventType } from "@ag-ui/core"
 import type { UIMessage, UIMessageChunk } from "ai"
 
@@ -19,7 +21,7 @@ import {
 export type KokoroUiMessageMetadata = {
   cursor: EventCursor
   sourceEventId: string
-  sourceSequence: number
+  sourceSequence: number | string
   sessionId: string
   runId: string | null
   occurredAt: string
@@ -168,8 +170,8 @@ function customProjection(
   event: Extract<AgUiEvent, { type: EventType.CUSTOM }>,
 ): ChatProjectionEvent {
   switch (event.name) {
-    case "kokoro.interaction.awaiting_approval":
-      return projectionEnvelope(cursor, event, "tool.awaiting_approval", event.value)
+    case "kokoro.interaction.state":
+      return projectionEnvelope(cursor, event, "interaction.state", event.value)
     case "kokoro.delivery.created":
       return projectionEnvelope(cursor, event, "delivery.created", event.value)
     case "kokoro.subagent.started":
@@ -190,6 +192,10 @@ function customProjection(
 /** Stateful mapper for one logical AG-UI stream, including reconnects. */
 export class AgUiEventMapper {
   readonly #toolCalls = new Map<string, ToolCallState>()
+  readonly #interactions = new Map<string, InteractionState>()
+  constructor(baselines: Readonly<Record<string, InteractionState>> = {}) {
+    for (const [runId, state] of Object.entries(baselines)) this.#interactions.set(runId, state)
+  }
 
   #toolLookup(event: AgUiEvent, toolCallId: string): ToolCallLookup {
     const runId = requiredRunId(event)
@@ -456,6 +462,16 @@ export class AgUiEventMapper {
         }
       }
       case EventType.CUSTOM: {
+        if (event.name === "kokoro.run.queued") {
+          const projectionEvent = parseChatProjectionEvent({ event_id: cursor, sourceSequence: metadata.seq, session_id: metadata.session_id, run_id: metadata.run_id, timestamp: metadata.timestamp, kind: "run.queued", payload: event.value })
+          const messageMetadata: KokoroUiMessageMetadata = { cursor, sourceEventId: metadata.event_id, sourceSequence: metadata.seq, sessionId: metadata.session_id, runId: metadata.run_id, occurredAt: metadata.timestamp }
+          return { cursor, projectionEvent, terminal: false, uiMessageChunks: [{ type: "data-kokoro", id: cursor, data: { kind: projectionEvent.kind, payload: projectionEvent.payload, metadata: messageMetadata } }] }
+        }
+        if (event.name === "kokoro.interaction.state") {
+          const runId = requiredRunId(event)
+          assertInteractionRevision(this.#interactions.get(runId), event.value)
+          this.#interactions.set(runId, event.value)
+        }
         const messageMetadata = numericMessageMetadata(cursor, event)
         const projectionEvent = customProjection(cursor, event)
         return {

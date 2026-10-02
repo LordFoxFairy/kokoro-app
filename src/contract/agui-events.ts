@@ -4,6 +4,7 @@
 import { EventSchemas, EventType, RunFinishedOutcomeSchema } from "@ag-ui/core"
 import { z } from "zod"
 
+import { interactionStateSchema } from "./control"
 import { agentFailureCodeSchema, agentFailureProfileSchema } from "./agent-failure"
 
 export const eventCursorSchema = z.string().regex(/^agui_[0-9a-f]{32}$/u)
@@ -136,9 +137,19 @@ const eventSchema = z.union([
     role: z.literal("tool").optional(),
     isError: z.boolean().optional(),
   }),
+  z.object({
+    type: z.literal(EventType.CUSTOM), name: z.literal("kokoro.run.queued"),
+    value: z.object({ run_id: nonblankString, dispatch_sequence: z.string().regex(/^[1-9][0-9]*$/u) }).strict(),
+    timestamp: z.number().int().nonnegative(), metadata: z.object({ kokoro: dispatchRunErrorMetadataSchema }).strict(),
+  }).strict().superRefine((event, context) => {
+    if (event.value.run_id !== event.metadata.kokoro.run_id || event.value.dispatch_sequence !== event.metadata.kokoro.seq) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Queued source identity mismatch" })
+    }
+  }),
+  base.extend({ type: z.literal(EventType.CUSTOM), name: z.literal("kokoro.interaction.state"), value: interactionStateSchema }),
   base.extend({
     type: z.literal(EventType.CUSTOM),
-    name: z.string().min(1),
+    name: z.enum(["kokoro.delivery.created", "kokoro.subagent.started", "kokoro.subagent.finished", "kokoro.session.created", "kokoro.todo.updated", "kokoro.message.user"]),
     value: z.unknown(),
   }),
 ])

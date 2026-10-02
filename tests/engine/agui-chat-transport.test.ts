@@ -382,3 +382,66 @@ describe("AgUiChatTransport", () => {
     expect(submitted[3]?.idempotencyKey).not.toBe(submitted[2]?.idempotencyKey)
   })
 })
+
+
+import {
+  makePublic4Frame as r66Frame, makePublic4Interaction as r66Interaction,
+  makePublic4StateFrame as r66StateFrame,
+} from "../core/fixtures"
+
+describe("R66 public4 revision acceptance before cursor", () => {
+  it.each(["regression", "presence", "locator", "duplicate"] as const)(
+    "does not admit the %s frame or its cursor after a legal full revision",
+    async (variant) => {
+      const base = r66Interaction()
+      const bad = structuredClone(base)
+      if (variant === "regression") bad.interaction_revision = 3
+      if (variant === "presence") bad.groups[0]!.items[0]!.validation = null
+      if (variant === "locator") {
+        bad.interaction_revision = 5
+        bad.pause_ref = "different_same_pause"
+      }
+      if (variant === "duplicate") bad.groups.push(structuredClone(bad.groups[0]!))
+      const cursors = [21, 22, 23].map((n) => "agui_" + n.toString(16).padStart(32, "0"))
+      const first = cursors[0]!, acceptedCursor = cursors[1]!, rejectedCursor = cursors[2]!
+      const headers: Headers[] = []
+      const fetcher = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        headers.push(new Headers(init?.headers))
+        if (headers.length > 1) return new Response(new ReadableStream<Uint8Array>({
+          start: (controller) => init?.signal?.addEventListener("abort", () => controller.close(), { once: true }),
+        }), { headers: { "content-type": "text/event-stream" } })
+        return response(
+          sse(first, r66Frame({ type: "RUN_STARTED", threadId: "conv_9", runId: "run_1" }, 1)) +
+          sse(acceptedCursor, r66StateFrame(base, 2)) +
+          sse(rejectedCursor, r66StateFrame(bad, 3)),
+        )
+      }
+      const transport = new AgUiChatTransport({ eventsUrl: () => "/r66/events", fetcher })
+      const frames: AgUiTransportFrame[] = []
+      const errors: unknown[] = []
+      let finish: () => void = () => {}
+      const stopped = new Promise<void>((resolve) => { finish = resolve })
+      const handle = transport.openProjectionEvents({
+        chatId: "conv_9", resumeCursor: null,
+        onFrame: (frame) => frames.push(frame),
+        onStreamError: (error) => { errors.push(error); finish() },
+        onReconnecting: finish,
+      })
+      let replay: ReadableStream | null = null
+      try {
+        await stopped
+        expect(frames[0]?.projectionEvent).toMatchObject({ kind: "run.created", seq: 1 })
+        expect(frames).toHaveLength(2)
+        expect(frames[1]?.projectionEvent).toMatchObject({ kind: "interaction.state", payload: base })
+        expect(errors).toHaveLength(1)
+        expect(errors[0]).toMatchObject({ reason: "parse" })
+        replay = await transport.reconnectToStream({ chatId: "conv_9" })
+        expect(headers.at(-1)?.get("last-event-id")).toBe(acceptedCursor)
+        expect(headers.at(-1)?.get("last-event-id")).not.toBe(rejectedCursor)
+      } finally {
+        handle.close()
+        await replay?.cancel().catch(() => {})
+      }
+    },
+  )
+})

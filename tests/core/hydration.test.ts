@@ -83,8 +83,8 @@ describe("stateFromSnapshot", () => {
     (profile) => {
       const failed = makeFailedSnapshot(profile)
       const states = [
-        stateFromSnapshot({ ...failed, active_run: { run_id: "run_failed", status: "running" } }),
-        stateFromSnapshot({ ...failed, pending_pauses: [makePendingPause({ run_id: "run_failed" })] }),
+        stateFromSnapshot({ ...failed, execution_head: { run_id: "run_failed", state: "active", pending_pauses: [] } }),
+        stateFromSnapshot(makeSnapshot({ messages: failed.messages ?? [], pendingPauses: [makePendingPause({ run_id: "run_failed" })] })),
         stateFromSnapshot({
           ...failed,
           messages: [
@@ -96,9 +96,7 @@ describe("stateFromSnapshot", () => {
       ]
       for (const state of states) {
         expect(state.runStatus).toBe("idle")
-        const blocked = state.activeRunId === "run_failed" || state.stepsByRun.run_failed?.some(
-          (step) => step.kind === "tool" && step.tool.status === "awaiting",
-        )
+        const blocked = state.activeRunId === "run_failed" || Boolean(state.interactionsByRun.run_failed?.groups.length)
         if (blocked) expect(state.runFailuresById).toEqual({})
         else expect(state.runFailuresById).toHaveProperty("run_failed")
       }
@@ -108,8 +106,8 @@ describe("stateFromSnapshot", () => {
   it.each<[
     string,
     NonNullable<SessionSnapshot["messages"]>,
-    SessionSnapshot["active_run"] | undefined,
-    SessionSnapshot["pending_pauses"],
+    NonNullable<Parameters<typeof makeSnapshot>[0]>["activeRun"],
+    NonNullable<NonNullable<Parameters<typeof makeSnapshot>[0]>["pendingPauses"]>,
   ]>([
     ["newer user", [...failedHistory("failed"), { message_id: "user_2", role: "user" as const, content: "next", status: "completed" as const, created_at: "2026-07-02T00:00:02Z" }], undefined, []],
     ["completed assistant", [{ ...failedHistory("done")[1]!, status: "completed" as const }], undefined, []],
@@ -119,7 +117,7 @@ describe("stateFromSnapshot", () => {
     ["pending pause", failedHistory("failed"), undefined, [makePendingPause({ run_id: "run_failed" })]],
     ["empty messages", [], undefined, []],
   ])("does not restore stale failure for %s", (_label, messages, activeRun, pendingPauses) => {
-    const state = stateFromSnapshot(makeSnapshot({ messages, activeRun, pendingPauses }))
+    const state = stateFromSnapshot(makeSnapshot({ messages, ...(activeRun ? { activeRun } : {}), pendingPauses }))
     expect(state.runStatus).toBe("idle")
     if (_label === "active run" || _label === "pending pause") expect(state.runFailuresById).toEqual({})
     else if (_label === "newer user") expect(state.runFailuresById).toHaveProperty("run_failed")
@@ -142,7 +140,7 @@ describe("stateFromSnapshot", () => {
     const snapshot = parseSessionSnapshot({
       session: { session_id: "conv_1", title: "server title", owner_id: "local-user",
         created_at: "2026-07-02T00:00:00Z", updated_at: "2026-07-02T00:00:01Z" },
-      pending_pauses: [], files: [], deliveries: [], deliveries_has_more: false, event_watermark: null,
+      files: [], deliveries: [], deliveries_has_more: false, event_watermark: null,
     })
     const state = stateFromSnapshot(snapshot)
     expect(state.runStatus).toBe("idle")
@@ -167,10 +165,8 @@ describe("stateFromSnapshot", () => {
       ["user", "hi"],
       ["assistant", "yo"],
     ])
-    expect(state.stepsByRun.run_1?.[0]).toMatchObject({
-      kind: "tool",
-      tool: { id: "tool_1", status: "awaiting" },
-    })
+    expect(state.interactionsByRun.run_1).toMatchObject({ phase: "waiting", groups: [{ group_id: "group_1", items: [expect.objectContaining({ item_id: "tool_1" })] }] })
+    expect(state.stepsByRun.run_1).toBeUndefined()
     expect(state.lastSeq).toBe(0)
     expect(state.resumeCursor).toBe(cursor)
   })

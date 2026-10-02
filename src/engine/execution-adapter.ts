@@ -1,6 +1,6 @@
 // Engine 执行/传输适配边界：集中构造消息与 control wire，并隔离流代际和微任务批处理。
 
-import type { ResumeDecision } from "@/contract/control"
+import type { InteractionState, ResumeDecision } from "@/contract/control"
 import type {
   DeleteSessionReceipt,
   MessageCreateParams,
@@ -31,6 +31,8 @@ export type CreateMessageArgs = {
 }
 
 export type ResumeRunArgs = {
+  expectedPauseRevision: number
+  pauseRef: string
   sessionId: string
   runId: string
   decisions: readonly ResumeDecision[]
@@ -44,6 +46,7 @@ export type CancelRunArgs = {
 }
 
 export type ExecutionStreamCallbacks = {
+  interactionBaselines?: Readonly<Record<string, InteractionState>>
   onCursor: (cursor: EventCursor) => void
   onEvents: (events: readonly ChatProjectionEvent[]) => void
   onReconnecting?: (cursor: EventCursor | null) => void
@@ -151,6 +154,7 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     const handle = deps.client.openEvents({
       sessionId,
       resumeCursor,
+      ...(callbacks.interactionBaselines === undefined ? {} : { interactionBaselines: callbacks.interactionBaselines }),
       onCursor: (cursor) => {
         if (activeStream !== stream || stream.generation !== streamGeneration) {
           return
@@ -208,7 +212,8 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
         args.runId,
         {
           kind: "run.resume",
-          session_id: args.sessionId,
+          expected_pause_revision: args.expectedPauseRevision,
+          pause_ref: args.pauseRef,
           decisions: [...args.decisions],
         },
         args.commandId,
@@ -217,7 +222,7 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
       deps.client.sendControl(
         args.sessionId,
         args.runId,
-        { kind: "run.cancel", session_id: args.sessionId },
+        { kind: "run.cancel" },
         args.commandId,
       ),
     fetchSnapshot: (sessionId) => deps.client.fetchSnapshot(sessionId),

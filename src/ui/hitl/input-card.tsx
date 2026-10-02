@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { useRef, useState } from "react"
 
-import type { SessionToolCall } from "@/core/state"
+import type { InteractionItem } from "@/contract/control"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
@@ -22,29 +22,20 @@ import {
 } from "./input-schema"
 
 type InputCardProps = {
-  tool: SessionToolCall
+  decisionType?: "submit" | "edit"
+  tool: InteractionItem
   // 该工具已暂存的决策（引擎 staging 快照）；同帧未凑齐时先「已记录」。
   staged?: ToolDecision
-  // 本轮仍处 awaiting-hitl 相位才允许发决策；resume 已发出后按钮收口。
+  // owner waiting 才允许发决策；ACK 不消费卡片，durable resuming 禁新决策。
   hitlActive: boolean
   // control POST 失败：呈现错误并放开按钮允许重试（暂存仍在，重按即重发）。
   controlError: string | null
   onDecision?: (toolId: string, decision: ToolDecision) => void
 }
 
-// 提示语来自 args.message（MCP elicitation 的人话请求），缺省回落工具自述再回落兜底文案。
-function messageOf(tool: SessionToolCall, fallback: string): string {
-  const raw = tool.args["message"]
-  if (typeof raw === "string" && raw) {
-    return raw
-  }
-  return tool.description || fallback
-}
-
-// 校验失败重问：validation_error 随重发 awaiting 的 args 上 wire（agent 侧契约事实）。
-function validationErrorOf(tool: SessionToolCall): string | null {
-  const raw = tool.args["validation_error"]
-  return typeof raw === "string" && raw ? raw : null
+function messageOf(tool: InteractionItem, fallback: string): string { return tool.display.description || fallback }
+function validationErrorOf(tool: InteractionItem): string | null {
+  return tool.validation ? `${tool.validation.code}: ${tool.validation.instance_path.join(".")}` : null
 }
 
 function draftText(draft: FieldDraft, name: string): string {
@@ -61,7 +52,7 @@ function draftList(draft: FieldDraft, name: string): string[] {
 // boolean→开关、number→数字框、array(enum)→多选；不认识的 schema 回退原始 JSON 编辑器。
 // 提交=契约 SubmitDecision{request_id=tool_id, value}；reject 同卡（allowed_decisions 驱动）。
 // 表单草稿活在组件本地：校验失败重问只刷新同一工具步（卡不卸载），已填内容原样保留。
-export function InputCard({ tool, staged, hitlActive, controlError, onDecision }: InputCardProps) {
+export function InputCard({ decisionType = "submit", tool, staged, hitlActive, controlError, onDecision }: InputCardProps) {
   const t = useT()
   const [draft, setDraft] = useState<FieldDraft>({})
   const [jsonText, setJsonText] = useState("{}")
@@ -75,10 +66,10 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
   // 已暂存且未报错即禁用（防连点双发）；POST 失败时放开允许重试。
   const disabled = !actionable || (decided && controlError === null)
   const submitting = decided && controlError === null
-  const allowedDecisions = tool.allowedDecisions ?? []
-  const canSubmit = allowedDecisions.includes("submit")
+  const allowedDecisions = tool.allowed_decisions ?? []
+  const canSubmit = allowedDecisions.includes(decisionType)
   const canReject = allowedDecisions.includes("reject")
-  const fields = parseInputFields(tool.inputSchema)
+  const fields = parseInputFields(tool.display.input_schema)
   const validationError = validationErrorOf(tool)
 
   const prompt = messageOf(tool, t("hitl.inputHint"))
@@ -105,7 +96,7 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
         return
       }
       setBlocked(null)
-      onDecision(tool.id, { type: "submit", value })
+      onDecision?.(tool.item_id, decisionType === "edit" ? { type: "edit", args: value } : { type: "submit", value })
       return
     }
     const built = buildSubmitValue(fields, draft)
@@ -115,7 +106,7 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
       return
     }
     setBlocked(null)
-    onDecision(tool.id, { type: "submit", value: built.value })
+    onDecision?.(tool.item_id, decisionType === "edit" ? { type: "edit", args: built.value } : { type: "submit", value: built.value })
   }
 
   const invalidSet = new Set(blocked?.kind === "required" ? blocked.invalid : [])
@@ -123,7 +114,7 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
   const renderField = (field: InputField) => {
     const invalid = invalidSet.has(field.name)
     const labelText = field.required ? `${field.label} *` : field.label
-    const fieldId = `hitl-${tool.id}-${field.name}`
+    const fieldId = `hitl-${tool.item_id}-${field.name}`
     switch (field.kind) {
       case "text":
         return (
@@ -281,7 +272,7 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
           {blocked.kind === "json" ? t("hitl.inputJsonInvalid") : t("hitl.inputRequired")}
         </p>
       ) : null}
-      {actionable && (canSubmit || canReject) ? (
+      {onDecision !== undefined && (canSubmit || canReject) ? (
         <div className={styles.toolApprovalActions}>
           {canSubmit ? (
             <Button variant="default" type="button" className={styles.toolApprove} disabled={disabled} aria-busy={submitting} onClick={submit}>
@@ -295,7 +286,7 @@ export function InputCard({ tool, staged, hitlActive, controlError, onDecision }
               className={styles.toolReject}
               disabled={disabled}
               aria-busy={submitting}
-              onClick={() => onDecision(tool.id, { type: "reject" })}
+              onClick={() => onDecision?.(tool.item_id, { type: "reject" })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.reject")}

@@ -1,5 +1,7 @@
 // 纯状态模型：零 I/O 零 React；内部投影类型与 AG-UI wire DTO 分离。
 
+import type { InteractionState } from "@/contract/control"
+import type { ExecutionHead } from "@/contract/chat"
 import type { EventCursor } from "@/contract/agui-events"
 import type { AgentFailureProfile } from "@/contract/agent-failure"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -7,10 +9,6 @@ import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 type EventOf<K extends ChatProjectionEvent["kind"]> = Extract<ChatProjectionEvent, { kind: K }>
 
 export type SessionTodo = EventOf<"todo.updated">["payload"]["todos"][number]
-type AllowedDecision =
-  EventOf<"tool.awaiting_approval">["payload"]["allowed_decisions"][number]
-type AwaitingKind = EventOf<"tool.awaiting_approval">["payload"]["kind"]
-type ToolRisk = NonNullable<EventOf<"tool.awaiting_approval">["payload"]["risk"]>
 type SubagentSource = EventOf<"subagent.started">["payload"]["source"]
 type RunCompletedStatus = EventOf<"run.completed">["payload"]["status"]
 
@@ -37,11 +35,9 @@ export type SessionMessage = {
 // 结构化终态收口：stale-*（run 终态时仍悬挂）与 cancelled（用户停止）零 UI 文案，人话由渲染层生成。
 export type ToolStatus =
   | "running"
-  | "awaiting"
   | "rejected"
   | "done"
   | "error"
-  | "stale-awaiting"
   | "stale-running"
   | "cancelled"
 
@@ -55,15 +51,7 @@ export type SessionToolCall = {
   errorText?: string
   rejectReason?: string
   responded?: boolean
-  description?: string
-  allowedDecisions?: AllowedDecision[]
-  awaitingKind?: AwaitingKind
-  // 契约 risk：面向 web 的风险摘要，非权限判断真源。
-  risk?: ToolRisk
-  editable?: boolean
-  inputSchema?: Record<string, unknown>
-  // 契约 pending_tool_ids：同帧完整待批集合，HITL「凑齐才提交」的唯一判据。
-  pendingToolIds?: string[]
+
 }
 
 export type SessionSubagent = {
@@ -112,6 +100,8 @@ export type SessionDelivery = {
 }
 
 export type SessionStreamState = {
+  executionHead: ExecutionHead | null
+  interactionsByRun: Record<string, InteractionState>
   // 工作区文件清单（snapshot 水合；终态后重拉刷新）。
   files: WorkspaceFileEntry[]
   // Durable owner snapshot and live/replay frames share the binary identity.
@@ -139,6 +129,8 @@ export type SessionStreamState = {
 
 export function createSessionStreamState(): SessionStreamState {
   return {
+    executionHead: null,
+    interactionsByRun: {},
     files: [],
     deliveries: [],
     deliveriesHasMore: false,
@@ -154,4 +146,20 @@ export function createSessionStreamState(): SessionStreamState {
     resumeCursor: null,
     meta: null,
   }
+}
+
+// Structural equality preserves nullable/omitted fields; this is not an owner digest protocol.
+function canonicalState(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(canonicalState).join(",") + "]"
+  if (value !== null && typeof value === "object") return "{" + Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => JSON.stringify(key) + ":" + canonicalState(item)).join(",") + "}"
+  return JSON.stringify(value)
+}
+export function sameInteractionState(left: InteractionState, right: InteractionState): boolean {
+  return canonicalState(left) === canonicalState(right)
+}
+export function assertInteractionRevision(previous: InteractionState | undefined, next: InteractionState): void {
+  if (!previous) return
+  if (next.interaction_revision < previous.interaction_revision || next.pause_revision < previous.pause_revision ||
+    (next.pause_revision === previous.pause_revision && next.pause_ref !== previous.pause_ref) ||
+    (next.interaction_revision === previous.interaction_revision && !sameInteractionState(previous, next))) throw new Error("Interaction revision conflict")
 }

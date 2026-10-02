@@ -321,15 +321,25 @@ const notificationFallback: Partial<Record<MessageKey, string>> = {
   "notifications.fixtureMediaLabel": "Kokoro workspace",
 }
 
+const interactionFallback: Partial<Record<MessageKey, string>> = {
+  "hitl.edit": "Edit",
+  "hitl.retryResume": "Retry submitted decisions",
+  "hitl.previewSource": "Source: {source}",
+  "hitl.previewTruncated": "Preview truncated",
+  "hitl.queued": "Queued, waiting to execute",
+  "hitl.resuming": "Resuming execution; decisions submitted",
+  "hitl.cancelling": "Stopping, waiting for execution to finish",
+}
+
 // zh 是源字典(住 messages.ts),自身无 overlay;其余各挂 MT 生成(可人工精修)的增量覆盖。
 export const OVERLAYS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   zh: {},
-  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...en },
-  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ja },
-  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ko },
-  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...es },
-  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...fr },
-  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...de },
-  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...pt },
-  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...ru },
+  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...en },
+  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ja },
+  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ko },
+  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...es },
+  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...fr },
+  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...de },
+  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...pt },
+  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ru },
 }

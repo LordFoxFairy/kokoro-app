@@ -1,3 +1,112 @@
+## R75 Root 独立验收：public4 会话与审批消费者源码
+
+Root 在本工作树 fresh `pnpm check` Node22 exit0：contract240、architecture50、unit2271pass/0fail/0skip、lint/typecheck/build0，日志 `/tmp/kokoro-web-r75-root-full-check.log`。原 Astra 逐项重审 R74 冻结68path、5授权delta、747保护及九冻结块，0P0/P1/P2；原三个P1已关闭。Root 接收完整切片准备提交，当前仍固定已发布 BFF3c08a422/public4/digest5561450b，不提前消费未发布public5。首次R70纯GREEN后的三P1记录保留；源码及测试验收不代表真实IAM→模型→刷新→文件→积分整链。实际浏览器/资源由Root后继独立验收，WIN01已停止写入。
+
+## R74-WEB：三项 P1 修复候选冻结（2026-10-02）
+
+当前 Web 基线仍 main / `06a1c86612d9557d83081bcb67e8fc539ae7eacb`，未提交。R70 候选曾被 Root Astra 检出三项 P1，因此下方 R70 GREEN 与初审不是本轮最终验收；本前缀记录其统一修复，旧正文与 D0 原字节保留。Root 独占 Git/index/commit、服务与真实组合验收，WIN01 仅为已授权 slice 的 writer。
+
+### 本轮修复与精确范围
+
+- terminal RR 出现有效 successor head 时，以完整 canonical snapshot、opaque watermark 和 interaction baseline 原子接管；旧 stream 的 callbacks/buffer 经 adapter generation 失效，新 stream 使用 snapshot 水位。新 head 接管不被仅 delivery 推进的旧 cursor 阻止；live-advanced 成果按 exact Conversation/Artifact 二元身份合并。snapshot 不复活已观察 terminal；RR 在途 terminal evidence 只活在相应 read 窗口。没有 opaque 大小比较。
+- 每个 create closure 冻结自己的 optimistic ID，三个 receipt helper call 均显式传入该 ID。pending echoes 不参与 core 的内容猜测，SSE-first receipt 只删除对应 echo 并保留 canonical owner row；正常/逆序/同内容并发与 RR 在途的未 ACK/已 ACK admission 均覆盖，同会话 snapshot 接管不废弃仍有效的 admission generation。
+- resume 明确处理 pending/succeeded admission 与 failed durable receipt。failed 释放 lock、显示白名单 stable error（未知码统一 control_failed）、GET owner facts；不自动 POST、新 key/body、消费卡片或虚构 terminal。intent/attempt/session/run/pause/hydrate guards 阻止旧回执或慢 read 影响新 pause、Stop、同键显式重试。只有真实 owner pause/collection 变化才失效旧意图，旧 interaction revision 的 read 不回退已知 baseline。
+- RR 保留已确认普通 tool/thinking/subagent 事实；只携带这些 process projection 的 exact event-ID 去重集合，不携带旧 lastSeq、text/interaction 的 dedupe 身份。后水位重放不重复 subagent/process，canonical 全文仍由 fresh snapshot 建立，不重造第二 HITL 协议。
+- 本轮只改既有 source 两文件 machine.ts/event-reducer.ts、engine.test.ts/event-reducer.test.ts，以及本 CURRENT 前缀。新测试 EOF 追加 24 条（engine 21、helper 3），原 2247 条保留。Root 批准的旧断言例外只有 engine 原第2281行：旧 stream closed＋新 stream open/原精确 watermark；另仅为旧 helper call 增加 usr_1 显式参数。其余旧测试前缀恢复这些两项机械例外后与 R74 起始字节一致。
+- fixed BFF public4.0.0 owner `3c08a422f3a6aa3cf204c308716cfa64f6d61bb2` / YAML SHA `5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6` 未改；本轮未写 pin/generated/contracts/依赖/其余文档。无新文件/目录、index 空、Git 提交仍归 Root。
+
+### 当前实际证据
+
+Node v22.22.2 / pnpm11.25.0，本主工作树最终 fresh `pnpm check` 句柄95042已终态 **exit0**：
+
+| 门禁 | 实际结果 |
+| --- | --- |
+| 两 generator --check | 通过，Team15固定 owner pin 与 failure artifact 无变化 |
+| pnpm contract | 19文件 / 240通过 / 0失败 |
+| pnpm test:architecture | 4文件 / 50通过 / 0失败 |
+| pnpm lint | exit0，零warning |
+| pnpm typecheck | next typegen + tsc exit0 |
+| pnpm test | 163文件 / 2271通过 / 0失败 / 0跳过，43.23s |
+| pnpm build | exit0，编译、类型、静态页通过 |
+| 定向 engine + event-reducer | 138通过 / 0失败 / 0跳过 |
+
+最终完整日志 `/tmp/kokoro-web-r74-full-check-final.log`；起始752 tracked hashes `/tmp/kokoro-web-r74-baseline.json`，scope/旧断言保护 `/tmp/kokoro-web-r74-scope-protection.json`，新候选 manifest `/tmp/kokoro-web-r74-public4-green-freeze.json`。同一68条既有 dirty 路径仍沿 R70 授权，此次相对 R74 起点只有上述5条变化，其他747条 byte-equal；CURRENT 只前插证据。
+
+保留真实 RED/失败过程：RR初次3RED；三目标合集 raw 12fail/1pass（其中逆序用例先漏计 fixture 原 user，修正仅本次 EOF 新期待，不归为产品缺陷）；Stop/旧revision/live-delivery竞态3RED；ordinary tool丢失1RED；subagent重放重复1RED。首次完整门2259pass/1fail只因上述已批准旧 stream 断言冲突，第二轮2270 GREEN是最终 subagent修复前证据，不冒充最终源码。全部 logs/JSON 保留在 /tmp 同前缀下。
+
+独立 gpt-5.6-sol 原生只读审查两次发现 liveAdvanced 阻止接管及过程重放重复，均补真实 HTTP/SSE 负例修复；最终 source 绑定 machine SHA `f95791e9a32f2e6542c74ad5766c2397f16ba167294f46a9185520ee380dcbb5` / event-reducer SHA `1a9b76a61a40d2bdd819c8041db870b497718f21978101392b8cc4622b7ca3ce`，未发现剩余 P0/P1/P2。它未写文件、Git、服务或运行测试；最终全门由主 writer 实际重跑。Root Astra 的新 freeze 独立重审仍待执行。
+
+### 尚未完成与后续 owner
+
+状态为候选冻结、待 Root 独立审查/主仓重验/提交；不是已集成验收。未启动/重启共享服务、数据库、Redis、ObjectStore、provider 或浏览器，未运行 pnpm test:e2e；真实 IAM 登录、多轮、整组 HITL、Stop、Storage/模型/计费/刷新组合仍由 Root 验收。HTTP/SSE fixture 与组件门不证明这些用户整链。后续 owner：Root，WIN01 交接后停写。
+
+---
+
+## R70-01 WEB public4 完整 GREEN 候选冻结（2026-10-02）
+
+当前 Web 基线仍 main / `06a1c86612d9557d83081bcb67e8fc539ae7eacb`，未提交；Root 独占 Git/index/commit 与最终集成验收。WIN01 唯一 writer 已沿 R65 精确 source/tests/pin/generated 授权实现，下方 R65 D0 的“未实施”只属于其历史阶段，R65 原前缀与旧正文保留原字节。
+
+### 当前实现与授权保护
+
+- 固定已发布 BFF public4.0.0，owner `3c08a422f3a6aa3cf204c308716cfa64f6d61bb2`；YAML SHA-256 `5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6`。按现两个 generator 正规 `--write` 与 `--check`，Team15基线 byte-equal，failure仅 provenance改变，12tuple与语义fingerprint保持。
+- receipt/queued/START、execution_head四态、完整pause与五decision、required pause locator、strict revision/presence/privacy、ACK保卡、durable resuming、native consumption/new pause、FIFO/reload/GC410/Stop及连接正交已实施。snapshot-only直接展示完整groups/items，不注历史、不制造工具args；普通日志、Message全文/身份、safe12失败、Artifact二元身份、Direct/Project scope与pre-receipt原键恢复保留。
+- 已删除旧 active_run/顶层pending、旧awaiting CUSTOM/逐工具暂停生命周期、旧decision alias/public body session_id、乐观rejected/清卡与旧reattaching execution phase；生产没有public3 fallback/双读/第二协议。opaque cursor只有传递、相等/变化检查，无大小排序。
+- Root窄扩展是既有通知hook与三个success fixture包装例外，详见TECH R70；waiting通知真实3RED→3GREEN，resuming清可操作badge且owner卡片仍保留。fakes及两deferred ACK只按现同源adapter解包，错误envelope与冻结行为断言完全保持。
+- R66/R69九个冻结追加块逐字匹配（仅上述success wrapper例外），proof `/tmp/kokoro-web-r70-frozen-assertions-check.json`；旧测试只迁breaking语义，未删/skip/放宽安全、迟回执、游标或identity断言。完整测试仍保起始2193例，并增加R66 41、R69 2、R70 11，共2247。
+- 实际68条dirty路径均有授权映射：Root先前67条加既已在R65测试集内的 `tests/engine/event-reducer.test.ts` 旧phase机械迁移；没有新文件/目录。逐路径绝对位置、授权与SHA见 `/tmp/kokoro-web-r70-path-authorizations.json`，最终冻结manifest见 `/tmp/kokoro-web-r70-public4-green-freeze.json`。
+
+### 实际验证（不是整条用户链证据）
+
+Node `v22.22.2` / pnpm `11.25.0`，本主工作树 fresh `pnpm check` **exit0**，句柄71129已终态：
+
+| 命令 | 实际结果 |
+| --- | --- |
+| 两项 contract generator `--check` | 通过；Team15 byte-equal、owner YAML exact pin |
+| `pnpm contract` | 19文件 / 240通过 / 0失败 |
+| `pnpm test:architecture` | 4文件 / 50通过 / 0失败 |
+| `pnpm lint` | exit0，零warning |
+| `pnpm typecheck` | next typegen + tsc exit0 |
+| `pnpm test` | 163文件 / 2247通过 / 0失败 / 0跳过，45.16s |
+| `pnpm build` | exit0，Next编译/类型/静态页通过 |
+| `git diff --check`、路径/冻结/旧body保护 | 通过；index空、无untracked，待Root实际重验 |
+
+最终完整日志 `/tmp/kokoro-web-r70-full-check-final.log`。中间98旧语义失败、通知3RED、terminal两RED保留；首次完整门因删dead phase后5个旧测试类型失败，第二次2246pass/1fail因START插入后fixture游标仍在第一位置，现明确START=CURSOR_3/terminal=CURSOR_7且原断言不变。失败不抹去、不靠放宽门禁清零。
+
+独立 gpt-5.6-sol 只读审查基于变化中工作树：head单调、interaction terminal、unknown原意图重试、opaque排序、future admission迟ACK及terminal evidence窗口均已修，最终无剩余P0/P1/P2。撤回的“无head关闭可能丢未来B”设想已核对正式owner atHead/head RR语义，不改变冻结关闭行为；既有FIFO断言与新迟admission负例均通过。
+
+### 尚未验收与后续 owner
+
+本片没有启动/重启服务、PG/Redis/MinIO/ClamAV、浏览器、真实IAM登录、Ollama/provider、真实Storage上传、正式多轮/计费组合，也未运行 `pnpm test:e2e`。未验原因是Root独占资源与组合验收；纯fixture/组件GREEN不证明用户整链、部署或Wave0–7完成。
+
+当前状态：候选已冻结待 Root 审查、实际同门、提交及真实登录/模型/Storage/browser组合验收；后续owner为Root。WIN01交接后停写，不新增小卡或自行扩展范围。
+
+---
+
+## R65-WEB-PUBLIC4-D0：已发布 BFF 消费设计待审（仅四文档）
+
+当前Web基线 main / 06a1c86612d9557d83081bcb67e8fc539ae7eacb，任务开始working tree clean。BFF已正式发布 main 3c08a422f3a6aa3cf204c308716cfa64f6d61bb2且clean；其contract/openapi/v1/openapi.yaml public4.0.0 / SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6，本窗口已读取并核对实际SHA。Root BFF最终81真实PG/Redis/HTTP通过是owner组件证据，见owner CURRENT与Root R65卡，不是Web或整个用户链验收。
+
+### 当前态、目标态与授权边界
+
+- 当前Web src/generated/bff-public-openapi.yaml仍public3.0.0，owner293dfe7638e5dea0df2bee6dfdd8483b53fc9df6 / SHA acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b；source/tests仍旧active_run、顶层pending、逐工具HITL，未repin/generated，不假装兼容public4。
+- R65仅授权docs/TECHNICAL_DESIGN.md、API_CONTRACT.md、DATA_MODEL.md、CURRENT.md新增当前前缀；旧正文逐字节保护。WIN01唯一doc writer，Root独占index/commit、资源、审查与发布；不写source/tests/脚本/pin/generated/依赖/其他台账。
+- 三面目标是同一个完整public4用户切片：严格head四态/授权RR水位、queued专属decimal metadata不进Agent lastSeq、整组pause/五decision/required revision/ref、ACK非消耗、durable accepted/unknown→resuming、FIFO Run terminal不早断会话、合法control body无session_id。
+- 不重设计UI、不造第二协议/owner摘要或public3fallback；复用现卡片与组件/token。正常工具活动、Message全文/identity、安全失败十二元组、Artifact二元身份、Stop/连接分离、Direct/Project scope、pre-receipt retry保留。terminal retry/Agent P3B/真实账务等不是这份D0已实现内容。
+- 精确后继source/tests/pin/generated及删除/RED矩阵由TECH R65列举；API引用已发布machine，DATA明确无持久化owner。特别纳入agui-events.ts的queued metadata分支、client/transport的full-state基线/cursor校验顺序，避免只改mapper仍拒queued或坏revision先推进cursor。
+- 所有source/pin/生成及原冲突测试语义迁移待Root独立D0审、tests-only真实RED与精确续授权；不是本轮即时写权。无新计划中心。
+
+### 当前证据与未完成
+
+本窗口实际进行：Root/目标仓说明与三面阅读、Git clean/commit核对、owner YAML SHA核对、Web全tracked起始hash、四doc前缀写入后的原body byte-equal/其他tracked保护/git diff --check。四whole SHA、prefix byte offset与旧body SHA随交付报告冻结，不在本文自引用其whole hash。
+
+初次前缀写入命令因shell引号错误exit1，未到文件写入；改用literal here-doc后四body校验通过，原错误不计为测试失败或绿色证据。
+
+本阶段未执行vitest/contract/generator/typecheck/build/e2e，未启动Web、浏览器、PostgreSQL、Redis、真实登录或模型；doc-only写权不覆盖这些验证。Root既有Web2193 tests/preview14pass4skip属于旧消费者历史证据，不能用于public4 GREEN。未完成：D0独立审、consumer RED、source/pin/生成、单仓完整门及Root fresh正规双轮/刷新/整组HITL/Stop验收；后续owner为Root放行、WIN01实施。Root总Wave0–7目标继续，不能用本doc切片缩小或宣称全链完成。
+
+下方各阶段原正文byte-equal保留历史；其“当前/未实施/已完成”时间限定于原阶段，R65相关消费状态以本前缀为准。
+
+---
+
 ## R58 Root 积分显示与未知事实验收（2026-10-01）
 
 本切片统一既已发布的10^6 micros/credit显示单位，不是加价倍率、现金兑换率或账务writer。金额文字沿BigInt字符串移位，embedded余额/流水不经Number/Intl舍入；非法金额、缺套餐和缺免费额度显示未知，只有明确Free/零额度事实才显示对应值。低余额阈值、计价、扣费、wire及adapter未修改。

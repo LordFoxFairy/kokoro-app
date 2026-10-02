@@ -1,6 +1,7 @@
 // Explicit Web AG-UI transport boundary. It owns SSE framing, opaque replay
 // cursors, reconnect/deduplication, runtime validation, and AI SDK chunks.
 
+import type { InteractionState } from "@/contract/control"
 import type { ChatRequestOptions, ChatTransport, UIMessageChunk } from "ai"
 
 import { LAST_EVENT_ID_HEADER } from "@/contract/http"
@@ -33,6 +34,7 @@ export type SubmitAgUiMessageArgs = {
 }
 
 export type OpenProjectionEventsArgs = {
+  interactionBaselines?: Readonly<Record<string, InteractionState>>
   chatId: string
   resumeCursor: EventCursor | null
   headers?: Headers | Record<string, string>
@@ -165,7 +167,7 @@ export class AgUiChatTransport implements ChatTransport<KokoroUiMessage> {
 
   openProjectionEvents(args: OpenProjectionEventsArgs): ProjectionStreamHandle {
     const controller = new AbortController()
-    const mapper = new AgUiEventMapper()
+    const mapper = new AgUiEventMapper(args.interactionBaselines)
     const seenCursors = new Set<EventCursor>()
     let closed = false
 

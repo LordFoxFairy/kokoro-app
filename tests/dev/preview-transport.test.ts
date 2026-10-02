@@ -59,12 +59,12 @@ describe("preview transport control loop", () => {
       },
       onStreamError: (error) => { throw error },
     })
-    await waitFor(() => events.includes("tool.awaiting_approval"))
+    await waitFor(() => events.includes("interaction.state"))
 
     await client.sendControl("preview-session", receipt.run_id, {
       kind: "run.resume",
-      session_id: "preview-session",
-      decisions: [{ type: "approve", tool_id: `${receipt.run_id}:tool_1` }],
+      expected_pause_revision: 1, pause_ref: `${receipt.run_id}:pause:1`,
+      decisions: [{ type: "approve", item_id: `${receipt.run_id}:tool_1` }],
     }, "preview-command-1")
     await waitFor(() => events.includes("run.completed"))
 
@@ -88,7 +88,7 @@ describe("preview transport control loop", () => {
       resumeCursor: null,
       onCursor: () => {},
       onEvent: (event) => {
-        if (event.kind === "tool.awaiting_approval") awaiting = true
+        if (event.kind === "interaction.state") awaiting = true
         if (event.kind === "tool.returned") {
           returned.push({ is_error: event.payload.is_error, result: event.payload.result })
         }
@@ -100,8 +100,8 @@ describe("preview transport control loop", () => {
     await waitFor(() => awaiting)
     await client.sendControl("preview-reject-session", receipt.run_id, {
       kind: "run.resume",
-      session_id: "preview-reject-session",
-      decisions: [{ type: "reject", tool_id: `${receipt.run_id}:tool_1` }],
+      expected_pause_revision: 1, pause_ref: `${receipt.run_id}:pause:1`,
+      decisions: [{ type: "reject", item_id: `${receipt.run_id}:tool_1` }],
     }, "preview-command-2")
     await waitFor(() => completed.length === 1)
 

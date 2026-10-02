@@ -2,7 +2,10 @@
 
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { EventCursor } from "@/contract/agui-events"
-import type { MessageCreateReceipt } from "@/contract/http"
+import { resumeDecisionSchema } from "@/contract/control"
+import type { ResumeRunArgs } from "./execution-adapter"
+
+import type { MessageCreateReceipt, SessionSnapshot } from "@/contract/http"
 
 import {
   activeMode,
@@ -19,9 +22,8 @@ import { deliveryFromSnapshot, stateFromSnapshot } from "@/core/hydration"
 import {
   appendUserMessage,
   markRunCancelled,
-  markToolRejected,
 } from "@/core/reducer"
-import { createSessionStreamState, type SessionStreamState } from "@/core/state"
+import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
 
 import { SessionClientError } from "./client"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
@@ -41,8 +43,6 @@ import { IDLE_MACHINE, transition, type MachineState } from "./machine-state"
 import { DIRECT_SESSION_SCOPE } from "./session-scope"
 import {
   buildResumeDecisions,
-  pendingToolIdsOf,
-  rejectedToolIds,
   stageDecision,
   type StagedDecisions,
   type ToolDecision,
@@ -71,6 +71,8 @@ function defaultCreateId(prefix: string): string {
 }
 
 // control 撞终态的冲突码（session 契约 409/410）：暂停失效信号，触发 snapshot 对账。
+const SAFE_CONTROL_FAILURES = new Set(["interaction_conflict", "run_control_conflict", "run_not_active", "no_pending_pause", "invalid_run_control"])
+
 const STALE_CONTROL_ERRORS = new Set(["run_not_active", "no_pending_pause", "session_deleted"])
 
 // session 越权码（403）：activeId 指向的会话不属于当前用户——跨用户切换后 localStorage 残留了
@@ -120,6 +122,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // React 的 disabled 是渲染态，连续点击可能在一次提交前同时进入 engine。
   // 以 run 为粒度加同步闸门，保证同一暂停帧始终只有一个 resume 请求在途。
   const resumeInFlight = new Set<string>()
+  const frozenResumes = new Map<string, ResumeRunArgs>()
+  const resumeAttempts = new Map<string, symbol>()
   // 最近一次未获回执的完整提交意图：重试复用同一 key 与业务 body，保持 BFF digest 不变。
   let pendingSubmission: PendingSubmission | null = null
   // create 回执可能与 expired-cursor snapshot recovery 并发；recovery 期间先暂存，
@@ -131,6 +135,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // those keys so an accepted late run is cancelled instead of being
   // resurrected by the delayed response.
   const cancelledSubmissions = new Map<string, string>()
+  const observedTerminalRuns = new Set<string>()
+  const pendingSteerReceipts = new Map<symbol, PendingSubmission>()
+  // Exact acknowledged local rows not yet observed in the durable projection.
+  // Snapshot/live canonical identity confirms and removes these bounded intents.
+  const unprojectedAdmissions = new Map<string, SessionMessage>()
+  const processEventIds = new Set<string>()
   let notice: NoticeSpec | null = null
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] = []
@@ -146,6 +156,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let recoveringExpiredCursor = false
   // 文件同步代际守卫：同会话连续 run 收尾的乱序 snapshot 回来，只认最新一次。
   let filesSyncGeneration = 0
+  let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
@@ -175,6 +186,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       hydrating,
       connection,
       canRetryPendingSubmission: canRetryPendingSubmission(),
+      canRetryResume: retryableResume() !== null,
     }
   }
 
@@ -214,10 +226,35 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (disposed) {
       return
     }
-    const reduction = reduceProjectionEvents({ thread, machine, events })
+    const optimisticUserIds = new Set([...pendingSteerReceipts.values()].map((intent) => intent.optimisticUserId))
+    if (pendingSubmission) optimisticUserIds.add(pendingSubmission.optimisticUserId)
+    const reduction = reduceProjectionEvents({ thread, machine, events, optimisticUserIds })
+    for (const event of events) {
+      if ((event.kind.startsWith("tool.") || event.kind.startsWith("thinking.") || event.kind.startsWith("subagent.")) &&
+        reduction.thread.seenEventIds.has(event.event_id)) processEventIds.add(event.event_id)
+      if (event.kind === "message.user") unprojectedAdmissions.delete(event.payload.message_id)
+      if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") {
+        pendingTerminalRead?.runs.add(event.run_id)
+        if (store && pendingSteerReceipts.size > 0) observedTerminalRuns.add(JSON.stringify([store.activeId, event.run_id]))
+      }
+      if (event.kind !== "interaction.state") continue
+      const previous = thread.interactionsByRun[event.run_id]
+      const next = event.payload
+      if (next.phase === "resuming" && next.action_result?.kind === "unknown") resumeInFlight.delete(event.run_id)
+      const collectionChanged = previous !== undefined &&
+        (previous.pause_revision !== next.pause_revision || previous.pause_ref !== next.pause_ref ||
+          !sameInteractionState({ ...previous, interaction_revision: next.interaction_revision, phase: next.phase, action_result: next.action_result }, next))
+      if (collectionChanged || next.phase === "active" || next.phase === "terminal") {
+        staging.delete(event.run_id)
+        resumeCommandIds.delete(event.run_id)
+        resumeInFlight.delete(event.run_id)
+        frozenResumes.delete(event.run_id)
+        resumeAttempts.delete(event.run_id)
+      }
+    }
     thread = reduction.thread
     machine = reduction.machine
-    if (machine.phase === "awaiting-hitl" || machine.phase === "streaming") {
+    if (machine.phase === "waiting" || machine.phase === "streaming") {
       // 待批帧：用户决策不设时限；streaming：reattach 已收到 live 事件即证明 run 活着。
       // 两者都撤 90s 兜底——否则长 run（>90s 工具执行）会被 TIMEOUT 误切流，UI 与真态撕裂。
       clearReattachTimer()
@@ -227,11 +264,13 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       staging.delete(reduction.settledRunId)
       resumeCommandIds.delete(reduction.settledRunId)
       resumeInFlight.delete(reduction.settledRunId)
-      closeStream()
+      frozenResumes.delete(reduction.settledRunId)
+      resumeAttempts.delete(reduction.settledRunId)
       clearReattachTimer()
       // 活工作区（Manus 心智）：run 收尾即重读工作区文件清单，任何工具建的文件都进文件树，免手动刷新。
       if (store) {
-        syncWorkspaceFiles(store.activeId)
+        syncWorkspaceFiles(store.activeId, reduction.settledRunId, new Set(events.filter((event) =>
+          event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed").map((event) => event.run_id)))
       }
     }
     syncActiveEntry()
@@ -240,6 +279,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function openStream(sessionId: string, resumeCursor: EventCursor | null): void {
     execution.openStream(sessionId, resumeCursor, {
+      interactionBaselines: thread.interactionsByRun,
       onCursor: (cursor) => {
         if (disposed) {
           return
@@ -287,40 +327,116 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     })
   }
 
-  // run 收尾后重同步文件/成果面：只吸收 snapshot.files 与 snapshot.deliveries（线程已由
-  // 事件流实时构好，不重建），读的是工作区真相 → 覆盖一切建文件/deliver 的工具，非只认某个工具事件。
-  function syncWorkspaceFiles(sessionId: string): void {
+  function adoptOwnerSnapshot(
+    sessionId: string,
+    sessionSnapshot: SessionSnapshot,
+    liveDeliveries?: Pick<SessionStreamState, "deliveries" | "deliveriesHasMore">,
+  ): void {
+    const previous = thread
+    const hydrated = stateFromSnapshot(sessionSnapshot)
+    // RR cannot regress an already known interaction baseline, even when the
+    // snapshot and current cursor happen to be equal opaque values.
+    for (const [runId, next] of Object.entries(hydrated.interactionsByRun)) {
+      const before = previous.interactionsByRun[runId]
+      if (before && (next.interaction_revision < before.interaction_revision ||
+        (next.interaction_revision === before.interaction_revision && !sameInteractionState(before, next)))) return
+    }
+    if (liveDeliveries) Object.assign(hydrated, liveDeliveries)
+    // RR owns canonical text, not the already observed ordinary process log.
+    // Preserve real tool/thinking/subagent facts; snapshot text uses local render
+    // positions after them, never an owner seq or a second approval protocol.
+    for (const [runId, steps] of Object.entries(previous.stepsByRun)) {
+      const process = steps.filter((step) => step.kind !== "text")
+      if (process.length === 0) continue
+      const lastPosition = Math.max(...process.map((step) => step.seq))
+      const text = (hydrated.stepsByRun[runId] ?? []).map((step, index) => ({ ...step, seq: lastPosition + index + 1 }))
+      hydrated.stepsByRun[runId] = [...process, ...text]
+    }
+    for (const [id, message] of unprojectedAdmissions) {
+      if (hydrated.messages.some((row) => row.id === id)) unprojectedAdmissions.delete(id)
+      else hydrated.messages.push(message)
+    }
+    const pending = [...pendingSteerReceipts.values(), ...(pendingSubmission ? [pendingSubmission] : [])]
+    for (const intent of pending) {
+      const echo = previous.messages.find((message) => message.id === intent.optimisticUserId)
+      if (echo && !hydrated.messages.some((message) => message.id === echo.id)) hydrated.messages.push(echo)
+    }
+    for (const [runId] of frozenResumes) {
+      const before = previous.interactionsByRun[runId]
+      const next = hydrated.interactionsByRun[runId]
+      const changed = !before || !next || next.phase === "active" || next.phase === "terminal" ||
+        before.pause_revision !== next.pause_revision || before.pause_ref !== next.pause_ref ||
+        !sameInteractionState({ ...before, interaction_revision: next.interaction_revision, phase: next.phase, action_result: next.action_result }, next)
+      if (changed) {
+        staging.delete(runId); frozenResumes.delete(runId); resumeAttempts.delete(runId); resumeCommandIds.delete(runId); resumeInFlight.delete(runId)
+      }
+    }
+    // Preserved process facts carry ONLY their exact dedupe identities. Text and
+    // interaction frames still replay from W3 against the fresh snapshot; an
+    // already observed delta/subagent start must not append a second time.
+    hydrated.seenEventIds = new Set(processEventIds)
+    // closeStream invalidates callbacks AND queued adapter batches. The mapper
+    // created by openStream receives this exact snapshot's interaction baseline.
+    closeStream()
+    clearReattachTimer()
+    thread = hydrated
+    machine = transition(machine, { type: "RESET" })
+    const head = sessionSnapshot.execution_head
+    if (head) {
+      machine = transition(machine, { type: "REATTACH", runId: head.run_id, state: head.state })
+      openStream(sessionId, hydrated.resumeCursor)
+      if (head.state === "queued" || head.state === "active") {
+        reattachTimer = setTimeout(() => {
+          reattachTimer = null
+          if (machine.runId !== head.run_id || machine.phase === "waiting" || machine.phase === "resuming") return
+          closeStream()
+          connection = { status: "unavailable", reason: "timeout" }
+          notify()
+        }, reattachTimeoutMs)
+      }
+    } else connection = { status: "connected" }
+    syncActiveEntry()
+  }
+
+  // After terminal, files/deliveries may merge into a newer live generation.
+  // A quiet successor head instead takes over the complete RR snapshot + cursor.
+  function syncWorkspaceFiles(sessionId: string, settledRunId: string, terminalRuns: Set<string>): void {
     filesSyncGeneration += 1
     const generation = filesSyncGeneration
+    const terminalRead = { generation, runs: terminalRuns }
+    pendingTerminalRead = terminalRead
+    const sessionGeneration = hydrateGeneration
     const cursorAtStart = thread.resumeCursor
-    execution
-      .fetchSnapshot(sessionId)
-      .then((sessionSnapshot) => {
-        if (
-          disposed ||
-          generation !== filesSyncGeneration ||
-          store?.activeId !== sessionId ||
-          sessionSnapshot === null
-        ) {
-          return
-        }
-        const snapshotDeliveries = sessionSnapshot.deliveries.map(deliveryFromSnapshot)
-        const liveAdvanced = thread.resumeCursor !== cursorAtStart
-        const deliveries = liveAdvanced
+    execution.fetchSnapshot(sessionId).then((sessionSnapshot) => {
+      if (disposed || generation !== filesSyncGeneration || sessionGeneration !== hydrateGeneration || store?.activeId !== sessionId) return
+      if (sessionSnapshot === null) {
+        if (machine.phase === "idle" && thread.resumeCursor === cursorAtStart) closeStream()
+        return
+      }
+      const snapshotDeliveries = sessionSnapshot.deliveries.map(deliveryFromSnapshot)
+      const liveAdvanced = thread.resumeCursor !== cursorAtStart
+      thread = {
+        ...thread, files: sessionSnapshot.files,
+        deliveries: liveAdvanced
           ? [...new Map([...snapshotDeliveries, ...thread.deliveries].map((item) => [JSON.stringify([item.conversationId, item.artifactId]), item])).values()]
-          : snapshotDeliveries
-        thread = {
-          ...thread,
-          files: sessionSnapshot.files,
-          // Owner snapshot is authoritative unless a newer live cursor has advanced.
-          deliveries,
-          deliveriesHasMore: liveAdvanced ? thread.deliveriesHasMore || sessionSnapshot.deliveries_has_more : sessionSnapshot.deliveries_has_more,
-        }
-        notify()
-      })
-      .catch(() => {
-        // 文件面同步失败不动主线程：下次 run 收尾/刷新/切会话再对齐。
-      })
+          : snapshotDeliveries,
+        deliveriesHasMore: liveAdvanced ? thread.deliveriesHasMore || sessionSnapshot.deliveries_has_more : sessionSnapshot.deliveries_has_more,
+      }
+      if (machine.phase === "idle") {
+        // Never revive the exact observed terminal head from a stale RR view.
+        if (!sessionSnapshot.execution_head || sessionSnapshot.execution_head.run_id === settledRunId ||
+          terminalRead.runs.has(sessionSnapshot.execution_head.run_id) ||
+          observedTerminalRuns.has(JSON.stringify([sessionId, sessionSnapshot.execution_head.run_id]))) {
+          if (!liveAdvanced || sessionSnapshot.execution_head) closeStream()
+        } else adoptOwnerSnapshot(sessionId, sessionSnapshot, liveAdvanced
+          ? { deliveries: thread.deliveries, deliveriesHasMore: thread.deliveriesHasMore } : undefined)
+      }
+      notify()
+    }).catch(() => {
+      // A failed read leaves confirmed owner events intact; refresh can reconcile.
+    }).finally(() => {
+      if (pendingTerminalRead === terminalRead) pendingTerminalRead = null
+    })
   }
 
   // 在途 run 的统一放弃路径：本地立即收口（结构化 cancelled），取消 POST 尽力而为。
@@ -384,6 +500,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false): void {
     hydrateGeneration += 1
+    observedTerminalRuns.clear()
+    pendingSteerReceipts.clear()
+    unprojectedAdmissions.clear()
+    processEventIds.clear()
     const generation = hydrateGeneration
     if (!afterExpiredCursor && !hydrating) {
       hydrating = true
@@ -419,6 +539,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           staging.clear()
           resumeCommandIds.clear()
           resumeInFlight.clear()
+    frozenResumes.clear(); resumeAttempts.clear()
         }
         const previousCursor = thread.resumeCursor
         const deferred = deferredCreateReceipt !== null && deferredCreateReceipt.submission === pendingSubmission
@@ -461,15 +582,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           machine = transition(machine, {
             type: "REATTACH",
             runId: plan.runId,
-            awaiting: plan.awaiting,
+            state: plan.state,
           })
           if (machine !== before) {
             clearReattachTimer()
-            if (!plan.awaiting) {
+            if (plan.state === "queued" || plan.state === "active") {
               // 兜底窗口耗尽仍无终态：放弃续传，不永久卡在 streaming。待批帧不设时限。
               reattachTimer = setTimeout(() => {
                 reattachTimer = null
-                if (machine.phase !== "reattaching" || machine.runId !== plan.runId) {
+                if (machine.runId !== plan.runId || machine.phase === "waiting" || machine.phase === "resuming") {
                   return
                 }
                 closeStream()
@@ -575,7 +696,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmission = null
     recoveredSubmissionError = null
     deferredCreateReceipt = null
-    thread = reconcileUserMessageId(thread, receipt.user_message_id)
+    thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
     // Snapshot is authoritative when it already contains an active or settled
     // assistant run. An otherwise idle snapshot may precede the accepted POST;
     // anchor that exact receipt before hydrate decides whether to open a stream.
@@ -631,7 +752,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         recoveredSubmission = null
         recoveredSubmissionError = null
         deferredCreateReceipt = null
-        thread = reconcileUserMessageId(thread, receipt.user_message_id)
+        thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
         machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
         openStream(sessionId, thread.resumeCursor)
         notify()
@@ -664,38 +785,55 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     notice = null
     if (
       store !== null &&
-      (machine.phase === "streaming" ||
-        machine.phase === "awaiting-hitl" ||
-        machine.phase === "reattaching")
+      (machine.phase === "streaming" || machine.phase === "queued" || machine.phase === "resuming" ||
+        machine.phase === "waiting")
     ) {
       // 运行中再次提交：沿现有 create-message 路径，不动状态机、不重开事件流。
-      // 正式 queued/steer owner 语义尚未发布，本地不据此虚构新的相位或网络契约。
-      thread = appendUserMessage(thread, { id: createId("usr"), content: trimmed })
+      // 新 admission 不覆盖当前 execution head；FIFO 由 owner durable events/snapshot 接管。
+      const optimisticUserId = createId("usr")
+      thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
       notify()
       // 回执/失败必须锚回发起时的会话：POST 在途时切走 → 迟到回调不得落在别的会话线程上
       // （否则 adopt 会改/删 T 的乐观气泡、notice 串到 T）。与 beginRun 回执守卫对齐。
       const steerSessionId = store.activeId
-      execution
-        .createMessage({
-          sessionId: steerSessionId,
-          content: trimmed,
-          idempotencyKey: createId("idem"),
-          options: messageExecutionOptions(activeMode(store)),
-        })
+      const steerGeneration = hydrateGeneration
+      const receiptToken = Symbol("pending-steer-receipt")
+      const submission: PendingSubmission = {
+        sessionId: steerSessionId, content: trimmed, idempotencyKey: createId("idem"),
+        options: messageExecutionOptions(activeMode(store)), optimisticUserId,
+      }
+      pendingSteerReceipts.set(receiptToken, submission)
+      execution.createMessage(submission)
         .then((receipt) => {
-          if (disposed || store?.activeId !== steerSessionId) {
+          if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
             return
           }
-          thread = reconcileUserMessageId(thread, receipt.user_message_id)
+          const alreadyProjected = thread.messages.some((message) => message.id === receipt.user_message_id)
+          thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
+          const admitted = thread.messages.find((message) => message.id === receipt.user_message_id)
+          if (!alreadyProjected && admitted) unprojectedAdmissions.set(receipt.user_message_id, { ...admitted, runId: receipt.run_id })
+          if (machine.phase === "idle" && !observedTerminalRuns.has(JSON.stringify([steerSessionId, receipt.run_id]))) {
+            // This POST may be admitted after the prior run settled. Its receipt
+            // admits a queued successor, not START, and reuses the durable cursor.
+            filesSyncGeneration += 1
+            machine = transition(transition(machine, { type: "SUBMIT" }), { type: "RECEIPT", runId: receipt.run_id })
+            openStream(steerSessionId, thread.resumeCursor)
+          }
           notify()
         })
         .catch((error: unknown) => {
-          if (disposed || store?.activeId !== steerSessionId) {
+          if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
             return
           }
           // 插话投递失败必须可见：瞬态通知（不打断相位），下次提交自动清。
           notice = { key: "steer.sendFailed", vars: { detail: describeUnknown(error) } }
           notify()
+        })
+        .finally(() => {
+          // Terminal evidence exists only while an outstanding receipt can
+          // still name it; settled long-lived sessions retain no run-ID cache.
+          pendingSteerReceipts.delete(receiptToken)
+          if (pendingSteerReceipts.size === 0) observedTerminalRuns.clear()
         })
       return true
     }
@@ -745,79 +883,92 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     beginRun(pending)
   }
 
-  function stageToolDecision(runId: string, toolId: string, decision: ToolDecision): void {
-    if (
-      disposed ||
-      recoveringExpiredCursor ||
-      connection.status !== "connected" ||
-      !store ||
-      machine.phase !== "awaiting-hitl" ||
-      machine.runId !== runId
-    ) {
-      return
-    }
-    const sessionId = store.activeId
-    const pendingIds = pendingToolIdsOf(thread.stepsByRun[runId] ?? [])
-    // 迟到的旧卡片/切会话后的点击不能污染当前暂停帧，也不能制造永远凑不齐的 staging。
-    if (!pendingIds.includes(toolId) || resumeInFlight.has(runId)) {
-      return
-    }
-    const staged = stageDecision(staging.get(runId) ?? new Map(), toolId, decision)
+  function stageToolDecision(runId: string, itemId: string, decision: ToolDecision): void {
+    if (disposed || recoveringExpiredCursor || connection.status !== "connected" || !store || machine.phase !== "waiting" || machine.runId !== runId) return
+    const interaction = thread.interactionsByRun[runId]
+    if (!interaction || interaction.phase !== "waiting" || !interaction.pause_ref) return
+    const items = interaction.groups.flatMap((group) => group.items)
+    const item = items.find((candidate) => candidate.item_id === itemId)
+    if (!item || !item.allowed_decisions.includes(decision.type) || resumeInFlight.has(runId)) return
+    const wireDecision = decision.type === "respond" ? { type: decision.type, item_id: itemId, response: decision.message } : { ...decision, item_id: itemId }
+    if (!resumeDecisionSchema.safeParse(wireDecision).success) return
+    const frozen = frozenResumes.get(runId)
+    // An unknown outcome can retry only the exact frozen intent, never edit the digest.
+    if (frozen && JSON.stringify(staging.get(runId)?.get(itemId)) !== JSON.stringify(decision)) return
+    const staged = frozen ? staging.get(runId)! : stageDecision(staging.get(runId) ?? new Map(), itemId, decision)
     staging.set(runId, staged)
-    notify()
-
-    const decisions = buildResumeDecisions(staged, pendingIds)
-    if (!decisions) {
-      // 同帧仍有工具未决：等凑齐后统一提交一条 resume。
-      return
+    const decisions = buildResumeDecisions(staged, items)
+    if (!decisions) { notify(); return }
+    const intent = frozen ?? {
+      sessionId: store.activeId, runId, expectedPauseRevision: interaction.pause_revision,
+      pauseRef: interaction.pause_ref, decisions: structuredClone(decisions), commandId: createId("command"),
     }
-    // 同一帧的重试复用同一 command_id：服务端据此幂等，双击/网络重试不会二次 resume。
-    const commandId = resumeCommandIds.get(runId) ?? createId("command")
-    resumeCommandIds.set(runId, commandId)
+    frozenResumes.set(runId, intent)
+    resumeCommandIds.set(runId, intent.commandId)
     resumeInFlight.add(runId)
-    const controlGeneration = hydrateGeneration
-    const currentControl = () => !disposed && store?.activeId === sessionId &&
-      hydrateGeneration === controlGeneration && machine.runId === runId &&
-      resumeCommandIds.get(runId) === commandId
-    execution
-      .resumeRun({ sessionId, runId, decisions, commandId })
-      .then(() => {
-        if (!currentControl()) {
-          return
-        }
-        machine = transition(machine, { type: "RESUME_SENT" })
-        const rejected = rejectedToolIds(staged, pendingIds)
-        if (rejected.length > 0) {
-          thread = markToolRejected(thread, runId, rejected)
-        }
-        staging.delete(runId)
-        resumeCommandIds.delete(runId)
+    machine = { ...machine, error: null }
+    notify()
+    sendResumeIntent(intent)
+  }
+
+  function retryableResume(): ResumeRunArgs | null {
+    if (disposed || recoveringExpiredCursor || connection.status !== "connected" || machine.phase !== "resuming" || !store || !machine.runId) return null
+    const intent = frozenResumes.get(machine.runId)
+    const interaction = thread.interactionsByRun[machine.runId]
+    return intent && interaction?.action_result?.kind === "unknown" &&
+      interaction.action_result.command_id === intent.commandId && intent.sessionId === store.activeId &&
+      interaction.pause_revision === intent.expectedPauseRevision && interaction.pause_ref === intent.pauseRef &&
+      !resumeInFlight.has(machine.runId) ? intent : null
+  }
+
+  function retryResume(): void {
+    const intent = retryableResume()
+    if (intent) sendResumeIntent(intent)
+  }
+
+  function sendResumeIntent(intent: ResumeRunArgs): void {
+    const { runId } = intent
+    resumeInFlight.add(runId)
+    machine = { ...machine, error: null }
+    notify()
+    const generation = hydrateGeneration
+    const attempt = Symbol("resume-attempt")
+    resumeAttempts.set(runId, attempt)
+    const current = () => !disposed && store?.activeId === intent.sessionId && hydrateGeneration === generation &&
+      frozenResumes.get(runId) === intent && resumeAttempts.get(runId) === attempt &&
+      machine.runId === runId && machine.phase !== "cancelling" &&
+      thread.interactionsByRun[runId]?.pause_revision === intent.expectedPauseRevision &&
+      thread.interactionsByRun[runId]?.pause_ref === intent.pauseRef
+    execution.resumeRun(intent).then((receipt) => {
+      if (!current()) return
+      if (receipt.status === "failed") {
         resumeInFlight.delete(runId)
-        notify()
-      })
-      .catch((error: unknown) => {
-        if (!currentControl()) {
-          return
-        }
-        // 网络失败允许重试，但在下一次点击前必须解除在途闸门。
-        resumeInFlight.delete(runId)
-        const detail = describeUnknown(error)
-        // 终态冲突码=这个暂停已经失效（run 已收口/被取消/会话已删）：按 snapshot
-        // 对账重建真态并清暂存，绝不把用户卡死在 awaiting-hitl（审计缺口④）。
-        if (STALE_CONTROL_ERRORS.has(detail) && store) {
-          staging.delete(runId)
-          resumeCommandIds.delete(runId)
-          closeStream()
-          clearReattachTimer()
-          machine = transition(machine, { type: "RESET" })
-          hydrate(store.activeId)
+        const error = receipt.error_code && SAFE_CONTROL_FAILURES.has(receipt.error_code) ? receipt.error_code : "control_failed"
+        machine = transition(machine, { type: "CONTROL_FAILED", error })
+        const cursor = thread.resumeCursor
+        // A definitive failed command releases the lock, but only owner facts
+        // replace cards/pause. Never synthesize consumption or issue another POST.
+        void execution.fetchSnapshot(intent.sessionId).then((owner) => {
+          if (!current() || owner === null || thread.resumeCursor !== cursor) return
+          adoptOwnerSnapshot(intent.sessionId, owner)
+          if (frozenResumes.get(runId) === intent && machine.runId === runId) machine = { ...machine, error }
           notify()
-          return
-        }
-        // 其余失败（网络抖动等）：暂存保留可重试；仅记录错误，不离开 awaiting-hitl。
-        machine = transition(machine, { type: "CONTROL_FAILED", error: detail })
-        notify()
-      })
+        }).catch(() => { /* Retain the safe failure and last confirmed cards. */ })
+      }
+      // pending/succeeded acknowledge admission only; native events own phase.
+      notify()
+    }).catch((error: unknown) => {
+      if (!current()) return
+      resumeInFlight.delete(runId)
+      const detail = describeUnknown(error)
+      if (STALE_CONTROL_ERRORS.has(detail)) {
+        closeStream()
+        machine = transition(machine, { type: "RESET" })
+        staging.clear(); frozenResumes.clear(); resumeAttempts.clear(); resumeCommandIds.clear(); resumeInFlight.clear()
+        hydrate(intent.sessionId)
+      } else machine = transition(machine, { type: "CONTROL_FAILED", error: detail })
+      notify()
+    })
   }
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
@@ -831,6 +982,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     staging.clear()
     resumeCommandIds.clear()
     resumeInFlight.clear()
+    frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
     recoveredSubmission = null
     recoveredSubmissionError = null
@@ -839,6 +991,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       selectedSkillSourceRefs = []
     }
     thread = createSessionStreamState()
+    observedTerminalRuns.clear()
+    pendingSteerReceipts.clear()
+    unprojectedAdmissions.clear()
+    processEventIds.clear()
     hydrating = shouldHydrate
     commitStore(next)
     notify()
@@ -903,6 +1059,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     staging.clear()
     resumeCommandIds.clear()
     resumeInFlight.clear()
+    frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
     recoveredSubmission = null
     recoveredSubmissionError = null
@@ -910,6 +1067,10 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     connection = { status: "connected" }
     selectedSkillSourceRefs = []
     thread = createSessionStreamState()
+    observedTerminalRuns.clear()
+    pendingSteerReceipts.clear()
+    unprojectedAdmissions.clear()
+    processEventIds.clear()
     hydrating = false
     commitStore(next)
     notify()
@@ -958,8 +1119,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       notify()
       return
     }
-    abandonActiveRun()
+    if (!store || !machine.runId || machine.phase === "cancelling") return
+    const runId = machine.runId
+    const sessionId = store.activeId
+    const generation = hydrateGeneration
+    machine = transition(machine, { type: "CANCEL" })
     notify()
+    execution.cancelRun({ sessionId, runId, commandId: createId("command") }).catch((error: unknown) => {
+      if (disposed || store?.activeId !== sessionId || generation !== hydrateGeneration || machine.runId !== runId) return
+      machine = transition(machine, { type: "CONTROL_FAILED", error: describeUnknown(error) })
+      notify()
+    })
   }
 
   function setSelectedSkillSourceRefs(sourceRefs: readonly string[]): void {
@@ -1027,12 +1197,17 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     staging.clear()
     resumeCommandIds.clear()
     resumeInFlight.clear()
+    frozenResumes.clear(); resumeAttempts.clear()
     pendingSubmission = null
     recoveredSubmission = null
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     selectedSkillSourceRefs = []
     thread = createSessionStreamState()
+    observedTerminalRuns.clear()
+    pendingSteerReceipts.clear()
+    unprojectedAdmissions.clear()
+    processEventIds.clear()
     store = external
     if (external?.activeId) {
       hydrate(external.activeId)
@@ -1056,6 +1231,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     },
     submit,
     retry,
+    retryResume,
     reconnect,
     cancelRun,
     stageToolDecision,

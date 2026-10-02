@@ -1,16 +1,18 @@
 import { Button } from "@/components/ui/button"
+import { useState } from "react"
+import { InputCard } from "./input-card"
 import { Spinner } from "@/components/ui/spinner"
-import type { SessionToolCall } from "@/core/state"
+import type { InteractionItem } from "@/contract/control"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 
 import styles from "../thread/thread.module.css"
 
 type ApprovalCardProps = {
-  tool: SessionToolCall
+  tool: InteractionItem
   // 该工具已暂存的决策（引擎 staging 快照）；同帧未凑齐时先「已记录」。
   staged?: ToolDecision
-  // 本轮仍处 awaiting-hitl 相位才允许发决策；resume 已发出后按钮收口。
+  // owner waiting 才允许发决策；ACK 不消费卡片，durable resuming 禁新决策。
   hitlActive: boolean
   // control POST 失败：呈现错误并放开按钮允许重试（暂存仍在，重按即重发）。
   controlError: string | null
@@ -29,16 +31,18 @@ export function ApprovalCard({
   onDecision,
 }: ApprovalCardProps) {
   const t = useT()
+  const [editing, setEditing] = useState(false)
+  const canEdit = tool.allowed_decisions.includes("edit") && tool.display.editable
   const decided = staged !== undefined
   const actionable = hitlActive && onDecision !== undefined
   // 已暂存且未报错即禁用（防连点双发）；POST 失败时放开允许重试。
   const disabled = !actionable || (decided && controlError === null)
   const submitting = decided && controlError === null
-  const allowedDecisions = tool.allowedDecisions ?? []
+  const allowedDecisions = tool.allowed_decisions ?? []
   const canApprove = allowedDecisions.includes("approve")
   const canReject = allowedDecisions.includes("reject")
   // description=工具自述（agent 装配侧注入的真实数据；查不到发空串）——有则显示，缺省中文兜底。
-  const prompt = tool.description || t("hitl.approvalHint")
+  const prompt = tool.display.description || t("hitl.approvalHint")
   const promptText = controlError
     ? t("hitl.decisionFailed")
     : decided || !hitlActive
@@ -55,16 +59,9 @@ export function ApprovalCard({
       >
         {promptText}
       </p>
-      {tool.risk !== undefined ? (
-        <p className={styles.toolRisk} data-level={tool.risk.level}>
-          {t("hitl.riskLine", {
-            level: tool.risk.level,
-            source: tool.risk.source,
-            reason: tool.risk.reason,
-          })}
-        </p>
-      ) : null}
-      {actionable && (canApprove || canReject) ? (
+      {canEdit && onDecision !== undefined ? <Button type="button" disabled={disabled} onClick={() => setEditing(true)}>{t("hitl.edit")}</Button> : null}
+      {editing ? <InputCard tool={tool} decisionType="edit" hitlActive={hitlActive} controlError={controlError} {...(staged === undefined ? {} : { staged })} {...(onDecision === undefined ? {} : { onDecision })} /> : null}
+      {onDecision !== undefined && (canApprove || canReject) ? (
         <div className={styles.toolApprovalActions}>
           {canApprove ? (
             <Button variant="default"
@@ -72,7 +69,7 @@ export function ApprovalCard({
               className={styles.toolApprove}
               disabled={disabled}
               aria-busy={submitting}
-              onClick={() => onDecision(tool.id, { type: "approve" })}
+              onClick={() => onDecision?.(tool.item_id, { type: "approve" })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.approve")}
@@ -84,7 +81,7 @@ export function ApprovalCard({
               className={styles.toolReject}
               disabled={disabled}
               aria-busy={submitting}
-              onClick={() => onDecision(tool.id, { type: "reject" })}
+              onClick={() => onDecision?.(tool.item_id, { type: "reject" })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.reject")}

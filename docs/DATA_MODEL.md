@@ -1,3 +1,42 @@
+## R65-WEB-PUBLIC4-D0：无持久化 owner 的完整暂停与水位投影（目标态，仅文档）
+
+本前缀与TECH/API R65构成同一方案；下方历史数据正文byte-equal保留，不作为旧active_run/逐工具暂停实施依据。Web main06a1c86612d9557d83081bcb67e8fc539ae7eacb仍旧public3 consumer；目标BFF已发布3c08a422f3a6aa3cf204c308716cfa64f6d61bb2/public4.0.0，OpenAPI SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6。本轮仅四doc前缀，source/tests/pin/generated/存储未改。
+
+### Owner 与生命周期
+
+Web无业务持久化owner：不建SQL/canonical schema/migration、不访问owner数据库或Redis、不把完整pause、groups、decisions、原args放localStorage/IndexedDB/服务端cache。BFF拥有授权RR head/最新full interaction/Message/Artifact/event_watermark，Agent拥有pause/消费/terminal；浏览器刷新只按owner snapshot重建，不从storage重播决策。现会话索引/偏好/路由生命周期保持，不能作为head/pause权威。
+
+| 内存对象 | 归属与精确用途 |
+| --- | --- |
+| execution head view | 当前session的可缺失runId/state；仅源自validated snapshot/queued/START/full-state/terminal对账。queued不代表started，receipt不能把B替换A head；无head不制造空run。 |
+| latest full interaction | 独立于SessionToolCall，保存run绑定六字段与完整groups/items/action_result、optional存在性；新interaction_revision整体替换，原序不merge。仅有active snapshot时不得伪造未知revision。 |
+| ordinary steps/messages | 既有tool/thinking/subagent/正文事实保留；普通tool返回不能消费暂停，HITL不能伪造args/segment来塞进ToolCall。partial snapshot正文prefix与durable identity保持。 |
+| decision staging | session/run/pause_revision/pause_ref身份下按item_id暂存；全集原序、五payload、allowed_decisions校验。新pause/集合变更清旧暂存；同run新pause也不继承旧项。 |
+| frozen control intent | 原command key＋immutable完整body＋pause身份，网络unknown及合法same-key recovery保留；本地inflight仅防双发。ACK不删owner全集，不表示native consumption。决策value仅当前页操作内存，不日志/持久化。 |
+| connection/cancellation | reconnecting/unavailable与Run phase独立；保partial、draft、Stop。当前会话cancelling待owner terminal；导航本地abandon与旧Run best-effort cancel分开，旧ACK不恢复新会话。 |
+| cursor/source position | opaque resumeCursor独立于Agent numeric lastSeq；queued/dispatch BFF decimal sourceSequence保字符串。validated frame及revision guard成功才更新cursor；不由seq拼resume点。 |
+| terminal/failure/artifact | 按exact run保safe12与unattributed历史失败，binary Artifact二元身份不改。interaction terminal不释放Run；Run terminal只收确切Run，新head不继承A pause。 |
+
+session/run/generation共同保护late snapshot/control/stream callbacks；pause locator再保护同Run新pause。array顺序与字段presence参与完整state结构一致性；same revision同内容no-op，异内容/倒退拒绝，不能用JSON序列化丢undefined/presence或control optional-null规则冒充state等值。Web不产生第二control/state摘要协议。
+
+### 一致性、恢复与隐私
+
+- snapshot head/最新fullpause/Message/Artifact/watermark同一授权RR是BFF事务事实；Web一次成功响应整体水合，响应之间不宣称同RR。foreign/damaged/不一致JSONfail closed，不把parser失败补[]或改unknown为成功。
+- waiting/resuming恰一完整PendingPause，queued/active无pending；resuming保所有groups，accepted/unknown只禁新key重复decision。waiting即使有上一轮action_result也不是已submitted。
+- receipt ACK、普通工具返回或local timeout都不清pause；只有下一完整owner revision整体替换。native_consumed后非空仍waiting，空才active；validation_failed的新waiting显示owner安全code/path。
+- 重连带当前已知full state作为decoder revision基线；解析/交叉约束/同revision一致性成功后承认cursor。坏帧不能推进已接受cursor；GC410 bounded snapshot-first重建四态，从非零event_watermark续接，不重POST用户/决定。
+- A terminal与下一B queued跨批也继续drain；后继validated source或snapshot裁决新head。无head已结算会话关idle SSE；historical terminal只影响其Run，不能清当前B的groups/正文/cursor。
+- full display只用name/description/editable/input_schema与optional preview/truncated/source/validation；不补旧private args/question/choices/risk/原submitted值。展示preview仍保source/truncation，不以请求摘要可见为由复制私有payload。
+- 每次新/换/删会话、scope变化、dispose清当前浏览器pause/staging，禁止old ACK写新session；Direct/Project原scope/project_ref、Skill选择及pre-create-receipt冻结恢复不变。public4未给terminal retry，不持久化未来retry定位。
+
+### 删除与验证范围
+
+后继删除旧snapshot fields、逐工具pause_id/status/segment/risk/args投影、pending_tool_ids、decision tool_id/request_id alias、ACK本地rejected/清卡及runId-only intent；保普通tool日志、合法scope/隐私/失败/Message/Artifact能力。control.ts旧Agent RuntimeConfig/RunRequest等无人消费定义经引用证明才删，不凭“旧”删有效职责。
+
+所有实际source/test/pin/generated文件及阶段命令以TECH R65精确枚举为准；不新增表/目录/持久化缓存。无Web db:apply-schema步骤，不能为文档门创建空schema。后继至少两group/多kind的完整决策、ACK→accepted/unknown→消费空/重暂停/validation、新pause迟到ACK、presence/null、bad revision零cursor写、非零reload/GC、A→B FIFO及Project/direct隔离，与原safe failure/partial/binary断言一起验。当前仅正文保护/hash/diff证明，不构成SQL、HTTP、真实Agent或浏览器GREEN。
+
+---
+
 # Kokoro User Web 数据模型与 Owner
 
 ## WEB-PROJECT-READ-R42：指令历史同代际收敛（仅设计与 RED，2026-10-01）

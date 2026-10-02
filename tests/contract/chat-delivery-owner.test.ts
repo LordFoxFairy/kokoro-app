@@ -11,7 +11,7 @@ const delivery = {
 
 const snapshot = {
   session: { session_id: "ses_1", title: "T", owner_id: "member_1", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" },
-  pending_pauses: [], files: [], deliveries: [delivery], deliveries_has_more: true, event_watermark: null,
+  files: [], deliveries: [delivery], deliveries_has_more: true, event_watermark: null,
 }
 
 describe("BFF S9 Chat Delivery consumer", () => {

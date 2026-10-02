@@ -2,15 +2,9 @@ import { FileChip } from "./artifact-card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
 import type { SessionToolCall, ToolStatus } from "@/core/state"
-import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
-import { ApprovalCard } from "@/ui/hitl/approval-card"
-import { AskUserCard } from "@/ui/hitl/ask-user-card"
-import { InputCard } from "@/ui/hitl/input-card"
-import { ReviewCard } from "@/ui/hitl/review-card"
 import { ArrowUpRight, ChevronDown, Wrench } from "lucide-react"
-import { useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 
 import { RunState } from "./run-state"
@@ -51,83 +45,35 @@ function formatArgs(args: Record<string, unknown>): string | null {
 
 // 结构化收口状态 → 文案 key：文案只活在渲染层，状态层零 UI 文案（i18n 在渲染处取译）。
 const CLOSED_NOTE: Partial<Record<ToolStatus, MessageKey>> = {
-  "stale-awaiting": "thread.staleAwaiting",
   "stale-running": "thread.staleRunning",
   cancelled: "thread.cancelledNote",
 }
 
-// 单条工具调用：扳手 + 名称 + 运行态。有入参/结果/错误/待批时是可展开的 shadcn Collapsible，
+// 单条普通工具调用：扳手 + 名称 + 运行态。有入参/结果/错误时可展开，
 // 无任何细节时退化为不可点击的 <div>，避免无意义的死切换。
-// awaiting 时按契约 kind 分流四张 HITL 卡：tool_approval → 审批卡；ask_user → 问答卡；
-// result_review → 结果审核卡；input → 动态表单输入卡。
+// 公开 HITL groups/items 由 AssistantTurn 独立渲染，不制造普通工具状态。
 export function ToolCallRow({
   sessionId,
   tool,
   onOpenFile,
   onOpenDetail,
-  staged,
-  hitlActive,
-  controlError,
-  onDecision,
-  onCancelRun,
 }: {
   sessionId: string | null
   tool: SessionToolCall
   onOpenFile?: (path: string) => void
   // pill 点击升级：在 canvas 打开参数/结果详情；未提供时保留内联展开（降级）。
   onOpenDetail?: () => void
-  // 该工具已暂存的决策（引擎 staging 快照）；同帧未凑齐时先「已记录」。
-  staged?: ToolDecision
-  // 本轮仍处 awaiting-hitl 相位才允许发决策；resume 已发出后按钮收口。
-  hitlActive: boolean
-  // control POST 失败：呈现错误并放开按钮允许重试（暂存仍在，重按即重发）。
-  controlError: string | null
-  onDecision?: (toolId: string, decision: ToolDecision) => void
-  // 问答卡（ask_user）自带的取消 run 入口。
-  onCancelRun?: () => void
+
 }) {
   const t = useT()
-  // ask_user 的入参（question/choices）已由问答卡语义化呈现：原始 JSON 只添噪音。
-  // kind=input 待批期间同理（message/validation_error 由输入卡呈现）；恢复执行后 args
-  // 被 invoked 刷新为真实入参，照常展示。
-  const semanticArgsCard =
-    tool.name === "ask_user_question" ||
-    (tool.status === "awaiting" && tool.awaitingKind === "input")
-  const argsText = semanticArgsCard ? null : formatArgs(tool.args)
-  // 胶囊头的一行简要参数（语义卡同样跳过——卡已呈现）。
-  const argHint = semanticArgsCard ? null : formatArgHint(tool.args)
+  const argsText = formatArgs(tool.args)
+  const argHint = formatArgHint(tool.args)
   const running = tool.status === "running"
   const failed = tool.status === "error"
-  // awaiting：被门控工具等待用户批准/回答（HITL），展开显示对应卡片。
-  const awaiting = tool.status === "awaiting"
-  const wasAwaitingRef = useRef(awaiting)
-
-  // The decision card is removed when the run resumes or is cancelled. Radix
-  // and the browser otherwise fall back to <body> because the focused button
-  // no longer exists. Return the user to the stable composer only after the
-  // awaiting row has actually left the tree, not while a control request is
-  // still pending or has returned a retryable error.
-  useEffect(() => {
-    const leftAwaiting = wasAwaitingRef.current && !awaiting
-    wasAwaitingRef.current = awaiting
-    if (!leftAwaiting) return
-
-    const frame = window.requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLTextAreaElement>('[data-settings-return-target="composer"]:not([disabled])')
-        ?.focus()
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [awaiting])
-
   // rejected：用户驳回了该调用——工具未执行，显禁止圈而非绿勾。
   const rejected = tool.status === "rejected"
-  const activeDisclosure = running || failed || awaiting || rejected
-  // result_review 的收口语义不同：工具已执行，悬着的只是结果审核。
-  const closedNoteKey: MessageKey | undefined =
-    tool.status === "stale-awaiting" && tool.awaitingKind === "result_review"
-      ? "thread.reviewPending"
-      : CLOSED_NOTE[tool.status]
+  const activeDisclosure = running || failed || rejected
+  const closedNoteKey = CLOSED_NOTE[tool.status]
   // responded：done 态但结果由人工答复（非工具产出）——加 provenance 标记，让回看者一眼可辨。
   const responded = Boolean(tool.responded)
   // 有入参/结果/错误/待批/已拒绝/收口说明才展开；无任何细节的工具保持紧凑静态行。
@@ -142,7 +88,6 @@ export function ToolCallRow({
     Boolean(tool.result) ||
     filePath !== null ||
     failed ||
-    awaiting ||
     rejected ||
     closedNoteKey !== undefined
 
@@ -156,7 +101,6 @@ export function ToolCallRow({
         <RunState
           done={tool.status === "done"}
           failed={failed}
-          awaiting={awaiting}
           rejected={rejected || closedNoteKey !== undefined}
         />
       </span>
@@ -171,9 +115,9 @@ export function ToolCallRow({
     )
   }
 
-  // pill 点击升级为 canvas 详情：awaiting 除外（HITL 卡必须留在会话流内联可操作）。
+  // 普通工具日志可在 Canvas 打开；交互卡片独立留在会话流。
   // 未提供 onOpenDetail（无会话/装配缺位）时保留内联展开；有会话则升级到 canvas。
-  const openInCanvas = onOpenDetail !== undefined && !awaiting
+  const openInCanvas = onOpenDetail !== undefined
 
   // 进入 Canvas 的工具行不是一个 disclosure：如果继续套 Collapsible，
   // 点击后 aria-expanded 仍会停在 false、chevron 也会像「没有打开」一样，
@@ -220,42 +164,6 @@ export function ToolCallRow({
       <CollapsibleContent className={styles.toolDetail}>
         {/* V1 args 只读展示（无定制编辑 UI 前不提供任何参数编辑入口）。 */}
         {argsText !== null ? <pre className={styles.toolArgs}>{argsText}</pre> : null}
-        {awaiting ? (
-          tool.awaitingKind === "ask_user_question" ? (
-            <AskUserCard
-              tool={tool}
-              {...(staged === undefined ? {} : { staged })}
-              hitlActive={hitlActive}
-              controlError={controlError}
-              {...(onDecision === undefined ? {} : { onDecision })}
-              {...(onCancelRun === undefined ? {} : { onCancelRun })}
-            />
-          ) : tool.awaitingKind === "result_review" ? (
-            <ReviewCard
-              tool={tool}
-              {...(staged === undefined ? {} : { staged })}
-              hitlActive={hitlActive}
-              controlError={controlError}
-              {...(onDecision === undefined ? {} : { onDecision })}
-            />
-          ) : tool.awaitingKind === "input" ? (
-            <InputCard
-              tool={tool}
-              {...(staged === undefined ? {} : { staged })}
-              hitlActive={hitlActive}
-              controlError={controlError}
-              {...(onDecision === undefined ? {} : { onDecision })}
-            />
-          ) : (
-            <ApprovalCard
-              tool={tool}
-              {...(staged === undefined ? {} : { staged })}
-              hitlActive={hitlActive}
-              controlError={controlError}
-              {...(onDecision === undefined ? {} : { onDecision })}
-            />
-          )
-        ) : null}
         {failed ? (
           <p className={styles.toolError} role="status">
             {/* || 而非 ??：空串错误文本（无消息异常）也回落到兜底文案，绝不渲染空白红条。 */}
@@ -269,7 +177,7 @@ export function ToolCallRow({
           <p className={styles.toolRejectedNote} role="status">
             {t(closedNoteKey)}
           </p>
-        ) : tool.result && !awaiting ? (
+        ) : tool.result ? (
           // awaiting 时不重复渲染结果：result_review 的待审结果由审核卡只读区独占展示。
           <pre className={styles.toolResult}>{tool.result}</pre>
         ) : running ? (

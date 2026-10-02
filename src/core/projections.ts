@@ -82,7 +82,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   }
 
   // 仅有过程步骤、尚无任何 assistant 文本的 run（首 token 未到）：作为无文本的成形 turn。
-  for (const runId of Object.keys(state.stepsByRun)) {
+  for (const runId of new Set([...Object.keys(state.stepsByRun), ...Object.keys(state.interactionsByRun)])) {
     if (renderedRuns.has(runId)) {
       continue
     }

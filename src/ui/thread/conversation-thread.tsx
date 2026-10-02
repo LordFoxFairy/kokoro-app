@@ -17,6 +17,7 @@ import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
 import { buildThreadItems } from "@/core/projections"
 import type { AttributedRunFailure, RunFailure, SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
+import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
@@ -77,10 +78,13 @@ export type ConversationThreadProps = {
   thread: SessionStreamState
   isStreaming: boolean
   // Engine machine runId is the live authority after receipt; snapshot activeRunId is its reload fallback.
+  executionPhase?: MachinePhase
   currentRunId?: string | null
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
   isReconnecting: boolean
   hasFailed: boolean
+  canRetryResume?: boolean
+  onRetryResume?: () => void
   canRetryPendingSubmission: boolean
   // 402：run 被 credit_insufficient 拒——失败处改给计费专用说明 + 查看余额入口（不用通用失败文案）。
   creditRejected: boolean
@@ -177,8 +181,11 @@ function ConversationThreadSurface({
   thread,
   isStreaming,
   currentRunId,
+  executionPhase,
   isReconnecting,
   hasFailed,
+  canRetryResume = false,
+  onRetryResume,
   canRetryPendingSubmission,
   creditRejected,
   onOpenBilling,
@@ -359,8 +366,10 @@ function ConversationThreadSurface({
                   sessionId={sessionId}
                   {...(onOpenFile === undefined ? {} : { onOpenFile })}
                   {...(onOpenTool === undefined ? {} : { onOpenTool: (tool: SessionToolCall) => onOpenTool(item.runId, tool) })}
+                  {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
                   steps={item.steps}
                   messagesById={item.messagesById}
+                  {...(item.runId === liveRunId && executionPhase ? { executionPhase } : {})}
                   isLive={item.runId === liveRunId}
                   reconnecting={item.runId === liveRunId && isReconnecting}
                   mode={mode}
@@ -392,6 +401,7 @@ function ConversationThreadSurface({
               steps={[]}
               messagesById={{}}
               isLive
+              {...(executionPhase ? { executionPhase } : {})}
               reconnecting={isReconnecting}
               mode={mode}
               stagedDecisions={NO_DECISIONS}
@@ -401,6 +411,9 @@ function ConversationThreadSurface({
           </MessageScrollerItem>
         ) : null}
 
+        {canRetryResume && onRetryResume ? <MessageScrollerItem messageId="resume-retry">
+          <Button type="button" variant="outline" onClick={onRetryResume}>{t("hitl.retryResume")}</Button>
+        </MessageScrollerItem> : null}
         {/* 成果区：会话流尾部聚合本会话全部成果（终态一目了然，不用翻消息流）。 */}
         {onOpenDelivery && sessionId !== null && (thread.deliveries.length > 0 || thread.deliveriesHasMore) ? (
           <MessageScrollerItem messageId="deliveries">

@@ -83,7 +83,6 @@ describe("fetchSnapshot：兼容 Session runtime 的 feature_key 增量元数据
           feature_key: "chat",
         },
         messages: [],
-        pending_pauses: [],
         files: [],
         deliveries: [],
         deliveries_has_more: false,

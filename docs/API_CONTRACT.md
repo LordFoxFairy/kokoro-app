@@ -1,3 +1,63 @@
+## R65-WEB-PUBLIC4-D0：固定已发布 public4 的消费边界（目标态，仅文档）
+
+本前缀与 TECHNICAL_DESIGN/DATA_MODEL 的 R65 是唯一当前目标；下方旧正文 byte-equal 保留历史，不据其实现 active_run、旧顶层 pending 或 decisions-only。本阶段仅四doc前缀，未改source/tests/pin/generated。当前 Web main06a1c86612d9557d83081bcb67e8fc539ae7eacb 仍消费public3；目标 BFF已发布main3c08a422f3a6aa3cf204c308716cfa64f6d61bb2，contract/openapi/v1/openapi.yaml public4.0.0 / SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6。完整machine是唯一API事实源；以下是consumer约束，不另建可编辑OpenAPI。
+
+### 路径、身份与唯一 snapshot
+
+Browser→现 /api/session/* adapter→BFF /v1/* 保持；session/run来自现路径，tenant/subject/session admission来自既有受信上下文，不body自报。GET /v1/sessions/{id} 的现 data/meta envelope、Message/Artifact/permission与event_watermark不改；data仅可缺失 execution_head，删除 active_run与顶层pending_pauses。无head字段缺失，不收null、空run或旧双字段。closed head required run_id/state/pending_pauses，state精确queued|active|waiting|resuming。
+
+| head state | pending_pauses | UI与恢复 |
+| --- | --- | --- |
+| queued | [] | 等matching START，不从receipt猜已执行 |
+| active | [] | UI streaming；无wire streaming alias |
+| waiting | 恰一条phase=waiting完整PendingPause | 所有groups/items直接可见；等待全集决策 |
+| resuming | 恰一条phase=resuming完整PendingPause | 保留全集、禁新key重复决定；不是已消费 |
+
+head/最新full-state/Message/Artifact/watermark是BFF授权后同一RR读；Web只消费一次响应，不将多次请求拼成RR。event_watermark仍opaque agui_[0-9a-f]{32}或null，开流使用原Last-Event-ID，不从seq生成cursor。初读错误不是空成功；GC410仅event_cursor_expired允许现snapshot-first bounded恢复，其他错误保持connection unavailable而不是Run terminal。
+
+### full-state、隐私与严格校验
+
+PendingPause是owner完整ChatInteractionState的waiting/resuming投影：required interaction_revision/pause_revision/pause_ref/phase/groups/action_result，不是逐item暂停记录。interaction_revision正JS safe integer，pause_revision非负safe且<=interaction_revision；PendingPause pause_revision正、pause_ref非空。group_id/item_id全局唯一，groups/items原序；waiting/resuming groups非空，active/terminal明确[]。零pause revision对应null ref，正revision对应非空ref；active/terminal可保留历史正revision/ref，不强制归零。
+
+InteractionItem仅required item_id/request_id/kind/allowed_decisions/display及optional nullable validation；kind为tool_approval|ask_user_question|result_review|input，allowed_decisions非空、唯一五类。display required name/description/editable/input_schema，optional nullable result_preview/truncated/source；字符串preview必须有boolean truncated和非空source。validation如存在仅owner json_schema_invalid/instance_path，不从私有args合成。闭合边界、integer范围及字段存在性以固定machine为准，任意业务input_schema/args/value字典不递归改写null。
+
+action_result为null或command_id/pause_revision/kind；kind是accepted/native_consumed/validation_failed/unknown/cancelled。action.pause_revision<=当前pause；resuming必须accepted/unknown且精确当前pause。validation_failed的waiting携上一轮action revision，新的waiting非空action不代表已submitted。owner额外交叉约束由consumer contract向量及decoder验证，不凭nullable缺失默认化。
+
+禁止公开/消费checkpoint locator、task/interrupt私有定位、原tool args、submitted decision value、risk/segment/checkpoint等旧字段；display/input_schema是明确公开数据，不据描述解析新wire。snapshot与CUSTOM共享同一consumer full-state校验，不维护第二协议。schema放既有control.ts，head/body在chat.ts，AG-UI frame在agui-events.ts；control不反向import后二者。
+
+### AG-UI queued 与完整 interaction
+
+GET /v1/sessions/{id}/events 继续durable AG-UI SSE，metadata/cursor/event_id及UTC timestamp沿现协议；不发opened/resolved逐项delta。
+
+- CUSTOM kokoro.run.queued：strict value仅run_id、dispatch_sequence；dispatch_sequence正decimal string。此BFF专属metadata含source_owner=kokoro-bff、seq正decimal string、event_id/session_id/run_id/timestamp；run_id与value一致，source seq与dispatch sequence一致。复用现dispatch-error的精确字符串语义，不把任意CUSTOM开放成string/number union，不把BFF seq写入Agent numeric lastSeq或Number舍入。
+- CUSTOM kokoro.interaction.state：value是完整六字段，包括active/terminal明确空groups；metadata为现Agent数值序列分支。先校验frame/full集合/当前run revision，再承认opaque cursor；map到现data-kokoro UIMessage part和内部projection，不另开SSE。
+- 同revision同完整内容可no-op，omitted与null仍不同；倒退/同revision异内容fail closed。Web仅比较完整验证对象，不实现Agent control digest、BFF mutation fingerprint或owner interaction_digest。
+- interaction phase terminal不是RUN_FINISHED/RUN_ERROR。真正matching Run terminal仅结束该Run；A terminal之后B queued仍必须drain，跨批/跨页不早关会话。最终无live head关闭idle stream；重连与Run状态分开。
+
+### control 完整集合与 ACK
+
+现 POST /v1/sessions/{id}/runs/{runId}/control、Idempotency-Key与receipt envelope保持。public三分支闭合，不接收session_id（该边界在旧BFF也已存在，不写成public4新增身份要求）：
+
+| kind | required public body |
+| --- | --- |
+| run.cancel | kind |
+| run.resume | kind、decisions、expected_pause_revision、pause_ref |
+| run.steer | kind、message_id、content |
+
+expected_pause_revision正safe integer，pause_ref非空；locators不optional、不default。五closed ResumeDecision都使用item_id：approve可选nullable object args；edit必需object args；reject可选nullable string reason；respond必需非空response；submit必需object value。submit不是request_id，其他分支不是tool_id，不保alias。decisions覆盖当前所有groups的item ID恰一次，按展示原序构造，重复/缺失/额外/disallowed整批拒绝，不能只补剩余项。UI以allowed_decisions为动作白名单，不从旧kind固定子集推断允许动作；edit另遵守display.editable，不从私有args预填。
+
+冻结提交身份绑定当前session/run/pause_revision/ref，保key/body及完整业务null。HTTP202 receipt（即status=succeeded）仅admission/replay，不清卡、清groups、标rejected或转active；本地inflight防双发不能假冒owner resuming。只有durable accepted/unknown full-state进入resuming且全集保留；native_consumed下一完整revision空才active，非空为新waiting/re-pause；validation_failed显示新waiting与owner validation。普通tool returned/activity不解除pending；cancel ACK也不制造terminal。
+
+结构错误400 invalid_run_control；不可见会话404 session_not_found，非当前/不存在Run404 run_not_found；stale pause/ref或非waiting且非合法同key recovery409 run_control_conflict。same key/different body保持409 idempotency_conflict、处理中idempotency_in_progress，不把后者当terminal或放弃unknown原意图。resuming只允许与当前action_result.command_id一致的原key恢复，不能换key重decide。网络unknown保留原key/body；新pause替换时旧ACK零写，snapshot-first对账而非本地猜清全集。Web不从receipt.request_digest重算owner摘要或私有request。
+
+### 生成、消费者断言与后继门
+
+准确机器消费、生成/七pin测试文件集及完整RED矩阵以同TECH R65为准；本轮不更新src/generated/bff-public-openapi.yaml。后继仅从已发布3c08a422 blob复制，固定version/digest，现failure/Team两generator正规--write/--check；safe12 failure fingerprint/九Teamoperation和其他owner语义不放宽，不手改generated、不新增Chat SDK generator。现contract/api-contract.test.ts对固定机器的ExecutionHead/ChatInteractionState/PendingPause/ResumeDecision/RunControlRequest图做独立closed/negative assertions，而不是只改版本让旧decoder静默接受。
+
+首次public4用户激活必须snapshot/queued/完整pause/control/FIFO一片通过；无public3双读、HTTP4 terminal retry、retry_of_run_id或future P3B API。本D0未运行consumer RED、正式HTTP或浏览器；Root后继文档审→RED复验→source/pin/生成→contract/architecture/完整静态和行为门→正规owner组合验收。
+
+---
+
 # Kokoro User Web API 与协议契约
 
 ## WEB-PROJECT-READ-R42：指令历史复用已发布 wire（仅设计与 RED，2026-10-01）

@@ -31,7 +31,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   const snapshotMessages = snapshot.messages ?? []
   const tailMessage = snapshotMessages.at(-1)
   const activeAssistants = snapshotMessages.filter((message) => message.role === "assistant" &&
-    message.run_id !== undefined && message.run_id === snapshot.active_run?.run_id &&
+    message.run_id !== undefined && message.run_id === snapshot.execution_head?.run_id &&
     (message.status === "pending" || message.status === "streaming"))
   const candidate = activeAssistants.length === 1 ? activeAssistants[0] : undefined
   const messages: SessionMessage[] = snapshotMessages.map((message) => ({
@@ -42,15 +42,9 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     ...(message.role === "assistant" ? { snapshotMessageId: message.message_id } : {}),
     ...(message === candidate ? { awaitingTextSegment: true } : {}),
   }))
-  const pending = snapshot.pending_pauses.filter((pause) => pause.status === "pending")
-  const restoresFailedRun = tailMessage?.role === "assistant" && tailMessage.status === "failed" &&
-    snapshot.active_run === undefined && pending.length === 0
-  const pendingIdsByRun = new Map<string, string[]>()
-  for (const pause of pending) {
-    const ids = pendingIdsByRun.get(pause.run_id) ?? []
-    ids.push(pause.tool_id)
-    pendingIdsByRun.set(pause.run_id, ids)
-  }
+  const head = snapshot.execution_head
+  const pending = head?.pending_pauses ?? []
+  const restoresFailedRun = tailMessage?.role === "assistant" && tailMessage.status === "failed" && head === undefined
   const stepsByRun: Record<string, SessionStep[]> = {}
   const finalAssistantByRun = new Map<string, NonNullable<SessionSnapshot["messages"]>[number]>()
   let unattributedFailure: RunFailure | null = null
@@ -65,7 +59,7 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
   const runFailuresById: Record<string, AttributedRunFailure> = {}
   for (const [runId, message] of finalAssistantByRun) {
     if (message.status !== "failed") continue
-    if (snapshot.active_run?.run_id === runId || pending.some((pause) => pause.run_id === runId)) continue
+    if (snapshot.execution_head?.run_id === runId || (head?.run_id === runId && pending.length > 0)) continue
     runFailuresById[runId] = message.failure === undefined
       ? { failedRunId: runId, kind: "generic" }
       : { failedRunId: runId, kind: "agent", profile: message.failure }
@@ -78,29 +72,6 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     steps.push({ kind: "text", seq: index - messages.length, segmentId: message.id })
     stepsByRun[message.runId] = steps
   }
-  for (const [index, pause] of pending.entries()) {
-    const steps = stepsByRun[pause.run_id] ?? []
-    steps.push({
-      kind: "tool",
-      seq: index + 1,
-      segmentId: pause.segment_id,
-      tool: {
-        id: pause.tool_id,
-        name: pause.tool_name,
-        args: pause.args,
-        status: "awaiting",
-        description: pause.description,
-        allowedDecisions: [...pause.allowed_decisions],
-        awaitingKind: pause.kind,
-        editable: pause.editable,
-        pendingToolIds: [...(pendingIdsByRun.get(pause.run_id) ?? [])],
-        ...(pause.risk === undefined ? {} : { risk: pause.risk }),
-        ...(pause.input_schema === undefined ? {} : { inputSchema: pause.input_schema }),
-        ...(pause.result === undefined ? {} : { result: pause.result }),
-      },
-    })
-    stepsByRun[pause.run_id] = steps
-  }
 
   return {
     ...createSessionStreamState(),
@@ -110,7 +81,9 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
         }
       : {}),
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
-    activeRunId: snapshot.active_run?.run_id ?? null,
+    activeRunId: head?.run_id ?? null,
+    executionHead: head ?? null,
+    interactionsByRun: head && pending[0] ? { [head.run_id]: pending[0] } : {},
     messages,
     stepsByRun,
     runFailuresById,

@@ -4,6 +4,7 @@ import {
   parseChatProjectionEvent,
   type ChatProjectionEvent,
 } from "@/core/chat-projection-event"
+import type { InteractionState } from "@/contract/control"
 import type { AgentFailureProfile } from "@/contract/agent-failure"
 import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
 import type { RunControlReceipt, SessionSnapshot } from "@/contract/http"
@@ -311,7 +312,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // optimistic echo during the live run and reconstructs the user bubble when
     // a refreshed preview page replays the event history.
     queueEvents(session, [envelope("message.user", { message_id: `${runId}:user`, content })])
-    // 预览待批态演练：消息以 `!hitl` 起头则合成 tool.awaiting_approval 并停在待批（不发 run.completed），
+    // 预览待批态演练：消息以 `!hitl` 起头则合成完整 interaction.state 并停在 waiting（不发 run.completed），
     // 供 HITL-NOTIFY 跨会话徽标/通知人工走查。仅 dev 假流内可达，不影响真实链路。
     if (content.trim().startsWith("!hitl")) {
       const toolId = `${runId}:tool_1`
@@ -321,16 +322,12 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
         envelope("thinking.delta", { segment_id: segmentId, delta: "正在准备一次工具调用。" }),
         envelope("tool.invoked", { segment_id: segmentId, tool_id: toolId, name: "shell", args }),
-        envelope("tool.awaiting_approval", {
-          segment_id: segmentId,
-          tool_id: toolId,
-          name: "shell",
-          args,
-          description: "预览：这次工具调用正在等待你的批准。",
-          allowed_decisions: ["approve", "reject"],
-          kind: "tool_approval",
-          editable: false,
-          pending_tool_ids: [toolId],
+        envelope("interaction.state", {
+          interaction_revision: 1, pause_revision: 1, pause_ref: `${runId}:pause:1`, phase: "waiting", action_result: null,
+          groups: [{ group_id: `${runId}:group:1`, items: [{
+            item_id: toolId, request_id: `${runId}:request:1`, kind: "tool_approval", allowed_decisions: ["approve", "reject"],
+            display: { name: "shell", description: "预览：这次工具调用正在等待你的批准。", editable: false, input_schema: {} },
+          }] }],
         }),
       ])
       drainActive(session)
@@ -459,8 +456,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       if (!session?.started) return null
       const firstEvent = session.history[0]
       let activeRunId: string | null = null
+      let interaction: InteractionState | null = null
       for (const event of session.history) {
-        if (event.kind === "run.created") activeRunId = event.payload.run_id
+        if (event.kind === "run.created") { activeRunId = event.payload.run_id; interaction = null }
+        if (event.kind === "interaction.state" && event.run_id === activeRunId) interaction = event.payload
         if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") activeRunId = null
       }
       return {
@@ -471,8 +470,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           created_at: firstEvent?.timestamp ?? session.updatedAt,
           updated_at: session.updatedAt,
         },
-        ...(activeRunId !== null ? { active_run: { run_id: activeRunId, status: "running" } } : {}),
-        pending_pauses: [],
+        ...(activeRunId !== null ? { execution_head: {
+          run_id: activeRunId, state: interaction?.phase === "waiting" || interaction?.phase === "resuming" ? interaction.phase : "active",
+          pending_pauses: interaction?.phase === "waiting" || interaction?.phase === "resuming" ? [interaction] : [],
+        } } : {}),
         files: [],
         deliveries: [],
         deliveries_has_more: false,
@@ -500,6 +501,9 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         const decision = body.decisions[0]
         const rejected = decision?.type === "reject"
         queueEvents(session, [
+          envelope("interaction.state", { interaction_revision: 2, pause_revision: body.expected_pause_revision,
+            pause_ref: body.pause_ref, phase: "active", groups: [],
+            action_result: { command_id: commandId, pause_revision: body.expected_pause_revision, kind: "native_consumed" } }),
           envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
           envelope("tool.returned", {
             segment_id: segmentId,

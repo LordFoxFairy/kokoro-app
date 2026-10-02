@@ -1,13 +1,19 @@
+import type { InteractionState } from "@/contract/control"
+import { ApprovalCard } from "@/ui/hitl/approval-card"
+import { AskUserCard } from "@/ui/hitl/ask-user-card"
+import { ReviewCard } from "@/ui/hitl/review-card"
+import { InputCard } from "@/ui/hitl/input-card"
 import type { AgentMode } from "@/core/conversations"
 import { DEFAULT_BRAND } from "@/config/brand"
 import { groupSegments } from "@/core/projections"
 import type { SessionMessage, SessionStep, SessionToolCall } from "@/core/state"
+import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, Copy } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 
 import { MarkdownMessage } from "./markdown-message"
@@ -15,6 +21,8 @@ import { SegmentProcess } from "./segment-process"
 import styles from "./thread.module.css"
 
 type AssistantTurnProps = {
+  interaction?: InteractionState
+  executionPhase?: MachinePhase
   brandName?: string
   onOpenFile?: (path: string) => void
   // 工具 pill 点击 → canvas 详情（runId 已在上游绑定）。
@@ -71,6 +79,8 @@ function FormingContent({
 //   正文在【上】＋ 它的过程挂在【下面】（思考/该段工具/子智能体，收成更轻的可折叠次级块）。
 // 只有整轮的尾段在流式时带就近光标（唯一 live 锚点）。
 export function AssistantTurn({
+  interaction,
+  executionPhase,
   brandName = DEFAULT_BRAND.name,
   sessionId,
   onOpenFile,
@@ -89,18 +99,30 @@ export function AssistantTurn({
   failureFooter,
 }: AssistantTurnProps) {
   const t = useT()
+  const hadInteraction = useRef(Boolean(interaction?.groups.length))
+  useEffect(() => {
+    const hasInteraction = Boolean(interaction?.groups.length)
+    const consumed = hadInteraction.current && !hasInteraction
+    hadInteraction.current = hasInteraction
+    if (!consumed) return
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>('[data-settings-return-target="composer"]:not([disabled])')?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [interaction])
   const segments = groupSegments(steps)
   const tailId = segments.at(-1)?.segmentId
   const tailMessage = tailId ? messagesById[tailId] : undefined
   const tailHasText = Boolean(tailMessage) && (tailMessage?.content.length ?? 0) > 0
-  const formingLabel = hitlActive
+  const phaseLabel = executionPhase === "queued" ? t("hitl.queued") : executionPhase === "resuming" ? t("hitl.resuming") : executionPhase === "cancelling" ? t("hitl.cancelling") : null
+  const formingLabel = phaseLabel ?? (hitlActive
     ? t("hitl.approvalTitle")
     : mode === "fast"
       ? t("thread.formingAnswer")
-      : t("thread.formingThinking")
+      : t("thread.formingThinking"))
   // 提交后首个 step/token 未到：这一轮还没有任何 segment，但仍在途——给一个成形脚手架
   // （单条「正在…」），绝不让在途轮塌成空帧。落定/非流式则不渲染脚手架。
-  const showScaffold = isLive && segments.length === 0
+  const showScaffold = isLive && segments.length === 0 && !interaction?.groups.length
   // 重连可读：尾段已有正文时（streaming 盒，无 forming 盒承载「重连中…」），用 turn 级状态条补出
   // 重连信号——否则刷新回半截 run 只剩呼吸脉冲、看不出在重连还是卡死。无正文时仍由成形盒显示，互斥不重复。
   const showReconnectStrip = reconnecting && tailHasText
@@ -148,6 +170,7 @@ export function AssistantTurn({
             </span>
           </div>
         ) : null}
+        {phaseLabel && !showScaffold ? <p role="status">{phaseLabel}</p> : null}
         {showScaffold ? (
           <div className={styles.turnSegment}>
             <div
@@ -215,15 +238,33 @@ export function AssistantTurn({
                 subagents={segment.subagents}
                 live={liveSegment}
                 {...(mode === undefined ? {} : { mode })}
-                stagedDecisions={stagedDecisions}
-                hitlActive={hitlActive}
-                controlError={controlError}
-                {...(onToolDecision === undefined ? {} : { onToolDecision })}
-                {...(onCancelRun === undefined ? {} : { onCancelRun })}
               />
             </div>
           )
         })}
+        {interaction?.groups.map((group) => <div key={group.group_id} data-interaction-group={group.group_id}>
+          {group.items.map((item) => {
+            const Card = item.kind === "tool_approval" ? ApprovalCard : item.kind === "ask_user_question" ? AskUserCard : item.kind === "result_review" ? ReviewCard : InputCard
+            const staged = stagedDecisions[item.item_id]
+            return <div key={`${interaction.pause_revision}:${item.item_id}`}>
+              <h3>{item.display.name}</h3>
+              <Card tool={item} hitlActive={hitlActive && interaction.phase === "waiting"} controlError={controlError}
+                {...(onCancelRun && item.kind === "ask_user_question" ? { onCancelRun } : {})}
+                {...(staged === undefined ? {} : { staged })} {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })} />
+              {/* Kind chooses the presentation, never narrows the owner's action whitelist. */}
+              {item.kind !== "tool_approval" && item.allowed_decisions.some((type) => type === "edit" || (item.kind === "ask_user_question" && (type === "approve" || type === "reject")) || (item.kind === "input" && type === "approve")) ?
+                <ApprovalCard tool={{ ...item, allowed_decisions: item.allowed_decisions.filter((type) => type === "edit" || (item.kind === "ask_user_question" && (type === "approve" || type === "reject")) || (item.kind === "input" && type === "approve")) }}
+                  hitlActive={hitlActive && interaction.phase === "waiting"} controlError={controlError}
+                  {...(staged === undefined ? {} : { staged })} {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })} /> : null}
+              {item.kind !== "ask_user_question" && item.kind !== "result_review" && item.allowed_decisions.includes("respond") ?
+                <AskUserCard tool={item} hitlActive={hitlActive && interaction.phase === "waiting"} controlError={controlError}
+                  {...(staged === undefined ? {} : { staged })} {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })} /> : null}
+              {item.kind !== "input" && item.allowed_decisions.includes("submit") ?
+                <InputCard tool={{ ...item, allowed_decisions: ["submit"] }} hitlActive={hitlActive && interaction.phase === "waiting"} controlError={controlError}
+                  {...(staged === undefined ? {} : { staged })} {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })} /> : null}
+            </div>
+          })}
+        </div>)}
         {!isLive && answerText ? (
           <div className={styles.assistantActions} data-slot="assistant-actions">
             <Button

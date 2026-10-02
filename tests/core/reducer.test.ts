@@ -7,13 +7,12 @@ import {
   applyChatProjectionEvents,
   appendUserMessage,
   markRunCancelled,
-  markToolRejected,
 } from "@/core/reducer"
 import { createSessionStreamState, type SessionStreamState } from "@/core/state"
 
 import {
   AGENT_FAILURE_PROFILES,
-  awaitingPayload,
+  makeInteractionState,
   makeAgentFailureEvent,
   makeEvent,
   makeDeliveryPayload,
@@ -118,12 +117,13 @@ describe("session.created / run.created 投影", () => {
     expect(state.meta).toEqual({ title: "server title", ownerId: "owner_9" })
   })
 
-  it("run.created 解析记账但不投影（run 锚定由 receipt/snapshot 承担）", () => {
+  it("START 锚定 active head，不发明消息", () => {
     const state = applyChatProjectionEvent(
       createSessionStreamState(),
       makeEvent("run.created", { run_id: "run_9" }, { run_id: "run_9" }),
     )
-    expect(state.activeRunId).toBeNull()
+    expect(state.activeRunId).toBe("run_9")
+    expect(state.executionHead).toMatchObject({ run_id: "run_9", state: "active", pending_pauses: [] })
     expect(state.messages).toHaveLength(0)
     expect(state.seenEventIds.size).toBe(1)
   })
@@ -201,7 +201,7 @@ describe("activeRunId 显式锚定（snapshot 置位、终态清空）", () => {
 describe("工具步按 tool_id 归并（segment 漂移免疫）", () => {
   it("awaiting→invoked→returned 跨 segment 仍是单步单组（真栈走查回归）", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
-      makeEvent("tool.awaiting_approval", { ...awaitingPayload("tool_1", ["tool_1"]), segment_id: "seg_msg" }),
+      makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1"])),
       // agent 在 approve 恢复后以 tool_call_id 兜底 segment：与 awaiting 的 segment 漂移。
       makeEvent("tool.invoked", { segment_id: "tool_1", tool_id: "tool_1", name: "w", args: { a: 1 } }),
       makeEvent("tool.returned", { segment_id: "tool_1", tool_id: "tool_1", name: "w", result: "ok", is_error: false }),
@@ -209,18 +209,19 @@ describe("工具步按 tool_id 归并（segment 漂移免疫）", () => {
     const steps = state.stepsByRun["run_1"] ?? []
     const toolSteps = steps.filter((s) => s.kind === "tool")
     expect(toolSteps).toHaveLength(1)
-    expect(toolSteps[0]!.segmentId).toBe("seg_msg")
+    expect(toolSteps[0]!.segmentId).toBe("tool_1")
+    expect(state.interactionsByRun.run_1?.groups).toHaveLength(1)
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe("done")
   })
 })
 
 describe("HITL：rejected 不被降级", () => {
-  it("本地 rejected 后 is_error=false 的 tool.returned 不翻绿勾", () => {
+  it("owner rejected 后 is_error=false 的 tool.returned 不翻绿勾", () => {
     let state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_1", name: "w", args: {} }),
-      makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"])),
+      makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1"])),
     ])
-    state = markToolRejected(state, "run_1", ["tool_1"])
+    state = applyChatProjectionEvent(state, makeEvent("tool.returned", { segment_id: "seg_1", tool_id: "tool_1", name: "w", result: "user rejected", is_error: false, rejected: true }))
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe("rejected")
     state = applyChatProjectionEvent(
       state,
@@ -254,18 +255,19 @@ describe("HITL：rejected 不被降级", () => {
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe(expected)
   })
 
-  it("markToolRejected 只翻命中且 awaiting 的工具（同帧部分拒绝）", () => {
+  it("owner 裁决只翻命中工具（同帧部分拒绝，交互集合不被乐观清空）", () => {
     let state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_1", name: "a", args: {} }),
-      makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1", "tool_2"])),
+      makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1", "tool_2"])),
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_2", name: "b", args: {} }),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_2", ["tool_1", "tool_2"], { tool_id: "tool_2", name: "b" }),
+        "interaction.state",
+        makeInteractionState("tool_2", ["tool_1", "tool_2"], { tool_id: "tool_2", name: "b" }),
       ),
     ])
-    state = markToolRejected(state, "run_1", ["tool_2"])
-    expect(toolStatusOf(state, "run_1", "tool_1")).toBe("awaiting")
+    state = applyChatProjectionEvent(state, makeEvent("tool.returned", { segment_id: "seg_1", tool_id: "tool_2", name: "b", result: "rejected", is_error: false, rejected: true }))
+    expect(toolStatusOf(state, "run_1", "tool_1")).toBe("running")
+    expect(state.interactionsByRun.run_1?.groups[0]?.items.map((item) => item.item_id)).toEqual(["tool_1", "tool_2"])
     expect(toolStatusOf(state, "run_1", "tool_2")).toBe("rejected")
   })
 
@@ -282,54 +284,52 @@ describe("HITL：rejected 不被降级", () => {
     }
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], { ...base, args: { message: "需要验证码" } }),
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], { ...base, args: { message: "需要验证码" } }),
       ),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], {
           ...base,
           args: { message: "需要验证码", validation_error: "'otp' is a required property" },
         }),
       ),
     ])
-    const step = (state.stepsByRun["run_1"] ?? [])[0]
-    if (step?.kind !== "tool") {
-      throw new Error("expected tool step")
-    }
-    expect(step.tool.status).toBe("awaiting")
-    expect(step.tool.args["validation_error"]).toBe("'otp' is a required property")
-    expect(step.tool.inputSchema).toEqual(schema)
-    expect(step.tool.awaitingKind).toBe("input")
+    const item = state.interactionsByRun.run_1?.groups[0]?.items[0]
+    expect(item?.kind).toBe("input")
+    expect(item?.validation).toEqual({ code: "json_schema_invalid", instance_path: ["otp"] })
+    expect(item?.display.input_schema).toEqual(schema)
+    expect(item?.display.description).toBe("需要验证码")
+    expect(JSON.stringify(item)).not.toContain("required property")
+    expect(state.stepsByRun.run_1 ?? []).toEqual([])
   })
 
   it("awaiting 事件把契约 pending_tool_ids/kind/risk 落进工具（凑帧与分卡判据）", () => {
     const state = applyChatProjectionEvent(
       createSessionStreamState(),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1", "tool_2"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1", "tool_2"], {
           kind: "ask_user_question",
           allowed_decisions: ["respond"],
           risk: { level: "low", source: "policy", reason: "asks user" },
         }),
       ),
     )
-    const step = (state.stepsByRun["run_1"] ?? [])[0]
-    if (step?.kind !== "tool") {
-      throw new Error("expected tool step")
-    }
-    expect(step.tool.pendingToolIds).toEqual(["tool_1", "tool_2"])
-    expect(step.tool.awaitingKind).toBe("ask_user_question")
-    expect(step.tool.risk).toEqual({ level: "low", source: "policy", reason: "asks user" })
+    const items = state.interactionsByRun.run_1?.groups.flatMap((group) => group.items)
+    expect(items?.map((item) => item.item_id)).toEqual(["tool_1", "tool_2"])
+    expect(items?.[0]?.kind).toBe("ask_user_question")
+    expect(items?.[0]?.allowed_decisions).toEqual(["respond"])
+    expect(JSON.stringify(items)).not.toContain("risk")
+    expect(state.stepsByRun.run_1 ?? []).toEqual([])
   })
 
   it("result_review 的 awaiting 事件把待审 result 预填进工具步", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_1", name: "w", args: {} }),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], {
           kind: "result_review",
           allowed_decisions: ["approve", "respond", "reject"],
           result: "raw tool output",
@@ -340,16 +340,16 @@ describe("HITL：rejected 不被降级", () => {
     if (step?.kind !== "tool") {
       throw new Error("expected tool step")
     }
-    expect(step.tool.status).toBe("awaiting")
-    expect(step.tool.awaitingKind).toBe("result_review")
-    expect(step.tool.result).toBe("raw tool output")
+    expect(step.tool.status).toBe("running")
+    expect(step.tool.result).toBeUndefined()
+    expect(state.interactionsByRun.run_1?.groups[0]?.items[0]).toMatchObject({ kind: "result_review", display: { result_preview: "raw tool output", truncated: false, source: "tool" } })
   })
 
   it("result_review 裁决回流：tool.returned 覆盖预填 result 为裁决后内容", () => {
     const state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], {
           kind: "result_review",
           allowed_decisions: ["approve", "respond", "reject"],
           result: "raw tool output",
@@ -376,18 +376,19 @@ describe("HITL：rejected 不被降级", () => {
 
 describe("终态收口：结构化 status、零 UI 文案", () => {
   it.each([
-    ["awaiting", "stale-awaiting"],
+    ["waiting", "stale-running"],
     ["running", "stale-running"],
   ] as const)("run.completed 时 %s 工具 → %s", (openStatus, expected) => {
     const events: ChatProjectionEvent[] = [
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_1", name: "w", args: {} }),
     ]
-    if (openStatus === "awaiting") {
-      events.push(makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"])))
+    if (openStatus === "waiting") {
+      events.push(makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1"])))
     }
     events.push(makeEvent("run.completed", { status: "completed" }))
     const state = applyChatProjectionEvents(createSessionStreamState(), events)
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe(expected)
+    expect(state.interactionsByRun.run_1).toBeUndefined()
     const step = (state.stepsByRun["run_1"] ?? [])[0]
     expect(step?.kind === "tool" ? step.tool.errorText : "sentinel").toBeUndefined()
   })
@@ -414,7 +415,7 @@ describe("终态收口：结构化 status、零 UI 文案", () => {
   it("markRunCancelled 把悬挂工具置结构化 cancelled", () => {
     let state = applyChatProjectionEvents(createSessionStreamState(), [
       makeEvent("tool.invoked", { segment_id: "seg_1", tool_id: "tool_1", name: "w", args: {} }),
-      makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"])),
+      makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1"])),
     ])
     state = markRunCancelled(state, "run_1")
     expect(toolStatusOf(state, "run_1", "tool_1")).toBe("cancelled")

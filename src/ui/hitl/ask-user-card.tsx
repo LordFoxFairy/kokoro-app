@@ -4,7 +4,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useState } from "react"
 
-import type { SessionToolCall } from "@/core/state"
+import type { InteractionItem } from "@/contract/control"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 
@@ -12,7 +12,9 @@ import styles from "../thread/thread.module.css"
 
 // ask_user 的 choices 活在工具 args 里（agent 侧工具入参）：仅接受纯字符串数组，其余形状忽略。
 function choicesOf(args: Record<string, unknown>): string[] {
-  const raw = args["choices"]
+  const properties = args["properties"] as Record<string, unknown> | undefined
+  const response = properties?.["response"] as Record<string, unknown> | undefined
+  const raw = response?.["enum"]
   if (!Array.isArray(raw)) {
     return []
   }
@@ -32,7 +34,7 @@ function choicesOf(args: Record<string, unknown>): string[] {
 }
 
 type AskUserCardProps = {
-  tool: SessionToolCall
+  tool: InteractionItem
   staged?: ToolDecision
   hitlActive: boolean
   controlError: string | null
@@ -58,10 +60,10 @@ export function AskUserCard({
   const actionable = hitlActive && onDecision !== undefined
   const disabled = !actionable || (decided && controlError === null)
   const submitting = decided && controlError === null
-  const canRespond = (tool.allowedDecisions ?? []).includes("respond")
-  const choices = choicesOf(tool.args)
+  const canRespond = (tool.allowed_decisions ?? []).includes("respond")
+  const choices = choicesOf(tool.display.input_schema)
   const responseText = response.trim()
-  const rawQuestion = tool.args["question"]
+  const rawQuestion = tool.display.description
   const question = typeof rawQuestion === "string" && rawQuestion ? rawQuestion : t("hitl.askHint")
   const promptText = controlError
     ? t("hitl.replyFailed")
@@ -114,7 +116,7 @@ export function AskUserCard({
               className={styles.toolRespondSend}
               disabled={disabled || responseText.length === 0}
               aria-busy={submitting}
-              onClick={() => onDecision?.(tool.id, { type: "respond", message: responseText })}
+              onClick={() => onDecision?.(tool.item_id, { type: "respond", message: responseText })}
             >
               {submitting ? <Spinner aria-hidden="true" /> : null}
               {t("hitl.sendReply")}

@@ -37,6 +37,7 @@ export type EngineSnapshot = {
   // 已有可信 snapshot 后的页面连接可用性；不属于 Message/Run terminal。
   connection: ConnectionAvailability
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
+  canRetryResume: boolean
   canRetryPendingSubmission: boolean
 }
 
@@ -51,6 +52,7 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   staging: {},
   hydrating: false,
   connection: { status: "connected" },
+  canRetryResume: false,
   canRetryPendingSubmission: false,
 }
 
@@ -61,6 +63,7 @@ export type SessionEngine = {
   // submission lifecycle. Callers must retain drafts and route intent on false.
   submit: (content: string) => boolean
   // 仅恢复未获 create receipt 的冻结提交；owner terminal 不经本入口重发。
+  retryResume: () => void
   retry: () => void
   // 连接 hard failure 的只读恢复：重新 snapshot-first，不重发 user/message。
   reconnect: () => void

@@ -54,7 +54,7 @@ describe("engine event reducer", () => {
 
     const result = reduceProjectionEvents({
       thread: createSessionStreamState(),
-      machine: { ...IDLE_MACHINE, phase: "reattaching", runId: "run_1" },
+      machine: { ...IDLE_MACHINE, phase: "streaming", runId: "run_1" },
       events: [historicalTerminal, activeTerminal],
     })
 
@@ -75,7 +75,7 @@ describe("engine event reducer", () => {
     })
     const result = reduceProjectionEvents({
       thread: createSessionStreamState(),
-      machine: { ...IDLE_MACHINE, phase: "reattaching", runId: "run_1" },
+      machine: { ...IDLE_MACHINE, phase: "streaming", runId: "run_1" },
       events: [openTool, dispatchTerminal],
     })
     expect(result.thread.lastSeq).toBe(7)
@@ -97,14 +97,14 @@ describe("engine event reducer", () => {
     })
     const result = reduceProjectionEvents({
       thread: { ...createSessionStreamState(), activeRunId: "run_new", lastSeq: 11 },
-      machine: { ...IDLE_MACHINE, phase: "reattaching", runId: "run_new" },
+      machine: { ...IDLE_MACHINE, phase: "streaming", runId: "run_new" },
       events: [dispatchTerminal],
     })
     expect(result.thread).toMatchObject({
       activeRunId: "run_new", lastSeq: 11, runStatus: "idle",
     })
     expect(result.thread.runFailuresById.run_old).toEqual({ failedRunId: "run_old", kind: "dispatch" })
-    expect(result.machine).toMatchObject({ phase: "reattaching", runId: "run_new" })
+    expect(result.machine).toMatchObject({ phase: "streaming", runId: "run_new" })
     expect(result.settledRunId).toBeNull()
   })
 
@@ -117,9 +117,38 @@ describe("engine event reducer", () => {
       ],
     }
 
-    const result = reconcileUserMessageId(state, "msg_new")
+    const result = reconcileUserMessageId(state, "msg_new", "usr_1")
 
     expect(result.messages.map((message) => message.id)).toEqual(["msg_existing", "msg_new"])
     expect(result.messages[1]?.content).toBe("hello")
+  })
+})
+
+// R74 receipt identity is explicit and independent of content/prefix/position.
+describe("R74 explicit optimistic receipt reconciliation", () => {
+  const pending = () => ({ ...createSessionStreamState(), messages: [
+    { id: "local_B", role: "user" as const, content: "same", runId: "local_B" },
+    { id: "usr_C", role: "user" as const, content: "same", runId: "usr_C" },
+  ] })
+
+  it("reconciles the named admission rather than the last prefixed echo", () => {
+    const result = reconcileUserMessageId(pending(), "canonical_B", "local_B")
+    expect(result.messages.map((message) => message.id)).toEqual(["canonical_B", "usr_C"])
+  })
+
+  it("preserves an unrelated echo and the owner row when SSE arrived before receipt", () => {
+    const state = pending()
+    state.messages.push({ id: "canonical_B", role: "user", content: "owner content", runId: "run_B" })
+    const result = reconcileUserMessageId(state, "canonical_B", "local_B")
+    expect(result.messages).toEqual([
+      { id: "canonical_B", role: "user", content: "owner content", runId: "run_B" },
+      state.messages[1],
+    ])
+  })
+
+  it("keeps the state unchanged when the explicit echo is absent", () => {
+    const state = pending()
+    expect(reconcileUserMessageId(state, "canonical_B", "missing_echo")).toBe(state)
+    expect(state.messages.map((message) => message.id)).toEqual(["local_B", "usr_C"])
   })
 })

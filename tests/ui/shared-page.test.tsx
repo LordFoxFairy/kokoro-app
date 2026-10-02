@@ -29,7 +29,6 @@ const snapshot = {
     updated_at: "2026-08-25T00:00:01.000Z",
   },
   messages: [],
-  pending_pauses: [],
   files: [],
   deliveries: [],
   deliveries_has_more: false,

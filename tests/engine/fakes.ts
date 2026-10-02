@@ -183,3 +183,88 @@ export async function settle(): Promise<void> {
     setTimeout(resolve, 0)
   })
 }
+
+
+// R66 public4 HTTP builder exercises the real SessionClient parser and transport.
+// Responses/streams are in memory; an unexpected route never reaches the network.
+import { createSessionClient as r66CreateSessionClient } from "@/engine/client"
+
+export function createPublic4HttpFixture(initialSnapshot: Record<string, unknown>) {
+  let snapshot = initialSnapshot
+  let expireNext = false
+  const requests: Array<{ method: string; path: string; headers: Headers; body: unknown }> = []
+  const controls: Array<{ runId: string; key: string; body: unknown }> = []
+  const streams: Array<{
+    closed: boolean
+    headers: Headers
+    controller: ReadableStreamDefaultController<Uint8Array>
+  }> = []
+  const reply = (data: unknown, status = 200) => new Response(
+    JSON.stringify(data),
+    { status, headers: { "content-type": "application/json" } },
+  )
+  const fixture = {
+    client: r66CreateSessionClient({ baseUrl: "http://r66.invalid/api/session" }),
+    requests, controls, streams,
+    setSnapshot: (next: Record<string, unknown>) => { snapshot = next },
+    expireNextStream: () => { expireNext = true },
+    controlReply: (call: { runId: string; key: string; body: unknown }): Promise<Response> =>
+      Promise.resolve(reply({
+        run_id: call.runId, command_id: call.key, request_digest: "sha256:r66",
+        status: "succeeded", replayed: false,
+      }, 202)),
+    emit: (cursor: string, event: unknown) => {
+      const stream = streams.at(-1)
+      if (!stream || stream.closed) throw new Error("R66 requires an open HTTP stream before emission")
+      stream.controller.enqueue(new TextEncoder().encode(
+        `id: ${cursor}\ndata: ${JSON.stringify(event)}\n\n`,
+      ))
+    },
+    fetcher: async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const address = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+      const path = new URL(address, "http://r66.invalid").pathname
+      const method = init?.method ?? "GET"
+      const headers = new Headers(init?.headers)
+      const body: unknown = typeof init?.body === "string" ? JSON.parse(init.body) : null
+      requests.push({ method, path, headers, body })
+      if (method === "GET" && path.endsWith("/events")) {
+        if (expireNext) {
+          expireNext = false
+          return new Response(JSON.stringify({
+            error: { code: "event_cursor_expired", message: "R66 expired" },
+            meta: { request_id: "r66_request" },
+          }), { status: 410, headers: { "content-type": "application/json" } })
+        }
+        return new Response(new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            const stream = { closed: false, headers, controller }
+            streams.push(stream)
+            init?.signal?.addEventListener("abort", () => {
+              if (!stream.closed) { stream.closed = true; controller.close() }
+            }, { once: true })
+          },
+          cancel: () => {
+            const stream = streams.at(-1)
+            if (stream) stream.closed = true
+          },
+        }), { status: 200, headers: { "content-type": "text/event-stream" } })
+      }
+      if (method === "GET" && /\/sessions\/[^/]+$/u.test(path)) return reply(snapshot)
+      if (method === "POST" && path.endsWith("/messages")) return reply({
+        run_id: "run_1", user_message_id: "r66_user", assistant_message_id: "r66_assistant",
+      }, 202)
+      if (method === "POST" && path.endsWith("/control")) {
+        const runId = path.split("/").at(-2)
+        if (!runId) throw new Error("R66 malformed control fixture URL")
+        const call = { runId, key: headers.get("idempotency-key") ?? "", body }
+        controls.push(call)
+        return fixture.controlReply(call)
+      }
+      return new Response(JSON.stringify({
+        error: { code: "session_not_found", message: "R66 unexpected fixture route" },
+        meta: { request_id: "r66_request" },
+      }), { status: 404, headers: { "content-type": "application/json" } })
+    },
+  }
+  return fixture
+}

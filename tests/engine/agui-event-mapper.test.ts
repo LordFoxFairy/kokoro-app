@@ -393,3 +393,63 @@ it.each(["START", "END"] as const)("retains TEXT_MESSAGE_%s internally without c
   })
   expect(mapped.uiMessageChunks).toEqual([{ type: boundary === "START" ? "text-start" : "text-end", id: "wire" }])
 })
+
+
+import { applyChatProjectionEvents as r66Fold } from "@/core/reducer"
+import { createSessionStreamState as r66EmptyState } from "@/core/state"
+import {
+  makePublic4Frame as r66Frame, makePublic4Interaction as r66Interaction,
+  makePublic4QueuedFrame as r66Queued, makePublic4StateFrame as r66StateFrame,
+} from "../core/fixtures"
+
+describe("R66 public4 queued/START/full-state mapper", () => {
+  it("keeps the BFF queued sequence exact and outside numeric Agent ordering", () => {
+    const mapper = new AgUiEventMapper()
+    const start = mapper.map(CURSORS.start, r66Frame({
+      type: "RUN_STARTED", threadId: "conv_9", runId: "run_1",
+    }, 7))
+    expect(start.projectionEvent).toMatchObject({ kind: "run.created", seq: 7 })
+    const sequence = "9007199254740993123456789"
+    const queued = mapper.map(CURSORS.args, r66Queued(sequence, "run_2"))
+    expect(queued.terminal).toBe(false)
+    expect(queued.projectionEvent).toMatchObject({
+      kind: "run.queued", sourceSequence: sequence,
+      payload: { run_id: "run_2", dispatch_sequence: sequence },
+    })
+    expect(queued.projectionEvent).not.toHaveProperty("seq")
+    expect(queued.uiMessageChunks).toContainEqual(expect.objectContaining({ type: "data-kokoro" }))
+    const events = [start.projectionEvent, queued.projectionEvent].filter(
+      (event): event is NonNullable<typeof event> => event !== null,
+    )
+    expect(r66Fold(r66EmptyState(), events).lastSeq).toBe(7)
+  })
+
+  it("emits the complete owner collection, retaining optional presence and UIMessage parts", () => {
+    const state = r66Interaction()
+    const mapped = new AgUiEventMapper().map(CURSORS.start, r66StateFrame(state))
+    expect(mapped.projectionEvent).toMatchObject({ kind: "interaction.state", payload: state })
+    expect(mapped.uiMessageChunks).toContainEqual(expect.objectContaining({
+      type: "data-kokoro", data: expect.objectContaining({ payload: state }),
+    }))
+    expect(mapped.terminal).toBe(false)
+    expect(JSON.stringify(mapped)).not.toContain("pending_tool_ids")
+    expect(JSON.stringify(mapped)).not.toContain("private_fence")
+  })
+
+  it("rejects a same-revision presence change and does not confuse interaction terminal with Run terminal", () => {
+    const state = r66Interaction()
+    const mapper = new AgUiEventMapper()
+    const accepted = mapper.map(CURSORS.start, r66StateFrame(state))
+    expect(accepted.terminal).toBe(false)
+    const group = state.groups.at(0)
+    if (!group) throw new Error("R66 fixture requires a group")
+    const changed = { ...state, groups: [{ ...group,
+      items: group.items.map((item) => ({ ...item, validation: null })),
+    }, ...state.groups.slice(1)] }
+    expect(() => mapper.map(CURSORS.args, r66StateFrame(changed, 22))).toThrow()
+    const terminal = mapper.map(CURSORS.terminal, r66StateFrame(r66Interaction({
+      interaction_revision: 5, phase: "terminal", groups: [],
+    }), 23))
+    expect(terminal.terminal).toBe(false)
+  })
+})

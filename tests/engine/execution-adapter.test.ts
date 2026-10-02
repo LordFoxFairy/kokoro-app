@@ -120,13 +120,14 @@ describe("session execution adapter", () => {
   it("把 resume 与 cancel 统一送入带 command identity 的 control adapter", async () => {
     const client = createFakeClient()
     const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
-    const decisions: ResumeDecision[] = [{ type: "approve", tool_id: "tool_1" }]
+    const decisions: ResumeDecision[] = [{ type: "approve", item_id: "tool_1" }]
 
     await adapter.resumeRun({
       sessionId: "session_1",
       runId: "run_1",
       decisions,
       commandId: "command_resume",
+      expectedPauseRevision: 1, pauseRef: "pause_1",
     })
     await adapter.cancelRun({
       sessionId: "session_1",
@@ -141,7 +142,7 @@ describe("session execution adapter", () => {
         commandId: "command_resume",
         body: {
           kind: "run.resume",
-          session_id: "session_1",
+          expected_pause_revision: 1, pause_ref: "pause_1",
           decisions,
         },
       },
@@ -149,8 +150,41 @@ describe("session execution adapter", () => {
         sessionId: "session_1",
         runId: "run_1",
         commandId: "command_cancel",
-        body: { kind: "run.cancel", session_id: "session_1" },
+        body: { kind: "run.cancel" },
       },
     ])
+  })
+})
+
+
+import {
+  makePublic4Decisions as r66Decisions,
+  makePublic4Resume as r66Resume,
+} from "../core/fixtures"
+
+describe("R66 public4 exact control adapter", () => {
+  it("sends all five item decisions with exact pause locators and no public session_id", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+    // Reflect invokes the current runtime export with legal future-shaped input.
+    // It avoids importing a new type/export, not the HTTP behavior being asserted.
+    await Reflect.apply(adapter.resumeRun, adapter, [{
+      sessionId: "conv_9", runId: "run_1", commandId: "command_r66",
+      expectedPauseRevision: 2, pauseRef: "pause_r66_2", decisions: r66Decisions(),
+    }])
+    expect(client.controlCalls).toHaveLength(1)
+    expect(client.controlCalls[0]).toEqual({
+      sessionId: "conv_9", runId: "run_1", commandId: "command_r66", body: r66Resume(),
+    })
+  })
+
+  it("keeps Stop's trusted path identity outside the kind-only public cancel body", async () => {
+    const client = createFakeClient()
+    const adapter = createExecutionAdapter({ client, scope: { kind: "direct" } })
+    await adapter.cancelRun({ sessionId: "conv_9", runId: "run_1", commandId: "cancel_r66" })
+    expect(client.controlCalls[0]).toEqual({
+      sessionId: "conv_9", runId: "run_1", commandId: "cancel_r66",
+      body: { kind: "run.cancel" },
+    })
   })
 })

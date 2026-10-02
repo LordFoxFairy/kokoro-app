@@ -6,7 +6,6 @@ import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
 import type { SessionSubagent, SessionToolCall } from "@/core/state"
-import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
 import { createPersistedStore } from "@/lib/persisted-store"
@@ -63,13 +62,7 @@ type SegmentProcessProps = {
   live: boolean
   // 本会话模式：Fast 把「思考」改称「处理」，避免「直接作答」与「思考」自相矛盾。
   mode?: AgentMode
-  // 本轮该工具已暂存的决策视图 + control 失败信息（由引擎快照下发）。
-  stagedDecisions: Record<string, ToolDecision>
-  hitlActive: boolean
-  controlError: string | null
-  onToolDecision?: (toolId: string, decision: ToolDecision) => void
-  // ask_user 问答卡的取消 run 入口（透传到工具行）。
-  onCancelRun?: () => void
+
 }
 
 // 落定摘要：「思考过程 · N 工具(K 失败) · M 子智能体」，省略为零的维度。
@@ -105,21 +98,13 @@ export function SegmentProcess({
   subagents,
   live,
   mode,
-  stagedDecisions,
-  hitlActive,
-  controlError,
-  onToolDecision,
-  onCancelRun,
 }: SegmentProcessProps) {
   const t = useT()
   // 默认展开态跟随 live 信号：尾段流式时摊开实时看，落定即收成一行摘要。
   // 一旦用户手动切换（manualOpen 落定），就以用户意图为准、不再随 live 变化对抗用户。
   // 用 shadcn Collapsible 统一键盘、aria-expanded、焦点和展开状态；状态机不靠 remount。
   const manualOpen = useDisclosure(segmentId)
-  // 有工具待批时强制展开（盖过用户手动折叠）：否则批准/拒绝按钮被裁掉、HITL 卡死无入口。
-  const awaitingCount = tools.filter((tool) => tool.status === "awaiting").length
-  const hasAwaiting = awaitingCount > 0
-  const open = hasAwaiting || (manualOpen ?? live)
+  const open = manualOpen ?? live
 
   const hasActivity = thinking.length > 0 || tools.length > 0 || subagents.length > 0
   if (!hasActivity) {
@@ -127,19 +112,15 @@ export function SegmentProcess({
   }
   // Manus keeps a settled, text-only reasoning trace out of the primary
   // reading column; the task progress affordance is the disclosure surface.
-  // Tool/HITL rows remain visible because they carry an actionable result.
+  // Ordinary tool rows retain their disclosure; interactions live outside this block.
   if (!live && tools.length === 0 && subagents.length === 0) {
     return null
   }
 
   const verb = mode === "fast" ? t("thread.verbFast") : t("thread.verbThink")
   const failedTools = tools.filter((tool) => tool.status === "error").length
-  // A paused run is no longer merely "thinking": the next action belongs to
-  // the user. Promote that state into the summary so the collapsed affordance
-  // remains actionable and understandable before the card body is opened.
-  const summary = hasAwaiting
-    ? t("hitl.approvalTitle")
-    : live
+  // This summary describes ordinary process activity, never the HITL collection.
+  const summary = live
       ? t("thread.verbActive", { verb })
       : settledSummary(t, verb, tools.length, subagents.length, failedTools)
 
@@ -156,15 +137,13 @@ export function SegmentProcess({
           variant="ghost"
           type="button"
           className={styles.processSummary}
-          disabled={hasAwaiting}
-          aria-disabled={hasAwaiting || undefined}
         >
         <Sparkles className={styles.processSpark} />
         {/* key 随 live 翻转：落定时标题 remount，配合 CSS 让新摘要淡入（live↔settled 不硬跳）。 */}
         <span className={styles.processTitle} key={live ? "live" : "settled"}>
           {summary}
         </span>
-        {live && !hasAwaiting ? (
+        {live ? (
           <span className={styles.processLive} aria-label={t("thread.verbActiveShort", { verb })}>
             <i />
             <i />
@@ -186,15 +165,7 @@ export function SegmentProcess({
 
             {tools.length > 0 ? (
               <div className={styles.actgroup} aria-label={t("thread.toolCall")}>
-                {/* 同帧多工具同属一次暂停（契约 pending_tool_ids），须一起决定后一并提交：
-                    >1 时点明，免用户决了一个见没动静而困惑。 */}
-                {awaitingCount > 1 ? (
-                  <p className={styles.actgroupHint} role="status">
-                    {t("thread.awaitingBatch", { count: awaitingCount })}
-                  </p>
-                ) : null}
                 {tools.map((tool) => {
-                  const staged = stagedDecisions[tool.id]
                   return (
                     <ToolCallRow
                       sessionId={sessionId}
@@ -202,11 +173,6 @@ export function SegmentProcess({
                       {...(onOpenTool === undefined ? {} : { onOpenDetail: () => onOpenTool(tool) })}
                       key={tool.id}
                       tool={tool}
-                      {...(staged === undefined ? {} : { staged })}
-                      hitlActive={hitlActive}
-                      controlError={controlError}
-                      {...(onToolDecision === undefined ? {} : { onDecision: onToolDecision })}
-                      {...(onCancelRun === undefined ? {} : { onCancelRun })}
                     />
                   )
                 })}

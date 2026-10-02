@@ -59,7 +59,7 @@ import { SessionClientError } from "@/engine/client"
 import * as pageClients from "@/ui/shell/page-clients"
 
 import {
-  awaitingPayload,
+  makeInteractionState,
   makeDeliveryPayload,
   makeEvent,
   makeFailedSnapshot,
@@ -1910,13 +1910,13 @@ it("主路径：发送 → 流式 → HITL 批准 → 完成收束", async () =>
         name: "write_file",
         args: { path: "/tmp/a" },
       }),
-      makeEvent("tool.awaiting_approval", awaitingPayload("tool_1", ["tool_1"])),
+      makeEvent("interaction.state", makeInteractionState("tool_1", ["tool_1"])),
     ])
     await settle()
   })
-  expect(screen.getByText("write_file")).toBeInTheDocument()
+  expect(screen.getAllByText("write_file").length).toBeGreaterThan(0)
   expect(screen.getByText("先确认写入范围。")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "工具调用待批准" })).toBeInTheDocument()
+  expect(screen.getByRole("group", { name: "工具调用待批准" })).toBeInTheDocument()
   expect(screen.queryByText("正在整理回答")).not.toBeInTheDocument()
 
   // HITL：点批准 → 单帧凑齐即发一条带 command identity 的 run.resume。
@@ -1994,18 +1994,9 @@ it("刷新场景：带 pending pause 的 snapshot 水合后审批卡直接可操
     </ThemeProvider>,
   )
   await act(settle)
-  // 线程=事件史全量回放重建（水合后开流从 0）：注入历史事件即重现消息与审批帧。
-  await act(async () => {
-    client.lastStream().emit([
-      makeEvent("message.user", { message_id: "msg_u", content: "帮我写个文件" }, { run_id: "run_9", seq: 1 }),
-      makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], { name: "write_file" }),
-        { run_id: "run_9", seq: 2 },
-      ),
-    ])
-  })
-  await act(settle)
+  // 完整 owner snapshot 即可恢复审批卡，不注入历史事件或制造工具步骤。
+  expect(client.lastStream().resumeCursor).toBe("agui_00000000000000000000000000000014")
+  expect(engine.getSnapshot().thread.stepsByRun.run_9 ?? []).toEqual([])
   expect(screen.getAllByText("帮我写个文件").length).toBeGreaterThan(0)
   expect(screen.getByText("write_file")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "批准" }))
@@ -2014,7 +2005,7 @@ it("刷新场景：带 pending pause 的 snapshot 水合后审批卡直接可操
   expect(client.controlCalls[0]).toMatchObject({
     sessionId: "conv_9",
     runId: "run_9",
-    body: { kind: "run.resume", decisions: [{ type: "approve", tool_id: "tool_1" }] },
+    body: { kind: "run.resume", decisions: [{ type: "approve", item_id: "tool_1" }] },
   })
 })
 
@@ -2148,8 +2139,8 @@ it("ask_user 待批帧渲染问答卡：问题=description、choices 可选、�
     client.lastStream().emit([
       makeEvent("run.created", { run_id: "run_1" }),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], {
           name: "ask_user_question",
           kind: "ask_user_question",
           description: "选择要导入的 skill",
@@ -2174,7 +2165,7 @@ it("ask_user 待批帧渲染问答卡：问题=description、choices 可选、�
   expect(client.controlCalls).toHaveLength(1)
   expect(client.controlCalls[0]?.body).toMatchObject({
     kind: "run.resume",
-    decisions: [{ type: "respond", tool_id: "tool_1", response: "skill-a" }],
+    decisions: [{ type: "respond", item_id: "tool_1", response: "skill-a" }],
   })
 })
 
@@ -2200,8 +2191,8 @@ it("result_review 待批帧渲染审核卡：结果只读、三动作齐备、�
         args: { path: "/tmp/a" },
       }),
       makeEvent(
-        "tool.awaiting_approval",
-        awaitingPayload("tool_1", ["tool_1"], {
+        "interaction.state",
+        makeInteractionState("tool_1", ["tool_1"], {
           kind: "result_review",
           description: "审核 write_file 的执行结果",
           allowed_decisions: ["approve", "respond", "reject"],
@@ -2213,7 +2204,7 @@ it("result_review 待批帧渲染审核卡：结果只读、三动作齐备、�
   })
 
   // 审核卡：工具名 + 待审结果只读区 + 三动作；不出现审批卡的「批准」。
-  expect(screen.getByText("write_file")).toBeInTheDocument()
+  expect(screen.getAllByText("write_file").length).toBeGreaterThan(0)
   expect(screen.getByText("wrote 42 bytes to /tmp/a")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "批准" })).not.toBeInTheDocument()
   expect(screen.getByRole("button", { name: "采纳" })).toBeInTheDocument()
@@ -2231,7 +2222,7 @@ it("result_review 待批帧渲染审核卡：结果只读、三动作齐备、�
   expect(client.controlCalls).toHaveLength(1)
   expect(client.controlCalls[0]?.body).toMatchObject({
     kind: "run.resume",
-    decisions: [{ type: "approve", tool_id: "tool_1" }],
+    decisions: [{ type: "approve", item_id: "tool_1" }],
   })
 })
 
@@ -2482,3 +2473,373 @@ it("连接恢复条在窄屏保留换行、命中区、forced-colors 与既有fo
 
 // Project-read fixtures use spies, so every case restores its browser boundary.
 afterEach(() => vi.restoreAllMocks())
+
+
+import { describe as r66Describe } from "vitest"
+import {
+  makePublic4Frame as r66Frame, makePublic4Interaction as r66Interaction, makePublic4Snapshot as r66Snapshot,
+  makePublic4StateFrame as r66StateFrame, public4StagedDecisions as r66Staged,
+} from "../core/fixtures"
+import { createPublic4HttpFixture as r66HttpFixture } from "../engine/fakes"
+
+function r66RenderHttpApp(snapshot: Record<string, unknown>) {
+  const http = r66HttpFixture(snapshot)
+  vi.spyOn(globalThis, "fetch").mockImplementation(http.fetcher)
+  let id = 0
+  engine = createSessionEngine({
+    client: http.client, storage: createMemoryStorage<ConversationStore>(addConversation(null, "conv_9", 500)),
+    now: () => 1_000, createId: (prefix) => "r66_" + prefix + "_" + ++id,
+  })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({
+    ...http.client, listSessions: () => Promise.resolve({ sessions: [], next_cursor: null }),
+  })
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" /></LocaleProvider></ThemeProvider>)
+  return http
+}
+
+r66Describe("R66 public4 actual AppFrame snapshot cards and Stop", () => {
+  it("renders all five snapshot-only items and sends only the complete collection, retaining resuming cards", async () => {
+    const http = r66RenderHttpApp(r66Snapshot())
+    await act(settle)
+    for (const decision of ["approve", "edit", "reject", "respond", "submit"]) {
+      expect(screen.getByText("R66 " + decision)).toBeInTheDocument()
+    }
+    expect(http.streams).toHaveLength(1)
+    fireEvent.click(screen.getByRole("button", { name: "批准" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(0)
+    await act(async () => {
+      for (const [id, decision] of r66Staged().slice(1)) {
+        Reflect.apply(engine.stageToolDecision, engine, ["run_1", id, decision])
+      }
+      await settle()
+    })
+    expect(http.controls).toHaveLength(1)
+    expect(http.controls[0]?.body).toMatchObject({
+      kind: "run.resume", expected_pause_revision: 2, pause_ref: "pause_r66_2",
+      decisions: [
+        { type: "approve", item_id: "item_approve" },
+        { type: "edit", item_id: "item_edit", args: { text: "edited", optional: null } },
+        { type: "reject", item_id: "item_reject", reason: "No" },
+        { type: "respond", item_id: "item_respond", response: "R66 answer" },
+        { type: "submit", item_id: "item_submit", value: { text: "R66 input", optional: null } },
+      ],
+    })
+    expect(http.controls[0]?.body).not.toHaveProperty("session_id")
+    for (const decision of ["approve", "edit", "reject", "respond", "submit"]) {
+      expect(screen.getByText("R66 " + decision)).toBeInTheDocument()
+    }
+    await act(async () => {
+      http.emit("agui_00000000000000000000000000000015", r66StateFrame(r66Interaction({
+        interaction_revision: 5, phase: "resuming",
+        action_result: { command_id: http.controls[0]!.key, pause_revision: 2, kind: "accepted" },
+      }), 21))
+      await settle()
+    })
+    expect(engine.getSnapshot().machine.phase).toBe("resuming")
+    expect(screen.getByRole("button", { name: "批准" })).toBeDisabled()
+    for (const decision of ["approve", "edit", "reject", "respond", "submit"]) {
+      expect(screen.getByText("R66 " + decision)).toBeInTheDocument()
+    }
+    await act(async () => {
+      http.emit("agui_00000000000000000000000000000016", r66Frame({
+        type: "TOOL_CALL_RESULT", messageId: "r66_log_result", toolCallId: "item_approve",
+        content: "R66 ordinary tool activity", role: "tool",
+      }, 22))
+      await settle()
+    })
+    expect(engine.getSnapshot().machine.phase).toBe("resuming")
+    for (const decision of ["approve", "edit", "reject", "respond", "submit"]) {
+      expect(screen.getByText("R66 " + decision)).toBeInTheDocument()
+    }
+    expect(http.controls).toHaveLength(1)
+  })
+
+  it("keeps the partial answer and unsent draft when Stop awaits the owner terminal", async () => {
+    const http = r66RenderHttpApp(r66Snapshot({ state: "active" }))
+    await act(settle)
+    expect(screen.getByText("R66 durable prefix")).toBeInTheDocument()
+    expect(http.streams).toHaveLength(1)
+    const input = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(input, { target: { value: "R66 unsent draft" } })
+    fireEvent.click(screen.getByLabelText("停止生成"))
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+    expect(http.controls[0]?.body).toEqual({ kind: "run.cancel" })
+    expect(engine.getSnapshot().machine.phase).toBe("cancelling")
+    expect(input).toHaveValue("R66 unsent draft")
+    expect(screen.getByText("R66 durable prefix")).toBeInTheDocument()
+  })
+})
+
+
+// R69 P1 closure: every decision below is made through the rendered AppFrame.
+// Public display/input_schema drive the fields; control assertions inspect real HTTP calls.
+function r69ApprovalCard(description: string): HTMLElement {
+  const cards = screen.getAllByRole("group", { name: "工具调用待批准" })
+    .filter((card) => within(card).queryByText(description) !== null)
+  expect(cards).toHaveLength(1)
+  return cards[0]!
+}
+
+function r69ExpectCardsRetained() {
+  for (const decision of ["approve", "edit", "reject", "respond", "submit"]) {
+    expect(screen.getByText("R66 " + decision)).toBeInTheDocument()
+  }
+}
+
+r66Describe("R69 public4 real DOM five-decision controls", () => {
+  it("opens an edit-only public schema editor and rejects missing/noninteger values without staging or POST", async () => {
+    const pause = r66Interaction()
+    const original = pause.groups[0]!.items[1]!
+    pause.groups = [{
+      group_id: "group_r69_edit",
+      items: [{
+        ...original,
+        display: {
+          ...original.display,
+          input_schema: {
+            type: "object",
+            properties: { count: { type: "integer", title: "执行次数" } },
+            required: ["count"],
+            additionalProperties: false,
+          },
+        },
+      }],
+    }]
+    const http = r66RenderHttpApp(r66Snapshot({ interaction: pause }))
+    await act(settle)
+    const card = screen.getByRole("group", { name: "工具调用待批准" })
+    const ui = within(card)
+    expect(ui.getByText("R66 edit request")).toBeInTheDocument()
+    expect(ui.queryByRole("button", { name: "批准" })).toBeNull()
+    expect(ui.queryByRole("button", { name: "拒绝" })).toBeNull()
+    expect(ui.queryByRole("button", { name: "发送回复" })).toBeNull()
+    expect(ui.queryByRole("button", { name: "提交" })).toBeNull()
+
+    fireEvent.click(ui.getByRole("button", { name: /^编辑(?:参数)?$/u }))
+    const count = ui.getByRole("spinbutton", { name: "执行次数 *" })
+    expect(count).toHaveAttribute("aria-required", "true")
+    expect(count).toHaveValue(null)
+    fireEvent.click(ui.getByRole("button", { name: "提交" }))
+    await act(settle)
+    expect(ui.getByRole("alert")).toHaveTextContent("必填项未填或格式不对")
+    expect(engine.getSnapshot().staging).toEqual({})
+    expect(http.controls).toHaveLength(0)
+
+    fireEvent.change(count, { target: { value: "2.5" } })
+    fireEvent.click(ui.getByRole("button", { name: "提交" }))
+    await act(settle)
+    expect(ui.getByRole("alert")).toHaveTextContent("必填项未填或格式不对")
+    expect(engine.getSnapshot().staging).toEqual({})
+    expect(http.controls).toHaveLength(0)
+
+    fireEvent.change(count, { target: { value: "2" } })
+    fireEvent.click(ui.getByRole("button", { name: "提交" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+    expect(http.controls[0]?.body).toEqual({
+      kind: "run.resume",
+      expected_pause_revision: 2,
+      pause_ref: "pause_r66_2",
+      decisions: [{ type: "edit", item_id: "item_edit", args: { count: 2 } }],
+    })
+    expect(engine.getSnapshot().machine.phase).toBe("waiting")
+    expect(screen.getByText("R66 edit")).toBeInTheDocument()
+  })
+
+  it("clicks and fills all five cards, orders one closed batch by owner items, and retains locked cards through ACK/resuming", async () => {
+    const pause = r66Interaction()
+    pause.groups[0]!.items[1]!.display.input_schema = {
+      type: "object",
+      properties: { count: { type: "integer", title: "执行次数" } },
+      required: ["count"],
+      additionalProperties: false,
+    }
+    pause.groups[1]!.items[2]!.display.input_schema = {
+      type: "object",
+      properties: { text: { type: "string", title: "补充内容" } },
+      required: ["text"],
+      additionalProperties: false,
+    }
+    const http = r66RenderHttpApp(r66Snapshot({ interaction: pause }))
+    let acknowledge: () => void = () => {}
+    http.controlReply = (call) => new Promise<Response>((resolve) => {
+      acknowledge = () => resolve(new Response(JSON.stringify({
+          run_id: call.runId, command_id: call.key, request_digest: "sha256:r69",
+          status: "succeeded", replayed: false,
+        }), { status: 202, headers: { "content-type": "application/json" } }))
+    })
+    await act(settle)
+    r69ExpectCardsRetained()
+    expect(http.streams).toHaveLength(1)
+    const approveCard = r69ApprovalCard("R66 approve request")
+    const editCard = r69ApprovalCard("R66 edit request")
+    const reviewCard = screen.getByRole("group", { name: "工具结果待审核" })
+    const answerCard = screen.getByRole("group", { name: "Agent 提问" })
+    const inputCard = screen.getByRole("group", { name: "Agent 请求补充输入" })
+
+    expect(within(approveCard).queryByRole("button", { name: "拒绝" })).toBeNull()
+    expect(within(approveCard).queryByRole("button", { name: /^编辑(?:参数)?$/u })).toBeNull()
+    expect(within(editCard).queryByRole("button", { name: "批准" })).toBeNull()
+    expect(within(editCard).queryByRole("button", { name: "拒绝" })).toBeNull()
+    expect(within(reviewCard).queryByRole("button", { name: "采纳" })).toBeNull()
+    expect(within(reviewCard).queryByRole("button", { name: "替换" })).toBeNull()
+    expect(within(answerCard).queryByRole("button", { name: "批准" })).toBeNull()
+    expect(within(inputCard).queryByRole("button", { name: "拒绝" })).toBeNull()
+    expect(within(reviewCard).getByText("R66 reviewed result")).toBeInTheDocument()
+
+    // Deliberately not click order: the outbound batch must retain owner group/item order.
+    fireEvent.click(within(reviewCard).getByRole("button", { name: "拒绝" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(0)
+
+    const answer = within(answerCard).getByRole("textbox", { name: "回复 agent" })
+    expect(within(answerCard).getByRole("button", { name: "发送回复" })).toBeDisabled()
+    fireEvent.change(answer, { target: { value: "R69 user answer" } })
+    fireEvent.click(within(answerCard).getByRole("button", { name: "发送回复" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(0)
+
+    fireEvent.click(within(approveCard).getByRole("button", { name: "批准" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(0)
+
+    fireEvent.click(within(editCard).getByRole("button", { name: /^编辑(?:参数)?$/u }))
+    const count = within(editCard).getByRole("spinbutton", { name: "执行次数 *" })
+    expect(count).toHaveValue(null)
+    fireEvent.change(count, { target: { value: "3" } })
+    fireEvent.click(within(editCard).getByRole("button", { name: "提交" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(0)
+
+    const text = within(inputCard).getByRole("textbox", { name: "补充内容 *" })
+    expect(text).toHaveAttribute("aria-required", "true")
+    expect(text).toHaveValue("")
+    fireEvent.change(text, { target: { value: "R69 supplied input" } })
+    fireEvent.click(within(inputCard).getByRole("button", { name: "提交" }))
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+    expect(http.controls[0]?.runId).toBe("run_1")
+    expect(http.controls[0]?.key).not.toBe("")
+    expect(http.controls[0]?.body).toEqual({
+      kind: "run.resume",
+      expected_pause_revision: 2,
+      pause_ref: "pause_r66_2",
+      decisions: [
+        { type: "approve", item_id: "item_approve" },
+        { type: "edit", item_id: "item_edit", args: { count: 3 } },
+        { type: "reject", item_id: "item_reject" },
+        { type: "respond", item_id: "item_respond", response: "R69 user answer" },
+        { type: "submit", item_id: "item_submit", value: { text: "R69 supplied input" } },
+      ],
+    })
+    expect(engine.getSnapshot().machine.phase).toBe("waiting")
+    r69ExpectCardsRetained()
+
+    const retryClicks = () => {
+      const cards = screen.getAllByRole("group", {
+        name: /^(?:工具调用待批准|工具结果待审核|Agent 提问|Agent 请求补充输入)$/u,
+      })
+      expect(cards.length).toBeGreaterThanOrEqual(5)
+      for (const card of cards) {
+        for (const button of within(card).queryAllByRole("button", {
+          name: /^(?:批准|编辑(?:参数)?|拒绝|发送回复|提交)$/u,
+        })) {
+          expect(button).toBeDisabled()
+          fireEvent.click(button)
+        }
+      }
+    }
+    retryClicks()
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+
+    await act(async () => { acknowledge(); await settle() })
+    expect(engine.getSnapshot().machine.phase).toBe("waiting")
+    r69ExpectCardsRetained()
+    retryClicks()
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+
+    await act(async () => {
+      http.emit("agui_00000000000000000000000000000015", r66StateFrame({
+        ...pause, interaction_revision: 5, phase: "resuming",
+        action_result: { command_id: http.controls[0]!.key, pause_revision: 2, kind: "accepted" },
+      }, 21))
+      await settle()
+    })
+    expect(engine.getSnapshot().machine.phase).toBe("resuming")
+    r69ExpectCardsRetained()
+    retryClicks()
+    await act(settle)
+    expect(http.controls).toHaveLength(1)
+  })
+})
+
+// R70 scope extension: exercise the existing waiting notification hook, not a mock registry.
+import { useT as r70UseT } from "@/i18n/context"
+import { useAwaitingNotify as r70UseAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
+import { readAwaiting as r70ReadAwaiting, setAwaiting as r70SetAwaiting } from "@/ui/hitl/awaiting-store"
+
+function R70NotifyHarness({ id, phase, brand = "R70Brand" }: { id: string; phase: string; brand?: string }) {
+  const t = r70UseT()
+  const ids = r70UseAwaitingNotify(id, phase, t, brand)
+  return <output aria-label="R70 pending sessions">{JSON.stringify([...ids])}</output>
+}
+
+r66Describe("R70 waiting hook preserves notification lifecycle", () => {
+  const a = "r70_notify_a", b = "r70_notify_b"
+  const prepareNotification = (permission: NotificationPermission) => {
+    r70SetAwaiting(a, false); r70SetAwaiting(b, false)
+    const construct = vi.fn(function NotificationFixture() {})
+    Object.defineProperty(construct, "permission", { value: permission })
+    const requestPermission = vi.fn().mockResolvedValue(permission)
+    Object.defineProperty(construct, "requestPermission", { value: requestPermission })
+    vi.stubGlobal("Notification", construct)
+    return { construct, requestPermission }
+  }
+  afterEach(() => {
+    r70SetAwaiting(a, false); r70SetAwaiting(b, false)
+    vi.unstubAllGlobals()
+  })
+
+  it("registers real waiting once, retains the branded title, and clears action badges at resuming/active", () => {
+    const notification = prepareNotification("granted")
+    const view = render(<R70NotifyHarness id={a} phase="waiting" />, { wrapper: LocaleProvider })
+    expect(r70ReadAwaiting().has(a)).toBe(true)
+    expect(screen.getByLabelText("R70 pending sessions")).toHaveTextContent(a)
+    expect(document.title).toBe(`● (${r70ReadAwaiting().size}) R70Brand Web`)
+    expect(notification.construct).toHaveBeenCalledTimes(1)
+    view.rerender(<R70NotifyHarness id={a} phase="waiting" />)
+    expect(notification.construct).toHaveBeenCalledTimes(1)
+    view.rerender(<R70NotifyHarness id={a} phase="resuming" />)
+    expect(r70ReadAwaiting().has(a)).toBe(false)
+    view.rerender(<R70NotifyHarness id={a} phase="waiting" />)
+    expect(notification.construct).toHaveBeenCalledTimes(2)
+    view.rerender(<R70NotifyHarness id={a} phase="streaming" />)
+    expect(r70ReadAwaiting().has(a)).toBe(false)
+  })
+
+  it("keeps A's badge after switching to idle B, notifies new B once, and does not re-notify an already registered A", () => {
+    const notification = prepareNotification("granted")
+    const view = render(<R70NotifyHarness id={a} phase="waiting" />, { wrapper: LocaleProvider })
+    view.rerender(<R70NotifyHarness id={b} phase="idle" />)
+    expect(r70ReadAwaiting().has(a)).toBe(true)
+    expect(r70ReadAwaiting().has(b)).toBe(false)
+    view.rerender(<R70NotifyHarness id={b} phase="waiting" />)
+    expect(r70ReadAwaiting().has(b)).toBe(true)
+    expect(notification.construct).toHaveBeenCalledTimes(2)
+    view.rerender(<R70NotifyHarness id={a} phase="waiting" />)
+    expect(notification.construct).toHaveBeenCalledTimes(2)
+    expect(document.title).toBe(`● (${r70ReadAwaiting().size}) R70Brand Web`)
+  })
+
+  it("keeps waiting and its badge when desktop notifications are denied without requesting permission again", () => {
+    const notification = prepareNotification("denied")
+    render(<R70NotifyHarness id={a} phase="waiting" />, { wrapper: LocaleProvider })
+    expect(r70ReadAwaiting().has(a)).toBe(true)
+    expect(notification.construct).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
+  })
+})

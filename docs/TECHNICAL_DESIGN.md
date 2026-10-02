@@ -1,3 +1,106 @@
+## R70-WEB-PUBLIC4：已授权实现候选与窄范围扩展（2026-10-02）
+
+R65 三面与放置决定已沿 Root 精确授权实施；本节只记录实现归属与两个已明确批准的例外，不重开架构或扩大 owner。下方 R65 前缀及更早正文原字节保持，彼时“未实施”是阶段历史；当前状态与验收证据以 CURRENT 的 R70 节为准。
+
+- source、测试、pin、generator 均在下方 R65 精确文件集内；原测试仅机械迁移 public4 breaking 语义，保全部安全、身份、游标、并发及普通工具/正文/作品保障。删除旧 wire/alias/ACK 乐观清卡与旧 reattaching 执行相位；连接 availability 单独建模。
+- Root 批准 `src/ui/shell/use-awaiting-notify.ts` 现文件窄扩展：只由正式 waiting 登记可操作徽标与通知；resuming 清徽标但保 owner 卡片，按既有会话 registry 去重并保标题/品牌/权限/切换。只在既授 `tests/ui/app-frame.smoke.test.tsx` 追加三例真实 hook RED→GREEN，无新文件或存储模型。
+- Root 批准 success fixture packaging 机械例外：现 `/api/session` adapter 已解 BFF data envelope，SessionClient 接裸 DTO，因此 fakes 通用成功回包与 R66/R69 两个 deferred ACK 仅剥成功 data/meta 外壳；错误 envelope、字段、状态、header、时序、request/control/stream 和全部新行为断言不动。生产没有 dual-reader/fallback。
+- frozen resume intent 仍绑定 session/run/pause revision/ref、原 key/body；durable unknown 的窄重试入口只复用已存在的原意图，不允许刷新后发明 key、不接受 resuming 新决策。迟 queued/START 不降 paused head；interaction terminal 只清交互，不发明 Run terminal。
+- terminal files/head 对账使用请求代际、live cursor 是否变化和 exact settled run，不比较 opaque cursor 大小。owner RR no-head 表明当前无已 admitted 后继；FIFO 后继 head 保当前流，无 head 收口。运行中另一个尚未 admitted POST 迟 receipt 只在 exact session/代际、idle且未观察其 terminal 时 queued 重开原 cursor，不替换已有 head或伪造 START。
+- late receipt 所需 terminal evidence 仅在 outstanding steer receipt 窗口采集，最后 token 完成或线程/水合换代即清；不为长期已结算会话积累 run-ID cache。独立复审已关闭全部 P0/P1/P2；最终仍由 Root 重跑同门与真实组合放行。
+
+无新目录/模块/进程/依赖/SQL/routes/CSS/theme；input-schema.ts、e2e、资源启动与 Git/index/commit 不在本 writer 操作范围。R65 owner/version/digest 固定不变，Team 15 正规生成 byte-equal，failure 12 tuple 与 fingerprint 不变。
+
+---
+
+## R65-WEB-PUBLIC4-D0：已发布 owner 的完整会话消费切片（目标态，仅文档）
+
+本前缀是 public4 消费的唯一当前方案；下方原正文逐字节保留历史，旧 public3/active_run/逐工具暂停描述不作为后继实现依据。Web 基线 main / 06a1c86612d9557d83081bcb67e8fc539ae7eacb；当前源码、测试、pin、generated 仍是旧消费者，本阶段只新增 TECH/API/DATA/CURRENT 四文档前缀。WIN01 唯一 Web writer，Root 独占 Git、资源、独立审与最终验收。执行依据为 Root AGENTS §8–9、TypeScript 手册 §1/4–6/8.4；本前缀须经 Root 审通过后才授 tests/source。
+
+### 发布事实、范围与单次激活
+
+BFF 已发布 main 3c08a422f3a6aa3cf204c308716cfa64f6d61bb2；事实源为其 contract/openapi/v1/openapi.yaml，public4.0.0，SHA-256 5561450bd02e978bace1d4850c262aea645bad8fdf4ec46fd0cfffb6765c8ef6。当前 Web src/generated/bff-public-openapi.yaml 仍是 public3.0.0 / owner 293dfe7638e5dea0df2bee6dfdd8483b53fc9df6 / acd92ed2fa3e84032e824e1462d67a007c4a94a7e79b7bda8fd5a66f9d51cd3b，本轮不 repin。BFF 固定的 Agent HTTP4 输入为 e977923ea9992cbddaf0cdbc6c8f8d23b3af120e；Web 不复制 Agent artifact、SDK、SQL 或 digest 算法。
+
+本切片的完整用户目标是“发送→排队→流式正文→完成→刷新保真”及“刷新完整暂停→整组决策→ACK 保卡→durable resuming→下一完整 revision”。实现可分依赖 commit，但只有 head/cursor 与 HITL/control 一起通过才 fresh 激活；不发布能聊普通消息却破坏既有审批的半成品，不建 /v2、双读、fallback、第二 SSE 或新的 UI 主题。HTTP4 没有 retry_of_run_id，terminal retry/Agent P3B/计价倍率/正式积分或文件上传不是本片实现范围。
+
+### AGENTS §8 放置表
+
+| 项 | 当前决定 |
+| --- | --- |
+| Owner | BFF 唯一拥有 Conversation/Message/durable head、公开 full-state 与 cursor；Agent 唯一拥有暂停、native consumption 与 Run terminal；Web 只拥有校验后的内存投影、冻结提交意图和现 UI。 |
+| 当前事实 | chat.ts:105–116 严格要求旧顶层 pending_pauses；agui-events.ts 普通 CUSTOM metadata 只收 number seq；mapper:170–186 无 queued/state；machine receipt/ACK 直接 streaming、terminal 立即关流；HITL 以 tool_id/pending_tool_ids 和本地 rejected 表达。Web 起始 clean，无待交接修改。 |
+| 目标职责 | 严格 public4 decoder、单一 head、完整 interaction replacement、pause-bound frozen control、会话级 FIFO/reload；既有布局、正常 tool 活动、失败 footer 和作品身份保持。 |
+| 目录方案 | 采用现 contract→core/engine→thread/hitl 职责；淘汰新 execution 模块/第二 transport/把 owner interaction 假装成 SessionToolCall 的方案，避免重复状态和私有 args。 |
+| 粒度 | 不新增文件/目录/进程。control.ts 收敛为暂停交互的 schema/type（full-state 与五 decisions）；chat.ts 组装 snapshot/head/control body；agui-events.ts 管 frame/metadata。纯 schema/type 共置符合 §8.4，不把 schema、I/O 与编排混入 machine。 |
+| 依赖 | control.ts 仅依赖 Zod；agui-events.ts 可依赖 control full-state；chat.ts 依赖二者。禁止 control 回 import chat/agui，避免 chat 当前 cursor import 引发循环；core/engine 使用已验证对象，UI 不解析未知 wire。 |
+| 数据/API | 现同源 /api/session adapter 与 owner /v1 paths 保持；可信身份仍来自现 session 边界。无 DB/Redis、public route/permission、新 browser storage 或第二 canonical schema。运行时 Zod 是固定 owner 的 consumer 校验，由机器图 contract tests约束。 |
+| 删除项 | 旧 active_run/顶层 pending_pauses、旧 awaiting CUSTOM、pending_tool_ids/逐工具暂停生命周期、decision tool_id/request_id alias、public body session_id、ACK rejected/清卡、仅 runId 的提交身份、旧 selector/fallback；普通工具日志与安全失败事实不删。 |
+| 验证 | 先现文件 tests-only RED、保原行为与测试前缀；再准确授权 source/pin/正规生成、contract/architecture/lint/typecheck/full test/build；Root 最后正规登录/真实 owner/浏览器及 fresh 组合验收。当前仅文档保护校验。 |
+
+### 投影、状态与失败恢复
+
+1. snapshot 的 execution_head 是唯一当前执行锚；无 head 字段缺失。queued/active 的 pending_pauses=[]，waiting/resuming 恰一条完整 PendingPause；active 仅映射 UI streaming，不发明 wire streaming。授权 RR 同读 head/Message/Artifact/watermark 是 BFF 的保证，Web 只原样验证和消费，不把不同 HTTP 请求拼成一次 RR。
+2. create receipt 只确认该提交的 admission；冻结 user/key/body 与迟到回执守卫保留。receipt 本身不证明 RUN_STARTED，也不能用排在 A 后面的 B receipt 替换当前 head A。queued/head 来自严格 CUSTOM 或 snapshot，matching START 才进入 started/streaming；queued、waiting、resuming、cancelling 与 connection 的 reconnecting/unavailable 正交。
+3. queued CUSTOM 需要专属闭合 metadata/value 分支：source_owner=kokoro-bff，metadata.seq 与 dispatch_sequence 是正十进制字符串，run 身份一致；不 Number 转换、不写 numeric Agent lastSeq。继续使用现 opaque cursor/event_id/data-kokoro UIMessage part，既有 dispatch-failed 字符串序列分支保持。
+4. interaction.state 六字段在 core 与普通 tool steps 分开保存，按 session/run 和 interaction_revision 整体替换；group/item 原顺序、optional 存在性和 null 保留。同 revision 同完整内容可 no-op，异内容或 revision 倒退 fail closed；使用纯结构一致性校验，不实现第二 owner SHA/digest 协议。
+5. 刷新 waiting/resuming 直接从 snapshot 恢复全集，不重新读从零历史以补卡。当前可信完整 state 在开流时经窄参数传 client/execution/transport/mapper，作为 revision guard 基线；frame schema/集合/revision 校验成功后才接受 cursor。不得让缓冲 reducer 之后的拒绝发生在 cursor 已承认以后。无已知 full revision（例如 active snapshot）的场景不伪造 revision=0。
+6. 单 Run terminal 只结算确切 Run，interaction phase terminal 不等于 Run terminal。A terminal 与 B queued 可以跨 frame/page/微任务批；不在 A terminal 就关整个 conversation stream。继续 drain，并由后继事件或 snapshot-first 对账决定新 head；无 head 的已结算会话关闭 idle SSE，不无界 EOF reconnect。旧 run terminal 不清 B 的 head、正文或 pause。
+7. HITL staging/frozen intent 绑定 sessionId/runId/pause_revision/pause_ref，完整 state 更新另受 interaction_revision 守卫；新 pause 或集合变化废弃旧 item 决策，迟到旧 ACK/finally 不改新 pause。整组未凑齐不发送；全集一次、允许类型/五 payload 结构严格验证。
+8. 本地 resume 请求在途仅禁重复，HTTP 202/status=succeeded 不改变 owner phase、不删 groups、不本地标 rejected。network/unknown 保留原 key 与原 body，不能编辑同 key 语义或换 key 重复提交；durable accepted/unknown 才置 resuming 并保全集。下一明确空 full revision 才 active，非空则 waiting/re-pause；validation_failed 用新 owner validation 显示。
+9. Stop 发合法 kind-only public cancel，当前会话 cancelling 等 owner terminal；换/新会话的本地 abandon 与旧会话 best-effort cancel 分开，不把 late ACK 带回新会话。连接失败保持 partial、Stop、draft、safe failure 和 frozen submission，不制造 Run failure。
+10. Direct/Project 的现 SessionScope、project_ref、Skill 选择与切换清理不变；现 retry 仅 pre-create-receipt 同 key/body 恢复。保 opaque watermark、GC410 snapshot-first、bounded恢复、session/generation守卫、正文 prefix identity、safe12失败及 binary Artifact identity。
+11. UI 复用现 AssistantTurn/SegmentProcess/四 HITL cards 与已有组件/token；完整 groups/items 不需假的 tool args/segment_id。ask 从 display/input_schema 展示；review 保留 preview/truncated/source；input/编辑用现 input-schema parser与表单控件，编辑初值不取私有原 args。allowed_decisions 是动作白名单，不用旧 kind 固定子集隐藏合法分支。允许 edit 且 editable 才给现控件入口；未识别的公开 schema 复用现 InputCard 的 object JSON 输入/parseJsonObject，空白或用户输入，不预填私有 args。格式错误保卡，动态 schema 仍由 owner 最终验证，不假成功或删除允许决策。键盘/focus/reduced motion/mobile/只读 Share 无 control 保持。
+
+### 精确后继 source 集（此处仅方案，待 Root 授权）
+
+下列花括号为现文件枚举。client/transport 纳入是为了 snapshot full-state baseline 与 cursor 接受边界，不是替换 transport；control 收敛时先引用检查，再删除已无消费者的旧 Agent wire 定义。
+
+```text
+src/contract/{chat,control,agui-events}.ts
+src/core/{state,chat-projection-event,hydration,reducer,projections}.ts
+src/engine/{agui-event-mapper,agui-chat-transport,client,hitl-staging,execution-adapter,machine-state,event-reducer,engine-types,machine,reattach}.ts
+src/components/blocks/app-frame/app-frame.tsx
+src/ui/thread/{conversation-thread,assistant-turn,segment-process,tool-call-row}.tsx
+src/ui/hitl/{approval-card,ask-user-card,review-card,input-card}.tsx
+src/dev/preview-transport.ts
+src/i18n/{messages,overlays}.ts
+```
+
+i18n 仅新增 queued/resuming/cancelling/edit/owner validation 必需安全标签，沿现非中文 overlay fallback，不动其他翻译/布局/CSS。input-schema.ts、routes、paths、scope、新模块、依赖/lockfile 不在默认 source 写集；如实测需要越界先报告。preview 只迁合法新形状及完整状态，不作生产降级。
+
+### 精确测试集与 RED 位置
+
+```text
+contract/api-contract.test.ts
+tests/contract/chat-delivery-owner.test.ts
+tests/core/{fixtures,hydration.test,reducer.test,projections.test}.ts
+tests/engine/{fakes,client.test,engine.test,hitl-staging.test,machine.test,reattach.test,agui-event-mapper.test,agui-chat-transport.test,event-reducer.test,execution-adapter.test,concurrency.test}.ts
+tests/dev/preview-transport.test.ts
+tests/ui/{app-frame.smoke.test,input-card.test,segment-process.test,shared-page.test,shared-thread.test}.tsx
+tests/e2e/web-governance.spec.ts
+```
+
+现 contract/api-contract:148–167 是旧五 decision/body 接受；engine/machine:27/46 是 receipt/ACK→streaming；engine/engine:469–500 是 ACK rejected/清 staging，1358/1394 是旧 snapshot 恢复；UI app-frame.smoke:1959–2018 还注入历史 awaiting，不能证明完整 snapshot 自足。后继先在现文件追加 public4 RED，保原正文 prefix；GREEN阶段仅按批准的 breaking 语义机械迁原 fixture/冲突断言，不删除完整集合、权限、cursor或并发保障。schema/mapper 的 RED不得只因 missing import/collection error；每组验证真实字段/行为。
+
+| 矩阵 | 必须证明 |
+| --- | --- |
+| wire/head | 四态与 no-head、closed schema、safe revisions、nullable/presence、坏 cardinality/unique/display/privacy；旧字段/metadata/decisions alias 拒绝 |
+| queued/START/FIFO | 超 safe integer 的 decimal seq 精确；receipt不证明started；A terminal/B queued 分批及跨页继续；旧 terminal不清新head；无head后零idle SSE |
+| reload/cursor | 非零 snapshot watermark→Last-Event-ID、partial全文/身份保真；四态与GC410；坏/倒退/同revision异内容不承认cursor，重放不丢不重 |
+| HITL/control | 两group多item含五decision；partial/duplicate/extra/disallowed不发；精确rev/ref；ACK不消耗；accepted/unknown保全集；native_consumed空/重暂停、validation_failed及旧ACK隔离 |
+| 用户交互 | snapshot不注历史即有全部卡；部分决策零POST、全集一次；resuming禁新key；Stop/cancelling、连接错误保draft/正文；Direct/Project及pre-receipt retry不变 |
+| 回归 | safe12 failure、Message prefix、Artifact二元身份、只读Share、preview及原键盘/IME/mobile/focus/reduced-motion断言保留 |
+
+### pin、生成与执行门
+
+后继同片准确复制已发布 BFF blob 到 src/generated/bff-public-openapi.yaml；仅 scripts/generate-bff-agent-failure.mjs 的 ownerCommit/version/digest 与 generate-bff-team-client.mjs 的 digest更新。现 ChatMessage failure fingerprint/safe12语义不放宽；现 Team九operation保持。用现 --write/--check 重建 bff-agent-failure.ts 与 bff-team/十五文件，不手改生成物、不新增 Chat SDK generator，不承诺未执行的生成 byteequal。
+
+机械 provenance consumer tests 是 tests/contract/{bff-agent-failure-public,bff-team-public,bff-project-create-public,bff-project-resource-public,bff-library-file-public,bff-library-artifact-public,bff-skills-mcp-public}.test.ts；原业务 assertions保持。contract/README.md、INDEX.md、docs/INDEX.md 后继仅更新唯一现入口/pin，CURRENT随实际证据更新；这些都不是本轮文档之外的写权。
+
+后继 Node22.22.2/pnpm11.25.0：定点 vitest→两个 generator --check→pnpm contract→pnpm test:architecture→pnpm lint→pnpm typecheck→pnpm test→pnpm build；Root独占pnpm test:e2e及真实登录/owner双轮、非零刷新/整组HITL/Stop与资源cleanup。纯fixture、preview或旧2193 tests通过不替代真实组合。依赖顺序为本D0独立审→tests-only RED与Root复验→精确source/pin/生成→独立审/完整门→Root fresh 激活与发布；不建立新计划中心。
+
+---
+
 # Kokoro User Web 技术设计
 
 ## WEB-PROJECT-READ-R42：指令/历史边界漏接 P1（仅设计与 RED，2026-10-01）
