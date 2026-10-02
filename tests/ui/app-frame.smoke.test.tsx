@@ -1261,7 +1261,11 @@ it("owner 已创建但导航回调抛错时重试只重新导航，不再 POST",
   vi.unstubAllGlobals()
 })
 
-it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
+it.each([
+  { item: "写一篇文章", prompt: "帮我写一篇关于「主题」的文章，风格专业、结构清晰。" },
+  { item: "分析数据", prompt: "帮我分析这份数据，找出关键趋势和可执行的结论。" },
+  { item: "写点代码", prompt: "帮我写一个「功能」的脚本，并说明如何运行和调整。" },
+])("快捷任务的更多菜单保留 $item 场景并把焦点交回 Composer", async ({ item, prompt }) => {
   buildEngine()
   render(
     <ThemeProvider>
@@ -1274,12 +1278,12 @@ it("快捷任务的更多菜单关闭后把焦点交回 Composer", async () => {
   const more = await screen.findByRole("button", { name: "更多" })
   fireEvent.pointerDown(more, { button: 0, ctrlKey: false })
   fireEvent.pointerUp(more, { button: 0, ctrlKey: false })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "写一篇文章" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: item }))
 
   await waitFor(() => {
     const composer = screen.getByRole("textbox", { name: "对话输入" })
     expect(composer).toHaveFocus()
-    expect(composer).toHaveValue("帮我写一篇关于「主题」的文章，风格专业、结构清晰。")
+    expect(composer).toHaveValue(prompt)
   })
 })
 
@@ -3299,7 +3303,23 @@ r66Describe("R70 waiting hook preserves notification lifecycle", () => {
   })
 })
 
-it("正式 Home 建议经真实 AppFrame 只填写草稿并聚焦，不自动发送、建项目或打开计费", async () => {
+it.each([
+  {
+    label: "制作简报",
+    prompt: "帮我制作一份关于「主题」的简报，包含清晰的大纲、关键要点和可直接用于投影片的内容。",
+    intent: "presentation",
+  },
+  {
+    label: "设计",
+    prompt: "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
+    intent: "design",
+  },
+  {
+    label: "制作游戏",
+    prompt: "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
+    intent: "game",
+  },
+])("正式 Home 的 $label 建议经真实 AppFrame 只填写同意图草稿并聚焦", async ({ label, prompt, intent }) => {
   buildEngine()
   const submit = vi.spyOn(engine, "submit")
   const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }))
@@ -3312,26 +3332,34 @@ it("正式 Home 建议经真实 AppFrame 只填写草稿并聚焦，不自动发
       </ThemeProvider>,
     )
     const input = await screen.findByRole("textbox", { name: "对话输入" })
-    fireEvent.click(await screen.findByRole("button", { name: /制作简报/u }))
+    fireEvent.click(await screen.findByRole("button", { name: new RegExp(label, "u") }))
     await waitFor(() => expect(input).toHaveFocus())
 
     expect({
       draft: (input as HTMLTextAreaElement).value,
+      intent: input.closest('[data-slot="composer-wrap"]')?.getAttribute("data-creation-intent"),
       focused: document.activeElement === input,
       submitCalls: submit.mock.calls,
       messagePosts: client.createCalls.length,
+      httpPosts: fetchMock.mock.calls.filter(([, init]) => init?.method === "POST").length,
       projectPosts: fetchMock.mock.calls.filter(([request, init]) =>
         String(request) === "/api/hub/projects" && init?.method === "POST").length,
+      billingPosts: fetchMock.mock.calls.filter(([request, init]) =>
+        String(request).startsWith("/api/billing/") && init?.method === "POST").length,
       settingsOpen: screen.queryByTestId("settings-modal") !== null,
     }).toEqual({
-      draft: "帮我写一篇关于「主题」的文章，风格专业、结构清晰。",
+      draft: prompt,
+      intent,
       focused: true,
       submitCalls: [],
       messagePosts: 0,
+      httpPosts: 0,
       projectPosts: 0,
+      billingPosts: 0,
       settingsOpen: false,
     })
   } finally {
+    submit.mockRestore()
     fetchMock.mockRestore()
   }
 })

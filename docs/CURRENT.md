@@ -1,3 +1,11 @@
+## R102 Home提示语义验收（2026-10-02，Root已验，发布结果见Git）
+
+基线main b49797b1e8ee659b7593429aa09e9455a3ad5485；四现content/i18n source及三test切片。简报/设计/游戏使用各自专用草稿、已有意图描述与intent；网站及More文章/数据/代码保留。点击仅填draft并聚焦，不创建项目/消息、不发送或计费。九locale均解析新key，不新增CSS/API/状态源/依赖。
+
+- E37 Root原28466真实RED11fail/142pass；冻结GREEN Root原84433完整pnpm check exit0：249contract/50architecture/163files2328tests、lint/typecheck/build。日志/tmp/kokoro-r101-root-home-final-check.log，独立/tmp/kokoro-r101-home-final-review.md P0/P1/P2均0；无format脚本（N/A）。
+- 本次Root原7822新聚焦复验exit0：153pass/3files/7.93s，/tmp/kokoro-r102-root-home-focused.log。七候选+share八hash匹配，748外围基线保持，旧已删除CSS sentinel不恢复。Root唯一Git owner，按七切片路径和本CURRENT精确提交。
+- 仅本仓限定纯门通过。新提交/远端发布/Root gitlink与provenance以实际Git证据为准；Home真实浏览器T-U01、完整W2及积分/其他能力仍未闭环，纯门不能替代。
+
 ## R99 Home交互真实性切片（2026-10-02，Root已验收，发布结果见Git）
 
 基线main85403f340b6565aeb11d9aa6f90ea7d2ff906fe6；本切片仅正式Home提示填入draft/intent并聚焦、零自动submit/项目创建/计费；无Billing投影不显示Free/升级状态，preview样例明确隔离。全部Workspace Header只读品牌，删假1.6档位、本地tier state/radio及唯一消费CSS；真实Composer/System模型链不改，不保留双行为路径。

@@ -37,6 +37,55 @@ describe("i18n 解析 fallback（未译回退中文源，绝不裸露 key）", (
   })
 })
 
+const homePromptMessages = [
+  {
+    key: "firstSite.presentationPrompt",
+    zh: "帮我制作一份关于「主题」的简报，包含清晰的大纲、关键要点和可直接用于投影片的内容。",
+    en: "Create a presentation about [topic] with a clear outline, key points, and slide-ready content.",
+  },
+  {
+    key: "firstSite.designPrompt",
+    zh: "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
+    en: "Design a visual for [topic], including the style, layout, colors, and key message to communicate.",
+  },
+  {
+    key: "firstSite.gamePrompt",
+    zh: "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
+    en: "Create a game about [theme], including its core gameplay, objective, rules, and basic controls.",
+  },
+] as const
+
+type PendingHomePromptKey = (typeof homePromptMessages)[number]["key"]
+
+function resolvePendingHomePrompt(locale: (typeof LOCALES)[number], key: PendingHomePromptKey): string {
+  // RED 阶段 key 尚未进入中文事实源；只在测试边界桥接动态 key，避免用 TypeScript future-key 错误冒充行为失败。
+  return resolveMessage(locale, key as keyof typeof zh)
+}
+
+function pendingOverlayValue(locale: Exclude<(typeof LOCALES)[number], "zh">, key: PendingHomePromptKey): string | undefined {
+  return (OVERLAYS[locale] as Readonly<Record<string, string | undefined>>)[key]
+}
+
+describe("Home 主建议使用意图专用草稿", () => {
+  it.each(homePromptMessages)("$key 提供精确中文源与英文译文", ({ key, zh: zhMessage, en: enMessage }) => {
+    expect.soft(resolvePendingHomePrompt("zh", key)).toBe(zhMessage)
+    expect.soft(resolvePendingHomePrompt("en", key)).toBe(enMessage)
+  })
+
+  it("三个专用 key 在九个上线 locale 都解析为实际文案，非中文语言不静默回退中文", () => {
+    for (const { key, zh: zhMessage } of homePromptMessages) {
+      for (const locale of LOCALES) {
+        const resolved = resolvePendingHomePrompt(locale, key)
+        expect.soft(resolved, `${locale}:${key} 裸露 key`).not.toBe(key)
+        expect.soft(resolved.trim(), `${locale}:${key} 为空`).not.toBe("")
+        if (locale === "zh") continue
+        expect.soft(pendingOverlayValue(locale, key), `${locale}:${key} 缺少显式 overlay`).toBeTruthy()
+        expect.soft(resolved, `${locale}:${key} 静默回退中文`).not.toBe(zhMessage)
+      }
+    }
+  })
+})
+
 describe("i18n 语言包完整性（构建期可校验）", () => {
   const zhKeys = new Set(Object.keys(zh))
 

@@ -60,7 +60,7 @@ it("建立网站入口把网站意图交给壳层以显示选中胶囊", () => {
   expect(onPrompt).toHaveBeenCalledWith("描述你想要建立的网站", "website")
 })
 
-it("能力提示填写精确草稿和意图，不切换无正文创作模式", () => {
+it("设计能力提示填写专用草稿和意图，不沿用数据分析语义", () => {
   const onPrompt = vi.fn()
   const onCreationIntentSelect = vi.fn()
   render(
@@ -69,9 +69,14 @@ it("能力提示填写精确草稿和意图，不切换无正文创作模式", (
     </LocaleProvider>,
   )
 
-  fireEvent.click(screen.getByRole("button", { name: "设计 找趋势、出结论、给建议" }))
+  const designPrompt = screen.getByRole("button", { name: /^设计 /u })
+  expect.soft(designPrompt).toHaveAccessibleName("设计 描述您想要生成的图片")
+  fireEvent.click(designPrompt)
 
-  expect(onPrompt).toHaveBeenCalledExactlyOnceWith("帮我分析这份数据，找出关键趋势和可执行的结论。", "design")
+  expect(onPrompt).toHaveBeenCalledExactlyOnceWith(
+    "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
+    "design",
+  )
   expect(onCreationIntentSelect).not.toHaveBeenCalled()
 })
 
@@ -296,11 +301,26 @@ it("正式网站提示流程不展示虚构 Figma/Shopify 与内建集成", () =
 })
 
 it.each([
-  { label: "制作简报", prompt: "帮我写一篇关于「主题」的文章，风格专业、结构清晰。", intent: "presentation" as const },
-  { label: "建立网站", prompt: "描述你想要建立的网站", intent: "website" as const },
-  { label: "设计", prompt: "帮我分析这份数据，找出关键趋势和可执行的结论。", intent: "design" as const },
-  { label: "制作游戏", prompt: "帮我写一个「功能」的脚本，并说明如何运行和调整。", intent: "game" as const },
-])("正式 Home 的 $label 提示只填写精确草稿，不切换或启动其他产品动作", ({ label, prompt, intent }) => {
+  {
+    label: "制作简报",
+    description: "描述您的简报主题",
+    prompt: "帮我制作一份关于「主题」的简报，包含清晰的大纲、关键要点和可直接用于投影片的内容。",
+    intent: "presentation" as const,
+  },
+  { label: "建立网站", description: "描述你想要建立的网站", prompt: "描述你想要建立的网站", intent: "website" as const },
+  {
+    label: "设计",
+    description: "描述您想要生成的图片",
+    prompt: "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
+    intent: "design" as const,
+  },
+  {
+    label: "制作游戏",
+    description: "描述您想要制作的游戏",
+    prompt: "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
+    intent: "game" as const,
+  },
+])("正式 Home 的 $label 提示使用同意图描述并只填写精确草稿", ({ label, description, prompt, intent }) => {
   const onPrompt = vi.fn()
   const onCreationIntentSelect = vi.fn()
   const onCreateProject = vi.fn()
@@ -319,9 +339,11 @@ it.each([
     </LocaleProvider>,
   )
 
-  fireEvent.click(screen.getByRole("button", { name: new RegExp(label, "u") }))
+  const promptButton = screen.getByRole("button", { name: new RegExp(`^${label} `, "u") })
+  expect.soft(promptButton).toHaveAccessibleName(`${label} ${description}`)
+  fireEvent.click(promptButton)
 
-  expect({
+  expect.soft({
     promptCalls: onPrompt.mock.calls,
     creationIntentCalls: onCreationIntentSelect.mock.calls,
     createProjectCalls: onCreateProject.mock.calls,

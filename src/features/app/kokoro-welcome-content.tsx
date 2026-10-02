@@ -315,10 +315,10 @@ function FigmaMark(props: React.SVGProps<SVGSVGElement>) { return <svg data-slot
 function ShopifyMark() { return <span className={coreStyles.shopifyMark} data-slot="shopify-mark" aria-hidden="true">S</span> }
 
 const directPrompts = [
-  { title: "firstSite.promptBrief", description: "scenario.writeDesc", prompt: "scenario.writePrompt", intent: "presentation", icon: BriefcaseBusiness },
+  { title: "firstSite.promptBrief", description: "firstSite.presentationPlaceholder", prompt: "firstSite.presentationPrompt", intent: "presentation", icon: BriefcaseBusiness },
   { title: "firstSite.promptWebsite", description: "firstSite.websitePrompt", prompt: "firstSite.websitePrompt", intent: "website", icon: CodeWindowIcon },
-  { title: "firstSite.promptDesign", description: "scenario.dataDesc", prompt: "scenario.dataPrompt", intent: "design", icon: DesignWandIcon },
-  { title: "firstSite.promptGame", description: "scenario.codeDesc", prompt: "scenario.codePrompt", intent: "game", icon: Gamepad2 },
+  { title: "firstSite.promptDesign", description: "firstSite.designPlaceholder", prompt: "firstSite.designPrompt", intent: "design", icon: DesignWandIcon },
+  { title: "firstSite.promptGame", description: "firstSite.gamePlaceholder", prompt: "firstSite.gamePrompt", intent: "game", icon: Gamepad2 },
 ] as const
 
 const creationTypes = [
