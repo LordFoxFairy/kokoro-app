@@ -2,7 +2,7 @@
 // （行为规格在 core/engine 层。）
 
 import { readFileSync } from "node:fs"
-import { act } from "react"
+import { act, StrictMode, Suspense, use } from "react"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -2482,6 +2482,444 @@ it("连接恢复条在窄屏保留换行、命中区、forced-colors 与既有fo
   expect(css).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.connectionStatus\s*\{[^}]*flex-wrap:\s*wrap;/u)
   expect(css).toMatch(/\.connectionStatus button\s*\{[^}]*min-height:\s*2\.75rem;/u)
   expect(css).toMatch(/@media \(forced-colors: active\)[\s\S]*?\.connectionStatus\s*\{[^}]*border-color:\s*CanvasText;/u)
+})
+
+it("真实卸载后同 scope 立即重挂不会让旧 cleanup 处置新挂载复用的 browser engine", () => {
+  vi.useFakeTimers()
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    void input
+    void init
+    return new Promise<Response>(() => undefined)
+  })
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock)
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  let secondView: ReturnType<typeof render> | null = null
+
+  try {
+    const firstView = render(
+      <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" /></LocaleProvider></ThemeProvider>,
+    )
+    const sharedEngine = browserEngineSpy.mock.results.at(-1)?.value
+    expect(sharedEngine).not.toBeNull()
+
+    firstView.unmount()
+    secondView = render(
+      <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" /></LocaleProvider></ThemeProvider>,
+    )
+    expect(browserEngineSpy.mock.results.at(-1)?.value).toBe(sharedEngine)
+
+    act(() => vi.advanceTimersByTime(0))
+    const input = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(input, { target: { value: "survive immediate remount" } })
+    const activeEngineBeforeSend = browserEngineSpy.mock.results.at(-1)?.value
+    const activeEngineCanSubmitBeforeSend = activeEngineBeforeSend?.getSnapshot().canSubmitMessage
+    const reusedEngineCanSubmitBeforeSend = sharedEngine?.getSnapshot().canSubmitMessage
+    const send = screen.getByRole("button", { name: "发送消息" })
+    fireEvent.click(send)
+
+    const messagePosts = fetchMock.mock.calls.filter(([inputValue, init]) =>
+      String(inputValue).endsWith("/messages") && init?.method === "POST")
+    expect({
+      reusedEngineStillActive: activeEngineBeforeSend === sharedEngine,
+      reusedEngineCanSubmitBeforeSend,
+      activeEngineCanSubmitBeforeSend,
+      sendEnabled: !send.hasAttribute("disabled"),
+      messagePostCount: messagePosts.length,
+    }).toEqual({
+      reusedEngineStillActive: true,
+      reusedEngineCanSubmitBeforeSend: true,
+      activeEngineCanSubmitBeforeSend: true,
+      sendEnabled: true,
+      messagePostCount: 1,
+    })
+  } finally {
+    secondView?.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    browserEngineSpy.mockRestore()
+    fetchSpy.mockRestore()
+    listClientSpy.mockRestore()
+    vi.useRealTimers()
+  }
+})
+
+it("两个同时挂载的同 scope AppFrame 由最后一个 owner 卸载后才释放 engine 与 SSE", async () => {
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const streamSignals: AbortSignal[] = []
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const target = String(input)
+    if (target.endsWith("/messages") && init?.method === "POST") {
+      return Promise.resolve(Response.json({
+        run_id: "run_multi_owner",
+        user_message_id: "user_multi_owner",
+        assistant_message_id: "assistant_multi_owner",
+      }, { status: 202 }))
+    }
+    if (target.endsWith("/events") && init?.signal) {
+      streamSignals.push(init.signal)
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true })
+      })
+    }
+    return Promise.reject(new Error(`unexpected multi-owner request: ${target}`))
+  })
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock)
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  let replacement: SessionEngine | null = null
+  const owners = (firstMounted: boolean, secondMounted: boolean) => (
+    <ThemeProvider><LocaleProvider>
+      {firstMounted ? <div key="first-owner"><AppFrame chatHref="/app" /></div> : null}
+      {secondMounted ? <div key="second-owner"><AppFrame chatHref="/app" /></div> : null}
+    </LocaleProvider></ThemeProvider>
+  )
+  const flushRelease = () => act(async () => {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+  })
+  const view = render(owners(true, false))
+
+  try {
+    const sharedEngine = browserEngineSpy.mock.results.at(0)?.value
+    const firstComposer = within(view.container)
+    fireEvent.change(firstComposer.getByRole("textbox", { name: "对话输入" }), {
+      target: { value: "shared owner lifecycle" },
+    })
+    fireEvent.click(firstComposer.getByRole("button", { name: "发送消息" }))
+    await act(async () => {
+      for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    })
+    expect(fetchMock.mock.calls.filter(([inputValue, init]) =>
+      String(inputValue).endsWith("/messages") && init?.method === "POST")).toHaveLength(1)
+    expect(streamSignals).toHaveLength(1)
+    expect(streamSignals[0]?.aborted).toBe(false)
+
+    view.rerender(owners(true, true))
+    await act(async () => {
+      for (let index = 0; index < 4; index += 1) await Promise.resolve()
+    })
+    expect(browserEngineSpy.mock.results.at(-1)?.value).toBe(sharedEngine)
+    pageClients.releaseBrowserEngine(sharedEngine)
+    expect(sharedEngine?.getSnapshot().canSubmitMessage).toBe(true)
+    expect(streamSignals[0]?.aborted).toBe(false)
+    view.rerender(owners(false, true))
+    await flushRelease()
+    expect(sharedEngine?.getSnapshot().canSubmitMessage).toBe(true)
+    expect(streamSignals[0]?.aborted).toBe(false)
+
+    view.rerender(owners(false, false))
+    await flushRelease()
+    expect(streamSignals[0]?.aborted).toBe(true)
+    expect(sharedEngine?.getSnapshot().canSubmitMessage).toBe(false)
+    replacement = pageClients.browserEngine({ preview: false })
+    expect(replacement).not.toBe(sharedEngine)
+  } finally {
+    view.unmount()
+    await flushRelease()
+    pageClients.releaseBrowserEngine(replacement)
+    browserEngineSpy.mockRestore()
+    fetchSpy.mockRestore()
+    listClientSpy.mockRestore()
+  }
+})
+
+it("browser-owned AppFrame 从 direct 切到 project scope 后只释放旧 scope owner", () => {
+  vi.useFakeTimers()
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  const projectRef = "project_scope_transition"
+  let replacement: SessionEngine | null = null
+  const view = render(
+    <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" /></LocaleProvider></ThemeProvider>,
+  )
+
+  try {
+    const directEngine = browserEngineSpy.mock.results.at(-1)?.value
+    expect(directEngine?.getSnapshot().canSubmitMessage).toBe(true)
+
+    view.rerender(
+      <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" projectRef={projectRef} /></LocaleProvider></ThemeProvider>,
+    )
+    const projectEngine = browserEngineSpy.mock.results.at(-1)?.value
+    expect(projectEngine).not.toBe(directEngine)
+    expect(projectEngine?.getSnapshot().canSubmitMessage).toBe(true)
+
+    act(() => vi.advanceTimersByTime(0))
+    expect(directEngine?.getSnapshot().canSubmitMessage).toBe(false)
+    expect(projectEngine?.getSnapshot().canSubmitMessage).toBe(true)
+
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    expect(projectEngine?.getSnapshot().canSubmitMessage).toBe(false)
+    replacement = pageClients.browserEngine({ preview: false, scope: { kind: "project", projectRef } })
+    expect(replacement).not.toBe(projectEngine)
+  } finally {
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    pageClients.releaseBrowserEngine(replacement)
+    browserEngineSpy.mockRestore()
+    listClientSpy.mockRestore()
+    vi.useRealTimers()
+  }
+})
+
+it("injected 与 browser-owned AppFrame 切换时只管理 browser lease", () => {
+  vi.useFakeTimers()
+  buildEngine()
+  const injectedEngine = engine
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  const injectedTree = () => (
+    <ThemeProvider><LocaleProvider><AppFrame engine={injectedEngine} chatHref="/app" /></LocaleProvider></ThemeProvider>
+  )
+  const browserTree = () => (
+    <ThemeProvider><LocaleProvider><AppFrame chatHref="/app" /></LocaleProvider></ThemeProvider>
+  )
+  const view = render(injectedTree())
+
+  try {
+    expect(browserEngineSpy).not.toHaveBeenCalled()
+    expect(injectedEngine.getSnapshot().canSubmitMessage).toBe(true)
+
+    view.rerender(browserTree())
+    const ownedEngine = browserEngineSpy.mock.results.at(-1)?.value
+    expect(ownedEngine?.getSnapshot().canSubmitMessage).toBe(true)
+    expect(injectedEngine.getSnapshot().canSubmitMessage).toBe(true)
+
+    view.rerender(injectedTree())
+    act(() => vi.advanceTimersByTime(0))
+    expect(ownedEngine?.getSnapshot().canSubmitMessage).toBe(false)
+    expect(injectedEngine.getSnapshot().canSubmitMessage).toBe(true)
+
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    expect(injectedEngine.getSnapshot().canSubmitMessage).toBe(true)
+  } finally {
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    browserEngineSpy.mockRestore()
+    listClientSpy.mockRestore()
+    vi.useRealTimers()
+  }
+})
+
+it("Suspense 放弃的 AppFrame render 不创建 browser engine、资源订阅或 cache entry", async () => {
+  const conversationId = "conv_aborted_render"
+  window.localStorage.setItem("kokoro.web.conversations.direct", JSON.stringify({
+    activeId: conversationId,
+    conversations: [{ id: conversationId, title: "aborted", updatedAt: 1_000, mode: "fast" }],
+  }))
+  const never = new Promise<void>(() => undefined)
+  function SuspendedEmptyState() {
+    use(never)
+    return null
+  }
+
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const storageSpy = vi.spyOn(window, "addEventListener")
+  const streamSignals: AbortSignal[] = []
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const target = String(input)
+    if (target.endsWith(`/sessions/${conversationId}`)) {
+      return Promise.resolve(Response.json(makeSnapshot({
+        sessionId: conversationId,
+        activeRun: { run_id: "run_aborted_render", status: "running" },
+      })))
+    }
+    if (target.endsWith(`/sessions/${conversationId}/events`) && init?.signal) {
+      streamSignals.push(init.signal)
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true })
+      })
+    }
+    return Promise.reject(new Error(`unexpected aborted-render request: ${target}`))
+  })
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock)
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  let cachedAfterAbort: SessionEngine | null = null
+  const view = render(
+    <ThemeProvider><LocaleProvider><Suspense fallback={<output data-testid="aborted-render-fallback">suspended</output>}>
+      <AppFrame chatHref="/app" emptyState={SuspendedEmptyState} />
+    </Suspense></LocaleProvider></ThemeProvider>,
+  )
+
+  try {
+    expect(screen.getByTestId("aborted-render-fallback")).toBeInTheDocument()
+    await act(async () => {
+      for (let index = 0; index < 12; index += 1) await Promise.resolve()
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+    const renderFactoryCalls = browserEngineSpy.mock.calls.length
+    const abortedEngine = browserEngineSpy.mock.results.at(0)?.value ?? null
+    if (abortedEngine) cachedAfterAbort = pageClients.browserEngine({ preview: false })
+
+    expect({
+      renderFactoryCalls,
+      storageSubscriptions: storageSpy.mock.calls.filter(([type]) => type === "storage").length,
+      snapshotRequests: fetchMock.mock.calls.filter(([inputValue]) =>
+        String(inputValue).endsWith(`/sessions/${conversationId}`)).length,
+      sseSubscriptions: streamSignals.length,
+      abandonedEngineStillCached: abortedEngine !== null && cachedAfterAbort === abortedEngine,
+    }).toEqual({
+      renderFactoryCalls: 0,
+      storageSubscriptions: 0,
+      snapshotRequests: 0,
+      sseSubscriptions: 0,
+      abandonedEngineStillCached: false,
+    })
+  } finally {
+    view.unmount()
+    pageClients.releaseBrowserEngine(cachedAfterAbort)
+    browserEngineSpy.mockRestore()
+    fetchSpy.mockRestore()
+    storageSpy.mockRestore()
+    listClientSpy.mockRestore()
+  }
+})
+
+it("跨 macrotask 延迟 commit 的 AppFrame 才创建并持有可提交的 browser engine", async () => {
+  let resolveGate: () => void = () => undefined
+  let gateOpen = false
+  const gate = new Promise<void>((resolve) => { resolveGate = resolve })
+  function DelayedGate() {
+    use(gate)
+    return null
+  }
+  function DelayedEmptyState() {
+    return gateOpen
+      ? <output data-testid="delayed-render-ready">ready</output>
+      : <DelayedGate />
+  }
+
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const storageSpy = vi.spyOn(window, "addEventListener")
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    void input
+    void init
+    return new Promise<Response>(() => undefined)
+  })
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock)
+  const browserEngineSpy = vi.spyOn(pageClients, "browserEngine")
+  const surface = () => (
+    <ThemeProvider><LocaleProvider><Suspense fallback={<output data-testid="delayed-render-fallback">waiting</output>}>
+      <AppFrame chatHref="/app" emptyState={DelayedEmptyState} />
+    </Suspense></LocaleProvider></ThemeProvider>
+  )
+  const view = render(surface())
+
+  try {
+    expect(screen.getByTestId("delayed-render-fallback")).toBeInTheDocument()
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+    const factoryCallsBeforeCommit = browserEngineSpy.mock.calls.length
+    const storageSubscriptionsBeforeCommit = storageSpy.mock.calls.filter(([type]) => type === "storage").length
+
+    await act(async () => {
+      gateOpen = true
+      resolveGate()
+      await gate
+      view.rerender(surface())
+      for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    })
+    expect(screen.getByTestId("delayed-render-ready")).toBeInTheDocument()
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+    const factoryCallsAfterCommit = browserEngineSpy.mock.calls.length
+    const activeEngine = browserEngineSpy.mock.results.at(-1)?.value ?? null
+    const engineCanSubmitBeforeSend = activeEngine?.getSnapshot().canSubmitMessage ?? false
+    const input = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(input, { target: { value: "delayed commit submit" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送消息" }))
+    const messagePosts = fetchMock.mock.calls.filter(([inputValue, init]) =>
+      String(inputValue).endsWith("/messages") && init?.method === "POST")
+
+    expect({
+      factoryCallsBeforeCommit,
+      storageSubscriptionsBeforeCommit,
+      factoryCallsAfterCommit,
+      storageSubscriptionsAfterCommit: storageSpy.mock.calls.filter(([type]) => type === "storage").length,
+      engineCanSubmitBeforeSend,
+      messagePostCount: messagePosts.length,
+    }).toEqual({
+      factoryCallsBeforeCommit: 0,
+      storageSubscriptionsBeforeCommit: 0,
+      factoryCallsAfterCommit: 1,
+      storageSubscriptionsAfterCommit: 1,
+      engineCanSubmitBeforeSend: true,
+      messagePostCount: 1,
+    })
+  } finally {
+    view.unmount()
+    await act(async () => {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    })
+    browserEngineSpy.mockRestore()
+    fetchSpy.mockRestore()
+    storageSpy.mockRestore()
+    listClientSpy.mockRestore()
+  }
+})
+
+it("StrictMode 同实例探测保留 browser engine，最终卸载才释放 cache 并关闭 SSE", async () => {
+  vi.useFakeTimers()
+  const listClientSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createFakeClient())
+  const streamSignals: AbortSignal[] = []
+  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const target = String(input)
+    if (target.endsWith("/messages") && init?.method === "POST") {
+      return Promise.resolve(Response.json({
+        run_id: "run_strict_lifecycle",
+        user_message_id: "user_strict_lifecycle",
+        assistant_message_id: "assistant_strict_lifecycle",
+      }, { status: 202 }))
+    }
+    if (target.endsWith("/events") && init?.signal) {
+      streamSignals.push(init.signal)
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true })
+      })
+    }
+    return Promise.reject(new Error(`unexpected browser-engine request: ${target}`))
+  })
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(fetchMock)
+  let replacement: SessionEngine | null = null
+  const view = render(
+    <StrictMode><ThemeProvider><LocaleProvider><AppFrame chatHref="/app" /></LocaleProvider></ThemeProvider></StrictMode>,
+  )
+  const strictEngine = pageClients.browserEngine({ preview: false })
+
+  try {
+    expect(strictEngine).not.toBeNull()
+    act(() => vi.advanceTimersByTime(0))
+    expect(pageClients.browserEngine({ preview: false })).toBe(strictEngine)
+    expect(strictEngine?.getSnapshot().canSubmitMessage).toBe(true)
+
+    const input = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(input, { target: { value: "strict lifecycle" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送消息" }))
+    expect(fetchMock.mock.calls.filter(([inputValue, init]) =>
+      String(inputValue).endsWith("/messages") && init?.method === "POST")).toHaveLength(1)
+    await act(async () => {
+      for (let index = 0; index < 12; index += 1) await Promise.resolve()
+    })
+    expect(streamSignals).toHaveLength(1)
+    expect(streamSignals[0]?.aborted).toBe(false)
+
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    await act(async () => { await Promise.resolve() })
+    expect(streamSignals[0]?.aborted).toBe(true)
+    expect(strictEngine?.getSnapshot().canSubmitMessage).toBe(false)
+    replacement = pageClients.browserEngine({ preview: false })
+    expect(replacement).not.toBe(strictEngine)
+  } finally {
+    view.unmount()
+    act(() => vi.advanceTimersByTime(0))
+    pageClients.releaseBrowserEngine(replacement)
+    fetchSpy.mockRestore()
+    listClientSpy.mockRestore()
+    vi.useRealTimers()
+  }
 })
 
 // Project-read fixtures use spies, so every case restores its browser boundary.

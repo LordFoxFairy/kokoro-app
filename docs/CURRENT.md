@@ -1,3 +1,11 @@
+## R90 Root验收：committed-effect会话引擎生命周期（2026-10-02）
+
+基线main5e538f69；原WIN01三路径冻结，Root实际tests-only RED原12482 exit1（2failed/91filtered，/tmp/kokoro-r90-root-web-aborted-render-red.log）证实aborted/delayed commit在render提前创建storage/snapshot/SSE/cache。effect内同步factory+retain并发布本hook局部lease；render仅匹配已committed scope/mode实例或null，不peek全局零owner缓存。保token/refcount、Strict/双owner/幂等cleanup、injected caller-owned、scope遮旧与最后owner释放。
+
+Root fresh Node22.22.2 pnpm check原47394实际终态exit0：246contract、50architecture、2306tests，lint/typecheck/build通过；/tmp/kokoro-r90-root-web-full-check.log。独立Sol最终0P0/P1/P2，原P1已闭（/tmp/kokoro-r90-web-final-review.md）；3hash在Root门后匹配。worker生命周期7/AppFrame95为补充，Root完整门重新覆盖。仓库无format脚本，本轮git diff --check0，未声称运行不存在命令。
+
+仅生命周期组件/源码切片通过，不证明W2根因、真实登录/模型两轮/刷新/作品/积分全链；仍固定BFFpublic5，后继正规public6 consumer再Root真实旅程。Root接管本三源码/测试与此CURRENT精确提交，其余tracked byte-equal，未启服务/共享资源/改用户数据。
+
 ## R85 Root：Plugins本地假成功已删除（2026-10-02）
 
 基线main52fdd8e。原WIN01只改现Plugins组件及测试：删除added Set/toggle、Add/Remove/data-added/checkmark，保发现信息、搜索、分页、轮播、空态、管理与现创建入口；未改CSS、engine、依赖、SQL或任何契约。Root真实RED2fail/8pass→独立Sol两文件0P0/P1/P2→Root完整Node22 pnpm check实际原52371终态exit0，日志/tmp/kokoro-r85-root-web-truth-full-check.log。RED测试全文冻结，750外围tracked文件在补此CURRENT/仓INDEX前字节完全相同。

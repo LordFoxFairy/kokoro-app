@@ -1,14 +1,41 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useSyncExternalStore } from "react"
 
-import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
+import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 import { type SessionEngine } from "@/engine/machine"
 import { useSessionEngine } from "@/engine/use-session-engine"
-import { browserEngine, releaseBrowserEngine } from "@/ui/shell/page-clients"
+import { browserEngine, retainBrowserEngine } from "@/ui/shell/page-clients"
 
 export type AppFrameEngineOptions = {
   injectedEngine: SessionEngine | null | undefined
   preview: boolean
   projectRef: string | undefined
+}
+
+type CommittedBrowserEngine = {
+  key: string
+  engine: SessionEngine
+  lease: symbol
+}
+
+function createBrowserEngineLeaseStore() {
+  let snapshot: CommittedBrowserEngine | null = null
+  const listeners = new Set<() => void>()
+  const publish = (next: CommittedBrowserEngine | null): void => {
+    if (snapshot === next) return
+    snapshot = next
+    for (const listener of listeners) listener()
+  }
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    publish,
+    clear: (lease: symbol) => {
+      if (snapshot?.lease === lease) publish(null)
+    },
+  }
 }
 
 /** Owns the page-level engine instance and its scope transition lifecycle. */
@@ -21,38 +48,36 @@ export function useAppFrameEngine({
     () => projectRef ? { kind: "project", projectRef } : DIRECT_SESSION_SCOPE,
     [projectRef],
   )
-  const engine = injectedEngine !== undefined ? injectedEngine : browserEngine({ preview, scope: sessionScope })
+  const desiredBrowserEngineKey = `${preview ? "preview" : "live"}:${sessionScopeKey(sessionScope)}`
+  const leaseStore = useMemo(() => createBrowserEngineLeaseStore(), [])
+  const committedBrowserEngine = useSyncExternalStore(
+    leaseStore.subscribe,
+    leaseStore.getSnapshot,
+    () => null,
+  )
+  const engine = injectedEngine !== undefined
+    ? injectedEngine
+    : committedBrowserEngine?.key === desiredBrowserEngineKey ? committedBrowserEngine.engine : null
   const snapshot = useSessionEngine(engine)
   const { machine, store, thread, pendingMode, staging, hydrating, connection, canSubmitMessage } = snapshot
   const activeId = store?.activeId ?? null
 
-  // A project/direct route change replaces the scope-owned engine while this
-  // AppFrame stays mounted. Close the old scope immediately so its SSE,
-  // storage subscription, and reattach timers cannot accumulate behind the
-  // current rail selection. Injected test engines remain caller-owned.
-  const browserEngineRef = useRef<SessionEngine | null>(engine)
-  const browserEngineMountedRef = useRef(false)
+  // Create and retain browser engines in the same committed effect. Render only
+  // exposes this hook's committed lease when its mode/scope key still matches;
+  // a suspended/aborted render therefore creates no cache, storage, hydrate, or
+  // SSE resources, and a scope change cannot expose the previous engine.
   useEffect(() => {
     if (injectedEngine !== undefined) return
-    const previous = browserEngineRef.current
-    if (previous !== engine) {
-      releaseBrowserEngine(previous)
-    }
-    browserEngineMountedRef.current = true
-    browserEngineRef.current = engine
+    const acquiredEngine = browserEngine({ preview, scope: sessionScope })
+    if (acquiredEngine === null) return
+    const release = retainBrowserEngine(acquiredEngine)
+    const lease = Symbol("app-frame-browser-engine-lease")
+    leaseStore.publish({ key: desiredBrowserEngineKey, engine: acquiredEngine, lease })
     return () => {
-      // React Strict Mode deliberately runs effect cleanup/setup once during
-      // development. Defer unmount disposal by one macrotask so that probe
-      // cleanup does not dispose the engine that the immediately-following
-      // setup is about to reuse. A real unmount has no setup to cancel it.
-      browserEngineMountedRef.current = false
-      window.setTimeout(() => {
-        if (browserEngineMountedRef.current || engine !== browserEngineRef.current) return
-        releaseBrowserEngine(engine)
-        browserEngineRef.current = null
-      }, 0)
+      release()
+      leaseStore.clear(lease)
     }
-  }, [engine, injectedEngine])
+  }, [desiredBrowserEngineKey, injectedEngine, leaseStore, preview, sessionScope])
 
   return {
     engine,

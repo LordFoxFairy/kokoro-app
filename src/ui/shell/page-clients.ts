@@ -133,25 +133,77 @@ export function browserScheduledTaskClient(): ScheduledTaskClient {
   return pageScheduledTaskClient
 }
 
-// 整页共享一个引擎实例（含流句柄与重连计时器），仅浏览器创建，SSR 为 null。
-const pageEngines = new Map<string, SessionEngine>()
+type BrowserEngineEntry = {
+  engine: SessionEngine
+  owners: Set<symbol>
+  pendingRelease: number | null
+}
+
+// 整页按 scope 共享引擎实例（含流句柄与重连计时器）。production hook 只在
+// committed effect 内同步执行 factory + retain；render 不创建零 owner entry。
+const pageEngines = new Map<string, BrowserEngineEntry>()
+
+function browserEngineEntry(engine: SessionEngine): { key: string; entry: BrowserEngineEntry } | null {
+  for (const [key, entry] of pageEngines) {
+    if (entry.engine === engine) return { key, entry }
+  }
+  return null
+}
+
+function cancelPendingBrowserEngineRelease(entry: BrowserEngineEntry): void {
+  if (entry.pendingRelease === null) return
+  window.clearTimeout(entry.pendingRelease)
+  entry.pendingRelease = null
+}
+
+function scheduleBrowserEngineRelease(key: string, entry: BrowserEngineEntry): void {
+  if (entry.pendingRelease !== null || entry.owners.size > 0) return
+  const timer = window.setTimeout(() => {
+    if (
+      pageEngines.get(key) !== entry ||
+      entry.pendingRelease !== timer ||
+      entry.owners.size > 0
+    ) return
+    entry.pendingRelease = null
+    pageEngines.delete(key)
+    entry.engine.dispose()
+  }, 0)
+  entry.pendingRelease = timer
+}
 
 /**
- * Release an engine when its route scope leaves the mounted AppFrame.
+ * Retain the cached browser engine for one committed consumer.
  *
- * The browser cache is useful while a single scope is mounted, but retaining
- * every project engine forever leaves its SSE handle, storage listener, and
- * reattach timer alive. That turns repeated rail navigation into progressively
- * slower work and can make an old scope publish after the user has moved on.
- * The server remains the source of truth; a later visit recreates the engine
- * and hydrates the same scope again.
+ * Each call owns an independent token. The returned release is idempotent, so
+ * Strict Mode cleanup/setup and late cleanup from replaced trees cannot underflow
+ * another AppFrame's ownership.
  */
+export function retainBrowserEngine(engine: SessionEngine | null | undefined): () => void {
+  if (!engine) return () => undefined
+  const located = browserEngineEntry(engine)
+  if (!located) return () => undefined
+  const { key, entry } = located
+  const owner = Symbol("browser-engine-owner")
+  cancelPendingBrowserEngineRelease(entry)
+  entry.owners.add(owner)
+  let released = false
+
+  return () => {
+    if (released) return
+    released = true
+    if (pageEngines.get(key) !== entry || !entry.owners.delete(owner)) return
+    scheduleBrowserEngineRelease(key, entry)
+  }
+}
+
+/** Explicitly dispose an unowned cache entry; live owner leases always win. */
 export function releaseBrowserEngine(engine: SessionEngine | null | undefined): void {
   if (!engine) return
-  for (const [key, candidate] of pageEngines) {
-    if (candidate !== engine) continue
+  for (const [key, entry] of pageEngines) {
+    if (entry.engine !== engine || entry.owners.size > 0) continue
+    cancelPendingBrowserEngineRelease(entry)
     pageEngines.delete(key)
-    candidate.dispose()
+    entry.engine.dispose()
   }
 }
 
@@ -165,7 +217,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
   const scope = options.scope ?? DIRECT_SESSION_SCOPE
   const engineKey = `${mode}:${sessionScopeKey(scope)}`
   const existing = pageEngines.get(engineKey)
-  if (existing) return existing
+  if (existing) return existing.engine
   {
     // The route adapter explicitly selects preview; otherwise Chat always
     // uses the same-origin `/api/session` BFF, including in development.
@@ -180,7 +232,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       }),
       scope,
     })
-    pageEngines.set(engineKey, engine)
+    pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null })
     return engine
   }
 }
