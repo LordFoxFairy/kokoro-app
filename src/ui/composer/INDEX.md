@@ -15,3 +15,5 @@
 ## 陷阱
 - Enter 发送 / Shift+Enter 换行；IME 合成期 Enter 只确认候选词不发送。
 - 首条消息后模式/模型/agent 锁定（`modeLocked`）：由 shell 传入，组件不自持锁态。
+
+- Send 的可见性只由运行态与非空 draft 决定；disabled 消费上游 engine admission，非空但暂不可提交时保留按钮与草稿，Stop 不受该判定阻断。

@@ -1,3 +1,9 @@
+## R83 Root：发送可用性源码切片已验收（2026-10-02）
+
+基线 main a118ac8a76dc2e41a49511b739c31d5742ff510a。原WIN01八source/test冻结，独立Sol0P0/P1/P2，Root8hash/精确变更集匹配。原真实DOM RED1pass2fail保留：submitting/unavailable发送错误enabled；修后engine统一canSubmitMessage供snapshot/submit，Composer内容可见与disabled分开，保draft/Stop/connected streaming steer/FIFO。无wire/SQL/依赖/CSS或新状态机。Root仅补相邻engine/composer INDEX与此当前证据，旧正文保留。
+
+Root fresh Node22 pnpm check原90572终态exit0：246contract、50architecture、2298test均0fail/0skip，lint/typecheck/build0；日志/tmp/kokoro-r83-web-root-full-check-confirmed.log。首跑check构建结束后shell只读status变量导致收尾exit1，原日志保留而非冒充0，完整重跑显式确认exit。此为源码/组件门，不是真实IAM/BFF/模型/文件/费用浏览器全链；R81 W2失败尚待新已发布组合复跑，不假定此片就是根因。Root精确提交，worker停写。
+
 ## R80 正式 consent 过期恢复源码组件已验收（2026-10-02）
 
 基线 main96b6ac2331893a9093d088a0b7f82b8fbb9c2e26。原WIN01先只追加126行现Next集成测试，Root真实Next+Redis corrected RED3pass1fail64filteredskip；HTML过期403而非正式空303/login。route局部GREEN后Root全68与完整2298测试发现finalproxy覆写no-referrer，保该真实失败/断言，精确POST路径proxy补策略。

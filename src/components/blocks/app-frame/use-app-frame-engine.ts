@@ -23,7 +23,7 @@ export function useAppFrameEngine({
   )
   const engine = injectedEngine !== undefined ? injectedEngine : browserEngine({ preview, scope: sessionScope })
   const snapshot = useSessionEngine(engine)
-  const { machine, store, thread, pendingMode, staging, hydrating, connection } = snapshot
+  const { machine, store, thread, pendingMode, staging, hydrating, connection, canSubmitMessage } = snapshot
   const activeId = store?.activeId ?? null
 
   // A project/direct route change replaces the scope-owned engine while this
@@ -64,6 +64,7 @@ export function useAppFrameEngine({
     staging,
     hydrating,
     connection,
+    canSubmitMessage,
     activeId,
   }
 }

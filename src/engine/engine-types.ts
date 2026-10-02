@@ -36,6 +36,8 @@ export type EngineSnapshot = {
   hydrating: boolean
   // 已有可信 snapshot 后的页面连接可用性；不属于 Message/Run terminal。
   connection: ConnectionAvailability
+  // 非空消息是否会被 submit 同步接纳；UI 只消费该投影，不复制状态机规则。
+  canSubmitMessage: boolean
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryResume: boolean
   canRetryPendingSubmission: boolean
@@ -52,6 +54,7 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   staging: {},
   hydrating: false,
   connection: { status: "connected" },
+  canSubmitMessage: false,
   canRetryResume: false,
   canRetryPendingSubmission: false,
 }

@@ -8,11 +8,12 @@ import styles from "./composer-controls.module.css"
 type ComposerSubmitActionProps = {
   isStreaming: boolean
   isAwaitingApproval: boolean
+  showSend: boolean
   canSend: boolean
   onStop: () => void
 }
 
-export function ComposerSubmitAction({ isStreaming, isAwaitingApproval, canSend, onStop }: ComposerSubmitActionProps) {
+export function ComposerSubmitAction({ isStreaming, isAwaitingApproval, showSend, canSend, onStop }: ComposerSubmitActionProps) {
   const t = useT()
   const stop = isStreaming ? (
     <Button variant="outline" size="icon-sm" className={`${styles.send} ${styles.sendStop}`} data-composer-action="stop" type="button" aria-label={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} title={t(isAwaitingApproval ? "hitl.cancelWaiting" : "composer.stop")} onClick={onStop}>
@@ -22,7 +23,7 @@ export function ComposerSubmitAction({ isStreaming, isAwaitingApproval, canSend,
   return (
     <>
       {stop}
-      {!isStreaming || canSend ? (
+      {showSend ? (
         <Button variant="default" size="icon-sm" className={styles.send} data-composer-action="send" type="submit" aria-label={t(isStreaming ? "composer.sendSteer" : "composer.send")} disabled={!canSend}><ArrowUp className={styles.glyph} data-icon="inline-start" /></Button>
       ) : null}
     </>

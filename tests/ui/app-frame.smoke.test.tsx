@@ -1887,6 +1887,11 @@ it("主路径：发送 → 流式 → HITL 批准 → 完成收束", async () =>
   fireEvent.change(screen.getByLabelText("对话输入"), {
     target: { value: "帮我写个文件" },
   })
+  expect(engine.getSnapshot()).toMatchObject({
+    machine: { phase: "idle" },
+    connection: { status: "connected" },
+  })
+  expect(screen.getByLabelText("发送消息")).toBeEnabled()
   fireEvent.click(screen.getByLabelText("发送消息"))
   expect(screen.getAllByText("帮我写个文件").length).toBeGreaterThan(0)
   expect(screen.getByLabelText("对话输入")).toHaveValue("")
@@ -2309,6 +2314,7 @@ it("未获receipt时拒绝第二次提交并保留草稿，不产生额外POST",
   expect(client.createCalls).toHaveLength(1)
   expect(input).toHaveValue("keep this draft")
   expect(window.location.href).toBe(acceptedUrl)
+  expect(screen.getByRole("button", { name: "发送插话" })).toBeDisabled()
 })
 
 it("同步拒绝不会清除既有创建意图", async () => {
@@ -2351,6 +2357,7 @@ it("已获receipt后的stream error显示独立连接恢复且不伪造run failu
     expect(input).toHaveValue("keep this offline draft")
     expect(client.createCalls).toHaveLength(createCount)
     expect(screen.getByLabelText("停止生成")).toBeEnabled()
+    expect(screen.getByRole("button", { name: "发送插话" })).toBeDisabled()
     client.nextSnapshot = () => Promise.resolve(makeSnapshot({
       sessionId: engine.getSnapshot().store?.activeId ?? "conv_1",
       activeRun: { run_id: "run_1", status: "running" },
@@ -2360,6 +2367,12 @@ it("已获receipt后的stream error显示独立连接恢复且不伪造run failu
     expect(client.createCalls).toHaveLength(createCount)
     act(() => client.lastStream().connected())
     expect(screen.queryByRole("status", { name: "连接暂时中断" })).toBeNull()
+    expect(engine.getSnapshot()).toMatchObject({
+      machine: { phase: "streaming" },
+      connection: { status: "connected" },
+    })
+    expect(screen.getByRole("button", { name: "发送插话" })).toBeEnabled()
+    expect(screen.getByLabelText("停止生成")).toBeEnabled()
   } finally {
     listClientSpy.mockRestore()
   }

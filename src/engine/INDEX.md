@@ -26,6 +26,7 @@
 - `engine-types.ts`
   - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`、`SessionEngine`、`EngineDeps`（SSR 首帧和
     引擎依赖契约）；`canRetryPendingSubmission` 只暴露同会话、未获 create receipt 且仍处于合法 error 相位的恢复能力；
+    `canSubmitMessage` 与 submit 共用唯一同步接纳规则；SSR 为 false，UI 只组合非空草稿，不把它当 owner 回执。
     瞬态通知发 i18n key 不落文案。
 - `client.ts`：`createSessionClient({baseUrl}) → SessionClient`——全部入站过
   contract zod，失败以 `SessionClientError`（network/http/parse）上抛零静默降级；

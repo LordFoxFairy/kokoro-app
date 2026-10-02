@@ -165,6 +165,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const listeners = new Set<() => void>()
   let snapshot: EngineSnapshot = buildSnapshot()
 
+  function canSubmitMessage(): boolean {
+    if (disposed || recoveringExpiredCursor || connection.status !== "connected") return false
+    if (machine.phase === "idle" || machine.phase === "error") return true
+    return store !== null && (
+      machine.phase === "streaming" || machine.phase === "queued" ||
+      machine.phase === "resuming" || machine.phase === "waiting"
+    )
+  }
+
   function canRetryPendingSubmission(): boolean {
     return connection.status === "connected" &&
       machine.phase === "error" && machine.error !== null && pendingSubmission !== null &&
@@ -185,6 +194,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       staging: stagingView,
       hydrating,
       connection,
+      canSubmitMessage: canSubmitMessage(),
       canRetryPendingSubmission: canRetryPendingSubmission(),
       canRetryResume: retryableResume() !== null,
     }
@@ -779,7 +789,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function submit(content: string): boolean {
     const trimmed = content.trim()
-    if (disposed || recoveringExpiredCursor || connection.status !== "connected" || !trimmed) {
+    if (!trimmed || !canSubmitMessage()) {
       return false
     }
     notice = null
@@ -1155,6 +1165,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function dispose(): void {
     disposed = true
+    snapshot = buildSnapshot()
     closeStream()
     clearReattachTimer()
     unsubscribeStore?.()

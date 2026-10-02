@@ -67,6 +67,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
 
 export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, agents, selectedAgent, onAgentChange, agentLocked, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
+  const showSend = !isStreaming || draft.trim().length > 0
   const modeLabel = modeLabelText(t, mode)
   const creationIntentLabel = creationLabel(t, creationIntent)
   const voiceInput = useVoiceInput({ draft, onDraftChange, preview: voicePreview, previewTranscript: t("composer.voicePreviewTranscript") })
@@ -114,7 +115,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
           <ComposerSelectors mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} agents={agents} currentAgent={currentAgent} currentAgentName={currentAgent?.name ?? ""} onAgentChange={onAgentChange} agentLocked={agentLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
           <ComposerVoiceActions emptyWorkspace={emptyWorkspace} projectWorkspace={projectWorkspace} creationIntent={creationIntent} state={voiceInput.state} onToggle={voiceInput.toggle} />
-          <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} canSend={canSend} onStop={onStop} />
+          <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} canSend={canSend} onStop={onStop} />
         </div>
       </form>
       {modeLocked ? <p className={styles.disclaimer} data-slot="composer-disclaimer">{t("composer.disclaimer")}</p> : null}

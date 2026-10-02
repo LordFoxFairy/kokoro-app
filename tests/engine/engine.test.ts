@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { addConversation, type ConversationStore } from "@/core/conversations"
 import { SessionClientError } from "@/engine/client"
-import { createSessionEngine, type SessionEngine } from "@/engine/machine"
+import { createSessionEngine, SERVER_ENGINE_SNAPSHOT, type SessionEngine } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
 import type { RunControlReceipt } from "@/contract/http"
 
@@ -354,11 +354,13 @@ describe("提交链路", () => {
     const messageCount = thread().messages.length
 
     stream.reconnecting()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
     expect(engine.submit("must remain a draft")).toBe(false)
     expect(client.createCalls).toHaveLength(createCount)
     expect(thread().messages).toHaveLength(messageCount)
 
     stream.fail(new SessionClientError("http", "status 429"))
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
     expect(engine.submit("still blocked")).toBe(false)
     expect(client.createCalls).toHaveLength(createCount)
     expect(engine.getSnapshot().machine).toMatchObject({ phase: "streaming", runId: "run_1" })
@@ -1796,6 +1798,7 @@ describe("运行中插话（steer）", () => {
     client.lastStream().emit([makeEvent("run.created", { run_id: "run_1" })])
     await settle()
     expect(engine.getSnapshot().machine.phase).toBe("streaming")
+    expect(engine.getSnapshot().canSubmitMessage).toBe(true)
     const streamsBefore = client.streams.length
 
     expect(engine.submit("改成国内市场")).toBe(true)
@@ -1812,7 +1815,9 @@ describe("运行中插话（steer）", () => {
 
   it("submitting 相位（未获回执）双发仍被拒：不误当插话", async () => {
     buildEngine()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(true)
     expect(engine.submit("hello")).toBe(true)
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
     expect(engine.submit("过早的第二条")).toBe(false)
     expect(thread().messages.filter((m) => m.role === "user")).toHaveLength(1)
     await settle()
@@ -1820,9 +1825,11 @@ describe("运行中插话（steer）", () => {
   })
 
   it("同步前置条件拒绝时明确返回 false 且不创建请求", () => {
+    expect(SERVER_ENGINE_SNAPSHOT.canSubmitMessage).toBe(false)
     buildEngine()
     expect(engine.submit("   ")).toBe(false)
     engine.dispose()
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
     expect(engine.submit("disposed submission")).toBe(false)
     expect(client.createCalls).toHaveLength(0)
   })
@@ -1843,6 +1850,7 @@ describe("运行中插话（steer）", () => {
     client.nextSnapshot = () => new Promise(() => {})
     client.lastStream().fail(new SessionClientError("http", "410", "event_cursor_expired"))
     const callsBefore = client.createCalls.length
+    expect(engine.getSnapshot().canSubmitMessage).toBe(false)
     expect(engine.submit("must wait for snapshot recovery")).toBe(false)
     expect(client.createCalls).toHaveLength(callsBefore)
   })

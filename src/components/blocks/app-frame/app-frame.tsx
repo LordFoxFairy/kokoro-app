@@ -88,6 +88,7 @@ export function AppFrame({
     staging,
     hydrating,
     connection,
+    canSubmitMessage,
     activeId,
   } = engineState
 
@@ -220,7 +221,7 @@ export function AppFrame({
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
   const mode = store ? activeMode(store) : pendingMode
   const modeLocked = hasMessages
-  const canSend = draft.trim().length > 0
+  const canSend = draft.trim().length > 0 && canSubmitMessage
   const conversations = conversationsCtl.conversations
   const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
