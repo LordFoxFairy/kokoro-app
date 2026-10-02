@@ -1,3 +1,13 @@
+## R80 正式 consent 过期恢复源码组件已验收（2026-10-02）
+
+基线 main96b6ac2331893a9093d088a0b7f82b8fbb9c2e26。原WIN01先只追加126行现Next集成测试，Root真实Next+Redis corrected RED3pass1fail64filteredskip；HTML过期403而非正式空303/login。route局部GREEN后Root全68与完整2298测试发现finalproxy覆写no-referrer，保该真实失败/断言，精确POST路径proxy补策略。
+
+最终三source/test冻结，独立Sol两轮0P0/P1/P2。Root真实Next+共享Redis独有origin+Chromium fixture68pass0fail0skip20.99s（/tmp/kokoro-web-r80-consent-root-full-next-final.log）；Root完整Node22 pnpm check exit0：246contract/50architecture/2298unit0fail0skip，lint/typecheck/build0（/tmp/kokoro-web-r80-consent-root-full-check-final.log）。原Next/BFFfixture句柄终态并由afterAll回收临时目录/独有CSRF键，不reset共享状态。
+
+HTML失效只空303固定/login+精确Path清CSRF cookie，不重放旧签名query、不造连接/重试页；JSON403、Origin/query/issuer/form/decision检查、GETDEL、Redis异常503与owner状态语义保持。finalproxy仅exact consent POST加更严格no-referrer，不影响其他路径/方法/CSP。原所有旧测试断言零删除/修改。
+
+这是真实Web/Redis/Chromium组件门，upstream IAM/BFF为该既有fixture替身，不称真实IAM owner、账户完整登录、模型两轮/刷新/文件或Billing费用链已通过。下一实际旅程需已发布clean六owner/Root exactpins，完整Wave0–7仍未闭环。Root仅提交本三代码/测试+此当前证据前缀，旧全文原字节如下。
+
 ## R80 项目关联独立任务源码验收候选（2026-10-02）
 
 Root 当前验收基线 main dc330a99332be28bb74a4fa2d2196ba8425f9dc5；BFF479d4e8/public5.0.0 固定契约保持。R79五D0通过独立Astra；R80原15source/tests先真实RED66pass8fail→78GREEN。首次独立source审发现whole surface卸载后旧回执reload的P2，原writer再真实RED31pass2fail→聚焦33/定向83GREEN；两文件窄修后独立Astra复审0P0/P1/P2。Root fresh完整Node22 pnpm check实际exit0：246contract/50architecture/2294unit0fail0skip及lint/typecheck/build0，日志/tmp/kokoro-web-r80-p2-root-full-check.log。修前Root2290以下证据不替代本次新hash。

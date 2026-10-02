@@ -107,6 +107,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     response.headers.set("Cache-Control", "no-store")
     response.headers.set("Referrer-Policy", path === "/iam/verify-email" ? "no-referrer" : "same-origin")
   }
+  if (request.method === "POST" && path === "/iam/interactions/consent") {
+    response.headers.set("Referrer-Policy", "no-referrer")
+  }
   // Only exact binary GET paths suppress referrer data at the final Next
   // boundary. Do not accept arbitrary percent escapes or double decoding here.
   if (request.method === "GET" && request.nextUrl.search === ""

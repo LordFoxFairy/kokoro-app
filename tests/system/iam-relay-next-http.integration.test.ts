@@ -1370,6 +1370,132 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     expect((result.headers["set-cookie"] as string[] | undefined)?.some((value) => value.includes("kokoro-issuer"))).not.toBe(true)
     expect(receivedPaths.splice(0)).toEqual(["/iam/sign-in/email", "/iam/oauth2/continue"])
   })
+
+  async function expireIssuedConsentNonce(token: string): Promise<void> {
+    const { createHash } = await import("node:crypto")
+    const key = `${iamCsrfKeyPrefix(`http://localhost:${nextPort}`)}${createHash("sha256").update(token).digest("hex")}`
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          await client.connect()
+          expect(await client.del(key)).toBe(1)
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis delete deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+    expect(await ownCsrfKeys()).not.toContain(key)
+  }
+
+  it("R80 consent recovery restarts an expired HTML nonce at the fixed login path", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    const proof = await interactionProof(path)
+    await expireIssuedConsentNonce(proof.token)
+
+    const response = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      accept: "text/html",
+      cookie: proof.cookie,
+      origin: `http://localhost:${nextPort}`,
+      "x-request-id": "r80-consent-expired-html",
+    })
+
+    expect(response.status).toBe(303)
+    expect(response.body).toBe("")
+    expect(response.headers.location).toBe("/login")
+    expect(response.headers["cache-control"]).toBe("no-store")
+    expect(response.headers["referrer-policy"]).toBe("no-referrer")
+    expect(response.headers["x-request-id"]).toBe("r80-consent-expired-html")
+    expect(response.headers["set-cookie"]).toEqual([
+      "kokoro_iam_csrf=; Path=/iam/interactions/consent; Max-Age=0; HttpOnly; SameSite=Lax",
+    ])
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("R80 consent recovery preserves JSON rejection for an expired nonce", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    const proof = await interactionProof(path)
+    await expireIssuedConsentNonce(proof.token)
+
+    const response = await rawPost(nextPort, path, `csrf_token=${proof.token}&decision=agree`, {
+      accept: "application/json",
+      cookie: proof.cookie,
+      origin: `http://localhost:${nextPort}`,
+      "x-request-id": "r80-consent-expired-json",
+    })
+
+    expect(response.status).toBe(403)
+    expect(JSON.parse(response.body)).toEqual({
+      error: { code: "iam_interaction_csrf_rejected", message: "IAM interaction was rejected" },
+    })
+    expect(response.headers.location).toBeUndefined()
+    expect(response.headers["set-cookie"]).toBeUndefined()
+    expect(response.headers["cache-control"]).toBe("no-store")
+    expect(response.headers["x-request-id"]).toBe("r80-consent-expired-json")
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("R80 consent recovery rejects origin and malformed query before HTML recovery", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    const proof = await interactionProof(path)
+    await expireIssuedConsentNonce(proof.token)
+    const common = {
+      accept: "text/html",
+      cookie: proof.cookie,
+      "x-request-id": "r80-consent-validation-order",
+    }
+    const body = `csrf_token=${proof.token}&decision=agree`
+
+    const maliciousOrigin = await rawPost(nextPort, path, body, {
+      ...common,
+      origin: "https://evil.example",
+    })
+    const missingOrigin = await rawPost(nextPort, path, body, common)
+    const malformedQuery = await rawPost(nextPort, "/iam/interactions/consent?sig=%2BAb&sig=duplicate&scope=openid", body, {
+      ...common,
+      origin: `http://localhost:${nextPort}`,
+    })
+
+    expect(maliciousOrigin.status).toBe(403)
+    expect(JSON.parse(maliciousOrigin.body)).toMatchObject({ error: { code: "iam_interaction_origin_rejected" } })
+    expect(maliciousOrigin.headers.location).toBeUndefined()
+    expect(missingOrigin.status).toBe(403)
+    expect(JSON.parse(missingOrigin.body)).toMatchObject({ error: { code: "iam_interaction_origin_rejected" } })
+    expect(missingOrigin.headers.location).toBeUndefined()
+    expect(malformedQuery.status).toBe(404)
+    expect(JSON.parse(malformedQuery.body)).toMatchObject({ error: { code: "iam_interaction_not_found" } })
+    expect(malformedQuery.headers.location).toBeUndefined()
+    expect(receivedPaths).toEqual([])
+  })
+
+  it("R80 consent recovery preserves owner 503 and rejects its replayed nonce as JSON", async () => {
+    const path = "/iam/interactions/consent?sig=%2BAb&scope=openid"
+    consentStatus = 503
+    const proof = await interactionProof(path)
+    const body = `csrf_token=${proof.token}&decision=agree`
+    const common = {
+      cookie: proof.cookie,
+      origin: `http://localhost:${nextPort}`,
+    }
+
+    const ownerFailure = await rawPost(nextPort, path, body, { ...common, accept: "text/html" })
+    expect(ownerFailure.status).toBe(503)
+    expect(JSON.parse(ownerFailure.body)).toMatchObject({ error: { code: "iam_interaction_unavailable" } })
+    expect(ownerFailure.headers.location).toBeUndefined()
+    expect(receivedPaths).toEqual(["/iam/oauth2/consent"])
+
+    const replay = await rawPost(nextPort, path, body, { ...common, accept: "application/json" })
+    expect(replay.status).toBe(403)
+    expect(JSON.parse(replay.body)).toMatchObject({ error: { code: "iam_interaction_csrf_rejected" } })
+    expect(replay.headers.location).toBeUndefined()
+    expect(receivedPaths).toEqual(["/iam/oauth2/consent"])
+  })
 })
 
 
