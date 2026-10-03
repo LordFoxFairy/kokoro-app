@@ -1,3 +1,11 @@
+## R156 Web 受控测试切片发布（2026-10-03；`b09ec815…` 已推送，用户原页仍失败）
+
+Web main 已发布并推送 commit `b09ec8156f2853b8908b6e8d3accc27473597ad7`，Root 进程 14958 确认实际 `HEAD=origin/main` 且工作树 clean。发布的五路径中三个测试文件与进程 81876 完整工程门所验冻结内容逐字节相同；该上一轮同源门为 contract 256、architecture 50、lint、typecheck、164 files / 2360 tests / 0 skip 与 Next build 全通过，Redis 15 当轮终态为 `DBSIZE=0`，独立审查 `ffba…` 为 0 项发现。本轮只另执行了 Node22 定向 ESLint，Root 进程 28485 exit 0；没有重跑 2360 项，故不把 14958 或 28485 冒称新的完整工程门。
+
+这是测试源码的发布，不是用户 E2E 恢复：原用户 `conv_ffd7` 仍为 P0，尚未取得其 hydration、DOM、session 或实际刷新结果；历史 pending-refresh signout 500 根因仍未知。Web Move consumer 尚未迁移，本切片没有 Product 生产源码变化，也未触发正式运行组合验证。
+
+---
+
 ## R155 Web 测试资源终态回收（2026-10-03；完整工程门通过，用户原页仍失败）
 
 真实资源 RED 先证明两处 fixture-owned Redis 遗漏：IAM relay 68 个业务断言通过但终态报告动态 origin 的 `oidc_state count=3`；Product Session store 8 个业务断言通过但跨 origin 损坏 alias 留下一个 tombstone。测试现按 exact origin/prefix 与启动前 baseline 只回收本 fixture 新增事实，不删除 baseline 或其它 owner 数据；IAM 在停 owned child 后统一回收 CSRF/OIDC state/Product Session delta，并用三类长生命周期 sentinel 证明 baseline 保留后再精确删除 sentinel；Product 跨 origin case 同时删除自己的 record/tombstone。终态资源清理与资源扫描各自设有 2 秒总界；用例内对自有损坏 alias 的直接精确删除仍由该用例 `finally` 负责。清理错误不阻止终态 delta oracle，也不被吞掉。独立只读审 `b26be7…` 的两个 P2（sentinel TTL 与 Product cleanup 总期限/错误汇总）已收口。
