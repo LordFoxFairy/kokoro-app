@@ -1,3 +1,18 @@
+## R141 会话列表限定验收（2026-10-03；系统切片与工程门通过，待 Git）
+
+| ID | 已执行行为 | 结果 |
+| --- | --- | --- |
+| R141-01 | 真实 Next+Chromium：会话列表 HTTP 200 body 未结束时，10 秒预算后显示列表内错误与人工 Retry；恢复后由新请求展示权威列表 | PASS |
+| R141-02 | 真实 Next+Chromium：会话列表 503 不触发登录风暴，列表内 Retry 恢复权威列表 | PASS |
+
+Root 严格 RED 进程 47705 为 2 fail；GREEN 进程 94936 两节点通过，完整 OIDC system file 进程 14725 为 45 pass / 0 skip（manifest 标识前缀 `5d01351f`、日志标识前缀 `46460d24`）。完整工程门进程 15328 已通过 contract 256、architecture 50、lint、typecheck并得到 2351 pass / 1 fail / 0 skip；唯一旧 fetch options 断言已迁移 AbortSignal，当时最终全门和 build 尚待 Root 复验。
+
+Root 最新完整 `pnpm check` 进程 96991 自然 exit 0（127.231s）：contract 256、architecture 50、lint、typecheck、164 files / 2352 tests / 0 skip、build 全通过，包含 OIDC 45 与 IAM relay 68；manifest SHA-256 `448bdb142b2a24e7b9bb57652ac0509149d8368aa2c7f5222a7ec1c4b8718711`，日志 SHA-256 `61f7bec6e517538d6a705a2ae6eac6e4059e8d0bcd65c3d2cd1eb54efed47dde`。进程 92828 曾在既有 pending-refresh signout 节点出现 HTTP 500 / `next_runtime_error`；后续通过未定位其间歇根因，稳定性调查仍未关闭，不记为已修复。
+
+该证据不覆盖 snapshot、分页、其它 GET、全部真实 owner 或当前用户 IAB；候选尚待 Root Git。
+
+---
+
 ## R139 限定验收结果（2026-10-03；Root 工程与系统切片通过，待 Git）
 
 | ID | 已执行行为 | 结果 |

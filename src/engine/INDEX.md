@@ -1,5 +1,9 @@
 # engine — 会话引擎（状态机 + 浏览器 I/O 唯一编排者）
 
+## R141 会话列表读取边界
+
+`client.ts` 的 `listSessions` 使用单一 10 秒预算覆盖 fetch、成功 body 与错误 body 的读取，超时 abort 后按既有 network failure 交由 rail 显式显示并等待人工 Retry。该边界只属于会话列表 GET；snapshot、分页以外的其它 GET、POST 与 SSE 不由本切片改变。rail 仅在列表已成功加载、无错误且为空时隐藏 direct 空列表，loading/error/Retry 必须可见。
+
 ## 职责
 
 显式会话状态机与 framework-free 引擎：snapshot-first 水合、SSE 流句柄、HITL 决策暂存、

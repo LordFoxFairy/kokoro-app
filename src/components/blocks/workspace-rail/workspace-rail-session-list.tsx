@@ -93,7 +93,7 @@ export function WorkspaceRailSessionList({
 
   return (
     <nav
-      className={cn(itemStyles.list, !projectActive && !hasConversations && itemStyles.emptyDirectList)}
+      className={cn(itemStyles.list, !projectActive && !hasConversations && !listLoading && !listError && itemStyles.emptyDirectList)}
       aria-label={projectActive ? t("firstSite.projectConversations") : t("rail.directChatsAria")}
       data-conversation-list={projectActive ? "project-conversation" : "direct"}
     >

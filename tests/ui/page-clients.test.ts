@@ -17,6 +17,11 @@ describe("页面 Chat client transport selection", () => {
 
     await browserListClient({ preview: false }).listSessions()
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/session/sessions?scope=direct", { cache: "no-store" })
+    expect(fetchMock).toHaveBeenCalledWith("/api/session/sessions?scope=direct", {
+      cache: "no-store",
+      signal: expect.any(AbortSignal),
+    })
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect((options.signal as AbortSignal).aborted).toBe(false)
   })
 })

@@ -1,3 +1,15 @@
+## R141 会话列表有界读取（2026-10-03；限定系统切片与工程门通过，待 Git）
+
+`listSessions` 现以单一 10 秒预算覆盖 `fetch`、成功 JSON body 与错误 JSON body 的完整读取；超时终止真实请求并沿既有 network failure 进入人工 Retry，不建立自动重试。桌面 rail 只在已加载成功、无错误且确实为空时隐藏 direct 空列表；loading、错误和 Retry 保持可见。
+
+Root 的严格 direct-list RED 进程 47705 为 2 fail；冻结实现后进程 94936 两个 R141 节点通过，进程 14725 的完整 OIDC system file 为 45 pass / 0 skip，manifest 标识前缀 `5d01351f`、日志标识前缀 `46460d24`。随后完整工程门进程 15328 已通过 contract 256、architecture 50、lint、typecheck，并到达 2351 pass / 1 fail / 0 skip；唯一失败是旧 `page-clients` 精确 fetch options 断言未包含新 AbortSignal，现已按实际调用迁移，当时仍待 Root 最终完整复验与 build。
+
+Root 最新完整 `pnpm check` 进程 96991 自然 exit 0（127.231s）：contract 256、architecture 50、lint、typecheck、164 files / 2352 tests / 0 skip 与 build 全通过，包含 OIDC 45 与 IAM relay 68；manifest SHA-256 `448bdb142b2a24e7b9bb57652ac0509149d8368aa2c7f5222a7ec1c4b8718711`，日志 SHA-256 `61f7bec6e517538d6a705a2ae6eac6e4059e8d0bcd65c3d2cd1eb54efed47dde`。此前进程 92828 曾在既有 pending-refresh signout 节点出现 HTTP 500 / `next_runtime_error`；其后完整 OIDC 45 与最新全门通过只证明当前复验成功，未定位该间歇失败根因，稳定性调查仍未关闭，本文不宣称已修复。
+
+本切片只证明 fixture 覆盖的会话列表未结束 body、503、显式 Retry 与恢复行为；不证明 snapshot、分页、其它 GET、全部真实 owner 或当前用户 IAB 已闭环。候选尚待 Root Git。
+
+---
+
 ## R139 Product Session 有界恢复（2026-10-03；Root 工程与限定系统验证通过，待 Git）
 
 当前候选把 `/api/auth/session` 收敛为共享、10 秒有界且可真实 abort 的探针：只有 HTTP 200 的显式 `authenticated:false` 才进入匿名登录，可信非空 subject 才进入 live；503、网络、超时、坏响应与 storage 故障均 fail closed 到可访问 Retry。已认证重核验故障保留 Chat 树与旧 subject，同时立即撤销 Project reads；身份变化清 Web 自有 Conversation 索引并硬刷新，不把新主体采纳到旧 engine。同 subject 第二文档通过非授权性质的 UI marker 保留原标签页索引与草稿。

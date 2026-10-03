@@ -9,7 +9,7 @@ import type { Duplex } from "node:stream"
 
 import { createClient } from "redis"
 import { decode } from "next-auth/jwt"
-import { chromium, type Browser, type Page, type Response as BrowserResponse } from "@playwright/test"
+import { chromium, type Browser, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
@@ -66,7 +66,11 @@ async function sessionProbeProxy(nextPort: number): Promise<{
   close: () => Promise<void>
   setFault: (fault: SessionProbeFault) => void
   releasePending: () => void
+  setListBodyPending: (pending: boolean) => void
+  releaseListBodies: () => void
   sessionRequests: () => number
+  listRequests: () => number
+  heldListBodies: () => number
   loginRequests: () => number
   upgradeDiagnostics: () => readonly { path: string; requests: number }[]
   connectDiagnostics: () => Readonly<{ requests: number; established: boolean }>
@@ -74,8 +78,11 @@ async function sessionProbeProxy(nextPort: number): Promise<{
 }> {
   let fault: SessionProbeFault = "pass"
   let probes = 0
+  let lists = 0
   let logins = 0
+  let holdListBody = false
   const pending = new Set<{ request: import("node:http").IncomingMessage; response: import("node:http").ServerResponse }>()
+  const pendingListBodies = new Set<{ response: import("node:http").ServerResponse; tail: Buffer }>()
   const resources = new Map<string, { requests: number; upstreamStatuses: number[] }>()
   const upgrades = new Map<string, number>()
   const upstreamRequests = new Set<ReturnType<typeof httpRequest>>()
@@ -93,7 +100,18 @@ async function sessionProbeProxy(nextPort: number): Promise<{
       path: `${target.pathname}${target.search}`, headers: { ...request.headers, host: `localhost:${nextPort}` } }, (reply) => {
       if (resource.upstreamStatuses.length < 8) resource.upstreamStatuses.push(reply.statusCode ?? 0)
       response.writeHead(reply.statusCode ?? 502, reply.headers)
-      reply.pipe(response)
+      if (holdListBody && request.method === "GET" && target.pathname === "/api/session/sessions" && reply.statusCode === 200) {
+        const chunks: Buffer[] = []
+        reply.on("data", (chunk: Buffer) => chunks.push(chunk))
+        reply.once("end", () => {
+          const body = Buffer.concat(chunks)
+          const split = Math.max(0, body.length - 1)
+          if (split > 0) response.write(body.subarray(0, split))
+          const held = { response, tail: body.subarray(split) }
+          pendingListBodies.add(held)
+          response.once("close", () => pendingListBodies.delete(held))
+        })
+      } else reply.pipe(response)
     })
     upstreamRequests.add(upstream)
     upstream.once("close", () => upstreamRequests.delete(upstream))
@@ -110,6 +128,7 @@ async function sessionProbeProxy(nextPort: number): Promise<{
   const server = createServer((request, response) => {
     const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
     if (target.pathname === "/login") logins += 1
+    if (request.method === "GET" && target.pathname === "/api/session/sessions") lists += 1
     if (request.method === "GET" && target.pathname === "/api/auth/session") {
       probes += 1
       if (fault === "pending") {
@@ -162,6 +181,8 @@ async function sessionProbeProxy(nextPort: number): Promise<{
         held.response.destroy()
       }
       pending.clear()
+      for (const held of pendingListBodies) held.response.destroy()
+      pendingListBodies.clear()
       for (const request of upstreamRequests) request.destroy()
       for (const socket of tunnelSockets) socket.destroy()
       upstreamRequests.clear()
@@ -175,7 +196,17 @@ async function sessionProbeProxy(nextPort: number): Promise<{
         forward(held.request, held.response)
       }
     },
+    setListBodyPending: (next) => { holdListBody = next },
+    releaseListBodies: () => {
+      holdListBody = false
+      for (const held of pendingListBodies) {
+        pendingListBodies.delete(held)
+        if (!held.response.destroyed) held.response.end(held.tail)
+      }
+    },
     sessionRequests: () => probes,
+    listRequests: () => lists,
+    heldListBodies: () => pendingListBodies.size,
     loginRequests: () => logins,
     upgradeDiagnostics: () => [...upgrades.entries()].slice(0, 20).map(([path, requests]) => ({ path, requests })),
     connectDiagnostics: () => ({ requests: connectRequests, established: connectEstablished }),
@@ -413,6 +444,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityUserId = "user-one"
   let identityTenantId = "tenant-one"
   let identityStatus = 200
+  let sessionListStatus = 200
   let invalidIdentityShape = false
   let slowIdentity = false
   let output = ""
@@ -523,6 +555,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       location_path: safeLocationPath(response.headers),
       bff_paths: bffPathnames(paths.slice(pathStart)),
       next_error_categories: nextErrorCategories(output.slice(outputStart)),
+      next_error_excerpt: safeNextErrorExcerpt(output.slice(outputStart), [clientSecret, "rp-bff-secret", authSecret]),
     })}`
   }
 
@@ -600,6 +633,63 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     } catch {
       throw new Error(await browserProbeDiagnostic(stage, page, response, proxy, outputStart))
     }
+  }
+
+  async function listFailureDiagnostic(
+    stage: string,
+    page: Page,
+    proxy: Awaited<ReturnType<typeof sessionProbeProxy>>,
+  ): Promise<string> {
+    const directList = page.locator('[data-conversation-list="direct"]')
+    const listErrors = page.locator('[data-conversation-list="direct"] [role="alert"]')
+    const retryButtons = page.locator('[data-conversation-list="direct"] button')
+      .filter({ hasText: /Retry|重试/u })
+    const listLoading = page.locator('[data-conversation-list="direct"] [role="status"]')
+    const visibleCount = async (locator: Locator): Promise<number> => {
+      const count = await locator.count()
+      let visible = 0
+      for (let index = 0; index < count; index += 1) {
+        if (await locator.nth(index).isVisible().catch(() => false)) visible += 1
+      }
+      return visible
+    }
+    const record = {
+      stage,
+      pathname: (() => { try { return new URL(page.url()).pathname } catch { return "<invalid>" } })(),
+      main_visible: await page.locator('[data-app-frame-main="true"]').isVisible().catch(() => false),
+      desktop_rail_count: await page.locator('[data-desktop-rail="true"]').count(),
+      desktop_rail_collapsed: await page.locator('[data-desktop-rail="true"]').getAttribute("data-collapsed"),
+      direct_list_count: await directList.count(),
+      direct_list_visible: await visibleCount(directList),
+      direct_list_display: await directList.evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).display)),
+      list_error_count: await listErrors.count(),
+      list_error_visible: await visibleCount(listErrors),
+      retry_count: await retryButtons.count(),
+      retry_visible: await visibleCount(retryButtons),
+      list_loading_count: await listLoading.count(),
+      list_loading_visible: await visibleCount(listLoading),
+      list_requests: proxy.listRequests(),
+      held_list_bodies: proxy.heldListBodies(),
+      login_requests: proxy.loginRequests(),
+      list_upstream_statuses: proxy.resourceDiagnostics()
+        .find((entry) => entry.path === "/api/session/sessions")?.upstream_statuses ?? [],
+    }
+    const serialized = JSON.stringify(record)
+    const screenshotDirectory = process.env.KOKORO_TEST_SCREENSHOT_DIR?.trim()
+    if (screenshotDirectory) {
+      await mkdir(screenshotDirectory, { recursive: true })
+      await page.screenshot({ path: path.join(screenshotDirectory, `r141-${stage}.png`), fullPage: true }).catch(() => undefined)
+      await writeFile(path.join(screenshotDirectory, `r141-${stage}.json`), serialized, { encoding: "utf8", mode: 0o600 })
+    }
+    return `${stage} list diagnostic: ${serialized}`
+  }
+
+  async function expandDesktopRail(page: Page): Promise<void> {
+    const rail = page.locator('[data-desktop-rail="true"]')
+    await rail.waitFor({ state: "visible", timeout: 15_000 })
+    if (await rail.getAttribute("data-collapsed") === "false") return
+    await page.getByRole("button", { name: /Expand sidebar|展开侧栏/u }).first().click()
+    await expect.poll(() => rail.getAttribute("data-collapsed"), { timeout: 10_000 }).toBe("false")
   }
 
   async function directAnonymousControlDiagnostic(): Promise<string> {
@@ -815,6 +905,21 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             const timer = setTimeout(() => response.end(payload), 6_000)
             response.once("close", () => clearTimeout(timer))
           } else response.end(payload)
+          return
+        }
+        if (request.method === "GET" && request.url === "/v1/sessions?scope=direct") {
+          expect(request.headers.cookie).toBeUndefined()
+          expect(request.headers["x-kokoro-service"]).toBe("web-bff")
+          expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
+          expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+          response.writeHead(sessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify(sessionListStatus === 200 ? {
+            data: { sessions: [
+              { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+              { session_id: "session-list-b", title: "Bounded list beta", updated_at: "2026-10-03T11:00:00.000Z" },
+            ], next_cursor: null },
+            meta: { request_id: "req_r141_list" },
+          } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
           return
         }
         if (request.url?.startsWith("/iam/oauth2/authorize?")) {
@@ -1124,6 +1229,97 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await context.close()
     } finally {
       await browser.close()
+    }
+  }, 45_000)
+
+  it("R141 bounds an unfinished session-list response and restores the list only after Retry", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let page: Page | undefined
+    sessionListStatus = 200
+    try {
+      proxy.setListBodyPending(true)
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      const context = await browser.newContext()
+      page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      const loginRequestsAfterAdmission = proxy.loginRequests()
+      await expandDesktopRail(page)
+      await expect.poll(() => proxy.listRequests(), { timeout: 15_000 }).toBe(1)
+      await expect.poll(() => proxy.heldListBodies(), { timeout: 10_000 }).toBe(1)
+      const loginRequestsAtListBarrier = proxy.loginRequests()
+      expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
+
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const alert = directList.getByRole("alert")
+      const retry = alert.getByRole("button", { name: /Retry|重试/u })
+      await alert.waitFor({ timeout: 15_000 })
+      expect(new URL(page.url()).pathname).toBe("/app")
+      expect(proxy.listRequests()).toBe(1)
+      expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
+
+      proxy.releaseListBodies()
+      await retry.click()
+      await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
+      await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
+      await context.close()
+    } catch (error) {
+      if (page === undefined) throw error
+      throw new AggregateError([error], await listFailureDiagnostic("unfinished_body", page, proxy))
+    } finally {
+      sessionListStatus = 200
+      proxy.releaseListBodies()
+      try { await browser?.close() }
+      finally { await proxy.close() }
+    }
+  }, 50_000)
+
+  it("R141 keeps a 503 session list on an explicit Retry surface and restores the authoritative list", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let page: Page | undefined
+    sessionListStatus = 503
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      const context = await browser.newContext()
+      page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      const loginRequestsAfterAdmission = proxy.loginRequests()
+      await expandDesktopRail(page)
+      await expect.poll(() => proxy.listRequests(), { timeout: 15_000 }).toBe(1)
+      const loginRequestsAtListBarrier = proxy.loginRequests()
+      expect(loginRequestsAtListBarrier).toBe(loginRequestsAfterAdmission)
+
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const alert = directList.getByRole("alert")
+      const retry = alert.getByRole("button", { name: /Retry|重试/u })
+      await alert.waitFor({ timeout: 10_000 })
+      expect(new URL(page.url()).pathname).toBe("/app")
+      expect(proxy.listRequests()).toBe(1)
+      expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
+
+      sessionListStatus = 200
+      await retry.click()
+      await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(2)
+      await page.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await page.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => alert.count(), { timeout: 10_000 }).toBe(0)
+      expect(proxy.loginRequests()).toBe(loginRequestsAtListBarrier)
+      await context.close()
+    } catch (error) {
+      if (page === undefined) throw error
+      throw new AggregateError([error], await listFailureDiagnostic("service_unavailable", page, proxy))
+    } finally {
+      sessionListStatus = 200
+      try { await browser?.close() }
+      finally { await proxy.close() }
     }
   }, 45_000)
 

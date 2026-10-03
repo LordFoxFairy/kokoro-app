@@ -190,16 +190,23 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       }
       const query = queryParams.size > 0 ? `?${queryParams.toString()}` : ""
       const target = url(`${sessionsPath()}${query}`)
-      let response: Response
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 10_000)
       try {
-        response = await fetch(target, { cache: "no-store" })
+        const response = await fetch(target, { cache: "no-store", signal: controller.signal })
+        if (!response.ok) {
+          throw await httpError("GET", target, response)
+        }
+        return await parseJsonResponse(response, (raw) => sessionListSchema.parse(raw))
       } catch (error) {
+        if (controller.signal.aborted) {
+          throw new SessionClientError("network", describeUnknown(error))
+        }
+        if (error instanceof SessionClientError) throw error
         throw new SessionClientError("network", describeUnknown(error))
+      } finally {
+        clearTimeout(timer)
       }
-      if (!response.ok) {
-        throw await httpError("GET", target, response)
-      }
-      return parseJsonResponse(response, (raw) => sessionListSchema.parse(raw))
     },
 
     createMessage: async (sessionId, input) => {
