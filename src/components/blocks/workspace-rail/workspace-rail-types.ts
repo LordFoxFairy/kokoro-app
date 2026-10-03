@@ -45,7 +45,7 @@ export type WorkspaceRailProps = {
   // 待批会话 id 集（HITL-NOTIFY）：命中的条目上挂待批徽标（跨会话可见性）。
   awaitingIds: ReadonlySet<string>
   onSelectConversation: (id: string) => void
-  onDeleteConversation: (id: string) => void
+  onDeleteConversation: (id: string) => Promise<boolean>
   onRequestDelete?: (conversation: ConversationSummary) => void
   /** Stable desktop fallback after a destructive delete removes the opener row. */
   deleteDialogFallbackFocusRef?: RefObject<HTMLButtonElement | null>

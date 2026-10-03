@@ -341,6 +341,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "rail.deleteConfirmTitle": "Delete chat?",
   "rail.deleteConfirmDescription": "Deleting “{title}” removes this conversation from your recent list.",
   "rail.deleteConfirm": "Delete chat",
+  "rail.deleteFailed": "Delete failed. The chat is still available; try again.",
   "rail.deleteCancel": "Cancel",
   "shell.resizeAria": "Resize sidebar",
   "shell.openNav": "Open chat navigation",

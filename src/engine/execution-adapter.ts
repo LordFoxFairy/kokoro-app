@@ -61,6 +61,7 @@ export type SessionExecutionAdapter = {
   cancelRun: (args: CancelRunArgs) => Promise<RunControlReceipt>
   fetchSnapshot: (sessionId: string) => Promise<SessionSnapshot | null>
   deleteSession: (sessionId: string) => Promise<DeleteSessionReceipt>
+  abortDelete: () => void
   openStream: (
     sessionId: string,
     resumeCursor: EventCursor | null,
@@ -104,6 +105,7 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
   let streamGeneration = 0
   let activeStream: StreamContext | null = null
   const snapshotControllers = new Set<AbortController>()
+  const deleteControllers = new Set<AbortController>()
 
   function fetchSnapshot(sessionId: string): Promise<SessionSnapshot | null> {
     for (const controller of snapshotControllers) controller.abort()
@@ -122,6 +124,16 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
       stream.handle?.close()
       stream.handle = null
     }
+  }
+
+  function deleteSession(sessionId: string): Promise<DeleteSessionReceipt> {
+    const controller = new AbortController()
+    deleteControllers.add(controller)
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+    return deps.client.deleteSession(sessionId, deps.scope, controller.signal).finally(() => {
+      clearTimeout(timeout)
+      deleteControllers.delete(controller)
+    })
   }
 
   function flushStream(stream: StreamContext): void {
@@ -236,7 +248,11 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
         args.commandId,
       ),
     fetchSnapshot,
-    deleteSession: (sessionId) => deps.client.deleteSession(sessionId),
+    deleteSession,
+    abortDelete: () => {
+      for (const controller of deleteControllers) controller.abort()
+      deleteControllers.clear()
+    },
     openStream,
     closeStream: () => {
       for (const controller of snapshotControllers) controller.abort()

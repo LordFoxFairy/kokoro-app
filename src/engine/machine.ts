@@ -158,6 +158,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
+  let deleteIntentGeneration = 0
+  let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
   let unsubscribeStore: (() => void) | null = null
 
@@ -1074,19 +1076,40 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // 新会话本地新建、服务端必然不存在：不发无谓的 snapshot 请求。
   }
 
-  function deleteConversation(id: string): void {
-    if (disposed || !store) {
-      return
+  function deleteConversation(id: string): Promise<boolean> {
+    if (disposed || !store || !store.conversations.some((entry) => entry.id === id)) {
+      return Promise.resolve(false)
     }
-    if (id === store.activeId) {
-      abandonActiveRun()
+    if (deleteIntent !== null) {
+      return deleteIntent.targetId === id ? deleteIntent.promise : Promise.resolve(false)
     }
-    // 服务端软删除 fire-and-forget：本地移除不等网络（失败仅记日志；
-    // 服务端残留由 P1 会话列表服务端化对账——technical/16 入册边界）。
-    void execution.deleteSession(id).catch((error: unknown) => {
-      console.error("session soft-delete failed", id, error)
-    })
-    activateConversation(removeConversation(store, id, createId("conv"), now()))
+    const generation = ++deleteIntentGeneration
+    const promise = execution.deleteSession(id)
+      .then(() => {
+        const intent = deleteIntent
+        if (disposed || intent === null || intent.generation !== generation || intent.targetId !== id || !store) return false
+        deleteIntent = null
+        // BFF's committed delete owns durable Run cancellation. Only its strict
+        // receipt authorizes the local projection switch.
+        if (!store.conversations.some((entry) => entry.id === id)) return true
+        const wasActive = store.activeId === id
+        const next = removeConversation(store, id, createId("conv"), now())
+        if (wasActive) {
+          activateConversation(next)
+        } else {
+          // The user may have moved to another thread while DELETE was in
+          // flight. Commit only the list projection; keep its draft/run state.
+          commitStore(next)
+          notify()
+        }
+        return true
+      })
+      .catch(() => false)
+      .finally(() => {
+        if (deleteIntent?.generation === generation && deleteIntent.targetId === id) deleteIntent = null
+      })
+    deleteIntent = { targetId: id, generation, promise }
+    return promise
   }
 
   function setMode(mode: AgentMode): void {
@@ -1152,6 +1175,9 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   function dispose(): void {
     disposed = true
+    deleteIntentGeneration += 1
+    deleteIntent = null
+    execution.abortDelete()
     snapshot = buildSnapshot()
     closeStream()
     clearReattachTimer()

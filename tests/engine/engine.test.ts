@@ -2022,12 +2022,12 @@ describe("typed Skill 选择的会话边界", () => {
     buildEngine(twoConversations)
     await settle()
     engine.setSelectedSkillSourceRefs(["skill:a.v1"])
-    engine.deleteConversation("conv_b")
+    await engine.deleteConversation("conv_b")
     engine.submit("still A")
     await settle()
     expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual(["skill:a.v1"])
 
-    engine.deleteConversation("conv_a")
+    await engine.deleteConversation("conv_a")
     engine.submit("fallback")
     await settle()
     expect(client.createCalls.at(-1)?.body.selected_skill_source_refs).toEqual([])
@@ -2164,13 +2164,13 @@ describe("运行中插话（steer）", () => {
   })
 
 describe("会话软删除（technical/16 SD-W1）", () => {
-  it("deleteConversation：本地立即移除 + 服务端软删除 fire-and-forget", async () => {
+  it("deleteConversation：服务端确认删除后才移除本地会话", async () => {
     buildEngine()
     engine.submit("将要被删除的会话")
     await settle()
     const doomed = engine.getSnapshot().store?.activeId
     if (doomed === undefined || doomed === null) throw new Error("active conversation expected")
-    engine.deleteConversation(doomed)
+    await engine.deleteConversation(doomed)
     const remaining = engine.getSnapshot().store?.conversations ?? []
     expect(remaining.some((entry) => entry.id === doomed)).toBe(false)
     expect(client.deleteCalls).toEqual([doomed])

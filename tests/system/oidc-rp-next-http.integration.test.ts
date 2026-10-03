@@ -445,6 +445,17 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityTenantId = "tenant-one"
   let identityStatus = 200
   let sessionListStatus = 200
+  let deleteSessionStatus = 200
+  let holdDeleteSession = false
+  let deleteSessionCommitted = false
+  let releaseDeleteSession: (() => void) | undefined
+  const releaseHeldDeleteSession = (): void => {
+    const release = releaseDeleteSession
+    if (release !== undefined) release()
+  }
+  const deleteSessionRequests: { url: string; idempotencyKey: string | undefined }[] = []
+  let sessionSnapshotRequests = 0
+  const sessionBoundaryRequests: { method: string; path: string }[] = []
   let invalidIdentityShape = false
   let slowIdentity = false
   let output = ""
@@ -684,6 +695,32 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     return `${stage} list diagnostic: ${serialized}`
   }
 
+  async function deleteFailureDiagnostic(stage: string, page: Page): Promise<string> {
+    const screenshotDirectory = process.env.KOKORO_TEST_SCREENSHOT_DIR?.trim()
+    let screenshot: string | null = null
+    const record = {
+      pathname: (() => { try { return new URL(page.url()).pathname } catch { return "<invalid>" } })(),
+      session_requests: sessionBoundaryRequests.slice(-20),
+      snapshot_requests: sessionSnapshotRequests,
+      delete_requests: deleteSessionRequests.length,
+      direct_rows: await page.locator('[data-conversation-list="direct"] [data-conversation-id]').count().catch(() => -1),
+      active_rows: await page.locator('[data-conversation-list="direct"] [aria-pressed="true"]').count().catch(() => -1),
+      composer_visible: await page.locator('[data-slot="composer-input"]').isVisible().catch(() => false),
+      dialog_visible: await page.getByRole("alertdialog").isVisible().catch(() => false),
+    }
+    if (screenshotDirectory) {
+      await mkdir(screenshotDirectory, { recursive: true })
+      screenshot = path.join(screenshotDirectory, `r143-${stage}.png`)
+      await page.screenshot({ path: screenshot }).catch(() => undefined)
+      await writeFile(
+        path.join(screenshotDirectory, `r143-${stage}.json`),
+        JSON.stringify({ ...record, screenshot }),
+        { encoding: "utf8", mode: 0o600 },
+      )
+    }
+    return `${stage} delete diagnostic: ${JSON.stringify({ ...record, screenshot })}`
+  }
+
   async function expandDesktopRail(page: Page): Promise<void> {
     const rail = page.locator('[data-desktop-rail="true"]')
     await rail.waitFor({ state: "visible", timeout: 15_000 })
@@ -823,6 +860,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       root = await isolatedNext(process.cwd())
       bff = createServer((request, response) => {
         paths.push(request.url ?? "")
+        if (request.url?.startsWith("/v1/sessions")) {
+          sessionBoundaryRequests.push({ method: request.method ?? "<unknown>", path: request.url })
+        }
         if (request.url === "/iam/jwks") {
           expect(request.method).toBe("GET")
           expect(request.headers.authorization).toBeUndefined()
@@ -915,11 +955,66 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           response.writeHead(sessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify(sessionListStatus === 200 ? {
             data: { sessions: [
-              { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+              ...(deleteSessionCommitted ? [] : [
+                { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+              ]),
               { session_id: "session-list-b", title: "Bounded list beta", updated_at: "2026-10-03T11:00:00.000Z" },
             ], next_cursor: null },
             meta: { request_id: "req_r141_list" },
           } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          return
+        }
+        if (
+          request.method === "GET" &&
+          (request.url === "/v1/sessions/session-list-a" || request.url === "/v1/sessions/session-list-a?scope=direct")
+        ) {
+          sessionSnapshotRequests += 1
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({
+            data: {
+              session: {
+                session_id: "session-list-a",
+                title: "Bounded list alpha",
+                owner_id: "user-one",
+                created_at: "2026-10-03T11:59:00.000Z",
+                updated_at: "2026-10-03T12:00:00.000Z",
+              },
+              messages: [{
+                message_id: "message-r143-user-a",
+                role: "user",
+                content: "R143 authoritative conversation A body",
+                status: "completed",
+                created_at: "2026-10-03T12:00:00.000Z",
+              }],
+              execution_process: null,
+              files: [],
+              deliveries: [],
+              deliveries_has_more: false,
+              event_watermark: null,
+            },
+            meta: { request_id: "req_r143_snapshot" },
+          }))
+          return
+        }
+        if (request.method === "DELETE" && request.url?.startsWith("/v1/sessions/session-list-a")) {
+          deleteSessionRequests.push({
+            url: request.url,
+            idempotencyKey: typeof request.headers["idempotency-key"] === "string"
+              ? request.headers["idempotency-key"]
+              : undefined,
+          })
+          const send = (): void => {
+            if (response.destroyed) return
+            response.writeHead(deleteSessionStatus, { "content-type": "application/json", "cache-control": "no-store" })
+            if (deleteSessionStatus === 200) {
+              deleteSessionCommitted = true
+              response.end(JSON.stringify({ data: { status: "deleted" }, meta: { request_id: "req_r143_delete" } }))
+            } else {
+              response.end(JSON.stringify({ error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+            }
+          }
+          if (holdDeleteSession) releaseDeleteSession = send
+          else send()
           return
         }
         if (request.url?.startsWith("/iam/oauth2/authorize?")) {
@@ -1320,6 +1415,140 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       sessionListStatus = 200
       try { await browser?.close() }
       finally { await proxy.close() }
+    }
+  }, 45_000)
+
+  it("R143 keeps the conversation, active draft and list stable until an exact-scope DELETE ACK", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    let page: Page | undefined
+    holdDeleteSession = true
+    deleteSessionStatus = 200
+    deleteSessionCommitted = false
+    deleteSessionRequests.length = 0
+    releaseDeleteSession = undefined
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      await directList.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
+      await conversationA.click()
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(new URL(page.url()).pathname).toBe("/app")
+      await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const listRequestsBeforeDelete = proxy.listRequests()
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.waitFor({ state: "visible", timeout: 10_000 })
+      const draft = "R143 delayed delete keeps this draft"
+      await composer.fill(draft)
+
+      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      const dialog = page.getByRole("alertdialog")
+      await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
+      await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
+
+      expect(deleteSessionRequests).toEqual([{
+        url: "/v1/sessions/session-list-a?scope=direct",
+        idempotencyKey: expect.stringMatching(/^session-mutation:/u),
+      }])
+      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe(draft)
+      await expect.poll(() => directList.getByText("Bounded list alpha", { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+      await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(listRequestsBeforeDelete)
+      await expect.poll(() => dialog.isVisible(), { timeout: 10_000 }).toBe(true)
+      expect(await dialog.getByRole("button", { name: "Delete chat", exact: true }).isDisabled()).toBe(true)
+
+      releaseHeldDeleteSession()
+      await expect.poll(() => directList.getByText("Bounded list alpha", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(listRequestsBeforeDelete + 1)
+      expect(deleteSessionRequests).toHaveLength(1)
+    } catch (error) {
+      if (page === undefined) throw error
+      throw new AggregateError([error], await deleteFailureDiagnostic("delayed_ack", page))
+    } finally {
+      holdDeleteSession = false
+      releaseHeldDeleteSession()
+      releaseDeleteSession = undefined
+      deleteSessionStatus = 200
+      deleteSessionCommitted = false
+      deleteSessionRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
+  it("R143 preserves the conversation and draft on DELETE 503 with visible recovery and no cancel or refresh", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    let page: Page | undefined
+    deleteSessionStatus = 503
+    deleteSessionCommitted = false
+    deleteSessionRequests.length = 0
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    const pathStart = paths.length
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      await directList.getByText("Bounded list alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
+      await conversationA.click()
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      expect(sessionBoundaryRequests).toContainEqual({ method: "GET", path: "/v1/sessions/session-list-a" })
+      expect(new URL(page.url()).pathname).toBe("/app")
+      await expect.poll(() => conversationA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await page.getByText("R143 authoritative conversation A body", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const listRequestsBeforeDelete = proxy.listRequests()
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.waitFor({ state: "visible", timeout: 10_000 })
+      const draft = "R143 rejected delete keeps this draft"
+      await composer.fill(draft)
+
+      await page.getByRole("button", { name: "Delete chat Bounded list alpha" }).click()
+      const dialog = page.getByRole("alertdialog")
+      await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
+      await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
+
+      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe(draft)
+      await expect.poll(() => directList.getByText("Bounded list alpha", { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+      await expect.poll(() => proxy.listRequests(), { timeout: 10_000 }).toBe(listRequestsBeforeDelete)
+      await expect.poll(() => dialog.isVisible(), { timeout: 10_000 }).toBe(true)
+      await dialog.getByRole("alert").waitFor({ state: "visible", timeout: 10_000 })
+      expect(await dialog.getByRole("button", { name: "Delete chat", exact: true }).isEnabled()).toBe(true)
+      expect(paths.slice(pathStart).some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+      expect(deleteSessionRequests).toHaveLength(1)
+    } catch (error) {
+      if (page === undefined) throw error
+      throw new AggregateError([error], await deleteFailureDiagnostic("service_unavailable", page))
+    } finally {
+      deleteSessionStatus = 200
+      deleteSessionCommitted = false
+      deleteSessionRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
     }
   }, 45_000)
 

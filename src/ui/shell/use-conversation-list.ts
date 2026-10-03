@@ -27,7 +27,7 @@ export type ConversationListController = {
   hasMore: boolean
   loadMore: () => void
   selectConversation: (id: string) => void
-  deleteConversation: (id: string) => void
+  deleteConversation: (id: string) => Promise<boolean>
   renameConversation: (id: string, title: string) => void
   startNewChat: () => void
 }
@@ -93,10 +93,11 @@ export function useConversationList(params: {
   )
 
   const deleteConversation = useCallback(
-    (id: string) => {
-      engine?.deleteConversation(id)
-      // 软删后重取清单：服务端软删项即刻不出（本地乐观移除由引擎处理）。
-      setListRefresh((n) => n + 1)
+    async (id: string): Promise<boolean> => {
+      if (!engine) return false
+      const deleted = await engine.deleteConversation(id)
+      if (deleted) setListRefresh((n) => n + 1)
+      return deleted
     },
     [engine],
   )

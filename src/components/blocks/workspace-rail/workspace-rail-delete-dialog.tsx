@@ -18,7 +18,9 @@ import type { ConversationSummary } from "@/ui/rail/rail-search"
 type WorkspaceDeleteDialogProps = {
   target: ConversationSummary | null
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: () => Promise<void>
+  pending: boolean
+  failed: boolean
   returnFocusRef?: RefObject<HTMLElement | null>
   fallbackFocusRef?: RefObject<HTMLElement | null>
 }
@@ -27,6 +29,8 @@ export function WorkspaceDeleteDialog({
   target,
   onClose,
   onConfirm,
+  pending,
+  failed,
   returnFocusRef,
   fallbackFocusRef,
 }: WorkspaceDeleteDialogProps) {
@@ -38,6 +42,7 @@ export function WorkspaceDeleteDialog({
   }, [returnFocusRef])
 
   const closeAndRestoreFocus = () => {
+    if (pending) return
     onClose()
     scheduleFocusRestore()
   }
@@ -72,7 +77,7 @@ export function WorkspaceDeleteDialog({
     <AlertDialog
       open={target !== null}
       onOpenChange={(open) => {
-        if (!open) {
+        if (!open && !pending) {
           onClose()
           scheduleFocusRestore()
         }
@@ -97,14 +102,20 @@ export function WorkspaceDeleteDialog({
           <AlertDialogDescription>
             {target ? t("rail.deleteConfirmDescription", { title: target.title || t("rail.newChat") }) : null}
           </AlertDialogDescription>
+          {failed ? <p role="alert">{t("rail.deleteFailed")}</p> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={closeAndRestoreFocus}>{t("rail.deleteCancel")}</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending} onClick={closeAndRestoreFocus}>{t("rail.deleteCancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            onClick={() => {
+            disabled={pending}
+            aria-busy={pending}
+            onClick={(event) => {
+              // AlertDialogAction closes by default. Keep the intent visible
+              // until the owner receipt has been acknowledged.
+              event.preventDefault()
               confirmedRef.current = true
-              onConfirm()
+              void onConfirm()
             }}
           >
             {t("rail.deleteConfirm")}

@@ -533,7 +533,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         replayed: false,
       }
     },
-    deleteSession: () => Promise.resolve({ status: "deleted" }),
+    deleteSession: () => Promise.resolve({ status: "deleted" as const }),
     renameSession: () => Promise.resolve({ ok: true as const }),
 
     openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }): EventStreamHandle => {

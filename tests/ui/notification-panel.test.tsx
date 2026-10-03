@@ -24,7 +24,7 @@ function renderNotificationRail() {
           activeId={null}
           awaitingIds={new Set()}
           onSelectConversation={() => {}}
-          onDeleteConversation={() => {}}
+          onDeleteConversation={async () => true}
           onRenameConversation={() => {}}
           onOpenSettings={() => {}}
           listLoading={false}

@@ -1,3 +1,25 @@
+## R143-W 会话删除等待正式 ACK（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
+
+Conversation 删除事实继续由 BFF 唯一持久拥有；Web 只拥有当前页面的删除意图、交互反馈和 ACK 后的本地投影切换。正式事实源固定为 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` public `7.0.0`，canonical OpenAPI SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`。BFF 的同一事务完成 Conversation 软删、stream fence、share 撤销和需要的 cancellation outbox；Web 删除前不得另发 Run cancel，也不得提前 RESET、移除 Conversation、清草稿或切换 active。
+
+### 放置与生命周期
+
+| 项 | 已确定结论 |
+| --- | --- |
+| Owner | BFF 是 Conversation 删除及 durable cancellation 的唯一 writer；Web 是同源调用、mounted engine 删除意图与 UI 状态的 owner。Browser 仍只经 `/api/session/[...path]`，不直连 BFF/Agent。 |
+| 当前事实 | client 现发送 exact direct/project scope，以 10 秒 AbortSignal 约束请求并同时要求 HTTP 200、既有 receipt schema 通过及 `status === "deleted"`；machine/rail/controller 已改为严格 `Promise<boolean>` ACK gate、single-flight 与 dispose/generation/target guard。ACK 前不改 store/Run/draft；切到别的 active 后的晚 ACK 只删原 target 列表投影，不 reset 新 active。 |
+| 目标职责 | 在现 engine 内建立 `idle -> deleting(target,scope,generation) -> acknowledged/rejected|unknown` 的单一意图。严格 200 `deleted` ACK 后才执行现 `removeConversation`/`activateConversation` 并刷新；明确失败或 unknown 保留原 Conversation、active、draft、thread、Run、stream 与 staging。 |
+| 目录方案 | 采用现 `client.ts`、`execution-adapter.ts`、`engine-types.ts`、`machine.ts`、`use-conversation-list.ts` 与现 rail/dialog 文件，各自承接 wire、scope/lifecycle、状态机和交互；不新建目录、模块、API 或通用 mutation manager。 |
+| 并发与失败 | 同一 mounted engine 同时只允许一个 delete intent；重复确认不发第二 DELETE。每个 success/error/finally 必须核对未 dispose、同 scope、同 target 和同 generation。network/timeout/abort-after-dispatch 是 unknown：首片不做含混 reconcile、不自动换 key重发；404 也不冒充删除成功。 |
+| 成功去向 | 删除非 active 保持当前 active；删除 active 选择现 `removeConversation` 给出的剩余第一项；删空沿现行为创建当前 scope 的本地空会话。仅 ACK 后发生，不新增 Project 级联。 |
+| 删除项 | 删除 fire-and-forget、ACK 前 `abandonActiveRun`/本地移除、立即列表刷新、console-only failure 与重复提交窗口；不删除 rename/new/select、draft、HITL、Delivery、正文、连接 refcount 或 external-store 既有职责。 |
+
+实现已落在 `src/engine/{client,execution-adapter,engine-types,machine}.ts`、`src/ui/shell/use-conversation-list.ts`、`src/components/blocks/workspace-rail/workspace-rail-types.ts`、`src/components/blocks/workspace-rail/{workspace-rail,workspace-rail-delete-dialog}.tsx`、`src/dev/preview-transport.ts` 与现 `src/i18n/{messages,en,overlays}.ts`；没有新增目录、API、schema、依赖或 Project 级联。
+
+现 `tests/system/oidc-rp-next-http.integration.test.ts` 已以真实 Next+Chromium+HTTP barrier 覆盖 direct exact query、延迟 ACK 前列表/active/draft 保全、单请求、成功后一次刷新，以及 503 保全/可恢复且无额外 cancel/刷新。Project exact query与 same-engine 切换后的晚 ACK 尚缺完整 real-UI 节点；当前 IAB 与真实 owner 整链也未验，不能以 fixture/工程门代替。
+
+---
+
 ## R139 Product Session 与 UI 缓存准入（2026-10-03；Root 工程与限定系统验证通过，待 Git）
 
 浏览器仍只以同源 Product Session 探针认证：200 `authenticated:false` 才匿名，可信非空 subject 才进入 live；故障、超时、畸形响应与 storage 失败均显式 unavailable。共享探针在开始时只读 UI subject marker，完成时若 marker 已被另一文档改为不同主体则拒绝采纳并要求人工重试。同 subject 新文档不清索引；首次或不同 subject 准入清 Web 自有 Conversation 索引并更新 marker，主体切换继续硬刷新，旧 engine 不承接新主体。

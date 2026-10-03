@@ -16,23 +16,39 @@ export type { WorkspaceRailProject, WorkspaceRailProps } from "./workspace-rail-
 /** Public rail boundary: provider ownership and destructive-dialog lifecycle. */
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null)
+  const [deletePending, setDeletePending] = useState(false)
+  const [deleteFailed, setDeleteFailed] = useState(false)
   const deleteDialogFallbackFocusRef = useRef<HTMLButtonElement | null>(null)
   const deleteDialogFocusRef = useRef<HTMLElement | null>(null)
   const { onDeleteConversation } = props
 
   const requestDelete = (conversation: ConversationSummary) => {
+    if (deletePending) return
     const active = document.activeElement
     const activeElement = active instanceof HTMLElement && active !== document.body ? active : null
     deleteDialogFocusRef.current = activeElement
     setDeleteTarget(conversation)
+    setDeleteFailed(false)
   }
 
-  const confirmDelete = useCallback(() => {
-    if (deleteTarget) {
-      onDeleteConversation(deleteTarget.id)
-      setDeleteTarget(null)
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget || deletePending) return
+    const targetId = deleteTarget.id
+    setDeletePending(true)
+    setDeleteFailed(false)
+    try {
+      const result = await onDeleteConversation(targetId)
+      if (result !== true) {
+        setDeleteFailed(true)
+        return
+      }
+      setDeleteTarget((current) => current?.id === targetId ? null : current)
+    } catch {
+      setDeleteFailed(true)
+    } finally {
+      setDeletePending(false)
     }
-  }, [deleteTarget, onDeleteConversation])
+  }, [deletePending, deleteTarget, onDeleteConversation])
 
   const content = (
     <WorkspaceRailShell
@@ -44,8 +60,12 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
   const dialog = (
     <WorkspaceDeleteDialog
       target={deleteTarget}
-      onClose={() => setDeleteTarget(null)}
+      onClose={() => {
+        if (!deletePending) setDeleteTarget(null)
+      }}
       onConfirm={confirmDelete}
+      pending={deletePending}
+      failed={deleteFailed}
       returnFocusRef={deleteDialogFocusRef}
       fallbackFocusRef={deleteDialogFallbackFocusRef}
     />

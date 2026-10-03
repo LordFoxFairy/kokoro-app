@@ -76,7 +76,7 @@ export type SessionEngine = {
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
   openConversation: (id: string) => void
   newConversation: () => void
-  deleteConversation: (id: string) => void
+  deleteConversation: (id: string) => Promise<boolean>
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[]) => void

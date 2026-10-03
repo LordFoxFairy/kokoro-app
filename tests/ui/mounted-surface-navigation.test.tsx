@@ -42,7 +42,7 @@ it("same-shell rail links disable Next prefetch because clicks are history-proje
           activeId={null}
           awaitingIds={new Set()}
           onSelectConversation={() => {}}
-          onDeleteConversation={() => {}}
+          onDeleteConversation={async () => true}
           onRenameConversation={() => {}}
           onOpenSettings={() => {}}
           listLoading={false}

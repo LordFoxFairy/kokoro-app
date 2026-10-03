@@ -183,6 +183,7 @@ export const zh = {
   "rail.deleteConfirmTitle": "删除会话？",
   "rail.deleteConfirmDescription": "删除“{title}”后，相关会话记录将从最近列表中移除。",
   "rail.deleteConfirm": "确认删除",
+  "rail.deleteFailed": "删除失败。会话仍保留，请重试。",
   "rail.deleteCancel": "取消",
   // shell 外壳
   "shell.resizeAria": "调整侧栏宽度",

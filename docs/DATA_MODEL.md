@@ -1,3 +1,13 @@
+## R143-W 会话删除页面内存边界（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
+
+Web 不新增数据库、canonical schema、migration、事务、Redis、receipt 或浏览器业务缓存。BFF 继续唯一持久拥有 Conversation 删除、share/stream 收口和 cancellation outbox；Web 只在 mounted engine 内保存一个瞬时 delete intent：exact `targetId`、当前 `SessionScope`、generation、pending 与安全 failure/unknown 状态。该意图不是 owner receipt，也不跨 reload 恢复。
+
+ACK 前不改 `ConversationStore`，不清 active draft/thread/Run/staging，不标本地 cancelled，不刷新列表；明确失败或 unknown 释放 busy 但保留全部原事实并允许用户显式恢复操作。首片不以404或含混集合 read推断删除完成，也不自动重发。严格 200 `deleted` 后才调用现 `removeConversation`：非 active 删除保持当前 active，active 删除选择剩余第一项，删空创建当前 scope 的本地空会话；随后一次同 scope owner list刷新，不创建 Project 级联或跨 scope tombstone。
+
+dispose、engine scope变化或较新 delete generation 立即撤销旧回调的本地写权；迟到 success/error/finally 均不得移除/刷新新页。若同一 engine 已切到别的 active，原 target 成功 ACK 只更新 ConversationStore 列表，不重建新 active 的 thread/draft/Run。single-flight 阻止同一 mounted engine 的重复删除。BFF ACK 后的 durable Run取消由 owner事务收敛，Web不保存 cancellation副本或发第二 cancel。当前 direct fixture 已验 ACK/503 边界；Project 与晚 ACK 的完整 real-UI、当前 IAB/真实 owner 仍待后继。
+
+---
+
 ## R139 会话 UI 缓存边界（2026-10-03；Root 工程与限定系统验证通过，待 Git）
 
 Web 仍无数据库、SQL、Redis 或业务事实 owner。`kokoro.web.auth-index-subject` 只是浏览器 UI 缓存失效 marker，不是 Product Session、actor、授权证明或跨设备事实；可信 `/api/auth/session` 结果才可驱动比较。相同 subject 的新文档保留 `kokoro.web.conversations.` 索引；不同 subject 清该 Web 自有前缀并更新 marker 后硬刷新。探针开始后的 marker 竞态或 storage 失败均 fail closed 并等待人工重试，不把新主体采纳进旧树。

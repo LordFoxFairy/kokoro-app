@@ -1,3 +1,15 @@
+## R143-W 会话删除消费合同（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
+
+Web 只消费 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` public `7.0.0` canonical OpenAPI（SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`）的 `DELETE /v1/sessions/{id}`。请求必须携带一个 `Idempotency-Key`，并按当前 engine scope 精确携带 `scope=direct` 或非空 exact `project_ref`；session ID 不替代 actor/scope。浏览器仍经同源 adapter 使用受信 Product Session，tenant/subject 不从 body/header 自报。
+
+成功仅是 HTTP 200 且严格 envelope 解包后的 `{status:"deleted"}`。现共享 receipt schema 为 strict object 但 `status` 仍是 string；删除 client 在该解析边界之后再做 literal `deleted` 双判，未扩大或复制 BFF wire。401/403/404/409/429/503、网络错误、超时、abort 和坏 200 均不提交本地删除。404 的 `session_not_found` 同时隐藏缺失/越权/错 scope，不能单独证明“已经删除”。public route 的 required idempotency header 不等于 Web 已获得可依赖的 durable delete replay；unknown 首片不自动换新 key或盲重发，也不把列表首页缺项解释为成功。
+
+DELETE 200 是 BFF owner 事务完成后的 ACK：Conversation 软删、stream consumer fence、share 撤销及所需 cancellation outbox 都由该事务负责。Web 不在 DELETE 前另发 Run cancel；ACK 前保留 Conversation、draft、Run 与所有页面投影。严格 ACK 后才按现本地 fallback 切换并触发一次同 scope 列表刷新。
+
+现真实 Next/Chromium/透明 HTTP barrier 已固定 direct exact URL/query、单请求、ACK 时点与 503 保全；未新增 mock/unit 文件、未注入身份/storage，也未用 preview 代替 owner。Project exact query与换 active 后晚 ACK 的完整 real-UI 仍是 P2；当前 IAB/真实 owner 未验。未决机器契约问题 0；本片未增加 reconcile API、Project 级联、兼容 alias 或第二 DELETE 路径。
+
+---
+
 ## R137-E117 当前 consumer contract（2026-10-03；已验证候选待 Root Git）
 
 Web 已固定 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` / public `7.0.0` / canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe` 的原始机器契约并正规生成。浏览器同源 catchall 解包 owner success envelope，client 严格解析裸 `RunProcessPage`；错误 envelope 保留 stable code。required nullable snapshot process、exact scope/W/cursor、safe CUSTOM 闭集、Todo/activity替换、全页耗尽后续流与有界410恢复均为当前候选行为，无 public6 fallback、raw alias 或第二协议。

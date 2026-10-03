@@ -33,7 +33,7 @@ function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
         activeId="ses_1"
         awaitingIds={new Set()}
         onSelectConversation={() => {}}
-        onDeleteConversation={() => {}}
+        onDeleteConversation={async () => true}
         onRenameConversation={onRenameConversation}
         onOpenSettings={onOpenSettings}
         onOpenNotifications={onOpenNotifications}
@@ -250,7 +250,7 @@ it("选择新建专案后完成路由与草稿承接，并把焦点留在展开�
           activeId={null}
           awaitingIds={new Set()}
           onSelectConversation={() => {}}
-          onDeleteConversation={() => {}}
+          onDeleteConversation={async () => true}
           onRenameConversation={() => {}}
           onOpenSettings={() => {}}
           listLoading={false}
@@ -479,7 +479,7 @@ it("鼠标收起时品牌入口 focus 不挂错误 ring 标记，键盘收起不
       activeId={null}
       awaitingIds={new Set()}
       onSelectConversation={() => {}}
-      onDeleteConversation={() => {}}
+      onDeleteConversation={async () => true}
       onRenameConversation={() => {}}
       onOpenSettings={() => {}}
       listLoading={false}
@@ -550,7 +550,7 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
           activeId={null}
           awaitingIds={new Set()}
           onSelectConversation={() => {}}
-          onDeleteConversation={() => {}}
+          onDeleteConversation={async () => true}
           onRenameConversation={() => {}}
           onOpenSettings={() => {}}
           listLoading={false}
@@ -585,7 +585,7 @@ it("compactDesktop 模式变化时关闭账户菜单", async () => {
         activeId={null}
         awaitingIds={new Set()}
         onSelectConversation={() => {}}
-        onDeleteConversation={() => {}}
+        onDeleteConversation={async () => true}
         onRenameConversation={() => {}}
         onOpenSettings={() => {}}
         listLoading={false}
@@ -683,7 +683,7 @@ it("桌面删除确认取消后把焦点还给原删除按钮", async () => {
 })
 
 it("桌面确认删除后把焦点交给稳定的新对话入口", async () => {
-  const onDeleteConversation = vi.fn()
+  const onDeleteConversation = vi.fn().mockResolvedValue(true)
   renderRail({ onDeleteConversation })
   const deleteButton = screen.getByRole("button", { name: "删除会话 旧标题" })
   deleteButton.focus()
@@ -829,7 +829,7 @@ it("桌面折叠态只显示品牌展开入口，展开后搜索仍可用", asyn
       activeId="ses_1"
       awaitingIds={new Set()}
       onSelectConversation={() => {}}
-      onDeleteConversation={() => {}}
+      onDeleteConversation={async () => true}
       onRenameConversation={() => {}}
       onOpenSettings={() => {}}
       listLoading={false}
@@ -874,7 +874,7 @@ it("收起侧栏时清理搜索状态，重新展开不恢复隐藏搜索框", a
         activeId={null}
         awaitingIds={new Set()}
         onSelectConversation={() => {}}
-        onDeleteConversation={() => {}}
+        onDeleteConversation={async () => true}
         onRenameConversation={() => {}}
         onOpenSettings={() => {}}
         listLoading={false}

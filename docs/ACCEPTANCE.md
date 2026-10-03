@@ -145,3 +145,18 @@ python3 scripts/verify-ten-repository-standard.py --format json
 
 验收记录必须包含：branch、commit、命令、exit code、失败数、环境、时间和剩余 gap。`pnpm test`
 包含 preview/unit 并不证明 live BFF 或生产环境通过。
+
+## R144 会话删除 ACK 限定验收（2026-10-03；工程门证据冻结，实际发布以 HEAD/Root gitlink 为准）
+
+| ID | 已执行行为 | 结果 |
+| --- | --- | --- |
+| R144-01 | 真实 Next+Chromium+HTTP barrier：direct exact DELETE 单请求；延迟 ACK 前 Conversation/active/draft/对话框保留且零刷新；严格 ACK 后删除并刷新一次 | PASS |
+| R144-02 | DELETE 503：Conversation 与 draft 保留，显示可恢复失败；无额外 cancel、自动重放或列表刷新 | PASS |
+| R144-03 | 完整 `pnpm check`：contract 256、architecture 50、lint、typecheck、164 files / 2354 tests / 0 skip、build；OIDC 47、relay 68 | PASS |
+| R144-P2 | Project exact query及 same-engine 切换 active 后晚 ACK 的完整 real-UI | 待验 |
+
+原 RED 最终证明缺 exact scope 与失败时草稿/对话框/刷新边界；早期两次未到 DELETE 的 fixture 前置失败不冒充业务 RED。首次完整 check 的 TS2349 是测试 fixture callback 控制流问题，修正后最终门通过。最终 manifest SHA-256 `98dc3faf5800297a00deea686d649d34a5cc38374279b571e3a6c8e9418596ea`，日志 SHA-256 `0cad62400bb4211269d193f03e80cdc0a3f2f0a495f2bc16e58cdad4848224ca`。
+
+本验收不覆盖当前 IAB、真实 BFF/Agent owner、全部 actor/scope 矩阵或完整产品目标；工程门不得解释为全用户闭环。实际提交与发布状态以本仓 HEAD 和 Root gitlink 为准。
+
+---

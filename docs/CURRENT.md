@@ -1,3 +1,13 @@
+## R144 会话删除 ACK gate（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
+
+Web 会话删除现以 exact scope、单一在途 intent 和严格 `Promise<boolean>` 驱动。client 同时要求 HTTP 200、现 strict receipt schema 解析成功及 `status === "deleted"`；10 秒超时、404、503、网络/解析错误与 unknown 均不提交本地删除或自动重放。ACK 前 Conversation、active、draft、thread、Run 与列表保持；成功后只删除原 target，若用户已切到另一 active 则不 reset 新页面。BFF 继续独占 durable cancel，Web 不发第二 cancel。
+
+历史证据链保留：最初真实 RED 两节点均先因 fixture 未打开会话/GET query 形状而未到 DELETE；修正合法 snapshot fixture 后，RED 实际观察到 DELETE 缺 exact scope，以及 503 时草稿/对话框丢失与提前刷新。首次完整 check 又因异步 HTTP handler 设置的 release callback 被 TypeScript 收窄为 `never` 而失败，后以同文件动态读取 helper 修正，未改行为断言。
+
+Root 最终 `pnpm check` 原进程 86341 自然 exit 0（121.298s）：contract 256、architecture 50、lint、typecheck、164 files / 2354 tests / 0 skip、build，含 OIDC 47 与 IAM relay 68；manifest SHA-256 `98dc3faf5800297a00deea686d649d34a5cc38374279b571e3a6c8e9418596ea`，日志 SHA-256 `0cad62400bb4211269d193f03e80cdc0a3f2f0a495f2bc16e58cdad4848224ca`。这证明当前限定源码/fixture/工程门，不是所有 owner 或用户目标闭环。Project exact scope与 same-engine active 切换后的晚 ACK 尚缺完整 real-UI，当前 IAB 与真实 BFF/Agent owner 整链未验；实际提交与发布状态以本仓 HEAD 和 Root gitlink 为准。
+
+---
+
 ## R141 会话列表有界读取（2026-10-03；限定系统切片与工程门通过，待 Git）
 
 `listSessions` 现以单一 10 秒预算覆盖 `fetch`、成功 JSON body 与错误 JSON body 的完整读取；超时终止真实请求并沿既有 network failure 进入人工 Retry，不建立自动重试。桌面 rail 只在已加载成功、无错误且确实为空时隐藏 direct 空列表；loading、错误和 Retry 保持可见。

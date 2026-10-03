@@ -334,15 +334,19 @@ const interactionFallback: Partial<Record<MessageKey, string>> = {
   "hitl.cancelling": "Stopping, waiting for execution to finish",
 }
 
+const conversationFallback: Partial<Record<MessageKey, string>> = {
+  "rail.deleteFailed": "Delete failed. The chat is still available; try again.",
+}
+
 // zh 是源字典(住 messages.ts),自身无 overlay;其余各挂 MT 生成(可人工精修)的增量覆盖。
 export const OVERLAYS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   zh: {},
-  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...en },
-  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ja },
-  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ko },
-  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...es },
-  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...fr },
-  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...de },
-  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...pt },
-  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...ru },
+  en: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...en },
+  ja: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ja },
+  ko: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ko },
+  es: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...es },
+  fr: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...fr },
+  de: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...de },
+  pt: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...pt },
+  ru: { ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ru },
 }

@@ -77,8 +77,8 @@ export type SessionClient = {
     body: RunControlBody,
     commandId: string,
   ) => Promise<RunControlReceipt>
-  // 软删除（technical/16）：服务端打状态位；幂等（不存在/已删除同为 202）。
-  deleteSession: (sessionId: string) => Promise<DeleteSessionReceipt>
+  // Conversation owner only confirms deletion with a strict 200 `deleted` receipt.
+  deleteSession: (sessionId: string, scope: SessionScope, signal?: AbortSignal) => Promise<DeleteSessionReceipt>
   // 会话重命名（CONV-UX）：显式改题（他人 403 / 软删·不存在 404 / 超 256 → 422）；成功 200 {ok:true}。
   renameSession: (sessionId: string, title: string) => Promise<RenameSessionReceipt>
   // 模型候选（MODEL-UX）：本 namespace 声明可选 ∩ platform resolve 可用性；输入框下拉据此枚举。
@@ -299,18 +299,29 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
     sendControl: (sessionId, runId, body, commandId) =>
       postJson(url(controlPath(sessionId, runId)), body, (raw) => runControlReceiptSchema.parse(raw), commandId),
 
-    deleteSession: async (sessionId) => {
-      const target = url(snapshotPath(sessionId))  // DELETE 与 snapshot 同路径（契约）
+    deleteSession: async (sessionId, scope, signal) => {
+      const query = new URLSearchParams()
+      if (scope.kind === "project") query.set("project_ref", scope.projectRef)
+      else query.set("scope", "direct")
+      const target = url(`${snapshotPath(sessionId)}?${query.toString()}`)  // DELETE 与 snapshot 同路径（契约）
       let response: Response
       try {
-        response = await fetch(target, { method: "DELETE", headers: { "idempotency-key": `session-mutation:${crypto.randomUUID()}` } })
+        response = await fetch(target, {
+          method: "DELETE",
+          headers: { "idempotency-key": `session-mutation:${crypto.randomUUID()}` },
+          ...(signal === undefined ? {} : { signal }),
+        })
       } catch (error) {
         throw new SessionClientError("network", describeUnknown(error))
       }
-      if (!response.ok) {
+      if (response.status !== 200) {
         throw await httpError("DELETE", target, response)
       }
-      return parseJsonResponse(response, (raw) => deleteSessionReceiptSchema.parse(raw))
+      return parseJsonResponse(response, (raw) => {
+        const receipt = deleteSessionReceiptSchema.parse(raw)
+        if (receipt.status !== "deleted") throw new SessionClientError("parse", "Delete receipt status is invalid")
+        return { status: "deleted" }
+      })
     },
 
     renameSession: async (sessionId, title) => {
