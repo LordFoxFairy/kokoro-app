@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } from "node:crypto"
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { connect as netConnect } from "node:net"
 import { tmpdir } from "node:os"
@@ -36,19 +36,37 @@ async function unusedPort(): Promise<number> {
   return port
 }
 
-function http(port: number, target: string, method = "GET", body = "", extra: Record<string, string> = {}): Promise<HttpResult> {
+function http(
+  port: number,
+  target: string,
+  method = "GET",
+  body = "",
+  extra: Record<string, string> = {},
+  timeoutMs?: number,
+): Promise<HttpResult> {
   if (typeof target !== "string" || !target.startsWith("/") || target.startsWith("//")) {
     return Promise.reject(new Error("fixture HTTP target must be root-relative"))
   }
   return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const clearDeadline = (): void => {
+      if (timer !== undefined) clearTimeout(timer)
+      timer = undefined
+    }
+    const resolveOnce = (result: HttpResult): void => { clearDeadline(); resolve(result) }
+    const rejectOnce = (error: unknown): void => { clearDeadline(); reject(error) }
     const request = httpRequest({ hostname: "127.0.0.1", port, path: target, method,
       headers: { host: `localhost:${port}`, ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}), ...extra } }, (response) => {
       const chunks: Buffer[] = []
       response.on("data", (chunk: Buffer) => chunks.push(chunk))
-      response.once("end", () => resolve({ status: response.statusCode ?? 0, headers: response.headers,
+      response.once("error", rejectOnce)
+      response.once("end", () => resolveOnce({ status: response.statusCode ?? 0, headers: response.headers,
         body: Buffer.concat(chunks).toString("utf8") }))
     })
-    request.once("error", reject)
+    request.once("error", rejectOnce)
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => request.destroy(new Error("fixture HTTP deadline")), Math.max(1, timeoutMs))
+    }
     request.end(body)
   })
 }
@@ -244,6 +262,48 @@ async function isolatedNext(projectRoot: string): Promise<string> {
   try {
     await cp(path.join(projectRoot, "src"), path.join(root, "src"), { recursive: true })
     await cp(path.join(projectRoot, "public"), path.join(root, "public"), { recursive: true })
+    await writeFile(path.join(root, "json-parse-diagnostic.cjs"), `const { createHash } = require("node:crypto")
+const originalParse = JSON.parse
+let emitted = 0
+function caller(stack) {
+  for (const raw of String(stack).split("\\n").slice(1, 9)) {
+    const frame = raw.replaceAll("\\\\", "/")
+    const line = frame.match(/:(\\d+):\\d+\\)?$/)?.[1]
+    if (frame.includes("/next/dist/server/load-manifest")) return { category: "next_manifest_loader", line }
+    if (frame.includes("/next/dist/server/lib/router-utils/filesystem")) return { category: "next_router_filesystem", line }
+    if (frame.includes("/next/dist/server/lib/incremental-cache/") || frame.includes("/next/dist/server/dev/")) return { category: "next_dev_or_cache", line }
+    if (frame.includes("/next/dist/server/app-render/")) return { category: "next_app_render", line }
+    if (frame.includes("/src/app/api/auth/") || frame.includes("/src/lib/server/")) return { category: "app_code", line }
+    if (frame.includes("/next/") || frame.includes("/webpack/")) return { category: "next_or_webpack_other", line }
+  }
+  return { category: "unknown", line: undefined }
+}
+JSON.parse = function parse(text, reviver) {
+  try { return originalParse.call(this, text, reviver) }
+  catch (error) {
+    if (emitted < 16) {
+      emitted += 1
+      try {
+        const isString = typeof text === "string"
+        const isBuffer = Buffer.isBuffer(text)
+        const inputType = isString ? "string" : isBuffer ? "buffer" : "other"
+        const completeString = isString && text.length <= 64 * 1024
+        const bounded = isString ? Buffer.from(text.slice(0, 64 * 1024)) :
+          isBuffer ? text.subarray(0, 256 * 1024) : null
+        const truncated = isString ? !completeString : isBuffer ? text.byteLength > 256 * 1024 : false
+        const location = caller(error instanceof Error ? error.stack || "" : "")
+        const record = { category: location.category, input_type: inputType,
+          byte_count: completeString ? bounded.byteLength : isBuffer ? text.byteLength : null,
+          scanned_bytes: bounded === null ? 0 : bounded.byteLength, truncated,
+          sha256: bounded === null ? null : createHash("sha256").update(bounded).digest("hex"),
+          line: location.line === undefined ? null : Number(location.line) }
+        process.stderr.write("KOKORO_TEST_JSON_PARSE_FAILURE " + JSON.stringify(record).slice(0, 8191) + "\\n")
+      } catch {}
+    }
+    throw error
+  }
+}
+`, { mode: 0o600 })
     const fixtureRoute = path.join(root, "src", "app", "api", "rp-preabort-fixture", "route.ts")
     await mkdir(path.dirname(fixtureRoute), { recursive: true })
     await writeFile(fixtureRoute, `import { request as httpRequest } from "node:http"
@@ -286,6 +346,63 @@ export async function GET(): Promise<Response> {
   try { await jwksProvider.token.request({ client: jwksClient, params: {}, checks: {}, provider: { callbackUrl: config.callbackUrl } }) }
   catch (error) { jwksRejected = error instanceof Error && error.name === "AbortError" }
   return Response.json({ settled, tokenRejected, userinfoRejected, jwksRejected, calls })
+}
+`)
+    const requestErrorRoute = path.join(root, "src", "app", "api", "rp-request-error-fixture", "route.ts")
+    await mkdir(path.dirname(requestErrorRoute), { recursive: true })
+    await writeFile(requestErrorRoute, `export const runtime = "nodejs"
+export function GET(): never {
+  const error = new SyntaxError("Unexpected end of JSON input")
+  Object.defineProperty(error, "syntheticSecret", { value: process.env.KOKORO_TEST_SYNTHETIC_SECRET })
+  throw error
+}
+`)
+    await writeFile(path.join(root, "src", "instrumentation.ts"), `import type { Instrumentation } from "next"
+
+type FrameCategory = "app_auth_route" | "app_product_session_store" | "app_product_session" |
+  "app_oidc_token" | "app_product_identity" | "dependency_redis" | "dependency_jose_or_next_auth" |
+  "dependency_openid_client" | "next_server_or_webpack" | "node_runtime" | "fixture_synthetic" | "unknown"
+
+function frameCategory(value: string): FrameCategory {
+  const normalized = value.replaceAll("\\\\", "/")
+  if (normalized.includes("/src/app/api/auth/[...nextauth]/route.")) return "app_auth_route"
+  if (normalized.includes("/src/lib/server/product-session-store.")) return "app_product_session_store"
+  if (normalized.includes("/src/lib/server/product-session.")) return "app_product_session"
+  if (normalized.includes("/src/lib/server/oidc-token.")) return "app_oidc_token"
+  if (normalized.includes("/src/lib/server/product-identity.")) return "app_product_identity"
+  if (normalized.includes("/src/app/api/rp-request-error-fixture/route.")) return "fixture_synthetic"
+  if (normalized.includes("/node_modules/redis/") || normalized.includes("/node_modules/@redis/")) return "dependency_redis"
+  if (normalized.includes("/node_modules/jose/") || normalized.includes("/node_modules/next-auth/")) return "dependency_jose_or_next_auth"
+  if (normalized.includes("/node_modules/openid-client/")) return "dependency_openid_client"
+  if (normalized.includes("/node_modules/next/") || normalized.includes("/node_modules/webpack/")) return "next_server_or_webpack"
+  if (normalized.startsWith("node:") || normalized.includes("node:internal")) return "node_runtime"
+  return "unknown"
+}
+
+export const onRequestError: Instrumentation.onRequestError = (error, request, context): void => {
+  try {
+    const frames: { category: FrameCategory; line: number | null }[] = []
+    let current: unknown = error
+    for (let depth = 0; depth < 3 && current instanceof Error; depth += 1) {
+      for (const frame of (current.stack ?? "").split("\\n").filter((line) => line.includes(" at ")).slice(0, 8 - frames.length)) {
+        const line = frame.match(/:(\\d+):\\d+\\)?$/u)?.[1]
+        frames.push({ category: frameCategory(frame), line: line === undefined ? null : Number(line) })
+      }
+      current = "cause" in current ? current.cause : undefined
+    }
+    const record = {
+      error_class: error instanceof SyntaxError ? "syntax_error" : error instanceof TypeError ? "type_error" :
+        error instanceof Error ? "other_error" : "non_error",
+      error_code: error instanceof SyntaxError && error.message === "Unexpected end of JSON input" ? "json_unexpected_eof" : "other",
+      method: request.method === "POST" || request.method === "GET" ? request.method : "other",
+      route: request.path.split("?", 1)[0] === "/api/auth/signout" ? "auth_signout" :
+        request.path.split("?", 1)[0] === "/api/rp-request-error-fixture" ? "fixture_synthetic" : "other",
+      router_kind: context.routerKind === "App Router" ? "app" : context.routerKind === "Pages Router" ? "pages" : "other",
+      route_type: ["route", "render", "action", "proxy"].includes(context.routeType) ? context.routeType : "other",
+      frames: frames.slice(0, 8),
+    }
+    console.log("KOKORO_TEST_NEXT_REQUEST_ERROR " + JSON.stringify(record))
+  } catch { /* diagnostics must not replace the original request error */ }
 }
 `)
     for (const name of ["package.json", "tsconfig.json", "next.config.ts", "postcss.config.mjs"]) await cp(path.join(projectRoot, name), path.join(root, name))
@@ -377,6 +494,122 @@ function nextErrorCategories(value: string): string[] {
   return checks.filter(([, pattern]) => pattern.test(value)).map(([category]) => category)
 }
 
+function nextJsonFailureSources(value: string): string[] {
+  const instrumented = requestErrorDiagnostics(value).flatMap((record) => record.frames.map((frame) => frame.category))
+  if (instrumented.length > 0) return [...new Set(instrumented)]
+  const checks: readonly [string, RegExp][] = [
+    ["app_oidc_token", /src\/lib\/server\/oidc-token\.(?:ts|js)/u],
+    ["app_product_identity", /src\/lib\/server\/product-identity\.(?:ts|js)/u],
+    ["openid_client", /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?openid-client\//u],
+    ["next_or_webpack", /node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:next|webpack)\//u],
+  ]
+  const sources = checks.filter(([, pattern]) => pattern.test(value)).map(([source]) => source)
+  return sources.length > 0 ? sources : ["unknown"]
+}
+
+const JSON_PARSE_FAILURE_PREFIX = "KOKORO_TEST_JSON_PARSE_FAILURE "
+const JSON_PARSE_FAILURE_CATEGORIES = new Set(["next_manifest_loader", "next_router_filesystem", "next_dev_or_cache",
+  "next_app_render", "app_code", "next_or_webpack_other", "unknown"])
+
+function jsonParseFailureDiagnostics(value: string): readonly Record<string, unknown>[] {
+  const bytes = Buffer.from(value, "utf8")
+  let input = bytes.subarray(Math.max(0, bytes.byteLength - 256 * 1024)).toString("utf8")
+  if (bytes.byteLength > 256 * 1024) input = input.slice(input.indexOf("\n") + 1)
+  const records: Record<string, unknown>[] = []
+  for (const line of input.split("\n")) {
+    if (records.length >= 16 || line.length > 8 * 1024 || !line.startsWith(JSON_PARSE_FAILURE_PREFIX)) continue
+    try {
+      const raw: unknown = JSON.parse(line.slice(JSON_PARSE_FAILURE_PREFIX.length))
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue
+      const record = raw as Record<string, unknown>
+      if (typeof record.category !== "string" || !JSON_PARSE_FAILURE_CATEGORIES.has(record.category) ||
+          !["string", "buffer", "other"].includes(typeof record.input_type === "string" ? record.input_type : "") ||
+          !(record.byte_count === null || typeof record.byte_count === "number" &&
+            Number.isSafeInteger(record.byte_count) && record.byte_count >= 0) ||
+          typeof record.scanned_bytes !== "number" || !Number.isSafeInteger(record.scanned_bytes) ||
+          record.scanned_bytes < 0 || record.scanned_bytes > 256 * 1024 ||
+          typeof record.truncated !== "boolean" ||
+          !(record.sha256 === null || typeof record.sha256 === "string" && /^[a-f0-9]{64}$/u.test(record.sha256)) ||
+          !(record.line === null || typeof record.line === "number" && Number.isSafeInteger(record.line) && record.line > 0)) continue
+      records.push({ category: record.category, input_type: record.input_type, byte_count: record.byte_count,
+        scanned_bytes: record.scanned_bytes, truncated: record.truncated, sha256: record.sha256, line: record.line })
+    } catch { /* Ignore incomplete child-process output. */ }
+  }
+  return records
+}
+
+const REQUEST_ERROR_PREFIX = "KOKORO_TEST_NEXT_REQUEST_ERROR "
+const REQUEST_ERROR_FRAME_CATEGORIES = new Set([
+  "app_auth_route", "app_product_session_store", "app_product_session", "app_oidc_token", "app_product_identity",
+  "dependency_redis", "dependency_jose_or_next_auth", "dependency_openid_client", "next_server_or_webpack",
+  "node_runtime", "fixture_synthetic", "unknown",
+])
+
+type RequestErrorDiagnostic = Readonly<{
+  error_class: string
+  error_code: string
+  method: string
+  route: string
+  router_kind: string
+  route_type: string
+  frames: readonly Readonly<{ category: string; line: number | null }>[]
+}>
+
+function requestErrorDiagnostics(value: string): RequestErrorDiagnostic[] {
+  const records: RequestErrorDiagnostic[] = []
+  const bytes = Buffer.from(value, "utf8")
+  const truncated = bytes.byteLength > 256 * 1024
+  let input = (truncated ? bytes.subarray(bytes.byteLength - 256 * 1024) : bytes).toString("utf8")
+  if (truncated) {
+    const firstCompleteLine = input.indexOf("\n")
+    if (firstCompleteLine < 0) return []
+    input = input.slice(firstCompleteLine + 1)
+  }
+  for (const line of input.replace(/\u001b\[[0-9;]*m/gu, "").split(/\r?\n/u)) {
+    if (records.length >= 16) break
+    if (Buffer.byteLength(line, "utf8") > 8 * 1024) continue
+    const offset = line.indexOf(REQUEST_ERROR_PREFIX)
+    if (offset < 0) continue
+    try {
+      const raw: unknown = JSON.parse(line.slice(offset + REQUEST_ERROR_PREFIX.length))
+      if (typeof raw !== "object" || raw === null || !("frames" in raw) || !Array.isArray(raw.frames)) continue
+      const item = raw as Record<string, unknown>
+      const oneOf = (candidate: unknown, allowed: readonly string[], fallback: string): string =>
+        typeof candidate === "string" && allowed.includes(candidate) ? candidate : fallback
+      const frames = raw.frames.flatMap((frame) => {
+        if (typeof frame !== "object" || frame === null) return []
+        const candidate = frame as Record<string, unknown>
+        if (typeof candidate.category !== "string" || !REQUEST_ERROR_FRAME_CATEGORIES.has(candidate.category)) return []
+        const lineNumber = typeof candidate.line === "number" && Number.isSafeInteger(candidate.line) && candidate.line > 0
+          ? candidate.line : null
+        return [{ category: candidate.category, line: lineNumber }]
+      }).slice(0, 8)
+      records.push({
+        error_class: oneOf(item.error_class, ["syntax_error", "type_error", "other_error", "non_error"], "non_error"),
+        error_code: oneOf(item.error_code, ["json_unexpected_eof", "other"], "other"),
+        method: oneOf(item.method, ["POST", "GET", "other"], "other"),
+        route: oneOf(item.route, ["auth_signout", "fixture_synthetic", "other"], "other"),
+        router_kind: oneOf(item.router_kind, ["app", "pages", "other"], "other"),
+        route_type: oneOf(item.route_type, ["route", "render", "action", "proxy", "other"], "other"),
+        frames,
+      })
+    } catch { /* malformed diagnostic output is ignored and asserted by its focused system test */ }
+  }
+  return records
+}
+
+async function diagnosticWithin<T>(promise: Promise<T>, fallback: T, timeoutMs = 500): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise.catch(() => fallback),
+      new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), timeoutMs) }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 function safeNextErrorExcerpt(value: string, redactions: readonly string[] = []): string | null {
   const sensitive = /authorization|cookie|password|client[_-]?secret|access[_-]?token|refresh[_-]?token|id[_-]?token/iu
   const relevant = /TypeError|ReferenceError|Module not found|Cannot (?:find|resolve|read|access)|Failed to compile|Build Error|Import trace|Error:|(?:^|\s)at\s+.*(?:src\/|tests\/|node_modules\/)|^\s*[./].*(?:src\/|node_modules\/)/u
@@ -459,6 +692,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let invalidIdentityShape = false
   let slowIdentity = false
   let output = ""
+  let appCompileReadinessMs: number | null = null
+  let appCompileReadinessStatus: number | null = null
   let ownedBrowserPrefixes: readonly string[] = []
   let ownsBrowserPrefixes = false
   type BrowserDiagnostics = {
@@ -567,6 +802,99 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       bff_paths: bffPathnames(paths.slice(pathStart)),
       next_error_categories: nextErrorCategories(output.slice(outputStart)),
       next_error_excerpt: safeNextErrorExcerpt(output.slice(outputStart), [clientSecret, "rp-bff-secret", authSecret]),
+    })}`
+  }
+
+  async function nextManifestMetadata(): Promise<readonly Record<string, unknown>[]> {
+    const fixtureRoot = root
+    if (fixtureRoot === undefined) return []
+    const files = [
+      { name: "build-manifest.json", json: true },
+      { name: "routes-manifest.json", json: true },
+      { name: "prerender-manifest.json", json: true },
+      { name: "app-path-routes-manifest.json", json: true },
+      { name: "server/app-paths-manifest.json", json: true },
+      { name: "server/functions-config-manifest.json", json: true },
+      { name: "server/middleware-manifest.json", json: true },
+      { name: "server/pages-manifest.json", json: true },
+      { name: "server/app/api/auth/[...nextauth]/route.js", json: false },
+      { name: "server/app/api/auth/[...nextauth]/route.js.map", json: true },
+    ] as const
+    const collect = Promise.all(files.map(async ({ name, json }) => {
+      try {
+        const filename = path.join(fixtureRoot, ".next", "dev", name)
+        const info = await stat(filename)
+        if (!info.isFile()) return { name, exists: true, file: false, size: info.size }
+        const bytes = await readFile(filename)
+        let jsonValid: boolean | null = null
+        if (json) {
+          try { JSON.parse(bytes.toString("utf8")); jsonValid = true }
+          catch { jsonValid = false }
+        }
+        return { name, exists: true, file: true, size: bytes.byteLength,
+          sha256: createHash("sha256").update(bytes).digest("hex"), json_valid: jsonValid }
+      } catch (error) {
+        const code = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "unknown"
+        return { name, exists: code !== "ENOENT", error_code: code }
+      }
+    }))
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        collect,
+        new Promise<readonly Record<string, unknown>[]>((resolve) => {
+          timer = setTimeout(() => resolve([{ error_code: "metadata_deadline" }]), 750)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }
+
+  function nextManifestChanges(
+    before: readonly Record<string, unknown>[],
+    after: readonly Record<string, unknown>[],
+  ): readonly Readonly<{ name: string; change: string }>[] {
+    const names = ["build-manifest.json", "routes-manifest.json", "prerender-manifest.json", "app-path-routes-manifest.json",
+      "server/app-paths-manifest.json", "server/functions-config-manifest.json", "server/middleware-manifest.json",
+      "server/pages-manifest.json", "server/app/api/auth/[...nextauth]/route.js",
+      "server/app/api/auth/[...nextauth]/route.js.map"] as const
+    const byName = (values: readonly Record<string, unknown>[]): Map<string, Record<string, unknown>> =>
+      new Map(values.flatMap((value) => typeof value.name === "string" ? [[value.name, value] as const] : []))
+    const beforeByName = byName(before)
+    const afterByName = byName(after)
+    return names.map((name) => {
+      const left = beforeByName.get(name)
+      const right = afterByName.get(name)
+      if (left === undefined || right === undefined || left.error_code !== undefined && left.error_code !== "ENOENT" ||
+          right.error_code !== undefined && right.error_code !== "ENOENT") {
+        return { name, change: "unavailable" }
+      }
+      if (left.exists === false && right.exists === true) return { name, change: "appeared" }
+      if (left.exists === true && right.exists === false) return { name, change: "disappeared" }
+      if (right.json_valid === false) return { name, change: "changed_invalid" }
+      if (left.exists === right.exists && left.file === right.file && left.size === right.size &&
+          left.sha256 === right.sha256 && left.json_valid === right.json_valid) return { name, change: "unchanged" }
+      return { name, change: "changed_valid" }
+    })
+  }
+
+  function nextFailureDiagnostic(
+    stage: string,
+    response: HttpResult,
+    outputStart: number,
+    pathStart: number,
+    manifestsBefore: readonly Record<string, unknown>[],
+    manifestsAfter: readonly Record<string, unknown>[],
+  ): string {
+    const nextOutput = output.slice(outputStart)
+    return `${responseDiagnostic(stage, response, outputStart, pathStart)}; fixture metadata: ${JSON.stringify({
+      next_json_failure_sources: nextJsonFailureSources(nextOutput),
+      json_parse_failure_diagnostics: jsonParseFailureDiagnostics(nextOutput),
+      request_error_diagnostics: requestErrorDiagnostics(nextOutput),
+      next_manifests_before: manifestsBefore,
+      next_manifests_after: manifestsAfter,
+      next_manifest_changes: nextManifestChanges(manifestsBefore, manifestsAfter),
     })}`
   }
 
@@ -856,6 +1184,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   }
 
   beforeAll(async () => {
+    const setupDeadline = Date.now() + 55_000
     try {
       root = await isolatedNext(process.cwd())
       bff = createServer((request, response) => {
@@ -1073,24 +1402,50 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
       next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
         cwd: root,
-        env: { ...process.env, NODE_ENV: "development", KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
+        env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${path.join(root, "json-parse-diagnostic.cjs")}`]
+          .filter((value): value is string => Boolean(value)).join(" "),
+          NODE_ENV: "development", KOKORO_WEB_ORIGIN: `http://localhost:${nextPort}`,
           KOKORO_DOMAIN: "localhost", KOKORO_TENANT_ID: "tenant-one",
           KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`, KOKORO_INTERNAL_SECRET_WEB_BFF: "rp-bff-secret",
           KOKORO_WEB_REDIS_URL: redisUrl, KOKORO_OIDC_CLIENT_ID: clientId, KOKORO_OIDC_CLIENT_SECRET: clientSecret,
-          KOKORO_WEB_AUTH_SECRET: authSecret, NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` },
+          KOKORO_WEB_AUTH_SECRET: authSecret, KOKORO_TEST_SYNTHETIC_SECRET: "syntheticsecret-marker",
+          NEXTAUTH_URL: `http://localhost:${nextPort}/api/auth` },
         stdio: ["ignore", "pipe", "pipe"],
       })
       next.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
       next.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString("utf8") })
       let lastResponse: HttpResult | undefined
-      for (let attempt = 0; attempt < 100; attempt += 1) {
+      let csrfReady = false
+      while (Date.now() < setupDeadline) {
         try {
-          lastResponse = await http(nextPort, "/api/auth/csrf")
-          if (lastResponse.status === 200) return
+          lastResponse = await http(nextPort, "/api/auth/csrf", "GET", "", {},
+            Math.min(1_000, setupDeadline - Date.now()))
+          if (lastResponse.status === 200) { csrfReady = true; break }
         } catch { /* wait for socket */ }
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
-      throw new Error(`RP Next fixture did not become ready: ${JSON.stringify(lastResponse)}\n${output.slice(0, 2_000)}`)
+      if (!csrfReady) throw new Error(`RP Next fixture did not become ready: ${JSON.stringify(lastResponse)}\n${output.slice(0, 2_000)}`)
+
+      const compileStartedAt = Date.now()
+      let appResponse: HttpResult | undefined
+      while (Date.now() < setupDeadline) {
+        try {
+          appResponse = await http(nextPort, "/app", "GET", "", {}, Math.min(5_000, setupDeadline - Date.now()))
+          appCompileReadinessStatus = appResponse.status
+          if (appResponse.status === 200) {
+            appCompileReadinessMs = Date.now() - compileStartedAt
+            return
+          }
+        } catch { /* keep the fixture readiness failure bounded by beforeAll */ }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      appCompileReadinessMs = Date.now() - compileStartedAt
+      throw new Error(`RP Next /app compile readiness failed: ${JSON.stringify({
+        status: appResponse?.status ?? null,
+        duration_ms: appCompileReadinessMs,
+        error_categories: nextErrorCategories(output),
+        error_excerpt: safeNextErrorExcerpt(output, [clientSecret, "rp-bff-secret", authSecret]),
+      })}`)
     } catch (error) {
       try { await cleanup() }
       catch (cleanupError) { throw new AggregateError([error, cleanupError], "RP fixture setup and cleanup failed") }
@@ -1141,6 +1496,34 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     await expect(http(nextPort, "api/auth/csrf")).rejects.toThrow("fixture HTTP target must be root-relative")
   })
 
+  it("captures request errors through the real Next instrumentation hook without exposing private error fields", async () => {
+    const outputStart = output.length
+    const manifestsBefore = await nextManifestMetadata()
+    const response = await http(nextPort, "/api/rp-request-error-fixture", "GET", "", {}, 10_000)
+    const manifestsAfter = await nextManifestMetadata()
+    expect(response.status).toBe(500)
+    await expect.poll(() => requestErrorDiagnostics(output.slice(outputStart))
+      .find((record) => record.route === "fixture_synthetic"), { timeout: 2_000 }).toBeDefined()
+    const record = requestErrorDiagnostics(output.slice(outputStart))
+      .find((candidate) => candidate.route === "fixture_synthetic")
+    expect(record).toBeDefined()
+    expect(Object.keys(record ?? {}).sort()).toEqual([
+      "error_class", "error_code", "frames", "method", "route", "route_type", "router_kind",
+    ])
+    expect(record).toMatchObject({
+      error_class: "syntax_error", error_code: "json_unexpected_eof", method: "GET",
+      route: "fixture_synthetic", router_kind: "app", route_type: "route",
+    })
+    expect(record?.frames.length).toBeLessThanOrEqual(8)
+    expect(record?.frames.every((frame) => REQUEST_ERROR_FRAME_CATEGORIES.has(frame.category) &&
+      (frame.line === null || Number.isSafeInteger(frame.line) && frame.line > 0))).toBe(true)
+    expect(JSON.stringify(record)).not.toContain("syntheticsecret-marker")
+    expect(output.slice(outputStart)).not.toContain("syntheticsecret-marker")
+    const manifestChanges = nextManifestChanges(manifestsBefore, manifestsAfter)
+    expect(manifestChanges.some(({ change }) => change === "appeared" || change === "changed_valid")).toBe(true)
+    expect(manifestChanges.every(({ change }) => !["changed_invalid", "disappeared", "unavailable"].includes(change))).toBe(true)
+  })
+
   it("keeps code exchange and userinfo server-only, then establishes an encrypted Product Session", async () => {
     const { signin, jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
@@ -1174,6 +1557,465 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(replay.status).toBe(403)
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(tokenCalls)
   })
+
+  it("R147 converges an authenticated cold and reloaded workspace instead of leaving the SSR loading shell", async () => {
+    const { signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    const productCookie = (callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .find((cookie) => /^kokoro_product_session=/u.test(cookie))
+    expect(productCookie).toBeDefined()
+    expect(productCookie).toMatch(/^kokoro_product_session=[^;]+;/u)
+
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    const outputStart = output.length
+    try {
+      browser = await chromium.launch({ headless: true })
+      context = await browser.newContext()
+      const origin = `http://localhost:${nextPort}`
+      const productJar = cookieHeader(signin, callback)
+      await context.addCookies(productJar.split(/;\s*/u).flatMap((pair) => {
+        const separator = pair.indexOf("=")
+        return separator > 0 ? [{ name: pair.slice(0, separator), value: pair.slice(separator + 1), url: origin }] : []
+      }))
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      let sessionRequests = 0
+      const sessionStatuses: number[] = []
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/auth/session") sessionRequests += 1
+      })
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
+      })
+
+      const diagnostic = async (stage: string): Promise<string> => {
+        const observed = browserDiagnostics.get(page)
+        return `${stage} authenticated workspace diagnostic: ${JSON.stringify({
+          stage,
+          pathname: (() => { try { return new URL(page.url()).pathname } catch { return "<invalid>" } })(),
+          document_ready_state: await diagnosticWithin(page.evaluate(() => document.readyState), "unavailable"),
+          session_requests: sessionRequests,
+          session_response_statuses: sessionStatuses,
+          session_requests_pending: Math.max(0, sessionRequests - sessionStatuses.length),
+          runtime_loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
+          app_main_count: await diagnosticWithin(page.locator('[data-app-frame-main="true"]').count(), -1),
+          composer_count: await diagnosticWithin(page.locator('[data-slot="composer-input"]').count(), -1),
+          browser_error_categories: [...observed?.categories ?? []],
+          request_failures: observed?.requestFailures ?? [],
+          script_responses: observed?.scriptResponses ?? [],
+          has_next_runtime: await diagnosticWithin(page.evaluate(() => "next" in window), false),
+          has_webpack_chunk_runtime: await diagnosticWithin(page.evaluate(() => "webpackChunk_N_E" in window), false),
+          flight_entry_count: await diagnosticWithin(page.evaluate(() => {
+            const value = (window as unknown as { __next_f?: unknown }).__next_f
+            return Array.isArray(value) ? value.length : 0
+          }), -1),
+          fixture_app_compile_readiness_ms: appCompileReadinessMs,
+          fixture_app_compile_readiness_status: appCompileReadinessStatus,
+          next_error_categories: nextErrorCategories(output.slice(outputStart)),
+          next_error_excerpt: safeNextErrorExcerpt(output.slice(outputStart), [clientSecret, "rp-bff-secret", authSecret]),
+        })}`
+      }
+      const converge = async (stage: "cold" | "reload"): Promise<void> => {
+        const requestBaseline = sessionRequests
+        const responseBaseline = sessionStatuses.length
+        const deadline = Date.now() + 12_000
+        const remaining = (): number => Math.max(1, deadline - Date.now())
+        let response: BrowserResponse | null
+        try {
+          response = stage === "cold"
+            ? await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
+            : await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+        } catch (error) {
+          throw new AggregateError([error], await diagnostic(`${stage}_document`))
+        }
+        if (response?.status() !== 200) throw new Error(await diagnostic(`${stage}_document_status`))
+        try {
+          await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+          await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+        } catch (error) {
+          throw new AggregateError([error], await diagnostic(`${stage}_convergence`))
+        }
+        expect(await page.getByTestId("runtime-loading").count(), await diagnostic(`${stage}_loading_remained`)).toBe(0)
+        const stageRequestCount = sessionRequests - requestBaseline
+        const stageStatuses = sessionStatuses.slice(responseBaseline)
+        expect(stageRequestCount).toBeGreaterThanOrEqual(1)
+        expect(stageStatuses).toHaveLength(stageRequestCount)
+        expect(stageStatuses.every((status) => status === 200)).toBe(true)
+        const composer = page.locator('[data-slot="composer-input"]')
+        const value = `r147-${stage}-workspace-ready`
+        await composer.fill(value)
+        await expect.poll(() => composer.inputValue(), { timeout: remaining() }).toBe(value)
+        await composer.fill("")
+        await expect.poll(() => composer.inputValue(), { timeout: remaining() }).toBe("")
+      }
+
+      await converge("cold")
+      await converge("reload")
+    } finally {
+      try { await context?.close() }
+      finally { await browser?.close() }
+    }
+  }, 45_000)
+
+  it("R150 lets the latest authenticated generation settle after finite focus tasks", async () => {
+    const { jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    const productCookie = (callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .find((cookie) => /^kokoro_product_session=/u.test(cookie))
+    expect(productCookie).toMatch(/^kokoro_product_session=[^;]+;/u)
+
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    const outputStart = output.length
+    try {
+      browser = await chromium.launch({
+        headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" },
+        args: ["--proxy-bypass-list=<-loopback>"],
+      })
+      context = await browser.newContext()
+      await context.addInitScript(() => {
+        type BootProbe = {
+          init: number
+          microtask: number
+          domContentLoaded: number
+          focusEvents: number
+          ticks: number
+          loadingSeen: number
+          appSeen: number
+        }
+        const target = window as unknown as { __kokoroBootProbe: BootProbe }
+        const probe: BootProbe = {
+          init: 1,
+          microtask: 0,
+          domContentLoaded: 0,
+          focusEvents: 0,
+          ticks: 0,
+          loadingSeen: 0,
+          appSeen: 0,
+        }
+        target.__kokoroBootProbe = probe
+        queueMicrotask(() => { probe.microtask = 1 })
+        document.addEventListener("DOMContentLoaded", () => { probe.domContentLoaded = 1 }, { once: true })
+        window.addEventListener("focus", () => { probe.focusEvents = Math.min(16, probe.focusEvents + 1) })
+        const observe = (): void => {
+          if (document.querySelector('[data-testid="runtime-loading"]')) probe.loadingSeen = 1
+          if (document.querySelector('[data-app-frame-main="true"]')) probe.appSeen = 1
+        }
+        const observer = new MutationObserver(observe)
+        observer.observe(document, { childList: true, subtree: true })
+        const heartbeat = window.setInterval(() => {
+          probe.ticks = Math.min(100, probe.ticks + 1)
+          observe()
+          if (probe.appSeen === 1 || probe.ticks === 100) {
+            observer.disconnect()
+            window.clearInterval(heartbeat)
+          }
+        }, 100)
+      })
+      const origin = `http://localhost:${nextPort}`
+      await context.addCookies(productCookie === undefined ? [] : [{
+        name: "kokoro_product_session",
+        value: productCookie.slice("kokoro_product_session=".length).split(";", 1)[0] ?? "",
+        url: origin,
+      }])
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const sessionStatuses: number[] = []
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
+      })
+      const heartbeat = async (): Promise<Record<string, number> | null> => diagnosticWithin(page.evaluate(() => {
+        const value = (window as unknown as { __kokoroBootProbe?: Record<string, number> }).__kokoroBootProbe
+        return value === undefined ? null : { ...value }
+      }), null)
+      const diagnostic = async (stage: string, response: BrowserResponse | null): Promise<string> =>
+        `${await browserProbeDiagnostic(stage, page, response, proxy, outputStart)}; boot probe: ${JSON.stringify({
+          heartbeat: await heartbeat(),
+          session_statuses: sessionStatuses.slice(0, 8),
+        })}`
+
+      proxy.setFault("pending")
+      const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await diagnostic("focus_document", response))
+      await requireSessionProbe("focus_pending_probe", 1, page, response, proxy, outputStart)
+      if (!await page.getByTestId("runtime-loading").isVisible()) {
+        throw new Error(await diagnostic("focus_pending_loading", response))
+      }
+
+      const focusBaseline = await heartbeat()
+      await page.evaluate(async () => {
+        for (let index = 0; index < 8; index += 1) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 20))
+          window.dispatchEvent(new Event("focus"))
+        }
+      })
+      const pendingHeartbeat = await heartbeat()
+      expect(pendingHeartbeat).toMatchObject({ init: 1, microtask: 1, domContentLoaded: 1, loadingSeen: 1 })
+      expect(pendingHeartbeat?.focusEvents).toBe((focusBaseline?.focusEvents ?? 0) + 8)
+      expect((pendingHeartbeat?.ticks ?? 0) > (focusBaseline?.ticks ?? 0)).toBe(true)
+      expect(proxy.sessionRequests()).toBe(1)
+
+      proxy.setFault("pass")
+      const deadline = Date.now() + 12_000
+      const remaining = (): number => Math.max(1, deadline - Date.now())
+      proxy.releasePending()
+      try {
+        await expect.poll(() => sessionStatuses, { timeout: remaining() }).toContain(200)
+        await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+        await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+        await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      } catch (error) {
+        throw new AggregateError([error], await diagnostic("focus_release_convergence", response))
+      }
+      expect(await heartbeat()).toMatchObject({ appSeen: 1 })
+
+      const settledRequests = proxy.sessionRequests()
+      const settledResponses = sessionStatuses.length
+      const postSettleDeadline = Date.now() + 12_000
+      const postSettleRemaining = (): number => Math.max(1, postSettleDeadline - Date.now())
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+        window.dispatchEvent(new Event("focus"))
+      })
+      try {
+        await expect.poll(() => proxy.sessionRequests(), { timeout: postSettleRemaining() }).toBe(settledRequests + 1)
+        await expect.poll(() => sessionStatuses.length, { timeout: postSettleRemaining() }).toBe(settledResponses + 1)
+        expect(sessionStatuses.at(-1)).toBe(200)
+        await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: postSettleRemaining() })
+        await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: postSettleRemaining() })
+        expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+      } catch (error) {
+        throw new AggregateError([error], await diagnostic("focus_post_settle", response))
+      }
+    } finally {
+      proxy.releasePending()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
+  it.each([
+    ["theme", "kokoro.theme"],
+    ["locale", "kokoro.locale"],
+  ] as const)("R150 keeps an authenticated workspace usable when the %s preference is denied", async (_preference, deniedKey) => {
+    const { jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    const productCookie = (callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .find((cookie) => /^kokoro_product_session=/u.test(cookie))
+    expect(productCookie).toMatch(/^kokoro_product_session=[^;]+;/u)
+
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    const outputStart = output.length
+    try {
+      browser = await chromium.launch({ headless: true })
+      context = await browser.newContext({ locale: "en-US", colorScheme: "light", viewport: { width: 1440, height: 900 } })
+      await context.addInitScript((key) => {
+        const originalGetItem = Storage.prototype.getItem
+        const originalSetItem = Storage.prototype.setItem
+        const target = window as unknown as { __kokoroDeniedPreferenceWrites: number }
+        target.__kokoroDeniedPreferenceWrites = 0
+        const denied = (): never => { throw new DOMException("preference storage denied", "SecurityError") }
+        Storage.prototype.getItem = function (candidate: string): string | null {
+          if (candidate === key) return denied()
+          return originalGetItem.call(this, candidate)
+        }
+        Storage.prototype.setItem = function (candidate: string, value: string): void {
+          if (candidate === key) {
+            target.__kokoroDeniedPreferenceWrites += 1
+            denied()
+          }
+          originalSetItem.call(this, candidate, value)
+        }
+      }, deniedKey)
+      const origin = `http://localhost:${nextPort}`
+      await context.addCookies(productCookie === undefined ? [] : [{
+        name: "kokoro_product_session",
+        value: productCookie.slice("kokoro_product_session=".length).split(";", 1)[0] ?? "",
+        url: origin,
+      }])
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      let sessionRequests = 0
+      const sessionStatuses: number[] = []
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/auth/session") sessionRequests += 1
+      })
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
+      })
+      const diagnostic = async (stage: string): Promise<string> => {
+        const observed = browserDiagnostics.get(page)
+        return `${stage} denied preference diagnostic: ${JSON.stringify({
+          denied_key: deniedKey,
+          session_requests: sessionRequests,
+          session_statuses: sessionStatuses.slice(0, 8),
+          loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
+          app_count: await diagnosticWithin(page.locator('[data-app-frame-main="true"]').count(), -1),
+          composer_count: await diagnosticWithin(page.locator('[data-slot="composer-input"]').count(), -1),
+          browser_error_categories: [...observed?.categories ?? []],
+          request_failures: observed?.requestFailures ?? [],
+          script_responses: observed?.scriptResponses ?? [],
+          next_error_categories: nextErrorCategories(output.slice(outputStart)),
+        })}`
+      }
+      const deadline = Date.now() + 12_000
+      const remaining = (): number => Math.max(1, deadline - Date.now())
+      const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
+      if (response?.status() !== 200) throw new Error(await diagnostic("preference_document"))
+      try {
+        await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+        await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+        await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      } catch (error) {
+        throw new Error(await diagnostic("preference_convergence"), { cause: error })
+      }
+      expect(sessionRequests).toBeGreaterThanOrEqual(1)
+      expect(sessionStatuses).toHaveLength(sessionRequests)
+      expect(sessionStatuses.every((status) => status === 200)).toBe(true)
+
+      const interactionDeadline = Date.now() + 10_000
+      const interactionRemaining = (): number => Math.max(1, interactionDeadline - Date.now())
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill(`r150-${_preference}-storage-denial`, { timeout: interactionRemaining() })
+      await expect.poll(() => composer.inputValue(), { timeout: interactionRemaining() }).toContain("storage-denial")
+      await composer.fill("", { timeout: interactionRemaining() })
+      await expect.poll(() => composer.inputValue(), { timeout: interactionRemaining() }).toBe("")
+      await page.getByTestId("rail-utility-account").click({ timeout: interactionRemaining() })
+      await page.getByRole("menuitem", { name: /Settings|设置/u }).click({ timeout: interactionRemaining() })
+      const appearance = page.getByTestId("settings-appearance")
+      await appearance.waitFor({ state: "visible", timeout: interactionRemaining() })
+      if (deniedKey === "kokoro.theme") {
+        await appearance.getByRole("radio", { name: "Dark" }).click({ timeout: interactionRemaining() })
+        await expect.poll(() => page.locator("html").getAttribute("class"), { timeout: interactionRemaining() }).toContain("dark")
+        expect(await page.locator("html").getAttribute("lang")).toBe("en-US")
+      } else {
+        await appearance.getByRole("combobox", { name: /Interface language|界面语言/u }).click({ timeout: interactionRemaining() })
+        await page.getByRole("option", { name: /中文|简体中文/u }).click({ timeout: interactionRemaining() })
+        await expect.poll(() => page.locator("html").getAttribute("lang"), { timeout: interactionRemaining() }).toBe("zh")
+        expect((await page.locator("html").getAttribute("class"))?.split(/\s+/u)).not.toContain("dark")
+      }
+      expect(await page.evaluate(() =>
+        (window as unknown as { __kokoroDeniedPreferenceWrites: number }).__kokoroDeniedPreferenceWrites)).toBe(1)
+      expect([...browserDiagnostics.get(page)?.categories ?? []].filter((category) => category.startsWith("page_"))).toEqual([])
+
+      const reloadDeadline = Date.now() + 12_000
+      const reloadRemaining = (): number => Math.max(1, reloadDeadline - Date.now())
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: reloadRemaining() })
+      if (reload?.status() !== 200) throw new Error(await diagnostic("preference_reload_document"))
+      try {
+        await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: reloadRemaining() })
+        await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: reloadRemaining() })
+        await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: reloadRemaining() }).toBe(0)
+      } catch (error) {
+        throw new Error(await diagnostic("preference_reload_convergence"), { cause: error })
+      }
+      expect(await page.locator("html").getAttribute("lang")).toBe("en-US")
+      expect((await page.locator("html").getAttribute("class"))?.split(/\s+/u)).not.toContain("dark")
+      expect([...browserDiagnostics.get(page)?.categories ?? []].filter((category) => category.startsWith("page_"))).toEqual([])
+      const reloadedAppearance = page.getByTestId("settings-appearance")
+      await reloadedAppearance.waitFor({ state: "visible", timeout: reloadRemaining() })
+      const reloadedLocale = reloadedAppearance.getByRole("combobox", { name: /Interface language|界面语言/u })
+      await expect.poll(() => reloadedLocale.textContent(), { timeout: reloadRemaining() }).toMatch(/English/u)
+    } finally {
+      try { await context?.close() }
+      finally { await browser?.close() }
+    }
+  }, 45_000)
+
+  it("R150 turns complete localStorage denial into a recoverable session alert instead of a private workspace", async () => {
+    const { jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    const productCookie = (callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .find((cookie) => /^kokoro_product_session=/u.test(cookie))
+    expect(productCookie).toMatch(/^kokoro_product_session=[^;]+;/u)
+
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    const outputStart = output.length
+    try {
+      browser = await chromium.launch({ headless: true })
+      context = await browser.newContext()
+      await context.addInitScript(() => {
+        Object.defineProperty(window, "localStorage", {
+          configurable: true,
+          get: (): never => { throw new DOMException("local storage denied", "SecurityError") },
+        })
+      })
+      const origin = `http://localhost:${nextPort}`
+      await context.addCookies(productCookie === undefined ? [] : [{
+        name: "kokoro_product_session",
+        value: productCookie.slice("kokoro_product_session=".length).split(";", 1)[0] ?? "",
+        url: origin,
+      }])
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      let sessionRequests = 0
+      const sessionStatuses: number[] = []
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/auth/session") sessionRequests += 1
+      })
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
+      })
+      const diagnostic = async (stage: string): Promise<string> => {
+        const observed = browserDiagnostics.get(page)
+        return `${stage} denied localStorage diagnostic: ${JSON.stringify({
+          session_requests: sessionRequests,
+          session_statuses: sessionStatuses.slice(0, 8),
+          loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
+          alert_count: await diagnosticWithin(page.getByRole("alert").count(), -1),
+          app_count: await diagnosticWithin(page.locator('[data-app-frame-main="true"]').count(), -1),
+          browser_error_categories: [...observed?.categories ?? []],
+          request_failures: observed?.requestFailures ?? [],
+          script_responses: observed?.scriptResponses ?? [],
+          next_error_categories: nextErrorCategories(output.slice(outputStart)),
+        })}`
+      }
+      const deadline = Date.now() + 12_000
+      const remaining = (): number => Math.max(1, deadline - Date.now())
+      const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
+      if (response?.status() !== 200) throw new Error(await diagnostic("storage_denial_document"))
+      const retry = page.getByRole("button", { name: /Retry|重试/u })
+      const alert = page.getByRole("alert").filter({ has: retry })
+      try {
+        await alert.waitFor({ state: "visible", timeout: remaining() })
+        await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      } catch (error) {
+        throw new Error(await diagnostic("storage_denial_alert"), { cause: error })
+      }
+      expect(sessionRequests).toBeGreaterThanOrEqual(1)
+      expect(sessionStatuses).toHaveLength(sessionRequests)
+      expect(sessionStatuses.every((status) => status === 200)).toBe(true)
+      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
+      expect(await page.locator('[data-slot="composer-input"]').count()).toBe(0)
+    } finally {
+      try { await context?.close() }
+      finally { await browser?.close() }
+    }
+  }, 45_000)
 
   it("R139 turns a pending browser session probe into a recoverable alert without request storms", async () => {
     const proxy = await sessionProbeProxy(nextPort)
@@ -1795,9 +2637,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }
       expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(refreshesBefore + 1)
       const revokesBefore = paths.filter((item) => item === "/iam/oauth2/revoke").length
+      const manifestsBefore = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
       const signout = await http(nextPort, "/api/auth/signout", "POST", form,
         { origin: `http://localhost:${nextPort}`, cookie })
-      expect(signout.status, responseDiagnostic("signout", signout, outputStart, pathStart)).toBe(200)
+      const manifestsAfter = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
+      if (signout.status !== 200) {
+        throw new Error(nextFailureDiagnostic(
+          "signout", signout, outputStart, pathStart, manifestsBefore, manifestsAfter,
+        ))
+      }
       expect(JSON.parse(signout.body)).toMatchObject({ remote_revocation: "unconfirmed" })
       expect(paths.filter((item) => item === "/iam/oauth2/revoke")).toHaveLength(revokesBefore)
       releaseRefresh?.()

@@ -24,9 +24,12 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated()
   // 用户在本次挂载内的显式切换：优先于协商结果。
   const [override, setOverride] = useState<Locale | null>(null)
-  const negotiated = hydrated
-    ? negotiateLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY), navigator.languages)
-    : DEFAULT_LOCALE
+  let storedLocale: string | null = null
+  if (hydrated) {
+    try { storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY) }
+    catch { /* A blocked preference store falls back to browser negotiation. */ }
+  }
+  const negotiated = hydrated ? negotiateLocale(storedLocale, navigator.languages) : DEFAULT_LOCALE
   const locale = override ?? negotiated
 
   // 外部系统同步：<html lang> 跟随生效语言（含协商与显式切换）。
@@ -39,7 +42,10 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   const setLocale = useCallback((next: Locale) => {
     setOverride(next)
-    if (typeof window !== "undefined") window.localStorage.setItem(LOCALE_STORAGE_KEY, next)
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem(LOCALE_STORAGE_KEY, next) }
+      catch { /* Keep the in-memory override when persistence is unavailable. */ }
+    }
   }, [])
 
   const value = useMemo<LocaleContextValue>(

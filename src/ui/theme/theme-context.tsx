@@ -58,7 +58,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // 系统色偏好：订阅 matchMedia（system 档下随系统实时切换；SSR/首帧恒 false）。
   const systemDark = useSyncExternalStore(subscribeSystemDark, getSystemDark, getServerSystemDark)
 
-  const stored = hydrated ? window.localStorage.getItem(THEME_STORAGE_KEY) : null
+  let stored: string | null = null
+  if (hydrated) {
+    try { stored = window.localStorage.getItem(THEME_STORAGE_KEY) }
+    catch { /* A blocked preference store keeps the system theme default. */ }
+  }
   const mode: ThemeMode = override ?? (isThemeMode(stored) ? stored : "system")
   const isDark = resolveDark(mode, systemDark)
 
@@ -69,7 +73,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setMode = useCallback((next: ThemeMode) => {
     setOverride(next)
-    if (typeof window !== "undefined") window.localStorage.setItem(THEME_STORAGE_KEY, next)
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem(THEME_STORAGE_KEY, next) }
+      catch { /* Keep the in-memory override when persistence is unavailable. */ }
+    }
   }, [])
 
   const value = useMemo<ThemeContextValue>(

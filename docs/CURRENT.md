@@ -1,3 +1,13 @@
+## R151 工作区偏好存储拒绝恢复与有界诊断（2026-10-03；源码、系统与完整工程门通过，用户原页仍待验）
+
+主题与语言 Provider 现在只把 `localStorage` 当浏览器偏好：读取 `kokoro.theme` 被拒绝时回到既有系统主题，读取 `kokoro.locale` 被拒绝时继续按 runtime/browser locale 协商；写入被拒绝时保留本次内存选择，不让 `SecurityError` 中止水合。认证索引、Product Session 与 AppGate 仍 fail closed，本切片没有把认证事实降级为内存 fallback，也没有改网络、contract、配置或 timeout。现运行副本已应用 `src/i18n/context.tsx` 与 `src/ui/theme/theme-context.tsx` 的冻结实现。
+
+Root 真实 Chromium/Next 测试先观察到三个受控 storage 拒绝节点全部失败，随后三个节点 GREEN；补充的真实 Settings setter 路径证明 Theme/Locale 写失败时内存切换立即可见、reload 回既有 fallback。有限 focus 重入节点排除了受控 fixture 中“有限 focus 导致 session generation 永远饥饿”的假说。Root 最终 `pnpm check` 进程 99026 自然 exit 0：contract 256、architecture 50、lint、typecheck、164 files / 2360 tests / 0 skip、Next build；Root 进程 12865 的完整 OIDC system file 为 53 pass / 0 skip（80.69s）。安全诊断只在 JSON parse 失败时记录闭集 caller、输入类别、有界长度/hash 与数字行号，不记录原文、raw stack、cookie、body、query 或私有路径，也不吞异常或自动重试。
+
+这些门证明当前受控存储拒绝与 fixture 行为，不证明用户原 tab21 已恢复：现有证据仍只有截图与 Codex/CDP control timeout，没有该页面的 DOM、session、heartbeat 或 timer 测量。历史 pending-refresh signout 500 的 `Unexpected end of JSON input` 来源仍未知；最终通过未复现不等于根治。BFF public 7.1 producer 已发布为 `284b…`，Web 当前 pin/consumer 尚未迁移，本切片未消费或改写该契约。
+
+---
+
 ## R144 会话删除 ACK gate（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
 
 Web 会话删除现以 exact scope、单一在途 intent 和严格 `Promise<boolean>` 驱动。client 同时要求 HTTP 200、现 strict receipt schema 解析成功及 `status === "deleted"`；10 秒超时、404、503、网络/解析错误与 unknown 均不提交本地删除或自动重放。ACK 前 Conversation、active、draft、thread、Run 与列表保持；成功后只删除原 target，若用户已切到另一 active 则不 reset 新页面。BFF 继续独占 durable cancel，Web 不发第二 cancel。

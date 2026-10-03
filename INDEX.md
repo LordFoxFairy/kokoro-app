@@ -45,6 +45,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | --- | --- |
 | `src/app/layout.tsx` | 根布局与 provider 装配 |
 | `src/app/app/layout.tsx` | 登录后的桌面工作区布局 |
+| `src/i18n/context.tsx`、`src/ui/theme/theme-context.tsx` | 浏览器 locale/theme 偏好 Provider；存储拒绝时分别回到既有语言协商/系统主题，写失败只保留内存选择，不拥有认证事实 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
 | `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
@@ -118,7 +119,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 - `src/dev/preview-transport.ts`：local/test 合成 Chat 历史；
 - `src/features/app/kokoro-scheduled-surface.tsx`：preview Scheduled localStorage；
 - `src/features/app/kokoro-library-surface.tsx`：同页文件/Agent 作品 Tabs；正式作品消费 BFF Product 二元身份，显式 preview/fixture 独立，错误与重试可见；
-- `src/ui/theme/`、`src/i18n/`、`src/ui/shell/`：主题、locale、草稿和 UI 偏好。
+- `src/ui/theme/`、`src/i18n/`、`src/ui/shell/`：主题、locale、草稿和 UI 偏好；theme/locale 的持久化是可失败偏好，读取异常回既有默认协商，写入异常不撤销当前内存选择。认证索引仍独立 fail closed。
 
 这些数据不是服务端业务事实；完整分类见 [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md)。
 
