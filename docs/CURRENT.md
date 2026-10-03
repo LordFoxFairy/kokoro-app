@@ -1,3 +1,13 @@
+## R139 Product Session 有界恢复（2026-10-03；Root 工程与限定系统验证通过，待 Git）
+
+当前候选把 `/api/auth/session` 收敛为共享、10 秒有界且可真实 abort 的探针：只有 HTTP 200 的显式 `authenticated:false` 才进入匿名登录，可信非空 subject 才进入 live；503、网络、超时、坏响应与 storage 故障均 fail closed 到可访问 Retry。已认证重核验故障保留 Chat 树与旧 subject，同时立即撤销 Project reads；身份变化清 Web 自有 Conversation 索引并硬刷新，不把新主体采纳到旧 engine。同 subject 第二文档通过非授权性质的 UI marker 保留原标签页索引与草稿。
+
+Root 在冻结候选上完成四个真实 Next+Chromium 系统行为：pending 超时后人工 Retry 恢复、503 不误跳登录、真实匿名 200 进入正常登录、同 subject 第二文档不清首标签页 Conversation index/draft。完整 `pnpm check` 原进程 84601 自然 exit 0（116.853s）：contract 256、architecture 50、lint、typecheck、164 files / 2350 tests / 0 skip、build 全通过；其中 OIDC 43 与 IAM relay 68 个真实系统节点均执行通过。manifest SHA-256 `5cb35e18feb23049cc137e6a6d80f90380446c50020c8f39f8c7cb5dfd46225e`。
+
+该候选尚未由 Root Git/发布，当前 live 副本未更新；用户 IAB 仍有 7 个窗口未关闭。本次 BFF fixture 证明限定会话边界，不证明所有真实 owner、模型/provider、Billing 或用户整链闭环。跨 actor draft、marker 多文档并发、list/snapshot 截止恢复仍是后继验收项。
+
+---
+
 ## R137-E117 当前状态（2026-10-03；public7 consumer 与特定 UI 切片已验证，待 Root Git）
 
 Web 已从基线 `ddd38c5bdc1eab01f802e1fc993f7b597d707a64` 完成 BFF public `7.0.0` 单轨 consumer 候选：固定 owner main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`，正规 generator write/check，接入 required nullable selected execution process、锚定分页、safe Todo/activity、同水位续流、410 有界重取与真实 abort/generation 隔离。Browser 仍只走 Web 同源 BFF；无新 owner、数据库、缓存或依赖。

@@ -1,3 +1,18 @@
+## R139 限定验收结果（2026-10-03；Root 工程与系统切片通过，待 Git）
+
+| ID | 已执行行为 | 结果 |
+| --- | --- | --- |
+| R139-01 | 真实 Next+Chromium：session pending 达 10 秒进入显式 Retry，人工 Retry 使用新请求并恢复真实 UI | PASS |
+| R139-02 | session 503 保持故障面，不按匿名跳登录；恢复后才续正常身份流程 | PASS |
+| R139-03 | 真实 `200 authenticated:false` 是唯一自动登录分支 | PASS |
+| R139-04 | 同 BrowserContext、同 subject 第二文档不清首标签页 Conversation index 与未发送 draft | PASS |
+
+Root 冻结候选完整 `pnpm check` 自然 exit 0：contract 256、architecture 50、lint/typecheck、164 files / 2350 tests / 0 skip、build；OIDC 43 与 IAM relay 68 个系统节点在该门内通过。manifest SHA-256 `5cb35e18feb23049cc137e6a6d80f90380446c50020c8f39f8c7cb5dfd46225e`。候选仍待 Root Git，当前 live 副本未更新，用户 IAB 7 个窗口仍未关闭。
+
+以上只证明 fixture 覆盖的 Product Session/UI 缓存边界；不证明真实全部 owner、模型/provider、Billing 或用户整链闭环。跨 actor draft、marker 并发、list/snapshot 截止恢复继续未验，不能据此改为完整发布通过。
+
+---
+
 # Kokoro User Web 验收矩阵
 
 ## Failed snapshot restore（实现候选）

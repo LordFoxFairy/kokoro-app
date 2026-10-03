@@ -1,3 +1,11 @@
+## R139 Product Session 与 UI 缓存准入（2026-10-03；Root 工程与限定系统验证通过，待 Git）
+
+浏览器仍只以同源 Product Session 探针认证：200 `authenticated:false` 才匿名，可信非空 subject 才进入 live；故障、超时、畸形响应与 storage 失败均显式 unavailable。共享探针在开始时只读 UI subject marker，完成时若 marker 已被另一文档改为不同主体则拒绝采纳并要求人工重试。同 subject 新文档不清索引；首次或不同 subject 准入清 Web 自有 Conversation 索引并更新 marker，主体切换继续硬刷新，旧 engine 不承接新主体。
+
+marker 只优化本地缓存失效，不替代 HttpOnly session 或 BFF 每请求授权；无新 API、owner、依赖、数据库或兼容层。其 localStorage 更新不是 Web Lock/跨进程原子协议，多文档主体并发和 draft 暂态列为后继系统验证，不宣称完整 actor 隔离。
+
+---
+
 ## R137-E117 实现现状（2026-10-03；已验证候选待 Root Git）
 
 R135 设计已按 public7 单轨实现：`src/engine/hydrate-process.ts` 成为私有 snapshot/process-page 协调器，所有 machine snapshot adoption 经 execution adapter 统一进入该 gate；同 session/run/scope/watermark 耗尽并校验后才原子 adopt/续流，初始页及跨页重复 identity、cursor loop、run/W mismatch 与重复 410 均 fail closed。safe process 独立于 Message text 与 queued head，UI 只渲染受控自然标签；旧 raw Tool Canvas、subagent详情与 snapshot non-text merge 不再是运行事实。

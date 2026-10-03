@@ -25,6 +25,35 @@ import {
 } from "@/dev/preview-clients"
 
 const STORAGE_KEY = "kokoro.web.conversations"
+const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
+
+/** Remove only browser-owned conversation indexes before admitting a live identity. */
+export function invalidateBrowserAuthSessionIndexes(): void {
+  if (typeof window === "undefined") return
+  const prefix = `${STORAGE_KEY}.`
+  const keys: string[] = []
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith(prefix)) keys.push(key)
+  }
+  for (const key of keys) window.localStorage.removeItem(key)
+}
+
+/** Cache marker only; Product Session remains the sole authentication proof. */
+export function readBrowserAuthIndexSubject(): string | null {
+  if (typeof window === "undefined") return null
+  return window.localStorage.getItem(AUTH_INDEX_SUBJECT_KEY)
+}
+
+/** Invalidate browser-owned indexes only when a verified subject changes. */
+export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null): boolean {
+  const currentSubject = readBrowserAuthIndexSubject()
+  if (currentSubject !== subjectAtProbeStart && currentSubject !== subject) return false
+  if (currentSubject === subject) return true
+  invalidateBrowserAuthSessionIndexes()
+  window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
+  return true
+}
 
 // 会话清单/成果/分享/模型/agent 读客户端子集（SESS-LIST/MODEL-UX/AGENT-PRESET/SHARE/ARTIFACT-LIB）。
 export type ListClient = Pick<

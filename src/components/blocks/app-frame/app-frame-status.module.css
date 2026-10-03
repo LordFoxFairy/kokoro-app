@@ -186,18 +186,18 @@
 
 /* The stage, header, and Composer enter as one non-blocking desktop handoff. */
 @media (min-width: 768px) {
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
     animation: web-thread-enter var(--motion-fast) var(--ease-standard) both;
   }
 }
 
 /* Respect reduced motion without changing the live resize transaction. */
 @media (prefers-reduced-motion: reduce) {
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
-  :global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="workspace-header"]),
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > .timelineStage,
+  .threadFrame:global([data-app-frame-main="true"][data-web-view="thread"]) > :global([data-slot="composer"]) {
     animation: none;
   }
 }

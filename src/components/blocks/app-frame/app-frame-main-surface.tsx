@@ -91,7 +91,7 @@ export function AppFrameMainSurface({
 
   return (
     <section
-      className={mainStyles.main}
+      className={`${mainStyles.main} ${statusStyles.threadFrame}`}
       data-desktop-web="true"
       data-app-frame-main="true"
       data-standalone-surface={standaloneSurface ? "true" : undefined}

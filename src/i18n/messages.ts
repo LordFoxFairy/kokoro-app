@@ -199,6 +199,8 @@ export const zh = {
   "shell.commandPreferences": "偏好设置",
   "shell.loadingWorkspace": "正在打开工作区",
   "shell.loadingApp": "正在加载工作区",
+  "shell.sessionUnavailable": "暂时无法确认登录状态。请重试。",
+  "shell.sessionRetry": "重试",
   "shell.contextPanel": "工作区上下文",
   "shell.heading": "今天想做什么？",
   "shell.subhead": "选一个场景开始，或直接把想法说给我",

@@ -4,10 +4,11 @@
 会话态探针与 Product 退出交互。登录入口由 `src/app/login/route.ts` 服务端持有；鉴权由 HttpOnly Product Session cookie 同源携带，前端不持 token。
 
 ## 公开件
-- `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"`；preview 仅由非生产显式开关放行，探针网络失败按 anonymous 处理。
+- `useSessionState`（`use-session-state.ts`）：探正式 `GET /api/auth/session` → `"checking"|"pass"|"anonymous"|"unavailable"`；preview 仅由非生产显式开关放行，探针故障保持显式重试面，不降级为 anonymous。
 - `useSessionProbe`：在同一探针结果中保留 `preview|authenticated` 模式，供 `/app` 选择 Preview Transport 或真实 Session BFF。
 - `/` 是固定 Kokoro 公开首页；`/login` 是固定 Product RP 登录；`/app` 是受保护工作台。`/auth/sign-in` 只承载 IAM issuer 交互，不是 Product 登录页。
 - `AppGate`（`app-gate.tsx`）：`/app` 的认证闸；authenticated 直接渲染产品工作台；System manifest 仅在已验证时覆盖品牌、导航与 feature flags，anonymous 转到 `/login`。
+- 首次可信身份按 UI subject marker 决定是否清理 Web 自有会话索引；同 subject 新文档不清。身份切换先撤销 Project 读取、清理索引并硬刷新，旧引擎不承接新主体；marker 不参与认证或授权。
 - `/login` 没有 React 中转页；服务端签发 Auth.js CSRF 并启动固定 `kokoro-iam` OIDC，浏览器直接进入 `/auth/sign-in` 的 IAM 邮箱/密码表单。启动失败返回无自动循环的 503，绝不接收凭据或伪造成功；IAM 表单的凭据错误在原表单内呈现并签发新一次性 CSRF。
 
 ## 协作者

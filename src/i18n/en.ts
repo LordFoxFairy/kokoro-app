@@ -1384,6 +1384,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "firstSite.previewNext": "The preview fixture keeps this workspace usable while backend configuration is connecting.",
   "shell.loadingWorkspace": "Opening workspace",
   "shell.loadingApp": "Loading workspace",
+  "shell.sessionUnavailable": "We couldn't confirm your sign-in status. Try again.",
+  "shell.sessionRetry": "Retry",
   "shell.contextPanel": "Workspace context",
 
   "artifact.retryPreview": "Reload preview",

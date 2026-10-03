@@ -9,7 +9,7 @@ import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { DEFAULT_BRAND } from "@/config/brand"
 
 import { useSessionProbe } from "./use-session-state"
-import { RuntimeLoading } from "./runtime-loading"
+import { RuntimeLoading, RuntimeSessionUnavailable } from "./runtime-loading"
 import { browserScheduledTaskClient } from "@/ui/shell/page-clients"
 
 export function AppGate({ brandName }: { brandName?: string } = {}) {
@@ -29,13 +29,19 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
     if (state === "anonymous") router.replace("/login")
   }, [router, state])
 
+  if (state === "unavailable") {
+    return <RuntimeSessionUnavailable label={t("shell.sessionUnavailable")} retryLabel={t("shell.sessionRetry")}
+      pendingLabel={t("shell.loadingApp")} onRetry={probe.retry} pending={probe.requestPending} />
+  }
   if (state === "checking" || state === "anonymous") {
     return <RuntimeLoading label={t("shell.loadingApp")} />
   }
 
   // Product-owned defaults are not preview data. Only a verified live manifest
   // may override visual presentation or feature flags.
-  return (
+  return (<>
+    {probe.unavailable ? <RuntimeSessionUnavailable compact label={t("shell.sessionUnavailable")} retryLabel={t("shell.sessionRetry")}
+      pendingLabel={t("shell.loadingApp")} onRetry={probe.retry} pending={probe.requestPending} /> : null}
     <KokoroAppSurface
       brandName={brandName ?? brand.name}
       brandMark={brand.mark}
@@ -45,5 +51,5 @@ export function AppGate({ brandName }: { brandName?: string } = {}) {
       projectReadBoundary={probe.projectReadBoundary}
       {...(probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
     />
-  )
+  </>)
 }

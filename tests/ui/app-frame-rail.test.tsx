@@ -265,7 +265,7 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
     if (path === "/api/auth/session" && method === "GET") {
       return Response.json({
         authenticated: true,
-        subject: "project-read-user",
+        subject: "project-reader",
         expires_at: "2027-01-01T00:00:00.000Z",
       })
     }
@@ -284,7 +284,9 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
     </ThemeProvider>,
   )
   await screen.findByRole("textbox", { name: "对话输入" })
-  expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", { cache: "no-store" })
+  expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", expect.objectContaining({
+    cache: "no-store", signal: expect.any(AbortSignal),
+  }))
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
@@ -375,7 +377,7 @@ it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能�
   }, async () => {
     checks++
     if (checks === 3) return new Promise<Response>((resolve) => { resolveSession = resolve })
-    return Response.json({ authenticated: true, subject: "same-reader" })
+    return Response.json({ authenticated: true, subject: "project-reader" })
   })
   await screen.findByRole("link", { name: "研究项目甲" })
   const composer = screen.getByRole("textbox", { name: "对话输入" })
@@ -388,7 +390,7 @@ it("同 subject 重核验开始就清空并取消旧读取，迟到响应不能�
   expect(screen.queryByTestId("projects-empty")).not.toBeInTheDocument()
   await act(async () => { resolveOld(projectReadEnvelope()); await Promise.resolve() })
   expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
-  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "same-reader" })) })
+  await act(async () => { resolveSession(Response.json({ authenticated: true, subject: "project-reader" })) })
   await screen.findByRole("link", { name: "研究项目乙" })
   expect(calls).toBe(3)
   expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
@@ -465,16 +467,17 @@ it("创建成功只触发正式 GET 刷新，不把 ACK 当全集，原草稿仍
   }
 })
 
-it("健康正式列表在 session 401 登出后撤销，既不留下项目链接也不改为 preview", async () => {
+it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且不改为 preview", async () => {
   let reads = 0
   let checks = 0
   await mountAuthenticatedProjectRail(async () => { reads++; return projectReadEnvelope() }, async () => {
     checks++
-    return checks === 1 ? Response.json({ authenticated: true, subject: "logout-reader" }) : Response.json({ authenticated: false }, { status: 401 })
+    return checks === 1 ? Response.json({ authenticated: true, subject: "project-reader" }) : Response.json({ authenticated: false }, { status: 401 })
   })
   await screen.findByRole("link", { name: "研究项目甲" })
   act(() => window.dispatchEvent(new Event("focus")))
-  await waitFor(() => expect(screen.queryByRole("textbox", { name: "对话输入" })).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("暂时无法确认登录状态"))
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBeInTheDocument()
   expect(checks).toBe(2)
   expect(reads).toBe(1)
   expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()

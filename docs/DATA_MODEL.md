@@ -1,3 +1,11 @@
+## R139 会话 UI 缓存边界（2026-10-03；Root 工程与限定系统验证通过，待 Git）
+
+Web 仍无数据库、SQL、Redis 或业务事实 owner。`kokoro.web.auth-index-subject` 只是浏览器 UI 缓存失效 marker，不是 Product Session、actor、授权证明或跨设备事实；可信 `/api/auth/session` 结果才可驱动比较。相同 subject 的新文档保留 `kokoro.web.conversations.` 索引；不同 subject 清该 Web 自有前缀并更新 marker 后硬刷新。探针开始后的 marker 竞态或 storage 失败均 fail closed 并等待人工重试，不把新主体采纳进旧树。
+
+该 marker 与索引操作不是原子的跨进程锁；多文档并发切换及既有 draft 跨主体暂态仍需真实系统验收。本切片不新增 schema、migration、API、事务、owner 数据或兼容轨。
+
+---
+
 ## R137-E117 当前页面内存模型（2026-10-03；已验证候选待 Root Git）
 
 当前候选已实现独立 `executionHead` 与 selected `executionProcess`：process 保存 exact run、`todos: null | ordered list` 与有序 safe activities；activity 按 identity 保首次位置并全值替换，Todo 全表替换，分页 cursor 仅存在于单次私有 hydrate 协调。snapshot adopt 不再合并旧内存 non-text process；scope/new hydrate/dispose 真实 abort 并以 generation 隔离迟到结果。Web 仍无数据库、schema、Redis 或浏览器业务持久缓存。
