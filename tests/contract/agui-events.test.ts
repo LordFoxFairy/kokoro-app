@@ -32,6 +32,38 @@ const metadata = {
 }
 
 describe("AG-UI wire contract", () => {
+  describe("R135 safe execution process CUSTOM events", () => {
+    it("accepts a full Todo replacement including an explicit empty list", () => {
+      expect(parseAgUiEvent({
+        type: "CUSTOM", timestamp: 1, name: "kokoro.todo.updated", value: { todos: [] }, metadata,
+      })).toMatchObject({ name: "kokoro.todo.updated", value: { todos: [] } })
+    })
+
+    it("accepts whole-value Skill updates and rejects inherited failed-only fields", () => {
+      const activity = {
+        activity: "skill",
+        activity_id: `act_${"a".repeat(64)}`,
+        preflight_id: `spf_${"b".repeat(64)}`,
+        source_refs: ["skill:alpha"],
+        phase: "loading",
+      }
+      expect(parseAgUiEvent({
+        type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value: activity, metadata,
+      })).toMatchObject({ name: "kokoro.activity.updated", value: activity })
+      expect(() => parseAgUiEvent({
+        type: "CUSTOM", timestamp: 2, name: "kokoro.activity.updated",
+        value: { ...activity, phase: "ready", error_code: "skill_load_failed" }, metadata,
+      })).toThrow()
+    })
+
+    it("rejects old raw process aliases instead of accepting a second wire", () => {
+      expect(() => parseAgUiEvent({
+        type: "CUSTOM", timestamp: 1, name: "kokoro.subagent.started",
+        value: { subagent_id: "private", name: "private" }, metadata,
+      })).toThrow()
+    })
+  })
+
   it("validates the canonical frame without projecting wire DTOs into UI state", () => {
     expect(parseAgUiEvent({
       type: "TEXT_MESSAGE_CONTENT",

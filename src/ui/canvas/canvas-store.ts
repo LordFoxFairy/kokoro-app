@@ -8,7 +8,6 @@ import type { ReactNode } from "react"
 import type {
   SessionDelivery,
   SessionStreamState,
-  SessionToolCall,
   WorkspaceFileEntry,
 } from "@/core/state"
 
@@ -17,8 +16,6 @@ import type {
 export type CanvasContentRef =
   | { kind: "file"; path: string }
   | { kind: "delivery"; conversationId: string; artifactId: string }
-  // 工具详情：runId+toolId 定位活数据；snapshot 为线程态缺位时的兜底显示。
-  | { kind: "tool"; runId: string; toolId: string; snapshot: SessionToolCall }
   | { kind: "node"; title: string; node: ReactNode }
 
 export type CanvasSlot = {
@@ -108,7 +105,6 @@ export function resetCanvasStore(): void {
 export type ResolvedCanvasContent =
   | { kind: "file"; file: WorkspaceFileEntry }
   | { kind: "delivery"; delivery: SessionDelivery }
-  | { kind: "tool"; tool: SessionToolCall }
   | { kind: "node"; title: string; node: ReactNode }
 
 export function resolveCanvasContent(
@@ -124,16 +120,6 @@ export function resolveCanvasContent(
     case "delivery": {
       const delivery = thread.deliveries.find((d) => d.conversationId === ref.conversationId && d.artifactId === ref.artifactId)
       return delivery ? { kind: "delivery", delivery } : null
-    }
-    case "tool": {
-      // 优先取线程活数据（结果回流即更新）；线程缺位（切会话回来等）用点击时快照兜底。
-      const steps = thread.stepsByRun[ref.runId] ?? []
-      for (const step of steps) {
-        if (step.kind === "tool" && step.tool.id === ref.toolId) {
-          return { kind: "tool", tool: step.tool }
-        }
-      }
-      return { kind: "tool", tool: ref.snapshot }
     }
     case "node":
       return { kind: "node", title: ref.title, node: ref.node }

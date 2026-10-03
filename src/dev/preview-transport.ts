@@ -294,6 +294,9 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     const session = sessionFor(sessionId)
     const envelope = makeEnvelope(sessionId, runId)
     const segmentId = `${runId}:seg_1`
+    const safeSegmentId = `seg_${"b".repeat(64)}`
+    const safeToolActivity = { activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: safeSegmentId, status: "running", display_code: "tool.execution" } as const
+    const safeSkillActivity = { activity: "skill", activity_id: `act_${"c".repeat(64)}`, preflight_id: `spf_${"d".repeat(64)}`, source_refs: ["skill:preview"], phase: "loading" } as const
     // 记账清单元数据：首条消息内容作标题，每轮刷新活动时间。
     if (session.title === "") {
       session.title = content
@@ -316,12 +319,10 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // 供 HITL-NOTIFY 跨会话徽标/通知人工走查。仅 dev 假流内可达，不影响真实链路。
     if (content.trim().startsWith("!hitl")) {
       const toolId = `${runId}:tool_1`
-      const args = { command: "rm -rf /tmp/preview-demo" }
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
-        envelope("thinking.delta", { segment_id: segmentId, delta: "正在准备一次工具调用。" }),
-        envelope("tool.invoked", { segment_id: segmentId, tool_id: toolId, name: "shell", args }),
+        envelope("activity.updated", safeToolActivity),
         envelope("interaction.state", {
           interaction_revision: 1, pause_revision: 1, pause_ref: `${runId}:pause:1`, phase: "waiting", action_result: null,
           groups: [{ group_id: `${runId}:group:1`, items: [{
@@ -347,7 +348,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
-        envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理网站需求结构。" }),
+        envelope("activity.updated", safeSkillActivity),
         envelope("message.completed", { segment_id: segmentId, content: longAnswer }),
         envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
         envelope("run.completed", { status: "completed" }),
@@ -363,7 +364,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
-        envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理一份预览成果。" }),
+        envelope("activity.updated", safeSkillActivity),
         envelope("message.completed", { segment_id: segmentId, content: "预览成果已准备好。" }),
         envelope("delivery.created", {
           artifact_id: "preview-delivery-report",
@@ -386,7 +387,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       queueEvents(session, [
         envelope("run.created", { run_id: runId }),
         envelope("todo.updated", { todos: PREVIEW_TODOS }),
-        envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理预览回复。" }),
+        envelope("activity.updated", safeSkillActivity),
         envelope("run.failed", { profile: failureProfile }),
       ])
       drainActive(session)
@@ -395,7 +396,8 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     queueEvents(session, [
       envelope("run.created", { run_id: runId }),
       envelope("todo.updated", { todos: PREVIEW_TODOS }),
-      envelope("thinking.delta", { segment_id: segmentId, delta: "正在整理预览回复。" }),
+      envelope("activity.updated", safeSkillActivity),
+      envelope("message.delta", { segment_id: segmentId, delta: "", text_boundary: "start" }),
       envelope("message.delta", { segment_id: segmentId, delta: "预览模式：已收到「" }),
       envelope("message.delta", { segment_id: segmentId, delta: `${content}」。` }),
       envelope("message.completed", {
@@ -474,6 +476,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
           run_id: activeRunId, state: interaction?.phase === "waiting" || interaction?.phase === "resuming" ? interaction.phase : "active",
           pending_pauses: interaction?.phase === "waiting" || interaction?.phase === "resuming" ? [interaction] : [],
         } } : {}),
+        execution_process: activeRunId === null ? null : { run_id: activeRunId, todos: null, activities: [], next_cursor: null },
         files: [],
         deliveries: [],
         deliveries_has_more: false,
@@ -482,6 +485,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
         event_watermark: null,
       }
     },
+    fetchRunProcessPage: async () => { throw new Error("preview process has no continuation page") },
 
     // The preview transport must close the same loop as the real session
     // service. Keeping HITL at "已记录你的决定…" forever made the visual
@@ -492,7 +496,6 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       await ensureRestored()
       const session = sessionFor(sessionId)
       const envelope = makeEnvelope(sessionId, runId)
-      const segmentId = `${runId}:seg_1`
       if (body.kind === "run.cancel") {
         queueEvents(session, [
           envelope("run.completed", { status: "cancelled" }),
@@ -500,18 +503,20 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
       } else if (body.kind === "run.resume") {
         const decision = body.decisions[0]
         const rejected = decision?.type === "reject"
+        const safeSegmentId = `seg_${"b".repeat(64)}`
+        const safeToolActivity = {
+          activity: "tool",
+          activity_id: `act_${"a".repeat(64)}`,
+          segment_id: safeSegmentId,
+          status: rejected ? "failed" : "completed",
+          display_code: "tool.execution",
+        } as const
         queueEvents(session, [
           envelope("interaction.state", { interaction_revision: 2, pause_revision: body.expected_pause_revision,
             pause_ref: body.pause_ref, phase: "active", groups: [],
             action_result: { command_id: commandId, pause_revision: body.expected_pause_revision, kind: "native_consumed" } }),
           envelope("todo.updated", { todos: COMPLETED_PREVIEW_TODOS }),
-          envelope("tool.returned", {
-            segment_id: segmentId,
-            tool_id: `${runId}:tool_1`,
-            name: "shell",
-            result: rejected ? "预览工具已拒绝。" : "预览工具已执行。",
-            is_error: rejected,
-          }),
+          envelope("activity.updated", safeToolActivity),
           envelope("message.completed", {
             segment_id: `${runId}:seg_2`,
             content: rejected ? "已拒绝这次工具调用。" : "工具调用已完成。",

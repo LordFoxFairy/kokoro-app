@@ -1,7 +1,7 @@
 // 纯状态模型：零 I/O 零 React；内部投影类型与 AG-UI wire DTO 分离。
 
 import type { InteractionState } from "@/contract/control"
-import type { ExecutionHead } from "@/contract/chat"
+import type { ExecutionHead, RunProcessActivity } from "@/contract/chat"
 import type { EventCursor } from "@/contract/agui-events"
 import type { AgentFailureProfile } from "@/contract/agent-failure"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
@@ -111,6 +111,7 @@ export type SessionStreamState = {
   seenEventIds: Set<string>
   messages: SessionMessage[]
   todos: SessionTodo[]
+  executionProcess: { runId: string; todos: SessionTodo[] | null; activities: RunProcessActivity[] } | null
   stepsByRun: Record<string, SessionStep[]>
   runStatus: "idle" | RunCompletedStatus | "failed"
   // 已验证的安全失败按 owner run identity 索引；不保存 producer message、exception 或 stack。
@@ -137,6 +138,7 @@ export function createSessionStreamState(): SessionStreamState {
     seenEventIds: new Set(),
     messages: [],
     todos: [],
+    executionProcess: null,
     stepsByRun: {},
     runStatus: "idle",
     runFailuresById: {},

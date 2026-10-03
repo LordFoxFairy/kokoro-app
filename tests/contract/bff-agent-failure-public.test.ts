@@ -12,9 +12,9 @@ import YAML from "yaml"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "bb610ea7262574772e1d8c309a6e03171d07d0a3"
-const BFF_PUBLIC_OPENAPI_SHA256 = "75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129"
-const BFF_PUBLIC_OPENAPI_VERSION = "6.0.0"
+const BFF_OWNER_COMMIT = "a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b"
+const BFF_PUBLIC_OPENAPI_SHA256 = "76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe"
+const BFF_PUBLIC_OPENAPI_VERSION = "7.0.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -122,11 +122,11 @@ const SEMANTIC_MUTANTS: readonly [string, (draft: FailureSpecFixture) => void][]
 ]
 
 describe("pinned BFF Agent failure public contract", () => {
-  it("pins the exact owner public 6.0 OpenAPI bytes", async () => {
+  it("pins the exact owner public 7.0 OpenAPI bytes", async () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("bb610ea7262574772e1d8c309a6e03171d07d0a3")
+    expect(BFF_OWNER_COMMIT).toBe("a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -136,7 +136,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const failure = chat.properties.failure
 
     expect(chat.properties.role.enum).toEqual(["user", "assistant"])
-    expect(failure, "public 6.0 ChatMessage.failure must be present").toBeDefined()
+    expect(failure, "public 7.0 ChatMessage.failure must be present").toBeDefined()
     expect(failure.required).toEqual(["source", "code", "retryable"])
     expect(failure.additionalProperties).toBe(false)
     expect(Object.keys(failure.properties)).toEqual(["source", "code", "retryable"])

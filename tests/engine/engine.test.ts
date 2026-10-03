@@ -51,6 +51,14 @@ function buildEngine(initial: ConversationStore | null = null, reattachTimeoutMs
   return engine
 }
 
+function buildConfiguredEngine(initial: ConversationStore, configure: (fake: FakeClient) => void) {
+  client = createFakeClient()
+  configure(client)
+  storage = createMemoryStorage<ConversationStore>(initial)
+  let idCounter = 0
+  engine = createSessionEngine({ client, storage, now: () => 1_000, createId: (prefix) => `${prefix}_${(idCounter += 1)}` })
+}
+
 beforeEach(resetFixtureSeq)
 afterEach(() => {
   engine.dispose()
@@ -831,6 +839,120 @@ describe("停止与放弃", () => {
 
 describe("snapshot-first 水合与中断恢复", () => {
   const SEEDED = addConversation(null, "conv_9", 500)
+
+  it("R135 exhausts one anchored process page before opening the stream", async () => {
+    buildConfiguredEngine(SEEDED, (fake) => {
+      fake.nextSnapshot = () => Promise.resolve({
+      ...makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_20, activeRun: { run_id: "run_a", status: "running" } }),
+      execution_process: {
+        run_id: "run_a", todos: null,
+        activities: Array.from({ length: 100 }, (_, index) => ({
+          activity: "tool", activity_id: `act_${index.toString(16).padStart(64, "0")}`,
+          segment_id: `seg_${index.toString(16).padStart(64, "0")}`,
+          status: "completed", display_code: "tool.execution",
+        })),
+        next_cursor: CURSOR_30,
+      },
+      } as unknown as ReturnType<typeof makeSnapshot>)
+      fake.nextProcessPage = () => new Promise((resolve) => { resolvePage = resolve })
+    })
+    let resolvePage!: (page: Awaited<ReturnType<FakeClient["nextProcessPage"]>>) => void
+
+    await settle()
+    expect(client.processPageCalls).toEqual([expect.objectContaining({
+      sessionId: "conv_9", runId: "run_a", watermark: CURSOR_20, cursor: CURSOR_30,
+    })])
+    expect(client.streams).toHaveLength(0)
+    expect(thread().executionProcess).toBeNull()
+
+    resolvePage({
+      run_id: "run_a", todos: null,
+      activities: [{
+        activity: "tool", activity_id: `act_${"f".repeat(64)}`, segment_id: `seg_${"e".repeat(64)}`,
+        status: "completed", display_code: "tool.execution",
+      }],
+      next_cursor: null, event_watermark: CURSOR_20,
+    })
+    await settle()
+    expect((thread() as unknown as { executionProcess?: { activities: unknown[] } }).executionProcess?.activities).toHaveLength(101)
+    expect(client.streams).toHaveLength(1)
+    expect(client.streams[0]?.resumeCursor).toBe(CURSOR_20)
+  })
+
+  it("R135 aborts an in-flight process page when scope is disposed", async () => {
+    let observedSignal: AbortSignal | undefined
+    buildConfiguredEngine(SEEDED, (fake) => {
+      fake.nextSnapshot = () => Promise.resolve({
+      ...makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_20, activeRun: { run_id: "run_a", status: "running" } }),
+      execution_process: { run_id: "run_a", todos: null, activities: [], next_cursor: CURSOR_30 },
+      } as unknown as ReturnType<typeof makeSnapshot>)
+      fake.nextProcessPage = ({ signal }) => {
+        observedSignal = signal
+        return new Promise(() => {})
+      }
+    })
+    await settle()
+    engine.dispose()
+    expect(observedSignal?.aborted).toBe(true)
+    expect(client.streams).toHaveLength(0)
+  })
+
+  it("R135 discards an expired anchored page and performs one bounded fresh snapshot", async () => {
+    let snapshotNumber = 0
+    buildConfiguredEngine(SEEDED, (fake) => {
+      fake.nextSnapshot = () => {
+        snapshotNumber += 1
+        return Promise.resolve({
+        ...makeSnapshot({ sessionId: "conv_9", eventWatermark: snapshotNumber === 1 ? CURSOR_20 : CURSOR_30, activeRun: { run_id: "run_a", status: "running" } }),
+        execution_process: {
+          run_id: "run_a", todos: null, activities: [],
+          next_cursor: snapshotNumber === 1 ? CURSOR_30 : null,
+        },
+        } as unknown as ReturnType<typeof makeSnapshot>)
+      }
+      fake.nextProcessPage = () => Promise.reject(
+        new SessionClientError("http", "process cursor expired", "process_cursor_expired"),
+      )
+    })
+    await settle()
+    expect(client.processPageCalls).toHaveLength(1)
+    expect(client.snapshotCalls).toEqual(["conv_9", "conv_9"])
+    expect(client.streams).toHaveLength(1)
+    expect(client.streams[0]?.resumeCursor).toBe(CURSOR_30)
+  })
+
+  it("R135 restores a terminal process without inventing a live subscription when no head exists", async () => {
+    buildConfiguredEngine(SEEDED, (fake) => { fake.nextSnapshot = () => Promise.resolve({
+      ...makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_20 }),
+      execution_process: {
+        run_id: "run_terminal", todos: [], activities: [{
+          activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+          status: "completed", display_code: "tool.execution",
+        }], next_cursor: null,
+      },
+    } as unknown as ReturnType<typeof makeSnapshot>) })
+    await settle()
+    expect((thread() as unknown as { executionProcess?: { runId: string } }).executionProcess?.runId).toBe("run_terminal")
+    expect(client.streams).toHaveLength(0)
+  })
+
+  it.each([null, CURSOR_30])("R136 rejects duplicate activity identities in the initial snapshot when next_cursor=%s", async (nextCursor) => {
+    const duplicate = {
+      activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+      status: "completed", display_code: "tool.execution",
+    } as const
+    buildConfiguredEngine(SEEDED, (fake) => {
+      fake.nextSnapshot = () => Promise.resolve({
+        ...makeSnapshot({ sessionId: "conv_9", eventWatermark: CURSOR_20, activeRun: { run_id: "run_a", status: "running" } }),
+        execution_process: { run_id: "run_a", todos: null, activities: [duplicate, duplicate], next_cursor: nextCursor },
+      } as unknown as ReturnType<typeof makeSnapshot>)
+      fake.nextProcessPage = () => Promise.resolve({ run_id: "run_a", todos: null, activities: [], next_cursor: null, event_watermark: CURSOR_20 })
+    })
+    await settle()
+    expect(client.streams).toHaveLength(0)
+    expect(thread().executionProcess).toBeNull()
+    expect(engine.getSnapshot().machine.phase).toBe("error")
+  })
 
   it.each([
     { historyStatus: "completed" as const, snapshotHasReceiptTerminal: false },
@@ -1661,6 +1783,7 @@ describe("snapshot-first 水合与中断恢复", () => {
       createId: (prefix) => `${prefix}_evict_${requested.length}`,
     })
 
+    await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
     expect(requested).toEqual(["conv_9"])
@@ -2945,7 +3068,7 @@ it("R74 does not resurrect a successor terminal observed while its stale RR head
   } finally { vi.restoreAllMocks() }
 })
 
-it("R74 failed resume snapshot preserves confirmed ordinary tool activity without reconstructing HITL", async () => {
+it("R136 raw tool frames do not reconstruct process state during failed resume", async () => {
   const http = r66BuildHttpEngine(r66Snapshot())
   try {
     await settle()
@@ -2954,38 +3077,33 @@ it("R74 failed resume snapshot preserves confirmed ordinary tool activity withou
     http.emit("agui_00000000000000000000000000000017", r66Frame({ type: "TOOL_CALL_END", toolCallId: "ordinary_tool" }, 23))
     http.emit("agui_00000000000000000000000000000018", r66Frame({ type: "TOOL_CALL_RESULT", toolCallId: "ordinary_tool", messageId: "tool_result", content: "confirmed result", role: "tool" }, 24))
     await settle()
-    expect(thread().stepsByRun.run_1?.find((step) => step.kind === "tool" && step.tool.id === "ordinary_tool")).toMatchObject({ tool: { status: "done", result: "confirmed result" } })
+    expect(thread().stepsByRun.run_1?.some((step) => step.kind === "tool")).not.toBe(true)
     http.controlReply = async (call) => r74FailedControl(call)
     r66Stage()
     await settle()
-    expect(thread().stepsByRun.run_1?.find((step) => step.kind === "tool" && step.tool.id === "ordinary_tool")).toMatchObject({ tool: { status: "done", result: "confirmed result" } })
+    expect(thread().stepsByRun.run_1?.some((step) => step.kind === "tool")).not.toBe(true)
     expect(thread().interactionsByRun.run_1?.groups).toHaveLength(2)
     expect(thread().messages.filter((message) => message.role === "assistant")).toHaveLength(1)
   } finally { vi.restoreAllMocks() }
 })
 
-it("R74 preserves ordinary subagent activity once when the new RR stream replays a known process frame", async () => {
+it("R136 preserves one safe subagent activity when the stream replays its known cursor", async () => {
   const http = r66BuildHttpEngine(r66Snapshot({ state: "active" }))
   try {
     await settle()
-    const release = r74HoldNextSnapshot(http)
-    http.setSnapshot(r74Snapshot("waiting"))
-    http.emit(CURSOR_30, r66Frame({ type: "RUN_FINISHED", threadId: "conv_9", runId: "run_1", status: "completed" }, 30))
-    await settle()
     const cursor = "agui_0000000000000000000000000000002a"
-    const frame = r66Frame({ type: "CUSTOM", name: "kokoro.subagent.started", value: {
-      segment_id: "sub_segment", subagent_id: "sub_exact", name: "research", description: "ordinary process",
-      subagent_type: "research", source: "built-in",
+    const frame = r66Frame({ type: "CUSTOM", name: "kokoro.activity.updated", value: {
+      activity: "subagent",
+      activity_id: `act_${"d".repeat(64)}`,
+      segment_id: `seg_${"e".repeat(64)}`,
+      status: "running",
+      display_code: "subagent.execution",
     } }, 31)
     http.emit(cursor, frame)
     await settle()
-    release()
-    await settle()
-    expect(http.streams).toHaveLength(2)
     http.emit(cursor, frame)
     await settle()
-    expect(thread().stepsByRun.run_1?.filter((step) => step.kind === "subagent" && step.subagent.id === "sub_exact")).toHaveLength(1)
+    expect(thread().executionProcess?.activities).toEqual([frame.value])
     expect(thread().resumeCursor).toBe(cursor)
-    expect(thread().messages.filter((message) => message.runId === "run_2" && message.role === "assistant")).toHaveLength(1)
   } finally { vi.restoreAllMocks() }
 })

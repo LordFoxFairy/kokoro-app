@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react"
 import { z } from "zod"
 
 import type { AgentMode } from "@/core/conversations"
-import type { SessionSubagent, SessionToolCall } from "@/core/state"
+import type { RunProcessActivity } from "@/contract/chat"
 import { useT } from "@/i18n/context"
 import type { MessageKey } from "@/i18n/messages"
 import { createPersistedStore } from "@/lib/persisted-store"
@@ -48,16 +48,10 @@ function useDisclosure(segmentId: string): boolean | null {
 }
 
 type SegmentProcessProps = {
-  onOpenFile?: (path: string) => void
-  // 工具 pill 点击 → canvas 详情（保留内联展开作降级）。
-  onOpenTool?: (tool: SessionToolCall) => void
-  sessionId: string | null
   // 该段全局唯一 id：作为持久化展开意图（manualOpen）的键，跨刷新保留。
   segmentId: string
   // 这一段的过程：思考独白 + 该段用到的工具 + 子智能体。
-  thinking: string
-  tools: SessionToolCall[]
-  subagents: SessionSubagent[]
+  activities: RunProcessActivity[]
   // 这一段是否仍在生长（整轮的尾段）：决定默认展开（实时看）与「思考中」脉冲。
   live: boolean
   // 本会话模式：Fast 把「思考」改称「处理」，避免「直接作答」与「思考」自相矛盾。
@@ -89,13 +83,8 @@ function settledSummary(
 // 一段的「过程块」：挂在该段答案气泡【下面】的可折叠次级披露——比气泡更轻（muted）。
 // 流式中（尾段）默认展开方便实时看，落定后收成一行摘要，保持对话干净。全空时不渲染。
 export function SegmentProcess({
-  sessionId,
-  onOpenFile,
-  onOpenTool,
   segmentId,
-  thinking,
-  tools,
-  subagents,
+  activities,
   live,
   mode,
 }: SegmentProcessProps) {
@@ -106,19 +95,19 @@ export function SegmentProcess({
   const manualOpen = useDisclosure(segmentId)
   const open = manualOpen ?? live
 
-  const hasActivity = thinking.length > 0 || tools.length > 0 || subagents.length > 0
+  const tools = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "tool" }> => activity.activity === "tool")
+  const subagents = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "subagent" }> => activity.activity === "subagent")
+  const skills = activities.filter((activity): activity is Extract<RunProcessActivity, { activity: "skill" }> => activity.activity === "skill")
+  const hasActivity = activities.length > 0
   if (!hasActivity) {
     return null
   }
   // Manus keeps a settled, text-only reasoning trace out of the primary
   // reading column; the task progress affordance is the disclosure surface.
   // Ordinary tool rows retain their disclosure; interactions live outside this block.
-  if (!live && tools.length === 0 && subagents.length === 0) {
-    return null
-  }
 
   const verb = mode === "fast" ? t("thread.verbFast") : t("thread.verbThink")
-  const failedTools = tools.filter((tool) => tool.status === "error").length
+  const failedTools = tools.filter((tool) => tool.status === "failed").length
   // This summary describes ordinary process activity, never the HITL collection.
   const summary = live
       ? t("thread.verbActive", { verb })
@@ -161,29 +150,23 @@ export function SegmentProcess({
           {/* inert（收起时）把内容移出无障碍树 + 不可聚焦，补回 Collapsible 的隐藏语义；
               它不设 display:none，故 grid 高度过渡仍能动（视觉裁剪由 clip 的 overflow:hidden 负责）。 */}
           <div className={styles.processBody} inert={!open}>
-            {thinking ? <p className={styles.processThinking}>{thinking}</p> : null}
-
             {tools.length > 0 ? (
               <div className={styles.actgroup} aria-label={t("thread.toolCall")}>
-                {tools.map((tool) => {
-                  return (
-                    <ToolCallRow
-                      sessionId={sessionId}
-                      {...(onOpenFile === undefined ? {} : { onOpenFile })}
-                      {...(onOpenTool === undefined ? {} : { onOpenDetail: () => onOpenTool(tool) })}
-                      key={tool.id}
-                      tool={tool}
-                    />
-                  )
-                })}
+                {tools.map((activity) => <ToolCallRow key={activity.activity_id} activity={activity} />)}
               </div>
             ) : null}
 
             {subagents.length > 0 ? (
               <div className={styles.actgroup} aria-label={t("thread.subagent")}>
-                {subagents.map((subagent) => (
-                  <SubagentRow key={subagent.id} subagent={subagent} />
-                ))}
+                {subagents.map((activity) => <SubagentRow key={activity.activity_id} activity={activity} />)}
+              </div>
+            ) : null}
+
+            {skills.length > 0 ? (
+              <div className={styles.actgroup}>
+                {skills.map((activity) => <div className={styles.tool} data-status={activity.phase} key={activity.activity_id}>
+                  <div className={styles.toolSummary}><span className={styles.toolName}>{t("thread.skill")}</span><span>{t(activity.phase === "resolving" ? "thread.skillResolving" : activity.phase === "loading" ? "thread.skillLoading" : activity.phase === "ready" ? "thread.skillReady" : "thread.skillFailed")}</span></div>
+                </div>)}
               </div>
             ) : null}
           </div>

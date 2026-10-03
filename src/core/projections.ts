@@ -8,6 +8,7 @@ import type {
   SessionSubagent,
   SessionToolCall,
 } from "./state"
+import type { RunProcessActivity } from "@/contract/chat"
 
 // 线程渲染项：连续同 runId 的 assistant 消息归并为一个 turn；用户消息单独成项。
 export type ThreadItem =
@@ -82,7 +83,7 @@ export function buildThreadItems(state: SessionStreamState): ThreadItem[] {
   }
 
   // 仅有过程步骤、尚无任何 assistant 文本的 run（首 token 未到）：作为无文本的成形 turn。
-  for (const runId of new Set([...Object.keys(state.stepsByRun), ...Object.keys(state.interactionsByRun)])) {
+  for (const runId of new Set([...Object.keys(state.stepsByRun), ...Object.keys(state.interactionsByRun), ...(state.executionProcess === null ? [] : [state.executionProcess.runId])])) {
     if (renderedRuns.has(runId)) {
       continue
     }
@@ -129,10 +130,11 @@ export type Segment = {
   thinking: string
   tools: SessionToolCall[]
   subagents: SessionSubagent[]
+  activities: RunProcessActivity[]
 }
 
 // 按 segmentId 把有序步骤分段，保持首次出现顺序（即真实发生时序）。
-export function groupSegments(steps: SessionStep[]): Segment[] {
+export function groupSegments(steps: SessionStep[], activities: readonly RunProcessActivity[] = []): Segment[] {
   // ordered 保留首次出现顺序；byId 仅做去重定位，二者指向同一对象。
   const ordered: Segment[] = []
   const byId = new Map<string, Segment>()
@@ -141,7 +143,7 @@ export function groupSegments(steps: SessionStep[]): Segment[] {
     if (existing) {
       return existing
     }
-    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [] }
+    const created: Segment = { segmentId: id, thinking: "", tools: [], subagents: [], activities: [] }
     byId.set(id, created)
     ordered.push(created)
     return created
@@ -156,6 +158,10 @@ export function groupSegments(steps: SessionStep[]): Segment[] {
       segment.subagents.push(step.subagent)
     }
     // text 步骤只标记该段存在；正文从 messagesById 取。
+  }
+  for (const activity of activities) {
+    const segmentId = activity.activity === "skill" ? `skill:${activity.preflight_id}` : activity.segment_id
+    segmentFor(segmentId).activities.push(activity)
   }
   return ordered
 }

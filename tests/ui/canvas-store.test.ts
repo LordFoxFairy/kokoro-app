@@ -102,41 +102,4 @@ describe("resolveCanvasContent（引用 → 线程活数据）", () => {
     expect(resolveCanvasContent({ kind: "delivery", conversationId: "ses_1", artifactId: "artifact_x" }, thread)).toBeNull()
   })
 
-  it("tool：优先线程活数据（结果回流即更新），线程缺位用点击时快照兜底", () => {
-    const snapshot = {
-      id: "tool_1",
-      name: "write_file",
-      args: { path: "/tmp/a" },
-      status: "running",
-    } as const
-    let thread = applyChatProjectionEvent(
-      createSessionStreamState(),
-      makeEvent("tool.invoked", {
-        segment_id: "seg_1",
-        tool_id: "tool_1",
-        name: "write_file",
-        args: { path: "/tmp/a" },
-      }),
-    )
-    thread = applyChatProjectionEvent(
-      thread,
-      makeEvent("tool.returned", {
-        segment_id: "seg_1",
-        tool_id: "tool_1",
-        name: "write_file",
-        result: "ok",
-        is_error: false,
-      }),
-    )
-    const live = resolveCanvasContent(
-      { kind: "tool", runId: "run_1", toolId: "tool_1", snapshot },
-      thread,
-    )
-    expect(live?.kind === "tool" ? live.tool : null).toMatchObject({ status: "done", result: "ok" })
-    const fallback = resolveCanvasContent(
-      { kind: "tool", runId: "run_gone", toolId: "tool_1", snapshot },
-      createSessionStreamState(),
-    )
-    expect(fallback?.kind === "tool" ? fallback.tool : null).toBe(snapshot)
-  })
 })

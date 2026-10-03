@@ -174,14 +174,12 @@ function customProjection(
       return projectionEnvelope(cursor, event, "interaction.state", event.value)
     case "kokoro.delivery.created":
       return projectionEnvelope(cursor, event, "delivery.created", event.value)
-    case "kokoro.subagent.started":
-      return projectionEnvelope(cursor, event, "subagent.started", event.value)
-    case "kokoro.subagent.finished":
-      return projectionEnvelope(cursor, event, "subagent.finished", event.value)
     case "kokoro.session.created":
       return projectionEnvelope(cursor, event, "session.created", event.value)
     case "kokoro.todo.updated":
       return projectionEnvelope(cursor, event, "todo.updated", event.value)
+    case "kokoro.activity.updated":
+      return projectionEnvelope(cursor, event, "activity.updated", event.value)
     case "kokoro.message.user":
       return projectionEnvelope(cursor, event, "message.user", event.value)
     default:
@@ -373,12 +371,7 @@ export class AgUiEventMapper {
         this.#toolCalls.set(key, tool)
         return {
           cursor,
-          projectionEvent: projectionEnvelope(cursor, event, "tool.invoked", {
-            segment_id: tool.segmentId,
-            tool_id: event.toolCallId,
-            name: tool.name,
-            args: {},
-          }),
+          projectionEvent: null,
           uiMessageChunks: [toolInputStartChunk(tool)],
           terminal: false,
         }
@@ -386,18 +379,9 @@ export class AgUiEventMapper {
       case EventType.TOOL_CALL_ARGS: {
         const { tool, bootstrapped } = this.#toolLookup(event, event.toolCallId)
         tool.argumentsText += event.delta
-        const args = jsonRecord(tool.argumentsText)
         return {
           cursor,
-          projectionEvent:
-            args === null
-              ? null
-              : projectionEnvelope(cursor, event, "tool.invoked", {
-                  segment_id: tool.segmentId,
-                  tool_id: event.toolCallId,
-                  name: tool.name,
-                  args,
-                }),
+          projectionEvent: null,
           uiMessageChunks: [
             ...(bootstrapped ? [toolInputStartChunk(tool)] : []),
             {
@@ -418,12 +402,7 @@ export class AgUiEventMapper {
         tool.inputCompleted = true
         return {
           cursor,
-          projectionEvent: projectionEnvelope(cursor, event, "tool.invoked", {
-            segment_id: tool.segmentId,
-            tool_id: event.toolCallId,
-            name: tool.name,
-            args,
-          }),
+          projectionEvent: null,
           uiMessageChunks: [
             ...(bootstrapped ? [toolInputStartChunk(tool)] : []),
             toolInputAvailableChunk(tool, args),
@@ -450,13 +429,7 @@ export class AgUiEventMapper {
           : { type: "tool-output-available", toolCallId: event.toolCallId, output: event.content, dynamic: true })
         return {
           cursor,
-          projectionEvent: projectionEnvelope(cursor, event, "tool.returned", {
-            segment_id: event.messageId,
-            tool_id: event.toolCallId,
-            name: tool.name,
-            result: event.content,
-            is_error: event.isError === true,
-          }),
+          projectionEvent: null,
           uiMessageChunks,
           terminal: false,
         }

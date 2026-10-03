@@ -2,6 +2,70 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { createSessionClient } from "@/engine/client"
 
+describe("R135 snapshot-first process page client", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("accepts the public7 required nullable snapshot process", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      session: { session_id: "ses_1", title: "Chat", owner_id: "user_1", created_at: "2026-10-03T00:00:00Z", updated_at: "2026-10-03T00:00:01Z" },
+      files: [], deliveries: [], deliveries_has_more: false,
+      event_watermark: "agui_00000000000000000000000000000011",
+      execution_process: null,
+    }), { status: 200, headers: { "content-type": "application/json" } })))
+    await expect(createSessionClient({ baseUrl: "/api/session" }).fetchSnapshot("ses_1")).resolves.toMatchObject({
+      execution_process: null,
+    })
+  })
+
+  it("propagates an AbortSignal to the real snapshot request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const controller = new AbortController()
+    const client = createSessionClient({ baseUrl: "/api/session" })
+    await (client.fetchSnapshot as unknown as (id: string, options: { signal: AbortSignal }) => Promise<unknown>)(
+      "ses_abort", { signal: controller.signal },
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/session/sessions/ses_abort",
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
+
+  it("R136 consumes the catchall's unwrapped public7 page with exact anchor, scope, cursor and signal", async () => {
+    const page = {
+      run_id: "run_a", todos: null, activities: [], next_cursor: null,
+      event_watermark: "agui_00000000000000000000000000000011",
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(page), {
+      status: 200, headers: { "content-type": "application/json" },
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const controller = new AbortController()
+    await expect(createSessionClient({ baseUrl: "/api/session" }).fetchRunProcessPage({
+      sessionId: "ses_a", runId: "run_a", watermark: page.event_watermark,
+      cursor: "agui_00000000000000000000000000000022", scope: { kind: "project", projectRef: "project a" },
+      signal: controller.signal,
+    })).resolves.toEqual(page)
+    const [target, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(target).toBe("/api/session/sessions/ses_a/runs/run_a/process?watermark=agui_00000000000000000000000000000011&limit=100&cursor=agui_00000000000000000000000000000022&project_ref=project+a")
+    expect(init.signal).toBe(controller.signal)
+  })
+
+  it("R136 rejects a re-wrapped success body and preserves a public7 error code", async () => {
+    const page = { run_id: "run_a", todos: null, activities: [], next_cursor: null, event_watermark: "agui_00000000000000000000000000000011" }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: page, meta: { request_id: "req" } }), {
+      status: 200, headers: { "content-type": "application/json" },
+    })).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "process_projection_unavailable", message: "unavailable" }, meta: { request_id: "req" } }), {
+      status: 503, headers: { "content-type": "application/json" },
+    })))
+    const client = createSessionClient({ baseUrl: "/api/session" })
+    const args = { sessionId: "ses_a", runId: "run_a", watermark: page.event_watermark, scope: { kind: "direct" } as const }
+    await expect(client.fetchRunProcessPage(args)).rejects.toThrow()
+    await expect(client.fetchRunProcessPage(args)).rejects.toMatchObject({ code: "process_projection_unavailable" })
+  })
+
+})
+
 describe("listSessions：owner required nullable cursor", () => {
   afterEach(() => vi.unstubAllGlobals())
 
@@ -87,6 +151,7 @@ describe("fetchSnapshot：兼容 Session runtime 的 feature_key 增量元数据
         deliveries: [],
         deliveries_has_more: false,
         event_watermark: null,
+        execution_process: null,
       }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),

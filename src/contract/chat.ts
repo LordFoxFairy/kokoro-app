@@ -1,7 +1,7 @@
 // Canonical v1 runtime contract. Keep these schemas synchronized with the checked-in API documentation and contract tests.
 
 import { z } from "zod"
-import { eventCursorSchema } from "./agui-events"
+import { eventCursorSchema, runProcessActivitySchema, runTodoSchema } from "./agui-events"
 import { resumeDecisionSchema, interactionStateSchema } from "./control"
 import { deliverySchema, workspaceFileSchema } from "./artifacts"
 import { agentFailureProfileSchema } from "./agent-failure"
@@ -59,6 +59,11 @@ export const executionHeadSchema = z.object({
   }
 })
 export type ExecutionHead = z.infer<typeof executionHeadSchema>
+export type RunProcessActivity = z.infer<typeof runProcessActivitySchema>
+export const runExecutionProcessSchema = z.object({ run_id: z.string().min(1), todos: z.array(runTodoSchema).max(100).nullable(), activities: z.array(runProcessActivitySchema).max(100), next_cursor: eventCursorSchema.nullable() }).strict()
+export type RunExecutionProcess = z.infer<typeof runExecutionProcessSchema>
+export const runProcessPageSchema = runExecutionProcessSchema.extend({ event_watermark: eventCursorSchema }).strict()
+export type RunProcessPage = z.infer<typeof runProcessPageSchema>
 export const sessionListItemSchema = z
   .object({
     session_id: z.string().min(1),
@@ -80,6 +85,7 @@ export const sessionSnapshotSchema = z
     session: sessionMetaSchema,
     messages: z.array(messageRecordSchema).optional(),
     execution_head: executionHeadSchema.optional(),
+    execution_process: runExecutionProcessSchema.nullable(),
     files: z.array(workspaceFileSchema),
     deliveries: z.array(deliverySchema),
     deliveries_has_more: z.boolean(),

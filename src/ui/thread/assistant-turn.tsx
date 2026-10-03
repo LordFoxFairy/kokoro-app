@@ -6,7 +6,8 @@ import { InputCard } from "@/ui/hitl/input-card"
 import type { AgentMode } from "@/core/conversations"
 import { DEFAULT_BRAND } from "@/config/brand"
 import { groupSegments } from "@/core/projections"
-import type { SessionMessage, SessionStep, SessionToolCall } from "@/core/state"
+import type { SessionMessage, SessionStep } from "@/core/state"
+import type { RunProcessActivity } from "@/contract/chat"
 import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
@@ -25,13 +26,12 @@ type AssistantTurnProps = {
   executionPhase?: MachinePhase
   brandName?: string
   onOpenFile?: (path: string) => void
-  // 工具 pill 点击 → canvas 详情（runId 已在上游绑定）。
-  onOpenTool?: (tool: SessionToolCall) => void
   sessionId: string | null
   // 这一轮（一个 runId）按 seq 排好的有序步骤：思考/工具/子智能体/文本交错。
   steps: SessionStep[]
   // 文本步骤按 segmentId 取这一段正文；过程先到、正文未到时该段可能暂缺。
   messagesById: Record<string, SessionMessage>
+  activities?: readonly RunProcessActivity[]
   // 这一轮是否仍在流式：驱动「正在出字」光标、过程默认展开。
   isLive: boolean
   // 重连续传态：在途轮的 live 锚点改为「重连中…」，区别于普通「正在思考…」。
@@ -82,11 +82,9 @@ export function AssistantTurn({
   interaction,
   executionPhase,
   brandName = DEFAULT_BRAND.name,
-  sessionId,
-  onOpenFile,
-  onOpenTool,
   steps,
   messagesById,
+  activities = [],
   isLive,
   reconnecting = false,
   mode,
@@ -110,9 +108,20 @@ export function AssistantTurn({
     })
     return () => window.cancelAnimationFrame(frame)
   }, [interaction])
-  const segments = groupSegments(steps)
-  const tailId = segments.at(-1)?.segmentId
-  const tailMessage = tailId ? messagesById[tailId] : undefined
+  const segments = groupSegments(steps, activities)
+  const processTailId = segments.at(-1)?.segmentId
+  // Public7 process activities have opaque safe segment identities that are
+  // independent from message identities. Keep the newest process live, but
+  // anchor answer streaming to the last segment that actually owns a message.
+  let answerTailId: string | undefined
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]
+    if (segment && messagesById[segment.segmentId] !== undefined) {
+      answerTailId = segment.segmentId
+      break
+    }
+  }
+  const tailMessage = answerTailId ? messagesById[answerTailId] : undefined
   const tailHasText = Boolean(tailMessage) && (tailMessage?.content.length ?? 0) > 0
   const phaseLabel = executionPhase === "queued" ? t("hitl.queued") : executionPhase === "resuming" ? t("hitl.resuming") : executionPhase === "cancelling" ? t("hitl.cancelling") : null
   const formingLabel = phaseLabel ?? (hitlActive
@@ -189,16 +198,14 @@ export function AssistantTurn({
         {segments.map((segment) => {
           const message = messagesById[segment.segmentId]
           const hasText = Boolean(message) && (message?.content.length ?? 0) > 0
-          const liveSegment = isLive && segment.segmentId === tailId
-          const showCaret = liveSegment && hasText
-          const hasProcess =
-            segment.thinking.length > 0 ||
-            segment.tools.length > 0 ||
-            segment.subagents.length > 0
+          const liveAnswerSegment = isLive && segment.segmentId === answerTailId
+          const liveProcessSegment = isLive && segment.segmentId === processTailId
+          const showCaret = liveAnswerSegment && hasText
+          const hasProcess = segment.activities.length > 0
           // HITL 的过程卡本身就是当前状态锚点；不要再在它上方渲染
           // 一条重复的「工具调用待批准」forming 行，避免审批态撑高后
           // 首条消息被自动滚动挤出视口。
-          const forming = liveSegment && !hasText && !(hitlActive && hasProcess)
+          const forming = isLive && !tailHasText && liveProcessSegment && !hasText && !(hitlActive && hasProcess)
           // 既无气泡又无过程的空段不渲染：避免落定空正文段留一个占位 segment（多段时多撑一个 gap 槽）。
           if (!hasText && !forming && !hasProcess) {
             return null
@@ -210,7 +217,7 @@ export function AssistantTurn({
               {hasText || forming ? (
                 <div
                   className={cn(styles.bubble, styles.turnAnswer)}
-                  data-state={hasText ? (liveSegment ? "streaming" : "settled") : "forming"}
+                  data-state={hasText ? (liveAnswerSegment ? "streaming" : "settled") : "forming"}
                   data-anchor={forming && reconnecting ? "reconnecting" : undefined}
                 >
                   {hasText ? (
@@ -229,14 +236,9 @@ export function AssistantTurn({
                 </div>
               ) : null}
               <SegmentProcess
-                sessionId={sessionId}
-                {...(onOpenFile === undefined ? {} : { onOpenFile })}
-                {...(onOpenTool === undefined ? {} : { onOpenTool })}
                 segmentId={segment.segmentId}
-                thinking={segment.thinking}
-                tools={segment.tools}
-                subagents={segment.subagents}
-                live={liveSegment}
+                activities={segment.activities}
+                live={liveProcessSegment}
                 {...(mode === undefined ? {} : { mode })}
               />
             </div>

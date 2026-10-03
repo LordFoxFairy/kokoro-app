@@ -1,3 +1,23 @@
+## R137-E117 当前状态（2026-10-03；public7 consumer 与特定 UI 切片已验证，待 Root Git）
+
+Web 已从基线 `ddd38c5bdc1eab01f802e1fc993f7b597d707a64` 完成 BFF public `7.0.0` 单轨 consumer 候选：固定 owner main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`，正规 generator write/check，接入 required nullable selected execution process、锚定分页、safe Todo/activity、同水位续流、410 有界重取与真实 abort/generation 隔离。Browser 仍只走 Web 同源 BFF；无新 owner、数据库、缓存或依赖。
+
+Root 在最终冻结候选上实际执行 Node22 `pnpm check`，原进程 47729 自然 exit 0（78.359s）：contract 256、architecture 50、lint/typecheck、2346 tests（0 skip）与 Next build 全通过；manifest `/var/folders/gn/wbk8wfbd047_wvwkwtyn331r0000gn/T/kokoro-r137-final-check-ah0clun_/manifest.json` SHA-256 `431c51b480c843646d1a2e42358ed0e4bc8e3100b718135ff7db710e05998943`，753 个受保护源文件不变。E113→E117 的 lint 与旧 raw HITL 断言失败链保留在任务记录，未以放宽门禁清零。
+
+Root 另以本地 preview 真实页面执行 R137 六个桌面/移动 Playwright 节点，原子进程 56896 自然 exit 0、6/6 pass：正文在 safe process 存在时保持单一 streaming、TEXT START 到首 token 无空白、HITL approve/reject 后展开同一工具活动可见 Completed/Failed，并留成功截图；manifest SHA-256 `f491c5c548db9320ed822e08cca95b297284e420ca9b549f8b34b2d1b0e4df3d`。这是 preview 页面交互证据，不是正式 IAM、真实 provider、Billing、真实 BFF HTTP 或全部 Web7 用户能力闭环。候选尚未由 Root 提交/发布；旧 raw core schema/type/reducer/projection/cancel 清理仍属下一窄切片，不能称 D0 全部技术债归零。未决协议/产品问题为 0；最终 Git、资源与发布验收仍由 Root 独占。下方 R135-D0 是已执行的历史设计门，不再描述当前源码版本。
+
+---
+## R135-WEB7-D0（历史设计门） 当前状态（2026-10-03；四文档方案候选）
+
+Web main 基线 `ddd38c5bdc1eab01f802e1fc993f7b597d707a64` 起始 clean；当前源码/pin/generated 仍消费 BFF public `6.0.0`。目标 BFF 已正式发布 main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` / public `7.0.0` / canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`。R135 本阶段只有 `docs/TECHNICAL_DESIGN.md`、`docs/API_CONTRACT.md`、`docs/DATA_MODEL.md`、`docs/CURRENT.md` 新前缀；Root 独占审查、Git/index/commit、资源与最终验收。
+
+三面设计门已对齐且未决产品/协议/数据问题为 0：BFF/Agent owner 不变，Browser 唯一同源 BFF；snapshot selected process 与 head 独立，A terminal+B queued 保 A 到 B START；Todo null 与空数组不同；安全 activity 保首次顺序、后续全值替换且不虚构 kind/phase 图；同 anchor 全页耗尽/验证后才从 W 续流；400/401/403/404/429/503 fail closed，process 410 丢全部旧页并有界新 snapshot；scope/dispose/new hydrate 真实 abort+generation 隔离所有迟到结果。无新数据库、持久缓存、owner、依赖、样式重设计或兼容轨。
+
+TECH R135 已给出 §8 放置表、现 machine 扩展与条件性私有 `src/engine/hydrate-process.ts` 比较、精确 tests/source/pin/generated 文件集和 RED/GREEN 门。默认采用现文件最小扩展；只有 tests-first RED 证明 machine 职责需要拆分时才由 Root 放行该具名 plain file。删除范围仅旧 raw tool/subagent shape/alias、process=head 推导和内存 non-text merge；合法正文、Vercel 映射、HITL、Delivery、optimistic admission、failure 与连接 refcount 均保护。
+
+本轮未改 source/tests/机器 pin/generated/lockfile/Root docs，未运行 pnpm、浏览器、数据库、Redis、共享服务或 Git；文档候选不构成行为 RED、GREEN、生成成功或真实 owner/browser 证据。后继必须由 Root 先审 D0，再另授 tests-first RED；不得直接进入实现。四文档 hash、suffix byte 保护和 diff check 由本次冻结报告给出，交付后唯一 Web writer 停写。
+
+---
 ## R102 Home提示语义验收（2026-10-02，Root已验，发布结果见Git）
 
 基线main b49797b1e8ee659b7593429aa09e9455a3ad5485；四现content/i18n source及三test切片。简报/设计/游戏使用各自专用草稿、已有意图描述与intent；网站及More文章/数据/代码保留。点击仅填draft并聚焦，不创建项目/消息、不发送或计费。九locale均解析新key，不新增CSS/API/状态源/依赖。

@@ -1928,7 +1928,7 @@ it("主路径：发送 → 流式 → HITL 批准 → 完成收束", async () =>
     await settle()
   })
   expect(screen.getAllByText("write_file").length).toBeGreaterThan(0)
-  expect(screen.getByText("先确认写入范围。")).toBeInTheDocument()
+  expect(screen.queryByText("先确认写入范围。")).not.toBeInTheDocument()
   expect(screen.getByRole("group", { name: "工具调用待批准" })).toBeInTheDocument()
   expect(screen.queryByText("正在整理回答")).not.toBeInTheDocument()
 
@@ -2089,51 +2089,6 @@ it("成果链路：delivery.created → 尾部成果卡 → canvas 打开 → �
   expect(appendixOpener).not.toHaveFocus()
   fireEvent.click(screen.getByRole("button", { name: "打开工作区" }))
   expect(screen.getByLabelText("canvas 详情 调研报告")).toBeInTheDocument()
-})
-
-it("工具 pill 点击升级为 canvas 详情：参数与结果在面板呈现", async () => {
-  buildEngine()
-  render(
-    <ThemeProvider>
-      <LocaleProvider>
-        <AppFrame engine={engine} chatHref="/app" />
-      </LocaleProvider>
-    </ThemeProvider>,
-  )
-  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "跑个工具" } })
-  fireEvent.click(screen.getByLabelText("发送消息"))
-  await act(settle)
-  await act(async () => {
-    client.lastStream().emit([
-      makeEvent("run.created", { run_id: "run_1" }),
-      makeEvent("tool.invoked", {
-        segment_id: "seg_1",
-        tool_id: "tool_1",
-        name: "write_file",
-        args: { file_path: "/tmp/a.md" },
-      }),
-      makeEvent("tool.returned", {
-        segment_id: "seg_1",
-        tool_id: "tool_1",
-        name: "write_file",
-        result: "wrote 42 bytes",
-        is_error: false,
-      }),
-      makeEvent("run.completed", { status: "completed" }),
-    ])
-    await settle()
-  })
-
-  // 已升级到 Canvas 的工具 pill 是 action，不是 disclosure：真实动作发生前后
-  // 都不应暴露一个永远为 false 的 aria-expanded。
-  const openToolButton = screen.getByRole("button", { name: "在工作区打开 write_file" })
-  expect(openToolButton).not.toHaveAttribute("aria-expanded")
-  fireEvent.click(openToolButton)
-  const panel = screen.getByLabelText("canvas 详情 write_file")
-  expect(panel).toBeInTheDocument()
-  expect(within(panel).getByText("参数")).toBeInTheDocument()
-  expect(within(panel).getByText("结果")).toBeInTheDocument()
-  expect(within(panel).getByText("wrote 42 bytes")).toBeInTheDocument()
 })
 
 it("ask_user 待批帧渲染问答卡：问题=description、choices 可选、提交即 respond", async () => {

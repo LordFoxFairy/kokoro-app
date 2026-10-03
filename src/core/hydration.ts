@@ -83,6 +83,11 @@ export function stateFromSnapshot(snapshot: SessionSnapshot): SessionStreamState
     // run 锚点与终态清空语义依赖 activeRunId（状态而非线程内容）：水合保留。
     activeRunId: head?.run_id ?? null,
     executionHead: head ?? null,
+    executionProcess: snapshot.execution_process === null ? null : {
+      runId: snapshot.execution_process.run_id,
+      todos: snapshot.execution_process.todos,
+      activities: snapshot.execution_process.activities,
+    },
     interactionsByRun: head && pending[0] ? { [head.run_id]: pending[0] } : {},
     messages,
     stepsByRun,

@@ -187,19 +187,11 @@ describe("公开 input 卡与普通日志职责隔离", () => {
     expect(document.querySelector("pre")).toBeNull()
   })
 
-  it("展开交互使用 shadcn Collapsible，并可由用户收起", () => {
-    render(
-      <ToolCallRow sessionId="ses_1" tool={{ id: "tool_1", name: "mcp_call", args: { query: "example" }, status: "running" }} />,
-      { wrapper: LocaleProvider },
-    )
-
-    const trigger = screen.getByRole("button", { name: "mcp_callexample" })
-    expect(trigger).toHaveAttribute("aria-expanded", "true")
-    const controlledId = trigger.getAttribute("aria-controls")
-    expect(controlledId).toBeTruthy()
-    expect(controlledId ? document.getElementById(controlledId) : null).toHaveAttribute("data-slot", "collapsible-content")
-    fireEvent.click(trigger)
-    expect(trigger).toHaveAttribute("aria-expanded", "false")
-    expect(screen.queryByRole("group", { name: "Agent 请求补充输入" })).not.toBeInTheDocument()
-  })
-})
+  it("safe tool activity stays summary-only without raw detail disclosure", () => {
+    render(<ToolCallRow activity={{ activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution" }} />, { wrapper: LocaleProvider })
+    expect(screen.getByText("工具调用")).toBeInTheDocument()
+    expect(screen.getByText("运行中")).toBeInTheDocument()
+    expect(screen.queryByText("tool.execution")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
+    expect(document.querySelector("pre")).toBeNull()
+  })})

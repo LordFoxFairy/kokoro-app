@@ -132,7 +132,7 @@ type SnapshotInput = {
   title?: string
   featureKey?: string
   messages?: SessionSnapshot["messages"]
-  activeRun?: { run_id: string; status: "running" | "waiting_input" }
+  activeRun?: { run_id: string; status: "queued" | "running" | "waiting_input" }
   pendingPauses?: PauseFixture[]
   files?: SessionSnapshot["files"]
   deliveries?: SessionSnapshot["deliveries"]
@@ -160,7 +160,8 @@ export function makeSnapshot(input: SnapshotInput = {}): SessionSnapshot {
       ...(input.featureKey !== undefined ? { feature_key: input.featureKey } : {}),
     },
     messages: input.messages ?? [],
-    ...(runId !== undefined ? { execution_head: { run_id: runId, state: pending ? "waiting" : "active", pending_pauses: pending ? [pending] : [] } } : {}),
+    ...(runId !== undefined ? { execution_head: { run_id: runId, state: pending ? "waiting" : input.activeRun?.status === "queued" ? "queued" : "active", pending_pauses: pending ? [pending] : [] } } : {}),
+    execution_process: null,
     files: input.files ?? [],
     deliveries: input.deliveries ?? [],
     deliveries_has_more: input.deliveriesHasMore ?? false,
@@ -345,6 +346,12 @@ export function makePublic4Snapshot(input: {
       run_id: runId, state,
       pending_pauses: state === "waiting" || state === "resuming" ? [pause] : [],
     } }),
+    execution_process: state === "none" ? null : {
+      run_id: runId,
+      todos: null,
+      activities: [],
+      next_cursor: null,
+    },
     files: [],
     deliveries: input.deliveries ?? [],
     deliveries_has_more: false,

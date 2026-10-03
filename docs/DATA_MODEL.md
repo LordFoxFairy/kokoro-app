@@ -1,3 +1,23 @@
+## R137-E117 当前页面内存模型（2026-10-03；已验证候选待 Root Git）
+
+当前候选已实现独立 `executionHead` 与 selected `executionProcess`：process 保存 exact run、`todos: null | ordered list` 与有序 safe activities；activity 按 identity 保首次位置并全值替换，Todo 全表替换，分页 cursor 仅存在于单次私有 hydrate 协调。snapshot adopt 不再合并旧内存 non-text process；scope/new hydrate/dispose 真实 abort 并以 generation 隔离迟到结果。Web 仍无数据库、schema、Redis 或浏览器业务持久缓存。
+
+页面投影现分别选择最后真实 Message 正文与最后 safe process 作为 live 锚；空 TEXT START 已建立 Message identity 但正文仍为空时继续显示 forming，首 token 后才转 streaming。HITL preview 对同一 opaque activity identity 从 running 全值替换为 completed/failed，不把 raw 工具结果写回页面内存。Root Node22 `pnpm check` 最终全绿，且本地 preview 真实页面桌面/移动六节点全过；后者不证明正式 IAM、provider、Billing、真实 BFF HTTP 或所有用户能力闭环。候选尚未提交发布，旧 raw core schema/type/reducer/projection/cancel 数据形状清理仍待下一窄切片。下方 R135 是实现前历史数据设计。
+
+---
+## R135-WEB7-D0（历史设计门）：execution process 页面内存模型（2026-10-03；目标态）
+
+BFF 继续唯一持久拥有 Conversation、Message、durable AG-UI ledger、snapshot/process projection；Agent 继续拥有 Run、Todo/activity source 与执行证据。Web 不新增数据库、canonical schema、migration、事务、Redis namespace、localStorage/IndexedDB 业务缓存、server cache、retention 或跨设备过程事实；因此无 `db:apply-schema`/fresh-install 变化。
+
+Web 只在当前 conversation+project scope+hydrate generation 内保存两个独立投影：`executionHead` 和 selected `executionProcess`。process 由 exact `runId`、`todos: null | ordered list`、ordered safe activities、分页加载状态/安全失败组成；owner `next_cursor` 只在一次 hydrate 的临时协调中存在，不持久化，也不充当 AG-UI resume cursor。`null` process、`todos:null`、`todos:[]` 三者严格不同。
+
+activity identity 是 `(runId, activityId)`，首次出现决定顺序，后续 source 值整体替换；不在浏览器拼 raw tool/subagent 数据、不保留旧字段、不构造 phase 状态机。terminal A 的 process 与 queued B head 可以并存；B START 后 owner 更新才整体选择 B。Todo 每次全列表替换，`[]` 清空；不会跨 Run/global merge。Message/UIMessage 文本、HITL、Delivery、failure、optimistic admission 与 process 分离。
+
+hydrate 临时累积绑定 exact session、scope、run、watermark、generation；只在所有 anchor 页耗尽且严格校验后一次采用。401/404/400/503 不写空成功；410 删除整份旧 anchor 累积后重新 snapshot，有界失败。new hydrate、scope/conversation 变化、dispose 立即 abort 并清临时页；generation 检查使迟到成功、失败、finally 均无写权。reload 从 owner snapshot 重建，不以先前 live 非 text steps、localStorage 展开偏好或 preview fixture 恢复业务事实。
+
+这与 TECH/API R135 一致：只有现内存 type/reducer/hydration/engine/UI 变化，条件性私有 `src/engine/hydrate-process.ts` 也只协调生命周期；无新 owner/API/schema。旧 raw tool/subagent shape、aliases 与 non-text merge 经引用证明后删除；纯 disclosure 展开偏好可保留但不得存 Todo/activity/cursor。当前仍是 public6 实现，后继 tests-first 才迁移。未决数据问题 0。
+
+---
 ## R91-WEB-PUBLIC6：Conversation scope 数据边界（2026-10-02；正规生成 GREEN）
 
 Web 没有 Conversation、Project 或 cursor 的持久化 owner，也不创建数据库 schema。BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3` 的 public6（SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`）拥有 Conversation 与 nullable `project_ref` 关系、tenant/subject 可见性和集合分页事实。

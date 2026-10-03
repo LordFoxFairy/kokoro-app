@@ -287,7 +287,6 @@ export function AppFrame({
     onCancelRun: () => engine?.cancelRun(),
     onOpenFile: canvas.openFile,
     onOpenDelivery: canvas.openDelivery,
-    onOpenTool: canvas.openTool,
   }
 
   const projectConversations: NonNullable<EmptyStateProps["projectConversations"]> = conversations.map((conversation) => ({

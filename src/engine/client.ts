@@ -28,12 +28,15 @@ import {
   type MutationReceipt,
   type SessionList,
   type SessionSnapshot,
+  runProcessPageSchema,
+  type RunProcessPage,
   type ShareReceipt,
   type MessageCreateParams,
   type MessageCreateReceipt,
   deleteSessionReceiptSchema,
   type DeleteSessionReceipt,
   renameSessionPath,
+  runProcessPath,
   renameSessionReceiptSchema,
   type RenameSessionReceipt,
 } from "@/contract/http"
@@ -66,7 +69,8 @@ export type SessionClient = {
   listSessions: (cursor?: string, scope?: SessionScope) => Promise<SessionList>
   createMessage: (sessionId: string, body: MessageCreateParams) => Promise<MessageCreateReceipt>
   // 服务端不存在该会话（404）返回 null（本地新会话的合法答案）；其余失败照常上抛。
-  fetchSnapshot: (sessionId: string) => Promise<SessionSnapshot | null>
+  fetchSnapshot: (sessionId: string, options?: { signal?: AbortSignal }) => Promise<SessionSnapshot | null>
+  fetchRunProcessPage: (args: { sessionId: string; runId: string; watermark: EventCursor; cursor?: EventCursor; limit?: number; scope?: SessionScope; signal?: AbortSignal }) => Promise<RunProcessPage>
   sendControl: (
     sessionId: string,
     runId: string,
@@ -95,6 +99,7 @@ function describeUnknown(error: unknown): string {
 // 失败响应尽力取出契约错误码（如 session_run_active）作为错误消息，供上层识别。
 async function httpError(method: string, url: string, response: Response): Promise<SessionClientError> {
   let detail = `${method} ${url} failed with status ${response.status}`
+  let code: string | null = null
   try {
     const raw: unknown = await response.json()
     if (typeof raw === "object" && raw !== null && "error" in raw) {
@@ -103,12 +108,13 @@ async function httpError(method: string, url: string, response: Response): Promi
         detail = error
       } else if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
         detail = error.message
+        if ("code" in error && typeof error.code === "string") code = error.code
       }
     }
   } catch {
     // 无 JSON 错误体：保留状态码描述。
   }
-  return new SessionClientError("http", detail)
+  return new SessionClientError("http", detail, code)
 }
 
 async function parseJsonResponse<T>(response: Response, parse: (raw: unknown) => T): Promise<T> {
@@ -233,11 +239,11 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
       return parseJsonResponse(response, (raw) => agentCandidateListSchema.parse(raw))
     },
 
-    fetchSnapshot: async (sessionId) => {
+    fetchSnapshot: async (sessionId, options) => {
       const target = url(snapshotPath(sessionId))
       let response: Response
       try {
-        response = await fetch(target, { cache: "no-store" })
+        response = await fetch(target, { cache: "no-store", ...(options?.signal ? { signal: options.signal } : {}) })
       } catch (error) {
         throw new SessionClientError("network", describeUnknown(error))
       }
@@ -251,6 +257,19 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw await httpError("GET", target, response)
       }
       return parseJsonResponse(response, parseSessionSnapshot)
+    },
+
+    fetchRunProcessPage: async ({ sessionId, runId, watermark, cursor, limit = 100, scope = { kind: "direct" }, signal }) => {
+      const query = new URLSearchParams({ watermark, limit: String(limit) })
+      if (cursor !== undefined) query.set("cursor", cursor)
+      if (scope.kind === "project") query.set("project_ref", scope.projectRef)
+      else query.set("scope", "direct")
+      const target = url(`${runProcessPath(sessionId, runId)}?${query.toString()}`)
+      let response: Response
+      try { response = await fetch(target, { cache: "no-store", ...(signal ? { signal } : {}) }) }
+      catch (error) { throw new SessionClientError("network", describeUnknown(error)) }
+      if (!response.ok) throw await httpError("GET", target, response)
+      return parseJsonResponse(response, (raw) => runProcessPageSchema.parse(raw))
     },
 
     createShare: (sessionId) =>

@@ -140,7 +140,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   // Exact acknowledged local rows not yet observed in the durable projection.
   // Snapshot/live canonical identity confirms and removes these bounded intents.
   const unprojectedAdmissions = new Map<string, SessionMessage>()
-  const processEventIds = new Set<string>()
   let notice: NoticeSpec | null = null
   // 当前会话 exact source refs：只在内存中保存，不从 browser store 恢复。
   let selectedSkillSourceRefs: string[] = []
@@ -240,8 +239,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (pendingSubmission) optimisticUserIds.add(pendingSubmission.optimisticUserId)
     const reduction = reduceProjectionEvents({ thread, machine, events, optimisticUserIds })
     for (const event of events) {
-      if ((event.kind.startsWith("tool.") || event.kind.startsWith("thinking.") || event.kind.startsWith("subagent.")) &&
-        reduction.thread.seenEventIds.has(event.event_id)) processEventIds.add(event.event_id)
       if (event.kind === "message.user") unprojectedAdmissions.delete(event.payload.message_id)
       if (event.kind === "run.completed" || event.kind === "run.failed" || event.kind === "run.dispatch_failed") {
         pendingTerminalRead?.runs.add(event.run_id)
@@ -352,16 +349,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         (next.interaction_revision === before.interaction_revision && !sameInteractionState(before, next)))) return
     }
     if (liveDeliveries) Object.assign(hydrated, liveDeliveries)
-    // RR owns canonical text, not the already observed ordinary process log.
-    // Preserve real tool/thinking/subagent facts; snapshot text uses local render
-    // positions after them, never an owner seq or a second approval protocol.
-    for (const [runId, steps] of Object.entries(previous.stepsByRun)) {
-      const process = steps.filter((step) => step.kind !== "text")
-      if (process.length === 0) continue
-      const lastPosition = Math.max(...process.map((step) => step.seq))
-      const text = (hydrated.stepsByRun[runId] ?? []).map((step, index) => ({ ...step, seq: lastPosition + index + 1 }))
-      hydrated.stepsByRun[runId] = [...process, ...text]
-    }
     for (const [id, message] of unprojectedAdmissions) {
       if (hydrated.messages.some((row) => row.id === id)) unprojectedAdmissions.delete(id)
       else hydrated.messages.push(message)
@@ -381,10 +368,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         staging.delete(runId); frozenResumes.delete(runId); resumeAttempts.delete(runId); resumeCommandIds.delete(runId); resumeInFlight.delete(runId)
       }
     }
-    // Preserved process facts carry ONLY their exact dedupe identities. Text and
-    // interaction frames still replay from W3 against the fresh snapshot; an
-    // already observed delta/subagent start must not append a second time.
-    hydrated.seenEventIds = new Set(processEventIds)
     // closeStream invalidates callbacks AND queued adapter batches. The mapper
     // created by openStream receives this exact snapshot's interaction baseline.
     closeStream()
@@ -520,7 +503,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
-    processEventIds.clear()
     const generation = hydrateGeneration
     if (!afterExpiredCursor && !hydrating) {
       hydrating = true
@@ -1011,7 +993,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
-    processEventIds.clear()
     hydrating = shouldHydrate
     commitStore(next)
     notify()
@@ -1087,7 +1068,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
-    processEventIds.clear()
     hydrating = false
     commitStore(next)
     notify()
@@ -1225,7 +1205,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
-    processEventIds.clear()
     store = external
     if (external?.activeId) {
       hydrate(external.activeId)

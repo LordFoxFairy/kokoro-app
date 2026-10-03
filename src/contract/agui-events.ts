@@ -9,6 +9,16 @@ import { agentFailureCodeSchema, agentFailureProfileSchema } from "./agent-failu
 
 export const eventCursorSchema = z.string().regex(/^agui_[0-9a-f]{32}$/u)
 export type EventCursor = z.infer<typeof eventCursorSchema>
+const unicodeString = (max: number) => z.string().min(1).refine((value) => Array.from(value).length <= max)
+export const runTodoSchema = z.object({ content: unicodeString(1024), status: z.enum(["pending", "in_progress", "completed"]) }).strict()
+const activityIdSchema = z.string().regex(/^act_[0-9a-f]{64}$/u)
+const segmentIdSchema = z.string().regex(/^seg_[0-9a-f]{64}$/u)
+const toolActivitySchema = z.object({ activity: z.literal("tool"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.literal("tool.execution") }).strict()
+const subagentActivitySchema = z.object({ activity: z.literal("subagent"), activity_id: activityIdSchema, segment_id: segmentIdSchema, status: z.enum(["running", "completed", "failed"]), display_code: z.literal("subagent.execution") }).strict()
+const skillActivitySchema = z.object({ activity: z.literal("skill"), activity_id: activityIdSchema, preflight_id: z.string().regex(/^spf_[0-9a-f]{64}$/u), source_refs: z.array(z.string().regex(/^skill:(?!skill:)[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)).min(1).max(16).refine((items) => new Set(items).size === items.length), phase: z.enum(["resolving", "loading", "ready", "failed"]), error_code: z.enum(["skill_resolve_failed", "skill_load_failed"]).optional() }).strict().superRefine((value, context) => {
+  if ((value.phase === "failed") !== (value.error_code !== undefined)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["error_code"], message: "invalid conditional error_code" })
+})
+export const runProcessActivitySchema = z.union([toolActivitySchema, subagentActivitySchema, skillActivitySchema])
 
 const nonblankString = z.string().min(1).refine((value) => value.trim().length > 0, "must not be blank")
 
@@ -147,9 +157,11 @@ const eventSchema = z.union([
     }
   }),
   base.extend({ type: z.literal(EventType.CUSTOM), name: z.literal("kokoro.interaction.state"), value: interactionStateSchema }),
+  base.extend({ type: z.literal(EventType.CUSTOM), name: z.literal("kokoro.activity.updated"), value: runProcessActivitySchema }),
+  base.extend({ type: z.literal(EventType.CUSTOM), name: z.literal("kokoro.todo.updated"), value: z.object({ todos: z.array(runTodoSchema).max(100) }).strict() }),
   base.extend({
     type: z.literal(EventType.CUSTOM),
-    name: z.enum(["kokoro.delivery.created", "kokoro.subagent.started", "kokoro.subagent.finished", "kokoro.session.created", "kokoro.todo.updated", "kokoro.message.user"]),
+    name: z.enum(["kokoro.delivery.created", "kokoro.session.created", "kokoro.message.user"]),
     value: z.unknown(),
   }),
 ])

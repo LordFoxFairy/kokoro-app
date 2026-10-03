@@ -1,3 +1,10 @@
+## R137-WEB-PUBLIC7 当前 consumer pin（2026-10-03；候选待发布）
+
+唯一 public 来源为 BFF commit `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `7.0.0`，canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`。owner 原字节已固定到 `src/generated/bff-public-openapi.yaml`；Team 与 Agent failure 两个既有 generator 均正规 write/check，未手改 generated。
+
+public7 consumer 单轨增加 durable execution process snapshot/page 与 safe Todo/activity；同源 adapter 仍负责 envelope 解包，Browser 不直连 owner。Root 冻结候选 Node22 `pnpm check` 实测 256 contract、50 architecture、2346 tests、lint/typecheck/build 全通过。候选尚未 Git 发布；真实 BFF HTTP、browser/e2e 与共享资源未在本轮实测。下方 public6 及更旧 pin 仅为历史。
+
+---
 ## R91-WEB-PUBLIC6 当前 consumer pin（2026-10-02；正规生成 GREEN，待 Root 验收）
 
 唯一 public 来源为 BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `6.0.0`，canonical SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。该 owner 原始字节已固定到 Web `src/generated/bff-public-openapi.yaml`；旧 snapshot RED 经 Root 确认后，既有两 generator 已正规 write/check，不存在手改派生业务内容。

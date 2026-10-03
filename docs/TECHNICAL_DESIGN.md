@@ -1,3 +1,54 @@
+## R137-E117 实现现状（2026-10-03；已验证候选待 Root Git）
+
+R135 设计已按 public7 单轨实现：`src/engine/hydrate-process.ts` 成为私有 snapshot/process-page 协调器，所有 machine snapshot adoption 经 execution adapter 统一进入该 gate；同 session/run/scope/watermark 耗尽并校验后才原子 adopt/续流，初始页及跨页重复 identity、cursor loop、run/W mismatch 与重复 410 均 fail closed。safe process 独立于 Message text 与 queued head，UI 只渲染受控自然标签；旧 raw Tool Canvas、subagent详情与 snapshot non-text merge 不再是运行事实。
+
+R137 另把正文 live 锚与 opaque safe process live 锚分离，TEXT START 空正文仍保 forming 到首 token；preview HITL resume 以同一 safe activity identity 全值更新 completed/failed，不再恢复 raw `tool.returned`。Root 最终 Node22 `pnpm check` 实测 exit 0（256 contract、50 architecture、2346 tests/0 skip、lint/typecheck/build），并在本地 preview 真实页面跑通桌面/移动六个 R137 Playwright 节点。该浏览器证据只覆盖上述 preview UI 切片，不代表正式 IAM、provider、Billing、真实 BFF HTTP 或所有 Web7 能力闭环；候选尚未提交发布。旧 raw core schema/type/reducer/projection/cancel 清理仍待后继窄切片。下方 R135 是实现前历史设计门与放置决策，保留供审计。
+
+---
+## R135-WEB7-D0（历史设计门）：public7 durable execution process 单轨消费设计（2026-10-03；仅文档门）
+
+本节与 `API_CONTRACT.md`、`DATA_MODEL.md`、`CURRENT.md` 的 R135 前缀共同构成当前目标态并覆盖下方历史版本现状；旧正文保持历史证据。Web 当前基线为 main `ddd38c5bdc1eab01f802e1fc993f7b597d707a64`，当前运行时仍固定 BFF public `6.0.0`。目标是已正式发布 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` 的 public `7.0.0`，canonical `contract/openapi/v1/openapi.yaml` SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`。本 D0 只改四份现有文档；source、tests、pin、generated、lockfile、Root 文档、Git 与资源均未改/未运行。
+
+### §8 放置表与三面设计门
+
+| 项 | 已确定结论 |
+| --- | --- |
+| Owner | BFF 唯一持久拥有 Conversation、Message、durable AG-UI ledger、snapshot 与 execution process projection；Agent 拥有 Run/执行事件。Web 只拥有同源消费、严格 wire 校验、当前页面内存投影及 UI 映射，唯一 writer 不变。 |
+| 当前事实 | `src/contract/chat.ts` 的 public6 snapshot 没有 required nullable `execution_process`/page schema；`paths.ts` 无 process path；`engine/client.ts` snapshot 不接 `AbortSignal` 且混同部分错误；hydration 只由 Message 建正文，reducer Todo 未按 selected process Run 隔离，machine 仍把旧非 text 内存步骤合回 snapshot；CUSTOM/过程 UI 仍含旧 raw tool/subagent 形状。 |
+| 目标职责 | 单轨固定 public7 原字节并严格消费 snapshot 的 selected process、锚定分页与 `kokoro.todo.updated`/`kokoro.activity.updated` 安全闭集；从同一水位续唯一 AG-UI 流。Web 不创建第二 wire、owner、cursor 事实或持久恢复层。 |
+| 目录方案 A（采用） | 优先扩展现有 contract/core/engine/client/machine/hydration/reducer 与现 UI 文件；它们已分别拥有 schema、HTTP、hydrate orchestration、projection 和 rendering。分页协调在 `machine.ts` 保持清晰时不新增文件，变化范围最小且不制造抽象。 |
+| 目录方案 B（条件采用） | 若 RED 证明 `machine.ts` 同时承担分页循环、完整性验证和 410 重启后超过一个主要变化原因，只可在现 `src/engine/` 新建具名私有 `hydrate-process.ts`，只导出 hydrate 协调器，不成为 public API/store/第二 client；不得建 `utils/common/process/` 目录。Root 在 RED 审查时按 TS 手册 §8.4 决定。 |
+| 粒度 | wire schema、页面内存 type、纯 reducer、网络 client、hydrate 协调与 UI 各留在既有责任文件；只在上述条件满足时拆一个 plain file。无新顶层目录、模块、进程或 ADR。 |
+| 依赖 | `Browser -> /api/session/[...path] -> BFF /v1/*` 唯一路径；过程分页复用现同源 adapter、受信 Product Session 与 exact direct/project scope。禁止浏览器直连 BFF/Agent、import owner schema/ORM、用 Vercel `UIMessage` 形成第二网络协议。 |
+| 数据/API | snapshot required nullable `execution_process`；process page 使用 exact session/run/watermark/cursor/limit，cursor 与 AG-UI resume cursor 独立。无 Web SQL/schema/Redis/browser business cache；完整生命周期见 DATA R135，机器契约见 API R135。 |
+| 删除项 | 正式 safe activity 承接后，经引用证明无合法职责才删除旧 raw tool/subagent args/result/name/error 投影、旧 CUSTOM 别名、selected Skill 伪 phase、把 process Run 等同 head 的推导、snapshot 后保留内存非 text step 作为事实的 merge。保留合法正文/Vercel 映射、HITL、Delivery、optimistic admission、failure 归属、connection refcount、scope 与纯展开偏好。 |
+| 验证 | Root 放行后 tests-first：真实 parser/client/reducer/engine/UI RED，随后正规 pin/generation 与 GREEN；定向 Vitest、`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`，再由 Root 做真实 HTTP/browser。Web 无 `db:apply-schema`；本 D0 不运行这些命令。 |
+
+TECH/API/DATA 已一致：owner/API route 和错误来自正式 public7；Web 数据仅页面内存；选择、分页、失败恢复和取消是同一个 hydrate generation。未决产品/协议问题为 0；是否抽私有 helper 仅由后继 RED 的文件职责证据裁决，不改变契约。
+
+### 状态、顺序与 hydration 算法
+
+`execution_head` 与 selected `execution_process` 是两个独立事实。过程对象为 `{run_id,todos,activities,next_cursor}`；`null` 表示从未观察到 durable START，`todos:null` 表示 selected Run 尚未观察 Todo，`todos:[]` 表示 owner 明确清空。terminal A 后 successor B 仅 queued 时仍展示 A；只有 B durable START 的 snapshot/live owner 更新才选择 B，不以 receipt/head/正文推导切换。
+
+同一 Run 的 Todo 每次全值、有序替换。activity 以 `(run_id, activity_id)` 为内存身份，首次出现决定列表位置；后续合法 source 值整体替换，不能 field merge。tool/subagent/skill 只接 public7 安全 discriminated union；Skill 同 activity 的新 preflight 可替换旧值。Web 不虚构 kind/phase 单向图，`ready -> loading` 等只要是 schema 合法且 owner 顺序更新就接纳；opaque `segment_id` 只分组安全过程，不成为 Message/UIMessage 文本身份。
+
+每次取得 owner snapshot 的入口（initial hydrate、`machine.adoptOwnerSnapshot`、`syncWorkspaceFiles` 后的 snapshot adopt，以及 resume/unknown ACK 重读）都必须走同一 process-page gate：先取得 snapshot 和 anchor `W`；若 selected process 有 `next_cursor`，固定同一 session、run、scope、`W` 逐页直到 null。每页必须严格 schema、`run_id` 等于请求 Run、`event_watermark === W`、cursor 不循环、跨页 activity identity 不重复；单页 limit 不是 Run 总量上限，101/151 项必须全部耗尽。该 generation 的过程页全部校验后才原子采用完整 baseline，再从同一 `W` strictly-after 打开唯一 SSE；不得以 partial 页标记完成，也不得先开流后让旧 anchor 尾页覆盖新事件。Message/head/HITL/Delivery/正文随 snapshot 保持，过程不写入 UIMessage text。
+
+错误必须 fail closed：401 中止 page/stream并进入现认证失败；404 是资源/授权/删除失败，不当空过程；400 invalid query/cursor/scope 失败，不从 0 或 mutable latest 续；503 `process_projection_unavailable` 覆盖 provenance/compact/frame 完整性或过程页预算失败，并允许有界用户重试，不展示空成功；200 的 schema/run/W 不匹配是本地 parse 失败，不解释为 HTTP 400。process 410 `process_cursor_expired` 丢弃整个旧 `W` 累积，重新取 snapshot/new anchor 后有界重建；它不复用 session snapshot 删除语义，重复过期最终失败而非无限循环。
+
+新 hydrate、conversation/project scope 变化、dispose 立即真实 abort snapshot/page/stream，并递增 generation；response parse 后、每页 append 前、最终 adopt 前都校验 scope+generation。迟到成功、失败和 `finally` 均不能写入新会话。现 optimistic admission、HITL frozen decision、Delivery、failure、connection refcount 与新/删会话语义保持。
+
+### 后继精确文件集与 tests-first 门
+
+后继 **tests-first RED** 授权应限制为现文件：`tests/contract/chat.test.ts`、`tests/contract/agui-events.test.ts`、`contract/api-contract.test.ts`、`tests/contract/bff-agent-failure-public.test.ts` 及现 public pin 保护（`bff-library-artifact-public`、`bff-library-file-public`、`bff-project-create-public`、`bff-project-resource-public`、`bff-skills-mcp-public`、`bff-team-public` 与 `contract/api-contract` 的既有保护）、`tests/contract/http-paths.test.ts`、`tests/engine/client.test.ts`、`tests/engine/agui-event-mapper.test.ts`、`tests/core/reducer.test.ts`、`tests/core/hydration.test.ts`、`tests/engine/engine.test.ts`（主要 engine I/O/adoption 行为）、`tests/engine/machine.test.ts`（纯状态转换正负例）、`tests/engine/agui-chat-transport.test.ts`、`tests/system/agui-chat-transport-http.integration.test.ts`、`tests/system/session-route-http.integration.test.ts`、`tests/ui/segment-process.test.tsx`、`tests/ui/todo-bar.test.tsx` 及必要的现 thread 正控测试。RED 必须经过真实入口，不以 missing import/export 或 0 collect 充数。
+
+GREEN source 范围：`src/contract/chat.ts`、`src/contract/agui-events.ts`、`src/contract/paths.ts`、`src/core/state.ts`、`src/core/chat-projection-event.ts`、`src/core/reducer.ts`、`src/core/hydration.ts`、`src/engine/client.ts`、`src/engine/execution-adapter.ts`、`src/engine/agui-event-mapper.ts`、`src/engine/machine.ts`、必要时窄改 `src/engine/agui-chat-transport.ts`、`src/ui/thread/segment-process.tsx`、`src/ui/thread/assistant-turn.tsx` 与现 Todo 展示入口；条件新文件仅 `src/engine/hydrate-process.ts`。所有 snapshot adoption 调用必须经过完整分页 gate，不能让 `syncWorkspaceFiles`、resume/unknown ACK 重读或其他 refresh 把未耗尽第一页当权威全集。同源 catchall route 只允许在真实 route RED 证明不能无损 relay 新路径/abort 时窄改，否则原字节保留。
+
+正规 pin/generated 范围：从 BFF 上述 committed canonical 原字节更新 `src/generated/bff-public-openapi.yaml`；按现真实常量更新 `scripts/generate-bff-agent-failure.mjs` 的 owner commit/version/digest，并只更新 `scripts/generate-bff-team-client.mjs` 已存在的 canonical digest；分别执行现 `--write/--check`；只接收其现有 generated 输出（包括 `src/generated/bff-agent-failure.ts` 与 Team generated 集），由上述 public pin tests/`contract/README.md` 验证 provenance、byte equality 及未变 Safe12/Team/其他 operation graph。禁止手改 generated、复制 schema、兼容 public6 或升级依赖。
+
+RED 至少覆盖：nullable/required/presence、Todo `null != []`、两类 CUSTOM 严格闭集/raw canary、同 activity 全替换及合法 phase 回退、A terminal+B queued、101/151 跨页、同 `W` 完整耗尽后才开流、cursor loop/watermark/run mismatch、400/401/403/404/429/503、首次/重复 410、scope/dispose/new hydrate 的真实 `signal.aborted` 与迟到成功/失败隔离、正文/HITL/Delivery/optimistic/refcount 正控。
+
+---
 ## R91-WEB-PUBLIC6：Conversation 集合 scope 消费（2026-10-02；正规生成 GREEN）
 
 本切片收敛 Web 对 BFF public6 的固定消费与机器断言；事实 owner 为 BFF commit `bb610ea7262574772e1d8c309a6e03171d07d0a3`、OpenAPI `6.0.0`、canonical SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。tests/docs-only 阶段已先对 public5 snapshot 形成真实 RED，Root 复跑确认后才复制 owner 原始字节并沿既有两个 generator 正规生成；未改 runtime source。

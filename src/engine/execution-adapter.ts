@@ -15,6 +15,7 @@ import type { AgentMode } from "@/core/conversations"
 import type { EventStreamHandle, SessionClient } from "./client"
 import { SessionClientError } from "./client-error"
 import type { SessionScope } from "./session-scope"
+import { fetchCompleteSnapshot } from "./hydrate-process"
 
 export type MessageExecutionOptions = {
   mode: AgentMode
@@ -102,6 +103,15 @@ type StreamContext = {
 export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecutionAdapter {
   let streamGeneration = 0
   let activeStream: StreamContext | null = null
+  const snapshotControllers = new Set<AbortController>()
+
+  function fetchSnapshot(sessionId: string): Promise<SessionSnapshot | null> {
+    for (const controller of snapshotControllers) controller.abort()
+    snapshotControllers.clear()
+    const controller = new AbortController()
+    snapshotControllers.add(controller)
+    return fetchCompleteSnapshot(deps.client, sessionId, deps.scope, controller.signal)
+  }
 
   function closeStream(): void {
     streamGeneration += 1
@@ -225,9 +235,13 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
         { kind: "run.cancel" },
         args.commandId,
       ),
-    fetchSnapshot: (sessionId) => deps.client.fetchSnapshot(sessionId),
+    fetchSnapshot,
     deleteSession: (sessionId) => deps.client.deleteSession(sessionId),
     openStream,
-    closeStream,
+    closeStream: () => {
+      for (const controller of snapshotControllers) controller.abort()
+      snapshotControllers.clear()
+      closeStream()
+    },
   }
 }

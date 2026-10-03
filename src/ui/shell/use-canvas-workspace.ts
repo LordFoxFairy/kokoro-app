@@ -6,7 +6,7 @@
 
 import { useCallback, useSyncExternalStore } from "react"
 
-import type { SessionDelivery, SessionToolCall } from "@/core/state"
+import type { SessionDelivery } from "@/core/state"
 import {
   canvasSlot,
   closeCanvas,
@@ -29,7 +29,6 @@ export type CanvasWorkspace = {
   fullscreen: boolean
   openFile: (path: string) => void
   openDelivery: (delivery: SessionDelivery) => void
-  openTool: (runId: string, tool: SessionToolCall) => void
   onSelectFile: (file: { path: string }) => void
   onSelectDelivery: (delivery: SessionDelivery) => void
   onToggleFullscreen: () => void
@@ -63,15 +62,6 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
     },
     [activeId],
   )
-  const openTool = useCallback(
-    (runId: string, tool: SessionToolCall) => {
-      if (activeId !== null) {
-        openCanvas(activeId, { kind: "tool", runId, toolId: tool.id, snapshot: tool })
-      }
-    },
-    [activeId],
-  )
-
   const onSelectFile = useCallback(
     (file: { path: string }) => {
       if (activeId !== null) {
@@ -111,7 +101,6 @@ export function useCanvasWorkspace(activeId: string | null, thread: Thread, moun
     fullscreen: slot.fullscreen,
     openFile,
     openDelivery,
-    openTool,
     onSelectFile,
     onSelectDelivery,
     onToggleFullscreen,

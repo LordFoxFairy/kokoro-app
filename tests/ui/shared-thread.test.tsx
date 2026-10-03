@@ -27,6 +27,7 @@ function snapshot(): SessionSnapshot {
     deliveries: [],
     deliveries_has_more: false,
     event_watermark: "agui_00000000000000000000000000000002",
+    execution_process: null,
   }
 }
 

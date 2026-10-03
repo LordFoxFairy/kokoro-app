@@ -106,6 +106,7 @@ const sessionSnapshot = {
   deliveries: [],
   deliveries_has_more: false,
   event_watermark: EVENT_CURSOR,
+  execution_process: null,
 }
 
 describe("checked-in HTTP request and response contracts", () => {
@@ -556,7 +557,7 @@ describe("R66 public4 wire/head and closed resume", () => {
   })
 })
 
-// R76 owner create graph preserved under the R91 public6 exact consumer pin.
+// R76 owner create graph preserved under the R91 public7 exact consumer pin.
 import { createHash as r76Hash } from "node:crypto"
 import { readFile as r76ReadFile } from "node:fs/promises"
 import r76Yaml from "yaml"
@@ -595,11 +596,11 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
-describe("R76 ScheduledTask owner creation graph under the public6 pin", () => {
-  it("consumes the exact published public6 canonical bytes", async () => {
+describe("R76 ScheduledTask owner creation graph under the public7 pin", () => {
+  it("consumes the exact published public7 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129")
-    expect(spec.info.version).toBe("6.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe")
+    expect(spec.info.version).toBe("7.0.0")
   })
 
   it("has five required create fields and rejects enabled/status as creation properties", async () => {
@@ -636,7 +637,7 @@ describe("R76 ScheduledTask owner creation graph under the public6 pin", () => {
   })
 })
 
-describe("R91 public6 Conversation collection query graph", () => {
+describe("R91 public7 Conversation collection query graph", () => {
   it("publishes the exact listSessions filter parameters and invalid-scope response", async () => {
     const get = (await r76PublicSpec()).spec.paths["/v1/sessions"]!.get
     expect(get.operationId).toBe("listSessions")

@@ -6,7 +6,8 @@ import { makeInteractionState } from "../core/fixtures"
 afterEach(cleanup)
 it("HITL 卡独立于可收起的过程，手动收起不会隐藏决策入口", () => {
   render(<LocaleProvider><AssistantTurn sessionId="session_1"
-    steps={[{ kind: "tool", seq: 1, segmentId: "segment_1", tool: { id: "tool_1", name: "write_file", args: { file_path: "report.md" }, status: "running" } }]}
+    steps={[]}
+    activities={[{ activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`, status: "running", display_code: "tool.execution" }]}
     messagesById={{}} isLive mode="thinking" stagedDecisions={{}} hitlActive controlError={null} onToolDecision={() => {}}
     interaction={makeInteractionState("tool_1", ["tool_1"], { description: "需要批准写入文件" })} executionPhase="waiting" /></LocaleProvider>)
   const summary = document.querySelector<HTMLButtonElement>('[data-slot="collapsible-trigger"]')

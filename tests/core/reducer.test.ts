@@ -53,6 +53,25 @@ describe("event_id 幂等去重", () => {
 })
 
 describe("replay 收敛", () => {
+  it("R135 replaces a safe activity as a whole while preserving its first position", () => {
+    const first = {
+      kind: "activity.updated", event_id: "evt_r135_1", seq: 1, session_id: "ses_1", run_id: "run_a",
+      timestamp: "2026-10-03T00:00:00Z",
+      payload: { activity: "skill", activity_id: `act_${"a".repeat(64)}`, preflight_id: `spf_${"b".repeat(64)}`, source_refs: ["skill:alpha"], phase: "failed", error_code: "skill_load_failed" },
+    } as unknown as ChatProjectionEvent
+    const replacement = {
+      ...first, event_id: "evt_r135_2", seq: 2,
+      payload: { activity: "skill", activity_id: `act_${"a".repeat(64)}`, preflight_id: `spf_${"c".repeat(64)}`, source_refs: ["skill:alpha"], phase: "loading" },
+    } as unknown as ChatProjectionEvent
+    const started = makeEvent("run.created", { run_id: "run_a" }, {
+      run_id: "run_a", seq: 0, event_id: "evt_r135_start",
+    })
+    const state = applyChatProjectionEvents(createSessionStreamState(), [started, first, replacement])
+    expect((state as unknown as { executionProcess?: { activities: unknown[] } }).executionProcess?.activities).toEqual([
+      replacement.payload,
+    ])
+  })
+
   function fullRun(): ChatProjectionEvent[] {
     return [
       makeEvent("session.created", { title: "topic", owner_id: "local-user" }),

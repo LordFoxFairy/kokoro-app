@@ -10,6 +10,27 @@ import { AgUiEventMapper } from "@/engine/agui-event-mapper"
 import { AGENT_FAILURE_PROFILES, makeFailedSnapshot, makePendingPause, makeSnapshot, makeSnapshotDelivery } from "./fixtures"
 
 describe("stateFromSnapshot", () => {
+  it("R135 restores selected process independently from a queued successor head", () => {
+    const snapshot = {
+      ...makeSnapshot({
+        activeRun: { run_id: "run_b", status: "queued" },
+        messages: [{ message_id: "a_1", role: "assistant" as const, run_id: "run_a", content: "kept", status: "completed" as const, created_at: "2026-10-03T00:00:00Z" }],
+        deliveries: [makeSnapshotDelivery({ run_id: "run_a" })],
+      }),
+      execution_process: {
+        run_id: "run_a", todos: [], activities: [{
+          activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+          status: "completed", display_code: "tool.execution",
+        }], next_cursor: null,
+      },
+    } as unknown as SessionSnapshot
+    const state = stateFromSnapshot(snapshot)
+    expect((state as unknown as { executionProcess?: unknown }).executionProcess).toMatchObject({ runId: "run_a", todos: [] })
+    expect(state.activeRunId).toBe("run_b")
+    expect(state.messages[0]?.content).toBe("kept")
+    expect(state.deliveries).toHaveLength(1)
+  })
+
   const failedHistory = (content: string): NonNullable<SessionSnapshot["messages"]> => [
     { message_id: "user_1", role: "user" as const, content: "try this", status: "completed" as const, created_at: "2026-07-02T00:00:00Z" },
     { message_id: "assistant_1", role: "assistant" as const, run_id: "run_failed", content, status: "failed" as const, created_at: "2026-07-02T00:00:01Z" },
@@ -140,7 +161,7 @@ describe("stateFromSnapshot", () => {
     const snapshot = parseSessionSnapshot({
       session: { session_id: "conv_1", title: "server title", owner_id: "local-user",
         created_at: "2026-07-02T00:00:00Z", updated_at: "2026-07-02T00:00:01Z" },
-      files: [], deliveries: [], deliveries_has_more: false, event_watermark: null,
+      files: [], deliveries: [], deliveries_has_more: false, event_watermark: null, execution_process: null,
     })
     const state = stateFromSnapshot(snapshot)
     expect(state.runStatus).toBe("idle")

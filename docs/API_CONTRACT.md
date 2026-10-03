@@ -1,3 +1,27 @@
+## R137-E117 当前 consumer contract（2026-10-03；已验证候选待 Root Git）
+
+Web 已固定 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` / public `7.0.0` / canonical SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe` 的原始机器契约并正规生成。浏览器同源 catchall 解包 owner success envelope，client 严格解析裸 `RunProcessPage`；错误 envelope 保留 stable code。required nullable snapshot process、exact scope/W/cursor、safe CUSTOM 闭集、Todo/activity替换、全页耗尽后续流与有界410恢复均为当前候选行为，无 public6 fallback、raw alias 或第二协议。
+
+Root 最终 Node22 `pnpm check` 实测 contract 256、architecture 50、2346 tests/0 skip 及 lint/typecheck/build 全通过；本地 preview 真实页面的桌面/移动六节点也全部通过，覆盖 safe process 与正文、TEXT START forming、HITL activity 终态可见性。preview transport 只发 public7 safe `activity.updated`，明确不恢复 raw `tool.returned`；这不是正式 IAM、provider、Billing、真实 BFF HTTP 或全部深层状态码矩阵证据。候选尚未 Git 发布，旧 raw core schema/type/reducer/projection/cancel 清理仍待下一窄切片。下方 R135 是已执行的历史目标合同。
+
+---
+## R135-WEB7-D0（历史设计门）：public7 execution process 消费合同（2026-10-03；目标态）
+
+Web 当前仍固定 BFF public `6.0.0`；目标机器事实源已正式发布于 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b`，`contract/openapi/v1/openapi.yaml` public `7.0.0`，SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`。后继只能复制该 committed canonical 原字节并正规生成；本文是消费者约束，不是第二份可编辑 contract。Browser 仍只经 `/api/session/[...path]` 到 BFF，身份/scope 来自现受信上下文，不直连 Agent/BFF、不 body 自报。
+
+snapshot 的 `execution_process` 在 data 中 **required nullable**：null 是没有 durable START；非 null 的 `run_id,todos,activities,next_cursor` 全部 required。`todos:null` 与 `todos:[]` 不同；activities 是 anchor 下第一页而非全集。`execution_head` 与 process 可指不同 Run：A terminal、B queued 时 process 保持 A，直到 B durable START。Web 不从 head、receipt、Message 或 local active id 推导 process Run。
+
+后继严格消费 `GET /v1/sessions/{id}/runs/{runId}/process?watermark=W&cursor=C&limit=N`，并原样携带现 direct/project scope。200 data 的 `run_id,todos,activities,next_cursor,event_watermark` 全部 required；每页 `run_id` 必须等于 path Run、watermark 必须逐字等于 W，cursor 是 opaque pagination identity，不能与 AG-UI `Last-Event-ID` 混用、解码、比较或合成。limit 仅每页 1..100；必须读至 null，不能把 100 项当总量。
+
+Todo 是完整有序替换；CUSTOM 仅接 owner 的 `kokoro.todo.updated` 与 `kokoro.activity.updated`。activity union 仅为安全 tool/subagent/skill 字段：opaque ids、受控 status/display code 或 Skill source refs/preflight/phase/条件 error code。额外字段、未知 discriminator、旧 `subagent.started/finished`、raw name/args/result/error/path/stack 及兼容 alias 全帧拒绝且不推进 cursor。相同 activity 的后续值整体替换并保首次位置；schema 未发布 phase 单向迁移图，因此 Web 不附加一套。 Todo content 的 1..1024 按 Unicode 字符计数而非 JavaScript UTF-16 code unit；非 null Todo 每页最多100。Skill `source_refs` 保序、1..16、unique 且逐项匹配 owner regex；failed phase 必须有受控 `error_code`，其他 phase 必须缺席该键（`null` 也拒绝）。tool/subagent 的 `display_code` 分别固定，交叉值拒绝。snapshot `messages` 延续机器契约既有 optional 语义，不借 public7 顺便收紧。
+
+分页全部成功校验并原子采用后，唯一 AG-UI stream 从同一 W strictly-after 续流；partial 页不成为完整过程事实，不并行开流覆盖。400/401/403/404/429/503 均 fail closed：400 依 exact stable code 区分 invalid query/cursor/scope，401 进入原认证恢复，403 保授权失败，404 保资源不可见/不存在，429 保原限流语义，503 保过程投影或通用服务不可用；不得降级为空数组或 public6 merge。200 响应的 schema、run 或 W 不匹配属于 Web 本地 parse 失败，不解释为 HTTP 400。provenance/compact/frame 完整性错误和 owner 过程页超预算均按正式现有 `process_projection_unavailable` 处理，不发明 `process_page_item_too_large`；1 MiB 是 owner 过程页预算，不是 Web 对含正文/Delivery 的整份 snapshot 附加上限。process 410 `process_cursor_expired` 必须丢弃旧 W 全部页，重新 snapshot 后有界重建；重复 410 终止并显示安全失败。session snapshot 的删除/不存在语义不与 process 410 合并。
+
+每次 scope/dispose/new hydrate 真实 abort snapshot/page/stream，并以 generation 在 parse、append、adopt 三处复核；迟到 success/error/finally 不写新 scope。合法 Message 全文、Vercel `UIMessage` 映射、full HITL、Delivery、optimistic admission、failure 与连接引用计数不变。breaking 策略为 public7 单轨：没有 public6 optional fallback、旧 raw shape、双 reader 或第二 SSE。
+
+精确后继 pin/generator/test/source 与 RED/GREEN 命令见 TECH R135；当前 D0 未更新 canonical snapshot、generated 或运行 contract tests。未决协议问题 0。
+
+---
 ## R91-WEB-PUBLIC6：`GET /v1/sessions` 查询合同（2026-10-02；正规生成 GREEN）
 
 固定 owner 为 BFF `bb610ea7262574772e1d8c309a6e03171d07d0a3` / OpenAPI `6.0.0` / SHA-256 `75ef9f7a3b28018d9c7a3ca5899f75afe561dd40b794e7f71b0e3d078b29c129`。机器事实源仍是 owner `contract/openapi/v1/openapi.yaml`；Web snapshot 现为该 canonical blob。更新前 public5 snapshot 已形成并保存 123 pass / 13 fail 的真实 RED。

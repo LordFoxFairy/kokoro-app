@@ -8,7 +8,7 @@ import { Download, FileCheck2, Maximize2, Minimize2, Play, SkipBack, X } from "l
 
 // 右侧 canvas 工作区面板：会话在左、内容在右（三栏第三栏）。
 // 内容体按来源分派：file=可变直读（重开即最新）、delivery=BFF 二元元数据、
-// tool=参数/结果详情、node=通用 ReactNode 插槽；文本预览复用格式矩阵。
+// node=通用 ReactNode 插槽；文本预览复用格式矩阵。
 
 import { type RefObject, useEffect, useRef, useState } from "react"
 
@@ -46,25 +46,12 @@ export function formatDeliveryTime(iso: string, locale: string): string {
   })
 }
 
-// 工具参数压成紧凑 JSON；空参数返回 null（不渲染参数块）。
-function formatToolArgs(args: Record<string, unknown>): string | null {
-  const keys = Object.keys(args)
-  if (keys.length === 0) return null
-  try {
-    return JSON.stringify(args, null, 2)
-  } catch {
-    return keys.join(", ")
-  }
-}
-
 function contentTitle(content: ResolvedCanvasContent): string {
   switch (content.kind) {
     case "file":
       return content.file.path
     case "delivery":
       return content.delivery.title
-    case "tool":
-      return content.tool.name
     case "node":
       return content.title
   }
@@ -121,9 +108,7 @@ export function CanvasPanel({
       ? `file:${content.file.path}`
       : content.kind === "delivery"
         ? `delivery:${JSON.stringify([content.delivery.conversationId, content.delivery.artifactId])}`
-        : content.kind === "tool"
-          ? `tool:${content.tool.id}`
-          : `node:${content.title}`
+        : `node:${content.title}`
 
   useEffect(() => () => {
     downloadControllerRef.current?.abort()
@@ -439,7 +424,6 @@ function ContentBody({
   sessionId: string
   content: ResolvedCanvasContent
 }) {
-  const { t } = useLocale()
   switch (content.kind) {
     case "file": {
       const name = content.file.path.split("/").at(-1) ?? content.file.path
@@ -460,32 +444,6 @@ function ContentBody({
             <p className={styles.deliveryNote}>{delivery.note}</p>
           ) : null}
           <p>{delivery.artifactKind} · {delivery.mime} · {formatBytes(delivery.size)}</p>
-        </div>
-      )
-    }
-    case "tool": {
-      const { tool } = content
-      const args = formatToolArgs(tool.args)
-      const hasResult = typeof tool.result === "string" && tool.result.length > 0
-      return (
-        <div className={styles.toolBody} data-status={tool.status}>
-          {args !== null ? (
-            <>
-              <p className={styles.groupHeading}>{t("canvas.toolArgs")}</p>
-              <pre className={styles.toolBlock}>{args}</pre>
-            </>
-          ) : null}
-          {hasResult ? (
-            <>
-              <p className={styles.groupHeading}>{t("canvas.toolResult")}</p>
-              <pre className={styles.toolBlock} data-error={tool.status === "error" ? "true" : undefined}>
-                {tool.result}
-              </pre>
-            </>
-          ) : null}
-          {args === null && !hasResult ? (
-            <p className={styles.meta}>{t("canvas.toolNoDetail")}</p>
-          ) : null}
         </div>
       )
     }

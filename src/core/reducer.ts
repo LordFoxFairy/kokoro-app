@@ -307,6 +307,7 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
       }
       break
     case "run.created":
+      draft.state.executionProcess = { runId: event.run_id, todos: null, activities: [] }
       if (draft.state.activeRunId === null || (draft.state.activeRunId === event.run_id &&
         (draft.state.executionHead === null || draft.state.executionHead.state === "queued"))) {
         draft.state.activeRunId = event.run_id
@@ -378,7 +379,15 @@ function applyEvent(draft: Draft, event: ChatProjectionEvent): void {
     case "todo.updated":
       // 整表替换：todo.updated 每次携带完整清单。
       draft.state.todos = event.payload.todos
+      if (draft.state.executionProcess?.runId === event.run_id) draft.state.executionProcess.todos = event.payload.todos
       break
+    case "activity.updated": {
+      if (draft.state.executionProcess?.runId !== event.run_id) break
+      const index = draft.state.executionProcess.activities.findIndex((item) => item.activity_id === event.payload.activity_id)
+      if (index === -1) draft.state.executionProcess.activities.push(event.payload)
+      else draft.state.executionProcess.activities[index] = event.payload
+      break
+    }
     case "subagent.started":
       applySubagentStarted(draft, event)
       break
@@ -468,6 +477,11 @@ export function applyChatProjectionEvents(
           seenEventIds: new Set(state.seenEventIds),
           messages: [...state.messages],
           todos: state.todos,
+          executionProcess: state.executionProcess === null ? null : {
+            ...state.executionProcess,
+            todos: state.executionProcess.todos === null ? null : [...state.executionProcess.todos],
+            activities: [...state.executionProcess.activities],
+          },
           stepsByRun: { ...state.stepsByRun },
           files: state.files,
           deliveries: state.deliveries,

@@ -7,11 +7,10 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 
 ## 公开 API
 
-- `state.ts`：`SessionStreamState`（messages/todos/stepsByRun/runStatus/runError/
-  activeRunId/lastSeq/resumeCursor/files/deliveries/meta + seenEventIds 内存去重集）、`createSessionStreamState`、
-  `SessionStep`（thinking/tool/subagent/text 按 seq 有序，非按 kind 归桶）、
-  `SessionToolCall`/`ToolStatus`（含结构化终态 stale-*/cancelled，零 UI 文案）、
-  `SessionMessage`/`SessionSubagent`/`SessionDelivery`（成果以 conversationId + artifactId 标识）
+- `state.ts`：`SessionStreamState`（messages/todos/executionProcess/stepsByRun/runStatus/runError/
+  activeRunId/lastSeq/resumeCursor/files/deliveries/meta + seenEventIds 内存去重集）、`createSessionStreamState`；
+  `executionProcess` 是 public7 selected Run 的 Todo 与 safe activity 视图，`SessionMessage`/`SessionDelivery`
+  分别承载正文与成果（成果以 conversationId + artifactId 标识）
   及契约派生类型别名；`RunFailure` 是 agent safe profile / dispatch / generic 的 closed union，不保存 raw error）。
 - `reducer.ts`
   - `applyChatProjectionEvents(state, events)`：批量折叠——event_id 幂等去重、整批一次顶层快照、
@@ -19,8 +18,8 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   - `applyChatProjectionEvent`：单事件包装。
   - 本地命令（非事件折叠）：`appendUserMessage`（本地 echo，usr_ 前缀 id）、
     `markToolRejected`（拒绝乐观置位，防回流翻绿勾）、`markRunCancelled`（停止本地收口）。
-- `projections.ts`：`buildThreadItems`（连续同 runId assistant 归并为 turn；纯派生，
-  渲染层唯一读取模型）、`groupSegments`/`Segment`（turn 内按 segmentId 聚合过程）。
+- `projections.ts`：`buildThreadItems`（连续同 runId assistant 归并为 turn；safe process 可在首 token 前建立 turn；纯派生，
+  渲染层唯一读取模型）、`groupSegments`/`Segment`（正文锚点与 public7 safe activity 按 opaque segment 聚合）。
 - `hydration.ts`：`stateFromSnapshot`——从 BFF 同一事务 snapshot 水合
   messages/pending pauses/meta/files/deliveries/activeRunId，并保存 `event_watermark` 为
   `resumeCursor`；尾部 settled failed assistant 在无 active/HITL 时按 Message.failure 恢复 agent 或 generic safe failure，
@@ -43,8 +42,7 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
   `resumeCursor`。
 - 终态 runStatus/runError 是单槽投影：仅在无在途锚点或终态属在途 run 时写——
   reattach 全量回放里历史 run 的终态不得覆写在途 run。
-- `insertOrdered` 按 (seq, 到达先后) 稳定插入；乱序/部分 replay 时 awaiting/returned
-  可先于 invoked 到达，各 apply 函数补建步骤不丢事件。
+- selected process activity 以 activity_id 替换完整值并保留首次位置；Todo 每帧有序全值替换，`null` 与 `[]` 不合并。
 
 ## 扩展规则
 
@@ -55,6 +53,5 @@ web 的领域核心：会话线程状态、事件折叠 reducer、渲染投影�
 ## 当前陷阱
 
 - message.user 三态吸收（id 命中更新 / 本地 echo 就地改 id / 新建）：SSE 常跑赢 HTTP 回执。
-- tool.returned 不得把已 rejected 的工具降级为 done（拒绝文案 is_error=false 回流）。
 - delivery.created 以 `(conversationId, artifactId)` 幂等（非 hash）；同 hash 的不同成果保留两件。
 - snapshot 最近 100 件与 `deliveriesHasMore` 一并水合；完整历史由 Library 分页读取。

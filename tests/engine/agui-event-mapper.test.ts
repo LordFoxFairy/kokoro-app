@@ -29,6 +29,24 @@ function metadata(
 }
 
 describe("AgUiEventMapper", () => {
+  it("R135 maps safe activity as process state without emitting UIMessage text", () => {
+    const activity = {
+      activity: "tool",
+      activity_id: `act_${"a".repeat(64)}`,
+      segment_id: `seg_${"b".repeat(64)}`,
+      status: "running",
+      display_code: "tool.execution",
+    }
+    const mapped = new AgUiEventMapper().map(CURSORS.start, {
+      type: "CUSTOM", timestamp: 1, name: "kokoro.activity.updated", value: activity,
+      metadata: metadata("r135-activity", 1),
+    })
+    expect(mapped.projectionEvent).toMatchObject({ kind: "activity.updated", payload: activity })
+    expect(mapped.uiMessageChunks).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: expect.stringMatching(/text|reasoning|tool/u) }),
+    ]))
+  })
+
   it("maps canonical text frames to reducer projections and AI SDK UIMessage chunks", () => {
     const mapped = new AgUiEventMapper().map(CURSORS.start, {
       type: "TEXT_MESSAGE_CONTENT",
@@ -82,18 +100,9 @@ describe("AgUiEventMapper", () => {
       metadata: metadata("agent-tool-2", 9),
     })
 
-    expect(start.projectionEvent).toMatchObject({
-      kind: "tool.invoked",
-      payload: { tool_id: "tool-1", name: "search", args: {} },
-    })
-    expect(args.projectionEvent).toMatchObject({
-      kind: "tool.invoked",
-      payload: { tool_id: "tool-1", name: "search", args: { query: "AG-UI" } },
-    })
-    expect(end.projectionEvent).toMatchObject({
-      kind: "tool.invoked",
-      payload: { tool_id: "tool-1", name: "search", args: { query: "AG-UI" } },
-    })
+    expect(start.projectionEvent).toBeNull()
+    expect(args.projectionEvent).toBeNull()
+    expect(end.projectionEvent).toBeNull()
     expect(end.uiMessageChunks).toEqual([
       {
         type: "tool-input-available",
@@ -103,10 +112,7 @@ describe("AgUiEventMapper", () => {
         dynamic: true,
       },
     ])
-    expect(result.projectionEvent).toMatchObject({
-      kind: "tool.returned",
-      payload: { tool_id: "tool-1", name: "search", result: "found" },
-    })
+    expect(result.projectionEvent).toBeNull()
     expect(result.uiMessageChunks).toEqual([
       {
         type: "tool-output-available",
@@ -161,7 +167,7 @@ describe("AgUiEventMapper", () => {
       isError: true,
       metadata: metadata("agent-tool-error", 4),
     })
-    expect(mapped.projectionEvent).toMatchObject({ kind: "tool.returned", payload: { is_error: true } })
+    expect(mapped.projectionEvent).toBeNull()
     expect(mapped.uiMessageChunks.at(-1)).toMatchObject({ type: "tool-output-error", errorText: "tool failed" })
   })
 
@@ -194,10 +200,7 @@ describe("AgUiEventMapper", () => {
       toolCallId: "tool-replay-end",
       metadata: metadata("agent-replay-end", 3),
     })
-    expect(end.projectionEvent).toMatchObject({
-      kind: "tool.invoked",
-      payload: { tool_id: "tool-replay-end", name: "tool", args: {} },
-    })
+    expect(end.projectionEvent).toBeNull()
     expect(end.uiMessageChunks).toEqual([
       {
         type: "tool-input-start",
@@ -223,10 +226,7 @@ describe("AgUiEventMapper", () => {
       content: "replayed",
       metadata: metadata("agent-replay-result", 4),
     })
-    expect(result.projectionEvent).toMatchObject({
-      kind: "tool.returned",
-      payload: { tool_id: "tool-replay-result", name: "tool", result: "replayed", is_error: false },
-    })
+    expect(result.projectionEvent).toBeNull()
     expect(result.uiMessageChunks).toEqual([
       {
         type: "tool-input-start",
@@ -268,11 +268,7 @@ describe("AgUiEventMapper", () => {
       metadata: metadata("agent-new", 2, "run-new", "session-new"),
     })
 
-    expect(mapped.projectionEvent).toMatchObject({
-      session_id: "session-new",
-      run_id: "run-new",
-      payload: { tool_id: "reused-tool", name: "tool", args: {} },
-    })
+    expect(mapped.projectionEvent).toBeNull()
     expect(mapped.uiMessageChunks).toContainEqual({
       type: "tool-input-start",
       toolCallId: "reused-tool",

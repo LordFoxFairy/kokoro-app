@@ -26,6 +26,13 @@ export type FakeClient = SessionClient & {
   createCalls: { sessionId: string; body: MessageCreateParams }[]
   controlCalls: { sessionId: string; runId: string; body: RunControlBody; commandId: string }[]
   snapshotCalls: string[]
+  processPageCalls: {
+    sessionId: string
+    runId: string
+    watermark: string
+    cursor?: string
+    signal?: AbortSignal
+  }[]
   deleteCalls: string[]
   renameCalls: { sessionId: string; title: string }[]
   // 默认成功 receipt；测试可重写为 reject 以驱动失败回滚路径。
@@ -35,6 +42,7 @@ export type FakeClient = SessionClient & {
   nextControl: () => Promise<RunControlReceipt>
   // 默认 null（服务端无此会话）；测试可按会话编程 snapshot。
   nextSnapshot: (sessionId: string) => Promise<SessionSnapshot | null>
+  nextProcessPage: (args: Parameters<SessionClient["fetchRunProcessPage"]>[0]) => ReturnType<SessionClient["fetchRunProcessPage"]>
   lastStream: () => FakeStream
 }
 
@@ -56,6 +64,7 @@ export function createFakeClient(): FakeClient {
     createCalls: [],
     controlCalls: [],
     snapshotCalls: [],
+    processPageCalls: [],
     streams: [],
     nextCreate: () => {
       runCounter += 1
@@ -69,6 +78,7 @@ export function createFakeClient(): FakeClient {
       replayed: false,
     }),
     nextSnapshot: () => Promise.resolve(null),
+    nextProcessPage: () => Promise.reject(new Error("unexpected process page")),
     lastStream: () => {
       const stream = client.streams.at(-1)
       if (!stream) {
@@ -88,6 +98,10 @@ export function createFakeClient(): FakeClient {
     fetchSnapshot: (sessionId) => {
       client.snapshotCalls.push(sessionId)
       return client.nextSnapshot(sessionId)
+    },
+    fetchRunProcessPage: (args) => {
+      client.processPageCalls.push(args)
+      return client.nextProcessPage(args)
     },
     deleteCalls: [] as string[],
     deleteSession: (sessionId: string) => {

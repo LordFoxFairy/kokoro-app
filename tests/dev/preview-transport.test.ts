@@ -40,10 +40,14 @@ describe("preview transport control loop", () => {
     expect(setItem).toHaveBeenCalledTimes(1)
   })
 
-  it("HITL approve emits returned tool, assistant completion, and run completion", async () => {
+  it("HITL approve completes the same opaque activity without exposing a raw tool result", async () => {
     const client = createPreviewClient({ stepMs: 0 })
     const events: string[] = []
     const eventIds: string[] = []
+    const activities: unknown[] = []
+    const completedMessages: string[] = []
+    const completedRuns: string[] = []
+    let approvalItemId: string | null = null
     const receipt = await client.createMessage("preview-session", {
       idempotency_key: "preview-message-1",
       selected_skill_source_refs: [],
@@ -56,6 +60,12 @@ describe("preview transport control loop", () => {
       onEvent: (event) => {
         events.push(event.kind)
         eventIds.push(event.event_id)
+        if (event.kind === "activity.updated") activities.push(event.payload)
+        if (event.kind === "message.completed") completedMessages.push(event.payload.content)
+        if (event.kind === "run.completed") completedRuns.push(event.payload.status)
+        if (event.kind === "interaction.state" && event.payload.phase === "waiting") {
+          approvalItemId = event.payload.groups[0]?.items[0]?.item_id ?? null
+        }
       },
       onStreamError: (error) => { throw error },
     })
@@ -68,15 +78,31 @@ describe("preview transport control loop", () => {
     }, "preview-command-1")
     await waitFor(() => events.includes("run.completed"))
 
-    expect(events).toContain("tool.returned")
-    expect(events).toContain("message.completed")
+    expect(approvalItemId).toBe(`${receipt.run_id}:tool_1`)
+    expect(activities).toEqual([
+      {
+        activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+        status: "running", display_code: "tool.execution",
+      },
+      {
+        activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+        status: "completed", display_code: "tool.execution",
+      },
+    ])
+    expect(events).not.toContain("tool.returned")
+    expect(completedMessages).toEqual(["工具调用已完成。"])
+    expect(completedRuns).toEqual(["completed"])
     expect(new Set(eventIds).size).toBe(eventIds.length)
   })
 
-  it("HITL reject emits an error-shaped tool result and closes the run", async () => {
+  it("HITL reject fails the same opaque activity without exposing a raw tool result", async () => {
     const client = createPreviewClient({ stepMs: 0 })
-    const returned: Array<{ is_error: boolean; result: string }> = []
-    const completed: string[] = []
+    const events: string[] = []
+    const eventIds: string[] = []
+    const activities: unknown[] = []
+    const completedMessages: string[] = []
+    const completedRuns: string[] = []
+    let approvalItemId: string | null = null
     let awaiting = false
     const receipt = await client.createMessage("preview-reject-session", {
       idempotency_key: "preview-reject-message-1",
@@ -88,11 +114,15 @@ describe("preview transport control loop", () => {
       resumeCursor: null,
       onCursor: () => {},
       onEvent: (event) => {
-        if (event.kind === "interaction.state") awaiting = true
-        if (event.kind === "tool.returned") {
-          returned.push({ is_error: event.payload.is_error, result: event.payload.result })
+        events.push(event.kind)
+        eventIds.push(event.event_id)
+        if (event.kind === "interaction.state" && event.payload.phase === "waiting") {
+          awaiting = true
+          approvalItemId = event.payload.groups[0]?.items[0]?.item_id ?? null
         }
-        if (event.kind === "run.completed") completed.push(event.payload.status)
+        if (event.kind === "activity.updated") activities.push(event.payload)
+        if (event.kind === "message.completed") completedMessages.push(event.payload.content)
+        if (event.kind === "run.completed") completedRuns.push(event.payload.status)
       },
       onStreamError: (error) => { throw error },
     })
@@ -103,10 +133,23 @@ describe("preview transport control loop", () => {
       expected_pause_revision: 1, pause_ref: `${receipt.run_id}:pause:1`,
       decisions: [{ type: "reject", item_id: `${receipt.run_id}:tool_1` }],
     }, "preview-command-2")
-    await waitFor(() => completed.length === 1)
+    await waitFor(() => completedRuns.length === 1)
 
-    expect(returned).toEqual([{ is_error: true, result: "预览工具已拒绝。" }])
-    expect(completed).toEqual(["completed"])
+    expect(approvalItemId).toBe(`${receipt.run_id}:tool_1`)
+    expect(activities).toEqual([
+      {
+        activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+        status: "running", display_code: "tool.execution",
+      },
+      {
+        activity: "tool", activity_id: `act_${"a".repeat(64)}`, segment_id: `seg_${"b".repeat(64)}`,
+        status: "failed", display_code: "tool.execution",
+      },
+    ])
+    expect(events).not.toContain("tool.returned")
+    expect(completedMessages).toEqual(["已拒绝这次工具调用。"])
+    expect(completedRuns).toEqual(["completed"])
+    expect(new Set(eventIds).size).toBe(eventIds.length)
   })
 
   it("rejects an unknown preview failure code before creating message or session history", async () => {

@@ -398,4 +398,97 @@ test.describe("Web production boundary", () => {
     }
     await page.screenshot({ path: testInfo.outputPath("thread-two-turn-1280.png"), fullPage: true })
   })
+
+  test("R137 keeps the in-flight answer streaming when a safe process is the newest segment", async ({ page }, testInfo) => {
+    test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the deterministic preview stream is available only on the local preview server")
+
+    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.evaluate(() => {
+      type Evidence = { answer: string; formingCount: number; streamingCount: number }
+      const target = window as typeof window & {
+        __r137EmptyFormingGap?: boolean
+        __r137SawForming?: boolean
+        __r137StreamingEvidence?: Evidence
+      }
+      const inspect = () => {
+        const article = document.querySelector<HTMLElement>('article')
+        const formingCount = article?.querySelectorAll('[data-state="forming"]').length ?? 0
+        if (formingCount > 0) target.__r137SawForming = true
+        if (target.__r137SawForming && article && formingCount === 0 &&
+          document.querySelector('[data-slot="message-scroller"][data-state="streaming"]') &&
+          !article.textContent?.includes("预览模式：已收到")) {
+          target.__r137EmptyFormingGap = true
+        }
+        if (target.__r137StreamingEvidence !== undefined) return true
+        const streaming = [...document.querySelectorAll<HTMLElement>('article [data-state="streaming"]')]
+        const answer = streaming.find((element) => element.textContent?.includes("预览模式：已收到"))
+        if (!answer) return false
+        target.__r137StreamingEvidence = {
+          answer: answer.textContent ?? "",
+          formingCount: document.querySelectorAll('article [data-state="forming"]').length,
+          streamingCount: streaming.length,
+        }
+        return true
+      }
+      const observer = new MutationObserver(() => {
+        if (inspect()) observer.disconnect()
+      })
+      observer.observe(document.body, { attributes: true, childList: true, characterData: true, subtree: true })
+      inspect()
+    })
+
+    const prompt = "R137 safe process streaming answer"
+    await page.getByRole("textbox", { name: "Chat input" }).fill(prompt)
+    await page.getByRole("button", { name: "Send message" }).click()
+
+    await expect.poll(() => page.evaluate(() => {
+      const target = window as typeof window & {
+        __r137StreamingEvidence?: { answer: string; formingCount: number; streamingCount: number }
+      }
+      return target.__r137StreamingEvidence ?? null
+    }), { message: "the real answer must own the single in-flight streaming state" }).toEqual({
+      answer: expect.stringContaining("预览模式：已收到"),
+      formingCount: 0,
+      streamingCount: 1,
+    })
+    await expect(page.getByText(`预览模式：已收到「${prompt}」。`, { exact: true })).toBeVisible()
+    await expect(page.locator('article [data-state="forming"]')).toHaveCount(0)
+    expect(await page.evaluate(() => {
+      const target = window as typeof window & { __r137EmptyFormingGap?: boolean }
+      return target.__r137EmptyFormingGap ?? false
+    }), "TEXT_MESSAGE_START must retain the forming answer until real text arrives").toBe(false)
+    await page.screenshot({ path: testInfo.outputPath(`r137-completed-answer-${testInfo.project.name}.png`), fullPage: true })
+  })
+
+  for (const decision of [
+    { button: "Approve", terminalStatus: "completed" },
+    { button: "Reject", terminalStatus: "failed" },
+  ] as const) {
+    test(`R137 ${decision.button.toLowerCase()} settles the same safe tool activity`, async ({ page }, testInfo) => {
+      test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the deterministic preview HITL stream is available only on the local preview server")
+
+      await page.goto("/app", { waitUntil: "networkidle" })
+      await page.getByRole("textbox", { name: "Chat input" }).fill(`!hitl R137 ${decision.button.toLowerCase()}`)
+      await page.getByRole("button", { name: "Send message" }).click()
+
+      const toolActivity = page.locator('[aria-label="Tool call"] [data-status]')
+      await expect(toolActivity).toHaveCount(1)
+      await expect(toolActivity).toHaveAttribute("data-status", "running")
+      await page.getByRole("button", { name: decision.button, exact: true }).click()
+
+      await expect(toolActivity).toHaveCount(1)
+      await expect(toolActivity).toHaveAttribute("data-status", decision.terminalStatus)
+      await expect(page.locator('[aria-label="Tool call"] [data-status="running"]')).toHaveCount(0)
+      const processDisclosure = page.locator("article").filter({ has: toolActivity }).locator('button[aria-expanded="false"]')
+      await expect(processDisclosure).toHaveCount(1)
+      await processDisclosure.click()
+      await expect(toolActivity).toBeVisible()
+      await expect(toolActivity).toContainText(decision.terminalStatus === "completed" ? "Completed" : "Failed")
+      await expect(toolActivity).not.toContainText("Running")
+      await page.screenshot({
+        path: testInfo.outputPath(`r137-${decision.button.toLowerCase()}-${testInfo.project.name}.png`),
+        fullPage: true,
+      })
+    })
+  }
 })

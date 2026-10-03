@@ -5,6 +5,7 @@ import { z } from "zod"
 
 import { interactionStateSchema } from "@/contract/control"
 import { agentFailureProfileSchema } from "@/contract/agent-failure"
+import { runProcessActivitySchema } from "@/contract/agui-events"
 
 const todoSchema = z
   .object({
@@ -231,6 +232,7 @@ export const chatProjectionEventSchema = z.discriminatedUnion("kind", [
   envelope.extend({ kind: z.literal("tool.returned"), payload: toolReturnedPayload }),
   envelope.extend({ kind: z.literal("delivery.created"), payload: deliveryCreatedPayload }),
   envelope.extend({ kind: z.literal("todo.updated"), payload: todoUpdatedPayload }),
+  envelope.extend({ kind: z.literal("activity.updated"), payload: runProcessActivitySchema }),
   envelope.extend({ kind: z.literal("subagent.started"), payload: subagentStartedPayload }),
   envelope.extend({ kind: z.literal("subagent.finished"), payload: subagentFinishedPayload }),
   envelope.extend({ kind: z.literal("subagent.thinking.delta"), payload: subagentThinkingDeltaPayload }),

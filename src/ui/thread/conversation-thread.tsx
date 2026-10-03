@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react"
 import type { AgentFailureCode } from "@/contract/agent-failure"
 import type { AgentMode } from "@/core/conversations"
 import { buildThreadItems } from "@/core/projections"
-import type { AttributedRunFailure, RunFailure, SessionDelivery, SessionStreamState, SessionToolCall } from "@/core/state"
+import type { AttributedRunFailure, RunFailure, SessionDelivery, SessionStreamState } from "@/core/state"
 import type { MachinePhase } from "@/engine/machine-state"
 import type { ToolDecision } from "@/engine/hitl-staging"
 import { useT } from "@/i18n/context"
@@ -70,9 +70,8 @@ export type ConversationThreadProps = {
   preview?: boolean
   brandName?: string
   onOpenFile?: (path: string) => void
-  // 成果卡点击 → canvas 打开冻结预览；工具 pill 点击 → canvas 打开参数/结果详情。
+  // 成果卡点击 → canvas 打开冻结预览。
   onOpenDelivery?: (delivery: SessionDelivery) => void
-  onOpenTool?: (runId: string, tool: SessionToolCall) => void
   // 产物端点 URL 构造需要（透传到工具行的产物卡）。
   sessionId: string | null
   thread: SessionStreamState
@@ -177,7 +176,6 @@ function ConversationThreadSurface({
   sessionId,
   onOpenFile,
   onOpenDelivery,
-  onOpenTool,
   thread,
   isStreaming,
   currentRunId,
@@ -365,7 +363,7 @@ function ConversationThreadSurface({
                   {...(brandName === undefined ? {} : { brandName })}
                   sessionId={sessionId}
                   {...(onOpenFile === undefined ? {} : { onOpenFile })}
-                  {...(onOpenTool === undefined ? {} : { onOpenTool: (tool: SessionToolCall) => onOpenTool(item.runId, tool) })}
+                  activities={thread.executionProcess?.runId === item.runId ? thread.executionProcess.activities : []}
                   {...(thread.interactionsByRun[item.runId] === undefined ? {} : { interaction: thread.interactionsByRun[item.runId] })}
                   steps={item.steps}
                   messagesById={item.messagesById}
@@ -400,6 +398,7 @@ function ConversationThreadSurface({
               sessionId={sessionId}
               steps={[]}
               messagesById={{}}
+              activities={liveRunId !== undefined && thread.executionProcess?.runId === liveRunId ? thread.executionProcess.activities : []}
               isLive
               {...(executionPhase ? { executionPhase } : {})}
               reconnecting={isReconnecting}
