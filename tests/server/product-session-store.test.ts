@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 
 import { createClient } from "redis"
-import { afterAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 import { createSession, finalizeRefresh, inspectSession, reserveRefresh, tombstoneSession } from "@/lib/server/product-session-store"
 
@@ -11,17 +11,71 @@ const secret = "product-session-store-test-key-at-least-32-bytes"
 const config = { redisUrl, webOrigin, secret }
 const ids: string[] = []
 const prefix = `kokoro:web:product-session:${createHash("sha256").update(webOrigin).digest("hex")}:`
+const otherOrigin = "http://other-product-session.fixture"
+let resourceBaseline: Readonly<Record<"primary" | "other", ReadonlySet<string>>> | undefined
 
 function productSessionKeyPrefix(origin: string): string {
   return `kokoro:web:product-session:${createHash("sha256").update(origin).digest("hex")}:`
 }
 
-afterAll(async () => {
-  if (ids.length === 0) return
+async function ownedResourceKeys(): Promise<Record<"primary" | "other", Set<string>>> {
+  const prefixes = { primary: prefix, other: productSessionKeyPrefix(otherOrigin) } as const
   const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
   client.on("error", () => undefined)
-  try { await client.connect(); await client.del(ids.flatMap((id) => [`${prefix}${id}`, `${prefix}${id}:tombstone`])) }
-  finally { client.destroy() }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      (async () => {
+        await client.connect()
+        const found = { primary: new Set<string>(), other: new Set<string>() }
+        for (const kind of Object.keys(prefixes) as Array<keyof typeof prefixes>) {
+          for await (const batch of client.scanIterator({ MATCH: `${prefixes[kind]}*`, COUNT: 100 })) {
+            for (const key of batch) found[kind].add(key)
+          }
+        }
+        return found
+      })(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("Product Session test resource read deadline")), 2_000)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+    client.destroy()
+  }
+}
+
+beforeAll(async () => { resourceBaseline = await ownedResourceKeys() })
+
+afterAll(async () => {
+  const errors: unknown[] = []
+  if (ids.length > 0) {
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          await client.connect()
+          await client.del(ids.flatMap((id) => [`${prefix}${id}`, `${prefix}${id}:tombstone`]))
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("Product Session test cleanup deadline")), 2_000)
+        }),
+      ])
+    } catch (error) { errors.push(error) }
+    finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
+  }
+  try {
+    if (resourceBaseline !== undefined) {
+      const current = await ownedResourceKeys()
+      for (const kind of ["primary", "other"] as const) {
+        const count = [...current[kind]].filter((key) => !resourceBaseline?.[kind].has(key)).length
+        if (count > 0) throw new Error(`Product Session test resource delta: kind=${kind} count=${count}`)
+      }
+    }
+  } catch (error) { errors.push(error) }
+  if (errors.length > 0) throw new AggregateError(errors, "Product Session test cleanup failed")
 })
 
 async function newSession(): Promise<string> {
@@ -83,13 +137,12 @@ describe("Product Session Redis double-CAS", () => {
       expect(secondRaw).not.toBeNull()
       const firstValue = JSON.parse(firstRaw!) as { refresh: string }
       const secondValue = JSON.parse(secondRaw!) as { refresh: string }
-      const otherOrigin = "http://other-product-session.fixture"
       const otherPrefix = productSessionKeyPrefix(otherOrigin)
       const otherKey = `${otherPrefix}${first}`
       await client.set(otherKey, firstRaw!, { EX: 60 })
       try {
         await expect(reserveRefresh({ ...config, webOrigin: otherOrigin }, first, 0)).rejects.toThrow()
-      } finally { await client.del(otherKey) }
+      } finally { await client.del([otherKey, `${otherKey}:tombstone`]) }
       await client.set(`${prefix}${second}`, JSON.stringify({ ...secondValue, refresh: firstValue.refresh }), { KEEPTTL: true })
       await expect(reserveRefresh(config, second, 0)).rejects.toThrow()
       expect(await client.exists(`${prefix}${second}`)).toBe(0)

@@ -13,6 +13,13 @@ import { chromium, type Browser, type Locator, type Page, type Response as Brows
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
+type NextDevEngine = "webpack" | "programmatic"
+
+function nextDevEngine(): NextDevEngine {
+  const value = process.env.KOKORO_TEST_NEXT_DEV_ENGINE?.trim() || "webpack"
+  if (value === "webpack" || value === "programmatic") return value
+  throw new Error("KOKORO_TEST_NEXT_DEV_ENGINE must be webpack or programmatic")
+}
 
 function oidcStateKeyPrefix(webOrigin: string): string {
   return `kokoro:web:oidc-state:${createHash("sha256").update(webOrigin).digest("hex")}:`
@@ -257,8 +264,9 @@ async function stop(child: ChildProcess): Promise<void> {
   })
 }
 
-async function isolatedNext(projectRoot: string): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), "kokoro-oidc-rp-next-"))
+async function isolatedNext(projectRoot: string, engine: NextDevEngine): Promise<string> {
+  const commonRoot = path.resolve(projectRoot, "../../..")
+  const root = await mkdtemp(path.join(engine === "programmatic" ? commonRoot : tmpdir(), "kokoro-oidc-rp-next-"))
   try {
     await cp(path.join(projectRoot, "src"), path.join(root, "src"), { recursive: true })
     await cp(path.join(projectRoot, "public"), path.join(root, "public"), { recursive: true })
@@ -406,6 +414,20 @@ export const onRequestError: Instrumentation.onRequestError = (error, request, c
 }
 `)
     for (const name of ["package.json", "tsconfig.json", "next.config.ts", "postcss.config.mjs"]) await cp(path.join(projectRoot, name), path.join(root, name))
+    if (engine === "programmatic") {
+      const configPath = path.join(root, "next.config.ts")
+      const config = await readFile(configPath, "utf8")
+      const marker = "root: process.cwd()"
+      if (config.split(marker).length !== 2) throw new Error("Web Turbopack test fixture config drift")
+      await writeFile(configPath, config.replace(marker, `root: ${JSON.stringify(commonRoot)}`))
+      await writeFile(path.join(root, "server.cjs"), `const http = require("node:http")
+const next = require("next")
+const [port, host] = process.argv.slice(2)
+const app = next({ dev: true, dir: __dirname, hostname: host, port: Number(port) })
+app.prepare().then(() => http.createServer(app.getRequestHandler()).listen(Number(port), host))
+  .catch(() => { process.exitCode = 1 })
+`, { mode: 0o600 })
+    }
     await symlink(path.join(projectRoot, "node_modules"), path.join(root, "node_modules"), "dir")
     return root
   } catch (error) { await rm(root, { recursive: true, force: true }); throw error }
@@ -1186,7 +1208,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   beforeAll(async () => {
     const setupDeadline = Date.now() + 55_000
     try {
-      root = await isolatedNext(process.cwd())
+      const engine = nextDevEngine()
+      root = await isolatedNext(process.cwd(), engine)
       bff = createServer((request, response) => {
         paths.push(request.url ?? "")
         if (request.url?.startsWith("/v1/sessions")) {
@@ -1400,7 +1423,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       if (preexisting.length > 0) throw new Error(`RP random-origin Redis prefixes were not empty (${preexisting.length})`)
       ownsBrowserPrefixes = true
       const nextBin = path.resolve(process.cwd(), "node_modules/next/dist/bin/next")
-      next = spawn(process.execPath, [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)], {
+      const nextArgs = engine === "programmatic"
+        ? [path.join(root, "server.cjs"), String(nextPort), "127.0.0.1"]
+        : [nextBin, "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(nextPort)]
+      next = spawn(process.execPath, nextArgs, {
         cwd: root,
         env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${path.join(root, "json-parse-diagnostic.cjs")}`]
           .filter((value): value is string => Boolean(value)).join(" "),

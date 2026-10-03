@@ -142,6 +142,10 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 
 S9 Chat Delivery 候选的当前/目标态见 `docs/CURRENT.md` 顶部；正式成果卡/Canvas 复用
 BFF Library 二元详情及原生同源附件，不再使用旧 hash 下载。真实 IAM/Agent/Storage 浏览器链由 Root 独立验收。
+OIDC system fixture 可用测试专属 `KOKORO_TEST_NEXT_DEV_ENGINE=webpack|programmatic` 对照集成 CLI Webpack 与
+programmatic Turbopack；未设置保持 Webpack，未知值 fail closed。该开关不进入生产配置，也不替代完整工程门或真实 owner E2E。
+真实 Redis fixture 必须按 exact origin/prefix 保存启动前 baseline，并只清理由本次运行新增的 CSRF、OIDC state 与
+Product Session record/tombstone；清理后执行零增量断言。禁止通过 `FLUSHDB`、删除 baseline 或等待 TTL 来伪造资源门通过。
 
 ```bash
 pnpm contract

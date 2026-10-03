@@ -1,3 +1,23 @@
+## R155 Web 测试资源终态回收（2026-10-03；完整工程门通过，用户原页仍失败）
+
+真实资源 RED 先证明两处 fixture-owned Redis 遗漏：IAM relay 68 个业务断言通过但终态报告动态 origin 的 `oidc_state count=3`；Product Session store 8 个业务断言通过但跨 origin 损坏 alias 留下一个 tombstone。测试现按 exact origin/prefix 与启动前 baseline 只回收本 fixture 新增事实，不删除 baseline 或其它 owner 数据；IAM 在停 owned child 后统一回收 CSRF/OIDC state/Product Session delta，并用三类长生命周期 sentinel 证明 baseline 保留后再精确删除 sentinel；Product 跨 origin case 同时删除自己的 record/tombstone。终态资源清理与资源扫描各自设有 2 秒总界；用例内对自有损坏 alias 的直接精确删除仍由该用例 `finally` 负责。清理错误不阻止终态 delta oracle，也不被吞掉。独立只读审 `b26be7…` 的两个 P2（sentinel TTL 与 Product cleanup 总期限/错误汇总）已收口。
+
+Root 最新冻结 `67a4…` / `3edb…` 与 R153 启动器候选一起执行完整 `pnpm check`，原进程 81876 自然 exit 0（106.39s）：contract 256、architecture 50、lint、typecheck、164 files / 2360 tests / 0 skip、Next build；门后五个候选 hash 不变，Redis 15 实际 `DBSIZE=0`。此前 Webpack/programmatic cold-reload 对照及 programmatic 53-system 门仍只证明受控测试启动器与工作流，资源终态门不扩大为正式全 owner E2E。
+
+当前用户原 `conv_ffd7` 仍是 P0：新截图与完整 inventory 控制继续超时，没有取得该页 hydration、DOM、session 请求或实际手动刷新结果，Root也没有重启服务或创建新标签。本轮不证明用户首屏恢复。历史 pending-refresh signout 500 的根因仍未确定；未复现不等于修复，也不能把本限定工程门称为全业务闭环。
+
+---
+
+## R153 Next dev 启动器对照门（2026-10-03；测试候选未发布，用户原页仍失败）
+
+OIDC 真实系统 fixture 现有封闭测试开关 `KOKORO_TEST_NEXT_DEV_ENGINE=webpack|programmatic`：未设置时保持原 `next dev --webpack`，未知值在创建 fixture 或资源前失败；programmatic 分支只在临时 fixture 生成 custom server，并把临时 `turbopack.root` 指向 fixture 与 owner `node_modules` symlink 的共同父目录。生产源码、正式配置、认证行为、请求数、业务断言和 12/45 秒预算均未改变。
+
+Root 实际执行同一 R147 cold/reload oracle：Webpack 进程 38725 为 1 pass / 52 名称过滤（21.98s），programmatic Turbopack 进程 43049 为 1 pass / 52 名称过滤（7.07s）；programmatic 完整 OIDC system file 进程 21527 为 53 pass / 0 skip（55.45s）。Node22 定向 ESLint/typecheck 进程 96779 通过；测试 hash 门后不变，Redis 15、源码 hash 与临时 fixture 清理均保持。该证据没有运行本轮完整 2360-test `pnpm check`，也不是正式全 owner E2E。
+
+两启动方式通过只排除受控 fixture 中“programmatic Turbopack 必然无法完成该 cold/reload 流程”，不证明当前用户 `conv_ffd7/tab21` 已恢复；原页控制仍 timeout，缺少 DOM/session/hydration 证据。历史 pending-refresh signout 500 来源仍未知，本轮未复现不等于根治。本测试候选尚未发布。
+
+---
+
 ## R151 工作区偏好存储拒绝恢复与有界诊断（2026-10-03；源码、系统与完整工程门通过，用户原页仍待验）
 
 主题与语言 Provider 现在只把 `localStorage` 当浏览器偏好：读取 `kokoro.theme` 被拒绝时回到既有系统主题，读取 `kokoro.locale` 被拒绝时继续按 runtime/browser locale 协商；写入被拒绝时保留本次内存选择，不让 `SecurityError` 中止水合。认证索引、Product Session 与 AppGate 仍 fail closed，本切片没有把认证事实降级为内存 fallback，也没有改网络、contract、配置或 timeout。现运行副本已应用 `src/i18n/context.tsx` 与 `src/ui/theme/theme-context.tsx` 的冻结实现。

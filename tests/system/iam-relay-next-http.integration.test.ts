@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import { EventEmitter } from "node:events"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { cp, mkdir, mkdtemp, rm, symlink } from "node:fs/promises"
 import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
@@ -214,6 +214,151 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   let verifyEmailContentType = "text/plain"
   let verifyEmailBody = "verified"
   const redisUrl = process.env.KOKORO_WEB_REDIS_URL ?? "redis://127.0.0.1:6379"
+  type ResourceKind = "csrf" | "oidc_state" | "product_session"
+  let resourceBaseline: Readonly<Record<ResourceKind, ReadonlySet<string>>> | undefined
+  let baselineSentinels: string[] = []
+
+  function productSessionKeyPrefix(origin: string): string {
+    return `kokoro:web:product-session:${createHash("sha256").update(origin).digest("hex")}:`
+  }
+
+  function oidcStateKeyPrefix(origin: string): string {
+    return `kokoro:web:oidc-state:${createHash("sha256").update(origin).digest("hex")}:`
+  }
+
+  function resourcePrefixes(): Readonly<Record<ResourceKind, string>> {
+    const origin = `http://localhost:${nextPort}`
+    return {
+      csrf: iamCsrfKeyPrefix(origin),
+      oidc_state: oidcStateKeyPrefix(origin),
+      product_session: productSessionKeyPrefix(origin),
+    }
+  }
+
+  async function ownResourceKeys(): Promise<Record<ResourceKind, Set<string>>> {
+    const prefixes = resourcePrefixes()
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([
+        (async () => {
+          await client.connect()
+          const found: Record<ResourceKind, Set<string>> = {
+            csrf: new Set(), oidc_state: new Set(), product_session: new Set(),
+          }
+          for (const kind of Object.keys(prefixes) as ResourceKind[]) {
+            for await (const batch of client.scanIterator({ MATCH: `${prefixes[kind]}*`, COUNT: 100 })) {
+              for (const key of batch) found[kind].add(key)
+            }
+          }
+          return found
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis resource read deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+  }
+
+  async function installBaselineSentinels(): Promise<void> {
+    const suffix = createHash("sha256").update(randomUUID()).digest("hex")
+    const keys = Object.values(resourcePrefixes()).map((prefix) => `${prefix}${suffix}`)
+    baselineSentinels = []
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          await client.connect()
+          for (const key of keys) {
+            // The system file may run all 68 cases at their declared 30-second
+            // ceiling; keep the baseline proof alive through setup and teardown.
+            if (await client.set(key, "fixture-baseline", { EX: 3_600, NX: true }) !== "OK") {
+              throw new Error("test Redis baseline sentinel collision")
+            }
+            baselineSentinels.push(key)
+          }
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis baseline sentinel deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+  }
+
+  async function deleteOwnedResourceDelta(): Promise<void> {
+    if (resourceBaseline === undefined) return
+    const prefixes = resourcePrefixes()
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => {
+          await client.connect()
+          const delta: string[] = []
+          for (const kind of Object.keys(prefixes) as ResourceKind[]) {
+            for await (const batch of client.scanIterator({ MATCH: `${prefixes[kind]}*`, COUNT: 100 })) {
+              for (const key of batch) if (!resourceBaseline?.[kind].has(key)) delta.push(key)
+            }
+          }
+          if (delta.length > 0) await client.del(delta)
+        })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis cleanup deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+  }
+
+  async function removeBaselineSentinels(): Promise<void> {
+    if (baselineSentinels.length === 0) return
+    const keys = [...baselineSentinels]
+    const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
+    client.on("error", () => undefined)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        (async () => { await client.connect(); await client.del(keys); baselineSentinels = [] })(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error("test Redis baseline sentinel cleanup deadline")), 2_000)
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      client.destroy()
+    }
+  }
+
+  async function assertNoOwnedResourceDelta(): Promise<void> {
+    if (resourceBaseline === undefined) return
+    const current = await ownResourceKeys()
+    for (const kind of Object.keys(current) as ResourceKind[]) {
+      const count = [...current[kind]].filter((key) => !resourceBaseline?.[kind].has(key)).length
+      if (count > 0) throw new Error(`test Redis resource delta: kind=${kind} count=${count}`)
+    }
+  }
+
+  function closedResourceDelta(error: unknown): string | null {
+    if (error instanceof Error && /^test Redis resource delta: kind=(csrf|oidc_state|product_session) count=\d+$/u.test(error.message)) {
+      return error.message
+    }
+    if (error instanceof AggregateError) {
+      return error.errors.map(closedResourceDelta).find((message) => message !== null) ?? null
+    }
+    return null
+  }
 
   async function ownCsrfKeys(): Promise<string[]> {
     const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
@@ -251,7 +396,10 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
     if (next === undefined) {
       try { await dispose() } catch (error) { errors.push(error) }
     }
-    if (errors.length > 0) throw new AggregateError(errors, "failed to clean IAM relay Next fixture")
+    if (errors.length > 0) {
+      const resourceDelta = errors.map(closedResourceDelta).find((message) => message !== null)
+      throw new AggregateError(errors, `failed to clean IAM relay Next fixture${resourceDelta ? `; ${resourceDelta}` : ""}`)
+    }
   }
 
   async function disposeNextState(): Promise<void> {
@@ -261,22 +409,20 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       try { await rm(directory, { recursive: true, force: true }); fixtureRoot = undefined } catch (error) { errors.push(error) }
     }
     if (nextPort !== 0) {
-      const client = createClient({ url: redisUrl, socket: { connectTimeout: 500, reconnectStrategy: false } })
-      client.on("error", () => undefined)
-      let timer: ReturnType<typeof setTimeout> | undefined
+      try { await deleteOwnedResourceDelta() } catch (error) { errors.push(error) }
+      try { await assertNoOwnedResourceDelta() } catch (error) { errors.push(error) }
       try {
-        // Register every key issued by this isolated origin, including browser
-        // redirects whose Set-Cookie never passes through the raw HTTP helpers.
-        const keys = await ownCsrfKeys()
-        await Promise.race([
-          (async () => { await client.connect(); if (keys.length > 0) await client.del(keys) })(),
-          new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("test Redis cleanup deadline")), 2_000) }),
-        ])
+        const current = await ownResourceKeys()
+        const present = new Set(Object.values(current).flatMap((keys) => [...keys]))
+        const missing = baselineSentinels.filter((key) => !present.has(key)).length
+        if (missing > 0) throw new Error(`test Redis baseline sentinel missing: count=${missing}`)
       } catch (error) { errors.push(error) }
-      finally { if (timer !== undefined) clearTimeout(timer); client.destroy() }
-      try { expect(await ownCsrfKeys()).toEqual([]) } catch (error) { errors.push(error) }
+      try { await removeBaselineSentinels() } catch (error) { errors.push(error) }
     }
-    if (errors.length > 0) throw new AggregateError(errors, "failed to clean IAM relay Next fixture")
+    if (errors.length > 0) {
+      const resourceDelta = errors.map(closedResourceDelta).find((message) => message !== null)
+      throw new AggregateError(errors, `failed to clean IAM relay Next fixture${resourceDelta ? `; ${resourceDelta}` : ""}`)
+    }
   }
 
   it("retains the active Next handle and never disposes its directory or CSRF keys", async () => {
@@ -392,6 +538,8 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       })
       bffPort = await listen(bff)
       nextPort = await unusedPort()
+      await installBaselineSentinels()
+      resourceBaseline = await ownResourceKeys()
       authorizePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/sign-in?sig=%2BAb` }
       continuePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/select-tenant?sig=%2BAb` }
       setActivePayload = { redirect: true, url: `http://localhost:${nextPort}/auth/consent?sig=%2BAb&scope=openid` }
