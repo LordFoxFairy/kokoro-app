@@ -4,6 +4,9 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "rail.moveChat": "Move conversation {title}",
+  "rail.retryMoveChat": "Retry moving conversation",
+  "rail.moveFailed": "The conversation could not be moved. Refresh and try again.",
   "firstSite.projectsLoading": "Loading projects…",
   "firstSite.projectsError": "Projects could not be loaded.",
   "firstSite.projectsEmpty": "No projects yet.",

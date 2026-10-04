@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "rail.moveFailed": "대화를 이동하지 못했습니다. 페이지를 새로고침한 후 다시 시도하세요.",
   "skills.personal.published": "내가 게시한 스킬",
   "skills.personal.installations": "내 설치 목록",
   "skills.personal.install": "이 스킬 설치",
@@ -175,6 +176,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "rail.inviteFriendsTitle": "친구를 {brand}에 초대",
   "rail.inviteFriendsHint": "링크를 공유하고 함께 더 많은 일을 하세요",
   "rail.deleteChat": "세션 {title} 삭제",
+  "rail.moveChat": "대화 {title} 이동",
+  "rail.retryMoveChat": "대화 이동 다시 시도",
   "rail.renameChat": "세션 {title} 이름 바꾸기",
   "rail.renamePlaceholder": "세션 제목",
   "rail.renameSave": "제목 저장",

@@ -3,6 +3,8 @@ import type { ComponentType, RefObject, SVGProps } from "react"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
+import type { ConversationMoveIntent } from "@/engine/engine-types"
+import type { SessionScope } from "@/engine/session-scope"
 
 /** Public inputs owned by the mounted desktop shell and standalone embeds. */
 export type WorkspaceRailProps = {
@@ -53,6 +55,12 @@ export type WorkspaceRailProps = {
   accountTriggerRef?: RefObject<HTMLButtonElement | null>
   // 会话重命名（CONV-UX）：提交非空新题；乐观更新 + 失败回滚由上层处理。
   onRenameConversation: (id: string, title: string) => void
+  conversationScope?: SessionScope
+  conversationMove?: ConversationMoveIntent | null
+  conversationMovePending?: boolean
+  conversationMoveFailed?: boolean
+  onMoveConversation?: (sessionId: string, targetProjectId: string | null) => void
+  onRetryConversationMove?: () => void
   // 打开设置中心模态到指定 tab（WEB-FACE 面三）：管理入口不再整页导航,浮层叠在工作区之上。
   onOpenSettings: (tab: SettingsTab) => void
   /** Bottom utility action opens the floating notification center, not Settings. */

@@ -1,3 +1,13 @@
+## R170-W-MOVE-UI：内部调用与用户可见状态（2026-10-04；候选已实现，发布待 Root 集成）
+
+本片不新增HTTP/API；只消费required `SessionClient.moveSession`。Engine冻结canonical `sessionId`、`targetProjectId|null`与一次`commandId`，同一显式retry复用三者。没有unknown intent时retry返回`null`且零owner调用；pending时重复同意图共享结果，不同target也返回rejected而不换key。只有validated matching 200 ACK返回confirmed；明确且终局的owner拒绝为rejected；network/deadline/abort/parse/adapter、503及409 `idempotency_in_progress`为unknown。UI不得从list差异推断成功、不得换key自动retry、不得在ACK前导航。
+
+active confirmed导航为Project target `/app/project/<canonical>?conversation=<canonical>`，Direct target为`/app?conversation=<canonical>`；保Conversation ID。运行中Run不取消、不重发，target engine以正式scope snapshot/replay恢复。非active confirmed不导航。Project destination只在正式Project list状态ready时取owner-confirmed list并排除current；`projectHref`、preview或synthetic shortcut不能成为目的地，未知/不可见ID没有自由文本入口。TC-C05-UI01..08分别覆盖destination权限、ACK前保全、三方向导航、scope admission、owner rejection、unknown同key恢复及全部迟到fence。
+
+matching confirmed receipt先确立durable outcome，再应用generation/view fence：旧UI projection不导航、不显示错误、不抢焦点，但同scope来源仍必须发起新的owner GET并按canonical membership移除已移动Conversation。该对账不新增HTTP字段、receipt、entity或binding事实，也不自动重发Move。R194-W1只覆盖当前scope；跨scope unknown/late ACK、route未dispose及blocked-storage硬刷新仍为W2 OPEN。
+
+---
+
 ## R158-W-MOVE-D0：public 7.1 Move 消费合同（2026-10-04；A候选待 Root 集成）
 
 唯一 owner 机器事实是 BFF 已发布 public OpenAPI 7.1 canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`（文档 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a`）的 `POST /v1/sessions/{id}/move`。Web 后继第一片增加 Session client，并在现 `/api/session/[...path]` 内增加仅限该 operation 的响应投影；不增加新的浏览器公开 API、独立 proxy、engine action 或 UI。

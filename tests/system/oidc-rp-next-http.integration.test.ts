@@ -703,13 +703,33 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let deleteSessionStatus = 200
   type MoveFixtureResponse = {
     status: number
+    body: unknown
+    contentType?: string
     requestId?: string
     retryAfter?: string
-    contentType?: string
-    body: unknown
   }
   let moveFixtureResponse: MoveFixtureResponse | undefined
+  let moveUiFixtureEnabled = false
+  let moveBindingFixtureEnabled = false
+  let moveBindingProjectRef: string | null = null
+  const moveBindingScopeGets: {
+    scope: string
+    bindingAtRead: string | null
+    sessionIds: string[]
+  }[] = []
+  const moveBindingSnapshotGets: {
+    sessionId: string
+    bindingAtRead: string | null
+    messageIds: string[]
+  }[] = []
+  let moveFixtureMode: "respond" | "hold" | "close" | "commit-close" = "respond"
+  let releaseHeldMove: (() => void) | undefined
+  const releaseMove = (): void => { const release = releaseHeldMove; releaseHeldMove = undefined; release?.() }
   const moveBoundaryRequests: { method: string; path: string; idempotencyKey: string | undefined; body: string }[] = []
+  const moveConversationA = "conv_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  const moveConversationB = "conv_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  const moveProjectA = "project_22222222-2222-4222-8222-222222222222"
+  const moveProjectB = "project_33333333-3333-4333-8333-333333333333"
   const resetMoveFixture = (): void => {
     moveFixtureResponse = undefined
     moveBoundaryRequests.length = 0
@@ -1312,8 +1332,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           } else response.end(payload)
           return
         }
-        const fixtureMovePath = "/v1/sessions/conv_11111111-1111-4111-8111-111111111111/move"
-        if (request.method === "POST" && request.url === fixtureMovePath) {
+        if (request.method === "GET" && request.url === "/v1/projects" && moveUiFixtureEnabled) {
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({ data: { projects: [
+            { id: moveProjectA, name: "Move target alpha", slug: "move-target-alpha", description: "", created_at: "2026-10-03T10:00:00.000Z", updated_at: "2026-10-03T10:00:00.000Z" },
+            { id: moveProjectB, name: "Move target beta", slug: "move-target-beta", description: "", created_at: "2026-10-03T10:00:00.000Z", updated_at: "2026-10-03T10:00:00.000Z" },
+          ] }, meta: { request_id: "req_move_projects" } }))
+          return
+        }
+        const defaultFixtureMovePath = "/v1/sessions/conv_11111111-1111-4111-8111-111111111111/move"
+        const fixtureMovePath = request.url?.match(/^\/v1\/sessions\/(conv_[0-9a-f-]+)\/move(?:\?.*)?$/u)?.[0]?.split("?")[0]
+        if (request.method === "POST" && fixtureMovePath !== undefined &&
+          (fixtureMovePath === defaultFixtureMovePath || moveUiFixtureEnabled)) {
           const chunks: Buffer[] = []
           request.on("data", (chunk: Buffer) => chunks.push(chunk))
           request.on("end", () => {
@@ -1328,15 +1358,43 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             expect(request.headers["x-kokoro-service"]).toBe("web-bff")
             expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
             expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+            if (request.url !== fixtureMovePath) {
+              response.writeHead(400, {
+                "content-type": "application/json", "cache-control": "no-store",
+                "x-request-id": "req_move_owner_invalid_query",
+              })
+              response.end(JSON.stringify({
+                error: { code: "invalid_move_request", message: "query is not allowed", retryable: false },
+              }))
+              return
+            }
             expect(configured).toBeDefined()
             const headers: Record<string, string> = {
-              "content-type": configured?.contentType ?? "application/json",
-              "cache-control": "no-store",
+              "content-type": configured?.contentType ?? "application/json", "cache-control": "no-store",
             }
             if (configured?.requestId !== undefined) headers["x-request-id"] = configured.requestId
             if (configured?.retryAfter !== undefined) headers["retry-after"] = configured.retryAfter
-            response.writeHead(configured?.status ?? 500, headers)
-            response.end(JSON.stringify(configured?.body ?? { error: { code: "fixture_unconfigured" } }))
+            const settle = (): void => {
+              if (moveBindingFixtureEnabled && configured?.status === 200) {
+                const parsedBody = JSON.parse(moveBoundaryRequests.at(-1)?.body ?? "null") as { target_project_id?: unknown } | null
+                const configuredBody = configured.body as { data?: { session_id?: unknown; project_ref?: unknown } } | null
+                const pathSessionId = fixtureMovePath.slice("/v1/sessions/".length, -"/move".length)
+                const targetProjectId = parsedBody?.target_project_id
+                if ((typeof targetProjectId === "string" || targetProjectId === null) &&
+                  configuredBody?.data?.session_id === pathSessionId &&
+                  configuredBody.data.project_ref === targetProjectId) {
+                  moveBindingProjectRef = targetProjectId
+                }
+              }
+              if (moveFixtureMode === "close" || moveFixtureMode === "commit-close") {
+                response.destroy()
+                return
+              }
+              response.writeHead(configured?.status ?? 500, headers)
+              response.end(JSON.stringify(configured?.body ?? { error: { code: "fixture_unconfigured" } }))
+            }
+            if (moveFixtureMode === "hold") releaseHeldMove = settle
+            else settle()
           })
           return
         }
@@ -1352,16 +1410,57 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           expect(request.headers["x-kokoro-service"]).toBe("web-bff")
           expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
           expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+          const moveSessions = [
+            ...(moveBindingProjectRef === null ? [
+              { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+            ] : []),
+            { session_id: moveConversationB, title: "Move conversation beta", updated_at: "2026-10-03T11:00:00.000Z" },
+          ]
+          if (moveBindingFixtureEnabled) {
+            moveBindingScopeGets.push({ scope: "direct", bindingAtRead: moveBindingProjectRef,
+              sessionIds: moveSessions.map((session) => session.session_id) })
+          }
           response.writeHead(sessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify(sessionListStatus === 200 ? {
-            data: { sessions: [
+            data: { sessions: moveUiFixtureEnabled ? moveSessions : [
               ...(deleteSessionCommitted ? [] : [
                 { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
               ]),
               { session_id: "session-list-b", title: "Bounded list beta", updated_at: "2026-10-03T11:00:00.000Z" },
-            ], next_cursor: null },
-            meta: { request_id: "req_r141_list" },
+            ], next_cursor: null }, meta: { request_id: "req_r141_list" },
           } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          return
+        }
+        if (request.method === "GET" && moveBindingFixtureEnabled &&
+          request.url === `/v1/sessions?project_ref=${encodeURIComponent(moveProjectA)}`) {
+          const projectSessions = moveBindingProjectRef === moveProjectA ? [
+            { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+          ] : []
+          moveBindingScopeGets.push({ scope: `project:${moveProjectA}`, bindingAtRead: moveBindingProjectRef,
+            sessionIds: projectSessions.map((session) => session.session_id) })
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({ data: { sessions: projectSessions, next_cursor: null },
+            meta: { request_id: "req_move_binding_project_list" } }))
+          return
+        }
+        if (request.method === "GET" && moveUiFixtureEnabled &&
+          (request.url === `/v1/sessions/${moveConversationA}` || request.url === `/v1/sessions/${moveConversationB}`)) {
+          const sessionId = request.url.slice("/v1/sessions/".length)
+          const moveMessages = moveBindingFixtureEnabled && sessionId === moveConversationA ? [{
+            message_id: "message-move-binding-a", role: "user",
+            content: "R192 binding survives the filtered view move", status: "completed",
+            created_at: "2026-10-03T12:00:00.000Z",
+          }] : []
+          if (moveBindingFixtureEnabled) {
+            moveBindingSnapshotGets.push({ sessionId, bindingAtRead: moveBindingProjectRef,
+              messageIds: moveMessages.map((message) => message.message_id) })
+          }
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({ data: { session: {
+            session_id: sessionId, title: sessionId === moveConversationA ? "Move conversation alpha" : "Move conversation beta",
+            owner_id: "user-one", created_at: "2026-10-03T11:59:00.000Z", updated_at: "2026-10-03T12:00:00.000Z",
+          }, messages: moveMessages, execution_process: null, files: [], deliveries: [], deliveries_has_more: false,
+          event_watermark: null }, meta: { request_id: "req_move_snapshot" } }))
           return
         }
         if (
@@ -3160,4 +3259,526 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       userinfoRejected: true, jwksRejected: true, calls: 0 })
     expect(paths).toHaveLength(before)
   })
+
+  it("R183 shows a safe rail failure when the Move owner rejects without changing the active draft or route", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 409,
+      requestId: "req_move_owner_rejected",
+      body: { error: { code: "idempotency_conflict", message: "fixture owner detail must stay private", retryable: false } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await expect.poll(() => composer.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await selectA.getByText("Move conversation alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await selectA.click()
+      await composer.fill("R183 owner rejection preserves this active draft")
+      const beforeUrl = page.url()
+      const beforeListRequests = proxy.listRequests()
+
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      const alert = directList.getByRole("alert").filter({
+        hasText: /The conversation could not be moved\. Refresh and try again\.|移动失败，请刷新后重试。/u,
+      })
+      await alert.waitFor({ state: "visible", timeout: 10_000 })
+      expect(await alert.textContent()).not.toMatch(/fixture owner detail|idempotency_conflict|req_move_owner_rejected/u)
+      expect(page.url()).toBe(beforeUrl)
+      expect(await composer.inputValue()).toBe("R183 owner rejection preserves this active draft")
+      expect(await selectA.getAttribute("aria-pressed")).toBe("true")
+      expect(proxy.listRequests()).toBe(beforeListRequests)
+      expect(moveBoundaryRequests).toHaveLength(1)
+      expect(paths.some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
+  it("R183 disables every competing Move while one row is pending and retries an unknown result only on its original row", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_retry_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const rowB = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`,
+      )
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await selectA.click()
+      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      const moveA = rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u })
+      const moveB = rowB.getByRole("button", { name: /Move conversation Move conversation beta|移动会话 Move conversation beta/u })
+      await moveA.click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      await expect.poll(() => moveA.isDisabled(), { timeout: 10_000 }).toBe(true)
+      await expect.poll(() => moveB.isDisabled(), { timeout: 10_000 }).toBe(true)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      moveFixtureMode = "close"
+      releaseMove()
+      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      await moveA.click()
+      const retryItems = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retryItems.waitFor({ state: "visible", timeout: 10_000 })
+      expect(await retryItems.count()).toBe(1)
+      await page.keyboard.press("Escape")
+      await moveB.click()
+      expect(await page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u }).count()).toBe(0)
+      await page.keyboard.press("Escape")
+      await moveA.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R192 keeps a moved Conversation out of Direct after return and reload while preserving its Project history", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_binding_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(moveBoundaryRequests[0]?.body).toBe(JSON.stringify({ target_project_id: moveProjectA }))
+      expect(moveBoundaryRequests[0]?.idempotencyKey).toMatch(
+        /^move_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+      )
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+
+      const directGetsAfterCommitBaseline = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directGetsAfterCommitBaseline)
+      const directReturnRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directReturnRead).toEqual({
+        scope: "direct",
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationB],
+      })
+      const directGetsBeforeReload = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      await page.reload({ waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const reloadedDirectList = page.locator('[data-conversation-list="direct"]')
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directGetsBeforeReload)
+      const directReloadRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directReloadRead).toEqual({
+        scope: "direct",
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationB],
+      })
+      await expect.poll(() => reloadedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBeNull()
+
+      const snapshotGetsBeforeProjectOpen = moveBindingSnapshotGets.length
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      const projectList = page.locator('[data-conversation-list="project-conversation"]')
+      await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
+        .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
+      expect(moveBindingSnapshotGets.at(-1)).toEqual({
+        sessionId: moveConversationA,
+        bindingAtRead: moveProjectA,
+        messageIds: ["message-move-binding-a"],
+      })
+      await projectList.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBindingScopeGets).toContainEqual({
+        scope: `project:${moveProjectA}`,
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationA],
+      })
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R194 reconciles a late matching ACK with a post-commit source GET without stealing the newly active draft", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_late_confirmed_reconcile",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const composer = page.locator('[data-slot="composer-input"]')
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
+      await selectA.click()
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      const preCommitReads = moveBindingScopeGets.filter((entry) => entry.scope === "direct")
+      expect(preCommitReads.length).toBeGreaterThan(0)
+      expect(preCommitReads.at(-1)).toEqual({
+        scope: "direct", bindingAtRead: null, sessionIds: [moveConversationA, moveConversationB],
+      })
+      const sourceGetsBeforeAck = preCommitReads.length
+      await selectB.click()
+      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await composer.fill("R194 keep the newly active B draft")
+      const stableUrl = page.url()
+
+      releaseMove()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(sourceGetsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
+        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
+      })
+      await expect.poll(() => directList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), { timeout: 10_000 })
+        .toBe(0)
+      expect(page.url()).toBe(stableUrl)
+      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
+      expect(await composer.inputValue()).toBe("R194 keep the newly active B draft")
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R188 retains an unknown Move identity after active switch and retries only its original row", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_switched_unknown_retry",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
+      const moveA = rowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      })
+      await selectA.click()
+      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await moveA.click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      await selectB.click()
+      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      const stableUrl = page.url()
+      const listRequestsBeforeUnknown = proxy.listRequests()
+      moveFixtureMode = "close"
+      releaseMove()
+      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      expect(page.url()).toBe(stableUrl)
+      expect(proxy.listRequests()).toBe(listRequestsBeforeUnknown)
+
+      await moveA.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      expect(page.url()).toBe(stableUrl)
+      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R194 recovers a committed Move after the owner socket closes with the exact command and preserves one Conversation history", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "commit-close"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_committed_lost_ack",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await rowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      const ownerMutationsBefore = paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value)).length
+
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(moveBindingProjectRef).toBe(moveProjectA)
+      await expect.poll(() => rowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).isEnabled(), { timeout: 10_000 }).toBe(true)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBindingSnapshotGets.at(-1)).toEqual({
+        sessionId: moveConversationA,
+        bindingAtRead: moveProjectA,
+        messageIds: ["message-move-binding-a"],
+      })
+      expect(paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value))).toHaveLength(ownerMutationsBefore)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it.each([
+    [503, "business_store_unavailable"],
+    [409, "idempotency_in_progress"],
+  ] as const)("R194 keeps typed %s %s Move outcomes unknown and retries the exact command", async (status, code) => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status,
+      requestId: `req_move_unknown_${status}`,
+      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      moveFixtureResponse = {
+        status: 200,
+        requestId: `req_move_unknown_retry_${status}`,
+        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+      }
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
 })

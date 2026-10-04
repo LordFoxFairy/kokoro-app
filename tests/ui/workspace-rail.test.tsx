@@ -146,6 +146,59 @@ it("专案与会话使用独立清单，专案加号只创建专案，会话加�
   expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
+it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", async () => {
+  const onMoveConversation = vi.fn()
+  const conversationId = "conv_11111111-1111-4111-8111-111111111111"
+  const currentProject = "project_22222222-2222-4222-8222-222222222222"
+  const targetProject = "project_33333333-3333-4333-8333-333333333333"
+  renderRail({
+    projects: [
+      { id: currentProject, name: "当前专案", href: `/app/project/${currentProject}`, active: true },
+      { id: targetProject, name: "目标专案", href: `/app/project/${targetProject}` },
+    ],
+    projectListStatus: "ready",
+    projectHref: `/app/project/${currentProject}`,
+    projectActive: true,
+    conversations: [{ id: conversationId, title: "旧标题" }],
+    ...({
+      conversationScope: { kind: "project", projectRef: currentProject },
+      onMoveConversation,
+      conversationMove: null,
+    } as unknown as Partial<Parameters<typeof WorkspaceRail>[0]>),
+  })
+
+  fireEvent.click(screen.getByRole("button", { name: "移动会话 旧标题" }))
+  const menu = await screen.findByRole("menu")
+  expect(within(menu).getByRole("menuitem", { name: "直接会话" })).toBeEnabled()
+  expect(within(menu).getByRole("menuitem", { name: "目标专案" })).toBeEnabled()
+  expect(within(menu).queryByRole("menuitem", { name: "当前专案" })).toBeNull()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "目标专案" }))
+  expect(onMoveConversation).toHaveBeenCalledWith(conversationId, targetProject)
+})
+
+it.each(["loading", "error"] as const)(
+  "R170不把%s或synthetic project shortcut当作Move目的地",
+  async (projectListStatus) => {
+    const conversationId = "conv_11111111-1111-4111-8111-111111111111"
+    renderRail({
+      projectHref: "/app/project/synthetic-preview-project",
+      projectActive: false,
+      projectListStatus,
+      conversations: [{ id: conversationId, title: "旧标题" }],
+      ...({
+        conversationScope: { kind: "direct" },
+        onMoveConversation: vi.fn(),
+        conversationMove: null,
+      } as unknown as Partial<Parameters<typeof WorkspaceRail>[0]>),
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "移动会话 旧标题" }))
+    const menu = await screen.findByRole("menu")
+    expect(within(menu).queryByRole("menuitem", { name: "synthetic-preview-project" })).toBeNull()
+    expect(within(menu).queryAllByRole("menuitem")).toHaveLength(0)
+  },
+)
+
 it("会话指针拖动只在当前清单内排序，并向宿主上报稳定顺序", () => {
   const onReorderConversations = vi.fn()
   renderRail({

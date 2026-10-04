@@ -56,6 +56,7 @@ import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
 import { SessionClientError } from "@/engine/client"
+import { ConversationMoveError } from "@/engine/conversation-move-error"
 import * as pageClients from "@/ui/shell/page-clients"
 
 import {
@@ -1112,6 +1113,210 @@ it("Direct Chat 展开侧栏后新建专案仍承接当前草稿", async () => {
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByLabelText("对话输入")).toHaveValue("从 Chat 承接到新专案")
   })
+})
+
+it("活动会话的确认Move先按回执导航而不被来源缓存驱逐误伤", async () => {
+  const sessionId = "00000000-0000-4000-8000-000000000091"
+  const targetProjectId = "00000000-0000-4000-8000-000000000092"
+  buildEngine(addConversation(null, sessionId, 500))
+  let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  const listSessions = vi.fn().mockResolvedValue({
+    sessions: [{ session_id: sessionId, title: "Active source", updated_at: "2026-10-04T00:00:00Z" }],
+    next_cursor: null,
+  })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: targetProjectId, name: "Active target", slug: "active-target", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-active-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
+    projectReadBoundary={{ admitted: true, subject: "subject-active", generation: 1 }} />
+  </LocaleProvider></ThemeProvider>)
+
+  const row = (await screen.findByRole("button", { name: "Active source" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(row).not.toBeNull()
+  fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "移动会话 Active source" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Active target" }))
+  act(() => resolveMove({ session_id: sessionId, project_ref: targetProjectId }))
+
+  await waitFor(() => {
+    expect(window.location.pathname).toBe(`/app/project/${targetProjectId}`)
+    expect(window.location.search).toBe(`?conversation=${sessionId}`)
+  })
+  expect(engine.getSnapshot().store?.activeId).toBe(sessionId)
+  expect(client.moveSession).toHaveBeenCalledTimes(1)
+})
+
+it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导航", async () => {
+  const sessionId = "00000000-0000-4000-8000-000000000101"
+  const otherSessionId = "00000000-0000-4000-8000-000000000102"
+  const targetProjectId = "00000000-0000-4000-8000-000000000201"
+  const replacementProjectId = "00000000-0000-4000-8000-000000000202"
+  buildEngine(addConversation(addConversation(null, otherSessionId, 400), sessionId, 500))
+
+  let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  const listSessions = vi.fn().mockResolvedValue({
+    sessions: [
+      { session_id: sessionId, title: "A", updated_at: "2026-10-04T00:00:00Z" },
+      { session_id: otherSessionId, title: "B", updated_at: "2026-10-03T00:00:00Z" },
+    ],
+    next_cursor: null,
+  })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{
+      id: targetProjectId,
+      name: "Target",
+      slug: "target",
+      description: "",
+      created_at: "2026-10-04T00:00:00Z",
+      updated_at: "2026-10-04T00:00:00Z",
+    }] },
+    meta: { request_id: "req-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+
+  const renderFrame = (projectRef?: string) => (
+    <ThemeProvider>
+      <LocaleProvider>
+        <AppFrame
+          engine={engine}
+          chatHref="/app"
+          desktopRailCollapsed={false}
+          projectReadBoundary={{ admitted: true, subject: "subject-1", generation: 1 }}
+          {...(projectRef === undefined ? {} : { projectWorkspace: true, projectRef })}
+        />
+      </LocaleProvider>
+    </ThemeProvider>
+  )
+  const view = render(renderFrame())
+
+  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+  const sessionButton = await screen.findByRole("button", { name: "A" })
+  const sessionRow = sessionButton.closest('[data-slot="sidebar-menu-item"]')
+  expect(sessionRow).not.toBeNull()
+  fireEvent.click(within(sessionRow as HTMLElement).getByRole("button", { name: "移动会话 A" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Target" }))
+  expect(client.moveSession).toHaveBeenCalledTimes(1)
+
+  act(() => {
+    resolveMove({ session_id: sessionId, project_ref: targetProjectId })
+    engine.selectConversation(otherSessionId)
+    window.history.replaceState(window.history.state, "", `/app?conversation=${otherSessionId}`)
+  })
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  expect(window.location.pathname).toBe("/app")
+  expect(window.location.search).toBe(`?conversation=${otherSessionId}`)
+  expect(listSessions).toHaveBeenCalledTimes(2)
+
+  window.history.replaceState(window.history.state, "", `/app/project/${replacementProjectId}?conversation=${sessionId}`)
+  view.rerender(renderFrame(replacementProjectId))
+  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(3))
+
+  let resolveAfterUnmount!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => {
+    resolveAfterUnmount = resolve
+  }))
+  const replacementRow = (await screen.findByRole("button", { name: "A" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(replacementRow).not.toBeNull()
+  fireEvent.click(within(replacementRow as HTMLElement).getByRole("button", { name: "移动会话 A" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Target" }))
+  expect(client.moveSession).toHaveBeenCalledTimes(1)
+  const listCallsBeforeUnmount = listSessions.mock.calls.length
+  act(() => {
+    resolveAfterUnmount({ session_id: sessionId, project_ref: targetProjectId })
+    view.unmount()
+  })
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  expect(window.location.pathname).toBe(`/app/project/${replacementProjectId}`)
+  expect(listSessions).toHaveBeenCalledTimes(listCallsBeforeUnmount)
+})
+
+it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async () => {
+  const sessionId = "00000000-0000-4000-8000-000000000111"
+  const targetProjectId = "00000000-0000-4000-8000-000000000211"
+  const replacementProjectId = "00000000-0000-4000-8000-000000000212"
+  buildEngine(addConversation(null, sessionId, 500))
+
+  let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  const listSessions = vi.fn().mockResolvedValue({
+    sessions: [{ session_id: sessionId, title: "Scope A", updated_at: "2026-10-04T00:00:00Z" }], next_cursor: null,
+  })
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: targetProjectId, name: "Scope Target", slug: "scope-target", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-scope-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  const renderFrame = (projectRef?: string) => (
+    <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
+      projectReadBoundary={{ admitted: true, subject: "subject-scope", generation: 1 }}
+      {...(projectRef === undefined ? {} : { projectWorkspace: true, projectRef })} />
+    </LocaleProvider></ThemeProvider>
+  )
+  const view = render(renderFrame())
+  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+  const row = (await screen.findByRole("button", { name: "Scope A" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(row).not.toBeNull()
+  fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "移动会话 Scope A" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Scope Target" }))
+  expect(client.moveSession).toHaveBeenCalledTimes(1)
+
+  act(() => {
+    resolveMove({ session_id: sessionId, project_ref: targetProjectId })
+    window.history.replaceState(window.history.state, "", `/app/project/${replacementProjectId}?conversation=${sessionId}`)
+    view.rerender(renderFrame(replacementProjectId))
+  })
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+  expect(engine.getSnapshot().conversationMove).toBeNull()
+  expect(window.location.pathname).toBe(`/app/project/${replacementProjectId}`)
+  expect(listSessions).toHaveBeenCalledTimes(3)
+})
+
+it("移动拒绝的暂态反馈不在 A 切 B 再切 A 后复活", async () => {
+  const sessionA = "00000000-0000-4000-8000-000000000121"
+  const sessionB = "00000000-0000-4000-8000-000000000122"
+  const targetProjectId = "00000000-0000-4000-8000-000000000221"
+  buildEngine(addConversation(addConversation(null, sessionB, 400), sessionA, 500))
+  client.moveSession = vi.fn().mockRejectedValue(new ConversationMoveError({
+    kind: "owner", status: 409, code: "idempotency_conflict", retryable: false,
+    requestId: "req-rejected", retryAfter: null,
+  }))
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({
+    ...client,
+    listSessions: vi.fn().mockResolvedValue({
+      sessions: [
+        { session_id: sessionA, title: "Reject A", updated_at: "2026-10-04T00:00:00Z" },
+        { session_id: sessionB, title: "Reject B", updated_at: "2026-10-03T00:00:00Z" },
+      ],
+      next_cursor: null,
+    }),
+  })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: targetProjectId, name: "Reject Target", slug: "reject-target", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-reject-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
+    projectReadBoundary={{ admitted: true, subject: "subject-reject", generation: 1 }} />
+  </LocaleProvider></ThemeProvider>)
+
+  const rowA = (await screen.findByRole("button", { name: "Reject A" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(rowA).not.toBeNull()
+  fireEvent.click(within(rowA as HTMLElement).getByRole("button", { name: "移动会话 Reject A" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Reject Target" }))
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("移动失败"))
+
+  act(() => engine.selectConversation(sessionB))
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  act(() => engine.selectConversation(sessionA))
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  expect(client.moveSession).toHaveBeenCalledTimes(1)
 })
 
 it("正式新建专案只在 BFF canonical 回执后导航，多击不重复提交，承接点击时草稿", async () => {

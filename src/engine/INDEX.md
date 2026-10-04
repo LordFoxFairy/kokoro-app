@@ -14,7 +14,8 @@
 - `machine.ts`
   - `createSessionEngine(deps) → SessionEngine`：唯一的引擎编排入口；submit（运行中插话转
     现 create-message 路径、不动状态机；同步返回本地是否接纳，供调用方在拒绝时保留草稿）/ retry（未回执重试复用首发 key 与完整 options 快照，保持同 digest）/ cancelRun /
-    stageToolDecision / selectConversation / newConversation / deleteConversation / setMode /
+    stageToolDecision / selectConversation / newConversation / deleteConversation / moveConversation /
+    retryConversationMove（仅保留结果未知的同一 command/body，ACK 前不改归属）/ setMode /
     dispose。
   - 从 `machine-state.ts` 与 `engine-types.ts` re-export 原有公共入口，保持下游 import 契约。
 - `machine-state.ts`
@@ -25,7 +26,7 @@
   - `reduceProjectionEvents`：把一批已校验的 AG-UI 投影事件交给 core reducer，并返回
     本轮终态收束标记；`reconcileUserMessageId`：对齐本地 echo 与服务端回执。
 - `execution-adapter.ts`
-  - 集中构造 message/control wire；管理流句柄、代际守卫和微任务批处理，向 machine 只交付
+  - 集中构造 message/control/Move wire；管理流句柄、Move abort、代际守卫和微任务批处理，向 machine 只交付
     cursor、事件批次和错误。
 - `engine-types.ts`
   - `EngineSnapshot`、`SERVER_ENGINE_SNAPSHOT`、`SessionEngine`、`EngineDeps`（SSR 首帧和

@@ -1,14 +1,16 @@
 "use client"
 
-import { type RefObject } from "react"
-import { Pencil, X } from "lucide-react"
+import { type RefObject, useState } from "react"
+import { FolderInput, Pencil, X } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import type { ConversationMoveIntent } from "@/engine/engine-types"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/context"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
@@ -33,6 +35,11 @@ export type WorkspaceRailSessionItemProps = {
   onSelect: (id: string) => void
   onStartRename: (id: string, current: string) => void
   onRequestDelete: (conversation: ConversationSummary) => void
+  moveDestinations: readonly Readonly<{ id: string | null; name: string }>[]
+  conversationMove: ConversationMoveIntent | null
+  conversationMovePending: boolean
+  onMoveConversation?: (sessionId: string, targetProjectId: string | null) => void
+  onRetryConversationMove?: () => void
 }
 
 /** A single conversation/task row, including rename and destructive actions. */
@@ -53,8 +60,14 @@ export function WorkspaceRailSessionItem({
   onSelect,
   onStartRename,
   onRequestDelete,
+  moveDestinations,
+  conversationMove,
+  conversationMovePending,
+  onMoveConversation,
+  onRetryConversationMove,
 }: WorkspaceRailSessionItemProps) {
   const t = useT()
+  const [moveOpen, setMoveOpen] = useState(false)
 
   return (
     <SidebarMenuItem
@@ -116,6 +129,30 @@ export function WorkspaceRailSessionItem({
           >
             <Pencil aria-hidden="true" />
           </SidebarMenuAction>
+          {onMoveConversation ? (
+            <DropdownMenu open={moveOpen} onOpenChange={setMoveOpen}>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuAction showOnHover className={itemStyles.itemMove} type="button"
+                  aria-label={t("rail.moveChat", { title })} disabled={conversationMovePending}
+                  onClick={() => setMoveOpen(true)}>
+                  <FolderInput aria-hidden="true" />
+                </SidebarMenuAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {moveDestinations.map((destination) => (
+                  <DropdownMenuItem
+                    key={destination.id ?? "direct"}
+                    onSelect={() => onMoveConversation(conversation.id, destination.id)}
+                  >
+                    {destination.name}
+                  </DropdownMenuItem>
+                ))}
+                {conversationMove?.status === "unknown" && onRetryConversationMove ? (
+                  <DropdownMenuItem onSelect={onRetryConversationMove}>{t("rail.retryMoveChat")}</DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <SidebarMenuAction
             showOnHover
             className={cn(itemStyles.itemDelete, itemStyles.itemDeleteAction)}

@@ -62,6 +62,12 @@ export function WorkspaceRailShell({
   onRequestDelete,
   deleteDialogFallbackFocusRef,
   onRenameConversation,
+  conversationScope,
+  conversationMove,
+  conversationMovePending = false,
+  conversationMoveFailed = false,
+  onMoveConversation,
+  onRetryConversationMove,
   onOpenSettings,
   onOpenNotifications,
   accountTriggerRef,
@@ -107,6 +113,14 @@ export function WorkspaceRailShell({
       active: projectActive,
     }]
   }, [preview, projectActive, projectHref, projects, t])
+  const moveDestinations = projectListStatus === "ready" && conversationScope !== undefined
+    ? [
+        ...(conversationScope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
+        ...projectItems
+          .filter((project) => conversationScope.kind !== "project" || project.id !== conversationScope.projectRef)
+          .map((project) => ({ id: project.id, name: project.name })),
+      ]
+    : []
 
   const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
   const {
@@ -380,6 +394,12 @@ export function WorkspaceRailShell({
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}
+            moveDestinations={moveDestinations}
+            conversationMove={conversationMove ?? null}
+            conversationMovePending={conversationMovePending}
+            conversationMoveFailed={conversationMoveFailed}
+            {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
+            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
           />
         </SidebarContent>
 

@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "rail.moveFailed": "会話を移動できませんでした。ページを更新して、もう一度お試しください。",
   "skills.personal.published": "公開済みのスキル",
   "skills.personal.installations": "自分のインストール",
   "skills.personal.install": "このスキルをインストール",
@@ -173,6 +174,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "rail.inviteFriendsTitle": "友達を {brand} に招待",
   "rail.inviteFriendsHint": "リンクを共有して一緒に進める",
   "rail.deleteChat": "セッション {title} を削除します",
+  "rail.moveChat": "会話「{title}」を移動",
+  "rail.retryMoveChat": "会話の移動を再試行",
   "rail.renameChat": "セッションの名前を {title} に変更します",
   "rail.renamePlaceholder": "セッションタイトル",
   "rail.renameSave": "タイトルを保存する",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { activeMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
@@ -39,6 +39,7 @@ import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
+import { sessionScopeKey } from "@/engine/session-scope"
 
 export type { AppCommandMenuProps }
 export type { AppFrameProps, EmptyStateProps, WorkspaceCapabilities } from "./app-frame.types"
@@ -144,6 +145,71 @@ export function AppFrame({
     focusComposer,
     scope: sessionScope,
   })
+  const conversationMove = engine?.getSnapshot().conversationMove ?? null
+  const moveScopeKey = sessionScopeKey(sessionScope)
+  const moveViewIdentity = useMemo(() => ({ engine, activeId, scopeKey: moveScopeKey }), [activeId, engine, moveScopeKey])
+  const moveProjectionRef = useRef<{
+    engine: typeof engine
+    activeId: string | null
+    scopeKey: string
+    identity: typeof moveViewIdentity
+    live: boolean
+  } | null>(null)
+  const [moveFailureProjection, setMoveFailureProjection] = useState<NonNullable<typeof moveProjectionRef.current> | null>(null)
+  useLayoutEffect(() => {
+    const projection = { engine, activeId, scopeKey: moveScopeKey, identity: moveViewIdentity, live: true }
+    moveProjectionRef.current = projection
+    return () => {
+      projection.live = false
+      if (moveProjectionRef.current === projection) moveProjectionRef.current = null
+    }
+  }, [activeId, engine, moveScopeKey, moveViewIdentity])
+  const commitConfirmedMove = useCallback((result: Awaited<ReturnType<NonNullable<typeof engine>["moveConversation"]>>, wasActive: boolean) => {
+    if (result.status !== "confirmed") return
+    if (!wasActive) return
+    const conversation = encodeURIComponent(result.sessionId)
+    const target = result.targetProjectId === null
+      ? `/app?conversation=${conversation}`
+      : `/app/project/${encodeURIComponent(result.targetProjectId)}?conversation=${conversation}`
+    navigateMountedSurface(target)
+  }, [])
+  const settleConversationMove = useCallback((
+    result: Awaited<ReturnType<NonNullable<typeof engine>["moveConversation"]>>,
+    wasActive: boolean,
+    projection: NonNullable<typeof moveProjectionRef.current>,
+  ) => {
+    if (result.status === "confirmed") conversationsCtl.refresh()
+    if (!projection.live || moveProjectionRef.current !== projection) return
+    if (result.status === "rejected") {
+      setMoveFailureProjection(projection)
+    }
+    commitConfirmedMove(result, wasActive)
+  }, [commitConfirmedMove, conversationsCtl])
+  const moveConversation = useCallback((sessionId: string, targetProjectId: string | null) => {
+    if (!engine) return
+    const projection = moveProjectionRef.current
+    if (projection === null) return
+    setMoveFailureProjection(null)
+    const wasActive = engine.getSnapshot().store?.activeId === sessionId
+    void engine.moveConversation({ sessionId, targetProjectId })
+      .then((result) => {
+        settleConversationMove(result, wasActive, projection)
+      })
+  }, [engine, settleConversationMove])
+  const retryConversationMove = useCallback(() => {
+    if (!engine) return
+    const retained = engine.getSnapshot().conversationMove
+    if (retained === null) return
+    const projection = moveProjectionRef.current
+    if (projection === null) return
+    setMoveFailureProjection(null)
+    const wasActive = engine.getSnapshot().store?.activeId === retained.sessionId
+    void engine.retryConversationMove().then((result) => {
+      if (result !== null) {
+        settleConversationMove(result, wasActive, projection)
+      }
+    })
+  }, [engine, settleConversationMove])
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted, projectRef)
@@ -441,6 +507,12 @@ export function AppFrame({
     onSelectConversation: actions.selectConversationWithUrl,
     onDeleteConversation: conversationsCtl.deleteConversation,
     onRenameConversation: conversationsCtl.renameConversation,
+    conversationScope: sessionScope,
+    conversationMove,
+    conversationMovePending: conversationMove?.status === "pending",
+    conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
+    onMoveConversation: moveConversation,
+    onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,
     accountTriggerRef,
     listLoading: conversationsCtl.loading,

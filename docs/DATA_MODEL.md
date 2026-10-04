@@ -1,3 +1,11 @@
+## R170-W-MOVE-UI：仅mounted intent（2026-10-04；候选已实现，发布待 Root 集成）
+
+Web不新增schema、Redis、localStorage/IndexedDB、receipt或Conversation归属缓存。唯一新增内存值是mounted engine的nullable frozen Move intent：canonical session、target Project或null、稳定command identity、`pending|unknown`。它不跨reload恢复，不成为owner事实；confirmed/rejected释放，unknown只供用户显式同值重试；无intent retry返回null，不制造空session/target/key记录。ACK前及失败时ConversationStore、draft、thread、Run、Message、cursor和scope均不改；ACK后target membership仍通过owner snapshot/list读取，不把receipt写成假列表项。
+
+旧scope stream释放不产生cancel；已准入Run继续由owner事实与target-scope replay观察。matching ACK先把当前意图结算为durable confirmed，再由generation/view fence限制导航、错误和焦点投影；同scope来源owner GET不受旧UI projection否决，并以canonical membership更新view cache。503与409 `idempotency_in_progress`不代表未执行，保留同一`sessionId/targetProjectId/commandId`为unknown供人工恢复。全程不保存target副本、不创建第二binding truth、不改变Conversation/Message身份。cache storage/observer异常仍fail-contained。跨scope unknown/late ACK、route未dispose与blocked-storage硬刷新归W2 OPEN。
+
+---
+
 ## R158-W-MOVE-D0：Move client 瞬时数据边界（2026-10-04；A候选待 Root 集成）
 
 Conversation 的 current Project/direct 归属、Move idempotency receipt 与事务始终由 BFF 持久拥有。Web 第一片不新增数据库、schema、migration、Redis、localStorage/IndexedDB、server cache、第二 receipt或归属表；只在一次 client调用与operation-scoped同源投影中传递并校验：canonical `conversationId`、canonical `targetProjectId | null`、稳定 `commandId`，strict ACK 的 `session_id/project_ref`，以及 typed error的 owner code/retryable。请求身份只从 owner必需 `x-request-id` header投影，不伪造 `meta`。

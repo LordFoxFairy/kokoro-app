@@ -21,6 +21,7 @@ import { filterConversations, type ConversationSummary } from "@/ui/rail/rail-se
 import { type RailDragKind, type RailDragProps, type RailDragState } from "./workspace-rail-actions"
 import { itemStyles } from "./workspace-rail-styles"
 import { WorkspaceRailSessionItem } from "./workspace-rail-session-item"
+import type { ConversationMoveIntent } from "@/engine/engine-types"
 
 export type WorkspaceRailSessionListProps = {
   projectActive: boolean
@@ -51,6 +52,12 @@ export type WorkspaceRailSessionListProps = {
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
   dragOverKey: string | null
+  moveDestinations: readonly Readonly<{ id: string | null; name: string }>[]
+  conversationMove: ConversationMoveIntent | null
+  conversationMovePending: boolean
+  conversationMoveFailed: boolean
+  onMoveConversation?: (sessionId: string, targetProjectId: string | null) => void
+  onRetryConversationMove?: () => void
 }
 
 /** Owns the route-scoped conversation list and its local presentation state. */
@@ -83,6 +90,12 @@ export function WorkspaceRailSessionList({
   dragProps,
   dragState,
   dragOverKey,
+  moveDestinations,
+  conversationMove,
+  conversationMovePending,
+  conversationMoveFailed,
+  onMoveConversation,
+  onRetryConversationMove,
 }: WorkspaceRailSessionListProps) {
   const t = useT()
   const [conversationOrder, setConversationOrder] = useState<"recent" | "name">("recent")
@@ -137,6 +150,9 @@ export function WorkspaceRailSessionList({
               </div>
             ) : null}
           </div>
+          {conversationMoveFailed ? (
+            <div className={itemStyles.listNotice} role="alert">{t("rail.moveFailed")}</div>
+          ) : null}
           {listError && !hasConversations ? (
             <div className={itemStyles.listNotice} role="alert">
               <p className={itemStyles.empty}>{t("rail.listError")}</p>
@@ -185,6 +201,11 @@ export function WorkspaceRailSessionList({
                       onSelect={(id) => { onSelectConversation(id); closeNavigation() }}
                       onStartRename={onStartRename}
                       onRequestDelete={onRequestDelete}
+                      moveDestinations={moveDestinations}
+                      conversationMove={conversationMove?.sessionId === conversation.id ? conversationMove : null}
+                      conversationMovePending={conversationMovePending}
+                      {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
+                      {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
                     />
                   )
                 })}

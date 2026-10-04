@@ -1,3 +1,19 @@
+## R170-W-MOVE-UI：ACK-gated Conversation Move（2026-10-04；候选已实现，发布待 Root 集成）
+
+Root 已裁决运行中 Move：strict matching ACK 后立即导航到 target scope 并保留 canonical Conversation query；target-scope engine 从 owner snapshot/replay 继续观察已准入 Run，释放旧 scoped engine/stream不得发 cancel，下一条新消息才按新scope准入。非active行成功只刷新source list，绝不抢焦点。
+
+| 放置项 | 决定 |
+| --- | --- |
+| Owner/目标 | BFF仍唯一拥有Conversation归属与receipt；Web engine只拥有一次mounted intent、pending/unknown UI投影和ACK后导航决定，不写第二归属事实。 |
+| 采用位置 | 扩现`engine-types.ts`/`machine.ts`/`execution-adapter.ts`承接single-flight、稳定commandId、Abort/dispose与generation fence；`use-conversation-list.ts`只编排source refresh；现AppFrame/navigation在active matching ACK后原子发target pathname+conversation query；现workspace-rail types/shell/list/item增加可访问Move菜单。无新模块、store或通用mutation框架。 |
+| 公共内存边界 | Engine required `moveConversation({sessionId,targetProjectId})` 与 `retryConversationMove()`；snapshot只暴露nullable frozen intent `{sessionId,targetProjectId,commandId,status:"pending"|"unknown"}`。confirmed/rejected释放intent；unknown保exact三元组供人工同key/body retry；没有unknown intent时retry明确返回`null`且零调用，不编空身份。 |
+| UI规则 | destination只在`projectListStatus=ready`时来自owner-confirmed `projects`，加Direct并排除当前scope；`projectHref`/preview shortcut不得合成目的地。重复点击共享single-flight，不同target在pending期间也拒绝且不换key。ACK前route/active/draft/thread/Run/row不变。明确owner拒绝安全显示且不自动retry；network/timeout/parse/adapter、503及409 `idempotency_in_progress`均保留unknown同key恢复。 |
+| 迟到/删除 | matching owner ACK的durable outcome必须先于generation/view fence处理；同scope切换active后仍触发一次新的source owner GET并采用owner canonical membership。AppFrame的导航、错误反馈和焦点写入才受当前live projection约束，旧projection不得借此抢回active/draft。matching ACK不注入target假行、不改Conversation/Message身份。 |
+
+R194-W1只闭合当前mounted scope内的三个真实RED：late matching ACK后的owner GET、owner已commit但响应丢失的原key恢复，以及503/409 `idempotency_in_progress` unknown分类。最小源码仍限现`machine.ts`与`app-frame.tsx`及其既有邻测试；不改wire/client/adapter，不建page registry、park、verified actor或第二binding truth。matching ACK后的本地cache处理继续best-effort，异常不得把confirmed改为unknown或中断dispose。跨scope unknown/late ACK、route未dispose及blocked-storage硬刷新归W2 OPEN；true-Next fixture不冒充真实BFF/PostgreSQL或原3310已启用。
+
+---
+
 ## R158-W-MOVE-D0：Conversation Move consumer 第一片（2026-10-04；A候选待 Root 集成）
 
 本仓只消费 BFF 已发布文档基线 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码基线 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a` 的唯一 public OpenAPI 7.1，canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`；BFF 继续唯一拥有 Conversation 归属、Move receipt 与事务。本A片固定public 7.1 pin、strict Move client与browser-private adapter；engine/UI归后继B片，原3310运行副本尚未因此启用。本D0不把fixture验收写成真实BFF发布，也不关闭原用户 `conv_ffd7` loading P0。
