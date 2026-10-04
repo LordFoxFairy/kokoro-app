@@ -339,7 +339,7 @@ it("空的直接会话桌面页仍保留独立会话分区", () => {
   expect(within(chats).queryByText("任务")).toBeNull()
 })
 
-it("收起态不复制直接会话 stop，并保留专案会话和底部账户锚点", () => {
+it("收起态不复制直接会话或孤立专案会话 stop，并保留专案与底部账户锚点", () => {
   renderRail({
     collapsed: true,
     projectHref: "/app/project/kokoro",
@@ -348,13 +348,13 @@ it("收起态不复制直接会话 stop，并保留专案会话和底部账户�
 
   expect(screen.queryByTestId("rail-direct-chat")).toBeNull()
   expect(screen.getByTestId("rail-project")).toHaveAttribute("data-navigation-section", "project")
-  expect(screen.getByTestId("rail-project-conversation")).toHaveAttribute("data-navigation-section", "project-conversation")
+  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
   expect(screen.getByTestId("rail-utility-device")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-notifications")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-account")).toHaveAttribute("data-rail-anchor", "account")
 })
 
-it("当前专案的会话图标创建新会话，不重复导航到当前专案", () => {
+it("当前专案只由会话清单的明确加号创建一次新会话", () => {
   const onNewChat = vi.fn()
   renderRail({
     projectHref: "/app/project/kokoro",
@@ -362,9 +362,8 @@ it("当前专案的会话图标创建新会话，不重复导航到当前专案"
     onNewChat,
   })
 
-  const task = screen.getByTestId("rail-project-conversation")
-  expect(task.querySelector("a")).toBeNull()
-  fireEvent.click(task)
+  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
+  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
   expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
@@ -446,7 +445,7 @@ it("展开态不为已显示文字的菜单保留 Radix tooltip trigger", () => 
 
   expect(screen.getByTestId("rail-new-conversation")).not.toHaveAttribute("data-state")
   expect(screen.getByTestId("rail-agent")).not.toHaveAttribute("data-state")
-  expect(screen.getByTestId("rail-project-conversation")).not.toHaveAttribute("data-state")
+  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
 })
 
 it("收起态不保留隐藏标签或会话操作按钮", () => {
@@ -941,14 +940,17 @@ it("会话清单加载态暴露 status，错误态暴露 alert", () => {
   expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
 })
 
-it("专案会话仍叫会话，独立任务导航不调用新建会话", () => {
+it("专案会话只保留清单内明确的新对话入口，独立任务导航不创建会话", () => {
   const onNewChat = vi.fn()
   renderRail({ projectActive: true, projectHref: "/app/project/owner-id", onNewChat,
     conversations: [{ id: "conversation-id", title: "真实会话" }], navigation: [{ key: "scheduled", label: "定时任务" }] })
   expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
+  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
   expect(screen.getAllByRole("button", { name: "新对话" })).toHaveLength(2)
+  fireEvent.click(screen.getByTestId("rail-new-project-conversation"))
+  expect(onNewChat).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole("link", { name: "定时任务" }))
-  expect(onNewChat).not.toHaveBeenCalled()
+  expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
 it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿", async () => {
@@ -961,14 +963,13 @@ it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿"
   expect(onCreateProject).toHaveBeenCalledExactlyOnceWith()
 })
 
-it("会话入口 DOM 和图标不再使用任务身份", () => {
+it("专案侧栏不渲染孤立会话气泡，清单加号是唯一专案新对话入口", () => {
   renderRail({ projectHref: "/app/project/owner-id", projectActive: true })
   expect(screen.getByTestId("rail-new-conversation")).toHaveAttribute("data-navigation-section", "new-conversation")
-  const shortcut = screen.getByTestId("rail-project-conversation")
-  expect(shortcut).toHaveAttribute("data-navigation-section", "project-conversation")
-  expect(shortcut.querySelector(".lucide-message-square")).not.toBeNull()
-  expect(shortcut.querySelector(".lucide-list-todo")).toBeNull()
-  expect(screen.getByTestId("rail-new-project-conversation")).toBeInTheDocument()
+  expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
+  const explicitEntry = screen.getByTestId("rail-new-project-conversation")
+  expect(explicitEntry).toHaveAccessibleName("新对话")
+  expect(explicitEntry.querySelector(".lucide-plus")).not.toBeNull()
 })
 
 it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", () => {

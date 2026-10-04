@@ -2,7 +2,7 @@
 
 import { type Dispatch, type MouseEvent, type PointerEvent, type RefObject, type ReactNode, type SetStateAction } from "react"
 import Link from "next/link"
-import { Folder, MessageSquare, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
+import { Folder, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
 
 import { BrandMark } from "@/components/blocks/brand-mark/brand-mark"
 import { Button } from "@/components/ui/button"
@@ -462,35 +462,6 @@ export function WorkspaceRailNavigation({
               })}
             </SidebarMenu>
           )}
-          {projectActive || projectHref ? (
-            <SidebarMenu className={itemStyles.projectConversationShortcut}>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild type="button" className={navigationStyles.navItem} data-testid="rail-project-conversation" data-navigation-section="project-conversation">
-                  {projectActive ? (
-                    <button
-                      type="button"
-                      aria-label={t("firstSite.projectConversations")}
-                      onPointerDown={markPointerFocus}
-                      onClick={() => { onNewChat(); closeNavigation() }}
-                    >
-                      <MessageSquare className={railStyles.icon} aria-hidden="true" />
-                    </button>
-                  ) : projectHref !== undefined ? (
-                    <Link
-                      href={projectHref}
-                      {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                      aria-label={t("firstSite.projectConversations")}
-                      onPointerDown={markPointerFocus}
-                      onClickCapture={(event) => interceptMountedSurfaceNavigation(event, projectHref)}
-                      onClick={closeNavigation}
-                    >
-                      <MessageSquare className={railStyles.icon} aria-hidden="true" />
-                    </Link>
-                  ) : null}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          ) : null}
         </SidebarGroupContent>
       </SidebarGroup> : null}
     </nav>
