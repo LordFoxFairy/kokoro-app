@@ -2,9 +2,12 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import type { SessionClient } from "@/engine/client"
+import { SessionClientError, type SessionClient } from "@/engine/client"
+import type { SessionEngine } from "@/engine/machine"
 import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import { useSessionList } from "@/ui/rail/use-session-list"
+import * as pageClients from "@/ui/shell/page-clients"
+import { useConversationList } from "@/ui/shell/use-conversation-list"
 
 function item(id: string, updatedAt: string) {
   return { session_id: id, title: `chat ${id}`, updated_at: updatedAt }
@@ -73,6 +76,49 @@ describe("useSessionList", () => {
     await waitFor(() => expect(result.current.entries).toHaveLength(1))
     rerender({ signal: 1 })
     await waitFor(() => expect(result.current.entries).toHaveLength(2))
+  })
+
+  it("starts a distinct refreshed GET while the pre-refresh first page is still pending", async () => {
+    let resolveOld!: (value: { sessions: ReturnType<typeof item>[], next_cursor: null }) => void
+    const oldPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: null }>((resolve) => { resolveOld = resolve })
+    const listSessions = vi.fn()
+      .mockReturnValueOnce(oldPage)
+      .mockResolvedValueOnce({ sessions: [item("post-ack", "t2")], next_cursor: null })
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const view = renderHook(
+      ({ signal }: { signal: number }) => useSessionList(client, signal),
+      { initialProps: { signal: 0 } },
+    )
+    expect(listSessions).toHaveBeenCalledTimes(1)
+
+    view.rerender({ signal: 1 })
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.result.current.entries.map((entry) => entry.id)).toEqual(["post-ack"]))
+    expect(view.result.current.settledFirstPage).toMatchObject({ refreshSignal: 1, success: true })
+
+    await act(async () => { resolveOld({ sessions: [item("pre-ack", "t1")], next_cursor: null }); await oldPage })
+    expect(view.result.current.entries.map((entry) => entry.id)).toEqual(["post-ack"])
+    view.unmount()
+  })
+
+  it("does not share an explicit refresh promise across hook instances with the same signal", async () => {
+    let resolveOld!: (value: { sessions: ReturnType<typeof item>[], next_cursor: null }) => void
+    const oldRefresh = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: null }>((resolve) => { resolveOld = resolve })
+    const listSessions = vi.fn()
+      .mockReturnValueOnce(oldRefresh)
+      .mockResolvedValueOnce({ sessions: [item("post-ack", "t2")], next_cursor: null })
+    const client = { listSessions } as Pick<SessionClient, "listSessions">
+    const oldHook = renderHook(() => useSessionList(client, 1))
+    expect(listSessions).toHaveBeenCalledTimes(1)
+
+    const postAckHook = renderHook(() => useSessionList(client, 1))
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(postAckHook.result.current.entries.map((entry) => entry.id)).toEqual(["post-ack"]))
+    expect(oldHook.result.current.loading).toBe(true)
+
+    await act(async () => { resolveOld({ sessions: [item("pre-ack", "t1")], next_cursor: null }); await oldRefresh })
+    oldHook.unmount()
+    postAckHook.unmount()
   })
 
   it("surfaces an error state without throwing when the fetch fails", async () => {
@@ -150,6 +196,186 @@ describe("useSessionList", () => {
 
     resolveDirectMore({ sessions: [item("direct-b", "t3")], next_cursor: null })
     await waitFor(() => expect(result.current.entries.map((entry) => entry.id)).toEqual(["project-a"]))
+  })
+})
+
+describe("useConversationList rename reconciliation", () => {
+  const engine = {} as SessionEngine
+  const thread = { messages: [] } as never
+  const focusComposer = () => undefined
+
+  it("serializes one session's intents and keeps the latest overlay until a post-ACK owner GET completes", async () => {
+    let resolveFirstRename!: () => void
+    let resolveSecondRename!: () => void
+    let resolveReconcile!: (page: { sessions: ReturnType<typeof item>[], next_cursor: null }) => void
+    const firstRename = new Promise<{ ok: true }>((resolve) => { resolveFirstRename = () => resolve({ ok: true }) })
+    const secondRename = new Promise<{ ok: true }>((resolve) => { resolveSecondRename = () => resolve({ ok: true }) })
+    const reconcile = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: null }>((resolve) => { resolveReconcile = resolve })
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("same", "t1")], next_cursor: null })
+      .mockReturnValueOnce(reconcile)
+    const renameSession = vi.fn()
+      .mockReturnValueOnce(firstRename)
+      .mockReturnValueOnce(secondRename)
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const view = renderHook(() => useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("chat same"))
+
+    act(() => {
+      view.result.current.renameConversation("same", "A")
+      view.result.current.renameConversation("same", "B")
+    })
+    expect(renameSession).toHaveBeenCalledTimes(1)
+    expect(renameSession).toHaveBeenNthCalledWith(1, "same", "A")
+    expect(view.result.current.conversations[0]?.title).toBe("B")
+
+    await act(async () => { resolveFirstRename(); await firstRename })
+    await waitFor(() => expect(renameSession).toHaveBeenCalledTimes(2))
+    expect(renameSession).toHaveBeenNthCalledWith(2, "same", "B")
+    expect(listSessions).toHaveBeenCalledTimes(1)
+
+    await act(async () => { resolveSecondRename(); await secondRename })
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    expect(view.result.current.conversations[0]?.title).toBe("B")
+
+    await act(async () => {
+      resolveReconcile({ sessions: [{ ...item("same", "t2"), title: "Canonical C" }], next_cursor: null })
+      await reconcile
+    })
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("Canonical C"))
+    view.unmount()
+  })
+
+  it("does not let an earlier rejection roll back a later queued intent", async () => {
+    let rejectFirstRename!: (error: Error) => void
+    let resolveSecondRename!: () => void
+    const firstRename = new Promise<{ ok: true }>((_resolve, reject) => { rejectFirstRename = reject })
+    const secondRename = new Promise<{ ok: true }>((resolve) => { resolveSecondRename = () => resolve({ ok: true }) })
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [item("same", "t1")], next_cursor: null })
+    const renameSession = vi.fn()
+      .mockReturnValueOnce(firstRename)
+      .mockReturnValueOnce(secondRename)
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const view = renderHook(() => useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+
+    act(() => {
+      view.result.current.renameConversation("same", "A")
+      view.result.current.renameConversation("same", "B")
+    })
+    await act(async () => { rejectFirstRename(new Error("late A")); await firstRename.catch(() => undefined) })
+    await waitFor(() => expect(renameSession).toHaveBeenCalledTimes(2))
+    expect(view.result.current.conversations[0]?.title).toBe("B")
+    await act(async () => { resolveSecondRename(); await secondRename })
+    view.unmount()
+  })
+
+  it("ignores an old committed lifecycle ACK after direct to project to direct", async () => {
+    let resolveRename!: () => void
+    const rename = new Promise<{ ok: true }>((resolve) => { resolveRename = () => resolve({ ok: true }) })
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [item("same", "t1")], next_cursor: null })
+    const renameSession = vi.fn().mockReturnValue(rename)
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const projectScope = { kind: "project" as const, projectRef: "project-a" }
+    const view = renderHook(
+      ({ scope }: { scope: typeof DIRECT_SESSION_SCOPE | typeof projectScope }) =>
+        useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer, scope }),
+      { initialProps: { scope: DIRECT_SESSION_SCOPE } },
+    )
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+    act(() => view.result.current.renameConversation("same", "Old lifecycle"))
+    expect(view.result.current.conversations[0]?.title).toBe("Old lifecycle")
+
+    view.rerender({ scope: projectScope })
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    view.rerender({ scope: DIRECT_SESSION_SCOPE })
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(3))
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("chat same"))
+
+    await act(async () => { resolveRename(); await rename })
+    await act(async () => { await Promise.resolve() })
+    expect(listSessions).toHaveBeenCalledTimes(3)
+    expect(view.result.current.conversations[0]?.title).toBe("chat same")
+    view.unmount()
+  })
+
+  it("reconciles after A commits even when queued B fails", async () => {
+    let resolveA!: () => void
+    let rejectB!: (error: Error) => void
+    const renameA = new Promise<{ ok: true }>((resolve) => { resolveA = () => resolve({ ok: true }) })
+    const renameB = new Promise<{ ok: true }>((_resolve, reject) => { rejectB = reject })
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("same", "t1")], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [{ ...item("same", "t2"), title: "Canonical A" }], next_cursor: null })
+    const renameSession = vi.fn().mockReturnValueOnce(renameA).mockReturnValueOnce(renameB)
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const view = renderHook(() => useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+    act(() => {
+      view.result.current.renameConversation("same", "A")
+      view.result.current.renameConversation("same", "B")
+    })
+    await act(async () => { resolveA(); await renameA })
+    await waitFor(() => expect(renameSession).toHaveBeenCalledTimes(2))
+    await act(async () => { rejectB(new Error("B failed")); await renameB.catch(() => undefined) })
+
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("Canonical A"))
+    view.unmount()
+  })
+
+  it("does not resurrect a reconciled overlay after a later owner GET fails", async () => {
+    let resolveRename!: () => void
+    const rename = new Promise<{ ok: true }>((resolve) => { resolveRename = () => resolve({ ok: true }) })
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("same", "t1")], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [{ ...item("same", "t2"), title: "Canonical C" }], next_cursor: null })
+      .mockRejectedValueOnce(new Error("later owner read failed"))
+    const renameSession = vi.fn().mockReturnValue(rename)
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const canonicalThread = { messages: [{ id: "message", role: "user", parts: [] }], meta: { title: "Canonical C" } } as never
+    const view = renderHook(() => useConversationList({ engine, activeId: "same", thread: canonicalThread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+    act(() => view.result.current.renameConversation("same", "Optimistic B"))
+    await act(async () => { resolveRename(); await rename })
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("Canonical C"))
+
+    act(() => view.result.current.refresh())
+    await waitFor(() => expect(view.result.current.error).toBe(true))
+    expect(view.result.current.conversations[0]?.title).toBe("Canonical C")
+    view.unmount()
+  })
+
+  it("reconciles from the owner after a final network failure may have lost its ACK", async () => {
+    const listSessions = vi.fn()
+      .mockResolvedValueOnce({ sessions: [item("same", "t1")], next_cursor: null })
+      .mockResolvedValueOnce({ sessions: [{ ...item("same", "t2"), title: "Committed despite lost ACK" }], next_cursor: null })
+    const renameSession = vi.fn().mockRejectedValueOnce(new SessionClientError("network", "socket closed"))
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const view = renderHook(() => useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+    act(() => view.result.current.renameConversation("same", "Optimistic title"))
+
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("Committed despite lost ACK"))
+    expect(renameSession).toHaveBeenCalledTimes(1)
+    view.unmount()
+  })
+
+  it("rolls back an explicit owner rejection without retrying PATCH or forcing reconciliation", async () => {
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [item("same", "t1")], next_cursor: null })
+    const renameSession = vi.fn().mockRejectedValueOnce(
+      new SessionClientError("http", "Title is too long", "title_too_long"),
+    )
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ listSessions, renameSession } as never)
+    const view = renderHook(() => useConversationList({ engine, activeId: null, thread, isStreaming: false, focusComposer }))
+    await waitFor(() => expect(view.result.current.conversations).toHaveLength(1))
+    act(() => view.result.current.renameConversation("same", "Rejected title"))
+
+    await waitFor(() => expect(view.result.current.conversations[0]?.title).toBe("chat same"))
+    expect(renameSession).toHaveBeenCalledTimes(1)
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    view.unmount()
   })
 })
 

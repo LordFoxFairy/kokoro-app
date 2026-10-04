@@ -2,7 +2,7 @@
 // updated_at desc、软删不出、复合游标分页）。localStorage 不再存清单——换浏览器见同一列表。
 // refreshSignal 变化即重取首页（新会话落库/删除后由 shell 触发）。
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import type { SessionListItem } from "@/contract/http"
 import type { SessionClient } from "@/engine/client"
@@ -16,6 +16,7 @@ export type SessionListView = {
   loadingMore: boolean
   error: boolean
   hasMore: boolean
+  settledFirstPage: { scopeKey: string; refreshSignal: number; requestGeneration: number; success: boolean } | null
   loadMore: () => void
 }
 
@@ -30,7 +31,7 @@ type SessionListPage = Awaited<ReturnType<Lister["listSessions"]>>
 // request before the previous promise has settled. Share only the in-flight
 // promise: refreshSignal still forces a new request after a mutation, while
 // concurrent mounts no longer duplicate the network round trip.
-const firstPageInflight = new WeakMap<object, Map<string, Promise<SessionListPage>>>()
+const firstPageInflight = new WeakMap<object, Map<unknown, Promise<SessionListPage>>>()
 
 type ListState = {
   scopeKey: string
@@ -39,15 +40,16 @@ type ListState = {
   loading: boolean
   loadingMore: boolean
   error: boolean
+  settledFirstPage: SessionListView["settledFirstPage"]
 }
 
-const INITIAL: ListState = { scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false }
+const INITIAL: ListState = { scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false, settledFirstPage: null }
 
 function scopeKey(scope: SessionScope): string {
   return scope.kind === "direct" ? "direct" : `project:${scope.projectRef}`
 }
 
-function listFirstPage(client: Lister, key: string, scope: SessionScope): Promise<SessionListPage> {
+function listFirstPage(client: Lister, key: unknown, scope: SessionScope): Promise<SessionListPage> {
   let byScope = firstPageInflight.get(client)
   if (byScope === undefined) {
     byScope = new Map()
@@ -65,15 +67,31 @@ function listFirstPage(client: Lister, key: string, scope: SessionScope): Promis
   return request
 }
 
-export function useSessionList(client: Lister, refreshSignal: number, scope: SessionScope = DIRECT_SESSION_SCOPE): SessionListView {
+export function useSessionList(
+  client: Lister,
+  refreshSignal: number,
+  scope: SessionScope = DIRECT_SESSION_SCOPE,
+  onFirstPageSettled?: (settled: NonNullable<SessionListView["settledFirstPage"]>) => void,
+): SessionListView {
   const [state, setState] = useState<ListState>(INITIAL)
   const requestGenerationRef = useRef(0)
   const currentScopeKey = scopeKey(scope)
+  // Initial mounts share their string key for StrictMode deduplication. Every
+  // explicit refresh gets a hook-instance-local identity, so a mutation cannot
+  // inherit an equally-numbered request started by an older hook lifecycle.
+  const firstPageRequestKey = useMemo(
+    () => refreshSignal === 0 ? currentScopeKey : {},
+    [currentScopeKey, refreshSignal],
+  )
 
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
-  const fetchFirst = useCallback(async (): Promise<ListState> => {
+  const fetchFirst = useCallback(async (requestGeneration: number): Promise<ListState> => {
     try {
-      const page = await listFirstPage(client, currentScopeKey, scope)
+      // The refresh signal is part of the in-flight identity. StrictMode mounts
+      // with the same signal still deduplicate, while an explicit mutation
+      // refresh can never reuse a request that started before its ACK.
+      const page = await listFirstPage(client, firstPageRequestKey, scope)
+      const settled = { scopeKey: currentScopeKey, refreshSignal, requestGeneration, success: true }
       return {
         scopeKey: currentScopeKey,
         entries: page.sessions.map(toEntry),
@@ -81,22 +99,35 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
         loading: false,
         loadingMore: false,
         error: false,
+        settledFirstPage: settled,
       }
     } catch {
-      return { scopeKey: currentScopeKey, entries: [], cursor: undefined, loading: false, loadingMore: false, error: true }
+      const settled = { scopeKey: currentScopeKey, refreshSignal, requestGeneration, success: false }
+      return {
+        scopeKey: currentScopeKey,
+        entries: [],
+        cursor: undefined,
+        loading: false,
+        loadingMore: false,
+        error: true,
+        settledFirstPage: settled,
+      }
     }
-  }, [client, currentScopeKey, scope])
+  }, [client, currentScopeKey, firstPageRequestKey, refreshSignal, scope])
 
   useEffect(() => {
     const generation = ++requestGenerationRef.current
     let live = true
-    void fetchFirst().then((next) => {
-      if (live && generation === requestGenerationRef.current) setState(next)
+    void fetchFirst(generation).then((next) => {
+      if (live && generation === requestGenerationRef.current) {
+        onFirstPageSettled?.(next.settledFirstPage as NonNullable<SessionListView["settledFirstPage"]>)
+        setState(next)
+      }
     })
     return () => {
       live = false
     }
-  }, [currentScopeKey, fetchFirst, refreshSignal])
+  }, [currentScopeKey, fetchFirst, onFirstPageSettled, refreshSignal])
 
   const loadMore = useCallback(() => {
     const generation = requestGenerationRef.current
@@ -134,6 +165,7 @@ export function useSessionList(client: Lister, refreshSignal: number, scope: Ses
     loadingMore: visibleState.loadingMore,
     error: visibleState.error,
     hasMore: visibleState.cursor !== undefined,
+    settledFirstPage: visibleState.settledFirstPage,
     loadMore,
   }
 }

@@ -4,15 +4,16 @@
 // 清单本体来自 session GET /sessions（换浏览器见同列表），localStorage 不再作真源；新建/切换/删除/
 // 开跑收尾后 refresh 重取首页。活跃会话若未在服务端清单出现（新建未落库/未及刷新）合成置顶项不消失。
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { conversationTitle } from "@/core/conversations"
+import { SessionClientError } from "@/engine/client"
 import type { EngineSnapshot } from "@/engine/machine"
 import type { SessionEngine } from "@/engine/machine"
 import { useSessionList } from "@/ui/rail/use-session-list"
 
 import { browserListClient } from "./page-clients"
-import { DIRECT_SESSION_SCOPE, type SessionScope } from "@/engine/session-scope"
+import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 
 type Thread = EngineSnapshot["thread"]
 
@@ -44,12 +45,64 @@ export function useConversationList(params: {
   const { engine, preview = false, activeId, thread, isStreaming, focusComposer, scope = DIRECT_SESSION_SCOPE } = params
 
   const [listRefresh, setListRefresh] = useState(0)
+  const listRefreshRef = useRef(0)
   const listClient = browserListClient({ preview })
-  const sessionList = useSessionList(listClient, listRefresh, scope)
-  // 会话重命名乐观覆写：改题即刻反映，服务端回执前先展示新题；失败回滚（删除覆写）。成功后覆写与
-  // 服务端清单最终一致（值相同，展示无差），故无需额外对账 effect。
-  const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({})
-  const withOverride = (id: string, title: string): string => titleOverrides[id] ?? title
+  const currentScopeKey = sessionScopeKey(scope)
+  const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey }), [currentScopeKey, listClient])
+  type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean }
+  const lifecycleRef = useRef<LifecycleToken | null>(null)
+  type RenameOverlay = { title: string; sequence: number; reconcileAfter: number | null; lifecycle: LifecycleToken }
+  type RenameIntent = { title: string; sequence: number; lifecycle: LifecycleToken }
+  type RenameQueue = { running: boolean; latest: RenameIntent | null; reconcileLifecycles: Set<LifecycleToken> }
+  const [titleOverrides, setTitleOverrides] = useState<Record<string, RenameOverlay>>({})
+  const renameSequenceRef = useRef(0)
+  const renameQueuesRef = useRef(new Map<string, RenameQueue>())
+  const handleFirstPageSettled = useCallback((settled: {
+    scopeKey: string
+    refreshSignal: number
+    requestGeneration: number
+    success: boolean
+  }) => {
+    if (!settled.success) return
+    setTitleOverrides((previous) => {
+      let changed = false
+      const next = { ...previous }
+      for (const [id, overlay] of Object.entries(previous)) {
+        if (
+          overlay.lifecycle.identity.client === listClient
+          && overlay.lifecycle.identity.scopeKey === settled.scopeKey
+          && overlay.reconcileAfter !== null
+          && settled.refreshSignal >= overlay.reconcileAfter
+        ) {
+          delete next[id]
+          changed = true
+        }
+      }
+      return changed ? next : previous
+    })
+  }, [listClient])
+  const sessionList = useSessionList(listClient, listRefresh, scope, handleFirstPageSettled)
+  useLayoutEffect(() => {
+    const token: LifecycleToken = { identity: lifecycleIdentity, active: true }
+    lifecycleRef.current = token
+    return () => {
+      token.active = false
+      if (lifecycleRef.current === token) lifecycleRef.current = null
+    }
+  }, [lifecycleIdentity])
+
+  const withOverride = (id: string, title: string): string => {
+    const overlay = titleOverrides[id]
+    if (overlay === undefined || overlay.lifecycle.identity !== lifecycleIdentity) return title
+    return overlay.title
+  }
+
+  const requestListRefresh = useCallback((): number => {
+    const next = listRefreshRef.current + 1
+    listRefreshRef.current = next
+    setListRefresh(next)
+    return next
+  }, [])
 
   // 当前活跃会话若尚未在服务端清单出现：仅在它已有真实内容时合成置顶项。
   // 空工作区不应在「最近」里出现一个没有任何历史的“新对话”行；这会让
@@ -68,10 +121,10 @@ export function useConversationList(params: {
   const wasStreamingRef = useRef(false)
   useEffect(() => {
     if (wasStreamingRef.current && !isStreaming) {
-      setListRefresh((n) => n + 1)
+      requestListRefresh()
     }
     wasStreamingRef.current = isStreaming
-  }, [isStreaming])
+  }, [isStreaming, requestListRefresh])
 
   const startNewChat = useCallback(() => {
     // 不清 draft：newConversation 换 activeId 后，草稿 controller 会加载新会话自己的草稿。
@@ -80,8 +133,8 @@ export function useConversationList(params: {
   }, [engine, focusComposer])
 
   const refresh = useCallback(() => {
-    setListRefresh((n) => n + 1)
-  }, [])
+    requestListRefresh()
+  }, [requestListRefresh])
 
   const selectConversation = useCallback(
     (id: string) => {
@@ -96,32 +149,81 @@ export function useConversationList(params: {
     async (id: string): Promise<boolean> => {
       if (!engine) return false
       const deleted = await engine.deleteConversation(id)
-      if (deleted) setListRefresh((n) => n + 1)
+      if (deleted) requestListRefresh()
       return deleted
     },
-    [engine],
+    [engine, requestListRefresh],
   )
 
-  // 会话重命名（CONV-UX）：乐观置题 → PATCH /sessions/{id}/title；成功重取清单对账，失败回滚覆写。
-  // 空题/未变化直接忽略（不发请求）。长度上限由端点收口（超 256 → 422 → 回滚）。
+  const drainRenameQueue = useCallback((id: string, queue: RenameQueue): void => {
+    if (queue.running) return
+    queue.running = true
+    void (async () => {
+      while (queue.latest !== null) {
+        const intent = queue.latest
+        queue.latest = null
+        let succeeded = false
+        try {
+          await listClient.renameSession(id, intent.title)
+          succeeded = true
+          queue.reconcileLifecycles.add(intent.lifecycle)
+        } catch (error) {
+          succeeded = false
+          const explicitOwnerRejection = error instanceof SessionClientError
+            && error.reason === "http"
+            && error.code !== null
+            && new Set(["title_too_long", "session_forbidden", "session_not_found"]).has(error.code)
+          if (!explicitOwnerRejection) queue.reconcileLifecycles.add(intent.lifecycle)
+        }
+        const stillCommitted = intent.lifecycle.active && lifecycleRef.current === intent.lifecycle
+        const newerQueued = queue.latest !== null
+        if (newerQueued) continue
+        const needsReconcile = queue.reconcileLifecycles.has(intent.lifecycle)
+        queue.reconcileLifecycles.delete(intent.lifecycle)
+        if (!stillCommitted) continue
+        if (needsReconcile) {
+          const reconcileAfter = requestListRefresh()
+          setTitleOverrides((previous) => {
+            const current = previous[id]
+            return current?.sequence === intent.sequence && current.lifecycle === intent.lifecycle
+              ? { ...previous, [id]: { ...current, reconcileAfter } }
+              : previous
+          })
+        } else if (!succeeded) {
+          setTitleOverrides((previous) => {
+            const current = previous[id]
+            if (current?.sequence !== intent.sequence || current.lifecycle !== intent.lifecycle) return previous
+            const next = { ...previous }
+            delete next[id]
+            return next
+          })
+        }
+      }
+      queue.running = false
+      queue.reconcileLifecycles.clear()
+      if (renameQueuesRef.current.get(id) === queue) renameQueuesRef.current.delete(id)
+    })()
+  }, [listClient, requestListRefresh])
+
+  // Same-session intents are serialized and collapsed to the latest queued
+  // title, so an older PATCH can never commit after a newer one. The optimistic
+  // title survives ACK until a genuinely post-ACK owner GET succeeds.
   const renameConversation = useCallback((id: string, title: string) => {
     const trimmed = title.trim()
     if (trimmed === "") return
-    setTitleOverrides((prev) => ({ ...prev, [id]: trimmed }))
-    void listClient
-      .renameSession(id, trimmed)
-      .then(() => {
-        setListRefresh((n) => n + 1)
-      })
-      .catch(() => {
-        setTitleOverrides((prev) => {
-          if (!(id in prev)) return prev
-          const next = { ...prev }
-          delete next[id]
-          return next
-        })
-      })
-  }, [listClient])
+    const committedLifecycle = lifecycleRef.current
+    if (committedLifecycle === null || !committedLifecycle.active) return
+    const sequence = ++renameSequenceRef.current
+    const intent = { title: trimmed, sequence, lifecycle: committedLifecycle }
+    setTitleOverrides((previous) => ({
+      ...previous,
+      [id]: { ...intent, reconcileAfter: null },
+    }))
+    const queue = renameQueuesRef.current.get(id) ?? { running: false, latest: null, reconcileLifecycles: new Set<LifecycleToken>() }
+    queue.latest = intent
+    renameQueuesRef.current.set(id, queue)
+    drainRenameQueue(id, queue)
+  }, [drainRenameQueue])
 
   return {
     conversations,
