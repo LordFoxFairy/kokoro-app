@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+import {
+  isMoveSessionErrorStatusCode,
+  moveRequestIdSchema,
+  moveRetryAfterSchema,
+  moveSessionErrorResponseSchema,
+  moveSessionResponseSchema,
+} from "@/contract/conversation-move"
 
 export const PUBLIC_REQUEST_ID_HEADER = "x-request-id"
 
@@ -117,4 +124,49 @@ export function bffErrorResponse(
     },
     { status, headers },
   )
+}
+
+export function moveSessionResponse(
+  upstream: Response,
+  body: unknown,
+  adapterRequestId: string,
+): Response {
+  const ownerRequestId = moveRequestIdSchema.safeParse(upstream.headers.get(PUBLIC_REQUEST_ID_HEADER))
+  if (!ownerRequestId.success || upstream.headers.get("cache-control") !== "no-store") {
+    return webErrorResponse("bff_bad_response", 502, adapterRequestId)
+  }
+
+  if (upstream.status === 200) {
+    const parsed = moveSessionResponseSchema.safeParse(body)
+    if (!parsed.success || upstream.headers.has("retry-after")) {
+      return webErrorResponse("bff_bad_response", 502, adapterRequestId)
+    }
+    return new Response(JSON.stringify(parsed.data.data), {
+      status: 200,
+      headers: responseHeadersWithRequestId(ownerRequestId.data, {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "private, no-store",
+      }),
+    })
+  }
+
+  const parsed = moveSessionErrorResponseSchema.safeParse(body)
+  if (!parsed.success || !isMoveSessionErrorStatusCode(upstream.status, parsed.data.error.code)) {
+    return webErrorResponse("bff_bad_response", 502, adapterRequestId)
+  }
+  const retryAfter = upstream.headers.get("retry-after")
+  if (
+    upstream.status === 429
+      ? retryAfter !== null && !moveRetryAfterSchema.safeParse(retryAfter).success
+      : retryAfter !== null
+  ) {
+    return webErrorResponse("bff_bad_response", 502, adapterRequestId)
+  }
+
+  const headers = responseHeadersWithRequestId(ownerRequestId.data, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "private, no-store",
+  })
+  if (retryAfter !== null) headers.set("retry-after", retryAfter)
+  return new Response(JSON.stringify(parsed.data), { status: upstream.status, headers })
 }

@@ -599,8 +599,8 @@ async function r76PublicSpec() {
 describe("R76 ScheduledTask owner creation graph under the public7 pin", () => {
   it("consumes the exact published public7 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe")
-    expect(spec.info.version).toBe("7.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5")
+    expect(spec.info.version).toBe("7.1.0")
   })
 
   it("has five required create fields and rejects enabled/status as creation properties", async () => {
@@ -682,5 +682,252 @@ describe("R91 public7 Conversation collection query graph", () => {
     })
     expect(project.description).toContain("cannot be combined with scope=direct on GET /v1/sessions")
     expect(project.description).toContain("resource routes retain their existing project-bound authorization")
+  })
+})
+
+type OpenApiObject = Record<string, unknown>
+
+function openApiObject(value: unknown, label: string): OpenApiObject {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
+  return value as OpenApiObject
+}
+
+function openApiArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array`)
+  return value
+}
+
+function resolveOpenApi(document: OpenApiObject, value: unknown): OpenApiObject {
+  const candidate = openApiObject(value, "OpenAPI node")
+  const reference = candidate.$ref
+  if (reference === undefined) return candidate
+  if (typeof reference !== "string" || !/^#\/components\/(schemas|parameters|responses)\/[^/]+$/u.test(reference)) {
+    throw new Error("unexpected OpenAPI reference")
+  }
+  const [, , section, name] = reference.split("/")
+  const components = openApiObject(document.components, "components")
+  return openApiObject(openApiObject(components[section!], section!)[name!], reference)
+}
+
+function moveCodeEnums(document: OpenApiObject, value: unknown): string[] {
+  const schema = resolveOpenApi(document, value)
+  const properties = schema.properties === undefined ? undefined : openApiObject(schema.properties, "schema properties")
+  const error = properties?.error === undefined ? undefined : openApiObject(properties.error, "error schema")
+  const errorProperties = error?.properties === undefined ? undefined : openApiObject(error.properties, "error properties")
+  const code = errorProperties?.code === undefined ? undefined : openApiObject(errorProperties.code, "code schema")
+  if (Array.isArray(code?.enum)) return code.enum.filter((item): item is string => typeof item === "string")
+  for (const branch of [...(schema.allOf === undefined ? [] : openApiArray(schema.allOf, "allOf"))].reverse()) {
+    const narrowed = moveCodeEnums(document, branch)
+    if (narrowed.length > 0) return narrowed
+  }
+  return []
+}
+
+function moveOperation(document: OpenApiObject): { pathItem: OpenApiObject; operation: OpenApiObject } {
+  const paths = openApiObject(document.paths, "paths")
+  const pathItem = openApiObject(paths["/v1/sessions/{id}/move"], "Move path")
+  return { pathItem, operation: openApiObject(pathItem.post, "Move POST") }
+}
+
+const MOVE_EXPECTED_ERROR_CODES = {
+  400: ["invalid_move_request", "idempotency_key_required"],
+  401: ["session_authentication_required", "session_invalid"],
+  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
+  404: ["session_not_found"],
+  409: ["idempotency_conflict", "idempotency_in_progress"],
+  429: ["session_rate_limited"],
+  503: ["business_store_unavailable", "iam_admission_unavailable"],
+} as const
+
+function assertMoveMachineSemantics(document: OpenApiObject): void {
+  const { pathItem, operation } = moveOperation(document)
+  const parameters = [
+    ...openApiArray(pathItem.parameters, "Move path parameters"),
+    ...openApiArray(operation.parameters, "Move operation parameters"),
+  ].map((parameter) => resolveOpenApi(document, parameter))
+  expect(parameters.map((parameter) => [parameter.name, parameter.in, parameter.required])).toEqual([
+    ["id", "path", true],
+    ["Idempotency-Key", "header", true],
+  ])
+
+  const requestBody = openApiObject(operation.requestBody, "Move request body")
+  const requestContent = openApiObject(requestBody.content, "Move request content")
+  const requestMedia = openApiObject(requestContent["application/json"], "Move request media")
+  const requestSchema = resolveOpenApi(document, openApiObject(requestMedia.schema, "Move request schema"))
+  expect(requestSchema).toMatchObject({ type: "object", required: ["target_project_id"], additionalProperties: false })
+  const requestProperties = openApiObject(requestSchema.properties, "Move request properties")
+  expect(Object.keys(requestProperties)).toEqual(["target_project_id"])
+  const target = openApiObject(requestProperties.target_project_id, "Move target")
+  const targetVariants = openApiArray(target.oneOf, "Move target variants").map((variant) => openApiObject(variant, "Move target variant"))
+  expect(targetVariants).toHaveLength(2)
+  expect(targetVariants.some((variant) => variant.type === "null")).toBe(true)
+  const targetString = targetVariants.find((variant) => variant.type === "string")
+  expect(targetString).toBeDefined()
+  const targetPattern = new RegExp(targetString?.pattern as string, "u")
+  expect(targetPattern.test("project_12345678-1234-1234-1234-123456789abc")).toBe(true)
+  expect(targetPattern.test("project_slug")).toBe(false)
+
+  const responses = openApiObject(operation.responses, "Move responses")
+  const success = resolveOpenApi(document, responses["200"])
+  const successContent = openApiObject(success.content, "Move success content")
+  const successMedia = openApiObject(successContent["application/json"], "Move success media")
+  const receipt = resolveOpenApi(document, openApiObject(successMedia.schema, "Move success schema"))
+  expect(receipt).toMatchObject({ type: "object", required: ["data"], additionalProperties: false })
+  const receiptProperties = openApiObject(receipt.properties, "Move receipt properties")
+  expect(Object.keys(receiptProperties)).toEqual(["data"])
+  const data = openApiObject(receiptProperties.data, "Move receipt data")
+  expect(data).toMatchObject({ type: "object", required: ["session_id", "project_ref"], additionalProperties: false })
+  const dataProperties = openApiObject(data.properties, "Move data properties")
+  expect(Object.keys(dataProperties).sort()).toEqual(["project_ref", "session_id"])
+  const sessionPattern = new RegExp(openApiObject(dataProperties.session_id, "Move session id").pattern as string, "u")
+  expect(sessionPattern.test("conv_12345678-1234-1234-1234-123456789abc")).toBe(true)
+  expect(sessionPattern.test("session_alias")).toBe(false)
+  const projectVariants = openApiArray(openApiObject(dataProperties.project_ref, "Move project ref").oneOf, "Move project variants")
+    .map((variant) => openApiObject(variant, "Move project variant"))
+  expect(projectVariants.some((variant) => variant.type === "null")).toBe(true)
+  const projectString = projectVariants.find((variant) => variant.type === "string")
+  expect(projectString).toBeDefined()
+  const projectPattern = new RegExp(projectString?.pattern as string, "u")
+  expect(projectPattern.test("project_12345678-1234-1234-1234-123456789abc")).toBe(true)
+  expect(projectPattern.test("project_alias")).toBe(false)
+
+  const schemas = openApiObject(openApiObject(document.components, "components").schemas, "schemas")
+  const errorResponse = openApiObject(schemas.MoveSessionErrorResponse, "MoveSessionErrorResponse")
+  expect(errorResponse).toMatchObject({ type: "object", required: ["error"], additionalProperties: false })
+  const error = openApiObject(openApiObject(errorResponse.properties, "error response properties").error, "Move error")
+  expect(error).toMatchObject({
+    type: "object", required: ["code", "message", "retryable"], additionalProperties: false,
+  })
+  const errorProperties = openApiObject(error.properties, "Move error properties")
+  expect(openApiObject(errorProperties.code, "Move error code")).toEqual({
+    type: "string",
+    enum: [...new Set(Object.values(MOVE_EXPECTED_ERROR_CODES).flat())],
+  })
+  expect(openApiObject(errorProperties.message, "Move error message")).toEqual({ type: "string", minLength: 1 })
+  expect(openApiObject(errorProperties.retryable, "Move retryable")).toEqual({ type: "boolean" })
+
+  for (const [status, expectedCodes] of Object.entries(MOVE_EXPECTED_ERROR_CODES)) {
+    const response = resolveOpenApi(document, responses[status])
+    const content = openApiObject(response.content, `${status} content`)
+    const media = openApiObject(content["application/json"], `${status} media`)
+    expect(moveCodeEnums(document, openApiObject(media.schema, `${status} schema`))).toEqual(expectedCodes)
+  }
+  for (const [status, value] of Object.entries(responses)) {
+    const headers = openApiObject(resolveOpenApi(document, value).headers, `${status} headers`)
+    if (status === "429") expect(headers["Retry-After"]).toBeDefined()
+    else expect(headers["Retry-After"]).toBeUndefined()
+  }
+}
+
+describe("R164 public7.1 Conversation Move machine graph", () => {
+
+  it("pins the canonical path, closed request, strict 200 receipt, and complete typed error graph", async () => {
+    const document = (await r76PublicSpec()).spec as unknown as OpenApiObject
+    assertMoveMachineSemantics(document)
+    const { pathItem, operation } = moveOperation(document)
+    expect(Object.keys(pathItem).filter((key) => ["get", "post", "put", "patch", "delete"].includes(key))).toEqual(["post"])
+    expect(operation).toMatchObject({
+      operationId: "moveSession",
+      "x-kokoro-owner": "kokoro-bff",
+      "x-kokoro-visibility": "public",
+      "x-kokoro-stability": "beta",
+      "x-kokoro-idempotency": "required",
+      "x-kokoro-permission": "chat.session.update",
+    })
+
+    const parameters = [
+      ...openApiArray(pathItem.parameters, "Move path parameters"),
+      ...openApiArray(operation.parameters, "Move operation parameters"),
+    ].map((parameter) => resolveOpenApi(document, parameter))
+    expect(parameters.map((parameter) => [parameter.name, parameter.in, parameter.required])).toEqual([
+      ["id", "path", true],
+      ["Idempotency-Key", "header", true],
+    ])
+    expect(parameters.some((parameter) => parameter.in === "query")).toBe(false)
+    const pathPattern = new RegExp(openApiObject(parameters[0]!.schema, "Move path schema").pattern as string, "u")
+    expect(pathPattern.test("conv_12345678-1234-1234-1234-123456789abc")).toBe(true)
+    expect(pathPattern.test("session_slug")).toBe(false)
+    expect(openApiObject(parameters[1]!.schema, "Move key schema")).toMatchObject({
+      type: "string", minLength: 1, maxLength: 128, pattern: "^[\\x21-\\x2B\\x2D-\\x7E]+$",
+    })
+
+    const requestBody = openApiObject(operation.requestBody, "Move request body")
+    expect(requestBody.required).toBe(true)
+    const requestContent = openApiObject(requestBody.content, "Move request content")
+    expect(Object.keys(requestContent)).toEqual(["application/json"])
+    const requestMedia = openApiObject(requestContent["application/json"], "Move request media")
+    const requestSchema = resolveOpenApi(document, openApiObject(requestMedia.schema, "Move request schema"))
+    expect(requestSchema).toMatchObject({ type: "object", required: ["target_project_id"], additionalProperties: false })
+    expect(Object.keys(openApiObject(requestSchema.properties, "Move request properties"))).toEqual(["target_project_id"])
+
+    const responses = openApiObject(operation.responses, "Move responses")
+    expect(Object.keys(responses).sort()).toEqual(["200", "400", "401", "403", "404", "409", "429", "503"])
+    const success = resolveOpenApi(document, responses["200"])
+    const successContent = openApiObject(success.content, "Move success content")
+    const successMedia = openApiObject(successContent["application/json"], "Move success media")
+    const receipt = resolveOpenApi(document, openApiObject(successMedia.schema, "Move success schema"))
+    expect(receipt).toMatchObject({ type: "object", required: ["data"], additionalProperties: false })
+    expect(Object.keys(openApiObject(receipt.properties, "Move receipt properties"))).toEqual(["data"])
+    const data = openApiObject(openApiObject(receipt.properties, "Move receipt properties").data, "Move receipt data")
+    expect(data).toMatchObject({
+      type: "object", required: ["session_id", "project_ref"], additionalProperties: false,
+    })
+    expect(Object.keys(openApiObject(data.properties, "Move data properties")).sort()).toEqual(["project_ref", "session_id"])
+
+    for (const status of Object.keys(responses)) {
+      const response = resolveOpenApi(document, responses[status])
+      const headers = openApiObject(response.headers, `${status} headers`)
+      const requestId = openApiObject(headers["x-request-id"], `${status} request id`)
+      expect(requestId.required).toBe(true)
+      expect(openApiObject(requestId.schema, `${status} request id schema`)).toMatchObject({
+        type: "string", minLength: 1, maxLength: 128,
+      })
+      const cacheControl = openApiObject(headers["Cache-Control"], `${status} cache control`)
+      expect(cacheControl.required).toBe(true)
+      expect(openApiObject(cacheControl.schema, `${status} cache schema`)).toMatchObject({ type: "string", const: "no-store" })
+      if (status !== "200") {
+        const content = openApiObject(response.content, `${status} content`)
+        const media = openApiObject(content["application/json"], `${status} media`)
+        const errorStatus = Number(status) as keyof typeof MOVE_EXPECTED_ERROR_CODES
+        expect(moveCodeEnums(document, openApiObject(media.schema, `${status} schema`))).toEqual(
+          MOVE_EXPECTED_ERROR_CODES[errorStatus],
+        )
+      }
+    }
+    const rateLimit = resolveOpenApi(document, responses["429"])
+    const retryAfter = openApiObject(openApiObject(rateLimit.headers, "429 headers")["Retry-After"], "Retry-After")
+    expect(retryAfter.required).toBe(false)
+    expect(openApiObject(retryAfter.schema, "Retry-After schema")).toEqual({
+      type: "string", pattern: "^[1-9][0-9]{0,4}$",
+    })
+  })
+
+  it("rejects query, status-code, message, and retryable semantic mutants with the same machine assertion", async () => {
+    const original = (await r76PublicSpec()).spec as unknown as OpenApiObject
+    const queryMutant = structuredClone(original)
+    moveOperation(queryMutant).operation.parameters = [
+      ...openApiArray(moveOperation(queryMutant).operation.parameters, "Move parameters"),
+      { $ref: "#/components/parameters/ProjectRefQuery" },
+    ]
+    expect(() => assertMoveMachineSemantics(queryMutant)).toThrow()
+
+    const errorMutant = structuredClone(original)
+    const responses = openApiObject(moveOperation(errorMutant).operation.responses, "Move responses")
+    responses["409"] = { $ref: "#/components/responses/MoveSessionNotFound" }
+    expect(() => assertMoveMachineSemantics(errorMutant)).toThrow()
+
+    const messageMutant = structuredClone(original)
+    const messageSchemas = openApiObject(openApiObject(messageMutant.components, "components").schemas, "schemas")
+    const messageResponse = openApiObject(messageSchemas.MoveSessionErrorResponse, "MoveSessionErrorResponse")
+    const messageError = openApiObject(openApiObject(messageResponse.properties, "error response properties").error, "Move error")
+    openApiObject(openApiObject(messageError.properties, "Move error properties").message, "Move message").minLength = 0
+    expect(() => assertMoveMachineSemantics(messageMutant)).toThrow()
+
+    const retryableMutant = structuredClone(original)
+    const retryableSchemas = openApiObject(openApiObject(retryableMutant.components, "components").schemas, "schemas")
+    const retryableResponse = openApiObject(retryableSchemas.MoveSessionErrorResponse, "MoveSessionErrorResponse")
+    const retryableError = openApiObject(openApiObject(retryableResponse.properties, "error response properties").error, "Move error")
+    openApiObject(openApiObject(retryableError.properties, "Move error properties").retryable, "Move retryable").type = "string"
+    expect(() => assertMoveMachineSemantics(retryableMutant)).toThrow()
   })
 })

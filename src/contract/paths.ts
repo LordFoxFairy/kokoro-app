@@ -59,6 +59,9 @@ export function sharedSnapshotPath(shareId: string): string {
 export function renameSessionPath(sessionId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/title`
 }
+export function moveSessionPath(sessionId: string): string {
+  return `/sessions/${opaquePathSegment(sessionId)}/move`
+}
 export function scheduledTasksPath(): string {
   return "/api/scheduled-tasks"
 }

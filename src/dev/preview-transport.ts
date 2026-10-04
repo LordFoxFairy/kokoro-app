@@ -14,6 +14,7 @@ import {
   type SessionClient,
 } from "@/engine/client"
 import { SessionClientError } from "@/engine/client-error"
+import { ConversationMoveError } from "@/engine/conversation-move-error"
 import { BFF_AGENT_FAILURE_TUPLES } from "@/generated/bff-agent-failure"
 // 仅当显式设置 NEXT_PUBLIC_SESSION_PREVIEW=1 时提供假流客户端；否则返回 null（走真实链路）。
 // 单例缓存：清单客户端与引擎客户端共享同一份内存会话（否则各持一份 Map，侧栏永远看不到已开会话）。
@@ -535,6 +536,7 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     },
     deleteSession: () => Promise.resolve({ status: "deleted" as const }),
     renameSession: () => Promise.resolve({ ok: true as const }),
+    moveSession: () => Promise.reject(new ConversationMoveError({ kind: "unsupported" })),
 
     openEvents: ({ sessionId, resumeCursor, onCursor, onEvent, onStreamError }): EventStreamHandle => {
       let closed = false

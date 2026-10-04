@@ -10,6 +10,7 @@ import type {
 import { eventCursorSchema, type EventCursor } from "@/contract/agui-events"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { OpenEventsArgs, SessionClient, SessionClientError } from "@/engine/client"
+import { ConversationMoveError } from "@/engine/conversation-move-error"
 import type { PersistedStore } from "@/lib/persisted-store"
 
 export type FakeStream = {
@@ -114,6 +115,7 @@ export function createFakeClient(): FakeClient {
       client.renameCalls.push({ sessionId, title })
       return client.nextRename(sessionId, title)
     },
+    moveSession: () => Promise.reject(new ConversationMoveError({ kind: "unsupported" })),
     sendControl: (sessionId, runId, body, commandId) => {
       client.controlCalls.push({ sessionId, runId, body, commandId })
       return client.nextControl()

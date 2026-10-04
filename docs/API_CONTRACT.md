@@ -1,3 +1,28 @@
+## R158-W-MOVE-D0：public 7.1 Move 消费合同（2026-10-04；A候选待 Root 集成）
+
+唯一 owner 机器事实是 BFF 已发布 public OpenAPI 7.1 canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`（文档 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a`）的 `POST /v1/sessions/{id}/move`。Web 后继第一片增加 Session client，并在现 `/api/session/[...path]` 内增加仅限该 operation 的响应投影；不增加新的浏览器公开 API、独立 proxy、engine action 或 UI。
+
+- path `id` 必须匹配 canonical `^conv_<uuid>$`；body 必须是 closed `{target_project_id}`，其值匹配 canonical `^project_<uuid>$` 或为 `null`。不接受 slug、alias、source Project、空串或额外字段。BFF public raw URL 的无 query 规则不变；Web browser-private 经 Next 规范化后，把没有实际参数的空尾 `?` 视为同一 canonical URI，但任何非空 query 都必须本地返回 `400 invalid_move_request` 且不向 BFF 发请求。
+- `commandId` 是一次用户 Move 意图的稳定幂等身份，必须满足 owner 的 printable 1..128 边界并原样进入 `Idempotency-Key`；client 不 trim、合并、随机替换或自动重发。相同意图的显式恢复才可复用同一 key/body。
+- 成功只认 HTTP 200 和 strict flat adapter ACK `{session_id,project_ref}`；`session_id` 必须等于请求 Conversation，`project_ref` 必须与请求 target（含 `null`）相等。owner ACK 没有 `command_id`，Web 不复制或臆造该字段。202、其它状态、bad/extra JSON、错 session/target 全部拒绝，不能提交本地归属。
+- 400/401/403/404/409/429/503 沿现 typed client error；网络、abort、timeout 与 503 unknown 均不说明 Move 未发生，也不自动 retry或从列表猜成功。BFF 当前 IAM admission、permission `chat.session.update`、same-key replay/conflict及 `Cache-Control:no-store` 仍是 owner语义。
+- Move 不取消当前 Run/stream，不改 Message、Share、AG-UI cursor 或 Artifact 关联；只影响后续 message/Run admission。Web 第一片不投影这些事实，后继 UI/engine 必须在严格 ACK 后才更新视图。
+
+Web client公开的首片边界固定为 `moveSession(input: MoveSessionInput): Promise<MoveSessionReceipt>`；`MoveSessionInput` 是 readonly `{sessionId:string; targetProjectId:string|null; commandId:string; signal?:AbortSignal}`，`MoveSessionReceipt` 是 readonly `{session_id:string; project_ref:string|null}`。该方法是 `SessionClient` required member，不发布optional/feature-detection兼容轨。preview固定抛专属`ConversationMoveError`的`unsupported`分支，不得改变preview sessions或生成假ACK；这不是owner业务错误码。生产实现不得经过现 `postJson`，因为后者会trim/缺省生成key并接受任意`response.ok`，与Move的exact command identity和strict 200冲突。
+caller传入的非法session ID、target或command key统一是专属`{kind:"parse"}`本地失败：不附owner status/code/retryable/requestId/retryAfter，不发fetch，也不写任何会话归属。
+
+生产Move client自带不可配置的10秒总预算，起点在fetch前，终点在完整body读取、JSON解析与ACK关联校验后；不是只包response headers，也不继承Web→BFF 15秒上界。内部controller组合可选caller signal：已aborted signal不发请求；在途abort转发；timeout与caller abort都拒绝为本地`network` unknown，保原commandId且不自动重发或推断owner取消。所有路径finally清timer/abort listener。该预算只属于Move，不改变其它SessionClient HTTP行为。
+
+Move client拒绝值只使用专属closed `ConversationMoveError.details`：成功校验过的owner error映为 `{kind:"owner",status,code,retryable,requestId,retryAfter}`，其中status/code组合必须属于7.1机器图，requestId来自合法`x-request-id`，Retry-After仅429可按已发布正则保存为string或null。fetch/abort映`network`；200 ACK/body/identity/target解析失败映`parse`；代理自有502、坏/缺owner error、坏/缺request-id或非法Retry-After映`adapter`；preview/fake映`unsupported`。后四类没有owner status/code/retryable/requestId/retryAfter字段。不得借此修改其它`SessionClientError`、建立泛型Error体系或让调用方用message字符串判定unknown。
+
+现 generic catchall 的 JSON success 要求 `{data,meta.request_id}`，generic error也要求 `meta` 且不接受 owner Move 的 `retryable`；因此合法 Move 200 会被降为502、typed Move error会丢业务 code。第一片必须以 method/path/canonical ID 三重精确识别 `POST sessions/<conv>/move`：success只解析 owner `{data:{session_id,project_ref}}`，从必需 `x-request-id` header取得请求身份后向浏览器返回 flat ACK；error只允许 owner发布的 status/code/retryable组合，保原HTTP status、typed error、`x-request-id` 与可选 `Retry-After`。缺/坏 header、shape或status组合 fail closed；generic success/error schemas及其它 route一字不宽化。`tests/system/session-route-http.integration.test.ts` 只作mock-auth direct route门；正向反例必须在 `tests/system/oidc-rp-next-http.integration.test.ts` 复用真实Next、Redis与Product cookie fixture，fixture BFF只模拟owner响应而不冒充真BFF owner。现product-bff Next测试的dead-Redis负例与fetch mock都不能替代该正向门。
+
+机器 pin 更新必须复制 owner committed blob 到 `src/generated/bff-public-openapi.yaml`，把现 Team 与 Agent-failure generator 的 version/commit/digest provenance 更新到 7.1/上述完整 digest，并正规再生/check `src/generated/bff-agent-failure.ts` 与 `src/generated/bff-team/**`。`contract/api-contract.test.ts` 必须新增 Move path/parameter/request/200/error graph并保现 Scheduled/collection断言；七个现 `tests/contract/bff-*-public.test.ts` 继续保护 Team、failure、Library、Project、Skills/MCP fragment，不因全 blob升级删除或放宽。
+
+engine/UI如何暴露Move、意图生命周期和用户journey归后继B片；这些不是机器字段或新公开合同。A片不宣称浏览器用户Move已可用，不关闭原loading P0。
+
+---
+
 ## R143-W 会话删除消费合同（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
 
 Web 只消费 BFF main `a68cbe55cde709f9b21f3d5803bfbd3ca5d14e2b` public `7.0.0` canonical OpenAPI（SHA-256 `76d524d731b10d1cd4b16db4dae957701bf5c5d82a3cd915a42bc57617746ebe`）的 `DELETE /v1/sessions/{id}`。请求必须携带一个 `Idempotency-Key`，并按当前 engine scope 精确携带 `scope=direct` 或非空 exact `project_ref`；session ID 不替代 actor/scope。浏览器仍经同源 adapter 使用受信 Product Session，tenant/subject 不从 body/header 自报。

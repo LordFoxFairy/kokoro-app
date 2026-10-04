@@ -5,11 +5,13 @@
 
 import { z } from "zod"
 
+import { canonicalConversationIdSchema } from "@/contract/conversation-move"
 import { sameOriginOk } from "@/lib/server/same-origin"
 import {
   bffErrorEnvelopeSchema,
   bffErrorResponse,
   bffSuccessEnvelopeSchema,
+  moveSessionResponse,
   requestIdForRequest,
   requestIdFromResponse,
   responseHeadersWithRequestId,
@@ -56,6 +58,12 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   const isAgUiEvents = request.method === "GET" && segments.length === 3
     && segments[0] === "sessions" && segments[2] === "events"
   const search = new URL(request.url).search
+  const isMoveSession = request.method === "POST" && segments.length === 3
+    && segments[0] === "sessions" && segments[2] === "move"
+    && canonicalConversationIdSchema.safeParse(segments[1]).success
+  if (isMoveSession && search !== "") {
+    return webErrorResponse("invalid_move_request", 400, requestId)
+  }
   const encodedPath = segments.map((segment) => encodeURIComponent(segment)).join("/")
   const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedPath}${search}`
 
@@ -95,6 +103,13 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   }
 
   const contentType = upstream.headers.get("content-type")?.toLowerCase() ?? ""
+  if (isMoveSession) {
+    if (contentType.split(";", 1)[0]?.trim() !== "application/json") {
+      return webErrorResponse("bff_bad_response", 502, requestId)
+    }
+    const raw: unknown = await upstream.json().catch(() => null)
+    return moveSessionResponse(upstream, raw, requestId)
+  }
   // SSE and binary bodies must remain streaming and opaque to this adapter.
   if (!contentType.includes("application/json")) {
     if (!upstream.ok) {

@@ -39,17 +39,35 @@ import {
   runProcessPath,
   renameSessionReceiptSchema,
   type RenameSessionReceipt,
+  canonicalConversationIdSchema,
+  canonicalProjectIdSchema,
+  isMoveSessionErrorStatusCode,
+  moveCommandIdSchema,
+  moveRequestIdSchema,
+  moveRetryAfterSchema,
+  moveSessionErrorResponseSchema,
+  moveSessionPath,
+  moveSessionReceiptSchema,
+  type MoveSessionReceipt,
 } from "@/contract/http"
 import type { EventCursor } from "@/contract/agui-events"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import { AgUiChatTransport } from "./agui-chat-transport"
 import { SessionClientError, type ClientFailureReason } from "./client-error"
+import { ConversationMoveError } from "./conversation-move-error"
 import type { SessionScope } from "./session-scope"
 
 export { SessionClientError }
 export type { ClientFailureReason }
 
 export type EventStreamHandle = { close: () => void }
+
+export type MoveSessionInput = Readonly<{
+  sessionId: string
+  targetProjectId: string | null
+  commandId: string
+  signal?: AbortSignal
+}>
 
 export type OpenEventsArgs = {
   interactionBaselines?: Readonly<Record<string, InteractionState>>
@@ -81,6 +99,7 @@ export type SessionClient = {
   deleteSession: (sessionId: string, scope: SessionScope, signal?: AbortSignal) => Promise<DeleteSessionReceipt>
   // 会话重命名（CONV-UX）：显式改题（他人 403 / 软删·不存在 404 / 超 256 → 422）；成功 200 {ok:true}。
   renameSession: (sessionId: string, title: string) => Promise<RenameSessionReceipt>
+  moveSession: (input: MoveSessionInput) => Promise<MoveSessionReceipt>
   // 模型候选（MODEL-UX）：本 namespace 声明可选 ∩ platform resolve 可用性；输入框下拉据此枚举。
   listModels: () => Promise<ModelCandidateList>
   // agent 候选（AGENT-PRESET）：本 namespace 声明的具名预设 + general 缺省入口；输入框选择器据此枚举。
@@ -90,6 +109,113 @@ export type SessionClient = {
   createShare: (sessionId: string) => Promise<ShareReceipt>
   revokeShare: (sessionId: string) => Promise<MutationReceipt>
   openEvents: (args: OpenEventsArgs) => EventStreamHandle
+}
+
+const MOVE_DEADLINE_MS = 10_000
+
+async function moveSession(
+  target: string,
+  input: MoveSessionInput,
+): Promise<MoveSessionReceipt> {
+  if (
+    !canonicalConversationIdSchema.safeParse(input.sessionId).success ||
+    !canonicalProjectIdSchema.nullable().safeParse(input.targetProjectId).success ||
+    !moveCommandIdSchema.safeParse(input.commandId).success
+  ) {
+    throw new ConversationMoveError({ kind: "parse" })
+  }
+  if (input.signal?.aborted === true) {
+    throw new ConversationMoveError({ kind: "network" })
+  }
+
+  const startedAt = performance.now()
+  const controller = new AbortController()
+  let rejectDeadline: ((error: ConversationMoveError) => void) | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    rejectDeadline = reject
+  })
+  const failNetwork = (): void => {
+    controller.abort()
+    rejectDeadline?.(new ConversationMoveError({ kind: "network" }))
+  }
+  const timer = setTimeout(failNetwork, MOVE_DEADLINE_MS)
+  const callerAbort = (): void => failNetwork()
+  input.signal?.addEventListener("abort", callerAbort, { once: true })
+
+  const withinDeadline = async <T>(operation: Promise<T>): Promise<T> =>
+    Promise.race([operation, deadline])
+  const ensureActive = (): void => {
+    if (controller.signal.aborted || performance.now() - startedAt >= MOVE_DEADLINE_MS) {
+      throw new ConversationMoveError({ kind: "network" })
+    }
+  }
+
+  try {
+    let response: Response
+    try {
+      response = await withinDeadline(fetch(target, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": input.commandId,
+        },
+        body: JSON.stringify({ target_project_id: input.targetProjectId }),
+        credentials: "same-origin",
+        redirect: "error",
+        signal: controller.signal,
+      }))
+    } catch (error) {
+      if (error instanceof ConversationMoveError) throw error
+      throw new ConversationMoveError({ kind: "network" })
+    }
+
+    let raw: unknown
+    try {
+      raw = await withinDeadline(response.json())
+    } catch (error) {
+      if (error instanceof ConversationMoveError) throw error
+      ensureActive()
+      throw new ConversationMoveError({ kind: response.status === 200 ? "parse" : "adapter" })
+    }
+
+    if (response.status === 200) {
+      const parsed = moveSessionReceiptSchema.safeParse(raw)
+      ensureActive()
+      if (
+        !parsed.success ||
+        parsed.data.session_id !== input.sessionId ||
+        parsed.data.project_ref !== input.targetProjectId
+      ) {
+        throw new ConversationMoveError({ kind: "parse" })
+      }
+      return parsed.data
+    }
+
+    const parsedError = moveSessionErrorResponseSchema.safeParse(raw)
+    const requestId = moveRequestIdSchema.safeParse(response.headers.get("x-request-id"))
+    const retryAfterValue = response.headers.get("retry-after")
+    const retryAfter = retryAfterValue === null ? null : moveRetryAfterSchema.safeParse(retryAfterValue)
+    ensureActive()
+    if (
+      !parsedError.success ||
+      !requestId.success ||
+      !isMoveSessionErrorStatusCode(response.status, parsedError.data.error.code) ||
+      (response.status === 429 ? retryAfter !== null && !retryAfter.success : retryAfterValue !== null)
+    ) {
+      throw new ConversationMoveError({ kind: "adapter" })
+    }
+    throw new ConversationMoveError({
+      kind: "owner",
+      status: response.status,
+      code: parsedError.data.error.code,
+      retryable: parsedError.data.error.retryable,
+      requestId: requestId.data,
+      retryAfter: retryAfterValue,
+    })
+  } finally {
+    clearTimeout(timer)
+    input.signal?.removeEventListener("abort", callerAbort)
+  }
 }
 
 function describeUnknown(error: unknown): string {
@@ -340,6 +466,16 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw await httpError("PATCH", target, response)
       }
       return parseJsonResponse(response, (raw) => renameSessionReceiptSchema.parse(raw))
+    },
+
+    moveSession: (input) => {
+      const snapshot: MoveSessionInput = {
+        sessionId: input.sessionId,
+        targetProjectId: input.targetProjectId,
+        commandId: input.commandId,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+      }
+      return moveSession(url(moveSessionPath(snapshot.sessionId)), snapshot)
     },
 
     // Canonical AG-UI only: SSE framing, validation, dedupe and reconnect are

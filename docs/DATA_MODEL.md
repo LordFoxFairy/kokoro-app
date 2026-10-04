@@ -1,3 +1,20 @@
+## R158-W-MOVE-D0：Move client 瞬时数据边界（2026-10-04；A候选待 Root 集成）
+
+Conversation 的 current Project/direct 归属、Move idempotency receipt 与事务始终由 BFF 持久拥有。Web 第一片不新增数据库、schema、migration、Redis、localStorage/IndexedDB、server cache、第二 receipt或归属表；只在一次 client调用与operation-scoped同源投影中传递并校验：canonical `conversationId`、canonical `targetProjectId | null`、稳定 `commandId`，strict ACK 的 `session_id/project_ref`，以及 typed error的 owner code/retryable。请求身份只从 owner必需 `x-request-id` header投影，不伪造 `meta`。
+
+`commandId` 绑定同一用户意图和 exact target；unknown 保留这组调用方意图才可能由后继显式恢复，本 client 不持久化、不自动重发、不轮换 key。只有 200 ACK 同时通过 closed schema、session identity 与 target equality 才向上返回 confirmed；202、非 200、错误/多余字段、错 identity/target、网络/timeout/abort 都不写 ConversationStore 或 project list，也不清 Run/Message/draft/stream。`null` 是正式 direct target，不等于缺失、空串或未知。
+
+私有10秒预算与caller abort只终止本地等待：即使发生在headers后slow body或ACK parse期间，也保留同一`conversationId/targetProjectId/commandId`语义为unknown，不写本地取消事实。timer与listener只是单次调用资源，finally释放，不进入页面状态、storage或后继重放身份。
+非法caller session ID、target或command key在owner调用前以专属`parse`失败结束，不携带owner字段、零fetch且不产生任何归属写入。
+
+required `SessionClient.moveSession` 的 preview与通用engine fake只允许显式typed rejection，不创建receipt、修改preview `projectRef` 或提供optional fallback。A片没有调用该方法的UI/engine；把required接口补齐不等于用户可操作。调用参数与ACK只活在当前Promise/AbortSignal生命周期，unknown后的同键恢复归B片单意图状态机。
+
+失败投影也不持久化：只有专属`ConversationMoveError`的`owner`分支携带完整validated status/code/retryable/requestId/retryAfter；network、parse、adapter、unsupported均为互斥本地分类且没有owner字段。下一片可据此把可确认owner拒绝与结果unknown分开，但不得把network/adapter失败推断为“未执行”或据retryable自动重发。
+
+A片没有engine/UI状态机，因此没有乐观归属、ACK后本地投影或reload恢复；这些归B片以single intent、generation/dispose guard与真实用户测试设计。现同源catchall adapter只转发受信身份和owner wire，不拥有Move数据。原用户 `conv_ffd7` loading P0与本数据切片独立保持开放。
+
+---
+
 ## R143-W 会话删除页面内存边界（2026-10-03；限定实现与完整工程门冻结，实际发布以 HEAD/Root gitlink 为准）
 
 Web 不新增数据库、canonical schema、migration、事务、Redis、receipt 或浏览器业务缓存。BFF 继续唯一持久拥有 Conversation 删除、share/stream 收口和 cancellation outbox；Web 只在 mounted engine 内保存一个瞬时 delete intent：exact `targetId`、当前 `SessionScope`、generation、pending 与安全 failure/unknown 状态。该意图不是 owner receipt，也不跨 reload 恢复。

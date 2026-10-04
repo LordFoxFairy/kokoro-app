@@ -701,6 +701,19 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityStatus = 200
   let sessionListStatus = 200
   let deleteSessionStatus = 200
+  type MoveFixtureResponse = {
+    status: number
+    requestId?: string
+    retryAfter?: string
+    contentType?: string
+    body: unknown
+  }
+  let moveFixtureResponse: MoveFixtureResponse | undefined
+  const moveBoundaryRequests: { method: string; path: string; idempotencyKey: string | undefined; body: string }[] = []
+  const resetMoveFixture = (): void => {
+    moveFixtureResponse = undefined
+    moveBoundaryRequests.length = 0
+  }
   let holdDeleteSession = false
   let deleteSessionCommitted = false
   let releaseDeleteSession: (() => void) | undefined
@@ -1299,6 +1312,41 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           } else response.end(payload)
           return
         }
+        const fixtureMovePath = "/v1/sessions/conv_11111111-1111-4111-8111-111111111111/move"
+        if (request.method === "POST" && request.url === fixtureMovePath) {
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            const configured = moveFixtureResponse
+            moveBoundaryRequests.push({
+              method: request.method ?? "<unknown>",
+              path: request.url ?? "<unknown>",
+              idempotencyKey: request.headers["idempotency-key"] as string | undefined,
+              body: Buffer.concat(chunks).toString("utf8"),
+            })
+            expect(request.headers.cookie).toBeUndefined()
+            expect(request.headers["x-kokoro-service"]).toBe("web-bff")
+            expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
+            expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+            expect(configured).toBeDefined()
+            const headers: Record<string, string> = {
+              "content-type": configured?.contentType ?? "application/json",
+              "cache-control": "no-store",
+            }
+            if (configured?.requestId !== undefined) headers["x-request-id"] = configured.requestId
+            if (configured?.retryAfter !== undefined) headers["retry-after"] = configured.retryAfter
+            response.writeHead(configured?.status ?? 500, headers)
+            response.end(JSON.stringify(configured?.body ?? { error: { code: "fixture_unconfigured" } }))
+          })
+          return
+        }
+        if (request.method === "GET" && request.url === "/v1/sessions/session-no-meta") {
+          response.writeHead(200, {
+            "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_non_move",
+          })
+          response.end(JSON.stringify({ data: { session_id: "session-no-meta" } }))
+          return
+        }
         if (request.method === "GET" && request.url === "/v1/sessions?scope=direct") {
           expect(request.headers.cookie).toBeUndefined()
           expect(request.headers["x-kokoro-service"]).toBe("web-bff")
@@ -1550,6 +1598,19 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(manifestChanges.every(({ change }) => !["changed_invalid", "disappeared", "unavailable"].includes(change))).toBe(true)
   })
 
+  async function authenticatedProductJar(): Promise<string> {
+    const { signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    expect(callback.headers.location).toBe("/app")
+    expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(true)
+    return cookieHeader(signin, callback)
+  }
+
   it("keeps code exchange and userinfo server-only, then establishes an encrypted Product Session", async () => {
     const { signin, jar, location, state } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
@@ -1583,6 +1644,174 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(replay.status).toBe(403)
     expect(paths.filter((item) => item === "/iam/oauth2/token")).toHaveLength(tokenCalls)
   })
+
+  it("R162 projects strict Move owner responses through real Next without widening generic envelopes", async () => {
+    const productJar = await authenticatedProductJar()
+    const sessionId = "conv_11111111-1111-4111-8111-111111111111"
+    const projectId = "project_22222222-2222-4222-8222-222222222222"
+    const projectCommandId = "move-r162-project-intent"
+    const directCommandId = "move-r162-direct-intent"
+    const path = `/api/session/sessions/${sessionId}/move`
+    const upstreamPath = `/v1/sessions/${sessionId}/move`
+    const postMove = (targetProjectId: string | null, commandId: string): Promise<HttpResult> => http(
+      nextPort,
+      path,
+      "POST",
+      JSON.stringify({ target_project_id: targetProjectId }),
+      { cookie: productJar, origin: `http://localhost:${nextPort}`,
+        "content-type": "application/json", "idempotency-key": commandId },
+      10_000,
+    )
+
+    resetMoveFixture()
+    for (const [index, [targetProjectId, commandId]] of ([
+      [projectId, projectCommandId],
+      [null, directCommandId],
+    ] as const).entries()) {
+      moveFixtureResponse = {
+        status: 200,
+        requestId: `req_move_success_${index}`,
+        body: { data: { session_id: sessionId, project_ref: targetProjectId } },
+      }
+      const response = await postMove(targetProjectId, commandId)
+      expect(response.status).toBe(200)
+      expect(headerValue(response.headers, "x-request-id")).toBe(`req_move_success_${index}`)
+      expect(JSON.parse(response.body)).toEqual({ session_id: sessionId, project_ref: targetProjectId })
+    }
+    expect(moveBoundaryRequests).toEqual([
+      { method: "POST", path: upstreamPath, idempotencyKey: projectCommandId,
+        body: JSON.stringify({ target_project_id: projectId }) },
+      { method: "POST", path: upstreamPath, idempotencyKey: directCommandId,
+        body: JSON.stringify({ target_project_id: null }) },
+    ])
+
+    moveFixtureResponse = {
+      status: 429,
+      requestId: "req move rate limited",
+      retryAfter: "7",
+      body: { error: { code: "session_rate_limited", message: "rate limited", retryable: true } },
+    }
+    const rateLimited = await postMove(projectId, "move-r162-rate-limited-intent")
+    expect(rateLimited.status).toBe(429)
+    expect(headerValue(rateLimited.headers, "x-request-id")).toBe("req move rate limited")
+    expect(headerValue(rateLimited.headers, "retry-after")).toBe("7")
+    expect(JSON.parse(rateLimited.body)).toEqual({
+      error: { code: "session_rate_limited", message: "rate limited", retryable: true },
+    })
+
+    const invalidOwnerResponses: readonly (readonly [string, MoveFixtureResponse])[] = [
+      ["move-r162-invalid-success-extra", { status: 200, requestId: "req_move_extra",
+        body: { data: { session_id: sessionId, project_ref: projectId }, extra: true } }],
+      ["move-r162-invalid-missing-request-id",
+        { status: 200, body: { data: { session_id: sessionId, project_ref: projectId } } }],
+      ["move-r162-invalid-session-id", { status: 200, requestId: "req_move_invalid_identity",
+        body: { data: { session_id: "session_alias", project_ref: projectId } } }],
+      ["move-r162-invalid-status-code", { status: 409, requestId: "req_move_bad_graph",
+        body: { error: { code: "session_not_found", message: "wrong status", retryable: false } } }],
+      ["move-r162-invalid-undeclared-code", { status: 503, requestId: "req_move_undeclared_code",
+        body: { error: { code: "product_tenant_not_configured", message: "not in public graph", retryable: false } } }],
+      ["move-r162-invalid-error-extra", { status: 409, requestId: "req_move_error_extra",
+        body: { error: { code: "idempotency_conflict", message: "extra", retryable: false, extra: true } } }],
+      ["move-r162-invalid-retry-after", { status: 429, requestId: "req_move_bad_retry", retryAfter: "0",
+        body: { error: { code: "session_rate_limited", message: "bad retry", retryable: true } } }],
+    ]
+    for (const [commandId, configured] of invalidOwnerResponses) {
+      moveFixtureResponse = configured
+      const response = await postMove(projectId, commandId)
+      expect(response.status).toBe(502)
+      expect(JSON.parse(response.body)).toMatchObject({ error: { code: "bff_bad_response" } })
+    }
+
+    const nonMove = await http(nextPort, "/api/session/sessions/session-no-meta", "GET", "", { cookie: productJar })
+    expect(nonMove.status).toBe(502)
+    expect(JSON.parse(nonMove.body)).toMatchObject({ error: { code: "bff_bad_response" } })
+  }, 60_000)
+
+  it("R164 treats a normalized bare query as canonical but rejects a nonempty Move query locally", async () => {
+    resetMoveFixture()
+    const productJar = await authenticatedProductJar()
+    const sessionId = "conv_11111111-1111-4111-8111-111111111111"
+    const projectId = "project_22222222-2222-4222-8222-222222222222"
+    const bareBoundaryStart = moveBoundaryRequests.length
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_bare_query_normalized",
+      body: { data: { session_id: sessionId, project_ref: projectId } },
+    }
+
+    const bare = await http(
+      nextPort,
+      `/api/session/sessions/${sessionId}/move?`,
+      "POST",
+      JSON.stringify({ target_project_id: projectId }),
+      { cookie: productJar, origin: `http://localhost:${nextPort}`,
+        "content-type": "application/json", "idempotency-key": "move-r164-bare-query" },
+      10_000,
+    )
+
+    expect(bare.status).toBe(200)
+    expect(headerValue(bare.headers, "x-request-id")).toBe("req_move_bare_query_normalized")
+    expect(JSON.parse(bare.body)).toEqual({ session_id: sessionId, project_ref: projectId })
+    expect(moveBoundaryRequests.slice(bareBoundaryStart)).toEqual([{
+      method: "POST",
+      path: `/v1/sessions/${sessionId}/move`,
+      idempotencyKey: "move-r164-bare-query",
+      body: JSON.stringify({ target_project_id: projectId }),
+    }])
+
+    const queryBoundaryStart = moveBoundaryRequests.length
+    const unexpectedQuery = await http(
+      nextPort,
+      `/api/session/sessions/${sessionId}/move?unexpected=1`,
+      "POST",
+      JSON.stringify({ target_project_id: projectId }),
+      { cookie: productJar, origin: `http://localhost:${nextPort}`,
+        "content-type": "application/json", "idempotency-key": "move-r164-nonempty-query" },
+      10_000,
+    )
+    expect(unexpectedQuery.status).toBe(400)
+    expect(JSON.parse(unexpectedQuery.body)).toMatchObject({ error: { code: "invalid_move_request" } })
+    expect(moveBoundaryRequests).toHaveLength(queryBoundaryStart)
+  }, 60_000)
+
+  it("R164 accepts only the application/json media type for strict Move owner responses", async () => {
+    resetMoveFixture()
+    const productJar = await authenticatedProductJar()
+    const sessionId = "conv_11111111-1111-4111-8111-111111111111"
+    const projectId = "project_22222222-2222-4222-8222-222222222222"
+    const path = `/api/session/sessions/${sessionId}/move`
+    const postMove = (commandId: string): Promise<HttpResult> => http(
+      nextPort,
+      path,
+      "POST",
+      JSON.stringify({ target_project_id: projectId }),
+      { cookie: productJar, origin: `http://localhost:${nextPort}`,
+        "content-type": "application/json", "idempotency-key": commandId },
+      10_000,
+    )
+    const validBody = { data: { session_id: sessionId, project_ref: projectId } }
+
+    for (const [commandId, contentType] of [
+      ["move-r164-json-suffix", "application/jsonx"],
+      ["move-r164-json-substring", "text/plain; profile=application/json"],
+    ] as const) {
+      moveFixtureResponse = { status: 200, requestId: `req_${commandId}`, contentType, body: validBody }
+      const response = await postMove(commandId)
+      expect(response.status).toBe(502)
+      expect(JSON.parse(response.body)).toMatchObject({ error: { code: "bff_bad_response" } })
+    }
+
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_json_charset",
+      contentType: "application/json; charset=utf-8",
+      body: validBody,
+    }
+    const valid = await postMove("move-r164-json-charset")
+    expect(valid.status).toBe(200)
+    expect(headerValue(valid.headers, "x-request-id")).toBe("req_move_json_charset")
+    expect(JSON.parse(valid.body)).toEqual(validBody.data)
+  }, 60_000)
 
   it("R147 converges an authenticated cold and reloaded workspace instead of leaving the SSR loading shell", async () => {
     const { signin, jar, location } = await start()

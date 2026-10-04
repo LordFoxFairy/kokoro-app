@@ -281,3 +281,78 @@ describe("preview transport control loop", () => {
     expect(replayedA).toContain("message.completed")
   })
 })
+describe("R166 required preview Move boundary", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("rejects every direction as typed unsupported without mutating sessions or storage", async () => {
+    const client = createPreviewClient({ stepMs: 0 });
+    const directSession = "preview-move-direct";
+    const projectSession = "preview-move-project";
+    const projectA = "project_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const projectB = "project_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    await client.createMessage(directSession, {
+      idempotency_key: "preview-move-seed-direct",
+      selected_skill_source_refs: [],
+      content: "direct",
+    });
+    await client.createMessage(projectSession, {
+      idempotency_key: "preview-move-seed-project",
+      selected_skill_source_refs: [],
+      content: "project",
+      project_ref: projectA,
+    });
+    const beforeDirect = await client.listSessions(undefined, {
+      kind: "direct",
+    });
+    const beforeA = await client.listSessions(undefined, {
+      kind: "project",
+      projectRef: projectA,
+    });
+    const beforeB = await client.listSessions(undefined, {
+      kind: "project",
+      projectRef: projectB,
+    });
+    const beforeStorage = window.localStorage.getItem(
+      "kokoro.preview.sessions.v1",
+    );
+    const method = (client as unknown as { moveSession?: unknown }).moveSession;
+    expect(typeof method).toBe("function");
+    const move = (method as (input: unknown) => Promise<unknown>).bind(client);
+
+    for (const input of [
+      {
+        sessionId: directSession,
+        targetProjectId: projectA,
+        commandId: "preview-direct-to-project",
+      },
+      {
+        sessionId: projectSession,
+        targetProjectId: projectB,
+        commandId: "preview-project-to-project",
+      },
+      {
+        sessionId: projectSession,
+        targetProjectId: null,
+        commandId: "preview-project-to-direct",
+      },
+    ]) {
+      await expect(move(input)).rejects.toMatchObject({
+        name: "ConversationMoveError",
+        details: { kind: "unsupported" },
+      });
+    }
+
+    await expect(
+      client.listSessions(undefined, { kind: "direct" }),
+    ).resolves.toEqual(beforeDirect);
+    await expect(
+      client.listSessions(undefined, { kind: "project", projectRef: projectA }),
+    ).resolves.toEqual(beforeA);
+    await expect(
+      client.listSessions(undefined, { kind: "project", projectRef: projectB }),
+    ).resolves.toEqual(beforeB);
+    expect(window.localStorage.getItem("kokoro.preview.sessions.v1")).toBe(
+      beforeStorage,
+    );
+  });
+});
