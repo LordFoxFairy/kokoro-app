@@ -4,6 +4,10 @@ Web不新增schema、Redis、localStorage/IndexedDB、receipt或Conversation归�
 
 旧scope stream释放不产生cancel；已准入Run继续由owner事实与target-scope replay观察。matching ACK先把当前意图结算为durable confirmed，再由generation/view fence限制导航、错误和焦点投影；同scope来源owner GET不受旧UI projection否决，并以canonical membership更新view cache。503与409 `idempotency_in_progress`不代表未执行，保留同一`sessionId/targetProjectId/commandId`为unknown供人工恢复。全程不保存target副本、不创建第二binding truth、不改变Conversation/Message身份。cache storage/observer异常仍fail-contained。跨scope unknown/late ACK、route未dispose与blocked-storage硬刷新归W2 OPEN。
 
+R195-W2把上述瞬时intent改为当前document内、verified subject绑定的单槽Move command，而不是mounted engine字段。槽只含subject、epoch/slot identity、canonical session、target Project或null、稳定commandId/body、`pending|unknown`及必要的Promise/AbortController/subscriber；不保存owner binding、Project membership、Conversation/Message副本或第二receipt。scope engine dispose只移除subscriber，不能清槽或中断仍在10秒client预算内的请求。matching ACK当下按source scope+sessionId精确evict已有内存/持久browser Conversation索引并释放command；随后只保留source/target有界per-scope version，version与实际request generation共同保证不采用pre-ACK inflight。不存在等待GET消费的per-session token、队列、map或journal，因此连续confirmed Move不会覆盖遗漏前一session；target membership仍只来自fresh owner GET，其他scope缓存不变。
+unknown不设后台timer、轮询、自动POST或无限队列，只能由原verified subject显式同key/bodyRetry。可信anonymous、subject change、logout、pagehide和document teardown先递增epoch，再清槽并abort pending；React订阅者只在自身cleanup时unsubscribe，document唯一永久pagehide handler在每次离页都revoke；所有迟到callback须匹配slot/epoch/subject，abort rejection不得复活状态或invalidation。普通effect cleanup/StrictMode replay不清槽；temporary unavailable只suspend start/retry，同subject pending可结算，恢复不自动重发。command槽与per-scope version不写新的localStorage/IndexedDB/Redis/SQL事实、不跨reload恢复；既有browser索引的best-effort写失败仍保持confirmed，当前document内存eviction继续隐藏source，blocked-storage硬刷新仍无恢复保证。后继实现必须删除engine内旧Move intent/retry/confirmedActiveMove双轨；machine只保不含target/command的通用local cache reconcile，不能把page槽与engine槽并存，也不能park engine冒充operation保留。
+
+
 ---
 
 ## R158-W-MOVE-D0：Move client 瞬时数据边界（2026-10-04；A候选待 Root 集成）

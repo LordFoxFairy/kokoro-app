@@ -1145,8 +1145,43 @@ it("活动会话的确认Move先按回执导航而不被来源缓存驱逐误伤
     expect(window.location.pathname).toBe(`/app/project/${targetProjectId}`)
     expect(window.location.search).toBe(`?conversation=${sessionId}`)
   })
-  expect(engine.getSnapshot().store?.activeId).toBe(sessionId)
+  expect(engine.getSnapshot().store?.conversations.some((conversation) => conversation.id === sessionId)).toBe(false)
   expect(client.moveSession).toHaveBeenCalledTimes(1)
+})
+
+it("同scope新对话使旧Move ACK失去导航资格", async () => {
+  const sessionId = "00000000-0000-4000-8000-000000000093"
+  const targetProjectId = "00000000-0000-4000-8000-000000000094"
+  buildEngine(addConversation(null, sessionId, 500))
+  let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({
+    ...client,
+    listSessions: vi.fn().mockResolvedValue({
+      sessions: [{ session_id: sessionId, title: "New chat source", updated_at: "2026-10-04T00:00:00Z" }],
+      next_cursor: null,
+    }),
+  })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: targetProjectId, name: "New chat target", slug: "new-chat-target", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-new-chat-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  window.history.replaceState(window.history.state, "", `/app?conversation=${sessionId}`)
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
+    projectReadBoundary={{ admitted: true, subject: "subject-new-chat", generation: 1 }} />
+  </LocaleProvider></ThemeProvider>)
+
+  const row = (await screen.findByRole("button", { name: "New chat source" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(row).not.toBeNull()
+  fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "移动会话 New chat source" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "New chat target" }))
+  fireEvent.click(screen.getByRole("button", { name: "新对话" }))
+  act(() => resolveMove({ session_id: sessionId, project_ref: targetProjectId }))
+
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  expect(window.location.pathname).toBe("/app")
+  expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
 })
 
 it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导航", async () => {
@@ -1157,7 +1192,12 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
   buildEngine(addConversation(addConversation(null, otherSessionId, 400), sessionId, 500))
 
   let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
-  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  let resolveAfterUnmount!: (receipt: { session_id: string; project_ref: string }) => void
+  const moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => {
+    if (moveSession.mock.calls.length === 1) resolveMove = resolve
+    else resolveAfterUnmount = resolve
+  }))
+  client.moveSession = moveSession
   const listSessions = vi.fn().mockResolvedValue({
     sessions: [
       { session_id: sessionId, title: "A", updated_at: "2026-10-04T00:00:00Z" },
@@ -1191,6 +1231,7 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
       </LocaleProvider>
     </ThemeProvider>
   )
+  window.history.replaceState(window.history.state, "", `/app?conversation=${sessionId}`)
   const view = render(renderFrame())
 
   await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
@@ -1201,30 +1242,24 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
   fireEvent.click(await screen.findByRole("menuitem", { name: "Target" }))
   expect(client.moveSession).toHaveBeenCalledTimes(1)
 
-  act(() => {
-    resolveMove({ session_id: sessionId, project_ref: targetProjectId })
-    engine.selectConversation(otherSessionId)
-    window.history.replaceState(window.history.state, "", `/app?conversation=${otherSessionId}`)
-  })
+  fireEvent.click(await screen.findByRole("button", { name: "B" }))
+  act(() => resolveMove({ session_id: sessionId, project_ref: targetProjectId }))
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
   expect(window.location.pathname).toBe("/app")
   expect(window.location.search).toBe(`?conversation=${otherSessionId}`)
-  expect(listSessions).toHaveBeenCalledTimes(2)
+  expect(listSessions.mock.calls.length).toBeGreaterThan(1)
 
+  const callsBeforeReplacementScope = listSessions.mock.calls.length
   window.history.replaceState(window.history.state, "", `/app/project/${replacementProjectId}?conversation=${sessionId}`)
   view.rerender(renderFrame(replacementProjectId))
-  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(callsBeforeReplacementScope))
 
-  let resolveAfterUnmount!: (receipt: { session_id: string; project_ref: string }) => void
-  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => {
-    resolveAfterUnmount = resolve
-  }))
   const replacementRow = (await screen.findByRole("button", { name: "A" })).closest('[data-slot="sidebar-menu-item"]')
   expect(replacementRow).not.toBeNull()
   fireEvent.click(within(replacementRow as HTMLElement).getByRole("button", { name: "移动会话 A" }))
   fireEvent.click(await screen.findByRole("menuitem", { name: "Target" }))
-  expect(client.moveSession).toHaveBeenCalledTimes(1)
+  expect(client.moveSession).toHaveBeenCalledTimes(2)
   const listCallsBeforeUnmount = listSessions.mock.calls.length
   act(() => {
     resolveAfterUnmount({ session_id: sessionId, project_ref: targetProjectId })
@@ -1266,16 +1301,15 @@ it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async ()
   fireEvent.click(await screen.findByRole("menuitem", { name: "Scope Target" }))
   expect(client.moveSession).toHaveBeenCalledTimes(1)
 
+  const callsBeforeReplacementScope = listSessions.mock.calls.length
   act(() => {
     resolveMove({ session_id: sessionId, project_ref: targetProjectId })
     window.history.replaceState(window.history.state, "", `/app/project/${replacementProjectId}?conversation=${sessionId}`)
     view.rerender(renderFrame(replacementProjectId))
   })
-  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(callsBeforeReplacementScope))
 
-  expect(engine.getSnapshot().conversationMove).toBeNull()
   expect(window.location.pathname).toBe(`/app/project/${replacementProjectId}`)
-  expect(listSessions).toHaveBeenCalledTimes(3)
 })
 
 it("移动拒绝的暂态反馈不在 A 切 B 再切 A 后复活", async () => {
@@ -1312,9 +1346,9 @@ it("移动拒绝的暂态反馈不在 A 切 B 再切 A 后复活", async () => {
   fireEvent.click(await screen.findByRole("menuitem", { name: "Reject Target" }))
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("移动失败"))
 
-  act(() => engine.selectConversation(sessionB))
+  fireEvent.click(await screen.findByRole("button", { name: "Reject B" }))
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
-  act(() => engine.selectConversation(sessionA))
+  fireEvent.click(await screen.findByRole("button", { name: "Reject A" }))
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
   expect(client.moveSession).toHaveBeenCalledTimes(1)
 })

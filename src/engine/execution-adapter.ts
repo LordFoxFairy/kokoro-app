@@ -11,7 +11,6 @@ import type {
 import type { EventCursor } from "@/contract/agui-events"
 import type { ChatProjectionEvent } from "@/core/chat-projection-event"
 import type { AgentMode } from "@/core/conversations"
-import type { MoveSessionReceipt } from "@/contract/conversation-move"
 
 import type { EventStreamHandle, SessionClient } from "./client"
 import { SessionClientError } from "./client-error"
@@ -63,8 +62,6 @@ export type SessionExecutionAdapter = {
   fetchSnapshot: (sessionId: string) => Promise<SessionSnapshot | null>
   deleteSession: (sessionId: string) => Promise<DeleteSessionReceipt>
   abortDelete: () => void
-  moveSession: (args: Readonly<{ sessionId: string; targetProjectId: string | null; commandId: string }>) => Promise<MoveSessionReceipt>
-  abortMove: () => void
   openStream: (
     sessionId: string,
     resumeCursor: EventCursor | null,
@@ -109,7 +106,6 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
   let activeStream: StreamContext | null = null
   const snapshotControllers = new Set<AbortController>()
   const deleteControllers = new Set<AbortController>()
-  let moveController: { commandId: string; controller: AbortController } | null = null
 
   function fetchSnapshot(sessionId: string): Promise<SessionSnapshot | null> {
     for (const controller of snapshotControllers) controller.abort()
@@ -256,23 +252,6 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     abortDelete: () => {
       for (const controller of deleteControllers) controller.abort()
       deleteControllers.clear()
-    },
-    moveSession: (args) => {
-      if (moveController?.commandId !== args.commandId) {
-        moveController?.controller.abort()
-        moveController = { commandId: args.commandId, controller: new AbortController() }
-      }
-      const controller = moveController.controller
-      return deps.client.moveSession({
-        sessionId: args.sessionId,
-        targetProjectId: args.targetProjectId,
-        commandId: args.commandId,
-        signal: controller.signal,
-      })
-    },
-    abortMove: () => {
-      moveController?.controller.abort()
-      moveController = null
     },
     openStream,
     closeStream: () => {

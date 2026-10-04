@@ -9,7 +9,7 @@ import type { Duplex } from "node:stream"
 
 import { createClient } from "redis"
 import { decode } from "next-auth/jwt"
-import { chromium, type Browser, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
+import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
@@ -1431,12 +1431,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
           return
         }
+        const moveProjectScope = request.url?.match(/^\/v1\/sessions\?project_ref=(project_[0-9a-f-]+)$/u)?.[1]
         if (request.method === "GET" && moveBindingFixtureEnabled &&
-          request.url === `/v1/sessions?project_ref=${encodeURIComponent(moveProjectA)}`) {
-          const projectSessions = moveBindingProjectRef === moveProjectA ? [
+          (moveProjectScope === moveProjectA || moveProjectScope === moveProjectB)) {
+          const projectSessions = moveProjectScope === moveProjectA && moveBindingProjectRef === moveProjectA ? [
             { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
           ] : []
-          moveBindingScopeGets.push({ scope: `project:${moveProjectA}`, bindingAtRead: moveBindingProjectRef,
+          moveBindingScopeGets.push({ scope: `project:${moveProjectScope}`, bindingAtRead: moveBindingProjectRef,
             sessionIds: projectSessions.map((session) => session.session_id) })
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify({ data: { sessions: projectSessions, next_cursor: null },
@@ -1649,6 +1650,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     if (token === undefined) return
     const claims = await decode({ token, secret: authSecret, salt: "kokoro-product-session-v1" })
     if (typeof claims?.id === "string") productIds.add(claims.id)
+  }
+
+  async function admitBrowserContext(context: BrowserContext): Promise<void> {
+    const jar = await authenticatedProductJar()
+    const origin = `http://localhost:${nextPort}`
+    await context.addCookies(jar.split(/;\s*/u).flatMap((pair) => {
+      const separator = pair.indexOf("=")
+      return separator > 0 ? [{ name: pair.slice(0, separator), value: pair.slice(separator + 1), url: origin }] : []
+    }))
   }
 
   async function productRecordKeys(): Promise<Set<string>> {
@@ -3781,4 +3791,231 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }
     }
   }, 50_000)
+  it("R195 reconciles a cross-scope matching Move ACK without stealing the mounted Project draft", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_cross_scope_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(0)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
+        scope: `project:${moveProjectA}`, bindingAtRead: null, sessionIds: [],
+      })
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(0)
+      const projectBReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length
+      const composer = page.locator('[data-slot="composer-input"]')
+      const projectBDraft = "R195 keep the mounted Project B draft"
+      await composer.fill(projectBDraft)
+      const directReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      const targetReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length
+
+      releaseMove()
+      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 }).toBe(moveProjectA)
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
+      expect(await composer.inputValue()).toBe(projectBDraft)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directReadsBeforeAck)
+      const returnedDirectList = page.locator('[data-conversation-list="direct"]')
+      await expect.poll(() => returnedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
+        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
+      })
+
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(targetReadsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
+        scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
+      })
+      await page.locator('[data-conversation-list="project-conversation"]')
+        .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
+        .toBe(projectBDraft)
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
+        timeout: 10_000,
+      }).toBe(projectBReadsBeforeAck + 1)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual({
+        scope: `project:${moveProjectB}`, bindingAtRead: moveProjectA, sessionIds: [],
+      })
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it.each([
+    ["committed lost ACK", "commit-close", 200, "lost_ack"],
+    ["typed unavailable", "respond", 503, "business_store_unavailable"],
+  ] as const)("R195 retains a cross-scope %s Move command for one explicit exact retry", async (
+    _outcome, releaseMode, status, code,
+  ) => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = status === 200 ? {
+      status,
+      requestId: "req_move_cross_scope_lost_ack",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    } : {
+      status,
+      requestId: "req_move_cross_scope_unavailable",
+      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      const frozenRequest = moveBoundaryRequests[0]
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      const projectBDraft = `R195 ${code} keeps Project B mounted`
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill(projectBDraft)
+      moveFixtureMode = releaseMode
+      releaseMove()
+      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 })
+        .toBe(status === 200 ? moveProjectA : null)
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
+      expect(await composer.inputValue()).toBe(projectBDraft)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      const recoveryProject = status === 200 ? moveProjectA : null
+      if (recoveryProject === null) {
+        await page.locator('a[href="/app"]').first().click()
+        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      } else {
+        await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+          .toBe(`/app/project/${moveProjectA}`)
+      }
+      const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
+      const recoveryRow = recoveryList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const moveButton = recoveryRow.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      })
+      await moveButton.waitFor({ state: "visible", timeout: 10_000 })
+      await page.locator('[data-slot="composer-input"]').focus()
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      await moveButton.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBoundaryRequests).toHaveLength(1)
+      moveFixtureMode = "respond"
+      moveFixtureResponse = {
+        status: 200,
+        requestId: `req_move_cross_scope_retry_${status}`,
+        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+      }
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(frozenRequest)
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+
 })

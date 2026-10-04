@@ -6,7 +6,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import { admitBrowserAuthSessionIndexes, readBrowserAuthIndexSubject } from "@/ui/shell/page-clients"
+import {
+  admitBrowserAuthSessionIndexes,
+  browserConversationMoveCoordinator,
+  readBrowserAuthIndexSubject,
+} from "@/ui/shell/page-clients"
 
 /** Local read lifecycle only; BFF still authorizes every Project request. */
 export type ProjectReadBoundary = { admitted: boolean; subject: string | null; generation: number }
@@ -106,6 +110,7 @@ export function useSessionProbe(): SessionProbe {
       void requestSessionMode().then((resolved) => {
         if (!live || generationRef.current !== currentGeneration) return
         if (resolved.mode === "unavailable") {
+          browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
           setProbe((current) => current.mode === "authenticated"
             ? { ...current, unavailable: true, requestPending: false, retry,
               projectReadBoundary: { admitted: false, subject: current.projectReadBoundary.subject, generation: currentGeneration } }
@@ -127,9 +132,11 @@ export function useSessionProbe(): SessionProbe {
             if (admittedSubject === null) {
               admittedSubject = resolved.subject
             } else if (admittedSubject !== resolved.subject) {
+              browserConversationMoveCoordinator().revokeSubject()
               window.location.reload()
               return
             }
+            browserConversationMoveCoordinator().admitVerifiedSubject(resolved.subject)
           } catch {
             setProbe((current) => current.mode === "authenticated"
               ? { ...current, unavailable: true, requestPending: false, retry,
@@ -138,6 +145,10 @@ export function useSessionProbe(): SessionProbe {
                 projectReadBoundary: { admitted: false, subject: null, generation: currentGeneration } })
             return
           }
+        }
+        if (resolved.mode === "anonymous") {
+          browserConversationMoveCoordinator().revokeSubject()
+          admittedSubject = null
         }
         setProbe({
           state: resolved.mode === "authenticated" ? "pass" : "anonymous",

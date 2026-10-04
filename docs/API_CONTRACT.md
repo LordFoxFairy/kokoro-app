@@ -6,6 +6,10 @@ active confirmed导航为Project target `/app/project/<canonical>?conversation=<
 
 matching confirmed receipt先确立durable outcome，再应用generation/view fence：旧UI projection不导航、不显示错误、不抢焦点，但同scope来源仍必须发起新的owner GET并按canonical membership移除已移动Conversation。该对账不新增HTTP字段、receipt、entity或binding事实，也不自动重发Move。R194-W1只覆盖当前scope；跨scope unknown/late ACK、route未dispose及blocked-storage硬刷新仍为W2 OPEN。
 
+R195-W2仍不新增HTTP、cookie、header、error code或owner字段。页面单槽Move coordinator只在现可信session probe已admit的verified subject下调用required `SessionClient.moveSession`，冻结原`sessionId/targetProjectId/commandId`与由此产生的同一body；scope/route/view engine不是调用身份。matching 200 ACK即使原view已unmount也必须结算，并立即按source scope+sessionId精确驱逐现browser内存/持久Conversation索引，再递增source/target有界per-scope version以取得新的canonical GET；不保存可被连续Move覆盖的per-session待办，不阻止下一次Move，不插target假行。旧view不得导航、报错或抢焦点。network/abort/parse/adapter、任意503及409 `idempotency_in_progress`继续为unknown：mount、focus、canonical GET和scope切换都不得自动POST，只有同一verified subject的明确Retry可再发一次完全相同的`Idempotency-Key`与body。
+可信anonymous、subject change、logout、pagehide或真正document coordinator teardown通过epoch-fenced revoke清除/abort冻结command；普通probe effect cleanup与StrictMode replay不构成revoke。新subject既看不到也不能重试旧subject command，revoke后的迟到resolve/reject不得恢复unknown、发布reconciliation或导航。session probe temporary unavailable只suspend start/retry，不把owner outcome分类为closed rejection；同subject、同epoch的pending ACK仍可结算，恢复只解冻现slot且不以新key/body自动重发。React订阅者只在自身cleanup时unsubscribe；document唯一pagehide handler永久且幂等安装，并在每次pagehide执行revoke。上述均为browser内部生命周期，不改变BFF 7.1 Move、same-origin route或10秒client预算。后继必须删除engine-owned intent/retry双轨，禁止同时从engine与coordinator发Move。
+
+
 ---
 
 ## R158-W-MOVE-D0：public 7.1 Move 消费合同（2026-10-04；A候选待 Root 集成）

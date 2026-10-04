@@ -21,6 +21,13 @@ export type ConnectionAvailability =
   | { status: "reconnecting" }
   | { status: "unavailable"; reason: ClientFailureReason | "timeout" }
 
+export type ConversationMoveIntent = Readonly<{
+  sessionId: string
+  targetProjectId: string | null
+  commandId: string
+  status: "pending" | "unknown"
+}>
+
 export type EngineSnapshot = {
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
@@ -41,22 +48,7 @@ export type EngineSnapshot = {
   // 当前失败是否仍有未获 create receipt 的同会话冻结意图可按原 key/body 恢复。
   canRetryResume: boolean
   canRetryPendingSubmission: boolean
-  conversationMove: ConversationMoveIntent | null
 }
-
-export type ConversationMoveIntent = Readonly<{
-  sessionId: string
-  targetProjectId: string | null
-  commandId: string
-  status: "pending" | "unknown"
-}>
-
-export type ConversationMoveResult = Readonly<{
-  status: "confirmed" | "rejected" | "unknown" | "superseded"
-  sessionId: string
-  targetProjectId: string | null
-  commandId: string
-}>
 
 const EMPTY_THREAD: SessionStreamState = createSessionStreamState()
 
@@ -72,7 +64,6 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
   canSubmitMessage: false,
   canRetryResume: false,
   canRetryPendingSubmission: false,
-  conversationMove: null,
 }
 
 export type SessionEngine = {
@@ -93,8 +84,8 @@ export type SessionEngine = {
   openConversation: (id: string) => void
   newConversation: () => void
   deleteConversation: (id: string) => Promise<boolean>
-  moveConversation: (input: Readonly<{ sessionId: string; targetProjectId: string | null }>) => Promise<ConversationMoveResult>
-  retryConversationMove: () => Promise<ConversationMoveResult | null>
+  /** Remove one confirmed-nonmember Conversation from this scope's browser index only. */
+  reconcileConversationCache: (sessionId: string) => void
   setMode: (mode: AgentMode) => void
   // 当前会话的 exact Skill source refs；只在内存中保存，提交时冻结进 typed wire。
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[]) => void

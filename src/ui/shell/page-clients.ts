@@ -6,9 +6,15 @@ import { createPreviewClient, previewClientFromEnv } from "@/dev/preview-transpo
 import { createSessionClient, type SessionClient } from "@/engine/client"
 import { sessionBaseUrl } from "@/engine/config"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
+import { removeConversation, type ConversationStore } from "@/core/conversations"
 import { storedConversationStoreSchema } from "@/core/persistence"
 import { createPersistedStore } from "@/lib/persisted-store"
+import type { PersistedStore } from "@/lib/persisted-store"
 import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
+import {
+  createConversationMoveCoordinator,
+  type ConversationMoveCoordinator,
+} from "./conversation-move-coordinator"
 
 import { createBillingClient, type BillingClient } from "@/billing/client"
 import { createPricingClient, type PricingClient } from "@/billing/pricing"
@@ -126,7 +132,7 @@ export function browserAgentClient(options: { preview?: boolean } = {}): AgentCl
 
 // 会话清单读客户端：与引擎同源选择（preview 假流优先，否则 `/api/session` BFF）。listModels/
 // listAgents 复用同客户端。
-let pageListClient: ListClient | null = null
+let pageListClient: SessionClient | null = null
 let pagePreviewClient: SessionClient | null = null
 
 function browserPreviewClient(): SessionClient {
@@ -140,7 +146,7 @@ function browserPreviewClient(): SessionClient {
   return pagePreviewClient
 }
 
-export function browserListClient(options: { preview?: boolean } = {}): ListClient {
+export function browserListClient(options: { preview?: boolean } = {}): SessionClient {
   if (options.preview === true) {
     return browserPreviewClient()
   }
@@ -151,6 +157,12 @@ export function browserListClient(options: { preview?: boolean } = {}): ListClie
     // correct mode after the auth probe, and live Chat must reach the BFF.
     pageListClient = createSessionClient({ baseUrl: sessionBaseUrl() })
   }
+  return pageListClient
+}
+
+function browserSessionClient(options: { preview?: boolean } = {}): SessionClient {
+  if (options.preview === true) return browserPreviewClient()
+  if (!pageListClient) pageListClient = createSessionClient({ baseUrl: sessionBaseUrl() })
   return pageListClient
 }
 
@@ -171,6 +183,48 @@ type BrowserEngineEntry = {
 // 整页按 scope 共享引擎实例（含流句柄与重连计时器）。production hook 只在
 // committed effect 内同步执行 factory + retain；render 不创建零 owner entry。
 const pageEngines = new Map<string, BrowserEngineEntry>()
+const pageConversationStores = new Map<string, PersistedStore<ConversationStore>>()
+let pageMoveCoordinator: ConversationMoveCoordinator | null = null
+let pageMovePagehideBound = false
+
+function conversationStore(scopeKey: string): PersistedStore<ConversationStore> {
+  const existing = pageConversationStores.get(scopeKey)
+  if (existing) return existing
+  const created = createPersistedStore({
+    key: `${STORAGE_KEY}.${scopeKey}`,
+    schema: storedConversationStoreSchema,
+  })
+  pageConversationStores.set(scopeKey, created)
+  return created
+}
+
+function evictBrowserConversationIndex(scopeKey: string, sessionId: string): void {
+  const liveEngine = pageEngines.get(`live:${scopeKey}`)?.engine
+  if (liveEngine) {
+    try { liveEngine.reconcileConversationCache(sessionId) }
+    catch { /* Confirmed owner state wins over best-effort browser persistence. */ }
+    return
+  }
+  const storage = conversationStore(scopeKey)
+  const current = storage.read()
+  if (!current?.conversations.some((entry) => entry.id === sessionId)) return
+  try { storage.write(removeConversation(current, sessionId, `conv_${crypto.randomUUID()}`, Date.now())) }
+  catch { /* Keep the current-document store projection invalidated when persistence observers fail. */ }
+}
+
+export function browserConversationMoveCoordinator(): ConversationMoveCoordinator {
+  if (!pageMoveCoordinator) {
+    pageMoveCoordinator = createConversationMoveCoordinator({
+      client: browserSessionClient(),
+      evictSourceIndex: evictBrowserConversationIndex,
+    })
+  }
+  if (!pageMovePagehideBound && typeof window !== "undefined") {
+    window.addEventListener("pagehide", pageMoveCoordinator.revokeSubject)
+    pageMovePagehideBound = true
+  }
+  return pageMoveCoordinator
+}
 
 function browserEngineEntry(engine: SessionEngine): { key: string; entry: BrowserEngineEntry } | null {
   for (const [key, entry] of pageEngines) {
@@ -255,10 +309,7 @@ export function browserEngine(options: { preview?: boolean; scope?: SessionScope
       : createSessionClient({ baseUrl: sessionBaseUrl() })
     const engine = createSessionEngine({
       client,
-      storage: createPersistedStore({
-        key: `${STORAGE_KEY}.${sessionScopeKey(scope)}`,
-        schema: storedConversationStoreSchema,
-      }),
+      storage: conversationStore(sessionScopeKey(scope)),
       scope,
     })
     pageEngines.set(engineKey, { engine, owners: new Set(), pendingRelease: null })

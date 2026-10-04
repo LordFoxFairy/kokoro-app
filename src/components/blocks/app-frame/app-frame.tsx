@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { activeMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
@@ -8,7 +8,11 @@ import { useHydrated } from "@/lib/use-hydrated"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
-import { browserListClient } from "@/ui/shell/page-clients"
+import { browserConversationMoveCoordinator, browserListClient } from "@/ui/shell/page-clients"
+import {
+  createConversationMoveCoordinator,
+  type ConversationMoveResult,
+} from "@/ui/shell/conversation-move-coordinator"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
@@ -136,6 +140,25 @@ export function AppFrame({
   }, [])
 
   const isStreaming = machine.phase !== "idle" && machine.phase !== "error"
+  const moveCoordinator = useMemo(() => injectedEngine === undefined
+    ? browserConversationMoveCoordinator()
+    : createConversationMoveCoordinator({
+        client: browserListClient({ preview }),
+        evictSourceIndex: (_scopeKey, sessionId) => injectedEngine?.reconcileConversationCache(sessionId),
+      }), [injectedEngine, preview])
+  useEffect(() => {
+    if (projectReadBoundary?.admitted && projectReadBoundary.subject) {
+      moveCoordinator.admitVerifiedSubject(projectReadBoundary.subject)
+    } else if (projectReadBoundary?.subject) {
+      moveCoordinator.suspendVerifiedSubject(projectReadBoundary.subject)
+    }
+  }, [moveCoordinator, projectReadBoundary])
+  const moveSnapshot = useSyncExternalStore(
+    moveCoordinator.subscribe,
+    moveCoordinator.getSnapshot,
+    moveCoordinator.getSnapshot,
+  )
+  const moveScopeKey = sessionScopeKey(sessionScope)
   const conversationsCtl = useConversationList({
     engine,
     preview,
@@ -144,72 +167,88 @@ export function AppFrame({
     isStreaming,
     focusComposer,
     scope: sessionScope,
+    scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
   })
-  const conversationMove = engine?.getSnapshot().conversationMove ?? null
-  const moveScopeKey = sessionScopeKey(sessionScope)
-  const moveViewIdentity = useMemo(() => ({ engine, activeId, scopeKey: moveScopeKey }), [activeId, engine, moveScopeKey])
+  const conversationMove = moveSnapshot.intent
+  const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
+  const moveViewIdentity = useMemo(
+    () => ({ engine, scopeKey: moveScopeKey, selectionGeneration: moveSelectionGeneration }),
+    [engine, moveScopeKey, moveSelectionGeneration],
+  )
   const moveProjectionRef = useRef<{
     engine: typeof engine
-    activeId: string | null
     scopeKey: string
     identity: typeof moveViewIdentity
     live: boolean
   } | null>(null)
   const [moveFailureProjection, setMoveFailureProjection] = useState<NonNullable<typeof moveProjectionRef.current> | null>(null)
   useLayoutEffect(() => {
-    const projection = { engine, activeId, scopeKey: moveScopeKey, identity: moveViewIdentity, live: true }
+    const projection = { engine, scopeKey: moveScopeKey, identity: moveViewIdentity, live: true }
     moveProjectionRef.current = projection
     return () => {
       projection.live = false
       if (moveProjectionRef.current === projection) moveProjectionRef.current = null
     }
-  }, [activeId, engine, moveScopeKey, moveViewIdentity])
-  const commitConfirmedMove = useCallback((result: Awaited<ReturnType<NonNullable<typeof engine>["moveConversation"]>>, wasActive: boolean) => {
+  }, [engine, moveScopeKey, moveViewIdentity])
+  const commitConfirmedMove = useCallback((result: ConversationMoveResult, wasActive: boolean) => {
     if (result.status !== "confirmed") return
     if (!wasActive) return
+    const confirmedTargetScope = result.targetProjectId === null ? "direct" : `project:${result.targetProjectId}`
+    if (confirmedTargetScope === moveScopeKey) {
+      // Same-scope URL changes do not replace the scoped engine, so explicitly
+      // hydrate the exact retained session before projecting its canonical URL.
+      engine?.openConversation(result.sessionId)
+    }
     const conversation = encodeURIComponent(result.sessionId)
     const target = result.targetProjectId === null
       ? `/app?conversation=${conversation}`
       : `/app/project/${encodeURIComponent(result.targetProjectId)}?conversation=${conversation}`
     navigateMountedSurface(target)
-  }, [])
+  }, [engine, moveScopeKey])
   const settleConversationMove = useCallback((
-    result: Awaited<ReturnType<NonNullable<typeof engine>["moveConversation"]>>,
+    result: ConversationMoveResult,
     wasActive: boolean,
     projection: NonNullable<typeof moveProjectionRef.current>,
   ) => {
-    if (result.status === "confirmed") conversationsCtl.refresh()
     if (!projection.live || moveProjectionRef.current !== projection) return
     if (result.status === "rejected") {
       setMoveFailureProjection(projection)
     }
     commitConfirmedMove(result, wasActive)
-  }, [commitConfirmedMove, conversationsCtl])
+  }, [commitConfirmedMove])
   const moveConversation = useCallback((sessionId: string, targetProjectId: string | null) => {
     if (!engine) return
     const projection = moveProjectionRef.current
     if (projection === null) return
     setMoveFailureProjection(null)
     const wasActive = engine.getSnapshot().store?.activeId === sessionId
-    void engine.moveConversation({ sessionId, targetProjectId })
+    void moveCoordinator.start({ sourceScopeKey: moveScopeKey, sessionId, targetProjectId })
       .then((result) => {
         settleConversationMove(result, wasActive, projection)
       })
-  }, [engine, settleConversationMove])
+  }, [engine, moveCoordinator, moveScopeKey, settleConversationMove])
   const retryConversationMove = useCallback(() => {
     if (!engine) return
-    const retained = engine.getSnapshot().conversationMove
+    const retained = moveCoordinator.getSnapshot().intent
     if (retained === null) return
     const projection = moveProjectionRef.current
     if (projection === null) return
     setMoveFailureProjection(null)
-    const wasActive = engine.getSnapshot().store?.activeId === retained.sessionId
-    void engine.retryConversationMove().then((result) => {
+    const mountedConversationId = typeof window === "undefined"
+      ? null
+      : new URL(window.location.href).searchParams.get("conversation")
+    const shouldSelectRetainedConversation = mountedConversationId === null
+      || mountedConversationId === retained.sessionId
+    void moveCoordinator.retry().then((result) => {
       if (result !== null) {
-        settleConversationMove(result, wasActive, projection)
+        // Retry repairs binding state, but must not steal a different
+        // conversation the user explicitly selected while the outcome was
+        // unknown. An overview/no-query recovery page may select the retained
+        // conversation once its matching ACK is authoritative.
+        settleConversationMove(result, shouldSelectRetainedConversation, projection)
       }
     })
-  }, [engine, settleConversationMove])
+  }, [engine, moveCoordinator, settleConversationMove])
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
   const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted, projectRef)
@@ -255,8 +294,19 @@ export function AppFrame({
     brandName,
     commandNewChatTimerRef: overlays.commandNewChatTimerRef,
   })
+  const selectConversationWithMoveFence = useCallback((id: string) => {
+    setMoveSelectionGeneration((generation) => generation + 1)
+    actions.selectConversationWithUrl(id)
+  }, [actions])
+  const startNewChatWithMoveFence = useCallback(() => {
+    setMoveSelectionGeneration((generation) => generation + 1)
+    actions.startNewChatAndFocus()
+  }, [actions])
+  const startNewChatFromCommandWithMoveFence = useCallback(() => {
+    setMoveSelectionGeneration((generation) => generation + 1)
+    actions.startNewChatFromCommand()
+  }, [actions])
   const { openCommand } = overlays
-  const { startNewChatAndFocus } = actions
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -267,12 +317,12 @@ export function AppFrame({
       }
       if (isNewChatShortcut(event)) {
         event.preventDefault()
-        startNewChatAndFocus()
+        startNewChatWithMoveFence()
       }
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [openCommand, startNewChatAndFocus])
+  }, [openCommand, startNewChatWithMoveFence])
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
@@ -409,8 +459,8 @@ export function AppFrame({
     onCreationIntentSelect: actions.handleCreationIntentSelect,
     projectConversations,
     activeProjectConversationId: activeId,
-    onSelectProjectConversation: actions.selectConversationWithUrl,
-    onOpenSession: actions.selectConversationWithUrl,
+    onSelectProjectConversation: selectConversationWithMoveFence,
+    onOpenSession: selectConversationWithMoveFence,
     projectConversationsLoading: conversationsCtl.loading,
     projectConversationsError: conversationsCtl.error,
     onRetryProjectConversations: conversationsCtl.refresh,
@@ -481,7 +531,7 @@ export function AppFrame({
       if (layout.compactDesktopRail) layout.setCompactRailOpen((value) => !value)
       else layout.setRailCollapsed((value) => !value)
     },
-    onNewChat: actions.startNewChatAndFocus,
+    onNewChat: startNewChatWithMoveFence,
     ...(brandName === undefined ? {} : { brandName }),
     ...(brandMark === undefined ? {} : { brandMark }),
     ...(brandLogoUrl === undefined ? {} : { brandLogoUrl }),
@@ -504,7 +554,7 @@ export function AppFrame({
     conversations,
     activeId,
     awaitingIds,
-    onSelectConversation: actions.selectConversationWithUrl,
+    onSelectConversation: selectConversationWithMoveFence,
     onDeleteConversation: conversationsCtl.deleteConversation,
     onRenameConversation: conversationsCtl.renameConversation,
     conversationScope: sessionScope,
@@ -524,7 +574,7 @@ export function AppFrame({
   }
 
   const commandProps: Omit<AppCommandMenuProps, "open" | "onOpenChange"> = {
-    onNewChat: actions.startNewChatFromCommand,
+    onNewChat: startNewChatFromCommandWithMoveFence,
     onOpenSettings: overlays.openSettings,
     ...(navigation === undefined ? {} : { navigation }),
     ...(featureFlags === undefined ? {} : { featureFlags }),

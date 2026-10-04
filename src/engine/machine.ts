@@ -26,7 +26,6 @@ import {
 import { sameInteractionState, createSessionStreamState, type SessionStreamState, type SessionMessage } from "@/core/state"
 
 import { SessionClientError } from "./client"
-import { ConversationMoveError } from "./conversation-move-error"
 import { reconcileUserMessageId, reduceProjectionEvents } from "./event-reducer"
 import {
   createExecutionAdapter,
@@ -39,8 +38,6 @@ import {
   type ConnectionAvailability,
   type NoticeSpec,
   type SessionEngine,
-  type ConversationMoveIntent,
-  type ConversationMoveResult,
 } from "./engine-types"
 import { IDLE_MACHINE, transition, type MachineState } from "./machine-state"
 import { DIRECT_SESSION_SCOPE } from "./session-scope"
@@ -161,9 +158,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
-  let conversationMove: ConversationMoveIntent | null = null
-  let conversationMovePromise: Promise<ConversationMoveResult> | null = null
-  let confirmedActiveMove: string | null = null
   let deleteIntentGeneration = 0
   let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
   // 多 tab 实时同步：订阅会话 store 的跨 tab 变更（persisted-store 的 storage 事件）。
@@ -204,124 +198,15 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
       canSubmitMessage: canSubmitMessage(),
       canRetryPendingSubmission: canRetryPendingSubmission(),
       canRetryResume: retryableResume() !== null,
-      conversationMove,
     }
   }
 
-  function moveResult(intent: ConversationMoveIntent, status: ConversationMoveResult["status"]): ConversationMoveResult {
-    return {
-      status,
-      sessionId: intent.sessionId,
-      targetProjectId: intent.targetProjectId,
-      commandId: intent.commandId,
-    }
-  }
-
-  // A matching owner receipt already fixed the durable binding. Source-scope
-  // cache persistence is therefore best-effort: a localStorage/observer
-  // failure must not turn a known ACK into an unknown owner outcome or abort
-  // engine disposal. Keep the in-memory view invalidated for this lifecycle,
-  // while a later hard reload may still observe stale disk state if the write
-  // was blocked.
-  function evictConfirmedMoveFromSourceCache(sessionId: string): void {
+  function reconcileConversationCache(sessionId: string): void {
     if (!store?.conversations.some((entry) => entry.id === sessionId)) return
     const next = removeConversation(store, sessionId, createId("conv"), now())
     store = next
-    try {
-      deps.storage.write(next)
-    } catch {
-      // Owner ACK stays confirmed; no automatic Move retry is authorized.
-    }
-  }
-
-  function executeConversationMove(intent: ConversationMoveIntent): Promise<ConversationMoveResult> {
-    const generation = hydrateGeneration
-    const settleObsoleteIntent = (resolution: "released" | "unknown", promise: Promise<ConversationMoveResult>): void => {
-      if (conversationMovePromise !== promise || conversationMove?.commandId !== intent.commandId) return
-      conversationMove = resolution === "unknown" ? { ...intent, status: "unknown" } : null
-      notify()
-    }
-    const promise = execution.moveSession(intent).then((receipt) => {
-      const matchesIntent = receipt.session_id === intent.sessionId && receipt.project_ref === intent.targetProjectId
-      if (disposed || conversationMove?.commandId !== intent.commandId) {
-        settleObsoleteIntent(matchesIntent ? "released" : "unknown", promise)
-        return moveResult(intent, "superseded")
-      }
-      if (!matchesIntent) {
-        conversationMove = { ...intent, status: "unknown" }
-        notify()
-        return moveResult(intent, "unknown")
-      }
-      if (store?.conversations.some((entry) => entry.id === intent.sessionId)) {
-        if (store.activeId === intent.sessionId) {
-          // Keep the active projection stable until AppFrame consumes the
-          // receipt and navigates. The source-scope cache is evicted when the
-          // routed engine lease is disposed, so that navigation cannot be
-          // fenced by its own confirmed local state change.
-          confirmedActiveMove = intent.sessionId
-        } else {
-          // A late ACK must not disturb the conversation the user selected
-          // meanwhile, but its confirmed source binding is no longer a valid
-          // local list entry.
-          evictConfirmedMoveFromSourceCache(intent.sessionId)
-        }
-      }
-      conversationMove = null
-      notify()
-      return moveResult(intent, "confirmed")
-    }).catch((error: unknown) => {
-      const ownerRejected = error instanceof ConversationMoveError && error.details.kind === "owner" && (
-        [400, 401, 403, 404, 429].includes(error.details.status) ||
-        (error.details.status === 409 && error.details.code === "idempotency_conflict")
-      )
-      if (disposed || generation !== hydrateGeneration || conversationMove?.commandId !== intent.commandId) {
-        settleObsoleteIntent(ownerRejected ? "released" : "unknown", promise)
-        return moveResult(intent, "superseded")
-      }
-      if (ownerRejected) {
-        conversationMove = null
-        notify()
-        return moveResult(intent, "rejected")
-      }
-      conversationMove = { ...intent, status: "unknown" }
-      notify()
-      return moveResult(intent, "unknown")
-    }).finally(() => {
-      if (conversationMovePromise === promise) conversationMovePromise = null
-    })
-    conversationMovePromise = promise
-    return promise
-  }
-
-  function moveConversation(input: Readonly<{ sessionId: string; targetProjectId: string | null }>): Promise<ConversationMoveResult> {
-    if (disposed) {
-      const intent = { ...input, commandId: createId("move"), status: "pending" as const }
-      return Promise.resolve(moveResult(intent, "superseded"))
-    }
-    if (conversationMove !== null) {
-      if (conversationMove.status === "pending" && conversationMove.sessionId === input.sessionId &&
-        conversationMove.targetProjectId === input.targetProjectId && conversationMovePromise !== null) {
-        return conversationMovePromise
-      }
-      return Promise.resolve(moveResult(conversationMove, "rejected"))
-    }
-    const intent: ConversationMoveIntent = {
-      sessionId: input.sessionId,
-      targetProjectId: input.targetProjectId,
-      commandId: createId("move"),
-      status: "pending",
-    }
-    conversationMove = intent
+    deps.storage.write(next)
     notify()
-    return executeConversationMove(intent)
-  }
-
-  function retryConversationMove(): Promise<ConversationMoveResult | null> {
-    if (disposed || conversationMove === null || conversationMove.status !== "unknown") return Promise.resolve(null)
-    const intent: ConversationMoveIntent = { ...conversationMove, status: "pending" }
-    conversationMove = intent
-    notify()
-    return executeConversationMove(intent)
   }
 
   function notify(): void {
@@ -1298,12 +1183,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function dispose(): void {
-    if (confirmedActiveMove !== null) evictConfirmedMoveFromSourceCache(confirmedActiveMove)
-    confirmedActiveMove = null
     disposed = true
-    execution.abortMove()
-    conversationMove = null
-    conversationMovePromise = null
     deleteIntentGeneration += 1
     deleteIntent = null
     execution.abortDelete()
@@ -1391,8 +1271,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     openConversation,
     newConversation,
     deleteConversation,
-    moveConversation,
-    retryConversationMove,
+    reconcileConversationCache,
     setMode,
     setSelectedSkillSourceRefs,
     setModel,

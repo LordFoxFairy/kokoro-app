@@ -41,13 +41,18 @@ export function useConversationList(params: {
   isStreaming: boolean
   focusComposer: () => void
   scope?: SessionScope
+  scopeRevision?: number
 }): ConversationListController {
-  const { engine, preview = false, activeId, thread, isStreaming, focusComposer, scope = DIRECT_SESSION_SCOPE } = params
+  const {
+    engine, preview = false, activeId, thread, isStreaming, focusComposer,
+    scope = DIRECT_SESSION_SCOPE, scopeRevision = 0,
+  } = params
 
-  const [listRefresh, setListRefresh] = useState(0)
-  const listRefreshRef = useRef(0)
-  const listClient = browserListClient({ preview })
+  const [listRefresh, setListRefresh] = useState(scopeRevision)
+  const listRefreshRef = useRef(scopeRevision)
   const currentScopeKey = sessionScopeKey(scope)
+  const observedScopeRevisionRef = useRef({ scopeKey: currentScopeKey, revision: scopeRevision })
+  const listClient = browserListClient({ preview })
   const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey }), [currentScopeKey, listClient])
   type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean }
   const lifecycleRef = useRef<LifecycleToken | null>(null)
@@ -103,6 +108,16 @@ export function useConversationList(params: {
     setListRefresh(next)
     return next
   }, [])
+
+  useEffect(() => {
+    const previous = observedScopeRevisionRef.current
+    observedScopeRevisionRef.current = { scopeKey: currentScopeKey, revision: scopeRevision }
+    // Entering a scope already starts its canonical first-page GET. Only a
+    // revision change while that same scope has been observed needs a second,
+    // explicitly post-ACK request.
+    if (previous.scopeKey !== currentScopeKey || previous.revision === scopeRevision) return
+    requestListRefresh()
+  }, [currentScopeKey, requestListRefresh, scopeRevision])
 
   // 当前活跃会话若尚未在服务端清单出现：仅在它已有真实内容时合成置顶项。
   // 空工作区不应在「最近」里出现一个没有任何历史的“新对话”行；这会让
