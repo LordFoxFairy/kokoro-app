@@ -175,7 +175,11 @@ export function WorkspaceRailAccount({
             onClickCapture={(event) => interceptMountedSurfaceNavigation(event, "/app")}
           ><Home aria-hidden="true" />{t("rail.accountHome")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></Link></DropdownMenuItem>
           <DropdownMenuItem asChild><a href="/docs"><CircleHelp aria-hidden="true" />{t("rail.accountHelp")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
-          <DropdownMenuItem asChild><a href="/docs"><FileText aria-hidden="true" />{t("rail.accountDocs")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
+          <DropdownMenuItem asChild><Link
+            href="/app/library"
+            prefetch={false}
+            onClickCapture={(event) => interceptMountedSurfaceNavigation(event, "/app/library")}
+          ><FileText aria-hidden="true" />{t("rail.accountDocs")}<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></Link></DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => void endProductSession()}>
             <LogOut aria-hidden="true" />{t("settings.logout")}

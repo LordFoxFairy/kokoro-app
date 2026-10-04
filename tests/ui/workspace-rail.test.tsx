@@ -643,6 +643,18 @@ it("桌面收起侧栏通过账户菜单打开设置", async () => {
   await waitFor(() => expect(onOpenSettings).toHaveBeenCalledWith("account"))
 })
 
+it("账户文件入口使用已挂载的资料库路由", async () => {
+  renderRail()
+  window.history.replaceState(window.history.state, "", "/app")
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  const files = await screen.findByRole("menuitem", { name: "文件" })
+  expect(files).toHaveAttribute("href", "/app/library")
+  fireEvent.click(files)
+  expect(window.location.pathname).toBe("/app/library")
+})
+
 it("双击标题进入编辑，Enter 提交新题一次并把焦点还给会话行", async () => {
   const { onRenameConversation } = renderRail()
   fireEvent.doubleClick(screen.getByText("旧标题"))
