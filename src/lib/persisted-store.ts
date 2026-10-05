@@ -45,7 +45,12 @@ export function createPersistedStore<T>(options: {
     if (typeof window === "undefined") {
       return null
     }
-    const raw = window.localStorage.getItem(options.key)
+    let raw: string | null
+    try {
+      raw = window.localStorage.getItem(options.key)
+    } catch {
+      return cachedValue
+    }
     if (raw === cachedRaw) {
       return cachedValue
     }

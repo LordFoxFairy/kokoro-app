@@ -91,6 +91,11 @@ async function sessionProbeProxy(nextPort: number): Promise<{
   close: () => Promise<void>
   setFault: (fault: SessionProbeFault) => void
   releasePending: () => void
+  sessionResponseDiagnostics: () => readonly {
+    status: number
+    authenticated: boolean | null
+    completed_at_ms: number
+  }[]
   setListBodyPending: (pending: boolean) => void
   releaseListBodies: () => void
   sessionRequests: () => number
@@ -106,6 +111,7 @@ async function sessionProbeProxy(nextPort: number): Promise<{
   let lists = 0
   let logins = 0
   let holdListBody = false
+  const sessionResponses: { status: number; authenticated: boolean | null; completed_at_ms: number }[] = []
   const pending = new Set<{ request: import("node:http").IncomingMessage; response: import("node:http").ServerResponse }>()
   const pendingListBodies = new Set<{ response: import("node:http").ServerResponse; tail: Buffer }>()
   const resources = new Map<string, { requests: number; upstreamStatuses: number[] }>()
@@ -124,6 +130,26 @@ async function sessionProbeProxy(nextPort: number): Promise<{
     const upstream = httpRequest({ hostname: "127.0.0.1", port: nextPort, method: request.method,
       path: `${target.pathname}${target.search}`, headers: { ...request.headers, host: `localhost:${nextPort}` } }, (reply) => {
       if (resource.upstreamStatuses.length < 8) resource.upstreamStatuses.push(reply.statusCode ?? 0)
+      if (request.method === "GET" && target.pathname === "/api/auth/session") {
+        const chunks: Buffer[] = []
+        let size = 0
+        reply.on("data", (chunk: Buffer) => {
+          if (size + chunk.length <= 64 * 1024) chunks.push(chunk)
+          size += chunk.length
+        })
+        reply.once("end", () => {
+          let authenticated: boolean | null = null
+          if (size <= 64 * 1024) {
+            try {
+              const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { authenticated?: unknown }
+              if (typeof parsed.authenticated === "boolean") authenticated = parsed.authenticated
+            } catch { /* closed diagnostic only */ }
+          }
+          if (sessionResponses.length < 8) {
+            sessionResponses.push({ status: reply.statusCode ?? 0, authenticated, completed_at_ms: Date.now() })
+          }
+        })
+      }
       response.writeHead(reply.statusCode ?? 502, reply.headers)
       if (holdListBody && request.method === "GET" && target.pathname === "/api/session/sessions" && reply.statusCode === 200) {
         const chunks: Buffer[] = []
@@ -221,6 +247,7 @@ async function sessionProbeProxy(nextPort: number): Promise<{
         forward(held.request, held.response)
       }
     },
+    sessionResponseDiagnostics: () => sessionResponses.slice(),
     setListBodyPending: (next) => { holdListBody = next },
     releaseListBodies: () => {
       holdListBody = false
@@ -4017,5 +4044,97 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 50_000)
 
+  it("R233 keeps an authenticated deep link recoverable when only its Conversation index read is denied", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(() => {
+        const originalGetItem = Storage.prototype.getItem
+        const target = window as unknown as { __kokoroDeniedConversationReads: number }
+        target.__kokoroDeniedConversationReads = 0
+        Storage.prototype.getItem = function (candidate: string): string | null {
+          if (candidate === "kokoro.web.conversations.direct") {
+            target.__kokoroDeniedConversationReads += 1
+            throw new DOMException("conversation storage denied", "SecurityError")
+          }
+          return originalGetItem.call(this, candidate)
+        }
+      })
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const pageErrors: string[] = []
+      page.on("pageerror", (error) => pageErrors.push(error.name))
+      const target = `http://localhost:${nextPort}/app?conversation=session-list-a`
+
+      const deniedReads = async (): Promise<number> => page.evaluate(() =>
+        (window as unknown as { __kokoroDeniedConversationReads?: number }).__kokoroDeniedConversationReads ?? 0)
+        .catch(() => -1)
+      const diagnostic = async (stage: string): Promise<string> => {
+        const observed = browserDiagnostics.get(page)
+        return `${stage} selective Conversation storage diagnostic: ${JSON.stringify({
+          denied_conversation_reads: await deniedReads(),
+          session_responses: proxy.sessionResponseDiagnostics(),
+          snapshot_requests: sessionSnapshotRequests,
+          boundary_requests: sessionBoundaryRequests.slice(-12),
+          runtime_loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
+          app_frame_loading_count: await diagnosticWithin(page.getByTestId("app-frame-loading").count(), -1),
+          body_count: await diagnosticWithin(page.getByText("R143 authoritative conversation A body", { exact: true }).count(), -1),
+          composer_count: await diagnosticWithin(page.locator('[data-slot="composer-input"]').count(), -1),
+          page_error_categories: pageErrors,
+          browser_error_categories: [...observed?.categories ?? []],
+          request_failures: observed?.requestFailures ?? [],
+          url_path_search: (() => { try { const url = new URL(page.url()); return `${url.pathname}${url.search}` } catch { return "<invalid>" } })(),
+        })}`
+      }
+      const converge = async (stage: "cold" | "reload"): Promise<void> => {
+        const sessionBaseline = proxy.sessionResponseDiagnostics().length
+        const snapshotBaseline = sessionSnapshotRequests
+        const deadline = Date.now() + 12_000
+        const remaining = (): number => Math.max(1, deadline - Date.now())
+        try {
+          const response = stage === "cold"
+            ? await page.goto(target, { waitUntil: "domcontentloaded", timeout: remaining() })
+            : await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+          expect(response?.status()).toBe(200)
+          await expect.poll(() => proxy.sessionResponseDiagnostics().slice(sessionBaseline), { timeout: remaining() })
+            .toContainEqual(expect.objectContaining({ status: 200, authenticated: true }))
+          await expect.poll(deniedReads, { timeout: remaining() }).toBeGreaterThan(0)
+          await expect.poll(() => sessionSnapshotRequests, { timeout: remaining() }).toBeGreaterThan(snapshotBaseline)
+          await page.getByText("R143 authoritative conversation A body", { exact: true })
+            .waitFor({ state: "visible", timeout: remaining() })
+          const composer = page.locator('[data-slot="composer-input"]')
+          await composer.waitFor({ state: "visible", timeout: remaining() })
+          await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
+          expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+          expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+          expect(pageErrors).toEqual([])
+          expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(
+            "/app?conversation=session-list-a",
+          )
+          expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
+        } catch (error) {
+          throw new Error(await diagnostic(stage), { cause: error })
+        }
+      }
+
+      await converge("cold")
+      await converge("reload")
+    } finally {
+      sessionSnapshotRequests = 0
+      sessionBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
 
 })
