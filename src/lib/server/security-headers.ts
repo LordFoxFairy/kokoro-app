@@ -6,7 +6,36 @@ const BASE_SECURITY_HEADERS = {
   "X-DNS-Prefetch-Control": "off",
 } as const
 
-export function contentSecurityPolicy(nonce: string, development = false): string {
+type LocalUploadPolicyContext = Readonly<{
+  webOrigin: string | undefined
+  localUploadOrigin: string | undefined
+  requestProtocol: string
+  requestHost: string | null
+  requestOrigin: string | null
+}>
+
+function canonicalLocalHttpOrigin(raw: string | undefined): URL | null {
+  if (!raw) return null
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+      || url.origin !== raw || url.port === "0") return null
+    return url
+  } catch { return null }
+}
+
+function localUploadSource(development: boolean, context: LocalUploadPolicyContext | undefined): string {
+  if (!development || context === undefined) return ""
+  const web = canonicalLocalHttpOrigin(context.webOrigin)
+  const upload = canonicalLocalHttpOrigin(context.localUploadOrigin)
+  // Next dev may normalize its URL to localhost. Compare the actual Host only
+  // against trusted configuration; never use request headers as policy sources.
+  if (web === null || upload === null || context.requestProtocol !== web.protocol || context.requestHost !== web.host
+    || context.requestOrigin !== null && context.requestOrigin !== web.origin) return ""
+  return ` ${upload.origin}`
+}
+
+export function contentSecurityPolicy(nonce: string, development = false, localUpload?: LocalUploadPolicyContext): string {
   const developmentSources = development ? " 'unsafe-eval'" : ""
   return [
     "default-src 'self'",
@@ -15,7 +44,7 @@ export function contentSecurityPolicy(nonce: string, development = false): strin
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https:",
-    "connect-src 'self' https: wss:",
+    `connect-src 'self' https: wss:${localUploadSource(development, localUpload)}`,
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "frame-src 'self' https:",
@@ -26,10 +55,10 @@ export function contentSecurityPolicy(nonce: string, development = false): strin
   ].join("; ")
 }
 
-export function securityHeaders(nonce: string, development = false): Record<string, string> {
+export function securityHeaders(nonce: string, development = false, localUpload?: LocalUploadPolicyContext): Record<string, string> {
   return {
     ...BASE_SECURITY_HEADERS,
-    "Content-Security-Policy": contentSecurityPolicy(nonce, development),
+    "Content-Security-Policy": contentSecurityPolicy(nonce, development, localUpload),
   }
 }
 

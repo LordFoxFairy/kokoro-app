@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+import { contentSecurityPolicy } from "@/lib/server/security-headers"
+
 const { issueIamInteractionCsrf } = vi.hoisted(() => ({ issueIamInteractionCsrf: vi.fn() }))
 
 vi.mock("@/lib/server/iam-interaction-csrf", async (original) => ({
@@ -96,5 +98,77 @@ describe("signed sign-in expiration boundary", () => {
     const { isIamSignInExpired, rawIamSignInQuery } = await import("@/lib/server/iam-sign-in-target")
     expect(isIamSignInExpired(query)).toBe(expired)
     expect(rawIamSignInQuery(`${ORIGIN}/auth/sign-in${query}`)).toBe(query)
+  })
+})
+
+describe("development local upload CSP boundary", () => {
+  const webOrigin = "http://127.0.0.1:3311"
+  const uploadOrigin = "http://127.0.0.1:39190"
+  beforeEach(() => {
+    vi.stubEnv("NODE_ENV", "development")
+    vi.stubEnv("KOKORO_WEB_ORIGIN", webOrigin)
+    vi.stubEnv("KOKORO_WEB_LOCAL_UPLOAD_ORIGIN", uploadOrigin)
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  it("sets the exact source on both the document and forwarded request CSP without changing other directives", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: { host: "127.0.0.1:3311" } }))
+    const policy = response.headers.get("content-security-policy")!
+    const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
+    expect(policy).toBe(contentSecurityPolicy(nonce, true).replace("connect-src 'self' https: wss:", `connect-src 'self' https: wss: ${uploadOrigin}`))
+    expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(policy)
+    expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
+    expect(response.headers.get("vary")).toBe("Cookie")
+  })
+
+  it("uses the configured Host when Next normalizes the listener URL to localhost", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest("http://localhost:3311/app/skills", {
+      headers: { host: "127.0.0.1:3311", origin: webOrigin },
+    }))
+    expect(response.headers.get("content-security-policy")).toContain(`connect-src 'self' https: wss: ${uploadOrigin};`)
+  })
+
+  it("keeps the source blocked when Origin conflicts with the configured Host", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest("http://localhost:3311/app/skills", {
+      headers: { host: "127.0.0.1:3311", origin: "http://evil.test:3311" },
+    }))
+    const policy = response.headers.get("content-security-policy")!
+    const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
+    expect(policy).toBe(contentSecurityPolicy(nonce, true))
+  })
+
+  it.each(["production", "test", ""])("preserves the original CSP outside explicit development (%s)", async (mode) => {
+    vi.stubEnv("NODE_ENV", mode)
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: { host: "127.0.0.1:3311" } }))
+    const policy = response.headers.get("content-security-policy")!
+    const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
+    expect(policy).toBe(contentSecurityPolicy(nonce))
+  })
+
+  it("ignores browser-supplied upload policy values when trusted configuration is absent", async () => {
+    vi.stubEnv("KOKORO_WEB_LOCAL_UPLOAD_ORIGIN", undefined)
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(`${webOrigin}/app/skills`, { headers: {
+      "x-kokoro-web-local-upload-origin": uploadOrigin, "origin": uploadOrigin,
+      "content-security-policy": `connect-src http: ${uploadOrigin}`,
+    } }))
+    const policy = response.headers.get("content-security-policy")!
+    const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
+    expect(policy).toBe(contentSecurityPolicy(nonce, true))
+  })
+
+  it("does not use Origin or forwarded headers to turn a different Host into the configured page", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest("http://evil.test:3311/app/skills", { headers: {
+      "host": "evil.test:3311", "origin": webOrigin,
+      "x-forwarded-host": "127.0.0.1:3311", "x-forwarded-proto": "http",
+    } }))
+    const policy = response.headers.get("content-security-policy")!
+    const nonce = /'nonce-([^']+)'/u.exec(policy)![1]!
+    expect(policy).toBe(contentSecurityPolicy(nonce, true))
   })
 })

@@ -37,7 +37,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     headers.delete("x-kokoro-sign-in-feedback")
   }
   headers.delete("x-kokoro-sign-in-proof")
-  const responseSecurityHeaders = securityHeaders(nonce, process.env.NODE_ENV === "development")
+  const responseSecurityHeaders = securityHeaders(nonce, process.env.NODE_ENV === "development", {
+    webOrigin: process.env.KOKORO_WEB_ORIGIN,
+    localUploadOrigin: process.env.KOKORO_WEB_LOCAL_UPLOAD_ORIGIN,
+    requestProtocol: request.nextUrl.protocol,
+    requestHost: request.headers.get("host"),
+    requestOrigin: request.headers.get("origin"),
+  })
   const policy = responseSecurityHeaders["Content-Security-Policy"]
   headers.set("x-nonce", nonce)
   if (policy !== undefined) headers.set("Content-Security-Policy", policy)
