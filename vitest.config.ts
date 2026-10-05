@@ -9,6 +9,8 @@ export default defineConfig({
     },
   },
   test: {
+    // The suite owns Chromium and Next child processes, so keep file parallelism within an explicit worker budget.
+    maxWorkers: 4,
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
     // tmp/ 是 gitignored 暂存区（异构迁移草稿等）：绝不纳入 Web
