@@ -9,6 +9,30 @@ afterEach(() => vi.unstubAllGlobals())
 const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "owner-1" }
 const reference = { url: "https://objects.example/put?signature=TOKEN", method: "PUT" as const, required_headers: { "content-type": "application/zip" as const }, expires_at: "2999-01-01T00:00:00Z" }
 
+it("accepts final Proxy no-store directives for Draft and preserves authorization errors", async () => {
+  const draft = { skill_id: "mine", series_id: "series", revision: 1, status: "draft", replayed: false }
+  vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify({ data: draft }), { status: 201, headers: { ...headers, "cache-control": "private, no-store, max-age=0" } }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "session_invalid", message: "revoked", retryable: false } }), { status: 401, headers: { ...headers, "cache-control": "private, no-store, max-age=0" } })))
+  const client = createSkillPublishClient()
+  await expect(client.createDraft({ display_name: "Mine", summary: "", tags: [] }, "create-key")).resolves.toEqual(draft)
+  await expect(client.publishDraft("mine", "publish-key")).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
+})
+
+it("keeps no-store, media, request ID and receipt guards under final Proxy headers", async () => {
+  const data = { source_ref: "skill:mine", revision: "2", status: "active", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: false }
+  for (const overrides of [
+    { "cache-control": "private, max-age=0" }, { "cache-control": "x-no-store" },
+    { "cache-control": 'extension="value, no-store, value"' }, { "cache-control": "no-store=1" },
+    { "content-type": "text/plain" }, { "x-request-id": "invalid request id" },
+  ]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }), { status: 200, headers: { ...headers, "cache-control": "private, no-store, max-age=0", ...overrides } })))
+    await expect(createSkillPublishClient().publishDraft("mine", "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+  }
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { ...data, unexpected: true } }), { status: 200, headers: { ...headers, "cache-control": "private, no-store, max-age=0" } })))
+  await expect(createSkillPublishClient().publishDraft("mine", "key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+})
+
 it("sends the exact zero-byte Publish command with one stable key and strict ACTIVE receipt", async () => {
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { source_ref: "skill:mine", revision: "2", status: "active", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: false } }), { status: 200, headers }))
   vi.stubGlobal("fetch", fetchMock)

@@ -1,6 +1,6 @@
 import { z, type ZodTypeAny } from "zod"
 
-import { HubClientError, createHubClient } from "./client"
+import { HubClientError, createHubClient, hasHubNoStoreDirective } from "./client"
 import {
   beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema,
   completeSkillUploadSchema, createSkillDraftRequestSchema, skillDraftSchema,
@@ -10,7 +10,7 @@ import {
 } from "./schemas"
 
 const responseHeaders = (response: Response): boolean =>
-  response.headers.get("cache-control") === "no-store"
+  hasHubNoStoreDirective(response.headers)
   && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
   && /^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
 

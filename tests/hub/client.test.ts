@@ -14,6 +14,50 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe("browser Hub cache directive boundary", () => {
+  const consumers = [
+    { name: "personal Skills", read: () => createHubClient().listPersonalSkills(), body: { data: { skills: [] } }, expected: { skills: [] } },
+    { name: "MCP projection", read: () => createHubClient().listMcpProjections(), body: { data: { servers: [] } }, expected: { servers: [] } },
+    { name: "installations", read: () => createSkillInstallationClient().list(), body: { data: [] }, expected: { data: [] } },
+  ]
+  it.each(consumers)("accepts final Proxy no-store directives for $name", async ({ read, body, expected }) => {
+    for (const cacheControl of ["private, no-store, max-age=0", "NO-STORE, private", "private,\tno-store\t, max-age=0", 'extension="value, no-store, value", no-store']) {
+      const response = publicResponse(body)
+      response.headers.set("cache-control", cacheControl)
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+      await expect(read()).resolves.toEqual(expected)
+    }
+  })
+  it.each(consumers)("rejects missing or lookalike no-store directives for $name", async ({ read, body }) => {
+    for (const cacheControl of [null, "private, max-age=0", "no-cache", "x-no-store", "no-store-extra", "no-store=1", 'extension="value, no-store, value"', 'no-store, extension="unterminated']) {
+      const response = publicResponse(body)
+      if (cacheControl === null) response.headers.delete("cache-control")
+      else response.headers.set("cache-control", cacheControl)
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+      await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    }
+  })
+  it.each(consumers)("preserves strict media, request ID and schema validation for $name", async ({ read, body }) => {
+    for (const [name, value] of [["content-type", "text/plain"], ["x-request-id", "invalid request id"], ["x-request-id", ""]]) {
+      const response = publicResponse(body)
+      response.headers.set("cache-control", "private, no-store, max-age=0")
+      response.headers.set(name!, value!)
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+      await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    }
+    const response = publicResponse({ ...body, unexpected: true })
+    response.headers.set("cache-control", "private, no-store, max-age=0")
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+    await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
+  })
+  it.each(consumers)("preserves typed authorization rejection under final Proxy headers for $name", async ({ read }) => {
+    const response = publicResponse({ error: { code: "session_invalid", message: "revoked", retryable: false } }, 401)
+    response.headers.set("cache-control", "private, no-store, max-age=0")
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+    await expect(read()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
+  })
+})
+
 describe("hub client", () => {
   it("rejects non-JSON success and error projection bodies but accepts UTF-8 JSON", async () => {
     const headers = { "cache-control": "no-store", "x-request-id": "req-json" }

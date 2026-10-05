@@ -231,6 +231,28 @@ const publicReadErrorSchema = z.object({ error: z.object({
   retryable: z.boolean(),
 }).strict() }).strict()
 
+/** Browser Proxy can add private/max-age directives to the owner's no-store. */
+export function hasHubNoStoreDirective(headers: Headers): boolean {
+  const value = headers.get("cache-control")
+  if (value === null) return false
+  let quoted = false
+  let escaped = false
+  let start = 0
+  let found = false
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index]
+    if (escaped) { escaped = false; continue }
+    if (quoted && char === "\\") { escaped = true; continue }
+    if (char === '"') { quoted = !quoted; continue }
+    // A comma inside an extension's quoted value is not a directive boundary.
+    if (char === "," && !quoted) {
+      found ||= value.slice(start, index).trim().toLowerCase() === "no-store"
+      start = index + 1
+    }
+  }
+  return !quoted && !escaped && (found || value.slice(start).trim().toLowerCase() === "no-store")
+}
+
 async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T, signal?: AbortSignal): Promise<z.infer<T>> {
   let response: Response
   try {
@@ -238,7 +260,7 @@ async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T, s
   } catch (error) {
     throw new HubClientError(isAbortError(error) ? "aborted" : "network", describeUnknown(error), null, null)
   }
-  if (response.headers.get("cache-control") !== "no-store"
+  if (!hasHubNoStoreDirective(response.headers)
     || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
     || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
     throw new HubClientError("parse", "invalid BFF read response headers", null, response.status)
@@ -510,7 +532,7 @@ export function createSkillInstallationClient(): SkillInstallationClient {
     }
     const requestId = response.headers.get("x-request-id")
     const retryAfter = response.status === 429 ? response.headers.get("retry-after") : null
-    if (response.headers.get("cache-control") !== "no-store" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
+    if (!hasHubNoStoreDirective(response.headers) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
       || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
       || retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter)) {
       throw new HubClientError("parse", "Invalid installation response headers", null, response.status)
