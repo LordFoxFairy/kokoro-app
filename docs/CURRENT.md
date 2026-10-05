@@ -1,3 +1,11 @@
+## R254 专案文件夹与常驻普通会话（2026-10-05；源码交付，页面待验）
+
+现侧栏每个专案可独立展开所属持久会话，普通会话区常驻；展开与概览选择分开，正文仍一份当前 engine。列表组职责在既有 workspace-rail-session-list.tsx，Shell 只组合；没有新关系实体、后端协议或目录框架。Move 只允许真实可见会话叶的匹配回执导航，退役读取不复用旧首页请求，撤准入清旧展开/删除意图；重名展开动作可辨。
+
+Root 最终句柄30884：contract273/20、architecture50/4、全辅助2619/153（排除 tests/system/**）、lint/typecheck/build及diff检查全0。独审23冻结路径0P0/P1/P2，末尾单空行由Root字节核对后复跑；原四mixed正文保留。系统fixture和真实浏览器E2E未执行，不用辅助绿报页面完成。
+
+原3310仍旧运行副本，尚未发布本片；当前真实项目/普通会话CRUD、Move、刷新、撤权、窄屏和登录链保持待验。Root完整70组11通过/6失败/14待复测/38未验/1支付后置不变；上方交付事实覆盖下方历史“源码候选/未实施”，不抹掉历史失败。
+
 ## R251 Web唯一Skills V2消费者（2026-10-05；源码候选待Root验收）
 
 固定BFF正式local main `f3c64d90f4a6fd7083252ff3d1646c5ad1dee292`，唯一public `8.0.0` /v1，canonical SHA256 `278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f`。现snapshot复制owner原字节，两既有generator正常write/check，failure仅三provenance字段变，Team9图与15派生文件byte-equal。现hub/schema六字段Validate只接受zip-v2，旧V1仅拒绝负控，不新增parser union、UI/client/flow/adapter或ZIP解析。

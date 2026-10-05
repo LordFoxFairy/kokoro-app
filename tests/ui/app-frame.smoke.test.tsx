@@ -55,7 +55,7 @@ import { AppFrame, COMPACT_DESKTOP_RAIL_BREAKPOINT, type EmptyStateProps } from 
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
 import { KokoroProjectWorkspace } from "@/features/app/kokoro-project-workspace"
 import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
-import { SessionClientError } from "@/engine/client"
+import { createSessionClient, SessionClientError } from "@/engine/client"
 import { ConversationMoveError } from "@/engine/conversation-move-error"
 import * as pageClients from "@/ui/shell/page-clients"
 
@@ -266,11 +266,20 @@ it("Kokoro 直接会话首页以 Composer 为主，而项目入口不替代该�
 
 it("站点路由把直接会话与专案内会话投影为两个独立工作区", async () => {
   buildEngine()
-  mockedPathname.value = "/app/project/kokoro"
+  mockedPathname.value = "/app/project/project_kokoro"
+  window.history.replaceState({}, "", mockedPathname.value)
+  const listSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "http://s.local" }))
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    if (url.pathname === "/api/hub/projects") return Response.json({ data: { projects: [{ id: "project_kokoro", name: "Kokoro", slug: "workspace", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }] }, meta: { request_id: "req_route_workspace" } })
+    if (url.pathname === "/sessions") return Response.json({ sessions: [{ session_id: url.searchParams.get("project_ref") === "project_kokoro" ? "conv_project" : "conv_direct", title: url.searchParams.get("project_ref") === "project_kokoro" ? "本专案已发送会话" : "外部普通已发送会话", updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null })
+    return Response.json({}, { status: 503 })
+  })
+  try {
   render(
     <ThemeProvider>
       <LocaleProvider>
-        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        <KokoroAppSurface engine={engine} desktopRailCollapsed={false} projectReadBoundary={{ admitted: true, subject: "route-reader", generation: 1 }} />
       </LocaleProvider>
     </ThemeProvider>,
   )
@@ -278,9 +287,16 @@ it("站点路由把直接会话与专案内会话投影为两个独立工作区"
   await waitFor(() => {
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(document.querySelector('[data-slot="direct-chat-welcome"]')).toBeNull()
-    expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    const folder = document.querySelector('[data-project-id="project_kokoro"]') as HTMLElement
+    expect(folder).not.toBeNull()
+    expect(within(folder).getByRole("link", { name: "Kokoro" })).toHaveAttribute("href", "/app/project/project_kokoro")
+    expect(within(folder).getByRole("navigation", { name: "Kokoro" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    expect(within(folder).getByRole("button", { name: "本专案已发送会话" })).toBeInTheDocument()
+    expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveTextContent("外部普通已发送会话")
+    expect(screen.queryByRole("navigation", { name: "专案会话" })).toBeNull()
     expect(screen.getAllByRole("link", { name: "Kokoro" }).some((link) => link.getAttribute("href") === "/app")).toBe(true)
   })
+  } finally { cleanup(); listSpy.mockRestore(); fetchSpy.mockRestore() }
 })
 
 it("专案路由首帧展开 scoped rail，而直接会话仍保持紧凑 rail", async () => {
@@ -453,9 +469,15 @@ it("恢复了会话消息时目录路由仍保持独立，不被 ConversationThr
 
 it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer 与项目上下文", async () => {
   buildEngine()
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => String(input) === "/api/hub/projects"
-    ? Response.json({ data: { projects: [{ id: "project_kokoro", name: "Kokoro", slug: "workspace", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }] }, meta: { request_id: "req_workspace" } })
-    : Response.json({}, { status: 503 }))
+  window.history.replaceState({}, "", "/app/project/project_kokoro")
+  const listSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "http://s.local" }))
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    if (url.pathname === "/api/hub/projects") return Response.json({ data: { projects: [{ id: "project_kokoro", name: "Kokoro", slug: "workspace", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }] }, meta: { request_id: "req_workspace" } })
+    if (url.pathname === "/sessions") return Response.json({ sessions: [{ session_id: url.searchParams.get("project_ref") === "project_kokoro" ? "conv_project" : "conv_direct", title: url.searchParams.get("project_ref") === "project_kokoro" ? "本专案已发送会话" : "外部普通已发送会话", updated_at: "2026-10-01T00:00:00Z" }], next_cursor: null })
+    return Response.json({}, { status: 503 })
+  })
+  try {
   render(
     <ThemeProvider>
       <LocaleProvider>
@@ -474,7 +496,11 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
 
   await waitFor(() => {
     expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
-    expect(screen.getByRole("navigation", { name: "专案会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    const folder = document.querySelector('[data-project-id="project_kokoro"]') as HTMLElement
+    expect(within(folder).getByRole("navigation", { name: "Kokoro" })).toHaveAttribute("data-conversation-list", "project-conversation")
+    expect(within(folder).getByRole("button", { name: "本专案已发送会话" })).toBeInTheDocument()
+    expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveTextContent("外部普通已发送会话")
+    expect(screen.queryByRole("navigation", { name: "专案会话" })).toBeNull()
     expect(screen.getByRole("form", { name: "消息编辑区" })).toBeInTheDocument()
     expect(document.querySelector('[data-slot="project-workspace"]')).toBeInTheDocument()
     expect(screen.getByText("文件和资源")).toBeInTheDocument()
@@ -485,6 +511,7 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
     expect(screen.queryByText(/Kokoro 1\.6/u)).toBeNull()
     expect(screen.getByRole("heading", { name: "Kokoro" })).toBeInTheDocument()
   })
+  } finally { cleanup(); listSpy.mockRestore(); fetchSpy.mockRestore() }
 })
 
 it("A→B 专案切换会清除 A 的失败上传意图与重试身份", async () => {
@@ -1131,6 +1158,7 @@ it("活动会话的确认Move先按回执导航而不被来源缓存驱逐误伤
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-active-projects" },
   }), { status: 200, headers: { "content-type": "application/json" } }))
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
   render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
     projectReadBoundary={{ admitted: true, subject: "subject-active", generation: 1 }} />
   </LocaleProvider></ThemeProvider>)
@@ -1234,7 +1262,9 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
   window.history.replaceState(window.history.state, "", `/app?conversation=${sessionId}`)
   const view = render(renderFrame())
 
-  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+  const countSourceReads = () => listSessions.mock.calls.filter(call => call[1]?.kind === "direct").length
+  await waitFor(() => expect(countSourceReads()).toBe(2))
+  const beforeMoveSourceReads = countSourceReads()
   const sessionButton = await screen.findByRole("button", { name: "A" })
   const sessionRow = sessionButton.closest('[data-slot="sidebar-menu-item"]')
   expect(sessionRow).not.toBeNull()
@@ -1248,7 +1278,7 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
 
   expect(window.location.pathname).toBe("/app")
   expect(window.location.search).toBe(`?conversation=${otherSessionId}`)
-  expect(listSessions.mock.calls.length).toBeGreaterThan(1)
+  await waitFor(() => expect(countSourceReads()).toBeGreaterThan(beforeMoveSourceReads))
 
   const callsBeforeReplacementScope = listSessions.mock.calls.length
   window.history.replaceState(window.history.state, "", `/app/project/${replacementProjectId}?conversation=${sessionId}`)
@@ -1294,7 +1324,9 @@ it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async ()
     </LocaleProvider></ThemeProvider>
   )
   const view = render(renderFrame())
-  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+  const countSourceReads = () => listSessions.mock.calls.filter(call => call[1]?.kind === "direct").length
+  await waitFor(() => expect(countSourceReads()).toBe(2))
+  const beforeMoveSourceReads = countSourceReads()
   const row = (await screen.findByRole("button", { name: "Scope A" })).closest('[data-slot="sidebar-menu-item"]')
   expect(row).not.toBeNull()
   fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "移动会话 Scope A" }))
@@ -1308,6 +1340,7 @@ it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async ()
     view.rerender(renderFrame(replacementProjectId))
   })
   await waitFor(() => expect(listSessions.mock.calls.length).toBeGreaterThan(callsBeforeReplacementScope))
+  await waitFor(() => expect(countSourceReads()).toBeGreaterThan(beforeMoveSourceReads))
 
   expect(window.location.pathname).toBe(`/app/project/${replacementProjectId}`)
 })

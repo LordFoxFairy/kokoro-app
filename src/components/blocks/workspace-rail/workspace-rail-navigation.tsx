@@ -2,7 +2,7 @@
 
 import { type Dispatch, type MouseEvent, type PointerEvent, type RefObject, type ReactNode, type SetStateAction } from "react"
 import Link from "next/link"
-import { Folder, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
+import { ChevronRight, Folder, MessageSquareMore, Plus, Search, SquarePen, X } from "lucide-react"
 
 import { BrandMark } from "@/components/blocks/brand-mark/brand-mark"
 import { Button } from "@/components/ui/button"
@@ -199,6 +199,9 @@ export type WorkspaceRailNavigationProps = {
   projectActive: boolean
   projects?: readonly WorkspaceRailProject[]
   orderedProjects: WorkspaceRailProject[]
+  expandedProjectIds: ReadonlySet<string>
+  onToggleProject: (id: string) => void
+  renderProjectConversations: (project: WorkspaceRailProject) => ReactNode
   projectListStatus?: "blocked" | "loading" | "ready" | "error"
   projectListRetryable?: boolean
   onRetryProjects?: () => void
@@ -230,6 +233,9 @@ export function WorkspaceRailNavigation({
   projectActive,
   projects,
   orderedProjects,
+  expandedProjectIds,
+  onToggleProject,
+  renderProjectConversations,
   projectListStatus,
   projectListRetryable = false,
   onRetryProjects,
@@ -426,7 +432,7 @@ export function WorkspaceRailNavigation({
           ) : (
             <SidebarMenu data-project-list="true" aria-label={t("firstSite.projects")}>
               {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
-              {orderedProjects.map((project) => {
+              {orderedProjects.map((project, position) => {
                 const active = project.active ?? (projectActive && project.href === projectHref)
                 const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
                 const dragging = dragState?.kind === "project" && dragState.id === project.id
@@ -440,6 +446,13 @@ export function WorkspaceRailNavigation({
                     data-dragging={dragging ? "true" : "false"}
                     data-drag-over={dragOver ? "true" : "false"}
                   >
+                    <div className={itemStyles.projectFolderRow}>
+                    <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.folderToggle}
+                      aria-label={t(expandedProjectIds.has(project.id) ? "rail.collapseProjectAria" : "rail.expandProjectAria", { name: project.name, position: position + 1 })} aria-expanded={expandedProjectIds.has(project.id)}
+                      aria-controls={`project-children-${encodeURIComponent(project.id)}`}
+                      onClick={() => onToggleProject(project.id)}>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
                     <SidebarMenuButton asChild type="button" className={itemStyles.itemSelect} isActive={active}>
                       <Link
                         href={project.href}
@@ -457,6 +470,10 @@ export function WorkspaceRailNavigation({
                         <span className={itemStyles.itemTitle}>{project.name}</span>
                       </Link>
                     </SidebarMenuButton>
+                    </div>
+                    {expandedProjectIds.has(project.id) ? <div id={`project-children-${encodeURIComponent(project.id)}`} className={itemStyles.projectFolderChildren}>
+                      {renderProjectConversations(project)}
+                    </div> : null}
                   </SidebarMenuItem>
                 )
               })}

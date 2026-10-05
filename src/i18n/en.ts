@@ -288,6 +288,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Search recent chats",
   "rail.searchClose": "Close search",
   "rail.navAria": "Primary navigation",
+  "rail.expandProjectAria": "Expand project {name} (item {position})",
+  "rail.collapseProjectAria": "Collapse project {name} (item {position})",
   "rail.expandAria": "Expand sidebar",
   "rail.collapseAria": "Collapse sidebar",
   "rail.newChat": "New chat",

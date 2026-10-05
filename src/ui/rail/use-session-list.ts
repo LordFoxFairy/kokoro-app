@@ -27,13 +27,13 @@ function toEntry(item: SessionListItem): SessionListEntry {
 type Lister = Pick<SessionClient, "listSessions">
 type SessionListPage = Awaited<ReturnType<Lister["listSessions"]>>
 
-// React Strict Mode and stable shell remounts can start the same first-page
-// request before the previous promise has settled. Share only the in-flight
-// promise: refreshSignal still forces a new request after a mutation, while
-// concurrent mounts no longer duplicate the network round trip.
+// Deduplicate only effect replay within one admitted hook lifecycle. A
+// different mounted group or renewed admission must own a fresh request.
 const firstPageInflight = new WeakMap<object, Map<unknown, Promise<SessionListPage>>>()
 
 type ListState = {
+  lifecycle: object | null
+  identity: string
   scopeKey: string
   entries: SessionListEntry[]
   cursor: string | undefined
@@ -43,7 +43,7 @@ type ListState = {
   settledFirstPage: SessionListView["settledFirstPage"]
 }
 
-const INITIAL: ListState = { scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false, settledFirstPage: null }
+const INITIAL: ListState = { lifecycle: null, identity: "", scopeKey: "direct", entries: [], cursor: undefined, loading: true, loadingMore: false, error: false, settledFirstPage: null }
 
 function scopeKey(scope: SessionScope): string {
   return scope.kind === "direct" ? "direct" : `project:${scope.projectRef}`
@@ -72,17 +72,16 @@ export function useSessionList(
   refreshSignal: number,
   scope: SessionScope = DIRECT_SESSION_SCOPE,
   onFirstPageSettled?: (settled: NonNullable<SessionListView["settledFirstPage"]>) => void,
+  readBoundary?: { identity: string; admitted: boolean },
 ): SessionListView {
+  const admitted = readBoundary?.admitted ?? true
+  const identity = readBoundary?.identity ?? ""
   const [state, setState] = useState<ListState>(INITIAL)
   const requestGenerationRef = useRef(0)
   const currentScopeKey = scopeKey(scope)
-  // Initial mounts share their string key for StrictMode deduplication. Every
-  // explicit refresh gets a hook-instance-local identity, so a mutation cannot
-  // inherit an equally-numbered request started by an older hook lifecycle.
-  const firstPageRequestKey = useMemo(
-    () => refreshSignal === 0 ? currentScopeKey : {},
-    [currentScopeKey, refreshSignal],
-  )
+  const lifecycle = useMemo(() => ({ admitted, client, scopeKey: currentScopeKey, identity }), [admitted, client, currentScopeKey, identity])
+  // useMemo survives StrictMode effect replay, not real unmount/re-admission.
+  const firstPageRequestKey = useMemo(() => ({ lifecycle, refreshSignal }), [lifecycle, refreshSignal])
 
   // 首页取数（不含同步 setState 供 effect 直接调用，对齐 login-gate idiom）。
   const fetchFirst = useCallback(async (requestGeneration: number): Promise<ListState> => {
@@ -93,6 +92,8 @@ export function useSessionList(
       const page = await listFirstPage(client, firstPageRequestKey, scope)
       const settled = { scopeKey: currentScopeKey, refreshSignal, requestGeneration, success: true }
       return {
+        lifecycle,
+        identity,
         scopeKey: currentScopeKey,
         entries: page.sessions.map(toEntry),
         cursor: page.next_cursor === null ? undefined : page.next_cursor,
@@ -104,6 +105,8 @@ export function useSessionList(
     } catch {
       const settled = { scopeKey: currentScopeKey, refreshSignal, requestGeneration, success: false }
       return {
+        lifecycle,
+        identity,
         scopeKey: currentScopeKey,
         entries: [],
         cursor: undefined,
@@ -113,11 +116,12 @@ export function useSessionList(
         settledFirstPage: settled,
       }
     }
-  }, [client, currentScopeKey, firstPageRequestKey, refreshSignal, scope])
+  }, [client, currentScopeKey, firstPageRequestKey, identity, lifecycle, refreshSignal, scope])
 
   useEffect(() => {
     const generation = ++requestGenerationRef.current
     let live = true
+    if (!admitted) return () => { requestGenerationRef.current += 1 }
     void fetchFirst(generation).then((next) => {
       if (live && generation === requestGenerationRef.current) {
         onFirstPageSettled?.(next.settledFirstPage as NonNullable<SessionListView["settledFirstPage"]>)
@@ -126,10 +130,12 @@ export function useSessionList(
     })
     return () => {
       live = false
+      requestGenerationRef.current += 1
     }
-  }, [currentScopeKey, fetchFirst, onFirstPageSettled, refreshSignal])
+  }, [admitted, currentScopeKey, fetchFirst, onFirstPageSettled, refreshSignal])
 
   const loadMore = useCallback(() => {
+    if (!admitted || state.lifecycle !== lifecycle || state.identity !== identity || state.scopeKey !== currentScopeKey) return
     const generation = requestGenerationRef.current
     const requestScopeKey = currentScopeKey
     setState((prev) => {
@@ -155,9 +161,9 @@ export function useSessionList(
         })
       return { ...prev, loadingMore: true }
     })
-  }, [client, currentScopeKey, scope])
+  }, [admitted, client, currentScopeKey, identity, lifecycle, scope, state.identity, state.lifecycle, state.scopeKey])
 
-  const visibleState = state.scopeKey === currentScopeKey ? state : INITIAL
+  const visibleState = admitted && state.lifecycle === lifecycle && state.identity === identity && state.scopeKey === currentScopeKey ? state : { ...INITIAL, loading: admitted, error: !admitted }
 
   return {
     entries: visibleState.entries,

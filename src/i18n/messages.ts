@@ -75,6 +75,8 @@ export const zh = {
   "rail.searchInputAria": "搜索最近会话",
   "rail.searchClose": "关闭搜索",
   "rail.navAria": "主导航",
+  "rail.expandProjectAria": "展开专案 {name}（第 {position} 项）",
+  "rail.collapseProjectAria": "收起专案 {name}（第 {position} 项）",
   "rail.expandAria": "展开侧栏",
   "rail.collapseAria": "收起侧栏",
   "rail.newChat": "新对话",

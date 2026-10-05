@@ -1,3 +1,11 @@
+## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
+
+没有新增SQL/schema/关系表/Redis/browser storage/缓存事实。项目与会话归属仍BFF Conversation nullable project_ref；未发送local草稿不伪持久会话。mounted展开Set、组list状态与分页generation仅UI实例生命周期，身份变化退役；折叠卸载后再展开重新读第一页，不承诺记住页码或持久化目录树。
+
+现browser Conversation索引只有ACK后按来源scope精确退役的投影，不是真实归属。复用既有coordinator单槽意图与scopeVersion，不复制operation/receipt/owner表，不预取折叠目标。各组verified subject/admission/scope/实例及page cursor隔离，撤权及时隐藏旧私有行；延迟GET/分页/rename/delete/Move不得写入新主体或scope。列表渲染无模型调用/费用操作/新Run，原草稿、消息、Run、checkpoint与存储生命周期不变。当前只有目标D0，尚无R254源码实施或页面PASS。
+
+---
+
 ## R252 匿名首页输入回归修正（Root最窄补充裁决）
 
 审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。

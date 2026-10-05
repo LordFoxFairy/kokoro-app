@@ -1,3 +1,15 @@
+## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
+
+当前态：AppFrame当前scope单份列表传rail，shell二选一显示普通或专案会话，项目行只是平面Link。目标态：现rail内局部固定scope组复用useConversationList/useSessionList，direct常驻，只有展开的project读取本scope列表；正文仍只一个当前engine，不为文件夹另建engine/SSE/缓存/实体。
+
+Root采用现shell局部ScopedConversationGroup，淘汰AppFrame多scope store或预加载全部项目。展开button与项目Link/选中分开；当前project初次可展开，用户之后可折叠而不改URL/Run/草稿。subject/admission变化退役组/展开意图，分页/迟到GET按身份、scope、实例generation隔离。每组loading/empty/error/pagination局部独立，失败不替换其他组。
+
+跨scope选择仅导航canonical目标，不能把普通id交给当前project engine。Move来源取行组固定scope，复用现单槽coordinator和ACK后scopeVersion刷新；非当前行改名/删除复用现client严格receipt，不先打开正文或创建engine。dialog捕获固定scope/handler，晚ACK只结算owner结果，不抢新路由/主体导航。原known/unknown显式同key恢复、草稿、撤权与权限边界不删。
+
+Owner为Web rail/list/route现组件，原web_r247_skill_header_owner唯一writer；Root独占D0/Git/资源。方案与10现source+3现test候选放置表引用Root docs/task.md R254与报告469ce1d1，非所有文件一次性写入授权。第一阶段仅既有三个UI交互测试反例，Root实际RED后才分批窄source；最终真实正规IAM/BFF用户列表CRUD/刷新验收。其他auth/engine/generated/contract/SQL和mixed不改，无新目录/框架。当前为目标设计，源码未实施。
+
+---
+
 ## R252 匿名首页输入回归修正（Root最窄补充裁决）
 
 审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。

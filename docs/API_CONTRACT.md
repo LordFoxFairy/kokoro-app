@@ -1,3 +1,13 @@
+## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
+
+Web只改变mounted view props与callback携带的固定来源scope/read identity，不改变BFF版本化公开/同源wire或generated。列表仍现owner GET，project_ref可空仍唯一归属，展开不创建Conversation/Run或发消息。普通组固定direct，expanded project组各自cursor；不得扫全量本地分组，不请求折叠组。
+
+选行使用现canonical /app?conversation=ID 或 /app/project/P?conversation=ID；列表来源与正文当前scope不可混用。改名/删除/Move仍现SessionClient命令与closed ACK校验，来源scope来自group、tenant/subject来自已验证上下文；pending/unknown/timeout不伪删/搬行，不自动重发。matching ACK只按固定scope失效原索引并刷新已挂载source/target，折叠目标以后展开再读。scope/subject/实例fence禁止迟到数据串组或旧命令抢新选择。没有新API、契约owner、error envelope、idempotency语义或兼容alias。
+
+本节仅R254目标；准入、权限、owner receipt及原网络契约仍现实现事实源。先现UI行为反例，再窄实现与Root真实owner/浏览器复验，不以辅助fixture绿称接口或整页闭环。
+
+---
+
 ## R252 匿名首页输入回归修正（Root最窄补充裁决）
 
 审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。

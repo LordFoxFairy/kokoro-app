@@ -4,7 +4,25 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
+import type { SessionEngine, EngineSnapshot } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
+
+export type RailConversationReads = {
+  engine: SessionEngine | null
+  scope: SessionScope
+  activeId: string | null
+  thread: EngineSnapshot["thread"]
+  isStreaming: boolean
+  identity: string
+  admitted: boolean
+  scopeVersions: ReadonlyMap<string, number>
+  failedMoveScopeKey: string | null
+  focusComposer: () => void
+  onSelect: (scope: SessionScope, id: string) => void
+  onNewChat: (scope: SessionScope) => void
+  onMove: (scope: SessionScope, id: string, target: string | null) => void
+  onDeleteConfirmed: (scope: SessionScope, id: string) => void
+}
 
 /** Public inputs owned by the mounted desktop shell and standalone embeds. */
 export type WorkspaceRailProps = {
@@ -48,7 +66,9 @@ export type WorkspaceRailProps = {
   awaitingIds: ReadonlySet<string>
   onSelectConversation: (id: string) => void
   onDeleteConversation: (id: string) => Promise<boolean>
-  onRequestDelete?: (conversation: ConversationSummary) => void
+  onRequestDelete?: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
+  /** Live per-scope readers. Standalone controlled rails supply their direct list explicitly. */
+  conversationReads?: RailConversationReads
   /** Stable desktop fallback after a destructive delete removes the opener row. */
   deleteDialogFallbackFocusRef?: RefObject<HTMLButtonElement | null>
   /** Shell-owned focus target for settings opened from the portaled account menu. */

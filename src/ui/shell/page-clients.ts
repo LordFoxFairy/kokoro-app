@@ -219,7 +219,7 @@ function conversationStore(scopeKey: string): PersistedStore<ConversationStore> 
   return created
 }
 
-function evictBrowserConversationIndex(scopeKey: string, sessionId: string): void {
+export function evictBrowserConversationIndex(scopeKey: string, sessionId: string): void {
   const liveEngine = pageEngines.get(`live:${scopeKey}`)?.engine
   if (liveEngine) {
     try { liveEngine.reconcileConversationCache(sessionId) }

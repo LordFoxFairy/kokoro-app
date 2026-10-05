@@ -8,7 +8,7 @@ import { useHydrated } from "@/lib/use-hydrated"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
-import { browserConversationMoveCoordinator, browserListClient } from "@/ui/shell/page-clients"
+import { browserConversationMoveCoordinator, browserListClient, evictBrowserConversationIndex } from "@/ui/shell/page-clients"
 import {
   createConversationMoveCoordinator,
   type ConversationMoveResult,
@@ -216,6 +216,8 @@ function AppFrameRuntime({
     moveCoordinator.getSnapshot,
   )
   const moveScopeKey = sessionScopeKey(sessionScope)
+  const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
+  const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
   const conversationsCtl = useConversationList({
     engine,
     preview,
@@ -224,13 +226,29 @@ function AppFrameRuntime({
     isStreaming,
     focusComposer,
     scope: sessionScope,
+    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
     scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
   })
   const conversationMove = moveSnapshot.intent
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
+  const moveRouteContext = typeof window === "undefined" ? null : (() => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete("conversation")
+    return `${url.pathname}${url.search}${url.hash}`
+  })()
+  let moveActor: string | null | undefined
+  try { moveActor = typeof window === "undefined" ? undefined : window.localStorage.getItem("kokoro.web.auth-index-subject") }
+  catch { moveActor = undefined }
+  const isVisibleMoveLeaf = useCallback((sourceScopeKey: string, id: string) => {
+    if (!railReadAdmitted || standaloneSurface || sourceScopeKey !== moveScopeKey || !engine || typeof window === "undefined") return false
+    const url = new URL(window.location.href)
+    const path = sessionScope.kind === "project" ? `/app/project/${encodeURIComponent(sessionScope.projectRef)}` : new URL(chatHref, window.location.href).pathname
+    return url.pathname === path && url.searchParams.getAll("conversation").length === 1 &&
+      url.searchParams.get("conversation") === id && engine.getSnapshot().store?.activeId === id
+  }, [chatHref, engine, moveScopeKey, railReadAdmitted, sessionScope, standaloneSurface])
   const moveViewIdentity = useMemo(
-    () => ({ engine, scopeKey: moveScopeKey, selectionGeneration: moveSelectionGeneration }),
-    [engine, moveScopeKey, moveSelectionGeneration],
+    () => ({ engine, scopeKey: moveScopeKey, selectionGeneration: moveSelectionGeneration, route: moveRouteContext, actor: moveActor, readIdentity: railReadIdentity, admitted: railReadAdmitted, standaloneSurface }),
+    [engine, moveActor, moveRouteContext, moveScopeKey, moveSelectionGeneration, railReadAdmitted, railReadIdentity, standaloneSurface],
   )
   const moveProjectionRef = useRef<{
     engine: typeof engine
@@ -242,7 +260,15 @@ function AppFrameRuntime({
   useLayoutEffect(() => {
     const projection = { engine, scopeKey: moveScopeKey, identity: moveViewIdentity, live: true }
     moveProjectionRef.current = projection
+    const retireNavigation = () => {
+      projection.live = false
+      setMoveSelectionGeneration((generation) => generation + 1)
+    }
+    window.addEventListener("popstate", retireNavigation)
+    window.addEventListener("kokoro:surface-navigation", retireNavigation)
     return () => {
+      window.removeEventListener("popstate", retireNavigation)
+      window.removeEventListener("kokoro:surface-navigation", retireNavigation)
       projection.live = false
       if (moveProjectionRef.current === projection) moveProjectionRef.current = null
     }
@@ -266,24 +292,40 @@ function AppFrameRuntime({
     result: ConversationMoveResult,
     wasActive: boolean,
     projection: NonNullable<typeof moveProjectionRef.current>,
+    submittedRoute: string,
   ) => {
-    if (!projection.live || moveProjectionRef.current !== projection) return
+    if (!projection.live || moveProjectionRef.current !== projection || !projection.identity.admitted) return
+    const actualRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const normalized = new URL(submittedRoute, window.location.origin)
+    normalized.searchParams.delete("conversation")
+    // Matching owner ACK synchronously evicts the source index. Its existing
+    // fallback effect may remove only the old conversation query before this
+    // Promise continuation. That is not a user navigation, but is admissible
+    // only for the captured visible leaf, its matching ACK and retired index.
+    const confirmedFallback = wasActive && result.status === "confirmed" &&
+      !projection.engine?.getSnapshot().store?.conversations.some(entry => entry.id === result.sessionId) &&
+      actualRoute === `${normalized.pathname}${normalized.search}${normalized.hash}`
+    if (actualRoute !== submittedRoute && !confirmedFallback) return
+    try {
+      if (projection.identity.actor === undefined || window.localStorage.getItem("kokoro.web.auth-index-subject") !== projection.identity.actor) return
+    } catch { return }
     if (result.status === "rejected") {
-      setMoveFailureProjection(projection)
+      setMoveFailureProjection({ ...projection, scopeKey: result.sourceScopeKey })
     }
     commitConfirmedMove(result, wasActive)
   }, [commitConfirmedMove])
-  const moveConversation = useCallback((sessionId: string, targetProjectId: string | null) => {
+  const moveConversation = useCallback((sourceScope: typeof sessionScope, sessionId: string, targetProjectId: string | null) => {
     if (!engine) return
     const projection = moveProjectionRef.current
     if (projection === null) return
     setMoveFailureProjection(null)
-    const wasActive = engine.getSnapshot().store?.activeId === sessionId
-    void moveCoordinator.start({ sourceScopeKey: moveScopeKey, sessionId, targetProjectId })
+    const wasActive = isVisibleMoveLeaf(sessionScopeKey(sourceScope), sessionId)
+    const submittedRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    void moveCoordinator.start({ sourceScopeKey: sessionScopeKey(sourceScope), sessionId, targetProjectId })
       .then((result) => {
-        settleConversationMove(result, wasActive, projection)
+        settleConversationMove(result, wasActive, projection, submittedRoute)
       })
-  }, [engine, moveCoordinator, moveScopeKey, settleConversationMove])
+  }, [engine, isVisibleMoveLeaf, moveCoordinator, settleConversationMove])
   const retryConversationMove = useCallback(() => {
     if (!engine) return
     const retained = moveCoordinator.getSnapshot().intent
@@ -291,21 +333,16 @@ function AppFrameRuntime({
     const projection = moveProjectionRef.current
     if (projection === null) return
     setMoveFailureProjection(null)
-    const mountedConversationId = typeof window === "undefined"
-      ? null
-      : new URL(window.location.href).searchParams.get("conversation")
-    const shouldSelectRetainedConversation = mountedConversationId === null
-      || mountedConversationId === retained.sessionId
+    const shouldSelectRetainedConversation = isVisibleMoveLeaf(retained.sourceScopeKey, retained.sessionId)
+    const submittedRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`
     void moveCoordinator.retry().then((result) => {
       if (result !== null) {
         // Retry repairs binding state, but must not steal a different
-        // conversation the user explicitly selected while the outcome was
-        // unknown. An overview/no-query recovery page may select the retained
-        // conversation once its matching ACK is authoritative.
-        settleConversationMove(result, shouldSelectRetainedConversation, projection)
+        // conversation or catalog/overview chosen while the outcome was unknown.
+        settleConversationMove(result, shouldSelectRetainedConversation, projection, submittedRoute)
       }
     })
-  }, [engine, moveCoordinator, settleConversationMove])
+  }, [engine, isVisibleMoveLeaf, moveCoordinator, settleConversationMove])
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
   const routedConversationId = navigationState.resolvedConversationRouteId
@@ -373,6 +410,58 @@ function AppFrameRuntime({
     brandName,
     commandNewChatTimerRef: overlays.commandNewChatTimerRef,
   })
+  // A folder's explicit new-chat action is consumed by the destination's
+  // committed engine, never by a made-up deep-link conversation id. This
+  // mounted handoff is short-lived; it is not a queued owner command.
+  const folderNewChatIntentRef = useRef<{
+    identity: string
+    scopeKey: string
+    target: string
+    actor: string | null
+    timer: number
+  } | null>(null)
+  const clearFolderNewChatIntent = useCallback(() => {
+    const intent = folderNewChatIntentRef.current
+    folderNewChatIntentRef.current = null
+    if (intent !== null) window.clearTimeout(intent.timer)
+  }, [])
+  useEffect(() => {
+    const onNavigation = () => {
+      const intent = folderNewChatIntentRef.current
+      if (intent !== null && `${window.location.pathname}${window.location.search}${window.location.hash}` !== intent.target) clearFolderNewChatIntent()
+    }
+    // Even history returning to the same address must not resurrect a click.
+    window.addEventListener("popstate", clearFolderNewChatIntent)
+    window.addEventListener("kokoro:surface-navigation", onNavigation)
+    return () => {
+      window.removeEventListener("popstate", clearFolderNewChatIntent)
+      window.removeEventListener("kokoro:surface-navigation", onNavigation)
+      clearFolderNewChatIntent()
+    }
+  }, [clearFolderNewChatIntent])
+  useLayoutEffect(() => {
+    const intent = folderNewChatIntentRef.current
+    if (intent === null) return
+    let actor: string | null
+    try { actor = window.localStorage.getItem("kokoro.web.auth-index-subject") }
+    catch { clearFolderNewChatIntent(); return }
+    if (!railReadAdmitted || intent.identity !== railReadIdentity || actor !== intent.actor ||
+      `${window.location.pathname}${window.location.search}${window.location.hash}` !== intent.target) {
+      clearFolderNewChatIntent()
+      return
+    }
+    // Preserve the source scope while the destination lease is committing.
+    if (intent.scopeKey !== moveScopeKey || engine === null) return
+    const destination = engine.getSnapshot()
+    if (destination.canRetryPendingSubmission || destination.machine.phase !== "idle" || destination.connection.status !== "connected") {
+      clearFolderNewChatIntent()
+      return
+    }
+    if (destination.hydrating) return
+    if (!destination.canSubmitMessage) { clearFolderNewChatIntent(); return }
+    clearFolderNewChatIntent() // consume before synchronous engine notification
+    actions.startNewChatAndFocus()
+  }, [actions, clearFolderNewChatIntent, engine, hydrating, machine.phase, moveScopeKey, railReadAdmitted, railReadIdentity])
   const selectConversationWithMoveFence = useCallback((id: string) => {
     setMoveSelectionGeneration((generation) => generation + 1)
     actions.selectConversationWithUrl(id)
@@ -652,7 +741,39 @@ function AppFrameRuntime({
     conversationMove,
     conversationMovePending: conversationMove?.status === "pending",
     conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
-    onMoveConversation: moveConversation,
+    onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
+    conversationReads: {
+      engine, scope: sessionScope, activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
+      identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
+      failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
+      onSelect: (scope, id) => {
+        if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
+        else {
+          setMoveSelectionGeneration((generation) => generation + 1)
+          navigateMountedSurface(scope.kind === "direct" ? `/app?conversation=${encodeURIComponent(id)}` : `/app/project/${encodeURIComponent(scope.projectRef)}?conversation=${encodeURIComponent(id)}`)
+        }
+      },
+      onNewChat: (scope) => {
+        if (sessionScopeKey(scope) === moveScopeKey) startNewChatWithMoveFence()
+        else {
+          clearFolderNewChatIntent()
+          if (!railReadAdmitted) return
+          let actor: string | null
+          try { actor = window.localStorage.getItem("kokoro.web.auth-index-subject") }
+          catch { return }
+          const target = scope.kind === "direct" ? "/app" : `/app/project/${encodeURIComponent(scope.projectRef)}`
+          const timer = window.setTimeout(clearFolderNewChatIntent, 5_000)
+          folderNewChatIntentRef.current = { identity: railReadIdentity, scopeKey: sessionScopeKey(scope), target, actor, timer }
+          setMoveSelectionGeneration((generation) => generation + 1)
+          navigateMountedSurface(target)
+        }
+      },
+      onMove: moveConversation,
+      onDeleteConfirmed: (scope, id) => {
+        if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
+        if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
+      },
+    },
     onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,
     accountTriggerRef,

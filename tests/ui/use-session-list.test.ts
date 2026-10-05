@@ -1,8 +1,9 @@
 // 会话清单水合 hook：首页取数 / 复合游标翻页追加 / refreshSignal 变化重取首页 / 失败回错误态。
+import { StrictMode, createElement, type ReactNode } from "react"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { SessionClientError, type SessionClient } from "@/engine/client"
+import { createSessionClient, SessionClientError, type SessionClient } from "@/engine/client"
 import type { SessionEngine } from "@/engine/machine"
 import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import { useSessionList } from "@/ui/rail/use-session-list"
@@ -18,22 +19,18 @@ afterEach(() => {
 })
 
 describe("useSessionList", () => {
-  it("shares an in-flight first-page request between concurrent mounts", async () => {
+  it("shares an in-flight first-page request across StrictMode effect replay of the same hook", async () => {
     let resolve!: (value: { sessions: ReturnType<typeof item>[], next_cursor: string | null }) => void
-    const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: string | null }>((done) => {
-      resolve = done
-    })
+    const firstPage = new Promise<{ sessions: ReturnType<typeof item>[], next_cursor: string | null }>(done => { resolve = done })
     const listSessions = vi.fn().mockReturnValue(firstPage)
     const client = { listSessions } as Pick<SessionClient, "listSessions">
-    const first = renderHook(() => useSessionList(client, 0))
-    const second = renderHook(() => useSessionList(client, 0))
-
+    const view = renderHook(() => useSessionList(client, 0), {
+      wrapper: ({ children }: { children: ReactNode }) => createElement(StrictMode, null, children),
+    })
     expect(listSessions).toHaveBeenCalledTimes(1)
     resolve({ sessions: [item("shared", "t1")], next_cursor: null })
-    await waitFor(() => expect(first.result.current.entries).toHaveLength(1))
-    await waitFor(() => expect(second.result.current.entries).toHaveLength(1))
-    first.unmount()
-    second.unmount()
+    await waitFor(() => expect(view.result.current.entries).toHaveLength(1))
+    view.unmount()
   })
 
   it("hydrates the first page and exposes hasMore from next_cursor", async () => {
@@ -539,4 +536,32 @@ it("rename read-back subject/route generation discards held detail and never sta
   expect(view.result.current.current.status).toBe("blocked")
   expect(fetchMock).toHaveBeenCalledTimes(2)
   view.unmount()
+})
+
+
+it.each(["unmount", "admission"] as const)("R254 %s退役首页后同scope新准入必须发新GET，迟到旧Response不进入新清单", async (boundary) => {
+  const scope = { kind: "project" as const, projectRef: "project_retired_page" }
+  let releaseOld!: (response: Response) => void
+  const old = new Promise<Response>(resolve => { releaseOld = resolve })
+  const response = (id: string) => Response.json({ sessions: [item(id, "2026-10-01T00:00:00Z")], next_cursor: null })
+  const fetch = vi.spyOn(globalThis, "fetch").mockReturnValueOnce(old).mockResolvedValue(response("fresh-owned-row"))
+  const client = createSessionClient({ baseUrl: "http://s.local" })
+  const useBoundSessionList = ({ admitted }: { admitted: boolean }) => useSessionList(client, 0, scope, undefined, { identity: "same-subject", admitted })
+  const initialProps: { admitted: boolean } = { admitted: true }
+  let view = renderHook(useBoundSessionList, { initialProps })
+  try {
+    expect(fetch).toHaveBeenCalledTimes(1)
+    if (boundary === "unmount") {
+      view.unmount()
+      view = renderHook(useBoundSessionList, { initialProps })
+    } else {
+      view.rerender({ admitted: false })
+      expect(view.result.current.entries).toEqual([])
+      view.rerender({ admitted: true })
+    }
+    expect(fetch).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(view.result.current.entries.map(entry => entry.id)).toEqual(["fresh-owned-row"]))
+    await act(async () => { releaseOld(response("retired-private-row")); await old })
+    expect(view.result.current.entries.map(entry => entry.id)).toEqual(["fresh-owned-row"])
+  } finally { releaseOld(response("retired-private-row")); view.unmount() }
 })

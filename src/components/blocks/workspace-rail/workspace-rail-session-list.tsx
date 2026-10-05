@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type RefObject } from "react"
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { ListFilter, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -18,13 +18,18 @@ import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/context"
 import { filterConversations, type ConversationSummary } from "@/ui/rail/rail-search"
 
-import { type RailDragKind, type RailDragProps, type RailDragState } from "./workspace-rail-actions"
+import { useWorkspaceRailActions, type RailDragKind, type RailDragProps, type RailDragState } from "./workspace-rail-actions"
 import { itemStyles } from "./workspace-rail-styles"
 import { WorkspaceRailSessionItem } from "./workspace-rail-session-item"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
+import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
+import { useConversationList } from "@/ui/shell/use-conversation-list"
+import type { RailConversationReads, WorkspaceRailProps } from "./workspace-rail-types"
 
 export type WorkspaceRailSessionListProps = {
   projectActive: boolean
+  groupLabel?: string
+  blocked?: boolean
   compactDesktop: boolean
   searchOpen: boolean
   query: string
@@ -63,6 +68,8 @@ export type WorkspaceRailSessionListProps = {
 /** Owns the route-scoped conversation list and its local presentation state. */
 export function WorkspaceRailSessionList({
   projectActive,
+  groupLabel,
+  blocked = false,
   compactDesktop,
   searchOpen,
   query,
@@ -107,14 +114,14 @@ export function WorkspaceRailSessionList({
   return (
     <nav
       className={cn(itemStyles.list, !projectActive && !hasConversations && !listLoading && !listError && itemStyles.emptyDirectList)}
-      aria-label={projectActive ? t("firstSite.projectConversations") : t("rail.directChatsAria")}
+      aria-label={groupLabel ?? (projectActive ? t("firstSite.projectConversations") : t("rail.directChatsAria"))}
       data-conversation-list={projectActive ? "project-conversation" : "direct"}
     >
       {!compactDesktop ? (
         <>
           <div className={itemStyles.sectionRow}>
             {/* `conversations` is already scope-filtered by the host. */}
-            <p className={itemStyles.section}>{projectActive ? t("firstSite.projectConversations") : t("rail.directChats")}</p>
+            <p className={itemStyles.section}>{groupLabel ?? (projectActive ? t("firstSite.projectConversations") : t("rail.directChats"))}</p>
             {projectActive ? (
               <div className={itemStyles.sectionActions}>
                 <Button
@@ -124,6 +131,7 @@ export function WorkspaceRailSessionList({
                   aria-label={t("rail.newChat")}
                   data-testid="rail-new-project-conversation"
                   type="button"
+                  disabled={blocked}
                   onClick={() => { onNewChat(); closeNavigation() }}
                 >
                   <Plus aria-hidden="true" />
@@ -153,7 +161,9 @@ export function WorkspaceRailSessionList({
           {conversationMoveFailed ? (
             <div className={itemStyles.listNotice} role="alert">{t("rail.moveFailed")}</div>
           ) : null}
-          {listError && !hasConversations ? (
+          {blocked ? (
+            <p className={itemStyles.empty} role="status">{t("firstSite.unavailable")}</p>
+          ) : listError && !hasConversations ? (
             <div className={itemStyles.listNotice} role="alert">
               <p className={itemStyles.empty}>{t("rail.listError")}</p>
               {onRetryList ? (
@@ -236,4 +246,114 @@ export function WorkspaceRailSessionList({
       ) : null}
     </nav>
   )
+}
+
+type ConversationGroupProps = Omit<WorkspaceRailSessionListProps, "renameInputRef" | "editingId" | "draftTitle" | "onDraftTitleChange" | "onCommitRename" | "onCancelRename" | "onStartRename" | "dragProps" | "dragState" | "dragOverKey"> & {
+  scopeKey: string
+  onRenameConversation: (id: string, title: string) => void
+  onReorderConversations?: (ids: string[]) => void
+}
+
+/** Each rendered list owns its edit/order state independently of selection. */
+export function ConversationGroup({ scopeKey, onRenameConversation, onReorderConversations, ...props }: ConversationGroupProps) {
+  const railRootRef = useRef<HTMLDivElement>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftTitle, setDraftTitle] = useState("")
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameReturnIdRef = useRef<string | null>(null)
+  const renameRestoreFocusRef = useRef(false)
+
+  useEffect(() => {
+    if (editingId !== null) {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }
+  }, [editingId])
+
+  const startRename = (id: string, current: string) => {
+    renameReturnIdRef.current = id
+    renameRestoreFocusRef.current = false
+    setEditingId(id)
+    setDraftTitle(current)
+  }
+
+  const focusRenamedConversation = () => {
+    const id = renameReturnIdRef.current
+    if (!id) return
+    window.requestAnimationFrame(() => {
+      const target = [...(railRootRef.current?.querySelectorAll<HTMLElement>('[data-conversation-id]') ?? [])]
+        .find((element) => element.dataset.conversationId === id)
+      target?.focus()
+    })
+  }
+
+  const cancelRename = (restoreFocus = false) => {
+    renameRestoreFocusRef.current = restoreFocus || renameRestoreFocusRef.current
+    setEditingId(null)
+    setDraftTitle("")
+    if (renameRestoreFocusRef.current) focusRenamedConversation()
+  }
+
+  const commitRename = (current: string, restoreFocus = false) => {
+    const value = draftTitle.trim()
+    if (editingId !== null && value !== "" && value !== current) {
+      onRenameConversation(editingId, value)
+    }
+    cancelRename(restoreFocus)
+  }
+
+  const { orderedConversations, dragProps, dragState, dragOverKey } = useWorkspaceRailActions({
+    projectItems: [], conversations: props.conversations, conversationScopeKey: scopeKey,
+    ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
+  })
+  return <div ref={railRootRef}><WorkspaceRailSessionList {...props}
+    conversations={orderedConversations}
+    renameInputRef={renameInputRef} editingId={editingId} draftTitle={draftTitle}
+    onDraftTitleChange={setDraftTitle} onCommitRename={commitRename} onCancelRename={cancelRename} onStartRename={startRename}
+    dragProps={dragProps} dragState={dragState} dragOverKey={dragOverKey}
+  /></div>
+}
+
+type ScopedGroupProps = Pick<WorkspaceRailSessionListProps,
+  "compactDesktop" | "query" | "searchOpen" | "awaitingIds" | "closeNavigation" | "onNewChat" |
+  "groupLabel" | "conversationMove" | "conversationMovePending" | "conversationMoveFailed" | "onRetryConversationMove"
+> & {
+  scope: SessionScope
+  reads: RailConversationReads
+  preview: boolean
+  projects: NonNullable<WorkspaceRailProps["projects"]>
+  projectListReady: boolean
+  onRequestDelete: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
+}
+
+/** A folder reads only its canonical list; it never creates an engine or SSE. */
+export function ScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
+  const t = useT()
+  const key = sessionScopeKey(desiredScope)
+  const projectRef = desiredScope.kind === "project" ? desiredScope.projectRef : null
+  const scope = useMemo<SessionScope>(() => projectRef === null ? DIRECT_SESSION_SCOPE : { kind: "project", projectRef }, [projectRef])
+  const current = key === sessionScopeKey(reads.scope)
+  const controller = useConversationList({
+    engine: current ? reads.engine : null, preview,
+    activeId: current ? reads.activeId : null, thread: reads.thread,
+    isStreaming: current && reads.isStreaming, focusComposer: reads.focusComposer, scope,
+    scopeRevision: reads.scopeVersions.get(key) ?? 0,
+    readBoundary: { identity: reads.identity, admitted: reads.admitted },
+    onDeleteConfirmed: reads.onDeleteConfirmed,
+  })
+  const destinations = projectListReady ? [
+    ...(scope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
+    ...projects.filter((project) => scope.kind !== "project" || project.id !== scope.projectRef).map((project) => ({ id: project.id, name: project.name })),
+  ] : []
+  return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
+    conversations={controller.conversations} hasConversations={controller.conversations.length > 0}
+    activeId={current ? reads.activeId : null}
+    listLoading={controller.loading} listLoadingMore={controller.loadingMore} listError={controller.error}
+    {...(reads.admitted ? { onRetryList: controller.refresh } : {})} hasMore={controller.hasMore} onLoadMore={controller.loadMore}
+    onSelectConversation={(id) => { if (reads.admitted) reads.onSelect(scope, id) }}
+    onRequestDelete={(conversation) => onRequestDelete(conversation, controller.deleteConversation)}
+    onRenameConversation={controller.renameConversation}
+    moveDestinations={destinations}
+    onMoveConversation={(id, target) => { if (reads.admitted) reads.onMove(scope, id, target) }}
+  />
 }

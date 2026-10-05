@@ -167,6 +167,8 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "Поиск недавних разговоров",
   "rail.searchClose": "Закрыть поиск",
   "rail.navAria": "Основная навигация",
+  "rail.expandProjectAria": "Развернуть проект {name} (элемент {position})",
+  "rail.collapseProjectAria": "Свернуть проект {name} (элемент {position})",
   "rail.expandAria": "Развернуть боковую панель",
   "rail.collapseAria": "Свернуть боковую панель",
   "rail.newChat": "новый разговор",

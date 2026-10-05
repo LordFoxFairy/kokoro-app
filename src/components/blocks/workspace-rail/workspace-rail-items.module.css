@@ -78,3 +78,8 @@
 @media (prefers-reduced-motion: reduce) {
   .item { transition: none; }
 }
+
+.projectFolderRow { display: flex; align-items: center; }
+.folderToggle { flex-shrink: 0; }
+.folderToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.projectFolderChildren { padding-inline-start: var(--spacing-4, 1rem); }

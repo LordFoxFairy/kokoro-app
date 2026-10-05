@@ -42,10 +42,12 @@ export function useConversationList(params: {
   focusComposer: () => void
   scope?: SessionScope
   scopeRevision?: number
+  readBoundary?: { identity: string; admitted: boolean }
+  onDeleteConfirmed?: (scope: SessionScope, id: string) => void
 }): ConversationListController {
   const {
     engine, preview = false, activeId, thread, isStreaming, focusComposer,
-    scope = DIRECT_SESSION_SCOPE, scopeRevision = 0,
+    scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, readBoundary, onDeleteConfirmed,
   } = params
 
   const [listRefresh, setListRefresh] = useState(scopeRevision)
@@ -53,8 +55,8 @@ export function useConversationList(params: {
   const currentScopeKey = sessionScopeKey(scope)
   const observedScopeRevisionRef = useRef({ scopeKey: currentScopeKey, revision: scopeRevision })
   const listClient = browserListClient({ preview })
-  const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey }), [currentScopeKey, listClient])
-  type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean }
+  const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey, identity: readBoundary?.identity, admitted: readBoundary?.admitted ?? true }), [currentScopeKey, listClient, readBoundary?.identity, readBoundary?.admitted])
+  type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean; controllers: Set<AbortController> }
   const lifecycleRef = useRef<LifecycleToken | null>(null)
   type RenameOverlay = { title: string; sequence: number; reconcileAfter: number | null; lifecycle: LifecycleToken }
   type RenameIntent = { title: string; sequence: number; lifecycle: LifecycleToken }
@@ -86,12 +88,14 @@ export function useConversationList(params: {
       return changed ? next : previous
     })
   }, [listClient])
-  const sessionList = useSessionList(listClient, listRefresh, scope, handleFirstPageSettled)
+  const sessionList = useSessionList(listClient, listRefresh, scope, handleFirstPageSettled, readBoundary)
   useLayoutEffect(() => {
-    const token: LifecycleToken = { identity: lifecycleIdentity, active: true }
+    const token: LifecycleToken = { identity: lifecycleIdentity, active: lifecycleIdentity.admitted, controllers: new Set<AbortController>() }
     lifecycleRef.current = token
     return () => {
       token.active = false
+      for (const controller of token.controllers) controller.abort()
+      token.controllers.clear()
       if (lifecycleRef.current === token) lifecycleRef.current = null
     }
   }, [lifecycleIdentity])
@@ -125,7 +129,7 @@ export function useConversationList(params: {
   const activeInList = activeId !== null && sessionList.entries.some((entry) => entry.id === activeId)
   const activeHasContent = thread.messages.length > 0 || Boolean(thread.meta?.title?.trim())
   const conversations =
-    activeId !== null && !activeInList && activeHasContent
+    lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent
       ? [
           { id: activeId, title: withOverride(activeId, thread.meta?.title ?? conversationTitle(thread.messages)) },
           ...sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) })),
@@ -160,15 +164,29 @@ export function useConversationList(params: {
     [engine, focusComposer],
   )
 
-  const deleteConversation = useCallback(
-    async (id: string): Promise<boolean> => {
-      if (!engine) return false
-      const deleted = await engine.deleteConversation(id)
-      if (deleted) requestListRefresh()
-      return deleted
-    },
-    [engine, requestListRefresh],
-  )
+  const deleteFlight = useRef<{ id: string; lifecycle: LifecycleToken; promise: Promise<boolean> } | null>(null)
+  const deleteConversation = useCallback((id: string): Promise<boolean> => {
+    const lifecycle = lifecycleRef.current
+    if (!lifecycle?.active) return Promise.resolve(false)
+    const existing = deleteFlight.current
+    if (existing?.lifecycle === lifecycle) return existing.id === id ? existing.promise : Promise.resolve(false)
+    const controller = new AbortController()
+    lifecycle.controllers.add(controller)
+    const timer = setTimeout(() => controller.abort(), 10_000)
+    const operation = engine ? engine.deleteConversation(id) : listClient.deleteSession(id, scope, controller.signal).then(() => true)
+    const promise = operation.then((confirmed) => {
+      if (!confirmed || !lifecycle.active || lifecycleRef.current !== lifecycle) return false
+      onDeleteConfirmed?.(scope, id)
+      requestListRefresh()
+      return true
+    }).catch(() => false).finally(() => {
+      clearTimeout(timer)
+      lifecycle.controllers.delete(controller)
+      if (deleteFlight.current?.promise === promise) deleteFlight.current = null
+    })
+    deleteFlight.current = { id, lifecycle, promise }
+    return promise
+  }, [engine, listClient, onDeleteConfirmed, requestListRefresh, scope])
 
   const drainRenameQueue = useCallback((id: string, queue: RenameQueue): void => {
     if (queue.running) return
@@ -177,6 +195,7 @@ export function useConversationList(params: {
       while (queue.latest !== null) {
         const intent = queue.latest
         queue.latest = null
+        if (!intent.lifecycle.active || lifecycleRef.current !== intent.lifecycle) continue
         let succeeded = false
         try {
           await listClient.renameSession(id, intent.title)

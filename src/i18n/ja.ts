@@ -165,6 +165,8 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "最近の会話を検索",
   "rail.searchClose": "検索を閉じる",
   "rail.navAria": "メインナビゲーション",
+  "rail.expandProjectAria": "プロジェクト {name} を展開（項目 {position}）",
+  "rail.collapseProjectAria": "プロジェクト {name} を折りたたむ（項目 {position}）",
   "rail.expandAria": "サイドバーを展開する",
   "rail.collapseAria": "サイドバーを折りたたむ",
   "rail.newChat": "新しい会話",

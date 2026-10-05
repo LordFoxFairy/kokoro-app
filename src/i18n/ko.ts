@@ -167,6 +167,8 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "rail.searchInputAria": "최근 대화 검색",
   "rail.searchClose": "검색 닫기",
   "rail.navAria": "메인 네비게이션",
+  "rail.expandProjectAria": "프로젝트 {name} 펼치기 (항목 {position})",
+  "rail.collapseProjectAria": "프로젝트 {name} 접기 (항목 {position})",
   "rail.expandAria": "사이드바 확장",
   "rail.collapseAria": "사이드바 접기",
   "rail.newChat": "새로운 대화",

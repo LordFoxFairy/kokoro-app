@@ -16,6 +16,7 @@ import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "@/components/ui/sidebar"
 import { useT } from "@/i18n/context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
+import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 
 import { WorkspaceInviteCard } from "./workspace-invite-card"
@@ -26,12 +27,12 @@ import {
 } from "./workspace-rail-actions"
 import { WorkspaceRailAccount } from "./workspace-rail-account"
 import { WorkspaceRailHeader, WorkspaceRailNavigation } from "./workspace-rail-navigation"
-import { WorkspaceRailSessionList } from "./workspace-rail-session-list"
+import { ConversationGroup, ScopedConversationGroup } from "./workspace-rail-session-list"
 import type { WorkspaceRailProps } from "./workspace-rail-types"
 import { railStyles } from "./workspace-rail-styles"
 
 export type WorkspaceRailShellProps = Omit<WorkspaceRailProps, "onRequestDelete" | "deleteDialogFallbackFocusRef"> & {
-  onRequestDelete: (conversation: ConversationSummary) => void
+  onRequestDelete: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
   deleteDialogFallbackFocusRef: RefObject<HTMLButtonElement | null>
 }
 
@@ -63,6 +64,7 @@ export function WorkspaceRailShell({
   deleteDialogFallbackFocusRef,
   onRenameConversation,
   conversationScope,
+  conversationReads,
   conversationMove,
   conversationMovePending = false,
   conversationMoveFailed = false,
@@ -125,17 +127,38 @@ export function WorkspaceRailShell({
   const conversationScopeKey = projectActive ? `project:${projectHref ?? "active"}` : "direct"
   const {
     orderedProjects,
-    orderedConversations,
     dragProps,
     dragState,
     dragOverKey,
   } = useWorkspaceRailActions({
     projectItems,
-    conversations,
+    conversations: [],
     conversationScopeKey,
     ...(onReorderProjects === undefined ? {} : { onReorderProjects }),
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })
+
+  const folderIdentity = conversationReads?.identity ?? "controlled"
+  const foldersAdmitted = conversationReads?.admitted ?? true
+  const [folderState, setFolderState] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null)
+  if (folderState !== null && (!foldersAdmitted || folderState.identity !== folderIdentity)) setFolderState(null)
+  const expandedProjectIds = foldersAdmitted
+    ? folderState?.identity === folderIdentity ? folderState.ids : new Set(projectItems.filter((project) => project.active).map((project) => project.id))
+    : new Set<string>()
+  useEffect(() => {
+    if (!foldersAdmitted || projectListStatus !== "ready" || folderState?.identity === folderIdentity) return
+    const ids = new Set(projectItems.filter((project) => project.active).map((project) => project.id))
+    let live = true
+    queueMicrotask(() => { if (live) setFolderState((current) => current?.identity === folderIdentity ? current : { identity: folderIdentity, ids }) })
+    return () => { live = false }
+  }, [folderIdentity, folderState?.identity, foldersAdmitted, projectItems, projectListStatus])
+  const toggleProject = (id: string) => {
+    if (!foldersAdmitted) return
+    const ids = new Set(expandedProjectIds)
+    if (ids.has(id)) ids.delete(id)
+    else ids.add(id)
+    setFolderState({ identity: folderIdentity, ids })
+  }
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchToggleRef = useRef<HTMLButtonElement>(null)
@@ -208,57 +231,12 @@ export function WorkspaceRailShell({
     responsiveFocusPendingRef.current = false
   }, [compactDesktopRail, visualCollapsed])
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [draftTitle, setDraftTitle] = useState("")
-  const renameInputRef = useRef<HTMLInputElement>(null)
-  const renameReturnIdRef = useRef<string | null>(null)
-  const renameRestoreFocusRef = useRef(false)
-
   useEffect(() => {
     if (!searchOpen) return
     searchInputRef.current?.focus()
     const frame = window.requestAnimationFrame(() => searchInputRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
   }, [searchOpen, visualCollapsed])
-
-  useEffect(() => {
-    if (editingId !== null) {
-      renameInputRef.current?.focus()
-      renameInputRef.current?.select()
-    }
-  }, [editingId])
-
-  const startRename = (id: string, current: string) => {
-    renameReturnIdRef.current = id
-    renameRestoreFocusRef.current = false
-    setEditingId(id)
-    setDraftTitle(current)
-  }
-
-  const focusRenamedConversation = () => {
-    const id = renameReturnIdRef.current
-    if (!id) return
-    window.requestAnimationFrame(() => {
-      const target = [...(railRootRef.current?.querySelectorAll<HTMLElement>('[data-conversation-id]') ?? [])]
-        .find((element) => element.dataset.conversationId === id)
-      target?.focus()
-    })
-  }
-
-  const cancelRename = (restoreFocus = false) => {
-    renameRestoreFocusRef.current = restoreFocus || renameRestoreFocusRef.current
-    setEditingId(null)
-    setDraftTitle("")
-    if (renameRestoreFocusRef.current) focusRenamedConversation()
-  }
-
-  const commitRename = (current: string, restoreFocus = false) => {
-    const value = draftTitle.trim()
-    if (editingId !== null && value !== "" && value !== current) {
-      onRenameConversation(editingId, value)
-    }
-    cancelRename(restoreFocus)
-  }
 
   const closeSearch = () => {
     setSearchOpen(false)
@@ -344,6 +322,19 @@ export function WorkspaceRailShell({
             projectActive={projectActive}
             {...(projects === undefined ? {} : { projects })}
             orderedProjects={orderedProjects}
+            expandedProjectIds={expandedProjectIds}
+            onToggleProject={toggleProject}
+            renderProjectConversations={(project) => conversationReads ? <ScopedConversationGroup
+              key={`${project.id}:${conversationReads.identity}`}
+              scope={{ kind: "project", projectRef: project.id }} reads={conversationReads} preview={preview}
+              groupLabel={project.name} compactDesktop={compactDesktop} query={query} searchOpen={searchOpen}
+              awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
+              onRequestDelete={onRequestDelete} projects={projectItems}
+              projectListReady={projectListStatus === "ready"}
+              conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
+              conversationMoveFailed={conversationMoveFailed}
+              {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+            /> : null}
             {...(projectListStatus === undefined ? {} : { projectListStatus })}
             {...(projectListRetryable === undefined ? {} : { projectListRetryable })}
             {...(onRetryProjects === undefined ? {} : { onRetryProjects })}
@@ -365,12 +356,26 @@ export function WorkspaceRailShell({
             dragState={dragState}
             dragOverKey={dragOverKey}
           />
-          <WorkspaceRailSessionList
-            projectActive={projectActive}
+          {conversationReads ? <ScopedConversationGroup
+            key={`direct:${conversationReads.identity}`}
+            scope={DIRECT_SESSION_SCOPE} reads={conversationReads} preview={preview}
+            compactDesktop={compactDesktop} query={query} searchOpen={searchOpen}
+            awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
+            onRequestDelete={onRequestDelete} projects={projectItems}
+            projectListReady={projectListStatus === "ready"}
+            conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
+            conversationMoveFailed={conversationMoveFailed}
+            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+          /> : (
+          <ConversationGroup
+            projectActive={false}
+            scopeKey="direct"
+            onRenameConversation={onRenameConversation}
+            {...(onReorderConversations === undefined ? {} : { onReorderConversations })}
             compactDesktop={compactDesktop}
             searchOpen={searchOpen}
             query={query}
-            conversations={orderedConversations}
+            conversations={conversations}
             hasConversations={hasConversations}
             activeId={activeId}
             awaitingIds={awaitingIds}
@@ -384,16 +389,6 @@ export function WorkspaceRailShell({
             closeNavigation={closeNavigation}
             onSelectConversation={onSelectConversation}
             onRequestDelete={onRequestDelete}
-            renameInputRef={renameInputRef}
-            editingId={editingId}
-            draftTitle={draftTitle}
-            onDraftTitleChange={setDraftTitle}
-            onCommitRename={commitRename}
-            onCancelRename={cancelRename}
-            onStartRename={startRename}
-            dragProps={dragProps}
-            dragState={dragState}
-            dragOverKey={dragOverKey}
             moveDestinations={moveDestinations}
             conversationMove={conversationMove ?? null}
             conversationMovePending={conversationMovePending}
@@ -401,6 +396,7 @@ export function WorkspaceRailShell({
             {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
             {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
           />
+          )}
         </SidebarContent>
 
         <SidebarFooter className={railStyles.footer}>
