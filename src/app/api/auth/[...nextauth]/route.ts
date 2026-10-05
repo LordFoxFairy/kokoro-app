@@ -3,6 +3,8 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto"
 import NextAuth from "next-auth"
 import { NextRequest } from "next/server"
 
+import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget, type ProductReturnTarget } from "@/lib/product-return-target"
+
 import { boundedInteractionForm } from "@/lib/server/iam-interaction-route"
 import { matchesCanonicalWebRequest } from "@/lib/server/iam-relay-config"
 import { IAM_RELAY_POLICY } from "@/lib/server/iam-relay-policy"
@@ -16,11 +18,11 @@ import { refreshOidcToken, revokeOidcToken } from "@/lib/server/oidc-token"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type Context = { params: Promise<{ nextauth: string[] }> }
+type Context = { params: Promise<{ nextauth: string[] }>; productReturnTarget?: ProductReturnTarget }
 type Action = "csrf" | "signin" | "callback" | "session" | "signout"
 
 function errorResponse(status: number, code: string, clearCookies: readonly string[] = []): Response {
-  const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8", "x-request-id": randomUUID() })
+  const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8", "referrer-policy": "no-referrer", "x-request-id": randomUUID() })
   for (const cookie of clearCookies) headers.append("set-cookie", cookie)
   return new Response(JSON.stringify({ error: { code, message: "RP request was rejected" } }), { status, headers })
 }
@@ -185,11 +187,14 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
         return errorResponse(502, "rp_response_invalid")
       }
       response.headers.set("cache-control", "no-store")
+      response.headers.set("referrer-policy", "no-referrer")
       return response
     } catch { return errorResponse(503, "rp_unavailable") }
   }
 
   if (action === "signin") {
+    const target = parseProductReturnTarget(context.productReturnTarget ?? DEFAULT_PRODUCT_RETURN_TARGET)
+    if (target === null) return errorResponse(400, "rp_signin_rejected")
     if (url.search !== "" || request.headers.get("content-type") !== "application/x-www-form-urlencoded") {
       return errorResponse(400, "rp_signin_rejected")
     }
@@ -210,8 +215,9 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
           state === null ? "no_state" : "state_ok")
         return errorResponse(403, "rp_signin_rejected")
       }
-      await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies })
+      await issueOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin, state, setCookies, target, authSecret: config.authSecret })
       response.headers.set("cache-control", "no-store")
+      response.headers.set("referrer-policy", "no-referrer")
       return response
     } catch { console.error("Kokoro RP sign-in start threw"); return errorResponse(503, "rp_unavailable") }
   }
@@ -224,10 +230,10 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     !/^[A-Za-z0-9._~-]{1,2048}$/u.test(query.get("code") ?? "")) {
     return errorResponse(400, "rp_callback_rejected", cleanup)
   }
-  let consumed: boolean
+  let consumed: ProductReturnTarget | null
   try {
     consumed = await consumeOidcState({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
-      state: query.get("state") ?? "", cookieHeader: request.headers.get("cookie") })
+      state: query.get("state") ?? "", cookieHeader: request.headers.get("cookie"), authSecret: config.authSecret })
   } catch { return errorResponse(503, "rp_unavailable", cleanup) }
   if (!consumed) return errorResponse(403, "rp_transaction_rejected", cleanup)
   let verified: VerifiedOidcTokens | null = null
@@ -244,7 +250,7 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
     config.authSecret, config.relay.webOrigin)
     await createSession({ redisUrl: config.redisUrl, webOrigin: config.relay.webOrigin,
       secret: config.authSecret }, tokens.refresh, candidate)
-    const headers = new Headers({ location: "/app", "cache-control": "private, no-store", "referrer-policy": "no-referrer" })
+    const headers = new Headers({ location: consumed, "cache-control": "private, no-store", "referrer-policy": "no-referrer" })
     for (const value of cleanup) headers.append("set-cookie", value)
     headers.append("set-cookie", cookie)
     return new Response(null, { status: 303, headers })

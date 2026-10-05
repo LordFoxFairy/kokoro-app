@@ -1,6 +1,8 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
+import { parseProductReturnTarget } from "@/lib/product-return-target"
+
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 import { activeProductSession } from "@/lib/server/product-session"
 import { AppGate } from "@/ui/auth/app-gate"
@@ -52,6 +54,9 @@ export default async function AppLayout({
   } catch {
     return <AppGate serverUnavailable />
   }
-  if (session === null) redirect("/login")
+  if (session === null) {
+    const target = parseProductReturnTarget(incoming.get("x-kokoro-product-return-target") ?? "")
+    redirect(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`)
+  }
   return <AppGate serverAdmitted />
 }

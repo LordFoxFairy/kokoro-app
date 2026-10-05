@@ -33,7 +33,7 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
   const retryServerAdmission = () => window.location.reload()
 
   useEffect(() => {
-    if (state !== "anonymous" || pathname === "/login") {
+    if (state !== "anonymous" || window.location.pathname === "/login") {
       anonymousNavigationStarted.current = false
       return
     }

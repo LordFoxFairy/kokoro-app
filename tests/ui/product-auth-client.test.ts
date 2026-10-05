@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  openProductSignIn,
   endProductSession,
   refreshProductSession,
 } from "@/ui/auth/product-auth-client";
@@ -9,6 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
+  window.history.replaceState({}, "", "/");
 });
 
 describe("Product auth browser client", () => {
@@ -106,5 +108,25 @@ describe("Product session refresh consumer", () => {
     vi.stubGlobal("fetch", vi.fn());
     await expect(refreshProductSession(controller.signal)).rejects.toThrow();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("mounted actual product return intent", () => {
+  it.each([
+    "/app?conversation=conv_00000000-0000-4000-8000-000000000302",
+    "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302",
+    "/app/library?type=images&view=list",
+  ])("retains the actual window path and query %s", (target) => {
+    window.history.replaceState({}, "", target + "#ignored");
+    const navigate = vi.fn();
+    openProductSignIn(navigate);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(`/login?${new URLSearchParams({ return_to: target })}`);
+  });
+  it.each(["/api/auth/session", "/app?unknown=value", "/app/project/arbitrary"])("falls back without forwarding invalid intent %s", (target) => {
+    window.history.replaceState({}, "", target);
+    const navigate = vi.fn();
+    openProductSignIn(navigate);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/login");
   });
 });

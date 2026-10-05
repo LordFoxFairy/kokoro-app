@@ -61,6 +61,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  window.history.replaceState({}, "", "/")
   vi.useRealTimers()
 })
 
@@ -156,4 +157,21 @@ it("keeps the data-free shell when native sign-in throws synchronously", () => {
   expect(state.retry).not.toHaveBeenCalled()
   expect(screen.queryByRole("alert")).toBeNull()
   expect(screen.getByTestId("app-surface")).toHaveAttribute("data-booting", "true")
+})
+
+
+it("does not let a stale RSC login pathname suppress actual mounted product sign-in", () => {
+  state.pathname = "/login"
+  state.probeState = "anonymous"
+  state.probeMode = "checking"
+  window.history.replaceState({}, "", "/app?conversation=conv_00000000-0000-4000-8000-000000000302")
+  render(<LocaleProvider><AppGate /></LocaleProvider>)
+  expect(state.openProductSignIn).toHaveBeenCalledOnce()
+})
+it("does not start a login loop from an actual login document with stale RSC product pathname", () => {
+  state.probeState = "anonymous"
+  state.probeMode = "checking"
+  window.history.replaceState({}, "", "/login")
+  render(<LocaleProvider><AppGate /></LocaleProvider>)
+  expect(state.openProductSignIn).not.toHaveBeenCalled()
 })

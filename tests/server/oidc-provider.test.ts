@@ -2,18 +2,28 @@ import { NextRequest } from "next/server"
 import type { OAuthConfig } from "next-auth/providers/oauth"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { nextAuth, issueOidcState } = vi.hoisted(() => ({
+const { nextAuth, issueOidcState, consumeOidcState, verifyProductIdentity, createSession, productSessionCookie, newSessionCandidate } = vi.hoisted(() => ({
   nextAuth: vi.fn(),
   issueOidcState: vi.fn(),
+  consumeOidcState: vi.fn(), verifyProductIdentity: vi.fn(), createSession: vi.fn(), productSessionCookie: vi.fn(), newSessionCandidate: vi.fn(),
 }))
 vi.mock("next-auth", () => ({ default: nextAuth }))
 vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
 vi.mock("@/lib/server/oidc-rp-transaction", () => ({
   issueOidcState,
-  consumeOidcState: vi.fn(),
-  rpCleanupCookies: vi.fn(),
+  consumeOidcState,
+  rpCleanupCookies: () => ["next-auth.state=; Max-Age=0", "next-auth.pkce.code_verifier=; Max-Age=0", "next-auth.nonce=; Max-Age=0"],
 }))
 
+vi.mock("@/lib/server/product-identity", () => ({ verifyProductIdentity }))
+vi.mock("@/lib/server/product-session", async (original) => ({
+  ...(await original<typeof import("@/lib/server/product-session")>()), productSessionCookie,
+}))
+vi.mock("@/lib/server/product-session-store", async (original) => ({
+  ...(await original<typeof import("@/lib/server/product-session-store")>()), createSession, newSessionCandidate,
+}))
+
+import { parseProductReturnTarget } from "@/lib/product-return-target"
 import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
 import { oidcAuthOptions, oidcRpConfig } from "@/lib/server/oidc-provider"
 
@@ -150,5 +160,91 @@ describe("Product OIDC fixed-tenant Team scopes", () => {
     nextAuth.mockResolvedValueOnce(authorizeResponse(EXPECTED_SCOPE, true))
     expect((await signIn()).status).toBe(403)
     expect(issueOidcState).not.toHaveBeenCalled()
+  })
+})
+
+
+describe("transaction-bound Product login return", () => {
+  const target = parseProductReturnTarget("/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302")!
+  function callback(extra = "") {
+    return GET(new NextRequest(`${ENV.NEXTAUTH_URL}/callback/kokoro-iam?${new URLSearchParams({ code: "verified-code", state: "s".repeat(32), iss: `${ENV.KOKORO_WEB_ORIGIN}/iam` })}${extra}`, {
+      headers: { host: "web.example.test", cookie: "next-auth.state=bound" },
+    }), { params: Promise.resolve({ nextauth: ["callback", "kokoro-iam"] }) })
+  }
+  function verifiedCallback() {
+    consumeOidcState.mockResolvedValue(target)
+    verifyProductIdentity.mockResolvedValue(undefined)
+    createSession.mockResolvedValue(undefined)
+    productSessionCookie.mockResolvedValue("kokoro_product_session=fixture; HttpOnly")
+    newSessionCandidate.mockReturnValue({ id: "00000000-0000-4000-8000-000000000303", expiresAt: Date.now() + 3_600_000 })
+    nextAuth.mockImplementation(async (_request, _context, options) => {
+      await options.callbacks.signIn({ account: { provider: "kokoro-iam", providerAccountId: "subject-a", access_token: "verified-access", refresh_token: "verified-refresh", expires_at: Math.floor(Date.now() / 1000) + 300 } })
+      return new Response(null, { status: 302, headers: { location: "/app" } })
+    })
+  }
+  it("passes the finite target only via internal Context and keeps fixed issuer redirect_uri", async () => {
+    nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
+    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
+      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, "content-type": "application/x-www-form-urlencoded" }, body: "csrfToken=Token123",
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }), productReturnTarget: target })
+    expect(response.status).toBe(302)
+    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target, authSecret: ENV.KOKORO_WEB_AUTH_SECRET }))
+    const authorize = new URL(response.headers.get("location")!)
+    expect(authorize.searchParams.get("redirect_uri")).toBe(`${ENV.NEXTAUTH_URL}/callback/kokoro-iam`)
+    expect(authorize.searchParams.has("return_to")).toBe(false)
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+  })
+  it("does not let a public HTTP header supply the internal target", async () => {
+    nextAuth.mockResolvedValue(authorizeResponse(EXPECTED_SCOPE))
+    const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
+      method: "POST", headers: { host: "web.example.test", origin: ENV.KOKORO_WEB_ORIGIN, "content-type": "application/x-www-form-urlencoded", "x-kokoro-product-return-target": target }, body: "csrfToken=Token123",
+    }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
+    expect(response.status).toBe(302)
+    expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ target: "/app" }))
+  })
+  it("rejects public extra form target without issuing a transaction", async () => {
+    expect((await signIn(undefined, `csrfToken=Token123&return_to=${encodeURIComponent(target)}`)).status).toBe(400)
+    expect(issueOidcState).not.toHaveBeenCalled()
+  })
+  it("redirects to the consumed target only after identity verification and durable session creation", async () => {
+    verifiedCallback()
+    let settle!: () => void
+    createSession.mockImplementation(() => new Promise<void>((resolve) => { settle = resolve }))
+    let complete = false
+    const pending = callback().then((response) => { complete = true; return response })
+    await vi.waitFor(() => expect(createSession).toHaveBeenCalledOnce())
+    expect(verifyProductIdentity).toHaveBeenCalledWith(expect.anything(), "verified-access", "subject-a", expect.any(AbortSignal))
+    expect(complete).toBe(false)
+    settle()
+    const response = await pending
+    expect(response.status).toBe(303)
+    expect(response.headers.get("location")).toBe(target)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(response.headers.getSetCookie()).toHaveLength(4)
+    expect(consumeOidcState).toHaveBeenCalledWith(expect.objectContaining({ authSecret: ENV.KOKORO_WEB_AUTH_SECRET }))
+  })
+  it("fails closed on replay/invalid transaction before Auth.js or Product session creation", async () => {
+    consumeOidcState.mockResolvedValue(null)
+    const response = await callback()
+    expect(response.status).toBe(403)
+    expect(response.headers.get("location")).toBeNull()
+    expect(nextAuth).not.toHaveBeenCalled()
+    expect(createSession).not.toHaveBeenCalled()
+    expect(response.headers.getSetCookie()).toHaveLength(3)
+  })
+  it.each(["identity", "store", "unverified"])("never redirects on %s failure", async (stage) => {
+    verifiedCallback()
+    if (stage === "identity") verifyProductIdentity.mockRejectedValue(new Error("denied"))
+    if (stage === "store") createSession.mockRejectedValue(new Error("unavailable"))
+    if (stage === "unverified") nextAuth.mockResolvedValue(new Response(null, { status: 302 }))
+    const response = await callback()
+    expect(response.status).toBe(stage === "unverified" ? 403 : 503)
+    expect(response.headers.get("location")).toBeNull()
+    if (stage === "identity" || stage === "unverified") expect(createSession).not.toHaveBeenCalled()
+  })
+  it("rejects callback self-reported target before consuming state", async () => {
+    expect((await callback("&return_to=%2Fapp")).status).toBe(400)
+    expect(consumeOidcState).not.toHaveBeenCalled()
   })
 })

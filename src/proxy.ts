@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 
 import { NextResponse, type NextRequest } from "next/server"
 
+import { parseProductReturnTarget } from "@/lib/product-return-target"
+
 import { securityHeaders, shouldDisableCaching } from "@/lib/server/security-headers"
 
 function requestNonce(): string {
@@ -16,6 +18,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const nonce = requestNonce()
   const headers = new Headers(request.headers)
   const path = request.nextUrl.pathname
+  // Never accept a browser's private projection, including on non-product paths.
+  headers.delete("x-kokoro-product-return-target")
+  if (request.method === "GET") {
+    const { iamRelayConfig, matchesCanonicalWebRequest } = await import("@/lib/server/iam-relay-config")
+    const canonical = iamRelayConfig(process.env)
+    if (canonical && request.nextUrl.protocol === new URL(canonical.webOrigin).protocol
+      && matchesCanonicalWebRequest(request, canonical, "GET")) {
+      const target = parseProductReturnTarget(`${path}${request.nextUrl.search}`)
+      if (target !== null) headers.set("x-kokoro-product-return-target", target)
+    }
+  }
   // A rewrite re-enters Proxy. The internal Page is admitted only with a
   // server-HMACed proof; direct browser requests cannot forge these headers.
   let internalSignInView = false

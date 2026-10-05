@@ -30,6 +30,8 @@ import {
   createPreviewTeamClient,
 } from "@/dev/preview-clients"
 
+import { consumeLandingPrompt } from "./use-draft"
+
 const STORAGE_KEY = "kokoro.web.conversations"
 const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
 
@@ -55,9 +57,28 @@ export function readBrowserAuthIndexSubject(): string | null {
 export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeStart: string | null): boolean {
   const currentSubject = readBrowserAuthIndexSubject()
   if (currentSubject !== subjectAtProbeStart && currentSubject !== subject) return false
-  if (currentSubject === subject) return true
-  invalidateBrowserAuthSessionIndexes()
-  window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
+  if (currentSubject !== subject) {
+    invalidateBrowserAuthSessionIndexes()
+    // Never retain unknown/previous-actor data as an anonymous prompt.
+    window.localStorage.removeItem("kokoro.web.drafts")
+    const projectDraftKeys: string[] = []
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index)
+      if (key?.startsWith("kokoro.web.pending-project-draft:")) projectDraftKeys.push(key)
+    }
+    for (const key of projectDraftKeys) window.sessionStorage.removeItem(key)
+    window.sessionStorage.removeItem("kokoro.web.pending-creation-intent")
+  }
+  const prompt = consumeLandingPrompt()
+  if (prompt !== null) {
+    const raw = window.localStorage.getItem("kokoro.web.drafts")
+    const drafts: unknown = raw === null ? {} : JSON.parse(raw)
+    if (typeof drafts !== "object" || drafts === null || Array.isArray(drafts) ||
+      Object.values(drafts).some((value) => typeof value !== "string")) throw new Error("invalid browser draft map")
+    // Do not use persisted-store.write: it intentionally swallows storage errors.
+    window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ ...drafts, __pending__: prompt }))
+  }
+  if (currentSubject !== subject) window.localStorage.setItem(AUTH_INDEX_SUBJECT_KEY, subject)
   return true
 }
 

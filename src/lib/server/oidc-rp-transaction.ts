@@ -1,8 +1,10 @@
 import "server-only"
 
-import { createHash, timingSafeEqual } from "node:crypto"
+import { createHash, createHmac, timingSafeEqual } from "node:crypto"
 
 import { createClient } from "redis"
+
+import { parseProductReturnTarget, type ProductReturnTarget } from "@/lib/product-return-target"
 
 const STATE_TTL_SECONDS = 300
 const STATE_PATTERN = /^[A-Za-z0-9_-]{16,256}$/u
@@ -63,16 +65,28 @@ async function withRedis<T>(url: string, operation: (client: ReturnType<typeof c
   }
 }
 
+const RECORD_VERSION = "product-return-v1"
+const HEX_DIGEST = /^[a-f0-9]{64}$/u
+
+function returnMac(secret: string, webOrigin: string, binding: string, target: ProductReturnTarget): string {
+  return createHmac("sha256", secret).update(JSON.stringify([
+    RECORD_VERSION, "kokoro-iam", `${webOrigin}/api/auth/callback/kokoro-iam`, binding, target,
+  ])).digest("hex")
+}
+
 export async function issueOidcState(input: Readonly<{
   redisUrl: string
   webOrigin: string
+  authSecret: string
   state: string
   setCookies: readonly string[]
+  target: ProductReturnTarget
 }>): Promise<void> {
   const redisKey = key(input.webOrigin, input.state)
   const binding = cookieBinding(input.setCookies.join("\n"), true)
-  if (redisKey === null || binding === null) throw new Error("invalid RP transaction")
-  const value = digest(JSON.stringify(["kokoro-iam", `${input.webOrigin}/api/auth/callback/kokoro-iam`, binding]))
+  const target = parseProductReturnTarget(input.target)
+  if (redisKey === null || binding === null || input.authSecret.length < 32 || target === null || target !== input.target) throw new Error("invalid RP transaction")
+  const value = JSON.stringify([RECORD_VERSION, target, binding, returnMac(input.authSecret, input.webOrigin, binding, target)])
   const stored = await withRedis(input.redisUrl, (client) => client.set(redisKey, value, { EX: STATE_TTL_SECONDS, NX: true }))
   if (stored !== "OK") throw new Error("RP state collision")
 }
@@ -80,15 +94,24 @@ export async function issueOidcState(input: Readonly<{
 export async function consumeOidcState(input: Readonly<{
   redisUrl: string
   webOrigin: string
+  authSecret: string
   state: string
   cookieHeader: string | null
-}>): Promise<boolean> {
+}>): Promise<ProductReturnTarget | null> {
   const redisKey = key(input.webOrigin, input.state)
   const binding = cookieBinding(input.cookieHeader ?? "", false)
-  if (redisKey === null || binding === null) return false
-  const expected = digest(JSON.stringify(["kokoro-iam", `${input.webOrigin}/api/auth/callback/kokoro-iam`, binding]))
+  if (redisKey === null || binding === null || input.authSecret.length < 32) return null
   const stored = await withRedis(input.redisUrl, (client) => client.getDel(redisKey))
-  return stored !== null && stored.length === expected.length && timingSafeEqual(Buffer.from(stored), Buffer.from(expected))
+  if (stored === null || stored.length > 2400) return null
+  let value: unknown
+  try { value = JSON.parse(stored) } catch { return null }
+  if (!Array.isArray(value) || value.length !== 4 || value[0] !== RECORD_VERSION
+    || typeof value[1] !== "string" || typeof value[2] !== "string" || typeof value[3] !== "string"
+    || !HEX_DIGEST.test(value[2]) || !HEX_DIGEST.test(value[3])) return null
+  const target = parseProductReturnTarget(value[1])
+  if (target === null || target !== value[1] || !timingSafeEqual(Buffer.from(value[2]), Buffer.from(binding))) return null
+  const mac = returnMac(input.authSecret, input.webOrigin, binding, target)
+  return timingSafeEqual(Buffer.from(value[3]), Buffer.from(mac)) ? target : null
 }
 
 export function rpCleanupCookies(secure: boolean): string[] {

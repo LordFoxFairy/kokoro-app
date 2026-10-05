@@ -47,6 +47,42 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("GET /login", () => {
+  it.each([
+    "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302",
+    "/app?conversation=conv_00000000-0000-4000-8000-000000000302",
+  ])("preserves a valid product pathname plus conversation query through internal auth context: %s", async (target) => {
+    const response = await GET(browserRequest(`/login?${new URLSearchParams({ return_to: target })}`))
+    expect(response.status).toBe(302)
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/iam/oauth2/authorize?client_id=product-web`)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer")
+    expect(authGet).toHaveBeenCalledOnce()
+    expect(authPost).toHaveBeenCalledOnce()
+    const [request, context] = authPost.mock.calls[0] as [NextRequest, { params: Promise<{ nextauth: string[] }>; productReturnTarget?: string }]
+    expect(context.productReturnTarget).toBe(target)
+    expect(await context.params).toEqual({ nextauth: ["signin", "kokoro-iam"] })
+    expect(request.nextUrl.search).toBe("")
+    expect(await request.text()).toBe(new URLSearchParams({ csrfToken: "a".repeat(64) }).toString())
+    expect(request.headers.has("return_to")).toBe(false)
+    expect(request.headers.has("x-product-return-target")).toBe(false)
+  })
+
+  it.each([
+    "/login?return_to=https%3A%2F%2Fevil.example%2Fapp",
+    "/login?return_to=%2F%2Fevil.example%2Fapp",
+    "/login?return_to=%2Fapp&return_to=%2Fapp%2Fskills",
+    "/login?return_to=%2Fapp&extra=1",
+    "/login?return_to=%2Fapp%3Fconversation%3Dnot-canonical",
+    "/login?return_to=%2Fapp%2Flibrary%3Fq%3D%FF",
+    "/login?return_to=%2Fapp%2Flibrary%3Fq%3D%",
+  ])("rejects invalid or ambiguous navigation intent before CSRF/signin: %s", async (path) => {
+    const response = await GET(browserRequest(path))
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(response.headers.get("location")).toBeNull()
+    expect(authGet).not.toHaveBeenCalled()
+    expect(authPost).not.toHaveBeenCalled()
+  })
+
   it("starts Product OIDC on the server and redirects straight to IAM", async () => {
     const response = await GET(new NextRequest("http://127.0.0.1:43123/login", {
       headers: { host: "web.example.test" },
@@ -57,6 +93,7 @@ describe("GET /login", () => {
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(authGet).toHaveBeenCalledOnce()
     expect(authPost).toHaveBeenCalledOnce()
+    expect(authPost.mock.calls[0]?.[1].productReturnTarget).toBe("/app")
     expect(setCookie).toHaveBeenCalledWith("next-auth.csrf-token", "token|digest", expect.objectContaining({ httpOnly: true }))
     const signInRequest = authPost.mock.calls[0]?.[0] as NextRequest
     expect(signInRequest.headers.get("origin")).toBe(ORIGIN)

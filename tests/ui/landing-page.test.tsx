@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
+import { admitBrowserAuthSessionIndexes } from "@/ui/shell/page-clients"
 import { LandingPage } from "@/ui/marketing/landing-page"
 
 const push = vi.fn()
@@ -23,10 +24,12 @@ function renderLanding(brandName?: string, marketingHref?: string) {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   push.mockClear()
   replace.mockClear()
   window.history.replaceState({}, "", "/")
   window.localStorage.clear()
+  window.sessionStorage.clear()
 })
 
 describe("LandingPage", () => {
@@ -75,8 +78,8 @@ describe("LandingPage", () => {
     })
     fireEvent.click(screen.getByTestId("landing-hero-start"))
     expect(push).toHaveBeenCalledWith("/login")
-    const drafts = JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")
-    expect(drafts.__pending__).toBe("帮我起草季度复盘")
+    expect(window.localStorage.getItem("kokoro.web.drafts")).toBeNull()
+    expect(JSON.parse(window.sessionStorage.getItem("kokoro.web.anonymous-prompt-handoff") ?? "null")).toEqual([1, expect.any(Number), "帮我起草季度复盘"])
   })
 
   it("routes to /login even with an empty hero draft without stashing", () => {
@@ -120,4 +123,39 @@ describe("LandingPage", () => {
     fireEvent.click(billing)
     expect(answer).not.toBeVisible()
   })
+})
+
+
+it("keeps the actual explicit landing prompt through first verified admission without keeping old actor drafts", () => {
+  window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ oldConversation: "old private draft" }))
+  renderLanding()
+  fireEvent.change(screen.getByTestId("landing-hero-input"), { target: { value: "  fresh landing prompt  " } })
+  fireEvent.click(screen.getByTestId("landing-hero-start"))
+  expect(push).toHaveBeenCalledExactlyOnceWith("/login")
+  expect(admitBrowserAuthSessionIndexes("subject-new", null)).toBe(true)
+  expect(JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")).toEqual({ __pending__: "fresh landing prompt" })
+  expect(window.sessionStorage.getItem("kokoro.web.anonymous-prompt-handoff")).toBeNull()
+})
+it("clears the previous explicit handoff when the user starts with an empty prompt", () => {
+  window.sessionStorage.setItem("kokoro.web.anonymous-prompt-handoff", JSON.stringify([1, Date.now(), "stale choice"]))
+  renderLanding()
+  fireEvent.click(screen.getByTestId("landing-hero-start"))
+  expect(push).toHaveBeenCalledExactlyOnceWith("/login")
+  expect(window.sessionStorage.getItem("kokoro.web.anonymous-prompt-handoff")).toBeNull()
+})
+
+
+it("bounds the existing hero input and preserves it without navigating when handoff storage fails", () => {
+  renderLanding()
+  const input = screen.getByTestId("landing-hero-input")
+  expect(input).toHaveAttribute("maxlength", "65536")
+  fireEvent.change(input, { target: { value: "keep visible prompt" } })
+  const original = Storage.prototype.setItem
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+    if (this === window.sessionStorage && key === "kokoro.web.anonymous-prompt-handoff") throw new DOMException("blocked", "SecurityError")
+    return original.call(this, key, value)
+  })
+  fireEvent.click(screen.getByTestId("landing-hero-start"))
+  expect(push).not.toHaveBeenCalled()
+  expect(input).toHaveValue("keep visible prompt")
 })

@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation"
 import { useT } from "@/i18n/context"
 import { DEFAULT_BRAND } from "@/config/brand"
 import type { MessageKey } from "@/i18n/messages"
-import { stashPendingDraft } from "@/ui/shell/use-draft"
+import { LANDING_PROMPT_MAX_LENGTH, stashLandingPrompt } from "@/ui/shell/use-draft"
 
 import { MarketingTopBar } from "./marketing-top-bar"
 import baseStyles from "./landing-page.module.css"
@@ -346,12 +346,10 @@ export function LandingPage({
   const [heroDraft, setHeroDraft] = useState("")
   const brand = brandName ?? DEFAULT_BRAND.name
 
-  // hero 输入回车/点开始：暂存草稿到 pending 键 → 跳 /login；登录回跳 `/` 后 composer 读同键预填。
+  // Explicit prompt survives login once; never restore an unknown actor draft map.
   const startFromHero = (): void => {
-    const value = heroDraft.trim()
-    if (value !== "") {
-      stashPendingDraft(value)
-    }
+    try { stashLandingPrompt(heroDraft) }
+    catch { return } // Keep the visible input if browser storage is unavailable.
     router.push("/login")
   }
 
@@ -372,6 +370,7 @@ export function LandingPage({
             <Textarea
               className={styles.heroInput}
               value={heroDraft}
+              maxLength={LANDING_PROMPT_MAX_LENGTH}
               rows={2}
               placeholder={t("marketing.heroInputPlaceholder")}
               aria-label={t("marketing.heroInputAria")}

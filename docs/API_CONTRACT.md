@@ -1,3 +1,17 @@
+## R252 匿名首页输入回归修正（Root最窄补充裁决）
+
+审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。
+
+handoff是closed [1, created_at_ms, trimmed_prompt]，300秒以内且非未来、非空、最大65536字符；这是本浏览器交接的新增有限输入防护，不冒现API已有限制。首页现Textarea同maxLength，空白开始也清旧handoff；consume先remove再strict校验，无效/过期不恢复、不fallback旧pending。恢复写必须严格storage set而非吞失败的persisted-store helper；任何storage失败不更新marker、不admit。普通tab隔离仅按sessionStorage语义，duplicate/window.open可能继承初始存储，不宣称防复制；无论如何只预填而不执行。权限仍来自正式session/BFF，不由prompt证明。
+
+方案比较：淘汰废止首页草稿（有效业务回归）；淘汰marker-null保旧map（未知主体泄漏）；采用现draft职责内单次显式prompt交接。原9源之外仅追加现use-draft.ts、landing-page.tsx，现tests/ui/use-draft.test.tsx、landing-page.test.tsx及已准入page-clients测试；同仓原writer，Root三D0与Git独占。先现测试证明首次verified准入丢本次输入，再实施；所有旧actor数据/异步race/清理失败断言保留，最后独审与Root真实首页输入→登录→只预填验证。
+
+## R252-WEB-AUTH-RETURN：browser-private返回意图（2026-10-05；Root批准D0）
+
+仅Web /login GET新增可选单一return_to；无参数合法默认/app，有参数必须恰好一次且无额外query，单次解码后严格验证，畸形拒绝无导航。目标≤2048字符；path仅/app、现agents/plugins/scheduled/library/skills和canonical project_<loweruuid>，无encoded path/额外slash/absolute/protocol-relative/control/backslash/hash。不以“只pathname”丢会话或已选标签：/app和项目仅可选canonical conv_<loweruuid> conversation；scheduled可选tab=calendar|list及canonical project_id；Library保留现tab/type/q/view/favorites有限显示过滤（q≤512，view=grid|list、favorites=1，type按现UI真实枚举），其他页无query；重复/未知key或错误值拒绝。具体canonical serialization保持浏览器等价语义且MAC/消费一致；不恢复hash editor/自动mutation。
+
+public /api/auth/signin/kokoro-iam仍仅form csrfToken；内部typed Context传经校验target，HTTP不能构造该字段，禁止私有header绕公开准入。现固定OIDC callback URL、scope/resource/issuer/code/queryexact/PKCE/nonce/三cookie/state/identity验证不变，target不发送IAM，不携tenant/subject/secret。所有验证成功才303 same-origin bounded target；Redis/签名/replay失败沿现稳定码及cleanup，不跳未验target。所有auth no-store/no-referrer、无target原值/query/token日志。角色与业务读写仍BFF/IAM current subject裁决，target不是授权。
+
 ## R251-WEB-SKILLS-V2：消费BFF public8.0（2026-10-05；实施准入）
 
 唯一事实源是BFF正式f3c64d90f4a6fd7083252ff3d1646c5ad1dee292 OpenAPI8.0.0，digest278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f，仍/v1、91ops。仅版本和Validate manifest_identity严格zip-v2值域改变，其余五字段/请求/错误/权限/幂等不变；Web复制committed原字节snapshot，现两generator正规派生，手写六字段schema只V2。旧V1、坏digest、未知字段拒绝且零Publish；不改Hub严格header/media/admission，不以Validate当发布/安装成功。

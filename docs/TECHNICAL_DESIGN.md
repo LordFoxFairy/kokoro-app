@@ -1,3 +1,24 @@
+## R252 匿名首页输入回归修正（Root最窄补充裁决）
+
+审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。
+
+handoff是closed [1, created_at_ms, trimmed_prompt]，300秒以内且非未来、非空、最大65536字符；这是本浏览器交接的新增有限输入防护，不冒现API已有限制。首页现Textarea同maxLength，空白开始也清旧handoff；consume先remove再strict校验，无效/过期不恢复、不fallback旧pending。恢复写必须严格storage set而非吞失败的persisted-store helper；任何storage失败不更新marker、不admit。普通tab隔离仅按sessionStorage语义，duplicate/window.open可能继承初始存储，不宣称防复制；无论如何只预填而不执行。权限仍来自正式session/BFF，不由prompt证明。
+
+方案比较：淘汰废止首页草稿（有效业务回归）；淘汰marker-null保旧map（未知主体泄漏）；采用现draft职责内单次显式prompt交接。原9源之外仅追加现use-draft.ts、landing-page.tsx，现tests/ui/use-draft.test.tsx、landing-page.test.tsx及已准入page-clients测试；同仓原writer，Root三D0与Git独占。先现测试证明首次verified准入丢本次输入，再实施；所有旧actor数据/异步race/清理失败断言保留，最后独审与Root真实首页输入→登录→只预填验证。
+
+## R252-WEB-AUTH-RETURN：正式登录恢复原目标（2026-10-05；Root批准D0）
+
+真实原3310 Document已证明项目重新登录丢目标：307/login→IAM→callback303/app，有效session项目200/草稿完整对照。Owner仍Web RP/首文档/既有浏览器身份fence；同一Web负责人唯一writer，Root负责审查/Git/真实浏览器。采用标准有限同源return_to，复用现state事务，不新增中转页/cookie/临时实体/认证框架，也不改IAM/BFF公开契约或固定issuer redirect_uri。
+
+| 放置项 | 决定 |
+| --- | --- |
+| 当前/粒度 | Web475f24fe，原四mixed排除；现Proxy/layout/login/RP/state/client/auth fence承接。仅新增src/lib/product-return-target.ts纯同构语法文件及同目录测试，不新增目录/层；existing UI route parser含React/任意project/fallback不能充安全validator。 |
+| 位置比较 | 采用现lib具名业务validator，无React/Next/server-only；淘汰features/app（server反向依赖UI）与lib/server（client需复制规则）。现role/auth models不扩大。 |
+| 依赖/数据流 | Proxy每入站剥外来private target头，可信canonical GET actual pathname+search重建；layout无session带validated target到/login；mounted client用实际window pathname+search而非陈旧usePathname。login严格单return_to，内部authPost Context可选typed productReturnTarget；框架public Context只params，public signin仍exactcsrfToken，无自报header/bodytarget。 |
+| 状态/身份 | return target只导航、不赋权限。既有state+3cookie+NX/300秒/GETDEL单次消费绑定MAC，callback所有issuer/PKCE/nonce/token/身份/session建立成功才303目标。现verified subject change admission同步清三类draft/creation状态；同subject草稿保留；storage失败不admit。新subject也仍owner授权，不恢复旧数据。 |
+| 删除/保护 | 删除固定/app对已绑定target的唯一路径；旧state record不双读，既有错误/cleanup保持；不改scope/权限/refresh/余额/模型/发送/UI样式。原四mixed（含巨大system test）逐字保留，不以历史fixture绿色冒浏览器结果。 |
+| 验证 | 先现login真实handler合法项目/会话return_to和现身份fence跨主体草稿行为RED，Root重跑；随后实现、冻结独审、Root生成/lint/typegen/types/build和现相关系统门，再正常用户项目/会话/Library重新登录回原路径、硬刷新、草稿同主体保留/换主体隔离、state重放/恶意target拒绝。辅助门非页面完成。 |
+
 ## R251-WEB-SKILLS-V2：单一正式消费者（2026-10-05；实施准入）
 
 Owner仍现Web Skills浏览器边界。沿现src/hub/schemas.ts唯一Validate六字段parser把identity值域收敛zip-v2，不改client/flow/dialog/read/adapter，不解析或生成ZIP，不新增层/目录/状态中心。采用现wire schema优于新V2模块，旧V1仅保拒绝负控，无union/fallback。现两public generator和snapshot固定BFF f3c64d90f4a6fd7083252ff3d1646c5ad1dee292/public8.0.0/SHA278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f；正常生成，Team9图和15输出应保持并须实核。

@@ -1,3 +1,17 @@
+## R252 匿名首页输入回归修正（Root最窄补充裁决）
+
+审查发现现stashPendingDraft把匿名首页提示混入未标主体的localStorage全draft map；首次verified准入清旧map会丢有效输入，直接保留未知map又会泄露旧主体草稿。选择保留原首页业务、分开显式用户本次登录输入：仅现use-draft的专用stash/consume与现landing开始动作创建一次性sessionStorage prompt handoff，不新增目录/认证cookie/URL参数/认证实体，不改Skills正常stash。现page-clients在verified identity/竞态fence成立后先清未知或跨subject旧map，再严格消费并仅预填__pending__；同subject保完整map但也消费本次显式输入，绝不自动提交。
+
+handoff是closed [1, created_at_ms, trimmed_prompt]，300秒以内且非未来、非空、最大65536字符；这是本浏览器交接的新增有限输入防护，不冒现API已有限制。首页现Textarea同maxLength，空白开始也清旧handoff；consume先remove再strict校验，无效/过期不恢复、不fallback旧pending。恢复写必须严格storage set而非吞失败的persisted-store helper；任何storage失败不更新marker、不admit。普通tab隔离仅按sessionStorage语义，duplicate/window.open可能继承初始存储，不宣称防复制；无论如何只预填而不执行。权限仍来自正式session/BFF，不由prompt证明。
+
+方案比较：淘汰废止首页草稿（有效业务回归）；淘汰marker-null保旧map（未知主体泄漏）；采用现draft职责内单次显式prompt交接。原9源之外仅追加现use-draft.ts、landing-page.tsx，现tests/ui/use-draft.test.tsx、landing-page.test.tsx及已准入page-clients测试；同仓原writer，Root三D0与Git独占。先现测试证明首次verified准入丢本次输入，再实施；所有旧actor数据/异步race/清理失败断言保留，最后独审与Root真实首页输入→登录→只预填验证。
+
+## R252-WEB-AUTH-RETURN：既有事务绑定目标（2026-10-05；Root批准D0）
+
+Web不新增SQL/实体/角色/cookie。现origin+state digest Redis key仍NX/TTL300/GETDEL，record收敛唯一新closed version tuple包含validated target、原cookie绑定及authSecret HMAC（固定provider/callback/绑定/target整体）；严格长度/字段/target验证与constant-time比较。consume成功返回target，其他null；无旧digest fallback、无state双读/额外mapping，未完成旧flow正常拒绝后由用户正规登录，不清共享Redis。
+
+现browser verified-subject fence仍唯一marker owner，不把明文subject写入state或draft新key；在确认subjectchange且runtime admission之前同步清localStorage kokoro.web.drafts、sessionStorage kokoro.web.pending-project-draft:*及kokoro.web.pending-creation-intent，同subject刷新保持。若storage异常，保守不admit，不跨账号暴露草稿。原四mixed全文仍保护；实现/真实用户验收尚未完成。
+
 ## R251-WEB-SKILLS-V2：无新增事实（2026-10-05；实施准入）
 
 仅消费者wire identity值域与固定contract provenance改变。Web无SQL/Redis/cookie/localStorage/IndexedDB/新receipt或ZIP身份映射；manifest、scan、draft、release/install仍属于Platform/Storage/BFF既有owner。现一次File/key/attempt/unknown意图仅瞬时UI，账户切换fence和ACK后权威GET保持。不复制owner ZIP解析，不持久化旧新映射、不后台造包，不改auth return/业务归属。当前三D0只prefix，原mixed全文保留；实现与用户验收待后继。

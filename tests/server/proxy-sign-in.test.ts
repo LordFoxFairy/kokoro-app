@@ -172,3 +172,44 @@ describe("development local upload CSP boundary", () => {
     expect(policy).toBe(contentSecurityPolicy(nonce, true))
   })
 })
+
+
+describe("trusted actual product target projection", () => {
+  const target = "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302"
+  const header = "x-kokoro-product-return-target"
+  beforeEach(() => { for (const [key, value] of Object.entries(ENV)) vi.stubEnv(key, value) })
+  afterEach(() => vi.unstubAllEnvs())
+  it("rebuilds from the actual canonical GET and never publishes a public target header", async () => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(request(target, { [header]: "/app/skills", "x-forwarded-host": "evil.test" }))
+    expect(response.headers.get(`x-middleware-request-${header}`)).toBe(target)
+    expect(response.headers.get(header)).toBeNull()
+  })
+  it("preserves canonical Host projection when Next normalizes the listener origin", async () => {
+    const { proxy } = await import("@/proxy")
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "http://127.0.0.1:3311")
+    const response = await proxy(new NextRequest(`http://localhost:3311${target}`, {
+      headers: { host: "127.0.0.1:3311", origin: "http://127.0.0.1:3311", [header]: "/app/skills" },
+    }))
+    expect(response.headers.get(`x-middleware-request-${header}`)).toBe(target)
+  })
+  it.each([
+    ["foreign Host", ORIGIN, "evil.test", null, "GET", target],
+    ["foreign Origin", ORIGIN, "web.example.test:4433", "https://evil.test", "GET", target],
+    ["wrong scheme", "http://web.example.test:4433", "web.example.test:4433", null, "GET", target],
+    ["non-GET", ORIGIN, "web.example.test:4433", null, "POST", target],
+    ["non-product", ORIGIN, "web.example.test:4433", null, "GET", "/api/auth/session"],
+    ["unknown query", ORIGIN, "web.example.test:4433", null, "GET", "/app?return_to=%2Fapp"],
+  ])("strips forged projection on %s", async (_name, origin, host, suppliedOrigin, method, path) => {
+    const { proxy } = await import("@/proxy")
+    const response = await proxy(new NextRequest(`${origin}${path}`, {
+      method, headers: { host, [header]: target, ...(suppliedOrigin ? { origin: suppliedOrigin } : {}) },
+    }))
+    expect(response.headers.get(`x-middleware-request-${header}`)).toBeNull()
+  })
+  it("strips supplied projection without canonical configuration", async () => {
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "")
+    const { proxy } = await import("@/proxy")
+    expect((await proxy(request(target, { [header]: target }))).headers.get(`x-middleware-request-${header}`)).toBeNull()
+  })
+})

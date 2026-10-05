@@ -1,7 +1,12 @@
 "use client";
 
-export function openProductSignIn(): void {
-  window.location.replace("/login");
+import { parseProductReturnTarget } from "@/lib/product-return-target";
+
+export function openProductSignIn(
+  navigate: (url: string) => void = (url) => window.location.replace(url),
+): void {
+  const target = parseProductReturnTarget(`${window.location.pathname}${window.location.search}`);
+  navigate(target === null ? "/login" : `/login?${new URLSearchParams({ return_to: target })}`);
 }
 
 async function currentCsrf(signal?: AbortSignal): Promise<string> {

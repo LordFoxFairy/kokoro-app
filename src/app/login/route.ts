@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 import { cookies as requestCookies } from "next/headers"
 
 import { GET as authGet, POST as authPost } from "@/app/api/auth/[...nextauth]/route"
+import { DEFAULT_PRODUCT_RETURN_TARGET, parseProductReturnTarget } from "@/lib/product-return-target"
 import { oidcRpConfig } from "@/lib/server/oidc-provider"
 
 export const runtime = "nodejs"
@@ -35,9 +36,17 @@ function cookiePairs(response: Response): string[] | null {
 
 export async function GET(request: NextRequest): Promise<Response> {
   const config = oidcRpConfig(process.env)
-  if (config === null || request.nextUrl.pathname !== "/login" || request.nextUrl.search !== "" ||
+  if (config === null || request.nextUrl.pathname !== "/login" ||
     request.headers.get("host") !== config.relay.webHost ||
     (request.headers.get("origin") !== null && request.headers.get("origin") !== config.relay.webOrigin)) return unavailable("configuration_or_origin")
+
+  try { decodeURIComponent(request.nextUrl.search.slice(1).replace(/\+/g, " ")) }
+  catch { return unavailable("return_target") }
+  const query = request.nextUrl.searchParams
+  const target = request.nextUrl.search === "" ? DEFAULT_PRODUCT_RETURN_TARGET
+    : [...query.keys()].length === 1 && query.getAll("return_to").length === 1
+      ? parseProductReturnTarget(query.get("return_to") ?? "") : null
+  if (target === null) return unavailable("return_target")
 
   const base = config.relay.webOrigin
   const headers = new Headers({ host: config.relay.webHost, accept: "application/json" })
@@ -75,7 +84,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         "content-type": "application/x-www-form-urlencoded",
       },
       body: new URLSearchParams({ csrfToken: token }).toString(),
-    }), SIGN_IN_PARTS)
+    }), { ...SIGN_IN_PARTS, productReturnTarget: target })
     const location = signIn.headers.get("location")
     if (signIn.status !== 302 || location === null ||
       !location.startsWith(`${base}/iam/oauth2/authorize?`)) {
