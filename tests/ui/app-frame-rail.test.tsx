@@ -266,8 +266,16 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
       return Response.json({
         authenticated: true,
         subject: "project-reader",
-        expires_at: "2027-01-01T00:00:00.000Z",
+        expires_at: Date.now() + 3_600_000,
       })
+    }
+    if (path === "/api/auth/csrf" && method === "GET") {
+      return Response.json({ csrfToken: "a".repeat(64) })
+    }
+    if (path === "/api/auth/session" && method === "POST") {
+      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
+      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
+      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
     }
     if (path === "/api/hub/projects" && method === "GET") {
       return Response.json({ data: { projects }, meta: { request_id: "req_project_read_r40" } })
@@ -287,6 +295,16 @@ it("已登录正式壳从同源 Project 列表显示两个独立项目，而非�
   expect(fetchMock).toHaveBeenCalledWith("/api/auth/session", expect.objectContaining({
     cache: "no-store", signal: expect.any(AbortSignal),
   }))
+  const authRequests = (path: string, method: string) => fetchMock.mock.calls.filter(([input, init]) => {
+    const url = input instanceof Request ? input.url : String(input)
+    return new URL(url, window.location.origin).pathname === path &&
+      (init?.method ?? (input instanceof Request ? input.method : "GET")) === method
+  })
+  expect(authRequests("/api/auth/session", "GET")).toHaveLength(1)
+  expect(authRequests("/api/auth/csrf", "GET")).toHaveLength(1)
+  expect(authRequests("/api/auth/session", "POST")).toHaveLength(1)
+  expect(authRequests("/api/auth/session", "POST")[0]?.[1]?.signal)
+    .toBe(authRequests("/api/auth/session", "GET")[0]?.[1]?.signal)
   expect(engineFactory).toHaveBeenCalledWith(expect.objectContaining({ preview: false }))
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
 
@@ -312,7 +330,7 @@ function projectReadEnvelope(projects = projectReadFixtures) {
 
 async function mountAuthenticatedProjectRail(
   read: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  session: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader" }),
+  readSession: () => Promise<Response> = async () => Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 }),
 ) {
   const pageClients = await import("@/ui/shell/page-clients")
   const { AppGate } = await import("@/ui/auth/app-gate")
@@ -321,7 +339,17 @@ async function mountAuthenticatedProjectRail(
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = input instanceof Request ? input.url : String(input)
     const path = new URL(url, window.location.origin).pathname
-    if (path === "/api/auth/session") return session()
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET")
+    // Recheck counters count readonly GETs, never the credential rotation POST.
+    if (path === "/api/auth/session" && method === "GET") return readSession()
+    if (path === "/api/auth/csrf" && method === "GET") {
+      return Response.json({ csrfToken: "a".repeat(64) })
+    }
+    if (path === "/api/auth/session" && method === "POST") {
+      expect(init?.headers).toEqual({ "content-type": "application/x-www-form-urlencoded" })
+      expect(init?.body?.toString()).toBe(`csrfToken=${"a".repeat(64)}`)
+      return Response.json({ authenticated: true, subject: "project-reader", expires_at: Date.now() + 3_600_000 })
+    }
     if (path === "/api/hub/projects") return read(input, init)
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })
