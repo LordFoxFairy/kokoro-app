@@ -312,12 +312,11 @@ function AppFrameRuntime({
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
-    // Creation ACK navigates with the existing frozen draft; the collection
-    // still comes only from a fresh owner GET, never from the ACK itself.
-    refreshProjects()
+    // Navigation is independently fenced; creation ACK refreshes through
+    // onProjectCreated even when the user has chosen another mounted scope.
     if (onOpenProject) onOpenProject(id, handoffDraft)
     else navigateMountedSurface(`/app/project/${encodeURIComponent(id)}`)
-  }, [onOpenProject, refreshProjects])
+  }, [onOpenProject])
   const project = useAppFrameProject({
     projectRef,
     projectWorkspace,
@@ -327,6 +326,7 @@ function AppFrameRuntime({
     updateDraft,
     clearDraft,
     onOpenProject: handleProjectOpen,
+    onProjectCreated: refreshProjects,
     projectDetail: projectReads.current,
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,

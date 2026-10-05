@@ -3105,3 +3105,33 @@ it("R136 preserves one safe subagent activity when the stream replays its known 
     expect(thread().resumeCursor).toBe(cursor)
   } finally { vi.restoreAllMocks() }
 })
+
+
+describe("R250 remote-list deletion boundary", () => {
+  it("deletes an owner-listed conversation without opening it or replacing the active local conversation", async () => {
+    buildEngine({ activeId: "conv_a", conversations: [{ id: "conv_a", title: "A", updatedAt: 1, mode: "fast" }] })
+    await settle()
+    client.listSessions = vi.fn().mockResolvedValue({
+      sessions: [{ session_id: "conv_remote_b", title: "B", updated_at: "2026-10-05T00:00:00Z" }], next_cursor: null,
+    })
+    const listed = await client.listSessions(undefined, { kind: "direct" })
+    const target = listed.sessions[0]?.session_id
+    if (!target) throw new Error("valid remote row required")
+    expect(engine.getSnapshot().store?.conversations.some((entry) => entry.id === target)).toBe(false)
+    const previous = engine.getSnapshot()
+    const snapshots = [...client.snapshotCalls]
+    let acknowledge!: (receipt: { status: "deleted" }) => void
+    const deletion = vi.spyOn(client, "deleteSession").mockImplementation(() => new Promise((resolve) => { acknowledge = resolve }))
+    const result = engine.deleteConversation(target)
+    expect(deletion).toHaveBeenCalledExactlyOnceWith(target, { kind: "direct" }, expect.any(AbortSignal))
+    expect(engine.getSnapshot().store?.activeId).toBe("conv_a")
+    expect(client.snapshotCalls).toEqual(snapshots)
+    expect(engine.deleteConversation(target)).toBe(result)
+    acknowledge({ status: "deleted" })
+    await expect(result).resolves.toBe(true)
+    expect(engine.getSnapshot().store).toBe(previous.store)
+    expect(engine.getSnapshot().thread).toBe(previous.thread)
+    expect(client.snapshotCalls).toEqual(snapshots)
+    expect(deletion).toHaveBeenCalledTimes(1)
+  })
+})

@@ -39,9 +39,13 @@ export type AppFrameProjectOptions = {
   renameBoundary?: ProjectReadBoundary
   renameRouteKey?: string
   onOpenProject?: (projectRef: string, draft?: string) => void
+  onProjectCreated?: () => void
 }
 
-type ProjectCreationIntent = { key: string; name: string; draft: string }
+type ProjectCreationIntent = {
+  key: string; name: string; draft: string; route: string; subject: string | null | undefined
+  navigationScope: { active: boolean; context: object }
+}
 type ProjectCreationState = { pending: boolean; error: boolean; retryable: boolean }
 
 /** Owns project-scoped draft handoff, instructions, resources, and mutations. */
@@ -54,6 +58,7 @@ export function useAppFrameProject({
   updateDraft,
   clearDraft,
   onOpenProject,
+  onProjectCreated,
   projectDetail,
   instructionHistory,
   instructionContext,
@@ -213,10 +218,21 @@ export function useAppFrameProject({
     })) : [], [preview, previewProjection, instructionContext, instructionHistory])
   const [projectCreation, setProjectCreation] = useState<ProjectCreationState>({ pending: false, error: false, retryable: false })
   const creationIntentRef = useRef<ProjectCreationIntent | null>(null)
-  const creationInFlightRef = useRef(false)
+  const creationInFlightRef = useRef<ProjectCreationIntent | null>(null)
   const createdProjectRef = useRef<string | null>(null)
   const latestDraftRef = useRef(draft)
   const lastDirectDraftRef = useRef<string | null>(null)
+
+  useLayoutEffect(() => {
+    const intent = creationIntentRef.current
+    if (!intent || intent.subject === renameBoundary?.subject) return
+    // A different actor starts a distinct lifetime, never reuses the old key.
+    // Retired completions cannot release or overwrite a newer actor's flight.
+    creationIntentRef.current = null
+    creationInFlightRef.current = null
+    createdProjectRef.current = null
+    setProjectCreation({ pending: false, error: false, retryable: false })
+  }, [renameBoundary?.subject])
 
   useEffect(() => {
     latestDraftRef.current = draft
@@ -337,7 +353,18 @@ export function useAppFrameProject({
 
   const finishProjectNavigation = useCallback((intent: ProjectCreationIntent) => {
     const projectId = createdProjectRef.current
-    if (projectId === null) return
+    if (projectId === null || creationIntentRef.current !== intent) return
+    const currentScope = renameScopeRef.current
+    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    // Route/context cleanup permanently revokes the original navigation token,
+    // including A → Q → A. A known owner success never recreates that authority.
+    if (!currentScope?.active || !intent.navigationScope.active || currentScope !== intent.navigationScope ||
+      currentScope.context.subject !== intent.subject || route !== intent.route) {
+      createdProjectRef.current = null
+      creationIntentRef.current = null
+      if (currentScope?.active) setProjectCreation({ pending: false, error: false, retryable: false })
+      return
+    }
     try {
       openProject(projectId, intent.draft)
       createdProjectRef.current = null
@@ -352,12 +379,21 @@ export function useAppFrameProject({
 
   const runCreateProject = useCallback(async (intent: ProjectCreationIntent) => {
     if (creationInFlightRef.current) return
-    creationInFlightRef.current = true
+    const scope = renameScopeRef.current
+    if (!scope?.active || scope.context.subject !== intent.subject || scope.context.admitted === false) return
+    creationInFlightRef.current = intent
+    const current = () => {
+      const active = renameScopeRef.current
+      return active?.active && active.context.subject === intent.subject && active.context.admitted !== false
+        && creationIntentRef.current === intent
+    }
     setProjectCreation({ pending: true, error: false, retryable: false })
     try {
       const project = await createProjectRequest(intent.name, intent.key)
+      if (!current()) return
       createdProjectRef.current = project.id
     } catch (error) {
+      if (!current()) return
       const retryable = !(error instanceof ProjectCreateError)
         || error.status === undefined || error.status >= 500 || error.status === 429
         || error.code === "project_create_invalid_response"
@@ -366,10 +402,16 @@ export function useAppFrameProject({
       setProjectCreation({ pending: false, error: true, retryable })
       return
     } finally {
-      creationInFlightRef.current = false
+      if (creationInFlightRef.current === intent) creationInFlightRef.current = null
+    }
+    const currentScope = renameScopeRef.current
+    // Refresh the current owner's collection independently of navigation.
+    // Old-account and disposed completions have no projection write authority.
+    if (currentScope?.active && currentScope.context.subject === intent.subject && currentScope.context.admitted !== false) {
+      try { onProjectCreated?.() } catch { /* Owner success is not an unknown POST outcome. */ }
     }
     finishProjectNavigation(intent)
-  }, [finishProjectNavigation])
+  }, [finishProjectNavigation, onProjectCreated])
 
   const createProject = useCallback((handoffDraft = draft) => {
     if (creationInFlightRef.current) return
@@ -385,8 +427,12 @@ export function useAppFrameProject({
       else finishProjectNavigation(unresolvedIntent)
       return
     }
+    const scope = renameScopeRef.current
+    if (!scope?.active || scope.context.admitted === false) return
     const key = crypto.randomUUID()
-    const intent = { key, name: `${t("firstSite.newProject")} ${key.slice(0, 8)}`, draft: handoffDraft }
+    const intent: ProjectCreationIntent = { key, name: `${t("firstSite.newProject")} ${key.slice(0, 8)}`, draft: handoffDraft,
+      route: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      subject: scope.context.subject, navigationScope: scope }
     creationIntentRef.current = intent
     void runCreateProject(intent)
   }, [draft, finishProjectNavigation, openProject, preview, runCreateProject, t])

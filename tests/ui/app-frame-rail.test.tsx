@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const pathname = vi.hoisted(() => ({ value: "/app" }))
@@ -510,4 +510,181 @@ it("健康正式列表在 session 401 服务异常后撤销，但保留 Chat 且
   expect(reads).toBe(1)
   expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
   expect(document.querySelector('a[href*="preview-project"]')).toBeNull()
+})
+
+
+it.each([false, true])("创建项目的迟到合法 ACK 不抢回用户已切换的项目或覆盖新草稿（返回来源=%s）", async (returnToSource) => {
+  window.history.replaceState(window.history.state, "", "/app")
+  let writes = 0
+  let reads = 0
+  let acknowledge!: (response: Response) => void
+  const view = await mountAuthenticatedProjectRail(async (_input, init) => {
+    if (init?.method === "POST") {
+      writes++
+      expect(init.headers).toEqual({ "content-type": "application/json", "Idempotency-Key": expect.any(String) })
+      return new Promise<Response>((resolve) => { acknowledge = resolve })
+    }
+    reads++
+    return projectReadEnvelope()
+  })
+  try {
+    await screen.findByRole("link", { name: "研究项目乙" })
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "创建时A的原草稿" } })
+    const trigger = screen.getByRole("button", { name: "新建专案" })
+    fireEvent.pointerDown(trigger, { button: 0 })
+    fireEvent.click(trigger)
+    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    await waitFor(() => expect(writes).toBe(1))
+    expect(acknowledge).toBeTypeOf("function")
+    fireEvent.click(await screen.findByRole("link", { name: "研究项目乙" }), { detail: 0 })
+    await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_read_beta"))
+    await screen.findByRole("heading", { name: "研究项目乙" })
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(composer, { target: { value: "切到Q后的新草稿" } })
+    expect(composer).toHaveValue("切到Q后的新草稿")
+    if (returnToSource) {
+      act(() => window.history.back())
+      await waitFor(() => expect(window.location.pathname).toBe("/app"))
+      fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "返回A后的新草稿" } })
+    }
+    const readsBeforeAck = reads
+    await act(async () => {
+      acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r250_create" } }))
+    })
+    await waitFor(() => expect(reads).toBeGreaterThan(readsBeforeAck))
+    expect(writes).toBe(1)
+    expect(window.location.pathname).toBe(returnToSource ? "/app" : "/app/project/project_read_beta")
+    expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue(returnToSource ? "返回A后的新草稿" : "切到Q后的新草稿")
+    if (!returnToSource) expect(screen.getByRole("heading", { name: "研究项目乙" })).toBeInTheDocument()
+  } finally {
+    view.unmount()
+    window.history.replaceState(window.history.state, "", "/")
+  }
+})
+
+
+async function mountCreationBoundary() {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const refresh = vi.fn()
+  const navigate = vi.fn()
+  const options = {
+    projectRef: undefined, projectWorkspace: false, preview: false, mounted: true, draft: "source draft",
+    updateDraft: vi.fn(), clearDraft: vi.fn(), projectDetail: { status: "blocked" as const },
+    instructionHistory: { status: "blocked" as const }, instructionContext: {}, refreshProject: vi.fn(),
+    onProjectCreated: refresh, onOpenProject: navigate,
+  }
+  const view = renderHook(({ subject, routeKey }) => useAppFrameProject({ ...options,
+    renameBoundary: { admitted: true, subject, generation: 1 }, renameRouteKey: routeKey,
+  }), { initialProps: { subject: "reader-a", routeKey: "A" },
+    wrapper: ({ children }) => <LocaleProvider>{children}</LocaleProvider>,
+  })
+  return { ...view, refresh, navigate }
+}
+
+it("创建ACK在账号变化后不刷新或导航旧主体事实", async () => {
+  let acknowledge!: (response: Response) => void
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise((resolve) => { acknowledge = resolve }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    view.rerender({ subject: "reader-b", routeKey: "A" })
+    await act(async () => { acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_actor_change" } })) })
+    expect(view.refresh).not.toHaveBeenCalled()
+    expect(view.navigate).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(1)
+  } finally { view.unmount() }
+})
+
+it("创建ACK在卸载后没有导航或集合写权", async () => {
+  let acknowledge!: (response: Response) => void
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise((resolve) => { acknowledge = resolve }))
+  const view = await mountCreationBoundary()
+  act(() => view.result.current.createProject())
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+  view.unmount()
+  await act(async () => { acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_disposed_create" } })) })
+  expect(view.refresh).not.toHaveBeenCalled()
+  expect(view.navigate).not.toHaveBeenCalled()
+})
+
+it("创建unknown显式恢复沿原key/body且不抢同主体已变选择", async () => {
+  const request = vi.spyOn(globalThis, "fetch")
+    .mockRejectedValueOnce(new Error("owner outcome unknown"))
+    .mockResolvedValueOnce(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_recovered_create" } }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(view.result.current.projectCreation.error).toBe(true))
+    const first = request.mock.calls[0]?.[1]
+    view.rerender({ subject: "reader-a", routeKey: "B" })
+    act(() => view.result.current.retryProjectCreation())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(1))
+    const recovered = request.mock.calls[1]?.[1]
+    expect(recovered?.headers).toEqual(first?.headers)
+    expect(recovered?.body).toBe(first?.body)
+    expect(view.navigate).not.toHaveBeenCalled()
+  } finally { view.unmount() }
+})
+
+it("创建已确认后导航失败仅重用返回ID，不第二次POST或刷新", async () => {
+  const request = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_navigation_failed" } }))
+  const view = await mountCreationBoundary()
+  view.navigate.mockImplementationOnce(() => { throw new Error("navigation unavailable") })
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(view.result.current.projectCreation.error).toBe(true))
+    expect(view.refresh).toHaveBeenCalledTimes(1)
+    act(() => view.result.current.retryProjectCreation())
+    await waitFor(() => expect(view.result.current.projectCreation.error).toBe(false))
+    expect(view.navigate).toHaveBeenCalledTimes(2)
+    expect(view.navigate.mock.calls.map((call) => call[0])).toEqual(["project_read_alpha", "project_read_alpha"])
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(view.refresh).toHaveBeenCalledTimes(1)
+  } finally { view.unmount() }
+})
+
+
+it("账号变化退役旧unknown且旧失败finally不抢新主体在途创建", async () => {
+  const replies: Array<(response: Response) => void> = []
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise((resolve) => { replies.push(resolve) }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    const first = request.mock.calls[0]?.[1]
+    view.rerender({ subject: "reader-b", routeKey: "A" })
+    act(() => view.result.current.retryProjectCreation())
+    expect(request).toHaveBeenCalledTimes(1)
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+    expect(request.mock.calls[1]?.[1]?.headers).not.toEqual(first?.headers)
+    await act(async () => { replies[0]?.(Response.json({ error: { code: "forbidden" } }, { status: 403 })) })
+    expect(view.result.current.projectCreation).toEqual({ pending: true, error: false, retryable: false })
+    act(() => view.result.current.createProject())
+    expect(request).toHaveBeenCalledTimes(2)
+    await act(async () => { replies[1]?.(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_new_actor" } })) })
+    expect(view.refresh).toHaveBeenCalledTimes(1)
+    expect(view.navigate).toHaveBeenCalledTimes(1)
+    expect(view.result.current.projectCreation).toEqual({ pending: false, error: false, retryable: false })
+  } finally { view.unmount() }
+})
+
+it("账号变化后已完成unknown不会阻挡新主体创建或重放旧key", async () => {
+  const request = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("unknown"))
+    .mockResolvedValueOnce(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_new_actor_after_unknown" } }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(view.result.current.projectCreation.error).toBe(true))
+    const first = request.mock.calls[0]?.[1]
+    view.rerender({ subject: "reader-b", routeKey: "A" })
+    act(() => view.result.current.retryProjectCreation())
+    expect(request).toHaveBeenCalledTimes(1)
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(view.navigate).toHaveBeenCalledTimes(1))
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[1]?.[1]?.headers).not.toEqual(first?.headers)
+  } finally { view.unmount() }
 })

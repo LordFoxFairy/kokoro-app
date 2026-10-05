@@ -1086,7 +1086,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function deleteConversation(id: string): Promise<boolean> {
-    if (disposed || !store || !store.conversations.some((entry) => entry.id === id)) {
+    if (disposed || !store) {
       return Promise.resolve(false)
     }
     if (deleteIntent !== null) {
