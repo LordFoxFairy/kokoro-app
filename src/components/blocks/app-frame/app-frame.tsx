@@ -24,7 +24,7 @@ import type { AppCommandMenuProps } from "./app-command-menu"
 
 import { AppCommandMenu } from "./app-command-menu"
 import { AppFrameComposer, type AppFrameComposerProps } from "./app-frame-composer"
-import { AppFrameMainSurface } from "./app-frame-main-surface"
+import { AppFrameBootingMainSurface, AppFrameMainSurface } from "./app-frame-main-surface"
 import { AppFrameOverlaySurfaces } from "./app-frame-overlay-surfaces"
 import { AppFrameShell } from "./app-frame-shell"
 import { DefaultEmptyState } from "./app-frame-status-surfaces"
@@ -44,12 +44,69 @@ import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
+import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
 export type { AppFrameProps, EmptyStateProps, WorkspaceCapabilities } from "./app-frame.types"
 export { COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation }
 
-export function AppFrame({
+function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<AppFrameProps, "brandName" | "projectWorkspace">) {
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const composer = (
+    <AppFrameComposer
+      preview={false}
+      brandName={brandName}
+      projectWorkspace={projectWorkspace}
+      hasMessages={false}
+      creationIntent={null}
+      onCreationIntentDismiss={() => undefined}
+      workspaceCapabilities={{ instructions: false, connectors: false, resources: false, skills: false, projectConversations: false }}
+      onOpenSettings={() => undefined}
+      draft=""
+      onDraftChange={() => undefined}
+      onKeyDown={() => undefined}
+      onSubmit={(event) => event.preventDefault()}
+      isStreaming={false}
+      canSend={false}
+      onStop={() => undefined}
+      composerRef={composerRef}
+      mode="fast"
+      onModeChange={() => undefined}
+      modeLocked
+      models={[]}
+      selectedModel={null}
+      onModelChange={() => undefined}
+      modelLocked
+      emptyWorkspace
+      agents={[]}
+      selectedAgent={null}
+      onAgentChange={() => undefined}
+      agentLocked
+    />
+  )
+  return (
+    <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro">
+      <div className={`${shellStyles.inset} flex flex-1`} data-slot="sidebar-inset">
+        <div className={shellStyles.workspace}>
+          <div className={`${shellStyles.mainPanel} flex-1`}>
+            <AppFrameBootingMainSurface composer={composer} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function AppFrame(props: AppFrameProps) {
+  return props.booting
+    ? <AppFrameBootingSurface
+        {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
+        {...(props.projectWorkspace === undefined ? {} : { projectWorkspace: props.projectWorkspace })}
+      />
+    : <AppFrameRuntime {...props} />
+}
+
+function AppFrameRuntime({
   engine: injectedEngine,
   brandName,
   brandMark,

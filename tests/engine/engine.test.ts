@@ -1783,9 +1783,7 @@ describe("snapshot-first 水合与中断恢复", () => {
       createId: (prefix) => `${prefix}_evict_${requested.length}`,
     })
 
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
     expect(requested).toEqual(["conv_9"])
     expect(engine.getSnapshot().store?.activeId).not.toBe("conv_9")
     expect(engine.getSnapshot().store?.conversations).toHaveLength(1)

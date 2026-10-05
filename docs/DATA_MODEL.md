@@ -1,3 +1,41 @@
+## R239 当前认证与工作区恢复数据边界
+
+本片不新增数据库、schema、migration、Redis key、browser business store、server cache、receipt 或第二身份事实。`serverAdmitted` 与 booting/unavailable 只存在于当前 render；data-free shell 不保存 subject、claims、Conversation、timeline 或 draft，也不读取 owner 私有数据。
+
+checking 只显示 disabled shell；probe timeout/unavailable 会卸载该壳与 composer，并保持 timeline、draft、snapshot/runtime owner I/O 为零，直到显式 Retry。可信 anonymous 卸载 Runtime 后只执行一次 native `/login`；不持久化 timer、navigation failure 或 Retry 中转状态。
+
+Snapshot/process 的 10 秒 deadline、AbortController 与分页累积只属于当前 mounted generation；全部严格验证前不写 thread、cursor、Run、Message 或 Conversation 投影，partial/late 结果丢弃。pagehide 只提交当时已捕获的 exact pending draft key/value；不改变 draft owner、retention 或清空语义。
+
+受控系统矩阵不证明原用户 3310 根因或恢复，亦不新增或验证费用数据事实。
+
+下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
+
+## R238 当前认证与恢复准入
+
+本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
+
+## R186-W-SNAPSHOT-DEADLINE：仅mounted读取生命周期（2026-10-04；tests-first）
+
+10秒snapshot总预算、AbortController、开始时刻与分页累积仅属于当前mounted engine generation，不持久化。完整snapshot与全部process页严格校验前不写thread、cursor、Run、Message或Conversation事实；timeout/dispose/scope切换丢弃临时累积及迟到回调。草稿与本地Conversation索引不因超时删除，显式Retry仍从owner snapshot重建。无localStorage/IndexedDB/SQL/Redis/schema或retention变化。
+
+## R177-WEB-PRD-NO-INTERSTITIAL：删除临时导航失败状态（2026-10-03；tests-first）
+
+目标态删除mounted `anonymousNavigationFailed`、10秒timer与可见Retry投影；只保留当前component instance的一次性native navigation guard，不持久化、不跨document。data-free booting、Product Session、OIDC state与IAM登录事实owner均不变；测试beacon只保存于隔离fixture内并只含phase/boolean，不成为应用receipt或第二身份事实。
+
+## R175-WEB-ANONYMOUS：无新增数据事实（2026-10-03；tests-first）
+
+anonymous时复用的booting composition仍只存在于当前React树，不保存subject、session、claims、Conversation、draft或navigation receipt，不写cookie、Redis、localStorage/IndexedDB。browser probe仍是撤权事实源；serverAdmitted只允许选择安全壳，不能恢复Runtime权限。测试beacon是隔离fixture的闭集观测，不是应用数据或新协议。
+
+## R173-SERVER-ADMITTED-SHELL：无新增事实（2026-10-03；tests-first）
+
+`serverAdmitted`与`booting`只存在于单次RSC/render composition，不写数据库、Redis、cookie、localStorage/IndexedDB、server cache、receipt或auth index，不跨reload恢复。booting subtree不mount任何data controller，因此不能读取旧Conversation/draft或创建owner请求；Product Session、subject、generation/tombstone与expiry仍由现owner及正式probe拥有。probe成功才mount Runtime；unavailable销毁booting presentation，anonymous撤权则保留无数据booting presentation等待native sign-in，二者都不采纳旧主体投影。
+
+## R167-SERVER-FIRST：无新增数据 owner（2026-10-03；待 tests-first）
+
+首文档 gate 不新增 Web 数据库、schema、migration、Redis key、browser storage、server cache、receipt或第二 session。它只读取现 HttpOnly Product Session 与现 Redis generation/tombstone，并检查 cookie claim 的 `accessExpiresAt`；可信事实和 retention 仍由现 Product Session owner路径维护。null/stale/tombstoned/expired 只驱动固定 `/login` redirect，不把 anonymous 写成持久状态；配置/Redis失败只形成当前请求的 fail-closed unavailable 输出。任何 claims/access/id/subject 均不得进入 RSC/client props、HTML、日志或 URL。
+
+成功后的 AppGate probe、browser auth-index marker 与 Conversation cache 边界保持不变；后者不是认证事实。layout 的首次 document 判定也不是后续 client navigation、focus revocation 或 BFF admission 的缓存。旧 IAB 文档卡住与新文档真实恢复并存，本片不新增诊断数据推断旧文档根因。
+
 ## R170-W-MOVE-UI：仅mounted intent（2026-10-04；候选已实现，发布待 Root 集成）
 
 Web不新增schema、Redis、localStorage/IndexedDB、receipt或Conversation归属缓存。唯一新增内存值是mounted engine的nullable frozen Move intent：canonical session、target Project或null、稳定command identity、`pending|unknown`。它不跨reload恢复，不成为owner事实；confirmed/rejected释放，unknown只供用户显式同值重试；无intent retry返回null，不制造空session/target/key记录。ACK前及失败时ConversationStore、draft、thread、Run、Message、cursor和scope均不改；ACK后target membership仍通过owner snapshot/list读取，不把receipt写成假列表项。

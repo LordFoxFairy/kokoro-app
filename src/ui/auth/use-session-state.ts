@@ -77,26 +77,28 @@ function requestSessionMode(): Promise<ResolvedSession> {
   return request
 }
 
-export function useSessionProbe(): SessionProbe {
+export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean }> = {}): SessionProbe {
+  const serverUnavailable = options.serverUnavailable === true
   const [retryGeneration, setRetryGeneration] = useState(0)
   const generationRef = useRef(0)
   const [probe, setProbe] = useState<SessionProbe>(() => ({
-    state: EXPLICIT_PREVIEW ? "pass" : "checking",
+    state: EXPLICIT_PREVIEW ? "pass" : serverUnavailable ? "unavailable" : "checking",
     mode: EXPLICIT_PREVIEW ? "preview" : "checking",
     projectReadBoundary: { admitted: false, subject: null, generation: 0 },
-    unavailable: false,
+    unavailable: serverUnavailable,
     requestPending: false,
     retry: () => undefined,
   }))
   const retry = useCallback(() => {
+    if (serverUnavailable) return
     setProbe((current) => current.mode === "authenticated"
       ? { ...current, requestPending: true }
       : { ...current, state: "checking", unavailable: false, requestPending: true })
     setRetryGeneration((current) => current + 1)
-  }, [])
+  }, [serverUnavailable])
 
   useEffect(() => {
-    if (EXPLICIT_PREVIEW) return
+    if (EXPLICIT_PREVIEW || serverUnavailable) return
     let live = true
     const check = (): void => {
       const currentGeneration = ++generationRef.current
@@ -177,7 +179,7 @@ export function useSessionProbe(): SessionProbe {
       document.removeEventListener("visibilitychange", onVisible)
       clearInterval(timer)
     }
-  }, [retry, retryGeneration])
+  }, [retry, retryGeneration, serverUnavailable])
 
   return probe
 }

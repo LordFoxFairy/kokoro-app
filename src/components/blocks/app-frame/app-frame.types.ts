@@ -53,6 +53,8 @@ export type WorkspaceCapabilities = {
 }
 
 export type AppFrameProps = {
+  /** Route-owned server-admitted shell; never mounts browser data controllers. */
+  booting?: boolean
   projectReadBoundary?: ProjectReadBoundary
   // 测试注入缝：不传则使用页面级单例引擎。
   engine?: SessionEngine | null

@@ -46,6 +46,33 @@ describe("useDraft persistence", () => {
       .toEqual({ "conversation-2": "keep this before navigation" })
   })
 
+  it("flushes the exact pending draft on pagehide without reviving a cleared draft", () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useDraft("conversation-pagehide", true))
+
+    act(() => result.current.updateDraft("keep this across a hard reload"))
+    act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}"))
+      .toEqual({ "conversation-pagehide": "keep this across a hard reload" })
+
+    act(() => result.current.updateDraft("must be cleared"))
+    act(() => result.current.clearDraft())
+    act(() => window.dispatchEvent(new PageTransitionEvent("pagehide")))
+    expect(JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? "{}"))
+      .toEqual({})
+  })
+
+  it("removes the pagehide listener when the scoped composer unmounts", () => {
+    const add = vi.spyOn(window, "addEventListener")
+    const remove = vi.spyOn(window, "removeEventListener")
+    const { unmount } = renderHook(() => useDraft("conversation-listener", true))
+    const registration = add.mock.calls.find(([type]) => type === "pagehide")
+
+    expect(registration).toBeDefined()
+    unmount()
+    expect(remove).toHaveBeenCalledWith("pagehide", registration?.[1])
+  })
+
   it("keeps an empty project's draft separate from a newer direct-chat draft", () => {
     const { result, rerender } = renderHook(
       ({ projectRef }: { projectRef: string | undefined }) => useDraft(null, true, projectRef),

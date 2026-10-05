@@ -1,5 +1,9 @@
 "use client";
 
+export function openProductSignIn(): void {
+  window.location.replace("/login");
+}
+
 async function currentCsrf(): Promise<string> {
   const response = await fetch("/api/auth/csrf", { cache: "no-store" });
   const raw: unknown = response.ok

@@ -1,3 +1,55 @@
+## R239 当前认证与工作区恢复边界
+
+Web 首文档采用 server-first Product Session admission：可信 Host、配置与现有 HttpOnly session/generation/tombstone/expiry 校验通过时，只向客户端传递无 claims 的 `serverAdmitted` 布尔值；anonymous 固定进入 `/login`，配置或 Redis 失败 fail closed。客户端 checking 阶段只挂载 data-free、禁用的工作区壳，不挂载 Runtime、Conversation、draft 或 owner clients。
+
+浏览器 probe 成功后才挂载 Runtime。可信 anonymous 同步卸载 Runtime 并且每个 mounted generation 只发起一次 native `/login`，不恢复旧 timer、自动 Retry 或可见中转页；checking 超时进入 unavailable 时卸载 admission 壳，显示显式 Retry，Retry 仍不得触发登录跳转或私有 owner I/O。
+
+首次 Conversation snapshot 的 headers、body、严格解析与全部 process 分页共享单一 10 秒 monotonic 预算；timeout、abort、dispose 或 scope/generation 改变均不采用 partial/late 结果，显式 Retry 从 owner 重读。pagehide 只 flush 已捕获的 exact pending draft key/value，不延长 debounce，也不复活已清空草稿。
+
+受控真实 Next/Chromium 系统矩阵用于验证本切片的 server-first、data-free、恢复与 fail-closed 边界，但不证明原用户 3310 页面根因或恢复，也不构成真实费用闭环。
+
+下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
+
+## R238 当前认证与恢复准入
+
+本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
+
+## R186-W-SNAPSHOT-DEADLINE：首次水合单一总预算（2026-10-04；tests-first）
+
+首次Conversation snapshot与其全部process分页共用一个私有固定10秒monotonic总预算，覆盖等待headers、读取body、解析及逐页耗尽，后续页面不得重置时钟。scope/conversation generation变化、engine dispose或预算耗尽都abort整次读取；partial snapshot/process不采用、不先开stream。首次超时沿现hydration error surface与显式Retry收敛，保草稿且不推断Run terminal；重试重新读取owner真态。已建立的AG-UI stream及snapshot后active-run reattach继续使用各自现有生命周期，不受该短预算截断。本片不新增wire、API、schema或第二网络协议。
+
+## R177-WEB-PRD-NO-INTERSTITIAL：native login 不恢复旧document重试页（2026-10-03；tests-first）
+
+R176真实Chromium对照证明：纯HTML与Next在held native document navigation期间都保持JS heartbeat，但Runtime/Page CDP读取失效；因此旧document的10秒watchdog既不能证明navigation失败，也会恢复用户已删除的整页Retry中转。目标态删除`anonymousNavigationFailed`、generation timer与该可见分支；可信anonymous仍同render卸载Runtime并保R175 data-free booting壳，每个mounted anonymous generation只发起一次现固定`window.location.replace('/login')`。native commit不由旧React状态推断；真正到达`/login`后只走现严格Host/Origin/query预检、302 IAM链或受控503，不新增中转、readiness API、nonce或fallback。
+
+系统验收保留原R165红为历史未过证据，但不再把“10–12秒出现整页Retry”当批准目标：新门在held navigation前与10秒后分别由闭集fixture beacon证明安全壳、私有事实/owner I/O为零且无alert/Retry；beacon不证明navigation commit。随后forward同一个真实document request，必须完成正式`/login`→IAM authorize→callback→新`/app` Product Session、enabled Runtime、reload与输入。原无cookieserver redirect及出网权限规则不变。
+
+## R175-WEB-ANONYMOUS：撤权后保留 data-free booting 壳（2026-10-03；tests-first）
+
+当前 `serverAdmitted` document 若 browser probe 返回可信 anonymous，AppGate 会同步卸载 Runtime，却改画整页 `RuntimeLoading`，同时既有 10 秒 watchdog 发起正式 `/login` document navigation；watchdog 只控制旧 document 的恢复提示，不能证明 native navigation 已 commit。本片不重写该 watchdog/OIDC 流程，只把 anonymous render 收敛为现 R173 `KokoroAppSurface booting`：同一次 commit 卸载 browser engine、Conversation/draft与owner clients，保留无 claims、禁用且不读取私有事实的既有壳；原生 login effect保持。首次无 Product cookie 仍由 server-first `307 /login`，不会借此壳伪造 admission。
+
+放置仍归现 `AppGate` composition，不改 probe、layout、login route或data hooks，也不新增组件/状态 owner。真实Next门在 held native navigation 前以页面内闭集 beacon 证明：anonymous commit 后无 `runtime-loading`、booting main/composer存在且禁用、无旧 timeline/draft、无 sessions/models/agents/Chat I/O；它不把 beacon 当身份或产品协议，也不宣称 navigation commit/原旧tab恢复。
+
+## R173-SERVER-ADMITTED-SHELL：集中 booting component boundary（2026-10-03；tests-first）
+
+当前 R169 在 layout 已验证 active Product Session，却仍由无初值 AppGate 输出整页 `RuntimeLoading`；客户端 10 秒探针不覆盖脚本下载、module graph 与 hydration 启动前。本片只由 layout 传无 claims 的 `serverAdmitted=true`，AppGate 在正式 probe 未完成时选择 `KokoroAppSurface` 的内部 `booting` composition。`AppFrame` 必须以独立 child component boundary 在 `BootingSurface` 与现完整 Runtime 之间选择：booting 复用现 `app-frame.module.css` 的 shell/inset/workspace/mainPanel 几何、现 MainSurface 的 main/thread/timeline CSS 与现 Composer，不建新 grid/padding 或第二套风格，同时根本不 mount 含 browser engine、Conversation/draft、list/models/agents/Project hooks 的 Runtime component。不得给各 hook 分散添加 `enabled`，不得把 probe 初值冒成 authenticated/pass，也不得引入第二壳、preview、subject/session/token/claim props。
+
+正式 `/api/auth/session` 成功且 auth-index fence 通过后才首次 mount Runtime；此前 ProjectReadBoundary 仍 blocked，所有本地旧 Conversation/draft与 BFF sessions/models/agents/Chat I/O 为零。首 probe 401/unavailable 必须卸下 booting shell并走现 unavailable UI；server-admitted document 的 anonymous 撤权保留同一 data-free booting壳并走现 native sign-in，不显示旧会话；成功后的 focus/revocation 与身份切换规则不变。局部目标文件为现 layout、AppGate、AppFrame props/AppFrame（必要时现 MainSurface presentation）；现 data hooks不改。旧 document 卡住的实际原因仍未知。
+
+## R167-SERVER-FIRST：`/app` 首文档 Product Session gate（2026-10-03；待 tests-first）
+
+当前 `src/app/app/layout.tsx` 的 SSR 无条件渲染 client `AppGate`，而生产态 `useSessionProbe` 初值固定为 `checking`，所以无会话的首个 HTML 也只能先输出 `runtime-loading`，再依赖水合、浏览器探针和 document navigation 离开。该独立缺口不等同于原 `conv_ffd7` 的直接根因；Root 已在同一 IAB 的新文档真实打开并 reload 原会话，旧文档 21/22 仍控制超时。
+
+| 放置项 | 决定 |
+| --- | --- |
+| Owner/目标 | Web 继续唯一拥有 Product Session cookie 解码、Redis generation/tombstone admission 与首文档 UX gate。初始 `/app` 及 nested route 在服务端先判定 Product Session；anonymous 不再等待水合后才离开 spinner。 |
+| 当前事实 | `product-session.ts` 的 `currentProductSession` 已复用 cookie decode/expiry 与 Redis inspection；`/api/auth/session` 另检查 `accessExpiresAt`。Redis owner 操作已有 2 秒界。现 layout 没有 server admission，AppGate 仍负责挂载后的 focus/visibility/retry/revocation。 |
+| 采用位置 | 扩展现 `src/app/app/layout.tsx` 作为 `/app/**` 首文档共同边界；从现 `oidcRpConfig(process.env)` 取得 session 所需配置，并复用 `currentProductSession` 加 access expiry。layout 优于全局 proxy：proxy 保持 security headers/IAM relay，业务 admission 留在现 app segment owner。若需收口 access-expiry 判断，只在现 `product-session.ts` 增加窄 helper；不建新文件、模块或认证抽象。 |
+| 状态/失败 | null、stale generation/tombstone 或 access expired 固定 `redirect("/login")`。配置或 Redis 失败必须 fail closed 到有限 unavailable 首屏，不误当 anonymous、不启动 OIDC、不传 claims/access/session id/subject 给 client。显式 preview 仍只允许非 production 已有开关。成功才渲染原 AppGate，且 client/BFF 每请求 admission 不删。 |
+| 淘汰/验证 | 淘汰 anonymous 首文档必须先 SSR spinner 再 client redirect 的唯一依赖；不删除 AppGate 后续 recheck。先在现真实 Next fixture 对 `/app` 与 `/app/skills` 无 cookie 写 RED：响应只能是实际 3xx Location `/login`，或 Next streaming redirect 的 200 表达；两者均不得含 `runtime-loading`。再覆盖 active cookie、expired/stale、Redis/config failure 与 preview。 |
+
+首个测试阶段只改三份 D0 与现 `tests/system/oidc-rp-next-http.integration.test.ts`；后继源码候选严格限现 `layout.tsx`、`product-session.ts`、`app-gate.tsx`、`use-session-state.ts`。Server Component layout 在 client navigation 可复用，因此本片只改善 initial document，不取代已挂载 tab 的 R165 recovery。redirect 的具体 HTTP status 必须以真实 Next 输出为准；不预写固定 307，streaming redirect 也必须严格证明固定 `/login` 且没有 spinner。
+
 ## R170-W-MOVE-UI：ACK-gated Conversation Move（2026-10-04；候选已实现，发布待 Root 集成）
 
 Root 已裁决运行中 Move：strict matching ACK 后立即导航到 target scope 并保留 canonical Conversation query；target-scope engine 从 owner snapshot/replay 继续观察已准入 Run，释放旧 scoped engine/stream不得发 cancel，下一条新消息才按新scope准入。非active行成功只刷新source list，绝不抢焦点。

@@ -270,6 +270,458 @@ async function sessionProbeProxy(nextPort: number): Promise<{
   }
 }
 
+type AuthRecoveryFault = "pass" | "pending" | "pending_body" | "unavailable" | "anonymous"
+type AuthRecoveryBodyDiagnostic = {
+  headersFlushed: boolean
+  partialWritten: boolean
+  closed: boolean
+  ended: boolean
+  elapsedMs: number | null
+  lateTailAttempted: boolean
+  lateTailDiscarded: boolean
+}
+
+function observeAnonymousSafetyHandoff(): void {
+  let sawRuntime = false
+  let sentCommit = false
+  const snapshot = (phase: "commit" | "watchdog"): void => {
+    const composer = document.querySelector('[data-slot="composer-input"]')
+    const retry = document.querySelector('[role="alert"] button')
+    void fetch("/__fixture/anonymous-handoff", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        phase,
+        booting: document.querySelector('[data-server-admitted-shell="true"]') !== null,
+        main: document.querySelector('[data-app-frame-main="true"]') !== null,
+        composer_disabled: composer instanceof HTMLTextAreaElement && composer.matches(":disabled"),
+        all_controls_disabled: [...document.querySelectorAll("button, input, select, textarea")]
+          .every((control) => control.matches(":disabled")),
+        runtime_loading: document.querySelector('[data-testid="runtime-loading"]') !== null,
+        app_frame_loading: document.querySelector('[data-testid="app-frame-loading"]') !== null,
+        private_timeline: document.querySelector('[data-slot="conversation-timeline"]') !== null,
+        draft_nonempty: composer instanceof HTMLTextAreaElement && composer.value.length > 0,
+        alert_visible: document.querySelector('[role="alert"]') !== null,
+        retry_visible: retry instanceof HTMLButtonElement && !retry.matches(":disabled"),
+      }),
+      keepalive: true,
+    }).catch(() => undefined)
+  }
+  const observe = (): void => {
+    const composer = document.querySelector('[data-slot="composer-input"]')
+    if (composer instanceof HTMLTextAreaElement && !composer.matches(":disabled") &&
+      document.querySelector('[data-server-admitted-shell="true"]') === null) sawRuntime = true
+    const booting = document.querySelector('[data-server-admitted-shell="true"]') !== null
+    if (!sawRuntime || !booting || sentCommit) return
+    sentCommit = true
+    snapshot("commit")
+    window.setTimeout(() => snapshot("watchdog"), 10_500)
+  }
+  const observer = new MutationObserver(observe)
+  observer.observe(document, { childList: true, subtree: true, attributes: true,
+    attributeFilter: ["disabled", "data-server-admitted-shell"] })
+  document.addEventListener("DOMContentLoaded", observe, { once: true })
+}
+
+async function authRecoveryProxy(nextPort: number): Promise<{
+  port: number
+  server: Server
+  close: () => Promise<void>
+  setFault: (fault: AuthRecoveryFault) => void
+  releasePending: () => void
+  releaseSessionBodies: () => void
+  sessionBodyDiagnostics: () => readonly AuthRecoveryBodyDiagnostic[]
+  setLoginPending: (pending: boolean) => void
+  releaseLoginRequests: () => void
+  forwardLoginRequests: () => void
+  heldLoginRequests: () => number
+  heldLoginDiagnostics: () => readonly { id: number; method: string; request_category: string; received_at_ms: number }[]
+  loginHoldOutcomes: () => readonly { id: number; outcome: "aborted" | "released" }[]
+  sessionResponseDiagnostics: () => readonly {
+    status: number
+    authenticated: boolean | null
+    completed_at_ms: number
+  }[]
+  anonymousHandoffDiagnostics: () => readonly {
+    phase: "commit" | "watchdog"
+    booting: boolean
+    main: boolean
+    composer_disabled: boolean
+    all_controls_disabled: boolean
+    runtime_loading: boolean
+    app_frame_loading: boolean
+    private_timeline: boolean
+    draft_nonempty: boolean
+    alert_visible: boolean
+    retry_visible: boolean
+  }[]
+  anonymousHandoffOwnerDiagnostics: () => readonly {
+    phase: "commit" | "watchdog"
+    session_owner: number
+    session_collection: number
+    messages: number
+    runtime_manifest: number
+  }[]
+  setListBodyPending: (pending: boolean) => void
+  releaseListBodies: () => void
+  sessionRequests: () => number
+  listRequests: () => number
+  heldListBodies: () => number
+  loginRequests: () => number
+  upgradeDiagnostics: () => readonly { path: string; requests: number }[]
+  connectDiagnostics: () => Readonly<{ requests: number; established: boolean }>
+  resourceDiagnostics: () => readonly {
+    path: string
+    requests: number
+    methods: Readonly<Record<string, number>>
+    request_categories: Readonly<Record<string, number>>
+    upstream_statuses: readonly number[]
+  }[]
+}> {
+  let fault: AuthRecoveryFault = "pass"
+  let probes = 0
+  let lists = 0
+  let logins = 0
+  let holdLogin = false
+  let holdListBody = false
+  const pending = new Set<{ request: import("node:http").IncomingMessage; response: import("node:http").ServerResponse }>()
+  const sessionBodies: {
+    response: import("node:http").ServerResponse
+    diagnostic: AuthRecoveryBodyDiagnostic
+  }[] = []
+  const pendingLogins = new Set<{
+    request: import("node:http").IncomingMessage
+    response: import("node:http").ServerResponse
+    id: number
+    requestCategory: string
+    receivedAtMs: number
+    released: boolean
+  }>()
+  const loginHoldOutcomes: { id: number; outcome: "aborted" | "released" }[] = []
+  let nextLoginHoldId = 1
+  const sessionResponses: { status: number; authenticated: boolean | null; completed_at_ms: number }[] = []
+  const anonymousHandoffs: {
+    phase: "commit" | "watchdog"
+    booting: boolean
+    main: boolean
+    composer_disabled: boolean
+    all_controls_disabled: boolean
+    runtime_loading: boolean
+    app_frame_loading: boolean
+    private_timeline: boolean
+    draft_nonempty: boolean
+    alert_visible: boolean
+    retry_visible: boolean
+  }[] = []
+  const anonymousHandoffOwners: {
+    phase: "commit" | "watchdog"
+    session_owner: number
+    session_collection: number
+    messages: number
+    runtime_manifest: number
+  }[] = []
+  const pendingListBodies = new Set<{ response: import("node:http").ServerResponse; tail: Buffer }>()
+  const resources = new Map<string, {
+    requests: number
+    methods: Record<string, number>
+    requestCategories: Record<string, number>
+    upstreamStatuses: number[]
+  }>()
+  const upgrades = new Map<string, number>()
+  const upstreamRequests = new Set<ReturnType<typeof httpRequest>>()
+  const tunnelSockets = new Set<Duplex>()
+  let connectRequests = 0
+  let connectEstablished = false
+
+  const forward = (request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse): void => {
+    if (response.destroyed) return
+    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
+    const resource = resources.get(target.pathname) ?? {
+      requests: 0, methods: {}, requestCategories: {}, upstreamStatuses: [],
+    }
+    resource.requests += 1
+    const method = request.method ?? "UNKNOWN"
+    resource.methods[method] = (resource.methods[method] ?? 0) + 1
+    const requestCategory = request.headers["sec-fetch-dest"] === "document"
+      ? "document"
+      : request.headers.rsc === "1" ? "rsc"
+      : request.headers["next-router-prefetch"] === "1" ? "router_prefetch" : "document_or_other"
+    resource.requestCategories[requestCategory] = (resource.requestCategories[requestCategory] ?? 0) + 1
+    resources.set(target.pathname, resource)
+    const upstream = httpRequest({ hostname: "127.0.0.1", port: nextPort, method: request.method,
+      path: `${target.pathname}${target.search}`, headers: { ...request.headers, host: `localhost:${nextPort}` } }, (reply) => {
+      if (resource.upstreamStatuses.length < 8) resource.upstreamStatuses.push(reply.statusCode ?? 0)
+      if (request.method === "GET" && target.pathname === "/api/auth/session") {
+        const chunks: Buffer[] = []
+        let size = 0
+        reply.on("data", (chunk: Buffer) => {
+          if (size + chunk.length <= 64 * 1024) chunks.push(chunk)
+          size += chunk.length
+        })
+        reply.once("end", () => {
+          let authenticated: boolean | null = null
+          if (size <= 64 * 1024) {
+            try {
+              const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { authenticated?: unknown }
+              if (typeof parsed.authenticated === "boolean") authenticated = parsed.authenticated
+            } catch { /* closed diagnostic only */ }
+          }
+          if (sessionResponses.length < 8) {
+            sessionResponses.push({ status: reply.statusCode ?? 0, authenticated, completed_at_ms: Date.now() })
+          }
+        })
+      }
+      response.writeHead(reply.statusCode ?? 502, reply.headers)
+      if (holdListBody && request.method === "GET" && target.pathname === "/api/session/sessions" && reply.statusCode === 200) {
+        const chunks: Buffer[] = []
+        reply.on("data", (chunk: Buffer) => chunks.push(chunk))
+        reply.once("end", () => {
+          const body = Buffer.concat(chunks)
+          const split = Math.max(0, body.length - 1)
+          if (split > 0) response.write(body.subarray(0, split))
+          const held = { response, tail: body.subarray(split) }
+          pendingListBodies.add(held)
+          response.once("close", () => pendingListBodies.delete(held))
+        })
+      } else reply.pipe(response)
+    })
+    upstreamRequests.add(upstream)
+    upstream.once("close", () => upstreamRequests.delete(upstream))
+    response.once("close", () => upstream.destroy())
+    request.once("aborted", () => upstream.destroy())
+    upstream.once("error", () => {
+      if (!response.headersSent) response.writeHead(502, { "content-type": "application/json" })
+      response.end(JSON.stringify({ error: { code: "fixture_upstream_unavailable" } }))
+    })
+    if (request.method === "GET" || request.method === "HEAD") upstream.end()
+    else request.pipe(upstream)
+  }
+
+  const server = createServer((request, response) => {
+    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
+    if (request.method === "POST" && target.pathname === "/__fixture/anonymous-handoff") {
+      const chunks: Buffer[] = []
+      let size = 0
+      request.on("data", (chunk: Buffer) => {
+        size += chunk.length
+        if (size <= 1024) chunks.push(chunk)
+      })
+      request.once("end", () => {
+        if (size <= 1024 && anonymousHandoffs.length < 4) {
+          try {
+            const value = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>
+            const keys = ["booting", "main", "composer_disabled", "all_controls_disabled", "runtime_loading", "app_frame_loading",
+              "private_timeline", "draft_nonempty", "alert_visible", "retry_visible"] as const
+            if ((value.phase === "commit" || value.phase === "watchdog") &&
+              Object.keys(value).length === keys.length + 1 && keys.every((key) => typeof value[key] === "boolean")) {
+              anonymousHandoffs.push({ phase: value.phase,
+                ...Object.fromEntries(keys.map((key) => [key, value[key]])) } as typeof anonymousHandoffs[number])
+              const count = (predicate: (path: string) => boolean): number => [...resources.entries()]
+                .filter(([path]) => predicate(path)).reduce((total, [, resource]) => total + resource.requests, 0)
+              anonymousHandoffOwners.push({
+                phase: value.phase,
+                session_owner: count((path) => path.startsWith("/api/session/")),
+                session_collection: count((path) => path === "/api/session/sessions"),
+                messages: count((path) => /^\/api\/session\/sessions\/[^/]+\/messages$/u.test(path)),
+                runtime_manifest: count((path) => path === "/api/system/runtime-manifest"),
+              })
+            }
+          } catch { /* closed fixture observation */ }
+        }
+        response.writeHead(204, { "cache-control": "no-store" })
+        response.end()
+      })
+      return
+    }
+    if (target.pathname === "/login") {
+      logins += 1
+      if (holdLogin) {
+        const requestCategory = request.headers["sec-fetch-dest"] === "document"
+          ? "document" : request.headers.rsc === "1" ? "rsc" : "document_or_other"
+        const held = { request, response, id: nextLoginHoldId++, requestCategory, receivedAtMs: Date.now(), released: false }
+        pendingLogins.add(held)
+        response.once("close", () => {
+          pendingLogins.delete(held)
+          if (loginHoldOutcomes.length < 8) {
+            loginHoldOutcomes.push({ id: held.id, outcome: held.released ? "released" : "aborted" })
+          }
+        })
+        return
+      }
+    }
+    if (request.method === "GET" && target.pathname === "/api/session/sessions") lists += 1
+    if (request.method === "GET" && target.pathname === "/api/auth/session") {
+      probes += 1
+      if (fault === "pending") {
+        const held = { request, response }
+        pending.add(held)
+        response.once("close", () => pending.delete(held))
+        return
+      }
+      if (fault === "pending_body") {
+        const startedAt = Date.now()
+        const diagnostic: AuthRecoveryBodyDiagnostic = {
+          headersFlushed: false, partialWritten: false, closed: false, ended: false,
+          elapsedMs: null, lateTailAttempted: false, lateTailDiscarded: false,
+        }
+        sessionBodies.push({ response, diagnostic })
+        response.once("close", () => {
+          diagnostic.closed = true
+          diagnostic.ended = response.writableEnded
+          diagnostic.elapsedMs = Date.now() - startedAt
+        })
+        response.writeHead(200, {
+          "content-type": "application/json", "cache-control": "no-store",
+          "x-kokoro-test-session-body": "pending",
+        })
+        response.flushHeaders()
+        diagnostic.headersFlushed = true
+        response.write('{"authenticated":', (error) => { diagnostic.partialWritten = error == null })
+        return
+      }
+      if (fault === "unavailable") {
+        response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" })
+        response.end(JSON.stringify({ error: { code: "product_session_unavailable", message: "fixture unavailable" } }))
+        return
+      }
+      if (fault === "anonymous") {
+        response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+        response.end(JSON.stringify({ authenticated: false }))
+        if (sessionResponses.length < 8) {
+          sessionResponses.push({ status: 200, authenticated: false, completed_at_ms: Date.now() })
+        }
+        return
+      }
+    }
+    forward(request, response)
+  })
+  server.on("upgrade", (request, socket) => {
+    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
+    upgrades.set(target.pathname, (upgrades.get(target.pathname) ?? 0) + 1)
+    socket.destroy()
+  })
+  server.on("connect", (request, clientSocket, head) => {
+    connectRequests += 1
+    tunnelSockets.add(clientSocket)
+    clientSocket.once("close", () => tunnelSockets.delete(clientSocket))
+    if (request.url !== `localhost:${nextPort}`) {
+      clientSocket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
+      return
+    }
+    const upstreamSocket = netConnect({ host: "127.0.0.1", port: nextPort })
+    tunnelSockets.add(upstreamSocket)
+    upstreamSocket.once("close", () => tunnelSockets.delete(upstreamSocket))
+    clientSocket.once("error", () => upstreamSocket.destroy())
+    upstreamSocket.once("error", () => clientSocket.destroy())
+    upstreamSocket.once("connect", () => {
+      connectEstablished = true
+      clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n")
+      if (head.length > 0) upstreamSocket.write(head)
+      clientSocket.pipe(upstreamSocket)
+      upstreamSocket.pipe(clientSocket)
+    })
+  })
+  const port = await listen(server)
+  return {
+    port,
+    server,
+    close: async () => {
+      for (const held of pending) {
+        held.request.destroy()
+        held.response.destroy()
+      }
+      pending.clear()
+      for (const held of sessionBodies) held.response.destroy()
+      sessionBodies.length = 0
+      for (const held of pendingLogins) {
+        held.request.destroy()
+        held.response.destroy()
+      }
+      pendingLogins.clear()
+      for (const held of pendingListBodies) held.response.destroy()
+      pendingListBodies.clear()
+      for (const request of upstreamRequests) request.destroy()
+      for (const socket of tunnelSockets) socket.destroy()
+      upstreamRequests.clear()
+      tunnelSockets.clear()
+      await close(server)
+    },
+    setFault: (next) => { fault = next },
+    releasePending: () => {
+      for (const held of pending) {
+        pending.delete(held)
+        forward(held.request, held.response)
+      }
+    },
+    releaseSessionBodies: () => {
+      for (const held of sessionBodies) {
+        if (held.diagnostic.lateTailAttempted) continue
+        held.diagnostic.lateTailAttempted = true
+        held.diagnostic.lateTailDiscarded = held.response.destroyed
+        // Retain the closed response for the oracle: an aborted body must not
+        // reopen a socket or deliver its contradictory anonymous tail.
+        if (!held.response.destroyed) held.response.end("false}")
+      }
+    },
+    sessionBodyDiagnostics: () => sessionBodies.map(({ diagnostic }) => ({ ...diagnostic })),
+    setLoginPending: (next) => { holdLogin = next },
+    releaseLoginRequests: () => {
+      holdLogin = false
+      for (const held of pendingLogins) {
+        pendingLogins.delete(held)
+        if (!held.response.destroyed) {
+          held.released = true
+          held.response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" })
+          held.response.end(JSON.stringify({ error: { code: "fixture_login_navigation_unavailable" } }))
+        }
+      }
+    },
+    forwardLoginRequests: () => {
+      holdLogin = false
+      for (const held of pendingLogins) {
+        pendingLogins.delete(held)
+        if (!held.response.destroyed) {
+          held.released = true
+          forward(held.request, held.response)
+        }
+      }
+    },
+    heldLoginRequests: () => pendingLogins.size,
+    heldLoginDiagnostics: () => [...pendingLogins].slice(0, 8).map((held) => ({
+      id: held.id,
+      method: held.request.method ?? "UNKNOWN",
+      request_category: held.requestCategory,
+      received_at_ms: held.receivedAtMs,
+    })),
+    loginHoldOutcomes: () => loginHoldOutcomes.slice(),
+    sessionResponseDiagnostics: () => sessionResponses.slice(),
+    anonymousHandoffDiagnostics: () => anonymousHandoffs.slice(),
+    anonymousHandoffOwnerDiagnostics: () => anonymousHandoffOwners.slice(),
+    setListBodyPending: (next) => { holdListBody = next },
+    releaseListBodies: () => {
+      holdListBody = false
+      for (const held of pendingListBodies) {
+        pendingListBodies.delete(held)
+        if (!held.response.destroyed) held.response.end(held.tail)
+      }
+    },
+    sessionRequests: () => probes,
+    listRequests: () => lists,
+    heldListBodies: () => pendingListBodies.size,
+    loginRequests: () => logins,
+    upgradeDiagnostics: () => [...upgrades.entries()].slice(0, 20).map(([path, requests]) => ({ path, requests })),
+    connectDiagnostics: () => ({ requests: connectRequests, established: connectEstablished }),
+    resourceDiagnostics: () => [...resources.entries()].slice(0, 100).map(([path, value]) => ({
+      path,
+      requests: value.requests,
+      methods: value.methods,
+      request_categories: value.requestCategories,
+      upstream_statuses: value.upstreamStatuses,
+    })),
+  }
+}
+
+
 async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   await new Promise<void>((resolve, reject) => {
@@ -1633,7 +2085,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         try {
           appResponse = await http(nextPort, "/app", "GET", "", {}, Math.min(5_000, setupDeadline - Date.now()))
           appCompileReadinessStatus = appResponse.status
-          if (appResponse.status === 200) {
+          const compiledReady = (
+            appResponse.status === 200 ||
+            (appResponse.status === 307 && appResponse.headers.location === "/login")
+          ) && nextErrorCategories(output).length === 0
+          if (compiledReady) {
             appCompileReadinessMs = Date.now() - compileStartedAt
             return
           }
@@ -1961,18 +2417,41 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(productCookie).toBeDefined()
     expect(productCookie).toMatch(/^kokoro_product_session=[^;]+;/u)
 
+    const productJar = cookieHeader(signin, callback)
+    const admittedDocument = await http(nextPort, "/app", "GET", "", { cookie: productJar })
+    expect(admittedDocument.status).toBe(200)
+    expect(admittedDocument.body).not.toContain('data-testid="runtime-loading"')
+    expect(admittedDocument.body).toContain('data-app-frame-main="true"')
+    expect(admittedDocument.body).toContain('data-slot="composer-input"')
+
     let browser: Browser | undefined
     let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
     const outputStart = output.length
     try {
       browser = await chromium.launch({ headless: true })
-      context = await browser.newContext()
       const origin = `http://localhost:${nextPort}`
-      const productJar = cookieHeader(signin, callback)
-      await context.addCookies(productJar.split(/;\s*/u).flatMap((pair) => {
+      const cookies = productJar.split(/;\s*/u).flatMap((pair) => {
         const separator = pair.indexOf("=")
         return separator > 0 ? [{ name: pair.slice(0, separator), value: pair.slice(separator + 1), url: origin }] : []
-      }))
+      })
+      const noScriptContext = await browser.newContext({ javaScriptEnabled: false })
+      try {
+        await noScriptContext.addCookies(cookies)
+        const noScriptPage = await noScriptContext.newPage()
+        const noScriptResponse = await noScriptPage.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: 12_000 })
+        expect(noScriptResponse?.status()).toBe(200)
+        await noScriptPage.locator('[data-app-frame-main="true"]').waitFor({ state: "visible" })
+        expect(await noScriptPage.locator('[data-app-frame-main="true"]').isVisible()).toBe(true)
+        await noScriptPage.locator('[data-slot="composer-input"]').waitFor({ state: "visible" })
+        expect(await noScriptPage.locator('[data-slot="composer-input"]').isVisible()).toBe(true)
+        expect(await noScriptPage.locator('[data-slot="composer-input"]').isDisabled()).toBe(true)
+        expect(await noScriptPage.getByTestId("runtime-loading").count()).toBe(0)
+        expect(await noScriptPage.getByTestId("app-frame-loading").count()).toBe(0)
+      } finally {
+        await noScriptContext.close()
+      }
+      context = await browser.newContext()
+      await context.addCookies(cookies)
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
       let sessionRequests = 0
@@ -2026,8 +2505,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         }
         if (response?.status() !== 200) throw new Error(await diagnostic(`${stage}_document_status`))
         try {
+          await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
           await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
           await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+          expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
         } catch (error) {
           throw new AggregateError([error], await diagnostic(`${stage}_convergence`))
         }
@@ -2108,7 +2589,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         const heartbeat = window.setInterval(() => {
           probe.ticks = Math.min(100, probe.ticks + 1)
           observe()
-          if (probe.appSeen === 1 || probe.ticks === 100) {
+          if ((probe.appSeen === 1 && document.querySelector('[data-server-admitted-shell="true"]') === null) || probe.ticks === 100) {
             observer.disconnect()
             window.clearInterval(heartbeat)
           }
@@ -2140,9 +2621,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded" })
       if (response?.status() !== 200) throw new Error(await diagnostic("focus_document", response))
       await requireSessionProbe("focus_pending_probe", 1, page, response, proxy, outputStart)
-      if (!await page.getByTestId("runtime-loading").isVisible()) {
-        throw new Error(await diagnostic("focus_pending_loading", response))
-      }
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "visible" })
+      expect(await page.locator('[data-app-frame-main="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isDisabled()).toBe(true)
+      expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+      expect(proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)).toBe(0)
 
       const focusBaseline = await heartbeat()
       await page.evaluate(async () => {
@@ -2152,7 +2639,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         }
       })
       const pendingHeartbeat = await heartbeat()
-      expect(pendingHeartbeat).toMatchObject({ init: 1, microtask: 1, domContentLoaded: 1, loadingSeen: 1 })
+      expect(pendingHeartbeat).toMatchObject({ init: 1, microtask: 1, domContentLoaded: 1, loadingSeen: 0, appSeen: 1 })
       expect(pendingHeartbeat?.focusEvents).toBe((focusBaseline?.focusEvents ?? 0) + 8)
       expect((pendingHeartbeat?.ticks ?? 0) > (focusBaseline?.ticks ?? 0)).toBe(true)
       expect(proxy.sessionRequests()).toBe(1)
@@ -2163,8 +2650,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       proxy.releasePending()
       try {
         await expect.poll(() => sessionStatuses, { timeout: remaining() }).toContain(200)
+        await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
         await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
         await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+        expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
         await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       } catch (error) {
         throw new AggregateError([error], await diagnostic("focus_release_convergence", response))
@@ -2273,8 +2762,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
       if (response?.status() !== 200) throw new Error(await diagnostic("preference_document"))
       try {
+        await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
         await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
         await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+        expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
         await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       } catch (error) {
         throw new Error(await diagnostic("preference_convergence"), { cause: error })
@@ -2313,8 +2804,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: reloadRemaining() })
       if (reload?.status() !== 200) throw new Error(await diagnostic("preference_reload_document"))
       try {
+        await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: reloadRemaining() })
         await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: reloadRemaining() })
         await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: reloadRemaining() })
+        expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(true)
         await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: reloadRemaining() }).toBe(0)
       } catch (error) {
         throw new Error(await diagnostic("preference_reload_convergence"), { cause: error })
@@ -2420,12 +2913,24 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
       proxy.setFault("pending")
+      await admitBrowserContext(context)
       const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
       if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic("pending_document", page, response, proxy, outputStart))
       await requireSessionProbe("pending_probe_barrier", 1, page, response, proxy, outputStart)
-      if (!await page.getByTestId("runtime-loading").isVisible()) {
+      if (!await page.locator('[data-server-admitted-shell="true"]').isVisible()) {
         throw new Error(await browserProbeDiagnostic("pending_loading", page, response, proxy, outputStart))
       }
+      const composer = page.locator('[data-slot="composer-input"]')
+      expect(await composer.isVisible()).toBe(true)
+      expect(await composer.isDisabled()).toBe(true)
+      expect(await composer.inputValue()).toBe("")
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+      expect(proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)).toBe(0)
+      expect(proxy.loginRequests()).toBe(0)
       await page.evaluate(() => {
         window.dispatchEvent(new Event("focus"))
         window.dispatchEvent(new Event("focus"))
@@ -2436,22 +2941,27 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       catch { throw new Error(await browserProbeDiagnostic("pending_alert", page, response, proxy, outputStart)) }
       expect(proxy.sessionRequests()).toBe(1)
       expect(new URL(page.url()).pathname).toBe("/app")
+      expect(await page.locator('[data-server-admitted-shell="true"]').count()).toBe(0)
+      expect(await composer.count()).toBe(0)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+      expect(proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)).toBe(0)
+      expect(proxy.loginRequests()).toBe(0)
 
       proxy.setFault("pass")
-      const recoveryDeadline = Date.now() + 10_000
+      const recoveryDeadline = Date.now() + 18_000
       const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
       await retry.click()
-      await expect.poll(() => proxy.loginRequests(), { timeout: recoveryBudget() }).toBeGreaterThan(0)
-      expect(proxy.sessionRequests()).toBeGreaterThanOrEqual(2)
+      await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
+      expect(proxy.loginRequests()).toBe(0)
       proxy.releasePending()
-      try {
-        await expect.poll(async () => {
-          const pathname = new URL(page.url()).pathname
-          return pathname !== "/app" || await page.locator('[data-app-frame-main="true"]').count() > 0
-        }, { timeout: recoveryBudget() }).toBe(true)
-      } catch {
-        throw new Error(await browserProbeDiagnostic("pending_recovery", page, response, proxy, outputStart))
-      }
+      await requireStableAuthenticatedWorkspace(
+        "pending_recovery", page, response, proxy, outputStart, recoveryDeadline,
+      )
+      expect(proxy.loginRequests()).toBe(0)
       await expect.poll(() => alert.count(), { timeout: recoveryBudget() }).toBe(0)
       await context.close()
     } finally {
@@ -2459,7 +2969,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       try { await browser?.close() }
       finally { await proxy.close() }
     }
-  }, 45_000)
+  }, 60_000)
 
   it("R139 keeps a 503 session probe on an explicit retry surface instead of redirecting to login", async () => {
     const proxy = await sessionProbeProxy(nextPort)
@@ -2470,6 +2980,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
       proxy.setFault("unavailable")
       const context = await browser.newContext()
+      await admitBrowserContext(context)
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
       const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
@@ -2484,15 +2995,21 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.sessionRequests()).toBe(1)
 
       proxy.setFault("pass")
+      const recoveryDeadline = Date.now() + 15_000
+      const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
       await retry.click()
-      await expect.poll(() => proxy.loginRequests()).toBeGreaterThan(0)
-      expect(proxy.sessionRequests()).toBeGreaterThanOrEqual(2)
+      await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
+      expect(proxy.loginRequests()).toBe(0)
+      await requireStableAuthenticatedWorkspace(
+        "unavailable_recovery", page, response, proxy, outputStart, recoveryDeadline,
+      )
+      expect(proxy.loginRequests()).toBe(0)
       await context.close()
     } finally {
       try { await browser?.close() }
       finally { await proxy.close() }
     }
-  }, 30_000)
+  }, 60_000)
 
   it("R139 preserves a real anonymous 200 response as the only automatic login path", async () => {
     const proxy = await sessionProbeProxy(nextPort)
@@ -4021,8 +4538,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await retry.click()
       await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
       expect(moveBoundaryRequests[1]).toEqual(frozenRequest)
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectA}`)
+      await expect.poll(() => {
+        const url = new URL(page.url())
+        return `${url.pathname}${url.search}`
+      }, { timeout: 10_000 }).toBe(`/app/project/${moveProjectA}?conversation=${moveConversationA}`)
       expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
       await page.getByText("R192 binding survives the filtered view move", { exact: true })
         .waitFor({ state: "visible", timeout: 10_000 })
@@ -4136,5 +4655,315 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }
     }
   }, 45_000)
+
+
+  async function requireStableAuthenticatedWorkspace(
+    stage: string,
+    page: Page,
+    response: BrowserResponse | null,
+    proxy: Awaited<ReturnType<typeof sessionProbeProxy>>,
+    outputStart: number,
+    deadline: number,
+    failureDiagnostic?: (stage: string) => Promise<string>,
+  ): Promise<void> {
+    const remaining = (): number => Math.max(1, deadline - Date.now())
+    try {
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+
+      const sessionsBeforeReload = proxy.sessionRequests()
+      const reloadResponse = await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+      if (reloadResponse?.status() !== 200) {
+        throw new Error(`reload document status ${reloadResponse?.status() ?? "missing"}`)
+      }
+      await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBeGreaterThan(sessionsBeforeReload)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+    } catch (error) {
+      const diagnostic = failureDiagnostic === undefined
+        ? await browserProbeDiagnostic(stage, page, response, proxy, outputStart)
+        : await failureDiagnostic(stage)
+      throw new Error(diagnostic, { cause: error })
+    }
+  }
+
+  function expectServerFirstAnonymousRedirect(response: HttpResult): void {
+    expect(response.body).not.toContain('data-testid="runtime-loading"')
+    if (response.status >= 300 && response.status < 400) {
+      expect(response.headers.location).toBe("/login")
+      return
+    }
+    expect(response.status).toBe(200)
+    expect(response.body).toMatch(/(?:NEXT_REDIRECT[^<]{0,512}\/login|<meta[^>]+url=\/login)/u)
+  }
+
+  it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
+    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
+    expectServerFirstAnonymousRedirect(response)
+  })
+
+  it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
+    const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
+    expectServerFirstAnonymousRedirect(response)
+  })
+
+
+  it("R175 removes private Runtime before a server-admitted document hands anonymous control to native login", async () => {
+    const proxy = await authRecoveryProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    const outputStart = output.length
+    try {
+      proxy.setLoginPending(true)
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(observeAnonymousSafetyHandoff)
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
+        "anonymous_handoff_document", page, response, proxy, outputStart,
+      ))
+      const runtimeDeadline = Date.now() + 12_000
+      await requireStableAuthenticatedWorkspace(
+        "anonymous_handoff_runtime", page, response, proxy, outputStart, runtimeDeadline,
+      )
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill("private-draft-must-not-survive-anonymous-handoff")
+      const ownerRequests = (): number => proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)
+      const ownerBaseline = ownerRequests()
+      const probeBaseline = proxy.sessionRequests()
+
+      proxy.setFault("anonymous")
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
+      await expect.poll(() => proxy.anonymousHandoffDiagnostics().length, { timeout: 10_000 }).toBe(1)
+      expect(proxy.anonymousHandoffDiagnostics()[0]).toEqual({
+        phase: "commit",
+        booting: true,
+        main: true,
+        composer_disabled: true,
+        all_controls_disabled: true,
+        runtime_loading: false,
+        app_frame_loading: false,
+        private_timeline: false,
+        draft_nonempty: false,
+        alert_visible: false,
+        retry_visible: false,
+      })
+      expect(ownerRequests()).toBe(ownerBaseline)
+      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
+      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
+      expect(proxy.loginRequests()).toBe(1)
+    } finally {
+      proxy.releaseLoginRequests()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R177 keeps anonymous native handoff data-free without reviving a visible retry interstitial", async () => {
+    const proxy = await authRecoveryProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    const outputStart = output.length
+    try {
+      proxy.setLoginPending(true)
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(observeAnonymousSafetyHandoff)
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
+        "no_interstitial_document", page, response, proxy, outputStart,
+      ))
+      await requireStableAuthenticatedWorkspace(
+        "no_interstitial_runtime", page, response, proxy, outputStart, Date.now() + 12_000,
+      )
+      await page.locator('[data-slot="composer-input"]').fill("private-draft-must-be-removed-before-native-login")
+      const ownerRequests = (): number => proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)
+      const ownerSnapshot = () => ({
+        session_owner: proxy.resourceDiagnostics().filter(({ path }) => path.startsWith("/api/session/"))
+          .reduce((total, resource) => total + resource.requests, 0),
+        session_collection: proxy.resourceDiagnostics().find(({ path }) => path === "/api/session/sessions")?.requests ?? 0,
+        messages: proxy.resourceDiagnostics().filter(({ path }) => /^\/api\/session\/sessions\/[^/]+\/messages$/u.test(path))
+          .reduce((total, resource) => total + resource.requests, 0),
+        runtime_manifest: proxy.resourceDiagnostics().find(({ path }) => path === "/api/system/runtime-manifest")?.requests ?? 0,
+      })
+      const ownerBaseline = ownerRequests()
+      const ownerBeforeHandoff = ownerSnapshot()
+      const probeBaseline = proxy.sessionRequests()
+      const resource = (path: string) => proxy.resourceDiagnostics().find((candidate) => candidate.path === path)
+      const appDocumentsBeforeHandoff = resource("/app")?.request_categories.document ?? 0
+
+      proxy.setFault("anonymous")
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
+      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
+      await expect.poll(
+        () => proxy.anonymousHandoffDiagnostics().filter(({ phase }) => phase === "watchdog").length,
+        { timeout: 12_000 },
+      ).toBe(1)
+      const expectedSafeShell = {
+        booting: true,
+        main: true,
+        composer_disabled: true,
+        all_controls_disabled: true,
+        runtime_loading: false,
+        app_frame_loading: false,
+        private_timeline: false,
+        draft_nonempty: false,
+        alert_visible: false,
+        retry_visible: false,
+      }
+      expect(proxy.anonymousHandoffDiagnostics()).toEqual([
+        { phase: "commit", ...expectedSafeShell },
+        { phase: "watchdog", ...expectedSafeShell },
+      ])
+      console.log("KOKORO_TEST_R177_HANDOFF_OWNER_DIAGNOSTIC " + JSON.stringify({
+        before_handoff: ownerBeforeHandoff,
+        at_beacons: proxy.anonymousHandoffOwnerDiagnostics(),
+        after_watchdog: ownerSnapshot(),
+      }))
+      expect(ownerRequests()).toBe(ownerBaseline)
+      expect(proxy.loginRequests()).toBe(1)
+      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
+
+      proxy.setFault("pass")
+      proxy.forwardLoginRequests()
+      const recoveryDeadline = Date.now() + 18_000
+      await requireStableAuthenticatedWorkspace(
+        "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
+      )
+      expect(resource("/login")?.upstream_statuses).toContain(302)
+      expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
+      expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
+      expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
+      expect(proxy.sessionResponseDiagnostics().at(-1)).toMatchObject({ status: 200, authenticated: true })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill("r177-native-login-recovered")
+      await expect.poll(() => composer.inputValue(), { timeout: Math.max(1, recoveryDeadline - Date.now()) })
+        .toBe("r177-native-login-recovered")
+      await composer.fill("")
+    } finally {
+      proxy.releaseLoginRequests()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R186 bounds an initial snapshot across headers and recovery instead of leaving the workspace loading forever", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    let releaseHeldSnapshot: (() => Promise<void>) | undefined
+    let browserSnapshotRequests = 0
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
+      await conversationA.click()
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe("session-list-a")
+      const composer = page.locator('[data-slot="composer-input"]')
+      const draft = "R186 snapshot timeout keeps this local draft"
+      await composer.fill(draft)
+      const successfulSnapshotsBeforeHold = sessionSnapshotRequests
+
+      await page.route(/\/api\/session\/sessions\/session-list-a(?:\?scope=direct)?$/u, async (route) => {
+        browserSnapshotRequests += 1
+        if (browserSnapshotRequests !== 1) {
+          await route.continue()
+          return
+        }
+        await new Promise<void>((resolve) => {
+          let released = false
+          releaseHeldSnapshot = async () => {
+            if (released) return
+            released = true
+            try { await route.continue() }
+            catch { /* an owned deadline may already have aborted the held browser request */ }
+            finally { resolve() }
+          }
+        })
+      })
+      const heldReload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(heldReload?.status()).toBe(200)
+      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
+      expect(await page.getByTestId("app-frame-loading").isVisible()).toBe(true)
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+
+      const errorSurface = page.getByTestId("app-frame-conversation-error")
+      await errorSurface.waitFor({ state: "visible", timeout: 12_000 })
+      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
+
+      await errorSurface.getByRole("button", { name: /Retry|重试/u }).click()
+      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(2)
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 })
+        .toBe(successfulSnapshotsBeforeHold + 1)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(await composer.inputValue()).toBe(draft)
+
+      await releaseHeldSnapshot?.()
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(1)
+      const snapshotRequestsBeforeReload = sessionSnapshotRequests
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 }).toBe(draft)
+      expect(sessionSnapshotRequests).toBeGreaterThan(snapshotRequestsBeforeReload)
+    } finally {
+      await releaseHeldSnapshot?.()
+      sessionSnapshotRequests = 0
+      sessionBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
 
 })

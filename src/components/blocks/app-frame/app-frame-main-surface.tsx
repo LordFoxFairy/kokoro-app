@@ -54,6 +54,23 @@ export type AppFrameMainSurfaceProps = {
   canvas: CanvasWorkspace
 }
 
+/** Data-free server-admitted presentation; the Runtime component is not mounted. */
+export function AppFrameBootingMainSurface({ composer }: { composer: ReactNode }) {
+  const t = useT()
+  return (
+    <section
+      className={`${mainStyles.main} ${statusStyles.threadFrame}`}
+      data-app-frame-main="true"
+      data-server-admitted-shell="true"
+      data-desktop-web="true"
+      data-web-view="welcome"
+    >
+      <div className={statusStyles.timelineStage} aria-hidden="true" />
+      <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset>
+    </section>
+  )
+}
+
 /** Owns the main workbench stage: header, state projection, timeline, and Composer slot. */
 export function AppFrameMainSurface({
   brandName,

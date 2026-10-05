@@ -45,6 +45,11 @@ export async function currentProductSession(request: Request, config: StoreConfi
   return await inspectSession(config, claims.id, claims.generation) ? claims : null
 }
 
+export async function activeProductSession(request: Request, config: StoreConfig): Promise<ProductClaims | null> {
+  const claims = await currentProductSession(request, config)
+  return claims !== null && claims.accessExpiresAt > Date.now() ? claims : null
+}
+
 function secureProductCookie(webOrigin: string): boolean {
   const protocol = new URL(webOrigin).protocol
   if (protocol !== "http:" && protocol !== "https:") throw new Error("invalid Product Session origin")

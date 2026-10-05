@@ -1,3 +1,43 @@
+## R239 当前认证与工作区恢复契约
+
+本片不新增公开 API、browser-private route、wire schema 或 owner 协议。`serverAdmitted` 只是单次 RSC composition 的无 claims 布尔输入；Product Session、actor、subject、generation、tombstone 与 expiry 仍由现有受信 cookie/Redis/session probe 边界拥有，浏览器不得自报。
+
+首文档 anonymous 只允许固定 `/login`；配置/Redis/Host 异常投影为有限 unavailable，不能伪装 anonymous。客户端 checking 只允许 data-free disabled shell；probe unavailable/timeout 必须进入显式 Retry 且零 native login，可信 anonymous 才允许一次 native login handoff。
+
+Snapshot 与 process 继续消费既有 strict owner responses，但完整读取共享一个 10 秒总预算；任何 partial、迟到、坏 body 或分页未耗尽都不得成为成功投影。pagehide draft flush 是既有浏览器本地状态生命周期，不是网络 receipt 或新接口。
+
+验收结果以 Root progress 的实际 manifest 与绑定源码 SHA 为准；受控 peer 测试未宣称原用户 3310 已启用或正式 Billing/费用链路已闭环。
+
+下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
+
+## R238 当前认证与恢复准入
+
+本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
+
+## R186-W-SNAPSHOT-DEADLINE：browser-private读取预算（2026-10-04；tests-first）
+
+同源snapshot请求及同一anchor的全部process-page请求共用固定10秒本地总预算，包含headers、body与严格schema解析；分页不得逐页获得新预算。耗尽是Web本地首次水合失败，显示现安全错误并只允许显式重读，不转换为owner error、Run terminal、空snapshot或partial成功，也不重发Message。scope/generation/dispose继续abort；公开BFF contract、请求参数、错误envelope与AG-UI stream wire均不变。
+
+## R177-WEB-PRD-NO-INTERSTITIAL：无旧document Retry协议（2026-10-03；tests-first）
+
+anonymous撤权后Web只发起一次固定`GET /login` document navigation；不新增本地错误envelope、ACK、轮询或重试command，也不把页面内beacon解释为commit。`/login`真正响应继续严格为空query/可信Host与Origin，成功只允许302到既有IAM authorize，预检/CSRF/signin失败为no-store受控503；旧App Runtime永不恢复。原R165的整页Retry期待与当前用户目标冲突，保留其失败证据，待新严格handoff成功链通过后由Root正式收敛验收而非skip。
+
+## R175-WEB-ANONYMOUS：browser-private composition 不扩 wire（2026-10-03；tests-first）
+
+不新增 API、header、cookie、redirect或readiness协议。可信 browser session `200 authenticated:false`仍立即撤销 Runtime，并由现固定 `/login` native document navigation接管；在该 navigation commit 前，已由server Product Session准入的旧document只允许显示无数据 booting壳，绝不显示旧Conversation/draft或发owner请求。现10秒watchdog仍存在但不构成navigation ACK；首次无cookie的server `307 /login`规则不变。测试用闭集fixture beacon只观察DOM安全不变量，不进入生产contract。
+
+## R173-SERVER-ADMITTED-SHELL：内部 booting composition（2026-10-03；tests-first）
+
+不新增 HTTP API、wire schema、cookie、header或公开错误。layout 成功验证 HttpOnly Product Session后只投影内部无 claims布尔 `serverAdmitted`；AppGate据此选择现 AppFrame 的 `booting` presentation，不把它解释为客户端 authenticated。真实 probe完成前不得创建 owner client state或发 BFF sessions/models/agents/Chat请求；首个401/503/坏响应进入现fail-closed UI，可信anonymous在native sign-in commit前保留同一data-free booting壳。只有可信200 authenticated与auth-index fence成功才首次mount Runtime。anonymous SSR redirect、trusted-origin/Redis failure、preview规则不变。
+
+真实Next门包括：正式cookie的原始GET `/app` 返回200，HTML含实际main/composer且不含runtime/app-frame spinner；浏览器hold首个真实session probe时同一booting shell可见且owner请求为零，release可信200后Runtime首次mount并保持原R147 cold/reload oracle；首次unavailable不得展示旧Conversation。这不是旧document恢复证明。
+
+## R167-SERVER-FIRST：首文档认证边界（2026-10-03；待 tests-first）
+
+`/app` 与所有 `/app/**` 是 Web browser-private 页面边界，不新增公开 API。首次 document GET 在渲染 client `AppGate` 前，以现 Product Session cookie、当前 Redis generation/tombstone 和 `accessExpiresAt` 作同一 owner admission：无 cookie、无效/过期 cookie、stale generation、tombstone 或过期 access 固定进入相对 `/login`。具体 wire 允许真实 Next 的非 streaming 3xx `Location: /login` 或 streaming 200 redirect 表达；不得预设 307，也不得在任一表达中输出 `runtime-loading`、claims、access credential、session id、subject、cookie或查询参数。
+
+配置缺失、Redis超时/失败不是 anonymous，必须 fail closed 为有限 unavailable 首屏，不跳 `/login`、不触发第二 OIDC transaction。active session 继续渲染 AppGate，并保留 `GET /api/auth/session`、BFF adapter 与后续 revocation 的既有每请求检查。显式 preview 只沿用非 production 开关；production 不从失败降级 preview。无新 endpoint、error envelope、owner contract 或 query。本 D0 的真实 HTTP RED 只验证首文档边界；后继实现与 active/failure 矩阵通过前不称协议已发布，也不把它当原旧文档卡住的因果证明。
+
 ## R170-W-MOVE-UI：内部调用与用户可见状态（2026-10-04；候选已实现，发布待 Root 集成）
 
 本片不新增HTTP/API；只消费required `SessionClient.moveSession`。Engine冻结canonical `sessionId`、`targetProjectId|null`与一次`commandId`，同一显式retry复用三者。没有unknown intent时retry返回`null`且零owner调用；pending时重复同意图共享结果，不同target也返回rejected而不换key。只有validated matching 200 ACK返回confirmed；明确且终局的owner拒绝为rejected；network/deadline/abort/parse/adapter、503及409 `idempotency_in_progress`为unknown。UI不得从list差异推断成功、不得换key自动retry、不得在ACK前导航。

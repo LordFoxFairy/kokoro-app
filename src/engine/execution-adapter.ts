@@ -102,6 +102,7 @@ type StreamContext = {
 }
 
 export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecutionAdapter {
+  const snapshotDeadlineMs = 10_000
   let streamGeneration = 0
   let activeStream: StreamContext | null = null
   const snapshotControllers = new Set<AbortController>()
@@ -112,7 +113,33 @@ export function createExecutionAdapter(deps: ExecutionAdapterDeps): SessionExecu
     snapshotControllers.clear()
     const controller = new AbortController()
     snapshotControllers.add(controller)
-    return fetchCompleteSnapshot(deps.client, sessionId, deps.scope, controller.signal)
+    const deadlineAt = performance.now() + snapshotDeadlineMs
+    let timedOut = false
+    const timeoutError = (): Error => new Error("snapshot read timeout")
+    const abortError = (): unknown => timedOut
+      ? timeoutError()
+      : controller.signal.reason instanceof Error
+        ? controller.signal.reason
+        : new Error("snapshot read aborted")
+    let onAbort: () => void = () => undefined
+    const aborted = new Promise<never>((_resolve, reject) => {
+      onAbort = () => reject(abortError())
+      controller.signal.addEventListener("abort", onAbort, { once: true })
+    })
+    const timer = setTimeout(() => {
+      timedOut = true
+      controller.abort(timeoutError())
+    }, snapshotDeadlineMs)
+    const complete = fetchCompleteSnapshot(deps.client, sessionId, deps.scope, controller.signal, deadlineAt)
+    return Promise.race([complete, aborted]).then((snapshot) => {
+      if (controller.signal.aborted) throw abortError()
+      if (performance.now() >= deadlineAt) throw timeoutError()
+      return snapshot
+    }).finally(() => {
+      clearTimeout(timer)
+      controller.signal.removeEventListener("abort", onAbort)
+      snapshotControllers.delete(controller)
+    })
   }
 
   function closeStream(): void {

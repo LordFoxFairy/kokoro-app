@@ -97,6 +97,15 @@ export function useDraft(activeId: string | null, mounted: boolean, projectRef?:
   // synchronous localStorage read/clone/stringify from every keystroke.
   useEffect(() => () => flushPendingWrite(), [draftKey, flushPendingWrite])
 
+  // A document navigation can discard the React tree before passive-effect
+  // cleanup runs. pagehide is the browser-owned last chance to persist the
+  // already captured exact key/value without extending the debounce window.
+  useEffect(() => {
+    const flushOnPageHide = () => flushPendingWrite()
+    window.addEventListener("pagehide", flushOnPageHide)
+    return () => window.removeEventListener("pagehide", flushOnPageHide)
+  }, [flushPendingWrite])
+
   const draft = !mounted
     ? ""
     : draftEdit !== null && draftEdit.key === draftKey
