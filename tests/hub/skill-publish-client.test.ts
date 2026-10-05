@@ -49,7 +49,7 @@ it("maps Draft/Get/Begin/Complete/Validate to the pinned same-origin paths and s
     [200, { skill_id: "mine", attempt_epoch: "0", phase: "none" }],
     [201, { skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", transfer_reference: reference, replayed: false }],
     [200, { skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", phase: "uploaded", replayed: false, content_sha256: sha, scan_state: "pending" }],
-    [200, { skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v1:sha256:${sha}`, replayed: false }],
+    [200, { skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v2:sha256:${sha}`, replayed: false }],
   ] as const
   const fetchMock = vi.fn()
   for (const [status, data] of responses) fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data }), { status, headers }))
@@ -128,4 +128,57 @@ it("propagates cancellation to the authoritative by-ID recovery GET", async () =
   vi.stubGlobal("fetch", fetchMock)
   await expect(createSkillPublishClient().getPublished("mine", controller.signal)).rejects.toMatchObject({ reason: "aborted" })
   expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skills/mine", expect.objectContaining({ signal: controller.signal }))
+})
+
+
+it("accepts the unique public8 ZIP V2 Validate receipt from a real Response", async () => {
+  const sha = "a".repeat(64)
+  const receipt = { skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v2:sha256:${sha}`, replayed: false }
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: receipt }), {
+    status: 200, headers: { ...headers, "cache-control": "private, no-store, max-age=0" },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  const signal = new AbortController().signal
+  await expect(createSkillPublishClient().validateDraft("mine", "attempt", "validate-key", signal)).resolves.toEqual(receipt)
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skills/mine/validate", expect.objectContaining({
+    method: "POST", cache: "no-store", redirect: "error", signal,
+    headers: { "content-type": "application/json", "idempotency-key": "validate-key" },
+    body: JSON.stringify({ attempt_id: "attempt" }),
+  }))
+  expect(fetchMock.mock.calls.some(([path]) => path.endsWith("/publish"))).toBe(false)
+})
+
+it("rejects the removed ZIP V1 Validate receipt instead of accepting a legacy format", async () => {
+  const sha = "a".repeat(64)
+  const receipt = { skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v1:sha256:${sha}`, replayed: false }
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: receipt }), { status: 200, headers }))
+  vi.stubGlobal("fetch", fetchMock)
+  await expect(createSkillPublishClient().validateDraft("mine", "attempt", "validate-key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skills/mine/validate", expect.objectContaining({ body: JSON.stringify({ attempt_id: "attempt" }) }))
+  expect(fetchMock.mock.calls.some(([path]) => path.endsWith("/publish"))).toBe(false)
+})
+
+
+it("preserves closed Validate fields and identity/header guards under the unique V2 format", async () => {
+  const sha = "a".repeat(64)
+  const receipt = { skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v2:sha256:${sha}`, replayed: false }
+  const invalid = [
+    { ...receipt, manifest_identity: `zip-v2:sha256:${"A".repeat(64)}` },
+    { ...receipt, manifest_identity: `zip-v2:sha256:${"a".repeat(63)}` },
+    { ...receipt, manifest_identity: `zip-v2:sha256:${"g".repeat(64)}` },
+    { ...receipt, manifest_identity: `zip-v3:sha256:${sha}` },
+    { ...receipt, unexpected: true }, { ...receipt, valid: false },
+  ]
+  for (const data of invalid) {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }), { status: 200, headers }))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(createSkillPublishClient().validateDraft("mine", "attempt", "validate-key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  }
+  for (const overrides of [{ "cache-control": "private, max-age=0" }, { "content-type": "text/plain" }, { "x-request-id": "invalid request id" }]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: receipt }), { status: 200, headers: { ...headers, ...overrides } })))
+    await expect(createSkillPublishClient().validateDraft("mine", "attempt", "validate-key")).rejects.toMatchObject({ reason: "parse", status: 200 })
+  }
 })

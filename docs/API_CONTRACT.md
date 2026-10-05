@@ -1,3 +1,9 @@
+## R251-WEB-SKILLS-V2：消费BFF public8.0（2026-10-05；实施准入）
+
+唯一事实源是BFF正式f3c64d90f4a6fd7083252ff3d1646c5ad1dee292 OpenAPI8.0.0，digest278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f，仍/v1、91ops。仅版本和Validate manifest_identity严格zip-v2值域改变，其余五字段/请求/错误/权限/幂等不变；Web复制committed原字节snapshot，现两generator正规派生，手写六字段schema只V2。旧V1、坏digest、未知字段拒绝且零Publish；不改Hub严格header/media/admission，不以Validate当发布/安装成功。
+
+本轮属已批准未上线clean-slate替换，不保旧snapshot/旧parser双轨；Team/failure生成pin精确更新，不手改输出。当前源码/生成未实施，真实整页Publish/Install未验。
+
 ## R242-WEB-RENAME-D0：Project name consumer contract gate（2026-10-05；仅设计）
 
 ### 契约身份与范围

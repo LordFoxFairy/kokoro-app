@@ -12,7 +12,7 @@ function fixture(scanState: "clean" | "pending" | "unknown" = "clean") {
     beginUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", transfer_reference: { url: "https://objects.example/put", method: "PUT", required_headers: { "content-type": "application/zip" }, expires_at: "2999-01-01T00:00:00Z" }, replayed: false }),
     putPackage: vi.fn().mockResolvedValue(undefined),
     completeUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", phase: "uploaded", replayed: false, content_sha256: sha, scan_state: scanState }),
-    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v1:sha256:${sha}`, replayed: false }),
+    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: sha, manifest_identity: `zip-v2:sha256:${sha}`, replayed: false }),
     publishDraft: vi.fn().mockResolvedValue({ source_ref: "skill:mine", revision: "1", status: "active", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: false }),
     getPublished: vi.fn(),
   }

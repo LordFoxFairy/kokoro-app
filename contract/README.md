@@ -1,3 +1,9 @@
+## R251 Web唯一Skills V2消费者（2026-10-05；源码候选待Root验收）
+
+固定BFF正式local main `f3c64d90f4a6fd7083252ff3d1646c5ad1dee292`，唯一public `8.0.0` /v1，canonical SHA256 `278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f`。现snapshot复制owner原字节，两既有generator正常write/check，failure仅三provenance字段变，Team9图与15派生文件byte-equal。现hub/schema六字段Validate只接受zip-v2，旧V1仅拒绝负控，不新增parser union、UI/client/flow/adapter或ZIP解析。
+
+Root独立真实Response RED2fail/10pass已确认；作者现五Skills测试53pass仅辅助安全网，含V2接受/V1拒绝与UI拒绝后零Publish/零假刷新。真实选包→扫描→Validate→Publish→Install/启停/移除→刷新仍由Root正式组合验，当前原3310未更新，不声明页面完成。三D0原mixed后缀和system混合文件保护；完整工程冻结收据由Root接审，以下历史pin不作为当前消费者来源。
+
 ## R243 固定 Project rename consumer（2026-10-05；候选待验）
 
 当前只读 BFF public snapshot 为 owner commit `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`、version `7.2.0`、SHA-256 `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。原 90 个 operations 保留，新增唯一 `renameProject`。`src/contract/project-rename.ts` 消费 closed command receipt/error；现同源 adapter 只将 canonical Project name PATCH 映射到 `/v1`，成功后的 Project GET/list 才是资源投影。

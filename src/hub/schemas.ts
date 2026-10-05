@@ -139,7 +139,7 @@ export const beginSkillUploadSchema = z.object({ skill_id: skillCommandId, attem
 export const completeSkillUploadRequestSchema = z.object({ attempt_id: skillCommandId, upload_id: skillCommandId, content_sha256: sha256, size_bytes: z.number().int().min(1).max(33554432) }).strict()
 export type CompleteSkillUploadRequest = z.infer<typeof completeSkillUploadRequestSchema>
 export const completeSkillUploadSchema = z.object({ skill_id: skillCommandId, attempt_id: skillCommandId, attempt_epoch: uint64, upload_id: skillCommandId, phase: z.literal("uploaded"), replayed: z.boolean(), content_sha256: sha256, scan_state: z.enum(["clean", "pending", "unknown"]) }).strict()
-export const validateSkillDraftSchema = z.object({ skill_id: skillCommandId, series_id: skillCommandId, valid: z.literal(true), content_digest: sha256, manifest_identity: z.string().regex(/^zip-v1:sha256:[a-f0-9]{64}$/u), replayed: z.boolean() }).strict()
+export const validateSkillDraftSchema = z.object({ skill_id: skillCommandId, series_id: skillCommandId, valid: z.literal(true), content_digest: sha256, manifest_identity: z.string().regex(/^zip-v2:sha256:[a-f0-9]{64}$/u), replayed: z.boolean() }).strict()
 export const publishSkillDraftSchema = z.object({ source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), revision: uint64, status: z.literal("active"), event_id: z.string().uuid(), replayed: z.boolean() }).strict()
 
 // —— 配额 ——

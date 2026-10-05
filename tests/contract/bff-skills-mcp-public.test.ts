@@ -5,9 +5,9 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "886a25a1c0158dbf71eb4b3b72522508b1c9a8f5"
-const OWNER_SHA256 = "bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73"
-const OWNER_VERSION = "7.2.0"
+const OWNER_COMMIT = "f3c64d90f4a6fd7083252ff3d1646c5ad1dee292"
+const OWNER_SHA256 = "278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f"
+const OWNER_VERSION = "8.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -17,7 +17,7 @@ type Shape = {
   properties?: Record<string, Shape>
   items?: { $ref?: string }
   type?: string | string[]
-  const?: string
+  const?: string | boolean
   pattern?: string
 }
 type Response = {
@@ -88,6 +88,11 @@ function assertGet(spec: Spec, path: string, id: string, successRef: string, err
 }
 
 function assertProjectionSemantics(spec: Spec): void {
+  const validated = shape(spec, "SkillValidateResource")
+  exactShape(validated, ["skill_id", "series_id", "valid", "content_digest", "manifest_identity", "replayed"])
+  expect(field(validated, "valid").const).toBe(true)
+  expect(field(validated, "content_digest").pattern).toBe("^[a-f0-9]{64}$")
+  expect(field(validated, "manifest_identity").pattern).toBe("^zip-v2:sha256:[a-f0-9]{64}$")
   const readErrors = {
     "400": "PlatformProjectionReadBadRequest", "401": "PlatformProjectionReadUnauthorized",
     "403": "PlatformProjectionReadForbidden", "429": "PlatformProjectionReadRateLimited",
@@ -138,7 +143,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six inactive Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("886a25a1c0158dbf71eb4b3b72522508b1c9a8f5")
+    expect(OWNER_COMMIT).toBe("f3c64d90f4a6fd7083252ff3d1646c5ad1dee292")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -163,6 +168,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("rejects actual parsed-spec mutations through the same consumer assertions", async () => {
     const original = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
     const mutations: Array<(candidate: Spec) => void> = [
+      (candidate) => { field(shape(candidate, "SkillValidateResource"), "manifest_identity").pattern = "^zip-v1:sha256:[a-f0-9]{64}$" },
       (candidate) => { operation(candidate, "/v1/skills/{skill_id}", "get").responses!["200"]!.$ref = "#/components/responses/ServiceUnavailable" },
       (candidate) => { candidate.components.responses.PublishedPersonalSkillOk!.headers!["Cache-Control"]!.schema!.const = "public" },
       (candidate) => { delete operation(candidate, "/v1/skills/{skill_id}", "get").responses!["404"] },

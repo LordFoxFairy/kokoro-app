@@ -1,3 +1,7 @@
+## R251-WEB-SKILLS-V2：无新增事实（2026-10-05；实施准入）
+
+仅消费者wire identity值域与固定contract provenance改变。Web无SQL/Redis/cookie/localStorage/IndexedDB/新receipt或ZIP身份映射；manifest、scan、draft、release/install仍属于Platform/Storage/BFF既有owner。现一次File/key/attempt/unknown意图仅瞬时UI，账户切换fence和ACK后权威GET保持。不复制owner ZIP解析，不持久化旧新映射、不后台造包，不改auth return/业务归属。当前三D0只prefix，原mixed全文保留；实现与用户验收待后继。
+
 ## R242-WEB-RENAME-D0：Project name consumer data boundary（2026-10-05；仅设计）
 
 ### owner 与持久化结论

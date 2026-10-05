@@ -599,8 +599,8 @@ async function r76PublicSpec() {
 describe("R76 ScheduledTask owner creation graph under the public7 pin", () => {
   it("consumes the exact published public7 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73")
-    expect(spec.info.version).toBe("7.2.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f")
+    expect(spec.info.version).toBe("8.0.0")
   })
 
   it("has five required create fields and rejects enabled/status as creation properties", async () => {

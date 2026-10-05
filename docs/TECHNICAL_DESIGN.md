@@ -1,3 +1,9 @@
+## R251-WEB-SKILLS-V2：单一正式消费者（2026-10-05；实施准入）
+
+Owner仍现Web Skills浏览器边界。沿现src/hub/schemas.ts唯一Validate六字段parser把identity值域收敛zip-v2，不改client/flow/dialog/read/adapter，不解析或生成ZIP，不新增层/目录/状态中心。采用现wire schema优于新V2模块，旧V1仅保拒绝负控，无union/fallback。现两public generator和snapshot固定BFF f3c64d90f4a6fd7083252ff3d1646c5ad1dee292/public8.0.0/SHA278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f；正常生成，Team9图和15输出应保持并须实核。
+
+Root批准/tmp/r251-web-v2-consumer-preflight.md的现18路径，先真实Response V2接受/V1拒绝行为RED，再实施；权限、single-flight、unknown原key、扫描、ACK后权威GET、账号fence保持。原三D0 mixed后缀和系统mixed排除，不顺带auth/布局/交易设计。Root独审/重跑与精确提交后真实持久owner选包→扫描→Validate→Publish→Install/启停/移除→刷新，工程门不算页面完成。当前未改源码/生成。
+
 ## R242-WEB-RENAME-D0：Project name consumer design gate（2026-10-05；仅设计）
 
 ### 当前态、owner 与证据

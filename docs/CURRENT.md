@@ -1,3 +1,9 @@
+## R251 Web唯一Skills V2消费者（2026-10-05；源码候选待Root验收）
+
+固定BFF正式local main `f3c64d90f4a6fd7083252ff3d1646c5ad1dee292`，唯一public `8.0.0` /v1，canonical SHA256 `278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f`。现snapshot复制owner原字节，两既有generator正常write/check，failure仅三provenance字段变，Team9图与15派生文件byte-equal。现hub/schema六字段Validate只接受zip-v2，旧V1仅拒绝负控，不新增parser union、UI/client/flow/adapter或ZIP解析。
+
+Root独立真实Response RED2fail/10pass已确认；作者现五Skills测试53pass仅辅助安全网，含V2接受/V1拒绝与UI拒绝后零Publish/零假刷新。真实选包→扫描→Validate→Publish→Install/启停/移除→刷新仍由Root正式组合验，当前原3310未更新，不声明页面完成。三D0原mixed后缀和system混合文件保护；完整工程冻结收据由Root接审，以下历史pin不作为当前消费者来源。
+
 ## R247 项目会话侧栏空态修复（2026-10-05）
 
 项目合法空清单此前侧栏返回 null。现使用已有文案与 role=status 呈现 settled-empty，保留搜索/direct/loading/error/scope/路由行为。Root真实Next/Chromium先取得有效RED1fail；修复后同完整系统文件77通过/0失败/0跳过（原74+此前2刷新诊断+本次1），101.439秒，source/Redis保持。manifest /var/folders/gn/wbk8wfbd047_wvwkwtyn331r0000gn/T/kokoro-r247-web-project-empty-green-full-2t9j5kfb/manifest.json，log bbce5266c54aa5205dac380462002741bc166df5089e0036418a78cdaa6244a2。Root重跑两个文件ESLint、Next typegen/TypeScript成功；第一次pnpm包装器版本不符在执行前退出，改用仓内固定工具入口，未放宽版本门。独审531200a1窄片无确定阻塞。

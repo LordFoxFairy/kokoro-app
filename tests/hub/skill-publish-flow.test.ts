@@ -11,7 +11,7 @@ it("requires an ACTIVE receipt after the single-ZIP owner command chain", async 
     beginUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", transfer_reference: { url: "https://objects.example/upload", method: "PUT", required_headers: { "content-type": "application/zip" }, expires_at: "2999-01-01T00:00:00Z" }, replayed: false }),
     putPackage: vi.fn().mockResolvedValue(undefined),
     completeUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", phase: "uploaded", replayed: false, content_sha256: "a".repeat(64), scan_state: "clean" }),
-    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: "a".repeat(64), manifest_identity: `zip-v1:sha256:${"a".repeat(64)}`, replayed: false }),
+    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: "a".repeat(64), manifest_identity: `zip-v2:sha256:${"a".repeat(64)}`, replayed: false }),
     publishDraft: vi.fn().mockRejectedValueOnce(new HubClientError("network", "lost ACK", null, null)).mockResolvedValueOnce({ source_ref: "skill:mine", revision: "1", status: "active", event_id: "550e8400-e29b-41d4-a716-446655440000", replayed: true }),
     getPublished: vi.fn(),
   }
@@ -41,7 +41,7 @@ it("never treats a lost Publish ACK or validation as success without ACTIVE by-I
     beginUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", transfer_reference: { url: "https://objects.example/put", method: "PUT", required_headers: { "content-type": "application/zip" }, expires_at: "2999-01-01T00:00:00Z" }, replayed: false }),
     putPackage: vi.fn().mockResolvedValue(undefined),
     completeUpload: vi.fn().mockResolvedValue({ skill_id: "mine", attempt_id: "attempt", attempt_epoch: "1", upload_id: "upload", phase: "uploaded", replayed: false, content_sha256: "a".repeat(64), scan_state: "clean" }),
-    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: "a".repeat(64), manifest_identity: `zip-v1:sha256:${"a".repeat(64)}`, replayed: false }),
+    validateDraft: vi.fn().mockResolvedValue({ skill_id: "mine", series_id: "series", valid: true, content_digest: "a".repeat(64), manifest_identity: `zip-v2:sha256:${"a".repeat(64)}`, replayed: false }),
     publishDraft: vi.fn().mockRejectedValue(new Error("lost ACK")),
     getPublished: vi.fn().mockRejectedValue(new HubClientError("http", "not found", "skill_not_found", 404)),
   }
