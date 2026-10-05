@@ -4,6 +4,19 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "firstSite.renameProject": "프로젝트 이름 바꾸기",
+  "firstSite.projectName": "프로젝트 이름",
+  "firstSite.projectRenameDescription": "확인 후 현재 프로젝트를 다시 읽습니다. 대화와 초안은 그대로 유지됩니다.",
+  "firstSite.projectRenameInvalid": "잘못된 문자가 없는 1–160 UTF-16 단위의 프로젝트 이름을 입력하세요.",
+  "firstSite.projectRenameForbidden": "현재 계정은 이 프로젝트의 이름을 바꿀 권한이 없습니다. 로그인 상태를 확인하세요.",
+  "firstSite.projectRenameSaving": "이름 변경 제출 중…",
+  "firstSite.projectRenameReading": "현재 프로젝트 이름 확인 중…",
+  "firstSite.projectRenameReadFailed": "이름 변경 요청이 확인되었거나 확인이 필요합니다. 프로젝트 읽기만 다시 시도하세요.",
+  "firstSite.projectRenameUnknown": "결과를 알 수 없습니다. 재시도하면 새 작업을 만들지 않고 같은 이름 변경 요청을 사용합니다.",
+  "firstSite.projectRenameRejected": "이름 변경이 거부되었습니다. 다시 편집하기 전에 현재 프로젝트를 확인하세요.",
+  "firstSite.projectRenameReadRetry": "프로젝트 다시 읽기",
+  "firstSite.projectRenameRetry": "같은 이름 변경 재시도",
+  "firstSite.projectRenameRestart": "다시 확인하고 편집",
   "rail.moveFailed": "대화를 이동하지 못했습니다. 페이지를 새로고침한 후 다시 시도하세요.",
   "skills.personal.published": "내가 게시한 스킬",
   "skills.personal.installations": "내 설치 목록",

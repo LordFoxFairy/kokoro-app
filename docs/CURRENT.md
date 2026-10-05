@@ -1,3 +1,13 @@
+## R244 Project 改名源码交付切片（2026-10-05）
+
+本片承接已批准R242三D0，固定BFF main `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` / public7.2.0 / canonical digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`，正常两个generator消费。不含数据库、Billing许可、会话写入或旧实现兼容层。新增现项目菜单的shadcn Dialog/Input/Button、唯一immutable PATCH、10秒headers/body/abort总预算、ACK后canonical GET与list、主体/路由代际和取消/显式retry/GET-only恢复；既有renameContext内存token防旧关闭抢新scope焦点。九上线语言项目改名文案已显式覆盖。
+
+Root冻结完整候选研发门89903实际全通过：contract263、architecture50、lint/typecheck、165 files/2488 tests（含现74 OIDC system）和build。manifest `/var/folders/gn/wbk8wfbd047_wvwkwtyn331r0000gn/T/kokoro-r243-web-rename-engineering-localized-185ixsi4/manifest.json`，log SHA256 `a574725e035dfbb1fe3e3444758a4b9a80bc369e727a8ca57721fedf3d13e7a1`，ordinary source与Redis keyset保持。原contract旧pin与ko缺译FAIL历史保留；修正只正规exact pin和七locale词典，不降95%或删除断言。Root另41237真实Next/Chromium/Redis取消→归焦→键盘重开→唯一写→canonicalB/list→成功归焦→刷新通过，12045相邻95/0。独审报告232093fc仅源码确定P0/P1/P2=0，非用户PASS。
+
+本地源码Git交付与当前用户运行是两个状态：原3310不重启、不清数据，正式BFF持久owner与当前预览完整项目改名/CRUD、跨scope焦点交错、多语言实际UI、axe/visual/bundle仍需验收。独立Playwright test:e2e尚未本片执行；受控owner系统不替代真实owner/provider/费用。formal既有三D0及system四mixed任务外内容保留，不把当前混合工作树当clean Git checkout；Root随后全门实际结果另录。main完整SHA与精确44路径/四mixed/index证据由Root收据记录，不把父Web5e096364冒本片提交。
+
+该片不关闭完整项目CRUD、Settings、正式外部模型与积分体系或原用户loading根因；其后续均沿Root同task/progress/test-cases。下方旧状态为历史快照。
+
 ## R156 Web 受控测试切片发布（2026-10-03；`b09ec815…` 已推送，用户原页仍失败）
 
 Web main 已发布并推送 commit `b09ec8156f2853b8908b6e8d3accc27473597ad7`，Root 进程 14958 确认实际 `HEAD=origin/main` 且工作树 clean。发布的五路径中三个测试文件与进程 81876 完整工程门所验冻结内容逐字节相同；该上一轮同源门为 contract 256、architecture 50、lint、typecheck、164 files / 2360 tests / 0 skip 与 Next build 全通过，Redis 15 当轮终态为 `DBSIZE=0`，独立审查 `ffba…` 为 0 项发现。本轮只另执行了 Node22 定向 ESLint，Root 进程 28485 exit 0；没有重跑 2360 项，故不把 14958 或 28485 冒称新的完整工程门。

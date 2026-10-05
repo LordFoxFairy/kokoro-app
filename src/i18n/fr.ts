@@ -4,6 +4,19 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "firstSite.renameProject": "Renommer le projet",
+  "firstSite.projectName": "Nom du projet",
+  "firstSite.projectRenameDescription": "Le projet actuel est relu après confirmation. Les conversations et les brouillons restent inchangés.",
+  "firstSite.projectRenameInvalid": "Saisissez un nom de projet de 1 à 160 unités UTF-16, sans caractères invalides.",
+  "firstSite.projectRenameForbidden": "Votre identité actuelle n’est pas autorisée à renommer ce projet. Vérifiez votre connexion.",
+  "firstSite.projectRenameSaving": "Envoi du changement de nom…",
+  "firstSite.projectRenameReading": "Vérification du nom du projet en cours…",
+  "firstSite.projectRenameReadFailed": "La demande de renommage a été confirmée ou doit être vérifiée. Réessayez uniquement la lecture du projet.",
+  "firstSite.projectRenameUnknown": "Résultat inconnu. Réessayer réutilise la même demande de renommage sans créer une nouvelle opération.",
+  "firstSite.projectRenameRejected": "Le renommage a été refusé. Vérifiez le projet actuel avant de modifier à nouveau son nom.",
+  "firstSite.projectRenameReadRetry": "Relire le projet",
+  "firstSite.projectRenameRetry": "Réessayer le même renommage",
+  "firstSite.projectRenameRestart": "Vérifier et modifier à nouveau",
   "rail.moveFailed": "La conversation n’a pas pu être déplacée. Actualisez la page et réessayez.",
   "skills.personal.published": "Mes Skills publiés",
   "skills.personal.installations": "Mes installations",

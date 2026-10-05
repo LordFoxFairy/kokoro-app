@@ -479,3 +479,64 @@ it.each([401, 403, 404, 503])("a deep-link detail HTTP %s clears the earlier can
     ? { status: "error", retryable: false } : { status: "ready", data: [alpha] })
   view.unmount()
 })
+
+
+it("rename refresh aborts the old generation, then reads frozen detail before list without a receipt projection", async () => {
+  const { useProjectList } = await import("@/features/app/use-project-list")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const old = { id, name: "Old", slug: "unchanged", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const fresh = { ...old, name: "Current B" }
+  const calls: string[] = []
+  const signals: (AbortSignal | null | undefined)[] = []
+  let deliverOld: (response: Response) => void = () => { throw new Error("no old read") }
+  let deliverDetail: (response: Response) => void = () => { throw new Error("no fresh detail") }
+  let deliverList: (response: Response) => void = () => { throw new Error("no fresh list") }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    calls.push(String(input)); signals.push(init?.signal)
+    if (calls.length === 1) return Response.json({ data: { projects: [old] }, meta: { request_id: "initial" } })
+    if (calls.length === 2) return new Promise<Response>((resolve) => { deliverOld = resolve })
+    if (String(input) === `/api/hub/projects/${id}`) return new Promise<Response>((resolve) => { deliverDetail = resolve })
+    return new Promise<Response>((resolve) => { deliverList = resolve })
+  })
+  const boundary = { admitted: true, subject: "reader", generation: 1 }
+  const view = renderHook(() => useProjectList(false, boundary, id))
+  await waitFor(() => expect(view.result.current.current).toEqual({ status: "ready", data: old }))
+  act(() => view.result.current.refresh())
+  await waitFor(() => expect(calls).toHaveLength(2))
+  let pending!: Promise<typeof fresh>
+  act(() => { pending = view.result.current.refreshRenamedProject(id, new AbortController().signal) })
+  expect(signals[1]?.aborted).toBe(true)
+  expect(calls).toEqual(["/api/hub/projects", "/api/hub/projects", `/api/hub/projects/${id}`])
+  await act(async () => { deliverOld(Response.json({ data: { projects: [old] }, meta: { request_id: "stale" } })); await Promise.resolve() })
+  expect(view.result.current.list.status).toBe("loading")
+  await act(async () => { deliverDetail(Response.json({ data: { project: fresh }, meta: { request_id: "detail" } })); await Promise.resolve() })
+  await waitFor(() => expect(calls).toHaveLength(4))
+  expect(view.result.current.current.status).toBe("loading")
+  await act(async () => { deliverList(Response.json({ data: { projects: [fresh] }, meta: { request_id: "list" } })); await pending })
+  expect(view.result.current.current).toEqual({ status: "ready", data: fresh })
+  expect(view.result.current.list).toEqual({ status: "ready", data: [fresh] })
+  expect(calls[3]).toBe("/api/hub/projects")
+  view.unmount()
+})
+
+it("rename read-back subject/route generation discards held detail and never starts its list", async () => {
+  const { useProjectList } = await import("@/features/app/use-project-list")
+  const project = { id: "project_12345678-1234-1234-1234-123456789abc", name: "Old", slug: "same", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  let finish: (response: Response) => void = () => { throw new Error("no held detail") }
+  let heldSignal: AbortSignal | null | undefined
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input) === "/api/hub/projects") return Response.json({ data: { projects: [project] }, meta: { request_id: "list" } })
+    heldSignal = init?.signal
+    return new Promise<Response>((resolve) => { finish = resolve })
+  })
+  const view = renderHook(({ boundary }) => useProjectList(false, boundary, project.id), { initialProps: { boundary: { admitted: true, subject: "old-reader", generation: 1 } } })
+  await waitFor(() => expect(view.result.current.current.status).toBe("ready"))
+  const pending = view.result.current.refreshRenamedProject(project.id, new AbortController().signal)
+  const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" })
+  view.rerender({ boundary: { admitted: false, subject: "", generation: 2 } })
+  expect(heldSignal?.aborted).toBe(true)
+  await act(async () => { finish(Response.json({ data: { project: { ...project, name: "Late" } }, meta: { request_id: "late" } })); await rejected })
+  expect(view.result.current.current.status).toBe("blocked")
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  view.unmount()
+})

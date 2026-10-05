@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { useT } from "@/i18n/context"
+import { renameProject, ProjectRenameError } from "@/features/app/project-rename"
+import { ProjectReadError } from "@/features/app/project-list"
+import { projectRenameIdSchema, projectRenameRequestSchema, type ProjectRenameIntent } from "@/contract/project-rename"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import type { ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import { uploadProjectResource as uploadProjectResourceRequest } from "@/features/app/project-resource-upload"
 import { ProjectResourceUploadError } from "@/features/app/project-resource-upload"
 import { listProjectResources as listProjectResourcesRequest } from "@/features/app/project-resource-list"
@@ -30,6 +35,9 @@ export type AppFrameProjectOptions = {
   instructionHistory: ProjectReadState<ProjectInstructionRevisionWire[]>
   instructionContext: object
   refreshProject: () => void
+  refreshRenamedProject?: (target: string, signal: AbortSignal) => Promise<Project>
+  renameBoundary?: ProjectReadBoundary
+  renameRouteKey?: string
   onOpenProject?: (projectRef: string, draft?: string) => void
 }
 
@@ -50,8 +58,140 @@ export function useAppFrameProject({
   instructionHistory,
   instructionContext,
   refreshProject,
+  refreshRenamedProject,
+  renameBoundary,
+  renameRouteKey,
 }: AppFrameProjectOptions) {
   const t = useT()
+  // Command lifecycle is fenced independently of read revision and draft state.
+  const [renameRouteEpoch, setRenameRouteEpoch] = useState(0)
+  const renameContext = useMemo(() => ({ projectRef, projectWorkspace, admitted: renameBoundary?.admitted, subject: renameBoundary?.subject,
+    generation: renameBoundary?.generation, route: renameRouteKey, routeEpoch: renameRouteEpoch, preview, mounted }),
+  [projectRef, projectWorkspace, renameBoundary?.admitted, renameBoundary?.subject, renameBoundary?.generation, renameRouteKey, renameRouteEpoch, preview, mounted])
+  type RenameScope = {
+    context: typeof renameContext; route: string; active: boolean; busy: boolean; revoked: boolean; controller: AbortController | null
+    intent: { command: ProjectRenameIntent; rawInput: string; route: string; ack: boolean; readOnly: boolean } | null
+  }
+  const renameScopeRef = useRef<RenameScope | null>(null)
+  type RenameUi = Pick<ProjectRenameControl, "open" | "name" | "status" | "problem" | "frozen">
+  const emptyRenameUi: RenameUi = { open: false, name: "", status: "idle", problem: null, frozen: false }
+  const [renameUi, setRenameUi] = useState<{ context: typeof renameContext; ui: RenameUi } | null>(null)
+  const renameView = renameUi?.context === renameContext ? renameUi.ui : emptyRenameUi
+  useLayoutEffect(() => {
+    const scope: RenameScope = { context: renameContext, route: typeof window === "undefined" ? "" : `${window.location.pathname}${window.location.search}${window.location.hash}`, active: true, busy: false, revoked: false, controller: null, intent: null }
+    renameScopeRef.current = scope
+    const routeChanged = () => {
+      const route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      if (route === scope.route) return
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      setRenameRouteEpoch((epoch) => epoch + 1)
+    }
+    window.addEventListener("popstate", routeChanged)
+    window.addEventListener("kokoro:surface-navigation", routeChanged)
+    return () => {
+      window.removeEventListener("popstate", routeChanged)
+      window.removeEventListener("kokoro:surface-navigation", routeChanged)
+      scope.active = false
+      scope.controller?.abort()
+      scope.intent = null
+      scope.controller = null
+    }
+  }, [renameContext])
+  const renameAvailable = mounted && projectWorkspace && !preview && renameBoundary?.admitted === true
+    && renameBoundary.subject !== null && projectDetail.status === "ready" && projectDetail.data.id === projectRef
+    && projectRenameIdSchema.safeParse(projectRef).success && refreshRenamedProject !== undefined && renameView.problem !== "permission"
+  const setRenameView = useCallback((ui: Omit<RenameUi, "frozen">) => {
+    const scope = renameScopeRef.current
+    if (scope?.active && scope.context === renameContext) setRenameUi({ context: renameContext,
+      ui: { ...ui, frozen: scope.intent !== null || scope.revoked } })
+  }, [renameContext])
+  const runRename = useCallback(async (readOnly: boolean, restart = false) => {
+    const scope = renameScopeRef.current
+    const retained = scope?.intent
+    if (!scope?.active || scope.context !== renameContext || !retained || scope.busy || !refreshRenamedProject || !projectRef) return
+    scope.busy = true
+    const controller = new AbortController()
+    scope.controller = controller
+    const current = () => scope.active && renameScopeRef.current === scope && !controller.signal.aborted && scope.intent?.command === retained.command
+      && (typeof window === "undefined" || retained.route === `${window.location.pathname}${window.location.search}${window.location.hash}`)
+    setRenameView({ open: true, name: retained.rawInput, status: readOnly ? "confirming-read" : "pending", problem: null })
+    try {
+      if (!current()) return
+      if (!readOnly) {
+        await renameProject(retained.command, controller.signal)
+        if (!current()) return
+        scope.intent = { ...retained, ack: true, readOnly: true }
+      } else scope.intent = { ...retained, readOnly: true }
+      setRenameView({ open: true, name: retained.rawInput, status: "confirming-read", problem: null })
+      const resource = await refreshRenamedProject(retained.command.projectId, controller.signal)
+      if (!current()) return
+      scope.intent = null
+      setRenameView(restart ? { open: true, name: resource.name, status: "idle", problem: null }
+        : { open: false, name: "", status: "idle", problem: null })
+    } catch (error) {
+      if (!current()) return
+      if ((error instanceof ProjectRenameError || error instanceof ProjectReadError) && (error.status === 401 || error.status === 403)) {
+        scope.intent = null
+        scope.revoked = true
+        setRenameView({ open: true, name: "", status: "error", problem: "permission" })
+      } else if (scope.intent?.readOnly || scope.intent?.ack) {
+        setRenameView({ open: true, name: retained.rawInput, status: "read-error", problem: "read" })
+      } else {
+        const uncertain = !(error instanceof ProjectRenameError) || error.status === undefined || error.status >= 500 || error.status === 429
+        setRenameView({ open: true, name: retained.rawInput, status: uncertain ? "unknown" : "error", problem: uncertain ? "unknown" : "rejected" })
+      }
+    } finally {
+      controller.abort()
+      if (scope.controller === controller) scope.controller = null
+      scope.busy = false
+    }
+  }, [projectRef, refreshRenamedProject, renameContext, setRenameView])
+  const projectRename: ProjectRenameControl = {
+    focusScopeToken: renameContext,
+    available: renameAvailable,
+    ...renameView,
+    onOpen: () => {
+      const scope = renameScopeRef.current
+      if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
+      scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      const retained = scope.intent
+      setRenameView(retained ? { open: true, name: retained.rawInput, status: retained.readOnly ? "read-error" : "unknown",
+        problem: retained.readOnly ? "read" : "unknown" } : { open: true, name: projectDetail.status === "ready" ? projectDetail.data.name : "", status: "idle", problem: null })
+    },
+    onClose: () => {
+      const scope = renameScopeRef.current
+      if (!scope?.active || scope.context !== renameContext || scope.busy) return
+      setRenameView(scope.intent ? { ...renameView, open: false } : { open: false, name: "", status: "idle", problem: scope.revoked ? "permission" : null })
+    },
+    onChange: (name) => {
+      const scope = renameScopeRef.current
+      if (!scope?.active || scope.context !== renameContext || scope.busy || scope.intent || scope.revoked) return
+      setRenameView({ open: true, name, status: "idle", problem: null })
+    },
+    onSave: () => {
+      const scope = renameScopeRef.current
+      if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy || scope.intent || !projectRef) return
+      if (window.location.pathname !== `/app/project/${projectRef}`) return
+      const parsed = projectRenameRequestSchema.safeParse({ name: renameView.name })
+      if (!parsed.success) { setRenameView({ ...renameView, status: "error", problem: "invalid" }); return }
+      const command = Object.freeze({ projectId: projectRef, name: parsed.data.name,
+        idempotencyKey: crypto.randomUUID(), body: JSON.stringify(parsed.data) })
+      scope.intent = { command, rawInput: renameView.name, route: `${window.location.pathname}${window.location.search}${window.location.hash}`, ack: false, readOnly: false }
+      void runRename(false)
+    },
+    onRetry: () => {
+      const scope = renameScopeRef.current
+      if (scope?.context === renameContext && scope.intent) void runRename(scope.intent.ack || scope.intent.readOnly)
+    },
+    onRestart: () => {
+      const scope = renameScopeRef.current
+      if (!scope?.active || scope.context !== renameContext || !scope.intent || scope.busy) return
+      scope.intent.readOnly = true
+      void runRename(true, true)
+    },
+  }
   const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
   const saveScopeRef = useRef<{ context: object; active: boolean; controllers: Set<AbortController> } | null>(null)
   useLayoutEffect(() => {
@@ -260,6 +400,7 @@ export function useAppFrameProject({
   }, [finishProjectNavigation, runCreateProject])
 
   return {
+    projectRename,
     projectInstructions,
     projectInstructionHistory,
     saveProjectInstructions,

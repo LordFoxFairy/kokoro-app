@@ -1,38 +1,112 @@
 "use client"
 
+import { useId, useLayoutEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useT } from "@/i18n/context"
 import { MoreHorizontal } from "lucide-react"
+import type { ProjectRenameControl } from "./workspace-header.types"
 
 type WorkspaceHeaderProjectMenuProps = {
   onOpenSettings?: (tab: "account" | "subscription") => void
+  projectRename?: ProjectRenameControl
 }
 
-export function WorkspaceHeaderProjectMenu({ onOpenSettings }: WorkspaceHeaderProjectMenuProps) {
+export function WorkspaceHeaderProjectMenu({ onOpenSettings, projectRename }: WorkspaceHeaderProjectMenuProps) {
   const t = useT()
+  const inputId = useId()
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const renameReturnFocusRef = useRef<HTMLButtonElement | null>(null)
+  const renameReturnFocusRouteRef = useRef<string | null>(null)
+  const renameReturnFocusScopeRef = useRef<object | null>(null)
+  const activeFocusScopeRef = useRef<object | null>(null)
+  const focusScopeToken = projectRename?.focusScopeToken ?? null
+  useLayoutEffect(() => {
+    activeFocusScopeRef.current = focusScopeToken
+    return () => {
+      if (activeFocusScopeRef.current === focusScopeToken) activeFocusScopeRef.current = null
+    }
+  }, [focusScopeToken])
+  const busy = projectRename?.status === "pending" || projectRename?.status === "confirming-read"
+  const problem = projectRename?.problem
+  const errorKey = problem === "invalid" ? "firstSite.projectRenameInvalid"
+    : problem === "permission" ? "firstSite.projectRenameForbidden"
+      : problem === "read" ? "firstSite.projectRenameReadFailed"
+        : problem === "unknown" ? "firstSite.projectRenameUnknown" : "firstSite.projectRenameRejected"
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="size-8 min-h-8"
-          aria-label={t("settings.moreSections")}
-        >
-          <MoreHorizontal aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => onOpenSettings?.("account")}>
-          {t("settings.accountTitle")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onOpenSettings?.("subscription")}>
-          {t("firstSite.upgrade")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button ref={moreTriggerRef} type="button" variant="ghost" size="icon-sm" className="size-8 min-h-8" aria-label={t("settings.moreSections")}>
+            <MoreHorizontal aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {projectRename?.available ? (
+            <DropdownMenuItem onSelect={() => {
+              const source = moreTriggerRef.current
+              renameReturnFocusRef.current = source?.isConnected ? source : null
+              renameReturnFocusRouteRef.current = source?.isConnected
+                ? `${window.location.pathname}${window.location.search}${window.location.hash}` : null
+              renameReturnFocusScopeRef.current = source?.isConnected ? projectRename.focusScopeToken : null
+              projectRename.onOpen()
+            }}>{t("firstSite.renameProject")}</DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem onSelect={() => onOpenSettings?.("account")}>{t("settings.accountTitle")}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onOpenSettings?.("subscription")}>{t("firstSite.upgrade")}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {projectRename ? (
+        <Dialog open={projectRename.open} onOpenChange={(open) => { if (!open && !busy) projectRename.onClose() }}>
+          <DialogContent showCloseButton={false}
+            onCloseAutoFocus={(event) => {
+              const source = renameReturnFocusRef.current
+              const sourceRoute = renameReturnFocusRouteRef.current
+              const sourceScope = renameReturnFocusScopeRef.current
+              renameReturnFocusRef.current = null
+              renameReturnFocusRouteRef.current = null
+              renameReturnFocusScopeRef.current = null
+              const currentRoute = `${window.location.pathname}${window.location.search}${window.location.hash}`
+              if (!projectRename.available || currentRoute !== sourceRoute || sourceScope !== activeFocusScopeRef.current
+                || !sourceScope || !source?.isConnected || source !== moreTriggerRef.current) return
+              event.preventDefault()
+              source.focus()
+            }}
+            onEscapeKeyDown={(event) => { if (busy) event.preventDefault() }}
+            onPointerDownOutside={(event) => { if (busy) event.preventDefault() }}
+            onInteractOutside={(event) => { if (busy) event.preventDefault() }}>
+            <DialogHeader>
+              <DialogTitle>{t("firstSite.renameProject")}</DialogTitle>
+              <DialogDescription>{t("firstSite.projectRenameDescription")}</DialogDescription>
+            </DialogHeader>
+            <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); if (!busy && !projectRename.frozen) projectRename.onSave() }}>
+              <div className="grid gap-2">
+                <label htmlFor={inputId} className="text-sm font-medium">{t("firstSite.projectName")}</label>
+                <Input id={inputId} value={projectRename.name} disabled={busy || projectRename.frozen}
+                  onChange={(event) => projectRename.onChange(event.target.value)} aria-invalid={problem === "invalid"} />
+              </div>
+              {busy ? <p role="status" className="text-sm text-muted-foreground">
+                {t(projectRename.status === "pending" ? "firstSite.projectRenameSaving" : "firstSite.projectRenameReading")}
+              </p> : null}
+              {problem ? <p role="alert" className="text-sm text-destructive">{t(errorKey)}</p> : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={projectRename.onClose} disabled={busy}>{t("firstSite.cancel")}</Button>
+                {projectRename.status === "unknown" || projectRename.status === "read-error" ? (
+                  <Button type="button" onClick={projectRename.onRetry} disabled={busy}>
+                    {t(projectRename.status === "read-error" ? "firstSite.projectRenameReadRetry" : "firstSite.projectRenameRetry")}
+                  </Button>
+                ) : <Button type="submit" disabled={busy || projectRename.frozen || !projectRename.available}>{t("firstSite.save")}</Button>}
+                {projectRename.frozen && !busy && problem !== "permission" ? (
+                  <Button type="button" variant="outline" onClick={projectRename.onRestart}>{t("firstSite.projectRenameRestart")}</Button>
+                ) : null}
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </>
   )
 }

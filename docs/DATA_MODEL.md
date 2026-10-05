@@ -1,3 +1,64 @@
+## R242-WEB-RENAME-D0：Project name consumer data boundary（2026-10-05；仅设计）
+
+### owner 与持久化结论
+
+Project name、rename receipt、idempotency receipt、tenant/subject admission 和 canonical Project resource 都由 `kokoro-bff` owner 持久化。Web 无持久化 owner：本命令不新增 PostgreSQL schema/table/migration、Redis key、server cache、localStorage、IndexedDB、browser business store、generated data model 或 retention rule；不复制可编辑 owner 事实。正式 producer pin 是 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` / public `7.2.0` / OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`；Web formal `5e0963648db0cb0e1a60de42ea025670b32aba85` 的旧全文在本节之后保持 exact suffix。
+
+Web 只在当前 mounted subject/route/generation 中保存一个临时 command intent。它是网络生命周期数据，不是 Project name 真相；fresh canonical GET 与 fresh collection list 才能产生页面 resource projection。
+
+### 临时状态形状
+
+实现可在现有 project hook/feature state 中表达下列单一 intent（字段名为设计语义，不是本阶段新增代码）：
+
+```ts
+type ProjectRenameIntent = {
+  targetProjectId: string                 // verified canonical project_<UUID>
+  rawInput: string                        // dialog draft, mounted-only
+  normalizedName: string                  // trim, 1..160 UTF-16, no NUL/lone surrogate
+  body: { name: string }                  // immutable during request/retry
+  idempotencyKey: string                  // visible ASCII 1..128, no comma/space
+  subjectKey: string                      // trusted session/subject fence
+  routeKey: string                       // current workspace/route fence
+  generation: number                     // mounted/read generation
+  status: "pending" | "confirming-read" | "confirmed" | "unknown" | "error"
+  abortController: AbortController       // request-local, not persisted
+  deadlineAt: number                     // monotonic budget, not wall-clock fact
+}
+```
+
+`rawInput` 可被用户编辑；一旦发送，`normalizedName`、body、target 和 key 冻结。编辑为新名称先结束旧 intent 并重新读取 owner，再创建全新 key/body；不得把同一个 key 当作两个 payload 的容器。
+
+### 生命周期与写入边界
+
+| 时点 | Web 临时状态 | owner/页面事实 | 允许的网络动作 |
+| --- | --- | --- | --- |
+| open/edit | raw input | 当前 Project resource 不变 | 0 次 PATCH |
+| pre-send cancel/Escape | intent 丢弃 | owner 不变；页面保持原 resource | 0 次 PATCH、0 receipt |
+| pending | target/key/body 冻结；重复 Save/简单关闭 disabled | 不把 draft 写入 resource | 一次 exact PATCH，10 秒总预算 |
+| ACK accepted | status=`confirming-read`；receipt 仅作本地证据 | receipt 不替代 Project | target detail GET → collection list |
+| fresh reads complete | intent 可清理；页面采用 owner reads | canonical detail/list 是唯一当前投影 | 无额外 PATCH |
+| 503/network/timeout/bad ACK | status=`unknown`，保留 input/target/key/body | 不推断成功/失败 owner 事实 | 仅显式同意的同 key/body PATCH retry |
+| GET read failure | status=`unknown` 或 read error | 不丢 ACK 证据、不写新 name | GET-only retry |
+| 401/403/subject change | intent 清敏并 fenced | 资源由新 subject/route 重读 | 不重发旧 PATCH |
+
+发送后的 cancel/abort 不等于 owner-zero-write；若 owner 可能已接受，页面进入 unknown 并要求 authority read。`pending` 禁重复保存和关闭是本 D0 的简单失败安全方案；不可恢复的 route/subject/generation 变化直接丢弃旧 intent，禁止旧回调写新 surface。
+
+### 不变量、围栏与删除语义
+
+1. 未发送前 cancel 的 PATCH/receipt 计数为零；发送后所有结果都以 `subjectKey + routeKey + generation + targetProjectId` 校验。
+2. ACK 必须同时匹配 frozen target 与 normalized name；ACK 不是资源，不触发本地 `setName`，也不形成第二个 name truth。
+3. 页面 confirmed 只来自 fresh canonical target GET 及随后 fresh list；旧 list/detail、ACK、导航缓存和 draft 不能覆盖新 generation。
+4. stable key 只绑定一个 body；503/unknown 显式 retry 复用 key/body，用户改名则旧 intent 结束并新建 key。
+5. timeout、caller abort、dispose、subject/route/epoch 变化都清理 timer/listeners/controller；迟到值只能被丢弃，不能改变新 dialog、focus、navigation 或 name。
+6. Web 不保存 Project name snapshot 作为独立事实，不改变 BFF receipt retention、tenant boundary、数据库事务、表或索引。
+7. 本命令没有删除 Project、slug、alias、conversation、history 或 list item 的语义；`project_not_found` 只表示当前 owner read 事实，不触发本地伪删除。
+
+### 设计验证边界
+
+本 D0 只交付 owner、临时状态、生命周期、读后投影与无 schema 结论；不改 canonical schema、API contract 文件、generated 类型、source/test/package/lock。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。后续实现必须以真实 BFF receipt、detail/list fresh read、auth/route/generation race 及真实 Next/Chromium 测试证明上述不变量；Root 在主仓执行 Web owner 门禁后再决定页面模块是否通过。
+
+---
+
 ## R239 当前认证与工作区恢复数据边界
 
 本片不新增数据库、schema、migration、Redis key、browser business store、server cache、receipt 或第二身份事实。`serverAdmitted` 与 booting/unavailable 只存在于当前 render；data-free shell 不保存 subject、claims、Conversation、timeline 或 draft，也不读取 owner 私有数据。

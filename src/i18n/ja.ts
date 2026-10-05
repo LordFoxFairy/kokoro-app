@@ -4,6 +4,19 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "firstSite.renameProject": "プロジェクト名を変更",
+  "firstSite.projectName": "プロジェクト名",
+  "firstSite.projectRenameDescription": "確認後に現在のプロジェクトを再読み込みします。会話と下書きはそのままです。",
+  "firstSite.projectRenameInvalid": "無効な文字を含まない、1～160 UTF-16単位のプロジェクト名を入力してください。",
+  "firstSite.projectRenameForbidden": "現在のアカウントにはこのプロジェクトの名前を変更する権限がありません。ログイン状態を確認してください。",
+  "firstSite.projectRenameSaving": "名前変更を送信中…",
+  "firstSite.projectRenameReading": "現在のプロジェクト名を確認中…",
+  "firstSite.projectRenameReadFailed": "名前変更リクエストは確認済み、または確認が必要です。プロジェクトの読み取りだけを再試行してください。",
+  "firstSite.projectRenameUnknown": "結果は不明です。再試行では新しい操作を作成せず、同じ名前変更リクエストを使います。",
+  "firstSite.projectRenameRejected": "名前変更が拒否されました。再編集する前に現在のプロジェクトを確認してください。",
+  "firstSite.projectRenameReadRetry": "プロジェクトを再読み込み",
+  "firstSite.projectRenameRetry": "同じ名前変更を再試行",
+  "firstSite.projectRenameRestart": "確認して再編集",
   "rail.moveFailed": "会話を移動できませんでした。ページを更新して、もう一度お試しください。",
   "skills.personal.published": "公開済みのスキル",
   "skills.personal.installations": "自分のインストール",

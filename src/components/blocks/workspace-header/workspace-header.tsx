@@ -55,6 +55,7 @@ export function WorkspaceHeader({
   brandName = DEFAULT_BRAND.name,
   emptyWorkspace = false,
   projectWorkspace = false,
+  projectRename,
   showNavigationTrigger = false,
 }: WorkspaceHeaderProps) {
   return (
@@ -75,6 +76,7 @@ export function WorkspaceHeader({
           emptyWorkspace={emptyWorkspace}
           {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
           projectWorkspace={projectWorkspace}
+          {...(projectRename === undefined ? {} : { projectRename })}
           shareClient={shareClient}
         />
       </div>

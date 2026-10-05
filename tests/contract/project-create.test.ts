@@ -122,3 +122,111 @@ it("read deadline includes a stalled body and abort releases even a non-cooperat
     await rejection
   } finally { vi.useRealTimers() }
 })
+
+
+// R243 Project rename is a closed command receipt, not ProjectResponse.
+const renameId = "project_12345678-1234-1234-1234-123456789abc"
+const renameHeaders = { "content-type": "application/json", "cache-control": "private, no-store, max-age=0", "x-request-id": "rename-request" }
+const renameIntent = Object.freeze({ projectId: renameId, name: "我的项目", idempotencyKey: "stable-rename-key", body: JSON.stringify({ name: "我的项目" }) })
+
+it("normalizes rename once, counts UTF-16 units and closes ID/key/request/ACK/error JSON", async () => {
+  const schema = await import("@/contract/project-rename")
+  expect(schema.projectRenameRequestSchema.parse({ name: "  我的  项目  " })).toEqual({ name: "我的  项目" })
+  expect(schema.projectRenameRequestSchema.parse({ name: "😀".repeat(80) }).name).toHaveLength(160)
+  for (const name of ["", "  ", "😀".repeat(81), "x\0y", "\ud800", "\udc00", "x\ud800y"]) {
+    expect(schema.projectRenameRequestSchema.safeParse({ name }).success).toBe(false)
+  }
+  expect(schema.projectRenameRequestSchema.safeParse({ name: "okay", project_id: renameId }).success).toBe(false)
+  for (const id of ["slug", renameId.toUpperCase(), `${renameId}\n`]) expect(schema.projectRenameIdSchema.safeParse(id).success).toBe(false)
+  for (const key of ["", "x y", "x,y", "x".repeat(129), "x\n", "汉字"]) expect(schema.projectRenameKeySchema.safeParse(key).success).toBe(false)
+  expect(schema.projectRenameKeySchema.safeParse("!~".repeat(64)).success).toBe(true)
+  const ack = { data: { project_id: renameId, name: renameIntent.name } }
+  expect(schema.projectRenameAckMatches(ack, renameIntent)).toBe(true)
+  for (const raw of [{ ...ack, meta: {} }, { data: { ...ack.data, slug: "alias" } }, { data: { ...ack.data, name: "Later B" } }]) {
+    expect(schema.projectRenameAckMatches(raw, renameIntent)).toBe(false)
+  }
+  for (const raw of ['{"name":"A","name":"B"}', '{"data":{"name":"A","na\\u006de":"B"}}']) {
+    expect(() => schema.parseProjectRenameJson(raw)).toThrow(SyntaxError)
+  }
+  expect(schema.parseProjectRenameJson('{"name":"a\\"b"}')).toEqual({ name: 'a"b' })
+  expect(schema.projectRenameOwnerHeadersValid(new Headers({ ...renameHeaders, "cache-control": "no-store" }))).toBe(true)
+  expect(schema.projectRenameOwnerHeadersValid(new Headers(renameHeaders))).toBe(false)
+  expect(schema.projectRenameBrowserHeadersValid(new Headers(renameHeaders))).toBe(true)
+  expect(schema.projectRenameBrowserHeadersValid(new Headers({ ...renameHeaders, "cache-control": "no-store" }))).toBe(false)
+  expect(schema.projectRenameOwnerErrorAllowed(503, "business_store_unavailable", true)).toBe(true)
+  expect(schema.projectRenameOwnerErrorAllowed(200, "business_store_unavailable", true)).toBe(false)
+  expect(schema.projectRenameOwnerErrorAllowed(403, "session_forbidden", true)).toBe(false)
+  for (const value of ["0", "01", "86401", "99999", "1\n"]) expect(schema.projectRenameRetryAfterValid(value)).toBe(false)
+  for (const value of ["1", "9999", "86399", "86400"]) expect(schema.projectRenameRetryAfterValid(value)).toBe(true)
+})
+
+it("issues one exact immutable PATCH and returns no resource or automatic retry", async () => {
+  const { renameProject } = await import("@/features/app/project-rename")
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: { project_id: renameId, name: renameIntent.name } }, { headers: renameHeaders }))
+  vi.stubGlobal("fetch", fetchMock)
+  await expect(renameProject(renameIntent, new AbortController().signal)).resolves.toBeUndefined()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledWith(`/api/hub/projects/${renameId}/name`, {
+    method: "PATCH", cache: "no-store", headers: { "content-type": "application/json", "Idempotency-Key": renameIntent.idempotencyKey },
+    body: renameIntent.body, signal: expect.any(AbortSignal),
+  })
+  expect(fetchMock.mock.calls[0]?.[1].signal.aborted).toBe(true)
+  const abort = new AbortController(); abort.abort()
+  await expect(renameProject(renameIntent, abort.signal)).rejects.toMatchObject({ code: "request_aborted" })
+  await expect(renameProject({ ...renameIntent, name: " raw ", body: '{"name":" raw "}' }, new AbortController().signal)).rejects.toMatchObject({ code: "invalid_project_rename" })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+it("rejects wrong ACK target/name, additions, status, headers, duplicate keys and mismatched owner errors", async () => {
+  const { renameProject } = await import("@/features/app/project-rename")
+  const ack = { data: { project_id: renameId, name: renameIntent.name } }
+  const vectors = [
+    { body: { data: { ...ack.data, project_id: "project_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" } }, status: 200, code: "ack_shape_mismatch" },
+    { body: { data: { ...ack.data, name: "B" } }, status: 200, code: "ack_shape_mismatch" },
+    { body: { ...ack, meta: {} }, status: 200, code: "ack_shape_mismatch" },
+    { body: ack, status: 201, code: "unexpected_status" },
+    { body: { error: { code: "session_forbidden", message: "denied", retryable: false } }, status: 503, code: "unexpected_status" },
+    { body: { error: { code: "business_store_unavailable", message: "unknown", retryable: true, extra: true } }, status: 503, code: "unexpected_status" },
+  ]
+  for (const vector of vectors) {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(vector.body, { status: vector.status, headers: renameHeaders }))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(renameProject(renameIntent, new AbortController().signal)).rejects.toMatchObject({ code: vector.code })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  }
+  for (const headers of [{ ...renameHeaders, "cache-control": "no-store" }, { ...renameHeaders, "cache-control": "public" }, { ...renameHeaders, "x-request-id": "x".repeat(129) }, { ...renameHeaders, "content-type": "text/plain" }]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(ack, { headers })))
+    await expect(renameProject(renameIntent, new AbortController().signal)).rejects.toMatchObject({ code: "invalid_headers" })
+  }
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"data":{"project_id":"' + renameId + '","name":"A","name":"我的项目"}}', { headers: renameHeaders })))
+  await expect(renameProject(renameIntent, new AbortController().signal)).rejects.toMatchObject({ code: "invalid_json" })
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: { code: "business_store_unavailable", message: "unknown", retryable: true } }, { status: 503, headers: renameHeaders })))
+  await expect(renameProject(renameIntent, new AbortController().signal)).rejects.toMatchObject({ code: "business_store_unavailable", status: 503 })
+})
+
+it("uses one 10-second budget across delayed headers and held body and cleans up late delivery", async () => {
+  const { renameProject } = await import("@/features/app/project-rename")
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
+  try {
+    let deliver: (value: Response) => void = () => { throw new Error("request not started") }
+    let bodyController: ReadableStreamDefaultController<Uint8Array> | undefined
+    const cancel = vi.fn()
+    const response = new Response(new ReadableStream<Uint8Array>({ start: (value) => { bodyController = value }, cancel }), { headers: renameHeaders })
+    const fetchMock = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { deliver = resolve }))
+    vi.stubGlobal("fetch", fetchMock)
+    const pending = renameProject(renameIntent, new AbortController().signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: "request_timeout" })
+    await vi.advanceTimersByTimeAsync(6_000)
+    deliver(response)
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(fetchMock.mock.calls[0]?.[1].signal.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await rejected
+    expect(fetchMock.mock.calls[0]?.[1].signal.aborted).toBe(true)
+    bodyController?.enqueue(new TextEncoder().encode(JSON.stringify({ data: { project_id: renameId, name: renameIntent.name } })))
+    bodyController?.close()
+    await Promise.resolve()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})

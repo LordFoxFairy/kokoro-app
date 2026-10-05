@@ -8,6 +8,7 @@ import { ConversationThread, type ConversationThreadProps } from "@/ui/thread/co
 import { TodoBar } from "@/ui/todo/todo-bar"
 import { WorkspaceHeader } from "@/components/blocks/workspace-header/workspace-header"
 import { useT } from "@/i18n/context"
+import type { ProjectRenameControl } from "@/components/blocks/workspace-header/workspace-header.types"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 
 import {
@@ -28,6 +29,7 @@ export type AppFrameMainSurfaceProps = {
   hideWorkspaceHeader: boolean
   standaloneSurface: boolean
   projectWorkspace: boolean
+  projectRename?: ProjectRenameControl
   projectRef: string | undefined
   projectConversationView: boolean
   resolvedRailCollapsed: boolean
@@ -79,6 +81,7 @@ export function AppFrameMainSurface({
   hideWorkspaceHeader,
   standaloneSurface,
   projectWorkspace,
+  projectRename,
   projectRef,
   projectConversationView,
   resolvedRailCollapsed,
@@ -126,6 +129,7 @@ export function AppFrameMainSurface({
           {...(brandName === undefined ? {} : { brandName })}
           emptyWorkspace={!showConversation}
           projectWorkspace={projectWorkspace}
+          {...(projectRename === undefined ? {} : { projectRename })}
           // The header owns the only menu trigger while the compact rail is
           // hidden. Once the rail is visible, its own shadcn trigger becomes
           // the owner so the canvas never shows two competing toggles.

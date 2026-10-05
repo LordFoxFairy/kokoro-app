@@ -23,6 +23,19 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "firstSite.renameProject": "重命名项目",
+  "firstSite.projectName": "项目名称",
+  "firstSite.projectRenameDescription": "名称确认后将重新读取当前项目；会话与草稿保持不变。",
+  "firstSite.projectRenameInvalid": "请输入 1–160 个字符的项目名称，不含无效字符。",
+  "firstSite.projectRenameForbidden": "当前身份无权改名，请检查登录状态。",
+  "firstSite.projectRenameSaving": "正在提交改名…",
+  "firstSite.projectRenameReading": "正在核对当前项目名称…",
+  "firstSite.projectRenameReadFailed": "改名请求已确认或待核对。读取失败，请仅重新读取项目。",
+  "firstSite.projectRenameUnknown": "结果未知。重试将复用同一改名请求，不会创建新操作。",
+  "firstSite.projectRenameRejected": "改名请求被拒绝，请核对当前项目后重新编辑。",
+  "firstSite.projectRenameReadRetry": "重新读取项目",
+  "firstSite.projectRenameRetry": "重试同一改名",
+  "firstSite.projectRenameRestart": "核对后重新编辑",
   "skills.personal.published": "本人已发布",
   "skills.personal.installations": "本人安装",
   "skills.personal.install": "安装此技能",

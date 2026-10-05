@@ -1,3 +1,9 @@
+## R243 固定 Project rename consumer（2026-10-05；候选待验）
+
+当前只读 BFF public snapshot 为 owner commit `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`、version `7.2.0`、SHA-256 `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。原 90 个 operations 保留，新增唯一 `renameProject`。`src/contract/project-rename.ts` 消费 closed command receipt/error；现同源 adapter 只将 canonical Project name PATCH 映射到 `/v1`，成功后的 Project GET/list 才是资源投影。
+
+活跃的既有生成入口是 `scripts/generate-bff-team-client.mjs` 与 `scripts/generate-bff-agent-failure.mjs`（分别 `--write` / `--check`）；本轮正常更新固定 provenance，不手改 generated output。下方“没有活跃 generator”只保留为历史阶段记录，不描述本轮当前态。邻接测试和真实浏览器结果由 Root 复验，未在此声明整个 CRUD 或用户页面已通过。
+
 ## R166-WEB-PUBLIC7.1 consumer pin（2026-10-03；候选待发布）
 
 唯一 public 来源为 BFF commit `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc` 的 `contract/openapi/v1/openapi.yaml`，OpenAPI `7.1.0`，canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`。owner 原字节已固定到 `src/generated/bff-public-openapi.yaml`；Team 与 Agent failure 两个既有 generator 均正规 write/check，未手改 generated。

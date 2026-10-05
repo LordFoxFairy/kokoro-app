@@ -658,3 +658,116 @@ it.each(["content-type", "cache-control", "x-request-id"])("fails closed on miss
   vi.mocked(requestWithDomain).mockResolvedValue(new Response('{"data":[]}', { headers }))
   expect((await GET(new Request("http://localhost/api/hub/self/skill-installations"), params(["self", "skill-installations"]))).status).toBe(502)
 })
+
+
+describe("R243 exact Project name adapter", () => {
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const headers = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-rename-1" }
+  const request = (body = '{"name":"  我的项目  "}', suffix = "", key = "stable-key") => new Request(`http://localhost/api/hub/projects/${id}/name${suffix}`, {
+    method: "PATCH", headers: { origin: "http://localhost", "content-type": "application/json", "Idempotency-Key": key }, body,
+  })
+  const path = params(["projects", id, "name"])
+  async function expectError(response: Response, status: number, code: string) {
+    expect(response.status).toBe(status)
+    expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
+    expect(response.headers.get("x-request-id")).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u)
+    expect(await response.json()).toEqual({ error: { code, message: code, retryable: status >= 500 || status === 499 } })
+  }
+
+  it("maps only exact canonical PATCH, normalized closed body and stable key to the admitted BFF domain", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route")
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: { project_id: id, name: "我的项目" } }, { headers }))
+    const response = await PATCH(request(), path)
+    expect(response.status).toBe(200)
+    expect(response.headers.get("x-request-id")).toBe("owner-rename-1")
+    expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0")
+    expect(await response.json()).toEqual({ data: { project_id: id, name: "我的项目" } })
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
+    const [url, domain, init] = vi.mocked(requestWithDomain).mock.calls[0]!
+    expect(url).toBe(`http://bff.test/v1/projects/${id}/name`)
+    expect(domain).toBe("dev.kokoro.localhost")
+    expect(init).toMatchObject({ method: "PATCH", timeoutMs: expect.any(Number), maxRequestBytes: 65_536, maxResponseBytes: 65_536 })
+    expect(init?.timeoutMs).toBeGreaterThan(0)
+    expect(init?.timeoutMs).toBeLessThanOrEqual(10_000)
+    expect(new TextDecoder().decode(init?.body as ArrayBuffer)).toBe('{"name":"我的项目"}')
+    const upstreamHeaders = new Headers(init?.headers)
+    expect(upstreamHeaders.get("idempotency-key")).toBe("stable-key")
+    expect(upstreamHeaders.get("authorization")).toBe("Bearer product-access")
+    expect(upstreamHeaders.get("x-kokoro-service")).toBe("web-bff")
+    expect(init?.signal?.aborted).toBe(true)
+  })
+
+  it("rejects aliases, query including bare ?, duplicate JSON keys, invalid Unicode and malformed keys before owner I/O", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route")
+    for (const body of ['{"name":"A","name":"B"}', '{"name":"A","na\\u006de":"B"}', '{"name":"A","subject":"spoof"}', '{"name":"\\ud800"}', '{"name":"\\u0000"}', JSON.stringify({ name: "😀".repeat(81) })]) {
+      await expectError(await PATCH(request(body), path), 400, "invalid_project_rename")
+    }
+    for (const suffix of ["?", "?x=1", "/extra"]) await expectError(await PATCH(request(undefined, suffix), path), 400, "invalid_project_rename")
+    for (const key of ["a,b", "a b", "x".repeat(129)]) await expectError(await PATCH(request(undefined, "", key), path), 400, "invalid_project_rename")
+    await expectError(await PATCH(new Request(`http://localhost/api/hub/self/projects/${id}/name`, { method: "PATCH", headers: { "content-type": "application/json", "Idempotency-Key": "key" }, body: '{"name":"A"}' }), params(["self", "projects", id, "name"])), 400, "invalid_project_rename")
+    await expectError(await PATCH(new Request(`http://localhost/api/hub/projects/${id}/name`, { method: "PATCH", headers: { origin: "https://evil.test", "content-type": "application/json", "Idempotency-Key": "key" }, body: '{"name":"A"}' }), path), 403, "session_forbidden")
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  })
+
+  it("closes owner status/headers/errors and never accepts a receipt as current Project", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route")
+    const ack = { data: { project_id: id, name: "我的项目" } }
+    const vectors = [
+      { body: { data: { ...ack.data, name: "Newer B" } }, status: 200, code: "ack_shape_mismatch" },
+      { body: { ...ack, meta: {} }, status: 200, code: "ack_shape_mismatch" },
+      { body: ack, status: 201, code: "unexpected_status" },
+      { body: { error: { code: "session_forbidden", message: "denied", retryable: false } }, status: 503, code: "unexpected_status" },
+      { body: { error: { code: "business_store_unavailable", message: "unknown", retryable: false } }, status: 503, code: "unexpected_status" },
+    ]
+    for (const vector of vectors) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(vector.body, { status: vector.status, headers }))
+      await expectError(await PATCH(request(), path), 502, vector.code)
+    }
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(ack, { headers: { ...headers, "cache-control": "public" } }))
+    await expectError(await PATCH(request(), path), 502, "invalid_headers")
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"project_id":"' + id + '","name":"A","name":"我的项目"}}', { headers }))
+    await expectError(await PATCH(request(), path), 502, "invalid_json")
+    const error = { error: { code: "business_store_unavailable", message: "unknown commit", retryable: true } }
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(error, { status: 503, headers }))
+    const unavailable = await PATCH(request(), path)
+    expect(unavailable.status).toBe(503)
+    expect(unavailable.headers.get("x-request-id")).toBe(headers["x-request-id"])
+    expect(await unavailable.json()).toEqual(error)
+    expect(requestWithDomain).toHaveBeenCalledTimes(vectors.length + 3)
+  })
+
+  it("does no owner write without configuration or current admission", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route")
+    delete process.env.KOKORO_WEB_AUTH_SECRET
+    await expectError(await PATCH(request(), path), 503, "product_tenant_not_configured")
+    expect(currentProductSession).not.toHaveBeenCalled()
+    process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET
+    currentProductSession.mockResolvedValueOnce(null)
+    await expectError(await PATCH(request(), path), 401, "session_authentication_required")
+    currentProductSession.mockRejectedValueOnce(new Error("IAM unavailable"))
+    await expectError(await PATCH(request(), path), 503, "iam_admission_unavailable")
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  })
+
+  it("shares the 10-second admission/body budget and aborts a caller cancellation without later I/O", async () => {
+    const { PATCH } = await import("@/app/api/hub/[...path]/route")
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
+    try {
+      let admit: (value: null) => void = () => { throw new Error("no admission") }
+      currentProductSession.mockImplementationOnce(() => new Promise<null>((resolve) => { admit = resolve }))
+      const pending = PATCH(request(), path)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expectError(await pending, 504, "request_timeout")
+      admit(null)
+      await Promise.resolve()
+      expect(requestWithDomain).not.toHaveBeenCalled()
+      const controller = new AbortController()
+      const cancelled = PATCH(new Request(`http://localhost/api/hub/projects/${id}/name`, { method: "PATCH", headers: { "content-type": "application/json", "Idempotency-Key": "key" }, body: new ReadableStream<Uint8Array>(), duplex: "half", signal: controller.signal } as RequestInit & { duplex: string }), path)
+      await Promise.resolve()
+      controller.abort()
+      await expectError(await cancelled, 499, "request_aborted")
+      expect(requestWithDomain).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+})

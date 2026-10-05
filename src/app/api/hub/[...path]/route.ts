@@ -7,6 +7,7 @@
 // 不强制 application/json。
 
 import { NextResponse } from "next/server"
+import { proxyProjectRename } from "@/lib/server/project-rename"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
@@ -256,6 +257,7 @@ export async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params
+  if (path[0] === "projects" && path[2] === "name" || path[0] === "self" && path[1] === "projects" && path[3] === "name") return proxyProjectRename(request, path)
   if (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skill-installations") return proxyInstallation(request, path)
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])

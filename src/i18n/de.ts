@@ -4,6 +4,19 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "firstSite.renameProject": "Projekt umbenennen",
+  "firstSite.projectName": "Projektname",
+  "firstSite.projectRenameDescription": "Das aktuelle Projekt wird nach der Bestätigung erneut eingelesen. Unterhaltungen und Entwürfe bleiben unverändert.",
+  "firstSite.projectRenameInvalid": "Geben Sie einen Projektnamen mit 1–160 UTF-16-Einheiten ohne ungültige Zeichen ein.",
+  "firstSite.projectRenameForbidden": "Ihre aktuelle Identität ist nicht berechtigt, dieses Projekt umzubenennen. Prüfen Sie Ihre Anmeldung.",
+  "firstSite.projectRenameSaving": "Umbenennung wird übermittelt…",
+  "firstSite.projectRenameReading": "Der aktuelle Projektname wird geprüft…",
+  "firstSite.projectRenameReadFailed": "Die Umbenennungsanfrage wurde bestätigt oder muss geprüft werden. Versuchen Sie nur das Einlesen des Projekts erneut.",
+  "firstSite.projectRenameUnknown": "Ergebnis unbekannt. Beim erneuten Versuch wird dieselbe Umbenennungsanfrage verwendet, ohne eine neue Operation anzulegen.",
+  "firstSite.projectRenameRejected": "Umbenennung abgelehnt. Prüfen Sie das aktuelle Projekt, bevor Sie es erneut bearbeiten.",
+  "firstSite.projectRenameReadRetry": "Projekt erneut einlesen",
+  "firstSite.projectRenameRetry": "Dieselbe Umbenennung erneut versuchen",
+  "firstSite.projectRenameRestart": "Erneut prüfen und bearbeiten",
   "rail.moveFailed": "Die Unterhaltung konnte nicht verschoben werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.",
   "skills.personal.published": "Meine veröffentlichten Skills",
   "skills.personal.installations": "Meine Installationen",

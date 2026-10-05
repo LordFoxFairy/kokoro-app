@@ -4,6 +4,19 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "firstSite.renameProject": "Rename project",
+  "firstSite.projectName": "Project name",
+  "firstSite.projectRenameDescription": "The current project is read again after confirmation. Conversations and drafts stay unchanged.",
+  "firstSite.projectRenameInvalid": "Enter a project name of 1–160 UTF-16 units without invalid characters.",
+  "firstSite.projectRenameForbidden": "Your current identity is not permitted to rename this project. Check your sign-in status.",
+  "firstSite.projectRenameSaving": "Submitting rename…",
+  "firstSite.projectRenameReading": "Checking the current project name…",
+  "firstSite.projectRenameReadFailed": "The request was confirmed or needs checking. Retry the project reads only.",
+  "firstSite.projectRenameUnknown": "The result is unknown. Retry uses the same rename request, not a new operation.",
+  "firstSite.projectRenameRejected": "The rename was rejected. Check the current project before editing again.",
+  "firstSite.projectRenameReadRetry": "Read project again",
+  "firstSite.projectRenameRetry": "Retry same rename",
+  "firstSite.projectRenameRestart": "Check and edit again",
   "rail.moveChat": "Move conversation {title}",
   "rail.retryMoveChat": "Retry moving conversation",
   "rail.moveFailed": "The conversation could not be moved. Refresh and try again.",

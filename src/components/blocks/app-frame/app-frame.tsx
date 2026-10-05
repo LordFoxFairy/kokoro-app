@@ -331,6 +331,9 @@ function AppFrameRuntime({
     instructionHistory: projectReads.instructionHistory,
     instructionContext: projectReads.context,
     refreshProject: refreshProjects,
+    refreshRenamedProject: projectReads.refreshRenamedProject,
+    ...(projectReadBoundary === undefined ? {} : { renameBoundary: projectReadBoundary }),
+    renameRouteKey: JSON.stringify([projectRef ?? null, activeId, navigationState.settingsTab]),
   })
 
   const actions = useAppFrameActions({
@@ -567,6 +570,7 @@ function AppFrameRuntime({
       connection={connection}
       onReconnect={() => engine?.reconnect()}
       projectCreation={project.projectCreation}
+      projectRename={project.projectRename}
       onRetryProjectCreation={project.retryProjectCreation}
       retryConversationHydration={retryConversationHydration}
       onOpenSettings={overlays.openSettings}

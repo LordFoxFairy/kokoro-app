@@ -1,3 +1,11 @@
+## R243 Project rename consumer candidate（2026-10-05；待 Root 真实门）
+
+- `src/contract/project-rename.ts`：canonical target、normalized name/key、闭合 ACK/error/headers 与 duplicate-key JSON 校验。
+- `src/features/app/project-rename.ts`、`src/lib/server/project-rename.ts`：单一 immutable PATCH、10 秒总预算和 exact 同源 adapter；ACK 不是 Project resource。
+- `use-project-list.ts` 与现 AppFrame project/header/menu：pending/unknown/GET-only retry、scope/route/subject fence；ACK 后强制 target GET 再 list，不写 route/draft。
+- 固定 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` public `7.2.0`，snapshot SHA-256 `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`；正常现两 generators 生成，不改旧 Chat/Team 事实。
+- 现邻接 contract/adapter/read-fence/UI tests 与 R242 真浏览器 oracle 供 Root 复验；作者静态检查不是产品 PASS，正式 3310 未由此切片更新。三 D0 原设计段冻结，任务入口仍为 Root `docs/task.md`。
+
 ## R85 Plugins目录真实度切片（2026-10-02）
 
 - `src/features/app/kokoro-plugins-surface.tsx`：发现目录、搜索、分页、轮播及已有管理入口；不拥有连接安装/授权事实，删除本地Set形成的Add/Remove/checkmark假成功。

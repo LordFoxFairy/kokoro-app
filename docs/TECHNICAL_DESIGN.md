@@ -1,3 +1,60 @@
+## R242-WEB-RENAME-D0：Project name consumer design gate（2026-10-05；仅设计）
+
+### 当前态、owner 与证据
+
+本节是 R242 Web consumer 的设计门；它只定义页面侧如何消费 BFF 已交付的 Project name command，不宣称本仓已有实现、页面验收或用户页面通过。Project 的 name、rename receipt、幂等及权限事实 owner 是 `kokoro-bff`；Web `kokoro` 只拥有同源浏览器适配、短生命周期编辑意图和受版本围栏保护的页面投影。正式 producer 基线为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`，public contract `7.2.0`，OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。Web formal 归档基线为 `5e0963648db0cb0e1a60de42ea025670b32aba85`；本候选副本仅供本设计门写入。
+
+本轮边界更正：BFF owner 响应严格要求 `Cache-Control: no-store`；Web same-origin browser-private 响应严格要求现 canonical `Cache-Control: private, no-store, max-age=0`。两层不共用宽松或 `includes` 判定。
+
+现有页面有 Workspace rail 的 Project 导航和 workspace header 的 Project menu；header menu 当前只有 Account/Upgrade，`use-app-frame-project.ts` 具备 create/instruction/resource/skill/openProject 入口但没有 rename，`use-project-list.ts` 的既有刷新也没有“ACK 后强制 canonical detail + list”语义。因此“BFF producer 已完成”不等于 Web 页面或整页验收完成。本节保留这一当前缺口，不把受控 peer、历史审计或旧 authentication evidence 升格为用户页面证据。
+
+### 放置表与准入
+
+| 项 | 当前事实 | R242-D0 准入结论 |
+| --- | --- | --- |
+| Owner | BFF 持久化 Project name/receipt；Web 仅浏览器适配与临时编辑态 | 不在 Web 建 DB、schema、cache 或第二 name owner |
+| browser-private adapter | 现有 `src/app/api/hub/[...path]/route.ts` 是通用转发，未提供 rename 的 exact dispatch、owner request-id 保留与 strict response gate | 未来在现同源 API 边界加精确 rename 分支；不得以 generic PATCH forwarding 作为验收 |
+| wire/parser | Web contract/client 目录已有按能力聚合的普通文件位置 | 未来在现目录增 `src/contract/project-rename.ts`；同源 server helper 使用 `src/lib/server/project-rename.ts`；运行时先 strict parse，再进入状态 |
+| feature orchestration | 现有 project hook/header/menu 承担页面编排 | 未来扩展 `src/features/app/project-rename.ts` 与现 hook/header/menu；不建通用 mutation framework |
+| tests | 当前 formal 仍缺本命令的 Web consumer 证据 | 实施后须增加 parser/adapter/route/real Next+Chromium 及 BFF-backed acceptance；本 D0 不改 test |
+| generated/contract/package | producer contract 由 BFF owner 维护；Web 不复制可编辑 owner 事实 | 本 D0 不改 generated、contract、package、lock 或 source；未来只按 artifact repin 规则更新只读生成物 |
+
+允许文件集严格引用 `/tmp/r241-web-project-rename-consumer-audit.md` §3–4：新增 `src/contract/project-rename.ts`、`src/features/app/project-rename.ts`、`src/lib/server/project-rename.ts`；现 `src/app/api/hub/[...path]/route.ts` 仅增加 exact dispatch；现 `src/components/blocks/app-frame/use-app-frame-project.ts`、`src/features/app/use-project-list.ts`、`src/components/blocks/app-frame/{app-frame.tsx,app-frame-main-surface.tsx}`、`src/components/blocks/workspace-header/{workspace-header.types.ts,workspace-header.tsx,workspace-header-session-actions.tsx,workspace-header-project-menu.tsx}`、`src/i18n/messages.ts` 及当前语言字典按职责接线。其余 source/test/pin/generated/contract/package/lock/Git/共享资源本阶段不写；未来 repin 仅按下方 artifact 规则处理。
+
+准入是闭集：canonical `project_<lowercase UUID>` target、一个稳定 visible-ASCII `Idempotency-Key`（长度 1..128，禁止 comma 与 space）、一个 JSON body、exact PATCH 端点、同源 session、strict response parser、单次 10 秒 monotonic 总预算、ACK 后 target detail GET 再 collection list、subject/route/generation fence、显式 retry。slug、alias、导航路径、localStorage、IndexedDB、Redis、SQL、owner SDK、generic mutation、自动重试和本地持久 name 均在闭集外。
+
+### 目标流程与状态机
+
+1. 用户在现有 Project menu 进入 rename dialog；draft 只在 mounted 页面内保存 raw input。Escape/Cancel 在发送前结束 intent，产生 0 次 PATCH、0 次 owner receipt；发送后的取消只终止本地等待并进入 unknown/read-authority 分支，不假设 owner 没有写入。
+2. Save 先以 ECMAScript `trim()` 生成 `normalizedName`：长度 1..160 个 UTF-16 code units，拒绝 NUL 与 lone surrogate；内部空白、大小写保持原值；不执行 NFC normalization。保存 `targetProjectId`、normalized body 与一次新生成的稳定 visible-ASCII key（1..128，禁止 comma/space）；pending 时禁用重复 Save，简单方案同时禁止关闭。
+3. browser-private exact adapter 仅将 `PATCH /api/hub/projects/{canonicalId}/name` 映射到 BFF `PATCH /v1/projects/{canonicalId}/name`，转发 JSON、`Content-Type`、唯一 `Idempotency-Key`；不经过会把 path/body 重新解释的通用动作代理。请求 headers、body、strict parse 与 response 全部共用 10 秒 monotonic 总预算；finally 清理 timer、abort listener 和本地 pending。
+4. 仅 HTTP 200、`x-request-id` bounded、`cache-control: private, no-store, max-age=0`（owner upstream 为 `no-store`）、闭合 JSON、`data.project_id === targetProjectId` 且 `data.name === normalizedName` 才是 ACK accepted。ACK 是原命令 receipt，不是当前 Project resource，不能直接 `setName` 或作为 sidebar/h1 的唯一投影。
+5. ACK accepted 后，先使旧 detail/list read generation 失效并 abort 可中止的旧读，强制对 frozen target 发 fresh canonical GET，再发 fresh collection list。只有同 subject、同 route scope、同 generation 的 fresh owner read 才能更新 sidebar、header、h1 或导航；不因所有导航一律增加 GET。
+6. unknown（503、网络、超时、abort、坏 headers/body、严格不匹配）保留原始 input、canonical target、同一个 key/body；只允许用户显式以同一意图 retry，且 retry 是同一 PATCH 语义。GET 失败只允许 GET-only retry；不自动重试、不换 key、不创建兼容 alias。
+
+页面状态为 `idle → pending → confirming-read → confirmed | unknown | error`。`confirmed` 只在 fresh canonical GET 与 collection list 都完成后对页面可见；ACK 到 fresh read 之间显示既有 loading/partial-safe 状态，不把 receipt 临时写成资源。401/403 清除敏感编辑 intent，abort/fence 其余结果；新 subject、route 或 epoch 的晚到 A 结果不得覆盖 B dialog、draft、focus、name 或 navigation。
+
+### 依赖方向与未来实现切片
+
+允许：页面组件/hooks → feature orchestration → contract/parser 与同源 adapter → BFF public contract。页面仅读同源 `/api/*`；不得直连 IAM、System、Agent、Platform、Billing、Storage、Scheduler，亦不得读 owner DB/Redis。BFF producer 的 schema、错误代码和 request-id 是输入事实；Web 不复制可编辑 owner 事实。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。
+
+后续实现按小切片顺序：
+
+1. 在现 contract/client 同目录加入严格 rename schema/parser 和 10 秒预算 helper，补 parser unit。
+2. 在现 API route 加 exact rename dispatch、request-id/cache-control 保留和 adapter error mapping，补 route/integration。
+3. 扩现 hook/header/menu，加入 pending/unknown/confirmed-read 状态、focus/keyboard/i18n token 和 generation fences。
+4. 用真实 Next/Chromium、真实 BFF PostgreSQL receipt 与 fresh GET/list 验证页面；再执行 Web owner 全部门禁。
+
+不新建 `utils/`、通用 mutation 层、第二 project store、server cache 或独立 rename 进程；不移动现有文件，不复制 BFF 可编辑 contract。
+
+### 设计门、失败安全与退出条件
+
+必须证明：0 PATCH 的 pre-send cancel；稳定 key/body 的显式 retry；严格 ACK closure；ACK 不直投资源；ACK 后 detail→list 顺序；旧 read generation、subject/route/epoch 和 auth fence；503/unknown 不丢原 intent；GET failure 不重发 PATCH；pending 无重复 Save/关闭；同源 exact path；10 秒总预算及 cleanup；现有 i18n/design token/accessibility/reduced-motion 状态复用。
+
+本 D0 的退出条件仅是三份当前设计与 producer pin 对齐、旧 formal 文本作为 exact suffix 保留、实现边界闭集且无跨 owner 写入；它不表示 source、test、build、e2e 或整页已通过。验证命令在实现交接后由 Root 在主仓执行：`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm test:e2e`。
+
+---
+
 ## R239 当前认证与工作区恢复边界
 
 Web 首文档采用 server-first Product Session admission：可信 Host、配置与现有 HttpOnly session/generation/tombstone/expiry 校验通过时，只向客户端传递无 claims 的 `serverAdmitted` 布尔值；anonymous 固定进入 `/login`，配置或 Redis 失败 fail closed。客户端 checking 阶段只挂载 data-free、禁用的工作区壳，不挂载 Runtime、Conversation、draft 或 owner clients。

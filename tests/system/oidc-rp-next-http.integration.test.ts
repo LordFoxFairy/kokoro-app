@@ -1213,6 +1213,24 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     moveFixtureResponse = undefined
     moveBoundaryRequests.length = 0
   }
+  // R242 owns only this peer's Project seed and held command/read responses.
+  const renameProjectId = "project_44444444-4444-4444-8444-444444444444"
+  const renameConversationId = "conv_cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  const renameOldName = "R242 原项目"
+  const renameSubmittedName = "中文项目  A"
+  const renameCurrentName = "当前权威项目 B"
+  const renameThreadBody = "R242 existing Project conversation must stay unchanged"
+  let renameFixtureEnabled = false
+  let renameOwnerName = renameOldName
+  let renameAckSent = false
+  let releaseRenameAck: (() => void) | undefined
+  let releaseRenameRead: (() => void) | undefined
+  const renameRequests: { method: string; path: string; idempotencyKey: string | undefined; body: string }[] = []
+  const renameReads: { path: string; afterAck: boolean; name: string }[] = []
+  const renameResource = () => ({
+    id: renameProjectId, name: renameOwnerName, slug: "r242-original-project", description: "",
+    instruction: "", created_at: "2026-10-05T10:00:00.000Z", updated_at: "2026-10-05T11:00:00.000Z",
+  })
   let holdDeleteSession = false
   let deleteSessionCommitted = false
   let releaseDeleteSession: (() => void) | undefined
@@ -1809,6 +1827,75 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             const timer = setTimeout(() => response.end(payload), 6_000)
             response.once("close", () => clearTimeout(timer))
           } else response.end(payload)
+          return
+        }
+        if (renameFixtureEnabled && (request.url === "/v1/projects" ||
+          request.url?.startsWith(`/v1/projects/${renameProjectId}`) ||
+          request.url === `/v1/sessions?project_ref=${renameProjectId}` ||
+          request.url === `/v1/sessions/${renameConversationId}`)) {
+          expect(request.headers.cookie).toBeUndefined()
+          expect(request.headers["x-kokoro-service"]).toBe("web-bff")
+          expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
+          expect(request.headers.forwarded).toBe("host=localhost")
+          expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+          const sendRenameJson = (data: unknown): void => {
+            if (response.destroyed) return
+            response.writeHead(200, {
+              "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_r242_owner",
+            })
+            response.end(JSON.stringify(data))
+          }
+          if (request.method === "PATCH" && request.url === `/v1/projects/${renameProjectId}/name`) {
+            const chunks: Buffer[] = []
+            request.on("data", (chunk: Buffer) => chunks.push(chunk))
+            request.on("end", () => {
+              renameRequests.push({ method: request.method ?? "<unknown>", path: request.url ?? "<unknown>",
+                idempotencyKey: typeof request.headers["idempotency-key"] === "string" ? request.headers["idempotency-key"] : undefined,
+                body: Buffer.concat(chunks).toString("utf8") })
+              expect(request.headers["content-type"]).toMatch(/^application\/json(?:;\s*charset=utf-8)?$/iu)
+              // A valid first-success receipt A can precede a newer canonical resource B.
+              releaseRenameAck = () => {
+                releaseRenameAck = undefined
+                if (response.destroyed) return
+                renameOwnerName = renameCurrentName
+                renameAckSent = true
+                sendRenameJson({ data: { project_id: renameProjectId, name: renameSubmittedName } })
+              }
+              response.once("close", () => { releaseRenameAck = undefined })
+            })
+            return
+          }
+          if (request.method === "GET" && (request.url === "/v1/projects" || request.url === `/v1/projects/${renameProjectId}`)) {
+            renameReads.push({ path: request.url, afterAck: renameAckSent, name: renameOwnerName })
+            const payload = request.url === "/v1/projects"
+              ? { data: { projects: [renameResource()] }, meta: { request_id: "req_r242_list" } }
+              : { data: { project: renameResource() }, meta: { request_id: "req_r242_detail" } }
+            if (renameAckSent && request.url === `/v1/projects/${renameProjectId}` &&
+              renameReads.filter((read) => read.afterAck && read.path === `/v1/projects/${renameProjectId}`).length === 1) {
+              releaseRenameRead = () => { releaseRenameRead = undefined; sendRenameJson(payload) }
+              response.once("close", () => { releaseRenameRead = undefined })
+            } else sendRenameJson(payload)
+            return
+          }
+          if (request.method === "GET" && request.url === `/v1/projects/${renameProjectId}/instruction-revisions`) {
+            sendRenameJson({ data: { items: [] }, meta: { request_id: "req_r242_instructions" } })
+            return
+          }
+          if (request.method === "GET" && request.url === `/v1/sessions?project_ref=${renameProjectId}`) {
+            sendRenameJson({ data: { sessions: [{ session_id: renameConversationId, title: "R242 existing conversation",
+              updated_at: "2026-10-05T11:00:00.000Z" }], next_cursor: null }, meta: { request_id: "req_r242_sessions" } })
+            return
+          }
+          if (request.method === "GET" && request.url === `/v1/sessions/${renameConversationId}`) {
+            sendRenameJson({ data: { session: { session_id: renameConversationId, title: "R242 existing conversation",
+              owner_id: "user-one", created_at: "2026-10-05T10:00:00.000Z", updated_at: "2026-10-05T11:00:00.000Z" },
+            messages: [{ message_id: "message-r242-existing", role: "user", content: renameThreadBody,
+              status: "completed", created_at: "2026-10-05T11:00:00.000Z" }], execution_process: null,
+            files: [], deliveries: [], deliveries_has_more: false, event_watermark: null }, meta: { request_id: "req_r242_snapshot" } })
+            return
+          }
+          response.writeHead(404)
+          response.end()
           return
         }
         if (request.method === "GET" && request.url === "/v1/projects" && moveUiFixtureEnabled) {
@@ -4965,5 +5052,158 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
+
+  it("R242 renames the canonical Project through its menu and renders fresh owner reads, not the ACK name", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    renameFixtureEnabled = true
+    renameOwnerName = renameOldName
+    renameAckSent = false
+    renameRequests.length = 0
+    renameReads.length = 0
+    const browserPatches: { path: string; key: string | undefined; body: string | null }[] = []
+    const browserWrites: { method: string; path: string }[] = []
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext({ locale: "zh-CN" })
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      page.on("request", (request) => {
+        const url = new URL(request.url())
+        if (url.pathname.startsWith("/api/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) {
+          browserWrites.push({ method: request.method(), path: `${url.pathname}${url.search}` })
+        }
+        if (request.method() === "PATCH") browserPatches.push({ path: `${url.pathname}${url.search}`,
+          key: request.headers()["idempotency-key"], body: request.postData() })
+      })
+      await page.goto(`http://localhost:${nextPort}/app/project/${renameProjectId}`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const sidebarProject = page.locator(`[data-project-list="true"] [data-project-id="${renameProjectId}"]`)
+      await page.getByRole("heading", { name: renameOldName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await sidebarProject.getByRole("link", { name: renameOldName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const identity = await context.request.get(`http://localhost:${nextPort}/api/auth/session`, { timeout: 10_000 })
+      expect(identity.status()).toBe(200)
+      expect(await identity.json()).toMatchObject({ authenticated: true, subject: "user-one" })
+      // The current page uses the collection for known ids: prove the real canonical detail adapter separately.
+      const initialDetail = await context.request.get(`http://localhost:${nextPort}/api/hub/projects/${renameProjectId}`, { timeout: 10_000 })
+      expect(initialDetail.status()).toBe(200)
+      expect(await initialDetail.json()).toMatchObject({ data: { project: { id: renameProjectId, name: renameOldName } } })
+      await page.locator(`[data-conversation-list="project-conversation"] [data-conversation-id="${renameConversationId}"]`).click()
+      await page.getByText(renameThreadBody, { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      const canonicalRoute = `/app/project/${renameProjectId}?conversation=${renameConversationId}`
+      await expect.poll(() => `${new URL(page.url()).pathname}${new URL(page.url()).search}`, { timeout: 10_000 }).toBe(canonicalRoute)
+      const composer = page.locator('[data-slot="composer-input"]')
+      const draft = "R242 保留当前项目会话草稿"
+      await composer.fill(draft)
+      expect(renameRequests).toHaveLength(0)
+      expect(renameReads.some((read) => read.path === `/v1/projects/${renameProjectId}` && read.name === renameOldName)).toBe(true)
+
+      const moreTrigger = page.locator('[data-slot="workspace-header"]').getByRole("button", { name: "更多设置分区", exact: true })
+      await moreTrigger.click()
+      // Pre-send cancel must close only the local dialog and restore focus, without a PATCH.
+      const renameMenu = page.getByRole("menuitem", { name: "重命名项目", exact: true })
+      await renameMenu.waitFor({ state: "visible", timeout: 10_000 })
+      await renameMenu.click()
+      const dialog = page.getByRole("dialog", { name: "重命名项目", exact: true })
+      await dialog.getByRole("button", { name: "取消", exact: true }).click()
+      await dialog.waitFor({ state: "detached", timeout: 10_000 })
+      await expect.poll(() => moreTrigger.evaluate((element) => element === document.activeElement), { timeout: 10_000 }).toBe(true)
+      expect(browserPatches).toHaveLength(0)
+      await moreTrigger.press("Enter")
+      await renameMenu.waitFor({ state: "visible", timeout: 10_000 })
+      await renameMenu.click()
+      await dialog.waitFor({ state: "visible", timeout: 10_000 })
+      const input = dialog.getByRole("textbox", { name: "项目名称", exact: true })
+      await input.fill(`  ${renameSubmittedName}  `)
+      const save = dialog.getByRole("button", { name: "保存", exact: true })
+      await save.click()
+      await expect.poll(() => renameRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(browserPatches).toHaveLength(1)
+      const command = renameRequests[0]!
+      expect(command.method).toBe("PATCH")
+      expect(command.path).toBe(`/v1/projects/${renameProjectId}/name`)
+      expect(command.idempotencyKey).toMatch(/^[\x21-\x2b\x2d-\x7e]{1,128}$/u)
+      expect(command.body).toBe(JSON.stringify({ name: renameSubmittedName }))
+      expect(browserPatches[0]).toEqual({ path: `/api/hub/projects/${renameProjectId}/name`, key: command.idempotencyKey,
+        body: command.body })
+      expect(await save.isDisabled()).toBe(true)
+      expect(await dialog.getByRole("button", { name: "取消", exact: true }).isDisabled()).toBe(true)
+      expect(renameOwnerName).toBe(renameOldName)
+      expect(await sidebarProject.getByRole("link", { name: renameOldName, exact: true, includeHidden: true }).count()).toBe(1)
+      expect(await sidebarProject.getByRole("link", { name: renameOldName, exact: true, includeHidden: true }).isVisible()).toBe(true)
+      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
+      expect(await composer.inputValue()).toBe(draft)
+      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
+      expect(renameReads.filter((read) => read.afterAck)).toEqual([])
+
+      const ackResponse = page.waitForResponse((response) => response.request().method() === "PATCH" &&
+        new URL(response.url()).pathname === `/api/hub/projects/${renameProjectId}/name`, { timeout: 10_000 })
+      releaseRenameAck?.()
+      const ack = await ackResponse
+      expect(ack.status()).toBe(200)
+      expect(ack.headers()["x-request-id"]).toBe("req_r242_owner")
+      expect(ack.headers()["cache-control"]).toBe("private, no-store, max-age=0")
+      expect(await ack.json()).toEqual({ data: { project_id: renameProjectId, name: renameSubmittedName } })
+      await expect.poll(() => renameReads.filter((read) => read.afterAck).length, { timeout: 10_000 }).toBe(1)
+      expect(renameReads.filter((read) => read.afterAck)).toEqual([
+        { path: `/v1/projects/${renameProjectId}`, afterAck: true, name: renameCurrentName },
+      ])
+      expect(releaseRenameRead).toBeDefined()
+      // Hold fresh detail B: receipt A must never be installed as the resource projection.
+      expect(await sidebarProject.getByRole("link", { name: renameSubmittedName, exact: true, includeHidden: true }).count()).toBe(0)
+      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
+      expect(await composer.inputValue()).toBe(draft)
+      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
+      releaseRenameRead?.()
+      await expect.poll(() => renameReads.filter((read) => read.afterAck).map((read) => read.path), { timeout: 10_000 })
+        .toEqual([`/v1/projects/${renameProjectId}`, "/v1/projects"])
+      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(await sidebarProject.getByRole("link", { name: renameSubmittedName, exact: true }).count()).toBe(0)
+      expect(renameRequests).toHaveLength(1)
+      // Fresh canonical list completion closes the dialog and restores the menu trigger before reload.
+      await dialog.waitFor({ state: "detached", timeout: 10_000 })
+      await expect.poll(() => moreTrigger.evaluate((element) => element === document.activeElement), { timeout: 10_000 }).toBe(true)
+      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
+      expect(await composer.inputValue()).toBe(draft)
+      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
+      expect(browserWrites).toEqual([{ method: "PATCH", path: `/api/hub/projects/${renameProjectId}/name` }])
+
+      const readsBeforeReload = renameReads.length
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.getByText(renameThreadBody, { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await expandDesktopRail(page)
+      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe(draft)
+      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
+      expect(renameReads.length).toBeGreaterThan(readsBeforeReload)
+      expect(renameReads.slice(readsBeforeReload).every((read) => read.name === renameCurrentName)).toBe(true)
+      expect(renameRequests).toHaveLength(1)
+      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).click()
+      await page.getByRole("heading", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${renameProjectId}`)
+      expect(browserWrites).toEqual([{ method: "PATCH", path: `/api/hub/projects/${renameProjectId}/name` }])
+      expect(browserPatches).toHaveLength(1)
+      expect(renameRequests).toHaveLength(1)
+    } finally {
+      releaseRenameAck?.()
+      releaseRenameRead?.()
+      releaseRenameAck = undefined
+      releaseRenameRead = undefined
+      renameFixtureEnabled = false
+      renameOwnerName = renameOldName
+      renameAckSent = false
+      renameRequests.length = 0
+      renameReads.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
 
 })

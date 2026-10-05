@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, renderHook, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
@@ -673,4 +673,97 @@ it("真实正式 AppFrame 同 subject 换代取消 A 待决详情/历史，迟�
     await waitFor(() => expect(detailSignals).toHaveLength(2))
     await waitFor(() => expect(view.projection().instruction).toBe("同 subject 新代际指令"))
   } finally { view.unmount(); view.engine.dispose(); vi.restoreAllMocks() }
+})
+
+
+it("Project rename keeps cancel at zero writes, pending locked, unknown same-key retry and ACK read-failure GET-only", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const { ProjectReadError } = await import("@/features/app/project-list")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Old canonical", slug: "unchanged", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}?conversation=conv-unchanged`)
+  const updateDraft = vi.fn(); const clearDraft = vi.fn()
+  let deliver: (response: Response) => void = () => { throw new Error("no pending PATCH") }
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => new Promise<Response>((resolve) => { deliver = resolve }))
+    .mockResolvedValueOnce(Response.json({ data: { project_id: id, name: "我的项目" } }, { headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "ack-a" } }))
+  const readBack = vi.fn().mockRejectedValueOnce(new ProjectReadError("http", 503)).mockResolvedValueOnce({ ...project, name: "Current B" })
+  const options = {
+    projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "preserved draft", updateDraft, clearDraft,
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {},
+    refreshProject: vi.fn(), refreshRenamedProject: readBack, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "same-project-thread",
+  }
+  const view = renderHook(() => useAppFrameProject(options), { wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.projectRename.onOpen())
+    act(() => view.result.current.projectRename.onChange("  我的项目  "))
+    act(() => view.result.current.projectRename.onClose())
+    expect(view.result.current.projectRename.open).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+    act(() => view.result.current.projectRename.onOpen())
+    act(() => view.result.current.projectRename.onChange("  我的项目  "))
+    act(() => view.result.current.projectRename.onSave())
+    expect(view.result.current.projectRename.status).toBe("pending")
+    act(() => { view.result.current.projectRename.onSave(); view.result.current.projectRename.onClose(); view.result.current.projectRename.onChange("different") })
+    expect(view.result.current.projectRename.open).toBe(true)
+    expect(view.result.current.projectRename.name).toBe("  我的项目  ")
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readBack).not.toHaveBeenCalled()
+    await act(async () => { deliver(Response.json({ error: { code: "business_store_unavailable", message: "unknown commit", retryable: true } }, { status: 503, headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "unknown" } })); await Promise.resolve() })
+    await waitFor(() => expect(view.result.current.projectRename.status).toBe("unknown"))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    act(() => view.result.current.projectRename.onRetry())
+    await waitFor(() => expect(view.result.current.projectRename.status).toBe("read-error"))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const requests = fetchMock.mock.calls.map(([url, init]) => ({ url, body: init?.body, key: new Headers(init?.headers).get("idempotency-key") }))
+    expect(requests[0]).toEqual(requests[1])
+    expect(requests[0]).toEqual({ url: `/api/hub/projects/${id}/name`, body: '{"name":"我的项目"}', key: expect.any(String) })
+    expect(readBack).toHaveBeenCalledTimes(1)
+    act(() => view.result.current.projectRename.onRetry())
+    await waitFor(() => expect(view.result.current.projectRename.open).toBe(false))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(readBack).toHaveBeenCalledTimes(2)
+    expect(readBack.mock.calls.every(([target]) => target === id)).toBe(true)
+    expect(updateDraft).not.toHaveBeenCalled()
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(`${window.location.pathname}${window.location.search}`).toBe(`/app/project/${id}?conversation=conv-unchanged`)
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
+})
+
+it("Project rename revocation clears sensitive intent; a route change aborts late PATCH before read-back", async () => {
+  const { useAppFrameProject } = await import("@/components/blocks/app-frame/use-app-frame-project")
+  const id = "project_12345678-1234-1234-1234-123456789abc"
+  const project = { id, name: "Old", slug: "same", description: "", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-01T00:00:00Z" }
+  const originalUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  window.history.replaceState(null, "", `/app/project/${id}`)
+  let deliver: (response: Response) => void = () => { throw new Error("no PATCH") }
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(Response.json({ error: { code: "session_forbidden", message: "denied", retryable: false } }, { status: 403, headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "denied" } }))
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { deliver = resolve }))
+  const readBack = vi.fn().mockResolvedValue(project)
+  const options = { projectRef: id, projectWorkspace: true, preview: false, mounted: true, draft: "same", updateDraft: vi.fn(), clearDraft: vi.fn(),
+    projectDetail: { status: "ready" as const, data: project }, instructionHistory: { status: "blocked" as const }, instructionContext: {}, refreshProject: vi.fn(),
+    refreshRenamedProject: readBack, renameBoundary: { admitted: true, subject: "reader", generation: 1 }, renameRouteKey: "route" }
+  const view = renderHook(({ boundary }) => useAppFrameProject({ ...options, renameBoundary: boundary }), { initialProps: { boundary: options.renameBoundary }, wrapper: LocaleProvider })
+  try {
+    act(() => view.result.current.projectRename.onOpen())
+    act(() => view.result.current.projectRename.onChange("sensitive name"))
+    act(() => view.result.current.projectRename.onSave())
+    await waitFor(() => expect(view.result.current.projectRename.problem).toBe("permission"))
+    expect(view.result.current.projectRename.name).toBe("")
+    expect(view.result.current.projectRename.available).toBe(false)
+    act(() => view.result.current.projectRename.onRetry())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    view.rerender({ boundary: { admitted: true, subject: "another-reader", generation: 2 } })
+    act(() => view.result.current.projectRename.onOpen())
+    act(() => view.result.current.projectRename.onChange("late name"))
+    act(() => view.result.current.projectRename.onSave())
+    window.history.pushState(null, "", "/app")
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")))
+    expect(fetchMock.mock.calls[1]?.[1]?.signal?.aborted).toBe(true)
+    await act(async () => { deliver(Response.json({ data: { project_id: id, name: "late name" } }, { headers: { "cache-control": "private, no-store, max-age=0", "x-request-id": "late" } })); await Promise.resolve() })
+    expect(readBack).not.toHaveBeenCalled()
+    expect(view.result.current.projectRename.open).toBe(false)
+    expect(view.result.current.projectRename.name).toBe("")
+    expect(options.updateDraft).not.toHaveBeenCalled()
+  } finally { view.unmount(); fetchMock.mockRestore(); window.history.replaceState(null, "", originalUrl) }
 })

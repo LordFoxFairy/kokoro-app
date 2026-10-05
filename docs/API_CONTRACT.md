@@ -1,3 +1,72 @@
+## R242-WEB-RENAME-D0：Project name consumer contract gate（2026-10-05；仅设计）
+
+### 契约身份与范围
+
+本节冻结 Web 对 BFF Project name command 的 browser-private 消费面，不新增 BFF public contract。producer 正式 pin：BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`，public contract `7.2.0`，OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。Web formal 基线 `5e0963648db0cb0e1a60de42ea025670b32aba85` 的原全文作为本节之后的 exact suffix；本节是 candidate 的 D0 设计，不是已生成契约或已实现客户端。
+
+本轮边界更正：BFF owner 响应严格要求 `Cache-Control: no-store`；Web same-origin browser-private 响应严格要求现 canonical `Cache-Control: private, no-store, max-age=0`。两层不共用宽松或 `includes` 判定。
+
+Owner 是 BFF：Project name、canonical ID、receipt、幂等、tenant/subject admission 和持久化一致性均由 BFF 拥有。Web 只提供 same-origin adapter、strict parser、短生命周期 command intent 和读后投影。浏览器不自报 tenant、actor、subject 或权限，不直连任何内部 owner。
+
+### browser-private 到 public 的唯一映射
+
+| 层 | 允许的契约 |
+| --- | --- |
+| Browser | `PATCH /api/hub/projects/{canonicalProjectId}/name`；同源 HttpOnly session；`Content-Type: application/json`；唯一 ASCII `Idempotency-Key` |
+| Web adapter | 精确方法、精确 path、严格 JSON parse、`x-request-id` bounded、`cache-control: private, no-store, max-age=0`；仅映射已发布错误 envelope |
+| BFF public | `PATCH /v1/projects/{canonicalProjectId}/name`；BFF owner admission、receipt 和错误代码 |
+| 成功之后 | frozen target 的 fresh canonical Project GET，然后 fresh Project list；这是读回协议，不是新命令或第二写入 |
+
+不允许用通用 catch-all 将任意 PATCH 透传来代替上述 exact mapping；不允许 slug、display label、navigation path 或 conversation ID 作为 target alias。
+
+### 请求与严格成功闭集
+
+`canonicalProjectId` 必须是 BFF 规定的 `project_<UUID lowercase hex>`；Web 只接受当前 Project resource 给出的 canonical opaque ID。body 只有一个字段：
+
+```json
+{"name":"<normalizedName>"}
+```
+
+`normalizedName = rawInput.trim()`；其 UTF-16 code unit 数为 1..160，拒绝 NUL 与 lone surrogate；内部空白、case 保持原值；不执行 NFC normalization。body 不附带 project_id、tenant、subject、slug、display metadata 或客户端时间。每次新的 intent 生成一个稳定 visible-ASCII key（1..128，禁止 comma 与 space，单 header value）；retry 复用同一 key 和完全相同 body，用户修改名称则先结束旧 intent、读 owner，再以新 key 开始。
+
+只接受以下成功闭集：HTTP `200`；有 bounded `x-request-id`；`cache-control: private, no-store, max-age=0`（owner upstream 为 `no-store`）；JSON 无多余字段的已知 envelope；`data.project_id` 与 frozen target 完全相等；`data.name` 与 normalized input 完全相等。BFF 当前 receipt 形状为：
+
+```json
+{"data":{"project_id":"project_<UUID>","name":"<normalizedName>"}}
+```
+
+该 receipt 是命令确认，不是 Project resource 当前态；Web 不从它直接覆盖 sidebar、header 或 h1。
+
+### 预算、错误与重试
+
+headers、body、JSON parse 和 adapter 映射共用一次 10 秒 monotonic total budget；caller abort、scope/subject/route/epoch 变化或 timer 到期均终止本次等待，finally 清理 timer/listeners。没有分段 10 秒、自动 retry、指数 backoff 或新 key。
+
+BFF published closed error set（Web 只按状态与 code 展示/分类，不重写 owner 事实）如下：
+
+| HTTP | code | Web 处理 |
+| --- | --- | --- |
+| 400 | `invalid_project_rename`、`idempotency_key_required` | 输入/请求契约 error；保留编辑值，修正后需新意图 |
+| 401 | `session_authentication_required`、`session_invalid` | 清除敏感 intent，fence 迟到结果，回到现有登录/会话 surface |
+| 403 | `session_forbidden`、`product_tenant_forbidden`、`service_auth_failed` | 清除敏感 intent，显示既有权限 error；不改本地 name |
+| 404 | `project_not_found` | target 已不在 owner；不把 ACK 或草稿投影为资源 |
+| 409 | `idempotency_conflict` | key/body 不可继续猜测；保留 unknown/error 与原证据，要求显式重新开始 |
+| 429 | `session_rate_limited` | 显式 retry surface；不自动重发 |
+| 503 | `business_store_unavailable`、`iam_admission_unavailable`、`product_tenant_not_configured` | unknown；保留原 input/target/key/body，显式同意后同一意图 retry |
+
+Web-local closed fault classes 为 `request_timeout`、`request_aborted`、`network_error`、`invalid_headers`、`invalid_json`、`unexpected_status`、`ack_shape_mismatch`、`read_after_ack_failed`。这些不是 BFF error code；不得伪造为 `project_not_found` 或 owner success。503、网络、超时和 malformed ACK 的 retry 必须复用同 key/body；read-after-ACK GET 失败只进行 GET-only retry。
+
+### ACK 后读回与并发围栏
+
+收到 accepted ACK 后，Web 先失效并取消仍可取消的旧 detail/list reads；以同一 verified subject、route scope、mounted generation 对 frozen target 发 fresh canonical GET，再发 fresh list。只有两次 fresh owner read 通过 strict parse 才进入 `confirmed` 页面投影。若 subject、route、epoch 或 generation 已变化，晚到结果最多完成其自身请求清理，不能写入新 dialog/draft/name/focus/navigation。
+
+ACK 不等待当前旧资源更新、不增加所有导航的 GET；只为这次 mutation 目标强制 detail GET，随后按 list contract 读取 collection。原有对话重命名、Project create、Project list/history、Message PATCH 或其他 generic adapter 均不借用本命令的 body、key、ACK 或 read-back 语义。
+
+### 实施与验证边界
+
+后续允许的普通文件位置严格引用 `/tmp/r241-web-project-rename-consumer-audit.md` §3–4：新增 `src/contract/project-rename.ts`、`src/features/app/project-rename.ts`、`src/lib/server/project-rename.ts`；现 `src/app/api/hub/[...path]/route.ts` exact dispatch；现 app-frame/project-list/header/menu 接线及 `src/i18n/messages.ts`/语言字典。用现 design tokens 与 i18n token，不重画 UI。此阶段不改 `contract/`、generated、source、test、package、lock 或 BFF 文件。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。完成实现后须在主仓以真实 Next/Chromium 与真实 BFF 组合执行 contract/architecture/lint/typecheck/test/build/e2e；本设计门不产生通过结论。
+
+---
+
 ## R239 当前认证与工作区恢复契约
 
 本片不新增公开 API、browser-private route、wire schema 或 owner 协议。`serverAdmitted` 只是单次 RSC composition 的无 claims 布尔输入；Product Session、actor、subject、generation、tombstone 与 expiry 仍由现有受信 cookie/Redis/session probe 边界拥有，浏览器不得自报。
