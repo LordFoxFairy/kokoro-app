@@ -1,3 +1,30 @@
+## T-B03.R255-WEB-CREDIT-D0：个人余额与流水（Root批准设计前缀，生产未授权）
+
+本节覆盖下方历史个人余额/quota/free/by-model消费者描述，不覆盖任务外mixed内容。阶段为D0三面设计收口，尚无生产、测试或生成修改许可，不以文档宣称页面完成。Web基线 `e8ff7599a62b045b0e7a3d20e8fd50894b31a099`；固定前置BFF正式commit `97a99d35c8c78e7ca6e1370fd16ba5d670766095`，public OpenAPI `8.0.0`，源 `contract/openapi/v1/openapi.yaml`，全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`。不可沿mutable main、旧f3c64d90 snapshot或旧wallet shape双读。
+
+Root正常HTTP证据：正规IAM登录后 `/api/auth/session` 为200/authenticated；真实 `/api/session/billing/summary`、`/api/session/billing/ledger?limit=50` 均503 `billing_unavailable`、private/no-store且带request-id，当前Billing正常入口尚未启用。`/api/billing/me/*`不存在，其404不是缺账户业务证明。新合法200与旧Web schema不匹配属于已核静态消费者缺口，尚未取得真实账户200或Credits浏览器失败/成功证据。70组11通过/6失败/14待复测/38未验/1支付后置不虚增。
+
+### 事实owner与瞬时视图
+
+Billing唯一拥有CreditAccount/Ledger/Metering与持久资金事实，BFF只固定本人projection，Web没有SQL、账本副本、新cookie/Redis/认证store或余额写入。现HttpOnly Product Session/IAM仍唯一身份准入；现browser主体marker只作异步结果退役判断，不能成为权限证明或传给owner自报主体。
+
+目标个人余额/流水只mounted ephemeral状态：controller/attempt序列、初读/刷新状态、已验items、opaque下一cursor/分页错误与单flight。退出固定module SUMMARY_KEY/BY_MODEL_KEY个人余额cache以隔离preview/live/新主体，不新第二钱包cache或通用generation框架；卸载、主体改变、撤准入和新attempt使旧读取与迟到completion失效，不向新主体写或展示数据。未知身份不使用旧缓存，storage访问异常沿现准入fail closed，不新认证fallback。旧本地draft/Conversation/Run事实不因账务错误修改。
+
+### 金额/序号/时间/分页规则
+
+- available_micros与held_micros分别来自owner完整原值，不相加造total，不按余额反推免费额度、可用资格或owner策略。disabled可读真实值；缺账户404与合法0余额不同，无ensure/refresh/grant副作用。
+- journal_id作显示身份；items保owner顺序，sequence精确decimal string不可浮点排序。页边界重复项不重复累计；重复/无效cursor进入明确分页错误，null终止，不把owner cursor拆解或造第二cursor。只已验页进入UI，失败保原已验页/原cursor可显式重读；新refresh从首页重新读，late页不追加到新数据。
+- 金额显示沿BigInt/十进制移位：1Credit=1000000micros，one-micro/大数/负delta正确；购买币种minor formatter不与Credit混算。历史趋势Number仅几何，按日net BigInt仅已读ledger显示汇总，不能代表全账本/重新计算available或费用。
+- created_at保ownerUTC Z瞬时点；展示按用户locale/本地日历分组，不将wire改epoch-ms或乘1000。source_kind/source_ref安全显示，不创建Conversation/run/title映射或绑定实体。
+
+不持久化quota/free/daily/默认Free/by-model衍生事实，不新增SQL/schema/storage/API字段。固定public snapshot及现正规generator来自已发布BFF commit/version/full digest，不能手改generated或新建Billing SDK；三文档原mixed全文作为suffix精确保留。
+
+### 阶段与恢复验收
+
+当前D0前缀而已，生产与测试/生成另等Root授权；后继有效parse/组件RED→Root重跑→局部实现/生成/独审/工程门→真实正常IAM/BFF/Billing用户余额/流水。初读timeout/body坏shape/取消和账号切换零旧数据、刷新失败非旧ready、分页Retry同cursor/无自动写均有有效行为反例及实际浏览器验收。真实非空账户/journal必须既有正式owner授权入口建立，不能SQL注资或虚构fixture充页面成功。HTTP session200/two reads503只证明当前正常source路径和未启用Billing状态，不是整页PASS。原70组/费用/模型/支付与赠送状态保持。
+
+---
+
 ## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
 
 没有新增SQL/schema/关系表/Redis/browser storage/缓存事实。项目与会话归属仍BFF Conversation nullable project_ref；未发送local草稿不伪持久会话。mounted展开Set、组list状态与分页generation仅UI实例生命周期，身份变化退役；折叠卸载后再展开重新读第一页，不承诺记住页码或持久化目录树。

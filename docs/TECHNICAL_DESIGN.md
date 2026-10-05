@@ -1,3 +1,72 @@
+## T-B03.R255-WEB-CREDIT-D0：个人余额与流水（Root批准设计前缀，生产未授权）
+
+本节覆盖下方历史个人余额/quota/free/by-model消费者描述，不覆盖任务外mixed内容。阶段为D0三面设计收口，尚无生产、测试或生成修改许可，不以文档宣称页面完成。Web基线 `e8ff7599a62b045b0e7a3d20e8fd50894b31a099`；固定前置BFF正式commit `97a99d35c8c78e7ca6e1370fd16ba5d670766095`，public OpenAPI `8.0.0`，源 `contract/openapi/v1/openapi.yaml`，全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`。不可沿mutable main、旧f3c64d90 snapshot或旧wallet shape双读。
+
+Root正常HTTP证据：正规IAM登录后 `/api/auth/session` 为200/authenticated；真实 `/api/session/billing/summary`、`/api/session/billing/ledger?limit=50` 均503 `billing_unavailable`、private/no-store且带request-id，当前Billing正常入口尚未启用。`/api/billing/me/*`不存在，其404不是缺账户业务证明。新合法200与旧Web schema不匹配属于已核静态消费者缺口，尚未取得真实账户200或Credits浏览器失败/成功证据。70组11通过/6失败/14待复测/38未验/1支付后置不虚增。
+
+### 目标职责、当前态与依赖
+
+当前Summary/Ledger strict schema仍旧balance/quota/entries/epoch-ms；BillingContent额外调用by-model并共享固定module cache，embedded含free/daily，Account缺projection仍默认Free。目标只消费正式可用余额/预占及owner账本：Browser→现 `/api/session/billing/{summary,ledger}`→Web现 `src/app/api/session/[...path]/route.ts`→固定BFF `/v1/billing/{summary,ledger}`→Billing资金owner。现adapter继续可信Product Session、success data unwrap、private no-store/x-request-id与stable error，不直连Billing或导入SDK，不携内部service token/u1/主体自报。
+
+1 Credit = 1,000,000 micros仅十进制显示尺度；沿现BigInt formatter保one-micro及>2^53精度，负delta正确符号。Billing独占采购费率、加价倍率、换算/舍入、资金计算；Web不从usage/model计费，不造额度/free/每日赠送/低余额阈值。删除by-model网络与无事实分解；现根据已读balance_after_micros的历史趋势可保，仅局部展示，不冒全账本聚合/未来余额。支付/赠送/预占结算释放不纳入此两读实现。
+
+### 局部状态与可靠性
+
+现client每个显式GET固定10秒总预算覆盖headers/body/strict parse，不逐stage重置；caller取消、真正abort与非合作fetch/body有界settle/reader释放、迟到回调丢弃均在现client/panel局部实现，复用现成熟读处理原则，不新增通用Promise框架。此预算不是auth probe预算，也不是Web→BFF transport总限时的代称。
+
+Summary与ledger初读独立loading→strict ready/error，404不是ready0，disabled仍可只读owner值。Refresh撤旧attempt且错误不以旧ready余额冒实时成功；分页单flight，失败保原cursor/已验页并显示明确错误及显式Retry，null终页，重复cursor拒绝循环。去固定SUMMARY_KEY/BY_MODEL_KEY共享余额cache，不改通用query层；使用现准入marker只作result退役fence而非权限证明，不新增认证字段/存储。卸载/主体改变/撤准入退役controller和结果，preview/live不共用个人数据；若现caller信息不足先给Root有效反例，不扩大auth写集。无自动POST/赠送/支付或盲重放mutation。
+
+### 后继候选放置表（不是本轮生产许可）
+
+Owner为Web现billing客户端/contract/视图，原负责人唯一writer；Root拥有三D0、审查、资源、Git与真实验收。优先扩展现文件：schema、网络client、纯view model、panel及render已有各自职责；淘汰新features/credits目录/第二钱包store以及新增/api/billing/summary、ledger handler（复制现session adapter）。不新模块/SDK/认证存储/Promise框架，不换shadcn或样式框架，不让Billing/DB/framework事实穿透页面规则。
+
+|现生产文件（10路径候选）|后继职责|
+|---|---|
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/contract/billing.ts` | strict新账户/流水data schema，删除旧shape/by-model |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/contract/paths.ts` | 保两读路径，删除by-model helper |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/billing/client.ts` | 同源两GET/严格响应/总预算/取消/错误 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/billing-model.ts` | UTC/decimal和mounted view state，不拥有费率 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/billing-panel.tsx` | 局部读取/刷新/分页/退役，退出固定余额cache |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/billing-summary.tsx` | 可用/预占，删除无owner免费/配额/每日展示 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/billing-ledger.tsx` | owner journal字段/分页错误，不猜source_ref导航 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/billing-usage.tsx` | 删除by-model，只保已读账本历史趋势展示 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/settings/settings-sections.tsx` | 移除live默认Free和无owner免费/每日额度；身份/订阅职责不扩大 |
+| `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/dev/preview-clients.ts` | 仅显式Billing preview fixture改新shape，不作live fallback |
+
+现测试候选（4路径）：
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/ui/billing-panel.test.tsx`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/ui/settings-modal.test.tsx`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/dev/preview-clients.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/app/billing-routes.test.ts`
+
+其中billing-panel现文件可同时构造actual Response验证client与真实组件，不需要新测试目录/虚构helper；合法新shape接受、旧shape拒绝、零by-model、可用/预占、大数/符号/UTC、404非零账户、分页/刷新/timeout/abort/身份迟到反例必须保持。settings-modal保旧tab/关闭/键盘；preview仅改Billing fixture；billing-routes现文件补现session adapter两读HTTP行为，不因测试新建route。`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/ui/page-clients.test.ts` 仅实际接口影响时另报Root；`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/billing/format.test.ts` 现one-micro/大数精度正控默认原样保留。
+
+固定发布/生成候选（12现路径）：
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/generated/bff-public-openapi.yaml`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/scripts/generate-bff-agent-failure.mjs`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/scripts/generate-bff-team-client.mjs`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/generated/bff-agent-failure.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/contract/api-contract.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-agent-failure-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-team-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-skills-mcp-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-project-create-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-project-resource-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-library-file-public.test.ts`
+- `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/tests/contract/bff-library-artifact-public.test.ts`
+
+由Root核正式commit blob后复制owner YAML原字节；更新两个现generator的固定commit/version/digest，沿 `pnpm contract:generate:bff-agent-failure`、`pnpm contract:generate:bff-team` 正规生成，再相应 `contract:check:*`。failure仅provenance变化；既有Safe12/ChatMessage fingerprint/Team9不改，Team15输出预期byte-equal，非预期diff先停报，不手改generated。现8pin测试固定同一身份，不删原邻域断言。当前BFF public未复制Credit unit extension，不声称现generator自动生成单位；显示尺度沿owner已定义10^6，无前端可配置倍率或旧比例fallback。
+
+后继短文档入口候选为现三D0及 `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/contract/README.md`、`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/docs/CURRENT.md`、`/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/ui/billing/INDEX.md`；只当前前缀/职责，不全篇重写历史。默认排除生产session adapter、page-clients/auth、通用query、engine、SQL、lock/dependencies、system混合测试、其他owner。现 `/Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/apps/kokoro-app/src/billing/format.ts` 保BigInt显示与现金formatter，creditsToNumber只可用于历史趋势几何，不用于余额/费用。
+
+### 后继阶段门与真实UI验收
+
+D0收口后Root独审；另授现测试先actual Response/组件有效RED，Root复跑后才授精确生产与pin生成。有限门为现生成check、contract、architecture、所列聚焦UI/dev/billing/adapter、lint/typecheck/build；system资源与浏览器仅Root独占。辅助绿不等于用户验收。
+
+真实用户正常IAM→Settings→Credits：两同源GET的available/held与owner decimal一致；关闭重开/硬刷新仍一致，无Free/quota/daily/by-model。经既有正式授权owner入口产生的journal验证正负/one-micro/>2^53金额、UTC/locale、页顺序/游标无遗漏重复/终页及刷新。缺账户、disabled、401/403、429、owner停机/坏凭据/坏shape、慢headers/body/取消及A→B/preview→live迟到数据分别验诚实错误/隔离，网络无BillingURL或内部凭据。当前唯一Billing正常main及正式赠送入口未闭，非空余额流水真实验收明确待前置；不得私下SQL注资、另启两GET host或把HTTP200当整页PASS。键盘/窄屏/Retry/Load more及原Dialog关闭行为保持。
+
+---
+
 ## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
 
 当前态：AppFrame当前scope单份列表传rail，shell二选一显示普通或专案会话，项目行只是平面Link。目标态：现rail内局部固定scope组复用useConversationList/useSessionList，direct常驻，只有展开的project读取本scope列表；正文仍只一个当前engine，不为文件夹另建engine/SSE/缓存/实体。

@@ -1,3 +1,27 @@
+## T-B03.R255-WEB-CREDIT-D0：个人余额与流水（Root批准设计前缀，生产未授权）
+
+本节覆盖下方历史个人余额/quota/free/by-model消费者描述，不覆盖任务外mixed内容。阶段为D0三面设计收口，尚无生产、测试或生成修改许可，不以文档宣称页面完成。Web基线 `e8ff7599a62b045b0e7a3d20e8fd50894b31a099`；固定前置BFF正式commit `97a99d35c8c78e7ca6e1370fd16ba5d670766095`，public OpenAPI `8.0.0`，源 `contract/openapi/v1/openapi.yaml`，全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`。不可沿mutable main、旧f3c64d90 snapshot或旧wallet shape双读。
+
+Root正常HTTP证据：正规IAM登录后 `/api/auth/session` 为200/authenticated；真实 `/api/session/billing/summary`、`/api/session/billing/ledger?limit=50` 均503 `billing_unavailable`、private/no-store且带request-id，当前Billing正常入口尚未启用。`/api/billing/me/*`不存在，其404不是缺账户业务证明。新合法200与旧Web schema不匹配属于已核静态消费者缺口，尚未取得真实账户200或Credits浏览器失败/成功证据。70组11通过/6失败/14待复测/38未验/1支付后置不虚增。
+
+### 唯一browser-private读取契约
+
+- `GET /api/session/billing/summary` 无body/query，映射 `/v1/billing/summary`。现adapter解包success data，DTO严格恰 `{credit_account_id:uuid,status:"active"|"disabled",available_micros,held_micros}`，两个micros为 `^(?:0|[1-9][0-9]*)$` decimal string。
+- `GET /api/session/billing/ledger?limit=&cursor=` 无body，仅limit十进制整数1..100（缺省50）及opaque cursor长度1..2048，拒未知/重复/非法输入；映射 `/v1/billing/ledger`。HTTP参数转义后owner收到原cursor，浏览器不解码其业务结构/trim/重建。
+- Ledger data严格 `{items:[{journal_id:uuid,sequence,delta_micros,balance_after_micros,source_kind,source_ref,created_at}],page:{next_cursor:string|null}}`；entry闭集。sequence/balance_after_micros canonical nonnegative integer string；delta_micros正式signed integer正则 `^-?(?:0|[1-9][0-9]*)$`。source_kind非空、source_ref非空且≤255；created_at为合法date-time UTC `Z`字符串，不旧epoch数值。page.next_cursor必有、null终页，字符串最长2048按正式schema，不私自换旧optional next_cursor。只有非空cursor继续取页，异常/重复cursor失败封闭，不循环。
+
+summary/ledger data的schema只此一版：删除balance_micros/quota/period/plan/free/daily、entries/entry_id/reason/run/title/conversation_id与by-model旧消费者，不建立union/fallback。source_ref是owner业务引用，不是Conversation导航凭据，不能猜URL或补读其他owner。micros/sequence不Number化；BigInt显示移位10^6不是费用倍率/余额重算。disabled仍只读真实值，无默认active/free或合成总余额。
+
+两读沿现Product Session/IAM admission，tenant/subject不从query/header/body自报；现session adapter保success unwrap、private no-store、合法x-request-id及稳定error。401/403、404 billing_account_not_found、429、502、503 billing_unavailable/invalid upstream等正式错误按code/status处理，不统一零余额/空流水。合法有账户零值与合法items=[]是ready，不存在账户/服务故障是error。浏览器不携Billing URL/SDK/service proof，保持同源API。现代码尚未改且本轮真实仅503，不以静态wire差异冒已有真实200 parse FAIL。
+
+### 边界行为与阶段
+
+client单GET10秒含headers/body/校验，abort/timeout/stale attempt不能准入结果；初读/刷新/分页失败明确退出loading并显式Retry同一读，无自动资金写或mutation重放。主体/准入/卸载变化先退役旧读取，严格header/media/data/schema拒绝，不能为新wire降request-id/no-store/权限。现session adapter正常路径不另造route。
+
+Root随后授权测试actual Response证明新shape接受、旧shape拒绝与错误/取消，固定pin正常生成及既有contract门；真实正常IAM/BFF/Billing→Credits余额/预占/流水分页/刷新/错误与主体隔离才用户验收。现三D0均仅目标，未授权生产/生成；支付、赠送、usage定价及完整70组不因此关闭。
+
+---
+
 ## R254-FOLDER-LISTS：专案嵌套与普通会话常驻（Root批准，2026-10-05）
 
 Web只改变mounted view props与callback携带的固定来源scope/read identity，不改变BFF版本化公开/同源wire或generated。列表仍现owner GET，project_ref可空仍唯一归属，展开不创建Conversation/Run或发消息。普通组固定direct，expanded project组各自cursor；不得扫全量本地分组，不请求折叠组。
