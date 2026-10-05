@@ -4,11 +4,13 @@ export function openProductSignIn(): void {
   window.location.replace("/login");
 }
 
-async function currentCsrf(): Promise<string> {
-  const response = await fetch("/api/auth/csrf", { cache: "no-store" });
+async function currentCsrf(signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
+  const response = await fetch("/api/auth/csrf", { cache: "no-store", ...(signal ? { signal } : {}) });
   const raw: unknown = response.ok
     ? await response.json().catch(() => null)
     : null;
+  signal?.throwIfAborted();
   const token =
     typeof raw === "object" && raw !== null
       ? (raw as { csrfToken?: unknown }).csrfToken
@@ -41,4 +43,36 @@ export async function endProductSession(
   }
   if (response.ok) navigate("/");
   else throw new Error("Product sign-out unavailable");
+}
+
+
+/** The caller owns the single budget for CSRF, refresh and optional read confirmation. */
+export async function refreshProductSession(
+  signal: AbortSignal,
+): Promise<{ mode: "authenticated"; subject: string } | { mode: "confirm" }> {
+  const csrfToken = await currentCsrf(signal);
+  signal.throwIfAborted();
+  const response = await fetch("/api/auth/session", {
+    method: "POST",
+    cache: "no-store",
+    signal,
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrfToken }),
+  });
+  signal.throwIfAborted();
+  // A different tab can own the CAS reservation. Never retry this POST.
+  if (response.status === 409 || response.status === 401) return { mode: "confirm" };
+  if (response.status !== 200) throw new Error("Product session refresh unavailable");
+  const raw: unknown = await response.json();
+  signal.throwIfAborted();
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    throw new Error("Product session refresh unavailable");
+  const projection = raw as Record<string, unknown>;
+  if (Object.keys(projection).sort().join(",") !== "authenticated,expires_at,subject" ||
+      projection.authenticated !== true ||
+      typeof projection.subject !== "string" || projection.subject.trim() === "" ||
+      typeof projection.expires_at !== "number" || !Number.isFinite(projection.expires_at) ||
+      projection.expires_at <= Date.now())
+    throw new Error("Product session refresh unavailable");
+  return { mode: "authenticated", subject: projection.subject };
 }

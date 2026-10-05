@@ -1,10 +1,12 @@
 "use client"
 
-// Product Session 是 HttpOnly；浏览器通过正式 GET /api/auth/session 获取只读在线投影。
+// Product Session 是 HttpOnly；GET 获取只读投影，可见页周期消费现有 CSRF POST 续期。
 // authenticated 或显式本地 preview → pass；anonymous → anonymous；探针未回前 checking。
 // preview 只由非生产环境的显式开关启用；网络、超时与畸形响应进入显式故障态，避免 fail-open 或误跳登录。
 
 import { useCallback, useEffect, useRef, useState } from "react"
+
+import { refreshProductSession } from "@/ui/auth/product-auth-client"
 
 import {
   admitBrowserAuthSessionIndexes,
@@ -32,43 +34,105 @@ export type SessionProbe = {
 const EXPLICIT_PREVIEW = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
 
 type ResolvedSession =
-  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined }
+  | { mode: "authenticated"; subject: string; subjectAtProbeStart: string | null | undefined; renewalConfirmed: boolean }
   | { mode: "anonymous"; subject: null }
   | { mode: "unavailable"; subject: null }
 
+const REFRESH_INTERVAL_MS = 120_000
 let sessionProbeInflight: Promise<ResolvedSession> | null = null
+let sessionProbeController: AbortController | null = null
 let admittedSubject: string | null = null
+let nextRefreshAt: number | null = null
+// An uncertain mutation is never replayed. Only a trusted current-cookie read
+// can establish a new, future renewal window.
+let refreshUnconfirmed = false
+let refreshSubject: string | null = null
+let documentSuspended = false
 
 function requestSessionMode(): Promise<ResolvedSession> {
   if (sessionProbeInflight !== null) return sessionProbeInflight
+  if (documentSuspended) return Promise.resolve({ mode: "unavailable", subject: null })
 
-  // Keep the request shared across Strict Mode effect replay, focus events and
-  // concurrent shell mounts. The promise is cleared after settlement so a
-  // later visibility check still observes session expiry.
-  const request = Promise.resolve()
-    .then(async () => {
-      let subjectAtProbeStart: string | null | undefined
-      try { subjectAtProbeStart = readBrowserAuthIndexSubject() }
-      catch { subjectAtProbeStart = undefined }
-      const controller = new AbortController()
-      const timer = window.setTimeout(() => controller.abort(), 10_000)
-      try {
-        const response = await fetch("/api/auth/session", { cache: "no-store", signal: controller.signal })
-        if (response.status !== 200) return { mode: "unavailable" as const, subject: null }
-        const raw: unknown = await response.json()
-        if (typeof raw !== "object" || raw === null) return { mode: "unavailable" as const, subject: null }
-        const authenticated = (raw as { authenticated?: unknown }).authenticated
-        if (authenticated === false) return { mode: "anonymous" as const, subject: null }
-        const subject = (raw as { subject?: unknown }).subject
-        if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
-          return { mode: "unavailable" as const, subject: null }
-        }
-        return { mode: "authenticated" as const, subject, subjectAtProbeStart }
-      } finally {
-        window.clearTimeout(timer)
+  const controller = new AbortController()
+  sessionProbeController = controller
+  const { signal } = controller
+  let abort!: () => void
+  const aborted = new Promise<never>((_, reject) => {
+    abort = () => reject(signal.reason ?? new Error("Product session probe aborted"))
+    signal.addEventListener("abort", abort, { once: true })
+  })
+  const timer = window.setTimeout(() => controller.abort(), 10_000)
+  // Both abort-aware fetch and an uncooperative late body must settle within
+  // the same budget. Every dispatch checks the signal; losing work cannot POST.
+  const work = Promise.resolve().then(async (): Promise<ResolvedSession> => {
+    signal.throwIfAborted()
+    let subjectAtProbeStart: string | null | undefined
+    try { subjectAtProbeStart = readBrowserAuthIndexSubject() }
+    catch { subjectAtProbeStart = undefined }
+    const recovering = refreshUnconfirmed
+    const read = async (): Promise<ResolvedSession> => {
+      signal.throwIfAborted()
+      const response = await fetch("/api/auth/session", { cache: "no-store", signal })
+      signal.throwIfAborted()
+      if (response.status !== 200) return { mode: "unavailable", subject: null }
+      const raw: unknown = await response.json()
+      signal.throwIfAborted()
+      if (typeof raw !== "object" || raw === null) return { mode: "unavailable", subject: null }
+      const authenticated = (raw as { authenticated?: unknown }).authenticated
+      if (authenticated === false) return { mode: refreshUnconfirmed ? "unavailable" : "anonymous", subject: null }
+      const subject = (raw as { subject?: unknown }).subject
+      if (authenticated !== true || typeof subject !== "string" || subject.trim() === "") {
+        return { mode: "unavailable", subject: null }
       }
+      return { mode: "authenticated", subject, subjectAtProbeStart, renewalConfirmed: false }
+    }
+    const cold = admittedSubject === null && !recovering
+    const due = admittedSubject !== null && subjectAtProbeStart === admittedSubject &&
+      document.visibilityState === "visible" && !recovering &&
+      nextRefreshAt !== null && Date.now() >= nextRefreshAt
+    let expectedSubject = admittedSubject
+    if (cold) {
+      // A cold document may inherit an access token with only seconds left.
+      // Read first, then renew within this same budget before mounting Runtime.
+      const initial = await read()
+      if (initial.mode !== "authenticated") return initial
+      if (subjectAtProbeStart === undefined) return { mode: "unavailable", subject: null }
+      const currentIndex = readBrowserAuthIndexSubject()
+      if (currentIndex !== subjectAtProbeStart && currentIndex !== initial.subject) {
+        return { mode: "unavailable", subject: null }
+      }
+      expectedSubject = initial.subject
+    }
+    if (cold || due) {
+      nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
+      refreshUnconfirmed = true
+      refreshSubject = expectedSubject
+      const refreshed = await refreshProductSession(signal)
+      signal.throwIfAborted()
+      if (refreshed.mode === "authenticated") {
+        if (refreshed.subject !== expectedSubject) return { mode: "unavailable", subject: null }
+        return { ...refreshed, subjectAtProbeStart, renewalConfirmed: true }
+      }
+      // Another tab can win CAS. Confirm only the original subject, once.
+      const confirmed = await read()
+      return confirmed.mode === "authenticated" && confirmed.subject === expectedSubject
+        ? { ...confirmed, renewalConfirmed: true }
+        : { mode: "unavailable", subject: null }
+    }
+    const resolved = await read()
+    if (!recovering) return resolved
+    return resolved.mode === "authenticated" && resolved.subject === refreshSubject
+      ? { ...resolved, renewalConfirmed: true }
+      : { mode: "unavailable", subject: null }
+
+  })
+  const request = Promise.race([work, aborted])
+    .catch((): ResolvedSession => ({ mode: "unavailable", subject: null }))
+    .finally(() => {
+      window.clearTimeout(timer)
+      signal.removeEventListener("abort", abort)
+      if (sessionProbeController === controller) sessionProbeController = null
     })
-    .catch(() => ({ mode: "unavailable" as const, subject: null }))
   sessionProbeInflight = request
   const clear = (): void => {
     if (sessionProbeInflight === request) sessionProbeInflight = null
@@ -139,6 +203,11 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
               return
             }
             browserConversationMoveCoordinator().admitVerifiedSubject(resolved.subject)
+            if (nextRefreshAt === null || resolved.renewalConfirmed) {
+              nextRefreshAt = Date.now() + REFRESH_INTERVAL_MS
+              refreshUnconfirmed = false
+              refreshSubject = null
+            }
           } catch {
             setProbe((current) => current.mode === "authenticated"
               ? { ...current, unavailable: true, requestPending: false, retry,
@@ -151,6 +220,9 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
         if (resolved.mode === "anonymous") {
           browserConversationMoveCoordinator().revokeSubject()
           admittedSubject = null
+          nextRefreshAt = null
+          refreshUnconfirmed = false
+          refreshSubject = null
         }
         setProbe({
           state: resolved.mode === "authenticated" ? "pass" : "anonymous",
@@ -163,20 +235,37 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
       })
     }
     check()
-    // 聚焦、重新可见和每两分钟重查在线 Product Session；过期或撤销后转匿名闸，
-    // 避免工作台继续展示失效会话并让后续 API 401 裸露给用户。
+    // A hidden tab does not rotate credentials. A due visible return renews
+    // before an expired-access GET can misclassify the still-valid session.
     const onVisible = (): void => {
-      if (document.visibilityState === "visible") {
-        check()
-      }
+      if (document.visibilityState === "visible") check()
     }
-    window.addEventListener("focus", check)
+    const onPageHide = (): void => {
+      documentSuspended = true
+      ++generationRef.current
+      sessionProbeController?.abort()
+      // A persisted pageshow may run before the aborted promise settles. Its
+      // fresh chain is protected from the old chain's guarded finally/clear.
+      sessionProbeInflight = null
+      setProbe((current) => ({ ...current, requestPending: false, projectReadBoundary: {
+        ...current.projectReadBoundary, admitted: false, generation: generationRef.current,
+      } }))
+    }
+    const onPageShow = (): void => {
+      documentSuspended = false
+      onVisible()
+    }
+    window.addEventListener("focus", onVisible)
     document.addEventListener("visibilitychange", onVisible)
-    const timer = setInterval(onVisible, 120_000)
+    window.addEventListener("pagehide", onPageHide)
+    window.addEventListener("pageshow", onPageShow)
+    const timer = setInterval(onVisible, REFRESH_INTERVAL_MS)
     return () => {
       live = false
-      window.removeEventListener("focus", check)
+      window.removeEventListener("focus", onVisible)
       document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("pagehide", onPageHide)
+      window.removeEventListener("pageshow", onPageShow)
       clearInterval(timer)
     }
   }, [retry, retryGeneration, serverUnavailable])
