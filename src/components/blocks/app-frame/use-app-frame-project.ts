@@ -218,7 +218,8 @@ export function useAppFrameProject({
     })) : [], [preview, previewProjection, instructionContext, instructionHistory])
   const [projectCreation, setProjectCreation] = useState<ProjectCreationState>({ pending: false, error: false, retryable: false })
   const creationIntentRef = useRef<ProjectCreationIntent | null>(null)
-  const creationInFlightRef = useRef<ProjectCreationIntent | null>(null)
+  const creationInFlightRef = useRef<{ intent: ProjectCreationIntent; controller: AbortController } | null>(null)
+  const creationLiveRef = useRef(false)
   const createdProjectRef = useRef<string | null>(null)
   const latestDraftRef = useRef(draft)
   const lastDirectDraftRef = useRef<string | null>(null)
@@ -228,11 +229,20 @@ export function useAppFrameProject({
     if (!intent || intent.subject === renameBoundary?.subject) return
     // A different actor starts a distinct lifetime, never reuses the old key.
     // Retired completions cannot release or overwrite a newer actor's flight.
+    creationInFlightRef.current?.controller.abort()
     creationIntentRef.current = null
     creationInFlightRef.current = null
     createdProjectRef.current = null
     setProjectCreation({ pending: false, error: false, retryable: false })
   }, [renameBoundary?.subject])
+
+  useLayoutEffect(() => {
+    creationLiveRef.current = true
+    return () => {
+      creationLiveRef.current = false
+      creationInFlightRef.current?.controller.abort()
+    }
+  }, [])
 
   useEffect(() => {
     latestDraftRef.current = draft
@@ -381,20 +391,27 @@ export function useAppFrameProject({
     if (creationInFlightRef.current) return
     const scope = renameScopeRef.current
     if (!scope?.active || scope.context.subject !== intent.subject || scope.context.admitted === false) return
-    creationInFlightRef.current = intent
+    const flight = { intent, controller: new AbortController() }
+    creationInFlightRef.current = flight
     const current = () => {
       const active = renameScopeRef.current
-      return active?.active && active.context.subject === intent.subject && active.context.admitted !== false
-        && creationIntentRef.current === intent
+      return creationLiveRef.current && active?.context.subject === intent.subject
+        && creationIntentRef.current === intent && creationInFlightRef.current === flight
     }
     setProjectCreation({ pending: true, error: false, retryable: false })
     try {
-      const project = await createProjectRequest(intent.name, intent.key)
+      const project = await createProjectRequest(intent.name, intent.key, flight.controller.signal)
       if (!current()) return
+      // A temporary same-subject pause cannot authorize a projection. Retain
+      // the original key conservatively for explicit recovery, never a new POST.
+      if (renameScopeRef.current?.context.admitted === false) {
+        setProjectCreation({ pending: false, error: true, retryable: true })
+        return
+      }
       createdProjectRef.current = project.id
     } catch (error) {
       if (!current()) return
-      const retryable = !(error instanceof ProjectCreateError)
+      const retryable = renameScopeRef.current?.context.admitted === false || !(error instanceof ProjectCreateError)
         || error.status === undefined || error.status >= 500 || error.status === 429
         || error.code === "project_create_invalid_response"
         || (error.status === 409 && error.code === "idempotency_in_progress")
@@ -402,7 +419,7 @@ export function useAppFrameProject({
       setProjectCreation({ pending: false, error: true, retryable })
       return
     } finally {
-      if (creationInFlightRef.current === intent) creationInFlightRef.current = null
+      if (creationInFlightRef.current === flight) creationInFlightRef.current = null
     }
     const currentScope = renameScopeRef.current
     // Refresh the current owner's collection independently of navigation.

@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest"
 
 import { createProject, ProjectCreateError } from "@/features/app/project-create"
+import { projectResponseSchema } from "@/contract/project"
 
 const receipt = {
   data: { project: {
@@ -15,9 +16,9 @@ afterEach(() => vi.unstubAllGlobals())
 it("posts one owner request with caller-owned stable identity and returns canonical id, not slug", async () => {
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(receipt), { status: 200 }))
   vi.stubGlobal("fetch", fetchMock)
-  expect(await createProject("New project 1", "stable-key")).toEqual({ id: "project_canonical-1", slug: "new-project-1" })
+  expect(await createProject("New project 1", "stable-key", new AbortController().signal)).toEqual({ id: "project_canonical-1", slug: "new-project-1" })
   expect(fetchMock).toHaveBeenCalledWith("/api/hub/projects", {
-    method: "POST", cache: "no-store",
+    method: "POST", cache: "no-store", signal: expect.any(AbortSignal),
     headers: { "content-type": "application/json", "Idempotency-Key": "stable-key" },
     body: JSON.stringify({ name: "New project 1" }),
   })
@@ -29,7 +30,7 @@ it("accepts compatible owner response additions without weakening required id/sl
     data: { ...receipt.data, project: { ...receipt.data.project, future_owner_field: { enabled: true } }, future_data_field: 1 },
     future_envelope_field: "compatible",
   }), { status: 200 })))
-  await expect(createProject("New project 1", "stable-key")).resolves.toEqual({ id: "project_canonical-1", slug: "new-project-1" })
+  await expect(createProject("New project 1", "stable-key", new AbortController().signal)).resolves.toEqual({ id: "project_canonical-1", slug: "new-project-1" })
 })
 
 it("rejects malformed success, including a missing canonical id or slug", async () => {
@@ -39,15 +40,15 @@ it("rejects malformed success, including a missing canonical id or slug", async 
     { ...receipt.data.project, id: "preview-project-1" },
   ]) {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...receipt, data: { project } }), { status: 200 })))
-    await expect(createProject("New project 1", "stable-key")).rejects.toBeInstanceOf(ProjectCreateError)
+    await expect(createProject("New project 1", "stable-key", new AbortController().signal)).rejects.toBeInstanceOf(ProjectCreateError)
   }
 })
 
 it("does not treat HTTP failure or invalid JSON as a project", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "project_slug_conflict" } }), { status: 409 })))
-  await expect(createProject("New project 1", "stable-key")).rejects.toMatchObject({ code: "project_slug_conflict", status: 409 })
+  await expect(createProject("New project 1", "stable-key", new AbortController().signal)).rejects.toMatchObject({ code: "project_slug_conflict", status: 409 })
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not-json", { status: 200 })))
-  await expect(createProject("New project 1", "stable-key")).rejects.toMatchObject({ code: "project_create_invalid_response" })
+  await expect(createProject("New project 1", "stable-key", new AbortController().signal)).rejects.toMatchObject({ code: "project_create_invalid_response" })
 })
 
 it("shared read schema preserves canonical strings and accepts additive fields but closes RequestMeta", async () => {
@@ -229,4 +230,180 @@ it("uses one 10-second budget across delayed headers and held body and cleans up
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   } finally { vi.useRealTimers() }
+})
+
+
+it.each(["headers", "success-body", "error-body"] as const)("R251 create settles at one total deadline while %s stalls", async (stage) => {
+  vi.useFakeTimers()
+  const outcome: { phase: "pending" | "fulfilled" | "rejected"; error?: unknown } = { phase: "pending" }
+  const cancel = vi.fn().mockImplementation(() => stage === "error-body" ? new Promise<void>(() => {}) : undefined)
+  const response = new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('{"data":'))
+  }, cancel }), { status: stage === "error-body" ? 503 : 200 })
+  const request = vi.fn().mockImplementation(() => stage === "headers" ? new Promise<Response>(() => {}) : Promise.resolve(response))
+  vi.stubGlobal("fetch", request)
+  try {
+    void createProject("New project 1", "r251-original-key", new AbortController().signal).then(
+      () => { outcome.phase = "fulfilled" },
+      (error: unknown) => { outcome.phase = "rejected"; outcome.error = error },
+    )
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(outcome.phase).toBe("pending")
+    if (stage !== "headers") expect(response.body?.locked).toBe(true)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(outcome.phase).toBe("rejected")
+    expect(outcome.error).toBeInstanceOf(ProjectCreateError)
+    expect((outcome.error as ProjectCreateError).status).toBeUndefined()
+    const init = request.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    expect(init?.signal?.aborted).toBe(true)
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    if (stage !== "headers") {
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(response.body?.locked).toBe(false)
+    }
+  } finally { vi.useRealTimers() }
+})
+
+it("R251 headers consume the same body budget, and a late legal body never revives the timed-out attempt", async () => {
+  vi.useFakeTimers()
+  let headers!: (response: Response) => void
+  let body!: (raw: unknown) => void
+  const request = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { headers = resolve }))
+  vi.stubGlobal("fetch", request)
+  const outcome: { phase: "pending" | "fulfilled" | "rejected" } = { phase: "pending" }
+  const accepted = vi.fn()
+  try {
+    void createProject("New project 1", "r251-budget-key", new AbortController().signal).then(() => { outcome.phase = "fulfilled"; accepted() }, () => { outcome.phase = "rejected" })
+    await vi.advanceTimersByTimeAsync(9_000)
+    const response = new Response(new ReadableStream<Uint8Array>({ start(controller) {
+      body = (raw) => { controller.enqueue(new TextEncoder().encode(JSON.stringify(raw))); controller.close() }
+    } }), { status: 200 })
+    headers(response)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(response.body?.locked).toBe(true)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(outcome.phase).toBe("rejected")
+    expect(response.body?.locked).toBe(false)
+    expect(() => body(receipt)).toThrow(TypeError)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(outcome.phase).toBe("rejected")
+    expect(accepted).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+
+
+it("R251 pre-aborted caller performs no dispatch or timer allocation", async () => {
+  vi.useFakeTimers()
+  const caller = new AbortController()
+  caller.abort()
+  const request = vi.fn()
+  vi.stubGlobal("fetch", request)
+  try {
+    await expect(createProject("New project 1", "aborted-key", caller.signal)).rejects.toMatchObject({ code: "project_create_request_aborted", status: undefined })
+    expect(request).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+
+it.each(["headers", "body"] as const)("R251 caller abort releases %s wait, ignores its late completion, and removes the listener", async (stage) => {
+  vi.useFakeTimers()
+  const caller = new AbortController()
+  const added = vi.spyOn(caller.signal, "addEventListener")
+  const removed = vi.spyOn(caller.signal, "removeEventListener")
+  let releaseHeaders!: (response: Response) => void
+  let bodyController!: ReadableStreamDefaultController<Uint8Array>
+  const cancel = vi.fn().mockRejectedValue(new Error("underlying cancellation rejected"))
+  const delayedBody = new Response(new ReadableStream<Uint8Array>({
+    start(controller) { bodyController = controller }, cancel,
+  }), { status: 200 })
+  const request = vi.fn().mockImplementation(() => stage === "headers"
+    ? new Promise<Response>((resolve) => { releaseHeaders = resolve }) : Promise.resolve(delayedBody))
+  vi.stubGlobal("fetch", request)
+  const accepted = vi.fn()
+  try {
+    const pending = createProject("New project 1", "cancelled-original-key", caller.signal)
+    void pending.then(accepted, () => undefined)
+    const rejected = expect(pending).rejects.toMatchObject({ code: "project_create_request_aborted", status: undefined })
+    await vi.advanceTimersByTimeAsync(0)
+    if (stage === "body") expect(delayedBody.body?.locked).toBe(true)
+    caller.abort()
+    await rejected
+    const init = request.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(init?.signal?.aborted).toBe(true)
+    expect(removed).toHaveBeenCalledWith("abort", added.mock.calls[0]?.[1])
+    expect(vi.getTimerCount()).toBe(0)
+    if (stage === "headers") releaseHeaders(Response.json(receipt))
+    else {
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(delayedBody.body?.locked).toBe(false)
+      expect(() => bodyController.enqueue(new TextEncoder().encode(JSON.stringify(receipt)))).toThrow(TypeError)
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    expect(accepted).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(1)
+  } finally { added.mockRestore(); removed.mockRestore(); vi.useRealTimers() }
+})
+
+it("R251 a late rejecting error body cannot become unhandled or change a timeout into owner rejection", async () => {
+  vi.useFakeTimers()
+  let rejectBody!: (error: unknown) => void
+  const caller = new AbortController()
+  const removed = vi.spyOn(caller.signal, "removeEventListener")
+  const response = new Response(new ReadableStream<Uint8Array>({ start(controller) {
+    rejectBody = (error) => controller.error(error)
+  } }), { status: 409 })
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
+  try {
+    const pending = createProject("New project 1", "error-body-original-key", caller.signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: "project_create_request_timeout", status: undefined })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await rejected
+    rejectBody(new Error("late body read rejected"))
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(pending).rejects.toMatchObject({ code: "project_create_request_timeout", status: undefined })
+    expect(removed).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { removed.mockRestore(); vi.useRealTimers() }
+})
+
+it("R251 completed validation still enforces the monotonic deadline if synchronous work passes it", async () => {
+  const monotonic = vi.spyOn(performance, "now")
+  let elapsed = 0
+  monotonic.mockImplementation(() => elapsed)
+  const parse = projectResponseSchema.safeParse.bind(projectResponseSchema)
+  const validation = vi.spyOn(projectResponseSchema, "safeParse").mockImplementation((raw, params) => {
+    const result = parse(raw, params)
+    elapsed = 10_001
+    return result
+  })
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(receipt)))
+  try {
+    await expect(createProject("New project 1", "parse-deadline-key", new AbortController().signal))
+      .rejects.toMatchObject({ code: "project_create_request_timeout", status: undefined })
+  } finally { validation.mockRestore(); monotonic.mockRestore() }
+})
+
+
+it("R251 a non-cooperating late headers response releases its unused body without reading or adopting it", async () => {
+  vi.useFakeTimers()
+  let headers!: (response: Response) => void
+  const cancel = vi.fn()
+  const late = new Response(new ReadableStream({ cancel }), { status: 200 })
+  const consume = vi.spyOn(late, "json")
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { headers = resolve })))
+  try {
+    const pending = createProject("New project 1", "late-headers-key", new AbortController().signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: "project_create_request_timeout" })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await rejected
+    headers(late)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(consume).not.toHaveBeenCalled()
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { consume.mockRestore(); vi.useRealTimers() }
 })

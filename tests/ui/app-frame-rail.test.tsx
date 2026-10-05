@@ -573,8 +573,8 @@ async function mountCreationBoundary() {
     instructionHistory: { status: "blocked" as const }, instructionContext: {}, refreshProject: vi.fn(),
     onProjectCreated: refresh, onOpenProject: navigate,
   }
-  const view = renderHook(({ subject, routeKey }) => useAppFrameProject({ ...options,
-    renameBoundary: { admitted: true, subject, generation: 1 }, renameRouteKey: routeKey,
+  const view = renderHook<ReturnType<typeof useAppFrameProject>, { subject: string; routeKey: string; admitted?: boolean }>(({ subject, routeKey, admitted = true }) => useAppFrameProject({ ...options,
+    renameBoundary: { admitted, subject, generation: 1 }, renameRouteKey: routeKey,
   }), { initialProps: { subject: "reader-a", routeKey: "A" },
     wrapper: ({ children }) => <LocaleProvider>{children}</LocaleProvider>,
   })
@@ -686,5 +686,145 @@ it("账号变化后已完成unknown不会阻挡新主体创建或重放旧key", 
     await waitFor(() => expect(view.navigate).toHaveBeenCalledTimes(1))
     expect(request).toHaveBeenCalledTimes(2)
     expect(request.mock.calls[1]?.[1]?.headers).not.toEqual(first?.headers)
+  } finally { view.unmount() }
+})
+
+
+it("R251 同主体暂撤准入期间settle解除pending，恢复只允许明确原key重试", async () => {
+  let fail!: (error: unknown) => void
+  const request = vi.spyOn(globalThis, "fetch")
+    .mockImplementationOnce(() => new Promise<Response>((_resolve, reject) => { fail = reject }))
+    .mockResolvedValueOnce(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_same_actor_recovery" } }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    const first = request.mock.calls[0]?.[1]
+    view.rerender({ subject: "reader-a", routeKey: "A", admitted: false })
+    await act(async () => { fail(new Error("unknown during same-subject probe")) })
+    expect(view.result.current.projectCreation).toEqual({ pending: false, error: true, retryable: true })
+    act(() => view.result.current.retryProjectCreation())
+    expect(request).toHaveBeenCalledTimes(1)
+    view.rerender({ subject: "reader-a", routeKey: "A", admitted: true })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(view.refresh).not.toHaveBeenCalled()
+    expect(view.navigate).not.toHaveBeenCalled()
+    act(() => view.result.current.retryProjectCreation())
+    await waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(1))
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[1]?.[1]?.headers).toEqual(first?.headers)
+    expect(request.mock.calls[1]?.[1]?.body).toBe(first?.body)
+    expect(view.navigate).not.toHaveBeenCalled()
+  } finally { view.unmount() }
+})
+
+it.each(["subject", "dispose"] as const)("R251 %s retirement aborts only its old creation attempt", async (retirement) => {
+  const acknowledge: Array<(response: Response) => void> = []
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>((resolve) => { acknowledge.push(resolve) }))
+  const view = await mountCreationBoundary()
+  let unmounted = false
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    const oldSignal = request.mock.calls[0]?.[1]?.signal
+    expect(oldSignal).toBeInstanceOf(AbortSignal)
+    expect(oldSignal?.aborted).toBe(false)
+    if (retirement === "subject") view.rerender({ subject: "reader-b", routeKey: "A" })
+    else { view.unmount(); unmounted = true }
+    expect(oldSignal?.aborted).toBe(true)
+    if (retirement === "subject") {
+      act(() => view.result.current.createProject())
+      await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+      const newSignal = request.mock.calls[1]?.[1]?.signal
+      expect(newSignal?.aborted).toBe(false)
+      await act(async () => { acknowledge[0]?.(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_old_actor" } })) })
+      expect(view.result.current.projectCreation.pending).toBe(true)
+      expect(newSignal?.aborted).toBe(false)
+      expect(view.refresh).not.toHaveBeenCalled()
+      expect(view.navigate).not.toHaveBeenCalled()
+      await act(async () => { acknowledge[1]?.(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_new_actor" } })) })
+      expect(view.refresh).toHaveBeenCalledTimes(1)
+      expect(view.navigate).toHaveBeenCalledTimes(1)
+    } else {
+      await act(async () => { acknowledge[0]?.(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_disposed" } })) })
+      expect(view.refresh).not.toHaveBeenCalled()
+      expect(view.navigate).not.toHaveBeenCalled()
+    }
+  } finally { if (!unmounted) view.unmount() }
+})
+
+it("R251 same-actor route change does not abort the owner result but permanently revokes its navigation", async () => {
+  let acknowledge!: (response: Response) => void
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>((resolve) => { acknowledge = resolve }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    const signal = request.mock.calls[0]?.[1]?.signal
+    expect(signal).toBeInstanceOf(AbortSignal)
+    view.rerender({ subject: "reader-a", routeKey: "Q" })
+    expect(signal?.aborted).toBe(false)
+    await act(async () => { acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_route" } })) })
+    expect(view.refresh).toHaveBeenCalledTimes(1)
+    expect(view.navigate).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(1)
+  } finally { view.unmount() }
+})
+
+
+it("R251 real create deadline releases local pending and explicit recovery preserves the old key after a route change", async () => {
+  vi.useFakeTimers()
+  let acknowledge!: (response: Response) => void
+  const request = vi.spyOn(globalThis, "fetch")
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { acknowledge = resolve }))
+    .mockResolvedValueOnce(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_deadline_recovery" } }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    expect(request).toHaveBeenCalledTimes(1)
+    const first = request.mock.calls[0]?.[1]
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(view.result.current.projectCreation).toEqual({ pending: false, error: true, retryable: true })
+    expect(first?.signal?.aborted).toBe(true)
+    expect(view.refresh).not.toHaveBeenCalled()
+    expect(view.navigate).not.toHaveBeenCalled()
+    view.rerender({ subject: "reader-a", routeKey: "Q" })
+    await act(async () => { acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_expired_ack" } })) })
+    expect(view.refresh).not.toHaveBeenCalled()
+    expect(view.navigate).not.toHaveBeenCalled()
+    await act(async () => { view.result.current.retryProjectCreation() })
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[1]?.[1]?.headers).toEqual(first?.headers)
+    expect(request.mock.calls[1]?.[1]?.body).toBe(first?.body)
+    expect(view.refresh).toHaveBeenCalledTimes(1)
+    expect(view.navigate).not.toHaveBeenCalled()
+    expect(view.result.current.projectCreation).toEqual({ pending: false, error: false, retryable: false })
+  } finally { view.unmount(); vi.useRealTimers() }
+})
+
+it("R251 legal ACK during same-subject suspension conservatively retains its key without publishing or automatic recovery", async () => {
+  let acknowledge!: (response: Response) => void
+  const request = vi.spyOn(globalThis, "fetch")
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { acknowledge = resolve }))
+    .mockResolvedValueOnce(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_ack_confirmation" } }))
+  const view = await mountCreationBoundary()
+  try {
+    act(() => view.result.current.createProject())
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+    const first = request.mock.calls[0]?.[1]
+    view.rerender({ subject: "reader-a", routeKey: "A", admitted: false })
+    await act(async () => { acknowledge(Response.json({ data: { project: projectReadFixtures[0] }, meta: { request_id: "req_r251_suspended_ack" } })) })
+    expect(view.result.current.projectCreation).toEqual({ pending: false, error: true, retryable: true })
+    expect(view.refresh).not.toHaveBeenCalled()
+    expect(view.navigate).not.toHaveBeenCalled()
+    view.rerender({ subject: "reader-a", routeKey: "A", admitted: true })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(view.refresh).not.toHaveBeenCalled()
+    act(() => view.result.current.retryProjectCreation())
+    await waitFor(() => expect(view.refresh).toHaveBeenCalledTimes(1))
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[1]?.[1]?.headers).toEqual(first?.headers)
+    expect(request.mock.calls[1]?.[1]?.body).toBe(first?.body)
+    expect(view.navigate).not.toHaveBeenCalled()
   } finally { view.unmount() }
 })
