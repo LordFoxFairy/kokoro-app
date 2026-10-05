@@ -153,8 +153,9 @@ export function useAppFrameNavigation({
         if (requestedConversation !== currentId) {
           engine?.openConversation(requestedConversation)
         }
-      } else if (previousConversation !== null && currentId !== null) {
-        // Going back from a conversation returns to a fresh workspace. Do not
+      } else if (!projectWorkspace && previousConversation !== null && currentId !== null) {
+        // Direct history returns to a fresh workspace. Project overview only
+        // changes the route projection; retain its pending/run and local index. Do not
         // clear a blank draft session that is already the current view, as can
         // happen when a Settings URL is closed without a conversation state.
         engine?.newConversation()

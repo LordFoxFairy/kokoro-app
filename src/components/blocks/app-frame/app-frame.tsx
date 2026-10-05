@@ -308,7 +308,24 @@ function AppFrameRuntime({
   }, [engine, moveCoordinator, settleConversationMove])
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
-  const { draft, updateDraft, clearDraft } = useDraft(activeId, mounted, projectRef)
+  const routedConversationId = navigationState.resolvedConversationRouteId
+  const draftRoute = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
+  const draftSelectionMatches = !projectWorkspace || routedConversationId === null || routedConversationId === activeId
+  const draftController = useDraft(projectWorkspace ? routedConversationId : activeId, mounted && draftSelectionMatches, projectRef)
+  const draftRouteIsCurrent = useCallback(() => {
+    if (!projectWorkspace) return true
+    if (!draftSelectionMatches || typeof window === "undefined" ||
+      `${window.location.pathname}${window.location.search}` !== draftRoute) return false
+    return !projectWorkspace || routedConversationId === null ||
+      engine?.getSnapshot().store?.activeId === routedConversationId
+  }, [draftRoute, draftSelectionMatches, engine, projectWorkspace, routedConversationId])
+  const { draft, updateDraft: updateScopedDraft, clearDraft: clearScopedDraft } = draftController
+  const updateDraft = useCallback((value: string) => {
+    if (draftRouteIsCurrent()) updateScopedDraft(value)
+  }, [updateScopedDraft, draftRouteIsCurrent])
+  const clearDraft = useCallback(() => {
+    if (draftRouteIsCurrent()) clearScopedDraft()
+  }, [clearScopedDraft, draftRouteIsCurrent])
   const projectReads = useProjectList(preview, projectReadBoundary, projectRef, projectWorkspace)
   const refreshProjects = projectReads.refresh
   const handleProjectOpen = useCallback((id: string, handoffDraft?: string) => {
@@ -339,6 +356,8 @@ function AppFrameRuntime({
   const actions = useAppFrameActions({
     engine,
     projectWorkspace,
+    ...(projectRef === undefined ? {} : { projectRef }),
+    routedConversationId,
     standaloneSurface,
     chatHref,
     activeId,
@@ -397,7 +416,18 @@ function AppFrameRuntime({
   const creditRejected = hasFailed && isCreditInsufficient(machine.error)
   const mode = store ? activeMode(store) : pendingMode
   const modeLocked = hasMessages
-  const canSend = draft.trim().length > 0 && canSubmitMessage
+  const projectSubmissionAdmitted = !projectWorkspace || (
+    typeof window !== "undefined"
+    && projectRef !== undefined
+    && window.location.pathname === `/app/project/${encodeURIComponent(projectRef)}`
+    && draftRouteIsCurrent()
+    && !hydrating
+    && connection.status === "connected"
+    && (routedConversationId === null
+      ? machine.phase === "idle" && !canRetryPendingSubmission
+      : activeId === routedConversationId)
+  )
+  const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
   const conversations = conversationsCtl.conversations
   const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent

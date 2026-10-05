@@ -2057,6 +2057,7 @@ it("专案清单不从标题或本地相位伪造 durable run status", async () 
 
 it("专案 Composer 首次发送后承接到当前会话视图", async () => {
   buildEngine()
+  window.history.replaceState(window.history.state, "", "/app/project/kokoro")
   function ProjectConversationProbe({ projectConversation, composer }: EmptyStateProps) {
     return (
       <div>

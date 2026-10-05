@@ -6,6 +6,7 @@ import {
 } from "react"
 
 import type { SessionEngine } from "@/engine/machine"
+import { activeMode } from "@/core/conversations"
 import type { SkillCard } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
@@ -20,6 +21,8 @@ import { COMMAND_SETTINGS_HANDOFF_MS } from "./app-frame-helpers"
 export type AppFrameActionsOptions = {
   engine: SessionEngine | null
   projectWorkspace: boolean
+  projectRef?: string
+  routedConversationId?: string | null
   standaloneSurface: boolean
   chatHref: string
   activeId: string | null
@@ -40,6 +43,8 @@ export type AppFrameActionsOptions = {
 export function useAppFrameActions({
   engine,
   projectWorkspace,
+  projectRef,
+  routedConversationId,
   standaloneSurface,
   chatHref,
   activeId,
@@ -58,10 +63,35 @@ export function useAppFrameActions({
   const t = useT()
   const { startNewChat, selectConversation } = conversations
 
+  const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
+  let actorAtRender: string | null | undefined
+  try { actorAtRender = typeof window === "undefined" ? undefined : window.localStorage.getItem("kokoro.web.auth-index-subject") }
+  catch { actorAtRender = undefined }
+
   const submitDraft = useCallback(() => {
     const content = draft.trim()
     if (!engine || !content || content.length > MAX_INPUT_LENGTH) {
       return
+    }
+    if (typeof window === "undefined" || (projectWorkspace && `${window.location.pathname}${window.location.search}` !== routeAtRender)) return
+    try {
+      if (actorAtRender === undefined || window.localStorage.getItem("kokoro.web.auth-index-subject") !== actorAtRender) return
+    } catch { return }
+    if (projectWorkspace) {
+      const url = new URL(window.location.href)
+      if (!projectRef || url.pathname !== `/app/project/${encodeURIComponent(projectRef)}` ||
+        url.searchParams.get("conversation") !== (routedConversationId ?? null)) return
+      const current = engine.getSnapshot()
+      if (routedConversationId !== null && routedConversationId !== undefined) {
+        if (current.store?.activeId !== routedConversationId || current.hydrating) return
+      } else {
+        // A root composer must not RESET a hidden POST, unknown receipt, or run.
+        if (!current.canSubmitMessage || current.hydrating || current.connection.status !== "connected" ||
+          current.machine.phase !== "idle" || current.canRetryPendingSubmission) return
+        const mode = current.store ? activeMode(current.store) : current.pendingMode
+        engine.newConversation()
+        engine.setMode(mode)
+      }
     }
     // 流式中提交继续沿现有 create-message 路径；queued/steer 的正式
     // owner 语义尚未发布，本层只消费 engine 的同步接纳结果。
@@ -72,6 +102,7 @@ export function useAppFrameActions({
       focusComposer()
       return
     }
+    clearDraft()
     if (projectWorkspace) {
       // A first project message creates its opaque conversation in the shared
       // engine before the next render. Update both URL and route projection at
@@ -84,13 +115,12 @@ export function useAppFrameActions({
         setConversationRouteId(projectConversationId)
       }
     }
-    clearDraft()
     // Creation intent belongs to the empty composer only. Clear its persisted
     // projection as soon as the user commits the first message so a later
     // blank conversation cannot inherit a stale Website/App capsule.
     setDeploymentIntent(null)
     focusComposer()
-  }, [clearDraft, draft, engine, focusComposer, projectWorkspace, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
+  }, [actorAtRender, routeAtRender, clearDraft, draft, engine, focusComposer, projectWorkspace, projectRef, routedConversationId, setConversationRouteId, setDeploymentIntent, syncConversationUrl])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

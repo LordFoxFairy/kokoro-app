@@ -10,11 +10,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/engine/config", () => ({ sessionBaseUrl: () => "http://s.local" }))
 
 import { AppFrame } from "@/components/blocks/app-frame/app-frame"
+import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionEngine, type SessionEngine } from "@/engine/machine"
 import type { ConversationStore } from "@/core/conversations"
-import { createFakeClient, createMemoryStorage, type FakeClient } from "../engine/fakes"
+import { makeSnapshot } from "../core/fixtures"
+import { createFakeClient, createMemoryStorage, makeReceipt, type FakeClient } from "../engine/fakes"
 
 let client: FakeClient
 let engine: SessionEngine
@@ -827,4 +829,324 @@ it("R251 legal ACK during same-subject suspension conservatively retains its key
     expect(request.mock.calls[1]?.[1]?.body).toBe(first?.body)
     expect(view.navigate).not.toHaveBeenCalled()
   } finally { view.unmount() }
+})
+
+
+// Actual AppFrame + actual scoped engines: URL projection must not silently
+// adopt the scoped index's remembered activeId as the project-root draft.
+it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000801"
+  const projectPath = `/app/project/${projectRef}`
+  const draftsKey = "kokoro.web.drafts"
+  const rootKey = `__project__:${encodeURIComponent(projectRef)}`
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-draft-reader")
+  window.history.replaceState({}, "", projectPath)
+  const projectClient = createFakeClient()
+  const projectStorage = createMemoryStorage<ConversationStore>(null)
+  const projectEngine = createSessionEngine({ client: projectClient, storage: projectStorage, scope: { kind: "project", projectRef } })
+  const frame = (project: boolean) => <ThemeProvider><LocaleProvider><AppFrame engine={project ? projectEngine : engine} chatHref="/app" projectWorkspace={project} {...(project ? { projectRef } : {})} /></LocaleProvider></ThemeProvider>
+  const view = render(frame(true))
+  try {
+    const composer = () => screen.getByRole("textbox", { name: "对话输入" })
+    const rootDraft = "root overview first\nroot overview second"
+    fireEvent.change(composer(), { target: { value: rootDraft } })
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[rootKey]).toBe(rootDraft))
+    fireEvent.click(screen.getByTestId("rail-new-conversation"))
+    const convB = projectEngine.getSnapshot().store?.activeId
+    expect(convB).toMatch(/^conv_/u)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(convB)
+    expect(composer()).toHaveValue("")
+    const convDraft = "new project conversation B"
+    fireEvent.change(composer(), { target: { value: convDraft } })
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[convB!]).toBe(convDraft))
+    act(() => window.history.pushState({}, "", "/app"))
+    view.rerender(frame(false))
+    fireEvent.change(composer(), { target: { value: "independent Home draft" } })
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}").__pending__).toBe("independent Home draft"))
+    act(() => window.history.pushState({}, "", projectPath))
+    view.rerender(frame(true))
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+    expect(new URL(window.location.href).searchParams.has("conversation")).toBe(false)
+    expect(composer()).toHaveValue(rootDraft)
+    expect(JSON.parse(window.localStorage.getItem(draftsKey) ?? "{}")[convB!]).toBe(convDraft)
+    expect(projectClient.createCalls).toHaveLength(0)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it("explicit project conversation hydration owns only its requested draft, never the remembered task while pending", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000802"
+  const convA = "conv_00000000-0000-4000-8000-000000000803"
+  const convB = "conv_00000000-0000-4000-8000-000000000804"
+  const projectClient = createFakeClient()
+  let resolveA!: (value: ReturnType<typeof makeSnapshot>) => void
+  projectClient.nextSnapshot = (id) => id === convA ? new Promise((resolve) => { resolveA = resolve }) : Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "remembered B", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-draft-reader")
+  window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ [convA]: "explicit A draft", [convB]: "remembered B draft" }))
+  window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${convA}`)
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
+  try {
+    await waitFor(() => expect(resolveA).toBeTypeOf("function"))
+    expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("explicit A draft")
+    expect(projectClient.createCalls).toHaveLength(0)
+    await act(async () => { resolveA(makeSnapshot({ sessionId: convA })); await Promise.resolve() })
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("explicit A draft"))
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convA)
+    expect(projectClient.createCalls).toHaveLength(0)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it("an explicit project overview submission creates a fresh target instead of posting to its hidden remembered conversation", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000805"
+  const convB = "conv_00000000-0000-4000-8000-000000000806"
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = (id) => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "hidden old task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "project-draft-reader")
+  window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ [`__project__:${encodeURIComponent(projectRef)}`]: "root overview submission" }))
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
+  try {
+    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(composer, { target: { value: "root overview submission" } })
+    fireEvent.keyDown(composer, { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.sessionId).not.toBe(convB)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(projectClient.createCalls[0]?.sessionId)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: string, conversation: string | null = null) {
+  const clearDraft = vi.fn()
+  const syncConversationUrl = vi.fn()
+  const setConversationRouteId = vi.fn()
+  const options = {
+    engine: projectEngine, projectWorkspace: true, projectRef, routedConversationId: conversation,
+    standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
+    draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
+    syncConversationUrl, setConversationRouteId,
+    conversations: { conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: async () => true, renameConversation: vi.fn(), startNewChat: vi.fn() },
+    focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
+  }
+  const view = renderHook(() => useAppFrameActions(options), { wrapper: LocaleProvider })
+  return { ...view, clearDraft, syncConversationUrl, setConversationRouteId }
+}
+
+it.each(["pending", "unknown", "active", "reconnecting", "disposed"] as const)("project overview preserves hidden %s state instead of resetting it for a new submission", async (state) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000811"
+  const convB = "conv_00000000-0000-4000-8000-000000000812"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "boundary-actor")
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "existing intent", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  let release!: (receipt: ReturnType<typeof makeReceipt>) => void
+  if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("unknown transport outcome"))
+  if (state === "pending") projectClient.nextCreate = () => new Promise(resolve => { release = resolve })
+  await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+  if (state === "disposed") projectEngine.dispose()
+  else {
+    expect(projectEngine.submit("original hidden intent")).toBe(true)
+    if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    if (state === "active" || state === "reconnecting") {
+      await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+      if (state === "reconnecting") projectClient.lastStream().reconnecting()
+    }
+  }
+  const before = projectEngine.getSnapshot()
+  const calls = structuredClone(projectClient.createCalls)
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  const view = mountProjectSubmitBoundary(projectEngine, projectRef)
+  try {
+    act(() => view.result.current.submitDraft())
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectClient.createCalls).toEqual(calls)
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(view.clearDraft).not.toHaveBeenCalled()
+    expect(view.syncConversationUrl).not.toHaveBeenCalled()
+    expect(window.location.search).toBe("")
+    if (state === "unknown") {
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_explicit_retry"))
+      act(() => projectEngine.retry())
+      expect(projectClient.createCalls).toHaveLength(2)
+      expect(projectClient.createCalls[1]).toEqual(calls[0])
+      await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    }
+    if (state === "pending") {
+      await act(async () => { release(makeReceipt("run_original_pending")); await Promise.resolve() })
+      expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+      expect(projectClient.createCalls).toEqual(calls)
+    }
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["route", "actor", "explicit-mismatch"] as const)("a late project submit callback rejects %s changes without mutating the hidden engine", async (change) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000813"
+  const convB = "conv_00000000-0000-4000-8000-000000000814"
+  const convA = "conv_00000000-0000-4000-8000-000000000815"
+  window.history.replaceState({}, "", `/app/project/${projectRef}${change === "explicit-mismatch" ? `?conversation=${convA}` : ""}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "actor-A")
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "hidden B", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+  const view = mountProjectSubmitBoundary(projectEngine, projectRef, change === "explicit-mismatch" ? convA : null)
+  const callback = view.result.current.submitDraft
+  const reset = vi.spyOn(projectEngine, "newConversation")
+  try {
+    if (change === "route") window.history.pushState({}, "", `/app/project/${projectRef}?conversation=${convB}`)
+    if (change === "actor") window.localStorage.setItem("kokoro.web.auth-index-subject", "actor-B")
+    act(() => callback())
+    expect(projectClient.createCalls).toHaveLength(0)
+    expect(reset).not.toHaveBeenCalled()
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+    expect(view.clearDraft).not.toHaveBeenCalled()
+    expect(view.syncConversationUrl).not.toHaveBeenCalled()
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+it("fresh overview admission keeps original text and retry identity after an unknown receipt, without revisiting or clearing a newer route", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000817"
+  const convB = "conv_00000000-0000-4000-8000-000000000818"
+  const convQ = "conv_00000000-0000-4000-8000-000000000819"
+  const rootKey = `__project__:${encodeURIComponent(projectRef)}`
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  projectClient.nextCreate = () => Promise.reject(new Error("unknown create receipt"))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "old idle task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "fresh-overview-actor")
+  window.localStorage.setItem("kokoro.web.drafts", JSON.stringify({ [rootKey]: "fresh original overview text", [convB]: "private old B" }))
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const frame = () => <ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>
+  const view = render(frame())
+  try {
+    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    expect(composer).toHaveValue("fresh original overview text")
+    fireEvent.keyDown(composer, { key: "Enter" })
+    await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    const original = structuredClone(projectClient.createCalls[0])
+    expect(original?.sessionId).not.toBe(convB)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(original?.sessionId)
+    expect(JSON.stringify(projectEngine.getSnapshot().thread.messages)).toContain("fresh original overview text")
+    const drafts = JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")
+    expect(drafts[rootKey]).toBeUndefined()
+    expect(drafts[convB]).toBe("private old B")
+    let acknowledge!: (receipt: ReturnType<typeof makeReceipt>) => void
+    projectClient.nextCreate = () => new Promise(resolve => { acknowledge = resolve })
+    act(() => projectEngine.retry())
+    expect(projectClient.createCalls).toHaveLength(2)
+    expect(projectClient.createCalls[1]).toEqual(original)
+    act(() => {
+      window.history.pushState({}, "", `/app/project/${projectRef}?conversation=${convQ}`)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    view.rerender(frame())
+    await waitFor(() => expect(projectEngine.getSnapshot().store?.activeId).toBe(convQ))
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "newer Q draft" } })
+    await act(async () => { acknowledge(makeReceipt("run_late_original")); await Promise.resolve() })
+    expect(window.location.search).toBe(`?conversation=${convQ}`)
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convQ)
+    expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("newer Q draft")
+    expect(projectClient.createCalls).toHaveLength(2)
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem("kokoro.web.drafts") ?? "{}")[convQ]).toBe("newer Q draft"))
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+it("an explicit overview send carries the user's thinking mode into its fresh conversation", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000821"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "thinking-actor")
+  const projectClient = createFakeClient()
+  const remembered = "conv_00000000-0000-4000-8000-000000000822"
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "blank remembered task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+  projectEngine.setMode("thinking")
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
+  try {
+    expect(projectEngine.getSnapshot().store?.conversations.find(entry => entry.id === remembered)?.mode).toBe("thinking")
+    const composer = screen.getByRole("textbox", { name: "对话输入" })
+    fireEvent.change(composer, { target: { value: "explicit thinking overview" } })
+    fireEvent.keyDown(composer, { key: "Enter" })
+    await waitFor(() => expect(projectClient.createCalls).toHaveLength(1))
+    expect(projectClient.createCalls[0]?.body.thinking).toBe(true)
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBe(projectClient.createCalls[0]?.sessionId)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+it.each(["pending", "unknown", "active"] as const)("project history returning to overview retains the original %s conversation without a ghost or RESET", async (state) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000823"
+  const convB = "conv_00000000-0000-4000-8000-000000000824"
+  window.history.replaceState({}, "", `/app/project/${projectRef}?conversation=${convB}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "history-actor")
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "original history task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
+  let release!: (receipt: ReturnType<typeof makeReceipt>) => void
+  try {
+    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+    if (state === "pending") projectClient.nextCreate = () => new Promise(resolve => { release = resolve })
+    if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("unknown history receipt"))
+    act(() => { expect(projectEngine.submit("original query intent")).toBe(true) })
+    if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    const before = projectEngine.getSnapshot()
+    const original = structuredClone(projectClient.createCalls[0])
+    const reset = vi.spyOn(projectEngine, "newConversation")
+    act(() => {
+      window.history.pushState({}, "", `/app/project/${projectRef}`)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    expect(reset).not.toHaveBeenCalled()
+    expect(window.location.search).toBe("")
+    expect(projectEngine.getSnapshot().store).toEqual(before.store)
+    expect(projectEngine.getSnapshot().machine).toEqual(before.machine)
+    expect(projectEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
+    expect(projectClient.createCalls).toHaveLength(1)
+    if (state === "unknown") {
+      expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true)
+      projectClient.nextCreate = () => Promise.resolve(makeReceipt("run_history_retry"))
+      act(() => projectEngine.retry())
+      expect(projectClient.createCalls[1]).toEqual(original)
+      await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    }
+    if (state === "pending") {
+      await act(async () => { release(makeReceipt("run_history_pending")); await Promise.resolve() })
+      expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+      expect(projectClient.createCalls).toHaveLength(1)
+    }
+    if (state === "active") expect(projectClient.lastStream().closed).toBe(false)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
+
+it.each(["unknown", "active"] as const)("project overview Send visibly disables hidden %s state instead of accepting a click its action rejects", async (state) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000825"
+  const convB = "conv_00000000-0000-4000-8000-000000000826"
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "send-admission-actor")
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
+  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: convB, conversations: [{ id: convB, title: "hidden original task", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef } })
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" projectWorkspace projectRef={projectRef} /></LocaleProvider></ThemeProvider>)
+  try {
+    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+    if (state === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("unknown original receipt"))
+    act(() => { expect(projectEngine.submit("original hidden task")).toBe(true) })
+    if (state === "unknown") await waitFor(() => expect(projectEngine.getSnapshot().canRetryPendingSubmission).toBe(true))
+    if (state === "active") await waitFor(() => expect(projectClient.streams).toHaveLength(1))
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "root cannot reset this task" } })
+    expect(screen.getByRole("button", { name: /发送消息|发送插话/ })).toBeDisabled()
+    expect(projectClient.createCalls).toHaveLength(1)
+    expect(projectEngine.getSnapshot().store?.activeId).toBe(convB)
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
