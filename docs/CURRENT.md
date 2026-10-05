@@ -1,3 +1,9 @@
+## R247 项目会话侧栏空态修复（2026-10-05）
+
+项目合法空清单此前侧栏返回 null。现使用已有文案与 role=status 呈现 settled-empty，保留搜索/direct/loading/error/scope/路由行为。Root真实Next/Chromium先取得有效RED1fail；修复后同完整系统文件77通过/0失败/0跳过（原74+此前2刷新诊断+本次1），101.439秒，source/Redis保持。manifest /var/folders/gn/wbk8wfbd047_wvwkwtyn331r0000gn/T/kokoro-r247-web-project-empty-green-full-2t9j5kfb/manifest.json，log bbce5266c54aa5205dac380462002741bc166df5089e0036418a78cdaa6244a2。Root重跑两个文件ESLint、Next typegen/TypeScript成功；第一次pnpm包装器版本不符在执行前退出，改用仓内固定工具入口，未放宽版本门。独审531200a1窄片无确定阻塞。
+
+本地main交付3路径；四mixed原字节保留（测试Git对象独立交付，不覆盖工作树）。受控IAM/BFF辅助归因，不冒当前3310启用或正式持久owner/完整用户验收；Skills401、Library503、缺三owner组合与原刷新间歇失败仍OPEN。
+
 ## R244 Project 改名源码交付切片（2026-10-05）
 
 本片承接已批准R242三D0，固定BFF main `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` / public7.2.0 / canonical digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`，正常两个generator消费。不含数据库、Billing许可、会话写入或旧实现兼容层。新增现项目菜单的shadcn Dialog/Input/Button、唯一immutable PATCH、10秒headers/body/abort总预算、ACK后canonical GET与list、主体/路由代际和取消/显式retry/GET-only恢复；既有renameContext内存token防旧关闭抢新scope焦点。九上线语言项目改名文案已显式覆盖。

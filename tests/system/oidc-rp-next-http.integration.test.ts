@@ -5206,4 +5206,225 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
+  it("R245 keeps a directly opened Conversation B after hard reload instead of restoring remembered A", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    moveUiFixtureEnabled = false
+    moveBindingFixtureEnabled = false
+    moveBindingProjectRef = null
+    sessionSnapshotRequests = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rememberedA = directList.locator('[data-conversation-id="session-list-a"]')
+      await rememberedA.click()
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe("session-list-a")
+
+      // The controlled fixture now exposes a distinct directly opened B with its own body.
+      moveUiFixtureEnabled = true
+      moveBindingFixtureEnabled = true
+      await page.goto(`http://localhost:${nextPort}/app?conversation=${moveConversationA}`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+    } finally {
+      sessionSnapshotRequests = 0
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveUiFixtureEnabled = false
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+
+  it("R245 keeps B after reload when a live A tab writes its late owner snapshot back", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    let pageA: Awaited<ReturnType<Browser["newPage"]>> | undefined
+    let pageB: Awaited<ReturnType<Browser["newPage"]>> | undefined
+    let releaseHeldSnapshot: (() => Promise<void>) | undefined
+    let browserSnapshotRequests = 0
+    moveUiFixtureEnabled = false
+    moveBindingFixtureEnabled = false
+    moveBindingProjectRef = null
+    sessionSnapshotRequests = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      pageA = await context.newPage()
+      await pageA.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await pageA.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await expandDesktopRail(pageA)
+      const directListA = pageA.locator('[data-conversation-list="direct"]')
+      await directListA.locator('[data-conversation-id="session-list-a"]').click()
+      await pageA.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(pageA!.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe("session-list-a")
+
+      // Reuse the real R186 request hold: A remains a live document while its
+      // second legitimate 200 snapshot is in flight; no storage or error is injected.
+      await pageA.route(/\/api\/session\/sessions\/session-list-a(?:\?scope=direct)?$/u, async (route) => {
+        browserSnapshotRequests += 1
+        if (browserSnapshotRequests !== 1) {
+          await route.continue()
+          return
+        }
+        await new Promise<void>((resolve) => {
+          let released = false
+          releaseHeldSnapshot = async () => {
+            if (released) return
+            released = true
+            try { await route.continue() }
+            catch { /* the owned request may already have been aborted during cleanup */ }
+            finally { resolve() }
+          }
+        })
+      })
+      const heldReload = await pageA.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(heldReload?.status()).toBe(200)
+      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(1)
+
+      moveUiFixtureEnabled = true
+      moveBindingFixtureEnabled = true
+      pageB = await context.newPage()
+      await pageB.goto(`http://localhost:${nextPort}/app?conversation=${moveConversationA}`, { waitUntil: "domcontentloaded" })
+      await pageB.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await pageB.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(pageB!.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
+      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+
+      // Let A's real 200 owner response win after B is already stable. The
+      // resulting A write must be observed, not manufactured by the test.
+      await releaseHeldSnapshot?.()
+      await expect.poll(() => pageA!.getByText("R143 authoritative conversation A body", { exact: true }).count(), { timeout: 10_000 })
+        .toBe(1)
+      await expect.poll(() => pageB!.evaluate(() => {
+        const raw = window.localStorage.getItem("kokoro.web.conversations.direct")
+        if (raw === null) return null
+        try {
+          const parsed = JSON.parse(raw) as { activeId?: unknown; conversations?: { id?: unknown }[] }
+          return {
+            activeId: parsed.activeId ?? null,
+            conversationIds: parsed.conversations?.map((entry) => entry.id).filter((id): id is string => typeof id === "string") ?? [],
+          }
+        }
+        catch { return null }
+      }), { timeout: 10_000 }).toMatchObject({
+        activeId: "session-list-a",
+        conversationIds: expect.arrayContaining(["session-list-a", moveConversationA]),
+      })
+      expect(new URL(pageB.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      expect(await pageB.getByText("R192 binding survives the filtered view move", { exact: true }).count()).toBe(1)
+      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+
+      const reloadB = await pageB.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reloadB?.status()).toBe(200)
+      await pageB.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
+      await pageB.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(new URL(pageB.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+    } finally {
+      await releaseHeldSnapshot?.()
+      sessionSnapshotRequests = 0
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveUiFixtureEnabled = false
+      try { await pageA?.close() }
+      finally {
+        try { await pageB?.close() }
+        finally {
+          try { await context?.close() }
+          finally {
+            try { await browser?.close() }
+            finally { await proxy.close() }
+          }
+        }
+      }
+    }
+  }, 60_000)
+
+
+  it("R247 exposes an explicit empty state for a settled project conversation rail", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext({ locale: "en-US" })
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+
+      const projectLink = page.getByRole("link", { name: "Move target beta", exact: true })
+      await projectLink.waitFor({ state: "visible", timeout: 10_000 })
+      await projectLink.click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+
+      const projectList = page.locator('[data-conversation-list="project-conversation"]')
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(0)
+      await expect.poll(() => projectList.getByRole("status", { name: "Loading chats…" }).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      expect(await projectList.getByRole("alert").count()).toBe(0)
+      const emptyStatus = projectList.getByRole("status").filter({
+        hasText: "No project conversations yet. Start one to begin.",
+      })
+      await emptyStatus.waitFor({ state: "visible", timeout: 10_000 })
+      expect(await emptyStatus.textContent()).toBe("No project conversations yet. Start one to begin.")
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveUiFixtureEnabled = false
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
 })

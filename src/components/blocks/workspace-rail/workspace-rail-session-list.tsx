@@ -225,7 +225,11 @@ export function WorkspaceRailSessionList({
                 </Button>
               ) : null}
             </>
-          ) : projectActive ? null : (
+          ) : projectActive ? (
+            <p className={itemStyles.empty} role="status">
+              {t(query !== "" ? "rail.emptyResult" : "firstSite.noProjectConversations")}
+            </p>
+          ) : (
             <p className={itemStyles.empty}>{t(searchOpen ? "rail.emptyResult" : "rail.emptyChats")}</p>
           )}
         </>
