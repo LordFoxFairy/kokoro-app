@@ -1,3 +1,13 @@
+## R256 会话标题与工具按钮独立命中（2026-10-06）
+
+Root冻结后明确Node22.22.2复跑lint/typecheck/3现UI文件167断言/build，原句柄37970实际exit0；首次wrapper漏打印句柄未作为exit证据，确认原build结束后独立重跑本次终态。未跑全量system/test:e2e/axe/视觉预算，不替代以上原页面用户证据。
+
+仅现 workspace-rail-items.module.css 的 conversation 选择器：title 与三工具由 flex 分配真实不重叠区域，不改目录树/路由/数据/权限。工具 position:relative 留正常流并绑定自身 ::after，保桌面32px/窄屏44px；初 static 候选被独审指出手机伪元素定位风险后仅改此关键词。最终源码SHA e8c2dc8517e75c86242f1fda2b96c4b09b2e9a362eda2811f22a19d47555eab1。
+
+Root原用户tab7正常IAM/BFF两次复现：717px专案会话title宽260，中心误中rename，普通click打开改名/URL不变；Escape未写。修后同页title宽128/工具44，click进入原conv_ffd7…及真实历史；Direct R243两原标记仍在。rename/Escape、move菜单/Escape、delete确认取消各自正确，无持久写；390四centerhit全true，1200四centerhit全true/工具32、title→Tab焦点rename，短窗口scroll113.5→204→0，刷新真实历史恢复且rename0/Direct常驻。恢复原视口，无新标签/模型或资金调用。r256-rail-{red,mobile-green,desktop-green,green-receipt}.json和final.png在Root现ignored证据目录。
+
+独审 f18ab3bf 未见新增已证P0/P1/P2，反向删除新增块重建原d6a7dea7 exact；原三D0/OIDC mixed逐项哈希保护。物理触屏、完整CRUD/长分页/跨actor滚动恢复与全页面仍待验，不把本title修复算全侧栏完成。后台现无正式/admin路由或人类管理员准入，Settings跳转需IAM资格→BFF→Web，不能按邮箱/组织owner/登录态造管理员。
+
 ### R255 用户原标签后补实证（2026-10-06）
 
 原tab7现已恢复同步：不注入cookie/preview，实际管理页原h1+h2=2且error可见，同时两个servers响应200（4de46d06/23f3d070）；CDP response body不可取，无法据此确定是旧schema/缓存/HMR哪个原因。保留error截图/metadata。正常reload当前源码并自动恢复既有settings hash后，原同tab1标题/正常空态/error0，两个真实servers200（2a7d008c/d1d78292）。这证明当前原页面读取呈现恢复，不代表Server→本人Connection/创建授权调用缺口已修。
