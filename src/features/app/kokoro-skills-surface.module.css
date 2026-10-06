@@ -9,6 +9,35 @@
   color: var(--foreground);
 }
 
+.personalPage {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.5rem 2rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.personalPage > :global([data-testid="personal-skills-read"]) {
+  width: 100%;
+  max-width: 60rem;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.personalPage > :global([data-testid="personal-skills-read"]) > header {
+  flex-wrap: wrap;
+}
+
+.personalPage > :global([data-testid="personal-skills-read"]) > header > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .header {
   display: flex;
   height: 3.5rem;
@@ -108,6 +137,7 @@
 }
 
 @media (max-width: 42rem) {
+  .personalPage { padding-inline: 1rem; }
   .header { padding-inline: 1rem; }
   .header h1 { font-size: 1rem; }
   .mySkillsButton { display: none; }

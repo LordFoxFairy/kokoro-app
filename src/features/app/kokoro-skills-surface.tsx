@@ -117,7 +117,11 @@ function formatUsage(index: number, t: (key: MessageKey, values?: Record<string,
 type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
-  if (props.preview !== true) return <PersonalSkillsRead client={browserHubClient()} {...(props.onOpenSettings === undefined ? {} : { onOpenSettings: props.onOpenSettings })} />
+  if (props.preview !== true) return (
+    <div className={styles.personalPage} data-testid="personal-skills-page">
+      <PersonalSkillsRead client={browserHubClient()} {...(props.onOpenSettings === undefined ? {} : { onOpenSettings: props.onOpenSettings })} />
+    </div>
+  )
   return <PreviewKokoroSkillsSurface {...props} />
 }
 
