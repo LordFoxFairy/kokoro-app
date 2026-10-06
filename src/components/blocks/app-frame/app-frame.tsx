@@ -212,24 +212,30 @@ function AppFrameRuntime({
     moveCoordinator.getSnapshot,
   )
   const moveScopeKey = sessionScopeKey(sessionScope)
+  const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
   const railFolderIntentIdentity = projectReadBoundary === undefined
     ? preview ? "preview" : injectedEngine !== undefined ? "injected" : null
     : projectReadBoundary.subject
+  const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
+  const handleConversationDeleteConfirmed = useCallback((scope: typeof sessionScope, id: string) => {
+    if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
+    if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
+  }, [engine, moveScopeKey])
   const conversationsCtl = useConversationList({
     engine,
     preview,
-    activeId,
+    activeId: projectWorkspace ? routedConversationId : activeId,
     thread,
     isStreaming,
     focusComposer,
     scope: sessionScope,
     readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
     scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
+    onDeleteConfirmed: handleConversationDeleteConfirmed,
   })
   const conversationMove = moveSnapshot.intent
-  const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
   const moveRouteContext = typeof window === "undefined" ? null : (() => {
     const url = new URL(window.location.href)
     url.searchParams.delete("conversation")
@@ -344,7 +350,6 @@ function AppFrameRuntime({
   }, [engine, isVisibleMoveLeaf, moveCoordinator, settleConversationMove])
   const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
 
-  const routedConversationId = navigationState.resolvedConversationRouteId
   const draftRoute = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   const draftSelectionMatches = !projectWorkspace || routedConversationId === null || routedConversationId === activeId
   const draftController = useDraft(projectWorkspace ? routedConversationId : activeId, mounted && draftSelectionMatches, projectRef)
@@ -738,7 +743,8 @@ function AppFrameRuntime({
     conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
     onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
     conversationReads: {
-      engine, scope: sessionScope, activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
+      engine, scope: sessionScope, currentController: conversationsCtl,
+      activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
       identity: railReadIdentity, admitted: railReadAdmitted, folderIntentIdentity: railFolderIntentIdentity, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
@@ -764,10 +770,7 @@ function AppFrameRuntime({
         }
       },
       onMove: moveConversation,
-      onDeleteConfirmed: (scope, id) => {
-        if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
-        if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
-      },
+      onDeleteConfirmed: handleConversationDeleteConfirmed,
     },
     onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,

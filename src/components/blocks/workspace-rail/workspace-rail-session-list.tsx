@@ -328,23 +328,40 @@ type ScopedGroupProps = Pick<WorkspaceRailSessionListProps,
 
 /** A folder reads only its canonical list; it never creates an engine or SSE. */
 export function ScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
-  const t = useT()
+  const key = sessionScopeKey(desiredScope)
+  if (key === sessionScopeKey(reads.scope)) {
+    return <ScopedConversationGroupView {...props} scope={desiredScope} reads={reads} projects={projects}
+      projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={reads.currentController} />
+  }
+  return <IndependentScopedConversationGroup {...props} scope={desiredScope} reads={reads} preview={preview}
+    projects={projects} projectListReady={projectListReady} onRequestDelete={onRequestDelete} />
+}
+
+function IndependentScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
   const key = sessionScopeKey(desiredScope)
   const projectRef = desiredScope.kind === "project" ? desiredScope.projectRef : null
   const scope = useMemo<SessionScope>(() => projectRef === null ? DIRECT_SESSION_SCOPE : { kind: "project", projectRef }, [projectRef])
-  const current = key === sessionScopeKey(reads.scope)
   const controller = useConversationList({
-    engine: current ? reads.engine : null, preview,
-    activeId: current ? reads.activeId : null, thread: reads.thread,
-    isStreaming: current && reads.isStreaming, focusComposer: reads.focusComposer, scope,
+    engine: null, preview,
+    activeId: null, thread: reads.thread,
+    isStreaming: false, focusComposer: reads.focusComposer, scope,
     scopeRevision: reads.scopeVersions.get(key) ?? 0,
     readBoundary: { identity: reads.identity, admitted: reads.admitted },
     onDeleteConfirmed: reads.onDeleteConfirmed,
   })
+  return <ScopedConversationGroupView {...props} scope={scope} reads={reads} projects={projects}
+    projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={controller} />
+}
+
+function ScopedConversationGroupView({ scope, reads, projects, projectListReady, onRequestDelete, controller, ...props }:
+  Omit<ScopedGroupProps, "preview"> & { controller: import("@/ui/shell/use-conversation-list").ConversationListController }) {
+  const t = useT()
   const destinations = projectListReady ? [
     ...(scope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
     ...projects.filter((project) => scope.kind !== "project" || project.id !== scope.projectRef).map((project) => ({ id: project.id, name: project.name })),
   ] : []
+  const key = sessionScopeKey(scope)
+  const current = key === sessionScopeKey(reads.scope)
   return <ConversationGroup {...props} conversationMoveFailed={props.conversationMoveFailed && reads.failedMoveScopeKey === key} scopeKey={key} onNewChat={() => { if (reads.admitted) reads.onNewChat(scope) }} blocked={!reads.admitted} projectActive={scope.kind === "project"}
     conversations={controller.conversations} hasConversations={controller.conversations.length > 0}
     activeId={current ? reads.activeId : null}

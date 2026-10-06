@@ -6,10 +6,13 @@ import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime
 import type { ConversationMoveIntent } from "@/engine/engine-types"
 import type { SessionEngine, EngineSnapshot } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
+import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 
 export type RailConversationReads = {
   engine: SessionEngine | null
   scope: SessionScope
+  /** AppFrame's canonical reader for the mounted scope; the rail must not open a duplicate flight for it. */
+  currentController: ConversationListController
   activeId: string | null
   thread: EngineSnapshot["thread"]
   isStreaming: boolean

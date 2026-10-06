@@ -1311,6 +1311,43 @@ it("同scope新对话使旧Move ACK失去导航资格", async () => {
   expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
 })
 
+it("删除当前会话使迟到Move ACK失去导航资格", async () => {
+  const sessionId = "00000000-0000-4000-8000-000000000095"
+  const targetProjectId = "00000000-0000-4000-8000-000000000096"
+  buildEngine(addConversation(null, sessionId, 500))
+  let resolveMove!: (receipt: { session_id: string; project_ref: string }) => void
+  client.moveSession = vi.fn(() => new Promise<{ session_id: string; project_ref: string }>((resolve) => { resolveMove = resolve }))
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({
+    ...client,
+    listSessions: vi.fn().mockResolvedValue({
+      sessions: [{ session_id: sessionId, title: "Delete pending source", updated_at: "2026-10-04T00:00:00Z" }],
+      next_cursor: null,
+    }),
+  })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: targetProjectId, name: "Delete target", slug: "delete-target", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-delete-projects" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
+    projectReadBoundary={{ admitted: true, subject: "subject-delete", generation: 1 }} />
+  </LocaleProvider></ThemeProvider>)
+
+  const row = (await screen.findByRole("button", { name: "Delete pending source" })).closest('[data-slot="sidebar-menu-item"]')
+  expect(row).not.toBeNull()
+  fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "移动会话 Delete pending source" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Delete target" }))
+  fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "删除会话 Delete pending source" }))
+  fireEvent.click(screen.getByRole("button", { name: "确认删除" }))
+  await waitFor(() => expect(engine.getSnapshot().store?.conversations.some(({ id }) => id === sessionId)).toBe(false))
+  act(() => resolveMove({ session_id: sessionId, project_ref: targetProjectId }))
+
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  expect(window.location.pathname).toBe("/app")
+  expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
+})
+
 it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导航", async () => {
   const sessionId = "00000000-0000-4000-8000-000000000101"
   const otherSessionId = "00000000-0000-4000-8000-000000000102"
@@ -1362,7 +1399,7 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
   const view = render(renderFrame())
 
   const countSourceReads = () => listSessions.mock.calls.filter(call => call[1]?.kind === "direct").length
-  await waitFor(() => expect(countSourceReads()).toBe(2))
+  await waitFor(() => expect(countSourceReads()).toBe(1))
   const beforeMoveSourceReads = countSourceReads()
   const sessionButton = await screen.findByRole("button", { name: "A" })
   const sessionRow = sessionButton.closest('[data-slot="sidebar-menu-item"]')
@@ -1424,7 +1461,7 @@ it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async ()
   )
   const view = render(renderFrame())
   const countSourceReads = () => listSessions.mock.calls.filter(call => call[1]?.kind === "direct").length
-  await waitFor(() => expect(countSourceReads()).toBe(2))
+  await waitFor(() => expect(countSourceReads()).toBe(1))
   const beforeMoveSourceReads = countSourceReads()
   const row = (await screen.findByRole("button", { name: "Scope A" })).closest('[data-slot="sidebar-menu-item"]')
   expect(row).not.toBeNull()

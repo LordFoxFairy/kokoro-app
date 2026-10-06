@@ -14,6 +14,7 @@ import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
+import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { act, useState } from "react"
 
@@ -65,7 +66,7 @@ function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceR
   const thread = transient.getSnapshot().thread
   transient.dispose()
   const listClient = createSessionClient({ baseUrl: "http://s.local" })
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
     const project = url.searchParams.get("project_ref")
     return Response.json({ sessions: [{ session_id: project === projectRef ? "task_a" : "conv_direct", title: project === projectRef ? "整理需求" : "普通持久会话", updated_at: "2026-10-01T00:00:00.000Z" }], next_cursor: null })
@@ -73,14 +74,19 @@ function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceR
   // Import binding is the existing browser client; no extra engine is created
   // to read an expanded folder's durable rows.
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
+  const currentController: ConversationListController = {
+    conversations: [{ id: "task_a", title: "整理需求" }], loading: false, loadingMore: false, error: false,
+    refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(),
+    deleteConversation: vi.fn().mockResolvedValue(true), renameConversation: vi.fn(), startNewChat: vi.fn(),
+  }
   return {
     ...renderRail({
       projects: [{ id: projectRef, name: "产品规划", href: `/app/project/${projectRef}`, active: true }, { id: "project_b", name: "发布清单", href: "/app/project/project_b" }],
       projectListStatus: "ready", projectHref: `/app/project/${projectRef}`, projectActive: true,
       onNewChat,
-      conversationReads: { engine: null, scope: { kind: "project", projectRef }, activeId: null, thread, isStreaming: false, identity: "folder-fixture", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: () => {}, onSelect: vi.fn(), onNewChat: onFolderNewChat, onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+      conversationReads: { engine: null, scope: { kind: "project", projectRef }, currentController, activeId: null, thread, isStreaming: false, identity: "folder-fixture", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: () => {}, onSelect: vi.fn(), onNewChat: onFolderNewChat, onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
       ...overrides,
-    }), onNewChat, onFolderNewChat, projectRef,
+    }), onNewChat, onFolderNewChat, projectRef, fetchMock, currentController,
   }
 }
 
@@ -702,6 +708,21 @@ it("文件夹渲染owner返回的所属会话且不混入普通清单", async ()
   expect(within(direct).queryByText("整理需求")).toBeNull()
 })
 
+it("当前scope复用主controller且仅非当前展开文件夹建立独立owner reader", async () => {
+  const { fetchMock, currentController } = renderProjectFolderRail()
+  await screen.findByRole("button", { name: "整理需求" })
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+  expect(fetchMock.mock.calls.map(([input]) => new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    .searchParams.get("project_ref"))).toEqual([null])
+  expect(currentController.refresh).not.toHaveBeenCalled()
+
+  const other = screen.getByRole("link", { name: "发布清单" }).closest('[data-project-id]') as HTMLElement
+  fireEvent.click(within(other).getByRole("button", { name: /展开专案 发布清单/u }))
+  await waitFor(() => expect(fetchMock.mock.calls.map(([input]) =>
+    new URL(input instanceof Request ? input.url : String(input), window.location.origin).searchParams.get("project_ref"),
+  )).toContain("project_b"))
+})
+
 it("桌面收起侧栏通过账户菜单打开设置", async () => {
   const { onOpenSettings } = renderRail({ collapsed: true })
   const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
@@ -1100,7 +1121,11 @@ function retirementRailFixture() {
     collapsed: false, onToggleCollapse: vi.fn(), onNewChat: vi.fn(), chatHref: "/app", conversations: [], activeId: null,
     awaitingIds: new Set(), onSelectConversation: vi.fn(), onDeleteConversation: vi.fn().mockResolvedValue(true), onRenameConversation: vi.fn(), onOpenSettings: vi.fn(), listLoading: false, listError: false, hasMore: false, onLoadMore: vi.fn(),
     projects: [{ id: "P", name: "同名专案", href: "/app/project/P" }, { id: "Q", name: "同名专案", href: "/app/project/Q" }], projectListStatus: "ready",
-    conversationReads: { engine: null, scope: { kind: "direct" }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
+    conversationReads: { engine: null, scope: { kind: "direct" }, currentController: {
+      conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false,
+      loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: vi.fn().mockResolvedValue(true),
+      renameConversation: vi.fn(), startNewChat: vi.fn(),
+    }, activeId: null, thread, isStreaming: false, identity: "retire-actor", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null, focusComposer: vi.fn(), onSelect: vi.fn(), onNewChat: vi.fn(), onMove: vi.fn(), onDeleteConfirmed: vi.fn() },
   }
   const frame = (admitted: boolean) => <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={{ ...props.conversationReads!, admitted }} /></LocaleProvider></ThemeProvider>
   return { props, frame }

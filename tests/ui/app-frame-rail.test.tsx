@@ -973,6 +973,46 @@ it("explicit project conversation hydration owns only its requested draft, never
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+it("project overview rail does not synthesize the engine's remembered active conversation as a selected row", async () => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000807"
+  const remembered = "conv_00000000-0000-4000-8000-000000000808"
+  const projectClient = createFakeClient()
+  projectClient.nextSnapshot = (id) => Promise.resolve(makeSnapshot({ sessionId: id, title: "remembered direct-looking row" }))
+  const projectEngine = createSessionEngine({
+    client: projectClient,
+    storage: createMemoryStorage<ConversationStore>({
+      activeId: remembered,
+      conversations: [{ id: remembered, title: "remembered direct-looking row", mode: "fast", updatedAt: 1000 }],
+    }),
+    scope: { kind: "project", projectRef },
+  })
+  projectEngine.openConversation(remembered)
+  await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({
+    ...projectClient,
+    listSessions: vi.fn().mockResolvedValue({ sessions: [], next_cursor: null }),
+  })
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+    data: { projects: [{ id: projectRef, name: "Overview project", slug: "overview-project", description: "",
+      created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
+    meta: { request_id: "req-overview-project" },
+  }), { status: 200, headers: { "content-type": "application/json" } }))
+  window.history.replaceState({}, "", `/app/project/${projectRef}`)
+  const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app"
+    desktopRailCollapsed={false} projectWorkspace projectRef={projectRef}
+    projectReadBoundary={{ admitted: true, subject: "overview-reader", generation: 1 }} />
+  </LocaleProvider></ThemeProvider>)
+  try {
+    await screen.findByRole("link", { name: "Overview project" })
+    expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
+    expect(screen.queryByRole("button", { name: "remembered direct-looking row" })).toBeNull()
+  } finally {
+    view.unmount()
+    projectEngine.dispose()
+  }
+})
+
 it("an explicit project overview submission creates a fresh target instead of posting to its hidden remembered conversation", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000805"
   const convB = "conv_00000000-0000-4000-8000-000000000806"
