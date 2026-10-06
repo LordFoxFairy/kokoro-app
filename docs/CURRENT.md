@@ -1,3 +1,11 @@
+## R255 04:19 Root：深链回退失败的无限加载窄修
+
+现 use-app-frame-navigation.ts 使已结束水合的 error（路由错位或无正文）优先成为既有错误终态，loading/error互斥；保持原URL、Retry原会话、权限/engine及同路由已有正文局部错误。仅现导航与app-frame.smoke新增反例，无新框架/页面/协议。Root真实AppFrame+SessionEngine UI fixture先1 FAIL（974行spinner不退出，前置状态成立），修后该case和既有项目重进case定向2 PASS；此辅助夹具不是正常浏览器或owner E2E。
+
+Root宽回归16文件461 PASS/1 FAIL，失败为既有项目创建未知结果重进（1590行路径仍/），定向复跑通过但原因尚未证实，保留待核不冒全回归绿色。两路径eslint及tsc --noEmit --incremental false均exit0，contract274/0、architecture50/0；独审f73e6a4f绑定两freeze，零已证P0/P1/P2。非空错路由分支只静态核对，未行为通过。全量test/build/Playwright/axe/移动视觉本轮未跑；正常浏览器控制超时，当前用户实际加载根因与完整T-C01仍待实测，70组PASS不增加。
+
+证据Root ignored var/dev/r255-preserve/0419-web-loading-{red,green,focused,lint,types,contract,architecture}.log与freeze/json。原四mixed及761非批准路径保持；正常八服务未重启，无PG/Redis/资金/模型操作。源码交付不代表用户页面已闭环。
+
 ## R255 02:44 Root 接收：nullable next 消费者源码切片
 
 本次固定 BFF 本地发布 artifact 45e67f0/public8.0.0/SHA2560802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95；24批准现文件、零新文件/层。wire十required、next必有nullable、输入optional recurrence anchor；live保null/list与calendar不编日期，preview生命周期保持。Team15生成文件byte-equal，failure仅两provenance更新；五原文档suffix及原system修改保护。

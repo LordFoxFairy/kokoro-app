@@ -217,6 +217,14 @@ export function useAppFrameNavigation({
   const routeOwnsConversation = resolvedConversationRouteId === null
     ? !projectWorkspace
     : resolvedConversationRouteId === activeId
+  // A settled error must also terminate a mismatched deep-link, even when the
+  // fallback has messages. Never paint that other conversation's body; errors
+  // on the matching route with existing messages retain their local UI.
+  const conversationHydrationFailed = mounted
+    && resolvedConversationRouteId !== null
+    && !hydrating
+    && machinePhase === "error"
+    && (!routeOwnsConversation || threadMessageCount === 0)
   // A deep-linked task must not fall through to the empty project welcome
   // while the scoped engine is still switching or fetching its snapshot. That
   // intermediate tree was perceived as a blank page (and could briefly show a
@@ -224,6 +232,7 @@ export function useAppFrameNavigation({
   // loading workbench until the requested conversation is authoritative.
   const conversationHydrating = mounted
     && resolvedConversationRouteId !== null
+    && !conversationHydrationFailed
     && (hydrating || !routeOwnsConversation)
 
   // A stale/forbidden conversation can be evicted by the engine. Once its
@@ -253,12 +262,6 @@ export function useAppFrameNavigation({
       active = false
     }
   }, [activeId, hydrating, machinePhase, mounted, resolvedConversationRouteId, syncConversationUrl])
-
-  const conversationHydrationFailed = mounted
-    && resolvedConversationRouteId !== null
-    && !hydrating
-    && machinePhase === "error"
-    && threadMessageCount === 0
 
   return {
     settingsTab,

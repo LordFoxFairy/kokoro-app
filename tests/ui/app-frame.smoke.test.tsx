@@ -899,6 +899,105 @@ it("项目 conversation 深链被拒后回退到 overview，不永久停在 load
   expect(screen.queryByTestId("app-frame-loading")).toBeNull()
 })
 
+it("项目深链被拒且已有 fallback 水合失败时退出 loading，重试原深链且不展示 fallback 正文", async () => {
+  const requestedId = "project_forbidden_then_retry"
+  const fallbackId = "project_existing_fallback"
+  const fallbackText = "仅属于 fallback 的历史正文"
+  client = createFakeClient()
+  client.nextSnapshot = () => Promise.resolve(makeSnapshot({
+    sessionId: fallbackId,
+    messages: [{
+      message_id: "fallback_assistant",
+      role: "assistant",
+      run_id: "fallback_completed_run",
+      content: fallbackText,
+      status: "completed",
+      created_at: "2026-07-02T00:00:01Z",
+    }],
+  }))
+  engine = createSessionEngine({
+    client,
+    storage: createMemoryStorage<ConversationStore>(addConversation(null, fallbackId, 500)),
+    now: () => 1_000,
+    createId: (prefix) => `${prefix}_loading_fallback`,
+  })
+  await settle()
+  expect(engine.getSnapshot().hydrating).toBe(false)
+  expect(engine.getSnapshot().thread.messages).toHaveLength(1)
+
+  let rejectRequested: ((reason: SessionClientError) => void) | undefined
+  let rejectFallback: ((reason: SessionClientError) => void) | undefined
+  client.nextSnapshot = (sessionId) => new Promise((_, reject) => {
+    if (sessionId === requestedId) rejectRequested = reject
+    else if (sessionId === fallbackId) rejectFallback = reject
+    else reject(new Error(`unexpected snapshot: ${sessionId}`))
+  })
+  window.history.replaceState(window.history.state, "", `/app/project/kokoro?conversation=${requestedId}`)
+  mockedPathname.value = "/app/project/kokoro"
+  // 通过真实 engine 先开始 A 水合，避免把已完成 B 的构造期读取当作 fallback 读取。
+  engine.openConversation(requestedId)
+  const listClientSpy = stubSuccessfulSessionList()
+
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <KokoroAppSurface engine={engine} desktopRailCollapsed={false} />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
+    expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument()
+    expect(screen.queryByText(fallbackText)).toBeNull()
+    expect(rejectRequested).toBeTypeOf("function")
+    await act(async () => {
+      rejectRequested?.(new SessionClientError("http", "session_forbidden"))
+      await settle()
+    })
+    expect(engine.getSnapshot().store?.activeId).toBe(fallbackId)
+    expect(engine.getSnapshot().hydrating).toBe(true)
+    expect(client.snapshotCalls).toEqual([fallbackId, requestedId, fallbackId])
+    expect(screen.getByTestId("app-frame-loading")).toBeInTheDocument()
+    expect(screen.queryByText(fallbackText)).toBeNull()
+    expect(rejectFallback).toBeTypeOf("function")
+    await act(async () => {
+      rejectFallback?.(new SessionClientError("network", "fallback_snapshot_unavailable"))
+      await settle()
+    })
+
+    expect(engine.getSnapshot().store?.activeId).toBe(fallbackId)
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(engine.getSnapshot().machine.phase).toBe("error")
+    expect(engine.getSnapshot().thread.messages).toHaveLength(0)
+    expect(window.location.search).toBe(`?conversation=${requestedId}`)
+    expect(screen.queryByText(fallbackText)).toBeNull()
+    expect(document.querySelector('[data-slot="project-workspace"]')).toBeNull()
+    expect(screen.queryByTestId("app-frame-loading")).toBeNull()
+    const errorSurface = screen.getByTestId("app-frame-conversation-error")
+    const retry = within(errorSurface).getByRole("button", { name: "重试" })
+    expect(retry).toBeEnabled()
+
+    client.nextSnapshot = (sessionId) => sessionId === requestedId
+      ? Promise.resolve(null)
+      : Promise.reject(new Error(`unexpected retry snapshot: ${sessionId}`))
+    fireEvent.click(retry)
+    await waitFor(() => expect(document.querySelector('[data-slot="project-conversation-welcome"]')).toBeInTheDocument())
+    expect(client.snapshotCalls).toEqual([fallbackId, requestedId, fallbackId, requestedId])
+    expect(engine.getSnapshot().store?.activeId).toBe(requestedId)
+    expect(engine.getSnapshot().hydrating).toBe(false)
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+    expect(window.location.pathname).toBe("/app/project/kokoro")
+    expect(window.location.search).toBe(`?conversation=${requestedId}`)
+    expect(screen.queryByText(fallbackText)).toBeNull()
+    expect(screen.queryByTestId("app-frame-loading")).toBeNull()
+    expect(screen.queryByTestId("app-frame-conversation-error")).toBeNull()
+    expect(client.createCalls).toHaveLength(0)
+    expect(client.controlCalls).toHaveLength(0)
+    expect(client.deleteCalls).toHaveLength(0)
+  } finally {
+    listClientSpy.mockRestore()
+  }
+})
+
 it.each([
   {
     label: "project snapshot 500",

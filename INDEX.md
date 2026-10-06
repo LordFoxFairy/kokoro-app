@@ -56,6 +56,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/i18n/context.tsx`、`src/ui/theme/theme-context.tsx` | 浏览器 locale/theme 偏好 Provider；存储拒绝时分别回到既有语言协商/系统主题，写失败只保留内存选择，不拥有认证事实 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
 | `src/components/blocks/app-frame/app-frame.tsx` | 当前桌面 shell 组合；后续 UI 阶段处理 |
+| `src/components/blocks/app-frame/use-app-frame-navigation.ts` | URL归属与水合派生状态；终态错误不被错路由loading遮蔽，重试保留原深链 |
 | `src/app/api/session/[...path]/route.ts` | Chat JSON/SSE/二进制的同源 BFF adapter；只转发显式 `Idempotency-Key` header，不从 JSON body 提升旧 key |
 | `src/app/api/system/runtime-manifest/route.ts` | 经 BFF 获取 runtime manifest |
 | `src/app/api/{hub,agents,scheduled-tasks,billing}/` | 业务 browser-private adapter；Hub 精确个人文件 1 MiB 缓冲与 Artifact 二元 1 GiB 流式下载分别校验同源二进制及安全头 |
