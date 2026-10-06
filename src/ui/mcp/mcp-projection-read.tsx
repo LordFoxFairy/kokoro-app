@@ -12,7 +12,7 @@ import { useT } from "@/i18n/context"
 
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: McpProjectionPage }
 
-export function McpProjectionRead({ client }: { client: HubClient }) {
+export function McpProjectionRead({ client, embedded = false }: { client: HubClient; embedded?: boolean }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
   const [history, setHistory] = useState<Array<string | null>>([])
@@ -29,7 +29,7 @@ export function McpProjectionRead({ client }: { client: HubClient }) {
 
   const page = state.kind === "ready" ? state.page : null
   return <section className="space-y-4" data-testid="mcp-projection-read">
-    <h2 className="text-xl font-semibold">{t("mcp.title")}</h2>
+    {embedded ? null : <h2 className="text-xl font-semibold">{t("mcp.title")}</h2>}
     {state.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
     {state.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("mcp.retry")}</Button></Alert> : null}
     {page?.servers.length === 0 ? <p className="text-muted-foreground">{t("mcp.empty")}</p> : null}

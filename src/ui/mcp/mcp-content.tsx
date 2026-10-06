@@ -24,7 +24,7 @@ export type McpContentProps = {
 }
 
 export function McpContent(props: McpContentProps) {
-  if (props.preview !== true) return <McpProjectionRead client={props.client} />
+  if (props.preview !== true) return <McpProjectionRead client={props.client} embedded={props.embedded ?? false} />
   return <PreviewMcpContent {...props} />
 }
 

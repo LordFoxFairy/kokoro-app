@@ -1093,3 +1093,14 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
     expect(JSON.parse(window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null")).toEqual({ model: "anthropic:opus" })
   })
 })
+
+it("R255 正式设置嵌入 MCP 投影仅显示一个已新增的连接器标题", async () => {
+  try {
+    renderSettings(() => {}, undefined, false, undefined, "mcp")
+    expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
+    expect(screen.getAllByRole("heading", { name: /^已新增的连接器$/ })).toHaveLength(1)
+  } finally {
+    cleanup()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+})

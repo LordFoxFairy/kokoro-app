@@ -1,3 +1,11 @@
+## R255 连接器嵌入标题修复与真实业务缺口（2026-10-06）
+
+Root正常IAM/BFF/Platform浏览器 /app/plugins→管理连接器：当前 /api/hub/self/mcp/servers 200，真实空列表；原截图的error未在同次请求复现，不能倒推未启动。现正式client→Web同源→BFF generated→Platform Prisma读取，无失败转空fallback；静态connector目录卡片不代表实际连接。
+
+Web现mcp-content传已有embedded，mcp-projection-read按embedded省重复h2；独立面保标题，读/空态/错误/重试/分页未改。现settings新增辅助case有效RED两个标题→GREEN；真实浏览器管理页标题数量1，原正常空态仍可见。首辅助typecheck因新增TestingLibrary误用exact失败，改为锚定名称正则而不放宽数量；Root明确Node22.22.2重跑2文件69/0/exit0，lint/typecheck/build全部exit0；辅助门不替代实际连接授权/调用。
+
+未完成：当前展示Server全局声明，不是Platform 3.2.0本人connections；BFF/Web未消费connections，非GET MCP正式503，Platform旧register RPC Unimplemented，静态名牌不是授权/handshake/invoke。后继沿当前owner artifact→BFF→Web补正式用户路径，不直写owner库/造成功/复活旧preview命令。全链仍OPEN；只读证据Root var/dev/r255-preserve/r255-connectors-current-failure-review.md。九既有服务已实际探测200，不等于创建/启用/模型或工具E2E通过。
+
 ## R255 本次左栏留白与重核展开意图（2026-10-06）
 
 Web bf04df7 基线，现4生产路径与现workspace-rail测试窄修：空folder branch桌面43.52→26.80px；非数据folderIntentIdentity按已验证subject隔离，与read generation分离。同主体pending仍撤准入/卸载私有分支，恢复保展开；换subject/null清意图，原未提供稳定key的受控退役case保持。无新存储/API/认证例外。
