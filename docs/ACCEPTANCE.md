@@ -1,3 +1,11 @@
+## R255 左栏触屏滑动与文件夹信息密度（2026-10-06）
+
+原正常 Web66e6f76 + protected四mixed。唯一生产路径 src/components/blocks/workspace-rail/workspace-rail-items.module.css，最终SHA93009a203dec9ac624983742405edd7ef7733c32d307a9423bd24b61f9c4171f：draggable行none→pan-y，desktop manipulation/HTML5/Space-Arrow-Escape接线不变；原nested toolbar定位所属folder行，仅重复视觉标题隐藏，nav aria-label及全部反馈/分页/创建排序保持。无新API/数据/框架/组件。
+
+Root正常3310真实IAM用户浏览器：390×640 coarse/touch模拟，项目行起滑原0→0而资料库0→171.5；修后原同手势0→171.5、会话行反向171.5→101.5。最终CSS硬刷新后两folder展开项目起滑0→234.5、44px四按钮center hit全true、真实排序菜单可达；不是物理触屏验收。Desktop1200×460 wheel0→262→0，宽276/scrollWidth276，Direct底346.80<固定footer356.80；两分支自身空态、children77.92→43.52px且只一次project名，keyboard P收起不动Q/Space grab Escape释放。回Direct既有两历史marker及两行不丢，最终硬刷新无工作区loading。只读/list/sort/导航，无新消息/持久CRUD/模型/资金写。
+
+Root最终冻结98文件1782辅助断言/0失败/exit0、正常build exit0；此前lint/typecheck0、contract275/0、architecture50/0，CSS最终真实页面另验。最终只读独审2227f645；这些不代替完整CRUD/70组。原用户IAB tab7 debugger同步超时，未冒其已刷新；多次HMR后旧disclosure locator、mobile中心命中既有rename overlay、错误/ready探针均保留为观察失败，据实际DOM/readyz纠正。实际正常9root/listener alive+既有probe200，原registry/uv/四mixed及其他候选保持。证据Root var/dev/r255-preserve/sidebar-billing-browser-final.json、sidebar-final-desktop.png、sidebar-billing-final-frozen-regression.log；用户IAB未操作。
+
 ## R255 侧栏真实用户回归路径（2026-10-06）
 
 对应Root既有 T-C01/T-C04，完整七字段用例/实际证据在Root docs/test-cases.md，不新建第二测试中心。使用正常本地源码开发环境、真实IAM/BFF、现P/Q与两条Direct，不用preview或接口mock冒系统验收。
