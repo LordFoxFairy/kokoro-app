@@ -737,7 +737,7 @@ export const zh = {
   "mcp.loading": "正在加载…",
   "mcp.loadError": "连接列表加载失败",
   "mcp.retry": "重试",
-  "mcp.empty": "还没有连接。注册一个 MCP server 开始。",
+  "mcp.empty": "当前没有可用连接。",
   "mcp.emptyGuide": "注册 MCP server 把外部工具接进来;官方连接由平台上架。",
   "mcp.emptyGuideEmbedded": "将 {brand} 与你的日常应用程序、API 和 MCP 连接起来",
   "mcp.searchPlaceholder": "搜索连接器",

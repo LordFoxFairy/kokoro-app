@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import type { HubClient } from "@/hub/client"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
 import styles from "./mcp-panel.module.css"
 import { McpContent } from "./mcp-content"
@@ -23,9 +24,10 @@ type McpPanelProps = {
   preview?: boolean
   onClose: () => void
   brandName?: string
+  readBoundary?: ProjectReadBoundary
 }
 
-export function McpPanel({ client, preview = false, onClose, brandName }: McpPanelProps) {
+export function McpPanel({ client, preview = false, onClose, brandName, readBoundary }: McpPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -44,7 +46,7 @@ export function McpPanel({ client, preview = false, onClose, brandName }: McpPan
             <p className={styles.subtitle}>{t("mcp.subtitle")}</p>
           </div>
         </header>
-        <McpContent client={client} preview={preview} {...(brandName === undefined ? {} : { brandName })} />
+        <McpContent client={client} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} {...(brandName === undefined ? {} : { brandName })} />
       </DialogContent>
     </Dialog>
   )

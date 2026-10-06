@@ -7,6 +7,7 @@
 // 不强制 application/json。
 
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { proxyProjectRename } from "@/lib/server/project-rename"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
@@ -15,6 +16,7 @@ import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError
 
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationEnabledRequestSchema,
   installationListQuerySchema, installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
+  mcpConnectionPageSchema, mcpConnectionReadErrorSchema, mcpConnectionErrorAllowed,
   type InstallationOperation } from "@/hub/schemas"
 
 export const runtime = "nodejs"
@@ -31,6 +33,7 @@ const MAX_ARTIFACT_DOWNLOAD_BYTES = 1_073_741_824
 // the per-field UTF-16 maxima in its public schema.
 const MAX_SKILL_COMMAND_BYTES = 65_536
 const PROJECTION_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
+const MCP_CONNECTION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u
 const JSON_MEDIA_TYPE = /^application\/json(?:;\s*charset=utf-8)?$/iu
 
 type ProjectionFault = "configuration" | "bffNotConfigured" | "iamUnavailable" | "unauthenticated" | "forbidden" | "invalidQuery" | "invalidSkillRequest" | "tooLarge" | "bffUnavailable" | "invalidOwnerResponse"
@@ -54,6 +57,17 @@ function projectionError(fault: ProjectionFault, requestId: string): Response {
     { error: { code, message: code, retryable } },
     { status, headers: { "cache-control": "no-store", "x-request-id": requestId } },
   )
+}
+
+function connectionProjectionError(fault: ProjectionFault, requestId: string): Response {
+  const base = PROJECTION_FAILURES[fault]
+  const code = fault === "bffNotConfigured" || fault === "bffUnavailable" ? "mcp_connection_dependency_unavailable"
+    : fault === "invalidOwnerResponse" ? "mcp_connection_response_invalid"
+      : base.code
+  return NextResponse.json({ error: { code, message: code, retryable: base.retryable } }, {
+    status: base.status,
+    headers: { "cache-control": "no-store", "x-request-id": requestId },
+  })
 }
 
 function safeDownloadHeaders(headers: Headers, maxBytes: number): Headers | null {
@@ -261,14 +275,14 @@ export async function proxyHubRequest(
   if (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skill-installations") return proxyInstallation(request, path)
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
-  if (path[0] !== "self" && (businessPath[0] === "skills" || businessPath[0] === "mcp" && businessPath[1] === "servers")) {
+  if (path[0] !== "self" && (businessPath[0] === "skills" || businessPath[0] === "mcp" && ["servers", "connections"].includes(businessPath[1] ?? ""))) {
     return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   }
   const personalSkillListRead = request.method === "GET" && path[0] === "self" && businessPath.length === 1 && businessPath[0] === "skills"
   const personalSkillIdRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills"
     && !["pool", "catalog", "quota"].includes(businessPath[1] ?? "")
-  const mcpProjectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "servers"
-  const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpProjectionRead
+  const mcpConnectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "connections"
+  const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpConnectionRead
   const formalSkillId = businessPath[1] ?? ""
   const skillUploadGet = request.method === "GET" && path[0] === "self" && businessPath.length === 3 && businessPath[0] === "skills" && businessPath[2] === "package-upload"
   const skillDraftPost = request.method === "POST" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills" && businessPath[1] === "drafts"
@@ -283,27 +297,27 @@ export async function proxyHubRequest(
     : incomingRequestId || crypto.randomUUID()
   const config = productBffConfig()
   if (config === null) {
-    if (publicSkillBoundary) return projectionError("configuration", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("configuration", requestId) : projectionError("configuration", requestId)
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
   if (config.bffBaseUrl == null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
-    if (publicSkillBoundary) return projectionError("bffNotConfigured", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffNotConfigured", requestId) : projectionError("bffNotConfigured", requestId)
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
-    if (publicSkillBoundary) return projectionError("forbidden", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("forbidden", requestId) : projectionError("forbidden", requestId)
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   }
   let claims
   try {
     claims = await admittedProductSession(request, config)
   } catch {
-    if (publicSkillBoundary) return projectionError("iamUnavailable", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("iamUnavailable", requestId) : projectionError("iamUnavailable", requestId)
     return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
   }
   if (claims === null) {
-    if (publicSkillBoundary) return projectionError("unauthenticated", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("unauthenticated", requestId) : projectionError("unauthenticated", requestId)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
   // The multipart preview/confirm and GitHub pseudo-publish routes belong to
@@ -313,16 +327,23 @@ export async function proxyHubRequest(
   }
   if (request.method === "GET" && path[0] === "self" && (
     (businessPath[0] === "skills" && ["pool", "catalog", "quota"].includes(businessPath[1] ?? ""))
-    || (businessPath[0] === "mcp" && businessPath[1] === "secrets")
+    || (businessPath[0] === "mcp" && ["servers", "secrets"].includes(businessPath[1] ?? ""))
   )) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   if (publicProjectionRead) {
+    if (mcpConnectionRead && ((request.headers.get("content-length") !== null && request.headers.get("content-length") !== "0")
+      || request.headers.has("transfer-encoding") || request.headers.has("idempotency-key"))) {
+      return connectionProjectionError("invalidQuery", requestId)
+    }
     const query = new URLSearchParams(search)
-    const allowed = personalSkillListRead ? ["scope_kind", "cursor"] : mcpProjectionRead ? ["cursor"] : []
+    const allowed = personalSkillListRead ? ["scope_kind", "cursor"] : mcpConnectionRead ? ["connection_id", "provider_key", "limit", "cursor"] : []
     const invalidQuery = [...query.keys()].some((key) => !allowed.includes(key) || query.getAll(key).length !== 1)
       || (personalSkillListRead && query.get("scope_kind") !== "personal")
-      || (query.has("cursor") && (query.get("cursor") === "" || (query.get("cursor")?.length ?? 0) > 4096))
+      || (query.has("cursor") && (query.get("cursor") === "" || [...(query.get("cursor") ?? "")].length > (mcpConnectionRead ? 2048 : 4096)))
+      || (mcpConnectionRead && query.has("connection_id") && !MCP_CONNECTION_ID.test(query.get("connection_id") ?? ""))
+      || (mcpConnectionRead && query.has("provider_key") && (query.get("provider_key") === "" || [...(query.get("provider_key") ?? "")].length > 191))
+      || (mcpConnectionRead && query.has("limit") && !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(query.get("limit") ?? ""))
       || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
-    if (invalidQuery) return projectionError(personalSkillIdRead ? "invalidSkillRequest" : "invalidQuery", requestId)
+    if (invalidQuery) return mcpConnectionRead ? connectionProjectionError("invalidQuery", requestId) : projectionError(personalSkillIdRead ? "invalidSkillRequest" : "invalidQuery", requestId)
   }
   if (skillUploadGet || skillDraftPost || skillWritePost) {
     if (search !== "" || ((skillUploadGet || skillWritePost) && !PROJECTION_REQUEST_ID.test(formalSkillId))) return projectionError("invalidSkillRequest", requestId)
@@ -388,9 +409,10 @@ export async function proxyHubRequest(
         strictResponseLength: true,
       } : {}),
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
+      ...(mcpConnectionRead ? { timeoutMs: 10_000, maxResponseBytes: 1024 * 1024 } : {}),
     })
   } catch {
-    if (publicSkillBoundary) return projectionError("bffUnavailable", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffUnavailable", requestId) : projectionError("bffUnavailable", requestId)
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
@@ -451,7 +473,21 @@ export async function proxyHubRequest(
       || upstreamContentType === null
       || !JSON_MEDIA_TYPE.test(upstreamContentType)) {
       await upstream.body?.cancel()
-      return projectionError("invalidOwnerResponse", requestId)
+      return mcpConnectionRead ? connectionProjectionError("invalidOwnerResponse", requestId) : projectionError("invalidOwnerResponse", requestId)
+    }
+    if (mcpConnectionRead) {
+      let raw: unknown
+      try {
+        raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await upstream.arrayBuffer()))
+      } catch (error) {
+        return connectionProjectionError(error instanceof UpstreamTimeoutError ? "bffUnavailable" : "invalidOwnerResponse", requestId)
+      }
+      const error = mcpConnectionReadErrorSchema.safeParse(raw)
+      const valid = upstream.status === 200
+        ? z.object({ data: mcpConnectionPageSchema }).strict().safeParse(raw).success
+        : error.success && mcpConnectionErrorAllowed(upstream.status, error.data.error.code)
+      if (!valid) return connectionProjectionError("invalidOwnerResponse", requestId)
+      return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "no-store", "x-request-id": upstreamRequestId } })
     }
     const projectionHeaders = new Headers({ "cache-control": "no-store", "x-request-id": upstreamRequestId, "content-type": upstreamContentType })
     return new Response(upstream.body, { status: upstream.status, headers: projectionHeaders })

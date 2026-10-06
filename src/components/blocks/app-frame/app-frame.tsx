@@ -796,6 +796,7 @@ function AppFrameRuntime({
       settingsTab={navigationState.settingsTab}
       brandName={brandName}
       preview={preview}
+      {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       onCloseSettings={overlays.closeSettings}
       onTabChange={(tab) => navigationState.syncSettingsUrl(tab, "replace")}
       onStartDeployment={actions.startDeploymentFromSettings}

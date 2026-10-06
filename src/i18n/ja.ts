@@ -605,7 +605,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.loading": "読み込み中…",
   "mcp.loadError": "接続リストの読み込みに失敗しました",
   "mcp.retry": "もう一度やり直してください",
-  "mcp.empty": "まだ接続されていません。開始するには、MCP サーバーを登録します。",
+  "mcp.empty": "現在利用できる有効な接続はありません。",
   "mcp.emptyGuide": "外部ツールに接続するために MCP サーバーを登録します。公式リンクはプラットフォームにリストされています。",
   "mcp.searchPlaceholder": "検索接続",
   "mcp.noMatch": "一致する接続がありません",

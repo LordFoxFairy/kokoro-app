@@ -9,6 +9,7 @@ import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { invalidate, useResource } from "@/lib/query"
 import type { HubClient } from "@/hub/client"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
 import styles from "./mcp-panel.module.css"
 import { MCP_KEY, type McpData } from "./mcp-panel-model"
@@ -21,11 +22,25 @@ export type McpContentProps = {
   preview?: boolean
   embedded?: boolean
   brandName?: string
+  readBoundary?: ProjectReadBoundary
 }
 
 export function McpContent(props: McpContentProps) {
-  if (props.preview !== true) return <McpProjectionRead client={props.client} embedded={props.embedded ?? false} />
+  if (props.preview !== true) {
+    if (!props.readBoundary?.admitted || props.readBoundary.subject === null) return null
+    const identity = `${props.readBoundary.subject}:${props.readBoundary.generation}`
+    return <McpProjectionScope client={props.client} embedded={props.embedded ?? false} identity={identity} />
+  }
   return <PreviewMcpContent {...props} />
+}
+
+function McpProjectionScope({ client, embedded, identity }: { client: HubClient; embedded: boolean; identity: string }) {
+  const [scope, setScope] = useState({ client, identity, generation: 0 })
+  if (scope.client !== client || scope.identity !== identity) {
+    setScope({ client, identity, generation: scope.generation + 1 })
+    return null
+  }
+  return <McpProjectionRead key={`${identity}:${scope.generation}`} client={client} embedded={embedded} identity={identity} />
 }
 
 function PreviewMcpContent({ client, embedded = false, brandName = "Workspace" }: McpContentProps) {

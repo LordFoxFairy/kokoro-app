@@ -127,6 +127,7 @@ type SettingsModalProps = {
   // 服务端按 host 解析的站点品牌名(SITE-REAL);缺省回退 Kokoro。
   brandName?: string
   preview?: boolean
+  readBoundary?: import("@/ui/auth/use-session-state").ProjectReadBoundary
   // 打开时的初始 tab(shell 从入口/URL 传入);变化即重置内部 tab(支持重开切 tab)。
   initialTab: SettingsTab
   onClose: () => void
@@ -144,6 +145,7 @@ type SettingsModalProps = {
 export function SettingsModal({
   brandName,
   preview = false,
+  readBoundary,
   initialTab,
   onClose,
   onTabChange,
@@ -353,7 +355,7 @@ export function SettingsModal({
           embedded
         />
       ) : null}
-      {panelTab === "mcp" ? <McpContent client={hubClient} preview={preview} embedded {...(brandName === undefined ? {} : { brandName })} /> : null}
+      {panelTab === "mcp" ? <McpContent client={hubClient} preview={preview} embedded {...(readBoundary === undefined ? {} : { readBoundary })} {...(brandName === undefined ? {} : { brandName })} /> : null}
       {panelTab === "team" ? (
         <TeamContent
           client={teamClient}

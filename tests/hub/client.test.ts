@@ -17,7 +17,7 @@ afterEach(() => {
 describe("browser Hub cache directive boundary", () => {
   const consumers = [
     { name: "personal Skills", read: () => createHubClient().listPersonalSkills(), body: { data: { skills: [] } }, expected: { skills: [] } },
-    { name: "MCP projection", read: () => createHubClient().listMcpProjections(), body: { data: { servers: [] } }, expected: { servers: [] } },
+    { name: "MCP projection", read: () => createHubClient().listMcpConnections(), body: { data: { connections: [] } }, expected: { connections: [] } },
     { name: "installations", read: () => createSkillInstallationClient().list(), body: { data: [] }, expected: { data: [] } },
   ]
   it.each(consumers)("accepts final Proxy no-store directives for $name", async ({ read, body, expected }) => {
@@ -91,16 +91,87 @@ describe("hub client", () => {
     ])
   })
 
-  it("reads only owner-native MCP projection fields and rejects legacy fields", async () => {
-    const server = { server_id: "server-1", provider_key: "provider", server_identity: "search", transport: "streamable_http", declaration_digest: "a".repeat(64), status: "registered" }
+  it("reads only owner-native MCP connection fields and rejects Server fields", async () => {
+    const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "provider", transport: "streamable_http", status: "active" }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(publicResponse({ data: { servers: [server], next_cursor: "next" } }))
-      .mockResolvedValueOnce(publicResponse({ data: { servers: [{ ...server, url: "https://wrong.example" }] } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connections: [connection], next_cursor: "next" } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connections: [{ ...connection, declaration_digest: "a".repeat(64) }] } }))
     vi.stubGlobal("fetch", fetchMock)
     const client = createHubClient()
-    expect(await client.listMcpProjections()).toEqual({ servers: [server], next_cursor: "next" })
-    await expect(client.listMcpProjections()).rejects.toMatchObject({ reason: "parse" })
-    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/self/mcp/servers", "/api/hub/self/mcp/servers"])
+    expect(await client.listMcpConnections()).toEqual({ connections: [connection], next_cursor: "next" })
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/self/mcp/connections", "/api/hub/self/mcp/connections"])
+  })
+
+  it("bounds MCP connection response bytes, UTF-8, error status and caller cancellation", async () => {
+    const validHeaders = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "connection-read" }
+    const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "provider", transport: "streamable_http", status: "active" }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(new Uint8Array([123, 34, 255, 34, 58, 49, 125]), { status: 200, headers: validHeaders }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [connection] } }), { status: 200, headers: { ...validHeaders, "content-length": String(1024 * 1024 + 1) } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "session_invalid", message: "expired", retryable: false } }), { status: 503, headers: validHeaders }))
+      .mockImplementationOnce((_input, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+      }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createHubClient()
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 503 })
+    const controller = new AbortController()
+    const pending = client.listMcpConnections({}, controller.signal)
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ reason: "aborted" })
+  })
+
+  it("applies one ten-second MCP Connection deadline to the pending response", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal("fetch", vi.fn((_input, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+      })))
+      const pending = createHubClient().listMcpConnections()
+      const rejected = expect(pending).rejects.toMatchObject({ reason: "aborted" })
+      await vi.advanceTimersByTimeAsync(10_001)
+      await rejected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("cancels an unread MCP response body when strict headers reject it early", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined)
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(new TextEncoder().encode("{}")) },
+      cancel,
+    })
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/plain", "cache-control": "no-store", "x-request-id": "connection-early-reject" },
+    })))
+
+    await expect(createHubClient().listMcpConnections()).rejects.toMatchObject({ reason: "parse", status: 200 })
+    expect(cancel).toHaveBeenCalledOnce()
+  })
+
+  it("sends each MCP connection filter once and preserves opaque pagination", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: { connections: [], next_cursor: "opaque-next" } }))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(createHubClient().listMcpConnections({ connection_id: "connection-1", provider_key: "provider-one", limit: 25, cursor: "opaque-current" })).resolves.toEqual({ connections: [], next_cursor: "opaque-next" })
+    const query = new URL(fetchMock.mock.calls[0]![0], "http://localhost").searchParams
+    expect([...query]).toEqual([["connection_id", "connection-1"], ["provider_key", "provider-one"], ["limit", "25"], ["cursor", "opaque-current"]])
+  })
+
+  it("applies MCP provider and cursor bounds by Unicode code point", async () => {
+    const row = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "😀".repeat(191), transport: "streamable_http", status: "active" }
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(publicResponse({ data: { connections: [row], next_cursor: "😀".repeat(2048) } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connections: [{ ...row, provider_key: row.provider_key + "😀" }] } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connections: [], next_cursor: "😀".repeat(2049) } })))
+    const client = createHubClient()
+    await expect(client.listMcpConnections()).resolves.toEqual({ connections: [row], next_cursor: "😀".repeat(2048) })
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
+    await expect(client.listMcpConnections()).rejects.toMatchObject({ reason: "parse" })
   })
 
   it("fails closed on unknown personal Skill state, unauthorized owner response and bad headers", async () => {

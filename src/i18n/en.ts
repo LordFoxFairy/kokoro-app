@@ -823,7 +823,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mcp.loading": "Loading…",
   "mcp.loadError": "Failed to load connections",
   "mcp.retry": "Retry",
-  "mcp.empty": "No connections yet. Register an MCP server to start.",
+  "mcp.empty": "No active connections available.",
   "mcp.emptyGuide": "Register an MCP server to bring external tools in; official connections are curated by the platform.",
   "mcp.emptyGuideEmbedded": "Connect {brand} to your everyday apps, APIs, and MCPs",
   "mcp.searchPlaceholder": "Search connections",

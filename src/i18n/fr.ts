@@ -546,7 +546,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mcp.loading": "Chargement…",
   "mcp.loadError": "Le chargement de la liste de connexion a échoué",
   "mcp.retry": "Essayer à nouveau",
-  "mcp.empty": "Pas encore connecté. Enregistrez un serveur MCP pour commencer.",
+  "mcp.empty": "Aucune connexion active disponible.",
   "mcp.emptyGuide": "Enregistrez le serveur MCP pour connecter des outils externes ; les liens officiels sont répertoriés sur la plateforme.",
   "mcp.searchPlaceholder": "recherche de connexion",
   "mcp.noMatch": "Aucune connexion correspondante",

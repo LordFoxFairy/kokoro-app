@@ -268,20 +268,35 @@ const mcpServerViewSchema = z
   .strict()
 export type McpServerView = z.infer<typeof mcpServerViewSchema>
 
-export const mcpProjectionSchema = z.object({
-  server_id: z.string(),
-  provider_key: z.string(),
-  server_identity: z.string(),
-  transport: z.enum(["stdio", "streamable_http", "sse_compat", "unknown"]),
-  declaration_digest: z.string().regex(/^[a-f0-9]{64}$/u),
-  status: z.enum(["registered", "disabled", "unknown"]),
+const codePointBounded = (maximum: number) => z.string().min(1).refine((value) => [...value].length <= maximum)
+const mcpConnectionIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
+export const mcpConnectionSchema = z.object({
+  connection_id: mcpConnectionIdSchema,
+  connector_id: mcpConnectionIdSchema,
+  server_id: mcpConnectionIdSchema,
+  provider_key: codePointBounded(191),
+  transport: z.literal("streamable_http"),
+  status: z.literal("active"),
 }).strict()
-export type McpProjection = z.infer<typeof mcpProjectionSchema>
-export const mcpProjectionPageSchema = z.object({
-  servers: z.array(mcpProjectionSchema),
-  next_cursor: z.string().optional(),
+export type McpConnection = z.infer<typeof mcpConnectionSchema>
+export const mcpConnectionPageSchema = z.object({
+  connections: z.array(mcpConnectionSchema),
+  next_cursor: codePointBounded(2048).optional(),
 }).strict()
-export type McpProjectionPage = z.infer<typeof mcpProjectionPageSchema>
+export type McpConnectionPage = z.infer<typeof mcpConnectionPageSchema>
+export const mcpConnectionReadErrorSchema = z.object({ error: z.object({
+  code: z.enum(["invalid_query_parameter", "service_auth_failed", "session_authentication_required", "session_invalid", "session_forbidden", "session_rate_limited", "product_tenant_not_configured", "product_tenant_forbidden", "iam_admission_unavailable", "mcp_connection_dependency_unavailable", "mcp_connection_response_invalid"]),
+  message: z.string().min(1),
+  retryable: z.boolean(),
+}).strict() }).strict()
+export function mcpConnectionErrorAllowed(status: number, code: string): boolean {
+  return status === 400 ? code === "invalid_query_parameter"
+    : status === 401 ? ["session_authentication_required", "session_invalid"].includes(code)
+      : status === 403 ? ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"].includes(code)
+        : status === 429 ? code === "session_rate_limited"
+          : status === 502 ? code === "mcp_connection_response_invalid"
+            : status === 503 && ["product_tenant_not_configured", "iam_admission_unavailable", "mcp_connection_dependency_unavailable"].includes(code)
+}
 
 export const mcpServerPoolSchema = z.object({ servers: z.array(mcpServerViewSchema) }).strict()
 export const mcpServerRegisteredSchema = z.object({ server: mcpServerViewSchema }).strict()
@@ -358,6 +373,7 @@ export const mcpSecretCreatedSchema = z.object({ handle: z.string().min(1) }).st
 
 // self 面路径（浏览器同源前缀 /api/hub → BFF 前缀 /hub → hub self 面）。
 export const HUB_BASE = "/api/hub"
+export const mcpConnectionsPath = "/self/mcp/connections"
 export const mcpServersPath = "/self/mcp/servers"
 export function mcpEnablePath(name: string): string {
   return `/self/mcp/servers/${encodeURIComponent(name)}/enable`

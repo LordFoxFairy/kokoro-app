@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useRef, useState } from "react"
 
-import { HubClientError, type HubClient } from "@/hub/client"
+import { createHubClient, HubClientError, type HubClient } from "@/hub/client"
 import type { McpSecret, McpServerView } from "@/hub/schemas"
 import { LocaleProvider } from "@/i18n/context"
 import { McpContent, McpCreateDialog, McpPanel } from "@/ui/mcp/mcp-panel"
@@ -40,7 +40,7 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
   return {
     listPersonalSkills: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
     getPublishedPersonalSkill: vi.fn(),
-    listMcpProjections: vi.fn().mockResolvedValue({ servers: [] }),
+    listMcpConnections: vi.fn().mockResolvedValue({ connections: [] }),
     listSkillPool: vi.fn(),
     listSkillCatalog: vi.fn(),
     skillQuota: vi.fn(),
@@ -69,23 +69,131 @@ function openRegister(nameValue: string, urlValue: string) {
   fireEvent.change(screen.getByPlaceholderText("https://…"), { target: { value: urlValue } })
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe("McpPanel", () => {
+  it("reads the current person's Connections instead of the global Server projection", async () => {
+    const requests: string[] = []
+    const connection = {
+      connection_id: "connection-one",
+      connector_id: "connector-one",
+      server_id: "server-one",
+      provider_key: "provider-one",
+      transport: "streamable_http",
+      status: "active",
+    }
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      void init
+      requests.push(input instanceof Request ? input.url : String(input))
+      return new Response(JSON.stringify({ data: { connections: [connection] } }), {
+        status: 200,
+        headers: {
+          "cache-control": "private, no-store",
+          "content-type": "application/json",
+          "x-request-id": "mcp-connection-read",
+        },
+      })
+    }))
+
+    render(<McpContent client={createHubClient()} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    await waitFor(() => expect(requests).toHaveLength(1))
+    expect(new URL(requests[0]!, "http://localhost").pathname).toBe("/api/hub/self/mcp/connections")
+    const card = await screen.findByTestId("mcp-projection")
+    expect(card).toHaveTextContent("provider-one")
+    expect(card).toHaveTextContent("Connected")
+    expect(card).toHaveTextContent("connection-one")
+    expect(card).toHaveTextContent("connector-one")
+    expect(card).toHaveTextContent("server-one")
+    expect(card).not.toHaveTextContent("declaration")
+  })
+
   it("renders only owner-native MCP projection fields without mutation controls", async () => {
-    const server = { server_id: "server-1", provider_key: "provider", server_identity: "search", transport: "streamable_http" as const, declaration_digest: "a".repeat(64), status: "registered" as const }
-    const client = makeClient({ listMcpProjections: vi.fn().mockResolvedValue({ servers: [server] }) })
-    render(<McpContent client={client} embedded brandName="Acme" />, { wrapper: LocaleProvider })
+    const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "provider", transport: "streamable_http" as const, status: "active" as const }
+    const client = makeClient({ listMcpConnections: vi.fn().mockResolvedValue({ connections: [connection] }) })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     const row = await screen.findByTestId("mcp-projection")
-    expect(row).toHaveTextContent("server-1")
     expect(row).toHaveTextContent("provider")
-    expect(row).toHaveTextContent("search")
     expect(row).toHaveTextContent("streamable_http")
-    expect(row).toHaveTextContent("registered")
-    expect(row).toHaveTextContent("a".repeat(64))
+    expect(row).toHaveTextContent("Connected")
+    expect(row).toHaveTextContent("connection-1")
+    expect(row).toHaveTextContent("connector-1")
+    expect(row).toHaveTextContent("server-1")
     expect(screen.queryByRole("button", { name: /Enable|Disable|Delete|Register/ })).toBeNull()
     expect(client.listMcpServers).not.toHaveBeenCalled()
+  })
+  it("pages opaque Connection cursors and aborts an unmounted read", async () => {
+    let observedSignal: AbortSignal | undefined
+    const listMcpConnections = vi.fn()
+      .mockResolvedValueOnce({ connections: [{ connection_id: "connection-1", connector_id: "connector-1", server_id: "server-shared", provider_key: "provider", transport: "streamable_http", status: "active" }], next_cursor: "opaque-next" })
+      .mockResolvedValueOnce({ connections: [{ connection_id: "connection-2", connector_id: "connector-2", server_id: "server-shared", provider_key: "provider", transport: "streamable_http", status: "active" }] })
+      .mockImplementationOnce((_query, signal: AbortSignal) => {
+        observedSignal = signal
+        return new Promise(() => undefined)
+      })
+    const view = render(<McpContent client={makeClient({ listMcpConnections })} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    expect(await screen.findByText("connection-1")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    expect(await screen.findByText("connection-2")).toBeInTheDocument()
+    expect(listMcpConnections.mock.calls[1]?.[0]).toEqual({ cursor: "opaque-next" })
+    fireEvent.click(screen.getByRole("button", { name: "Previous page" }))
+    await waitFor(() => expect(listMcpConnections).toHaveBeenCalledTimes(3))
+    view.unmount()
+    expect(observedSignal?.aborted).toBe(true)
+  })
+  it("retires the old client page and cursor synchronously when the client changes within one trusted identity", async () => {
+    let resolveLateA!: (page: Awaited<ReturnType<HubClient["listMcpConnections"]>>) => void
+    const lateA = new Promise<Awaited<ReturnType<HubClient["listMcpConnections"]>>>((resolve) => { resolveLateA = resolve })
+    const clientA = makeClient({
+      listMcpConnections: vi.fn()
+        .mockResolvedValueOnce({ connections: [{ connection_id: "connection-a", connector_id: "connector-a", server_id: "server-a", provider_key: "provider-a", transport: "streamable_http", status: "active" }], next_cursor: "cursor-a" })
+        .mockReturnValueOnce(lateA),
+    })
+    const clientBRead = vi.fn().mockReturnValue(new Promise<Awaited<ReturnType<HubClient["listMcpConnections"]>>>(() => undefined))
+    const clientB = makeClient({ listMcpConnections: clientBRead })
+    const boundary = { admitted: true, subject: "reader-a", generation: 1 } as const
+    const view = render(<McpContent client={clientA} embedded brandName="Acme" readBoundary={boundary} />, { wrapper: LocaleProvider })
+
+    expect(await screen.findByText("provider-a")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    await waitFor(() => expect(clientA.listMcpConnections).toHaveBeenCalledTimes(2))
+
+    view.rerender(<McpContent client={clientB} embedded brandName="Acme" readBoundary={boundary} />)
+    expect(screen.queryByText("provider-a")).toBeNull()
+    await waitFor(() => expect(clientBRead).toHaveBeenCalledOnce())
+    expect(clientBRead.mock.calls[0]?.[0]).toEqual({})
+
+    resolveLateA({ connections: [{ connection_id: "connection-late-a", connector_id: "connector-late-a", server_id: "server-late-a", provider_key: "provider-late-a", transport: "streamable_http", status: "active" }] })
+    await waitFor(() => expect(screen.queryByText("provider-late-a")).toBeNull())
+  })
+  it.each([
+    { label: "the current cursor", pages: ["cursor-c", "cursor-c"], calls: 2 },
+    { label: "a cursor already present in history", pages: ["cursor-c", "cursor-d", "cursor-c"], calls: 3 },
+  ])("rejects $label instead of entering permanent loading", async ({ pages, calls }) => {
+    const listMcpConnections = vi.fn()
+    for (const [index, next_cursor] of pages.entries()) {
+      listMcpConnections.mockResolvedValueOnce({
+        connections: [{ connection_id: `connection-${index}`, connector_id: `connector-${index}`, server_id: `server-${index}`, provider_key: `provider-${index}`, transport: "streamable_http", status: "active" }],
+        next_cursor,
+      })
+    }
+    listMcpConnections.mockImplementation(() => new Promise(() => undefined))
+    render(<McpContent client={makeClient({ listMcpConnections })} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    for (let index = 0; index < calls - 1; index += 1) {
+      expect(await screen.findByText(`provider-${index}`)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    }
+    expect(await screen.findByText(`provider-${calls - 1}`)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+    expect(screen.queryByRole("status")).toBeNull()
+    expect(listMcpConnections).toHaveBeenCalledTimes(calls)
   })
   it("direct MCP creator selects each reference layout and restores trigger focus", async () => {
     const client = makeClient()

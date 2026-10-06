@@ -4,6 +4,7 @@ import { CustomApiDialog } from "@/ui/mcp/connector-catalog-dialog"
 import { McpCreateDialog, type McpCreateMode } from "@/ui/mcp/mcp-panel"
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal"
 import type { SkillCard } from "@/hub/schemas"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { browserHubClient } from "@/ui/shell/page-clients"
 
 import type { AppCommandMenuProps } from "./app-command-menu"
@@ -13,6 +14,7 @@ export type AppFrameOverlaySurfacesProps = {
   settingsTab: SettingsTab | null
   brandName: string | undefined
   preview: boolean
+  readBoundary?: ProjectReadBoundary
   onCloseSettings: () => void
   onTabChange: (tab: SettingsTab) => void
   onStartDeployment: (kind: "website" | "app") => void
@@ -38,6 +40,7 @@ export function AppFrameOverlaySurfaces({
   settingsTab,
   brandName,
   preview,
+  readBoundary,
   onCloseSettings,
   onTabChange,
   onStartDeployment,
@@ -65,6 +68,7 @@ export function AppFrameOverlaySurfaces({
           {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
           preview={preview}
+          {...(readBoundary === undefined ? {} : { readBoundary })}
           onClose={onCloseSettings}
           onTabChange={onTabChange}
           onStartDeployment={onStartDeployment}

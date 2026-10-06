@@ -2062,6 +2062,44 @@ it("桌面设置关闭后焦点回到账户菜单触发按钮", async () => {
   await waitFor(() => expect(settings).toHaveFocus())
 })
 
+it("撤销本人读取准入或切换可信主体时卸载 MCP read 并取消在途请求", async () => {
+  buildEngine()
+  let observedSignal: AbortSignal | undefined
+  let resolveStale!: (page: { connections: Array<{ connection_id: string; connector_id: string; server_id: string; provider_key: string; transport: "streamable_http"; status: "active" }>; next_cursor?: string }) => void
+  const stale = new Promise<Awaited<ReturnType<ReturnType<typeof pageClients.browserHubClient>["listMcpConnections"]>>>((resolve) => { resolveStale = resolve })
+  const listMcpConnections = vi.fn()
+    .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { observedSignal = signal; return stale })
+    .mockResolvedValueOnce({ connections: [{ connection_id: "connection-b", connector_id: "connector-b", server_id: "server-b", provider_key: "provider-b", transport: "streamable_http", status: "active" }] })
+  vi.spyOn(pageClients, "browserHubClient").mockReturnValue({ ...pageClients.browserHubClient(), listMcpConnections })
+  const frame = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
+    <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" projectReadBoundary={boundary} /></LocaleProvider></ThemeProvider>
+  )
+  const view = render(frame({ admitted: true, subject: "reader-a", generation: 1 }))
+
+  const settings = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(settings, { button: 0 })
+  fireEvent.click(settings)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "账户" }))
+  fireEvent.keyDown(await screen.findByTestId("settings-tab-mcp"), { key: "Enter" })
+  await waitFor(() => expect(listMcpConnections).toHaveBeenCalledOnce())
+
+  view.rerender(frame({ admitted: false, subject: "reader-a", generation: 2 }))
+  await waitFor(() => expect(observedSignal?.aborted).toBe(true))
+  expect(screen.queryByTestId("mcp-projection")).toBeNull()
+  resolveStale({ connections: [{ connection_id: "connection-a", connector_id: "connector-a", server_id: "server-a", provider_key: "provider-a", transport: "streamable_http", status: "active" }], next_cursor: "stale-a-cursor" })
+  await act(async () => { await Promise.resolve() })
+  expect(screen.queryByText("provider-a")).toBeNull()
+
+  view.rerender(frame({ admitted: true, subject: "reader-b", generation: 3 }))
+  await waitFor(() => expect(listMcpConnections).toHaveBeenCalledTimes(2))
+  expect(listMcpConnections.mock.calls[1]?.[0]).toEqual({})
+  expect(await screen.findByText("provider-b")).toBeInTheDocument()
+  expect(screen.queryByText("provider-a")).toBeNull()
+
+  view.rerender(frame({ admitted: false, subject: "reader-b", generation: 4 }))
+  expect(screen.queryByText("provider-b")).toBeNull()
+})
+
 it("Composer 资源菜单只展示真实入口且设置关闭后焦点回到原触发器", async () => {
   buildEngine()
   render(

@@ -131,9 +131,10 @@ export function createPreviewHubClient(): HubClient {
       const skill = skills.filter((item) => item.scope === "personal")[Number(id.replace(/^preview-/u, "")) - 1]
       return skill ? Promise.resolve({ skill_id: id, source_ref: `skill:${id}`, revision: "1", status: "active" as const, name: skill.name, summary: skill.description, tags: [] }) : Promise.reject(new Error("preview Skill not found"))
     },
-    listMcpProjections: () => Promise.resolve({ servers: servers.map((server, index) => ({
-      server_id: `preview-${index + 1}`, provider_key: "preview", server_identity: server.name,
-      transport: "streamable_http" as const, declaration_digest: "0".repeat(64), status: server.enabled ? "registered" as const : "disabled" as const,
+    listMcpConnections: () => Promise.resolve({ connections: servers.filter((server) => server.enabled).map((server, index) => ({
+      connection_id: `preview-connection-${index + 1}`, connector_id: `preview-connector-${index + 1}`,
+      server_id: `preview-server-${index + 1}`, provider_key: server.name,
+      transport: "streamable_http" as const, status: "active" as const,
     })) }),
     listSkillPool: () => Promise.resolve(skills),
     listSkillCatalog: ({ scope, query } = {}): Promise<SkillCatalog> => {

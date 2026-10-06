@@ -546,7 +546,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.loading": "Laden…",
   "mcp.loadError": "Das Laden der Verbindungsliste ist fehlgeschlagen",
   "mcp.retry": "Versuchen Sie es erneut",
-  "mcp.empty": "Noch nicht verbunden. Registrieren Sie einen MCP-Server, um loszulegen.",
+  "mcp.empty": "Derzeit sind keine aktiven Verbindungen verfügbar.",
   "mcp.emptyGuide": "Registrieren Sie den MCP-Server, um externe Tools anzuschließen. Offizielle Links sind auf der Plattform aufgeführt.",
   "mcp.searchPlaceholder": "Suchverbindung",
   "mcp.noMatch": "Keine passende Verbindung",

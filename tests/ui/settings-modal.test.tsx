@@ -44,7 +44,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
   browserHubClient: () => ({
     listPersonalSkills: vi.fn().mockResolvedValue({ skills: [{ source_ref: "skill:mine", name: "我的技能", description: "Personal", content_hash: "digest", scope: "personal", revision: "2", enabled: true, categories: [] }], next_cursor: null }),
     getPublishedPersonalSkill: vi.fn().mockResolvedValue({ skill_id: "mine", source_ref: "skill:mine", revision: "2", status: "active", name: "我的技能", summary: "Personal", tags: [] }),
-    listMcpProjections: vi.fn().mockResolvedValue({ servers: [{ server_id: "server-1", provider_key: "provider", server_identity: "Owner MCP", transport: "streamable_http", declaration_digest: "a".repeat(64), status: "registered" }] }),
+    listMcpConnections: vi.fn().mockResolvedValue({ connections: [{ connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "Owner MCP", transport: "streamable_http", status: "active" }] }),
     listSkillPool: vi.fn().mockResolvedValue([
       { name: "YouTube 影片研究", description: "利用第一手影片证据强化深度研究。", content_hash: "preview:youtube", scope: "official", enabled: false, updated_at: Date.UTC(2026, 7, 28) },
       { name: "Typst PDF 制作工具", description: "使用 Typst 生成专业、高品质的 PDF 文件。", content_hash: "preview:typst", scope: "official", enabled: true, updated_at: Date.UTC(2026, 7, 28) },
@@ -90,6 +90,7 @@ function renderSettings(
   const props: ComponentProps<typeof SettingsModal> = {
     brandName: "Acme",
     preview,
+    readBoundary: { admitted: true, subject: "settings-reader", generation: 1 },
     initialTab,
     onClose,
   }

@@ -7,38 +7,44 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import type { HubClient } from "@/hub/client"
-import type { McpProjectionPage } from "@/hub/schemas"
+import type { McpConnectionPage } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 
-type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: McpProjectionPage }
+type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: McpConnectionPage }
 
-export function McpProjectionRead({ client, embedded = false }: { client: HubClient; embedded?: boolean }) {
+export function McpProjectionRead({ client, embedded = false, identity }: { client: HubClient; embedded?: boolean; identity: string }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
   const [history, setHistory] = useState<Array<string | null>>([])
   const [generation, setGeneration] = useState(0)
   const [state, setState] = useState<ReadState>({ kind: "loading" })
   useEffect(() => {
-    let current = true
-    void client.listMcpProjections(cursor ?? undefined).then(
-      (page) => { if (current) setState({ kind: "ready", page }) },
-      () => { if (current) setState({ kind: "error" }) },
+    const controller = new AbortController()
+    const requestCursor = cursor
+    const requestGeneration = generation
+    void client.listMcpConnections(requestCursor === null ? {} : { cursor: requestCursor }, controller.signal).then(
+      (page) => { if (!controller.signal.aborted && requestCursor === cursor && requestGeneration === generation) setState({ kind: "ready", page }) },
+      () => { if (!controller.signal.aborted && requestCursor === cursor && requestGeneration === generation) setState({ kind: "error" }) },
     )
-    return () => { current = false }
-  }, [client, cursor, generation])
+    return () => { controller.abort() }
+  }, [client, cursor, generation, identity])
 
   const page = state.kind === "ready" ? state.page : null
   return <section className="space-y-4" data-testid="mcp-projection-read">
     {embedded ? null : <h2 className="text-xl font-semibold">{t("mcp.title")}</h2>}
     {state.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
     {state.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("mcp.retry")}</Button></Alert> : null}
-    {page?.servers.length === 0 ? <p className="text-muted-foreground">{t("mcp.empty")}</p> : null}
-    {page ? <ul className="grid gap-3 sm:grid-cols-2">{page.servers.map((server) => <li key={server.server_id}>
+    {page?.connections.length === 0 ? <p className="text-muted-foreground">{t("mcp.empty")}</p> : null}
+    {page ? <ul className="grid gap-3 sm:grid-cols-2">{page.connections.map((connection) => <li key={connection.connection_id}>
       <Card data-testid="mcp-projection"><CardContent className="space-y-2 p-4">
-        <p className="font-semibold">{server.server_identity}</p>
-        <p className="text-sm text-muted-foreground">{server.provider_key} · {server.transport} · {server.status}</p>
-        <p className="break-all text-xs text-muted-foreground">{server.server_id}</p>
-        <p className="break-all text-xs text-muted-foreground">{server.declaration_digest}</p>
+        <p className="font-semibold">{connection.provider_key}</p>
+        <p className="text-sm text-muted-foreground">{t("settings.connected")} · {connection.transport}</p>
+        <details className="text-xs text-muted-foreground">
+          <summary>IDs</summary>
+          <p className="break-all">{connection.connection_id}</p>
+          <p className="break-all">{connection.connector_id}</p>
+          <p className="break-all">{connection.server_id}</p>
+        </details>
       </CardContent></Card>
     </li>)}</ul> : null}
     {page ? <nav className="flex gap-2" aria-label="MCP pages">
@@ -50,6 +56,10 @@ export function McpProjectionRead({ client, embedded = false }: { client: HubCli
       }}>{t("plugins.previous")}</Button>
       <Button type="button" variant="outline" disabled={!page.next_cursor} onClick={() => {
         if (!page.next_cursor) return
+        if (page.next_cursor === cursor || history.includes(page.next_cursor)) {
+          setState({ kind: "error" })
+          return
+        }
         setState({ kind: "loading" })
         setHistory((items) => [...items, cursor])
         setCursor(page.next_cursor ?? null)

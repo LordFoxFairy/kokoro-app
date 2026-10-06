@@ -1,3 +1,7 @@
+## R257 MCP Connection 当前本地 owner artifact
+
+本人 Connection 只读消费者固定 BFF local immutable commit `6d46ec8bdd2d2ffaa06513fd0561272eae907919`、public `8.0.0` canonical OpenAPI SHA256 `8d5b452ba554f7b9ce723481a0a619abf12d9fb3174b9f15f52a395ad1372783`。这是当前本地 artifact pin；不表示 remote/registry 发布、正常服务激活或浏览器业务验收。下方旧 digest 仅保留其历史切片记录，不作为 R257 消费来源。
+
 ## T-P02.R255-WEB-NEXT：public 8.0 ScheduledTask 固定消费者候选
 
 固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。

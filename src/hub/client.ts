@@ -57,12 +57,15 @@ import {
   type UploadConfirm,
   type UploadPreview,
   type GithubImportResult,
-  mcpProjectionPageSchema,
+  mcpConnectionPageSchema,
+  mcpConnectionErrorAllowed,
+  mcpConnectionReadErrorSchema,
+  mcpConnectionsPath,
   personalSkillPageSchema,
   personalSkillsPath,
   publishedPersonalSkillPath,
   publishedPersonalSkillSchema,
-  type McpProjectionPage,
+  type McpConnectionPage,
   type PersonalSkillPage,
   type PublishedPersonalSkill,
 } from "./schemas"
@@ -281,6 +284,66 @@ async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T, s
   return parsed.data.data as z.infer<T>
 }
 
+const MCP_CONNECTION_READ_BYTES = 1024 * 1024
+const MCP_CONNECTION_READ_TIMEOUT_MS = 10_000
+
+async function readMcpConnections(path: string, signal?: AbortSignal): Promise<McpConnectionPage> {
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(new DOMException("MCP connection read timed out", "TimeoutError")), MCP_CONNECTION_READ_TIMEOUT_MS)
+  const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
+  let response: Response | undefined
+  try {
+    response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error", signal: joined })
+    if (!hasHubNoStoreDirective(response.headers)
+      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
+      || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
+      throw new HubClientError("parse", "invalid BFF connection response headers", null, response.status)
+    }
+    const declared = response.headers.get("content-length")
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > MCP_CONNECTION_READ_BYTES)) {
+      throw new HubClientError("parse", "BFF connection response is too large", null, response.status)
+    }
+    if (response.body === null) throw new HubClientError("parse", "missing BFF connection response body", null, response.status)
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    try {
+      for (;;) {
+        const part = await reader.read()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > MCP_CONNECTION_READ_BYTES) throw new HubClientError("parse", "BFF connection response is too large", null, response.status)
+        chunks.push(part.value)
+      }
+    } finally {
+      void reader.cancel().catch(() => undefined)
+      reader.releaseLock()
+    }
+    joined.throwIfAborted()
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    let raw: unknown
+    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch (error) {
+      throw new HubClientError("parse", describeUnknown(error), null, response.status)
+    }
+    if (response.status === 200) {
+      const parsed = z.object({ data: mcpConnectionPageSchema }).strict().safeParse(raw)
+      if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
+      return parsed.data.data
+    }
+    const parsed = mcpConnectionReadErrorSchema.safeParse(raw)
+    if (!parsed.success || !mcpConnectionErrorAllowed(response.status, parsed.data.error.code)) throw new HubClientError("parse", "invalid BFF connection error", null, response.status)
+    throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status, parsed.data.error.retryable, response.headers.get("x-request-id"))
+  } catch (error) {
+    if (error instanceof HubClientError) throw error
+    throw new HubClientError(isAbortError(error) || joined.aborted ? "aborted" : "network", describeUnknown(error), null, response?.status ?? null)
+  } finally {
+    clearTimeout(timer)
+    void response?.body?.cancel().catch(() => undefined)
+  }
+}
+
 function withOptionalSignal(init: RequestInit, signal: AbortSignal | undefined): RequestInit {
   return signal === undefined ? init : { ...init, signal }
 }
@@ -311,7 +374,7 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 export type HubClient = {
   listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<PersonalSkillPage>
   getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<PublishedPersonalSkill>
-  listMcpProjections: (cursor?: string) => Promise<McpProjectionPage>
+  listMcpConnections: (query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpConnectionPage>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
   skillQuota: () => Promise<SkillQuota>
@@ -379,7 +442,14 @@ export function createHubClient(): HubClient {
       }
       return skill
     },
-    listMcpProjections: (cursor) => requestPublicRead(`${mcpServersPath}${cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`}`, mcpProjectionPageSchema),
+    listMcpConnections: (query = {}, signal) => {
+      const search = new URLSearchParams()
+      if (query.connection_id !== undefined) search.set("connection_id", query.connection_id)
+      if (query.provider_key !== undefined) search.set("provider_key", query.provider_key)
+      if (query.limit !== undefined) search.set("limit", String(query.limit))
+      if (query.cursor !== undefined) search.set("cursor", query.cursor)
+      return readMcpConnections(`${mcpConnectionsPath}${search.size === 0 ? "" : `?${search}`}`, signal)
+    },
     listSkillPool: async () => (await requestData(skillPoolPath, skillPoolSchema)).skills,
     listSkillCatalog: (params = {}) => {
       const search = new URLSearchParams()

@@ -5,8 +5,8 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f"
-const OWNER_SHA256 = "0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95"
+const OWNER_COMMIT = "6d46ec8bdd2d2ffaa06513fd0561272eae907919"
+const OWNER_SHA256 = "8d5b452ba554f7b9ce723481a0a619abf12d9fb3174b9f15f52a395ad1372783"
 const OWNER_VERSION = "8.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
@@ -107,6 +107,11 @@ function assertProjectionSemantics(spec: Spec): void {
   })
   expect(operation(spec, "/v1/skills/{skill_id}", "get").responses?.["200"]?.$ref).toBe("#/components/responses/PublishedPersonalSkillOk")
   assertGet(spec, "/v1/mcp/servers", "listMcpServers", "#/components/schemas/McpServerListResponse", readErrors)
+  assertGet(spec, "/v1/mcp/connections", "listSelfMcpConnections", "#/components/schemas/McpConnectionListResponse", {
+    "400": "McpConnectionReadBadRequest", "401": "McpConnectionReadUnauthorized",
+    "403": "McpConnectionReadForbidden", "429": "McpConnectionReadRateLimited",
+    "502": "McpConnectionReadBadGateway", "503": "McpConnectionReadUnavailable",
+  })
 
   expect(spec.components.parameters.CapabilitySkillScope?.name).toBe("scope_kind")
   expect(spec.components.parameters.CapabilitySkillScope?.schema?.enum).toContain("personal")
@@ -138,12 +143,16 @@ function assertProjectionSemantics(spec: Spec): void {
   expect(field(mcpData, "servers").items?.$ref).toBe("#/components/schemas/McpServerProjection")
   expect(field(mcpData, "next_cursor").type).toBe("string")
   exactShape(shape(spec, "McpServerProjection"), ["server_id", "provider_key", "server_identity", "transport", "declaration_digest", "status"])
+  const connections = shape(spec, "McpConnectionListResponse")
+  exactShape(connections, ["data"])
+  expect(field(field(connections, "data"), "connections").items?.$ref).toBe("#/components/schemas/McpConnectionProjection")
+  exactShape(shape(spec, "McpConnectionProjection"), ["connection_id", "connector_id", "server_id", "provider_key", "transport", "status"])
 }
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six inactive Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f")
+    expect(OWNER_COMMIT).toBe("6d46ec8bdd2d2ffaa06513fd0561272eae907919")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

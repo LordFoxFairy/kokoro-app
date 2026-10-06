@@ -102,7 +102,7 @@ describe("/api/hub/[...path] proxy", () => {
     currentProductSession.mockResolvedValueOnce(null)
     await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 401, "session_authentication_required", false)
     await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), path), 400, "invalid_query_parameter", false)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/mcp/servers?cursor="), params(["self", "mcp", "servers"])), 400, "invalid_query_parameter", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/mcp/connections?cursor="), params(["self", "mcp", "connections"])), 400, "invalid_query_parameter", false)
     await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/bad%20id"), params(["self", "skills", "bad id"])), 400, "invalid_skill_request", false, undefined, "byId")
 
     vi.mocked(requestWithDomain).mockRejectedValueOnce(new Error("BFF down"))
@@ -153,9 +153,61 @@ describe("/api/hub/[...path] proxy", () => {
     expect(hidden.headers.get("x-request-id")).toBe("req_skill_2")
 
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://invalid.example" } }))
-    const redirect = await GET(new Request("http://localhost/api/hub/self/mcp/servers"), params(["self", "mcp", "servers"]))
+    const redirect = await GET(new Request("http://localhost/api/hub/self/mcp/connections"), params(["self", "mcp", "connections"]))
     expect(redirect.status).toBe(502)
     expect(redirect.headers.get("location")).toBeNull()
+  })
+
+  it("proxies only the strict current-person MCP Connection read", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "provider-one", transport: "streamable_http", status: "active" }
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [connection], next_cursor: "opaque-next" } }), {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-connection-read" },
+    }))
+    const response = await GET(new Request("http://localhost/api/hub/self/mcp/connections?connection_id=connection-1&provider_key=provider-one&limit=25&cursor=opaque-current", {
+      headers: { "x-kokoro-subject": "attacker", "x-kokoro-tenant-id": "other" },
+    }), params(["self", "mcp", "connections"]))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ data: { connections: [connection], next_cursor: "opaque-next" } })
+    const [target, , options] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, { headers: Record<string, string>; maxResponseBytes: number; timeoutMs: number }]
+    expect(target).toBe("http://bff.test/v1/mcp/connections?connection_id=connection-1&provider_key=provider-one&limit=25&cursor=opaque-current")
+    expect(options).toMatchObject({ maxResponseBytes: 1024 * 1024, timeoutMs: 10_000 })
+    expect(options.headers["x-kokoro-subject"]).not.toBe("attacker")
+    expect(options.headers["x-kokoro-tenant-id"]).not.toBe("other")
+
+    const calls = vi.mocked(requestWithDomain).mock.calls.length
+    for (const suffix of ["subject=other", "connection_id=x&connection_id=y", "connection_id=", "connection_id=bad%2Fid", "provider_key=", `provider_key=${"😀".repeat(192)}`, "limit=01", "limit=101", "cursor="]) {
+      const invalid = await GET(new Request(`http://localhost/api/hub/self/mcp/connections?${suffix}`), params(["self", "mcp", "connections"]))
+      expect(invalid.status).toBe(400)
+      expect((await invalid.json()).error.code).toBe("invalid_query_parameter")
+    }
+    const body = await GET(new Request("http://localhost/api/hub/self/mcp/connections", { headers: { "content-length": "1" } }), params(["self", "mcp", "connections"]))
+    expect(body.status).toBe(400)
+    const retired = await GET(new Request("http://localhost/api/hub/self/mcp/servers"), params(["self", "mcp", "servers"]))
+    expect(retired.status).toBe(404)
+    expect(requestWithDomain).toHaveBeenCalledTimes(calls)
+
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [{ ...connection, secret: "leak" }] } }), {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-bad" },
+    }))
+    const badOwner = await GET(new Request("http://localhost/api/hub/self/mcp/connections"), params(["self", "mcp", "connections"]))
+    expect(badOwner.status).toBe(502)
+    expect(await badOwner.json()).toEqual({ error: { code: "mcp_connection_response_invalid", message: "mcp_connection_response_invalid", retryable: false } })
+  })
+  it("accepts the owner contract's 191-code-point connection ID boundary and rejects 192", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const connectionId191 = "c".repeat(191)
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { connections: [] } }), {
+      status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-connection-boundary" },
+    }))
+
+    const accepted = await GET(new Request(`http://localhost/api/hub/self/mcp/connections?connection_id=${connectionId191}`), params(["self", "mcp", "connections"]))
+    expect(accepted.status).toBe(200)
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/mcp/connections?connection_id=${connectionId191}`)
+
+    const rejected = await GET(new Request(`http://localhost/api/hub/self/mcp/connections?connection_id=${"c".repeat(192)}`), params(["self", "mcp", "connections"]))
+    expect(rejected.status).toBe(400)
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
   })
   it("streams only the exact Artifact binary path with a 1 GiB ceiling and safe attachment headers", async () => {
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })

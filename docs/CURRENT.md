@@ -1,3 +1,11 @@
+## R257 本人 Connection 读取与加载保护验收（2026-10-06）
+
+固定 BFF 6d46ec8 / public 8.0.0 / OpenAPI 8d5b452b；本人页改读 /self/mcp/connections，不再混 Server 目录。复用已有可信 subject/generation/admitted，重核同步撤旧页、换 client 退役游标；合法191 ID/响应早退取消、有限读取保持。重复当前或历史 next_cursor 提前进入错误态，不进入永久 loading，不自动重试。Root77585 两有效失败反例原字节保留；最终 b0d5466a 53路径冻结、独审1663f3d9无新增已证P0–P2。
+
+Root29002 显式Node22.22.2 lint/typecheck/build exit0，7 focused UI/adapter 文件459PASS/0；此前23032 contract275/0、architecture50/0绑定本次未变化输入，未称全量 pnpm check/E2E/axe/视觉通过。正常IAM/Web/BFF/Platform硬刷新真实 /api/hub/self/mcp/connections200、private no-store、connections=[]，最终一个标题/中性空态、翻页禁用，无持续工作区 loading；证据Root var/dev/r255-preserve/r257-mcp-cursor-final-live.json/png，自有tab11已close，user7/8保持。只验本人空读，不称创建、授权、启停、撤销、invoke或全CRUD闭环。
+
+后台BFF ac3cd1d的新资格投影尚未正常切换，IAM有数据演进/Web strict me/当前管理员入口及管理操作独立后继；三原D0/OIDC混合修改保持，不夹本提交。
+
 ## R256 会话标题与工具按钮独立命中（2026-10-06）
 
 Root冻结后明确Node22.22.2复跑lint/typecheck/3现UI文件167断言/build，原句柄37970实际exit0；首次wrapper漏打印句柄未作为exit证据，确认原build结束后独立重跑本次终态。未跑全量system/test:e2e/axe/视觉预算，不替代以上原页面用户证据。

@@ -19,7 +19,7 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
   return {
     listPersonalSkills: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
     getPublishedPersonalSkill: vi.fn(),
-    listMcpProjections: vi.fn().mockResolvedValue({ servers: [] }),
+    listMcpConnections: vi.fn().mockResolvedValue({ connections: [] }),
     listSkillPool: vi.fn().mockResolvedValue([OFFICIAL, OWN]),
     listSkillCatalog: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
     skillQuota: vi.fn().mockResolvedValue({

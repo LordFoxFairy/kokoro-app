@@ -546,7 +546,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.loading": "로드 중…",
   "mcp.loadError": "연결 목록을 로드하지 못했습니다.",
   "mcp.retry": "다시 시도하세요",
-  "mcp.empty": "아직 연결되지 않았습니다. 시작하려면 MCP 서버를 등록하세요.",
+  "mcp.empty": "현재 사용 가능한 활성 연결이 없습니다.",
   "mcp.emptyGuide": "외부 도구를 연결하려면 MCP 서버를 등록하세요. 공식 링크는 플랫폼에 나열되어 있습니다.",
   "mcp.searchPlaceholder": "검색 연결",
   "mcp.noMatch": "일치하는 연결이 없습니다.",
