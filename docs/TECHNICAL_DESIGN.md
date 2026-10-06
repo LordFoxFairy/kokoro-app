@@ -1,3 +1,27 @@
+## R256-ADMIN-01：当前平台管理员资格与唯一入口（目标设计，尚未实施）
+
+当前 Web 的 `src/lib/server/product-identity.ts` 只接受 BFF `/v1/me` 的 `tenant_id`、`user_id` 两字段；callback 与 refresh 都依赖该 strict 投影，新增 required 字段若未同步会失败闭合。目标固定消费 BFF commit `ac3cd1da4f13e9e22320efbd4dbf4009aa0a2e29`、public `8.0.0`、canonical SHA256 `cec91c36c836319af4acbb4e2cf372434b70dd0f52bdf266420e1957057ac4be`，将 required `platform_admin` 纳入同一当前身份投影。资格每次由受信 Product Session 经 BFF `/me` fresh 读取；不得从 cookie/JWT/email、组织 `owner/admin`、OAuth operator、Billing 身份、客户端 header 或浏览器状态推导，也不缓存为第二身份事实。
+
+普通用户继续使用产品，但 Settings 隐藏唯一“后台管理”入口；显式 `platform_admin:true` 才可导航正式 `/admin` 页面。隐藏入口不是授权：`/admin` server route 与其管理 API 每次仍执行 Product Session、当前 `/me` 和资格检查。撤权、Session 重核、主体/代际切换、依赖错误与迟到响应必须同步退役旧 `true`、入口和私有内容；错误不得降级成 `false` 后继续后台，也不得新建全局 auth store。当前 IAM 正常库演进与 strict IAM/BFF/Web 同步切换未完成，管理员真实帐号也未指定，因此本节不声明后台页面或 CRUD 已可用。
+
+### §8 放置表
+
+| 项 | 结论 |
+| --- | --- |
+| Owner | IAM 拥有资格；BFF 只发布当前 Product 投影；Web 唯一 writer 仅拥有入口、路由 gate 与浏览器退役状态。 |
+| 当前事实 | `product-identity.ts` strict 两字段；auth callback/refresh 会验证 `/me`；Settings 尚无可信管理员入口，`/admin` 页面不存在。 |
+| 目标职责 | 同一 strict identity 增加 required boolean；fresh gate 控制唯一入口、正式页面和 API，普通产品访问不因 `false` 受阻。 |
+| 目录方案 | 采用现 `lib/server` 身份验证、现 auth/session 状态、现 Settings/AppFrame 组合与 Next `app/admin/page.tsx`；淘汰另建 admin auth provider、全局 store 或从 Team 角色推断。新页面只承担 server-gated 管理壳与已发布操作，不造假数据。 |
+| 粒度 | 后继优先扩 `product-identity.ts`、现 auth route/session gate、Settings/AppFrame；仅正式页面确需时新增 `src/app/admin/page.tsx`。若 server gate 无可复用职责，再单独报一个 `lib/server` 普通 helper，不先建目录/框架。 |
+| 依赖 | Browser → Web same-origin → BFF；固定上述 artifact。Web 禁止直连 IAM、跨仓 import、读 owner DB、信任浏览器自报资格。 |
+| 数据/API | Web 无数据库 owner、无资格持久化；callback/refresh接受新合法 strict shape，当前检查控制撤权；公开 `/v1/me` required boolean，管理命令仍由各 owner 授权。 |
+| 删除项 | 无 RSA/plain/旧两字段 fallback、cookie admin marker、组织角色 alias、preview 假管理员或双入口。 |
+| 验证 | 先真实组件/HTTP RED：普通 `false` 隐藏且直链/API拒绝；`true`入口与server gate；撤权/重核/A→B/null/迟到响应退役；callback/refresh strict新shape及缺值/额外值失败；随后固定artifact生成、lint/typecheck/test/build，最后真实 IAM owner签发与浏览器E2E。 |
+
+后继候选现文件为 `src/lib/server/product-identity.ts`、`src/app/api/auth/[...nextauth]/route.ts`、`src/ui/auth/use-session-state.ts`、`src/ui/auth/app-gate.tsx`、`src/features/app/kokoro-app-surface.tsx`、AppFrame/overlay/Settings 现组合、`src/lib/server/security-headers.ts` 与 `src/lib/product-return-target.ts`；机器 snapshot/generator/pin 仅在 owner artifact 固定后正规更新。测试复用现 product BFF、OIDC HTTP、AppGate、Settings 与 return-target 门，不以 UI hide 代替 server 拒绝。
+
+---
+
 ## R257-MCP-WEB-D0：本人 MCP Connection 页面消费者（2026-10-06；仅设计）
 
 **当前与目标。** Web `30aa83d70e9d54a804b4eaf8e2211abaa6cb02d9` 的正常 `McpProjectionRead` 仍请求 `/api/hub/self/mcp/servers`，解析并显示全局 Server declaration；Root 已在正常 tab 11 取得该 wrong-resource 200 RED。目标只把此 live read 切到 BFF 待发布的 public 8.0.0 `GET /v1/mcp/connections`，显示当前已准入 subject 的 active Connection 六字段。BFF D0 已提交 `d776194`，但机器/source尚未发布，故本节不编造BFF commit或digest；消费者源码必须等Root固定正式artifact后另卡实施。preview管理表单、Server注册/启停/删除不是此read的fallback，也不因此验收。

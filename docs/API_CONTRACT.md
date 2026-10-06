@@ -1,3 +1,13 @@
+## R256-ADMIN-01：当前管理员资格消费契约（目标，尚未接线）
+
+Web 下一消费者固定 BFF `ac3cd1da4f13e9e22320efbd4dbf4009aa0a2e29`、public `8.0.0`、canonical OpenAPI SHA256 `cec91c36c836319af4acbb4e2cf372434b70dd0f52bdf266420e1957057ac4be`。`GET /v1/me` 成功 `data` 必须 strict包含 `tenant_id`、`user_id`、`platform_admin:boolean`；缺字段、额外字段、身份不一致、非JSON/错误media、无 `no-store`/request ID、错误状态或依赖不可用均失败闭合。普通用户的合法结果是 `platform_admin:false`，不是登录失败。
+
+Web callback 与 refresh 只接受这一新完整 shape；不保留旧两字段 union/default false。正常页面每次资格判断从受信 Product Session 向BFF fresh读取，不接受 query/body/header/cookie/JWT/email/Team role 自报。Settings只在当前值严格为 `true` 时显示唯一 `/admin` 入口；匿名、`false`、pending、error、撤权或主体/代际变化隐藏。`/admin` 页面及管理 same-origin API独立重复server gate：匿名按现登录边界处理，已认证但无资格拒绝，owner依赖失败保持可区分且不可沿用旧 `true`。浏览器隐藏不构成权限证明。
+
+后继 breaking 接收采用 owner immutable snapshot正规生成与pin，不手改generated。当前正常 IAM 有数据演进、BFF/Web strict消费者和服务切换必须同一受控窗口；不运行新IAM配旧消费者或反向混搭。真实验收包括普通false登录/callback/refresh、管理员true入口/直链、撤权后现页与新请求拒绝、A→B/null与迟到响应，以及各管理owner自身授权；仅页面准入不证明任何CRUD权限。
+
+---
+
 ## R257-MCP-WEB-D0：本人 Connection browser-private 消费契约（2026-10-06；仅设计）
 
 当前live Web读的是BFF `/v1/mcp/servers`的Server declaration。目标same-origin `GET /api/hub/self/mcp/connections`只转发到待发布BFF public 8.0.0同名GET；BFF目前只有D0 `d776194`，机器/source/immutable commit与digest待Root固定，故本节不是pin或发布声明。Browser不直连Platform，不接受Server旧shape兼容。

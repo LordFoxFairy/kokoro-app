@@ -1,3 +1,13 @@
+## R256-ADMIN-01：Web 管理员投影数据边界（目标，尚未实施）
+
+Web不拥有管理员资格表、grant、版本或Audit事实，也不新增数据库、localStorage、cookie、Redis字段或全局浏览器store。IAM User是 `platform_admin` 的唯一持久owner；BFF `/v1/me`只发布当前受信投影；Web只在一次受控读取生命周期内持有 `{ tenant_id, user_id, platform_admin }`，并把 subject/generation/admission 与该结果绑定。
+
+`false` 是普通用户合法当前事实；pending/error不得伪装成false后开放后台。撤权、Session重核、退出、A→B/null、generation变化或读取失败立即清除旧true与私有页面数据，迟到ACK不能复活。刷新后重新fresh读取，不从旧页面、JWT/email、Team角色或缓存恢复。Web normal切换必须等待IAM两列的正规有数据演进与三仓strict版本同步；不得通过reset、临时ALTER、默认管理员或兼容双读补洞。
+
+因此本切片无canonical schema、事务、索引、retention或跨owner SQL变化。后继测试的数据oracle是“普通用户零后台读取/写入、管理员仅在server gate后发起已授权owner请求、撤权后零新私有读取且旧投影退役”；页面隐藏和fixture true都不算owner授权或用户E2E。
+
+---
+
 ## R257-MCP-WEB-D0：本人 Connection 页面无持久化事实（2026-10-06；仅设计）
 
 Platform独占Connector、Connection、current authorization与Server；BFF只发布当前本人投影。Web不新增数据库、表、SQL、Redis、localStorage、IndexedDB、cookie字段、离线cache、receipt、outbox或同步store，也不复制owner eligibility。Server declaration不是本人Connection，旧Server read/shape不得保留为fallback。
