@@ -40,6 +40,9 @@ export function initialScheduledTaskEditorState(initialTask: ScheduledTaskInitia
 
 export function useMountedRef(): RefObject<boolean> {
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   return mounted
 }
