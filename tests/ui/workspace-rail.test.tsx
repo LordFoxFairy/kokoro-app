@@ -9,6 +9,7 @@ import { createSessionClient } from "@/engine/client"
 import { createSessionEngine } from "@/engine/machine"
 import { createFakeClient, createMemoryStorage } from "../engine/fakes"
 import type { ConversationStore } from "@/core/conversations"
+import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspace-rail-account"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
@@ -1155,4 +1156,90 @@ it("R254 重名文件夹disclosure有独立可辨动作名，键盘Enter/Space�
   expect(pToggle).toHaveAttribute("aria-expanded", "true")
   expect(qToggle).toHaveAttribute("aria-expanded", "true")
   expect(window.location.href).toBe(before)
+})
+
+// R255 native account projection shares the published personal Credit reader.
+it.each([false, true])("账户菜单精确显示 available 且不虚构免费套餐（读取失败=%s）", async (failed) => {
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({
+    summary: failed ? vi.fn().mockRejectedValue(new Error("billing_unavailable")) : vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "9007199254740993", held_micros: "500000" }),
+    ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+  })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-credit-owner")
+  renderRail()
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  const menu = await screen.findByRole("menu")
+  await waitFor(() => expect(menu).toHaveTextContent(failed ? "—" : "9007199254.740993"))
+  expect(within(menu).queryByText("免费", { exact: true })).toBeNull()
+  expect(within(menu).getByRole("button", { name: "升级" })).toBeInTheDocument()
+})
+
+function r255DeferredAccount() {
+  let resolve!: (value: { credit_account_id: string; status: "active"; available_micros: string; held_micros: string }) => void
+  const promise = new Promise<{ credit_account_id: string; status: "active"; available_micros: string; held_micros: string }>((done) => { resolve = done })
+  return { promise, resolve }
+}
+const r255AccountValue = { credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active" as const, available_micros: "42000000", held_micros: "0" }
+function r255AccountElement() {
+  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} /></LocaleProvider></ThemeProvider>
+}
+async function r255OpenAccountMenu() {
+  const button = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(button, { button: 0 })
+  fireEvent.click(button)
+  return screen.findByRole("menu")
+}
+it("账户余额主体切换先撤旧值，旧读取迟到不覆盖B且取消原读取", async () => {
+  const late = r255DeferredAccount()
+  const fresh = r255DeferredAccount()
+  const signals: (AbortSignal | undefined)[] = []
+  const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
+  const view = render(r255AccountElement())
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-B")
+  view.rerender(r255AccountElement())
+  await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("42")
+  expect(signals[0]?.aborted).toBe(true)
+  expect(summary).toHaveBeenCalledTimes(2)
+  await act(async () => { fresh.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it("账户准入marker撤回时立即隐藏旧余额而不读取未知主体", async () => {
+  const readmit = r255DeferredAccount()
+  const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => readmit.promise)
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
+  const view = render(r255AccountElement())
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  window.localStorage.removeItem("kokoro.web.auth-index-subject")
+  view.rerender(r255AccountElement())
+  await act(async () => { await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("42")
+  expect(menu).toHaveTextContent("—")
+  expect(summary).toHaveBeenCalledTimes(1)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
+  view.rerender(r255AccountElement())
+  expect(menu).not.toHaveTextContent("42")
+  expect(summary).toHaveBeenCalledTimes(2)
+  await act(async () => { readmit.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it("账户卸载真正abort且迟到completion不进入后续菜单", async () => {
+  const late = r255DeferredAccount()
+  let signal: AbortSignal | undefined
+  const summary = vi.fn((value?: AbortSignal) => { signal = value; return late.promise })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
+  const view = render(r255AccountElement())
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
+  view.unmount()
+  expect(signal?.aborted).toBe(true)
+  await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
+  expect(screen.queryByRole("menu")).toBeNull()
 })

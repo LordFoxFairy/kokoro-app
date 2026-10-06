@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type SVGProps } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { ArrowUpRight, CalendarSync, ChevronRight, CircleHelp, Contrast, Copy, FolderPlus, Gift, Globe, Globe2, KeyRound, LayoutGrid, LogOut, Moon, Plus, Search, Server, Sparkles, Sun, Wifi, X } from "lucide-react"
+import { ArrowUpRight, ChevronRight, CircleHelp, Contrast, Copy, FolderPlus, Gift, Globe, Globe2, KeyRound, LayoutGrid, LogOut, Moon, Plus, Search, Server, Sparkles, Sun, Wifi, X } from "lucide-react"
 
 import type { AgentCandidate, ModelCandidate } from "@/contract/http"
 import { useLocale, useT } from "@/i18n/context"
@@ -53,9 +53,6 @@ type AccountProjection = {
   userId: string
   planLabel: string
   credits: string
-  freeCredits: string
-  dailyCredits: string
-  dailyRefreshText: string
   loginMethods: { id: "google" | "microsoft" | "apple"; label: string; account: string | null; connected: boolean }[]
 }
 
@@ -66,9 +63,6 @@ function makePreviewAccount(t: ReturnType<typeof useT>): AccountProjection {
     userId: "preview-user",
     planLabel: t("billing.freeTier"),
     credits: "1,000",
-    freeCredits: "1,000",
-    dailyCredits: "300",
-    dailyRefreshText: t("billing.dailyRefreshHint", { time: "00:00", credits: "300" }),
     loginMethods: [
       { id: "google", label: "Google", account: "preview@example.test", connected: true },
       { id: "microsoft", label: "Microsoft", account: null, connected: false },
@@ -224,13 +218,11 @@ export function AccountCard({
       </div>
 
       <div className={styles.planCard}>
-        <div className={styles.planHeader}><strong>{account?.planLabel ?? t("billing.freeTier")}</strong><Button variant="default" size="sm" type="button" onClick={() => router.push("/app?settings=subscription")}>{t("firstSite.upgrade")}</Button></div>
+        <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={() => router.push("/app?settings=subscription")}>{t("firstSite.upgrade")}</Button></div>
         <div className={styles.planBody} data-slot="account-plan-body">
           <div className={styles.creditGroup} data-slot="account-credit-group">
             <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div>
-            <div className={styles.creditBreakdown}><span>{t("settings.freeCredits")}</span><span>{account?.freeCredits ?? "—"}</span></div>
           </div>
-          <div className={styles.dailyCredits} data-slot="account-daily-credit-group"><div><strong><CalendarSync />{t("settings.dailyCredits")}</strong><span>{account?.dailyRefreshText ?? "—"}</span></div><strong>{account?.dailyCredits ?? "—"}</strong></div>
         </div>
       </div>
 

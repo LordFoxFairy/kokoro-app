@@ -41,9 +41,6 @@ export function billingSummaryPath(): string {
 export function billingLedgerPath(): string {
   return `/billing/ledger`
 }
-export function billingByModelPath(): string {
-  return `/billing/by-model`
-}
 export function modelCandidatesPath(): string {
   return `/models`
 }

@@ -1,3 +1,13 @@
+## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
+
+当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。
+
+现 `/api/session/billing/summary` 与 `/api/session/billing/ledger` 复用可信session adapter。strict closed账户/流水data保十进制字符串、BigInt显示尺度10^6与owner UTC Z瞬时点（按用户locale/本地日历展示），disabled展示owner只读值；404/503是error而非零余额。每读10秒总预算覆盖headers/body/parse、真实abort及reader释放；mounted panel独立loading/error/ready，刷新撤旧投影，分页单flight、显式同cursor重试、null终页、重复cursor拒循环与journal去重。现主体marker仅退役结果，不赋权限、不建第二store。
+
+Account与rail popover未知套餐均占位，保身份/订阅入口及原布局；preview仅显式fixture，不是live失败fallback。此节覆盖下方历史消费者状态，原mixed正文不修改。三面D0已批准、D1行为反例已由Root复跑；当前生产/测试候选待Root工程复验、独审与提交。真实Billing账户200、余额/流水翻页/刷新/跨主体浏览器验收尚未执行，正常503退出loading不证明资金旅程完成；70组台账不虚增。
+
+---
+
 ## T-B03.R255-WEB-CREDIT-D0：个人余额与流水（Root批准设计前缀，生产未授权）
 
 本节覆盖下方历史个人余额/quota/free/by-model消费者描述，不覆盖任务外mixed内容。阶段为D0三面设计收口，尚无生产、测试或生成修改许可，不以文档宣称页面完成。Web基线 `e8ff7599a62b045b0e7a3d20e8fd50894b31a099`；固定前置BFF正式commit `97a99d35c8c78e7ca6e1370fd16ba5d670766095`，public OpenAPI `8.0.0`，源 `contract/openapi/v1/openapi.yaml`，全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`。不可沿mutable main、旧f3c64d90 snapshot或旧wallet shape双读。

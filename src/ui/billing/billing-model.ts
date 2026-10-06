@@ -1,10 +1,6 @@
 import type { BillingLedgerEntry, BillingSummary } from "@/contract/http"
 import type { MessageKey } from "@/i18n/messages"
 
-export const SUMMARY_KEY = "billing/summary"
-export const BY_MODEL_KEY = "billing/by-model"
-export const LOW_BALANCE_MICROS = BigInt(500_000)
-
 export type SummaryState =
   | { kind: "loading" }
   | { kind: "error" }
@@ -13,7 +9,7 @@ export type SummaryState =
 export type LedgerState =
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ready"; entries: BillingLedgerEntry[]; cursor: string | undefined; loadingMore: boolean }
+  | { kind: "ready"; entries: BillingLedgerEntry[]; cursor: string | null; loadingMore: boolean; pageError: boolean }
 
 export type LedgerFilter = "all" | "spend" | "credit"
 
@@ -36,39 +32,27 @@ export function reasonKey(reason: string): MessageKey | null {
   }
 }
 
-export function quotaPeriodKey(period: string): MessageKey | null {
-  return period === "monthly" ? "billing.quotaPeriodMonthly" : null
-}
-
-export function isLowBalance(balanceMicros: string): boolean {
-  try {
-    return BigInt(balanceMicros) < LOW_BALANCE_MICROS
-  } catch {
-    return false
-  }
-}
-
-function dayKey(epochMs: number): string {
-  const date = new Date(epochMs)
+function dayKey(instant: string): string {
+  const date = new Date(instant)
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
 }
 
-function formatDay(epochMs: number): string {
-  return new Date(epochMs).toLocaleDateString()
+function formatDay(instant: string, localeTag?: string): string {
+  return new Date(instant).toLocaleDateString(localeTag)
 }
 
-export function formatTime(epochMs: number): string {
-  return new Date(epochMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+export function formatTime(instant: string, localeTag?: string): string {
+  return new Date(instant).toLocaleTimeString(localeTag, { hour: "2-digit", minute: "2-digit" })
 }
 
-export function groupByDay(entries: BillingLedgerEntry[]): LedgerDay[] {
+export function groupByDay(entries: BillingLedgerEntry[], localeTag?: string): LedgerDay[] {
   const days: LedgerDay[] = []
   const index = new Map<string, LedgerDay>()
   for (const entry of entries) {
     const key = dayKey(entry.created_at)
     let day = index.get(key)
     if (day === undefined) {
-      day = { key, label: formatDay(entry.created_at), net: "0", entries: [] }
+      day = { key, label: formatDay(entry.created_at, localeTag), net: "0", entries: [] }
       index.set(key, day)
       days.push(day)
     }

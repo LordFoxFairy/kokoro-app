@@ -27,6 +27,11 @@ import { interceptMountedSurfaceNavigation } from "@/ui/navigation/mounted-surfa
 
 import { accountStyles, railStyles } from "./workspace-rail-styles"
 
+// The existing admission marker only retires a display result; it grants no access.
+function readCreditActor(): string | null | undefined {
+  try { return window.localStorage.getItem("kokoro.web.auth-index-subject") } catch { return undefined }
+}
+
 export function ComputerStatusIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg data-slot="computer-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -57,7 +62,14 @@ export function WorkspaceRailAccount({
 }: WorkspaceRailAccountProps) {
   const t = useT()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
-  const [creditBalance, setCreditBalance] = useState("—")
+  const actor = readCreditActor()
+  const [credit, setCredit] = useState<{ actor: string | null | undefined; preview: boolean; balance: string }>({ actor, preview, balance: "—" })
+  if (credit.actor !== actor || credit.preview !== preview) {
+    // Permanently retire the old projection even if A is readmitted before B resolves.
+    setCredit({ actor, preview, balance: "—" })
+  }
+  const creditAttempt = useRef<AbortController | null>(null)
+  const creditBalance = credit.actor === actor && credit.preview === preview ? credit.balance : "—"
   const accountSettingsFrameRef = useRef<number | null>(null)
   const previousCompactDesktopRef = useRef(compactDesktop)
   // The deployment tenant is fixed; the rail shows product identity, not an IAM namespace switcher.
@@ -92,12 +104,16 @@ export function WorkspaceRailAccount({
   }, [compactDesktop])
 
   useEffect(() => {
-    let live = true
-    void browserBillingClient({ preview }).summary()
-      .then((summary) => { if (live) setCreditBalance(formatCredits(summary.balance_micros)) })
-      .catch(() => { if (live) setCreditBalance("—") })
-    return () => { live = false }
-  }, [preview])
+    const controller = new AbortController()
+    creditAttempt.current = controller
+    const current = () => creditAttempt.current === controller && !controller.signal.aborted && readCreditActor() === actor
+    if (preview || typeof actor === "string") {
+      void browserBillingClient({ preview }).summary(controller.signal)
+        .then((summary) => { if (current()) setCredit({ actor, preview, balance: formatCredits(summary.available_micros) }) })
+        .catch(() => { if (current()) setCredit({ actor, preview, balance: "—" }) })
+    }
+    return () => { controller.abort(); if (creditAttempt.current === controller) creditAttempt.current = null }
+  }, [actor, preview])
 
   const openSettingsFromAccount = (tab: SettingsTab) => {
     if (accountSettingsFrameRef.current !== null) {
@@ -146,7 +162,7 @@ export function WorkspaceRailAccount({
           </DropdownMenuLabel>
           <div className={accountStyles.accountPlanGroup}>
             <div className={accountStyles.accountPlan}>
-              <span><strong>{t("billing.freeTier")}</strong></span>
+              <span><strong>—</strong></span>
               <Button
                 variant="default"
                 size="sm"

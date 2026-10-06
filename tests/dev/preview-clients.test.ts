@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   createPreviewBillingClient,
@@ -123,8 +123,33 @@ describe("preview settings clients", () => {
     const billing = await createPreviewBillingClient().summary()
     const pricing = await createPreviewPricingClient().plans()
     const team = await createPreviewTeamClient().listMembers()
-    expect(billing.balance_micros).toBe("10000000")
+    expect(billing.available_micros).toBe("10000000")
     expect(pricing.plans).toHaveLength(2)
     expect(team.items[0]?.member_id).toBe("preview-member")
+  })
+})
+
+
+describe("R255 explicit Credit preview boundary", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("uses local preview only explicitly and keeps the published account and ledger shape", async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal("fetch", fetcher)
+    const preview = createPreviewBillingClient()
+    const summary = await preview.summary()
+    const ledger = await preview.ledger()
+    expect(Object.keys(summary).sort()).toEqual(["available_micros", "credit_account_id", "held_micros", "status"])
+    expect(Object.keys(ledger).sort()).toEqual(["items", "page"])
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it("never substitutes preview credits when a live owner read fails", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ error: { code: "billing_unavailable", message: "Billing unavailable" } }, { status: 503 }))
+    vi.stubGlobal("fetch", fetcher)
+    const { createBillingClient } = await import("@/billing/client")
+    await expect(createBillingClient().summary()).rejects.toMatchObject({ status: 503 })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/session/billing/summary")
   })
 })

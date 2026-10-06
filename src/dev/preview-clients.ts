@@ -4,7 +4,7 @@
 
 import type { BillingClient } from "@/billing/client"
 import type { PlanCatalog, PricingClient } from "@/billing/pricing"
-import type { BillingByModel, BillingLedger } from "@/contract/http"
+import type { BillingLedger } from "@/contract/http"
 import { HubClientError, parseGithubRepository, type HubClient } from "@/hub/client"
 import type {
   McpRegisterInput,
@@ -313,14 +313,12 @@ export function createPreviewHubClient(): HubClient {
 
 export function createPreviewBillingClient(): BillingClient {
   const ledger: BillingLedger = {
-    entries: [
-      { entry_id: "preview-entry-1", delta_micros: "-125000", reason: "preview.run", title: "Preview task", conversation_id: "preview-conversation", created_at: Date.now(), balance_after_micros: "9875000", run_id: "run_preview_1" },
-    ],
+    items: [{ journal_id: "b8281e18-6afd-4c08-a772-8b55e2d7cbdd", sequence: "1", delta_micros: "-125000", source_kind: "preview.run", source_ref: "preview-run-1", created_at: new Date().toISOString(), balance_after_micros: "9875000" }],
+    page: { next_cursor: null },
   }
   return {
-    summary: () => Promise.resolve({ balance_micros: "10000000", held_micros: "0", quota_micros: null, quota_period: null, plan_label: "Free", free_credit_micros: "10000000", daily_refresh_micros: "3000000", daily_refresh_time: "00:00" }),
+    summary: () => Promise.resolve({ credit_account_id: "74ea5371-b5cf-4df7-b49a-582e45d959ce", status: "active", available_micros: "10000000", held_micros: "0" }),
     ledger: () => Promise.resolve(ledger),
-    byModel: (): Promise<BillingByModel> => Promise.resolve({ period_start: new Date().toISOString(), items: [{ model_binding_id: null, model_name: "Preview model", spent_micros: "125000", run_count: 1 }] }),
   }
 }
 

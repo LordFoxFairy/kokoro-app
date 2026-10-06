@@ -599,7 +599,7 @@ async function r76PublicSpec() {
 describe("R76 ScheduledTask owner creation graph under the public7 pin", () => {
   it("consumes the exact published public7 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("278fc0a60516617d41c754b7957fadbcc77f9b6132fa9f1a8af9409464319d0f")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4")
     expect(spec.info.version).toBe("8.0.0")
   })
 

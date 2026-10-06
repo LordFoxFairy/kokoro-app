@@ -1,85 +1,115 @@
-// 计费只读客户端：经同源 `/api/session` BFF 代理取 session 的 /billing/summary|/billing/ledger
-// （session 从已验 namespace 派生账户、代理 credit 窄读）。入站过契约 Zod；失败类型化上抛。
-// billing off 档 → session 回零额空流水（不 503），展示层照常渲染。
-
-import { ZodError } from "zod"
-
+// Personal Credit reads use the existing same-origin BFF adapter only.
 import {
-  billingByModelPath,
-  billingByModelSchema,
-  billingLedgerPath,
-  billingLedgerSchema,
-  billingSummaryPath,
-  billingSummarySchema,
-  type BillingByModel,
-  type BillingLedger,
-  type BillingSummary,
+  billingLedgerPath, billingLedgerSchema, billingSummaryPath, billingSummarySchema,
+  type BillingLedger, type BillingSummary,
 } from "@/contract/http"
 import { SESSION_PROXY_BASE } from "@/engine/config"
 
-// session 受理挂点余额不足时的 reject reason（→402）：run 被拒的稳定错误码，
-// web 端据此在失败处给计费专用说明 + 价格/联系入口（PAY-2 前不放假充值）。
 export const CREDIT_INSUFFICIENT = "credit_insufficient"
 
-type BillingFailureReason = "network" | "http" | "parse"
-
+type BillingFailureReason = "network" | "http" | "parse" | "timeout" | "aborted"
 class BillingClientError extends Error {
-  readonly reason: BillingFailureReason
-  readonly status: number | null
-
-  constructor(reason: BillingFailureReason, message: string, status: number | null) {
-    super(message)
+  constructor(readonly reason: BillingFailureReason, readonly status: number | null = null) {
+    super(`billing_${reason}`)
     this.name = "BillingClientError"
-    this.reason = reason
-    this.status = status
   }
 }
 
-function describeUnknown(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-async function getJson<T>(path: string, parse: (raw: unknown) => T): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(`${SESSION_PROXY_BASE}${path}`, { cache: "no-store" })
-  } catch (error) {
-    throw new BillingClientError("network", describeUnknown(error), null)
-  }
-  if (!response.ok) {
-    throw new BillingClientError("http", `billing request failed with status ${response.status}`, response.status)
-  }
-  let raw: unknown
-  try {
-    raw = await response.json()
-  } catch (error) {
-    throw new BillingClientError("parse", describeUnknown(error), response.status)
-  }
-  try {
-    return parse(raw)
-  } catch (error) {
-    if (error instanceof ZodError) {
-      throw new BillingClientError("parse", error.message, response.status)
+/** A single local deadline includes headers, body and validation; no retry. */
+async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) throw new BillingClientError("aborted")
+  const controller = new AbortController()
+  const deadline = performance.now() + 10_000
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let abort = () => {}
+  let response: Response | undefined
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  const check = () => {
+    const reason = performance.now() >= deadline ? "timeout"
+      : controller.signal.aborted || signal?.aborted ? "aborted" : null
+    if (reason !== null) {
+      if (response?.body && !response.body.locked) void response.body.cancel().catch(() => undefined)
+      throw new BillingClientError(reason)
     }
-    throw error
+  }
+  const interrupted = new Promise<never>((_, reject) => {
+    abort = () => { reject(new BillingClientError("aborted")); controller.abort() }
+    signal?.addEventListener("abort", abort, { once: true })
+    if (signal?.aborted) { abort(); return }
+    timer = setTimeout(() => { reject(new BillingClientError("timeout")); controller.abort() }, 10_000)
+  })
+  const read = async () => {
+    check()
+    try {
+      response = await fetch(`${SESSION_PROXY_BASE}${path}`, { cache: "no-store", signal: controller.signal, redirect: "error" })
+    } catch {
+      check()
+      throw new BillingClientError("network")
+    }
+    check()
+    if (!response.ok) throw new BillingClientError("http", response.status)
+    const media = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase()
+    const directives = response.headers.get("cache-control")?.split(",").map((value) => value.trim().toLowerCase()) ?? []
+    const requestId = response.headers.get("x-request-id")
+    if (response.status !== 200 || media !== "application/json" || !directives.includes("no-store") ||
+      !directives.includes("private") || !requestId || requestId.length > 256 || !/^[\x21-\x7e]+$/.test(requestId)) {
+      throw new BillingClientError("parse", response.status)
+    }
+    if (!response.body) throw new BillingClientError("parse", response.status)
+    const bodyReader = response.body.getReader()
+    reader = bodyReader
+    const decoder = new TextDecoder("utf-8", { fatal: true })
+    let text = ""
+    let bytes = 0
+    try {
+      while (true) {
+        check()
+        const chunk = await bodyReader.read()
+        check()
+        if (chunk.done) break
+        bytes += chunk.value.byteLength
+        if (bytes > 16 * 1024 * 1024) throw new BillingClientError("parse", response.status)
+        text += decoder.decode(chunk.value, { stream: true })
+      }
+      text += decoder.decode()
+      const data = parse(JSON.parse(text) as unknown)
+      check()
+      return data
+    } catch (error) {
+      check()
+      if (error instanceof BillingClientError) throw error
+      throw new BillingClientError("parse", response.status)
+    } finally {
+      if (reader === bodyReader) { reader = undefined; bodyReader.releaseLock() }
+    }
+  }
+  try {
+    return await Promise.race([interrupted, read()])
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener("abort", abort)
+    controller.abort()
+    if (reader) {
+      const held = reader
+      reader = undefined
+      void held.cancel().catch(() => undefined)
+      held.releaseLock()
+    }
+    if (response?.body && !response.body.locked) void response.body.cancel().catch(() => undefined)
   }
 }
 
 export type BillingClient = {
-  summary: () => Promise<BillingSummary>
-  // 分页：cursor 缺省=首页；服务端回 next_cursor（无=到底）。
-  ledger: (cursor?: string) => Promise<BillingLedger>
-  // 本周期按模型消费分解（B1d）：无账户/off 档→空清单。
-  byModel: () => Promise<BillingByModel>
+  summary: (signal?: AbortSignal) => Promise<BillingSummary>
+  ledger: (cursor?: string, signal?: AbortSignal) => Promise<BillingLedger>
 }
-
 export function createBillingClient(): BillingClient {
   return {
-    summary: () => getJson(billingSummaryPath(), (raw) => billingSummarySchema.parse(raw)),
-    ledger: (cursor) => {
-      const query = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : ""
-      return getJson(`${billingLedgerPath()}${query}`, (raw) => billingLedgerSchema.parse(raw))
+    summary: (signal) => getJson(billingSummaryPath(), (raw) => billingSummarySchema.parse(raw), signal),
+    ledger: (cursor, signal) => {
+      if (cursor !== undefined && (cursor.length === 0 || cursor.length > 2048)) return Promise.reject(new BillingClientError("parse"))
+      const query = cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`
+      return getJson(`${billingLedgerPath()}${query}`, (raw) => billingLedgerSchema.parse(raw), signal)
     },
-    byModel: () => getJson(billingByModelPath(), (raw) => billingByModelSchema.parse(raw)),
   }
 }

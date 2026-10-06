@@ -4,10 +4,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 
-const { currentProductSession } = vi.hoisted(() => ({
+const { currentProductSession, requestWithDomain } = vi.hoisted(() => ({
   currentProductSession: vi.fn(),
+  requestWithDomain: vi.fn(),
 }))
 vi.mock("@/lib/server/product-session", () => ({ currentProductSession }))
+vi.mock("@/lib/server/upstream-http", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/server/upstream-http")>()
+  return { ...original, requestWithDomain }
+})
 
 const ENV = {
   KOKORO_WEB_AUTH_SECRET: "a".repeat(32),
@@ -252,5 +257,53 @@ describe("POST /api/billing/mock-pay", () => {
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: "mock_pay_unavailable" })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+
+describe("R255 existing session adapter personal Credit reads", () => {
+  beforeEach(() => requestWithDomain.mockReset())
+
+  it.each([
+    ["summary", { credit_account_id: "74ea5371-b5cf-4df7-b49a-582e45d959ce", status: "active", available_micros: "9007199254740993", held_micros: "500000" }],
+    ["ledger", { items: [{ journal_id: "b8281e18-6afd-4c08-a772-8b55e2d7cbdd", sequence: "9007199254740993", delta_micros: "-1", balance_after_micros: "9007199254740993", source_kind: "model_call", source_ref: "owner-call-1", created_at: "2026-01-11T05:00:00.000Z" }], page: { next_cursor: null } }],
+  ])("unwraps %s and preserves no-store and the owner request ID", async (name, data) => {
+    requestWithDomain.mockResolvedValueOnce(Response.json({ data, meta: { request_id: "r255-bff-account" } }, { headers: { "cache-control": "no-store", "x-request-id": "r255-bff-account" } }))
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    const query = name === "ledger" ? "?limit=50&cursor=opaque%2B%2F%3D" : ""
+    const response = await GET(new Request(`http://localhost/api/session/billing/${name}${query}`), { params: Promise.resolve({ path: ["billing", name as string] }) })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(data)
+    expect(response.headers.get("cache-control")).toContain("no-store")
+    expect(response.headers.get("x-request-id")).toBe("r255-bff-account")
+    expect(requestWithDomain).toHaveBeenCalledTimes(1)
+    const [target, , options] = requestWithDomain.mock.calls[0]!
+    expect(target).toBe(`http://bff.test/v1/billing/${name}${query}`)
+    const headers = new Headers(options.headers)
+    expect(headers.get("authorization")).toBe("Bearer product-access")
+    expect(headers.get("cookie")).toBeNull()
+    expect(headers.get("x-kokoro-subject")).toBeNull()
+  })
+
+  it("keeps a Billing unavailable response as an error rather than an empty or zero account", async () => {
+    requestWithDomain.mockResolvedValueOnce(Response.json({ error: { code: "billing_unavailable", message: "Billing is unavailable" }, meta: { request_id: "r255-bff-error" } }, { status: 503 }))
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/session/billing/summary"), { params: Promise.resolve({ path: ["billing", "summary"] }) })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ error: { code: "billing_unavailable" } })
+    expect(response.headers.get("x-request-id")).toBe("r255-bff-error")
+    expect(response.headers.get("cache-control")).toContain("no-store")
+  })
+
+  it("rejects a retired session before either personal read reaches the BFF", async () => {
+    currentProductSession.mockResolvedValue(null)
+    const { GET } = await import("@/app/api/session/[...path]/route")
+    for (const name of ["summary", "ledger"]) {
+      const response = await GET(new Request(`http://localhost/api/session/billing/${name}`), { params: Promise.resolve({ path: ["billing", name] }) })
+      expect(response.status).toBe(401)
+      expect(response.headers.get("x-request-id")).toBeTruthy()
+      expect(response.headers.get("cache-control")).toContain("no-store")
+    }
+    expect(requestWithDomain).not.toHaveBeenCalled()
   })
 })

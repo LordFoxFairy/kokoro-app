@@ -30,7 +30,8 @@ vi.mock("@/ui/shell/page-clients", () => ({
     listRoles: vi.fn().mockResolvedValue({ items: [{ role_id: null, name: "owner", kind: "builtin", permissions: { member: ["read"], invitation: ["read"] } }], nextCursor: null, requestId: "test" }),
   }),
   browserBillingClient: () => ({
-    summary: vi.fn().mockResolvedValue({ balance_micros: "12500000", held_micros: "500000" }),
+    ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
+    summary: vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "12500000", held_micros: "500000" }),
   }),
   browserListClient: () => ({
     listModels: vi.fn().mockResolvedValue({
@@ -567,9 +568,9 @@ describe("SettingsModal 设置中心模态", () => {
     renderSettings(() => {}, undefined, true)
     const planBody = screen.getByTestId("settings-account").querySelector('[data-slot="account-plan-body"]')
     expect(planBody).not.toBeNull()
-    expect(planBody?.children).toHaveLength(2)
+    expect(planBody?.children).toHaveLength(1)
     expect(planBody?.querySelector('[data-slot="account-credit-group"]')).toBeInTheDocument()
-    expect(planBody?.querySelector('[data-slot="account-daily-credit-group"]')).toBeInTheDocument()
+    expect(planBody?.querySelector('[data-slot="account-daily-credit-group"]')).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "管理" }))
     expect(screen.getByTestId("settings-login-methods")).toBeInTheDocument()
     const nestedHeading = screen.getByRole("heading", { name: "管理登入方式", level: 1 })
@@ -1011,4 +1012,15 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByTestId("settings-panel-skills")).toBeInTheDocument()
   })
 
+})
+
+
+describe("R255 live account has no invented Credit policy", () => {
+  it("does not claim Free membership, free credits or a daily grant without owner facts", () => {
+    renderSettings(() => {}, undefined, false)
+    const account = screen.getByTestId("settings-account")
+    expect(account).not.toHaveTextContent("免费")
+    expect(account).not.toHaveTextContent("每日刷新积分")
+    expect(account.querySelector('[data-slot="account-daily-credit-group"]')).toBeNull()
+  })
 })

@@ -1,5 +1,4 @@
 import { CircleHelp } from "lucide-react"
-import Link from "next/link"
 import { useMemo } from "react"
 
 import type { BillingLedgerEntry } from "@/contract/http"
@@ -41,7 +40,7 @@ function LedgerError({ message, retryLabel, retrying, embedded, onRetry }: { mes
     <Alert variant="destructive" className={panelStyles.feedback}>
       <AlertDescription>
         <p>{message}</p>
-        <Button variant="outline" size="sm" type="button" disabled={embedded ? undefined : retrying} aria-busy={embedded ? undefined : retrying} onClick={() => void onRetry()}>
+        <Button variant="outline" size="sm" type="button" disabled={retrying} aria-busy={embedded ? undefined : retrying} onClick={() => void onRetry()}>
           {!embedded && retrying ? <Spinner aria-hidden="true" /> : null}
           {!embedded && retrying ? message : retryLabel}
         </Button>
@@ -54,7 +53,7 @@ function EmbeddedEntry({ entry, label }: { entry: BillingLedgerEntry; label: str
   const signed = formatSignedCredits(entry.delta_micros)
   return (
     <li className={styles.entry}>
-      <div className={styles.entryMain}>{entry.conversation_id ? <Link className={styles.entryReason} href={`/app?conversation=${encodeURIComponent(entry.conversation_id)}`}>{label}</Link> : <span className={styles.entryReason}>{label}</span>}</div>
+      <div className={styles.entryMain}><span className={styles.entryReason}>{label}</span></div>
       <span className={styles.entryDelta} data-sign={microSign(entry.delta_micros)}>{signed}</span>
     </li>
   )
@@ -62,7 +61,7 @@ function EmbeddedEntry({ entry, label }: { entry: BillingLedgerEntry; label: str
 
 function LedgerEntries({ entries, embedded, localeTag }: { entries: BillingLedgerEntry[]; embedded: boolean; localeTag: string }) {
   const t = useT()
-  const days = useMemo(() => groupByDay(entries), [entries])
+  const days = useMemo(() => groupByDay(entries, localeTag), [entries, localeTag])
   return (
     <>
       {days.map((day) => {
@@ -76,16 +75,15 @@ function LedgerEntries({ entries, embedded, localeTag }: { entries: BillingLedge
             </div>
             <ul className={styles.ledger}>
               {day.entries.map((entry) => {
-                const key = reasonKey(entry.reason)
-                const label = key ? t(key) : entry.reason
-                if (embedded) return <EmbeddedEntry key={entry.entry_id} entry={entry} label={entry.title ?? label} />
+                const key = reasonKey(entry.source_kind)
+                const label = key ? t(key) : entry.source_kind
+                if (embedded) return <EmbeddedEntry key={entry.journal_id} entry={entry} label={label} />
                 return (
-                  <li key={entry.entry_id} className={styles.entry}>
+                  <li key={entry.journal_id} className={styles.entry}>
                     <div className={styles.entryMain}>
                       <span className={styles.entryReason}>{label}</span>
                       <span className={styles.entryMeta}>
-                        <span className={styles.entryTime}>{formatTime(entry.created_at)}</span>
-                        {entry.run_id ? <span className={styles.runTag} title={entry.run_id}>{t("billing.runTag", { id: entry.run_id.slice(-6) })}</span> : null}
+                        <span className={styles.entryTime}>{formatTime(entry.created_at, localeTag)}</span>
                       </span>
                     </div>
                     <span className={styles.entryDelta} data-sign={microSign(entry.delta_micros)}>{formatSignedCredits(entry.delta_micros)}</span>
@@ -110,7 +108,7 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
     const sign = filter === "spend" ? "negative" : "positive"
     return allEntries.filter((entry) => microSign(entry.delta_micros) === sign)
   }, [allEntries, embedded, filter])
-  const days = useMemo(() => groupByDay(filteredEntries), [filteredEntries])
+  const days = useMemo(() => groupByDay(filteredEntries, localeTag), [filteredEntries, localeTag])
 
   return (
     <section data-testid="billing-ledger" data-slot="billing-ledger">
@@ -124,12 +122,13 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
       </div>
       {ledger.kind === "loading" ? <LoadingLedger label={t("billing.loading")} embedded={embedded} /> : null}
       {ledger.kind === "error" ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={retrying} embedded={embedded} onRetry={onRetry} /> : null}
+      {ledger.kind === "ready" && ledger.pageError ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={ledger.loadingMore} embedded={embedded} onRetry={onLoadMore} /> : null}
       {ledger.kind === "ready" && ledger.entries.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.ledgerEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.filterEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length > 0 ? (
         <>
           <LedgerEntries entries={filteredEntries} embedded={embedded} localeTag={localeTag} />
-          {ledger.cursor !== undefined ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} aria-busy={embedded ? undefined : ledger.loadingMore} onClick={onLoadMore}>{!embedded && ledger.loadingMore ? <Spinner aria-hidden="true" /> : null}{ledger.loadingMore ? t("billing.loading") : t("billing.loadMore")}</Button> : null}
+          {ledger.cursor !== null ? <Button variant="outline" type="button" className={styles.more} disabled={ledger.loadingMore || retrying} aria-busy={embedded ? undefined : ledger.loadingMore} onClick={onLoadMore}>{!embedded && ledger.loadingMore ? <Spinner aria-hidden="true" /> : null}{ledger.loadingMore ? t("billing.loading") : t("billing.loadMore")}</Button> : null}
         </>
       ) : null}
     </section>
