@@ -1,3 +1,11 @@
+## R255 用户侧栏树与滚动已修（2026-10-06）
+
+Web基线df609a0；仅现workspace-rail-navigation.tsx一处folder class、items CSS与rail CSS，未改数据/API/身份/scope/Move/拖拽/宽栏cookie。Root正常3310既有IAM真实复现：项目children横排超内容列（scrollWidth455/276），1200×460主content hidden使wheel700仍top0且Direct裁切。现项目纵向树/同元素padding、各列表自然高、唯一content纵向滚动/横向约束，header/footer固定；compact同样滚动。另退役违背R254的空Direct旧隐藏规则，不重造业务。
+
+实际浏览器GREEN：两空项目子列表位于自身header下/反馈可见；1200×460最终top253、Direct bottom346.68<固定footer356.8、原QA点击与4条历史保持；上下滚回0，700×460 fine-pointer top0→265后回宽hard-refresh仍展开/Direct2/loadingfalse；1200×320图标栏top0→170最后项目可达；键盘disclosure不导航，252px栏宽等动画后content228/scroll228，恢复300。项目概览→外部会话列表始终在，但概览另有会话GET404，不算Project完整成功。0 owner数据写/模型推理/资金调用，无服务重启或PG/Redis reset；用户IAB未动。
+
+Root Node22辅助门：lint0/typecheck0、contract275/0、architecture50/0；最终现5UI文件146/0且actual exit0、最终CSS build0。独审最终e0829f2b，三source冻结准确。两前置locator/对dialog错误假设与过早动画测量保留，不伪装产品失败/静态E2E。真实0Direct、触屏Sheet/长分页/故障注入、全量test与所有页面test:e2e、axe/视觉/bundle未验；普通2Direct不证明空账号业务闭环。原三mixed设计文档与OIDC/Root uv/gitlinks/registry保护，70组11/8/14/36/1不变。原任务/QA台账与ignored sidebar-scroll-*证据续接，无新计划中心。
+
 ## R255 06:12：无 owner 的旧 Agent preset 消费者退役已接收
 
 基线 Web main aaf577d；17生产/7测试/9语言/3integration既有文件，无新依赖、模块、接口、SQL、存储key或旧数据兼容。Web不再请求旧agents目录/生产preset字段；模型/Skill/mode/AG-UI/Todo/subagents与独立连接setup保持，公开MessageCreate.agent/generated保持。唯一model-only strict，含旧agent的对象整体回默认，不迁移其中model。

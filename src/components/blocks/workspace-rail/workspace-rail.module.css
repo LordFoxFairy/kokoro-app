@@ -14,6 +14,7 @@
   display: flex;
   height: 100%;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
   gap: 0.25rem;
   overflow: hidden;
@@ -22,7 +23,18 @@
 }
 
 .rail[data-desktop-rail="true"] { background: var(--sidebar); }
-.rail[data-desktop-rail="true"] .content { min-height: 0; overflow: hidden; }
+/* Header/search/footer stay fixed; this is the only vertical rail scroller. */
+.rail > :not(.content) { flex-shrink: 0; }
+.rail .content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+.content > nav { min-width: 0; flex: 0 0 auto; }
 
 /* The Sheet is the touch version of the rail; its frame keeps the same
  * horizontal inset while the navigation module owns the larger controls. */
@@ -212,7 +224,6 @@
   min-height: 0;
   flex: 1;
   align-self: flex-start;
-  overflow: hidden;
   box-sizing: border-box;
   padding-top: 0.5rem;
 }

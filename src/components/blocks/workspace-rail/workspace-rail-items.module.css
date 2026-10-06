@@ -2,14 +2,12 @@
 
 .list {
   display: flex;
+  min-width: 0;
   min-height: 0;
-  flex: 1;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 0.15rem;
-  overflow-y: auto;
   margin: 0.35rem 0 0.4rem;
-  scrollbar-color: var(--border) transparent;
-  scrollbar-width: thin;
 }
 
 .sectionRow { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; }
@@ -49,11 +47,6 @@
 .itemDelete svg { width: 0.9rem; height: 0.9rem; }
 .loadMore { width: calc(100% - 1.3rem); margin: 0.35rem 0.65rem 0.2rem; border-radius: var(--radius-sm); font-size: 0.8rem; }
 
-/* A wide desktop rail shows its scoped list. Stable data attributes keep this
- * rule independent from the CSS module that renders the navigation shell. */
-[data-desktop-rail="true"][data-collapsed="false"] .emptyDirectList { display: none; }
-[data-navigation-section="project"] .itemSelect { padding-right: 0.55rem; }
-
 [data-desktop-rail="true"] .item { position: relative; z-index: 1; }
 [data-desktop-rail="true"] .itemSelect { touch-action: manipulation; }
 
@@ -79,7 +72,10 @@
   .item { transition: none; }
 }
 
-.projectFolderRow { display: flex; align-items: center; }
+/* A folder owns a vertical branch; only its disclosure and overview share a row. */
+.item.projectFolder { width: 100%; flex-direction: column; align-items: stretch; }
+.projectFolderRow { display: flex; width: 100%; min-width: 0; align-items: center; }
+.projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 0.55rem; }
 .folderToggle { flex-shrink: 0; }
 .folderToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
-.projectFolderChildren { padding-inline-start: var(--spacing-4, 1rem); }
+.projectFolderChildren { width: 100%; min-width: 0; box-sizing: border-box; padding-inline-start: var(--spacing-4, 1rem); }

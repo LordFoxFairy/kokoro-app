@@ -440,7 +440,7 @@ export function WorkspaceRailNavigation({
                 return (
                   <SidebarMenuItem
                     key={project.id}
-                    className={cn(itemStyles.item, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    className={cn(itemStyles.item, itemStyles.projectFolder, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
                     data-dragging={dragging ? "true" : "false"}
