@@ -214,6 +214,9 @@ function AppFrameRuntime({
   const moveScopeKey = sessionScopeKey(sessionScope)
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
+  const railFolderIntentIdentity = projectReadBoundary === undefined
+    ? preview ? "preview" : injectedEngine !== undefined ? "injected" : null
+    : projectReadBoundary.subject
   const conversationsCtl = useConversationList({
     engine,
     preview,
@@ -736,7 +739,7 @@ function AppFrameRuntime({
     onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
     conversationReads: {
       engine, scope: sessionScope, activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
-      identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
+      identity: railReadIdentity, admitted: railReadAdmitted, folderIntentIdentity: railFolderIntentIdentity, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
         if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)

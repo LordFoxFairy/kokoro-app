@@ -1243,3 +1243,66 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
   await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
   expect(screen.queryByRole("menu")).toBeNull()
 })
+
+
+it("R255 稳定主体重核时隐藏私有分支，恢复后保留P/Q展开且Direct常驻", async () => {
+  const { props } = retirementRailFixture()
+  const frame = (admitted: boolean, generation: number) => {
+    const conversationReads = { ...props.conversationReads!, identity: `actor-A:gen${generation}`, admitted, folderIntentIdentity: "actor-A" }
+    return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
+  }
+  const view = render(frame(true, 1))
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+  for (const id of ["P", "Q"]) {
+    const toggle = document.querySelector<HTMLButtonElement>(`[data-project-id="${id}"] button[aria-expanded]`)
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle!)
+    await screen.findByRole("button", { name: `会话${id}` })
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+  }
+
+  view.rerender(frame(false, 2))
+  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
+  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
+  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+
+  view.rerender(frame(true, 2))
+  for (const id of ["P", "Q"]) {
+    expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toHaveAttribute("aria-expanded", "true")
+    await screen.findByRole("button", { name: `会话${id}` })
+  }
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+  expect(props.onDeleteConversation).not.toHaveBeenCalled()
+})
+
+it.each(["actor-B", null])("R255 展开意图遇主体%s再回A不复活旧P/Q分支", async (nextActor) => {
+  const { props } = retirementRailFixture()
+  const frame = (actor: string | null, generation: number, admitted: boolean) => {
+    const conversationReads = { ...props.conversationReads!, identity: `${actor ?? "unknown"}:gen${generation}`, admitted, folderIntentIdentity: actor }
+    return <ThemeProvider><LocaleProvider><WorkspaceRail {...props} conversationReads={conversationReads} /></LocaleProvider></ThemeProvider>
+  }
+  const view = render(frame("actor-A", 1, true))
+  for (const id of ["P", "Q"]) {
+    const toggle = document.querySelector<HTMLButtonElement>(`[data-project-id="${id}"] button[aria-expanded]`)
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle!)
+    await screen.findByRole("button", { name: `会话${id}` })
+  }
+  view.rerender(frame(nextActor, 2, nextActor !== null))
+  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
+  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
+  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+
+  view.rerender(frame("actor-A", 3, true))
+  for (const id of ["P", "Q"]) {
+    expect(document.querySelector(`[data-project-id="${id}"] button[aria-expanded]`)).toHaveAttribute("aria-expanded", "false")
+  }
+  await act(async () => { await Promise.resolve() })
+  expect(document.querySelectorAll('[data-conversation-list="project-conversation"]')).toHaveLength(0)
+  expect(screen.queryByRole("button", { name: "会话P" })).toBeNull()
+  expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
+  expect(props.onDeleteConversation).not.toHaveBeenCalled()
+})

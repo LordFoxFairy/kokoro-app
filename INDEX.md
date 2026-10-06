@@ -1,3 +1,7 @@
+## R255 左栏展示意图入口
+
+`workspace-rail-shell` 的 `folderIntentIdentity` 只保同已验证主体的非数据展开意图；read identity/generation/admitted 仍负责私有读取隔离。当前证据见 `docs/CURRENT.md`。
+
 ## R255 未开户正常状态与错误隔离（2026-10-06）
 
 15现生产路径+1现UI测试，freeze报告d33e64be/final独审eadda7dd。contract/billing.ts消费正规严格404 billing_account_not_found错误体（meta/header request_id一致）；billing/client.ts复用原唯一10秒/16MiB/fatalUTF8/abort读取链，非404失败保持早抛。summary/ledger独立missing_account，不画假0/空流水/Retry，不在GET开户；另一面的真实异常与原actor/分页控制保持。九语言现键，无新文件/依赖/generated/API/资金写。

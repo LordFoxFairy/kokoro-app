@@ -79,6 +79,8 @@
 .folderToggle { flex-shrink: 0; }
 .folderToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .projectFolderChildren { width: 100%; min-width: 0; box-sizing: border-box; padding-inline-start: var(--spacing-4, 1rem); }
+.projectFolderChildren .list { margin-top: 0.125rem; margin-bottom: 0.25rem; }
+.projectFolderChildren .empty { padding: 0.125rem 0.65rem; font-size: 0.75rem; line-height: 1.4; }
 
 /* Expanded folders keep their existing list actions on the owning folder row. */
 .projectFolder:has(> .projectFolderChildren) > .projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 4rem; }

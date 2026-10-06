@@ -138,22 +138,24 @@ export function WorkspaceRailShell({
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })
 
-  const folderIdentity = conversationReads?.identity ?? "controlled"
+  const folderIntentIdentity = conversationReads?.folderIntentIdentity
+  const folderIdentity = folderIntentIdentity === undefined ? conversationReads?.identity ?? "controlled" : folderIntentIdentity
+  const preservePendingFolderIntent = folderIntentIdentity !== undefined && folderIntentIdentity !== null
   const foldersAdmitted = conversationReads?.admitted ?? true
   const [folderState, setFolderState] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null)
-  if (folderState !== null && (!foldersAdmitted || folderState.identity !== folderIdentity)) setFolderState(null)
-  const expandedProjectIds = foldersAdmitted
+  if (folderState !== null && (folderIdentity === null || folderState.identity !== folderIdentity || (!foldersAdmitted && !preservePendingFolderIntent))) setFolderState(null)
+  const expandedProjectIds = foldersAdmitted && folderIdentity !== null
     ? folderState?.identity === folderIdentity ? folderState.ids : new Set(projectItems.filter((project) => project.active).map((project) => project.id))
     : new Set<string>()
   useEffect(() => {
-    if (!foldersAdmitted || projectListStatus !== "ready" || folderState?.identity === folderIdentity) return
+    if (!foldersAdmitted || folderIdentity === null || projectListStatus !== "ready" || folderState?.identity === folderIdentity) return
     const ids = new Set(projectItems.filter((project) => project.active).map((project) => project.id))
     let live = true
     queueMicrotask(() => { if (live) setFolderState((current) => current?.identity === folderIdentity ? current : { identity: folderIdentity, ids }) })
     return () => { live = false }
   }, [folderIdentity, folderState?.identity, foldersAdmitted, projectItems, projectListStatus])
   const toggleProject = (id: string) => {
-    if (!foldersAdmitted) return
+    if (!foldersAdmitted || folderIdentity === null) return
     const ids = new Set(expandedProjectIds)
     if (ids.has(id)) ids.delete(id)
     else ids.add(id)

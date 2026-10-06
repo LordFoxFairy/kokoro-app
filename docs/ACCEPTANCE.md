@@ -1,3 +1,11 @@
+## R255 本次左栏留白与重核展开意图（2026-10-06）
+
+Web bf04df7 基线，现4生产路径与现workspace-rail测试窄修：空folder branch桌面43.52→26.80px；非数据folderIntentIdentity按已验证subject隔离，与read generation分离。同主体pending仍撤准入/卸载私有分支，恢复保展开；换subject/null清意图，原未提供稳定key的受控退役case保持。无新存储/API/认证例外。
+
+Root正常3310既有IAM/BFF实际：修前两folder展开，后捕获session GET200时已收起；修后实际重核GET200后两folder仍展开/Direct常驻/原同ID两历史marker。具体timer/focus触发未分别归因。1200×460最终非空P+空Q scroll0→204→0，Direct底346.55<footer356.80，无横溢；本轮早段Direct→P→Direct正规移动同ID已恢复，后段外部数据变为P1/Direct1，未替用户再变更。空态/真实会话均可读；原user标签同步超时，不冒其已刷新。物理触屏、长期分页/异常、全CRUD、撤准入期间scroll位置恢复仍未验/未修，不以保展开冒scroll恢复。
+
+Root辅助验证：新增恢复case有效RED1/2PASS→冻结3UI文件167/0/exit0；lint/typecheck/build均exit0。独审/提交记录由Root现task承接；原三D0/OIDC mixed保持。正常九服务18PID alive、登记实际9探针200/fixture=false；无重复启动/PG或Redis reset/正常资金或模型调用。本片是用户侧栏子路径验收，不关闭70组或全研发上线。证据Root var/dev/r255-preserve/sidebar-intent-*与sidebar-new-*。
+
 ## R255 未开户正常状态与错误隔离（2026-10-06）
 
 15现生产路径+1现UI测试，freeze报告d33e64be/final独审eadda7dd。contract/billing.ts消费正规严格404 billing_account_not_found错误体（meta/header request_id一致）；billing/client.ts复用原唯一10秒/16MiB/fatalUTF8/abort读取链，非404失败保持早抛。summary/ledger独立missing_account，不画假0/空流水/Retry，不在GET开户；另一面的真实异常与原actor/分页控制保持。九语言现键，无新文件/依赖/generated/API/资金写。
