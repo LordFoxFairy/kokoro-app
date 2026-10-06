@@ -1,3 +1,9 @@
+## R255 04:40 项目重进双时序回归（不是产品根因修复）
+
+原欢迎页立即503/200、同key/body和A/B草稿断言完整保留，仅finally清理fetch替身；另加独立deferred ACK阶段诊断。Root Node22.22.2执行全部tests/ui+tests/engine：73文件1426PASS/0，快ACK114ms、deferred153ms；本文件eslint和直接tsc均0。独审d3f5e2b绑定test7b2abfda、navigationf98e06fd无已证P0/P1/P2。
+
+该宽集不是历史未保存完整命令的16文件同序复跑；旧461/1间歇失败证据保留，不以deferred时序绿抵销，不声称根因已修或正常浏览器验收。原四mixed/source/用户数据保护；全test/build/Playwright/axe/移动视觉未执行。
+
 ## R255 04:19 Root：深链回退失败的无限加载窄修
 
 现 use-app-frame-navigation.ts 使已结束水合的 error（路由错位或无正文）优先成为既有错误终态，loading/error互斥；保持原URL、Retry原会话、权限/engine及同路由已有正文局部错误。仅现导航与app-frame.smoke新增反例，无新框架/页面/协议。Root真实AppFrame+SessionEngine UI fixture先1 FAIL（974行spinner不退出，前置状态成立），修后该case和既有项目重进case定向2 PASS；此辅助夹具不是正常浏览器或owner E2E。

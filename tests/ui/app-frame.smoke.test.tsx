@@ -1575,30 +1575,104 @@ it("正式欢迎页新建未知结果后重进仍复用原意图，不把 B 草�
     }), { status: 200 }))
   })
   vi.stubGlobal("fetch", fetchMock)
-  render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
-  fireEvent.click(await screen.findByRole("button", { name: /建立网站/ }))
-  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "A 网站草稿" } })
-  const trigger = screen.getByRole("button", { name: "新增到专案" })
-  fireEvent.pointerDown(trigger)
-  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
-  expect(await screen.findByTestId("project-create-error")).toHaveTextContent("专案创建失败")
-  expect(window.location.pathname).toBe("/")
-  fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 网站草稿" } })
-  expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿")
-  fireEvent.pointerDown(trigger)
-  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
-  await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_welcome-a"))
-  const requests = fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST") as Array<[string, RequestInit]>
-  expect(requests).toHaveLength(2)
-  expect(requests[0]?.[1].headers).toEqual(requests[1]?.[1].headers)
-  expect(requests[0]?.[1].body).toBe(requests[1]?.[1].body)
-  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 网站草稿"))
-  await act(async () => {
-    window.history.pushState(window.history.state, "", "/app")
-    window.dispatchEvent(new PopStateEvent("popstate"))
+  try {
+    render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
+    fireEvent.click(await screen.findByRole("button", { name: /建立网站/ }))
+    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "A 网站草稿" } })
+    const trigger = screen.getByRole("button", { name: "新增到专案" })
+    fireEvent.pointerDown(trigger)
+    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    expect(await screen.findByTestId("project-create-error")).toHaveTextContent("专案创建失败")
+    expect(window.location.pathname).toBe("/")
+    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 网站草稿" } })
+    expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿")
+    fireEvent.pointerDown(trigger)
+    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_welcome-a"))
+    const requests = fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST") as Array<[string, RequestInit]>
+    expect(requests).toHaveLength(2)
+    expect(requests[0]?.[1].headers).toEqual(requests[1]?.[1].headers)
+    expect(requests[0]?.[1].body).toBe(requests[1]?.[1].body)
+    await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 网站草稿"))
+    await act(async () => {
+      window.history.pushState(window.history.state, "", "/app")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿"))
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
+it("正式欢迎页未知结果重进分段诊断：第二 POST 同意图后释放 deferred ACK，保留 A/B 草稿", async () => {
+  buildEngine()
+  let createCount = 0
+  let finishRetry!: (response: Response) => void
+  const retryResponse = new Promise<Response>((resolve) => { finishRetry = resolve })
+  const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url !== "/api/hub/projects" || init?.method !== "POST") {
+      return Promise.resolve(new Response(JSON.stringify({ data: {}, meta: { request_id: "req-get" } }), { status: 200 }))
+    }
+    createCount += 1
+    if (createCount === 1) return Promise.resolve(new Response(JSON.stringify({ error: { code: "service_unavailable" } }), { status: 503 }))
+    return retryResponse
   })
-  await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿"))
-  vi.unstubAllGlobals()
+  vi.stubGlobal("fetch", fetchMock)
+  try {
+    render(<ThemeProvider><LocaleProvider><KokoroAppSurface engine={engine} desktopRailCollapsed={false} preview={false} /></LocaleProvider></ThemeProvider>)
+    fireEvent.click(await screen.findByRole("button", { name: /建立网站/ }))
+    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "A 网站草稿" } })
+    const trigger = screen.getByRole("button", { name: "新增到专案" })
+    expect(trigger).toBeInTheDocument()
+    fireEvent.pointerDown(trigger)
+    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    expect(await screen.findByTestId("project-create-error")).toHaveTextContent("专案创建失败")
+    expect(window.location.pathname).toBe("/")
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "新增到专案" })).toHaveAttribute("aria-expanded", "false")
+      expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
+    })
+    fireEvent.change(screen.getByLabelText("对话输入"), { target: { value: "B 网站草稿" } })
+    expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿")
+
+    // 重新查询已挂载入口，区分菜单未选中与 POST/ACK 后导航未发生。
+    const retryTrigger = screen.getByRole("button", { name: "新增到专案" })
+    expect(retryTrigger).toBeInTheDocument()
+    expect(retryTrigger).toBeEnabled()
+    fireEvent.pointerDown(retryTrigger)
+    const retryMenu = await screen.findByRole("menu")
+    expect(retryTrigger).toHaveAttribute("aria-expanded", "true")
+    const retryItem = within(retryMenu).getByRole("menuitem", { name: "新建专案" })
+    expect(retryItem).toBeInTheDocument()
+    fireEvent.click(retryItem)
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(2))
+    const requests = fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST") as Array<[string, RequestInit]>
+    expect(requests).toHaveLength(2)
+    expect(requests[0]?.[1].headers).toEqual(requests[1]?.[1].headers)
+    expect(requests[0]?.[1].body).toBe(requests[1]?.[1].body)
+    await waitFor(() => {
+      expect(retryTrigger).toHaveAttribute("aria-expanded", "false")
+      expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
+    })
+    expect(window.location.pathname).toBe("/")
+    expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿")
+
+    // 只有实际第二次 POST 已入站且身份一致，才释放合法 owner 回执。
+    await act(async () => finishRetry(new Response(JSON.stringify({
+      data: { project: { id: "project_welcome-a", slug: "new-project-welcome-a", name: "New project A", description: "", created_at: "2026-09-28T00:00:00Z", updated_at: "2026-09-28T00:00:00Z" } },
+      meta: { request_id: "req-2" },
+    }), { status: 200 })))
+    await waitFor(() => expect(window.location.pathname).toBe("/app/project/project_welcome-a"))
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === "/api/hub/projects" && init?.method === "POST")).toHaveLength(2)
+    await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("A 网站草稿"))
+    await act(async () => {
+      window.history.pushState(window.history.state, "", "/app")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    })
+    await waitFor(() => expect(screen.getByLabelText("对话输入")).toHaveValue("B 网站草稿"))
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })
 
 it("owner 已创建但导航回调抛错时重试只重新导航，不再 POST", async () => {
