@@ -34,6 +34,42 @@ browser Hub client的新Connection read另以现client内局部strict helper施�
 
 <!-- R257-MCP-WEB-D0-TECH-END -->
 
+## R257-MCP-WEB-D0：本人 MCP Connection 页面消费者（2026-10-06；仅设计）
+
+**当前与目标。** Web `30aa83d70e9d54a804b4eaf8e2211abaa6cb02d9` 的正常 `McpProjectionRead` 仍请求 `/api/hub/self/mcp/servers`，解析并显示全局 Server declaration；Root 已在正常 tab 11 取得该 wrong-resource 200 RED。目标只把此 live read 切到 BFF 待发布的 public 8.0.0 `GET /v1/mcp/connections`，显示当前已准入 subject 的 active Connection 六字段。BFF D0 已提交 `d776194`，但机器/source尚未发布，故本节不编造BFF commit或digest；消费者源码必须等Root固定正式artifact后另卡实施。preview管理表单、Server注册/启停/删除不是此read的fallback，也不因此验收。
+
+### §8 放置与边界
+
+| 项 | 决定 |
+| --- | --- |
+| Owner | Platform拥有Connection/Connector/current authorization/Server；BFF发布本人public投影；Web只拥有同源adapter、严格consumer与页面请求生命周期。 |
+| 当前事实 | `src/hub/schemas.ts`定义Server projection，`src/hub/client.ts`的`listMcpProjections`请求servers，`src/ui/mcp/mcp-projection-read.tsx`分页展示Server；`src/app/api/hub/[...path]/route.ts`负责当前Session admission与可信BFF运输。 |
+| 采用方案 | 沿现`/api/hub/self/*`→BFF `/v1/*`、现HubClient、McpProjectionRead和public snapshot门原位替换资源；不建第二MCP client、store、query framework或直连Platform。 |
+| 身份/依赖 | browser只带HttpOnly session；adapter每次重新`admittedProductSession`并由服务器生成BFF身份头。禁止浏览器tenant/subject/header/body赋权，不把IAM后台资格或第三方帐号/费用当本人读取前置。 |
+| 数据/API | 无Web数据库、localStorage、IndexedDB、Redis、cookie字段或缓存事实；只内存保存当前actor下filters/cursor/page。固定BFF public artifact发布后，checked-in snapshot复制owner原字节并更新现generator provenance。 |
+| 删除项 | 删除live Server projection schema/path/client/UI字段及其preview假read；不保servers alias、双读、页面按Server过滤Connection或错误回退为empty。Server管理preview路径仍属显式preview分支，不冒live能力。 |
+| 验证 | contract snapshot mutation、Hub client/adapter真实Response、组件race/cancel/page/filter、原preview回归；最终Root正常登录A/B、empty/positive/分页/刷新/撤销与硬刷新浏览器。 |
+
+### 请求与页面生命周期
+
+HubClient目标输入为可选`connection_id/provider_key/limit/cursor`，由`URLSearchParams`各写一次；connection/provider filter改变时同步清cursor、历史和旧page并发新读。cursor只opaque传递，末页缺字段；前一页只使用本组件保存的访问历史，不解码/排序/重签。页面不按Server declaration去重或补名，同一server的多个connection分别显示。
+
+adapter只接受GET、`self/mcp/connections`与四个closed query；重复/未知/空值、ID/provider/limit/cursor边界在BFF socket前拒绝。它沿现Product Session准入生成request ID与BFF身份头，忽略浏览器伪造的`x-kokoro-*`。上游仍使用现`requestWithDomain`的总deadline、header/body cap、redirect拒绝和request.signal；响应须JSON、private no-store、合法request-id、strict closed success/error后才返回浏览器。401/403/429保持当前session语义；400是filter/cursor输入错误；502/503显式错误，不变空列表。
+
+browser Hub client的新Connection read另以现client内局部strict helper施加一次10秒总deadline，覆盖同源response headers、有限body读取、fatal UTF-8解码、JSON与Zod parse；成功/error body同限1MiB，超限、超时、取消、非法UTF-8或schema不合格分别收敛为现类型化错误。不得复用当前plain `fetch` + `response.json()`的无界`requestPublicRead`，也不得把legacy `readError`宽松解析带入新operation；helper只服务此正式read，不抽新网络framework或顺手重写Skills/其他Hub调用。
+
+`McpProjectionRead`的effect必须持本次actor marker、filter tuple、cursor与generation；cleanup主动AbortController.abort，而不只以boolean忽略回调。卸载、重试、filter变化、翻页、Session re-admission/A→B使旧request失效；迟到成功/失败不得覆盖新actor、新filter或已卸载视图。一次仅一个当前读，无自动遍历全页、后台预取或无限重试。loading/error/empty/ready/page控件保持；empty只表示本人此刻无可见active Connection，不提示已授权、已可调用或管理成功。六字段是strict传输闭集而非六列debug界面：Card主层只呈现provider与人类可读的“已连接”状态，opaque connection/connector/server ID仅放可访问的次要详情；transport可作低层详情，不展示内部permission、declaration、secret或原始owner诊断。
+
+### 后继最窄文件集（均未授权写入）
+
+1. 固定合同：`src/generated/bff-public-openapi.yaml`复制未来BFF正式8.0.0原字节；`scripts/generate-bff-team-client.mjs`与`scripts/generate-bff-agent-failure.mjs`只更新固定commit/digest并正规write/check，派生物由现生成器决定，禁止手改。`contract/README.md`只在正式pin片记录证据。
+2. consumer/adapter：`src/hub/schemas.ts`、`src/hub/client.ts`、`src/app/api/hub/[...path]/route.ts`、`src/ui/mcp/mcp-projection-read.tsx`；`mcp-content.tsx`现已挂此组件，除真实接线差异外不预改。若UI正式暴露两个filter需要新文案，沿现i18n字典完整补齐；不得硬编码技术标签或先建filter框架。
+3. 现测试：`tests/contract/bff-skills-mcp-public.test.ts`、`tests/hub/client.test.ts`、`tests/app/hub-proxy.test.ts`、`tests/ui/mcp-panel.test.tsx`；现`contract/api-contract.test.ts`及whole-public pin测试仅在固定artifact实际diff要求时更新，不为计数批改。
+
+有效RED必须让当前正常组件收到合法BFF Connection响应却因旧Server path/shape/字段而失败，而非ENOENT、future import、未登录或mock缺方法。正负门覆盖六字段closed shape、拒旧Server字段/额外secret、query单值与边界、filter清page、分页终止、同server多connection、不缓存empty、A→B/撤准入/重试/卸载迟到退役、错误不转empty，以及adapter零伪造身份。最后真实浏览器需本人合法Connection正控；正常empty只能验空态，不能私SQL/preview/假授权造数据。
+
+<!-- R257-MCP-WEB-D0-TECH-END -->
+
 ## T-C01.R255-PRESET-RETIRE（06:12）：旧 Agent preset 消费者退役设计（D0 阶段记录）
 
 本前缀记录实施前的 D0 收口决定，覆盖下方历史 AGENT-PRESET / namespace profile 选择说明，其他原文逐字保留；基线为 Web main aaf577dcfd7045c89bf2d68c80eff8e0e34ba152、Root 6455e04a7cf661068a1c7d106a2d0003527fc223，现已完成本片源码静态退役。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。

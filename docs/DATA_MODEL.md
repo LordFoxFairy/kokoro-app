@@ -10,6 +10,18 @@ Platform独占Connector、Connection、current authorization与Server；BFF只�
 
 <!-- R257-MCP-WEB-D0-DATA-END -->
 
+## R257-MCP-WEB-D0：本人 Connection 页面无持久化事实（2026-10-06；仅设计）
+
+Platform独占Connector、Connection、current authorization与Server；BFF只发布当前本人投影。Web不新增数据库、表、SQL、Redis、localStorage、IndexedDB、cookie字段、离线cache、receipt、outbox或同步store，也不复制owner eligibility。Server declaration不是本人Connection，旧Server read/shape不得保留为fallback。
+
+唯一瞬时状态为当前已准入actor marker下的filter tuple、opaque cursor历史、当前page及loading/error generation。filter、actor、Session admission、重试、卸载变化会取消/退役旧读；不得跨actor复用page、empty、cursor或错误。浏览器刷新必须从BFF/Platform重读current事实；多页不是跨请求数据库snapshot，撤权可使后页或刷新变化。
+
+六字段只用于strict传输投影，不要求六字段全部成为主视觉内容；主Card只显示provider与人类可读连接状态，opaque ID仅为次要详情。Web不持久保存URL、secret、headers、provider credential、scope、proof、工具清单、permission、declaration或授权缓存。active只描述owner本次合格投影，不证明Agent invoke权限、第三方帐号、计费或后台管理员资格。创建/授权/enable/invoke/revoke仍是独立owner命令与验收，本D0不创建其本地状态。browser client的10秒总deadline与1MiB body cap只约束单次内存读取，不形成缓存或持久事实。
+
+本片不改任何source/schema/机器快照。未来固定BFF artifact后，contract/client/adapter/component测试证明消费边界；最终Root用正常Session A/B及owner真实Connection/撤销/分页/硬刷新验收。只有empty而无合法positive不能关闭用户连接旅程。
+
+<!-- R257-MCP-WEB-D0-DATA-END -->
+
 ## T-C01.R255-PRESET-RETIRE（06:12）：唯一 model-only 浏览器偏好目标
 
 本前缀记录实施前的 D0 收口：冻结时源码仍为 model+agent strict 偏好，下述是当时裁决的实现边界，现已完成 model-only 源码静态退役，原数据模型全文保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
