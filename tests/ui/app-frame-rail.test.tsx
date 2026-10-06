@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
+import { StrictMode } from "react"
 
 const pathname = vi.hoisted(() => ({ value: "/app" }))
 
@@ -89,6 +90,81 @@ afterEach(() => {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth })
   Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia })
   vi.restoreAllMocks()
+})
+
+it.each([
+  { label: "saved expanded", cookie: "true", defaultCollapsed: true, expectedCollapsed: false },
+  { label: "saved collapsed", cookie: "false", defaultCollapsed: false, expectedCollapsed: true },
+  { label: "missing cookie / collapsed default", cookie: null, defaultCollapsed: true, expectedCollapsed: true },
+  { label: "missing cookie / expanded default", cookie: null, defaultCollapsed: false, expectedCollapsed: false },
+] as const)("R255 StrictMode rail reconciles $label after mount replay", async ({ cookie, defaultCollapsed, expectedCollapsed }) => {
+  setDesktopViewport(1200)
+  if (cookie !== null) document.cookie = `sidebar_state=${cookie}; path=/`
+  const cookieBeforeMount = document.cookie
+  render(
+    <StrictMode>
+      <ThemeProvider>
+        <LocaleProvider>
+          <AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={defaultCollapsed} />
+        </LocaleProvider>
+      </ThemeProvider>
+    </StrictMode>,
+  )
+
+  // Flush the real queued reconciliation after StrictMode setup/cleanup/setup.
+  // Neither the layout hook nor its cookie reader is mocked.
+  await act(async () => { await Promise.resolve() })
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  await waitFor(() => {
+    expect(shell).toHaveAttribute("data-rail-collapsed", String(expectedCollapsed))
+    expect(shell).not.toHaveAttribute("data-rail-hidden")
+    expect(screen.getByRole("button", { name: expectedCollapsed ? "展开侧栏" : "收起侧栏" })).toBeInTheDocument()
+  })
+  expect(document.cookie).toBe(cookieBeforeMount)
+})
+
+it("R255 StrictMode rail keeps mounted navigation state without rereading a changed cookie or route default", async () => {
+  setDesktopViewport(1200)
+  const DestinationSurface = () => <div>mounted rail destination</div>
+  const frame = (desktopRailCollapsed: boolean, standaloneSurface: boolean) => (
+    <StrictMode>
+      <ThemeProvider>
+        <LocaleProvider>
+          <AppFrame
+            engine={engine}
+            chatHref="/app"
+            desktopRailCollapsed={desktopRailCollapsed}
+            standaloneSurface={standaloneSurface}
+            emptyState={DestinationSurface}
+          />
+        </LocaleProvider>
+      </ThemeProvider>
+    </StrictMode>
+  )
+  const view = render(frame(true, false))
+  await act(async () => { await Promise.resolve() })
+  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  expect(shell).toHaveAttribute("data-rail-collapsed", "true")
+  fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
+  await waitFor(() => expect(shell).toHaveAttribute("data-rail-collapsed", "false"))
+  expect(document.cookie).toContain("sidebar_state=true")
+
+  // An external preference change must not overwrite this mounted shell's choice.
+  document.cookie = "sidebar_state=false; path=/"
+  pathname.value = "/app/agents"
+  view.rerender(frame(false, true))
+  await act(async () => { await Promise.resolve() })
+  expect(screen.getByText("mounted rail destination")).toBeInTheDocument()
+  expect(screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')).toBe(shell)
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  expect(document.cookie).toContain("sidebar_state=false")
+
+  pathname.value = "/app"
+  view.rerender(frame(true, false))
+  await act(async () => { await Promise.resolve() })
+  expect(screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')).toBe(shell)
+  expect(shell).toHaveAttribute("data-rail-collapsed", "false")
+  expect(document.cookie).toContain("sidebar_state=false")
 })
 
 it("桌面 shell 发布唯一 300/52 轨道契约和 rail seam", () => {

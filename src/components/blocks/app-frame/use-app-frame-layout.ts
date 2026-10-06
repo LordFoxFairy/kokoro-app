@@ -44,14 +44,14 @@ export function useAppFrameLayout({
     // it again during mounted-surface navigation would submit a second rail
     // state in the same transition and bring back the one-frame flash.
     if (railPreferenceReadRef.current) return
-    railPreferenceReadRef.current = true
     let active = true
     // Queue after the layout effect so the server/client tree stays identical
     // while still reconciling before the next user interaction. The async
     // callback also avoids a synchronous cascading render in React's effect
     // lint rule.
     queueMicrotask(() => {
-      if (!active) return
+      if (!active || railPreferenceReadRef.current) return
+      railPreferenceReadRef.current = true
       const persistedCollapsed = readRailCollapsedCookie()
       if (persistedCollapsed !== null) setRailCollapsed(persistedCollapsed)
     })

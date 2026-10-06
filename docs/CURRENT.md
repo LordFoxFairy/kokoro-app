@@ -1,3 +1,13 @@
+## R255 05:22：宽屏侧栏偏好刷新真实反例已修（完整能力仍OPEN）
+
+基线main ad918391；唯一layout hook首次cookie读取完成标记从effect setup移到有效microtask callback，保SSR初树、StrictMode清理和mounted导航不重读，compact不覆盖宽屏cookie。source SHA c809ea186 / test cfb8fde2；原四mixed未纳入本片。
+
+Root正常3310真实IAM既有会话：1200展开→cookie=true→硬刷新仍52px且cookie=true有效RED；源HMR后展开/收起两方向硬刷新恢复，700临时展开cookie不变→回1200并刷新保持展开、原会话正文与外部列表在、loading=false；自有Playwright页已关闭，IAB未动。证据 /Users/nako/WebstormProjects/github/thefoxfairy/Kokoro/var/dev/r255-preserve/0522-normal-browser-journey.json 与0522-normal-rail-restored.png；不是preview/mock模型用户完成声明。
+
+辅助组件StrictMode首轮5例2有效FAIL+1fixture INVALID（未当产品缺陷）→合法稳定ComponentType后5例3PASS/2FAIL→Root完整rail+smoke173/0，窄eslint与直接tsc均exit0，独审两hash无已证新增P0/P1/P2。未跑完整build/e2e/axe/bundle/独立SSR hydrate门，不以173替代全用户验收。
+
+同正常中文manifest403已由Root正规System同Site CAS仅追加zh-CN（version1→2、幂等回读200/public不变），实际页面manifest200，zh/en仍拒绝。但live projection navigation=[]、flags仅chat，侧栏高级模块入口仍缺；此配置偏差、agents404和Billing503/收费Agent完整链均OPEN。正常资金/模型/schema/reset/服务重启0，Site配置一次正规业务变更如实记录；70用户组计数不增加。
+
 ## R255 04:40 项目重进双时序回归（不是产品根因修复）
 
 原欢迎页立即503/200、同key/body和A/B草稿断言完整保留，仅finally清理fetch替身；另加独立deferred ACK阶段诊断。Root Node22.22.2执行全部tests/ui+tests/engine：73文件1426PASS/0，快ACK114ms、deferred153ms；本文件eslint和直接tsc均0。独审d3f5e2b绑定test7b2abfda、navigationf98e06fd无已证P0/P1/P2。
