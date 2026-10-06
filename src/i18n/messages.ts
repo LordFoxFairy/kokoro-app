@@ -901,9 +901,6 @@ export const zh = {
   "composer.modelSwitch": "切换模型",
   "composer.modelLocked": "模型：{model}（本轮锁定）",
   "composer.modelLockedTitle": "模型在本轮已锁定；开新对话可更换",
-  "composer.agentSwitch": "切换 agent",
-  "composer.agentLocked": "agent：{agent}（本轮锁定）",
-  "composer.agentLockedTitle": "agent 在本轮已锁定；开新对话可更换",
   // 作品库（ARTIFACT-LIB）
   "rail.navLibrary": "作品",
   "library.title": "作品库",
@@ -1369,10 +1366,9 @@ export const zh = {
   "settings.shortcutSidebar": "切换侧边栏",
   "settings.shortcutReset": "重设为预设值",
 
-  "settings.chatHint": "新对话发出首条消息时预填这些选择；本轮开跑后按会话锁定。",
+  "settings.chatHint": "新对话发出首条消息时使用此缺省模型；开跑后按会话锁定。",
   "settings.saved": "已保存",
   "settings.defaultModel": "缺省模型",
-  "settings.defaultAgent": "缺省 agent",
   "settings.followProfile": "跟随空间缺省",
   "settings.creditsTitle": "用量与计费",
   "settings.creditsMenu": "积分",

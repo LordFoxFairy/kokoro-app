@@ -91,8 +91,6 @@ export type SessionEngine = {
   setSelectedSkillSourceRefs: (sourceRefs: readonly string[]) => void
   // 选中模型（MODEL-UX）：首条消息上 wire 为 messageCreate.model。
   setModel: (model: string | null) => void
-  // 选中 agent（AGENT-PRESET）：首条消息上 wire 为 messageCreate.agent。
-  setAgent: (agent: string | null) => void
   dispose: () => void
 }
 

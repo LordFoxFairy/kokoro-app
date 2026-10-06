@@ -110,6 +110,17 @@ const sessionSnapshot = {
 }
 
 describe("checked-in HTTP request and response contracts", () => {
+  it("accepts model-only Web messages without retiring the optional public agent field", () => {
+    const input = {
+      idempotency_key: "request_model_only",
+      content: "hello",
+      model: "model_1",
+      thinking: true,
+      selected_skill_source_refs: ["skill:skill_1"],
+    }
+    expect(messageCreateParamsSchema.parse(input)).toEqual(input)
+  })
+
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
     expect(messageCreateParamsSchema.parse({
       idempotency_key: "request_1",

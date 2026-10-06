@@ -128,10 +128,11 @@ DELETE  /v1/sessions/{SESSION_ID}
 POST   /v1/sessions/{SESSION_ID}/share
 DELETE /v1/sessions/{SESSION_ID}/share
 GET    /v1/models
-GET    /v1/agents
 GET    /v1/artifacts?cursor=CURSOR
 GET    /v1/artifacts/{CONTENT_HASH}
 ```
+
+旧 Agent preset 目录 GET `/v1/agents` 未发布，Web 不再查询或生产 preset 选择；公开 MessageCreate.agent 仍可选，现 Web 消息只沿有效模型、mode、Skill 与 scope 构造，unknown-ACK 重试保同 key/body。独立 `/v1/agents/connections/setup` 不在退役范围。
 
 文件和 delivery 仍属于 Chat 事实投影，若返回二进制，BFF 和 Web 适配层保持 body 流式，
 不把内容整体读入内存。

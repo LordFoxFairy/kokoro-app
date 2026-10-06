@@ -82,10 +82,10 @@ export function admitBrowserAuthSessionIndexes(subject: string, subjectAtProbeSt
   return true
 }
 
-// 会话清单/成果/分享/模型/agent 读客户端子集（SESS-LIST/MODEL-UX/AGENT-PRESET/SHARE/ARTIFACT-LIB）。
+// 会话清单/成果/分享/模型读客户端子集（SESS-LIST/MODEL-UX/SHARE/ARTIFACT-LIB）。
 export type ListClient = Pick<
   SessionClient,
-  "listSessions" | "listModels" | "listAgents" | "createShare" | "revokeShare" | "renameSession"
+  "listSessions" | "listModels" | "createShare" | "revokeShare" | "renameSession"
 >
 
 let pageHubClient: HubClient | null = null
@@ -152,7 +152,6 @@ export function browserAgentClient(options: { preview?: boolean } = {}): AgentCl
 }
 
 // 会话清单读客户端：与引擎同源选择（preview 假流优先，否则 `/api/session` BFF）。listModels/
-// listAgents 复用同客户端。
 let pageListClient: SessionClient | null = null
 let pagePreviewClient: SessionClient | null = null
 

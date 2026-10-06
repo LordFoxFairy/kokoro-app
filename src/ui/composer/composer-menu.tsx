@@ -24,7 +24,7 @@ export type MenuOption = {
 type ComposerMenuProps = {
   triggerClassName: string
   /** Stable semantic hook for site skins that intentionally hide a control. */
-  dataComposerControl?: "agent" | "model" | "mode"
+  dataComposerControl?: "model" | "mode"
   triggerLabel: string
   triggerTitle?: string
   trigger: ReactNode

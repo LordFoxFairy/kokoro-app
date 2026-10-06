@@ -8,6 +8,8 @@ import type { ComponentProps } from "react"
 
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
+import { createSessionClient } from "@/engine/client"
+import * as pageClients from "@/ui/shell/page-clients"
 
 const { registerCustomMcp, registerCustomApi, uploadConnectorIcon, endProductSession } = vi.hoisted(() => ({
   registerCustomMcp: vi.fn().mockResolvedValue({}),
@@ -36,9 +38,6 @@ vi.mock("@/ui/shell/page-clients", () => ({
   browserListClient: () => ({
     listModels: vi.fn().mockResolvedValue({
       models: [{ provider: "anthropic", name: "opus", is_default: true }],
-    }),
-    listAgents: vi.fn().mockResolvedValue({
-      agents: [{ name: "general", description: "default", is_default: true }],
     }),
   }),
   // account/appearance/chat tab 不调用下列客户端；仅需存在 export 供模块 import。
@@ -1022,5 +1021,75 @@ describe("R255 live account has no invented Credit policy", () => {
     expect(account).not.toHaveTextContent("免费")
     expect(account).not.toHaveTextContent("每日刷新积分")
     expect(account.querySelector('[data-slot="account-daily-credit-group"]')).toBeNull()
+  })
+})
+
+
+describe("R255 preset retirement: Settings model-only preferences", () => {
+  afterEach(async () => {
+    cleanup()
+    // Drain Radix FocusScope's owned unmount task before this jsdom realm is released.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  })
+
+  it("正常 Settings 保留可用模型目录且不请求旧 agents 目录", async () => {
+    const requestedPaths: string[] = []
+    const listSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "/api/session" }))
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+      requestedPaths.push(url.pathname)
+      if (url.pathname === "/api/session/models") return Response.json({ models: [{ provider: "anthropic", name: "opus", is_default: true }] })
+      // Keep the old route successful: a real obsolete request, not a missing fixture, must cause RED.
+      if (url.pathname === "/api/session/agents") return Response.json({ agents: [{ name: "general", description: "default", is_default: true }] })
+      return Response.json({}, { status: 503 })
+    })
+    try {
+      renderSettings()
+      fireEvent.keyDown(screen.getByTestId("settings-tab-chat"), { key: "Enter" })
+      fireEvent.click(await screen.findByTestId("settings-default-model"))
+      fireEvent.click(await screen.findByRole("option", { name: "opus" }))
+      expect(screen.getByTestId("settings-default-model")).toHaveTextContent("opus")
+      expect(requestedPaths).toContain("/api/session/models")
+      expect(JSON.parse(window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null")).toEqual({ model: "anthropic:opus" })
+      expect(requestedPaths).not.toContain("/api/session/agents")
+      expect(screen.queryByTestId("settings-default-agent")).toBeNull()
+    } finally {
+      cleanup()
+      listSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it.each(["general", null])("含旧 agent=%s 的偏好整体失效，不迁移其中的 model", async (agent) => {
+    window.localStorage.setItem("kokoro.web.chat-prefs", JSON.stringify({ model: "anthropic:opus", agent }))
+    renderSettings()
+    fireEvent.keyDown(screen.getByTestId("settings-tab-chat"), { key: "Enter" })
+    const model = await screen.findByTestId("settings-default-model")
+    fireEvent.click(model)
+    await screen.findByRole("option", { name: "opus" })
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" })
+    expect(model).toHaveTextContent("跟随空间缺省")
+    expect(model).not.toHaveTextContent("opus")
+
+    fireEvent.click(model)
+    fireEvent.click(await screen.findByRole("option", { name: "opus" }))
+    expect(JSON.parse(window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null")).toEqual({ model: "anthropic:opus" })
+  })
+
+  it("新的 model-only 偏好正常保存并在重新挂载后读回精确 shape", async () => {
+    window.localStorage.setItem("kokoro.web.chat-prefs", JSON.stringify({ model: null }))
+    const first = renderSettings()
+    fireEvent.keyDown(screen.getByTestId("settings-tab-chat"), { key: "Enter" })
+    expect(screen.getByTestId("settings-default-model")).toHaveTextContent("跟随空间缺省")
+    fireEvent.click(screen.getByTestId("settings-default-model"))
+    fireEvent.click(await screen.findByRole("option", { name: "opus" }))
+    expect(screen.getByTestId("settings-saved")).toBeInTheDocument()
+    expect(JSON.parse(window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null")).toEqual({ model: "anthropic:opus" })
+    first.unmount()
+
+    renderSettings()
+    fireEvent.keyDown(screen.getByTestId("settings-tab-chat"), { key: "Enter" })
+    await waitFor(() => expect(screen.getByTestId("settings-default-model")).toHaveTextContent("opus"))
+    expect(JSON.parse(window.localStorage.getItem("kokoro.web.chat-prefs") ?? "null")).toEqual({ model: "anthropic:opus" })
   })
 })

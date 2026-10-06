@@ -238,8 +238,6 @@
  * Hide the semantic controls only after a conversation exists so creation
  * surfaces can continue to expose a workflow-specific model when needed. */
 .main[data-desktop-web="true"][data-web-view="thread"]
-  :global([data-composer-control="agent"]),
-.main[data-desktop-web="true"][data-web-view="thread"]
   :global([data-composer-control="model"]),
 .main[data-desktop-web="true"][data-web-view="thread"]
   :global([data-composer-control="mode"]) {

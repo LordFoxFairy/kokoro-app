@@ -1,7 +1,7 @@
 import { type ChangeEvent, type FormEvent, type KeyboardEvent, type RefObject, type ReactNode, useEffect, useRef } from "react"
 
 import type { AgentMode } from "@/core/conversations"
-import type { AgentCandidate, ModelCandidate } from "@/contract/http"
+import type { ModelCandidate } from "@/contract/http"
 import { Textarea } from "@/components/ui/textarea"
 import { useT } from "@/i18n/context"
 
@@ -43,10 +43,6 @@ export type ComposerProps = {
   modelLocked: boolean
   emptyWorkspace?: boolean
   placeholder?: string
-  agents: readonly AgentCandidate[]
-  selectedAgent: string | null
-  onAgentChange: (name: string) => void
-  agentLocked: boolean
   leadingActions?: ReactNode
   creationIntent?: CreationIntent
   onCreationIntentDismiss: () => void
@@ -65,7 +61,7 @@ function creationLabel(t: ReturnType<typeof useT>, intent: CreationIntent | unde
   return null
 }
 
-export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, agents, selectedAgent, onAgentChange, agentLocked, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
+export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreaming, isAwaitingApproval = false, canSend, onStop, composerRef, mode, onModeChange, modeLocked, models, hideModelSelector = false, preferredModelSelector, selectedModel, onModelChange, modelLocked, emptyWorkspace = false, placeholder, leadingActions, creationIntent, onCreationIntentDismiss, environmentLabel = "Desktop", projectWorkspace = false, environmentSelectorPlacement = "controls", voicePreview = false }: ComposerProps) {
   const t = useT()
   const showSend = !isStreaming || draft.trim().length > 0
   const modeLabel = modeLabelText(t, mode)
@@ -77,8 +73,6 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
   const currentModelTriggerLabel = currentModel ? modelTriggerLabel(currentModel) : ""
   const currentModelNewBadgeLabel = currentModel ? modelNewBadgeLabel(currentModel) : null
   const currentModelTriggerTitle = currentModelNewBadgeLabel ? `${currentModelTriggerLabel} ${currentModelNewBadgeLabel}` : currentModel ? modelLabel(currentModel) : ""
-  const defaultAgent = agents.find((agent) => agent.is_default) ?? agents[0]
-  const currentAgent = agents.find((agent) => agent.name === selectedAgent) ?? defaultAgent
   const preferredModelAppliedRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -113,7 +107,7 @@ export function Composer({ draft, onDraftChange, onKeyDown, onSubmit, isStreamin
           {leadingActions ? <div className={styles.leadingActions}>{leadingActions}</div> : null}
           {(emptyWorkspace || models.length === 0) && environmentSelectorPlacement === "controls" ? <ComposerEnvironment label={environmentLabel} /> : null}
           {creationIntent ? <CreationIntentPill intent={creationIntent} label={creationIntentLabel ?? ""} dismissLabel={t("composer.dismissCreationIntent", { label: creationIntentLabel ?? "" })} onDismiss={onCreationIntentDismiss} /> : null}
-          <ComposerSelectors mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} agents={agents} currentAgent={currentAgent} currentAgentName={currentAgent?.name ?? ""} onAgentChange={onAgentChange} agentLocked={agentLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
+          <ComposerSelectors mode={mode} modeLabel={modeLabel} onModeChange={onModeChange} modeLocked={modeLocked} models={models} hideModelSelector={hideModelSelector} currentModel={currentModel} currentSelector={currentSelector} currentModelTriggerLabel={currentModelTriggerLabel} currentModelNewBadgeLabel={currentModelNewBadgeLabel} currentModelTriggerTitle={currentModelTriggerTitle} onModelChange={onModelChange} modelLocked={modelLocked} />
           <ComposerVoiceActions emptyWorkspace={emptyWorkspace} projectWorkspace={projectWorkspace} creationIntent={creationIntent} state={voiceInput.state} onToggle={voiceInput.toggle} />
           <ComposerSubmitAction isStreaming={isStreaming} isAwaitingApproval={isAwaitingApproval} showSend={showSend} canSend={canSend} onStop={onStop} />
         </div>

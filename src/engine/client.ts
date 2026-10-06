@@ -19,9 +19,6 @@ import {
   messageCreateParamsSchema,
   modelCandidatesPath,
   modelCandidateListSchema,
-  agentCandidatesPath,
-  agentCandidateListSchema,
-  type AgentCandidateList,
   type ModelCandidateList,
   type RunControlBody,
   type RunControlReceipt,
@@ -102,8 +99,6 @@ export type SessionClient = {
   moveSession: (input: MoveSessionInput) => Promise<MoveSessionReceipt>
   // 模型候选（MODEL-UX）：本 namespace 声明可选 ∩ platform resolve 可用性；输入框下拉据此枚举。
   listModels: () => Promise<ModelCandidateList>
-  // agent 候选（AGENT-PRESET）：本 namespace 声明的具名预设 + general 缺省入口；输入框选择器据此枚举。
-  listAgents: () => Promise<AgentCandidateList>
   // 作品库（ARTIFACT-LIB）：属主 namespace 全部成果跨会话聚合、复合游标分页（cursor 缺省=首页）。
   // 分享（SHARE-1）：创建返 share_id（活跃分享幂等返同 id）；撤销置失效（公共读随即 404）。
   createShare: (sessionId: string) => Promise<ShareReceipt>
@@ -356,20 +351,6 @@ export function createSessionClient(options: { baseUrl: string }): SessionClient
         throw await httpError("GET", target, response)
       }
       return parseJsonResponse(response, (raw) => modelCandidateListSchema.parse(raw))
-    },
-
-    listAgents: async () => {
-      const target = url(agentCandidatesPath())
-      let response: Response
-      try {
-        response = await fetch(target, { cache: "no-store" })
-      } catch (error) {
-        throw new SessionClientError("network", describeUnknown(error))
-      }
-      if (!response.ok) {
-        throw await httpError("GET", target, response)
-      }
-      return parseJsonResponse(response, (raw) => agentCandidateListSchema.parse(raw))
     },
 
     fetchSnapshot: async (sessionId, options) => {

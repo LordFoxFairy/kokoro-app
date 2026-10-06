@@ -428,17 +428,18 @@ describe("提交链路", () => {
     expect(client.createCalls[0]!.body).not.toHaveProperty("model")
   })
 
-  it("AGENT-PRESET：setAgent 后首条 POST 带 agent 名（首条锁的 wire 值）", async () => {
+  it("preset 退役后首条 POST 保留模型与 Skill，不生产 agent 字段", async () => {
     buildEngine()
-    engine.setAgent("poet")
+    engine.setModel("openai:gpt-5")
+    engine.setSelectedSkillSourceRefs(["skill:research.v1"])
     engine.submit("hi")
     await settle()
-    expect(client.createCalls[0]!.body).toMatchObject({ content: "hi", agent: "poet" })
+    expect(client.createCalls[0]!.body).toMatchObject({ content: "hi", model: "openai:gpt-5", selected_skill_source_refs: ["skill:research.v1"] })
+    expect(client.createCalls[0]!.body).not.toHaveProperty("agent")
   })
 
-  it("AGENT-PRESET：selectedAgent=null（缺省 general）不带 agent 字段（服务端用 profile 缺省）", async () => {
+  it("preset 退役后缺省提交不生产 agent 字段", async () => {
     buildEngine()
-    engine.setAgent(null)
     engine.submit("hi")
     await settle()
     expect(client.createCalls[0]!.body).not.toHaveProperty("agent")
@@ -1910,7 +1911,6 @@ describe("失败重试", () => {
     buildEngine()
     engine.setMode("thinking")
     engine.setModel("model_original")
-    engine.setAgent("agent_original")
     engine.setSelectedSkillSourceRefs(["skill:original.v1"])
     client.nextCreate = () => Promise.reject(new SessionClientError("network", "unknown commit"))
     engine.submit("hello")
@@ -1919,7 +1919,6 @@ describe("失败重试", () => {
 
     engine.setMode("fast")
     engine.setModel("model_new")
-    engine.setAgent("agent_new")
     engine.setSelectedSkillSourceRefs(["skill:new.v1"])
     client.nextCreate = () => Promise.resolve(makeReceipt("run_retry"))
     engine.retry()
@@ -1929,8 +1928,9 @@ describe("失败重试", () => {
     expect(client.createCalls[1]).toEqual(client.createCalls[0])
     expect(client.createCalls[0]?.body).toMatchObject({
       idempotency_key: expect.any(String), content: "hello", thinking: true,
-      model: "model_original", agent: "agent_original", selected_skill_source_refs: ["skill:original.v1"],
+      model: "model_original", selected_skill_source_refs: ["skill:original.v1"],
     })
+    expect(client.createCalls[0]?.body).not.toHaveProperty("agent")
   })
 
   it.each([

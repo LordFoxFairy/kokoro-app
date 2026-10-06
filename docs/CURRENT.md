@@ -1,3 +1,13 @@
+## R255 06:12：无 owner 的旧 Agent preset 消费者退役已接收
+
+基线 Web main aaf577d；17生产/7测试/9语言/3integration既有文件，无新依赖、模块、接口、SQL、存储key或旧数据兼容。Web不再请求旧agents目录/生产preset字段；模型/Skill/mode/AG-UI/Todo/subagents与独立连接setup保持，公开MessageCreate.agent/generated保持。唯一model-only strict，含旧agent的对象整体回默认，不迁移其中model。
+
+Root真实正常3310/IAM既有session：工作区hard-refresh、Settings对话偏好、Settings硬刷新均旧/api/session/agents请求0，models200、原4条QA历史/Direct列表保持、loadingfalse，旧preset控件0。真实models是空数组，只有跟随默认选项；同值点击未触发保存，不宣称实际模型切换/保存、可用推理或资金E2E。没有cookie注入/正常模型或资金调用；Root自有浏览器关闭、用户IAB未动。
+
+有效RED：原Settings合法模型选存后仍调用旧目录；AppFrame首次空欢迎页模型控件不显示是fixture前置错误，沿原合法presentation创建意图纠正而不改产品规则。首宽回归566/1漏旧AGENTS fixture；次567断言全通过但真实exit1的Radix卸载跨realm异常保留，通过新增组owned cleanup/0ms真实macrotask修清，未ignoreUnhandled/fakeTimers/吞错。最终Root65531同567/0且exit0/types/lint0；61505正式Node22非system153files2663/0、133.21s/exit0；27321contract275/0、architecture50/0、build0。源码36hash保持，独审2d1d234c无新增确定P0/P1/P2。三D0仅自有前缀暂存，原mixed正文/原OIDC mixed不纳入此片。
+
+这是旧消费者退役的源码与真实读取刷新验收，不关闭完整Agent、Model或70用户组；独立connection setup404、正常Billing未启/正规资金链、文件单Asset删除缺协议仍OPEN。完整system suite、Playwright全量、axe/移动视觉/bundle本片未跑；567/2663是辅助工程证据，不能冒完整用户上线。Root ignored0612-web-preset-*及最终报告记录实际失败与结果。
+
 ## R255 05:22：宽屏侧栏偏好刷新真实反例已修（完整能力仍OPEN）
 
 基线main ad918391；唯一layout hook首次cookie读取完成标记从effect setup移到有效microtask callback，保SSR初树、StrictMode清理和mounted导航不重读，compact不覆盖宽屏cookie。source SHA c809ea186 / test cfb8fde2；原四mixed未纳入本片。

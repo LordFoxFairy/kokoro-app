@@ -66,7 +66,9 @@ kokoro-agent
 | GET/POST/PATCH/DELETE | `/v1/sessions[/:id]` | Chat 会话、消息、标题和软删除 |
 | GET/POST | `/v1/sessions/:id/events`, `/v1/sessions/:id/runs/:runId/control` | Chat SSE、Run control、HITL |
 | POST/DELETE | `/v1/sessions/:id/share` | Chat 分享生命周期 |
-| GET | `/v1/models`, `/v1/agents`, `/v1/artifacts[/:hash]` | Chat 候选、成果与下载投影 |
+| GET | `/v1/models`, `/v1/artifacts[/:hash]` | 模型候选、成果与下载投影 |
+
+旧 preset 目录 GET `/v1/agents` 未被 owner 发布，Web 已退役该消费者，不返回假空目录。公开 MessageCreate.agent 字段和上表独立 Agent connection setup 合同保留；后者实际 owner 验收独立，不由本次退役宣称通过。
 
 所有变更请求必须带 `Idempotency-Key`。BFF 按 namespace、方法、路径和 key 做幂等隔离；重复请求返回第一次结果。
 唯一例外是 `POST /v1/skills/github/preview` 与 `POST /v1/skills/upload/preview`：它们只做预检，不写入业务状态。

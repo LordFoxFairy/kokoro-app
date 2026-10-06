@@ -1,5 +1,5 @@
 .cluster { display: flex; align-items: center; gap: 0.3rem; }
-.modeSelect, .modelSelector { min-width: 0; }
+.modeSelect { min-width: 0; }
 .send, .mode { flex-shrink: 0; }
 .mode:focus-visible, .send:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .mode { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.4rem 0.55rem; font-size: 0.9rem; color: color-mix(in srgb, var(--foreground) 80%, var(--primary) 20%); cursor: pointer; transition: background-color var(--motion-fast) var(--ease-standard); }

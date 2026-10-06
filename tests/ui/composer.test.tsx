@@ -4,7 +4,7 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-l
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createRef, type FormEvent, useState } from "react"
 
-import type { AgentCandidate, ModelCandidate } from "@/contract/http"
+import type { ModelCandidate } from "@/contract/http"
 import { LocaleProvider } from "@/i18n/context"
 import { Composer } from "@/ui/composer/composer"
 import { CreationIntentPill, type CreationIntent } from "@/ui/composer/creation-intent-pill"
@@ -12,11 +12,6 @@ import { CreationIntentPill, type CreationIntent } from "@/ui/composer/creation-
 const MODELS: ModelCandidate[] = [
   { provider: "anthropic", name: "claude-sonnet-4-6", is_default: true },
   { provider: "openai", name: "gpt-5", is_default: false },
-]
-
-const AGENTS: AgentCandidate[] = [
-  { name: "general", description: "通用协调 agent", is_default: true },
-  { name: "poet", description: "诗人预设", is_default: false },
 ]
 
 function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -36,10 +31,6 @@ function renderComposer(overrides: Partial<Parameters<typeof Composer>[0]> = {})
     selectedModel: null,
     onModelChange: vi.fn(),
     modelLocked: false,
-    agents: [] as AgentCandidate[],
-    selectedAgent: null,
-    onAgentChange: vi.fn(),
-    agentLocked: false,
     environmentLabel: "Kokoro 桌面版",
     onCreationIntentDismiss: vi.fn(),
     ...overrides,
@@ -591,52 +582,12 @@ describe("CreationIntentPill dismissal", () => {
   })
 })
 
-describe("Composer agent selector（AGENT-PRESET）", () => {
-  it("selectedAgent=null 时高亮缺省候选（is_default=general）", () => {
-    renderComposer({ agents: AGENTS })
-    expect(screen.getByRole("button", { name: /Switch agent:/ }).textContent).toContain("general")
-  })
-
-  it("展开下拉选具名预设 → onAgentChange 收到 agent 名", () => {
-    const props = renderComposer({ agents: AGENTS })
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Switch agent:/ }))
-    fireEvent.click(screen.getByRole("menuitemradio", { name: /poet/ }))
-    expect(props.onAgentChange).toHaveBeenCalledWith("poet")
-  })
-
-  it("agent 下拉展示后端描述，帮助用户在长列表中区分预设", () => {
-    renderComposer({ agents: AGENTS })
-    fireEvent.pointerDown(screen.getByRole("button", { name: /Switch agent:/ }))
-    expect(screen.getByText("通用协调 agent")).toBeTruthy()
-    expect(screen.getByText("诗人预设")).toBeTruthy()
-  })
-
-  it("selectedAgent 命中候选时显示该项为当前", () => {
-    renderComposer({ agents: AGENTS, selectedAgent: "poet" })
-    expect(screen.getByRole("button", { name: /Switch agent:/ }).textContent).toContain("poet")
-  })
-
-  it("selectedAgent 不再存在于目录时回落缺省预设", () => {
-    renderComposer({ agents: AGENTS, selectedAgent: "retired-agent" })
-    expect(screen.getByRole("button", { name: /Switch agent:/ }).textContent).toContain("general")
-  })
-
-  it("agentLocked → 只读锁定态（不可展开切换）", () => {
-    renderComposer({ agents: AGENTS, selectedAgent: "poet", agentLocked: true })
-    expect(screen.queryByRole("button", { name: /Switch agent:/ })).toBeNull()
-    const locked = screen.getByRole("button", { name: /locked this turn/i })
-    expect(locked.hasAttribute("disabled")).toBe(true)
-    expect(locked.textContent).toContain("poet")
-  })
-
-  it("单候选（仅 general）→ 不渲染 agent 选择器（无可选项，隐去）", () => {
-    renderComposer({ agents: [AGENTS[0]!] })
-    expect(screen.queryByRole("button", { name: /Switch agent:/ })).toBeNull()
-  })
-
-  it("空候选 → 不渲染 agent 选择器", () => {
-    renderComposer({ agents: [] })
-    expect(screen.queryByRole("button", { name: /Switch agent:/ })).toBeNull()
+describe("Composer preset retirement", () => {
+  it("仅保留模型和 mode 选择，不呈现旧 agent 选择器", () => {
+    renderComposer()
+    expect(screen.getByRole("button", { name: /Switch model:/ })).toBeEnabled()
+    expect(document.querySelector('[data-composer-control="mode"]')).toBeInTheDocument()
+    expect(document.querySelector('[data-composer-control="agent"]')).toBeNull()
   })
 })
 
@@ -692,7 +643,7 @@ describe("Composer 状态契约", () => {
   })
 
   it("发送动作独立于可换行的选择器 cluster", () => {
-    renderComposer({ agents: AGENTS })
+    renderComposer()
     const send = screen.getByRole("button", { name: "Send message" })
     const model = screen.getByRole("button", { name: /Switch model:/ })
     expect(send.parentElement?.className).toContain("controls")

@@ -3764,3 +3764,47 @@ it.each([
     fetchMock.mockRestore()
   }
 })
+
+
+it("R255 preset retirement: 正常工作区保留模型选择且不请求旧 agents 目录", async () => {
+  buildEngine()
+  // The ordinary empty welcome intentionally hides model controls; a valid restored intent exposes them.
+  window.sessionStorage.setItem("kokoro.web.pending-creation-intent", "presentation")
+  window.localStorage.setItem("kokoro.web.chat-prefs", JSON.stringify({ model: "anthropic:opus" }))
+  const requestedPaths: string[] = []
+  const listSpy = vi.spyOn(pageClients, "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "/api/session" }))
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
+    requestedPaths.push(url.pathname)
+    if (url.pathname === "/api/session/models") return Response.json({ models: [
+      { provider: "anthropic", name: "opus", is_default: true },
+      { provider: "openai", name: "gpt-5", is_default: false },
+    ] })
+    // Keep a legal old directory response so only continued consumption fails the regression.
+    if (url.pathname === "/api/session/agents") return Response.json({ agents: [{ name: "general", description: "default", is_default: true }] })
+    if (url.pathname === "/api/session/sessions") return Response.json({ sessions: [], next_cursor: null })
+    return Response.json({}, { status: 503 })
+  })
+  try {
+    render(
+      <ThemeProvider>
+        <LocaleProvider>
+          <AppFrame engine={engine} chatHref="/app" preview={false} />
+        </LocaleProvider>
+      </ThemeProvider>,
+    )
+    const model = await screen.findByRole("button", { name: "切换模型: opus" })
+    expect(model).toBeEnabled()
+    fireEvent.pointerDown(model)
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "gpt-5" }))
+    expect(await screen.findByRole("button", { name: "切换模型: gpt-5" })).toBeEnabled()
+    expect(requestedPaths).toContain("/api/session/models")
+    expect(requestedPaths).not.toContain("/api/session/agents")
+    expect(document.querySelector('[data-composer-control="agent"]')).toBeNull()
+    expect(client.createCalls).toHaveLength(0)
+  } finally {
+    cleanup()
+    listSpy.mockRestore()
+    fetchSpy.mockRestore()
+  }
+})

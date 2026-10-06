@@ -44,9 +44,6 @@ export function billingLedgerPath(): string {
 export function modelCandidatesPath(): string {
   return `/models`
 }
-export function agentCandidatesPath(): string {
-  return `/agents`
-}
 export function sharePath(sessionId: string): string {
   return `/sessions/${opaquePathSegment(sessionId)}/share`
 }

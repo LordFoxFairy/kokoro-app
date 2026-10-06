@@ -78,10 +78,6 @@ function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<Ap
       onModelChange={() => undefined}
       modelLocked
       emptyWorkspace
-      agents={[]}
-      selectedAgent={null}
-      onAgentChange={() => undefined}
-      agentLocked
     />
   )
   return (
@@ -616,10 +612,6 @@ function AppFrameRuntime({
     selectedModel: selectors.selectedModel,
     onModelChange: selectors.setSelectedModel,
     modelLocked: modeLocked,
-    agents: selectors.agents,
-    selectedAgent: selectors.selectedAgent,
-    onAgentChange: selectors.setSelectedAgent,
-    agentLocked: modeLocked,
   }
 
   const emptyStateProps: EmptyStateProps = {

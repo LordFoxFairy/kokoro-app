@@ -1,3 +1,38 @@
+## T-C01.R255-PRESET-RETIRE（06:12）：旧 Agent preset 消费者退役设计（D0 阶段记录）
+
+本前缀记录实施前的 D0 收口决定，覆盖下方历史 AGENT-PRESET / namespace profile 选择说明，其他原文逐字保留；基线为 Web main aaf577dcfd7045c89bf2d68c80eff8e0e34ba152、Root 6455e04a7cf661068a1c7d106a2d0003527fc223，现已完成本片源码静态退役。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
+
+### 当前事实与产品决定
+
+D0 冻结时 use-composer-selectors 与 Settings ChatPrefsCard 调 SessionClient.listAgents，经同源 /api/session/agents、BFF /v1/agents 转到 Agent /agents；Root 正常浏览器已观测 404。BFF public 8.0 与 Agent 当前机器契约都没有这个 GET 目录。MessageCreate.agent 在 BFF 仍是可选公开字段，但现 dispatch 只将其记入 trace.agent，feature_key 固定 chat，worker-local chat Feature 仍执行 GENERAL_AGENT；旧 UI 选择没有选择另一主 Agent 的执行语义。
+
+Root 已按当前 PRD09 裁决：退役无 owner 的 preset 消费者，不补静态空 200、不把模型/Skills/内部 subagent catalog 冒作 Agent 目录。保留模型选择、Skill refs、mode、immutable retry、Todo/tool/subagent/MCP 活动、真实 Agent 运行和独立 Agent connection setup；这不是删除 PRD 的 Agent 能力。原 0522 调查报告的“旧对象剥离 agent 后保留 model”建议已被本次无旧数据兼容决定取代。
+
+### 放置、职责与依赖
+
+| 项 | 本片决定 |
+| --- | --- |
+| Owner / writer | Web 拥有选择器、浏览器偏好和消息生产者；Root 指定的单一 Web writer 后续实施，BFF/Agent owner 与契约不改。 |
+| 方案比较 | 采用现 contract/catalog、engine、composer、settings 消费链就地退役；淘汰 BFF 特判目录或 Agent 新目录模块，后者会虚构可选身份、资格与执行行为。 |
+| 粒度 | 现 14 个生产文件删除一个孤立消费者能力；不新建文件、模块、store、框架或依赖。 |
+| 依赖方向 | Browser → Web 同源 adapter → BFF 保持；不直连 Agent，不改通用同源代理或 /app/agents 连接入口。 |
+| 数据 / API | 无 SQL、表、事务、权限、session cookie 变化；仅本地偏好收敛为 model-only strict，细则见同批 DATA_MODEL；公开 MessageCreate.agent 与固定 generated pin 保留。 |
+| 删除项 | 候选 schema/path/listAgents、setAgent/selectedAgent、执行 options.agent 生产者、选择器 props/UI、默认 Agent 偏好及 preview 假目录、对应无调用文案。 |
+| 验证 | 先现组件行为 RED，再工程回归与 Root 正常浏览器验收；所有结果尚待实施。 |
+
+现生产范围固定为 src/contract/{catalog,paths}.ts、src/engine/{client,engine-types,machine,execution-adapter}.ts、src/ui/shell/{page-clients,use-composer-selectors}.ts、src/ui/composer/{composer,composer-selectors}.tsx、src/components/blocks/app-frame/app-frame.tsx、src/ui/settings/{chat-prefs.ts,settings-sections.tsx}、src/dev/preview-transport.ts。精确绝对路径及 6 个既有测试、9 个语言文件、3 个 integration 说明由本片交接清单列明；另补现 contract/api-contract.test.ts 的“省略 agent 仍符合公开请求”断言，原含 agent 的合法合同断言保留。本轮未放行这些写入。
+
+### 行为保留与验收界线
+
+- 旧 model+agent 对象整体无效并回默认，不迁移、不剥离兼容、不建立双读；新的合法 model-only 偏好继续保存与刷新读回。公共 persisted-store 不改。
+- unknown-ACK 重试继续使用冻结的 pendingSubmission；保原同 idempotency key / 完整 body 等值，model、thinking、selected_skill_source_refs、项目 scope 不因随后偏好变化而改写。只移除 preset 生产者，不重写重试状态机。
+- 模型候选请求与 model/mode 选择继续有效；settings.followProfile 仍用于模型，普通 Agent 活动/导航文案不全局删除。
+- /app/agents 与 /api/agents/... → /v1/agents/connections/setup 独立保留。它当前另有 setup 404/绑定 CRUD 未闭环，退役目录不把该链算成功。
+- Root 后继正常登录打开工作区及 Settings/hard reload，应无旧 /api/session/agents 请求、无旧 preset UI，新模型偏好可保存读回；纯组件检查及 retry body 证据不是实际模型执行或完整用户 E2E。
+- 后继按现 pnpm check 执行 contract、test:architecture、lint、typecheck、test、build；真实 browser 另验，不启动新模型或资金操作，不增加整组 PASS。
+
+---
+
 ## T-P02.R255-WEB-NEXT：ScheduledTask nullable next 消费者源码候选（待 Root 独审/真实验收）
 
 固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。

@@ -432,8 +432,6 @@ export function createPreviewClient(options?: { stepMs?: number }): SessionClien
     // at the shell boundary, so the catalogue never adds toolbar noise there.
     listModels: () => Promise.resolve({ models: [...PREVIEW_MODELS] }),
 
-    // 预览档无 namespace profile 源：agent 候选恒为空（输入框据此隐藏 agent 选择器）。
-    listAgents: () => Promise.resolve({ agents: [] }),
 
     // The live Manus baseline is an empty library for a new workspace. Keep
     // the route-level preview honest instead of inventing tenant artifacts;

@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { ArrowUpRight, ChevronRight, CircleHelp, Contrast, Copy, FolderPlus, Gift, Globe, Globe2, KeyRound, LayoutGrid, LogOut, Moon, Plus, Search, Server, Sparkles, Sun, Wifi, X } from "lucide-react"
 
-import type { AgentCandidate, ModelCandidate } from "@/contract/http"
+import type { ModelCandidate } from "@/contract/http"
 import { useLocale, useT } from "@/i18n/context"
 import { useTheme, type ThemeMode } from "@/ui/theme/theme-context"
 import { mutationHeaders } from "@/lib/client/mutation"
@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { readChatAgent, readChatModel, writeChatAgent, writeChatModel } from "./chat-prefs"
+import { readChatModel, writeChatModel } from "./chat-prefs"
 import styles from "./settings-sections.module.css"
 
 // 缺省选择占位：跟随空间缺省（不上 wire）。以哨兵值区分于具体候选。
@@ -980,14 +980,12 @@ export function IntegrationSettingsCard({
   )
 }
 
-// —— 卡三：对话偏好 —— 缺省模型（/models）/缺省 agent（/agents）；就地存 localStorage，
+// —— 卡三：对话偏好 —— 缺省模型（/models）；就地存 localStorage，
 // 工作台新对话首帧预填（会话级锁语义不变）。
 export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
   const t = useT()
   const [models, setModels] = useState<readonly ModelCandidate[]>([])
-  const [agents, setAgents] = useState<readonly AgentCandidate[]>([])
   const [model, setModel] = useState<string>(() => readChatModel() ?? FOLLOW_PROFILE)
-  const [agent, setAgent] = useState<string>(() => readChatAgent() ?? FOLLOW_PROFILE)
   // 就地保存反馈：改动后闪一枚「已保存」徽标，约 1.6s 后自动消（setState 在 timeout 内，非 effect 体内直接调）。
   const [saved, setSaved] = useState(false)
 
@@ -997,10 +995,6 @@ export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
       .listModels()
       .then((list) => live && setModels(list.models))
       .catch(() => live && setModels([]))
-    void browserListClient({ preview })
-      .listAgents()
-      .then((list) => live && setAgents(list.agents))
-      .catch(() => live && setAgents([]))
     return () => {
       live = false
     }
@@ -1017,11 +1011,6 @@ export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
   const onModelChange = (value: string): void => {
     setModel(value)
     writeChatModel(value === FOLLOW_PROFILE ? null : value)
-    setSaved(true)
-  }
-  const onAgentChange = (value: string): void => {
-    setAgent(value)
-    writeChatAgent(value === FOLLOW_PROFILE ? null : value)
     setSaved(true)
   }
 
@@ -1051,29 +1040,6 @@ export function ChatPrefsCard({ preview = false }: { preview?: boolean }) {
               <SelectItem value={FOLLOW_PROFILE_VALUE}>{t("settings.followProfile")}</SelectItem>
               {models.map((candidate) => (
                 <SelectItem key={modelSelector(candidate)} value={modelSelector(candidate)}>
-                  {candidate.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field orientation="horizontal" className={styles.row}>
-        <FieldLabel className={styles.rowLabel} htmlFor="settings-default-agent">
-          {t("settings.defaultAgent")}
-        </FieldLabel>
-        <Select
-          value={agent === FOLLOW_PROFILE ? FOLLOW_PROFILE_VALUE : agent}
-          onValueChange={(value) => onAgentChange(value === FOLLOW_PROFILE_VALUE ? FOLLOW_PROFILE : value)}
-        >
-          <SelectTrigger id="settings-default-agent" className={styles.select} data-testid="settings-default-agent">
-            <SelectValue placeholder={t("settings.followProfile")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value={FOLLOW_PROFILE_VALUE}>{t("settings.followProfile")}</SelectItem>
-              {agents.map((candidate) => (
-                <SelectItem key={candidate.name} value={candidate.name}>
                   {candidate.name}
                 </SelectItem>
               ))}

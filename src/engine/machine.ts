@@ -145,9 +145,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let selectedSkillSourceRefs: string[] = []
   // 选中模型（MODEL-UX，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 model（首条锁语义在 UI 层）。
   let selectedModel: string | null = null
-  // 选中 agent（AGENT-PRESET，shell 注入）：非 null 即随首条 messageCreate 上 wire 为 agent
-  // （null=用 profile 缺省 general，不上 wire；首条锁语义与 model 同在 UI 层）。
-  let selectedAgent: string | null = null
 
   // 水合代际守卫：切会话后迟到的 snapshot 一律丢弃。
   let hydrateGeneration = 0
@@ -688,7 +685,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     return {
       mode,
       model: selectedModel,
-      agent: selectedAgent,
       selectedSkillSourceRefs: [...selectedSkillSourceRefs],
     }
   }
@@ -1175,13 +1171,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedModel = model
   }
 
-  function setAgent(agent: string | null): void {
-    if (disposed) {
-      return
-    }
-    selectedAgent = agent
-  }
-
   function dispose(): void {
     disposed = true
     deleteIntentGeneration += 1
@@ -1275,7 +1264,6 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     setMode,
     setSelectedSkillSourceRefs,
     setModel,
-    setAgent,
     dispose,
   }
 }

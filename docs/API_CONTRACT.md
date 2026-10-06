@@ -1,3 +1,25 @@
+## T-C01.R255-PRESET-RETIRE（06:12）：退役未发布目录消费者，不改公开 agent 字段
+
+本前缀记录实施前的 D0 目标，冻结时生产仍发旧目录请求，现已完成本片源码静态退役；仅覆盖旧 preset 目录/选择说明，原 suffix、公开 agent 字段和 generated pin 保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
+
+### 唯一契约来源与当前缺口
+
+继续固定现 BFF public 8.0.0 artifact：owner commit 45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f，canonical contract/openapi/v1/openapi.yaml，blob 1b42d49388ca26eaaef7371daf23cbf1158d5fe6，SHA256 0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95；Root 本地接收 ef2d306。Web src/generated/bff-public-openapi.yaml 与现 generator pin/派生物均不修改；本地 artifact 不等于 remote 发布或 normal activation。
+
+D0 冻结时 handwritten catalog.ts 的 AgentCandidate{name,description,is_default} / agents 列表、agentCandidatesPath() 与 SessionClient.listAgents 不对应任何正式 BFF GET /v1/agents 或 Agent GET /agents。Root 裁决删除这组 Web browser-private 假定，不用空目录 200、fallback 或模型/Skill 映射掩盖 404。模型 GET /models 消费不变，信任上下文、通用 /api/session adapter、BFF routing 和任何 owner HTTP 路由都不在本片修改范围。
+
+### 目标请求与保留合同
+
+- 正常工作区、Settings 不再读旧 agents 目录；删除该客户端方法、路径、候选 schema、preview 目录响应及 UI 调用。
+- Web composer 不再生产可选 agent：其消息继续包含 canonical idempotency_key/content/thinking/selected_skill_source_refs，按原规则附 model、project_ref；其他受信身份与既有合同不变。删除的仅是该 UI 的 preset 输入，不使 BFF 公开字段非法。
+- src/contract/chat.ts 中 MessageCreate.agent 和 contract/api-contract.test.ts 原合法 agent 输入断言必须保留。后继在该既有测试补“不带 agent 的消息也被接受”，与 execution-adapter/engine 的“不再生产 agent”断言分层，禁止修改 owner OpenAPI、pin 或 generated 来制造绿灯。
+- unknown-ACK 重试沿原 pendingSubmission，保同 key/完整 body 等值和有效模型、mode、Skill、project 参数；不在 retry 时重新读取偏好或重组意图。
+- /app/agents 与 /api/agents/[...path] 的连接 setup 保留，后者仍消费正式 /v1/agents/connections/setup。现 tests/system/agent-route.test.ts 是独立路由保护，不因删除目录而删除；其 owner setup 404 未决不在本片关闭。
+
+后继同步三个旧说明 docs/integration/business-bff-contract-v1.md、chat-bff-contract-v1.md、user-web-api-contract-v4.md 的目录/preset 声明，明确不再消费，不新建第二合同。Root 验收应分别核工作区和 Settings 零旧目录请求、模型仍可用、消息/重试 body、独立 setup 路由保留。测试仅使用明确 fixture；真实浏览器与真实 owner 组合分别记录，不拿 fixture 冒用户 E2E。本轮只写三 D0 前缀，未运行契约或工程门。
+
+---
+
 ## T-P02.R255-WEB-NEXT：ScheduledTask recurrence/next 契约消费者（本地候选，normal 未激活）
 
 固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。

@@ -1,7 +1,7 @@
 import { ChevronDown, Lock, Sparkles, Zap } from "lucide-react"
 
 import type { AgentMode } from "@/core/conversations"
-import type { AgentCandidate, ModelCandidate } from "@/contract/http"
+import type { ModelCandidate } from "@/contract/http"
 import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/context"
 
@@ -15,11 +15,6 @@ type ComposerSelectorsProps = {
   modeLabel: string
   onModeChange: (mode: AgentMode) => void
   modeLocked: boolean
-  agents: readonly AgentCandidate[]
-  currentAgent: AgentCandidate | undefined
-  currentAgentName: string
-  onAgentChange: (name: string) => void
-  agentLocked: boolean
   models: readonly ModelCandidate[]
   hideModelSelector: boolean
   currentModel: ModelCandidate | undefined
@@ -31,18 +26,11 @@ type ComposerSelectorsProps = {
   modelLocked: boolean
 }
 
-export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, agents, currentAgent, currentAgentName, onAgentChange, agentLocked, models, hideModelSelector, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
+export function ComposerSelectors({ mode, modeLabel, onModeChange, modeLocked, models, hideModelSelector, currentModel, currentSelector, currentModelTriggerLabel, currentModelNewBadgeLabel, currentModelTriggerTitle, onModelChange, modelLocked }: ComposerSelectorsProps) {
   const t = useT()
   const ModeIcon = mode === "thinking" ? Sparkles : Zap
   return (
     <div className={styles.cluster} data-slot="composer-selector-cluster">
-      {agents.length > 1 && currentAgent ? (agentLocked ? (
-        <Button type="button" variant="ghost" className={`${styles.mode} ${styles.modelSelector} ${styles.modeLocked}`} data-composer-control="agent" disabled aria-label={t("composer.agentLocked", { agent: currentAgent.name })} title={`${currentAgent.name} — ${t("composer.agentLockedTitle")}`}>
-          <span>{currentAgent.name}</span><Lock className={styles.lock} data-icon="inline-end" />
-        </Button>
-      ) : (
-        <ComposerMenu triggerClassName={`${styles.mode} ${styles.modelSelector}`} dataComposerControl="agent" triggerLabel={t("composer.agentSwitch")} triggerTitle={currentAgent.name} trigger={<><span>{currentAgent.name}</span><ChevronDown className={styles.chevron} data-icon="inline-end" /></>} options={agents.map((agent) => ({ key: agent.name, label: agent.name, hint: agent.description }))} selectedKey={currentAgentName} onSelect={onAgentChange} align="start" />
-      )) : null}
       {!hideModelSelector && models.length > 0 && currentModel ? (modelLocked ? (
         <Button type="button" variant="ghost" className={`${styles.mode} ${styles.modeLocked}`} data-composer-control="model" disabled aria-label={t("composer.modelLocked", { model: modelLabel(currentModel) })} title={`${modelLabel(currentModel)} — ${t("composer.modelLockedTitle")}`}>
           <span>{modelLabel(currentModel)}</span><Lock className={styles.lock} data-icon="inline-end" />

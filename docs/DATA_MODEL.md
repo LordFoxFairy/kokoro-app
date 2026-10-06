@@ -1,3 +1,29 @@
+## T-C01.R255-PRESET-RETIRE（06:12）：唯一 model-only 浏览器偏好目标
+
+本前缀记录实施前的 D0 收口：冻结时源码仍为 model+agent strict 偏好，下述是当时裁决的实现边界，现已完成 model-only 源码静态退役，原数据模型全文保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
+
+### 持久化 owner 与零数据库影响
+
+Web 无 SQL 持久化 owner。本片没有数据库、表、索引、migration、跨 owner 查询、事务、权限、token、HttpOnly cookie 或 service identity 变化；BFF durable Message/idempotency/trace 与 Agent Run/Feature 事实均不迁移。公开 MessageCreate.agent 仍属于 BFF 合同，本片不删除其历史 durable 内容。
+
+唯一受影响对象是现 src/ui/settings/chat-prefs.ts 的非机密本地 UI 偏好，继续使用 key kokoro.web.chat-prefs 与现 createPersistedStore；不新 key、不扩公共 store。目标唯一 schema 为 z.object({ model: z.string().nullable().optional() }).strict()，仅 model 可选字符串/null，省略或 null 按现规则跟随空间默认。
+
+### 无旧数据兼容的确定语义
+
+1. 删除 agent 字段、readChatAgent/writeChatAgent 及全部 preset 状态/生产者；不建立 legacy schema、alias、双读或自动迁移。
+2. 旧 JSON 即使含合法 model，只要同时有 agent（含 null）或其他未知键，就整体 strict 失败；现 store.read() 返回 null，模型偏好回默认。这是用户明确接受的失效重置边界，不承诺挽救旧对象里的 model，取代 0522 调查的清理兼容建议。
+3. 失效重置指消费结果为默认，不要求额外 removeItem 或后台改写旧 raw；下次用户正规选择模型由现 writeChatModel 写入唯一合法 model-only 对象。没有“读旧 model 再修复”的隐性迁移。
+4. 正常新 model-only 对象继续保存、刷新读取、null/缺省默认；坏 JSON、非对象、错误 model 类型、未知键按现 store 校验失败语义处理。不会因删除 preset 而禁用或清空合法新模型偏好。
+5. 不清理其他浏览器数据、draft、conversation index、rail preference、Skill 或 MCP 状态；不改变已确认主体边界。新提交不发 agent，已有进行中 pendingSubmission 的冻结及 unknown-ACK 重试机制保持，不引入持久请求迁移。
+
+### 后继数据与用户验收
+
+在现 settings-modal / app-frame.smoke 测试补旧 {model,agent}（含 agent:null）整体回默认、新 model-only 选存/重新挂载读回、写出对象精确只有 model；保原模型保存反馈。engine / execution-adapter 保有效字段和同 key/body 重试全等，不把原有效 retry 断言删除。公共 MessageCreate 可选 agent 的接受断言仍在现 contract/api-contract.test.ts。
+
+Root 正常浏览器：打开工作区与 Settings 无旧目录请求；新模型偏好保存后 hard reload 仍读回，旧形状明确回默认；单独核模型/Skill/mode 与重试 body，Agent connection setup 入口/独立合同不被误删。这里没有真实模型、资金或完整 Agent setup 验收结论。本轮没有生产/测试/Schema 写入或执行门禁，后续由 Root 按阶段准入。
+
+---
+
 ## T-P02.R255-WEB-NEXT：ScheduledTask next 投影模型（源码候选；无 Web 持久化 owner）
 
 固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。

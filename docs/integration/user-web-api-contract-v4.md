@@ -595,11 +595,10 @@ delete response：
 
 delete 是软删除语义；实现注释约定不存在/已删除均为 `202`，服务端状态位是最终事实。
 
-#### Models / agents candidates
+#### Model candidates
 
 ```http
 GET /api/session/models
-GET /api/session/agents
 ```
 
 ```ts
@@ -611,15 +610,11 @@ type ModelCandidateList = {
     display_name?: string
   }>
 }
-
-type AgentCandidateList = {
-  agents: Array<{
-    name: string
-    description: string
-    is_default: boolean
-  }>
-}
 ```
+
+旧 `/api/session/agents` preset 消费者已退役：BFF/Agent 没有对应正式 GET 目录，不用模型或 Skill 充作目录。Web 不再选择/发送 preset，但公开 MessageCreate.agent 仍合法，生成契约和 pin 不变。
+
+本地 `kokoro.web.chat-prefs` 唯一形状为 model-only strict（model 可选 string/null）；含旧 agent 的对象整体无效并回默认，不迁移其中的 model、不双读。新的合法模型偏好正常保存/刷新读回；消息与 unknown-ACK 重试保有效 model/mode/Skill/project 和同 key/body。独立 Agent connection setup 及执行活动不退役，实际 setup 验收另记。
 
 #### Share
 
