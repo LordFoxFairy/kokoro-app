@@ -1,3 +1,9 @@
+### R255 用户原标签后补实证（2026-10-06）
+
+原tab7现已恢复同步：不注入cookie/preview，实际管理页原h1+h2=2且error可见，同时两个servers响应200（4de46d06/23f3d070）；CDP response body不可取，无法据此确定是旧schema/缓存/HMR哪个原因。保留error截图/metadata。正常reload当前源码并自动恢复既有settings hash后，原同tab1标题/正常空态/error0，两个真实servers200（2a7d008c/d1d78292）。这证明当前原页面读取呈现恢复，不代表Server→本人Connection/创建授权调用缺口已修。
+
+所有Root临时页9/10均已close，原user7/8保留，viewport/touch override已清；原tab最终截图connectors-user-original-final.png/JSON。先前“原tab超时/故障未同次复现”是前置观察记录，由本后补证续接，不能删旧错误或断言后台所有能力通过。辅助与完整70组计数保持。当前T-P02按既有Platform3.2.0本人projection→BFF固定artifact消费接续，不新造目录模型。
+
 ## R255 连接器嵌入标题修复与真实业务缺口（2026-10-06）
 
 Root正常IAM/BFF/Platform浏览器 /app/plugins→管理连接器：当前 /api/hub/self/mcp/servers 200，真实空列表；原截图的error未在同次请求复现，不能倒推未启动。现正式client→Web同源→BFF generated→Platform Prisma读取，无失败转空fallback；静态connector目录卡片不代表实际连接。
