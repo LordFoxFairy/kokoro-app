@@ -117,7 +117,7 @@ export function expiryDateToUtcInstant(date: string, timeZone: string): string {
   return new Date(localDateTimeToUtc(date, "23:59", timeZone).getTime() + 59_999).toISOString()
 }
 
-export function scheduledDateKey(nextRun: string | undefined, displayTimeZone = "UTC"): string | null {
+export function scheduledDateKey(nextRun: string | null | undefined, displayTimeZone = "UTC"): string | null {
   if (!nextRun) return null
   const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/u.test(nextRun) ? `${nextRun}Z` : nextRun
   const instant = new Date(normalized)

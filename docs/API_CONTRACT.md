@@ -1,3 +1,15 @@
+## T-P02.R255-WEB-NEXT：ScheduledTask recurrence/next 契约消费者（本地候选，normal 未激活）
+
+固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。
+
+`ScheduledTask` 必有 `id,title,prompt,frequency,time,timezone,next_run_at,auto_approve,enabled,status`；`next_run_at` 严格为 UTC `date-time` string 或 JSON null。字段缺失、offset 非 `Z`、date-only 与未知字段均失败封闭。null 表示 owner 当前没有已确认下次执行时间，Web 不合成日期；合法 string 原值映射到 `nextRun` 并仅用于既有显示和日历分组。
+
+`CreateScheduledTaskRequest` 保持五个 required 字段 `title,prompt,frequency,time,timezone`，可选 `recurrence_anchor_at`，不再允许输入 `next_run_at`。`ScheduledTaskPatchRequest` 是 closed object，显式允许 `title,prompt,frequency,time,timezone,recurrence_anchor_at,expires_at,auto_approve,enabled,status`，均可选且不允许 `next_run_at`；`expires_at` 继续允许 null 清除。当前 editor 没有 anchor 控件，合法省略且不得计算代填；collection/path/idempotency/error envelope 不变。
+
+唯一 snapshot、两 generator 与8个 whole-public pin 已切到上述 commit/digest；runtime contract、mapper及列表/日历 actual `Response` 反例已实现。当前辅助 focused 148项通过；正常 IAM/BFF 的真实响应与浏览器新建/暂停/恢复/hard-refresh 仍需 Root 在 normal source/schema 安全激活后验证。
+
+---
+
 ## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
 
 当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。

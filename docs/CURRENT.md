@@ -1,3 +1,21 @@
+## R255 02:44 Root 接收：nullable next 消费者源码切片
+
+本次固定 BFF 本地发布 artifact 45e67f0/public8.0.0/SHA2560802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95；24批准现文件、零新文件/层。wire十required、next必有nullable、输入optional recurrence anchor；live保null/list与calendar不编日期，preview生命周期保持。Team15生成文件byte-equal，failure仅两provenance更新；五原文档suffix及原system修改保护。
+
+Root先旧source/snapshot实际RED148项139pass/9fail，再冻结源码Node22.22.2独立复跑：两generated check、contract274/0、architecture、lint、typecheck、153非system文件2657/0、build均exit0。独审99cc868e绑定freeze63e5ba58零P0/P1/P2；最终仅此CURRENT事实前缀在审查后追加，源码/测试保持freeze。Next16官方原生dev/build输出隔离，八原normal进程不重启；不写共享PG/Redis、不主动模型/资金调用。
+
+这些是工程辅助，不关闭T-P02正常页面组：normal BFF旧进程与旧排程schema未激活、持续next更新尚未闭合。现浏览器控制三次focus超时无DOM/像素，不记产品FAIL/PASS；正式weekly创建/确认/暂停/恢复/刷新/时区/执行仍待真实E2E。原全量system、Playwright、axe、移动/视觉/bundle及provider旅程本波未运行；70组11/8/14/36/1不增加PASS。证据 Root ignored var/dev/r255-preserve/0244-web-*；本地artifact不冒remote release。
+
+## T-P02.R255-WEB-NEXT：本地消费者源码候选（2026-10-05；待 Root 独审/normal E2E）
+
+固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。
+
+当前已从 immutable owner blob 精确固定 whole-public snapshot并机械更新8个 public pin；Node `22.22.2` 下两条现 generator 正规 write/check，failure仅两项 provenance变化，Team15逐字不变。现 ScheduledTask schema要求 owner十个 required字段、nullable next与optional anchor；live mapper保null，calendar key窄扩接受null。editor、renderer、route、样式均未改，create/PATCH继续省略未由用户表达的anchor且从不发送旧next。
+
+Root 对旧实现已取得有效 RED；本地四 focused 文件现148项全通过。五文档只更新本任务顶部前缀，原 mixed suffix继续逐字保。当前 normal BFF未重载、normal schema仍旧，局部排程表重建请求仍待用户答复；本轮未触PG/Redis/env/服务/browser/system fixture/Git。辅助 contract/client/jsdom 门不等于真实HTTP或用户E2E，正常页面的新建weekly、owner确认、暂停null、恢复与hard refresh链仍OPEN，不增加70组用户PASS。
+
+---
+
 ## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
 
 当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。

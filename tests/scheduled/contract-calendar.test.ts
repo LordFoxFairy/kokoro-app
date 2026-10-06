@@ -15,8 +15,14 @@ import {
 const requiredRecord = {
   id: "scheduled_1",
   title: "Digest",
+  prompt: "Run it",
   frequency: "daily",
   time: "08:00",
+  timezone: "America/New_York",
+  next_run_at: null,
+  auto_approve: false,
+  enabled: true,
+  status: "active",
 } as const
 
 const requiredCreate = {
@@ -29,21 +35,73 @@ const requiredCreate = {
 } as const
 
 describe("scheduled task UTC contract", () => {
-  it("accepts owner ISO instants and rejects date-only or offset timestamps", () => {
+  it("requires nullable next_run_at and accepts only owner UTC instants when present", () => {
+    const completeRecord = {
+      ...requiredRecord,
+      next_run_at: "2026-09-15T08:00:00.000Z",
+    }
+    for (const field of [
+      "id",
+      "title",
+      "prompt",
+      "frequency",
+      "time",
+      "timezone",
+      "next_run_at",
+      "auto_approve",
+      "enabled",
+      "status",
+    ] as const) {
+      const missingRequiredField: Record<string, unknown> = { ...completeRecord }
+      delete missingRequiredField[field]
+      expect(
+        scheduledTaskRecordSchema.safeParse(missingRequiredField).success,
+        `owner record must require ${field}`,
+      ).toBe(false)
+    }
+    expect(scheduledTaskRecordSchema.safeParse(requiredRecord).success).toBe(true)
     expect(scheduledTaskRecordSchema.safeParse({
       ...requiredRecord,
       next_run_at: "2026-09-15T08:00:00.000Z",
       expires_at: "2026-09-30T23:59:59.999Z",
     }).success).toBe(true)
+    expect(scheduledTaskRecordSchema.safeParse({
+      id: requiredRecord.id,
+      title: requiredRecord.title,
+      prompt: requiredRecord.prompt,
+      frequency: requiredRecord.frequency,
+      time: requiredRecord.time,
+      timezone: requiredRecord.timezone,
+      auto_approve: requiredRecord.auto_approve,
+      enabled: requiredRecord.enabled,
+      status: requiredRecord.status,
+    }).success).toBe(false)
     expect(scheduledTaskRecordSchema.safeParse({ ...requiredRecord, expires_at: "2026-09-30" }).success).toBe(false)
     expect(scheduledTaskRecordSchema.safeParse({ ...requiredRecord, expires_at: "2026-09-30T23:59:59.999+00:00" }).success).toBe(false)
   })
 
-  it("uses an ISO instant for create and explicit null only for patch clear", () => {
+  it("uses an optional UTC recurrence anchor for create and PATCH without accepting owner next_run_at", () => {
     expect(scheduledTaskCreateRequestSchema.safeParse({
       ...requiredCreate,
+      recurrence_anchor_at: "2026-09-15T08:00:00.000Z",
       expires_at: "2026-09-30T23:59:59.999Z",
     }).success).toBe(true)
+    expect(scheduledTaskPatchRequestSchema.safeParse({
+      recurrence_anchor_at: "2026-09-15T08:00:00.000Z",
+    }).success).toBe(true)
+    expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate }).success).toBe(true)
+    expect(scheduledTaskPatchRequestSchema.safeParse({})).toMatchObject({ success: true })
+    expect(scheduledTaskCreateRequestSchema.safeParse({
+      ...requiredCreate,
+      next_run_at: "2026-09-15T08:00:00.000Z",
+    }).success).toBe(false)
+    expect(scheduledTaskPatchRequestSchema.safeParse({
+      next_run_at: "2026-09-15T08:00:00.000Z",
+    }).success).toBe(false)
+    expect(scheduledTaskCreateRequestSchema.safeParse({
+      ...requiredCreate,
+      recurrence_anchor_at: "2026-09-15T08:00:00.000+00:00",
+    }).success).toBe(false)
     expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, expires_at: "2026-09-30" }).success).toBe(false)
     expect(scheduledTaskCreateRequestSchema.safeParse({ ...requiredCreate, expires_at: null }).success).toBe(false)
     expect(scheduledTaskPatchRequestSchema.parse({ expires_at: null })).toEqual({ expires_at: null })
@@ -89,7 +147,7 @@ describe("scheduled task IANA calendar", () => {
 })
 
 describe("scheduled task runtime record guard", () => {
-  it("validates every optional field instead of admitting malformed storage data", () => {
+  it("preserves nullable owner next-run state while validating every optional field", () => {
     expect(isScheduledTaskRecord({
       ...requiredRecord,
       timezone: "America/New_York",
@@ -99,6 +157,7 @@ describe("scheduled task runtime record guard", () => {
       enabled: true,
       status: "active",
     })).toBe(true)
+    expect(isScheduledTaskRecord({ ...requiredRecord, nextRun: null })).toBe(true)
     expect(isScheduledTaskRecord({ ...requiredRecord, timezone: 42 })).toBe(false)
     expect(isScheduledTaskRecord({ ...requiredRecord, nextRun: "tomorrow" })).toBe(false)
     expect(isScheduledTaskRecord({ ...requiredRecord, expiresAt: "2026-09-30" })).toBe(false)

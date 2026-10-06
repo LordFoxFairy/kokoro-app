@@ -9,7 +9,7 @@ export type ScheduledTaskRecord = {
   frequency: ScheduledTaskFrequency
   time: string
   timezone?: string
-  nextRun?: string
+  nextRun?: string | null
   expiresAt?: string
   autoApprove?: boolean
   enabled?: boolean
@@ -57,7 +57,7 @@ export function isScheduledTaskRecord(value: unknown): value is ScheduledTaskRec
   if (!("time" in value) || typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/u.test(value.time)) return false
   if ("prompt" in value && value.prompt !== undefined && typeof value.prompt !== "string") return false
   if ("timezone" in value && value.timezone !== undefined && !isIanaTimezone(value.timezone)) return false
-  if ("nextRun" in value && value.nextRun !== undefined && !isUtcInstant(value.nextRun)) return false
+  if ("nextRun" in value && value.nextRun !== undefined && value.nextRun !== null && !isUtcInstant(value.nextRun)) return false
   if ("expiresAt" in value && value.expiresAt !== undefined && !isUtcInstant(value.expiresAt)) return false
   if ("autoApprove" in value && value.autoApprove !== undefined && typeof value.autoApprove !== "boolean") return false
   if ("enabled" in value && value.enabled !== undefined && typeof value.enabled !== "boolean") return false

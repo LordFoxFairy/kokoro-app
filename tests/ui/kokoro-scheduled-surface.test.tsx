@@ -10,6 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "@/i18n/context";
 import {
+  createScheduledTaskClient,
   ScheduledTaskSurface,
   type ScheduledTaskClient,
 } from "@/features/scheduled-tasks";
@@ -761,6 +762,78 @@ it("列表使用可读的本地化下一次运行时间，而不是把 ISO 字�
   expect(time).toHaveAttribute("dateTime", "2026-09-15T08:00:00.000Z");
   expect(time).not.toHaveTextContent("2026-09-15T08:00:00.000Z");
   expect(time).toHaveTextContent(/9月15日/);
+});
+
+it("actual Response 的空 next_run_at 不在列表或日历伪造日期，已确认字符串保持显示", async () => {
+  const now = new Date();
+  const confirmedNextRun = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 15, 8),
+  ).toISOString();
+  const confirmedDateKey = confirmedNextRun.slice(0, 10);
+  const ownerTask = {
+    title: "Owner 已暂停",
+    prompt: "等待 owner 重新排程",
+    frequency: "daily",
+    time: "08:00",
+    timezone: "UTC",
+    auto_approve: false,
+  } as const;
+  const fetcher: typeof fetch = async () =>
+    new Response(
+      JSON.stringify({
+        tasks: [
+          {
+            ...ownerTask,
+            id: "scheduled_paused_owner",
+            next_run_at: null,
+            enabled: false,
+            status: "paused",
+          },
+          {
+            ...ownerTask,
+            id: "scheduled_confirmed_owner",
+            title: "Owner 已确认",
+            next_run_at: confirmedNextRun,
+            enabled: true,
+            status: "active",
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+  window.history.replaceState(null, "", "/app/scheduled?tab=list");
+  render(
+    <LocaleProvider>
+      <ScheduledTaskSurface
+        brandName="Kokoro"
+        displayTimezone="UTC"
+        scheduledTaskClient={createScheduledTaskClient(fetcher)}
+      />
+    </LocaleProvider>,
+  );
+
+  const pausedCard = (await screen.findByText("Owner 已暂停")).closest(
+    "[role='listitem']",
+  );
+  const confirmedCard = screen.getByText("Owner 已确认").closest(
+    "[role='listitem']",
+  );
+  expect(pausedCard).not.toBeNull();
+  expect(confirmedCard).not.toBeNull();
+  expect(pausedCard?.querySelector("time")).toBeNull();
+  expect(confirmedCard?.querySelector("time")).toHaveAttribute(
+    "dateTime",
+    confirmedNextRun,
+  );
+
+  window.history.replaceState(null, "", "/app/scheduled?tab=calendar");
+  fireEvent(window, new Event("kokoro:surface-navigation"));
+  await waitFor(() =>
+    expect(screen.queryByText("Owner 已暂停")).not.toBeInTheDocument(),
+  );
+  expect(
+    screen.getByTestId(`scheduled-calendar-day-${confirmedDateKey}`),
+  ).toHaveTextContent("Owner 已确认");
 });
 
 it("排程 mutation 期间锁住操作入口，失败后保留可恢复的错误提示", async () => {

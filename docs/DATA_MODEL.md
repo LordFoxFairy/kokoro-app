@@ -1,3 +1,15 @@
+## T-P02.R255-WEB-NEXT：ScheduledTask next 投影模型（源码候选；无 Web 持久化 owner）
+
+固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。
+
+Web 不拥有 ScheduledTask、Schedule、Occurrence 或 recurrence anchor 的持久化事实，不新增 SQL、Redis、cookie、storage schema 或第二任务模型。BFF wire `next_run_at` 必有且为 `string | null`；其余 owner required 字段也在 wire schema 必有。Web live mapper 总是建立 `nextRun: string | null`，而 preview/controlled record 为维持现生命周期仍允许 optional；字段缺失是 contract parse failure，null 是合法 owner 状态，string 是已确认 UTC instant。
+
+映射只在 strict parse 成功后建立：null 原样保留，列表无 `<time>`，`scheduledDateKey` 接受 null 并使日历跳过；string 原样保留并由既有 formatter/grouping 读取。页面不从 frequency/time/timezone/当前日期重算 next；`nextPreviewRun` 只属于未保存 preview。`recurrence_anchor_at` 是 create/PATCH 可选 wire 输入，不是页面显示事实；现 editor 无显式输入，故省略且不新建 draft/store 字段。
+
+恢复边界仍是 owner 再次返回 string 后才恢复列表时间与日历 event；paused/null 不保留推算 event，缺字段不降级成 null。无 DB/schema/cache/事务变化；正常服务与真实页面刷新链尚未验。
+
+---
+
 ## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
 
 当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。

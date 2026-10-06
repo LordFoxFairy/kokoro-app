@@ -45,11 +45,11 @@ function toRecord(task: ScheduledTaskRecordResponse): ScheduledTaskRecord {
     title: task.title,
     frequency: task.frequency,
     time: task.time,
+    nextRun: task.next_run_at,
   }
   if (task.project_id !== undefined) record.projectId = task.project_id
   if (task.prompt !== undefined) record.prompt = task.prompt
   if (task.timezone !== undefined) record.timezone = task.timezone
-  if (task.next_run_at !== undefined) record.nextRun = task.next_run_at
   if (task.expires_at !== undefined) record.expiresAt = task.expires_at
   if (task.auto_approve !== undefined) record.autoApprove = task.auto_approve
   if (task.enabled !== undefined) record.enabled = task.enabled

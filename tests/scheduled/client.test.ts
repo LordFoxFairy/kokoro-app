@@ -40,6 +40,22 @@ describe("scheduled task HTTP client", () => {
     }])
   })
 
+  it("preserves owner null and confirmed-string next runs from an actual Response", async () => {
+    const confirmedNextRun = "2026-10-15T08:00:00.000Z"
+    const fetcher: typeof fetch = async () => new Response(JSON.stringify({
+      tasks: [
+        { ...wireTask, id: "scheduled_paused", status: "paused", enabled: false, next_run_at: null },
+        { ...wireTask, id: "scheduled_confirmed", next_run_at: confirmedNextRun },
+      ],
+    }), { status: 200 })
+
+    const tasks = await createScheduledTaskClient(fetcher).listScheduledTasks()
+
+    expect(tasks).toHaveLength(2)
+    expect(tasks[0]).toMatchObject({ id: "scheduled_paused", nextRun: null })
+    expect(tasks[1]).toMatchObject({ id: "scheduled_confirmed", nextRun: confirmedNextRun })
+  })
+
   it("sends strict create and update request bodies and parses mutation receipts", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ task: wireTask }), { status: 201 }))

@@ -1,3 +1,15 @@
+## T-P02.R255-WEB-NEXT：ScheduledTask nullable next 消费者源码候选（待 Root 独审/真实验收）
+
+固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。
+
+BFF 是 ScheduledTask、recurrence anchor 与 confirmed next 的唯一 owner；Web 只经现同源 `/api/scheduled-tasks` adapter 消费投影，Scheduler 仍只拥有通用调度事实。唯一 snapshot 已从上述 immutable blob 原字节固定；现两条 generator 已在 Node `22.22.2` 正规 write/check。Agent failure 生成物只改变 `ownerCommit`、`sourceSha256` 两项 provenance，Team 15 个生成文件逐字不变；没有第二 snapshot、SDK、兼容层或日期 owner。
+
+现 wire schema 与 owner 对齐：ScheduledTask 的 `id,title,prompt,frequency,time,timezone,next_run_at,auto_approve,enabled,status` 十字段 required，`next_run_at` 为 UTC instant 或 null；create/PATCH closed schema 可选接收 `recurrence_anchor_at` 且拒绝旧 `next_run_at`。live mapper 总是保存 `nextRun: string | null`；preview/controlled view-model 仍允许字段 optional。`scheduledDateKey` 的既有类型窄扩为 `string | null | undefined`，null 直接跳过分组；列表既有 truthy guard不渲染 `<time>`。
+
+Web 不从 frequency/time/timezone/当前时间计算 live next，也不把 `nextPreviewRun` 移出 preview store。当前编辑器没有显式 anchor 意图：create 省略 anchor 由 BFF 使用既有默认，PATCH 省略以保留 owner anchor；不从 next 反推，不新增 weekday/cron UI。源码与生成仅落在已批准现文件，renderer/routes/styles 未改。Root 旧实现 RED 后，本地四 focused 文件现为148项全通过；这些 actual `Response`/jsdom 门仍不是正常用户 E2E。
+
+---
+
 ## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
 
 当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。

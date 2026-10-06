@@ -557,7 +557,7 @@ describe("R66 public4 wire/head and closed resume", () => {
   })
 })
 
-// R76 owner create graph preserved under the R91 public7 exact consumer pin.
+// R255 ScheduledTask recurrence graph under the exact public8 consumer pin.
 import { createHash as r76Hash } from "node:crypto"
 import { readFile as r76ReadFile } from "node:fs/promises"
 import r76Yaml from "yaml"
@@ -569,7 +569,7 @@ async function r76PublicSpec() {
     components: {
       schemas: Record<string, {
         type: string; required: string[]; additionalProperties: boolean
-        properties: Record<string, { type: string; minLength?: number; pattern?: string }>
+        properties: Record<string, { type: string | string[]; format?: string; minLength?: number; pattern?: string }>
       }>
       parameters: Record<string, {
         name: string
@@ -596,25 +596,44 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
-describe("R76 ScheduledTask owner creation graph under the public7 pin", () => {
-  it("consumes the exact published public7 canonical bytes", async () => {
+describe("R255 ScheduledTask owner recurrence graph under the public8 pin", () => {
+  it("consumes the exact locally accepted public8 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95")
     expect(spec.info.version).toBe("8.0.0")
   })
 
-  it("has five required create fields and rejects enabled/status as creation properties", async () => {
-    const create = (await r76PublicSpec()).spec.components.schemas.CreateScheduledTaskRequest!
+  it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {
+    const schemas = (await r76PublicSpec()).spec.components.schemas
+    const task = schemas.ScheduledTask!
+    const create = schemas.CreateScheduledTaskRequest!
+    expect(task.required).toContain("next_run_at")
+    expect(task.properties.next_run_at).toEqual({ type: ["string", "null"], format: "date-time" })
     expect(create.type).toBe("object")
     expect(create.additionalProperties).toBe(false)
     expect(create.required).toEqual(["title", "prompt", "frequency", "time", "timezone"])
     expect(Object.keys(create.properties)).toEqual([
-      "project_id", "title", "prompt", "frequency", "time", "timezone", "next_run_at", "expires_at", "auto_approve",
+      "project_id", "title", "prompt", "frequency", "time", "timezone", "recurrence_anchor_at", "expires_at", "auto_approve",
     ])
+    expect(create.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
+    expect(create.properties.next_run_at).toBeUndefined()
     expect(create.properties.enabled).toBeUndefined()
     expect(create.properties.status).toBeUndefined()
     expect(create.required).not.toContain("project_id")
     expect(create.required).not.toContain("auto_approve")
+    expect(create.required).not.toContain("recurrence_anchor_at")
+  })
+
+  it("keeps PATCH closed with an optional recurrence anchor and no owner next-run input", async () => {
+    const patch = (await r76PublicSpec()).spec.components.schemas.ScheduledTaskPatchRequest!
+    expect(patch.type).toBe("object")
+    expect(patch.additionalProperties).toBe(false)
+    expect(patch.required ?? []).toEqual([])
+    expect(Object.keys(patch.properties)).toEqual([
+      "title", "prompt", "frequency", "time", "timezone", "recurrence_anchor_at", "expires_at", "auto_approve", "enabled", "status",
+    ])
+    expect(patch.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
+    expect(patch.properties.next_run_at).toBeUndefined()
   })
 
   it("models exact nonempty optional project_id without a project_ref alias or trimming", async () => {

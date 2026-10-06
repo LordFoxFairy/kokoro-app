@@ -1,3 +1,13 @@
+## T-P02.R255-WEB-NEXT：public 8.0 ScheduledTask 固定消费者候选
+
+固定前置为 BFF local immutable artifact：commit `45e67f0e783fb4bcdb086665a09b7c3c5fadbb6f`（源码父提交 `e603bd55`）、canonical `contract/openapi/v1/openapi.yaml`、Git blob `1b42d49388ca26eaaef7371daf23cbf1158d5fe6`、public `8.0.0`、全文 SHA256 `0802a31f9469a17cd8fc8b78e6d2326e0571bc93f3ac8d19811a42a1b185df95`。Root 本地交接 commit 为 `ef2d306`；该 artifact 尚未 remote push、registry 发布或 normal BFF/schema 激活，因此这里只记录本地发布接收与消费者候选，不冒称线上或当前正常服务已经生效。Web 冻结基线为 `97a79d45f93a6007fb0f37002372fd503cd0d373`。
+
+唯一 checked-in snapshot 已由上述 owner blob 原字节替换，SHA256与Git blob精确匹配。现 `scripts/generate-bff-team-client.mjs`、`scripts/generate-bff-agent-failure.mjs` 固定同一digest，Node `22.22.2` 正规 write/check通过；Agent failure派生物只改变 `ownerCommit`/`sourceSha256`，openapiVersion、roles、12 tuples不变；Team窄图及15生成文件逐字不变。8个whole-public测试固定同一commit/digest，不存在手改生成物或第二来源。
+
+本次接受的唯一 public delta是 ScheduledTask输出 required nullable `next_run_at`、create可选 `recurrence_anchor_at` 取代旧next输入，以及closed PATCH显式属性；public version仍为`8.0.0`。runtime strict schema同时补齐owner十个required字段；live mapper保留null，页面不计算Scheduler next。当前是local consumer candidate，没有remote/registry/normal activation；真实浏览器E2E另验。
+
+---
+
 ## T-B03.R255-WEB-CREDIT：当前消费者源码候选（待Root集成与真实用户验收）
 
 当前切片只消费个人可用余额/预占及owner journal，不再读by-model或推导Free、每日赠送、quota、低余额阈值。固定BFF `97a99d35c8c78e7ca6e1370fd16ba5d670766095` / public `8.0.0` / OpenAPI全文SHA256 `33971eaa8b43e8aa85a8eef8c3b99e42f0999fe3136dc129705beb7e8bb0e2f4`，owner正式blob原字节复制，现两个generator正规派生；不双读旧wallet。

@@ -22,15 +22,15 @@ export const scheduledTaskRecordSchema = z.object({
   id: z.string().min(1),
   project_id: projectReferenceSchema.optional(),
   title: z.string().min(1),
-  prompt: z.string().optional(),
+  prompt: z.string(),
   frequency: z.enum(["daily", "weekly"]),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  timezone: ianaTimezoneSchema.optional(),
-  next_run_at: utcInstantSchema.optional(),
+  timezone: ianaTimezoneSchema,
+  next_run_at: utcInstantSchema.nullable(),
   expires_at: utcInstantSchema.optional(),
-  auto_approve: z.boolean().optional(),
-  enabled: z.boolean().optional(),
-  status: z.enum(["active", "paused", "failed"]).optional(),
+  auto_approve: z.boolean(),
+  enabled: z.boolean(),
+  status: z.enum(["active", "paused", "failed"]),
 }).strict()
 export type ScheduledTaskRecordResponse = z.infer<typeof scheduledTaskRecordSchema>
 
@@ -44,6 +44,7 @@ export const scheduledTaskCreateRequestSchema = z.object({
   frequency: z.enum(["daily", "weekly"]),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   timezone: ianaTimezoneSchema,
+  recurrence_anchor_at: utcInstantSchema.optional(),
   expires_at: utcInstantSchema.optional(),
   auto_approve: z.boolean(),
 }).strict()
