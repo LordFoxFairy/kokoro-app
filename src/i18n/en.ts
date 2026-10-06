@@ -683,6 +683,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "billing.close": "Close balance panel",
   "billing.loading": "Loading…",
   "billing.loadError": "Failed to load, try again later",
+  "billing.missingAccount": "No credit account yet",
   "billing.retry": "Reload",
   "billing.balance": "Available balance",
   "billing.held": "On hold",

@@ -437,6 +437,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "billing.close": "잔액 패널 닫기",
   "billing.loading": "로드 중…",
   "billing.loadError": "로드하지 못했습니다. 나중에 다시 시도해 주세요.",
+  "billing.missingAccount": "아직 크레딧 계정이 없습니다",
   "billing.balance": "사용 가능한 잔액",
   "billing.held": "동결",
   "billing.creditUnit": "완전한",

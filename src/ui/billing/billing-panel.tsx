@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { BillingLedgerEntry } from "@/contract/http"
-import type { BillingClient } from "@/billing/client"
+import { BillingClientError, type BillingClient } from "@/billing/client"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
@@ -59,8 +59,8 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
         if (actor === undefined) throw new Error("billing_identity_unavailable")
         const value = await client.summary(flight.controller.signal)
         if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "ready", summary: value } }))
-      } catch {
-        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: "error" } }))
+      } catch (error) {
+        if (current()) setProjection((previous) => ({ ...previous, summary: { kind: error instanceof BillingClientError && error.reason === "missing_account" ? "missing_account" : "error" } }))
       }
     }
     const ledgerRead = async () => {
@@ -70,8 +70,8 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
         if (page.page.next_cursor === "") throw new Error("billing_cursor_invalid")
         const entries = uniqueEntries(page.items)
         if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "ready", entries, cursor: page.page.next_cursor, loadingMore: false, pageError: false } }))
-      } catch {
-        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: "error" } }))
+      } catch (error) {
+        if (current()) setProjection((previous) => ({ ...previous, ledger: { kind: error instanceof BillingClientError && error.reason === "missing_account" ? "missing_account" : "error" } }))
       }
     }
     void Promise.all([summaryRead(), ledgerRead()]).finally(() => { if (current()) setRetrying(false) })

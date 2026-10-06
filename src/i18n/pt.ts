@@ -437,6 +437,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "billing.close": "Fechar painel de saldo",
   "billing.loading": "Carregando…",
   "billing.loadError": "Falha ao carregar, tente novamente mais tarde",
+  "billing.missingAccount": "Ainda não há conta de créditos",
   "billing.balance": "saldo disponível",
   "billing.held": "Congelando",
   "billing.creditUnit": "integrante",

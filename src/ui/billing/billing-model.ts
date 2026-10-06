@@ -4,11 +4,13 @@ import type { MessageKey } from "@/i18n/messages"
 export type SummaryState =
   | { kind: "loading" }
   | { kind: "error" }
+  | { kind: "missing_account" }
   | { kind: "ready"; summary: BillingSummary }
 
 export type LedgerState =
   | { kind: "loading" }
   | { kind: "error" }
+  | { kind: "missing_account" }
   | { kind: "ready"; entries: BillingLedgerEntry[]; cursor: string | null; loadingMore: boolean; pageError: boolean }
 
 export type LedgerFilter = "all" | "spend" | "credit"

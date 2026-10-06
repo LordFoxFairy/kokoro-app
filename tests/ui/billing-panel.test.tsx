@@ -561,3 +561,227 @@ it("R255 preserves UTC wire instants but groups two midnight-crossing journals b
   expect(days[0]).toHaveTextContent(new Date(items[0]!.created_at).toLocaleDateString())
   expect(days[0]).toHaveTextContent("+0.000001")
 })
+
+// Real browser client + native Response fixtures; no owner service or account writes.
+describe("R255 missing Credit account domain state", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    window.localStorage.removeItem("kokoro.web.auth-index-subject")
+  })
+
+  const requestId = "r255-missing-account"
+  const missingBody = {
+    error: { code: "billing_account_not_found", message: "Billing account was not found" },
+    meta: { request_id: requestId },
+  }
+  const responseHeaders = { "cache-control": "private, no-store", "x-request-id": requestId }
+
+  it("renders both exact account-not-found reads as not opened, without zero balance or retry", async () => {
+    const fetcher = vi.fn(async () => Response.json(missingBody, { status: 404, headers: responseHeaders }))
+    vi.stubGlobal("fetch", fetcher)
+    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+
+    for (const sectionId of ["billing-balance", "billing-ledger"]) {
+      const section = screen.getByTestId(sectionId)
+      expect(await within(section).findByText("No credit account yet")).toBeInTheDocument()
+      expect(within(section).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+      expect(section).not.toHaveTextContent("Failed to load")
+      expect(within(section).queryByText("0", { exact: true })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText("No transactions yet")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    { name: "generic 404", status: 404, body: { error: { code: "not_found", message: "Route not found" }, meta: { request_id: requestId } } },
+    { name: "unavailable 503", status: 503, body: { error: { code: "billing_unavailable", message: "Billing is unavailable" }, meta: { request_id: requestId } } },
+    { name: "404 missing its request metadata", status: 404, body: { error: { code: "billing_account_not_found", message: "Billing account was not found" } } },
+  ])("keeps $name as a retryable display error rather than an unopened account", async ({ status, body }) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body, { status, headers: responseHeaders })))
+    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+
+    for (const sectionId of ["billing-balance", "billing-ledger"]) {
+      const section = screen.getByTestId(sectionId)
+      expect(await within(section).findByText(/^Failed to load/)).toBeInTheDocument()
+      expect(within(section).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+      expect(within(section).queryByText("No credit account yet")).not.toBeInTheDocument()
+    }
+  })
+
+  it.each(["summary", "ledger"])("does not let a missing %s conceal the other read's failure", async (missingRead) => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const missing = String(input).endsWith(`/${missingRead}`)
+      return Response.json(missing ? missingBody : {
+        error: { code: "billing_unavailable", message: "Billing is unavailable" },
+        meta: { request_id: requestId },
+      }, { status: missing ? 404 : 503, headers: responseHeaders })
+    }))
+    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+
+    const missingSection = screen.getByTestId(missingRead === "summary" ? "billing-balance" : "billing-ledger")
+    const failedSection = screen.getByTestId(missingRead === "summary" ? "billing-ledger" : "billing-balance")
+    expect(await within(missingSection).findByText("No credit account yet")).toBeInTheDocument()
+    expect(within(missingSection).queryByRole("button", { name: "Reload" })).not.toBeInTheDocument()
+    expect(await within(failedSection).findByText(/^Failed to load/)).toBeInTheDocument()
+    expect(within(failedSection).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+    expect(within(failedSection).queryByText("No credit account yet")).not.toBeInTheDocument()
+  })
+
+  it.each([401, 403, 503])("keeps status %s as a fast HTTP failure even with the exact missing-account code", async (status) => {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode(JSON.stringify(missingBody))) },
+      cancel,
+    })
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      status, headers: { ...responseHeaders, "content-type": "application/json" },
+    })))
+    await expect(createBillingClient().summary()).rejects.toMatchObject({ reason: "http", status })
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(body.locked).toBe(false)
+  })
+
+  it.each([
+    { name: "request metadata mismatch", body: { ...missingBody, meta: { request_id: "another-request" } } },
+    { name: "unknown envelope key", body: { ...missingBody, extra: true } },
+    { name: "unknown error key", body: { ...missingBody, error: { ...missingBody.error, extra: true } } },
+    { name: "unknown metadata key", body: { ...missingBody, meta: { ...missingBody.meta, extra: true } } },
+    { name: "empty message", body: { ...missingBody, error: { ...missingBody.error, message: "" } } },
+    { name: "missing private cache directive", body: missingBody, header: "cache-control", value: "no-store" },
+    { name: "missing no-store cache directive", body: missingBody, header: "cache-control", value: "private, max-age=0" },
+    { name: "missing request ID header", body: missingBody, header: "x-request-id", value: null },
+    { name: "non-JSON media", body: missingBody, header: "content-type", value: "text/plain" },
+  ])("keeps $name as a display error, not a trusted missing account", async ({ body, header, value }) => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      const headers = new Headers({ ...responseHeaders, "content-type": "application/json" })
+      if (header !== undefined) {
+        if (value === null) headers.delete(header)
+        else if (value !== undefined) headers.set(header, value)
+      }
+      return new Response(JSON.stringify(body), { status: 404, headers })
+    }))
+    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    for (const sectionId of ["billing-balance", "billing-ledger"]) {
+      const section = screen.getByTestId(sectionId)
+      expect(await within(section).findByText(/^Failed to load/)).toBeInTheDocument()
+      expect(within(section).getByRole("button", { name: "Reload" })).toBeInTheDocument()
+      expect(within(section).queryByText("No credit account yet")).not.toBeInTheDocument()
+    }
+  })
+
+  it.each(["invalid JSON", "truncated JSON", "broken stream", "oversized body"])("rejects a 404 with %s before classifying the account", async (variant) => {
+    const cancel = vi.fn()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        if (variant === "broken stream") { controller.error(new Error("connection interrupted")); return }
+        const text = variant === "invalid JSON" ? "not-json" : JSON.stringify(missingBody).slice(0, -1)
+        controller.enqueue(variant === "oversized body" ? new Uint8Array(16 * 1024 * 1024 + 1) : new TextEncoder().encode(text))
+        if (variant !== "oversized body") controller.close()
+      },
+      cancel,
+    })
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      status: 404, headers: { ...responseHeaders, "content-type": "application/json" },
+    })))
+    await expect(createBillingClient().ledger()).rejects.toMatchObject({ reason: "parse", status: 404 })
+    expect(body.locked).toBe(false)
+    if (variant === "oversized body") expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses the same total deadline for a slow 404 body and releases its unfinished reader", async () => {
+    vi.useFakeTimers()
+    const headers = r255Deferred<Response>()
+    const cancel = vi.fn()
+    let signal: AbortSignal | null | undefined
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const body = new ReadableStream<Uint8Array>({ start(value) { controller = value }, cancel })
+    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal
+      return headers.promise
+    }))
+    const read = createBillingClient().summary()
+    const outcome = expect(read).rejects.toMatchObject({ reason: "timeout" })
+    try {
+      await vi.advanceTimersByTimeAsync(9_000)
+      headers.resolve(new Response(body, { status: 404, headers: { ...responseHeaders, "content-type": "application/json" } }))
+      await vi.advanceTimersByTimeAsync(1_001)
+      await outcome
+      expect(signal?.aborted).toBe(true)
+      expect(cancel).toHaveBeenCalledTimes(1)
+      expect(body.locked).toBe(false)
+    } finally {
+      if (cancel.mock.calls.length === 0) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(missingBody)))
+        controller.close()
+      }
+      await outcome
+    }
+  })
+
+  it("cancels an unfinished missing-account body when its mounted panel unmounts", async () => {
+    const bodies: ReadableStream<Uint8Array>[] = []
+    const cancels: ReturnType<typeof vi.fn>[] = []
+    const signals: (AbortSignal | null | undefined)[] = []
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const cancel = vi.fn()
+      const body = new ReadableStream<Uint8Array>({ cancel })
+      bodies.push(body)
+      cancels.push(cancel)
+      signals.push(init?.signal)
+      return new Response(body, { status: 404, headers: { ...responseHeaders, "content-type": "application/json" } })
+    }))
+    const mounted = render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    await waitFor(() => expect(bodies.every((body) => body.locked)).toBe(true))
+    mounted.unmount()
+    await waitFor(() => expect(cancels.every((cancel) => cancel.mock.calls.length === 1)).toBe(true))
+    expect(signals.every((signal) => signal?.aborted)).toBe(true)
+    expect(bodies.every((body) => !body.locked)).toBe(true)
+  })
+
+  it.each([true, false])("never adopts a late previous actor response when the current missing-account state is %s", async (currentMissing) => {
+    const lateSummary = r255Deferred<Response>()
+    const lateLedger = r255Deferred<Response>()
+    const oldSignals: (AbortSignal | null | undefined)[] = []
+    let requests = 0
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests += 1
+      const summary = String(input).endsWith("/summary")
+      if (requests <= 2) {
+        oldSignals.push(init?.signal)
+        return summary ? lateSummary.promise : lateLedger.promise
+      }
+      return Response.json(currentMissing ? missingBody : summary
+        ? { ...r255ExistingSummary, available_micros: "7000000" }
+        : { items: [], page: { next_cursor: null } }, {
+        status: currentMissing ? 404 : 200, headers: responseHeaders,
+      })
+    }))
+    const client = createBillingClient()
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-A")
+    const mounted = render(<BillingContent client={client} embedded />, { wrapper: LocaleProvider })
+    await waitFor(() => expect(oldSignals).toHaveLength(2))
+    window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-B")
+    mounted.rerender(<BillingContent client={client} embedded />)
+    if (currentMissing) await screen.findAllByText("No credit account yet")
+    else await screen.findByText("7", { exact: true })
+    await act(async () => {
+      lateSummary.resolve(Response.json(currentMissing ? r255ExistingSummary : missingBody, { status: currentMissing ? 200 : 404, headers: responseHeaders }))
+      lateLedger.resolve(Response.json(currentMissing ? { items: [r255ExistingEntry], page: { next_cursor: null } } : missingBody, { status: currentMissing ? 200 : 404, headers: responseHeaders }))
+      await Promise.resolve()
+    })
+    expect(oldSignals.every((signal) => signal?.aborted)).toBe(true)
+    if (currentMissing) {
+      expect(screen.getAllByText("No credit account yet")).toHaveLength(2)
+      expect(screen.queryByText("7", { exact: true })).not.toBeInTheDocument()
+    } else {
+      expect(screen.getByText("7", { exact: true })).toBeInTheDocument()
+      expect(screen.getByTestId("billing-ledger")).toHaveTextContent("No transactions yet")
+      expect(screen.queryByText("No credit account yet")).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
+    expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
+  })
+})

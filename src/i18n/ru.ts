@@ -437,6 +437,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "billing.close": "Закрыть панель баланса",
   "billing.loading": "Загрузка…",
   "billing.loadError": "Не удалось загрузить, повторите попытку позже.",
+  "billing.missingAccount": "Кредитный счёт ещё не открыт",
   "billing.balance": "доступный баланс",
   "billing.held": "Замораживание",
   "billing.creditUnit": "интеграл",

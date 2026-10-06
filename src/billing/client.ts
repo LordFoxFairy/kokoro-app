@@ -3,12 +3,13 @@ import {
   billingLedgerPath, billingLedgerSchema, billingSummaryPath, billingSummarySchema,
   type BillingLedger, type BillingSummary,
 } from "@/contract/http"
+import { billingMissingAccountSchema } from "@/contract/billing"
 import { SESSION_PROXY_BASE } from "@/engine/config"
 
 export const CREDIT_INSUFFICIENT = "credit_insufficient"
 
-type BillingFailureReason = "network" | "http" | "parse" | "timeout" | "aborted"
-class BillingClientError extends Error {
+type BillingFailureReason = "network" | "http" | "parse" | "timeout" | "aborted" | "missing_account"
+export class BillingClientError extends Error {
   constructor(readonly reason: BillingFailureReason, readonly status: number | null = null) {
     super(`billing_${reason}`)
     this.name = "BillingClientError"
@@ -47,11 +48,11 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: Abo
       throw new BillingClientError("network")
     }
     check()
-    if (!response.ok) throw new BillingClientError("http", response.status)
+    if (!response.ok && response.status !== 404) throw new BillingClientError("http", response.status)
     const media = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase()
     const directives = response.headers.get("cache-control")?.split(",").map((value) => value.trim().toLowerCase()) ?? []
     const requestId = response.headers.get("x-request-id")
-    if (response.status !== 200 || media !== "application/json" || !directives.includes("no-store") ||
+    if ((response.status !== 200 && response.status !== 404) || media !== "application/json" || !directives.includes("no-store") ||
       !directives.includes("private") || !requestId || requestId.length > 256 || !/^[\x21-\x7e]+$/.test(requestId)) {
       throw new BillingClientError("parse", response.status)
     }
@@ -72,7 +73,16 @@ async function getJson<T>(path: string, parse: (raw: unknown) => T, signal?: Abo
         text += decoder.decode(chunk.value, { stream: true })
       }
       text += decoder.decode()
-      const data = parse(JSON.parse(text) as unknown)
+      const raw: unknown = JSON.parse(text)
+      if (response.status === 404) {
+        const missing = billingMissingAccountSchema.safeParse(raw)
+        check()
+        if (missing.success && missing.data.meta.request_id === requestId) {
+          throw new BillingClientError("missing_account", 404)
+        }
+        throw new BillingClientError("http", 404)
+      }
+      const data = parse(raw)
       check()
       return data
     } catch (error) {

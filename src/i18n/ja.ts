@@ -496,6 +496,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "billing.close": "バランスパネルを閉じる",
   "billing.loading": "読み込み中…",
   "billing.loadError": "読み込みに失敗しました。後でもう一度お試しください",
+  "billing.missingAccount": "クレジットアカウントはまだ開設されていません",
   "billing.balance": "利用可能残高",
   "billing.held": "凍結",
   "billing.creditUnit": "積分",

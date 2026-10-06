@@ -1,3 +1,9 @@
+## R255 未开户正常状态与错误隔离（2026-10-06）
+
+15现生产路径+1现UI测试，freeze报告d33e64be/final独审eadda7dd。contract/billing.ts消费正规严格404 billing_account_not_found错误体（meta/header request_id一致）；billing/client.ts复用原唯一10秒/16MiB/fatalUTF8/abort读取链，非404失败保持早抛。summary/ledger独立missing_account，不画假0/空流水/Retry，不在GET开户；另一面的真实异常与原actor/分页控制保持。九语言现键，无新文件/依赖/generated/API/资金写。
+
+Root真实IAM用户正常3310积分页硬刷新：两“尚未开通积分账户”status，Retry0/假0为0，无永久loading。正常owner确实暂无本人credit account，本片不是开户或授权赠送/预占/结算/释放/模型费用闭环。原44例全部保留+新增26例=本UI70/0；Root最终冻结98文件1782/0/exit0，lint/typecheck0、contract275/0、architecture50/0、正常build0仅辅助工程。未跑全量system fixture/全页Playwright/axe/视觉/bundle，不用这些数量冒全产品通过。原563行测试完整/四mixed/uv/registry保持；观察失败和当前风险在Root同任务及测试台账。
+
 ## R255 左栏触屏滑动与文件夹信息密度（2026-10-06）
 
 原正常 Web66e6f76 + protected四mixed。唯一生产路径 src/components/blocks/workspace-rail/workspace-rail-items.module.css，最终SHA93009a203dec9ac624983742405edd7ef7733c32d307a9423bd24b61f9c4171f：draggable行none→pan-y，desktop manipulation/HTML5/Space-Arrow-Escape接线不变；原nested toolbar定位所属folder行，仅重复视觉标题隐藏，nav aria-label及全部反馈/分页/创建排序保持。无新API/数据/框架/组件。

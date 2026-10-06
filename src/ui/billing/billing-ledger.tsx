@@ -122,6 +122,7 @@ export function BillingLedger({ ledger, filter, embedded, retrying, onFilterChan
       </div>
       {ledger.kind === "loading" ? <LoadingLedger label={t("billing.loading")} embedded={embedded} /> : null}
       {ledger.kind === "error" ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={retrying} embedded={embedded} onRetry={onRetry} /> : null}
+      {ledger.kind === "missing_account" ? <Empty role="status" className={panelStyles.emptyState}><EmptyDescription>{t("billing.missingAccount")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.pageError ? <LedgerError message={t("billing.loadError")} retryLabel={t("billing.retry")} retrying={ledger.loadingMore} embedded={embedded} onRetry={onLoadMore} /> : null}
       {ledger.kind === "ready" && ledger.entries.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.ledgerEmpty")}</EmptyDescription></Empty> : null}
       {ledger.kind === "ready" && ledger.entries.length > 0 && days.length === 0 ? <Empty className={panelStyles.emptyState}><EmptyDescription>{t("billing.filterEmpty")}</EmptyDescription></Empty> : null}

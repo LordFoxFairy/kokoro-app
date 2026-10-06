@@ -592,6 +592,7 @@ export const zh = {
   "billing.close": "关闭余额面板",
   "billing.loading": "正在加载…",
   "billing.loadError": "加载失败，请稍后再试",
+  "billing.missingAccount": "尚未开通积分账户",
   "billing.retry": "重新加载",
   "billing.balance": "可用余额",
   "billing.held": "冻结中",

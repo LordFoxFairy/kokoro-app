@@ -28,3 +28,12 @@ export const billingLedgerSchema = z.object({
   page: z.object({ next_cursor: z.string().max(2048).nullable() }).strict(),
 }).strict()
 export type BillingLedger = z.infer<typeof billingLedgerSchema>
+
+// Strict consumer projection of the pinned BFF error envelope for this domain state.
+export const billingMissingAccountSchema = z.object({
+  error: z.object({
+    code: z.literal("billing_account_not_found"),
+    message: z.string().min(1),
+  }).strict(),
+  meta: z.object({ request_id: z.string().min(1) }).strict(),
+}).strict()

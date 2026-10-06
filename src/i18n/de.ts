@@ -437,6 +437,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "billing.close": "Balance-Panel schließen",
   "billing.loading": "Laden…",
   "billing.loadError": "Der Ladevorgang ist fehlgeschlagen. Bitte versuchen Sie es später noch einmal",
+  "billing.missingAccount": "Noch kein Guthabenkonto",
   "billing.balance": "verfügbares Guthaben",
   "billing.held": "Einfrieren",
   "billing.creditUnit": "Integral",
