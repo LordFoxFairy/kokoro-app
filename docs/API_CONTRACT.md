@@ -1,3 +1,21 @@
+## R257-MCP-WEB-D0：本人 Connection browser-private 消费契约（2026-10-06；仅设计）
+
+当前live Web读的是BFF `/v1/mcp/servers`的Server declaration。目标same-origin `GET /api/hub/self/mcp/connections`只转发到待发布BFF public 8.0.0同名GET；BFF目前只有D0 `d776194`，机器/source/immutable commit与digest待Root固定，故本节不是pin或发布声明。Browser不直连Platform，不接受Server旧shape兼容。
+
+输入closed为可选且单值`connection_id/provider_key/limit/cursor`：connection_id匹配`^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$`；provider_key为1..191 code points；limit仅无符号十进制1..100；cursor为1..2048 opaque。未知、重复、空、越界、body、transfer-encoding或Idempotency-Key拒400且零BFF调用。filter变化丢弃cursor/page历史，从首页读取；Web不解析cursor。
+
+200严格`{data:{connections:[...],next_cursor?:string}}`，所有object closed；每项required且只含：`connection_id`、`connector_id`、`server_id`、`provider_key`、`transport:"streamable_http"`、`status:"active"`。三个ID各自opaque，不能互代；不返回name、URL、declaration、secret、scope、token、proof或工具权限。多Connection可指向同Server且不得合并。terminal page省略next_cursor，不接受null/空串。
+
+所有响应必须JSON、`Cache-Control`含no-store及合法`x-request-id`。错误只接BFF固定closed envelope；当前Session admission的401/403/429、输入400、owner-invalid 502、dependency 503各自保留，不透传内部detail，不把任何错误改empty/preview。browser伪造tenant/subject/service/request身份不转发；adapter只使用每次当前Product Session派生的server headers。
+
+browser Hub client对此operation使用一次10秒总deadline与1MiB成功/error body cap，范围包含同源headers、body、fatal UTF-8、JSON和strict schema parse；超时、超限、取消、非法UTF-8或shape错误不得落入legacy宽松`readError`或无限`response.json()`等待。
+
+组件消费完整六字段用于strict验证，但主界面保持简洁Card：主信息为provider与人类可读连接状态，opaque connection/connector/server ID只在次要详情，transport仅按需辅助；不把六字段机械排成debug表，不显示内部permission、declaration、secret或owner诊断。loading/error/empty/ready与显式前后页保留。当前actor/filter/cursor/generation共同绑定请求；取消、卸载、重试、翻页、filter或actor变化后旧结果退役。empty仅为当前本人读取事实，不表示未安装Server、无第三方权限、费用状态或连接命令成功。后台`/admin`资格与此本人读取无耦合。
+
+机器事实源仍是未来固定的BFF `contract/openapi/v1/openapi.yaml`原字节；Web本地Zod是consumer narrowing，不成为第二public contract。固定pin、生成、源码与测试路径见TECH。当前tab11 Servers 200只证明wrong-resource RED，不是本契约正控。
+
+<!-- R257-MCP-WEB-D0-API-END -->
+
 ## T-C01.R255-PRESET-RETIRE（06:12）：退役未发布目录消费者，不改公开 agent 字段
 
 本前缀记录实施前的 D0 目标，冻结时生产仍发旧目录请求，现已完成本片源码静态退役；仅覆盖旧 preset 目录/选择说明，原 suffix、公开 agent 字段和 generated pin 保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
