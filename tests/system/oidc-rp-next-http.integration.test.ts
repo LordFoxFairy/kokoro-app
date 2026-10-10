@@ -1156,6 +1156,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   const productIds = new Set<string>()
   const authSecret = randomBytes(32).toString("hex")
   const paths: string[] = []
+  const refreshRequests: string[] = []
   let root: string | undefined
   let bff: Server | undefined
   let next: ChildProcess | undefined
@@ -1765,7 +1766,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             expect(request.headers.cookie).toBeUndefined()
             expect(body.getAll("resource")).toEqual(["https://kokoro.dev/resources/iam-internal"])
             if (body.get("grant_type") === "refresh_token") {
-              expect(body.get("refresh_token")).toBe("refresh-opaque")
+              const refresh = body.get("refresh_token")
+              expect(["refresh-opaque", "refresh-rotated"]).toContain(refresh)
+              refreshRequests.push(refresh!)
               expect(body.get("code_verifier")).toBeNull()
               const send = (): void => sendJson(response, "token", refreshResponseOverride ??
                 { access_token: "access-rotated", refresh_token: "refresh-rotated", token_type: "Bearer", expires_in: 600 })
@@ -2493,6 +2496,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   }, 60_000)
 
   it("R147 converges an authenticated cold and reloaded workspace instead of leaving the SSR loading shell", async () => {
+    const refreshBaseline = refreshRequests.length
     const { signin, jar, location } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     expect(authorize.status).toBe(302)
@@ -2614,7 +2618,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }
 
       await converge("cold")
+      expect(refreshRequests.slice(refreshBaseline)).toEqual(["refresh-opaque"])
       await converge("reload")
+      expect(refreshRequests.slice(refreshBaseline)).toEqual(["refresh-opaque", "refresh-rotated"])
     } finally {
       try { await context?.close() }
       finally { await browser?.close() }
