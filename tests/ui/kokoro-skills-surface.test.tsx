@@ -865,7 +865,7 @@ it("groups two actual category badges in a wrapping row without an empty categor
 
 it("matches the reference frame budget without stretching its compact summary hero", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:95vw;[^}]*max-width:960px;[^}]*height:min\(600px,calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:95vw;[^}]*max-width:800px;[^}]*height:min\(600px,calc\(100dvh - 2rem\)\);/u)
   expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:12px;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
   expect(css).toMatch(/\.hero\s*\{[^}]*flex:0 0 auto;[^}]*padding:61px 24px 20px;/u)
   expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:20px 24px 32px;/u)
@@ -1025,4 +1025,21 @@ it("preserves the catalog download lifecycle when only shared admission changes"
   sessionBoundary.admitted = true; rendered.rerender(view())
   rejectDownload(new Error("Owner download failed"))
   await waitFor(() => expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled())
+})
+
+
+it("matches the measured summary typography and example dimensions while keeping the independent reader width", () => {
+  const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
+  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:800px;/u)
+  expect(css).toMatch(/\.readerDialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:960px;/u)
+  expect(css).toMatch(/\.description\s*\{[^}]*font-size:14px;[^}]*line-height:20px;/u)
+  expect(css).toMatch(/\.description\s*\{[^}]*margin:0 0 24px;/u)
+  expect(css).toMatch(/\.examples button\s*\{[^}]*min-height:44px;[^}]*padding:12px;[^}]*border-radius:12px;/u)
+  expect(css).toMatch(/\.actions button\s*\{[^}]*height:32px;[^}]*padding:0 8px;[^}]*line-height:18px;/u)
+})
+
+it("keeps real example text at 13/18 and its icon at 16 so padding produces the measured 44px row", () => {
+  const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
+  expect(css).toMatch(/\.examples button span\s*\{[^}]*font-size:13px;[^}]*line-height:18px;/u)
+  expect(css).toMatch(/\.examples svg\s*\{[^}]*width:1rem;[^}]*height:1rem;[^}]*flex:0 0 1rem;/u)
 })
