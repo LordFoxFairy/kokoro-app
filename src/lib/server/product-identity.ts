@@ -14,12 +14,13 @@ function parseIdentity(value: unknown): ProductIdentity | null {
   if (typeof value !== "object" || value === null || !exactKeys(value as Record<string, unknown>, ["data", "meta"])) return null
   const envelope = value as Record<string, unknown>
   if (typeof envelope.data !== "object" || envelope.data === null ||
-      !exactKeys(envelope.data as Record<string, unknown>, ["tenant_id", "user_id"]) ||
+      !exactKeys(envelope.data as Record<string, unknown>, ["tenant_id", "user_id", "platform_admin"]) ||
       typeof envelope.meta !== "object" || envelope.meta === null ||
       !exactKeys(envelope.meta as Record<string, unknown>, ["request_id"])) return null
   const data = envelope.data as Record<string, unknown>
   const meta = envelope.meta as Record<string, unknown>
-  if (typeof data.user_id !== "string" || data.user_id.length === 0 || data.user_id.length > 256 ||
+  if (typeof data.platform_admin !== "boolean" ||
+      typeof data.user_id !== "string" || data.user_id.length === 0 || data.user_id.length > 256 ||
       typeof data.tenant_id !== "string" || data.tenant_id.length === 0 || data.tenant_id.length > 256 ||
       typeof meta.request_id !== "string" || meta.request_id.length === 0 || meta.request_id.length > 256) return null
   return { userId: data.user_id, tenantId: data.tenant_id }
