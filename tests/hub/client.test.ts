@@ -6,6 +6,11 @@ function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } })
 }
 
+function managedResponse(data: object, status = 200): Response {
+  return publicResponse({ ...data, meta: { request_id: "request-1" } }, status)
+}
+const managedSkill = { skill_id: "skill-1", source_ref: "skill:skill-1", series_id: "series", revision: "2", status: "active", name: "Mine", summary: "Private", tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "5" } }
+
 function publicResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" } })
 }
@@ -16,7 +21,7 @@ afterEach(() => {
 
 describe("browser Hub cache directive boundary", () => {
   const consumers = [
-    { name: "personal Skills", read: () => createHubClient().listPersonalSkills(), body: { data: { skills: [] } }, expected: { skills: [] } },
+    { name: "personal Skills", read: () => createHubClient().listPersonalSkills(), body: { data: { skills: [], next_cursor: null }, meta: { request_id: "request-1" } }, expected: { skills: [], next_cursor: null } },
     { name: "MCP projection", read: () => createHubClient().listMcpConnections(), body: { data: { connections: [] } }, expected: { connections: [] } },
     { name: "installations", read: () => createSkillInstallationClient().list(), body: { data: [] }, expected: { data: [] } },
   ]
@@ -51,7 +56,7 @@ describe("browser Hub cache directive boundary", () => {
     await expect(read()).rejects.toMatchObject({ reason: "parse", status: 200 })
   })
   it.each(consumers)("preserves typed authorization rejection under final Proxy headers for $name", async ({ read }) => {
-    const response = publicResponse({ error: { code: "session_invalid", message: "revoked", retryable: false } }, 401)
+    const response = publicResponse(read === consumers[0]?.read ? { error: { code: "session_invalid", message: "revoked" }, meta: { request_id: "request-1" } } : { error: { code: "session_invalid", message: "revoked", retryable: false } }, 401)
     response.headers.set("cache-control", "private, no-store, max-age=0")
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response))
     await expect(read()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
@@ -62,21 +67,21 @@ describe("hub client", () => {
   it("rejects non-JSON success and error projection bodies but accepts UTF-8 JSON", async () => {
     const headers = { "cache-control": "no-store", "x-request-id": "req-json" }
     vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { ...headers, "content-type": "text/plain" } }))
-      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired","retryable":false}}', { status: 401, headers: { ...headers, "content-type": "text/plain" } }))
-      .mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { ...headers, "content-type": "application/json; charset=utf-8" } }))
-      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired","retryable":false}}', { status: 401, headers: { ...headers, "content-type": "application/json; charset=utf-8" } })))
+      .mockResolvedValueOnce(new Response('{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}', { status: 200, headers: { ...headers, "content-type": "text/plain" } }))
+      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}', { status: 401, headers: { ...headers, "content-type": "text/plain" } }))
+      .mockResolvedValueOnce(new Response('{"data":{"skills":[],"next_cursor":null},"meta":{"request_id":"req-json"}}', { status: 200, headers: { ...headers, "content-type": "application/json; charset=utf-8" } }))
+      .mockResolvedValueOnce(new Response('{"error":{"code":"session_invalid","message":"expired"},"meta":{"request_id":"req-json"}}', { status: 401, headers: { ...headers, "content-type": "application/json; charset=utf-8" } })))
     const client = createHubClient()
     await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 200 })
     await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "parse", status: 401 })
-    expect(await client.listPersonalSkills()).toEqual({ skills: [] })
+    expect(await client.listPersonalSkills()).toEqual({ skills: [], next_cursor: null })
     await expect(client.listPersonalSkills()).rejects.toMatchObject({ reason: "http", status: 401, code: "session_invalid" })
   })
 
   it("reads personal Skill pages by opaque cursor and resolves ACTIVE by ID without old catalog", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(publicResponse({ data: { skills: [{ source_ref: "skill:skill-1", name: "Mine", description: "Private", content_hash: "digest", scope: "personal", revision: "2", enabled: true, categories: [] }], next_cursor: "opaque-next" } }))
-      .mockResolvedValueOnce(publicResponse({ data: { skill_id: "skill-1", source_ref: "skill:skill-1", revision: "2", status: "active", name: "Mine", summary: "Private", tags: [] } }))
+      .mockResolvedValueOnce(managedResponse({ data: { skills: [managedSkill], next_cursor: "opaque-next" } }))
+      .mockResolvedValueOnce(managedResponse({ data: managedSkill }))
     vi.stubGlobal("fetch", fetchMock)
     const client = createHubClient()
 
@@ -84,10 +89,10 @@ describe("hub client", () => {
     expect(page.skills[0]).toMatchObject({ source_ref: "skill:skill-1", revision: "2" })
     expect(page.next_cursor).toBe("opaque-next")
     const published = await client.getPublishedPersonalSkill("skill-1")
-    expect(published).toEqual({ skill_id: "skill-1", source_ref: "skill:skill-1", revision: "2", status: "active", name: "Mine", summary: "Private", tags: [] })
+    expect(published).toEqual(managedSkill)
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
-      "/api/hub/self/skills?scope_kind=personal&cursor=opaque-current",
-      "/api/hub/self/skills/skill-1",
+      "/api/hub/self/skills/managed?status=active&limit=50&cursor=opaque-current",
+      "/api/hub/self/skills/managed/skill-1",
     ])
   })
 
@@ -177,7 +182,7 @@ describe("hub client", () => {
   it("fails closed on unknown personal Skill state, unauthorized owner response and bad headers", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(publicResponse({ data: { skill_id: "skill-1", source_ref: "skill:skill-1", revision: "2", status: "draft", name: "Mine", summary: "Private", tags: [] } }))
-      .mockResolvedValueOnce(publicResponse({ error: { code: "session_invalid", message: "revoked", retryable: false } }, 401))
+      .mockResolvedValueOnce(managedResponse({ error: { code: "session_invalid", message: "revoked" } }, 401))
       .mockResolvedValueOnce(jsonResponse({ data: { skills: [], next_cursor: null } }))
     vi.stubGlobal("fetch", fetchMock)
     const client = createHubClient()
@@ -195,10 +200,14 @@ describe("hub client", () => {
     [401, "session_invalid"],
     [403, "session_forbidden"],
     [404, "skill_not_found"],
-    [502, "skill_dependency_unavailable"],
+    [503, "skill_dependency_unavailable"],
   ])("preserves by-ID owner error %i without claiming ACTIVE", async (status, code) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ error: { code, message: "owner rejected", retryable: status === 502 } }, status)))
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(managedResponse({ error: { code, message: "owner rejected" } }, status)))
     await expect(createHubClient().getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "http", status, code })
+  })
+  it("rejects managed dependency code at the wrong 502 status", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(managedResponse({ error: { code: "skill_dependency_unavailable", message: "owner rejected" } }, 502)))
+    await expect(createHubClient().getPublishedPersonalSkill("skill-1")).rejects.toMatchObject({ reason: "parse", status: 502, code: null })
   })
   it("unwraps { data } and returns the skill pool", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
@@ -605,7 +614,7 @@ describe("hub client", () => {
 
 
 describe("personal installation consumer", () => {
-  const installation = { installation_id: "install-1", source_ref: "skill:mine-1", series_id: "series-1", revision: "18446744073709551615", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00.000Z", updated_at: "2026-09-30T10:00:00.000Z" }
+  const installation = { display_name: "Mine", summary: "Summary", source_status: "active", skill_updated_at: "2026-09-30T10:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [], installation_id: "install-1", source_ref: "skill:mine-1", series_id: "series-1", revision: "18446744073709551615", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00.000Z", updated_at: "2026-09-30T10:00:00.000Z" }
   it("preserves list envelope, false presence, exact cursor and current GET identity", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(publicResponse({ data: [installation], meta: { next_cursor: "opaque +/=" } })).mockResolvedValueOnce(publicResponse({ data: installation }))
     vi.stubGlobal("fetch", fetchMock)
@@ -624,7 +633,7 @@ describe("personal installation consumer", () => {
 })
 
 describe("personal installation strict boundaries", () => {
-  const item = { installation_id: "i1", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: false, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" }
+  const item = { display_name: "Mine", summary: "Summary", source_status: "active", skill_updated_at: "2026-09-30T10:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [], installation_id: "i1", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: false, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" }
   it.each([
     { ...item, tenant: "secret" }, { ...item, revision: "18446744073709551616" }, { ...item, revision: 1 },
     { ...item, revision: "01" }, { ...item, revision: "invalid" }, { ...item, revision: "1.5" }, { ...item, revision: "1\n" }, { ...item, source_ref: "skill:skill:s1" }, { ...item, source_ref: "skill:s1\n" },
@@ -688,4 +697,29 @@ describe("personal installation strict boundaries", () => {
     expect(fetchMock).not.toHaveBeenCalled()
     await expect(createSkillInstallationClient().list({}, controller.signal)).rejects.toMatchObject({ reason: "aborted" })
   })
+})
+
+it("requires every current installation field and rejects unknown owner fields", async () => {
+  const item = { installation_id: "i1", source_ref: "skill:s1", series_id: "s1", revision: "1", installed: true, enabled: true, installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", display_name: "Mine", summary: "", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [] }
+  for (const field of Object.keys(item)) {
+    const data: Record<string, unknown> = { ...item }
+    delete data[field]
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
+    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
+  }
+  for (const data of [{ ...item, internal_secret: "private" }, { ...item, product: { ...item.product, state_version: "0" } }, { ...item, product: { ...item.product, execution_allowed: true } }]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data })))
+    await expect(createSkillInstallationClient().get("i1")).rejects.toMatchObject({ reason: "parse" })
+  }
+})
+
+it("preserves current command-only 403 skill_forbidden without widening installation reads", async () => {
+  const client = createSkillInstallationClient()
+  for (const [command, expected] of [
+    [() => client.install("skill:s1", "key"), "http"], [() => client.setEnabled("i1", false, "key"), "http"], [() => client.remove("i1", "key"), "http"],
+    [() => client.list(), "parse"], [() => client.get("i1"), "parse"],
+  ] as const) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ error: { code: "skill_forbidden", message: "Denied", retryable: false } }, 403)))
+    await expect(command()).rejects.toMatchObject({ reason: expected, status: 403 })
+  }
 })

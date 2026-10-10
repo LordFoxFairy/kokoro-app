@@ -8,26 +8,29 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
+import type { ManagedPersonalSkill, SkillPublishRequest } from "@/hub/schemas"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { HubClientError } from "@/hub/client"
 import { useT } from "@/i18n/context"
 
-import { createPersonalSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
+import { createPersonalSkillPublishSession, createResumedSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
 
 type Status = { kind: "idle" } | { kind: "running"; stage: PublishStage } | { kind: "pending" } | { kind: "error" } | { kind: "invalidFile" } | { kind: "tooLarge" } | { kind: "auth" } | { kind: "restart" } | { kind: "uncertain"; skillId: string } | { kind: "success"; sourceRef: string; revision: string }
 
-export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash }: {
+export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash, base }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   client: SkillPublishClient
   onPublished: () => void
   hash?: (file: File) => Promise<string>
+  base?: ManagedPersonalSkill
 }) {
   const t = useT()
   const [file, setFile] = useState<File | null>(null)
-  const [name, setName] = useState("")
-  const [summary, setSummary] = useState("")
-  const [tags, setTags] = useState("")
+  const [name, setName] = useState(base?.name ?? "")
+  const [summary, setSummary] = useState(base?.summary ?? "")
+  const [tags, setTags] = useState(base?.tags.join(",") ?? "")
+  const [audience, setAudience] = useState<SkillPublishRequest["audience"] | "">("")
   const [status, setStatus] = useState<Status>({ kind: "idle" })
   const active = useRef<AbortController | null>(null)
   const [session, setSession] = useState<PersonalSkillPublishSession | null>(null)
@@ -51,9 +54,9 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
     if (status.kind === "running" || status.kind === "restart" || status.kind === "success") return
     let currentSession = session
     if (currentSession === null) {
-      if (!file) return
+      if ((!file && !base) || !audience) return
       try {
-        currentSession = createPersonalSkillPublishSession({ file, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean) })
+        currentSession = base ? createResumedSkillPublishSession(base, audience, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
         setSession(currentSession)
       } catch (error) {
         if (error instanceof HubClientError && error.code === "request_body_too_large") setStatus({ kind: "tooLarge" })
@@ -88,17 +91,24 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
       <DialogTitle>{t("skills.publishTitle")}</DialogTitle>
       <DialogDescription>{t("skills.publishDescription")}</DialogDescription>
       <form className="space-y-4" onSubmit={submit}>
-        <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-zip">{t("skills.publishFile")}</label>
-        <Input id="personal-skill-zip" type="file" accept=".zip,application/zip" required={session === null} disabled={session !== null || status.kind === "running"} onChange={(event) => {
+        <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-zip">{t(base ? "skills.publishReplaceUpload" : "skills.publishFile")}</label>
+        <Input id="personal-skill-zip" type="file" accept=".zip,application/zip" required={session === null && !base} disabled={session !== null || status.kind === "running"} onChange={(event) => {
           setFile(event.target.files?.[0] ?? null)
         }} />
-        {session ? <p className="text-xs text-muted-foreground">{session.input.file.name}</p> : null}
+        {session ? <p className="text-xs text-muted-foreground">{session.input.file?.name ?? base?.name}</p> : null}
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-name">{t("skills.publishName")}</label>
-        <Input id="personal-skill-name" required maxLength={255} value={name} disabled={session !== null || status.kind === "running"} onChange={(event) => setName(event.target.value)} />
+        <Input id="personal-skill-name" required maxLength={255} value={name} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setName(event.target.value)} />
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-summary">{t("skills.publishSummary")}</label>
-        <Textarea id="personal-skill-summary" maxLength={65535} value={summary} disabled={session !== null || status.kind === "running"} onChange={(event) => setSummary(event.target.value)} />
+        <Textarea id="personal-skill-summary" maxLength={65535} value={summary} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setSummary(event.target.value)} />
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-tags">{t("skills.publishTags")}</label>
-        <Input id="personal-skill-tags" value={tags} disabled={session !== null || status.kind === "running"} onChange={(event) => setTags(event.target.value)} />
+        <Input id="personal-skill-tags" value={tags} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setTags(event.target.value)} />
+        <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-audience">{t("skills.publishAudience")}</label>
+        <select id="personal-skill-audience" className="w-full rounded-md border border-input bg-background p-2 text-sm" value={audience} required disabled={session !== null || status.kind === "running"} onChange={(event) => setAudience(event.target.value as SkillPublishRequest["audience"])}>
+          <option value="" disabled>{t("skills.publishChooseAudience")}</option>
+          <option value="owner">{t("skills.publishAudienceOwner")}</option>
+          <option value="tenant">{t("skills.publishAudienceTenant")}</option>
+          <option value="catalog">{t("skills.publishAudienceCatalog")}</option>
+        </select>
         {status.kind === "running" ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{t(`skills.publishStage.${status.stage}`)}</p> : null}
         {status.kind === "pending" ? <Alert role="status"><AlertDescription>{t("skills.publishPending")}</AlertDescription></Alert> : null}
         {status.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription></Alert> : null}
@@ -110,8 +120,8 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
         {status.kind === "success" ? <p role="status" className="text-sm text-foreground">{t("skills.publishSuccess")} · {status.sourceRef} · {status.revision}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={close}>{status.kind === "running" ? t("skills.publishCancel") : t("skills.publishClose")}</Button>
-          {status.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(""); setSummary(""); setTags("") }}>{t("skills.publishStartOver")}</Button>
-            : <Button type="submit" disabled={session === null && (!file || !name.trim()) || status.kind === "running" || status.kind === "success"}>{status.kind === "pending" ? t("skills.publishCheckAgain") : status.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t("skills.publishAction")}</Button>}
+          {status.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? "") }}>{t("skills.publishStartOver")}</Button>
+            : <Button type="submit" disabled={session === null && ((!file && !base) || !name.trim() || !audience) || status.kind === "running" || status.kind === "success"}>{status.kind === "pending" ? t("skills.publishCheckAgain") : status.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t("skills.publishAction")}</Button>}
         </div>
       </form>
     </DialogContent>

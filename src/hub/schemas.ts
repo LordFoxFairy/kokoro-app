@@ -73,38 +73,13 @@ export type SkillCatalog = z.infer<typeof skillCatalogSchema>
 
 // BFF public read projections. These are consumer validators, not editable owner contracts.
 const publishedSkillId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
-const positiveRevision = z.string().regex(/^[1-9][0-9]*$/u)
-export const personalSkillListItemSchema = z.object({
-  source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u),
-  name: z.string(),
-  description: z.string(),
-  content_hash: z.string(),
-  scope: z.literal("personal"),
-  revision: positiveRevision,
-  enabled: z.boolean(),
-  installed: z.boolean().optional(),
-  categories: z.array(z.string()),
-}).strict()
-export type PersonalSkillListItem = z.infer<typeof personalSkillListItemSchema>
-export const personalSkillPageSchema = z.object({
-  skills: z.array(personalSkillListItemSchema),
-  next_cursor: z.string().nullable().optional(),
-}).strict()
-export type PersonalSkillPage = z.infer<typeof personalSkillPageSchema>
-export const publishedPersonalSkillSchema = z.object({
-  skill_id: publishedSkillId,
-  source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u),
-  revision: positiveRevision,
-  status: z.literal("active"),
-  name: z.string(),
-  summary: z.string(),
-  tags: z.array(z.string()),
-}).strict()
-export type PublishedPersonalSkill = z.infer<typeof publishedPersonalSkillSchema>
-export const personalSkillsPath = "/self/skills"
-export function publishedPersonalSkillPath(id: string): string {
+export function skillCommandPath(id: string): string {
   if (!publishedSkillId.safeParse(id).success) throw new Error("invalid Skill ID")
-  return `${personalSkillsPath}/${encodeURIComponent(id)}`
+  return `/self/skills/${encodeURIComponent(id)}`
+}
+export function managedPersonalSkillPath(id: string): string {
+  if (!publishedSkillId.safeParse(id).success) throw new Error("invalid Skill ID")
+  return `/self/skills/managed/${encodeURIComponent(id)}`
 }
 
 // BFF public single-ZIP draft commands. These strict consumer parsers mirror
@@ -112,23 +87,31 @@ export function publishedPersonalSkillPath(id: string): string {
 const skillCommandId = publishedSkillId
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u)
 const uint64 = z.string().max(20).regex(/^[1-9][0-9]*$/u).refine((value) => BigInt(value) <= BigInt("18446744073709551615"))
+const skillExamplePromptsSchema = z.array(z.string().refine((value) => { const count = [...value].length; return count > 0 && count <= 1000 && value.trim().length > 0 && !/[\u0000\uD800-\uDFFF]/u.test(value) })).max(10).refine((values) => values.reduce((size, value) => size + new TextEncoder().encode(value).byteLength, 0) <= 16384)
+const skillCategoryKeysSchema = z.array(z.enum(["programming", "data", "automation", "business", "design", "media", "content", "apps"])).max(8).refine((values) => new Set(values).size === values.length)
 export const createSkillDraftRequestSchema = z.object({
+  example_prompts: skillExamplePromptsSchema.optional(), category_keys: skillCategoryKeysSchema.optional(),
   display_name: z.string().min(1).max(255).refine((value) => /\S/u.test(value)),
   summary: z.string().max(65535),
   tags: z.array(z.string().min(1).max(128).refine((value) => /\S/u.test(value))).max(100).refine((items) => new Set(items).size === items.length),
 }).strict()
 export type CreateSkillDraftRequest = z.infer<typeof createSkillDraftRequestSchema>
-export const skillDraftSchema = z.object({ skill_id: skillCommandId, series_id: skillCommandId, revision: z.literal(1), status: z.literal("draft"), replayed: z.boolean() }).strict()
+export const skillStateVersionSchema = z.string().max(19).regex(/^[1-9][0-9]*$/u).refine((value) => BigInt(value) <= BigInt("9223372036854775807"))
+export const skillSourceVersionSchema = z.string().min(1).max(1024).regex(/^[\x21-\x7e]+$/u).refine((value) => value !== "null")
+export const skillPublishRequestSchema = z.object({ expected_state_version: skillStateVersionSchema, audience: z.enum(["owner", "tenant", "catalog"]) }).strict()
+export type SkillPublishRequest = z.infer<typeof skillPublishRequestSchema>
+export const skillDraftSchema = z.object({ state_version: skillStateVersionSchema, skill_id: skillCommandId, series_id: skillCommandId, revision: z.literal(1), status: z.literal("draft"), replayed: z.boolean() }).strict()
 export const skillUploadStateSchema = z.discriminatedUnion("phase", [
-  z.object({ skill_id: skillCommandId, attempt_epoch: z.literal("0"), phase: z.literal("none") }).strict(),
-  z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("intent"), attempt_id: skillCommandId }).strict(),
-  z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("upload_pending"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
-  z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("uploaded"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
-  z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("validated"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
-  z.object({ skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("aborted"), attempt_id: skillCommandId, upload_id: skillCommandId.optional() }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: z.literal("0"), phase: z.literal("none") }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("intent"), attempt_id: skillCommandId }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("upload_pending"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("uploaded"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("validated"), attempt_id: skillCommandId, upload_id: skillCommandId }).strict(),
+  z.object({ state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema.optional(), skill_id: skillCommandId, attempt_epoch: uint64, phase: z.literal("aborted"), attempt_id: skillCommandId, upload_id: skillCommandId.optional() }).strict(),
 ])
 export const skillZipFilenameSchema = z.string().min(1).max(255).refine((value) => new TextEncoder().encode(value).length <= 255 && !/^\.{1,2}$/u.test(value) && value.trim() === value && !/[\\/\u0000-\u001f\u007f]/u.test(value))
 export const beginSkillUploadRequestSchema = z.object({
+  expected_state_version: skillStateVersionSchema,
   filename: skillZipFilenameSchema,
   mime_type: z.literal("application/zip"),
   size_bytes: z.number().int().min(1).max(33554432),
@@ -142,12 +125,45 @@ export const transferReferenceSchema = z.object({
   expires_at: z.string().datetime({ offset: true }),
 }).strict()
 export type TransferReference = z.infer<typeof transferReferenceSchema>
-export const beginSkillUploadSchema = z.object({ skill_id: skillCommandId, attempt_id: skillCommandId, attempt_epoch: uint64, upload_id: skillCommandId, transfer_reference: transferReferenceSchema, replayed: z.boolean() }).strict()
-export const completeSkillUploadRequestSchema = z.object({ attempt_id: skillCommandId, upload_id: skillCommandId, content_sha256: sha256, size_bytes: z.number().int().min(1).max(33554432) }).strict()
+export const beginSkillUploadSchema = z.object({ state_version: skillStateVersionSchema, skill_id: skillCommandId, attempt_id: skillCommandId, attempt_epoch: uint64, upload_id: skillCommandId, transfer_reference: transferReferenceSchema, replayed: z.boolean() }).strict()
+export const completeSkillUploadRequestSchema = z.object({ expected_state_version: skillStateVersionSchema, source_version_id: skillSourceVersionSchema, attempt_id: skillCommandId, upload_id: skillCommandId, content_sha256: sha256, size_bytes: z.number().int().min(1).max(33554432) }).strict()
 export type CompleteSkillUploadRequest = z.infer<typeof completeSkillUploadRequestSchema>
-export const completeSkillUploadSchema = z.object({ skill_id: skillCommandId, attempt_id: skillCommandId, attempt_epoch: uint64, upload_id: skillCommandId, phase: z.literal("uploaded"), replayed: z.boolean(), content_sha256: sha256, scan_state: z.enum(["clean", "pending", "unknown"]) }).strict()
-export const validateSkillDraftSchema = z.object({ skill_id: skillCommandId, series_id: skillCommandId, valid: z.literal(true), content_digest: sha256, manifest_identity: z.string().regex(/^zip-v2:sha256:[a-f0-9]{64}$/u), replayed: z.boolean() }).strict()
-export const publishSkillDraftSchema = z.object({ source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), revision: uint64, status: z.literal("active"), event_id: z.string().uuid(), replayed: z.boolean() }).strict()
+export const completeSkillUploadSchema = z.object({ state_version: skillStateVersionSchema, skill_id: skillCommandId, attempt_id: skillCommandId, attempt_epoch: uint64, upload_id: skillCommandId, phase: z.literal("uploaded"), replayed: z.boolean(), content_sha256: sha256, scan_state: z.enum(["clean", "pending", "unknown"]) }).strict()
+export const validateSkillDraftSchema = z.object({ state_version: skillStateVersionSchema, skill_id: skillCommandId, series_id: skillCommandId, valid: z.literal(true), content_digest: sha256, manifest_identity: z.string().regex(/^skill-md-v1:sha256:[a-f0-9]{64}$/u), replayed: z.boolean() }).strict()
+export const publishSkillDraftSchema = z.object({ state_version: skillStateVersionSchema, source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), revision: uint64, status: z.literal("active"), event_id: z.string().uuid(), replayed: z.boolean() }).strict()
+
+
+export const validateSkillDraftRequestSchema = z.object({ attempt_id: skillCommandId, expected_state_version: skillStateVersionSchema }).strict()
+export type ValidateSkillDraftRequest = z.infer<typeof validateSkillDraftRequestSchema>
+const skillIamRefSchema = z.object({ kind: z.enum(["user", "organization"]), id: z.string().min(1).max(255) }).strict()
+const skillProvenanceFields = { asset_ref: z.string().min(1).max(255), content_sha256: sha256, size_bytes: skillStateVersionSchema, mime_type: z.literal("application/zip") }
+const skillGithubProvenanceSchema = z.object({ kind: z.literal("github"), repository_id: z.string().min(1).max(255), repository_url: z.string().url().max(2048), owner_login: z.string().min(1).max(255), owner_url: z.string().url().max(2048), commit: z.string().regex(/^[a-f0-9]{40}([a-f0-9]{24})?$/u), path: z.string().max(2048), ...skillProvenanceFields, asset_ref: skillProvenanceFields.asset_ref.optional(),
+  repo_stats: z.object({ stars: z.string().max(19).regex(/^(0|[1-9][0-9]*)$/u), forks: z.string().max(19).regex(/^(0|[1-9][0-9]*)$/u), observed_at: z.string().datetime({ offset: true }), metadata_source_url: z.string().url().max(2048) }).strict().optional(),
+}).strict()
+const skillAiProvenanceSchema = z.object({ kind: z.literal("ai"), conversation_id: z.string().min(1).max(255), run_ref: z.string().min(1).max(255), artifact_ref: z.string().min(1).max(255), source_event_id: z.string().min(1).max(255), source_event_seq: skillStateVersionSchema, source_event_digest: sha256, ...skillProvenanceFields }).strict()
+const skillProductFactsSchema = z.object({
+  publication_audience: z.enum(["owner", "tenant", "catalog"]), state_version: skillStateVersionSchema,
+  creator_ref: skillIamRefSchema.optional(),
+  publisher: z.discriminatedUnion("kind", [z.object({ kind: z.literal("iam"), iam: skillIamRefSchema }).strict(), z.object({ kind: z.literal("github_repository"), github_repository: skillGithubProvenanceSchema }).strict()]).optional(),
+  source_kind: z.enum(["personal", "official", "third_party"]).optional(),
+  creation_provenance: z.union([z.object({ kind: z.literal("local") }).strict(), skillAiProvenanceSchema, skillGithubProvenanceSchema]).optional(),
+  cover: z.object({ asset_ref: z.string().min(1).max(255), mime_type: z.enum(["image/png", "image/jpeg"]), width: z.number().int().min(1).max(4096), height: z.number().int().min(1).max(4096) }).strict().optional(),
+  presentation_kind: z.enum(["first_party", "github_repository"]).optional(),
+}).strict()
+const skillPublisherProfileSchema = z.union([
+  z.object({ kind: z.enum(["user", "organization"]), id: z.string().min(1).max(255), status: z.literal("found"), display_name: z.string(), image_url: z.string().nullable() }).strict(),
+  z.object({ kind: z.literal("user"), id: z.string().min(1).max(255), status: z.literal("missing") }).strict(),
+])
+export const managedPersonalSkillSchema = z.object({
+  skill_id: skillCommandId, source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), series_id: skillCommandId,
+  revision: z.string().regex(/^[1-9][0-9]*$/u), name: z.string().min(1).max(255).refine((value) => /\S/u.test(value)), summary: z.string().max(65535), tags: z.array(z.string().max(128)).max(100),
+  status: z.enum(["draft", "active", "disabled", "withdrawn", "quarantined"]), skill_updated_at: z.string().datetime().regex(/Z$/u),
+  example_prompts: skillExamplePromptsSchema,
+  category_keys: skillCategoryKeysSchema,
+  product: skillProductFactsSchema, publisher_profile: skillPublisherProfileSchema.optional(),
+}).strict()
+export type ManagedPersonalSkill = z.infer<typeof managedPersonalSkillSchema>
+export const managedPersonalSkillPageSchema = z.object({ skills: z.array(managedPersonalSkillSchema), next_cursor: z.string().min(1).max(2048).nullable() }).strict()
 
 // —— 配额 ——
 
@@ -428,6 +444,12 @@ export const personalInstallationSchema = z.object({
   installation_id: installationIdSchema, source_ref: installationSourceSchema, series_id: installationIdSchema,
   revision: z.string().max(20).refine((value) => /^[1-9][0-9]{0,19}(?![\s\S])/u.test(value) && BigInt(value) <= BigInt("18446744073709551615")), installed: z.boolean(), enabled: z.boolean(), installed_at: installationInstant,
   updated_at: installationInstant, removed_at: installationInstant.optional(),
+  display_name: managedPersonalSkillSchema.shape.name, summary: managedPersonalSkillSchema.shape.summary,
+  source_status: z.enum(["active", "disabled", "withdrawn", "quarantined"]), skill_updated_at: installationInstant,
+  example_prompts: managedPersonalSkillSchema.shape.example_prompts, category_keys: managedPersonalSkillSchema.shape.category_keys,
+  product: skillProductFactsSchema, publisher_profile: skillPublisherProfileSchema.optional(),
+  available_update: z.object({ source_ref: installationSourceSchema, revision: z.string().max(20).regex(/^[1-9][0-9]*(?![\s\S])/u) }).strict().optional(),
+  tags: z.array(z.string().min(1).max(128).refine((value) => /\S/u.test(value))).max(100).refine((values) => new Set(values).size === values.length),
 }).strict().refine((value) => value.installed ? value.removed_at === undefined : !value.enabled && value.removed_at !== undefined)
   .refine((value) => Date.parse(value.updated_at) >= Date.parse(value.installed_at)
     && (value.removed_at === undefined || Date.parse(value.removed_at) >= Date.parse(value.installed_at)))
@@ -457,7 +479,7 @@ export type InstallationOperation = "install" | "list" | "get" | "setEnabled" | 
 export const installationErrorCodes: Readonly<Record<number, readonly string[]>> = {
   400: ["invalid_skill_installation_request", "skill_installation_idempotency_key_required"],
   401: ["session_authentication_required", "session_invalid"],
-  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_installation_forbidden"],
+  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_installation_forbidden", "skill_forbidden"],
   404: ["skill_installation_not_found"],
   409: ["skill_installation_idempotency_conflict", "skill_installation_command_in_progress"],
   412: ["skill_installation_precondition_failed"], 413: ["request_body_too_large"],
@@ -467,7 +489,8 @@ export const installationErrorCodes: Readonly<Record<number, readonly string[]>>
   504: ["skill_installation_dependency_timeout"],
 }
 export function installationErrorAllowed(operation: InstallationOperation, status: number, code: string): boolean {
-  return !(operation === "list" && [404, 409, 412].includes(status))
+  return !(["list", "get"].includes(operation) && code === "skill_forbidden")
+    && !(operation === "list" && [404, 409, 412].includes(status))
     && !(operation === "get" && [409, 412].includes(status))
     && (installationErrorCodes[status]?.includes(code) ?? false)
 }

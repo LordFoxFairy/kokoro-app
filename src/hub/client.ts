@@ -2,6 +2,7 @@
 // 入站过 Zod，失败以类型化错误上抛；错误体尽力取 hub 错误码（如 hub.skill_required）供 UI 本地化。
 
 import { z, ZodError, type ZodTypeAny } from "zod"
+import { createSkillPublishClient } from "./skill-publish-client"
 
 import {
   installationIdSchema, installationKeySchema, installationSourceSchema, installationListQuerySchema,
@@ -61,13 +62,9 @@ import {
   mcpConnectionErrorAllowed,
   mcpConnectionReadErrorSchema,
   mcpConnectionsPath,
-  personalSkillPageSchema,
-  personalSkillsPath,
-  publishedPersonalSkillPath,
-  publishedPersonalSkillSchema,
   type McpConnectionPage,
-  type PersonalSkillPage,
-  type PublishedPersonalSkill,
+  type ManagedPersonalSkill,
+  type managedPersonalSkillPageSchema,
 } from "./schemas"
 
 export type HubFailureReason = "network" | "http" | "parse" | "aborted"
@@ -228,12 +225,6 @@ async function requestData<T extends ZodTypeAny>(
   return parseData(response, inner)
 }
 
-const publicReadErrorSchema = z.object({ error: z.object({
-  code: z.string().min(1),
-  message: z.string().min(1),
-  retryable: z.boolean(),
-}).strict() }).strict()
-
 /** Browser Proxy can add private/max-age directives to the owner's no-store. */
 export function hasHubNoStoreDirective(headers: Headers): boolean {
   const value = headers.get("cache-control")
@@ -254,34 +245,6 @@ export function hasHubNoStoreDirective(headers: Headers): boolean {
     }
   }
   return !quoted && !escaped && (found || value.slice(start).trim().toLowerCase() === "no-store")
-}
-
-async function requestPublicRead<T extends ZodTypeAny>(path: string, inner: T, signal?: AbortSignal): Promise<z.infer<T>> {
-  let response: Response
-  try {
-    response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error", ...(signal === undefined ? {} : { signal }) })
-  } catch (error) {
-    throw new HubClientError(isAbortError(error) ? "aborted" : "network", describeUnknown(error), null, null)
-  }
-  if (!hasHubNoStoreDirective(response.headers)
-    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
-    || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
-    throw new HubClientError("parse", "invalid BFF read response headers", null, response.status)
-  }
-  let raw: unknown
-  try {
-    raw = await response.json()
-  } catch (error) {
-    throw new HubClientError("parse", describeUnknown(error), null, response.status)
-  }
-  if (response.status !== 200) {
-    const parsed = publicReadErrorSchema.safeParse(raw)
-    if (!parsed.success) throw new HubClientError("parse", "invalid BFF read error", null, response.status)
-    throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status)
-  }
-  const parsed = z.object({ data: inner }).strict().safeParse(raw)
-  if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
-  return parsed.data.data as z.infer<T>
 }
 
 const MCP_CONNECTION_READ_BYTES = 1024 * 1024
@@ -372,8 +335,8 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 }
 
 export type HubClient = {
-  listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<PersonalSkillPage>
-  getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<PublishedPersonalSkill>
+  listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<z.infer<typeof managedPersonalSkillPageSchema>>
+  getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<ManagedPersonalSkill>
   listMcpConnections: (query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpConnectionPage>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
@@ -430,16 +393,10 @@ function uploadForm(zip: Blob, names: string[] | null): FormData {
 
 export function createHubClient(): HubClient {
   return {
-    listPersonalSkills: (cursor, signal) => {
-      const query = new URLSearchParams({ scope_kind: "personal" })
-      if (cursor !== undefined) query.set("cursor", cursor)
-      return requestPublicRead(`${personalSkillsPath}?${query}`, personalSkillPageSchema, signal)
-    },
+    listPersonalSkills: (cursor, signal) => createSkillPublishClient().listPublished(cursor, signal),
     getPublishedPersonalSkill: async (id, signal) => {
-      const skill = await requestPublicRead(publishedPersonalSkillPath(id), publishedPersonalSkillSchema, signal)
-      if (skill.skill_id !== id || skill.source_ref !== `skill:${id}`) {
-        throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
-      }
+      const skill = await createSkillPublishClient().getManaged(id, signal)
+      if (skill.skill_id !== id || skill.source_ref !== `skill:${id}` || skill.status !== "active") throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
       return skill
     },
     listMcpConnections: (query = {}, signal) => {

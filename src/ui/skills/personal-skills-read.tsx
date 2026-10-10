@@ -11,12 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { createSkillInstallationClient, HubClientError, type HubClient } from "@/hub/client"
 import { createSkillPublishClient } from "@/hub/skill-publish-client"
-import type { PersonalSkillPage, PublishedPersonalSkill, InstallationPage, PersonalInstallation } from "@/hub/schemas"
+import type { ManagedPersonalSkill, InstallationPage, PersonalInstallation } from "@/hub/schemas"
 import { useT } from "@/i18n/context"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 
-type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: PersonalSkillPage }
-type DetailState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; skill: PublishedPersonalSkill } | null
+type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: Awaited<ReturnType<typeof publishClient.listPublished>> }
+type DetailState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; skill: ManagedPersonalSkill } | null
 const publishClient = createSkillPublishClient()
 const installationClient = createSkillInstallationClient()
 type InstallationMutation = Readonly<{ operation: "install" | "setEnabled" | "remove"; resource: string; key: string; enabled?: boolean }>
@@ -32,7 +32,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
   onOpenSettings?: (section: "skills", trigger: HTMLElement) => void
 }) {
   const t = useT()
-  const [view, setView] = useState<"published" | "installations">("published")
+  const [view, setView] = useState<"published" | "installations" | "drafts">("published")
   const [installedFilter, setInstalledFilter] = useState("true")
   const [enabledFilter, setEnabledFilter] = useState("all")
   const [installationCursor, setInstallationCursor] = useState<string | null>(null)
@@ -50,6 +50,9 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
   const [pageState, setPageState] = useState<PageState>({ kind: "loading" })
   const [detail, setDetail] = useState<DetailState>(null)
   const [publishOpen, setPublishOpen] = useState(false)
+  const [resumeBase, setResumeBase] = useState<ManagedPersonalSkill | null>(null)
+  const [draftPage, setDraftPage] = useState<Awaited<ReturnType<typeof publishClient.listDrafts>> | null>(null)
+  const [draftError, setDraftError] = useState(false)
   const detailRequest = useRef(0)
 
   useEffect(() => () => {
@@ -120,7 +123,10 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
   const changeView = (next: "published" | "installations") => {
     if (next === view) return
     cancelAction()
-    if (next === "published") setPageState({ kind: "loading" })
+    if (next === "published") {
+      setPageState({ kind: "loading" })
+      if (view === "drafts") { setCursor(null); setHistory([]) }
+    }
     detailController.current?.abort()
     detailRequest.current += 1
     setDetail(null)
@@ -142,11 +148,23 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
     let current = true
     const controller = new AbortController()
     void client.listPersonalSkills(cursor ?? undefined, controller.signal).then(
-      (page) => { if (current) setPageState({ kind: "ready", page }) },
+      (page) => { if (current) setPageState(page.skills.some((skill) => skill.status !== "active") || page.next_cursor !== null && (page.next_cursor === cursor || history.includes(page.next_cursor)) ? { kind: "error" } : { kind: "ready", page }) },
       () => { if (current) setPageState({ kind: "error" }) },
     )
     return () => { current = false; controller.abort() }
-  }, [client, cursor, generation, view])
+  }, [client, cursor, generation, view, history])
+
+  useEffect(() => {
+    if (view !== "drafts") return
+    let current = true
+    const controller = new AbortController()
+    void publishClient.listDrafts(cursor ?? undefined, controller.signal).then((page) => {
+      if (!current) return
+      if (page.skills.some((skill) => skill.status !== "draft") || page.next_cursor !== null && (page.next_cursor === cursor || history.includes(page.next_cursor))) { setDraftError(true); return }
+      setDraftPage(page)
+    }, () => { if (current) setDraftError(true) })
+    return () => { current = false; controller.abort() }
+  }, [view, cursor, generation, history])
 
   const openDetail = (sourceRef: string) => {
     const id = sourceRef.slice("skill:".length)
@@ -167,7 +185,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">{t("skills.title")}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => setPublishOpen(true)}>{t("skills.publishTitle")}</Button>
+          <Button type="button" onClick={() => { setResumeBase(null); setPublishOpen(true) }}>{t("skills.publishTitle")}</Button>
           {!embedded && onOpenSettings ? <Button type="button" variant="outline" onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
         </div>
       </header>
@@ -184,6 +202,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         {action.kind === "rejected" && action.intent.operation !== "install" ? <Button type="button" variant="outline" onClick={() => void perform(action.intent, action.intent.resource)}>{t("skills.personal.checkCurrent")}</Button> : null}
         {action.current ? <p data-testid="installation-current">{action.current.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {action.current.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p> : null}
       </Alert> : null}
+      <Button type="button" variant="outline" onClick={() => { setCursor(null); setHistory([]); setDraftPage(null); setDraftError(false); setView("drafts") }}>{t("skills.publishDrafts")}</Button>
       {view === "published" ? <>
       {pageState.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("skills.loading")}</div> : null}
       {pageState.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("skills.retry")}</Button></Alert> : null}
@@ -192,9 +211,9 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         <Card key={skill.source_ref}>
           <CardContent className="space-y-2 p-4">
             <Button type="button" variant="ghost" className="h-auto px-0 text-left font-semibold" onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
-            <p className="text-sm text-muted-foreground">{skill.description}</p>
-            <div className="flex flex-wrap gap-1" aria-label="技能标签">{skill.categories.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
-            <p className="text-xs text-muted-foreground">{skill.installed ? t("skills.personal.installed") : t("skills.personal.removed")}</p>
+            <p className="text-sm text-muted-foreground">{skill.summary}</p>
+            <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{skill.category_keys.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
+
             <Button type="button" variant="outline" disabled={actionLocked} onClick={() => startAction("install", skill.source_ref)}>{t("skills.personal.install")}</Button>
           </CardContent>
         </Card>
@@ -213,7 +232,12 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           setCursor(page.next_cursor ?? null)
         }}>{t("plugins.next")}</Button>
       </nav> : null}
-      </> : <section className="space-y-3" data-testid="personal-installations">
+      </> : view === "drafts" ? <section data-testid="personal-skill-drafts" className="space-y-3">
+        {draftError ? <Alert role="alert" variant="destructive"><AlertDescription>{t("skills.loadError")}</AlertDescription><Button onClick={() => { setDraftError(false); setDraftPage(null); setGeneration((value) => value + 1) }}>{t("skills.retry")}</Button></Alert> : !draftPage ? <p role="status">{t("skills.loading")}</p> : <>
+          {draftPage.skills.length === 0 ? <p>{t("skills.noMatch")}</p> : draftPage.skills.map((draft) => <Card key={draft.skill_id}><CardContent className="space-y-2 p-4"><h2>{draft.name}</h2><p>{draft.summary}</p><Button onClick={() => { setResumeBase(draft); setPublishOpen(true) }}>{t("skills.publishResumeDraft")}</Button></CardContent></Card>)}
+          <nav className="flex gap-2" aria-label={t("skills.publishDrafts")}><Button disabled={!history.length} onClick={() => { setCursor(history.at(-1) ?? null); setHistory((values) => values.slice(0, -1)); setDraftPage(null) }}>{t("plugins.previous")}</Button><Button disabled={!draftPage.next_cursor} onClick={() => { setHistory((values) => [...values, cursor]); setCursor(draftPage.next_cursor); setDraftPage(null) }}>{t("plugins.next")}</Button></nav>
+        </>}
+      </section> : <section className="space-y-3" data-testid="personal-installations">
         <div className="flex flex-wrap gap-4">
           <div><span>{t("skills.personal.installedFilter")}</span><Select value={installedFilter} onValueChange={(value) => { setInstalledFilter(value); resetInstallationPage() }}>
             <SelectTrigger aria-label={t("skills.personal.installedFilter")}><SelectValue /></SelectTrigger><SelectContent>
@@ -231,7 +255,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         {installations.kind === "ready" ? <>
           {installations.page.data.length === 0 ? <p>{t("skills.personal.empty")}</p> : null}
           {installations.page.data.map((item) => <Card key={item.installation_id}><CardContent className="space-y-2 p-4">
-            <p className="font-medium">{item.installed ? t("skills.personal.installed") : t("skills.personal.removed")}</p>
+            <p className="font-medium">{item.display_name}</p>
             <p>{item.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {item.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" disabled={actionLocked} onClick={() => void perform({ operation: "get", resource: item.installation_id }, item.installation_id)}>{t("skills.personal.checkCurrent")}</Button>
@@ -250,12 +274,12 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           <DialogTitle>{detail?.kind === "ready" ? detail.skill.name : t("skills.title")}</DialogTitle>
           <DialogDescription>{detail?.kind === "ready" ? detail.skill.summary : t("skills.loading")}</DialogDescription>
           {detail?.kind === "ready" ? <div className="space-y-2 text-sm">
-            {detail.skill.tags.length > 0 ? <div className="flex flex-wrap gap-1" aria-label="技能标签">{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
+            {detail.skill.tags.length > 0 ? <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
           </div> : null}
           {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
         </DialogContent>
       </Dialog>
-      <PersonalSkillPublishDialog open={publishOpen} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
+      <PersonalSkillPublishDialog key={resumeBase?.skill_id ?? "new"} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )
 }

@@ -42,8 +42,8 @@ vi.mock("@/ui/shell/page-clients", () => ({
   }),
   // account/appearance/chat tab 不调用下列客户端；仅需存在 export 供模块 import。
   browserHubClient: () => ({
-    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [{ source_ref: "skill:mine", name: "我的技能", description: "Personal", content_hash: "digest", scope: "personal", revision: "2", enabled: true, categories: [] }], next_cursor: null }),
-    getPublishedPersonalSkill: vi.fn().mockResolvedValue({ skill_id: "mine", source_ref: "skill:mine", revision: "2", status: "active", name: "我的技能", summary: "Personal", tags: [] }),
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [{ skill_id: "mine", source_ref: "skill:mine", series_id: "series", name: "我的技能", summary: "Personal", revision: "2", status: "active", tags: [], category_keys: [], example_prompts: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "5" } }], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn().mockResolvedValue({ skill_id: "mine", source_ref: "skill:mine", revision: "2", status: "active", name: "我的技能", summary: "Personal", tags: [], series_id: "series", category_keys: [], example_prompts: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "5" } }),
     listMcpConnections: vi.fn().mockResolvedValue({ connections: [{ connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "Owner MCP", transport: "streamable_http", status: "active" }] }),
     listSkillPool: vi.fn().mockResolvedValue([
       { name: "YouTube 影片研究", description: "利用第一手影片证据强化深度研究。", content_hash: "preview:youtube", scope: "official", enabled: false, updated_at: Date.UTC(2026, 7, 28) },

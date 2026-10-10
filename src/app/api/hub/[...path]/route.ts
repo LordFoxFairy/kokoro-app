@@ -2,7 +2,7 @@
 // 转发到 kokoro-hub 的 self 面。scope 恒取自密封信封的 namespace，绝不透传浏览器参数当 scope；
 // 浏览器只见同源 `/api/hub/*`，runtime 凭据与 namespace 身份全留服务端。变更类请求校验同源 Origin。
 //
-// 路径约定：浏览器调 `/api/hub/self/skills?scope_kind=personal` → BFF `/v1/skills?scope_kind=personal`。
+// 本人 Skills 读取只使用 managed 同源闭集；目录列表不是本人管理事实。
 // 上传旧态仍走 multipart：透传浏览器 content-type（含 boundary），
 // 不强制 application/json。
 
@@ -17,7 +17,7 @@ import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationEnabledRequestSchema,
   installationListQuerySchema, installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
   mcpConnectionPageSchema, mcpConnectionReadErrorSchema, mcpConnectionErrorAllowed,
-  type InstallationOperation } from "@/hub/schemas"
+  skillPublishRequestSchema, type InstallationOperation } from "@/hub/schemas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -278,11 +278,12 @@ export async function proxyHubRequest(
   if (path[0] !== "self" && (businessPath[0] === "skills" || businessPath[0] === "mcp" && ["servers", "connections"].includes(businessPath[1] ?? ""))) {
     return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   }
-  const personalSkillListRead = request.method === "GET" && path[0] === "self" && businessPath.length === 1 && businessPath[0] === "skills"
-  const personalSkillIdRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills"
-    && !["pool", "catalog", "quota"].includes(businessPath[1] ?? "")
+  const managedSkillPath = path[0] === "self" && path[1] === "skills" && path[2] === "managed"
+  const managedSkillRead = managedSkillPath && request.method === "GET" && (path.length === 3 || path.length === 4)
+  if (managedSkillPath && !managedSkillRead) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+  if (request.method === "GET" && path[0] === "self" && businessPath[0] === "skills" && (businessPath.length === 1 || businessPath.length === 2 && !managedSkillRead)) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   const mcpConnectionRead = request.method === "GET" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "mcp" && businessPath[1] === "connections"
-  const publicProjectionRead = personalSkillListRead || personalSkillIdRead || mcpConnectionRead
+  const publicProjectionRead = mcpConnectionRead
   const formalSkillId = businessPath[1] ?? ""
   const skillUploadGet = request.method === "GET" && path[0] === "self" && businessPath.length === 3 && businessPath[0] === "skills" && businessPath[2] === "package-upload"
   const skillDraftPost = request.method === "POST" && path[0] === "self" && businessPath.length === 2 && businessPath[0] === "skills" && businessPath[1] === "drafts"
@@ -290,34 +291,40 @@ export async function proxyHubRequest(
     businessPath.length === 3 && ["package-upload", "validate", "publish"].includes(businessPath[2] ?? "")
     || businessPath.length === 4 && businessPath[2] === "package-upload" && businessPath[3] === "complete"
   )
-  const publicSkillBoundary = publicProjectionRead || skillUploadGet || skillDraftPost || skillWritePost
+  const publicSkillBoundary = managedSkillRead || publicProjectionRead || skillUploadGet || skillDraftPost || skillWritePost
   const incomingRequestId = request.headers.get("x-kokoro-request-id")
   const requestId = publicSkillBoundary
     ? incomingRequestId !== null && PROJECTION_REQUEST_ID.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID()
     : incomingRequestId || crypto.randomUUID()
+  const localSkillError = (fault: ProjectionFault, id: string): Response => {
+    if (!managedSkillRead) return projectionError(fault, id)
+    const { status, code } = PROJECTION_FAILURES[fault]
+    const managedCode = code === "invalid_query_parameter" ? "invalid_skill_request" : code
+    return NextResponse.json({ error: { code: managedCode, message: managedCode }, meta: { request_id: id } }, { status, headers: { "cache-control": "no-store", "x-request-id": id } })
+  }
   const config = productBffConfig()
   if (config === null) {
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("configuration", requestId) : projectionError("configuration", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("configuration", requestId) : localSkillError("configuration", requestId)
     return NextResponse.json({ error: "auth_not_configured" }, { status: 503 })
   }
   if (config.bffBaseUrl == null) {
     // 未接 hub 节点（预览档）：能力面不可用，展示层据此降级。
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffNotConfigured", requestId) : projectionError("bffNotConfigured", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffNotConfigured", requestId) : localSkillError("bffNotConfigured", requestId)
     return NextResponse.json({ error: "hub_not_configured" }, { status: 503 })
   }
   if (MUTATION_METHODS.has(request.method) && !sameOriginOk(request)) {
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("forbidden", requestId) : projectionError("forbidden", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("forbidden", requestId) : localSkillError("forbidden", requestId)
     return NextResponse.json({ error: "forbidden_origin" }, { status: 403 })
   }
   let claims
   try {
     claims = await admittedProductSession(request, config)
   } catch {
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("iamUnavailable", requestId) : projectionError("iamUnavailable", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("iamUnavailable", requestId) : localSkillError("iamUnavailable", requestId)
     return NextResponse.json({ error: "session_unavailable" }, { status: 503 })
   }
   if (claims === null) {
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("unauthenticated", requestId) : projectionError("unauthenticated", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("unauthenticated", requestId) : localSkillError("unauthenticated", requestId)
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
   }
   // The multipart preview/confirm and GitHub pseudo-publish routes belong to
@@ -329,25 +336,31 @@ export async function proxyHubRequest(
     (businessPath[0] === "skills" && ["pool", "catalog", "quota"].includes(businessPath[1] ?? ""))
     || (businessPath[0] === "mcp" && ["servers", "secrets"].includes(businessPath[1] ?? ""))
   )) return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+  if (managedSkillRead) {
+    const query = new URLSearchParams(search)
+    if (path.length === 4 && (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(path[3] ?? "") || search !== "")) return localSkillError("invalidQuery", requestId)
+    if (path.length === 3 && ([...query.keys()].some((key) => !["status", "limit", "cursor"].includes(key) || query.getAll(key).length !== 1)
+      || !["draft", "active"].includes(query.get("status") ?? "") || query.has("limit") && !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(query.get("limit") ?? "")
+      || query.has("cursor") && (!query.get("cursor") || query.get("cursor")!.length > 2048))) return localSkillError("invalidQuery", requestId)
+    if (request.headers.has("idempotency-key") || request.headers.has("transfer-encoding") || request.headers.has("content-length") && request.headers.get("content-length") !== "0") return localSkillError("invalidQuery", requestId)
+  }
   if (publicProjectionRead) {
     if (mcpConnectionRead && ((request.headers.get("content-length") !== null && request.headers.get("content-length") !== "0")
       || request.headers.has("transfer-encoding") || request.headers.has("idempotency-key"))) {
       return connectionProjectionError("invalidQuery", requestId)
     }
     const query = new URLSearchParams(search)
-    const allowed = personalSkillListRead ? ["scope_kind", "cursor"] : mcpConnectionRead ? ["connection_id", "provider_key", "limit", "cursor"] : []
+    const allowed = mcpConnectionRead ? ["connection_id", "provider_key", "limit", "cursor"] : []
     const invalidQuery = [...query.keys()].some((key) => !allowed.includes(key) || query.getAll(key).length !== 1)
-      || (personalSkillListRead && query.get("scope_kind") !== "personal")
       || (query.has("cursor") && (query.get("cursor") === "" || [...(query.get("cursor") ?? "")].length > (mcpConnectionRead ? 2048 : 4096)))
       || (mcpConnectionRead && query.has("connection_id") && !MCP_CONNECTION_ID.test(query.get("connection_id") ?? ""))
       || (mcpConnectionRead && query.has("provider_key") && (query.get("provider_key") === "" || [...(query.get("provider_key") ?? "")].length > 191))
       || (mcpConnectionRead && query.has("limit") && !/^(?:[1-9]|[1-9][0-9]|100)$/u.test(query.get("limit") ?? ""))
-      || (personalSkillIdRead && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(businessPath[1] ?? ""))
-    if (invalidQuery) return mcpConnectionRead ? connectionProjectionError("invalidQuery", requestId) : projectionError(personalSkillIdRead ? "invalidSkillRequest" : "invalidQuery", requestId)
+    if (invalidQuery) return mcpConnectionRead ? connectionProjectionError("invalidQuery", requestId) : localSkillError("invalidQuery", requestId)
   }
   if (skillUploadGet || skillDraftPost || skillWritePost) {
-    if (search !== "" || ((skillUploadGet || skillWritePost) && !PROJECTION_REQUEST_ID.test(formalSkillId))) return projectionError("invalidSkillRequest", requestId)
-    if ((skillDraftPost || skillWritePost) && !/^[\x21-\x2B\x2D-\x7E]{1,128}$/u.test(request.headers.get("idempotency-key") ?? "")) return projectionError("invalidSkillRequest", requestId)
+    if (search !== "" || ((skillUploadGet || skillWritePost) && !PROJECTION_REQUEST_ID.test(formalSkillId))) return localSkillError("invalidSkillRequest", requestId)
+    if ((skillDraftPost || skillWritePost) && !/^[\x21-\x2B\x2D-\x7E]{1,128}$/u.test(request.headers.get("idempotency-key") ?? "")) return localSkillError("invalidSkillRequest", requestId)
   }
   const personalDownload = request.method === "GET" && businessPath.length === 4
     && businessPath[0] === "library" && businessPath[1] === "files" && businessPath[3] === "content"
@@ -365,7 +378,7 @@ export async function proxyHubRequest(
     && ((businessPath.length === 3 && businessPath[0] === "projects" && businessPath[2] === "resources")
       || (businessPath.length === 2 && businessPath[0] === "library" && businessPath[1] === "files"))
   const encodedBusinessPath = businessPath.map((segment) => encodeURIComponent(segment)).join("/")
-  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${encodedBusinessPath}${search}`
+  const target = `${config.bffBaseUrl.replace(/\/+$/, "")}/v1/${managedSkillRead ? `self/skills${path.length === 4 ? `/${encodeURIComponent(path[3]!)}` : ""}` : encodedBusinessPath}${search}`
 
   const headers = productBffHeaders(config, claims, requestId)
   for (const name of FORWARD_HEADERS) {
@@ -379,9 +392,14 @@ export async function proxyHubRequest(
   if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "DELETE") {
     try {
       body = await readBoundedRequestBody(request, boundedFileUpload ? 1024 * 1024 : publicSkillBoundary ? MAX_SKILL_COMMAND_BYTES : undefined)
-      if (skillWritePost && businessPath[2] === "publish" && body.byteLength !== 0) return projectionError("invalidSkillRequest", requestId)
+      if (skillWritePost && businessPath[2] === "publish") {
+        if (!JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")) return localSkillError("invalidSkillRequest", requestId)
+        let raw: unknown
+        try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)) as unknown } catch { return localSkillError("invalidSkillRequest", requestId) }
+        if (!skillPublishRequestSchema.safeParse(raw).success) return localSkillError("invalidSkillRequest", requestId)
+      }
     } catch (error) {
-      if (publicSkillBoundary) return projectionError(error instanceof UpstreamRequestTooLargeError ? "tooLarge" : "invalidSkillRequest", requestId)
+      if (publicSkillBoundary) return localSkillError(error instanceof UpstreamRequestTooLargeError ? "tooLarge" : "invalidSkillRequest", requestId)
       return NextResponse.json(
         {
           error: error instanceof UpstreamRequestTooLargeError ? "request_body_too_large" : "request_body_unreadable",
@@ -409,10 +427,10 @@ export async function proxyHubRequest(
         strictResponseLength: true,
       } : {}),
       ...(boundedFileUpload ? { timeoutMs: 50_000, maxRequestBytes: 1024 * 1024 } : {}),
-      ...(mcpConnectionRead ? { timeoutMs: 10_000, maxResponseBytes: 1024 * 1024 } : {}),
+      ...(publicSkillBoundary ? { timeoutMs: 10_000, maxResponseBytes: 1024 * 1024 } : {}),
     })
   } catch {
-    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffUnavailable", requestId) : projectionError("bffUnavailable", requestId)
+    if (publicSkillBoundary) return mcpConnectionRead ? connectionProjectionError("bffUnavailable", requestId) : localSkillError("bffUnavailable", requestId)
     return NextResponse.json({ error: "hub_unreachable" }, { status: 502 })
   }
 
@@ -461,19 +479,19 @@ export async function proxyHubRequest(
     const upstreamRequestId = upstream.headers.get("x-request-id")
     const upstreamContentType = upstream.headers.get("content-type")
     const expectedSuccess = skillDraftPost || (skillWritePost && businessPath[2] === "package-upload" && businessPath.length === 3) ? 201 : 200
-    const allowedSkillErrors = skillDraftPost ? [400, 401, 403, 409, 412, 413, 429, 502, 503]
+    const allowedSkillErrors = managedSkillRead ? [400, 401, 403, 404, 429, 502, 503] : skillDraftPost ? [400, 401, 403, 409, 412, 413, 429, 502, 503]
       : skillUploadGet ? [400, 401, 403, 404, 412, 429, 502, 503]
         : [400, 401, 403, 404, 409, 412, 413, 429, 502, 503]
     if (upstream.status >= 200 && upstream.status < 300 && upstream.status !== expectedSuccess
       || upstream.status >= 300 && upstream.status < 400
-      || (skillDraftPost || skillUploadGet || skillWritePost) && upstream.status >= 400 && !allowedSkillErrors.includes(upstream.status)
+      || (managedSkillRead || skillDraftPost || skillUploadGet || skillWritePost) && upstream.status >= 400 && !allowedSkillErrors.includes(upstream.status)
       || upstream.headers.get("cache-control") !== "no-store"
       || upstreamRequestId === null
       || !PROJECTION_REQUEST_ID.test(upstreamRequestId)
       || upstreamContentType === null
       || !JSON_MEDIA_TYPE.test(upstreamContentType)) {
       await upstream.body?.cancel()
-      return mcpConnectionRead ? connectionProjectionError("invalidOwnerResponse", requestId) : projectionError("invalidOwnerResponse", requestId)
+      return mcpConnectionRead ? connectionProjectionError("invalidOwnerResponse", requestId) : localSkillError("invalidOwnerResponse", requestId)
     }
     if (mcpConnectionRead) {
       let raw: unknown

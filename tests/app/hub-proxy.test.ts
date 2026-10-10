@@ -28,12 +28,12 @@ const ENV = {
 const pinnedSpec = YAML.parse(readFileSync(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"), "utf8")) as {
   components: { schemas: {
     PlatformProjectionReadErrorResponse: { properties: { error: { properties: { code: { enum: string[] } } } } }
-    PublishedPersonalSkillErrorDetail: { properties: { code: { enum: string[] } } }
+    ManagedPersonalSkillErrorDetail: { properties: { code: { enum: string[] } } }
   } }
 }
 const ownerErrorCodes = {
   projection: pinnedSpec.components.schemas.PlatformProjectionReadErrorResponse.properties.error.properties.code.enum,
-  byId: pinnedSpec.components.schemas.PublishedPersonalSkillErrorDetail.properties.code.enum,
+  byId: pinnedSpec.components.schemas.ManagedPersonalSkillErrorDetail.properties.code.enum,
 }
 
 // A retired cookie must never be promoted into a Product Session.
@@ -63,7 +63,7 @@ afterEach(() => {
 describe("/api/hub/[...path] proxy", () => {
   it("keeps list/MCP query errors separate from by-ID request errors in the pinned owner enums", () => {
     expect(ownerErrorCodes.projection).toContain("invalid_query_parameter")
-    expect(ownerErrorCodes.projection).not.toContain("invalid_skill_request")
+    expect(ownerErrorCodes.byId).toContain("invalid_skill_request")
     expect(ownerErrorCodes.byId).toContain("invalid_skill_request")
     expect(ownerErrorCodes.byId).not.toContain("invalid_query_parameter")
   })
@@ -76,14 +76,18 @@ describe("/api/hub/[...path] proxy", () => {
     expect(requestId).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u)
     if (expectedRequestId) expect(requestId).toBe(expectedRequestId)
     expect(ownerErrorCodes[ownerKind]).toContain(code)
-    expect(await response.json()).toEqual({ error: { code, message: code, retryable } })
+    const raw = await response.json()
+    if ("meta" in raw) {
+      const managedCode = code === "invalid_query_parameter" ? "invalid_skill_request" : code
+      expect(raw).toEqual({ error: { code: managedCode, message: managedCode }, meta: { request_id: requestId } })
+    } else expect(raw).toEqual({ error: { code, message: code, retryable } })
   }
 
   it("emits typed local errors for projection config, IAM, query, network, and invalid owner branches", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
-    const path = params(["self", "skills"])
+    const path = params(["self", "skills", "managed"])
     delete process.env.KOKORO_WEB_AUTH_SECRET
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal", { headers: { "x-kokoro-request-id": "client-valid" } }), path), 503, "product_tenant_not_configured", false, "client-valid")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active", { headers: { "x-kokoro-request-id": "client-valid" } }), path), 503, "product_tenant_not_configured", false, "client-valid")
     process.env.KOKORO_WEB_AUTH_SECRET = ENV.KOKORO_WEB_AUTH_SECRET
 
     const productBff = await import("@/lib/server/product-bff")
@@ -91,40 +95,40 @@ describe("/api/hub/[...path] proxy", () => {
       bffBaseUrl: null, domain: "dev.kokoro.localhost", internalSecret: "svc-secret",
       session: { redisUrl: ENV.KOKORO_WEB_REDIS_URL, webOrigin: ENV.KOKORO_WEB_ORIGIN, secret: ENV.KOKORO_WEB_AUTH_SECRET },
     } as unknown as ProductBffConfig)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 503, "skill_dependency_unavailable", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path), 503, "skill_dependency_unavailable", false)
     configSpy.mockRestore()
 
     currentProductSession.mockRejectedValueOnce(new Error("IAM down"))
-    const invalidId = await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal", { headers: { "x-kokoro-request-id": "bad request id" } }), path)
+    const invalidId = await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active", { headers: { "x-kokoro-request-id": "bad request id" } }), path)
     await expectProjectionError(invalidId, 503, "iam_admission_unavailable", true)
     expect(invalidId.headers.get("x-request-id")).not.toBe("bad request id")
 
     currentProductSession.mockResolvedValueOnce(null)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 401, "session_authentication_required", false)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), path), 400, "invalid_query_parameter", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path), 401, "session_authentication_required", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?scope=official"), path), 400, "invalid_query_parameter", false)
     await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/mcp/connections?cursor="), params(["self", "mcp", "connections"])), 400, "invalid_query_parameter", false)
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/bad%20id"), params(["self", "skills", "bad id"])), 400, "invalid_skill_request", false, undefined, "byId")
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed/bad%20id"), params(["self", "skills", "managed", "bad id"])), 400, "invalid_skill_request", false, undefined, "byId")
 
     vi.mocked(requestWithDomain).mockRejectedValueOnce(new Error("BFF down"))
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 503, "skill_dependency_unavailable", true)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path), 503, "skill_dependency_unavailable", true)
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"skills":[]}}', { status: 200, headers: { "content-type": "application/json" } }))
-    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "skill_response_invalid", false)
+    await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path), 502, "skill_response_invalid", false)
   })
 
   it("accepts only JSON media type for successful and error owner projections", async () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
-    const path = params(["self", "skills"])
+    const path = params(["self", "skills", "managed"])
     for (const status of [200, 404]) {
       vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(status === 200 ? '{"data":{"skills":[]}}' : '{"error":{"code":"skill_not_found","message":"hidden","retryable":false}}', {
         status, headers: { "content-type": "text/plain", "cache-control": "no-store", "x-request-id": "owner-request" },
       }))
-      await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path), 502, "skill_response_invalid", false)
+      await expectProjectionError(await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path), 502, "skill_response_invalid", false)
     }
     for (const status of [200, 404]) {
       vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(status === 200 ? '{"data":{"skills":[]}}' : '{"error":{"code":"skill_not_found","message":"hidden","retryable":false}}', {
         status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "owner-request" },
       }))
-      const response = await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), path)
+      const response = await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), path)
       expect(response.status).toBe(status)
       expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8")
     }
@@ -135,20 +139,20 @@ describe("/api/hub/[...path] proxy", () => {
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { skills: [], next_cursor: null } }), {
       status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_skill_1" },
     }))
-    const list = await GET(new Request("http://localhost/api/hub/self/skills?scope_kind=personal"), params(["self", "skills"]))
+    const list = await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), params(["self", "skills", "managed"]))
     expect(list.status).toBe(200)
     expect(list.headers.get("cache-control")).toBe("no-store")
     expect(list.headers.get("x-request-id")).toBe("req_skill_1")
-    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/skills?scope_kind=personal")
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/self/skills?status=active")
 
-    const oldScope = await GET(new Request("http://localhost/api/hub/self/skills?scope=official"), params(["self", "skills"]))
+    const oldScope = await GET(new Request("http://localhost/api/hub/self/skills/managed?scope=official"), params(["self", "skills", "managed"]))
     expect(oldScope.status).toBe(400)
     expect(requestWithDomain).toHaveBeenCalledTimes(1)
 
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "skill_not_found", message: "hidden", retryable: false } }), {
       status: 404, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_skill_2" },
     }))
-    const hidden = await GET(new Request("http://localhost/api/hub/self/skills/skill-1"), params(["self", "skills", "skill-1"]))
+    const hidden = await GET(new Request("http://localhost/api/hub/self/skills/managed/skill-1"), params(["self", "skills", "managed", "skill-1"]))
     expect(hidden.status).toBe(404)
     expect(hidden.headers.get("x-request-id")).toBe("req_skill_2")
 
@@ -445,10 +449,10 @@ describe("/api/hub/[...path] proxy", () => {
     )
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
-    const request = new Request("http://localhost/api/hub/self/skills?scope_kind=personal", {
+    const request = new Request("http://localhost/api/hub/self/skills/managed?status=active", {
       headers: { cookie: sessionCookie() },
     })
-    const res = await GET(request, params(["self", "skills"]))
+    const res = await GET(request, params(["self", "skills", "managed"]))
     expect(res.status).toBe(200)
     expect(res.headers.get("cache-control")).toBe("no-store")
     expect(res.headers.get("x-request-id")).toBe("req-personal-list")
@@ -458,7 +462,7 @@ describe("/api/hub/[...path] proxy", () => {
       string,
       { headers: Record<string, string>; signal: AbortSignal },
     ]
-    expect(target).toBe("http://bff.test/v1/skills?scope_kind=personal")
+    expect(target).toBe("http://bff.test/v1/self/skills?status=active")
     expect(domain).toBe("dev.kokoro.localhost")
     expect(init.headers["x-kokoro-service"]).toBe("web-bff")
     expect(init.headers["x-kokoro-internal-secret"]).toBe("svc-secret")
@@ -472,14 +476,14 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
     const response = await GET(
-      new Request("http://localhost/api/hub/self/skills/pool", {
+      new Request("http://localhost/api/hub/self/skills/managed?status=active", {
         headers: { cookie: sessionCookie() },
       }),
-      params(["self", "skills", "pool"]),
+      params(["self", "skills", "managed"]),
     )
 
     expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({ error: "auth_not_configured" })
+    expect(await response.json()).toMatchObject({ error: { code: "product_tenant_not_configured" }, meta: { request_id: expect.any(String) } })
     expect(requestWithDomain).not.toHaveBeenCalled()
   })
 
@@ -493,10 +497,10 @@ describe("/api/hub/[...path] proxy", () => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
 
     await GET(
-      new Request("http://localhost/api/hub/self/skills?scope_kind=personal", {
+      new Request("http://localhost/api/hub/self/skills/managed?status=active", {
         headers: { cookie: sessionCookie(), "x-kokoro-namespace": "team_evil" },
       }),
-      params(["self", "skills"]),
+      params(["self", "skills", "managed"]),
     )
     const [, domain, init] = vi.mocked(requestWithDomain).mock.calls[0] as [
       string,
@@ -514,7 +518,7 @@ describe("/api/hub/[...path] proxy", () => {
     currentProductSession.mockResolvedValueOnce(null)
     vi.stubGlobal("fetch", vi.fn())
     const { GET } = await import("@/app/api/hub/[...path]/route")
-    const res = await GET(new Request("http://localhost/api/hub/self/skills/pool"), params(["self", "skills", "pool"]))
+    const res = await GET(new Request("http://localhost/api/hub/self/skills/managed?status=active"), params(["self", "skills", "managed"]))
     expect(res.status).toBe(401)
   })
 
@@ -556,14 +560,14 @@ describe("/api/hub/[...path] proxy", () => {
     vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response('{"data":{"source_ref":"skill:mine","revision":"1","status":"active","event_id":"550e8400-e29b-41d4-a716-446655440000","replayed":false}}', {
       status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-publish" },
     }))
-    const published = await POST(new Request(publishUrl, { method: "POST", headers: { "idempotency-key": "publish-key" } }), publishPath)
+    const published = await POST(new Request(publishUrl, { method: "POST", headers: { "content-type": "application/json", "idempotency-key": "publish-key" }, body: JSON.stringify({ expected_state_version: "4", audience: "owner" }) }), publishPath)
     expect(published.status).toBe(200)
     expect(published.headers.get("x-request-id")).toBe("owner-publish")
     expect(published.headers.get("cache-control")).toBe("no-store")
     const [, , init] = vi.mocked(requestWithDomain).mock.calls[0] as [string, string, { body?: ArrayBuffer; headers: Record<string, string> }]
-    expect(init.body?.byteLength).toBe(0)
+    expect(JSON.parse(new TextDecoder().decode(init.body))).toEqual({ expected_state_version: "4", audience: "owner" })
     expect(init.headers["idempotency-key"]).toBe("publish-key")
-    expect(init.headers["content-type"]).toBeUndefined()
+    expect(init.headers["content-type"]).toBe("application/json")
   })
 
   it("rejects a non-JSON formal command owner response before the browser sees it", async () => {
@@ -691,7 +695,7 @@ it("rejects installation aliases/unknown methods and foreign Origin before owner
 it("does not forward mismatched installation identity or invalid error status/code pairs", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route")
   const responses = [
-    { status: 200, value: { data: { installation_id: "other", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" } } },
+    { status: 200, value: { data: { display_name: "Mine", summary: "Summary", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [], installation_id: "other", source_ref: "skill:s1", series_id: "s", revision: "1", installed: true, enabled: true, installed_at: "2026-09-30T10:00:00Z", updated_at: "2026-09-30T10:00:00Z" } } },
     { status: 403, value: { error: { code: "skill_installation_dependency_timeout", message: "SENTINEL", retryable: true } } },
     { status: 200, value: { data: [], private: "SENTINEL" } },
   ]
@@ -822,4 +826,28 @@ describe("R243 exact Project name adapter", () => {
       expect(vi.getTimerCount()).toBe(0)
     } finally { vi.useRealTimers() }
   })
+})
+
+it("keeps managed reads a closed static route and rejects retired published wire paths", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const [url, path, status] of [
+    ["/self/skills", ["self", "skills"], 404], ["/self/skills/mine", ["self", "skills", "mine"], 404],
+    ["/self/skills/managed?status=draft&status=active", ["self", "skills", "managed"], 400],
+    ["/self/skills/managed?status=draft&limit=101", ["self", "skills", "managed"], 400],
+    ["/self/skills/managed?status=draft&unexpected=1", ["self", "skills", "managed"], 400],
+    ["/self/skills/managed/mine?status=draft", ["self", "skills", "managed", "mine"], 400],
+  ] as const) {
+    const response = await GET(new Request(`http://localhost/api/hub${url}`), params([...path]))
+    expect(response.status).toBe(status)
+  }
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it.each(["draft", "active"])("maps only exact managed %s reads to current owner self resources", async (status) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { skills: [], next_cursor: null }, meta: { request_id: "managed-owner" } }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "managed-owner" } }))
+  const response = await GET(new Request(`http://localhost/api/hub/self/skills/managed?status=${status}&limit=50&cursor=opaque`), params(["self", "skills", "managed"]))
+  expect(response.status).toBe(200)
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/self/skills?status=${status}&limit=50&cursor=opaque`)
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]).toMatchObject({ timeoutMs: 10000, maxResponseBytes: 1048576 })
 })

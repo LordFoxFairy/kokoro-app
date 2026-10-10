@@ -25,6 +25,14 @@ intent/upload_pending缺原PUT证明不可盲续短期URL；用户显式重选Fi
 
 本D0不迁移/重置PG、Redis、MinIO，不恢复旧数据，不整包复制分叉release c9b02b6，不改变原Admin基座。后继代码/测试需证明缺/坏CAS、异body同key、未知ACK与撤权/取消、缺PUT版本、refresh owner-state恢复、explicit replacement和ACTIVE判定；零schema diff只证明无持久化变更，不替代真实发布/浏览器验收。当前阶段未执行应用门、schema或服务命令。
 
+### 正式目标 pin 与本人读取闭集（2026-10-10）
+
+正式 BFF public 13.1.0 为 `2f3678736287241bbe620e087ab3b0da95fd2fb8`，canonical OpenAPI SHA-256 `418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045`，136 个 operation；URL 仍 `/v1`。本片消费者从该正式 commit blob 原字节生成只读 snapshot；13.1 仅补实际命令授权链 403 `skill_forbidden`，Get/managed 不扩该错误，授权路径不变。此为批准目标引用，不代替 Web 当前工程门、真实对象链或浏览器验收。
+
+本人读取唯一 browser-private 路径为 `/api/hub/self/skills/managed?status=draft|active&limit=...&cursor=...` 与 `/api/hub/self/skills/managed/{skill_id}`，分别精确映射 `/v1/self/skills` 与 `/v1/self/skills/{skill_id}`；static managed 优先，GET-only、闭集 query、重复参数/未知参数拒绝，detail 禁 query。正式 owner 已移除旧 `/v1/skills` list/detail，故本片删除对应旧 private published 路由、旧七字段 wire/schema/ref；本人已发布读 managed `status=active`，草稿读 `status=draft`。目录 `/v1/skill.list` 独立，不能代替本人事实；无 alias/fallback。成功与错误严格保留 managed `meta.request_id`，同 header 绑定。没有 package phase/hash/receipt 的 managed read 必须继续 GET package-upload，不合成字段。
+
+当前安装消费者同片精确对齐正式 SkillInstallation 19 properties / 16 required，list/get/三 mutation 复用严格当前 resource、optional publisher/update 与真实 product 字段，完整保留 installation/source 身份绑定、原 body/key、状态与错误 family；403 skill_forbidden 仅三 mutation，list/get 不扩。不得省字段、passthrough 或把 HTTP 安装回执当浏览器成功。
+
 <!-- END:T-K03.14-WEB-PUBLISH-DATA_MODEL-D0 -->
 
 ## R256-ADMIN-01：Web 管理员投影数据边界（目标，尚未实施）

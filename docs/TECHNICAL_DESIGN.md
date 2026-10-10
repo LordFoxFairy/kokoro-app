@@ -6,7 +6,7 @@
 
 当前实际 Web 为 `3c59071d8188f025b3d7b7683bb2d8560ceaa0fa`；现 `src/generated/bff-public-openapi.yaml` 与相邻 contract 测试仍固定 public 8.0.0、BFF `6d46ec8bdd2d2ffaa06513fd0561272eae907919`。现严格消费者漏六类 ACK/read 的 `state_version`，Begin/Complete/Validate 缺 mandatory CAS，PUT 丢对象版本，Complete 缺 `source_version_id`，Validate 仍接受旧 `zip-v2` 身份，Publish 零 body 且同源 route 拒绝非空 body。现 Dialog 仅在挂载内存保留意图，刷新无法选择和恢复 owner 持久 draft。Root 实际同源 Draft201、原 Admin 非空 list200 不证明该 UI 发布链已通过。
 
-目标依据 BFF 已批准设计提交 `8889701`：唯一 public 13.0.0（URL仍 `/v1`），Begin/Complete/Validate mandatory `expected_state_version`，Publish 既有 strict JSON 显式 audience/CAS。BFF 正式实现提交与 artifact SHA-256 仍待 Root 验证固定；此处不是消费者 current pin，不编辑/复制 owner 机器契约，不把目标称为已生效。三份本片前缀对本发布/恢复目标共同生效，下方原 mixed 正文逐字节保留为原始事实，旧 pin/zero-body/default-off 描述不作为本片目标依据。release `c9b02b6` 与当前源分叉，只逐路径参考，不整包搬回，不恢复替代 Admin；`apps/kokoro-admin` 保持唯一后台基座。
+目标依据 BFF 已批准设计提交 `8889701`：唯一 public 13.1.0（URL仍 `/v1`），Begin/Complete/Validate mandatory `expected_state_version`，Publish 既有 strict JSON 显式 audience/CAS。BFF 正式实现提交与 artifact SHA-256 已由 Root 工程门固定，详见本前缀末正式 pin；此处不冒充 Web 已验收 current，不编辑/复制 owner 机器契约，不把目标称为已生效。三份本片前缀对本发布/恢复目标共同生效，下方原 mixed 正文逐字节保留为原始事实，旧 pin/zero-body/default-off 描述不作为本片目标依据。release `c9b02b6` 与当前源分叉，只逐路径参考，不整包搬回，不恢复替代 Admin；`apps/kokoro-admin` 保持唯一后台基座。
 
 ### §8 放置与实现粒度
 
@@ -33,6 +33,14 @@ Create ACK 是初始真实 observation；同 skill owner GET/package GET 只观�
 刷新丢File/key/body/reference不称原命令重放。个人页通过正式本人 managed draft list/detail选择真实持久draft，再GET当前upload核对skill/attempt/epoch/CAS。uploaded/validated只沿owner已完成事实与当前资格恢复；对象版本只能来自实际PUT ACK或正规owner已完成readback，不合成、不把ETag/hash/upload ID当版本。intent/upload_pending缺原证明时禁止盲续PUT；用户明确重选File/hash/size、观察真实旧attempt，才创建新的replacement意图与新key/body/CAS，不静默替换未知旧命令。丢Publish key/ACK先权威读取，不能生成新key冒称原重放；各恢复按钮必须区分观察、原意图重放和用户新操作。
 
 预计完整代码集：现 generated snapshot、hub schemas/publish client、personal publish flow/dialog/read、Hub route；相邻现 contract、client、flow、resume、Dialog与Hub proxy测试一并更新。新增字段/labels/独立UI测试若确需另报精确路径，不借本D0预授实现。Root正式pin/文档门通过后才授代码writer；本阶段不执行build或服务/数据命令。
+
+### 正式目标 pin 与本人读取闭集（2026-10-10）
+
+正式 BFF public 13.1.0 为 `2f3678736287241bbe620e087ab3b0da95fd2fb8`，canonical OpenAPI SHA-256 `418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045`，136 个 operation；URL 仍 `/v1`。本片消费者从该正式 commit blob 原字节生成只读 snapshot；13.1 仅补实际命令授权链 403 `skill_forbidden`，Get/managed 不扩该错误，授权路径不变。此为批准目标引用，不代替 Web 当前工程门、真实对象链或浏览器验收。
+
+本人读取唯一 browser-private 路径为 `/api/hub/self/skills/managed?status=draft|active&limit=...&cursor=...` 与 `/api/hub/self/skills/managed/{skill_id}`，分别精确映射 `/v1/self/skills` 与 `/v1/self/skills/{skill_id}`；static managed 优先，GET-only、闭集 query、重复参数/未知参数拒绝，detail 禁 query。正式 owner 已移除旧 `/v1/skills` list/detail，故本片删除对应旧 private published 路由、旧七字段 wire/schema/ref；本人已发布读 managed `status=active`，草稿读 `status=draft`。目录 `/v1/skill.list` 独立，不能代替本人事实；无 alias/fallback。成功与错误严格保留 managed `meta.request_id`，同 header 绑定。没有 package phase/hash/receipt 的 managed read 必须继续 GET package-upload，不合成字段。
+
+当前安装消费者同片精确对齐正式 SkillInstallation 19 properties / 16 required，list/get/三 mutation 复用严格当前 resource、optional publisher/update 与真实 product 字段，完整保留 installation/source 身份绑定、原 body/key、状态与错误 family；403 skill_forbidden 仅三 mutation，list/get 不扩。不得省字段、passthrough 或把 HTTP 安装回执当浏览器成功。
 
 <!-- END:T-K03.14-WEB-PUBLISH-TECHNICAL_DESIGN-D0 -->
 

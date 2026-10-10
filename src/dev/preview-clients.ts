@@ -123,13 +123,11 @@ export function createPreviewHubClient(): HubClient {
     abortable(signal, () => githubPreviewFor(repository))
   return {
     listPersonalSkills: () => Promise.resolve({ skills: skills.filter((skill) => skill.scope === "personal").map((skill, index) => ({
-      source_ref: `skill:preview-${index + 1}`, name: skill.name, description: skill.description,
-      content_hash: skill.content_hash, scope: "personal" as const, revision: "1", enabled: skill.enabled ?? true,
-      categories: skill.categories ?? [],
+      skill_id: `preview-${index + 1}`, source_ref: `skill:preview-${index + 1}`, series_id: `preview-series-${index + 1}`, name: skill.name, summary: skill.description, revision: "1", status: "active" as const, tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { state_version: "1", publication_audience: "owner" as const },
     })), next_cursor: null }),
     getPublishedPersonalSkill: (id) => {
       const skill = skills.filter((item) => item.scope === "personal")[Number(id.replace(/^preview-/u, "")) - 1]
-      return skill ? Promise.resolve({ skill_id: id, source_ref: `skill:${id}`, revision: "1", status: "active" as const, name: skill.name, summary: skill.description, tags: [] }) : Promise.reject(new Error("preview Skill not found"))
+      return skill ? Promise.resolve({ skill_id: id, source_ref: `skill:${id}`, revision: "1", status: "active" as const, name: skill.name, summary: skill.description, tags: [], series_id: `preview-series-${id}`, example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { state_version: "1", publication_audience: "owner" as const } }) : Promise.reject(new Error("preview Skill not found"))
     },
     listMcpConnections: () => Promise.resolve({ connections: servers.filter((server) => server.enabled).map((server, index) => ({
       connection_id: `preview-connection-${index + 1}`, connector_id: `preview-connector-${index + 1}`,

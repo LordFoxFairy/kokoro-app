@@ -132,7 +132,7 @@ it("adds the server-selected skill through the typed installation boundary", asy
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.endsWith("/ListHubSkills")) return response(catalog)
     if (path.endsWith("/ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
-    if (path === "/api/hub/self/skill-installations" && init?.method === "POST") return response({ data: { installation: { installation_id: "i1", source_ref: "skill:skill-manim", series_id: "skill-manim", revision: "1", installed: true, enabled: true, installed_at: "2026-10-10T00:00:00.000Z", updated_at: "2026-10-10T00:00:00.000Z" }, change: "installed", event_id: "event-1", replayed: false } })
+    if (path === "/api/hub/self/skill-installations" && init?.method === "POST") return response({ data: { installation: { display_name: "Mine", summary: "Summary", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "5" }, tags: [], installation_id: "i1", source_ref: "skill:skill-manim", series_id: "skill-manim", revision: "1", installed: true, enabled: true, installed_at: "2026-10-10T00:00:00.000Z", updated_at: "2026-10-10T00:00:00.000Z" }, change: "installed", event_id: "event-1", replayed: false } })
     throw new Error(`unexpected ${path}`)
   })
   vi.stubGlobal("fetch", fetchMock)

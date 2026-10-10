@@ -568,7 +568,7 @@ describe("R66 public4 wire/head and closed resume", () => {
   })
 })
 
-// R255 ScheduledTask recurrence graph under the exact public8 consumer pin.
+// R255 ScheduledTask recurrence graph under the exact public13.1 consumer pin.
 import { createHash as r76Hash } from "node:crypto"
 import { readFile as r76ReadFile } from "node:fs/promises"
 import r76Yaml from "yaml"
@@ -607,11 +607,11 @@ async function r76PublicSpec() {
   return { bytes, spec }
 }
 
-describe("R255 ScheduledTask owner recurrence graph under the public8 pin", () => {
-  it("consumes the exact locally accepted public8 canonical bytes", async () => {
+describe("R255 ScheduledTask owner recurrence graph under the public13.1 pin", () => {
+  it("consumes the exact locally accepted public13.1 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("8d5b452ba554f7b9ce723481a0a619abf12d9fb3174b9f15f52a395ad1372783")
-    expect(spec.info.version).toBe("8.0.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045")
+    expect(spec.info.version).toBe("13.1.0")
   })
 
   it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {
