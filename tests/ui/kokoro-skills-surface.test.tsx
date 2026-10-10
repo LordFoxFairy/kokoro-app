@@ -533,3 +533,52 @@ it("bounds package client slow and excessive streams and rejects caller cancella
     expect(vi.getTimerCount()).toBe(0)
   } finally { vi.useRealTimers() }
 })
+
+it("switches the same dialog to an independent real folder tree reader and back to its overview", async () => {
+  const files = [{ path: "SKILL.md", size_bytes: "12" }, { path: "docs/nested/notes.txt", size_bytes: "6" }]
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (!url.includes("/package")) return response(ownerDetail)
+    const path = new URL(url, "http://localhost").searchParams.get("file_path")
+    return packageJson({ data: { ...packageDirectory.data, files, selected_file: path === null ? null : { path, text: path === "SKILL.md" ? "# Owner text" : "实际" } } })
+  }))
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "下载技能" })
+  const dialog = screen.getByTestId("manus-skill-detail-dialog")
+  expect(within(dialog).getByText("Summary")).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Owner text" })
+  expect(screen.getByTestId("manus-skill-detail-dialog")).toBe(dialog)
+  expect(dialog.querySelector('[role="tree"],[role="treeitem"],[role="group"]')).toBeNull()
+  expect(within(dialog).queryByText("Summary")).toBeNull()
+  expect(within(dialog).queryByText("Real example")).toBeNull()
+  expect(dialog.querySelector("img")).toBeNull()
+  const tree = screen.getByRole("navigation", { name: "技能文件" })
+  const folder = within(tree).getByRole("button", { name: "docs" })
+  expect(folder).toHaveAttribute("aria-expanded", "true")
+  // JSDOM does not synthesize a native button's default keyboard click.
+  // Dispatch the browser-equivalent zero-detail activation explicitly;
+  // real Enter/Space default activation remains a Root browser check.
+  const keyboardActivate = (button: HTMLElement, key: "Enter" | " ") => {
+    expect(button.tagName).toBe("BUTTON")
+    expect(button).toHaveAttribute("type", "button")
+    button.focus()
+    expect(button).toHaveFocus()
+    fireEvent.keyDown(button, { key })
+    fireEvent.keyUp(button, { key })
+    fireEvent.click(button, { detail: 0 })
+  }
+  keyboardActivate(folder, "Enter")
+  expect(folder).toHaveAttribute("aria-expanded", "false")
+  expect(within(tree).queryByRole("button", { name: "docs/nested/notes.txt" })).toBeNull()
+  keyboardActivate(folder, " ")
+  expect(within(tree).getByRole("button", { name: "nested" })).toBeInTheDocument()
+  keyboardActivate(within(tree).getByRole("button", { name: "docs/nested/notes.txt" }), "Enter")
+  expect(await screen.findByText("实际")).toBeInTheDocument()
+  keyboardActivate(within(tree).getByRole("button", { name: "SKILL.md" }), " ")
+  expect(await screen.findByRole("heading", { name: "Owner text" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "返回简介" }))
+  expect(screen.getByTestId("manus-skill-detail-dialog")).toBe(dialog)
+  expect(within(dialog).getByText("Summary")).toBeInTheDocument()
+  expect(screen.queryByRole("tree")).toBeNull()
+})

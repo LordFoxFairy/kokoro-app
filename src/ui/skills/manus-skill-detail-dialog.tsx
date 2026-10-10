@@ -3,7 +3,7 @@
 import Image from "next/image"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Download, MessageCircle, Plus, Share2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Download, FileText, Folder, MessageCircle, Plus, Share2 } from "lucide-react"
 import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +50,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
   const [readerLoading, setReaderLoading] = useState(false)
   const [readerFailed, setReaderFailed] = useState(false)
   const [readerAttempt, setReaderAttempt] = useState(0)
+  const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
   const identity = open && skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
   const [currentIdentity, setCurrentIdentity] = useState(identity)
 
@@ -66,6 +67,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
     setReaderFile(null)
     setReaderLoading(false)
     setReaderFailed(false)
+    setCollapsedFolders(new Set())
   }
 
   useEffect(() => {
@@ -114,6 +116,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
   const restartReader = () => {
     if (boundRevision === null) return
     setReaderOpen(true)
+    setCollapsedFolders(new Set())
     setDirectory(null)
     setSelectedPath(null)
     setReaderFile(null)
@@ -151,10 +154,36 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
   const installed = record?.added ?? skill.installed
   const cover = record?.coverImage ?? skill.cover_image
 
+  // Folder nodes are presentation-only prefixes of the owner-approved paths.
+  // No archive member or generated content is added to the inventory.
+  const renderFiles = (prefix: string): React.ReactNode => {
+    const entries = new Map<string, { path: string; folder: boolean }>()
+    for (const file of directory?.files ?? []) {
+      if (!file.path.startsWith(prefix)) continue
+      const remainder = file.path.slice(prefix.length)
+      const name = remainder.split("/")[0]!
+      entries.set(name, { path: `${prefix}${name}`, folder: remainder.includes("/") })
+    }
+    return [...entries].map(([name, entry]) => {
+      if (!entry.folder) return <li key={entry.path}>
+        <button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => selectFile(entry.path)}><FileText aria-hidden="true" /><span>{name}</span></button>
+      </li>
+      const expanded = !collapsedFolders.has(entry.path)
+      return <li key={entry.path}>
+        <button type="button" aria-expanded={expanded} onClick={() => setCollapsedFolders((current) => {
+          const next = new Set(current)
+          if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path)
+          return next
+        })}>{expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
+        {expanded ? <ul>{renderFiles(`${entry.path}/`)}</ul> : null}
+      </li>
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={styles.dialog}
+        className={readerOpen ? `${styles.dialog} ${styles.readerDialog}` : styles.dialog}
         overlayClassName={styles.overlay!}
         data-testid="manus-skill-detail-dialog"
         onCloseAutoFocus={(event) => {
@@ -164,11 +193,15 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
           target.focus({ preventScroll: true })
         }}
       >
-        <div className={styles.topActions}>
+        {readerOpen ? null : <div className={styles.topActions}>
           <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share2 aria-hidden="true" /></Button>
           {downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={t("skills.detailDownloadShort")} disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
-        </div>
-        <DialogHeader className={styles.hero}>
+        </div>}
+        {readerOpen ? <DialogHeader className={styles.readerHeader}>
+          <Button type="button" variant="ghost" onClick={() => setReaderOpen(false)}><ChevronRight className={styles.backIcon} aria-hidden="true" />{t("skills.packageBack")}</Button>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">{t("skills.packageReader")}</DialogDescription>
+        </DialogHeader> : <DialogHeader className={styles.hero}>
           <div className={styles.copy}>
             {categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}
             <DialogTitle>{title}</DialogTitle>
@@ -179,17 +212,20 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
             </div>
           </div>
           {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}
-        </DialogHeader>
-        <section className={styles.body}>
+        </DialogHeader>}
+        {readerOpen ? null : <section className={styles.body}>
           <p className={styles.description}>{description}</p>
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
           {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
           {record !== null && skill.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
-          {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
+          {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
+        </section>}
+        {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
             <nav className={styles.fileList} aria-label={t("skills.detailFiles")}>
-              {directory?.files.map((file) => <button key={file.path} type="button" aria-pressed={file.path === selectedPath} onClick={() => selectFile(file.path)}>{file.path}</button>)}
+              <ul>{renderFiles("")}</ul>
             </nav>
             <div className={styles.fileContent} aria-busy={readerLoading}>
+              {selectedPath !== null ? <div className={styles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
               {readerLoading ? <p role="status">{t("skills.packageLoading")}</p> : null}
               {readerFailed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={restartReader}>{t("skills.packageRetry")}</Button></div> : null}
               {!readerLoading && !readerFailed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
@@ -200,8 +236,6 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
               </> : null}
             </div>
           </section> : null}
-          {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
-        </section>
       </DialogContent>
     </Dialog>
   )
