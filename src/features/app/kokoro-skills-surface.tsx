@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, Code2, Database, FileCode2, Image as ImageIcon, LoaderCircle, Palette, Plus, Search, Sparkles, SquarePen, Upload, Workflow, X } from "lucide-react"
+import { Check, ChevronDown, LoaderCircle, Plus, Search, SlidersHorizontal, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -12,8 +12,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import type { HubClient } from "@/hub/client"
-import type { GithubImportResult, SkillCard, SkillCatalog, SkillCatalogCard, SkillCategory as CatalogSkillCategory } from "@/hub/schemas"
+import { createSkillInstallationClient, type HubClient } from "@/hub/client"
+import type { GithubImportResult, SkillCatalog, SkillCatalogCard, SkillCategory as CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
 import { useT } from "@/i18n/context"
@@ -21,8 +21,8 @@ import type { MessageKey } from "@/i18n/messages"
 import { cn } from "@/lib/utils"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
-import { SkillDetailDialog } from "@/ui/skills/skill-detail-dialog"
-import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
+import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
+import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
@@ -44,90 +44,47 @@ const CATEGORIES: readonly { value: SkillCategory; key: MessageKey }[] = [
 
 const CATALOG_KEY = "hub/skills/standalone-catalog"
 
-function skillCategories(skill: Pick<SkillCatalogCard, "name" | "description" | "categories">): Exclude<SkillCategory, "all">[] {
-  if (skill.categories?.length) return [...new Set(skill.categories)]
-  const text = `${skill.name} ${skill.description}`.toLocaleLowerCase()
-  const categories: Exclude<SkillCategory, "all">[] = []
-  if (/website|traffic|similarweb|excel|stock|finance|财务|股票|数据|csv|分析/.test(text)) categories.push("data")
-  if (/business|商业|商务|营销|shopify|excel|finance|财务|股票/.test(text)) categories.push("business")
-  if (/design|palette|颜色|设计|figma|品牌/.test(text)) categories.push("design")
-  if (/video|动画|影片|媒体|image|图像/.test(text)) categories.push("media")
-  if (/automation|workflow|自动化|流程|notion/.test(text)) categories.push("automation")
-  if (/content|writing|editor|research|内容|写作|润色|研究|seo/.test(text)) categories.push("content")
-  if (categories.length === 0) categories.push("coding")
-  return categories
+function skillCategories(skill: Pick<SkillCatalogCard, "categories">): Exclude<SkillCategory, "all">[] {
+  return [...new Set(skill.categories ?? [])]
 }
 
 async function listAllCatalog(client: HubClient): Promise<SkillCatalog> {
-  const pages = await Promise.all([
-    loadCatalogScope(client, "official"),
-    loadCatalogScope(client, "third_party"),
-  ])
-  const byKey = new Map<string, SkillCatalog["skills"][number]>()
-  for (const page of pages.flat()) {
-    for (const skill of page.skills) byKey.set(`${skill.scope}/${skill.name}`, skill)
-  }
-  return { skills: [...byKey.values()], next_cursor: null }
-}
-
-async function loadCatalogScope(client: HubClient, scope: "official" | "third_party"): Promise<SkillCatalog[]> {
   const pages: SkillCatalog[] = []
   const cursors = new Set<string>()
   let cursor: string | undefined
   for (let page = 0; ; page += 1) {
-    const result = await client.listSkillCatalog(cursor === undefined ? { scope } : { scope, cursor })
+    const result = await client.listSkillCatalog(cursor === undefined ? {} : { cursor })
     pages.push(result)
     const next = result.next_cursor
-    if (!next || cursors.has(next)) return pages
+    if (!next || cursors.has(next)) break
     if (page >= 99) throw new Error("skill catalog pagination exceeded the supported page limit")
     cursors.add(next)
     cursor = next
   }
+  const byKey = new Map<string, SkillCatalog["skills"][number]>()
+  for (const page of pages) for (const skill of page.skills) byKey.set(skill.skill_id ?? `${skill.scope}/${skill.name}`, skill)
+  return { skills: [...byKey.values()], next_cursor: null }
 }
 
-function artIcon(category: SkillCategory) {
-  switch (category) {
-    case "coding": return Code2
-    case "data": return Database
-    case "automation": return Workflow
-    case "business": return Sparkles
-    case "design": return Palette
-    case "media": return ImageIcon
-    case "content": return FileCode2
-    default: return Sparkles
-  }
-}
-
-function asSkillCard(skill: SkillCatalogCard): SkillCard {
-  return {
-    name: skill.name,
-    description: skill.description,
-    content_hash: skill.content_hash,
-    scope: skill.scope,
-    enabled: skill.enabled,
-    updated_at: skill.updated_at,
-  }
-}
-
-function formatUsage(index: number, t: (key: MessageKey, values?: Record<string, string | number>) => string): string {
-  const count = [96, 30.3, 221.2, 29.1, 107.2, 9.8, 76.7, 46.1][index % 8] ?? 0
-  return t("skills.usedCount", { count: count >= 100 ? `${count.toFixed(1)}k` : `${count}k` })
+function formatUsage(value: string): string {
+  const count = BigInt(value)
+  if (count < BigInt(1000)) return value
+  const compact = Number(count) / 1000
+  return `${compact >= 100 ? Math.round(compact) : compact.toFixed(1).replace(/\.0$/u, "")}k`
 }
 
 type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
-  if (props.preview !== true) return (
-    <div className={styles.personalPage} data-testid="personal-skills-page">
-      <PersonalSkillsRead client={browserHubClient()} {...(props.onOpenSettings === undefined ? {} : { onOpenSettings: props.onOpenSettings })} />
-    </div>
-  )
   return <PreviewKokoroSkillsSurface {...props} />
 }
 
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
   const t = useT()
-  const client = useMemo(() => browserHubClient({ preview }), [preview])
+  const client = useMemo(() => {
+    const base = browserHubClient({ preview })
+    return preview ? base : createManusSkillHubClient(base)
+  }, [preview])
   const catalog = useResource<SkillCatalog>(`${CATALOG_KEY}/${preview ? "preview" : "live"}`, useCallback(() => listAllCatalog(client), [client]))
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<SkillCategory>("all")
@@ -182,7 +139,8 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     setBusy(stateKey)
     setErrorName(null)
     try {
-      await client.setSkillEnabled(skill.name, true, skill.scope)
+      if (!skill.skill_id) throw new Error("skill identity is unavailable")
+      await createSkillInstallationClient().install(`skill:${skill.skill_id}`, crypto.randomUUID())
       setLastAddedSkill(skill.name)
       invalidate(`${CATALOG_KEY}/${preview ? "preview" : "live"}`)
     } catch {
@@ -190,7 +148,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     } finally {
       setBusy(null)
     }
-  }, [busy, client, preview])
+  }, [busy, preview])
 
   const handleImported = (result: GithubImportResult) => {
     setImportNotice(result)
@@ -208,7 +166,6 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     invalidate(`${CATALOG_KEY}/${preview ? "preview" : "live"}`)
   }
 
-  const detailCard = detailSkill ? asSkillCard(detailSkill) : null
 
   return (
     <div className={styles.surface} data-testid="skills-surface" data-web-skin="kokoro">
@@ -244,11 +201,16 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
           </label>
 
-          <nav className={styles.categories} aria-label={t("skills.categoryAria")}>
-            {CATEGORIES.map(({ value, key }) => (
-              <Button key={value} type="button" variant="ghost" className={styles.category} data-active={category === value || undefined} aria-pressed={category === value} onClick={() => setCategory(value)}>{t(key)}</Button>
-            ))}
-          </nav>
+          <div className={styles.filterRow}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" className={styles.filterButton} aria-label={t("skills.categoryAria")}><SlidersHorizontal aria-hidden="true" />{t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}<ChevronDown aria-hidden="true" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {CATEGORIES.map(({ value, key }) => <DropdownMenuItem key={value} onSelect={() => setCategory(value)}>{category === value ? <Check aria-hidden="true" /> : <span className={styles.filterPlaceholder} />}{t(key)}</DropdownMenuItem>)}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {importNotice ? (
             <Alert className={styles.importNotice} role="status" aria-live="polite">
@@ -267,21 +229,16 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             <div className={styles.emptyState} data-testid="skills-catalog-empty"><Search aria-hidden="true" /><p>{t("skills.noMatch")}</p></div>
           ) : (
             <div className={styles.grid} data-testid="skills-catalog-grid">
-              {filtered.map((skill, index) => {
+              {filtered.map((skill) => {
                 const stateKey = `${skill.scope}/${skill.name}`
                 const enabled = skill.enabled
                 const installed = skill.installed
                 const actionPending = busy === stateKey
                 const categoryValues = skillCategories(skill)
-                const categoryValue = categoryValues[0] ?? "coding"
-                const Icon = artIcon(categoryValue)
                 return (
                   <Card className={styles.card} key={stateKey}>
-                    <button type="button" className={cn(styles.cardArt, styles[`art${index % 6}` as keyof typeof styles])} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
-                      <span className={styles.cardCover} aria-hidden="true">
-                        <Icon className={styles.cardCoverIcon} />
-                        <span>{skill.name}</span>
-                      </span>
+                    <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
+                      {skill.skill_id ? <Image src={`/api/hub/self/skills/${encodeURIComponent(skill.skill_id)}/cover`} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true" />}
                     </button>
                     <CardContent className={styles.cardBody}>
                       <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
@@ -291,7 +248,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                         {categoryValues.map((value) => <span className={styles.metaPill} key={value}>{t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")}</span>)}
                       </div>
                       <div className={styles.cardFooter}>
-                        <span>{formatUsage(index, t)}</span>
+                        {skill.usage_count === undefined ? <span /> : <span>{t("skills.usedCount", { count: formatUsage(skill.usage_count) })}</span>}
                         <Button type="button" variant="outline" size="icon-sm" aria-label={`${installed && enabled ? t("skills.added") : t("skills.add")} ${skill.name}`} data-installed={installed || undefined} disabled={actionPending || (installed && enabled)} aria-busy={actionPending} onClick={() => void setEnabled(skill)}>
                           {actionPending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : installed && enabled ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
                         </Button>
@@ -308,19 +265,17 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
 
       <GithubImportDialog client={client} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
       <SkillUploadDialog client={client} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${CATALOG_KEY}/${preview ? "preview" : "live"}`)} />
-      <SkillDetailDialog
-        skill={detailCard}
-        brandName={brandName}
-        open={detailCard !== null}
+      <ManusSkillDetailDialog
+        skill={detailSkill}
+        open={detailSkill !== null}
+        busy={detailSkill !== null && busy === `${detailSkill.scope}/${detailSkill.name}`}
         onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
         returnFocusRef={detailRef}
-        onTry={(skill, prompt) => {
+        onAdd={(skill) => void setEnabled(skill)}
+        onTry={(prompt) => {
           setDetailSkill(null)
-          if (onTrySkill) {
-            onTrySkill(skill, prompt)
-          } else {
-            startChat(prompt ?? t("skills.tryPrompt", { brand: brandName, name: skill.name }))
-          }
+          if (onTrySkill) onTrySkill({ name: detailSkill?.name ?? "", description: detailSkill?.description ?? "", content_hash: detailSkill?.content_hash ?? "", scope: detailSkill?.scope ?? "official", enabled: true }, prompt)
+          else startChat(prompt)
         }}
       />
     </div>

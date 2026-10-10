@@ -47,6 +47,9 @@ export const skillPoolSchema = z.object({ skills: z.array(skillCardSchema) }).st
 // 技能，因此不能复用 SkillCard 的 enabled-only 语义。
 const skillCatalogCardSchema = z
   .object({
+    // Catalog identity is independent from a display name. The Manus-style
+    // read projection supplies this key; older local fixtures may omit it.
+    skill_id: z.string().min(1).optional(),
     name: z.string().min(1),
     description: z.string(),
     content_hash: z.string().min(1),
@@ -55,6 +58,10 @@ const skillCatalogCardSchema = z
     enabled: z.boolean(),
     categories: skillCategoriesSchema.optional(),
     updated_at: z.number().int().optional(),
+    usage_count: z.string().regex(/^(0|[1-9][0-9]*)$/u).optional(),
+    cover_image: z.string().min(1).optional(),
+    example_questions: z.array(z.string().min(1)).optional(),
+    publisher_type: z.string().min(1).optional(),
   })
   .strict()
 export type SkillCatalogCard = z.infer<typeof skillCatalogCardSchema>

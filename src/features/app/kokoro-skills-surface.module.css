@@ -71,17 +71,10 @@
 .searchField input { width: 100%; height: 2.25rem; min-height: 2.25rem; border-radius: .5rem; padding-left: 2.25rem; padding-right: 2.5rem; box-shadow: none; font-size: .875rem; }
 .searchField button { position: absolute; right: .25rem; color: var(--muted-foreground); }
 
-.categories { display: flex; min-height: 4rem; align-items: center; gap: .25rem; overflow-x: auto; scrollbar-width: none; }
-.categories::-webkit-scrollbar { display: none; }
-.category { height: 2.25rem; min-height: 2.25rem; flex: 0 0 auto; border-radius: 999px; padding-inline: .75rem; color: var(--muted-foreground); font-size: .8125rem; }
-.category[data-active="true"] { background: color-mix(in srgb, var(--foreground) 8%, transparent); color: var(--foreground); font-weight: 600; }
-
-/* The catalog's desktop filter row is a 32px control inside a 64px band.
- * Keep the mobile touch target on the existing 36px contract; the reference
- * desktop surface uses the tighter shadcn pill without changing the band. */
-@media (min-width: 48rem) {
-  .category { height: 2rem; min-height: 2rem; }
-}
+.filterRow { display:flex; min-height:5.25rem; align-items:center; }
+.filterButton { height:2.75rem; min-height:2.75rem; gap:.5rem; border-radius:.75rem; padding-inline:.875rem; font-size:1rem; }
+.filterButton svg { width:1.1rem; height:1.1rem; }.filterButton svg:last-child { width:1rem; height:1rem; }
+.filterPlaceholder { display:inline-block; width:1rem; }
 
 /* Dialog portals sit above the catalog, so the surface-specific overlay must
  * soften the page behind them without changing the shared Dialog primitive. */
@@ -95,23 +88,12 @@
 .importNotice [data-slot="alert-description"] span { display: block; overflow: hidden; color: var(--muted-foreground); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .importNotice button { flex: 0 0 2rem; }
 
-.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 .card { min-width: 0; overflow: hidden; border: .5px solid color-mix(in srgb, var(--foreground) 16%, transparent); border-radius: .75rem; background: rgb(250 250 250); box-shadow: none; gap: 0; padding-block: 0; }
-.cardArt { position: relative; display: flex; width: 100%; height: 9.625rem; min-height: 9.625rem; box-sizing: border-box; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0; overflow: hidden; border: 0; background: rgb(55 53 47 / 6%); color: rgb(32 33 36); cursor: pointer; padding-top: 1.5rem; }
-.cardArt::before, .cardArt::after { position: absolute; content: ""; border-radius: 999px; opacity: .18; }
-.cardArt::before { width: 10rem; height: 10rem; top: -4.5rem; right: -2rem; background: currentColor; }
-.cardArt::after { width: 7rem; height: 7rem; bottom: -3.5rem; left: -1.5rem; background: currentColor; }
-.cardCover { position: relative; z-index: 1; display: flex; width: 7.5rem; height: 10rem; flex: 0 0 10rem; flex-direction: column; align-items: center; justify-content: flex-end; overflow: hidden; box-sizing: border-box; padding: 1rem .5rem .75rem; border: 1px solid rgb(32 33 36 / 12%); background: rgb(255 255 255 / 88%); box-shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 8px 16px rgb(0 0 0 / 7%); color: currentColor; transform: rotate(-1deg); }
-.cardCover::before { position: absolute; inset: 0; content: ""; background: linear-gradient(145deg, rgb(255 255 255 / 62%), transparent 44%, rgb(0 0 0 / 6%)); pointer-events: none; }
-.cardCoverIcon { position: relative; z-index: 1; width: 2.75rem; height: 2.75rem; margin: auto; stroke-width: 1.25; }
-.cardCover > span { position: relative; z-index: 1; max-width: 100%; overflow: hidden; font-family: var(--font-serif); font-size: .875rem; font-weight: 700; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-.art0 { background: #ededeb; color: #58725d; }
-.art1 { background: #eeeae5; color: #735a4e; }
-.art2 { background: #e9eeee; color: #4c6a75; }
-.art3 { background: #eeebf0; color: #725a7b; }
-.art4 { background: #eceee7; color: #697343; }
-.art5 { background: #f1ebe7; color: #916349; }
-.artSkeleton { width: 100%; height: 9.625rem; min-height: 9.625rem; border-radius: 0; }
+.cardArt { position:relative; display:block; width:100%; height:12.25rem; min-height:12.25rem; overflow:hidden; border:0; background:rgb(55 53 47 / 6%); cursor:pointer; }
+.cardArt img { object-fit:cover; transition:transform .18s ease; }.cardArt:hover img { transform:scale(1.02); }
+.coverUnavailable { display:block; width:100%; height:100%; background:linear-gradient(145deg,rgb(55 53 47 / 4%),rgb(55 53 47 / 10%)); }
+.artSkeleton { width: 100%; height: 12.25rem; min-height: 12.25rem; border-radius: 0; }
 .cardBody { display: flex; min-width: 0; height: 8.875rem; min-height: 8.875rem; box-sizing: border-box; flex-direction: column; padding: .75rem 1rem 0; }
 .cardTitle { width: fit-content; max-width: 100%; height: 1.25rem; min-height: 1.25rem; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--card-foreground); font: inherit; font-size: .875rem; font-weight: 600; line-height: 1.25rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .cardTitle:hover { text-decoration: underline; text-underline-offset: .15rem; }
@@ -133,10 +115,10 @@
 
 @media (max-width: 58rem) {
   .content { width: min(100% - 2rem, 42rem); }
-  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 42rem) {
+  .grid { grid-template-columns: 1fr; }
   .personalPage { padding-inline: 1rem; }
   .header { padding-inline: 1rem; }
   .header h1 { font-size: 1rem; }
