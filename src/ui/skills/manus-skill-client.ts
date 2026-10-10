@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import type { HubClient } from "@/hub/client"
-import { manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
+import { hasHubNoStoreDirective, type HubClient } from "@/hub/client"
+import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 const categories = {
   SKILL_HUB_TAG_CODING: "coding",
@@ -17,20 +17,23 @@ const categories = {
 type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
 
 async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", body: unknown, schema: T, signal?: AbortSignal): Promise<z.infer<T>> {
+  const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
+  const { response, raw } = await readJson(`/api/skill.v1.${service}/${operation}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, signal)
+  if (response.status !== 200) throwReadError(operation, response.status, raw)
+  return schema.parse(raw)
+}
+
+async function readJson(url: string, init: RequestInit, signal?: AbortSignal): Promise<{ response: Response; raw: unknown }> {
   const deadline = new AbortController()
   const timer = setTimeout(() => deadline.abort(), 10_000)
   const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
   let response: Response | undefined
   try {
     joined.throwIfAborted()
-    const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
     response = await new Promise<Response>((resolve, reject) => {
       const abort = () => reject(joined.reason)
       joined.addEventListener("abort", abort, { once: true })
-      void fetch(`/api/skill.v1.${service}/${operation}`, {
-        method: "POST", cache: "no-store", redirect: "error", signal: joined,
-        headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-      }).then((value) => {
+      void fetch(url, { ...init, cache: "no-store", redirect: "error", signal: joined }).then((value) => {
         if (joined.aborted) void value.body?.cancel().catch(() => undefined)
         resolve(value)
       }, reject).finally(() => joined.removeEventListener("abort", abort))
@@ -67,8 +70,7 @@ async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSk
     try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) }
     catch { throw new Error("skill_response_invalid") }
     joined.throwIfAborted()
-    if (response.status !== 200) throwReadError(operation, response.status, raw)
-    return schema.parse(raw)
+    return { response, raw }
   } catch (error) {
     if (signal?.aborted) throw new Error("skill_read_aborted")
     if (joined.aborted) throw new Error("skill_read_timeout")
@@ -90,6 +92,7 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
     // from a title.
     content_hash: skill.currentVersion?.checksum ?? skill.skillId,
     skill_id: skill.skillId,
+    ...(skill.currentVersion?.versionUid === undefined ? {} : { revision_skill_id: skill.currentVersion.versionUid }),
     scope: sourceKind(skill),
     installed: added.get(skill.skillId)?.installed === true,
     enabled: added.get(skill.skillId)?.enabled === true,
@@ -169,4 +172,18 @@ function throwReadError(operation: "ListSkills" | "ListHubSkills" | "GetSkill" |
   if (!parsed.success || !(MANUSCRIPT_READ_ERRORS[status]?.includes(parsed.data.error.code)
     || status === 410 && (operation === "GetSkill" || operation === "DownloadSkill") && parsed.data.error.code === "Gone")) throw new Error("skill_response_invalid")
   throw new Error(parsed.data.error.code)
+}
+
+export async function getManusSkillPackage(revisionSkillId: string, filePath?: string, signal?: AbortSignal, expectedDirectory?: CatalogPackageData): Promise<CatalogPackageData> {
+  const { response, raw } = await readJson(catalogPackagePrivatePath(revisionSkillId, filePath), { method: "GET" }, signal)
+  if (!hasHubNoStoreDirective(response.headers) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
+    || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) throw new Error("skill_response_invalid")
+  if (response.status !== 200) {
+    const error = catalogPackageErrorSchema.safeParse(raw)
+    if (!error.success || !CATALOG_PACKAGE_ERRORS[response.status]?.includes(error.data.error.code)) throw new Error("skill_response_invalid")
+    throw new Error(error.data.error.code)
+  }
+  const parsed = catalogPackageResponseSchema.safeParse(raw)
+  if (!parsed.success || !catalogPackageMatches(parsed.data.data, revisionSkillId, filePath, expectedDirectory)) throw new Error("skill_response_invalid")
+  return parsed.data.data
 }

@@ -6,7 +6,7 @@ import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
 import { createHubClient } from "@/hub/client"
-import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill } from "@/ui/skills/manus-skill-client"
+import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage } from "@/ui/skills/manus-skill-client"
 
 const catalog = {
   skills: [{
@@ -444,4 +444,92 @@ it("catalog art stays empty without an owner cover fact instead of synthesizing 
   const title = await screen.findByRole("button", { name: "Current" })
   const card = title.closest('[data-slot="card"]') as HTMLElement
   expect(card.querySelector("img")).toBeNull()
+})
+
+const packageFiles = [{ path: "SKILL.md", size_bytes: "12" }, { path: "notes.txt", size_bytes: "6" }]
+const packageDirectory = { data: { source_ref: `skill:${ownerRevision}`, revision: "4", files: packageFiles, selected_file: null } }
+function packageJson(body: unknown) { return new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "private, no-store", "x-request-id": "package-ui" } }) }
+it("opens visible ViewDetails and reads real SKILL.md then the selected UTF8 text without navigating", async () => {
+  const requests: string[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input); requests.push(url)
+    if (url.includes("/package")) {
+      const path = new URL(url, "http://localhost").searchParams.get("file_path")
+      return packageJson(path === null ? packageDirectory : { data: { ...packageDirectory.data, selected_file: { path, text: path === "SKILL.md" ? "# Owner text" : "实际" } } })
+    }
+    return response(ownerDetail)
+  }))
+  const skill = { ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }
+  render(<LocaleProvider><ManusSkillDetailDialog skill={skill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "下载技能" })
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  expect(await screen.findByRole("heading", { name: "Owner text" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "notes.txt" }))
+  expect(await screen.findByText("实际")).toBeInTheDocument()
+  expect(requests).toContain(`/api/hub/skills/${ownerRevision}/package`)
+  expect(requests).toContain(`/api/hub/skills/${ownerRevision}/package?file_path=SKILL.md`)
+  expect(requests).toContain(`/api/hub/skills/${ownerRevision}/package?file_path=notes.txt`)
+  expect(screen.getByTestId("manus-skill-detail-dialog")).toBeInTheDocument()
+})
+
+it("does not execute HTML or request Markdown images and external links in real package text", async () => {
+  const text = '# Readable\n<script>alert("bad")</script>\n![external](https://outside.test/image.png)\n[link](https://outside.test/resource)'
+  const data = { ...packageDirectory.data, files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).byteLength) }] }
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("/package") ? packageJson({ data: { ...data, selected_file: String(input).includes("file_path") ? { path: "SKILL.md", text } : null } }) : response(ownerDetail))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "下载技能" })
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await screen.findByRole("heading", { name: "Readable" })
+  const reader = screen.getByRole("region", { name: "技能内容" })
+  expect(reader.querySelector("script,img,a")).toBeNull()
+  expect(fetchMock.mock.calls.every(([input]) => !String(input).startsWith("https://outside.test"))).toBe(true)
+})
+it("blocks package inspection when current GetSkill revision differs from the catalog", async () => {
+  const fetchMock = vi.fn(async () => response({ ...ownerDetail, skill: { ...ownerDetailFields, version: "new-revision", coverImage: "/api/v1/skills/new-revision/cover" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  await screen.findByText("技能版本已更新，请刷新目录后重试")
+  expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+it.each(["close", "replace", "file"])("cancels package body on %s and never renders the prior file", async action => {
+  const cancel = vi.fn()
+  let signal: AbortSignal | undefined
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (!url.includes("/package")) return response(ownerDetail)
+    if (!url.includes("file_path")) return packageJson(packageDirectory)
+    if (url.includes("notes.txt")) return packageJson({ data: { ...packageDirectory.data, selected_file: { path: "notes.txt", text: "实际" } } })
+    signal = init?.signal ?? undefined
+    return new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "package-ui" } })
+  }))
+  const view = (open: boolean, revision = ownerRevision) => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: revision }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const rendered = render(view(true))
+  await screen.findByRole("button", { name: "下载技能" })
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  await waitFor(() => expect(signal).toBeDefined())
+  if (action === "file") fireEvent.click(screen.getByRole("button", { name: "notes.txt" }))
+  else rendered.rerender(action === "close" ? view(false) : view(true, "other-revision"))
+  await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1))
+  expect(signal?.aborted).toBe(true)
+  if (action === "file") expect(await screen.findByText("实际")).toBeInTheDocument()
+  expect(screen.queryByRole("heading", { name: "Owner text" })).toBeNull()
+})
+it("bounds package client slow and excessive streams and rejects caller cancellation", async () => {
+  vi.useFakeTimers()
+  try {
+    const cancel = vi.fn()
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: { "content-type": "application/json" } })))
+    const slow = getManusSkillPackage(ownerRevision).catch((error: Error) => error.message)
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(await slow).toBe("skill_read_timeout")
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array(1048577)) } }), { headers: { "content-type": "application/json" } })))
+    await expect(getManusSkillPackage(ownerRevision)).rejects.toThrow("skill_response_invalid")
+    const caller = new AbortController(); caller.abort()
+    await expect(getManusSkillPackage(ownerRevision, undefined, caller.signal)).rejects.toThrow("skill_read_aborted")
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
 })

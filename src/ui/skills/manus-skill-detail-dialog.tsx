@@ -1,6 +1,8 @@
 "use client"
 
 import Image from "next/image"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Download, MessageCircle, Plus, Share2 } from "lucide-react"
 import { useEffect, useRef, useState, type RefObject } from "react"
 
@@ -8,8 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useLocale } from "@/i18n/context"
-import type { SkillCatalogCard } from "@/hub/schemas"
-import { downloadManusSkill, getManusSkillDetail, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
+import type { SkillCatalogCard, CatalogPackageData } from "@/hub/schemas"
+import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 
@@ -33,14 +35,22 @@ function displayDate(value: string | undefined, locale: string): string | null {
 }
 
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
- * source state, SKILL.md readers, or package identifiers in the browser. */
+ * source state or package identifiers in the browser. Package text comes only
+ * from the admitted published-revision inspection boundary. */
 export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
   const { locale, t } = useLocale()
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const activeRequest = useRef<AbortController | null>(null)
-  const identity = open ? skill?.skill_id ?? null : null
+  const [readerOpen, setReaderOpen] = useState(false)
+  const [directory, setDirectory] = useState<CatalogPackageData | null>(null)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [readerFile, setReaderFile] = useState<CatalogPackageData["selected_file"]>(null)
+  const [readerLoading, setReaderLoading] = useState(false)
+  const [readerFailed, setReaderFailed] = useState(false)
+  const [readerAttempt, setReaderAttempt] = useState(0)
+  const identity = open && skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
   const [currentIdentity, setCurrentIdentity] = useState(identity)
 
   // Reset browser presentation state by the selected resource identity, not
@@ -50,6 +60,12 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
     setDetail(null)
     setFailed(false)
     setDownloading(false)
+    setReaderOpen(false)
+    setDirectory(null)
+    setSelectedPath(null)
+    setReaderFile(null)
+    setReaderLoading(false)
+    setReaderFailed(false)
   }
 
   useEffect(() => {
@@ -62,7 +78,56 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
       if (!controller.signal.aborted) setFailed(true)
     })
     return () => { controller.abort(); if (activeRequest.current === controller) activeRequest.current = null }
-  }, [open, skill?.skill_id])
+  }, [open, skill?.skill_id, skill?.revision_skill_id])
+
+  const boundRevision = open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
+    && detail.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
+
+  useEffect(() => {
+    if (!readerOpen || boundRevision === null) return
+    const controller = new AbortController()
+    void getManusSkillPackage(boundRevision, undefined, controller.signal).then((value) => {
+      if (controller.signal.aborted) return
+      setDirectory(value)
+      const path = value.files.some((file) => file.path === "SKILL.md") ? "SKILL.md" : null
+      setSelectedPath(path)
+      setReaderLoading(path !== null)
+    }).catch(() => {
+      if (!controller.signal.aborted) { setReaderFailed(true); setReaderLoading(false) }
+    })
+    return () => controller.abort()
+  }, [readerOpen, boundRevision, readerAttempt])
+
+  useEffect(() => {
+    if (!readerOpen || boundRevision === null || directory === null || selectedPath === null) return
+    const controller = new AbortController()
+    void getManusSkillPackage(boundRevision, selectedPath, controller.signal, directory).then((value) => {
+      if (controller.signal.aborted) return
+      setReaderFile(value.selected_file)
+      setReaderLoading(false)
+    }).catch(() => {
+      if (!controller.signal.aborted) { setReaderFailed(true); setReaderLoading(false) }
+    })
+    return () => controller.abort()
+  }, [readerOpen, boundRevision, directory, selectedPath])
+
+  const restartReader = () => {
+    if (boundRevision === null) return
+    setReaderOpen(true)
+    setDirectory(null)
+    setSelectedPath(null)
+    setReaderFile(null)
+    setReaderLoading(true)
+    setReaderFailed(false)
+    setReaderAttempt((attempt) => attempt + 1)
+  }
+  const selectFile = (path: string) => {
+    if (path === selectedPath) return
+    setSelectedPath(path)
+    setReaderFile(null)
+    setReaderFailed(false)
+    setReaderLoading(true)
+  }
 
   const download = async () => {
     const controller = activeRequest.current
@@ -76,7 +141,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
   }
 
   if (!skill) return null
-  const record = detail?.skill.id === skill.skill_id ? detail?.skill : null
+  const record = detail !== null && detail.skill.id === skill.skill_id ? detail.skill : null
   const downloadInfo = detail !== null && detail.skill.id === skill.skill_id ? detail.downloadInfo : null
   const loading = open && skill.skill_id !== undefined && record === null && !failed
   const title = record?.displayName ?? record?.name ?? skill.name
@@ -109,6 +174,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription className={styles.meta}>{publisherLabel ? <>{publisherLabel}<span aria-hidden="true">|</span></> : null}{updated ? <>{t("skills.updatedAt", { date: updated })}<span aria-hidden="true">|</span></> : null}{skill.usage_count ? <>{t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) })}</> : null}</DialogDescription>
             <div className={styles.actions}>
+              <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => readerOpen ? setReaderOpen(false) : restartReader()}>{readerOpen ? t("skills.packageBack") : t("skills.packageViewDetails")}</Button>
               <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
             </div>
           </div>
@@ -118,6 +184,22 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
           <p className={styles.description}>{description}</p>
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
           {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
+          {record !== null && skill.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
+          {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
+            <nav className={styles.fileList} aria-label={t("skills.detailFiles")}>
+              {directory?.files.map((file) => <button key={file.path} type="button" aria-pressed={file.path === selectedPath} onClick={() => selectFile(file.path)}>{file.path}</button>)}
+            </nav>
+            <div className={styles.fileContent} aria-busy={readerLoading}>
+              {readerLoading ? <p role="status">{t("skills.packageLoading")}</p> : null}
+              {readerFailed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={restartReader}>{t("skills.packageRetry")}</Button></div> : null}
+              {!readerLoading && !readerFailed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
+              {!readerLoading && !readerFailed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}
+              {!readerLoading && !readerFailed && readerFile !== null ? <>
+                {readerFile.text === "" ? <p>{t("skills.packageEmptyFile")}</p> : null}
+                {readerFile.path.toLowerCase().endsWith(".md") ? <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{ img: ({ alt }) => <span>{alt}</span>, a: ({ children }) => <span>{children}</span> }}>{readerFile.text}</ReactMarkdown> : <pre>{readerFile.text}</pre>}
+              </> : null}
+            </div>
+          </section> : null}
           {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
         </section>
       </DialogContent>

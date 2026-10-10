@@ -17,7 +17,7 @@ import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationEnabledRequestSchema,
   installationListQuerySchema, installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
   mcpConnectionPageSchema, mcpConnectionReadErrorSchema, mcpConnectionErrorAllowed,
-  manuscriptCoverErrorSchema, MANUSCRIPT_COVER_ERRORS, skillPublishRequestSchema, type InstallationOperation } from "@/hub/schemas"
+  catalogPackageResponseSchema, catalogPackageErrorSchema, catalogPackagePathSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, manuscriptCoverErrorSchema, MANUSCRIPT_COVER_ERRORS, skillPublishRequestSchema, type InstallationOperation } from "@/hub/schemas"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -326,11 +326,96 @@ async function proxySkillCover(request: Request, path: string[]): Promise<Respon
   } })
 }
 
+// Published inspection is neither a series alias nor a personal/installation read.
+async function proxyCatalogPackage(request: Request, path: string[]): Promise<Response> {
+  const requestId = crypto.randomUUID()
+  const fail = (fault: ProjectionFault) => projectionError(fault, requestId)
+  const revisionSkillId = path[1] ?? ""
+  const url = new URL(request.url)
+  if (request.method !== "GET" || path.length !== 3 || path[0] !== "skills" || path[2] !== "package"
+    || !MCP_CONNECTION_ID.test(revisionSkillId) || url.pathname !== `/api/hub/skills/${encodeURIComponent(revisionSkillId)}/package`
+    || request.body !== null || url.hash || [...url.searchParams.keys()].some((key) => key !== "file_path")
+    || url.searchParams.getAll("file_path").length > 1
+    || ["content-length", "transfer-encoding", "idempotency-key"].some((header) => request.headers.has(header))) return fail("invalidSkillRequest")
+  const filePath = url.searchParams.get("file_path") ?? undefined
+  if (filePath !== undefined && !catalogPackagePathSchema.safeParse(filePath).success) return fail("invalidSkillRequest")
+  const config = productBffConfig()
+  if (config === null) return fail("configuration")
+  if (request.headers.has("origin") && request.headers.get("origin") !== config.session.webOrigin) return fail("forbidden")
+  const deadline = new AbortController()
+  const joined = AbortSignal.any([request.signal, deadline.signal])
+  const expires = Date.now() + 10_000
+  const timer = setTimeout(() => deadline.abort(), 10_000)
+  let upstream: Response | undefined
+  const within = <T,>(work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+    const abort = () => reject(joined.reason)
+    joined.addEventListener("abort", abort, { once: true })
+    void work.then(resolve, reject).finally(() => joined.removeEventListener("abort", abort))
+    if (joined.aborted) abort()
+  })
+  try {
+    joined.throwIfAborted()
+    const claims = await within(admittedProductSession(request, config)).catch(() => undefined)
+    if (claims === undefined) return fail("iamUnavailable")
+    if (claims === null) return fail("unauthenticated")
+    joined.throwIfAborted()
+    const headers = productBffHeaders(config, claims, requestId)
+    headers.set("accept", "application/json")
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/skills/${encodeURIComponent(revisionSkillId)}/package${filePath === undefined ? "" : `?file_path=${encodeURIComponent(filePath)}`}`
+    upstream = await within(requestWithDomain(target, config.domain, {
+      method: "GET", headers: Object.fromEntries(headers), signal: joined,
+      timeoutMs: Math.max(1, expires - Date.now()), maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576,
+      strictResponseLength: true,
+    }).then((value) => { if (joined.aborted) void value.body?.cancel().catch(() => undefined); return value }))
+    if (upstream === undefined) return fail("bffUnavailable")
+    const ownerId = upstream.headers.get("x-request-id")
+    if (upstream.body === null || !JSON_MEDIA_TYPE.test(upstream.headers.get("content-type") ?? "")
+      || upstream.headers.get("cache-control") !== "no-store" || !PROJECTION_REQUEST_ID.test(ownerId ?? "")) return fail("invalidOwnerResponse")
+    const declared = upstream.headers.get("content-length")
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576)) return fail("invalidOwnerResponse")
+    const reader = upstream.body.getReader()
+    let size = 0
+    const chunks: Uint8Array[] = []
+    const cancel = () => { void reader.cancel().catch(() => undefined) }
+    joined.addEventListener("abort", cancel, { once: true })
+    try {
+      for (;;) {
+        joined.throwIfAborted()
+        const part = await within(reader.read())
+        joined.throwIfAborted()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > 1_048_576) return fail("invalidOwnerResponse")
+        chunks.push(part.value)
+      }
+    } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock() }
+    if (declared !== null && Number(declared) !== size) return fail("invalidOwnerResponse")
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    let raw: unknown
+    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { return fail("invalidOwnerResponse") }
+    joined.throwIfAborted()
+    if (upstream.status === 200) {
+      const parsed = catalogPackageResponseSchema.safeParse(raw)
+      if (!parsed.success || !catalogPackageMatches(parsed.data.data, revisionSkillId, filePath)) return fail("invalidOwnerResponse")
+    } else {
+      const parsed = catalogPackageErrorSchema.safeParse(raw)
+      if (!parsed.success || !CATALOG_PACKAGE_ERRORS[upstream.status]?.includes(parsed.data.error.code)) return fail("invalidOwnerResponse")
+    }
+    const retryAfter = upstream.headers.get("retry-after")
+    if (retryAfter !== null && (upstream.status !== 429 || !/^[1-9][0-9]{0,4}$/u.test(retryAfter))) return fail("invalidOwnerResponse")
+    return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "private, no-store", "x-request-id": ownerId!, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
+  } catch { return fail("bffUnavailable") }
+  finally { clearTimeout(timer); void upstream?.body?.cancel().catch(() => undefined) }
+}
+
 export async function proxyHubRequest(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params
+  if (path.at(-1) === "package" && path[0] !== "skill-installations") return proxyCatalogPackage(request, path)
   if (path.at(-1) === "cover") return proxySkillCover(request, path)
   if (path[0] === "projects" && path[2] === "name" || path[0] === "self" && path[1] === "projects" && path[3] === "name") return proxyProjectRename(request, path)
   if (path[0] === "skill-installations" || path[0] === "self" && path[1] === "skill-installations") return proxyInstallation(request, path)

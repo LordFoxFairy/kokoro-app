@@ -941,3 +941,82 @@ it("rejects cover body declarations, command identity and scheme-changing Origin
     expect(requestWithDomain).not.toHaveBeenCalled()
   }
 })
+
+const catalogPackage = { data: { source_ref: "skill:revision-exact", revision: "4", files: [{ path: "SKILL.md", size_bytes: "12" }], selected_file: null } }
+const catalogPackageHeaders = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "package-owner" }
+it("projects the exact published revision package directory through current same-origin admission", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(catalogPackage, { headers: catalogPackageHeaders }))
+  const result = await GET(new Request("http://localhost/api/hub/skills/revision-exact/package"), params(["skills", "revision-exact", "package"]))
+  expect(result.status).toBe(200)
+  expect(await result.json()).toEqual(catalogPackage)
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/skills/revision-exact/package", "dev.kokoro.localhost", expect.objectContaining({ method: "GET", maxResponseBytes: 1048576 }))
+})
+it("rejects published inspection resource mismatch instead of forwarding a different package", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: { ...catalogPackage.data, source_ref: "skill:other-revision" } }, { headers: catalogPackageHeaders }))
+  const result = await GET(new Request("http://localhost/api/hub/skills/revision-exact/package"), params(["skills", "revision-exact", "package"]))
+  expect(result.status).toBe(502)
+})
+it("bounds published package slow body and cancels the stream at the whole request deadline", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.useFakeTimers()
+  const cancel = vi.fn()
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: catalogPackageHeaders }))
+  try {
+    const pending = GET(new Request("http://localhost/api/hub/skills/revision-exact/package"), params(["skills", "revision-exact", "package"]))
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect((await pending).status).toBe(503)
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+
+it("keeps published package GET closed to exact paths, one file query, no body and same origin", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const [parts, suffix, headers] of [
+    [["self", "skills", "revision-exact", "package"], "", {}],
+    [["skills", "revision-exact", "package"], "?file_path=SKILL.md&file_path=notes.txt", {}],
+    [["skills", "revision-exact", "package"], "?file_path=..%2FSKILL.md", {}],
+    [["skills", "revision-exact", "package"], "?other=1", {}],
+    [["skills", "revision-exact", "package"], "", { "content-length": "0" }],
+    [["skills", "revision-exact", "package"], "", { origin: "https://foreign.test" }],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockClear()
+    const result = await GET(new Request(`http://localhost/api/hub/${parts.join("/")}${suffix}`, { headers }), params([...parts]))
+    expect(result.status).toBeGreaterThanOrEqual(400)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  }
+})
+it("checks published file bytes and rejects personal error families and mismatched public status", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const request = () => new Request("http://localhost/api/hub/skills/revision-exact/package?file_path=SKILL.md")
+  const context = () => params(["skills", "revision-exact", "package"])
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ data: { ...catalogPackage.data, selected_file: { path: "SKILL.md", text: "# Owner text" } } }, { headers: catalogPackageHeaders }))
+  expect((await GET(request(), context())).status).toBe(200)
+  expect(vi.mocked(requestWithDomain).mock.calls.at(-1)?.[0]).toBe("http://bff.test/v1/skills/revision-exact/package?file_path=SKILL.md")
+  for (const [status, body] of [
+    [200, { data: { ...catalogPackage.data, selected_file: { path: "SKILL.md", text: "wrong bytes" } } }],
+    [404, { error: { code: "skill_package_not_found", message: "Missing", retryable: false } }],
+    [502, { error: { code: "skill_not_found", message: "Missing", retryable: false } }],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json(body, { status, headers: catalogPackageHeaders }))
+    expect((await GET(request(), context())).status).toBe(502)
+  }
+})
+it("bounds actual package stream bytes and caller cancellation, not just declared size", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const context = () => params(["skills", "revision-exact", "package"])
+  const cancelLarge = vi.fn()
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array(1048577)) }, cancel: cancelLarge }), { headers: catalogPackageHeaders }))
+  expect((await GET(new Request("http://localhost/api/hub/skills/revision-exact/package"), context())).status).toBe(502)
+  expect(cancelLarge).toHaveBeenCalledTimes(1)
+  const cancel = vi.fn()
+  const caller = new AbortController()
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: catalogPackageHeaders }))
+  const pending = GET(new Request("http://localhost/api/hub/skills/revision-exact/package", { signal: caller.signal }), context())
+  await new Promise(resolve => setTimeout(resolve, 0))
+  caller.abort()
+  expect((await pending).status).toBe(503)
+  expect(cancel).toHaveBeenCalledTimes(1)
+})

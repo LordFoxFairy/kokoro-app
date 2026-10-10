@@ -53,6 +53,7 @@ const skillCatalogCardSchema = z
     // Catalog identity is independent from a display name. The Manus-style
     // read projection supplies this key; older local fixtures may omit it.
     skill_id: z.string().min(1).optional(),
+    revision_skill_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     name: z.string().min(1),
     description: z.string(),
     content_hash: z.string().min(1),
@@ -567,4 +568,44 @@ export const MANUSCRIPT_COVER_ERRORS: Readonly<Record<number, readonly string[]>
   400: ["invalid_skill_request"], 404: ["skill_not_found"],
   409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"],
   413: ["request_body_too_large"], 429: ["skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["skill_dependency_unavailable"],
+}
+
+// Published package inspection: BFF getSkillPackageDirectory (not personal inspection).
+const packageUInt64 = z.string().regex(/^(0|[1-9][0-9]{0,19})$/u).refine((value) => /^(0|[1-9][0-9]{0,19})$/u.test(value) && BigInt(value) <= BigInt("18446744073709551615"))
+const packagePositiveUInt64 = packageUInt64.refine((value) => value !== "0")
+const packageUnicode = (value: string) => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value)
+export const catalogPackagePathSchema = z.string().min(1).refine((value) => packageUnicode(value)
+  && value === value.normalize("NFC") && new TextEncoder().encode(value).byteLength <= 256
+  && !value.startsWith("\uFEFF") && !value.includes("\0") && !value.includes("\\") && !value.startsWith("/") && !/^[A-Za-z]:/u.test(value)
+  && value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".."))
+export const catalogPackageDataSchema = z.object({
+  source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), revision: packagePositiveUInt64,
+  files: z.array(z.object({ path: catalogPackagePathSchema, size_bytes: packageUInt64 }).strict()).max(128),
+  selected_file: z.object({ path: catalogPackagePathSchema, text: z.string().refine(packageUnicode) }).strict().nullable(),
+}).strict().superRefine((value, context) => {
+  if (value.files.some((file, index) => index > 0 && (value.files[index - 1]?.path ?? "") >= file.path)) context.addIssue({ code: z.ZodIssueCode.custom, message: "package files must be sorted and unique" })
+  if (value.selected_file !== null) {
+    const file = value.files.find((item) => item.path === value.selected_file?.path)
+    if (file === undefined || !packageUInt64.safeParse(file.size_bytes).success || BigInt(new TextEncoder().encode(value.selected_file.text).byteLength) !== BigInt(file.size_bytes)) context.addIssue({ code: z.ZodIssueCode.custom, message: "selected package bytes do not match directory" })
+  }
+})
+export const catalogPackageResponseSchema = z.object({ data: catalogPackageDataSchema }).strict()
+export type CatalogPackageData = z.infer<typeof catalogPackageDataSchema>
+export const catalogPackageErrorSchema = z.object({ error: z.object({ code: z.string().min(1), message: z.string().min(1), retryable: z.boolean() }).strict() }).strict()
+export const CATALOG_PACKAGE_ERRORS: Readonly<Record<number, readonly string[]>> = {
+  400: ["invalid_skill_request"], 401: ["session_authentication_required", "session_invalid"],
+  403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_forbidden"],
+  404: ["skill_not_found"], 409: ["skill_idempotency_conflict", "skill_command_in_progress"],
+  412: ["skill_precondition_failed"], 413: ["request_body_too_large"], 429: ["session_rate_limited", "skill_rate_limited"],
+  502: ["skill_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"],
+}
+export function catalogPackageMatches(value: CatalogPackageData, revisionSkillId: string, filePath?: string, expectedDirectory?: CatalogPackageData): boolean {
+  return value.source_ref === `skill:${revisionSkillId}`
+    && (filePath === undefined ? value.selected_file === null : value.selected_file?.path === filePath)
+    && (expectedDirectory === undefined || value.source_ref === expectedDirectory.source_ref
+      && value.revision === expectedDirectory.revision && JSON.stringify(value.files) === JSON.stringify(expectedDirectory.files))
+}
+export function catalogPackagePrivatePath(revisionSkillId: string, filePath?: string): string {
+  const id = publishedSkillId.parse(revisionSkillId)
+  return `/api/hub/skills/${encodeURIComponent(id)}/package${filePath === undefined ? "" : `?file_path=${encodeURIComponent(catalogPackagePathSchema.parse(filePath))}`}`
 }

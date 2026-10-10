@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { skillCatalogSchema } from "@/hub/schemas"
+import { catalogPackageResponseSchema, catalogPackageMatches, catalogPackagePrivatePath, skillCatalogSchema } from "@/hub/schemas"
 
 import { createHubClient, createSkillInstallationClient, HubClientError } from "@/hub/client"
 
@@ -731,4 +731,34 @@ it("accepts APPS only on current catalog cards and keeps unknown catalog categor
   expect(skillCatalogSchema.shape.skills.element.parse(card)).toMatchObject({ categories: ["apps"], installed: true, enabled: false })
   expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, categories: ["invented"] }).success).toBe(false)
   expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, extra: true }).success).toBe(false)
+})
+
+it("preserves catalog revision Skill ID separately from series and checksum for package reads", async () => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client")
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => jsonResponse(String(input).endsWith("ListHubSkills")
+    ? { skills: [{ skillId: "series-id", displayName: "Live", currentVersion: { versionUid: "revision-id", checksum: "digest" } }], tagOptions: {} }
+    : { userAddedSkills: [], officialSkills: [] })))
+  const result = await createManusSkillHubClient(createHubClient()).listSkillCatalog()
+  expect(result.skills[0]).toMatchObject({ skill_id: "series-id", revision_skill_id: "revision-id", content_hash: "digest" })
+})
+
+const inspected = { source_ref: "skill:revision-1", revision: "4", files: [{ path: "SKILL.md", size_bytes: "6" }], selected_file: { path: "SKILL.md", text: "实际" } }
+it("binds package text to owner revision, decimal revision, file inventory and exact UTF8 bytes", () => {
+  expect(catalogPackageResponseSchema.safeParse({ data: inspected }).success).toBe(true)
+  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, selected_file: null })).toBe(true)
+  expect(catalogPackageMatches(inspected, "series-1", "SKILL.md")).toBe(false)
+  expect(catalogPackageMatches(inspected, "revision-1", "other.txt")).toBe(false)
+  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, revision: "5" })).toBe(false)
+  expect(catalogPackageMatches(inspected, "revision-1", "SKILL.md", { ...inspected, files: [] })).toBe(false)
+  expect(catalogPackagePrivatePath("revision-1", "文档/说明.txt")).toBe("/api/hub/skills/revision-1/package?file_path=%E6%96%87%E6%A1%A3%2F%E8%AF%B4%E6%98%8E.txt")
+})
+it("rejects package unknown fields, unsafe paths, invalid decimal revision and byte mismatches", () => {
+  for (const data of [
+    { ...inspected, extra: true }, { ...inspected, revision: "0" }, { ...inspected, revision: "18446744073709551616" },
+    { ...inspected, files: [{ path: "SKILL.md", size_bytes: "06" }] },
+    { ...inspected, files: [{ path: "SKILL.md", size_bytes: "2" }] },
+    { ...inspected, files: [...inspected.files, ...inspected.files] },
+    { ...inspected, selected_file: { path: "SKILL.md", text: "实际", extra: 1 } },
+    ...["../SKILL.md", "/SKILL.md", "a\\b", "a//b", "e\u0301.md"].map(path => ({ ...inspected, files: [{ path, size_bytes: "6" }], selected_file: null })),
+  ]) expect(catalogPackageResponseSchema.safeParse({ data }).success).toBe(false)
 })
