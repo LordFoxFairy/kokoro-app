@@ -1,3 +1,39 @@
+<!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
+## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）
+当前Web main b7dbfe8：managed严格schema已有真实example_prompts/skill_updated_at，但个人列表/详情未展示；publish flow只承接新draft及draft恢复，尚未消费本人versions/withdraw。目标仅本人真实详情、更新包/例子与撤回；普通导入、目录/shared reader、Admin职责不改。
+
+| 放置项 | 决定 |
+|---|---|
+| Owner | Web持浏览器意图/显示/同源adapter；BFF准入，Platform持版本/包/撤回事实；web_identity_owner唯一writer，Root提交。 |
+| 位置/粒度 | 扩现hub schema/client、publish flow/dialog及personal read；不另建lifecycle模块或移植旧catalog协议。撤回不同于包上传，新增现skills目录普通withdraw dialog及相邻UI test，无新目录/依赖。 |
+| 依赖 | Browser→Web→正式BFF e1769b56 public13.3→Platform91bc3655（当前main1eeac36同tree）；无SQL/新owner API/snapshot升级。 |
+| 状态/恢复 | CreateVersion冻结base UID/metadata/key，201仅新draft及初始CAS；新包phase none，必须真实选择ZIP，再沿Begin/PUT真实version/Complete/Validate/Publish owner+CAS。同series新UID绑定，旧revision和安装pin不改。每阶段原body/key/CAS冻结，unknown仅显式原意图重试；刷新缺原key不冒原重放，draft权威恢复沿现流程。撤回先确认原因及真实CAS，ACK严格source_ref/withdrawn/event/CAS，重读个人/安装事实。 |
+| 权限/显示 | 显示真实例子及技能更新时间，不以安装updated_at替代；缺例子不造。同主体准入/资源身份隔离，关闭/换资源/失准入取消迟到响应；不赋普通用户catalog公开发布权，不自动升级/重装。 |
+| 验证 | 现字段缺展示/两路径未接线为RED；strict身份/状态/错误、例子保留/清空、完整真实包链、withdraw unknown原意图、取消及旧pin保护→具名测试/type/lint；Root完整门/build/浏览器验收。 |
+
+后继源码/test闭集（本D0不实施）：
+- `src/hub/schemas.ts`
+- `src/hub/skill-publish-client.ts`
+- `src/app/api/hub/[...path]/route.ts`
+- `src/ui/skills/personal-skill-publish-flow.ts`
+- `src/ui/skills/personal-skill-publish-dialog.tsx`
+- `src/ui/skills/personal-skills-read.tsx`
+- `src/ui/skills/personal-skills-read.module.css`
+- `src/ui/skills/skills-panel.tsx`
+- `src/i18n/messages.ts`
+- `src/i18n/overlays.ts`
+- `src/ui/skills/personal-skill-withdraw-dialog.tsx`
+- `tests/ui/personal-skill-withdraw-dialog.test.tsx`
+- `tests/hub/skill-publish-client.test.ts`
+- `tests/hub/skill-publish-flow.test.ts`
+- `tests/hub/skill-publish-resume.test.ts`
+- `tests/app/hub-proxy.test.ts`
+- `tests/ui/personal-skill-publish-dialog.test.tsx`
+- `tests/ui/skills-panel.test.tsx`
+
+<!-- END:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
 
 ## T-K03.14-WEB-SHARE D0（2026-10-10；目标，尚未实施）

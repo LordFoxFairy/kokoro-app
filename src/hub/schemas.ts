@@ -166,6 +166,10 @@ export const managedPersonalSkillSchema = z.object({
   category_keys: skillCategoryKeysSchema,
   product: skillProductFactsSchema, publisher_profile: skillPublisherProfileSchema.optional(),
 }).strict()
+export const createPersonalSkillVersionRequestSchema = createSkillDraftRequestSchema.extend({ example_prompts: skillExamplePromptsSchema, category_keys: skillCategoryKeysSchema }).strict()
+export const createPersonalSkillVersionSchema = z.object({ skill_id: skillCommandId, series_id: skillCommandId, revision: uint64.refine((value) => BigInt(value) > BigInt("1")), status: z.literal("draft"), replayed: z.boolean(), state_version: skillStateVersionSchema }).strict()
+export const withdrawPersonalSkillRequestSchema = z.object({ reason: z.string().refine((value) => Array.from(value).length >= 1 && Array.from(value).length <= 2048 && /\S/u.test(value) && !value.includes("\0")), expected_state_version: skillStateVersionSchema }).strict()
+export const withdrawPersonalSkillSchema = z.object({ source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u), status: z.literal("withdrawn"), event_id: z.string().regex(/^evt:[a-f0-9]{64}$/u), replayed: z.boolean(), state_version: skillStateVersionSchema }).strict()
 export type ManagedPersonalSkill = z.infer<typeof managedPersonalSkillSchema>
 export const managedPersonalSkillPageSchema = z.object({ skills: z.array(managedPersonalSkillSchema), next_cursor: z.string().min(1).max(2048).nullable() }).strict()
 
@@ -535,3 +539,8 @@ export function catalogPackagePrivatePath(revisionSkillId: string, filePath?: st
   const id = publishedSkillId.parse(revisionSkillId)
   return `/api/hub/skills/${encodeURIComponent(id)}/package${filePath === undefined ? "" : `?file_path=${encodeURIComponent(catalogPackagePathSchema.parse(filePath))}`}`
 }
+
+export const personalSkillLifecycleErrors: Readonly<Record<number, readonly string[]>> = {
+  400: ["invalid_skill_request", "idempotency_key_required", "invalid_idempotency_key"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden", "skill_forbidden"], 404: ["skill_not_found"], 409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"], 413: ["request_body_too_large"], 429: ["session_rate_limited", "skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "skill_dependency_unavailable"],
+}
+export const personalSkillLifecycleErrorSchema = z.object({ error: z.object({ code: z.string().min(1), message: z.string().min(1) }).strict(), meta: z.object({ request_id: z.string().min(1).max(128) }).strict() }).strict()

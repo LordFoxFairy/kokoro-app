@@ -275,6 +275,10 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillPublishFallback: Partial<Record<MessageKey, string>> = {
+  "skills.lifecycle.update": "Update skill", "skills.lifecycle.examples": "Example questions (one per line)",
+  "skills.lifecycle.withdraw": "Withdraw skill", "skills.lifecycle.withdrawWarning": "This revision becomes unavailable. Existing installations are not upgraded automatically.",
+  "skills.lifecycle.reason": "Withdrawal reason", "skills.lifecycle.confirmWithdraw": "Confirm withdrawal", "skills.lifecycle.withdrawSuccess": "Withdrawal confirmed",
+  "skills.lifecycle.unknown": "The result is unconfirmed. Retry the original operation.", "skills.lifecycle.rejected": "The operation was rejected. Read the current state again.",
   "skills.publishDrafts": "Drafts",
   "skills.publishResumeDraft": "Continue processing",
   "skills.publishAudience": "Visibility",

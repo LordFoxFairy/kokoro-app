@@ -1,3 +1,12 @@
+<!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
+## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）
+Web无持久业务owner、无SQL/Redis新增。Platform拥有series/revision/package/state_version及withdraw事实；例子和skill_updated_at取managed真实投影，不合成用量/日期/例子、不改旧revision/安装pin。
+新版本metadata冻结真实现值及用户编辑结果；example_prompts/category_keys显式传送，省略会导致owner默认空数组，清空采用[]。例子遵现正式10项/Unicode scalar/16KiB总UTF8闭集，保原顺序和重复。CreateVersion201记录真实新UID/series/revision/初始CAS，包phase none；不推导CAS、不复用旧revision包proof。
+浏览器仅内存阶段意图（原body/key/CAS/File/真实PUT ACK）；unknown保原意图等待显式重试，刷新不声称恢复已丢key。既有draft权威GET恢复保持原限制；撤回须真实expectedCAS和原因，ACK后重读权威事实。401/403失准入关闭私有显示/动作，主体或资源改变使旧ACK失效；不新增credential或secret持久化。
+
+<!-- END:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
 
 ## T-K03.14-WEB-SHARE D0（目标，尚未实施）

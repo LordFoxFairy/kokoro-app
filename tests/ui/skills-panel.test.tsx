@@ -572,3 +572,13 @@ it("does not expose a fake Share action for a preview skill with no owner identi
   expect(screen.queryByRole("button", { name: "分享技能" })).toBeNull()
   expect(screen.getByRole("button", { name: "试试看" })).toBeInTheDocument()
 })
+
+it("personal lifecycle displays real skill update time and examples in the current detail", async () => {
+  const skill = { skill_id: "mine", source_ref: "skill:mine", series_id: "series", revision: "1", name: "真实个人技能", summary: "真实摘要", tags: [], status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: ["真实例子"], category_keys: [], product: { state_version: "4", publication_audience: "owner", source_kind: "personal" } }
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: { skills: [skill], next_cursor: null }, meta: { request_id: "owner-1" } }, { headers: { "cache-control": "no-store", "x-request-id": "owner-1" } })))
+  const client = makeClient({ listPersonalSkills: vi.fn().mockResolvedValue({ skills: [skill], next_cursor: null }), getPublishedPersonalSkill: vi.fn().mockResolvedValue(skill) })
+  render(<LocaleProvider><SkillsContent client={client} preview={false} pinned={[]} onTogglePin={() => {}} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "真实个人技能" }))
+  expect(await screen.findByText("真实例子")).toBeInTheDocument()
+  expect(document.querySelector('time[datetime="2026-10-10T00:00:00Z"]')).not.toBeNull()
+})

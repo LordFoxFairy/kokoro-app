@@ -14,6 +14,8 @@ import { createSkillPublishClient } from "@/hub/skill-publish-client"
 import type { ManagedPersonalSkill, InstallationPage, PersonalInstallation } from "@/hub/schemas"
 import { invalidate } from "@/lib/query"
 import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
+import { useSessionProbe } from "@/ui/auth/use-session-state"
+import { PersonalSkillWithdrawDialog } from "./personal-skill-withdraw-dialog"
 import { useT } from "@/i18n/context"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
@@ -29,12 +31,22 @@ type ActionState = { kind: "idle" } | { kind: "busy" | "unknown" | "rejected" | 
 type ActiveAction = { controller: AbortController; intent: InstallationIntent; id: string | null }
 
 
-export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }: {
+export function PersonalSkillsRead(props: { client: HubClient; embedded?: boolean; onOpenSettings?: (section: "skills", trigger: HTMLElement) => void }) {
+  const subject = useSessionProbe().projectReadBoundary.subject
+  return <PersonalSkillsReadScope key={subject ?? "anonymous"} {...props} />
+}
+
+function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
   client: HubClient
   embedded?: boolean
   onOpenSettings?: (section: "skills", trigger: HTMLElement) => void
 }) {
   const t = useT()
+  const boundary = useSessionProbe().projectReadBoundary
+  const admitted = boundary.admitted && boundary.subject !== null
+  const [withdrawTarget, setWithdrawTarget] = useState<ManagedPersonalSkill | null>(null)
+  const [lifecycleSubject, setLifecycleSubject] = useState<string | null>(null)
+  const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [view, setView] = useState<"published" | "installations" | "drafts">("published")
   const [installedFilter, setInstalledFilter] = useState("true")
   const [enabledFilter, setEnabledFilter] = useState("all")
@@ -217,6 +229,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           <CardContent className="space-y-2 p-4">
             <Button type="button" variant="ghost" className="h-auto px-0 text-left font-semibold" onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
             <p className="text-sm text-muted-foreground">{skill.summary}</p>
+            <time dateTime={skill.skill_updated_at}>{t("skills.updatedAt", { date: skill.skill_updated_at.slice(0, 10) })}</time>
             <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{skill.category_keys.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
 
             <Button type="button" variant="outline" disabled={actionLocked} onClick={() => startAction("install", skill.source_ref)}>{t("skills.personal.install")}</Button>
@@ -279,13 +292,20 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           <DialogTitle>{detail?.kind === "ready" ? detail.skill.name : t("skills.title")}</DialogTitle>
           <DialogDescription>{detail?.kind === "ready" ? detail.skill.summary : t("skills.loading")}</DialogDescription>
           {detail?.kind === "ready" ? <div className="space-y-2 text-sm">
+            <time dateTime={detail.skill.skill_updated_at}>{t("skills.updatedAt", { date: detail.skill.skill_updated_at.slice(0, 10) })}</time>
+            {detail.skill.example_prompts.length ? <ul>{detail.skill.example_prompts.map((prompt, index) => <li key={index}>{prompt}</li>)}</ul> : null}
+            {admitted && detail.skill.product.source_kind === "personal" && ["active", "disabled"].includes(detail.skill.status) ? <div className="flex flex-wrap gap-2">
+              <Button type="button" disabled={withdrawTarget !== null} onClick={() => { setLifecycleSubject(boundary.subject); setResumeBase(detail.skill); setDetail(null); setPublishOpen(true) }}>{t("skills.lifecycle.update")}</Button>
+              <Button type="button" disabled={withdrawTarget !== null && withdrawTarget.skill_id !== detail.skill.skill_id} onClick={() => { setLifecycleSubject(boundary.subject); setWithdrawTarget(current => lifecycleSubject === boundary.subject ? current ?? detail.skill : detail.skill); setWithdrawOpen(true) }}>{t("skills.lifecycle.withdraw")}</Button>
+            </div> : null}
             {detail.skill.tags.length > 0 ? <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
           </div> : null}
           {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
         </DialogContent>
       </Dialog>
+      {withdrawTarget ? <PersonalSkillWithdrawDialog key={`${lifecycleSubject}:${withdrawTarget.skill_id}`} skill={withdrawTarget} client={publishClient} admitted={admitted && lifecycleSubject === boundary.subject} open={withdrawOpen && lifecycleSubject === boundary.subject} onOpenChange={setWithdrawOpen} onReadCurrent={() => { setWithdrawTarget(null); setWithdrawOpen(false); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} onConfirmed={() => { setWithdrawTarget(null); setWithdrawOpen(false); invalidate(SKILL_CATALOG_RESOURCE_KEY); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} /> : null}
       <SkillUploadDialog open={importOpen} onOpenChange={setImportOpen} onPublished={() => { invalidate(SKILL_CATALOG_RESOURCE_KEY); setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1); setInstallationGeneration((value) => value + 1) }} />
-      <PersonalSkillPublishDialog key={resumeBase?.skill_id ?? "new"} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
+      <PersonalSkillPublishDialog key={`${boundary.subject}:${resumeBase?.skill_id ?? "new"}`} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} admitted={admitted && (!resumeBase || resumeBase.status === "draft" || lifecycleSubject === boundary.subject)} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )
 }

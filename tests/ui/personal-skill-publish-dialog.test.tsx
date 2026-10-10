@@ -104,3 +104,24 @@ it("does not reuse a draft-bound pagination cursor for the published managed vie
   await waitFor(() => expect(listPersonalSkills).toHaveBeenLastCalledWith(undefined, expect.any(AbortSignal)))
   vi.unstubAllGlobals()
 })
+
+it("owned active update requires a new package, permits clearing real examples, and offers owner visibility only",async()=>{
+ const base={skill_id:"old",source_ref:"skill:old",series_id:"series",revision:"1",name:"Original",summary:"Summary",tags:[],status:"active" as const,skill_updated_at:"2026-10-10T00:00:00Z",example_prompts:["真实旧例子"],category_keys:[],product:{source_kind:"personal" as const,publication_audience:"owner" as const,state_version:"99"}}
+ const createVersion=vi.fn().mockRejectedValue(new Error("unknown receipt"))
+ const client={createVersion} as unknown as SkillPublishClient
+ render(<LocaleProvider><PersonalSkillPublishDialog base={base} open admitted client={client} onOpenChange={vi.fn()} onPublished={vi.fn()} hash={async()=>"a".repeat(64)}/></LocaleProvider>)
+ const dialog=screen.getByTestId("personal-skill-publish-dialog")
+ expect(within(dialog).getByLabelText("可见范围")).toHaveValue("owner")
+ expect(within(dialog).queryByRole("option",{name:"技能目录"})).not.toBeInTheDocument()
+ expect(within(dialog).getByLabelText("示例问题（每行一项）")).toHaveValue("真实旧例子")
+ fireEvent.submit(dialog.querySelector("form")!)
+ expect(createVersion).not.toHaveBeenCalled()
+ fireEvent.change(within(dialog).getByLabelText(/重新选择并上传/),{target:{files:[new File(["new zip"],"update.zip",{type:"application/zip"})]}})
+ fireEvent.change(within(dialog).getByLabelText("示例问题（每行一项）"),{target:{value:""}})
+ fireEvent.submit(dialog.querySelector("form")!)
+ await within(dialog).findByRole("alert")
+ expect(createVersion).toHaveBeenCalledWith("old",{display_name:"Original",summary:"Summary",tags:[],example_prompts:[],category_keys:[]},expect.any(String),expect.any(AbortSignal))
+ fireEvent.submit(dialog.querySelector("form")!)
+ await waitFor(()=>expect(createVersion).toHaveBeenCalledTimes(2))
+ expect(createVersion.mock.calls[0]?.slice(0,3)).toEqual(createVersion.mock.calls[1]?.slice(0,3))
+})

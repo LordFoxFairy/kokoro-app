@@ -13,28 +13,34 @@ import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { HubClientError } from "@/hub/client"
 import { useT } from "@/i18n/context"
 
-import { createPersonalSkillPublishSession, createResumedSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
+import { createPersonalSkillVersionSession, createPersonalSkillPublishSession, createResumedSkillPublishSession, runPersonalSkillPublishSession, SkillPublishPending, SkillPublishRestartRequired, SkillPublishUncertain, type PersonalSkillPublishSession, type PublishStage } from "./personal-skill-publish-flow"
 
 type Status = { kind: "idle" } | { kind: "running"; stage: PublishStage } | { kind: "pending" } | { kind: "error" } | { kind: "invalidFile" } | { kind: "tooLarge" } | { kind: "auth" } | { kind: "restart" } | { kind: "uncertain"; skillId: string } | { kind: "success"; sourceRef: string; revision: string }
 
-export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash, base }: {
+export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPublished, hash, base, admitted = true }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   client: SkillPublishClient
   onPublished: () => void
   hash?: (file: File) => Promise<string>
+  admitted?: boolean
   base?: ManagedPersonalSkill
 }) {
   const t = useT()
+  const updating = base !== undefined && ["active", "disabled"].includes(base.status)
   const [file, setFile] = useState<File | null>(null)
   const [name, setName] = useState(base?.name ?? "")
   const [summary, setSummary] = useState(base?.summary ?? "")
   const [tags, setTags] = useState(base?.tags.join(",") ?? "")
-  const [audience, setAudience] = useState<SkillPublishRequest["audience"] | "">("")
+  const [examples, setExamples] = useState(base?.example_prompts.join("\n") ?? "")
+  const [audience, setAudience] = useState<SkillPublishRequest["audience"] | "">(updating ? "owner" : "")
   const [status, setStatus] = useState<Status>({ kind: "idle" })
   const active = useRef<AbortController | null>(null)
   const [session, setSession] = useState<PersonalSkillPublishSession | null>(null)
+  const [lastFlight, setLastFlight] = useState<AbortController | null>(null)
+  const visibleStatus: Status = status.kind === "running" && lastFlight?.signal.aborted ? { kind: "error" } : status
   useEffect(() => () => { active.current?.abort() }, [])
+  useEffect(() => { if (!admitted || !open) active.current?.abort() }, [admitted, open])
 
   const close = () => {
     active.current?.abort()
@@ -51,12 +57,12 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
   }
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (status.kind === "running" || status.kind === "restart" || status.kind === "success") return
+    if (!admitted || visibleStatus.kind === "running" || status.kind === "restart" || status.kind === "success") return
     let currentSession = session
     if (currentSession === null) {
-      if ((!file && !base) || !audience) return
+      if ((!file && (!base || updating)) || !audience) return
       try {
-        currentSession = base ? createResumedSkillPublishSession(base, audience, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
+        currentSession = updating ? createPersonalSkillVersionSession(base!, { file: file!, display_name: name, summary, tags: tags.split(",").map(item => item.trim()).filter(Boolean), example_prompts: examples === base!.example_prompts.join("\n") ? base!.example_prompts : examples === "" ? [] : examples.split("\n"), category_keys: base!.category_keys, audience: "owner" }) : base ? createResumedSkillPublishSession(base, audience, file ?? undefined) : createPersonalSkillPublishSession({ file: file!, display_name: name, summary, tags: tags.split(",").map((item) => item.trim()).filter(Boolean), audience })
         setSession(currentSession)
       } catch (error) {
         if (error instanceof HubClientError && error.code === "request_body_too_large") setStatus({ kind: "tooLarge" })
@@ -67,6 +73,7 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
     }
     const controller = new AbortController()
     active.current = controller
+    setLastFlight(controller)
     setStatus({ kind: "running", stage: "hashing" })
     void runPersonalSkillPublishSession(client, currentSession, { signal: controller.signal, ...(hash === undefined ? {} : { hash }), onStage: (stage) => { if (!controller.signal.aborted) setStatus({ kind: "running", stage }) } }).then(
       (receipt) => {
@@ -88,40 +95,41 @@ export function PersonalSkillPublishDialog({ open, onOpenChange, client, onPubli
 
   return <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
     <DialogContent data-testid="personal-skill-publish-dialog" closeLabel={t("skills.publishClose")}>
-      <DialogTitle>{t("skills.publishTitle")}</DialogTitle>
+      <DialogTitle>{t(updating ? "skills.lifecycle.update" : "skills.publishTitle")}</DialogTitle>
       <DialogDescription>{t("skills.publishDescription")}</DialogDescription>
       <form className="space-y-4" onSubmit={submit}>
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-zip">{t(base ? "skills.publishReplaceUpload" : "skills.publishFile")}</label>
-        <Input id="personal-skill-zip" type="file" accept=".zip,application/zip" required={session === null && !base} disabled={session !== null || status.kind === "running"} onChange={(event) => {
+        <Input id="personal-skill-zip" type="file" accept=".zip,application/zip" required={session === null && !base} disabled={session !== null || visibleStatus.kind === "running"} onChange={(event) => {
           setFile(event.target.files?.[0] ?? null)
         }} />
         {session ? <p className="text-xs text-muted-foreground">{session.input.file?.name ?? base?.name}</p> : null}
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-name">{t("skills.publishName")}</label>
-        <Input id="personal-skill-name" required maxLength={255} value={name} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setName(event.target.value)} />
+        <Input id="personal-skill-name" required maxLength={255} value={name} disabled={base !== undefined && !updating || session !== null || visibleStatus.kind === "running"} onChange={(event) => setName(event.target.value)} />
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-summary">{t("skills.publishSummary")}</label>
-        <Textarea id="personal-skill-summary" maxLength={65535} value={summary} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setSummary(event.target.value)} />
+        <Textarea id="personal-skill-summary" maxLength={65535} value={summary} disabled={base !== undefined && !updating || session !== null || visibleStatus.kind === "running"} onChange={(event) => setSummary(event.target.value)} />
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-tags">{t("skills.publishTags")}</label>
-        <Input id="personal-skill-tags" value={tags} disabled={base !== undefined || session !== null || status.kind === "running"} onChange={(event) => setTags(event.target.value)} />
+        <Input id="personal-skill-tags" value={tags} disabled={base !== undefined && !updating || session !== null || visibleStatus.kind === "running"} onChange={(event) => setTags(event.target.value)} />
+        {updating ? <><label htmlFor="personal-skill-examples">{t("skills.lifecycle.examples")}</label><Textarea id="personal-skill-examples" value={examples} disabled={session !== null || visibleStatus.kind === "running"} onChange={event => setExamples(event.target.value)} /></> : null}
         <label className="block space-y-1 text-sm font-medium" htmlFor="personal-skill-audience">{t("skills.publishAudience")}</label>
-        <select id="personal-skill-audience" className="w-full rounded-md border border-input bg-background p-2 text-sm" value={audience} required disabled={session !== null || status.kind === "running"} onChange={(event) => setAudience(event.target.value as SkillPublishRequest["audience"])}>
+        <select id="personal-skill-audience" className="w-full rounded-md border border-input bg-background p-2 text-sm" value={audience} required disabled={session !== null || visibleStatus.kind === "running"} onChange={(event) => setAudience(event.target.value as SkillPublishRequest["audience"])}>
           <option value="" disabled>{t("skills.publishChooseAudience")}</option>
           <option value="owner">{t("skills.publishAudienceOwner")}</option>
-          <option value="tenant">{t("skills.publishAudienceTenant")}</option>
-          <option value="catalog">{t("skills.publishAudienceCatalog")}</option>
+          {!updating ? <option value="tenant">{t("skills.publishAudienceTenant")}</option> : null}
+          {!updating ? <option value="catalog">{t("skills.publishAudienceCatalog")}</option> : null}
         </select>
-        {status.kind === "running" ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{t(`skills.publishStage.${status.stage}`)}</p> : null}
-        {status.kind === "pending" ? <Alert role="status"><AlertDescription>{t("skills.publishPending")}</AlertDescription></Alert> : null}
-        {status.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription></Alert> : null}
-        {status.kind === "invalidFile" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishInvalidFile")}</AlertDescription></Alert> : null}
-        {status.kind === "tooLarge" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishMetadataTooLarge")}</AlertDescription></Alert> : null}
-        {status.kind === "auth" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishAuth")}</AlertDescription></Alert> : null}
-        {status.kind === "restart" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishRestart")}</AlertDescription></Alert> : null}
-        {status.kind === "uncertain" ? <Alert role="alert"><AlertDescription>{t("skills.publishUnknown")} ({status.skillId})</AlertDescription></Alert> : null}
-        {status.kind === "success" ? <p role="status" className="text-sm text-foreground">{t("skills.publishSuccess")} · {status.sourceRef} · {status.revision}</p> : null}
+        {visibleStatus.kind === "running" ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner aria-hidden="true" />{t(`skills.publishStage.${visibleStatus.stage}`)}</p> : null}
+        {visibleStatus.kind === "pending" ? <Alert role="status"><AlertDescription>{t("skills.publishPending")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishError")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "invalidFile" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishInvalidFile")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "tooLarge" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishMetadataTooLarge")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "auth" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishAuth")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "restart" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.publishRestart")}</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "uncertain" ? <Alert role="alert"><AlertDescription>{t("skills.publishUnknown")} ({visibleStatus.skillId})</AlertDescription></Alert> : null}
+        {visibleStatus.kind === "success" ? <p role="status" className="text-sm text-foreground">{t("skills.publishSuccess")} · {visibleStatus.sourceRef} · {visibleStatus.revision}</p> : null}
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={close}>{status.kind === "running" ? t("skills.publishCancel") : t("skills.publishClose")}</Button>
-          {status.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? "") }}>{t("skills.publishStartOver")}</Button>
-            : <Button type="submit" disabled={session === null && ((!file && !base) || !name.trim() || !audience) || status.kind === "running" || status.kind === "success"}>{status.kind === "pending" ? t("skills.publishCheckAgain") : status.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t("skills.publishAction")}</Button>}
+          <Button type="button" variant="outline" onClick={close}>{visibleStatus.kind === "running" ? t("skills.publishCancel") : t("skills.publishClose")}</Button>
+          {visibleStatus.kind === "restart" ? <Button type="button" onClick={() => { setSession(null); setStatus({ kind: "idle" }); setFile(null); setName(base?.name ?? ""); setSummary(base?.summary ?? ""); setTags(base?.tags.join(",") ?? ""); setExamples(base?.example_prompts.join("\n") ?? "") }}>{t("skills.publishStartOver")}</Button>
+            : <Button type="submit" disabled={!admitted || session === null && ((!file && (!base || updating)) || !name.trim() || !audience) || visibleStatus.kind === "running" || visibleStatus.kind === "success"}>{visibleStatus.kind === "pending" ? t("skills.publishCheckAgain") : visibleStatus.kind === "uncertain" ? t("skills.publishRecheck") : session ? t("skills.publishRetry") : t(updating ? "skills.lifecycle.update" : "skills.publishAction")}</Button>}
         </div>
       </form>
     </DialogContent>

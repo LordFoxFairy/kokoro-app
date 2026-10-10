@@ -590,3 +590,56 @@ it("cancels the unused PUT ACK body, including streams which never close", async
   await expect(createSkillPublishClient().putPackage(reference, new File(["zip"], "mine.zip"))).resolves.toEqual({ source_version_id: "real-version" })
   expect(cancel).toHaveBeenCalledOnce()
 })
+
+it("personal lifecycle consumes actual version initial CAS and exact withdrawal ACK", async () => {
+  const created = { skill_id: "new-revision", series_id: "series", revision: "2", status: "draft", replayed: false, state_version: "1" }
+  const withdrawn = { source_ref: "skill:mine", status: "withdrawn", event_id: `evt:${"a".repeat(64)}`, replayed: false, state_version: "5" }
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ data: created, meta: { request_id: "owner-1" } }, { status: 201, headers }))
+    .mockResolvedValueOnce(Response.json({ data: withdrawn, meta: { request_id: "owner-1" } }, { headers }))
+  vi.stubGlobal("fetch", fetcher)
+  const client = createSkillPublishClient()
+  await expect(client.createVersion("mine", { display_name: "Mine", summary: "", tags: [], example_prompts: ["真实例子"], category_keys: [] }, "version-key")).resolves.toEqual(created)
+  await expect(client.withdraw("mine", { reason: "由本人撤回", expected_state_version: "4" }, "withdraw-key")).resolves.toEqual(withdrawn)
+  expect(fetcher.mock.calls[0]?.[0]).toContain("/self/skills/mine/versions")
+  expect(fetcher.mock.calls[1]?.[0]).toContain("/self/skills/mine/withdraw")
+})
+
+it.each([ [400,"skill_command_in_progress"], [403,"skill_precondition_failed"], [502,"session_invalid"] ] as const)("personal lifecycle rejects mismatched %s/%s without generic enum widening", async (status,code)=>{
+ const headers={"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}
+ vi.stubGlobal("fetch",vi.fn().mockImplementation(()=>Promise.resolve(Response.json({error:{code,message:"Rejected"},meta:{request_id:"owner-1"}},{status,headers}))))
+ const client=createSkillPublishClient()
+ await expect(client.createVersion("mine",{display_name:"Mine",summary:"",tags:[],example_prompts:[],category_keys:[]},"version-original")).rejects.toMatchObject({reason:"parse"})
+ await expect(client.withdraw("mine",{reason:"本人撤回",expected_state_version:"4"},"withdraw-original")).rejects.toMatchObject({reason:"parse"})
+})
+it("personal lifecycle preserves its no-retryable error envelope and rejects legacy extra fields", async()=>{
+ const headers={"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}
+ const fetcher=vi.fn().mockResolvedValueOnce(Response.json({error:{code:"skill_not_found",message:"Not owned"},meta:{request_id:"owner-1"}},{status:404,headers})).mockResolvedValueOnce(Response.json({error:{code:"skill_not_found",message:"Not owned",retryable:false},meta:{request_id:"owner-1"}},{status:404,headers}))
+ vi.stubGlobal("fetch",fetcher)
+ const client=createSkillPublishClient()
+ await expect(client.withdraw("mine",{reason:"本人撤回",expected_state_version:"4"},"withdraw-original")).rejects.toMatchObject({reason:"http",status:404,code:"skill_not_found"})
+ await expect(client.withdraw("mine",{reason:"本人撤回",expected_state_version:"4"},"withdraw-original")).rejects.toMatchObject({reason:"parse"})
+})
+it.each([ ["skill:other","5"], ["skill:mine","4"] ])("withdrawal rejects resource/CAS mismatch %s %s",async(source_ref,state_version)=>{
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(Response.json({data:{source_ref,state_version,status:"withdrawn",event_id:`evt:${"a".repeat(64)}`,replayed:false},meta:{request_id:"owner-1"}},{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}})))
+ await expect(createSkillPublishClient().withdraw("mine",{reason:"本人撤回",expected_state_version:"4"},"original")).rejects.toMatchObject({reason:"parse"})
+})
+it("withdrawal reason follows the formal 2048 code-point boundary, not UTF-16 code units",async()=>{
+ vi.stubGlobal("fetch",vi.fn().mockResolvedValue(Response.json({data:{source_ref:"skill:mine",state_version:"5",status:"withdrawn",event_id:`evt:${"a".repeat(64)}`,replayed:false},meta:{request_id:"owner-1"}},{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}})))
+ await expect(createSkillPublishClient().withdraw("mine",{reason:"😀".repeat(2048),expected_state_version:"4"},"reason-original")).resolves.toMatchObject({status:"withdrawn"})
+})
+it("personal lifecycle total deadline retires a stalled fetch and cancels a late response body",async()=>{
+ vi.useFakeTimers()
+ try {
+  let resolveFetch: (response:Response)=>void = ()=>{throw new Error("fetch not started")}
+  vi.stubGlobal("fetch",vi.fn().mockImplementation(()=>new Promise<Response>(resolve=>{resolveFetch=resolve})))
+  let failure:unknown
+  const pending=createSkillPublishClient().withdraw("mine",{reason:"本人撤回",expected_state_version:"4"},"original").catch(error=>{failure=error})
+  await vi.advanceTimersByTimeAsync(10001)
+  expect(failure).toMatchObject({reason:"network"})
+  const cancel=vi.fn()
+  resolveFetch(new Response(new ReadableStream({cancel}),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}}))
+  await pending
+  await Promise.resolve()
+  expect(cancel).toHaveBeenCalledTimes(1)
+ } finally {vi.useRealTimers()}
+})

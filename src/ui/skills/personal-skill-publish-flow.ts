@@ -1,9 +1,9 @@
 import { HubClientError } from "@/hub/client"
-import { createSkillDraftRequestSchema, skillZipFilenameSchema, skillDraftSchema, managedPersonalSkillSchema, skillUploadStateSchema, beginSkillUploadSchema, completeSkillUploadSchema, validateSkillDraftSchema, publishSkillDraftSchema, skillSourceVersionSchema, type ManagedPersonalSkill, type BeginSkillUploadRequest, type CompleteSkillUploadRequest, type ValidateSkillDraftRequest, type SkillPublishRequest } from "@/hub/schemas"
+import { createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, createSkillDraftRequestSchema, skillZipFilenameSchema, skillDraftSchema, managedPersonalSkillSchema, skillUploadStateSchema, beginSkillUploadSchema, completeSkillUploadSchema, validateSkillDraftSchema, publishSkillDraftSchema, skillSourceVersionSchema, type ManagedPersonalSkill, type BeginSkillUploadRequest, type CompleteSkillUploadRequest, type ValidateSkillDraftRequest, type SkillPublishRequest } from "@/hub/schemas"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 
 export type PublishStage = "hashing" | "draft" | "upload" | "scanning" | "validating" | "publishing" | "checking"
-export type PublishInput = { file: File; display_name: string; summary: string; tags: string[]; audience: SkillPublishRequest["audience"] }
+export type PublishInput = { file: File; display_name: string; summary: string; tags: string[]; example_prompts?: string[] | undefined; category_keys?: ManagedPersonalSkill["category_keys"] | undefined; audience: SkillPublishRequest["audience"] }
 export type PublishReceipt = { source_ref: string; revision: string }
 type Draft = { skill_id: string; series_id: string; revision: string; state_version: string }
 type Begin = Awaited<ReturnType<SkillPublishClient["beginUpload"]>>
@@ -21,6 +21,7 @@ export class SkillPublishUncertain extends Error {
 export type PersonalSkillPublishSession = {
   readonly input: Readonly<Omit<PublishInput, "file"> & { file: File | null }>
   readonly keys: Readonly<{ draft: string; begin: string; complete: string; validate: string; publish: string }>
+  readonly versionBase?: ManagedPersonalSkill
   readonly resumed?: ManagedPersonalSkill
   readonly draftBody: Readonly<{ display_name: string; summary: string; tags: string[] }>
   hash?: string
@@ -50,9 +51,9 @@ function assertCurrent(signal?: AbortSignal): void {
 function assertSame(value: boolean): asserts value {
   if (!value) throw new HubClientError("parse", "Skill command identity or phase mismatch", null, null)
 }
-async function retryLostTransport<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+async function retryLostTransport<T>(operation: () => Promise<T>, signal?: AbortSignal, automatic = true): Promise<T> {
   try { return await operation() } catch (error) {
-    if (!(error instanceof HubClientError) || error.reason !== "network") throw error
+    if (!automatic || !(error instanceof HubClientError) || error.reason !== "network") throw error
     assertCurrent(signal)
     return operation()
   }
@@ -85,6 +86,14 @@ export function createResumedSkillPublishSession(base: ManagedPersonalSkill, aud
   const current = managedPersonalSkillSchema.parse(base)
   assertSame(current.status === "draft")
   return newSession({ file: replacement ?? null, display_name: current.name, summary: current.summary, tags: current.tags, audience }, current)
+}
+export function createPersonalSkillVersionSession(base: ManagedPersonalSkill, input: PublishInput): PersonalSkillPublishSession {
+  const current = managedPersonalSkillSchema.parse(base)
+  assertSame(["active", "disabled"].includes(current.status) && current.product.source_kind === "personal" && input.audience === "owner")
+  if (!input.file) throw new SkillPublishRestartRequired()
+  const metadata = createPersonalSkillVersionRequestSchema.parse({ display_name: input.display_name, summary: input.summary, tags: input.tags, example_prompts: input.example_prompts ?? current.example_prompts, category_keys: input.category_keys ?? current.category_keys })
+  const session = newSession({ ...input, audience: "owner" })
+  return { ...session, versionBase: current, draftBody: Object.freeze({ ...metadata, tags: Object.freeze([...metadata.tags]) as unknown as string[], example_prompts: Object.freeze([...metadata.example_prompts]), category_keys: Object.freeze([...metadata.category_keys]) }) }
 }
 async function recoverPublished(client: SkillPublishClient, draft: Draft, body: Readonly<SkillPublishRequest>, signal?: AbortSignal): Promise<PublishReceipt | null> {
   try {
@@ -120,7 +129,10 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
     }
     if (!session.draft) {
       onStage?.("draft")
-      const created = skillDraftSchema.parse(await retryLostTransport(() => client.createDraft(session.draftBody, session.keys.draft, signal), signal))
+      const created = session.versionBase
+        ? createPersonalSkillVersionSchema.parse(await retryLostTransport(() => client.createVersion(session.versionBase!.skill_id, createPersonalSkillVersionRequestSchema.parse(session.draftBody), session.keys.draft, signal), signal, session.versionBase === undefined))
+        : skillDraftSchema.parse(await retryLostTransport(() => client.createDraft(session.draftBody, session.keys.draft, signal), signal, session.versionBase === undefined))
+      if (session.versionBase) assertSame(created.series_id === session.versionBase.series_id && created.skill_id !== session.versionBase.skill_id && BigInt(created.revision) > BigInt(session.versionBase.revision))
       assertCurrent(signal)
       session.draft = { ...created, revision: String(created.revision) }
     }
@@ -155,7 +167,7 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
       if (!session.beginBody) session.beginBody = Object.freeze({ filename: input.file.name, mime_type: "application/zip", size_bytes: input.file.size, content_sha256: session.hash, expected_state_version: observed.state_version, ...('attempt_id' in observed ? { replaces_attempt_id: observed.attempt_id } : {}) })
       if (!session.begin) {
         onStage?.("upload")
-        const begun = beginSkillUploadSchema.parse(await retryLostTransport(() => client.beginUpload(draft.skill_id, session.beginBody!, session.keys.begin, signal), signal))
+        const begun = beginSkillUploadSchema.parse(await retryLostTransport(() => client.beginUpload(draft.skill_id, session.beginBody!, session.keys.begin, signal), signal, session.versionBase === undefined))
         assertCurrent(signal); assertSame(begun.skill_id === draft.skill_id)
         if ('attempt_id' in observed) assertSame(begun.attempt_id !== observed.attempt_id && BigInt(begun.attempt_epoch) > BigInt(observed.attempt_epoch))
         assertSame(BigInt(begun.state_version) >= BigInt(session.beginBody.expected_state_version))
@@ -178,7 +190,7 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
       if (!session.completeBody) session.completeBody = Object.freeze({ attempt_id: begin.attempt_id, upload_id: begin.upload_id, content_sha256: session.hash, size_bytes: input.file.size, source_version_id: session.sourceVersionId!, expected_state_version: begin.state_version })
       if (!session.complete) {
         onStage?.("scanning")
-        const completed = completeSkillUploadSchema.parse(await retryLostTransport(() => client.completeUpload(draft.skill_id, session.completeBody!, session.keys.complete, signal), signal))
+        const completed = completeSkillUploadSchema.parse(await retryLostTransport(() => client.completeUpload(draft.skill_id, session.completeBody!, session.keys.complete, signal), signal, session.versionBase === undefined))
         assertCurrent(signal); assertSame(sameAttempt(completed, begin) && completed.upload_id === begin.upload_id && completed.content_sha256 === session.hash && BigInt(completed.state_version) >= BigInt(begin.state_version))
         session.complete = completed
       }
@@ -195,7 +207,7 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
       if (!session.validateBody) session.validateBody = Object.freeze({ attempt_id: source.attempt_id, expected_state_version: source.state_version })
       onStage?.("validating")
       let validated: Validated
-      try { validated = validateSkillDraftSchema.parse(await retryLostTransport(() => client.validateDraft(draft.skill_id, session.validateBody!, session.keys.validate, signal), signal)) }
+      try { validated = validateSkillDraftSchema.parse(await retryLostTransport(() => client.validateDraft(draft.skill_id, session.validateBody!, session.keys.validate, signal), signal, session.versionBase === undefined)) }
       catch (error) {
         if (error instanceof HubClientError && session.complete && session.complete.scan_state !== "clean" && ((error.status === 412 && error.code === "skill_precondition_failed") || (error.status === 409 && error.code === "skill_command_in_progress"))) throw new SkillPublishPending()
         throw error
@@ -206,7 +218,7 @@ export async function runPersonalSkillPublishSession(client: SkillPublishClient,
     if (!session.publishBody) session.publishBody = Object.freeze({ audience: input.audience, expected_state_version: session.validated?.state_version ?? observed.state_version })
     onStage?.("publishing"); session.publishAttempted = true
     try {
-      const published = publishSkillDraftSchema.parse(await retryLostTransport(() => client.publishDraft(draft.skill_id, session.publishBody!, session.keys.publish, signal), signal))
+      const published = publishSkillDraftSchema.parse(await retryLostTransport(() => client.publishDraft(draft.skill_id, session.publishBody!, session.keys.publish, signal), signal, session.versionBase === undefined))
       assertCurrent(signal); assertSame(published.source_ref === `skill:${draft.skill_id}` && published.revision === draft.revision && BigInt(published.state_version) > BigInt(session.publishBody.expected_state_version))
       session.receipt = { source_ref: published.source_ref, revision: published.revision }; return session.receipt
     } catch (error) {

@@ -1,3 +1,6 @@
+<!-- T-K03.14-WEB-PERSONAL-LIFECYCLE D0: target, not implemented -->
+本人managed详情将显示真实例子/更新时间；更新沿personal-skill-publish flow正规新版本包链，撤回独立personal-skill-withdraw-dialog。仅owner范围；实现闭集及待验门见三设计具名前缀。
+
 <!-- T-K03.14-WEB-GITHUB-IMPORT UI -->
 现GithubImportDialog → personal-skill-github-import-flow → focused GitHub client / 现Publish owner+CAS / 真实Installation ACK；删除旧Hub optional URL导入与preview模拟写，不影响local-import/真实reader。
 

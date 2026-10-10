@@ -1253,3 +1253,65 @@ it.each(["query", "body", "key", "length", "encoding", "origin"])("exact shared 
   const response = await POST(new Request(`http://localhost/api/hub/skill-shares/share-old/download${mode === "query" ? "?extra=1" : ""}`, { method: "POST", headers: { origin: mode === "origin" ? "https://other.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "forbidden" } : mode === "length" ? { "content-length": "1" } : mode === "encoding" ? { "transfer-encoding": "chunked" } : {}) }, ...(mode === "body" ? { body: "x" } : {}) }), params(["skill-shares", "share-old", "download"]))
   expect(response.status).toBe(mode === "origin" ? 403 : 400); expect(requestWithDomain).not.toHaveBeenCalled()
 })
+
+it("personal version and withdrawal map only to the formal self owner routes", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(Response.json({ data: { skill_id: "new", series_id: "series", revision: "2", status: "draft", replayed: false, state_version: "1" }, meta: { request_id: "owner-1" } }, { status: 201, headers: { "cache-control": "no-store", "x-request-id": "owner-1" } }))
+  const response = await POST(new Request("http://localhost/api/hub/self/skills/mine/versions", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "v-original" }, body: JSON.stringify({ display_name: "Mine", summary: "", tags: [], example_prompts: [], category_keys: [] }) }), params(["self", "skills", "mine", "versions"]))
+  expect(response.status).toBe(201)
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/self/skills/mine/versions")
+})
+
+it("personal lifecycle malformed owner JSON is a 502 closed response error, not dependency outage", async () => {
+ const { POST }=await import("@/app/api/hub/[...path]/route")
+ vi.mocked(requestWithDomain).mockResolvedValue(new Response("{",{status:200,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"owner-1"}}))
+ const response=await POST(new Request("http://localhost/api/hub/self/skills/mine/withdraw",{method:"POST",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"withdraw-original"},body:JSON.stringify({reason:"本人撤回",expected_state_version:"4"})}),params(["self","skills","mine","withdraw"]))
+ expect(response.status).toBe(502)
+ expect(await response.json()).toMatchObject({error:{code:"skill_response_invalid"}})
+})
+it("personal withdrawal preserves the original CAS/body/key through the formal route",async()=>{
+ const {POST}=await import("@/app/api/hub/[...path]/route")
+ const data={source_ref:"skill:mine",status:"withdrawn",event_id:`evt:${"a".repeat(64)}`,state_version:"5",replayed:false}
+ vi.mocked(requestWithDomain).mockResolvedValue(Response.json({data,meta:{request_id:"owner-1"}},{headers:{"cache-control":"no-store","x-request-id":"owner-1"}}))
+ const body={reason:"本人撤回",expected_state_version:"4"}
+ const response=await POST(new Request("http://localhost/api/hub/self/skills/mine/withdraw",{method:"POST",headers:{origin:"http://localhost","content-type":"application/json","idempotency-key":"original"},body:JSON.stringify(body)}),params(["self","skills","mine","withdraw"]))
+ expect(response.status).toBe(200)
+ expect(await response.json()).toEqual({data,meta:{request_id:"owner-1"}})
+ expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/self/skills/mine/withdraw")
+ const options=vi.mocked(requestWithDomain).mock.calls[0]?.[2]
+ expect(options?.headers).toMatchObject({"idempotency-key":"original"})
+ expect(JSON.parse(new TextDecoder().decode(options?.body as ArrayBuffer))).toEqual(body)
+})
+
+it.each(["versions", "withdraw"] as const)("personal lifecycle %s sends a fixed-length UTF-8 body over the actual Node transport", async action => {
+  const { createServer } = await import("node:http")
+  const actual = await vi.importActual<typeof import("@/lib/server/upstream-http")>("@/lib/server/upstream-http")
+  const body = action === "versions" ? { display_name: "本人更新", summary: "真实中文", tags: [], example_prompts: ["保留例子"], category_keys: [] } : { reason: "本人撤回", expected_state_version: "4" }
+  const ack = action === "versions" ? { skill_id: "new", series_id: "series", revision: "2", status: "draft", replayed: false, state_version: "1" } : { source_ref: "skill:mine", status: "withdrawn", event_id: `evt:${"a".repeat(64)}`, state_version: "5", replayed: false }
+  let observed: { transferEncoding: string | undefined; length: string | undefined; key: string | undefined; body: string } | undefined
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = []
+    request.on("data", chunk => chunks.push(Buffer.from(chunk)))
+    request.on("end", () => {
+      const bytes = Buffer.concat(chunks)
+      observed = { transferEncoding: request.headers["transfer-encoding"], length: request.headers["content-length"], key: request.headers["idempotency-key"]?.toString(), body: bytes.toString("utf8") }
+      const valid = observed.transferEncoding === undefined && observed.length === String(bytes.byteLength)
+      response.writeHead(valid ? action === "versions" ? 201 : 200 : 400, { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-wire" })
+      response.end(JSON.stringify(valid ? { data: ack, meta: { request_id: "owner-wire" } } : { error: { code: "invalid_skill_request", message: "Skill lifecycle request is invalid" }, meta: { request_id: "owner-wire" } }))
+    })
+  })
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve))
+  try {
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("missing fixture address")
+    vi.mocked(requestWithDomain).mockImplementation((url, domain, options) => actual.requestWithDomain(`http://127.0.0.1:${address.port}${new URL(url).pathname}`, domain, options))
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const response = await POST(new Request(`http://localhost/api/hub/self/skills/mine/${action}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-wire-intent" }, body: JSON.stringify(body) }), params(["self", "skills", "mine", action]))
+    expect(observed).toEqual({ transferEncoding: undefined, length: String(Buffer.byteLength(JSON.stringify(body))), key: "original-wire-intent", body: JSON.stringify(body) })
+    expect(response.status).toBe(action === "versions" ? 201 : 200)
+    expect(await response.json()).toEqual({ data: ack, meta: { request_id: "owner-wire" } })
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  }
+})

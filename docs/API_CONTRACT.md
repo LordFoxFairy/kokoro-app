@@ -1,3 +1,13 @@
+<!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
+## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）
+唯一机器事实源：正式BFF e1769b56 contract/openapi/v1/openapi.yaml public13.3，现Web固定snapshot不升级。Managed详情已有example_prompts/skill_updated_at，直接显示真实字段。
+新同源闭集POST /api/hub/self/skills/{skill_id}/versions及/withdraw，精确映射正式/v1/self/skills/{skill_id}/versions及/withdraw；不添加alias/泛转发。前者display_name/summary/tags及明确example_prompts/category_keys，禁止expected_state_version，201严格draft六字段含state_version；后者reason+expected_state_version，200严格source_ref/status/event_id/replayed/state_version。全部exact UID、同series、decimal revision/CAS与请求绑定，unknown原key/body不可换意图。
+按CreatePersonalSkillVersion/WithdrawPersonalSkill机器operation逐status错误闭集：400/401/403/404/409/412/413/429/502/503；保原envelope、request ID/no-store、合法Retry-After及取消。不得用其它Skill族通用enum×status放宽。10s总网络/累计body上限沿现client；共享PUT仍既有60s生命周期。不复制契约字段长文。
+更新201不是发布/安装成功：真实新包链Publish显式owner及最终CAS；不凭旧UI恢复公开发布权。撤回与包上传互不串意图；服务端仍是权限唯一裁决。
+
+<!-- END:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
 
 ## T-K03.14-WEB-SHARE D0（目标，尚未实施）
