@@ -1,3 +1,19 @@
+<!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-DATA_MODEL-D0 -->
+
+## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）
+
+当前态为 Web main `2e69b3b63ad4ac935752e4ad0b69ee1ce964f564`；Root 正常浏览器 ListHubSkills/ListSkills HTTP200但严格解析失败。正式 BFF `939bf0e1da98a313233a923c6aa55481d06f5aca`、Public13.1机器契约不变（既有 canonical digest `418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045`）。此片目标尚未实施/验收，下面既有设计前缀和 mixed 原正文全部逐字节保留；本片仅纠正现有 Skills 读取消费者，不增加 owner、协议、数据库或进程。
+
+Web 无业务持久 owner，无新 SQL/schema/Redis/业务缓存/存储表；此次仍只是现目录与安装读投影。Skill series/revision/product/publication、安装 membership/enabled、owner tags、封面对象及短期 download handle 由既有 owner 管理。新增读取字段仅进入现页面内存 view model，未呈现的合法 metadata 仅参与 validator，不伪造字段/版本/发布者/使用次数。
+
+Hub skillId 是 series identity，currentVersion.versionUid/详情 version 是 owner 当前 revision；两者不互换。封面 URI 来自 owner 且与当前 revision 比对，缺失时不发合成请求。downloadInfo 是已授权短期 handle，不持久化、不作为永久下载权限；GetSkill/DownloadSkill 返回 skill.id 须匹配请求 series，原 onAdd/onTry 和下载动作语义保留。
+
+安装记录存在/added 与 enabled 分开表达：禁用不等于未安装，official 目录 added 不能覆盖本人禁用事实；任何缺失/矛盾 identity 或类型不被浏览器补造。apps 为目录当前 owner 分类之一，不借目录读取扩大 mutation 输入或授权。所有观察跟现页面生命周期，刷新仍重新取 owner 响应，不新增 localStorage/数据库/权限缓存。
+
+本片新前缀之外原 mixed 正文逐字节保存，原两 mixed 测试不动；纯门、真实浏览器、系统全门由 Root 分别记录，目标不冒称实测。
+
+<!-- END:T-K03.14-WEB-SKILL-READ-CONTRACT-DATA_MODEL-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PUBLISH-DATA_MODEL-D0 -->
 
 ## T-K03.14-WEB-PUBLISH D0：版本观察、冻结意图与刷新恢复（2026-10-10；目标，无新增持久owner）

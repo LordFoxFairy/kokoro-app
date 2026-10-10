@@ -1,3 +1,21 @@
+<!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-TECHNICAL_DESIGN-D0 -->
+
+## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）
+
+当前态为 Web main `2e69b3b63ad4ac935752e4ad0b69ee1ce964f564`；Root 正常浏览器 ListHubSkills/ListSkills HTTP200但严格解析失败。正式 BFF `939bf0e1da98a313233a923c6aa55481d06f5aca`、Public13.1机器契约不变（既有 canonical digest `418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045`）。此片目标尚未实施/验收，下面既有设计前缀和 mixed 原正文全部逐字节保留；本片仅纠正现有 Skills 读取消费者，不增加 owner、协议、数据库或进程。
+
+### 归属与放置
+Web 唯一负责现 Manus 目录/安装读投影、详情/下载严格解析、既有分类与同源封面代理；BFF/Platform/Storage/IAM 仍是响应、发布、对象和权限事实 owner。采用现 `src/hub/schemas.ts` 的 consumer schema 与现 `src/ui/skills/manus-skill-client.ts` 的读取编排，不另建 wire/client/目录或 alias/fallback；现 App Skills surface、detail dialog、i18n 与相邻测试承接同一读投影，不改布局/品牌/权限或其它页面。
+
+现缺口包括 Hub 根 tagOptions、item publishStatus、完整 currentVersion 被 strict 拒绝，apps 标签缺失；ListSkills 的 passthrough 未封闭字段且 enabled 被当作 installed；GetSkill/DownloadSkill 合法 version/createdAt/ownerType 被拒绝；详情在缺封面事实时仍合成 series 封面地址。目标完整消费正式 owner 的四个读取响应闭集，保持各嵌套对象的类型/可选性及身份绑定，拒绝未知字段/坏类型/跨资源 ACK，不为了显示卡片删 owner 字段或转空数组成功。
+
+分类 apps 仅扩目录分类投影及现筛选项；其它 mutation/request 分类闭集不得借此拓宽。installed 与 enabled 分开保存；本人 ListSkills 安装事实优先，不由 official added 标记覆盖禁用态。封面只来自 owner coverImage，并绑定 Hub currentVersion.versionUid 或详情 version；不存在封面时不生成请求。仅规范 owner `/api/v1/skills/{revision}/cover` 精确重写到 browser-private `/api/hub/skills/{revision}/cover`，GET 同源 adapter 调正式 `/v1/skills/{revision}/cover`；不猜 series、不接受外链、查询/fragment/编码路径变体。代理保留 session/Origin/时间/取消/有界 body 与合法图片媒体边界，错误不当作图片成功。
+
+### 验证与排除
+13 个现路径范围以 Root 任务卡为准：四响应完整正控及未知字段/嵌套坏类型/资源错配负控、安装禁用事实、八类 apps、封面同源/revision/无字段/恶意路径；先真实函数 RED，再 focused/type/lint 与 Root 全纯门及正常浏览器。系统 OIDC mixed、其它生产行为、服务/数据/index 均排除；暂不宣称整产品闭环。
+
+<!-- END:T-K03.14-WEB-SKILL-READ-CONTRACT-TECHNICAL_DESIGN-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PUBLISH-TECHNICAL_DESIGN-D0 -->
 
 ## T-K03.14-WEB-PUBLISH D0：完整发布与刷新恢复消费者（2026-10-10；目标，未实施）

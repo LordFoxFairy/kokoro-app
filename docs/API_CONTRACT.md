@@ -1,3 +1,21 @@
+<!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-API_CONTRACT-D0 -->
+
+## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）
+
+当前态为 Web main `2e69b3b63ad4ac935752e4ad0b69ee1ce964f564`；Root 正常浏览器 ListHubSkills/ListSkills HTTP200但严格解析失败。正式 BFF `939bf0e1da98a313233a923c6aa55481d06f5aca`、Public13.1机器契约不变（既有 canonical digest `418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045`）。此片目标尚未实施/验收，下面既有设计前缀和 mixed 原正文全部逐字节保留；本片仅纠正现有 Skills 读取消费者，不增加 owner、协议、数据库或进程。
+
+### 唯一事实源与可见性
+完整读响应的唯一 owner schema 为上述 BFF commit 的 `src/http/skill-specification-schema.ts`（websiteHubResponseSchema、websiteListResponseSchema、websiteSkillSchema）；运行投影为 `src/application/skill-specification.ts`，HTTP envelope/下载 handle 由 `src/http/routes/platform-projection.ts` 发出。Web 现 `/api/skill.v1.SkillOptionalService/{ListHubSkills,ListSkills,GetSkill}` 与 `/api/skill.v1.SkillService/DownloadSkill` 仍是既有 browser-private adapter，不新建 public operation，不把消费 validator 当可编辑 owner 契约。
+
+Web 严格承接完整 Hub item/icon/source/currentVersion/tags/tagOptions、完整 installed/official 嵌套对象和完整 detail/download 三字段资格响应；按照 owner schema 的字段类型与可选性解析，identity 为读取必要条件且 Get/Download 必须与请求 skillId 匹配。各操作成功/envelope保持原 owner 形状，不用泛化 passthrough、不静默 strip owner 字段。未知字段、坏类型或资源错配失败闭合；错误形状与状态按当前操作和同源 adapter区分，坏响应不得变空目录或可下载成功。
+
+Hub/tagOptions 支持正式第八类 SKILL_HUB_TAG_APPS，分类投影为 apps；不扩其它公开请求 schema。安装 membership/added 与 enabled 是不同事实，已安装但禁用仍 installed=true、enabled=false，official added 不覆盖本人 enabled。GET 封面 private exact `/api/hub/skills/{revision}/cover` 唯一映射正式 `/v1/skills/{revision}/cover`；revision 来自已绑定 owner coverImage/current version，不建立 series alias 或外部 URL 代理。未知路径/非GET/body/query/身份失败按闭集拒绝。
+
+### 门禁
+具名真实四响应、嵌套完整字段、unknown/type/identity负控、apps、图片字节/媒体/Origin/session/revision绑定测试；Root pin/artifact不变，五 mixed 仅新增此前缀之外原正文保留。Root 真实浏览器目录/详情/安装/下载/封面仍待后继验收，不以 HTTP200 或 unit fixture 称完成。
+
+<!-- END:T-K03.14-WEB-SKILL-READ-CONTRACT-API_CONTRACT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PUBLISH-API_CONTRACT-D0 -->
 
 ## T-K03.14-WEB-PUBLISH D0：固定 Public13 发布与恢复消费（2026-10-10；目标，未接线）
