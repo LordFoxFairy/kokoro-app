@@ -154,7 +154,7 @@ const dialogLocales = [
   { locale: "zh", share: "分享技能", download: "下载技能", add: "添加到我的技能", added: "已添加到我的技能", loading: "正在加载技能详情…", failed: "技能详情暂时不可用", updated: "更新于 2026年5月22日", used: "已使用 37,000 次" },
   { locale: "en", share: "Share skill", download: "Download skill", add: "Add to my skills", added: "Added to my skills", loading: "Loading skill details…", failed: "Skill details are temporarily unavailable", updated: "Updated May 22, 2026", used: "Used 37,000 times" },
 ] as const
-const localizedSkill = { skill_id: "skill-manim", name: "Manim", description: "Server description", content_hash: "owner-checksum", scope: "official", enabled: false, installed: false, usage_count: "37000" }
+const localizedSkill = { skill_id: "skill-manim", revision_skill_id: "revision-manim", name: "Manim", description: "Server description", content_hash: "owner-checksum", scope: "official", enabled: false, installed: false, usage_count: "37000" }
 
 it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and actions without changing callbacks", async (labels) => {
   window.localStorage.setItem("kokoro.locale", labels.locale)
@@ -932,4 +932,60 @@ it.each([false, true])("only refreshes authoritative catalog after real GitHub P
   expect(within(reopened).queryByTestId("github-import-complete")).toBeNull()
   expect(within(reopened).getByTestId("github-repository-input")).not.toBeDisabled()
   expect(within(reopened).getByTestId("github-import-submit")).toBeInTheDocument()
+})
+
+it("creates a real revision Skill Share before copying only its service URL", async () => {
+  const writeText = vi.fn(async () => undefined)
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+  const url = `${window.location.origin}/skills/shared/actual-share`
+  const fetchMock = vi.fn(async (path: string) => path === "/api/hub/skill-shares"
+    ? new Response(JSON.stringify({ data: { share_id: "actual-share", source_ref: "skill:revision-old", url, created_at: "2026-10-10T00:00:00.000Z", expires_at: null, revoked_at: null } }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-create" } })
+    : response({ skill: { id: "series", version: "revision-old", name: "Actual skill" }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "skill.zip", expiresAt: "2026-10-10T00:00:00.000Z" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ skill_id: "series", revision_skill_id: "revision-old", name: "Actual skill", description: "Real", content_hash: "legacy-display", scope: "official", installed: false, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  const share = await screen.findByRole("button", { name: "分享技能" })
+  await waitFor(() => expect(share).not.toBeDisabled())
+  fireEvent.click(share)
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(url))
+  expect(fetchMock.mock.calls.filter(([path]) => path === "/api/hub/skill-shares")).toHaveLength(1)
+})
+
+it.each(["clipboard", "unknown"])("keeps the Share intent after %s without automatically creating again", async mode => {
+  const writeText = vi.fn().mockRejectedValueOnce(new Error("clipboard denied")).mockResolvedValue(undefined)
+  vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } })
+  let creates = 0
+  vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+    if (path !== "/api/hub/skill-shares") throw new Error("shared mode must not GetSkill")
+    creates++
+    if (mode === "unknown" && creates === 1) throw new Error("lost response")
+    return new Response(JSON.stringify({ data: { share_id: "share-old", source_ref: "skill:revision-old", url: `${window.location.origin}/skills/shared/share-old`, created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: null } }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-create" } })
+  }))
+  const summary = { share_id: "incoming", source_ref: "skill:revision-old", skill: { skill_id: "revision-old", series_id: "series", revision: "1", display_name: "Old", description: "Real", tags: [], category_keys: [], example_prompts: [], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official" as const, source_kind: "official" as const } }
+  render(<LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  const share = screen.getByRole("button", { name: "分享技能" }); fireEvent.click(share)
+  if (mode === "clipboard") {
+    await screen.findByText(/链接已创建，复制失败/u); fireEvent.click(share)
+    await screen.findByText("技能链接已复制")
+    expect(creates).toBe(1); expect(writeText).toHaveBeenCalledTimes(2)
+  } else {
+    await screen.findByText(/分享创建结果暂未确认/u)
+    expect(share).toBeDisabled(); expect(creates).toBe(1)
+    fireEvent.click(screen.getByRole("button", { name: "创建新的分享" }))
+    await screen.findByText(/链接已创建，复制失败/u)
+    expect(creates).toBe(2)
+  }
+})
+
+it("reuses the real package tree for a shared old revision without current metadata", async () => {
+  const summary = { share_id: "incoming", source_ref: `skill:${ownerRevision}`, skill: { skill_id: ownerRevision, series_id: "series", revision: "4", display_name: "Exact old", description: "Owner summary", tags: [], category_keys: [], example_prompts: [], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official" as const, source_kind: "official" as const } }
+  const fetcher = vi.fn(async (path: string) => {
+    if (!path.startsWith(`/api/hub/skills/${ownerRevision}/package`)) throw new Error("no series/current read")
+    return packageJson({ data: { ...packageDirectory.data, selected_file: path.includes("file_path") ? { path: "SKILL.md", text: "# Owner text" } : null } })
+  })
+  vi.stubGlobal("fetch", fetcher)
+  render(<LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
+  expect(await screen.findByText("Owner text")).toBeInTheDocument()
+  expect(screen.getByRole("navigation", { name: "技能文件" })).toBeInTheDocument()
+  expect(fetcher).toHaveBeenCalledTimes(2)
 })

@@ -150,7 +150,7 @@ export function createManusSkillHubClient(base: HubClient): Omit<HubClient, "lis
 
 export type ManusSkillDetail = z.infer<typeof manuscriptDetailSchema>
 
-function ownerCoverPath(cover: string, revision: string | undefined): string {
+export function ownerCoverPath(cover: string, revision: string | undefined): string {
   if (!revision || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(revision)
     || cover !== `/api/v1/skills/${encodeURIComponent(revision)}/cover`) throw new Error("skill_response_invalid")
   return `/api/hub/skills/${encodeURIComponent(revision)}/cover`

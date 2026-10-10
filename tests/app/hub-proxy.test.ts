@@ -1197,3 +1197,44 @@ it("retires a late GitHub upstream response after caller cancellation", async ()
   const cancel=vi.fn();resolve(new Response(new ReadableStream({cancel}),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"}}))
   await new Promise(accept=>setTimeout(accept,0));expect(cancel).toHaveBeenCalled()
 })
+
+it("Skill Share Create relays the exact revision and keeps the actual six-field service URL", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00.000Z", expires_at: null, revoked_at: null }
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-request" } }))
+  const response = await POST(new Request("http://localhost/api/hub/skill-shares", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify({ source_ref: "skill:revision-old" }) }), params(["skill-shares"]))
+  expect(response.status).toBe(201)
+  expect(await response.json()).toEqual({ data })
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/skill-shares")
+})
+
+it("Skill Share summary preserves exact revision fields and rejects a current/foreign cover", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const skill = { skill_id: "revision-old", series_id: "series", revision: "1", display_name: "Old", description: "Actual", tags: [], example_prompts: [], category_keys: ["apps"], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official", source_kind: "official" }
+  const data = { share_id: "share-old", source_ref: "skill:revision-old", skill }
+  for (const [value, status] of [[data, 200], [{ ...data, skill: { ...skill, cover_image: "/api/v1/skills/series/cover" } }, 502], [{ ...data, skill: { ...skill, current: true } }, 502]] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: value }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-read" } }))
+    const result = await GET(new Request("http://localhost/api/hub/skill-shares/share-old/skill"), params(["skill-shares", "share-old", "skill"]))
+    expect(result.status).toBe(status)
+    if (status === 200) expect(await result.json()).toEqual({ data })
+  }
+  expect(vi.mocked(requestWithDomain).mock.calls.every(call => call[0] === "http://bff.test/v1/skill-shares/share-old/skill")).toBe(true)
+})
+it.each(["query", "body", "key", "origin", "extra"])("Skill Share rejects closed request violation %s before owner IO", async mode => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const response = await POST(new Request(`http://localhost/api/hub/skill-shares${mode === "query" ? "?extra=1" : ""}`, { method: "POST", headers: { "content-type": "application/json", origin: mode === "origin" ? "https://other.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "not-permitted" } : {}) }, body: JSON.stringify(mode === "body" ? {} : { source_ref: "skill:revision-old", ...(mode === "extra" ? { extra: true } : {}) }) }), params(["skill-shares"]))
+  expect(response.status).toBeGreaterThanOrEqual(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["resolve", "content-length"], ["resolve", "transfer-encoding"], ["summary", "content-length"], ["summary", "transfer-encoding"],
+])("Skill Share %s rejects the mere presence of %s before owner IO", async (operation, header) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const data = operation === "resolve" ? { share_id: "share-old", source_ref: "skill:revision-old", url: "http://localhost/skills/shared/share-old", created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: null } : { share_id: "share-old", source_ref: "skill:revision-old", skill: { skill_id: "revision-old", series_id: "series", revision: "1", display_name: "Old", description: "Actual", tags: [], example_prompts: [], category_keys: [], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official", source_kind: "official" } }
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-read" } }))
+  const path = ["skill-shares", "share-old", ...(operation === "summary" ? ["skill"] : [])]
+  const response = await GET(new Request(`http://localhost/api/hub/${path.join("/")}`, { headers: { [header]: header === "content-length" ? "0" : "chunked" } }), params(path))
+  expect(response.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})

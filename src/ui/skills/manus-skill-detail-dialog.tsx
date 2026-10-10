@@ -13,9 +13,18 @@ import { useLocale } from "@/i18n/context"
 import type { SkillCatalogCard, CatalogPackageData } from "@/hub/schemas"
 import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
+import { createSkillShareClient } from "@/hub/skill-share-client"
+import type { ShareAck, ShareSummary } from "@/hub/skill-share.schema"
+import { useSessionProbe } from "@/ui/auth/use-session-state"
+import { ownerCoverPath } from "@/ui/skills/manus-skill-client"
+
 import styles from "./manus-skill-detail-dialog.module.css"
 
 type Props = {
+  sharedSummary?: ShareSummary
+  onAddShared?: () => void
+  installationNotice?: string | undefined
+  onRetryInstallation?: (() => void) | undefined
   skill: SkillCatalogCard | null
   open: boolean
   busy?: boolean
@@ -39,8 +48,20 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
+export function ManusSkillDetailDialog({ skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
   const { locale, t } = useLocale()
+  const probe = useSessionProbe()
+  const boundary = probe.projectReadBoundary
+  const shareIntents = useRef(new Map<string, { ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
+  type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
+  const [shareStates, setShareStates] = useState<Record<string, ShareState>>({})
+  const [shareSubject, setShareSubject] = useState(boundary.subject)
+  if (shareSubject !== boundary.subject) { setShareSubject(boundary.subject); setShareStates({}) }
+  useEffect(() => {
+    const intents = shareIntents.current
+    return () => { for (const intent of intents.values()) intent.controller?.abort(); intents.clear() }
+  }, [boundary.subject])
+
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -53,7 +74,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   const [readerFailed, setReaderFailed] = useState(false)
   const [readerAttempt, setReaderAttempt] = useState(0)
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
-  const identity = open && skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
+  const identity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
   const [currentIdentity, setCurrentIdentity] = useState(identity)
 
   // Reset browser presentation state by the selected resource identity, not
@@ -73,7 +94,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   }
 
   useEffect(() => {
-    if (!open || !skill?.skill_id) return
+    if (!open || !skill?.skill_id || sharedSummary) return
     const controller = new AbortController()
     activeRequest.current = controller
     void getManusSkillDetail(skill.skill_id, controller.signal).then((next) => {
@@ -82,16 +103,19 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
       if (!controller.signal.aborted) setFailed(true)
     })
     return () => { controller.abort(); if (activeRequest.current === controller) activeRequest.current = null }
-  }, [open, skill?.skill_id, skill?.revision_skill_id])
+  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary])
 
-  const boundRevision = open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
+  const boundRevision = open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
     && detail.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
+
+  const sharedRevision = sharedSummary?.skill.revision
 
   useEffect(() => {
     if (!readerOpen || boundRevision === null) return
     const controller = new AbortController()
     void getManusSkillPackage(boundRevision, undefined, controller.signal).then((value) => {
       if (controller.signal.aborted) return
+      if (sharedRevision !== undefined && value.revision !== sharedRevision) throw new Error("skill_response_invalid")
       setDirectory(value)
       const path = value.files.some((file) => file.path === "SKILL.md") ? "SKILL.md" : null
       setSelectedPath(path)
@@ -100,7 +124,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
       if (!controller.signal.aborted) { setReaderFailed(true); setReaderLoading(false) }
     })
     return () => controller.abort()
-  }, [readerOpen, boundRevision, readerAttempt])
+  }, [readerOpen, boundRevision, readerAttempt, sharedRevision])
 
   useEffect(() => {
     if (!readerOpen || boundRevision === null || directory === null || selectedPath === null) return
@@ -145,16 +169,72 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
     finally { if (!controller.signal.aborted) setDownloading(false) }
   }
 
-  if (!skill) return null
-  const record = detail !== null && detail.skill.id === skill.skill_id ? detail.skill : null
-  const downloadInfo = detail !== null && detail.skill.id === skill.skill_id ? detail.downloadInfo : null
-  const loading = open && skill.skill_id !== undefined && record === null && !failed
-  const title = record?.displayName ?? record?.name ?? skill.name
-  const description = record?.userDescription ?? record?.description ?? skill.description
-  const examples = record?.exampleQuestions ?? skill.example_questions ?? []
-  const updated = displayDate(record?.updatedAt ?? (skill.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
-  const installed = installationState === undefined ? record?.added ?? skill.installed : installationState.installed && installationState.enabled
-  const cover = record?.coverImage ?? skill.cover_image
+  const sourceRef = boundRevision === null ? null : `skill:${boundRevision}`
+  const shareIdentity = boundary.admitted && boundary.subject && identity && sourceRef ? JSON.stringify([boundary.subject, sourceRef]) : null
+  const liveShareIdentity = useRef(shareIdentity)
+  useEffect(() => {
+    liveShareIdentity.current = shareIdentity
+    const intents = shareIntents.current
+    if (shareIdentity === null) for (const intent of intents.values()) {
+      if (intent.pending && intent.ack === null) intent.unknown = true
+      intent.controller?.abort()
+    }
+    return () => {
+      if (shareIdentity !== null) {
+        const intent = intents.get(shareIdentity)
+        if (intent?.pending && intent.ack === null) intent.unknown = true
+        intent?.controller?.abort()
+      }
+    }
+  }, [shareIdentity])
+  const share = async (newIntent = false) => {
+    if (!shareIdentity || !sourceRef) return
+    let intent = shareIntents.current.get(shareIdentity)
+    if (intent?.pending || intent?.unknown && !newIntent) return
+    if (!intent || newIntent) {
+      intent = { ack: null, unknown: false, pending: false, controller: null }
+      shareIntents.current.set(shareIdentity, intent)
+    }
+    intent.pending = true
+    const controller = new AbortController()
+    intent.controller = controller
+    setShareStates(current => ({ ...current, [shareIdentity]: "pending" }))
+    try {
+      if (intent.ack === null) {
+        try { intent.ack = await createSkillShareClient().create({ source_ref: sourceRef }, controller.signal) }
+        catch (error) {
+          const known = error instanceof Error && "reason" in error && error.reason === "http" && "status" in error && typeof error.status === "number" && error.status < 500
+          intent.unknown = !known
+          if (shareIntents.current.get(shareIdentity) === intent) setShareStates(current => ({ ...current, [shareIdentity]: known ? "failed" : "unknown" }))
+          return
+        }
+      }
+      if (controller.signal.aborted || liveShareIdentity.current !== shareIdentity) return
+      try {
+        if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable")
+        await navigator.clipboard.writeText(intent.ack.url)
+        if (!controller.signal.aborted && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copied" }))
+      } catch {
+        if (!controller.signal.aborted && liveShareIdentity.current === shareIdentity) setShareStates(current => ({ ...current, [shareIdentity]: "copyFailed" }))
+      }
+    } finally {
+      if (controller.signal.aborted && shareIntents.current.get(shareIdentity) === intent) setShareStates(current => ({ ...current, [shareIdentity]: intent.ack === null ? "unknown" : "copyFailed" }))
+      intent.pending = false
+      if (intent.controller === controller) intent.controller = null
+    }
+  }
+  const shareStatus = shareIdentity === null ? null : shareStates[shareIdentity] ?? null
+
+  if (!skill && !sharedSummary) return null
+  const record = detail !== null && detail.skill.id === skill?.skill_id ? detail.skill : null
+  const downloadInfo = detail !== null && detail.skill.id === skill?.skill_id && !sharedSummary ? detail.downloadInfo : null
+  const loading = !sharedSummary && open && skill?.skill_id !== undefined && record === null && !failed
+  const title = sharedSummary?.skill.display_name ?? record?.displayName ?? record?.name ?? skill!.name
+  const description = sharedSummary?.skill.description ?? record?.userDescription ?? record?.description ?? skill!.description
+  const examples = sharedSummary?.skill.example_prompts ?? record?.exampleQuestions ?? skill?.example_questions ?? []
+  const updated = displayDate(sharedSummary?.skill.updated_at ?? record?.updatedAt ?? (skill?.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
+  const installed = installationState === undefined ? record?.added ?? skill?.installed ?? false : installationState.installed && installationState.enabled
+  const cover = sharedSummary?.skill.cover_image === undefined ? record?.coverImage ?? skill?.cover_image : ownerCoverPath(sharedSummary.skill.cover_image, sharedSummary.skill.skill_id)
 
   // Folder nodes are presentation-only prefixes of the owner-approved paths.
   // No archive member or generated content is added to the inventory.
@@ -185,7 +265,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   const metadata = [
     publisherLabel,
     updated ? t("skills.updatedAt", { date: updated }) : undefined,
-    skill.usage_count ? t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) }) : undefined,
+    !sharedSummary && skill?.usage_count ? t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) }) : undefined,
   ].filter((value): value is string => Boolean(value))
 
   return (
@@ -202,7 +282,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
         }}
       >
         {readerOpen ? null : <div className={styles.topActions}>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share aria-hidden="true" /></Button>
+          {sharedSummary || skill?.revision_skill_id ? <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} disabled={shareIdentity === null || shareStatus === "pending" || shareStatus === "unknown"} onClick={() => void share()}><Share aria-hidden="true" /></Button> : null}
           {downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={t("skills.detailDownloadShort")} disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
         </div>}
         {readerOpen ? <DialogHeader className={styles.readerHeader}>
@@ -215,19 +295,23 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription className={styles.meta}>{metadata.map((value, index) => <span key={index}>{index > 0 ? <span className={styles.separator} aria-hidden="true">|</span> : null}{value}</span>)}</DialogDescription>
             <div className={styles.actions}>
-              <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
+              <Button type="button" onClick={() => sharedSummary ? onAddShared?.() : skill && onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
               <Button type="button" variant="outline" disabled={boundRevision === null} onClick={restartReader}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
           {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}
         </DialogHeader>}
+        {shareStatus === "unknown" ? <div className={styles.status} role="alert"><p>{t("skills.shareUnknown")}</p><Button type="button" variant="outline" onClick={() => void share(true)}>{t("skills.shareNew")}</Button></div> : null}
+        {shareStatus === "copied" ? <p className={styles.status} role="status">{t("skills.detailLinkCopied")}</p> : null}
+        {shareStatus === "copyFailed" || shareStatus === "failed" ? <p className={styles.status} role="alert">{t(shareStatus === "copyFailed" ? "skills.shareCopyFailed" : "skills.shareFailed")}</p> : null}
+        {installationNotice ? <div className={styles.status} role="alert"><p>{installationNotice}</p>{onRetryInstallation ? <Button type="button" variant="outline" onClick={onRetryInstallation}>{t("skills.packageRetry")}</Button> : null}</div> : null}
         {actionFailed ? <p className={styles.status} role="alert">{t("skills.addError")}</p> : null}
         {readerOpen ? null : <section className={styles.body}>
           <p className={styles.description}>{description}</p>
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}
           {failed ? <p className={styles.status}>{t("skills.detailUnavailable")}</p> : null}
-          {record !== null && skill.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
-          {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
+          {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
+          {examples.length > 0 ? <div className={styles.examples}>{examples.map((example) => <button key={example} type="button" disabled={Boolean(sharedSummary)} onClick={() => onTry(example)}><MessageCircle aria-hidden="true" /><span>{example}</span></button>)}</div> : null}
         </section>}
         {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
             <nav className={styles.fileList} aria-label={t("skills.detailFiles")}>

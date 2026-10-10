@@ -32,3 +32,9 @@ describe("bounded canonical product navigation intent", () => {
     expect(parseProductReturnTarget(`/app/project/%70${project.slice(1)}`)).toBeNull()
   })
 })
+
+it("retains only canonical Skill Share return targets", () => {
+  expect(parseProductReturnTarget("/skills/shared/share-1")).toBe("/skills/shared/share-1")
+  expect(parseProductReturnTarget("/skills/shared/skill%3Arevision")).toBe("/skills/shared/skill%3Arevision")
+  for (const path of ["/skills/shared/", "/skills/shared/%73hare", "/skills/shared/a/b", "/skills/shared/a?x=1", "/skills/shared/a#x", "/skills/shared/%252F", "/skills/shared/%00"]) expect(parseProductReturnTarget(path)).toBeNull()
+})

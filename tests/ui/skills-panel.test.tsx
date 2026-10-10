@@ -8,6 +8,7 @@ import { HubClientError, type HubClient } from "@/hub/client"
 import type { SkillCard } from "@/hub/schemas"
 import { LocaleProvider } from "@/i18n/context"
 import { parseGithubRepository } from "@/ui/skills/github-import-dialog"
+import { SkillDetailDialog } from "@/ui/skills/skill-detail-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { SkillsContent, SkillsPanel } from "@/ui/skills/skills-panel"
 
@@ -563,4 +564,11 @@ it("explicit file replacement recovers a rejected Begin and reselects the same f
   await screen.findByText("new-skill")
   expect(localImportMock.begin).toHaveBeenCalledTimes(2)
   expect(localImportMock.begin.mock.calls[0]?.[1]).not.toBe(localImportMock.begin.mock.calls[1]?.[1])
+})
+
+it("does not expose a fake Share action for a preview skill with no owner identity", () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  render(<LocaleProvider><SkillDetailDialog skill={OFFICIAL} open onOpenChange={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  expect(screen.queryByRole("button", { name: "分享技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "试试看" })).toBeInTheDocument()
 })

@@ -458,13 +458,24 @@ export function createSkillInstallationClient(): SkillInstallationClient {
   const idPath = (id: string) => `${base}/${encodeURIComponent(installationIdSchema.parse(id))}`
   const commandHeaders = (key: string, json: boolean) => ({ ...(json ? { "content-type": "application/json" } : {}), "idempotency-key": installationKeySchema.parse(key) })
   async function request(operation: InstallationOperation, path: string, init: RequestInit, signal?: AbortSignal) {
-    if (signal?.aborted) throw new HubClientError("aborted", "Installation request cancelled", null, null)
-    let response: Response
+    const deadline = new AbortController()
+    const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
+    const timer = setTimeout(() => deadline.abort(), 10_000)
+    let response: Response | undefined
+    const within = <T,>(work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+      const abort = () => reject(joined.reason)
+      joined.addEventListener("abort", abort, { once: true })
+      void work.then(resolve, reject).finally(() => joined.removeEventListener("abort", abort))
+      if (joined.aborted) abort()
+    })
     try {
-      response = await fetch(path, { ...init, cache: "no-store", redirect: "error", ...(signal === undefined ? {} : { signal }) })
-    } catch {
-      throw new HubClientError(signal?.aborted ? "aborted" : "network", "Installation request did not complete", null, null)
-    }
+      joined.throwIfAborted()
+      response = await within(fetch(path, { ...init, cache: "no-store", redirect: "error", signal: joined }).then((value) => {
+        if (joined.aborted) void value.body?.cancel().catch(() => undefined)
+        return value
+      }))
+      joined.throwIfAborted()
+      if (response === undefined) throw new HubClientError("network", "Missing installation response", null, null)
     const requestId = response.headers.get("x-request-id")
     const retryAfter = response.status === 429 ? response.headers.get("retry-after") : null
     if (!hasHubNoStoreDirective(response.headers) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
@@ -472,9 +483,29 @@ export function createSkillInstallationClient(): SkillInstallationClient {
       || retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter)) {
       throw new HubClientError("parse", "Invalid installation response headers", null, response.status)
     }
+    const declared = response.headers.get("content-length")
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576) || response.body === null) throw new HubClientError("parse", "Invalid installation body size", null, response.status)
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    const cancel = () => { void reader.cancel().catch(() => undefined) }
+    joined.addEventListener("abort", cancel, { once: true })
+    try {
+      for (;;) {
+        const part = await within(reader.read())
+        joined.throwIfAborted()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > 1_048_576) throw new HubClientError("parse", "Installation body is too large", null, response.status)
+        chunks.push(part.value)
+      }
+    } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock() }
+    if (declared !== null && Number(declared) !== size) throw new HubClientError("parse", "Installation body size mismatch", null, response.status)
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
     let raw: unknown
-    try { raw = await response.json() } catch { throw new HubClientError(signal?.aborted ? "aborted" : "parse", "Invalid installation JSON", null, response.status) }
-    if (signal?.aborted) throw new HubClientError("aborted", "Installation request cancelled", null, response.status)
+    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw new HubClientError("parse", "Invalid installation JSON", null, response.status) }
     if (response.status !== 200) {
       const error = installationErrorSchema.safeParse(raw)
       if (!error.success || !installationErrorAllowed(operation, response.status, error.data.error.code)) throw new HubClientError("parse", "Invalid installation error", null, response.status)
@@ -483,6 +514,10 @@ export function createSkillInstallationClient(): SkillInstallationClient {
     const result = installationResponseSchema(operation).safeParse(raw)
     if (!result.success) throw new HubClientError("parse", "Invalid installation response", null, response.status)
     return result.data
+    } catch (error) {
+      if (error instanceof HubClientError) throw error
+      throw new HubClientError(signal?.aborted ? "aborted" : "network", "Installation request did not complete", null, response?.status ?? null)
+    } finally { clearTimeout(timer); void response?.body?.cancel().catch(() => undefined) }
   }
   const receipt = async (operation: "install" | "setEnabled" | "remove", path: string, init: RequestInit, identity: string, enabled?: boolean, signal?: AbortSignal): Promise<InstallationReceipt> => {
     const result = await request(operation, path, init, signal)

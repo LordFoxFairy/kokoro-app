@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 import { createSkillDraftRequestSchema, skillDraftSchema, beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema, completeSkillUploadSchema, validateSkillDraftRequestSchema, validateSkillDraftSchema, skillPublishRequestSchema, publishSkillDraftSchema, skillUploadStateSchema, managedPersonalSkillSchema, personalInstallationSchema, installationErrorAllowed, type InstallationOperation } from "@/hub/schemas"
 
-const OWNER_COMMIT = "2f3678736287241bbe620e087ab3b0da95fd2fb8"
-const OWNER_SHA256 = "418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045"
-const OWNER_VERSION = "13.1.0"
+const OWNER_COMMIT = "e1769b56aefa2e00e6460195c049cea81a9eea3b"
+const OWNER_SHA256 = "0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209"
+const OWNER_VERSION = "13.3.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -151,7 +151,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("2f3678736287241bbe620e087ab3b0da95fd2fb8")
+    expect(OWNER_COMMIT).toBe("e1769b56aefa2e00e6460195c049cea81a9eea3b")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -276,4 +276,13 @@ it("compares all five installation operation/status error families, including mu
     }
     expect(installationErrorAllowed(consumer, 403, "skill_forbidden")).toBe(!["list", "get"].includes(consumer))
   }
+})
+
+it("pins the formal Public13.3 exact shared revision operation without replacing Resolve", async () => {
+  const bytes = await readFile(SNAPSHOT)
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209")
+  const spec = YAML.parse(bytes.toString())
+  expect(spec.info.version).toBe("13.3.0")
+  expect(spec.paths["/v1/skill-shares/{share_id}/skill"].get.operationId).toBe("getSharedSkillRevision")
+  expect(spec.components.schemas.SkillShareResponse.properties.data.required).toEqual(["share_id", "source_ref", "url", "created_at", "expires_at", "revoked_at"])
 })

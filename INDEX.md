@@ -209,3 +209,5 @@ python3 scripts/verify-ten-repository-standard.py --format json
 
 该命令会审计十仓；评估本仓时只提取 `repository == "kokoro"` 的诊断。它不替代本仓的真实
 lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
+
+- Skill Share: `src/hub/skill-share.schema.ts` / `skill-share-client.ts` 严格消费正式六字段链接与精确 revision 摘要；`src/app/skills/shared/[id]/page.tsx` 复用真实摘要/包 reader，安装独立读取和 ACK。未知 Create 不自动重建；复制失败复用原 ACK。共享页未获 exact 下载句柄，不借 series current 下载。

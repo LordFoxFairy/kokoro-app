@@ -598,8 +598,9 @@ describe("personal installation strict boundaries", () => {
   })
   it("rejects invalid selectors before network and propagates cancellation", async () => {
     const fetchMock = vi.fn().mockImplementation(async (_path: string, init: RequestInit) => {
-      expect(init.signal).toBe(controller.signal)
+      expect(init.signal).toBeInstanceOf(AbortSignal)
       controller.abort()
+      expect(init.signal?.aborted).toBe(true)
       return publicResponse({ data: [] })
     })
     const controller = new AbortController()
@@ -674,3 +675,37 @@ it("rejects package unknown fields, unsafe paths, invalid decimal revision and b
 })
 
 it("removes the retired Github URL methods from the generic Hub client", () => { expect(createHubClient()).not.toHaveProperty("previewGithub"); expect(createHubClient()).not.toHaveProperty("importGithub") })
+
+describe("installation request total budget", () => {
+  afterEach(() => vi.useRealTimers())
+  it("ends a stalled fetch within the total deadline and cleans up its late body", async () => {
+    vi.useFakeTimers()
+    let resolve!: (response: Response) => void
+    const cancelled = vi.fn()
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((done) => { resolve = done })))
+    const result = createSkillInstallationClient().list().catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(10_001)
+    const error = await Promise.race([result, Promise.resolve("still pending")])
+    expect(error).toBeInstanceOf(HubClientError)
+    resolve(new Response(new ReadableStream({ cancel: cancelled })))
+    await Promise.resolve(); await Promise.resolve()
+    expect(cancelled).toHaveBeenCalledOnce()
+  })
+  it("cancels an oversized installation stream before parsing", async () => {
+    const cancelled = vi.fn()
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(1_048_577)) }, cancel: cancelled }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" } })))
+    const result = createSkillInstallationClient().list().catch((error: unknown) => error)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(await Promise.race([result, Promise.resolve("still pending")])).toMatchObject({ reason: "parse" })
+    expect(cancelled).toHaveBeenCalledOnce()
+  })
+  it("cancels a stalled body when its caller leaves", async () => {
+    const controller = new AbortController(), cancelled = vi.fn()
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({ cancel: cancelled }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "request-1" } })))
+    const result = createSkillInstallationClient().list({}, controller.signal).catch((error: unknown) => error)
+    await Promise.resolve(); await Promise.resolve(); controller.abort()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(await Promise.race([result, Promise.resolve("still pending")])).toMatchObject({ reason: "aborted" })
+    expect(cancelled).toHaveBeenCalledOnce()
+  })
+})

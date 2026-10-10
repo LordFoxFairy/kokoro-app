@@ -13,6 +13,14 @@ export function parseProductReturnTarget(raw: string): ProductReturnTarget | nul
   if (raw.length === 0 || raw.length > 2048 || /[\\\u0000-\u001f\u007f#]/u.test(raw)) return null
   const separator = raw.indexOf("?")
   const pathname = separator === -1 ? raw : raw.slice(0, separator)
+  if (pathname.startsWith("/skills/shared/")) {
+    if (separator !== -1) return null
+    const value = pathname.slice("/skills/shared/".length)
+    try {
+      const id = decodeURIComponent(value)
+      return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(id) && encodeURIComponent(id) === value ? pathname as ProductReturnTarget : null
+    } catch { return null }
+  }
   const project = pathname.startsWith("/app/project/") && PROJECT.test(pathname.slice("/app/project/".length))
   if (!SURFACES.has(pathname) && !project) return null
   if (separator === -1) return pathname as ProductReturnTarget

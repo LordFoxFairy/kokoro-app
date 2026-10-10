@@ -1703,6 +1703,15 @@ export const zh = {
   "firstSite.next": "下一步",
   "firstSite.liveNext": "菜单与视觉 token 来自实时 System 配置。",
   "firstSite.previewNext": "后端配置连接期间，预览 fixture 会保持工作区可用。",
+  "skills.shareUnknown": "分享创建结果暂未确认。不要重复提交；只有明确需要另一条链接时才重新创建。",
+  "skills.shareNew": "创建新的分享",
+  "skills.shareCopyFailed": "链接已创建，复制失败。再次点击分享可复制同一条链接。",
+  "skills.shareFailed": "分享创建失败，请重试。",
+  "skills.shareUnavailable": "分享暂不可用或已失效。",
+  "skills.shareLogin": "请登录后查看分享的技能。",
+  "skills.shareSignIn": "登录并继续",
+  "skills.shareInstallationUnavailable": "暂时无法确认安装状态，请重试。",
+  "skills.shareOtherPin": "我的技能中已安装该技能的其他固定版本；本页不会自动升级。",
 } as const
 
 export type MessageKey = keyof typeof zh

@@ -46,7 +46,7 @@ it("keeps the Manus-style action cluster visible and expands in place", async ()
   renderDialog()
 
   const dialog = screen.getByTestId("skill-detail-dialog")
-  expect(screen.getByRole("button", { name: "分享技能" })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: "分享技能" })).toBeNull()
   expect(screen.getByRole("button", { name: "更多技能操作" })).toBeInTheDocument()
   const expand = screen.getByRole("button", { name: "放大技能详情" })
 

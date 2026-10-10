@@ -5,13 +5,13 @@ import { resolve } from "node:path"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "2f3678736287241bbe620e087ab3b0da95fd2fb8"
-const OWNER_SHA256 = "418db9504b179d29113385f334628d304130491d4bbc86169e20c712cf2cd045"
-const OWNER_VERSION = "13.1.0"
+const OWNER_COMMIT = "e1769b56aefa2e00e6460195c049cea81a9eea3b"
+const OWNER_SHA256 = "0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209"
+const OWNER_VERSION = "13.3.0"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(OWNER_COMMIT).toBe("2f3678736287241bbe620e087ab3b0da95fd2fb8")
+  expect(OWNER_COMMIT).toBe("e1769b56aefa2e00e6460195c049cea81a9eea3b")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -74,10 +74,10 @@ it("pins the sole added Project rename operation and its closed command receipt/
     components: { schemas: Record<string, unknown>; responses: Record<string, unknown>; parameters: Record<string, unknown> }
   }
   const operations = Object.values(spec.paths).flatMap((path) => Object.entries(path).filter(([method]) => ["get", "post", "put", "patch", "delete", "options", "head"].includes(method)).map(([, operation]) => operation.operationId))
-  expect(operations).toHaveLength(136)
-  expect(new Set(operations).size).toBe(136)
+  expect(operations).toHaveLength(137)
+  expect(new Set(operations).size).toBe(137)
   const pathIds = Object.entries(spec.paths).flatMap(([path, methods]) => Object.entries(methods).filter(([method]) => ["get", "post", "put", "patch", "delete", "options", "head"].includes(method)).map(([method, operation]) => [path, method, operation.operationId])).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), "en"))
-  expect(createHash("sha256").update(JSON.stringify(pathIds)).digest("hex")).toBe("7bfe10358d0061990bf1c43da0c296907913eff7111381c04058ea6170af7857")
+  expect(createHash("sha256").update(JSON.stringify(pathIds)).digest("hex")).toBe("aeb95dd45c8241e38794ef7c76dfc2569b4a835cd309ef98facc9cc0dd3eeb42")
   expect(operations.filter((operation) => operation === "renameProject")).toHaveLength(1)
   expect(spec.paths["/v1/projects/{projectId}/name"]?.patch).toMatchObject({ operationId: "renameProject", "x-kokoro-owner": "kokoro-bff", "x-kokoro-idempotency": "required", "x-kokoro-permission": "project.update" })
   expect(spec.components.schemas.RenameProjectRequest).toMatchObject({ additionalProperties: false, required: ["name"] })

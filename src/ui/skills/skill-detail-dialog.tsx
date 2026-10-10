@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type RefObject } from "react"
-import { Check, ChevronDown, ChevronRight, Clipboard, Download, Ellipsis, FileText, Folder, Forward, Maximize2, MessageCircle, Minimize2 } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Clipboard, Download, Ellipsis, FileText, Folder, Maximize2, MessageCircle, Minimize2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,10 +41,8 @@ type SkillDetailDialogProps = {
 export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenChange, onTry, returnFocusRef }: SkillDetailDialogProps) {
   const t = useT()
   const [copiedSkillName, setCopiedSkillName] = useState<string | null>(null)
-  const [linkCopied, setLinkCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const copyResetTimerRef = useRef<number | null>(null)
-  const linkResetTimerRef = useRef<number | null>(null)
   const actionBarRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -52,18 +50,10 @@ export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenCha
       window.clearTimeout(copyResetTimerRef.current)
       copyResetTimerRef.current = null
     }
-    if (linkResetTimerRef.current !== null) {
-      window.clearTimeout(linkResetTimerRef.current)
-      linkResetTimerRef.current = null
-    }
     return () => {
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current)
         copyResetTimerRef.current = null
-      }
-      if (linkResetTimerRef.current !== null) {
-        window.clearTimeout(linkResetTimerRef.current)
-        linkResetTimerRef.current = null
       }
     }
   }, [open, skill?.name])
@@ -99,33 +89,13 @@ export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenCha
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setCopiedSkillName(null)
-      setLinkCopied(false)
       setExpanded(false)
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current)
         copyResetTimerRef.current = null
       }
-      if (linkResetTimerRef.current !== null) {
-        window.clearTimeout(linkResetTimerRef.current)
-        linkResetTimerRef.current = null
-      }
     }
     onOpenChange(nextOpen)
-  }
-
-  const copySkillLink = async () => {
-    if (!navigator.clipboard?.writeText) return
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setLinkCopied(true)
-      if (linkResetTimerRef.current !== null) window.clearTimeout(linkResetTimerRef.current)
-      linkResetTimerRef.current = window.setTimeout(() => {
-        linkResetTimerRef.current = null
-        setLinkCopied(false)
-      }, 1_200)
-    } catch {
-      setLinkCopied(false)
-    }
   }
 
   const downloadSkill = () => {
@@ -157,9 +127,6 @@ export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenCha
       >
         {expanded ? <div className={styles.expandedTitlebar}>{skill.name}</div> : null}
         <div ref={actionBarRef} className={styles.actionBar} tabIndex={-1} aria-label={t("skills.detailMore")}>
-          <Button type="button" variant="ghost" size="icon-sm" className={styles.actionButton} aria-label={linkCopied ? t("skills.detailLinkCopied") : t("skills.detailShare")} onClick={() => void copySkillLink()}>
-            <Forward aria-hidden="true" />
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon-sm" className={styles.actionButton} aria-label={t("skills.detailMore")}>
