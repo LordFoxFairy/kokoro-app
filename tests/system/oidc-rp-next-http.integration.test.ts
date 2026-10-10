@@ -4792,7 +4792,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       return
     }
     expect(response.status).toBe(200)
-    expect(response.body).toContain(loginLocation)
+    const escapedLocation = loginLocation.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+    expect(response.body).toMatch(new RegExp(`(?:NEXT_REDIRECT[^<]{0,512}${escapedLocation}|<meta[^>]+url=${escapedLocation})(?=[;\\s"'<]|$)`, "u"))
   }
 
   it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
