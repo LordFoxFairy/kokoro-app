@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
@@ -158,7 +158,7 @@ it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and act
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve })))
   const onAdd = vi.fn()
   const onTry = vi.fn()
-  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>)
   expect(await screen.findByText(labels.loading)).toBeInTheDocument()
   expect(screen.getByRole("button", { name: labels.share })).toBeInTheDocument()
   finish!(response({ skill: { id: "skill-manim", displayName: "Manim", updatedAt: "2026-05-22T00:00:00.000Z", exampleQuestions: ["Real example"], added: false }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } }))
@@ -166,7 +166,8 @@ it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and act
   const dialog = screen.getByTestId("manus-skill-detail-dialog")
   expect(dialog).toHaveTextContent(labels.updated)
   expect(dialog).toHaveTextContent(labels.used)
-  expect(dialog).toHaveTextContent("Manus")
+  expect(dialog).toHaveTextContent("Kokoro")
+  expect(dialog).not.toHaveTextContent("Manus")
   fireEvent.click(screen.getByRole("button", { name: labels.add }))
   expect(onAdd).toHaveBeenCalledWith(localizedSkill)
   fireEvent.click(screen.getByRole("button", { name: "Real example" }))
@@ -390,4 +391,57 @@ it("uses one finite budget for fetch headers plus body, and clears successful re
     await createManusSkillHubClient(createHubClient()).listSkillCatalog()
     expect(vi.getTimerCount()).toBe(0)
   } finally { vi.useRealTimers() }
+})
+
+const presentationCases = (["zh", "en"] as const).flatMap((locale) => (["official", "third_party"] as const).flatMap((scope) => [
+  { locale, scope, tag: "CODING", category: locale === "zh" ? "程式设计" : "Coding" },
+  { locale, scope, tag: "DATA", category: locale === "zh" ? "资料" : "Data" },
+  { locale, scope, tag: "AUTOMATION", category: locale === "zh" ? "自动化" : "Automation" },
+  { locale, scope, tag: "BUSINESS", category: locale === "zh" ? "商业" : "Business" },
+  { locale, scope, tag: "DESIGN", category: locale === "zh" ? "设计" : "Design" },
+  { locale, scope, tag: "CONTENT", category: locale === "zh" ? "内容" : "Content" },
+  { locale, scope, tag: "MEDIA", category: locale === "zh" ? "媒体" : "Media" },
+  { locale, scope, tag: "APPS", category: locale === "zh" ? "应用" : "Apps" },
+]))
+it.each(presentationCases)("shares $locale $scope publisher and $tag label between catalog card and detail", async ({ locale, scope, tag, category }) => {
+  window.localStorage.setItem("kokoro.locale", locale)
+  const publisher = scope === "official" ? "Kokoro Test" : locale === "zh" ? "社区" : "Community"
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const operation = String(input)
+    if (operation.endsWith("ListHubSkills")) return response({ ...ownerHub, nextPageToken: undefined, skills: [{ ...ownerHub.skills[0], displayName: "Real catalog title", publisherType: scope === "official" ? "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" : "SKILL_HUB_PUBLISHER_TYPE_COMMUNITY", tags: { values: [`SKILL_HUB_TAG_${tag}`] }, exampleQuestions: [] }] })
+    if (operation.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (operation.endsWith("GetSkill")) return response({ ...ownerDetail, skill: { ...ownerDetailFields, displayName: "Real catalog title", tags: { values: [`SKILL_HUB_TAG_${tag}`] }, exampleQuestions: [] } })
+    throw new Error(`unexpected request ${operation}`)
+  }))
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} brandName="Kokoro Test" onPrompt={vi.fn()} /></LocaleProvider>)
+  const title = await screen.findByRole("button", { name: "Real catalog title" })
+  const card = title.closest('[data-slot="card"]') as HTMLElement
+  expect(within(card).getByText(publisher)).toBeInTheDocument()
+  expect(within(card).getByText(category)).toBeInTheDocument()
+  fireEvent.click(title)
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  await within(dialog).findByRole("button", { name: locale === "zh" ? "下载技能" : "Download skill" })
+  expect(within(dialog).getByText(category)).toBeInTheDocument()
+  expect(dialog).toHaveTextContent(publisher)
+  expect(dialog).not.toHaveTextContent("Manus")
+  expect(within(dialog).queryByText(tag)).toBeNull()
+  expect(within(dialog).queryByText(`SKILL_HUB_TAG_${tag}`)).toBeNull()
+})
+
+it("catalog art consumes the owner revision-bound cover_image instead of a series alias", async () => {
+  stubOwnerReads({ ...ownerHub, nextPageToken: undefined })
+  renderLive()
+  const title = await screen.findByRole("button", { name: "Current" })
+  const card = title.closest('[data-slot="card"]') as HTMLElement
+  expect(card.querySelector("img")?.getAttribute("src")).toBe(`/api/hub/skills/${ownerRevision}/cover`)
+  expect(card.querySelector("img")?.getAttribute("src")).not.toContain("/self/skills/series-current/")
+})
+it("catalog art stays empty without an owner cover fact instead of synthesizing a series request", async () => {
+  const { coverImage: _cover, ...noCover } = ownerHub.skills[0]!
+  void _cover
+  stubOwnerReads({ ...ownerHub, nextPageToken: undefined, skills: [noCover] })
+  renderLive()
+  const title = await screen.findByRole("button", { name: "Current" })
+  const card = title.closest('[data-slot="card"]') as HTMLElement
+  expect(card.querySelector("img")).toBeNull()
 })

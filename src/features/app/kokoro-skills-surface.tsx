@@ -82,6 +82,8 @@ export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
 
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
   const t = useT()
+  const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
+  const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   const client = useMemo(() => {
     const base = browserHubClient({ preview })
     return preview ? base : createManusSkillHubClient(base)
@@ -239,14 +241,14 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                 return (
                   <Card className={styles.card} key={stateKey}>
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
-                      {skill.skill_id ? <Image src={`/api/hub/self/skills/${encodeURIComponent(skill.skill_id)}/cover`} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true" />}
+                      {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true" />}
                     </button>
                     <CardContent className={styles.cardBody}>
                       <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>
                       <p className={styles.cardDescription}>{skill.description}</p>
                       <div className={styles.cardMeta}>
-                        <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{skill.scope === "third_party" ? t("skills.community") : brandName}</span></span>
-                        {categoryValues.map((value) => <span className={styles.metaPill} key={value}>{t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")}</span>)}
+                        <span className={cn(styles.metaPill, styles.owner)}><BrandFallback aria-hidden="true" /><span>{publisherLabel(skill)}</span></span>
+                        {categoryValues.map((value) => <span className={styles.metaPill} key={value}>{categoryLabel(value)}</span>)}
                       </div>
                       <div className={styles.cardFooter}>
                         {skill.usage_count === undefined ? <span /> : <span>{t("skills.usedCount", { count: formatUsage(skill.usage_count) })}</span>}
@@ -269,6 +271,8 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       <ManusSkillDetailDialog
         key={detailSkill?.skill_id ?? "closed"}
         skill={detailSkill}
+        publisherLabel={detailSkill === null ? "" : publisherLabel(detailSkill)}
+        categoryLabels={detailSkill === null ? [] : skillCategories(detailSkill).map(categoryLabel)}
         open={detailSkill !== null}
         busy={detailSkill !== null && busy === `${detailSkill.scope}/${detailSkill.name}`}
         onOpenChange={(open) => { if (!open) setDetailSkill(null) }}

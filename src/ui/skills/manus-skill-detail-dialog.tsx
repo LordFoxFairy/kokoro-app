@@ -17,6 +17,8 @@ type Props = {
   skill: SkillCatalogCard | null
   open: boolean
   busy?: boolean
+  publisherLabel?: string
+  categoryLabels?: readonly string[]
   onOpenChange: (open: boolean) => void
   onAdd: (skill: SkillCatalogCard) => void
   onTry: (prompt: string) => void
@@ -32,7 +34,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state, SKILL.md readers, or package identifiers in the browser. */
-export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
+export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
   const { locale, t } = useLocale()
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
@@ -80,7 +82,6 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
   const title = record?.displayName ?? record?.name ?? skill.name
   const description = record?.userDescription ?? record?.description ?? skill.description
   const examples = record?.exampleQuestions ?? skill.example_questions ?? []
-  const tags = record?.tags?.values ?? []
   const updated = displayDate(record?.updatedAt ?? (skill.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
   const installed = record?.added ?? skill.installed
   const cover = record?.coverImage ?? skill.cover_image
@@ -104,9 +105,9 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
         </div>
         <DialogHeader className={styles.hero}>
           <div className={styles.copy}>
-            {tags.slice(0, 2).map((tag) => <Badge key={tag} variant="secondary">{tag.replace(/^SKILL_HUB_TAG_/u, "")}</Badge>)}
+            {categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription className={styles.meta}>Manus <span aria-hidden="true">|</span>{updated ? <>{t("skills.updatedAt", { date: updated })}<span aria-hidden="true">|</span></> : null}{skill.usage_count ? <>{t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) })}</> : null}</DialogDescription>
+            <DialogDescription className={styles.meta}>{publisherLabel ? <>{publisherLabel}<span aria-hidden="true">|</span></> : null}{updated ? <>{t("skills.updatedAt", { date: updated })}<span aria-hidden="true">|</span></> : null}{skill.usage_count ? <>{t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) })}</> : null}</DialogDescription>
             <div className={styles.actions}>
               <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
             </div>
