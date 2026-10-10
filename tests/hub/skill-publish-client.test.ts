@@ -583,3 +583,10 @@ for (const [operation, call] of Object.entries(errorCalls)) {
     }
   })
 }
+
+it("cancels the unused PUT ACK body, including streams which never close", async () => {
+  const cancel = vi.fn()
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({ cancel }), { headers: { "x-amz-version-id": "real-version" } })))
+  await expect(createSkillPublishClient().putPackage(reference, new File(["zip"], "mine.zip"))).resolves.toEqual({ source_version_id: "real-version" })
+  expect(cancel).toHaveBeenCalledOnce()
+})

@@ -1,4 +1,5 @@
 import { z, type ZodTypeAny } from "zod"
+import { putSkillPackage } from "./skill-package-transfer"
 
 import { HubClientError, hasHubNoStoreDirective } from "./client"
 import {
@@ -379,19 +380,6 @@ async function publicCommand<T extends ZodTypeAny>(path: string, method: "GET" |
 
 function path(id: string, suffix = ""): string { return `${skillCommandPath(id)}${suffix}` }
 
-function approvedTransferUrl(reference: TransferReference, pageUrl: string): URL {
-  let url: URL
-  let page: URL
-  try { url = new URL(reference.url); page = new URL(pageUrl) } catch { throw new HubClientError("parse", "invalid transfer reference", null, null) }
-  const loopback = (host: string) => host === "localhost" || host === "127.0.0.1" || host === "[::1]"
-  const localHttp = page.protocol === "http:" && loopback(page.hostname) && url.protocol === "http:" && loopback(url.hostname)
-  if ((url.protocol !== "https:" && !localHttp) || url.username || url.password || url.hash || Number.isNaN(Date.parse(reference.expires_at))) {
-    throw new HubClientError("parse", "unsafe transfer reference", null, null)
-  }
-  if (Date.parse(reference.expires_at) <= Date.now()) throw new HubClientError("parse", "expired transfer reference", null, null)
-  return url
-}
-
 export type SkillPublishClient = {
   createDraft: (body: CreateSkillDraftRequest, key: string, signal?: AbortSignal) => Promise<z.infer<typeof skillDraftSchema>>
   getUpload: (id: string, signal?: AbortSignal) => Promise<z.infer<typeof skillUploadStateSchema>>
@@ -412,23 +400,9 @@ export function createSkillPublishClient(pageUrl = globalThis.location?.href ?? 
     getUpload: (id, signal) => publicCommand(path(id, "/package-upload"), "GET", 200, "getUpload", skillUploadStateSchema, undefined, undefined, signal),
     beginUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload"), "POST", 201, "beginUpload", beginSkillUploadSchema, beginSkillUploadRequestSchema.parse(body), key, signal),
     putPackage: async (reference, file, signal) => {
-      const url = approvedTransferUrl(transferReferenceSchema.parse(reference), pageUrl)
-      const deadline = new AbortController()
-      const timer = setTimeout(() => deadline.abort(), 60_000)
-      const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
-      let response: Response
-      try {
-        response = await fetch(url.href, {
-          method: "PUT", body: file, headers: { "content-type": "application/zip" },
-          credentials: "omit", redirect: "error", referrerPolicy: "no-referrer", mode: "cors", signal: joined,
-        })
-      } catch { throw new HubClientError(signal?.aborted ? "aborted" : "network", "package transfer did not complete", null, null) }
-      finally { clearTimeout(timer) }
-      if (joined.aborted) throw new HubClientError(signal?.aborted ? "aborted" : "network", "package transfer did not complete", null, null)
-      if (!response.ok) throw new HubClientError("http", "package transfer rejected", null, response.status)
-      const proof = skillSourceVersionSchema.safeParse(response.headers.get("x-amz-version-id"))
-      if (!proof.success) throw new HubClientError("parse", "package transfer version ACK missing or invalid", null, response.status)
-      return { source_version_id: proof.data }
+      const ack = await putSkillPackage(transferReferenceSchema.parse(reference), file, pageUrl, 60_000, signal)
+      if (!skillSourceVersionSchema.safeParse(ack.source_version_id).success) throw new HubClientError("parse", "package transfer version ACK missing or invalid", null, 200)
+      return ack
     },
     completeUpload: (id, body, key, signal) => publicCommand(path(id, "/package-upload/complete"), "POST", 200, "completeUpload", completeSkillUploadSchema, completeSkillUploadRequestSchema.parse(body), key, signal),
     validateDraft: (id, body, key, signal) => publicCommand(path(id, "/validate"), "POST", 200, "validateDraft", validateSkillDraftSchema, validateSkillDraftRequestSchema.parse(body), key, signal),

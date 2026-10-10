@@ -1020,3 +1020,91 @@ it("bounds actual package stream bytes and caller cancellation, not just declare
   expect((await pending).status).toBe(503)
   expect(cancel).toHaveBeenCalledTimes(1)
 })
+
+it("admits the formal browser-private local import Begin path and owner ACK", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const data = { intent_id: "intent-1", skill_id: "series-1", phase: "upload_pending", upload_id: "upload-1", transfer_reference: { url: "https://objects.example/put", method: "PUT", required_headers: { "content-type": "application/zip" }, expires_at: "2999-01-01T00:00:00Z" }, expires_at: "2999-01-01T00:00:00Z", replayed: false }
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-1" } }))
+  const response = await POST(new Request("http://localhost/api/hub/skills/local-imports", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "begin-1" }, body: JSON.stringify({ filename: "mine.skill", size_bytes: 3, content_sha256: "a".repeat(64) }) }), params(["skills", "local-imports"]))
+  expect(response.status).toBe(201)
+  expect(await response.json()).toEqual({ data })
+})
+
+const importExpiry = "2999-01-01T00:00:00Z"
+const importProof = { upload_id: "upload-1", asset_id: "asset-1", source_version_id: "real-version", size_bytes: "3", content_sha256: "a".repeat(64) }
+const importSkill = { skill_id: "revision-1", source_ref: "skill:revision-1", series_id: "series-1", revision: "1", status: "active", name: "Mine", summary: "", tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "4", source_kind: "personal" }, package_phase: "valid" }
+const importInstallation = { installation_id: "installation-1", source_ref: importSkill.source_ref, series_id: importSkill.series_id, revision: "1", installed: true, enabled: true, installed_at: importSkill.skill_updated_at, updated_at: importSkill.skill_updated_at, display_name: "Mine", summary: "", source_status: "active", skill_updated_at: importSkill.skill_updated_at, example_prompts: [], category_keys: [], product: importSkill.product, tags: [] }
+const importOwnerHeaders = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-1" }
+
+it("maps Complete/zero-body Finalize/Get to exactly formal local-import paths, never self aliases", async () => {
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route")
+  const commands = [
+    { tail: ["intent-1", "complete"], data: { intent_id: "intent-1", skill_id: "series-1", phase: "uploaded", upload_proof: importProof, scan_state: "pending", expires_at: importExpiry, replayed: false }, body: { upload_id: "upload-1", source_version_id: "real-version", size_bytes: 3, content_sha256: importProof.content_sha256 } },
+    { tail: ["intent-1", "finalize"], data: { intent_id: "intent-1", phase: "completed", skill: importSkill, installation: importInstallation, replayed: false } },
+    { tail: ["intent-1"], data: { intent_id: "intent-1", skill_id: "series-1", phase: "completed", expires_at: importExpiry, upload_proof: importProof, skill: importSkill } },
+  ]
+  for (const command of commands) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data: command.data }), { headers: importOwnerHeaders }))
+    const get = command.tail.length === 1
+    const path = ["skills", "local-imports", ...command.tail]
+    const response = await (get ? GET : POST)(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: get ? "GET" : "POST", headers: { origin: "http://localhost", ...(get ? {} : { "idempotency-key": "original-key" }), ...("body" in command ? { "content-type": "application/json" } : {}) }, ...("body" in command ? { body: JSON.stringify(command.body) } : {}) }), params(path))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ data: command.data })
+    expect(requestWithDomain).toHaveBeenLastCalledWith(`http://bff.test/browser/v1/${path.join("/")}`, ENV.KOKORO_DOMAIN, expect.objectContaining({ method: get ? "GET" : "POST", headers: expect.objectContaining({ authorization: "Bearer product-access", "x-kokoro-service": "web-bff" }) }))
+    if (command.tail.at(-1) === "finalize") expect(vi.mocked(requestWithDomain).mock.calls.at(-1)?.[2]).not.toHaveProperty("body")
+  }
+})
+it.each([
+  { tail: ["intent-1", "finalize"], method: "POST", body: "{}", key: "key" },
+  { tail: ["intent-1"], method: "GET", key: "key" },
+  { tail: ["intent-1", "finalize"], method: "POST", key: "comma,key" },
+  { tail: ["intent-1", "complete", "extra"], method: "POST", key: "key" },
+])("rejects local import nonzero body/key/path variants before owner IO", async ({ tail, method, body, key }) => {
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route")
+  const path = ["skills", "local-imports", ...tail]
+  const response = await (method === "GET" ? GET : POST)(new Request(`http://localhost/api/hub/${path.join("/")}`, { method, headers: { origin: "http://localhost", "idempotency-key": key }, ...(body === undefined ? {} : { body }) }), params(path))
+  expect(response.status).toBe(400)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("keeps local-import Origin/session/query gates closed", async () => {
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route")
+  const path = ["skills", "local-imports", "intent-1"]
+  const query = await GET(new Request("http://localhost/api/hub/skills/local-imports/intent-1?tenant=other"), params(path))
+  expect(query.status).toBe(400)
+  const foreign = await POST(new Request("http://localhost/api/hub/skills/local-imports/intent-1/finalize", { method: "POST", headers: { origin: "http://evil.test", "idempotency-key": "key" } }), params([...path, "finalize"]))
+  expect(foreign.status).toBe(403)
+  currentProductSession.mockResolvedValue(null)
+  const unauthenticated = await GET(new Request("http://localhost/api/hub/skills/local-imports/intent-1"), params(path))
+  expect(unauthenticated.status).toBe(401)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("rejects Complete ACK mismatched proof and Get foreign series without leaking owner-family errors", async () => {
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { intent_id: "intent-1", skill_id: "series-1", phase: "uploaded", upload_proof: { ...importProof, source_version_id: "different" }, scan_state: "clean", expires_at: importExpiry, replayed: false } }), { headers: importOwnerHeaders }))
+  const response = await POST(new Request("http://localhost/api/hub/skills/local-imports/intent-1/complete", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "key" }, body: JSON.stringify({ upload_id: "upload-1", source_version_id: "real-version", size_bytes: 3, content_sha256: importProof.content_sha256 }) }), params(["skills", "local-imports", "intent-1", "complete"]))
+  expect(response.status).toBe(502)
+  expect(await response.json()).toMatchObject({ error: { code: "local_skill_import_response_invalid" } })
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ data: { intent_id: "intent-1", skill_id: "foreign", phase: "completed", expires_at: importExpiry, upload_proof: importProof, skill: importSkill } }), { headers: importOwnerHeaders }))
+  expect((await GET(new Request("http://localhost/api/hub/skills/local-imports/intent-1"), params(["skills", "local-imports", "intent-1"]))).status).toBe(502)
+})
+it("accepts formal local-import 429 without Retry-After, rejects a wrong error/status pair", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const call = () => POST(new Request("http://localhost/api/hub/skills/local-imports/intent-1/finalize", { method: "POST", headers: { origin: "http://localhost", "idempotency-key": "key" } }), params(["skills", "local-imports", "intent-1", "finalize"]))
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "local_skill_import_rate_limited", message: "limited", retryable: true } }), { status: 429, headers: importOwnerHeaders }))
+  expect((await call()).status).toBe(429)
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "local_skill_import_precondition_failed", message: "phase", retryable: false } }), { status: 403, headers: importOwnerHeaders }))
+  expect((await call()).status).toBe(502)
+})
+it("local import total budget closes an unending upstream body", async () => {
+  vi.useFakeTimers()
+  try {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const cancel = vi.fn()
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(new ReadableStream({ cancel }), { headers: importOwnerHeaders }))
+    const result = GET(new Request("http://localhost/api/hub/skills/local-imports/intent-1"), params(["skills", "local-imports", "intent-1"]))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect((await result).status).toBe(503)
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
