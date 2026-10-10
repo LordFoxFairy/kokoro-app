@@ -851,3 +851,93 @@ it.each(["draft", "active"])("maps only exact managed %s reads to current owner 
   expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/self/skills?status=${status}&limit=50&cursor=opaque`)
   expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]).toMatchObject({ timeoutMs: 10000, maxResponseBytes: 1048576 })
 })
+
+const ownerCoverHeaders = { "content-type": "image/png", "content-length": "3", "cache-control": "no-store", "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-request-id": "req-cover" }
+it("proxies only the exact owner revision cover GET with trusted session and image bytes", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { headers: ownerCoverHeaders }))
+  const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover"), params(["skills", "revision-current", "cover"]))
+  expect(result.status).toBe(200)
+  expect([...new Uint8Array(await result.arrayBuffer())]).toEqual([1, 2, 3])
+  expect(result.headers.get("content-type")).toBe("image/png")
+  expect(result.headers.get("referrer-policy")).toBe("no-referrer")
+  expect(result.headers.get("cache-control")).toBe("private, no-store")
+  expect(requestWithDomain).toHaveBeenCalledWith("http://bff.test/v1/skills/revision-current/cover", "dev.kokoro.localhost", expect.objectContaining({ method: "GET", timeoutMs: expect.any(Number), maxResponseBytes: 5242880, strictResponseLength: true }))
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.timeoutMs).toBeGreaterThan(0)
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.timeoutMs).toBeLessThanOrEqual(10_000)
+})
+it("rejects cover aliases, methods, query, encoded IDs, foreign Origin and missing session before owner I/O", async () => {
+  const { GET, POST } = await import("@/app/api/hub/[...path]/route")
+  for (const [path, suffix, method, origin] of [
+    [["self", "skills", "revision-current", "cover"], "", "GET", null],
+    [["skills", "%72evision-current", "cover"], "", "GET", null],
+    [["skills", "revision-current", "cover"], "?q=1", "GET", null],
+    [["skills", "revision-current", "cover"], "", "POST", null],
+    [["skills", "revision-current", "cover"], "", "GET", "https://foreign.test"],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockClear()
+    const request = new Request(`http://localhost/api/hub/${path.join("/")}${suffix}`, { method, ...(origin ? { headers: { origin } } : {}) })
+    const result = await (method === "GET" ? GET : POST)(request, params([...path]))
+    expect(result.status).toBeGreaterThanOrEqual(400)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  }
+  currentProductSession.mockResolvedValue(null)
+  const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover"), params(["skills", "revision-current", "cover"]))
+  expect(result.status).toBe(401)
+})
+it("rejects invalid cover media/length/headers and truncated or excessive body", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const overrides of [{ "content-type": "image/svg+xml" }, { "content-length": "5242881" }, { "content-length": "03" }, { "cache-control": "public" }, { "x-content-type-options": "" }]) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([1,2,3]), { headers: { ...ownerCoverHeaders, ...overrides } }))
+    const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover"), params(["skills", "revision-current", "cover"]))
+    expect(result.status).toBe(502)
+  }
+  for (const bytes of [[1,2], [1,2,3,4]]) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array(bytes), { headers: ownerCoverHeaders }))
+    const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover"), params(["skills", "revision-current", "cover"]))
+    await expect(result.arrayBuffer()).rejects.toThrow()
+  }
+})
+
+it.each(["image/jpeg", "image/webp"])("preserves the owner %s cover representation", async (type) => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { headers: { ...ownerCoverHeaders, "content-type": type } }))
+  const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover", { headers: { cookie: "forged", "x-kokoro-user-id": "forged", origin: "http://localhost" } }), params(["skills", "revision-current", "cover"]))
+  expect(result.headers.get("content-type")).toBe(type)
+  expect((await result.arrayBuffer()).byteLength).toBe(3)
+  const headers = vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.headers
+  expect(headers).toMatchObject({ authorization: "Bearer product-access", "x-kokoro-service": "web-bff", "x-kokoro-internal-secret": "svc-secret" })
+  expect(headers).not.toHaveProperty("cookie")
+  expect(headers).not.toHaveProperty("x-kokoro-user-id")
+})
+it("closes cover error status/code pairs and stops aborted or expired admission before owner I/O", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  const request = () => new Request("http://localhost/api/hub/skills/revision-current/cover")
+  for (const [status, code, expected] of [[404, "skill_not_found", 404], [502, "skill_not_found", 502], [503, "invented", 502]] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(Response.json({ error: { code, message: "Owner error", retryable: false } }, { status }))
+    expect((await GET(request(), params(["skills", "revision-current", "cover"]))).status).toBe(expected)
+  }
+  vi.mocked(requestWithDomain).mockClear()
+  const controller = new AbortController()
+  controller.abort()
+  await GET(new Request(request(), { signal: controller.signal }), params(["skills", "revision-current", "cover"]))
+  expect(requestWithDomain).not.toHaveBeenCalled()
+  vi.useFakeTimers()
+  try {
+    currentProductSession.mockImplementationOnce(() => new Promise(() => {}))
+    const pending = GET(request(), params(["skills", "revision-current", "cover"]))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect((await pending).status).toBe(503)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+
+it("rejects cover body declarations, command identity and scheme-changing Origin before owner I/O", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const headers of [{ "content-length": "0" }, { "transfer-encoding": "chunked" }, { "idempotency-key": "key" }, { origin: "https://localhost" }]) {
+    const result = await GET(new Request("http://localhost/api/hub/skills/revision-current/cover", { headers }), params(["skills", "revision-current", "cover"]))
+    expect(result.status).toBeGreaterThanOrEqual(400)
+    expect(requestWithDomain).not.toHaveBeenCalled()
+  }
+})

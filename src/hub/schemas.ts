@@ -24,6 +24,9 @@ export function hubDataSchema<T extends z.ZodTypeAny>(inner: T) {
 // stable so catalog filters can be shared by every User Web skin.
 export const SKILL_CATEGORIES = ["coding", "data", "automation", "business", "design", "media", "content"] as const
 export type SkillCategory = (typeof SKILL_CATEGORIES)[number]
+export const CATALOG_SKILL_CATEGORIES = [...SKILL_CATEGORIES, "apps"] as const
+export type CatalogSkillCategory = (typeof CATALOG_SKILL_CATEGORIES)[number]
+const catalogCategoriesSchema = z.array(z.enum(CATALOG_SKILL_CATEGORIES)).max(CATALOG_SKILL_CATEGORIES.length)
 const skillCategoriesSchema = z.array(z.enum(SKILL_CATEGORIES)).min(1).max(SKILL_CATEGORIES.length)
 
 // 池卡片：official 位（scope=OFFICIAL_SCOPE）与本 namespace 自有包（scope=namespace）合并视图。
@@ -56,7 +59,7 @@ const skillCatalogCardSchema = z
     scope: z.string().min(1),
     installed: z.boolean(),
     enabled: z.boolean(),
-    categories: skillCategoriesSchema.optional(),
+    categories: catalogCategoriesSchema.optional(),
     updated_at: z.number().int().optional(),
     usage_count: z.string().regex(/^(0|[1-9][0-9]*)$/u).optional(),
     cover_image: z.string().min(1).optional(),
@@ -507,4 +510,61 @@ export function installationReceiptMatches(operation: "install" | "setEnabled" |
     && changes.includes(value.change)
     && (operation !== "remove" || !value.installation.installed)
     && (operation !== "setEnabled" || value.installation.installed && value.installation.enabled === enabled)
+}
+
+// Consumer validators for BFF939bf0e website Skill projections. The owner
+// schema remains in BFF skill-specification-schema.ts, not in Web contract/.
+const websiteOptional = <T extends z.ZodRawShape>(shape: T) => z.object(shape).partial().strict()
+const websiteString = z.string()
+const websiteStrings = z.array(websiteString)
+const websiteIcon = websiteOptional({ type: websiteString, value: websiteString })
+const websiteTags = websiteOptional({ values: websiteStrings })
+const websiteDetailFields = {
+  id: websiteString, name: websiteString, description: websiteString, version: websiteString,
+  updatedAt: websiteString, ownerType: websiteString, type: websiteString, displayName: websiteString,
+  sortOrder: websiteString, createdAt: websiteString, visibility: websiteString, userDescription: websiteString,
+  coverImage: websiteString, addTime: websiteString, added: z.boolean(), defaultEnable: z.boolean(),
+  defaultAdd: z.boolean(), exampleQuestions: websiteStrings, sessionTypes: websiteStrings,
+  tags: websiteTags, skillIcon: websiteIcon,
+}
+const websiteDetailSchema = websiteOptional(websiteDetailFields).extend({ id: websiteString.min(1) }).strict()
+const websiteInstalledSchema = websiteOptional({ ...websiteDetailFields, enabled: z.boolean(), icon: websiteString, skillConfig: websiteOptional({ teamSkillForceAdd: z.boolean() }) }).extend({ id: websiteString.min(1) }).strict()
+const websiteOfficialSchema = websiteInstalledSchema.extend({ deviceCapable: z.boolean().optional() }).strict()
+const websiteSource = websiteOptional({ type: websiteString, url: websiteString, owner: websiteString,
+  repository: websiteString, ref: websiteString, path: websiteString, stars: websiteString, forks: websiteString,
+  latestCommitSha: websiteString, latestCommitAt: websiteString, licenseSpdxId: websiteString, licenseUrl: websiteString,
+  licenseStatus: websiteString, licenseCategory: websiteString, pathCommitAt: websiteString })
+const websiteVersion = websiteOptional({ versionUid: websiteString, checksum: websiteString, archiveSize: websiteString,
+  fileCount: z.number().int(), status: websiteString, current: z.boolean(), createdAt: websiteString,
+  sourceRevision: websiteString, sourceRevisionAt: websiteString, licenseSpdxId: websiteString, licenseUrl: websiteString })
+export const manuscriptHubSkillSchema = websiteOptional({ skillId: websiteString, originalName: websiteString,
+  displayName: websiteString, userDescription: websiteString, icon: websiteIcon, publishStatus: websiteString,
+  currentVersion: websiteVersion, sortOrder: websiteString, createdAt: websiteString, publisherType: websiteString,
+  verified: z.boolean(), usageCount: websiteString, exampleQuestions: websiteStrings, tags: websiteTags,
+  type: websiteString, coverImage: websiteString, source: websiteSource, syncStatus: websiteString, cmsUpdatedAt: websiteString,
+}).extend({ skillId: websiteString.min(1) }).strict()
+export const manuscriptHubPageSchema = z.object({ skills: z.array(manuscriptHubSkillSchema),
+  tagOptions: websiteOptional({ values: z.array(websiteOptional({ tag: websiteString, displayName: websiteString })) }),
+  nextPageToken: websiteString.optional(),
+}).strict()
+export const manuscriptListSchema = z.object({ userAddedSkills: z.array(websiteInstalledSchema), officialSkills: z.array(websiteOfficialSchema) }).strict()
+export const manuscriptDetailSchema = z.object({ skill: websiteDetailSchema,
+  downloadInfo: z.object({ downloadUrl: websiteString.regex(/^\/api\/skill-downloads\/[A-Za-z0-9_-]+$/u), filename: websiteString.min(1), expiresAt: websiteString.min(1) }).strict(),
+}).strict()
+
+export const manuscriptReadErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }).strict() }).strict()
+export const MANUSCRIPT_READ_ERRORS: Readonly<Record<number, readonly string[]>> = {
+  400: ["InvalidArgument", "invalid_skill_request"],
+  401: ["Unauthenticated", "session_authentication_required", "session_invalid"],
+  403: ["PermissionDenied", "session_forbidden", "service_auth_failed", "product_tenant_forbidden"],
+  404: ["NotFound", "skill_operation_not_found"], 405: ["MethodNotAllowed"],
+  413: ["PayloadTooLarge", "request_body_too_large"], 429: ["session_rate_limited"],
+  502: ["InvalidResponse", "skill_response_invalid"],
+  503: ["Unavailable", "skill_dependency_unavailable", "iam_admission_unavailable", "product_tenant_not_configured"],
+}
+export const manuscriptCoverErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string(), retryable: z.boolean() }).strict() }).strict()
+export const MANUSCRIPT_COVER_ERRORS: Readonly<Record<number, readonly string[]>> = {
+  400: ["invalid_skill_request"], 404: ["skill_not_found"],
+  409: ["skill_idempotency_conflict", "skill_command_in_progress"], 412: ["skill_precondition_failed"],
+  413: ["request_body_too_large"], 429: ["skill_rate_limited"], 502: ["skill_response_invalid"], 503: ["skill_dependency_unavailable"],
 }

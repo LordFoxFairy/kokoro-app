@@ -5,15 +5,16 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
-import { downloadManusSkill } from "@/ui/skills/manus-skill-client"
+import { createHubClient } from "@/hub/client"
+import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill } from "@/ui/skills/manus-skill-client"
 
 const catalog = {
   skills: [{
     skillId: "skill-manim", displayName: "Manim 动画师", userDescription: "使用 Manim 生成数学动画。",
     usageCount: "37000", publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL",
     tags: { values: ["SKILL_HUB_TAG_MEDIA"] }, exampleQuestions: ["创建一个几何证明动画。"],
-    createdAt: "2026-05-22T00:00:00.000Z", coverImage: "/api/v1/skills/skill-manim/cover",
-  }], nextPageToken: undefined,
+    currentVersion: { versionUid: "skill-manim" }, createdAt: "2026-05-22T00:00:00.000Z", coverImage: "/api/v1/skills/skill-manim/cover",
+  }], tagOptions: { values: [] }, nextPageToken: undefined,
 }
 
 function response(value: unknown) {
@@ -95,6 +96,7 @@ it("opens a stable server-backed detail dialog with real detail fields and examp
 
 it("does not retain a previous skill action while the next detail is loading", async () => {
   const catalogWithTwoSkills = {
+    tagOptions: { values: [] },
     skills: [catalog.skills[0], {
       skillId: "skill-search", displayName: "互联网技能搜索器", userDescription: "从已验证的仓库中搜索技能。",
       tags: { values: ["SKILL_HUB_TAG_AUTOMATION"] },
@@ -183,4 +185,209 @@ it.each(dialogLocales)("localizes $locale actual detail read failure", async (la
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("owner unavailable")))
   render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   expect(await screen.findByText(labels.failed)).toBeInTheDocument()
+})
+
+// The actual 939bf0e read projection, including optional owner metadata.
+const ownerRevision = "revision-current"
+const ownerHub = {
+  skills: [{ skillId: "series-current", originalName: "original", displayName: "Current", userDescription: "Summary", icon: { type: "image", value: "icon" }, publishStatus: "SKILL_HUB_PUBLISH_STATUS_PUBLISHED", currentVersion: { versionUid: ownerRevision, checksum: "a".repeat(64), archiveSize: "123", fileCount: 1, status: "SKILL_HUB_VERSION_STATUS_AVAILABLE", current: true, createdAt: "2026-10-10T00:00:00Z", sourceRevision: "source", sourceRevisionAt: "date", licenseSpdxId: "MIT", licenseUrl: "license" }, sortOrder: "1", createdAt: "2026-10-10T00:00:00Z", publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL", verified: true, usageCount: "3", exampleQuestions: ["Real example"], tags: { values: ["SKILL_HUB_TAG_APPS"] }, type: "skill", coverImage: `/api/v1/skills/${ownerRevision}/cover`, source: { type: "git", url: "source", owner: "owner", repository: "repository", ref: "main", path: "SKILL.md", stars: "1", forks: "2", latestCommitSha: "commit", latestCommitAt: "date", licenseSpdxId: "MIT", licenseUrl: "url", licenseStatus: "available", licenseCategory: "permissive", pathCommitAt: "date" }, syncStatus: "current", cmsUpdatedAt: "date" }],
+  tagOptions: { values: [{ tag: "SKILL_HUB_TAG_APPS", displayName: "应用" }] }, nextPageToken: "cursor",
+}
+const ownerDetailFields = { id: "series-current", name: "Original", description: "Summary", version: ownerRevision, updatedAt: "2026-10-10T00:00:00Z", ownerType: "official", type: "skill", displayName: "Current", sortOrder: "1", createdAt: "2026-10-10T00:00:00Z", visibility: "catalog", userDescription: "Summary", coverImage: `/api/v1/skills/${ownerRevision}/cover`, addTime: "date", added: true, defaultEnable: false, defaultAdd: false, exampleQuestions: ["Real example"], sessionTypes: ["chat"], tags: { values: ["SKILL_HUB_TAG_APPS"] }, skillIcon: { type: "image", value: "icon" } }
+const ownerLists = { userAddedSkills: [{ ...ownerDetailFields, enabled: false, icon: "icon", skillConfig: { teamSkillForceAdd: false } }], officialSkills: [{ ...ownerDetailFields, deviceCapable: true }] }
+const ownerDetail = { skill: ownerDetailFields, downloadInfo: { downloadUrl: "/api/skill-downloads/owner-handle", filename: "current.zip", expiresAt: "2999-01-01T00:00:00Z" } }
+function stubOwnerReads(hub: unknown = ownerHub, list: unknown = ownerLists, detail: unknown = ownerDetail) {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => response(String(input).endsWith("ListHubSkills") ? hub : String(input).endsWith("ListSkills") ? list : detail)))
+}
+it("consumes complete current Hub/List fields, APPS and independent installed/enabled facts", async () => {
+  stubOwnerReads()
+  const result = await createManusSkillHubClient(createHubClient()).listSkillCatalog()
+  expect(result.skills[0]).toMatchObject({ skill_id: "series-current", categories: ["apps"], installed: true, enabled: false, cover_image: `/api/hub/skills/${ownerRevision}/cover` })
+  expect(result.next_cursor).toBe("cursor")
+})
+it("renders the owner APPS category in the existing filter and uses revision cover", async () => {
+  stubOwnerReads()
+  renderLive()
+  await screen.findByRole("button", { name: "Current" })
+  const filter = screen.getByRole("button", { name: "技能分类" })
+  fireEvent.pointerDown(filter)
+  fireEvent.click(filter)
+  fireEvent.click(await screen.findByRole("menuitem", { name: "应用" }))
+  fireEvent.click(screen.getByRole("button", { name: "查看技能详情 Current" }))
+  await screen.findByRole("button", { name: "下载技能" })
+  const cover = screen.getByTestId("manus-skill-detail-dialog").querySelector("img")
+  expect(cover?.getAttribute("src")).toBe(`/api/hub/skills/${ownerRevision}/cover`)
+})
+it("GetSkill and DownloadSkill consume the complete owner skill and bind requested series", async () => {
+  stubOwnerReads()
+  await expect(getManusSkillDetail("series-current")).resolves.toMatchObject({ skill: { id: "series-current", version: ownerRevision, coverImage: `/api/hub/skills/${ownerRevision}/cover` } })
+  await expect(downloadManusSkill("series-current")).resolves.toMatchObject({ skill: { id: "series-current" } })
+  for (const read of [getManusSkillDetail, downloadManusSkill]) {
+    stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill: { ...ownerDetailFields, id: "another-series" } })
+    await expect(read("series-current")).rejects.toThrow()
+  }
+})
+it("rejects unknown and wrongly typed fields in every current owner nesting", async () => {
+  const invalidHub = [
+    { ...ownerHub, extra: true },
+    { ...ownerHub, tagOptions: { ...ownerHub.tagOptions, extra: true } },
+    { ...ownerHub, tagOptions: { values: [{ tag: "SKILL_HUB_TAG_APPS", displayName: 1 }] } },
+    ...["icon", "source", "currentVersion", "tags"].map((key) => ({ ...ownerHub, skills: [{ ...ownerHub.skills[0], [key]: { extra: true } }] })),
+    { ...ownerHub, skills: [{ ...ownerHub.skills[0], publishStatus: true }] },
+    { ...ownerHub, skills: [{ ...ownerHub.skills[0], currentVersion: { ...ownerHub.skills[0]!.currentVersion, fileCount: "1" } }] },
+  ]
+  for (const hub of invalidHub) { stubOwnerReads(hub); await expect(createManusSkillHubClient(createHubClient()).listSkillCatalog()).rejects.toThrow() }
+  for (const key of ["userAddedSkills", "officialSkills"] as const) {
+    for (const entry of [{ ...ownerLists[key][0], extra: true }, { ...ownerLists[key][0], tags: { values: [1] } }, { ...ownerLists[key][0], skillConfig: { teamSkillForceAdd: "false" } }]) {
+      stubOwnerReads(ownerHub, { ...ownerLists, [key]: [entry] }); await expect(createManusSkillHubClient(createHubClient()).listSkillCatalog()).rejects.toThrow()
+    }
+  }
+  for (const read of [getManusSkillDetail, downloadManusSkill]) {
+    for (const detail of [{ ...ownerDetail, extra: true }, { ...ownerDetail, skill: { ...ownerDetailFields, extra: true } }, { ...ownerDetail, skill: { ...ownerDetailFields, defaultEnable: "false" } }, { ...ownerDetail, downloadInfo: { ...ownerDetail.downloadInfo, extra: true } }]) {
+      stubOwnerReads(ownerHub, ownerLists, detail); await expect(read("series-current")).rejects.toThrow()
+    }
+  }
+})
+it("rejects foreign, query, encoded and wrong revision cover references rather than inventing a series fallback", async () => {
+  for (const coverImage of ["https://foreign.test/cover", `/api/v1/skills/${ownerRevision}/cover?q=1`, `/api/v1/skills/${ownerRevision}/cover#f`, "/api/v1/skills/another-revision/cover", "/api/v1/skills/%72evision-current/cover"]) {
+    stubOwnerReads({ ...ownerHub, skills: [{ ...ownerHub.skills[0], coverImage }] })
+    await expect(createManusSkillHubClient(createHubClient()).listSkillCatalog()).rejects.toThrow()
+    stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill: { ...ownerDetailFields, coverImage } })
+    await expect(getManusSkillDetail("series-current")).rejects.toThrow()
+  }
+})
+it("does not synthesize a cover when the owner has no cover fact", async () => {
+  const { coverImage: _cover, ...skill } = ownerDetailFields
+  void _cover
+  stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill })
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "下载技能" })
+  expect(screen.getByTestId("manus-skill-detail-dialog").querySelector("img")).toBeNull()
+})
+
+it("accepts exact current RPC read error pairs and rejects malformed or mismatched errors", async () => {
+  const reads = [() => createManusSkillHubClient(createHubClient()).listSkillCatalog(), () => getManusSkillDetail("series-current"), () => downloadManusSkill("series-current")]
+  for (const read of reads) {
+    for (const [status, code] of [[400, "InvalidArgument"], [401, "session_invalid"], [403, "PermissionDenied"], [503, "Unavailable"]] as const) {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code, message: "Current error" } }), { status })))
+      await expect(read()).rejects.toThrow(code)
+    }
+    for (const [status, body] of [
+      [502, { error: { code: "session_invalid", message: "Wrong status" } }],
+      [403, { error: { code: "Unavailable", message: "Wrong status" } }],
+      [503, { error: { code: "Unavailable", message: "Extra", extra: true } }],
+      [503, { error: { code: "Unavailable", message: 1 } }],
+      [503, { error: { code: "invented", message: "Unknown" } }],
+    ] as const) {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status })))
+      await expect(read()).rejects.toThrow("skill_response_invalid")
+    }
+  }
+})
+
+const boundedReads = [
+  { operation: "ListHubSkills", read: (signal: AbortSignal) => createManusSkillHubClient(createHubClient()).listSkillCatalog({ signal }) },
+  { operation: "ListSkills", read: (signal: AbortSignal) => createManusSkillHubClient(createHubClient()).listSkillCatalog({ signal }) },
+  { operation: "GetSkill", read: (signal: AbortSignal) => getManusSkillDetail("series-current", signal) },
+  { operation: "DownloadSkill", read: (signal: AbortSignal) => downloadManusSkill("series-current", signal) },
+]
+it.each(boundedReads)("bounds $operation body deadline even when the stream never closes", async ({ operation, read }) => {
+  vi.useFakeTimers()
+  let source!: ReadableStreamDefaultController<Uint8Array>
+  const cancel = vi.fn()
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith(operation)
+    ? new Response(new ReadableStream<Uint8Array>({ start(controller) { source = controller; controller.enqueue(new TextEncoder().encode('{"')); }, cancel }), { headers: { "content-type": "application/json" } })
+    : response(String(input).endsWith("ListHubSkills") ? ownerHub : ownerLists))
+  vi.stubGlobal("fetch", fetchMock)
+  let outcome = "pending"
+  const pending = read(new AbortController().signal).then(() => { outcome = "resolved" }, (error: Error) => { outcome = error.message })
+  try {
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(outcome).toBe("skill_read_timeout")
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    if (outcome === "pending") source.close()
+    await pending
+    vi.useRealTimers()
+  }
+})
+it.each(boundedReads)("rejects actual cumulative $operation bytes without trusting declared length", async ({ operation, read }) => {
+  const cancel = vi.fn()
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).endsWith(operation)
+    ? new Response(new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(600_000).fill(32)); controller.enqueue(new Uint8Array(600_000).fill(32)); controller.close() }, cancel }), { headers: { "content-type": "application/json", "content-length": "2" } })
+    : response(String(input).endsWith("ListHubSkills") ? ownerHub : ownerLists)))
+  await expect(read(new AbortController().signal)).rejects.toThrow("skill_response_invalid")
+})
+it.each(boundedReads)("cancels $operation body and propagates caller cancellation", async ({ operation, read }) => {
+  let source!: ReadableStreamDefaultController<Uint8Array>
+  const cancel = vi.fn()
+  const caller = new AbortController()
+  let suppliedSignal: AbortSignal | undefined
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (!String(input).endsWith(operation)) return response(String(input).endsWith("ListHubSkills") ? ownerHub : ownerLists)
+    suppliedSignal = init?.signal ?? undefined
+    return new Response(new ReadableStream<Uint8Array>({ start(controller) { source = controller }, cancel }), { headers: { "content-type": "application/json" } })
+  }))
+  let outcome = "pending"
+  const pending = read(caller.signal).then(() => { outcome = "resolved" }, (error: Error) => { outcome = error.message })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  caller.abort()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  try {
+    expect(suppliedSignal?.aborted).toBe(true)
+    expect(outcome).toBe("skill_read_aborted")
+    expect(cancel).toHaveBeenCalledTimes(1)
+  } finally { if (outcome === "pending") source.close(); await pending }
+})
+
+it.each(["close", "replace"])("aborts detail and download streams on dialog %s", async (action) => {
+  const signals: AbortSignal[] = []
+  const cancelDetail = vi.fn()
+  const cancelDownload = vi.fn()
+  let blockDetail = true
+  vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const id = JSON.parse(String(init?.body)).skillId as string
+    if (id === "another-series") return response({ ...ownerDetail, skill: { ...ownerDetailFields, id } })
+    signals.push(init?.signal as AbortSignal)
+    if (blockDetail || String(_input).endsWith("DownloadSkill")) return new Response(new ReadableStream<Uint8Array>({ cancel: blockDetail ? cancelDetail : cancelDownload }), { headers: { "content-type": "application/json" } })
+    return response(ownerDetail)
+  }))
+  const view = (open: boolean, id = "series-current") => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: id }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const rendered = render(view(true))
+  await waitFor(() => expect(signals).toHaveLength(1))
+  rendered.rerender(action === "close" ? view(false) : view(true, "another-series"))
+  await waitFor(() => expect(cancelDetail).toHaveBeenCalledTimes(1))
+  expect(signals[0]?.aborted).toBe(true)
+  blockDetail = false
+  rendered.rerender(view(true))
+  await screen.findByRole("button", { name: "下载技能" })
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(signals).toHaveLength(3))
+  rendered.rerender(action === "close" ? view(false) : view(true, "another-series"))
+  await waitFor(() => expect(cancelDownload).toHaveBeenCalledTimes(1))
+  expect(signals[2]?.aborted).toBe(true)
+})
+it("uses one finite budget for fetch headers plus body, and clears successful reader timers", async () => {
+  vi.useFakeTimers()
+  const cancel = vi.fn()
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => {
+    setTimeout(() => resolve(new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: { "content-type": "application/json" } })), 5_000)
+  })))
+  let outcome = "pending"
+  const pending = getManusSkillDetail("series-current").catch((error: Error) => { outcome = error.message })
+  try {
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(outcome).toBe("pending")
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(outcome).toBe("skill_read_timeout")
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    stubOwnerReads()
+    await getManusSkillDetail("series-current")
+    await downloadManusSkill("series-current")
+    await createManusSkillHubClient(createHubClient()).listSkillCatalog()
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
 })

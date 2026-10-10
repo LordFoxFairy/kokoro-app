@@ -1,32 +1,7 @@
 import { z } from "zod"
 
 import type { HubClient } from "@/hub/client"
-import type { SkillCatalog, SkillCatalogCard } from "@/hub/schemas"
-
-const tagKey = z.enum(["SKILL_HUB_TAG_CODING", "SKILL_HUB_TAG_DATA", "SKILL_HUB_TAG_AUTOMATION", "SKILL_HUB_TAG_BUSINESS", "SKILL_HUB_TAG_DESIGN", "SKILL_HUB_TAG_MEDIA", "SKILL_HUB_TAG_CONTENT"])
-const hubSkillSchema = z.object({
-  skillId: z.string().min(1),
-  displayName: z.string().min(1).optional(),
-  originalName: z.string().min(1).optional(),
-  userDescription: z.string().optional(),
-  usageCount: z.string().regex(/^(0|[1-9][0-9]*)$/u).optional(),
-  tags: z.object({ values: z.array(tagKey).optional() }).strict().optional(),
-  createdAt: z.string().optional(),
-  publisherType: z.string().optional(),
-  currentVersion: z.object({ checksum: z.string().optional() }).strict().optional(),
-  coverImage: z.string().min(1).optional(),
-  exampleQuestions: z.array(z.string().min(1)).optional(),
-}).strict()
-
-const hubPageSchema = z.object({
-  skills: z.array(hubSkillSchema),
-  nextPageToken: z.string().min(1).optional(),
-}).strict()
-
-const listSkillsSchema = z.object({
-  userAddedSkills: z.array(z.object({ id: z.string().min(1), enabled: z.boolean().optional() }).passthrough()),
-  officialSkills: z.array(z.object({ id: z.string().min(1), added: z.boolean().optional() }).passthrough()),
-}).strict()
+import { manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 const categories = {
   SKILL_HUB_TAG_CODING: "coding",
@@ -36,30 +11,76 @@ const categories = {
   SKILL_HUB_TAG_DESIGN: "design",
   SKILL_HUB_TAG_MEDIA: "media",
   SKILL_HUB_TAG_CONTENT: "content",
+  SKILL_HUB_TAG_APPS: "apps",
 } as const
 
-type HubSkill = z.infer<typeof hubSkillSchema>
+type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
 
-async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill", body: unknown, schema: T): Promise<z.infer<T>> {
-  const response = await fetch(`/api/skill.v1.SkillOptionalService/${operation}`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-  const raw: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    const code = typeof raw === "object" && raw !== null && "error" in raw ? String((raw as { error?: { code?: unknown } }).error?.code ?? "skill_hub_request_failed") : "skill_hub_request_failed"
-    throw new Error(code)
-  }
-  return schema.parse(raw)
+async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", body: unknown, schema: T, signal?: AbortSignal): Promise<z.infer<T>> {
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(), 10_000)
+  const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
+  let response: Response | undefined
+  try {
+    joined.throwIfAborted()
+    const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
+    response = await new Promise<Response>((resolve, reject) => {
+      const abort = () => reject(joined.reason)
+      joined.addEventListener("abort", abort, { once: true })
+      void fetch(`/api/skill.v1.${service}/${operation}`, {
+        method: "POST", cache: "no-store", redirect: "error", signal: joined,
+        headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+      }).then((value) => {
+        if (joined.aborted) void value.body?.cancel().catch(() => undefined)
+        resolve(value)
+      }, reject).finally(() => joined.removeEventListener("abort", abort))
+      if (joined.aborted) abort()
+    })
+    joined.throwIfAborted()
+    const declared = response.headers.get("content-length")
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576)
+      || response.body === null) throw new Error("skill_response_invalid")
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
+    const cancel = () => { void reader.cancel().catch(() => undefined) }
+    joined.addEventListener("abort", cancel, { once: true })
+    try {
+      for (;;) {
+        joined.throwIfAborted()
+        const part = await reader.read()
+        joined.throwIfAborted()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > 1_048_576) throw new Error("skill_response_invalid")
+        chunks.push(part.value)
+      }
+    } finally {
+      joined.removeEventListener("abort", cancel)
+      void reader.cancel().catch(() => undefined)
+      reader.releaseLock()
+    }
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    let raw: unknown
+    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) }
+    catch { throw new Error("skill_response_invalid") }
+    joined.throwIfAborted()
+    if (response.status !== 200) throwReadError(operation, response.status, raw)
+    return schema.parse(raw)
+  } catch (error) {
+    if (signal?.aborted) throw new Error("skill_read_aborted")
+    if (joined.aborted) throw new Error("skill_read_timeout")
+    throw error
+  } finally { clearTimeout(timer); void response?.body?.cancel().catch(() => undefined) }
 }
 
 function sourceKind(skill: HubSkill): "official" | "third_party" {
   return skill.publisherType === "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" ? "official" : "third_party"
 }
 
-function toCard(skill: HubSkill, added: ReadonlyMap<string, boolean>): SkillCatalogCard {
+function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean }>>): SkillCatalogCard {
   const createdAt = skill.createdAt === undefined ? undefined : Date.parse(skill.createdAt)
   return {
     name: skill.displayName ?? skill.originalName ?? skill.skillId,
@@ -70,12 +91,15 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, boolean>): SkillCata
     content_hash: skill.currentVersion?.checksum ?? skill.skillId,
     skill_id: skill.skillId,
     scope: sourceKind(skill),
-    installed: added.get(skill.skillId) === true,
-    enabled: added.get(skill.skillId) === true,
-    categories: (skill.tags?.values ?? []).map((value) => categories[value]),
+    installed: added.get(skill.skillId)?.installed === true,
+    enabled: added.get(skill.skillId)?.enabled === true,
+    categories: (skill.tags?.values ?? []).map((value) => {
+      if (!(value in categories)) throw new Error("skill_response_invalid")
+      return categories[value as keyof typeof categories]
+    }),
     ...(Number.isFinite(createdAt) ? { updated_at: Math.floor(createdAt! / 1000) } : {}),
     ...(skill.usageCount === undefined ? {} : { usage_count: skill.usageCount }),
-    ...(skill.coverImage === undefined ? {} : { cover_image: skill.coverImage }),
+    ...(skill.coverImage === undefined ? {} : { cover_image: ownerCoverPath(skill.coverImage, skill.currentVersion?.versionUid) }),
     ...(skill.exampleQuestions === undefined ? {} : { example_questions: skill.exampleQuestions }),
     ...(skill.publisherType === undefined ? {} : { publisher_type: skill.publisherType }),
   }
@@ -86,7 +110,7 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, boolean>): SkillCata
  * catalog transport with the Manus-compatible BFF methods. The adapter is a
  * read projection only; mutations remain on the typed installation boundary.
  */
-export function createManusSkillHubClient(base: HubClient): HubClient {
+export function createManusSkillHubClient(base: HubClient): Omit<HubClient, "listSkillCatalog"> & { listSkillCatalog: (input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal }) => Promise<SkillCatalog> } {
   return {
     ...base,
     listSkillCatalog: async (input = {}): Promise<SkillCatalog> => {
@@ -96,12 +120,20 @@ export function createManusSkillHubClient(base: HubClient): HubClient {
           includeOfficialSkills: true,
           ...(input.query?.trim() ? { query: input.query.trim() } : {}),
           ...(input.cursor ? { pageToken: input.cursor } : {}),
-        }, hubPageSchema),
-        post("ListSkills", {}, listSkillsSchema),
+        }, manuscriptHubPageSchema, input.signal),
+        post("ListSkills", {}, manuscriptListSchema, input.signal),
       ])
-      const added = new Map<string, boolean>()
-      for (const skill of installed.userAddedSkills) added.set(skill.id, skill.enabled !== false)
-      for (const skill of installed.officialSkills) if (skill.added === true) added.set(skill.id, true)
+      const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean }>>()
+      for (const skill of installed.userAddedSkills) {
+        if (added.has(skill.id) || skill.added === false) throw new Error("skill_response_invalid")
+        added.set(skill.id, { installed: true, enabled: skill.enabled === true })
+      }
+      const seenOfficial = new Set<string>()
+      for (const skill of installed.officialSkills) {
+        if (seenOfficial.has(skill.id) || skill.added === false && added.has(skill.id)) throw new Error("skill_response_invalid")
+        seenOfficial.add(skill.id)
+        if (!added.has(skill.id) && skill.added === true) added.set(skill.id, { installed: true, enabled: skill.enabled === true })
+      }
       const skills = hub.skills
         .filter((skill) => input.scope === undefined || sourceKind(skill) === input.scope)
         .map((skill) => toCard(skill, added))
@@ -111,35 +143,30 @@ export function createManusSkillHubClient(base: HubClient): HubClient {
 }
 
 
-const skillDetailSchema = z.object({
-  skill: z.object({
-    id: z.string().min(1),
-    displayName: z.string().min(1).optional(),
-    name: z.string().min(1).optional(),
-    userDescription: z.string().optional(),
-    description: z.string().optional(),
-    updatedAt: z.string().optional(),
-    coverImage: z.string().min(1).optional(),
-    exampleQuestions: z.array(z.string().min(1)).optional(),
-    tags: z.object({ values: z.array(z.string()).optional() }).strict().optional(),
-    added: z.boolean().optional(),
-  }).strict(),
-  downloadInfo: z.object({ downloadUrl: z.string().min(1), filename: z.string().min(1), expiresAt: z.string().min(1) }).strict(),
-}).strict()
+export type ManusSkillDetail = z.infer<typeof manuscriptDetailSchema>
 
-export type ManusSkillDetail = z.infer<typeof skillDetailSchema>
-
-export async function getManusSkillDetail(skillId: string): Promise<ManusSkillDetail> {
-  return post("GetSkill", { skillId }, skillDetailSchema)
+function ownerCoverPath(cover: string, revision: string | undefined): string {
+  if (!revision || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(revision)
+    || cover !== `/api/v1/skills/${encodeURIComponent(revision)}/cover`) throw new Error("skill_response_invalid")
+  return `/api/hub/skills/${encodeURIComponent(revision)}/cover`
+}
+function detailForSeries(raw: ManusSkillDetail, skillId: string): ManusSkillDetail {
+  if (raw.skill.id !== skillId) throw new Error("skill_response_invalid")
+  return raw.skill.coverImage === undefined ? raw : { ...raw, skill: { ...raw.skill, coverImage: ownerCoverPath(raw.skill.coverImage, raw.skill.version) } }
+}
+export async function getManusSkillDetail(skillId: string, signal?: AbortSignal): Promise<ManusSkillDetail> {
+  return detailForSeries(await post("GetSkill", { skillId }, manuscriptDetailSchema, signal), skillId)
 }
 
 /** Uses the distinct Manus service operation instead of treating a GetSkill
  * response as a permanent download authority. */
-export async function downloadManusSkill(skillId: string): Promise<ManusSkillDetail> {
-  const response = await fetch("/api/skill.v1.SkillService/DownloadSkill", {
-    method: "POST", cache: "no-store", headers: { "content-type": "application/json" }, body: JSON.stringify({ skillId }),
-  })
-  const raw: unknown = await response.json().catch(() => null)
-  if (!response.ok) throw new Error("skill_download_failed")
-  return skillDetailSchema.parse(raw)
+export async function downloadManusSkill(skillId: string, signal?: AbortSignal): Promise<ManusSkillDetail> {
+  return detailForSeries(await post("DownloadSkill", { skillId }, manuscriptDetailSchema, signal), skillId)
+}
+
+function throwReadError(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", status: number, raw: unknown): never {
+  const parsed = manuscriptReadErrorSchema.safeParse(raw)
+  if (!parsed.success || !(MANUSCRIPT_READ_ERRORS[status]?.includes(parsed.data.error.code)
+    || status === 410 && (operation === "GetSkill" || operation === "DownloadSkill") && parsed.data.error.code === "Gone")) throw new Error("skill_response_invalid")
+  throw new Error(parsed.data.error.code)
 }

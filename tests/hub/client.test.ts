@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { skillCatalogSchema } from "@/hub/schemas"
+
 import { createHubClient, createSkillInstallationClient, HubClientError } from "@/hub/client"
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -722,4 +724,11 @@ it("preserves current command-only 403 skill_forbidden without widening installa
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ error: { code: "skill_forbidden", message: "Denied", retryable: false } }, 403)))
     await expect(command()).rejects.toMatchObject({ reason: expected, status: 403 })
   }
+})
+
+it("accepts APPS only on current catalog cards and keeps unknown catalog categories closed", () => {
+  const card = { name: "Apps", description: "Current catalog", content_hash: "revision", skill_id: "series", scope: "official", installed: true, enabled: false, categories: ["apps"] }
+  expect(skillCatalogSchema.shape.skills.element.parse(card)).toMatchObject({ categories: ["apps"], installed: true, enabled: false })
+  expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, categories: ["invented"] }).success).toBe(false)
+  expect(skillCatalogSchema.shape.skills.element.safeParse({ ...card, extra: true }).success).toBe(false)
 })

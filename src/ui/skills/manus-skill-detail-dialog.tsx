@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { Download, MessageCircle, Plus, Share2 } from "lucide-react"
-import { useEffect, useState, type RefObject } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,10 +23,6 @@ type Props = {
   returnFocusRef?: RefObject<HTMLElement | null>
 }
 
-function coverPath(skillId: string): string {
-  return `/api/hub/self/skills/${encodeURIComponent(skillId)}/cover`
-}
-
 function displayDate(value: string | undefined, locale: string): string | null {
   if (!value) return null
   const date = new Date(value)
@@ -41,25 +37,40 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const activeRequest = useRef<AbortController | null>(null)
+  const identity = open ? skill?.skill_id ?? null : null
+  const [currentIdentity, setCurrentIdentity] = useState(identity)
+
+  // Reset browser presentation state by the selected resource identity, not
+  // synchronously inside the external request effect.
+  if (currentIdentity !== identity) {
+    setCurrentIdentity(identity)
+    setDetail(null)
+    setFailed(false)
+    setDownloading(false)
+  }
 
   useEffect(() => {
     if (!open || !skill?.skill_id) return
     const controller = new AbortController()
-    void getManusSkillDetail(skill.skill_id).then((next) => {
+    activeRequest.current = controller
+    void getManusSkillDetail(skill.skill_id, controller.signal).then((next) => {
       if (!controller.signal.aborted) setDetail(next)
     }).catch(() => {
       if (!controller.signal.aborted) setFailed(true)
     })
-    return () => controller.abort()
+    return () => { controller.abort(); if (activeRequest.current === controller) activeRequest.current = null }
   }, [open, skill?.skill_id])
 
   const download = async () => {
-    if (!skill?.skill_id || downloading) return
+    const controller = activeRequest.current
+    if (!skill?.skill_id || downloading || controller === null || controller.signal.aborted) return
     setDownloading(true)
     try {
-      const result = await downloadManusSkill(skill.skill_id)
-      window.location.assign(result.downloadInfo.downloadUrl)
-    } finally { setDownloading(false) }
+      const result = await downloadManusSkill(skill.skill_id, controller.signal)
+      if (!controller.signal.aborted) window.location.assign(result.downloadInfo.downloadUrl)
+    } catch { if (!controller.signal.aborted) setFailed(true) }
+    finally { if (!controller.signal.aborted) setDownloading(false) }
   }
 
   if (!skill) return null
@@ -72,6 +83,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
   const tags = record?.tags?.values ?? []
   const updated = displayDate(record?.updatedAt ?? (skill.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
   const installed = record?.added ?? skill.installed
+  const cover = record?.coverImage ?? skill.cover_image
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,7 +111,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
               <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
             </div>
           </div>
-          {skill.skill_id ? <div className={styles.cover}><Image src={coverPath(skill.skill_id)} alt="" fill sizes="180px" unoptimized /></div> : null}
+          {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}
         </DialogHeader>
         <section className={styles.body}>
           <p className={styles.description}>{description}</p>

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { createSkillInstallationClient, type HubClient } from "@/hub/client"
-import type { GithubImportResult, SkillCatalog, SkillCatalogCard, SkillCategory as CatalogSkillCategory } from "@/hub/schemas"
+import type { GithubImportResult, SkillCatalog, SkillCatalogCard, CatalogSkillCategory } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
 import { useT } from "@/i18n/context"
@@ -40,6 +40,7 @@ const CATEGORIES: readonly { value: SkillCategory; key: MessageKey }[] = [
   { value: "design", key: "skills.categoryDesign" },
   { value: "media", key: "skills.categoryMedia" },
   { value: "content", key: "skills.categoryContent" },
+  { value: "apps", key: "skills.categoryApps" },
 ]
 
 const CATALOG_KEY = "hub/skills/standalone-catalog"

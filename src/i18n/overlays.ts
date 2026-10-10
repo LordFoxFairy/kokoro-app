@@ -170,6 +170,7 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
   "skills.categoryBusiness": "Business",
   "skills.categoryDesign": "Design",
   "skills.categoryMedia": "Media",
+  "skills.categoryApps": "Apps",
   "skills.categoryContent": "Content",
   "skills.clearSearch": "Clear search",
   "skills.viewDetails": "View skill details",

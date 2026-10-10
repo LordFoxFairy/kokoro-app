@@ -434,6 +434,7 @@ export const zh = {
   "skills.categoryBusiness": "商业",
   "skills.categoryDesign": "设计",
   "skills.categoryMedia": "媒体",
+  "skills.categoryApps": "应用",
   "skills.categoryContent": "内容",
   "skills.clearSearch": "清除搜索",
   "skills.viewDetails": "查看技能详情",
