@@ -1108,3 +1108,92 @@ it("local import total budget closes an unending upstream body", async () => {
     expect(vi.getTimerCount()).toBe(0)
   } finally { vi.useRealTimers() }
 })
+
+
+const githubSelector = { owner: "acme", repository: "skills", commit: "a".repeat(40), path: "tools/check" }
+const githubDraft = { skill_id: "revision-new", source_ref: "skill:revision-new", status: "draft", state_version: "4", valid: true, content_digest: "b".repeat(64), manifest_identity: `skill-md-v1:sha256:${"b".repeat(64)}` }
+const githubPreview = { selection_required: true, repository_url: "https://github.com/acme/skills", commit: githubSelector.commit, paths: ["tools/check", "tools/other"] }
+const githubOwnerResponse = (data: unknown, status = 200) => new Response(JSON.stringify({ data }), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "github-owner" } })
+const githubRequest = (operation: string, body: unknown, headers: Record<string, string> = {}) => new Request(`http://localhost/api/hub/skills/github/${operation}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", ...headers }, body: JSON.stringify(body) })
+it.each(["preview", "import"])("admits exact formal GitHub %s and preserves immutable input", async operation => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const data = operation === "preview" ? githubPreview : githubDraft
+  const body = operation === "preview" ? { repository_url: githubPreview.repository_url } : githubSelector
+  vi.mocked(requestWithDomain).mockResolvedValue(githubOwnerResponse(data, operation === "preview" ? 200 : 201))
+  const result = await POST(githubRequest(operation, body, operation === "import" ? { "idempotency-key": "github-original-key" } : {}), params(["skills", "github", operation]))
+  expect(result.status).toBe(operation === "preview" ? 200 : 201)
+  expect(await result.json()).toEqual({ data })
+  expect(requestWithDomain).toHaveBeenCalledWith(`http://bff.test/v1/skills/github/${operation}`, ENV.KOKORO_DOMAIN, expect.objectContaining({ method: "POST", maxResponseBytes: 1_048_576 }))
+  const init = vi.mocked(requestWithDomain).mock.calls[0]![2]!
+  expect(JSON.parse(new TextDecoder().decode(init.body as ArrayBuffer))).toEqual(body)
+  const forwarded = new Headers(init.headers)
+  expect(forwarded.get("idempotency-key")).toBe(operation === "import" ? "github-original-key" : null)
+  expect(forwarded.get("authorization")).toBe("Bearer product-access")
+})
+
+it.each([
+  ["preview", { repository: "https://github.com/acme/skills" }, {}],
+  ["preview", { repository_url: "https://github.com/acme/skills" }, { "idempotency-key": "forbidden" }],
+  ["import", githubSelector, {}],
+  ["import", { ...githubSelector, extra: true }, { "idempotency-key": "key" }],
+  ["import", { ...githubSelector, path: "a".repeat(257) }, { "idempotency-key": "key" }],
+] as const)("rejects invalid GitHub %s body or key before upstream I/O", async (operation, body, headers) => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const result = await POST(githubRequest(operation, body, headers), params(["skills", "github", operation]))
+  expect(result.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled()
+  expect(await result.json()).toMatchObject({ error: { code: "invalid_skill_request" } })
+})
+it.each(["?extra=1", "/extra", "/"])("rejects GitHub path/query variant %s", async suffix => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const result = await POST(new Request(`http://localhost/api/hub/skills/github/preview${suffix}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify({ repository_url: githubPreview.repository_url }) }), params(["skills", "github", "preview"]))
+  expect(result.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("keeps GitHub origin, session and method boundaries closed", async () => {
+  const { POST, GET } = await import("@/app/api/hub/[...path]/route")
+  const path = params(["skills", "github", "preview"])
+  expect((await POST(githubRequest("preview", { repository_url: githubPreview.repository_url }, { origin: "https://evil.test" }), path)).status).toBe(403)
+  expect((await GET(new Request("http://localhost/api/hub/skills/github/preview"), path)).status).toBe(400)
+  currentProductSession.mockResolvedValueOnce(null)
+  expect((await POST(githubRequest("preview", { repository_url: githubPreview.repository_url }), path)).status).toBe(401)
+  expect(requestWithDomain).not.toHaveBeenCalled()
+})
+it("rejects malformed GitHub owner ACK and status/code mismatch instead of relaying a fake installation", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  for (const data of [{ ...githubDraft, installed: true }, { ...githubDraft, source_ref: "skill:wrong" }, { ...githubDraft, status: "active" }]) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(githubOwnerResponse(data,201))
+    expect((await POST(githubRequest("import",githubSelector,{"idempotency-key":"key"}),params(["skills","github","import"]))).status).toBe(502)
+  }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify({ error: { code:"session_invalid", message:"Wrong", retryable:false } }), { status:502,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"} }))
+  expect((await POST(githubRequest("preview",{repository_url:githubPreview.repository_url}),params(["skills","github","preview"]))).status).toBe(502)
+})
+it("relays legitimate GitHub 429 without requiring an absent Retry-After", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const error = { error: { code:"skill_rate_limited",message:"Limited",retryable:true } }
+  vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(JSON.stringify(error),{status:429,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"}}))
+  const result=await POST(githubRequest("preview",{repository_url:githubPreview.repository_url}),params(["skills","github","preview"]))
+  expect(result.status).toBe(429); expect(await result.json()).toEqual(error); expect(result.headers.has("retry-after")).toBe(false)
+})
+it("cancels GitHub oversized response bytes, including streams without declared length", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const cancel=vi.fn();vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new ReadableStream({start(c){c.enqueue(new Uint8Array(1_048_577))},cancel}),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"}}))
+  expect((await POST(githubRequest("preview",{repository_url:githubPreview.repository_url}),params(["skills","github","preview"]))).status).toBe(502);expect(cancel).toHaveBeenCalled()
+})
+it("bounds the total GitHub adapter body-read deadline and leaves no timer", async () => {
+  vi.useFakeTimers()
+  try {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const cancel=vi.fn();vi.mocked(requestWithDomain).mockResolvedValueOnce(new Response(new ReadableStream({start(c){c.enqueue(new TextEncoder().encode('{"data":'))},cancel}),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"}}))
+    const work=POST(githubRequest("preview",{repository_url:githubPreview.repository_url}),params(["skills","github","preview"]))
+    await vi.advanceTimersByTimeAsync(10_001);expect((await work).status).toBe(503);expect(cancel).toHaveBeenCalled();expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+it("retires a late GitHub upstream response after caller cancellation", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  let resolve!: (value:Response)=>void;vi.mocked(requestWithDomain).mockImplementationOnce(()=>new Promise<Response>(accept=>{resolve=accept}))
+  const controller=new AbortController()
+  const req=new Request(githubRequest("preview",{repository_url:githubPreview.repository_url}),{signal:controller.signal})
+  const work=POST(req,params(["skills","github","preview"]))
+  await vi.waitFor(()=>expect(requestWithDomain).toHaveBeenCalled());controller.abort();expect((await work).status).toBe(503)
+  const cancel=vi.fn();resolve(new Response(new ReadableStream({cancel}),{headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-owner"}}))
+  await new Promise(accept=>setTimeout(accept,0));expect(cancel).toHaveBeenCalled()
+})
