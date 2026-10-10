@@ -1,3 +1,32 @@
+<!-- BEGIN:T-K03.14-WEB-PUBLISH-API_CONTRACT-D0 -->
+
+## T-K03.14-WEB-PUBLISH D0：固定 Public13 发布与恢复消费（2026-10-10；目标，未接线）
+
+当前 Web commit `3c59071d8188f025b3d7b7683bb2d8560ceaa0fa` 消费 public8旧snapshot，strict ACK漏state_version，三写缺CAS、PUT丢版本、Complete缺对象版本、Validate旧zip-v2、Publish零body且route拒绝JSON。目标引用已批准BFF D0 `8889701`：正式public13.0.0，URL仍/v1；正式实现SHA与canonical artifact digest待Root固定，不使用变化中的worktree作为current pin。本前缀只确定目标，原mixed正文保留，不宣称生成/部署/验收通过。
+
+Browser business请求继续只走同源`/api/hub/self/skills/*`与已发布本人managed读取；BFF唯一维护public机器事实，Web snapshot原字节固定后只读。不能从release整包恢复替代Admin/契约或建立第二可编辑contract。变更同源route时去掉旧Publish零body专门限制，替换为已发布精确JSON请求解析；保Origin、Product Session、有限字节/时间、取消、request ID及全部非self/legacy路径拒绝，不放泛化/manage命令。
+
+| 操作 | 目标请求/版本来源 | 成功消费 |
+| --- | --- | --- |
+| CreateDraft | 原正式metadata；无CAS，不从base推算 | exact owner resource，包括state_version与skill/series/revision/status/replayed |
+| Get package-upload | 同本人skill，只读无mutation key | exact phase/attempt_epoch/可选attempt/upload/source_version_id与required state_version |
+| Begin | 原filename/MIME/size/hash、mandatory expected_state_version，replacement可选真实旧attempt | required state_version、attempt/upload/epoch、短期PUT reference与replayed |
+| PUT | 引用批准URL/method/required headers，原File；omit credentials、拒redirect、no-referrer、允许的HTTPS或既有loopback开发边界 | 实际响应x-amz-version-id；PUT不产生Skill CAS |
+| Complete | 原attempt/upload/hash/size、required source_version_id与mandatory CAS=Begin ACK | exact uploaded/scan_state/hash/身份及required state_version |
+| Validate | 原attempt_id、mandatory CAS=Complete ACK | valid/skill/series/content_digest、current skill-md-v1:sha256:[a-f0-9]{64}、replayed及state_version |
+| Publish | strict JSON explicit audience=owner/tenant/catalog，required CAS=Validate ACK；其它字段严格按固定owner契约 | ACTIVE source_ref/revision/event_id/replayed/state_version；不保空body路径 |
+| 本人managed list/detail | 正规本人资源，支持真实draft选择及权威恢复读回 | exact owner status/series/revision/product/state_version等完整当前shape，不用旧七字段ACTIVE或安装态代替 |
+
+CAS/state_version为canonical positive decimal string，1..9223372036854775807；数字/null/0/leading-zero/溢出拒绝。attempt_epoch继续按owner unsigned64与none/epoch0单独解析，revision不是CAS。source_version_id只采用真实ACK/owner已完成readback，非空、非null字面值与字符/长度严格固定owner规则；缺header、不可见CORS header或畸形值不能继续Complete，不剥版本字段适配旧parser。
+
+媒体/状态/headers/envelope/object均closed；成功/失败状态逐operation遵循固定owner error family，不能建立万能错误enum或strip额外字段。实测skill_forbidden/401/403必须保持owner授权拒绝语义；412 skill_precondition_failed、409冲突/in-progress与502坏owner/503依赖保持可区分，最终合法code/status组合以正式13artifact和owner当前runtime验证，不用未发布枚举替代事实。未知错误或坏ACK失败闭合、不得空列表/preview/成功；Web不降低IAM/BFF准入或添加token权限缓存。
+
+每阶段首次发送冻结body/CAS/key及资源和身份代际；重试/ACK丢失只重放同body/CAS/key。GET最新CAS不准写回原intent；异body/CAS同key不能借本地更新绕owner冲突。未知Publish先本人managed权威核对；仍未确定时展示未知并仅显式原意图恢复，不自动换key或创造成功。刷新丢key不称旧重放；owned draft/upload事实可重建观察，用户显式新replacement用新key与真实当前CAS，uploaded/validated沿owner已完成身份事实核验，不把Get当原command receipt。
+
+后继验证覆盖六类ACK版本、signed64边界、各mandatory字段、PUT真实版本与CORS缺失、source/attempt不匹配、current manifest、Publish显式JSON与audience/CAS、每阶段原body/key重放、刷新/撤权/取消/迟到；snapshot精确版本/commit/digest测试绑定最终发布，不修改原mixed大型OIDC test。此阶段只设计，无契约/Schema/test通过声明。
+
+<!-- END:T-K03.14-WEB-PUBLISH-API_CONTRACT-D0 -->
+
 ## R256-ADMIN-01：当前管理员资格消费契约（目标，尚未接线）
 
 Web 下一消费者固定 BFF `ac3cd1da4f13e9e22320efbd4dbf4009aa0a2e29`、public `8.0.0`、canonical OpenAPI SHA256 `cec91c36c836319af4acbb4e2cf372434b70dd0f52bdf266420e1957057ac4be`。`GET /v1/me` 成功 `data` 必须 strict包含 `tenant_id`、`user_id`、`platform_admin:boolean`；缺字段、额外字段、身份不一致、非JSON/错误media、无 `no-store`/request ID、错误状态或依赖不可用均失败闭合。普通用户的合法结果是 `platform_admin:false`，不是登录失败。

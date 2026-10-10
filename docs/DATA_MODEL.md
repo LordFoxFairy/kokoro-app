@@ -1,3 +1,32 @@
+<!-- BEGIN:T-K03.14-WEB-PUBLISH-DATA_MODEL-D0 -->
+
+## T-K03.14-WEB-PUBLISH D0：版本观察、冻结意图与刷新恢复（2026-10-10；目标，无新增持久owner）
+
+当前Web `3c59071d8188f025b3d7b7683bb2d8560ceaa0fa` 发布Dialog只在React生命周期保File/key与阶段ACK，刷新丢失；无CAS/对象版本完整消费。目标承接BFF批准设计 `8889701` 的public13 mandatory完整链；正式实现SHA/artifact digest尚待Root固定，目标尚未实施。此前缀覆盖本发布/恢复目标的旧零body/七字段/恢复描述，原三mixed正文逐字节保留，不据旧设计宣称当前能力。
+
+| 事实/状态 | 唯一owner与生命周期 |
+| --- | --- |
+| Skill/series/revision/status/publication audience、state_version、attempt/epoch、validation/manifest、幂等receipt/锁内CAS/event | Platform唯一持久writer；BFF当次IAM授权与精确public投影。Web不复制业务表或授权事实。 |
+| 原ZIP/SKILL.md字节、Upload/Asset/ObjectVersion、扫描/对象健康 | Storage/ObjectStore owner；source_version_id来源只为实际PUT ACK或正规owner已完成readback。hash/ETag/upload ID不替代版本。 |
+| 当前观察 | Web当前页面内存保存owner ACK/Get的真实state_version及资源身份；signed64 CAS与unsigned64 epoch分离，不自行递增/从revision推算，不成为持久事实。 |
+| 单阶段命令意图 | 首次发送前独立冻结完整原body/CAS/key、resource/attempt/upload/hash/source version与可信subject/admission generation；当前mounted session内存保存，不因后续GET/ACK变化重建旧请求。 |
+| File/短期PUT reference/版本ACK | 仅当前页面意图内存；离开/刷新不持久signed URL/原bytes/对象凭据，不跨主体移用。 |
+| 发布UI结果 | 只依据严格ACTIVE ACK或当前本人managed权威读核验同资源/版本/发布意图；uploaded/clean/validated、安装状态与旧catalog均非发布证明。 |
+
+无Web业务SQL、canonical schema、migration、索引/事务、业务Redis key/namespace、receipt/outbox、CAS/权限缓存、跨owner JOIN；现HttpOnly Product Session身份边界不变。不给localStorage/IndexedDB/sessionStorage保存signed URL、secret/bearer、File bytes、对象凭据或第二业务状态机。恢复不新增Web持久owner，仍由owner持久draft/attempt/receipt状态重新观察。
+
+### 原意图未知与页面刷新必须分开
+
+当前页面未知ACK保原阶段body/CAS/key，当前IAM重验后再交owner重放；GET版本前进只说明可能已提交，不许可原key更新CAS。cancel/timeout/坏ACK/迟到不表示owner回滚；subject/generation切换退役所有旧回调写权，恢复读取/PUT也有界可取消，旧结果不触发新命令。收到并严格核验的成功ACK才成为下一独立意图的版本依据。
+
+刷新后通过本人managed draft list/detail选择真实持久draft，再读package-upload，核对skill/series/revision/phase/attempt/epoch/state_version与所有已公布证明。uploaded/validated沿owner已完成事实核验，只有具备该阶段真实资格才继续后继新意图；不能把Get合成为原Validate/Complete ACK。丢原key/body时不宣称重放、不自动创建新Draft或Publish key。丢Publish ACK/key先权威managed读取判断ACTIVE，未知显示未知。
+
+intent/upload_pending缺原PUT证明不可盲续短期URL；用户显式重选File、重算hash/size并观察真实当前attempt后，才建立新的replacement意图、新key、冻结当前CAS与replaces_attempt_id。对象version不能用时间/随机值/null/current对象猜测补齐；uploaded/validated能使用的版本只来自owner正规已完成读回。刷新新观察、同页原intent重放、显式新replacement分别建模，后者不伪装前者。
+
+本D0不迁移/重置PG、Redis、MinIO，不恢复旧数据，不整包复制分叉release c9b02b6，不改变原Admin基座。后继代码/测试需证明缺/坏CAS、异body同key、未知ACK与撤权/取消、缺PUT版本、refresh owner-state恢复、explicit replacement和ACTIVE判定；零schema diff只证明无持久化变更，不替代真实发布/浏览器验收。当前阶段未执行应用门、schema或服务命令。
+
+<!-- END:T-K03.14-WEB-PUBLISH-DATA_MODEL-D0 -->
+
 ## R256-ADMIN-01：Web 管理员投影数据边界（目标，尚未实施）
 
 Web不拥有管理员资格表、grant、版本或Audit事实，也不新增数据库、localStorage、cookie、Redis字段或全局浏览器store。IAM User是 `platform_admin` 的唯一持久owner；BFF `/v1/me`只发布当前受信投影；Web只在一次受控读取生命周期内持有 `{ tenant_id, user_id, platform_admin }`，并把 subject/generation/admission 与该结果绑定。

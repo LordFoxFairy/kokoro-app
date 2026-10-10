@@ -1,3 +1,41 @@
+<!-- BEGIN:T-K03.14-WEB-PUBLISH-TECHNICAL_DESIGN-D0 -->
+
+## T-K03.14-WEB-PUBLISH D0：完整发布与刷新恢复消费者（2026-10-10；目标，未实施）
+
+### 当前态、目标态与权威来源
+
+当前实际 Web 为 `3c59071d8188f025b3d7b7683bb2d8560ceaa0fa`；现 `src/generated/bff-public-openapi.yaml` 与相邻 contract 测试仍固定 public 8.0.0、BFF `6d46ec8bdd2d2ffaa06513fd0561272eae907919`。现严格消费者漏六类 ACK/read 的 `state_version`，Begin/Complete/Validate 缺 mandatory CAS，PUT 丢对象版本，Complete 缺 `source_version_id`，Validate 仍接受旧 `zip-v2` 身份，Publish 零 body 且同源 route 拒绝非空 body。现 Dialog 仅在挂载内存保留意图，刷新无法选择和恢复 owner 持久 draft。Root 实际同源 Draft201、原 Admin 非空 list200 不证明该 UI 发布链已通过。
+
+目标依据 BFF 已批准设计提交 `8889701`：唯一 public 13.0.0（URL仍 `/v1`），Begin/Complete/Validate mandatory `expected_state_version`，Publish 既有 strict JSON 显式 audience/CAS。BFF 正式实现提交与 artifact SHA-256 仍待 Root 验证固定；此处不是消费者 current pin，不编辑/复制 owner 机器契约，不把目标称为已生效。三份本片前缀对本发布/恢复目标共同生效，下方原 mixed 正文逐字节保留为原始事实，旧 pin/zero-body/default-off 描述不作为本片目标依据。release `c9b02b6` 与当前源分叉，只逐路径参考，不整包搬回，不恢复替代 Admin；`apps/kokoro-admin` 保持唯一后台基座。
+
+### §8 放置与实现粒度
+
+| 项 | 决定 |
+| --- | --- |
+| Owner | Web 只拥有同源 adapter、严格消费者与 UI 意图；Platform 唯一写 Skill/attempt/CAS/receipt/event，Storage 写对象版本/扫描，BFF 发 public contract 并每请求授权。 |
+| 当前事实 | 现 hub schema/client、personal publish flow/dialog/read、Hub catch-all adapter 与具名测试；原三设计及 product-bff/OIDC system 两测试为五个 mixed，除本片设计前缀外保护。 |
+| 目标职责 | 一次自洽接通 Create/Get/Begin/PUT/Complete/Validate/Publish、未知 ACK 与刷新恢复，不能只改 Begin 留后续按钮失败。 |
+| 目录比较 | 采用现 `src/hub` wire/client、`src/ui/skills` flow/UI、现 Hub route；淘汰新上传框架/通用 mutation proxy/新持久 store及整体 release 移植，没有新增业务 owner。 |
+| 粒度 | schema、网络、命令编排和 UI 保持不同变化原因；managed draft 与 upload 恢复读取由现 publish client 承载，个人页只提供真实 draft 选择入口，不建第二管理客户端。 |
+| 依赖 | Browser → Web → BFF → Platform/Storage；唯一例外是批准短期引用的 ObjectStore PUT。禁止跨仓源码/ORM/SQL、浏览器自报 tenant/actor、owner DB预读或授权缓存。 |
+| 数据/API | 固定正式13 artifact后正规消费；正十进制 signed-int64 CAS 与 unsigned-int64 attempt epoch 分开；零 Web SQL/schema/业务Redis/凭据持久化。 |
+| 删除项 | 当前漏 version ACK、无CAS写路径、PUT无版本回执、旧 zip-v2 正控、零body Publish拒绝/成功路径与旧恢复假设；无 alias/fallback/双消费。 |
+| 验证 | 全链真实函数/owner-shape RED→GREEN、contract/architecture/具名 client-flow-resume-UI-route、Node22 lint/typecheck/test/build；Root 正规 IAM/Storage 发布、刷新恢复与原Admin操作，浏览器证据独立待验。 |
+
+### 命令、观察与取消生命周期
+
+Create ACK 是初始真实 observation；同 skill owner GET/package GET 只观察状态。每个命令首次发送前独立冻结资源身份、subject/admission generation、完整序列化 body、`expected_state_version` 与 Idempotency-Key。Begin 用 Create ACK/明确新意图的真实 GET CAS；Complete 用 Begin ACK CAS＋PUT真实对象版本；Validate 用 Complete ACK CAS；Publish 用 Validate ACK CAS＋用户明确 audience（owner/tenant/catalog），不从缺项默认。成功 ACK 经严格完整解析及 skill/series/attempt/epoch/upload/hash/source/revision/phase 核验后才记录，再用该真实版本建立下一独立命令；不算术推算 CAS，不用 attempt epoch/revision 代替。
+
+同键恢复永远使用原冻结 body/CAS，GET更高版本不许可旧 key 换CAS；不得用重入时可变 session.stateVersion 或刷新 Begin ACK 重建旧请求。网络未知、取消、无效 ACK 与迟到结果不证明 owner未提交；保持原意图、显式恢复并重新授权。扫描 pending/unknown保持partial，uploaded/CLEAN/validated不是成功。Publish只有严格 ACTIVE ACK或当前本人权威 managed GET 核验同资源/版本与发布意图后才成功；未知先核对，不新建Draft/Publish key。取消覆盖headers/body/PUT/恢复GET，退役generation后迟到结果不能缓存为有效阶段或触发下一命令。
+
+### 刷新恢复与最小自洽后继
+
+刷新丢File/key/body/reference不称原命令重放。个人页通过正式本人 managed draft list/detail选择真实持久draft，再GET当前upload核对skill/attempt/epoch/CAS。uploaded/validated只沿owner已完成事实与当前资格恢复；对象版本只能来自实际PUT ACK或正规owner已完成readback，不合成、不把ETag/hash/upload ID当版本。intent/upload_pending缺原证明时禁止盲续PUT；用户明确重选File/hash/size、观察真实旧attempt，才创建新的replacement意图与新key/body/CAS，不静默替换未知旧命令。丢Publish key/ACK先权威读取，不能生成新key冒称原重放；各恢复按钮必须区分观察、原意图重放和用户新操作。
+
+预计完整代码集：现 generated snapshot、hub schemas/publish client、personal publish flow/dialog/read、Hub route；相邻现 contract、client、flow、resume、Dialog与Hub proxy测试一并更新。新增字段/labels/独立UI测试若确需另报精确路径，不借本D0预授实现。Root正式pin/文档门通过后才授代码writer；本阶段不执行build或服务/数据命令。
+
+<!-- END:T-K03.14-WEB-PUBLISH-TECHNICAL_DESIGN-D0 -->
+
 ## R256-ADMIN-01：当前平台管理员资格与唯一入口（目标设计，尚未实施）
 
 当前 Web 的 `src/lib/server/product-identity.ts` 只接受 BFF `/v1/me` 的 `tenant_id`、`user_id` 两字段；callback 与 refresh 都依赖该 strict 投影，新增 required 字段若未同步会失败闭合。目标固定消费 BFF commit `ac3cd1da4f13e9e22320efbd4dbf4009aa0a2e29`、public `8.0.0`、canonical SHA256 `cec91c36c836319af4acbb4e2cf372434b70dd0f52bdf266420e1957057ac4be`，将 required `platform_admin` 纳入同一当前身份投影。资格每次由受信 Product Session 经 BFF `/me` fresh 读取；不得从 cookie/JWT/email、组织 `owner/admin`、OAuth operator、Billing 身份、客户端 header 或浏览器状态推导，也不缓存为第二身份事实。
