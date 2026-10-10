@@ -883,3 +883,53 @@ it("makes short-viewport summaries scroll as a whole without changing independen
   expect(css).toMatch(/\.dialog:not\(\.readerDialog\) \.body\s*\{\s*flex:0 0 auto;\s*overflow:visible;\s*\}/u)
   expect(css).toMatch(/\.readerDialog \.fileList,\.readerDialog \.fileContent\s*\{[^}]*overflow:auto;/u)
 })
+
+it.each([false, true])("only refreshes authoritative catalog after real GitHub Publish and Install without synthesizing a card (unknown ACK %s)", async unknown => {
+  let installed = false, previewCalls = 0
+  const selector = { owner:"acme",repository:"skills",commit:"a".repeat(40),path:"tools/check" }
+  const meta = { display_name:"GitHub actual",summary:"Owner text",tags:[] }
+  const product = { state_version:"4",publication_audience:"owner",source_kind:"personal" }
+  const managed = { skill_id:ownerRevision,source_ref:`skill:${ownerRevision}`,series_id:"series-current",revision:"4",status:"draft",name:meta.display_name,summary:meta.summary,tags:[],example_prompts:[],category_keys:[],skill_updated_at:"2026-10-10T00:00:00Z",product }
+  const ownerResponse=(data:unknown,status=200)=>new Response(JSON.stringify({data}),{status,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-ui"}})
+  const commands: Array<{url:string;init:RequestInit}>=[]
+  vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
+    const url=String(input)
+    if(url.endsWith("ListHubSkills"))return response({...ownerHub,nextPageToken:undefined})
+    if(url.endsWith("ListSkills"))return response({userAddedSkills:installed?[{...ownerLists.userAddedSkills[0],enabled:true}]:[],officialSkills:[]})
+    if(url.endsWith("/github/preview")){previewCalls++;return ownerResponse({selection_required:true,repository_url:"https://github.com/acme/skills",commit:selector.commit,paths:[selector.path,"other"]})}
+    if(url.includes("/self/skills/managed/"))return new Response(JSON.stringify({data:managed,meta:{request_id:"github-ui"}}),{status:200,headers:{"content-type":"application/json","cache-control":"no-store","x-request-id":"github-ui"}})
+    commands.push({url,init:init!})
+    if(url.endsWith("/github/import"))return ownerResponse({skill_id:ownerRevision,source_ref:`skill:${ownerRevision}`,status:"draft",state_version:"4",valid:true,content_digest:"b".repeat(64),manifest_identity:`skill-md-v1:sha256:${"b".repeat(64)}`},201)
+    if(url.endsWith("/publish"))return ownerResponse({source_ref:`skill:${ownerRevision}`,revision:"4",status:"active",state_version:"5",event_id:"e90c2e48-7c3e-4d61-a00a-d25b9807ce59",replayed:false})
+    if(unknown && commands.filter(command=>command.url.endsWith("/self/skill-installations")).length===1)throw new TypeError("ACK lost")
+    installed=true;return ownerResponse({installation:{...actionInstallation,product},change:"installed",event_id:"github-install",replayed:false})
+  }))
+  renderLive();await screen.findByRole("button",{name:"Current"})
+  fireEvent.pointerDown(screen.getByRole("button",{name:"建立我的专属技能"}));fireEvent.click(await screen.findByRole("menuitem",{name:"从 GitHub 导入"}))
+  const dialog=await screen.findByTestId("github-import-dialog")
+  fireEvent.change(within(dialog).getByTestId("github-repository-input"),{target:{value:"acme/skills"}})
+  fireEvent.keyDown(within(dialog).getByTestId("github-repository-input"),{key:"Enter"})
+  fireEvent.click(await within(dialog).findByRole("button",{name:selector.path}))
+  expect(within(dialog).queryByTestId("github-import-complete")).toBeNull()
+  expect(within(dialog).getByTestId("github-selected-path")).toHaveTextContent(selector.path)
+  fireEvent.click(within(dialog).getByRole("button",{name:"添加到我的技能（仅自己可见）"}))
+  if(unknown){
+    await within(dialog).findByText(/结果尚未确认/u)
+    expect(within(dialog).queryByTestId("github-import-complete")).toBeNull()
+    fireEvent.click(within(dialog).getByRole("button",{name:"重试"}))
+  }
+  await within(dialog).findByTestId("github-import-complete")
+  if(unknown){expect(commands[2]?.init.body).toBe(commands[3]?.init.body);expect(new Headers(commands[2]?.init.headers).get("idempotency-key")).toBe(new Headers(commands[3]?.init.headers).get("idempotency-key"))}
+  expect(previewCalls).toBe(1);expect(commands.slice(0,3).map(value=>value.url)).toEqual(["/api/hub/skills/github/import",`/api/hub/self/skills/${ownerRevision}/publish`,"/api/hub/self/skill-installations"])
+  expect(JSON.parse(String(commands[0]?.init.body))).toEqual(selector)
+  expect(JSON.parse(String(commands[1]?.init.body))).toEqual({audience:"owner",expected_state_version:"4"})
+  expect(JSON.parse(String(commands[2]?.init.body))).toEqual({source_ref:`skill:${ownerRevision}`})
+  fireEvent.click(within(dialog).getByTestId("github-import-done"))
+  expect(screen.queryByRole("button",{name:meta.display_name})).toBeNull()
+  expect(await screen.findByRole("button",{name:"Current"})).toBeInTheDocument()
+  fireEvent.pointerDown(screen.getByRole("button",{name:"建立我的专属技能"}));fireEvent.click(await screen.findByRole("menuitem",{name:"从 GitHub 导入"}))
+  const reopened=await screen.findByTestId("github-import-dialog")
+  expect(within(reopened).queryByTestId("github-import-complete")).toBeNull()
+  expect(within(reopened).getByTestId("github-repository-input")).not.toBeDisabled()
+  expect(within(reopened).getByTestId("github-import-submit")).toBeInTheDocument()
+})

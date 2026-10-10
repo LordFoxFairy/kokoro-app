@@ -1,3 +1,6 @@
+<!-- T-K03.14-WEB-GITHUB-IMPORT UI -->
+现GithubImportDialog → personal-skill-github-import-flow → focused GitHub client / 现Publish owner+CAS / 真实Installation ACK；删除旧Hub optional URL导入与preview模拟写，不影响local-import/真实reader。
+
 <!-- T-K03.14-WEB-LOCAL-IMPORT UI slice -->
 普通Skills本地导入：`src/ui/skills/skill-upload-dialog.tsx` + `personal-skill-import-flow.ts` → `src/hub/skill-local-import-client.ts` → 现同源四路径。旧preview/confirm client/schema/factory已删除；personal publish仅保已有draft更新/恢复。
 

@@ -5,11 +5,10 @@
 import type { BillingClient } from "@/billing/client"
 import type { PlanCatalog, PricingClient } from "@/billing/pricing"
 import type { BillingLedger } from "@/contract/http"
-import { HubClientError, parseGithubRepository, type HubClient } from "@/hub/client"
+import type { HubClient } from "@/hub/client"
 import type {
   McpRegisterInput,
   CustomApiView,
-  GithubImportResult,
   McpSecret,
   McpServerView,
   SkillCard,
@@ -56,59 +55,6 @@ function skillKey(skill: Pick<SkillCard, "scope" | "name">): string {
   return `${skill.scope}/${skill.name}`
 }
 
-function githubPreviewFor(repository: string): GithubImportResult {
-  const parsed = parseGithubRepository(repository)
-  if (parsed === null) {
-    throw new HubClientError("parse", "invalid GitHub repository", "github.invalid_repository", 400)
-  }
-  const canonical = parsed.canonical
-  const name = parsed.name
-  const repositoryName = canonical.replace(/^https:\/\/github\.com\//i, "")
-  const isChinese = typeof document !== "undefined" && document.documentElement.lang.toLowerCase().startsWith("zh")
-  return {
-    repository: canonical,
-    default_branch: "main",
-    skill: {
-      name,
-      description: isChinese
-        ? `来自 ${repositoryName} 的技能预览。`
-        : `Preview of the skill from ${repositoryName}.`,
-    },
-  }
-}
-
-function abortError(): HubClientError {
-  return new HubClientError("aborted", "preview request aborted", null, null)
-}
-
-function abortable<T>(signal: AbortSignal | undefined, work: () => T | Promise<T>): Promise<T> {
-  if (signal?.aborted) return Promise.reject(abortError())
-  return new Promise<T>((resolve, reject) => {
-    let settled = false
-    const onAbort = () => {
-      if (settled) return
-      settled = true
-      signal?.removeEventListener("abort", onAbort)
-      reject(abortError())
-    }
-    signal?.addEventListener("abort", onAbort, { once: true })
-    Promise.resolve()
-      .then(work)
-      .then((value) => {
-        if (settled) return
-        settled = true
-        signal?.removeEventListener("abort", onAbort)
-        resolve(value)
-      })
-      .catch((error: unknown) => {
-        if (settled) return
-        settled = true
-        signal?.removeEventListener("abort", onAbort)
-        reject(error)
-      })
-  })
-}
-
 export function createPreviewHubClient(): HubClient {
   let skills = [...previewSkills]
   // A fresh User Web starts with no user-managed connectors, matching the
@@ -117,8 +63,6 @@ export function createPreviewHubClient(): HubClient {
   let secrets: McpSecret[] = []
   let customApiCount = 0
   const quota = { ...previewQuota }
-  const previewGithub = (repository: string, signal?: AbortSignal): Promise<GithubImportResult> =>
-    abortable(signal, () => githubPreviewFor(repository))
   return {
     listPersonalSkills: () => Promise.resolve({ skills: skills.filter((skill) => skill.scope === "personal").map((skill, index) => ({
       skill_id: `preview-${index + 1}`, source_ref: `skill:preview-${index + 1}`, series_id: `preview-series-${index + 1}`, name: skill.name, summary: skill.description, revision: "1", status: "active" as const, tags: [], example_prompts: [], category_keys: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { state_version: "1", publication_audience: "owner" as const },
@@ -187,21 +131,6 @@ export function createPreviewHubClient(): HubClient {
         }
       }
       return Promise.resolve()
-    },
-    previewGithub,
-    importGithub: async (repository, signal) => {
-      const preview = await previewGithub(repository, signal)
-      if (signal?.aborted) throw abortError()
-      const imported: SkillCard = {
-        name: preview.skill.name,
-        description: preview.skill.description ?? "",
-        content_hash: `preview:github:${encodeURIComponent(preview.repository)}`,
-        scope: "personal",
-        enabled: true,
-        updated_at: previewUpdatedAt,
-      }
-      skills = [...skills.filter((skill) => !(skill.scope === "personal" && skill.name === imported.name)), imported]
-      return preview
     },
     listMcpServers: () => Promise.resolve(servers),
     registerMcpServer: (input: McpRegisterInput) => {

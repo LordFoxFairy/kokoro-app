@@ -1,5 +1,7 @@
 "use client"
 
+import type { GithubImported } from "@/ui/skills/personal-skill-github-import-flow"
+
 import Image from "next/image"
 import { useCallback, useMemo, useRef, useState } from "react"
 import { Check, ChevronDown, LoaderCircle, Plus, Search, SlidersHorizontal, SquarePen, Upload, X } from "lucide-react"
@@ -13,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { createSkillInstallationClient, type HubClient } from "@/hub/client"
-import type { GithubImportResult, SkillCatalog, SkillCatalogCard, CatalogSkillCategory, PersonalInstallation } from "@/hub/schemas"
+import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory, PersonalInstallation } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
 import { useT } from "@/i18n/context"
@@ -96,8 +98,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [detailSkill, setDetailSkill] = useState<SkillCatalogCard | null>(null)
-  const [importNotice, setImportNotice] = useState<GithubImportResult | null>(null)
-  const [importedSkills, setImportedSkills] = useState<SkillCatalogCard[]>([])
+  const [importNotice, setImportNotice] = useState<GithubImported | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [errorName, setErrorName] = useState<string | null>(null)
   const [lastAddedSkill, setLastAddedSkill] = useState<string | null>(null)
@@ -111,7 +112,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
-    return [...importedSkills, ...(catalog.data?.skills ?? [])].map((skill) => {
+    return (catalog.data?.skills ?? []).map((skill) => {
       const facts = skill.skill_id === undefined ? undefined : installationFacts[skill.skill_id]
       return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled }
     }).filter((skill) => {
@@ -121,7 +122,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         || skill.description.toLocaleLowerCase().includes(normalized)
       return matchesCategory && matchesQuery
     })
-  }, [catalog.data, category, importedSkills, installationFacts, query])
+  }, [catalog.data, category, installationFacts, query])
 
   const startChat = useCallback((prompt: string) => {
     // When the catalog is mounted inside the app shell, hand the prompt to
@@ -203,19 +204,8 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     }
   }, [preview, catalog.data])
 
-  const handleImported = (result: GithubImportResult) => {
+  const handleImported = (result: GithubImported) => {
     setImportNotice(result)
-    setImportedSkills((current) => [
-      {
-        name: result.skill.name,
-        description: result.skill.description ?? "",
-        content_hash: `github:${result.repository}`,
-        scope: "personal",
-        installed: true,
-        enabled: true,
-      },
-      ...current.filter((skill) => !(skill.scope === "personal" && skill.name === result.skill.name)),
-    ])
     invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)
   }
 
@@ -276,7 +266,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
 
           {importNotice ? (
             <Alert className={styles.importNotice} role="status" aria-live="polite">
-              <AlertDescription>{t("skills.githubImportNotice", { name: importNotice.skill.name })}<span>{importNotice.repository}</span></AlertDescription>
+              <AlertDescription>{t("skills.githubImportNotice", { name: importNotice.name })}<span>{importNotice.repository}</span></AlertDescription>
               <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.dismissImportNotice")} onClick={() => setImportNotice(null)}><X aria-hidden="true" /></Button>
             </Alert>
           ) : null}
@@ -326,7 +316,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         </div>
       </main>
 
-      <GithubImportDialog client={client} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
+      <GithubImportDialog open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
       <SkillUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
       <ManusSkillDetailDialog
         key={detailSkill?.skill_id ?? "closed"}

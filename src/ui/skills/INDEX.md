@@ -1,3 +1,6 @@
+<!-- T-K03.14-WEB-GITHUB-IMPORT UI -->
+现GithubImportDialog → personal-skill-github-import-flow → focused GitHub client / 现Publish owner+CAS / 真实Installation ACK；删除旧Hub optional URL导入与preview模拟写，不影响local-import/真实reader。
+
 <!-- T-K03.14-WEB-LOCAL-IMPORT UI slice -->
 - `skill-upload-dialog.tsx`：目录/个人新建共用普通拖放 `.zip`/`.skill`；不手填发布元数据、不消费旧preview/confirm。
 - `personal-skill-import-flow.ts`：原File/hash、冻结命令与未知结果、当前账号locator及GET恢复；只浏览器状态，不解析ZIP、不拥有持久业务事实。
@@ -24,8 +27,7 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 ## 协作者
 - `@/hub/client`（纯请求）、`@/hub/rules`（`isRequiredLockError` / `isQuotaExhausted`）、`@/hub/schemas`。
 - `GithubImportDialog`（`github-import-dialog.tsx`）：`parseGithubRepository` 负责 HTTPS GitHub owner/repo
-  边界校验；`HubClient.importGithub` 为生产提交入口，只有 `previewGithub` 的注入客户端会明确显示
-  preview-only，不把读取结果伪装成已保存；两者都缺失时显示能力不可用。
+  边界校验；focused GitHub client 为正式 Preview/immutable Import 入口，后续由flow消费原Publish/Install；旧optional注入已删除，不把Preview或draft响应伪装成已安装。
 - `SkillDetailDialog`（`skill-detail-dialog.tsx`）：技能名称打开独立详情 surface，展示文件树、YAML 复制和
   试用入口；它不伪造后端文件读取，待 Hub 提供完整内容 projection 后再替换详情内容源。
 - `@/lib/query`：池+配额合并读走 `useResource("hub/skills")`；启停/发布成功后 `invalidate("hub/skills")`。版本历史键 `hub/skill-revisions/<name>`。
@@ -34,7 +36,7 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 - 池只含「有效可用」项（official 上架∧未关 + 自有包）；池内项恒为已启用，唯一动作是停用。
 - required 官方技能拒关：hub 409 `hub.skill_required` → 经 `isRequiredLockError` 反射为锁定态。
 - 上传是非缓存状态机（idle→preview→confirming→done），不走 query 层。
-- GitHub 是 `input→importing→done|preview|unavailable`；关闭会使迟到响应失效，只有 `importGithub`
+- GitHub 是 `Preview→select/ready→Import draft→Publish owner/CAS→Install`；关闭取消等待并保原命令意图，只有真实Install ACK
   结果成功后再失活 `hub/skills`。Hub 的稳定错误码会映射到可操作的本地化提示，重复提交在同一帧内被拦截。
 - 技能目录的 cursor pagination 在同一滚动 Dialog 内有界合并，并对重复 cursor 停止，避免用户看到空的
   第二个分页层或因异常 cursor 进入无限请求。
@@ -45,8 +47,7 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
   `371.5×135px`，描述 `12px/16px`，开关 `22×14px`。
 - “浏览技能”目录是独立 `800×680px` 的 scroll surface，卡片为 `370×135px` 两列；官方/第三方切换只改变
   catalog scope 查询，不改变 workspace 身份边界。
-- `HubClient` 仅有 `previewGithub` 时，GitHub 对话框进入明确的 preview-only 完成态，不触发 `onImported`；
-  只有 `importGithub` 成功才刷新技能池。上传预检返回的诊断错误会保留在候选项中，候选的 checkbox
+- GitHub Preview和Import draft均不触发`onImported`；仅真实Publish/Install完成刷新权威技能读取。上传预检返回的诊断错误会保留在候选项中，候选的 checkbox
   使用稳定的编码 ID 关联描述和错误。
 - GitHub 导入关闭/卸载会 abort 当前请求；导入或上传成功同时失活 `hub/skills` 与 catalog 查询键，避免
   重新打开目录时残留过期的安装状态。短桌面视口由 Dialog 内部滚动承接内容，footer 不依赖页面高度。

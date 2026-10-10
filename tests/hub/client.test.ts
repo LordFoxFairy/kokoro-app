@@ -282,88 +282,6 @@ describe("hub client", () => {
     expect(client).not.toHaveProperty("confirmUpload")
   })
 
-  it("previews a GitHub repository through the optional BFF contract", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      data: {
-        repository: "https://github.com/acme/skill-repo",
-        default_branch: "main",
-        skill: { name: "skill-repo", description: "from BFF" },
-      },
-    }))
-    vi.stubGlobal("fetch", fetchMock)
-
-    const preview = await createHubClient().previewGithub?.("https://github.com/acme/skill-repo")
-
-    expect(preview?.skill.name).toBe("skill-repo")
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/self/skills/github/preview")
-    expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
-    expect(new Headers(init.headers).get("idempotency-key")).toBeNull()
-    expect(JSON.parse(init.body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
-  })
-
-  it("imports a GitHub repository through the optional BFF contract", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      data: {
-        repository: "https://github.com/acme/skill-repo",
-        default_branch: "main",
-        skill: { name: "skill-repo", description: "from BFF" },
-      },
-    }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-
-    const result = await createHubClient().importGithub?.("https://github.com/acme/skill-repo")
-
-    expect(result?.skill.name).toBe("skill-repo")
-    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(path).toBe("/api/hub/self/skills/github/import")
-    expect(init).toMatchObject({ method: "POST", headers: { "content-type": "application/json" } })
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-github-import:/)
-    expect(JSON.parse(init.body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
-  })
-
-  it("canonicalizes GitHub imports before sending a stable replay key", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
-          repository: "https://github.com/acme/skill-repo",
-          default_branch: "main",
-          skill: { name: "skill-repo", description: "from BFF" },
-        },
-      }, 201))
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
-          repository: "https://github.com/acme/skill-repo",
-          default_branch: "main",
-          skill: { name: "skill-repo", description: "from BFF" },
-        },
-      }, 201))
-    vi.stubGlobal("fetch", fetchMock)
-
-    const client = createHubClient()
-    await client.importGithub?.("  acme/skill-repo.git  ")
-    await client.importGithub?.("https://www.github.com/acme/skill-repo/")
-
-    const first = fetchMock.mock.calls[0] as [string, RequestInit]
-    const second = fetchMock.mock.calls[1] as [string, RequestInit]
-    expect(JSON.parse(first[1].body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
-    expect(JSON.parse(second[1].body as string)).toEqual({ repository: "https://github.com/acme/skill-repo" })
-    expect((first[1].headers as Record<string, string>)["Idempotency-Key"])
-      .toBe((second[1].headers as Record<string, string>)["Idempotency-Key"])
-  })
-
-  it("rejects a BFF result that is not a canonical GitHub repository", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      data: {
-        repository: "https://evil.example/acme/skill-repo",
-        default_branch: "main",
-        skill: { name: "skill-repo", description: "fixture" },
-      },
-    })))
-
-    await expect(createHubClient().importGithub?.("acme/skill-repo")).rejects.toMatchObject({ reason: "parse" })
-  })
-
   it("fails loud (parse) when the pool payload violates the schema", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: { skills: [{ name: "x" }] } })))
     await expect(createHubClient().listSkillPool()).rejects.toBeInstanceOf(HubClientError)
@@ -754,3 +672,5 @@ it("rejects package unknown fields, unsafe paths, invalid decimal revision and b
     ...["../SKILL.md", "/SKILL.md", "a\\b", "a//b", "e\u0301.md"].map(path => ({ ...inspected, files: [{ path, size_bytes: "6" }], selected_file: null })),
   ]) expect(catalogPackageResponseSchema.safeParse({ data }).success).toBe(false)
 })
+
+it("removes the retired Github URL methods from the generic Hub client", () => { expect(createHubClient()).not.toHaveProperty("previewGithub"); expect(createHubClient()).not.toHaveProperty("importGithub") })

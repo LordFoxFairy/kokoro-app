@@ -25,13 +25,9 @@ import {
   customApiConnectorsPath,
   customApiViewSchema,
   customMcpConnectorsPath,
-  githubImportRequestSchema,
-  githubImportResultSchema,
   mcpServersPath,
   skillDisablePath,
   skillEnablePath,
-  skillGithubImportPath,
-  skillGithubPreviewPath,
   skillPoolPath,
   skillPoolSchema,
   skillCatalogPath,
@@ -51,7 +47,6 @@ import {
   type SkillCatalog,
   type SkillQuota,
   type SkillRevision,
-  type GithubImportResult,
   mcpConnectionPageSchema,
   mcpConnectionErrorAllowed,
   mcpConnectionReadErrorSchema,
@@ -137,13 +132,7 @@ export function parseGithubRepository(value: string): GithubRepository | null {
   }
 }
 
-function canonicalGithubRepository(repository: string): string {
-  const parsed = parseGithubRepository(repository)
-  if (parsed === null) {
-    throw new HubClientError("parse", "invalid GitHub repository", "github.invalid_repository", 400)
-  }
-  return parsed.canonical
-}
+
 
 function isAbortError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
@@ -301,31 +290,15 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
   }
 }
 
-function withOptionalSignal(init: RequestInit, signal: AbortSignal | undefined): RequestInit {
-  return signal === undefined ? init : { ...init, signal }
-}
-
-function createIdempotencyKey(prefix: string, stableValue?: string): string {
-  if (stableValue !== undefined) {
-    // GitHub import is a resource operation: repeating the same canonical
-    // repository should be safe to replay after a timeout. Keep the key opaque
-    // and deterministic without putting the repository URL in a request
-    // header. Other mutations remain per-attempt keys.
-    let hash = 2166136261
-    for (let index = 0; index < stableValue.length; index += 1) {
-      hash ^= stableValue.charCodeAt(index)
-      hash = Math.imul(hash, 16777619)
-    }
-    return `${prefix}:${(hash >>> 0).toString(16).padStart(8, "0")}`
-  }
+function createIdempotencyKey(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   return `${prefix}:${uuid ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`
 }
 
 const JSON_HEADERS = { "content-type": "application/json" } as const
 
-function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}, stableValue?: string): Record<string, string> {
-  return { ...headers, "Idempotency-Key": createIdempotencyKey(prefix, stableValue) }
+function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}): Record<string, string> {
+  return { ...headers, "Idempotency-Key": createIdempotencyKey(prefix) }
 }
 
 export type HubClient = {
@@ -339,8 +312,6 @@ export type HubClient = {
   /** `scope` disambiguates same-name official/third-party/personal projections. */
   setSkillEnabled: (name: string, enabled: boolean, scope?: string) => Promise<void>
   /** Optional GitHub preview/import endpoints; preview clients may omit them. */
-  previewGithub?: (repository: string, signal?: AbortSignal) => Promise<GithubImportResult>
-  importGithub?: (repository: string, signal?: AbortSignal) => Promise<GithubImportResult>
   // MCP server 池（self 面）：列表 / 注册 / 启停 / 软删。
   listMcpServers: () => Promise<McpServerView[]>
   registerMcpServer: (input: McpRegisterInput) => Promise<McpServerView>
@@ -416,32 +387,6 @@ export function createHubClient(): HubClient {
       if (!response.ok) {
         throw await readError(response)
       }
-    },
-    previewGithub: async (repository, signal) => {
-      const canonical = canonicalGithubRepository(repository)
-      const body = githubImportRequestSchema.parse({ repository: canonical })
-      return requestData(
-        skillGithubPreviewPath,
-        githubImportResultSchema,
-        withOptionalSignal({
-          method: "POST",
-          headers: JSON_HEADERS,
-          body: JSON.stringify(body),
-        }, signal),
-      )
-    },
-    importGithub: async (repository, signal) => {
-      const canonical = canonicalGithubRepository(repository)
-      const body = githubImportRequestSchema.parse({ repository: canonical })
-      return requestData(
-        skillGithubImportPath,
-        githubImportResultSchema,
-        withOptionalSignal({
-          method: "POST",
-          headers: idempotencyHeaders("skill-github-import", { ...JSON_HEADERS }, canonical),
-          body: JSON.stringify(body),
-        }, signal),
-      )
     },
     listMcpServers: async () => (await requestData(mcpServersPath, mcpServerPoolSchema)).servers,
     registerMcpServer: async (input) =>

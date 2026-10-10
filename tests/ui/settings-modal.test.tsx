@@ -64,11 +64,6 @@ vi.mock("@/ui/shell/page-clients", () => ({
     }),
     skillQuota: vi.fn().mockResolvedValue(null),
     setSkillEnabled: vi.fn().mockResolvedValue(undefined),
-    importGithub: vi.fn().mockResolvedValue({
-      repository: "https://github.com/acme/skill-repo",
-      default_branch: "main",
-      skill: { name: "skill-repo", description: "Imported by the settings fixture" },
-    }),
     listMcpServers: vi.fn().mockResolvedValue([]),
     listMcpSecrets: vi.fn().mockResolvedValue([]),
     registerCustomMcp,
@@ -183,13 +178,8 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "创建" }), { button: 0, ctrlKey: false })
     fireEvent.click(await screen.findByRole("menuitem", { name: "从 GitHub 导入" }))
     const dialog = await screen.findByTestId("github-import-dialog")
-    fireEvent.change(within(dialog).getByTestId("github-repository-input"), {
-      target: { value: "https://github.com/acme/skill-repo" },
-    })
-    fireEvent.click(within(dialog).getByTestId("github-import-submit"))
-    expect(await within(dialog).findByTestId("github-import-complete")).toBeInTheDocument()
-
-    fireEvent.click(within(dialog).getByTestId("github-import-done"))
+    expect(within(dialog).getByTestId("github-repository-input")).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole("button", { name: "关闭 GitHub 导入" }))
     await waitFor(() => expect(screen.queryByTestId("github-import-dialog")).not.toBeInTheDocument())
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument()
     expect(screen.getByTestId("settings-tab-skills")).toHaveAttribute("data-state", "active")

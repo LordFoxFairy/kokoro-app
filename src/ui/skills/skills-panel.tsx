@@ -1,4 +1,6 @@
 "use client"
+
+import type { GithubImported } from "./personal-skill-github-import-flow"
 import Image from "next/image"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -26,7 +28,7 @@ import { cn } from "@/lib/utils"
 import { invalidate, useAsyncAction, useResource } from "@/lib/query"
 import type { HubClient } from "@/hub/client"
 import { isRequiredLockError } from "@/hub/rules"
-import type { GithubImportResult, SkillCard, SkillCatalog, SkillQuota, SkillRevision } from "@/hub/schemas"
+import type { SkillCard, SkillCatalog, SkillQuota, SkillRevision } from "@/hub/schemas"
 
 import styles from "./skills-panel.module.css"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
@@ -149,7 +151,7 @@ function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
   const uploadReturnFocusRef = useRef<HTMLElement | null>(null)
   const detailReturnFocusRef = useRef<HTMLElement | null>(null)
   const [detailSkill, setDetailSkill] = useState<SkillCard | null>(null)
-  const [githubImportNotice, setGithubImportNotice] = useState<GithubImportResult | null>(null)
+  const [githubImportNotice, setGithubImportNotice] = useState<GithubImported | null>(null)
   const [recentSkillKey, setRecentSkillKey] = useState<string | null>(null)
   const poolCreateTriggerRef = useRef<HTMLButtonElement | null>(null)
   const invalidateSkills = useCallback(() => {
@@ -159,13 +161,13 @@ function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
     invalidate(skillResourceKey(SKILLS_KEY, client))
     invalidate(skillResourceKey(SKILLS_CATALOG_KEY, client))
   }, [client])
-  const handleGithubImported = useCallback((result: GithubImportResult) => {
+  const handleGithubImported = useCallback((result: GithubImported) => {
     invalidateSkills()
     // Keep the just-imported skill discoverable after the dialog closes. The
     // list may contain many cards and the imported personal card is otherwise
     // appended below the fold, which makes a successful import look like a
     // no-op to the user.
-    setRecentSkillKey(`personal/${result.skill.name}`)
+    setRecentSkillKey(`personal/${result.name}`)
     setGithubImportNotice(result)
   }, [invalidateSkills])
   // 池 + 配额合并读经查询层（模块缓存/去重/失活）：池只含「有效可用」项，配额缺失回退 null。
@@ -271,8 +273,6 @@ function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
         </div>
       </div>
       <GithubImportDialog
-        key={githubOpen ? "github-import-open" : "github-import-closed"}
-        client={client}
         open={githubOpen}
         onOpenChange={setGithubOpen}
         returnFocusRef={githubReturnFocusRef}
@@ -365,7 +365,7 @@ function PoolTab({
   onOpenUpload: (returnFocusRef?: RefObject<HTMLElement | null>) => void
   onOpenGithub: (returnFocusRef?: RefObject<HTMLElement | null>) => void
   createTriggerRef: RefObject<HTMLButtonElement | null>
-  githubImportNotice: GithubImportResult | null
+  githubImportNotice: GithubImported | null
   recentSkillKey: string | null
   onDismissGithubImportNotice: () => void
   onCreateWithAi?: () => void
@@ -512,7 +512,7 @@ function PoolTab({
       {githubImportNotice ? (
         <Alert className={styles.importNotice} data-testid="github-import-notice" role="status" aria-live="polite">
           <AlertDescription>
-            {t("skills.githubImportNotice", { name: githubImportNotice.skill.name })}
+            {t("skills.githubImportNotice", { name: githubImportNotice.name })}
             <span className={styles.importNoticeRepository}>{githubImportNotice.repository}</span>
           </AlertDescription>
           <Button

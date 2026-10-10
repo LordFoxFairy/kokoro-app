@@ -203,38 +203,6 @@ export const skillRevisionsSchema = z.object({ revisions: z.array(skillRevisionS
 
 // —— GitHub 技能导入（可选 BFF 扩展）——
 
-// GitHub 导入入口与 zip 上传入口分开建模。当前 Web fixture 先使用本地预览，
-// 后端接入时可通过 HubClient.importGithub 注入同一形状的确认结果；不会把仓库
-// URL 误当成 multipart 文件，也不会把 GitHub 菜单项落到 upload surface。
-const githubCanonicalRepositoryPattern = /^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
-
-/**
- * The BFF only returns the canonical repository form produced by the client.
- * Keeping this constraint at the response boundary prevents a malformed or
- * untrusted upstream value from being rendered as a repository link later.
- */
-export const githubCanonicalRepositorySchema = z
-  .string()
-  .regex(githubCanonicalRepositoryPattern, "expected a canonical GitHub repository URL")
-
-export const githubImportRequestSchema = z
-  .object({ repository: githubCanonicalRepositorySchema })
-  .strict()
-
-export const githubImportResultSchema = z
-  .object({
-    repository: githubCanonicalRepositorySchema,
-    default_branch: z.string().min(1),
-    skill: z
-      .object({
-        name: z.string().min(1),
-        description: z.string().nullable(),
-      })
-      .strict(),
-  })
-  .strict()
-export type GithubImportResult = z.infer<typeof githubImportResultSchema>
-
 // —— MCP server 池（self 面）——
 
 // 传输种类：与 hub contract/mcp-storage.MCP_TRANSPORTS 对齐（http / streamable_http）。
@@ -396,8 +364,6 @@ export function skillDisablePath(name: string, scope?: string): string {
 export function skillRevisionsPath(name: string, scope?: string): string {
   return `/self/skills/${encodeURIComponent(name)}/revisions${skillScopeQuery(scope)}`
 }
-export const skillGithubPreviewPath = "/self/skills/github/preview"
-export const skillGithubImportPath = "/self/skills/github/import"
 
 // BFF personal installation projection; never an execution authorization cache.
 export const installationIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
