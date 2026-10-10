@@ -1,3 +1,24 @@
+<!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-TECHNICAL_DESIGN-D0 -->
+
+## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）
+
+当前 Web main `d2545a34cc2f9bbc4aa991b93fde773db555e2d5` 已显示真实目录/摘要，品牌与分类一致；“查看详情”包 reader 尚未接通，同源目录 package 读取仍404。本前缀定义待实施目标，不作为业务已生效/浏览器验收证据。BFF正式 `939bf0e1da98a313233a923c6aa55481d06f5aca` 已有 public `GET /v1/skills/{skill_id}/package`（getSkillPackageDirectory），经 `publishedSkillPackageInspectionRoute` 调 `ProductSkillReadService.InspectSkillPackage`；Platform物理 `apps/kokoro-capability` 正式 `32666c1c18360e707048a1104efe6b50e375002f`。不新增 owner API/RPC、依赖或持久化。下面原 mixed 全文逐字节保留。
+
+### 放置与具体流程
+- Web owner 扩现 `src/ui/skills/manus-skill-client.ts` 请求编排、`src/hub/schemas.ts` 消费校验、`src/app/api/hub/[...path]/route.ts` 具名闭集；现 `manus-skill-detail-dialog.tsx`/相邻CSS承接摘要→reader。比另建 wire/目录或恢复 `skill-detail-dialog.tsx` 的合成文件树，选择现模块，避免第二协议与假数据。后继精确授权现client/schema/route/dialog/CSS及相邻 UI/proxy/client 测试，必要 i18n 仅本片词条，由Root另行放行；本D0只三文档。
+- 目录 `skillId` 是 series，`currentVersion.versionUid` 是包的 revision Skill ID；保留后者在现内部 card projection。GetSkill仍以series请求且校验返回id，其version若与选定目录revision Skill ID不一致则提示刷新，不用series或checksum替代，不静默换包。包 `data.revision` 是另一项owner十进制revision，不当作URL标识。
+- 摘要新增可见“查看详情”动作，选择已核验revision Skill ID；请求 `/api/hub/skills/{revision_skill_id}/package` 获取真实文本目录，再请求同路径唯一 `file_path=SKILL.md`。存在真实根SKILL.md时默认显示；不存在时呈现真实不可读/空态，不生成说明。用户选择其它已返回UTF8文件，再请求其精确路径。读取期间保留摘要/reader壳，呈现loading/error/empty，不整页跳转或刷新。
+- 只参考现Manus布局壳，不复制旧合成 scripts/references/YAML/下载内容。Markdown展示使用已有解析能力，不执行HTML/脚本；不自动请求包Markdown引用的外部图片或资源，其它文本按惰性文本展示。下载仍走既有真实资格，不将reader文本冒充完整ZIP或二进制资源。
+- 每次目录/文件请求共用单次10秒总预算（含admission/fetch/body），累计JSON上限1MiB；关闭、资源切换、文件切换取消原请求，finally清计时器/取消reader，迟到响应不覆盖当前selection。目录与所选文件保持同source_ref与owner decimal revision；不重试为其它资源、不缓存权限。
+
+
+预计精确现文件集：`src/ui/skills/manus-skill-detail-dialog.tsx`、`src/ui/skills/manus-skill-detail-dialog.module.css`、`src/ui/skills/manus-skill-client.ts`、`src/hub/schemas.ts`、`src/app/api/hub/[...path]/route.ts`、`src/i18n/messages.ts`、`src/i18n/overlays.ts`、`tests/ui/kokoro-skills-surface.test.tsx`、`tests/app/hub-proxy.test.ts`、`tests/hub/client.test.ts`。不新增文件；此清单为D0后的拟授权，不在本阶段写入。
+
+### 验证与未决门
+先当前404、series/revision错配、非法/重复query、路径穿越、坏shape/UTF8字节/排序/迟到响应/超限/慢流取消RED；再真实目录、SKILL.md、多文本文件、空文件/无可读文件及错误闭集正负控。Root负责当前纯门/type/lint/build与真实未安装目录reader浏览器验收；D0放行之前不写业务。五mixed、其它页面/服务/数据/index持续保护。
+
+<!-- END:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-TECHNICAL_DESIGN-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-TECHNICAL_DESIGN-D0 -->
 
 ## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）

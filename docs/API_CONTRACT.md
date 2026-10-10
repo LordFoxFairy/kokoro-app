@@ -1,3 +1,22 @@
+<!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-API_CONTRACT-D0 -->
+
+## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）
+
+当前 Web main `d2545a34cc2f9bbc4aa991b93fde773db555e2d5` 已显示真实目录/摘要，品牌与分类一致；“查看详情”包 reader 尚未接通，同源目录 package 读取仍404。本前缀定义待实施目标，不作为业务已生效/浏览器验收证据。BFF正式 `939bf0e1da98a313233a923c6aa55481d06f5aca` 已有 public `GET /v1/skills/{skill_id}/package`（getSkillPackageDirectory），经 `publishedSkillPackageInspectionRoute` 调 `ProductSkillReadService.InspectSkillPackage`；Platform物理 `apps/kokoro-capability` 正式 `32666c1c18360e707048a1104efe6b50e375002f`。不新增 owner API/RPC、依赖或持久化。下面原 mixed 全文逐字节保留。
+
+### 唯一机器事实与同源边界
+字段事实引用 BFF `contract/openapi/v1/openapi.yaml` 的 `getSkillPackageDirectory`、`SkillPackageInspectionResponse/Data/File/SelectedFile`；成功为strict `{data}`，错误引用该operation的 `SkillProductErrorResponse`，不误用 self/installation 专属 `SkillPackageInspectionErrorResponse`。行为核对同仓 `src/http/routes/skill-download.ts`、`skill-drafts.ts` 及 `infrastructure/clients/platform/skill-package-inspection-response.ts`；Web既有generated pin不变，不维护另一份owner契约。
+
+目标private exact `GET /api/hub/skills/{revision_skill_id}/package` 唯一映射正式 `/v1/skills/{skill_id}/package`；参数取owner `currentVersion.versionUid`，不是series。只容许一个可选非空 `file_path`，一次decode、不trim/二次decode；拒绝alias、非GET、未知/重复query、body/content-length（含0）/transfer-encoding/idempotency-key，沿现Origin/session/受信头/超时取消规则，不转发浏览器identity。
+
+成功/嵌套未知字段失败闭合；source_ref须等于 `skill:{请求revision_skill_id}`。data.revision为正uint64十进制（非URL Skill ID）；size_bytes为含0的uint64十进制。最多128文件，安全NFC路径UTF8≤256 bytes，无绝对路径/drive/反斜杠/BOM/NUL/空段/dot/dotdot；目录严格排序且唯一。目录请求selected_file=null；文件请求selected_file.path精确等于请求且唯一在files中，text为合法Unicode，其真实UTF8 bytes等于列出size_bytes，保留空文本、BOM与行尾。后续文件响应须与已展示目录source_ref和decimal revision一致，错配提示刷新而非合并。
+
+目录是owner认可的UTF8文本集合，不是ZIP全量binary文件目录。错误按该operation实际400/401/403/404/409/412/413/429/502/503及对应code闭集测试；实际`runSkillRoute`/admission错误与Web本地失败分别校验，禁止通用enum×status、fallback或把412/坏响应转空成功。JSON媒体/no-store/request-id、响应累计1MiB和10秒全请求预算均需验证；不暴露token/内部URL/owner异常。
+
+D0后先Root精确授权现文件，再以真实函数/同源route RED→GREEN；当前机器契约不改，浏览器结果待Root后继验收。
+
+<!-- END:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-API_CONTRACT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-API_CONTRACT-D0 -->
 
 ## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）

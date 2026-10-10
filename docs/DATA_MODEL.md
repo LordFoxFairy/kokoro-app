@@ -1,3 +1,20 @@
+<!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-DATA_MODEL-D0 -->
+
+## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）
+
+当前 Web main `d2545a34cc2f9bbc4aa991b93fde773db555e2d5` 已显示真实目录/摘要，品牌与分类一致；“查看详情”包 reader 尚未接通，同源目录 package 读取仍404。本前缀定义待实施目标，不作为业务已生效/浏览器验收证据。BFF正式 `939bf0e1da98a313233a923c6aa55481d06f5aca` 已有 public `GET /v1/skills/{skill_id}/package`（getSkillPackageDirectory），经 `publishedSkillPackageInspectionRoute` 调 `ProductSkillReadService.InspectSkillPackage`；Platform物理 `apps/kokoro-capability` 正式 `32666c1c18360e707048a1104efe6b50e375002f`。不新增 owner API/RPC、依赖或持久化。下面原 mixed 全文逐字节保留。
+
+### 浏览器状态与身份
+Web仍无业务SQL、Redis表或持久owner，不建store/localStorage包缓存。BFF/Platform/Storage拥有publication、authorization、package与对象/扫描事实；Web仅保留当前页面选定series、revision Skill ID、reader开闭/所选file_path、请求状态和已核验目录/文本。
+
+series来自Hub skillId；URL与source_ref绑定Hub currentVersion.versionUid（或已与该值核对的GetSkill.version）。成功data.revision是独立正uint64十进制owner版本，不混同Skill ID、CAS或checksum。目录→文件必须绑定同一source_ref/decimal revision；资源改变清旧文本并取消旧请求，不把上一包响应显示为下一包。刷新从owner重新读，不跨刷新持久化资格。
+
+files只包含真实owner认可的UTF8可读成员；size_bytes与所选原text的UTF8编码长度一致，空文本保留为空，不补示例/SKILL.md/scripts/references，不声称展示全部binary。缺SKILL.md、目录为空、不可预览、权限拒绝均显示相应真实状态，不合成内容或绕资格；Markdown HTML/脚本不执行，引用的外部图片/资源不自动加载。
+
+后继只扩既有consumer内存projection/schema与现reader组件，不改owner数据库/扫描状态/发布/安装事务，不新增API/RPC。Root负责D0精准前缀提交、代码授权与最终验收；下面原三文档mixed正文和两mixed测试保持原bytes，不入本片提交。
+
+<!-- END:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-DATA_MODEL-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-SKILL-READ-CONTRACT-DATA_MODEL-D0 -->
 
 ## T-K03.14-WEB-SKILL-READ-CONTRACT D0：当前读取消费纠偏（2026-10-10；目标，待实施）
