@@ -25,13 +25,15 @@ vi.mock("@/lib/server/product-session-store", async (original) => ({
 
 import { parseProductReturnTarget } from "@/lib/product-return-target"
 import { GET, POST } from "@/app/api/auth/[...nextauth]/route"
-import { oidcAuthOptions, oidcRpConfig } from "@/lib/server/oidc-provider"
+import { oidcAuthOptions, oidcRpConfig, OIDC_SCOPE } from "@/lib/server/oidc-provider"
 
 const BASE_SCOPE = "openid profile email offline_access iam:session-authorization.verify"
 const TEAM_READ_SCOPES = ["iam:member.read", "iam:invitation.read", "iam:role.read"]
 const TEAM_WRITE_SCOPES = ["iam:member.write", "iam:invitation.write"]
 const TEAM_SCOPES = [...TEAM_READ_SCOPES, ...TEAM_WRITE_SCOPES]
-const EXPECTED_SCOPE = `${BASE_SCOPE} ${TEAM_SCOPES.join(" ")}`
+const SKILL_SCOPES = ["iam:authorization.check", "iam:skill-authorization.check", "iam:publisher-profile.read"]
+const ORIGINAL_SCOPE = `${BASE_SCOPE} ${TEAM_SCOPES.join(" ")}`
+const EXPECTED_SCOPE = `${ORIGINAL_SCOPE} ${SKILL_SCOPES.join(" ")}`
 const ENV = {
   NODE_ENV: "test",
   KOKORO_BFF_BASE_URL: "https://bff.example.test",
@@ -86,7 +88,7 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
-describe("Product OIDC fixed-tenant Team scopes", () => {
+describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
   it.each(["logout", "session-state"])("returns 404 for retired /api/auth/%s before RP configuration", async (legacy) => {
     vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
     const response = await GET(new NextRequest(`${ENV.NEXTAUTH_URL}/${legacy}`, {
@@ -116,7 +118,7 @@ describe("Product OIDC fixed-tenant Team scopes", () => {
     expect(unavailable.headers.get("location")).toBeNull()
     expect(await unavailable.json()).toMatchObject({ error: { code: "rp_unavailable" } })
   })
-  it("requests the original scopes followed by exactly three Team read and two write scopes", () => {
+  it("requests the original ten scopes followed by exactly three registered Skill scopes", () => {
     const config = oidcRpConfig(ENV)!
     const provider = oidcAuthOptions(config, vi.fn(), new AbortController().signal)
       .providers[0] as OAuthConfig<{ sub: string }>
@@ -129,6 +131,8 @@ describe("Product OIDC fixed-tenant Team scopes", () => {
       },
     })
     expect(provider.checks).toEqual(["pkce", "state", "nonce"])
+    expect(OIDC_SCOPE.split(" ")).toHaveLength(13)
+    expect(new Set(OIDC_SCOPE.split(" ")).size).toBe(13)
   })
 
   it("accepts the complete fixed scope in the Auth.js authorization redirect", async () => {
@@ -144,10 +148,17 @@ describe("Product OIDC fixed-tenant Team scopes", () => {
     ["legacy scope", BASE_SCOPE],
     ...TEAM_SCOPES.map((missing) => [
       `missing ${missing}`,
-      `${BASE_SCOPE} ${TEAM_SCOPES.filter((scope) => scope !== missing).join(" ")}`,
+      `${BASE_SCOPE} ${TEAM_SCOPES.filter((scope) => scope !== missing).join(" ")} ${SKILL_SCOPES.join(" ")}`,
     ]),
+    ["old ten scopes", ORIGINAL_SCOPE],
+    ...SKILL_SCOPES.map((missing) => [
+      `missing ${missing}`,
+      `${ORIGINAL_SCOPE} ${SKILL_SCOPES.filter((scope) => scope !== missing).join(" ")}`,
+    ]),
+    ...SKILL_SCOPES.map((duplicate) => [`duplicate ${duplicate}`, `${EXPECTED_SCOPE} ${duplicate}`]),
     ["extra scope", `${EXPECTED_SCOPE} iam:role.write`],
-    ["reordered scope", `${BASE_SCOPE} ${[...TEAM_SCOPES].reverse().join(" ")}`],
+    ["reordered Team scope", `${BASE_SCOPE} ${[...TEAM_SCOPES].reverse().join(" ")} ${SKILL_SCOPES.join(" ")}`],
+    ["reordered Skill scope", `${ORIGINAL_SCOPE} ${[...SKILL_SCOPES].reverse().join(" ")}`],
   ])("rejects %s before recording the RP transaction", async (_label, scope) => {
     nextAuth.mockResolvedValueOnce(authorizeResponse(scope!))
     const response = await signIn()
