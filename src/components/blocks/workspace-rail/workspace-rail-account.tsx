@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject, type SVGProps } from "react"
 import Link from "next/link"
-import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
+import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, ShieldCheck, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -62,6 +62,7 @@ export function WorkspaceRailAccount({
 }: WorkspaceRailAccountProps) {
   const t = useT()
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [adminAccess, setAdminAccess] = useState<{ manageUrl: string } | null>(null)
   const actor = readCreditActor()
   const [credit, setCredit] = useState<{ actor: string | null | undefined; preview: boolean; balance: string }>({ actor, preview, balance: "—" })
   if (credit.actor !== actor || credit.preview !== preview) {
@@ -89,6 +90,19 @@ export function WorkspaceRailAccount({
     if (accountSettingsFrameRef.current !== null) {
       window.cancelAnimationFrame(accountSettingsFrameRef.current)
     }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch("/api/admin-access", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => response.ok ? await response.json() as unknown : null)
+      .then((value) => {
+        if (controller.signal.aborted || typeof value !== "object" || value === null) return
+        const access = value as { platform_admin?: unknown; manage_url?: unknown }
+        setAdminAccess(access.platform_admin === true && typeof access.manage_url === "string" ? { manageUrl: access.manage_url } : null)
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
@@ -184,6 +198,10 @@ export function WorkspaceRailAccount({
             <DropdownMenuItem onSelect={() => openSettingsFromAccount("personalization")}><Grid2X2 aria-hidden="true" />{t("settings.personalizationTitle")}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => openSettingsFromAccount("appearance")}><SlidersHorizontal aria-hidden="true" />{t("settings.title")}<DropdownMenuShortcut>⌘⇧,</DropdownMenuShortcut></DropdownMenuItem>
           </DropdownMenuGroup>
+          {adminAccess ? <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild><a href={adminAccess.manageUrl}><ShieldCheck aria-hidden="true" />后台管理<ArrowUpRight className={accountStyles.accountLinkArrow} aria-hidden="true" /></a></DropdownMenuItem>
+          </> : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild><Link
             href="/app"
