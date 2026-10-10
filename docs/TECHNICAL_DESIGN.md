@@ -1,3 +1,66 @@
+<!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
+
+## T-K03.14-WEB-SHARE D0（2026-10-10；目标，尚未实施）
+当前Web main `d0b9aa9` 已有真实安装、GitHub/local-import与独立文件树；两个技能弹窗Share仍复制当前页面URL，没有技能分享页。现snapshot仍13.1；本前缀目标消费BFF正式 `e1769b56aefa2e00e6460195c049cea81a9eea3b` / public `13.3.0` / 137 operations / canonical SHA256 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`；Platform `91bc3655ebd3648cb8f8ccddfacb5628bdeb1c5c`。 下方原mixed全文逐字节保留，本文不声称消费者已生效。
+
+| 放置项 | 决定 |
+|---|---|
+| Owner | Web浏览器显示/意图/同源adapter，web_identity_owner唯一writer；BFF拥有Share，Platform拥有精确revision；Root提交。 |
+| 位置比较 | 采用现hub普通schema/client，wire与网络分别成文件；不继续膨胀通用HubClient、不建share框架/目录。页面必须落Next既有app/skills/shared/[id]/page.tsx；不借conversation /shared。 |
+| 粒度/依赖 | 三个hub文件分别wire、10秒bounded I/O及测试；页面承载本页身份/安装状态，复用现Manus弹窗和真实package reader。浏览器只经同源BFF，禁止owner SDK/SQL及包元数据伪造。 |
+| 删除/保留 | 删除两个现技能弹窗的当前URL假Share；旧preview没有真实UID，删其Share入口和相邻测试断言，不生成身份。布局、reader、下载、本地/GitHub导入、个人draft与Admin保持。 |
+
+Create→严格六字段ACK→只复制ACK.url；剪贴板失败保ACK重试复制，不再Create。Create无幂等键，不自动重试；写结果未知保原source/body及unknown状态，明确新意图才新建，不称同键恢复。异步由已admitted主体+资源UID隔离，取消/关闭/失去准入退役迟到结果；不改变旧正文或重挂Dialog。刷新无ACK不冒原重放。
+
+分享页Resolve与精确summary双绑定share_id/source_ref，摘要直接取summary，不调用series GetSkill/current。现SkillCatalogCard强制content_hash/installed/enabled，因此ManusDialog采用明确catalog/shared-summary显示来源，不造该wire对象；source_kind决定真实来源，分类/作者/封面/例子仅实际字段，缺usage不展示。文件树用summary.skill_id真实revision UID，decimal revision用于响应绑定，不混series；继续安全UTF8目录/SKILL.md/选文件及关闭切换取消。只允许真实cover同源闭集rewrite，无外链资源自动加载。
+
+安装单独读取正式installation list/get，不能从summary或phase推断installed；安装POST复用现client，冻结source_ref/body/key并验证真实ACK，未知保原意图。已有不同pin不得冒称所分享revision已安装、不自动升级/替换；停用启用保持原installation ID/source。成功invalidate既有catalog资源key。shared没有exact download handle，现DownloadSkill按series current：共享模式不借它下载旧版本，保目录现下载，显式列为owner能力缺口，不新造API。示例展示真实文本，不以假hash启动执行。
+
+### 网络切片候选5
+- `src/hub/skill-share.schema.ts`
+- `src/hub/skill-share-client.ts`
+- `tests/hub/skill-share-client.test.ts`
+- `src/app/api/hub/[...path]/route.ts`
+- `tests/app/hub-proxy.test.ts`
+
+### 正式snapshot/pin资格12（与网络同片）
+- `src/generated/bff-public-openapi.yaml`
+- `scripts/generate-bff-agent-failure.mjs`
+- `scripts/generate-bff-team-client.mjs`
+- `src/generated/bff-agent-failure.ts`
+- `tests/contract/bff-agent-failure-public.test.ts`
+- `tests/contract/bff-team-public.test.ts`
+- `tests/contract/bff-library-artifact-public.test.ts`
+- `tests/contract/bff-library-file-public.test.ts`
+- `tests/contract/bff-project-resource-public.test.ts`
+- `tests/contract/bff-project-create-public.test.ts`
+- `tests/contract/bff-skills-mcp-public.test.ts`
+- `contract/api-contract.test.ts`
+
+### 后继UI/导航/索引12
+- `src/ui/skills/manus-skill-detail-dialog.tsx`
+- `src/ui/skills/manus-skill-detail-dialog.module.css`
+- `src/ui/skills/manus-skill-client.ts`
+- `src/i18n/messages.ts`
+- `src/i18n/overlays.ts`
+- `src/lib/product-return-target.ts`
+- `tests/lib/product-return-target.test.ts`
+- `src/app/skills/shared/[id]/page.tsx`
+- `tests/ui/skill-shared-page.test.tsx`
+- `tests/ui/kokoro-skills-surface.test.tsx`
+- `src/ui/skills/INDEX.md`
+- `INDEX.md`
+
+### preview假Share删除2（单独明确范围）
+- `src/ui/skills/skill-detail-dialog.tsx`
+- `tests/ui/skills-panel.test.tsx`
+
+正规snapshot必须取正式commit blob原字节且核digest/version/137全operation；两个现generator按正式输入重生成，Agent仅provenance三字段变化、tuple/fingerprint不动，Team窄生成输出预期原bytes不动。若其它generated变更先报精确diff再授权，不手改生成物。current资格pin统一13.3，所有历史负控保留。
+
+先真实RED：原假URL/新adapter404；六字段及UID/URL错误、unknown零自动重建/clipboard复用ACK；shared旧revision不发GetSkill，完整摘要与嵌套树、匿名正规return_to、账号切换/迟到、实际安装ACK与不同pin负控。focused/contract/type/lint，freeze后Root纯门/build/浏览器/独审；不启动服务或创建验收数据。
+
+<!-- END:T-K03.14-WEB-SHARE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
 
 ## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）

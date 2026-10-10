@@ -1,3 +1,16 @@
+<!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
+
+## T-K03.14-WEB-SHARE D0（目标，尚未实施）
+Web无持久化owner，不增SQL/Redis/store；固定消费BFF正式 `e1769b56aefa2e00e6460195c049cea81a9eea3b` / public `13.3.0` / 137 operations / canonical SHA256 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`；Platform `91bc3655ebd3648cb8f8ccddfacb5628bdeb1c5c`。 BFF Share与Platform精确revision事实不复制。
+
+本片仅内存Create意图及ACK、copy状态、share_id/source_ref/真实summary、真实installation结果与原写body/key；账户失准入立即取消，anonymous/换主体清除，迟到ACK不污染其它资源。POST无幂等，不因超时/刷新/clipboard失败自动Create；clipboard失败复用已验证ACK，未知明确新意图才可再次创建。
+
+Resolve六字段不是摘要或安装事实；nested summary不是current、不是安装收据；skill_id是真实revision UID，series_id另列，revision为owner decimal。显示模型不造content_hash/installed/brand/usage/例子/封面。安装列表必须完整分页并绑定真实source/series，已存在不同pin保留原ID/版本，不自动升级；未知安装只重放原冻结key/body，refresh丢key不称原重放，权威GET成功也不合成原ACK。
+
+reader库存与selected_file来自现revision package API，source_ref/decimalrevision/选path绑定原目录；只UTF8文本，不执行HTML/script、不自动请求Markdown外部资源。无exact下载handle保持能力缺口，不合成URL或请求series current。
+
+<!-- END:T-K03.14-WEB-SHARE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
 
 ## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）

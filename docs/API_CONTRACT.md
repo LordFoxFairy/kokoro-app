@@ -1,3 +1,20 @@
+<!-- BEGIN:T-K03.14-WEB-SHARE-D0 -->
+
+## T-K03.14-WEB-SHARE D0（目标，尚未实施）
+BFF正式 `e1769b56aefa2e00e6460195c049cea81a9eea3b` / public `13.3.0` / 137 operations / canonical SHA256 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`；Platform `91bc3655ebd3648cb8f8ccddfacb5628bdeb1c5c`。 机器唯一事实源为正式BFF `contract/openapi/v1/openapi.yaml`；原Resolve六字段及现series GetSkill不变。
+
+闭集同源：POST `/api/hub/skill-shares`→POST `/v1/skill-shares`；GET `/api/hub/skill-shares/{share_id}`→GET正式同路径；GET `/api/hub/skill-shares/{share_id}/skill`→GET正式nested路径。拒其它method/segment/query、GET body及任何Idempotency-Key。POST只接受strict source_ref/可选expires_at，无自动重试；无DELETE UI，owner撤销资格不扩大。
+
+成功strict `{data:...}`：Create201/Resolve200的share_id/source_ref/url/created_at/expires_at/revoked_at完整六字段，创建核原source_ref且未撤销/未过期；url只接受当前可信浏览器同源、exact `/skills/shared/encodeURIComponent(share_id)`、零query/fragment，不改写服务端URL。Nested200精确share_id/source_ref/skill；skill含实际skill_id/series_id/decimalrevision/display_name/description/tags/example_prompts/category_keys/created_at/updated_at/owner_type/source_kind，optional original_name/author/cover_image，按机器strict，不接受private locators/current/installed/usage或未知字段；source_ref=skill:skill_id，cover仅actualUID path rewrite。
+
+错误按正式三个operation各自response.status与SkillProductErrorResponse实际闭集，不通用enum×任意status、不把IAM失效当notfound；保request-id/no-store/Retry-After存在时合法校验。无conversation匿名读取，分享页可信session未admitted不发业务；anonymous显式正规login return_to，unavailable可重试且不授权。
+
+每次JSON含fetch/body总10秒、累计1MiB/fatalUTF8、finally cancel/clear/迟到body cleanup；同源adapter保持Origin、在线session、可信tenant/subject、取消/timeout、请求body≤65,536bytes。分享reader沿现revision package GET/file_path闭集与既有字节预算，不扩任意转发。return-target新增仅canonical `/skills/shared/{合法share_id}`，无query/fragment/外链/双decode；新页不借/shared conversation。
+
+共享summary没有immutable下载handle；不借当前series DownloadSkill。安装使用现正式独立客户端和strict19-field安装事实，不复制API、不用summary制造ACK。snapshot/资格准确文件清单见本任务TECH前缀，原历史测试语义不删。
+
+<!-- END:T-K03.14-WEB-SHARE-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
 
 ## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）
