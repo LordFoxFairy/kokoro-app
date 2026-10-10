@@ -92,6 +92,42 @@ it("opens a stable server-backed detail dialog with real detail fields and examp
   expect(fetchMock.mock.calls.some(([path]) => path.endsWith("/GetSkill"))).toBe(true)
 })
 
+it("does not retain a previous skill action while the next detail is loading", async () => {
+  const catalogWithTwoSkills = {
+    skills: [catalog.skills[0], {
+      skillId: "skill-search", displayName: "互联网技能搜索器", userDescription: "从已验证的仓库中搜索技能。",
+      tags: { values: ["SKILL_HUB_TAG_AUTOMATION"] },
+    }],
+  }
+  let resolveSecond: ((value: Response) => void) | undefined
+  const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+    if (path.endsWith("ListHubSkills")) return Promise.resolve(response(catalogWithTwoSkills))
+    if (path.endsWith("ListSkills")) return Promise.resolve(response({ userAddedSkills: [], officialSkills: [] }))
+    if (path.endsWith("GetSkill")) {
+      const skillId = JSON.parse(String(init?.body)).skillId
+      if (skillId === "skill-manim") return Promise.resolve(response({
+        skill: { id: "skill-manim", displayName: "Manim 动画师" },
+        downloadInfo: { downloadUrl: "/api/skill-downloads/one", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" },
+      }))
+      return new Promise<Response>((resolve) => { resolveSecond = resolve })
+    }
+    throw new Error(`unexpected ${path}`)
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  renderLive()
+
+  fireEvent.click(await screen.findByRole("button", { name: "查看技能详情 Manim 动画师" }))
+  expect(await screen.findByRole("button", { name: "下载技能" })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole("button", { name: "Close" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看技能详情 互联网技能搜索器" }))
+  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  resolveSecond?.(response({
+    skill: { id: "skill-search", displayName: "互联网技能搜索器" },
+    downloadInfo: { downloadUrl: "/api/skill-downloads/two", filename: "search.skill", expiresAt: "2026-10-10T00:00:00.000Z" },
+  }))
+  expect(await screen.findByRole("button", { name: "下载技能" })).toBeInTheDocument()
+})
+
 it("adds the server-selected skill through the typed installation boundary", async () => {
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.endsWith("/ListHubSkills")) return response(catalog)

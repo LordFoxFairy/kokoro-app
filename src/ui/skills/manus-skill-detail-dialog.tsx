@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { Download, FileText, MessageCircle, Plus, Share2 } from "lucide-react"
+import { Download, MessageCircle, Plus, Share2 } from "lucide-react"
 import { useEffect, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -37,26 +37,16 @@ function displayDate(value: string | undefined): string | null {
  * source state, SKILL.md readers, or package identifiers in the browser. */
 export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
-  const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (!open || !skill?.skill_id) return
     const controller = new AbortController()
-    queueMicrotask(() => {
-      if (!controller.signal.aborted) {
-        setLoading(true)
-        setFailed(false)
-        setDetail(null)
-      }
-    })
     void getManusSkillDetail(skill.skill_id).then((next) => {
       if (!controller.signal.aborted) setDetail(next)
     }).catch(() => {
       if (!controller.signal.aborted) setFailed(true)
-    }).finally(() => {
-      if (!controller.signal.aborted) setLoading(false)
     })
     return () => controller.abort()
   }, [open, skill?.skill_id])
@@ -72,6 +62,8 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
 
   if (!skill) return null
   const record = detail?.skill.id === skill.skill_id ? detail?.skill : null
+  const downloadInfo = detail !== null && detail.skill.id === skill.skill_id ? detail.downloadInfo : null
+  const loading = open && skill.skill_id !== undefined && record === null && !failed
   const title = record?.displayName ?? record?.name ?? skill.name
   const description = record?.userDescription ?? record?.description ?? skill.description
   const examples = record?.exampleQuestions ?? skill.example_questions ?? []
@@ -94,7 +86,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
       >
         <div className={styles.topActions}>
           <Button type="button" variant="ghost" size="icon-sm" aria-label="分享技能" onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share2 aria-hidden="true" /></Button>
-          {detail?.downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label="下载技能" disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
+          {downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label="下载技能" disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
         </div>
         <DialogHeader className={styles.hero}>
           <div className={styles.copy}>
@@ -103,7 +95,6 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
             <DialogDescription className={styles.meta}>Manus <span aria-hidden="true">|</span>{updated ? <>更新于 {updated}<span aria-hidden="true">|</span></> : null}{skill.usage_count ? <>已使用 {Number(skill.usage_count).toLocaleString("zh-CN")} 次</> : null}</DialogDescription>
             <div className={styles.actions}>
               <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? "已添加到我的技能" : <><Plus aria-hidden="true" />添加到我的技能</>}</Button>
-              <span className={styles.detailLabel}><FileText aria-hidden="true" />技能详情</span>
             </div>
           </div>
           {skill.skill_id ? <div className={styles.cover}><Image src={coverPath(skill.skill_id)} alt="" fill sizes="180px" unoptimized /></div> : null}
