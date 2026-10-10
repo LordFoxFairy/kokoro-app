@@ -14,21 +14,11 @@ const currentUserSchema = bffSuccessEnvelopeSchema(z.object({
   platform_admin: z.boolean(),
 }).strict())
 
-function adminManageUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const value = env.KOKORO_ADMIN_WEB_ORIGIN?.trim()
-  if (!value) return null
-  try {
-    const url = new URL(value)
-    return /^https?:$/u.test(url.protocol) && url.origin === value ? `${value}/manage` : null
-  } catch { return null }
-}
-
 /** Read-only UI capability projection; BFF/IAM remain the authorization boundary. */
 export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdForRequest(request)
   const config = productBffConfig()
-  const manageUrl = adminManageUrl()
-  if (config === null || manageUrl === null) return webErrorResponse("admin_access_unavailable", 503, requestId)
+  if (config === null) return webErrorResponse("admin_access_unavailable", 503, requestId)
   const claims = await admittedProductSession(request, config).catch(() => null)
   if (claims === null) return webErrorResponse("unauthenticated", 401, requestId)
   let upstream: Response
@@ -41,7 +31,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) return webErrorResponse("admin_access_unavailable", 503, requestId)
   const parsed = currentUserSchema.safeParse(raw)
   if (!parsed.success || parsed.data.data.user_id !== claims.subject) return webErrorResponse("admin_access_unavailable", 503, requestId)
-  return NextResponse.json({ platform_admin: parsed.data.data.platform_admin, ...(parsed.data.data.platform_admin ? { manage_url: manageUrl } : {}) }, {
+  return NextResponse.json({ platform_admin: parsed.data.data.platform_admin, ...(parsed.data.data.platform_admin ? { manage_url: "/manage" } : {}) }, {
     headers: { "cache-control": "private, no-store", "x-request-id": parsed.data.meta.request_id },
   })
 }

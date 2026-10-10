@@ -1,6 +1,16 @@
 import type { NextConfig } from "next"
 
 const configuredDevOrigin = process.env.KOKORO_DOMAIN?.trim()
+const adminInternalOrigin = process.env.KOKORO_ADMIN_INTERNAL_ORIGIN?.trim() || "http://127.0.0.1:3320"
+
+function exactHttpOrigin(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return /^https?:$/u.test(url.protocol) && url.origin === value ? value : null
+  } catch { return null }
+}
+
+const resolvedAdminInternalOrigin = exactHttpOrigin(adminInternalOrigin)
 
 const nextConfig: NextConfig = {
   // Next dev logs the full incoming URL by default. Verification links carry
@@ -24,6 +34,13 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   // 生产镜像：standalone 产物自带精简 node_modules + server.js，容器只需 node server.js。
   output: "standalone",
+  async rewrites() {
+    if (resolvedAdminInternalOrigin === null) return []
+    return [
+      { source: "/manage", destination: `${resolvedAdminInternalOrigin}/manage` },
+      { source: "/manage/:path*", destination: `${resolvedAdminInternalOrigin}/manage/:path*` },
+    ]
+  },
   async headers() {
     return [
       {
