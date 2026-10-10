@@ -73,7 +73,24 @@ import { createFakeClient, createMemoryStorage, settle, type FakeClient } from "
 let client: FakeClient
 let engine: SessionEngine
 
+
+// Admin capability reads are independent of the business response queue.
+const adminAccessFetch = vi.fn<typeof fetch>(async (input, init) => {
+  expect(input).toBe("/api/admin-access")
+  expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  return Response.json({ platform_admin: false }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-ordinary-account" } })
+})
+function stubBusinessFetch<T extends typeof fetch>(businessFetch: T): T {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) =>
+    new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname === "/api/admin-access"
+      ? adminAccessFetch(input, init)
+      : businessFetch(input, init),
+  )
+  return businessFetch
+}
+
 beforeEach(() => {
+  adminAccessFetch.mockClear()
   mockedPathname.value = "/app"
   window.history.replaceState(window.history.state, "", "/")
   resetFixtureSeq()
@@ -517,7 +534,7 @@ it("专案入口是受 project_ref 约束的工作区，含专案会话 Composer
 it("A→B 专案切换会清除 A 的失败上传意图与重试身份", async () => {
   buildEngine()
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "resource_scan_pending" } }), { status: 503 }))
-  vi.stubGlobal("fetch", fetchMock)
+  stubBusinessFetch(fetchMock)
   const capabilities = { instructions: true, connectors: true, resources: true, skills: true, projectConversations: true }
   const renderProject = (projectRef: string) => <ThemeProvider><LocaleProvider><AppFrame
     engine={engine} chatHref="/app" preview projectWorkspace projectRef={projectRef}
@@ -1252,11 +1269,11 @@ it("活动会话的确认Move先按回执导航而不被来源缓存驱逐误伤
     next_cursor: null,
   })
   vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: targetProjectId, name: "Active target", slug: "active-target", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-active-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
   render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
     projectReadBoundary={{ admitted: true, subject: "subject-active", generation: 1 }} />
@@ -1289,11 +1306,11 @@ it("同scope新对话使旧Move ACK失去导航资格", async () => {
       next_cursor: null,
     }),
   })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: targetProjectId, name: "New chat target", slug: "new-chat-target", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-new-chat-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   window.history.replaceState(window.history.state, "", `/app?conversation=${sessionId}`)
   render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
     projectReadBoundary={{ admitted: true, subject: "subject-new-chat", generation: 1 }} />
@@ -1324,11 +1341,11 @@ it("删除当前会话使迟到Move ACK失去导航资格", async () => {
       next_cursor: null,
     }),
   })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: targetProjectId, name: "Delete target", slug: "delete-target", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-delete-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   window.history.replaceState({}, "", `/app?conversation=${sessionId}`)
   render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
     projectReadBoundary={{ admitted: true, subject: "subject-delete", generation: 1 }} />
@@ -1370,7 +1387,7 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
     next_cursor: null,
   })
   vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{
       id: targetProjectId,
       name: "Target",
@@ -1380,7 +1397,7 @@ it("移动回执形成后当前视图虽已切换仍刷新owner列表但不导�
       updated_at: "2026-10-04T00:00:00Z",
     }] },
     meta: { request_id: "req-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
 
   const renderFrame = (projectRef?: string) => (
     <ThemeProvider>
@@ -1448,11 +1465,11 @@ it("matching ACK 已形成后切换 scope 不提交旧视图副作用", async ()
     sessions: [{ session_id: sessionId, title: "Scope A", updated_at: "2026-10-04T00:00:00Z" }], next_cursor: null,
   })
   vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: targetProjectId, name: "Scope Target", slug: "scope-target", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-scope-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   const renderFrame = (projectRef?: string) => (
     <ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
       projectReadBoundary={{ admitted: true, subject: "subject-scope", generation: 1 }}
@@ -1500,11 +1517,11 @@ it("移动拒绝的暂态反馈不在 A 切 B 再切 A 后复活", async () => {
       next_cursor: null,
     }),
   })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: targetProjectId, name: "Reject Target", slug: "reject-target", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-reject-projects" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false}
     projectReadBoundary={{ admitted: true, subject: "subject-reject", generation: 1 }} />
   </LocaleProvider></ThemeProvider>)
@@ -3882,4 +3899,21 @@ it("R255 preset retirement: 正常工作区保留模型选择且不请求旧 age
     listSpy.mockRestore()
     fetchSpy.mockRestore()
   }
+})
+
+it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
+  buildEngine()
+  stubBusinessFetch(vi.fn<typeof fetch>(async () => Response.json({ sessions: [], next_cursor: null })))
+  render(<ThemeProvider><LocaleProvider><AppFrame engine={engine} chatHref="/app" desktopRailCollapsed={false} /></LocaleProvider></ThemeProvider>)
+  await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
+  for (const [input, init] of adminAccessFetch.mock.calls) {
+    expect(input).toBe("/api/admin-access")
+    expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  }
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  await screen.findByRole("menu")
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  expect(document.querySelector('a[href="/manage"]')).toBeNull()
 })

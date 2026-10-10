@@ -66,11 +66,11 @@ function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceR
   const thread = transient.getSnapshot().thread
   transient.dispose()
   const listClient = createSessionClient({ baseUrl: "http://s.local" })
-  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  const fetchMock = stubBusinessFetch(vi.fn<typeof fetch>(async (input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
     const project = url.searchParams.get("project_ref")
     return Response.json({ sessions: [{ session_id: project === projectRef ? "task_a" : "conv_direct", title: project === projectRef ? "整理需求" : "普通持久会话", updated_at: "2026-10-01T00:00:00.000Z" }], next_cursor: null })
-  })
+  }))
   // Import binding is the existing browser client; no extra engine is created
   // to read an expanded folder's durable rows.
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(listClient)
@@ -90,7 +90,24 @@ function renderProjectFolderRail(overrides: Partial<Parameters<typeof WorkspaceR
   }
 }
 
+
+// Admin capability reads are independent of the business response queue.
+const adminAccessFetch = vi.fn<typeof fetch>(async (input, init) => {
+  expect(input).toBe("/api/admin-access")
+  expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  return Response.json({ platform_admin: false }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-ordinary-account" } })
+})
+function stubBusinessFetch<T extends typeof fetch>(businessFetch: T): T {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) =>
+    new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname === "/api/admin-access"
+      ? adminAccessFetch(input, init)
+      : businessFetch(input, init),
+  )
+  return businessFetch
+}
+
 beforeEach(() => {
+  adminAccessFetch.mockClear()
   window.localStorage.clear()
   window.localStorage.setItem("kokoro.locale", "zh")
 })
@@ -1330,4 +1347,19 @@ it.each(["actor-B", null])("R255 展开意图遇主体%s再回A不复活旧P/Q�
   expect(screen.queryByRole("button", { name: "会话Q" })).toBeNull()
   expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
   expect(props.onDeleteConversation).not.toHaveBeenCalled()
+})
+
+it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
+  renderProjectFolderRail()
+  await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
+  for (const [input, init] of adminAccessFetch.mock.calls) {
+    expect(input).toBe("/api/admin-access")
+    expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  }
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  await screen.findByRole("menu")
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  expect(document.querySelector('a[href="/manage"]')).toBeNull()
 })

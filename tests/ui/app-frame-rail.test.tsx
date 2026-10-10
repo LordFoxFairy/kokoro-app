@@ -68,7 +68,24 @@ function resizeDesktopViewport(width: number) {
   for (const listener of mediaListeners) listener()
 }
 
+
+// Admin capability reads are independent of the business response queue.
+const adminAccessFetch = vi.fn<typeof fetch>(async (input, init) => {
+  expect(input).toBe("/api/admin-access")
+  expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  return Response.json({ platform_admin: false }, { headers: { "cache-control": "private, no-store", "x-request-id": "req-ordinary-account" } })
+})
+function stubBusinessFetch<T extends typeof fetch>(businessFetch: T): T {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) =>
+    new URL(input instanceof Request ? input.url : String(input), window.location.origin).pathname === "/api/admin-access"
+      ? adminAccessFetch(input, init)
+      : businessFetch(input, init),
+  )
+  return businessFetch
+}
+
 beforeEach(() => {
+  adminAccessFetch.mockClear()
   pathname.value = "/app"
   mediaListeners.clear()
   setDesktopViewport(1280)
@@ -993,11 +1010,11 @@ it("project overview rail does not synthesize the engine's remembered active con
     ...projectClient,
     listSessions: vi.fn().mockResolvedValue({ sessions: [], next_cursor: null }),
   })
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
     data: { projects: [{ id: projectRef, name: "Overview project", slug: "overview-project", description: "",
       created_at: "2026-10-04T00:00:00Z", updated_at: "2026-10-04T00:00:00Z" }] },
     meta: { request_id: "req-overview-project" },
-  }), { status: 200, headers: { "content-type": "application/json" } }))
+  }), { status: 200, headers: { "content-type": "application/json" } })))
   window.history.replaceState({}, "", `/app/project/${projectRef}`)
   const view = render(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app"
     desktopRailCollapsed={false} projectWorkspace projectRef={projectRef}
@@ -1568,4 +1585,20 @@ it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %
     expect(moveRequests).toHaveLength(surface === "unknown-retry" ? 2 : 1)
     expect(execution.createCalls).toEqual([])
   } finally { if (acknowledge) acknowledge(response()); view.unmount(); rememberedEngine.dispose() }
+})
+
+it("ordinary account capability read uses its own exact endpoint and exposes no Admin entry", async () => {
+  stubBusinessFetch(vi.fn<typeof fetch>(async () => Response.json({ sessions: [], next_cursor: null })))
+  mountFrame({ desktopRailCollapsed: false })
+  await waitFor(() => expect(adminAccessFetch).toHaveBeenCalled())
+  for (const [input, init] of adminAccessFetch.mock.calls) {
+    expect(input).toBe("/api/admin-access")
+    expect(init).toEqual(expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }))
+  }
+  const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
+  fireEvent.pointerDown(account, { button: 0 })
+  fireEvent.click(account)
+  await screen.findByRole("menu")
+  expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
+  expect(document.querySelector('a[href="/manage"]')).toBeNull()
 })
