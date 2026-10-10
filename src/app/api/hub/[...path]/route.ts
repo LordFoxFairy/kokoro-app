@@ -1,3 +1,4 @@
+import { mcpPersonalIdSchema, mcpPersonalMatches, mcpPersonalErrorAllowed, type McpPersonalOperation } from "@/hub/mcp-personal.schema"
 import { createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, withdrawPersonalSkillRequestSchema, withdrawPersonalSkillSchema, personalSkillLifecycleErrors, personalSkillLifecycleErrorSchema } from "@/hub/schemas"
 import { shareSchemas, shareIdSchema, shareCreateSchema, shareErrorSchema, shareErrorAllowed, shareMatches, type ShareOperation } from "@/hub/skill-share.schema"
 import { githubSchemas, githubPreviewRequestSchema, githubPreviewSchema, githubSelectorSchema, githubKeySchema, githubErrorSchema, githubErrorAllowed, githubPreviewMatches, type GithubImportOperation } from "@/hub/skill-github-import.schema"
@@ -17,7 +18,7 @@ import { proxyProjectRename } from "@/lib/server/project-rename"
 
 import { sameOriginOk } from "@/lib/server/same-origin"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
-import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError, UpstreamTimeoutError } from "@/lib/server/upstream-http"
+import { readBoundedRequestBody, requestWithDomain, UpstreamRequestTooLargeError, UpstreamTimeoutError, UpstreamResponseTooLargeError, UpstreamResponseIncompleteError } from "@/lib/server/upstream-http"
 
 import { installationIdSchema, installationKeySchema, installationInstallRequestSchema, installationEnabledRequestSchema,
   installationListQuerySchema, installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
@@ -183,6 +184,91 @@ function bffBusinessPath(path: string[]): string[] {
   // Web-to-BFF boundary. The BFF owns the business path after this point.
   if (path[0] === "self" && path[1] !== undefined) return path.slice(1)
   return path
+}
+
+// Caller-owned reads are a separate wire from the existing active Connection projection.
+async function proxyMcpPersonalRead(request: Request, path: string[]): Promise<Response> {
+  const supplied = request.headers.get("x-kokoro-request-id")
+  const requestId = supplied !== null && PROJECTION_REQUEST_ID.test(supplied) ? supplied : crypto.randomUUID()
+  const fail = (httpStatus: number, code: string) => NextResponse.json({ error: { code, message: code, retryable: httpStatus === 429 || httpStatus === 503 } }, { status: httpStatus, headers: { "cache-control": "no-store", "x-request-id": requestId } })
+  const url = new URL(request.url)
+  const operation: McpPersonalOperation | undefined = path.length === 3 && path[2] === "connectors" ? "connectors"
+    : path.length === 4 && path[2] === "connectors" ? "connector"
+      : path.length === 5 && path[2] === "connectors" && path[4] === "connections" ? "connections"
+        : path.length === 4 && path[2] === "connections" ? "connection" : undefined
+  const id = operation === "connectors" ? undefined : path[3]
+  const query = url.searchParams
+  const allowed = operation === "connectors" ? ["status", "limit", "cursor"] : operation === "connections" ? ["limit", "cursor"] : []
+  if (request.method !== "GET" || operation === undefined || path[0] !== "self" || path[1] !== "mcp"
+    || id !== undefined && !mcpPersonalIdSchema.safeParse(id).success
+    || url.pathname !== `/api/hub/${path.map(encodeURIComponent).join("/")}` || url.hash
+    || request.body !== null || ["content-length", "transfer-encoding", "idempotency-key"].some(name => request.headers.has(name))
+    || [...query.keys()].some(key => !allowed.includes(key) || query.getAll(key).length !== 1)
+    || query.has("limit") && !/^(?:[1-9]|[1-9][0-9]|100)(?![\s\S])/u.test(query.get("limit")!)
+    || query.has("cursor") && !/^[A-Za-z0-9_-]{1,2048}(?![\s\S])/u.test(query.get("cursor")!)
+    || query.has("status") && !["pending", "active", "error", "revoked"].includes(query.get("status")!)) return fail(400, "invalid_mcp_personal_request")
+  const config = productBffConfig()
+  if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured")
+  if (request.headers.has("origin") && request.headers.get("origin") !== config.session.webOrigin) return fail(403, "session_forbidden")
+  const controller = new AbortController()
+  const signal = AbortSignal.any([request.signal, controller.signal])
+  const expires = performance.now() + 10_000
+  const timer = setTimeout(() => controller.abort(), 10_000)
+  let upstream: Response | undefined
+  const within = <T,>(work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason)
+    signal.addEventListener("abort", abort, { once: true })
+    void work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort))
+    if (signal.aborted) abort()
+  })
+  try {
+    signal.throwIfAborted()
+    const claims = await within(admittedProductSession(request, config)).catch(() => undefined)
+    signal.throwIfAborted()
+    if (claims === undefined) return fail(503, "iam_admission_unavailable")
+    if (claims === null) return fail(401, "session_authentication_required")
+    const headers = productBffHeaders(config, claims, requestId)
+    headers.set("accept", "application/json")
+    upstream = await within(requestWithDomain(`${config.bffBaseUrl.replace(/\/+(?![\s\S])/u, "")}/v1/${path.map(encodeURIComponent).join("/")}${url.search}`, config.domain, {
+      method: "GET", headers: Object.fromEntries(headers), signal,
+      timeoutMs: Math.max(1, expires - performance.now()), maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576, strictResponseLength: true,
+    }).then(value => { if (signal.aborted) void value.body?.cancel().catch(() => undefined); return value }))
+    signal.throwIfAborted()
+    if (upstream === undefined) return fail(503, "mcp_personal_dependency_unavailable")
+    const ownerId = upstream.headers.get("x-request-id")
+    if (upstream.body === null || !JSON_MEDIA_TYPE.test(upstream.headers.get("content-type") ?? "") || upstream.headers.get("cache-control") !== "no-store"
+      || !PROJECTION_REQUEST_ID.test(ownerId ?? "") || upstream.status >= 300 && upstream.status < 400) return fail(502, "mcp_personal_response_invalid")
+    const length = upstream.headers.get("content-length")
+    if (length !== null && (!/^(0|[1-9][0-9]*)(?![\s\S])/u.test(length) || Number(length) > 1_048_576)) return fail(502, "mcp_personal_response_invalid")
+    const reader = upstream.body.getReader()
+    const cancel = () => { void reader.cancel().catch(() => undefined) }
+    signal.addEventListener("abort", cancel, { once: true })
+    let size = 0
+    const chunks: Uint8Array[] = []
+    try {
+      for (;;) {
+        const part = await within(reader.read())
+        signal.throwIfAborted()
+        if (part.done) break
+        size += part.value.byteLength
+        if (size > 1_048_576) return fail(502, "mcp_personal_response_invalid")
+        chunks.push(part.value)
+      }
+    } finally { signal.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock() }
+    if (length !== null && Number(length) !== size) return fail(502, "mcp_personal_response_invalid")
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    let raw: unknown
+    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { return fail(502, "mcp_personal_response_invalid") }
+    signal.throwIfAborted()
+    if (upstream.status === 200 ? !mcpPersonalMatches(operation, raw, id, query) : !mcpPersonalErrorAllowed(operation, upstream.status, raw)) return fail(502, "mcp_personal_response_invalid")
+    const retryAfter = upstream.headers.get("retry-after")
+    if (retryAfter !== null && (upstream.status !== 429 || (!/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) || Number(retryAfter) > 86400))) return fail(502, "mcp_personal_response_invalid")
+    return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "no-store", "x-request-id": ownerId!, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
+  } catch (error) { return error instanceof UpstreamResponseTooLargeError || error instanceof UpstreamResponseIncompleteError
+    ? fail(502, "mcp_personal_response_invalid") : fail(503, "mcp_personal_dependency_unavailable") }
+  finally { clearTimeout(timer); void upstream?.body?.cancel().catch(() => undefined) }
 }
 
 // Dedicated Product installation boundary; never the permissive legacy Hub branch.
@@ -843,6 +929,8 @@ export async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params
+  if (path[0] === "self" && path[1] === "mcp" && (path[2] === "connectors" || path[2] === "providers" || path[2] === "connections" && (path.length > 3 || request.method !== "GET"))
+    || path[0] === "mcp" && ["connectors", "providers"].includes(path[1] ?? "")) return proxyMcpPersonalRead(request, path)
   if (path[0] === "self" && path[1] === "skills" && ["versions", "withdraw"].includes(path[3] ?? "")) return proxyPersonalSkillLifecycle(request, path)
   if (path[0] === "skill-shares") return proxySkillShare(request, path)
   if (path[0] === "skills" && path[1] === "github") return proxyGithubSkillImport(request, path)

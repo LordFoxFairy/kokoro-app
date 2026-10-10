@@ -1315,3 +1315,142 @@ it.each(["versions", "withdraw"] as const)("personal lifecycle %s sends a fixed-
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   }
 })
+
+
+describe("personal MCP four canonical reads", () => {
+  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: ["tools.read"] }
+  const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], policy_digest: "a".repeat(64), status: "active" }
+  it.each([
+    ["connectors", { items: [connector], next_cursor: null }],
+    ["connectors/connector-1", { connector }],
+    ["connectors/connector-1/connections", { items: [connection], next_cursor: null }],
+    ["connections/connection-1", { connection }],
+  ])("preserves formal self path and strict %s response", async (suffix, data) => {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } }))
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request(`http://localhost/api/hub/self/mcp/${suffix}`), params(["self", "mcp", ...String(suffix).split("/")]))
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe(`http://bff.test/v1/self/mcp/${suffix}`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ data })
+  })
+})
+
+describe("personal MCP closed adapter boundaries", () => {
+  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: [] }
+  const owner = (data: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal", ...headers } })
+  it.each(["connectors?limit=01", "connectors?limit=101", "connectors?status=disabled", "connectors?cursor=bad%20cursor", "connectors?limit=1&limit=1", "connectors?tenant=forged", "connectors/connector-1?limit=1", "connectors/connector-1/connections?status=active", "connectors/%63onnector-1", "connectors/providers/extra", "providers", "connections/connection-1/extra"])("rejects unissued/canonical/query variant %s before owner", async suffix => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const url = new URL(`http://localhost/api/hub/self/mcp/${suffix}`)
+    const response = await GET(new Request(url), params(url.pathname.slice("/api/hub/".length).split("/").map(decodeURIComponent)))
+    expect(response.status).toBe(400)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+  it.each(["content-length", "transfer-encoding", "idempotency-key"])("rejects GET %s including zero length", async header => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const response = await GET(new Request("http://localhost/api/hub/self/mcp/connectors", { headers: { [header]: header === "content-length" ? "0" : "forged" } }), params(["self", "mcp", "connectors"]))
+    expect(response.status).toBe(400)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+  it.each(["POST", "PUT", "PATCH", "DELETE"])("rejects unissued %s personal connector writes", async method => {
+    const route = await import("@/app/api/hub/[...path]/route")
+    const response = await route[method as "POST" | "PUT" | "PATCH" | "DELETE"](new Request("http://localhost/api/hub/self/mcp/connectors", { method, headers: { origin: "http://localhost" } }), params(["self", "mcp", "connectors"]))
+    expect(response.status).toBe(400)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+  it("forwards only admitted bearer and validates owner requestID/no-store/resource/error matching", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const read = () => GET(new Request("http://localhost/api/hub/self/mcp/connectors/connector-1", { headers: { "x-kokoro-subject": "forged", cookie: "forged" } }), params(["self", "mcp", "connectors", "connector-1"]))
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ data: { connector } }))
+    expect((await read()).status).toBe(200)
+    const options = vi.mocked(requestWithDomain).mock.calls[0]?.[2]
+    expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "x-kokoro-service": "web-bff" })
+    expect(options?.headers).not.toHaveProperty("cookie")
+    expect(options?.headers).not.toHaveProperty("x-kokoro-subject")
+    expect(options?.headers).not.toHaveProperty("content-length")
+    for (const response of [owner({ data: { connector: { ...connector, connector_id: "wrong" } } }), owner({ data: { connector: { ...connector, extra: true } } }), owner({ data: { connector } }, 200, { "cache-control": "private" }), owner({ data: { connector } }, 200, { "x-request-id": "bad id" }), owner({ error: { code: "session_invalid", message: "safe", retryable: false } }, 502), owner({}, 302)]) {
+      vi.mocked(requestWithDomain).mockResolvedValue(response)
+      expect((await read()).status).toBe(502)
+    }
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ error: { code: "mcp_personal_not_found", message: "safe", retryable: false } }, 404))
+    expect((await read()).status).toBe(404)
+  })
+  it("allows valid throttling but never connector-list 404 or malformed Retry-After", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    const read = () => GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ error: { code: "session_rate_limited", message: "safe", retryable: true } }, 429, { "retry-after": "2" }))
+    const response = await read(); expect(response.status).toBe(429); expect(response.headers.get("retry-after")).toBe("2")
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ error: { code: "mcp_personal_not_found", message: "safe", retryable: false } }, 404))
+    expect((await read()).status).toBe(502)
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ error: { code: "session_rate_limited", message: "safe", retryable: true } }, 429, { "retry-after": "bad" }))
+    expect((await read()).status).toBe(502)
+  })
+  it("fails closed before business request on no session or inspection failure", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    currentProductSession.mockResolvedValue(null)
+    expect((await GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))).status).toBe(401)
+    currentProductSession.mockRejectedValue(new Error("unavailable"))
+    expect((await GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))).status).toBe(503)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+  it("cancels oversized owner streams and caller-aborted reads", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    for (const chunk of [new Uint8Array(1_048_577), new Uint8Array([0xff])]) {
+      const cancel = vi.fn()
+      const body = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(chunk) }, cancel })
+      vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } }))
+      const controller = new AbortController()
+      const result = GET(new Request("http://localhost/api/hub/self/mcp/connectors", { signal: controller.signal }), params(["self", "mcp", "connectors"]))
+      if (chunk.length === 1) {
+        await vi.waitFor(() => expect(vi.mocked(requestWithDomain)).toHaveBeenCalledTimes(2))
+        controller.abort()
+      }
+      expect((await result).status).toBe(chunk.length === 1 ? 503 : 502)
+      expect(cancel).toHaveBeenCalled()
+    }
+  })
+  it("shares one ten-second budget across session and body, with late fetch cleanup", async () => {
+    vi.useFakeTimers()
+    try {
+      const { GET } = await import("@/app/api/hub/[...path]/route")
+      currentProductSession.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ access: "product-access", accessExpiresAt: Date.now() + 60_000 }), 6_000)))
+      const cancel = vi.fn()
+      const body = new ReadableStream<Uint8Array>({ cancel })
+      vi.mocked(requestWithDomain).mockResolvedValue(new Response(body, { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } }))
+      const result = GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.timeoutMs).toBeLessThanOrEqual(4_000)
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect((await result).status).toBe(503)
+      expect(cancel).toHaveBeenCalled()
+      currentProductSession.mockResolvedValue({ access: "product-access", accessExpiresAt: Date.now() + 60_000 })
+      let resolveLate!: (value: Response) => void
+      vi.mocked(requestWithDomain).mockImplementation(() => new Promise(resolve => { resolveLate = resolve }))
+      const aborted = GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect((await aborted).status).toBe(503)
+      const lateCancel = vi.fn()
+      resolveLate(new Response(new ReadableStream({ cancel: lateCancel })))
+      await Promise.resolve(); await Promise.resolve()
+      expect(lateCancel).toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
+  })
+})
+
+
+it("personal MCP rejects malformed UTF8 and non-self connector aliases", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([0xff]), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } }))
+  expect((await GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))).status).toBe(502)
+  vi.mocked(requestWithDomain).mockClear()
+  expect((await GET(new Request("http://localhost/api/hub/mcp/connectors"), params(["mcp", "connectors"]))).status).toBe(400)
+  expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+})
+
+it("personal MCP accepts only owner Retry-After seconds 1 through 86400", async () => {
+  const { GET } = await import("@/app/api/hub/[...path]/route")
+  for (const [seconds, expected] of [["86400", 429], ["86401", 502], ["99999", 502]] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ error: { code: "session_rate_limited", message: "safe", retryable: true } }), { status: 429, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal", "retry-after": seconds } }))
+    const response = await GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))
+    expect(response.status).toBe(expected)
+  }
+})
