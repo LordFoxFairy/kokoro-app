@@ -4123,6 +4123,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectA}`)
+      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
+      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
       const projectList = page.locator('[data-conversation-list="project-conversation"]')
       await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
         .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
@@ -4508,6 +4511,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
         scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
       })
+      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
+      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
       await page.locator('[data-conversation-list="project-conversation"]')
         .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
 
@@ -4607,6 +4613,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
           .toBe(`/app/project/${moveProjectA}`)
       }
+      if (recoveryProject !== null) {
+        const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(recoveryProject)}"]`)
+        if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+        expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      }
       const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
       const recoveryRow = recoveryList.locator(
         `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
@@ -4618,6 +4629,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.locator('[data-slot="composer-input"]').focus()
       expect(moveBoundaryRequests).toHaveLength(1)
 
+      const retainedConversation = recoveryRow.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await retainedConversation.click()
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
       await moveButton.click()
       const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
       await retry.waitFor({ state: "visible", timeout: 10_000 })
