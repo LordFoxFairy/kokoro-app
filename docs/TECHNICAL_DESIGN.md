@@ -14,7 +14,7 @@ Create→严格六字段ACK→只复制ACK.url；剪贴板失败保ACK重试复�
 
 分享页Resolve与精确summary双绑定share_id/source_ref，摘要直接取summary，不调用series GetSkill/current。现SkillCatalogCard强制content_hash/installed/enabled，因此ManusDialog采用明确catalog/shared-summary显示来源，不造该wire对象；source_kind决定真实来源，分类/作者/封面/例子仅实际字段，缺usage不展示。文件树用summary.skill_id真实revision UID，decimal revision用于响应绑定，不混series；继续安全UTF8目录/SKILL.md/选文件及关闭切换取消。只允许真实cover同源闭集rewrite，无外链资源自动加载。
 
-安装单独读取正式installation list/get，不能从summary或phase推断installed；安装POST复用现client，冻结source_ref/body/key并验证真实ACK，未知保原意图。已有不同pin不得冒称所分享revision已安装、不自动升级/替换；停用启用保持原installation ID/source。成功invalidate既有catalog资源key。shared没有exact download handle，现DownloadSkill按series current：共享模式不借它下载旧版本，保目录现下载，显式列为owner能力缺口，不新造API。示例展示真实文本，不以假hash启动执行。
+安装单独读取正式installation list/get，不能从summary或phase推断installed；安装POST复用现client，冻结source_ref/body/key并验证真实ACK，未知保原意图。已有不同pin不得冒称所分享revision已安装、不自动升级/替换；停用启用保持原installation ID/source。成功invalidate既有catalog资源key。已核正式 BFF `contract/skill-download-policy.json`：POST `/browser/v1/skill-shares/{share_id}/download` 已提供 exact 分享资格句柄；当前 Web main `3c5c302` 尚未消费，不是 owner 能力缺口。本片沿现 hub adapter/client 与 `/api/skill-downloads/{handle}` 流式字节 route 接线，不增 owner API/public snapshot。核原 source_ref/summary decimal revision/真实 filename/未来 expiry/opaque handle，禁止 series current fallback；保目录原下载。示例展示真实文本，不以假hash启动执行。
 
 ### 网络切片候选5
 - `src/hub/skill-share.schema.ts`

@@ -7,7 +7,7 @@ Web无持久化owner，不增SQL/Redis/store；固定消费BFF正式 `e1769b56ae
 
 Resolve六字段不是摘要或安装事实；nested summary不是current、不是安装收据；skill_id是真实revision UID，series_id另列，revision为owner decimal。显示模型不造content_hash/installed/brand/usage/例子/封面。安装列表必须完整分页并绑定真实source/series，已存在不同pin保留原ID/版本，不自动升级；未知安装只重放原冻结key/body，refresh丢key不称原重放，权威GET成功也不合成原ACK。
 
-reader库存与selected_file来自现revision package API，source_ref/decimalrevision/选path绑定原目录；只UTF8文本，不执行HTML/script、不自动请求Markdown外部资源。无exact下载handle保持能力缺口，不合成URL或请求series current。
+reader库存与selected_file来自现revision package API，source_ref/decimalrevision/选path绑定原目录；只UTF8文本，不执行HTML/script、不自动请求Markdown外部资源。真实下载资格来自已发布 BFF share-download browser-private POST，非 summary 内嵌字段、非新 owner 能力。仅内存保已核 source_ref/decimal revision/handle/filename/expiry；不存包或 transfer locator、不造 ZIP。BFF 句柄在传包前后重核同分享/主体/exact source与真实 SHA/大小，Web 只流式传原字节；资源/主体退役取消，未知资格不自动重发，不借 series current。
 
 <!-- END:T-K03.14-WEB-SHARE-D0 -->
 
