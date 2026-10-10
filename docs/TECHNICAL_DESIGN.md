@@ -1,3 +1,13 @@
+<!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
+## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
+
+当前 Web `567af6fe` 的 generic hub adapter 剥去 self，使四个已发行本人 MCP reads 误投 /v1/mcp；BFF `ee423b7` 已正式接通，Root 已启用正常 owner surface 与独立 credential。目标只在现 catch-all 增加四个精确 GET dispatcher，保 self 映射 /v1/self/mcp；原 GET self/mcp/connections → /v1/mcp/connections active 投影原样。比较泛保 self 与精确 dispatcher，采用后者，避免改变原 active/旧路径边界。
+
+严格 wire 放在普通 src/hub/mcp-personal.schema.ts，不建目录、进程或 UI CRUD；route 依赖本地 schema 与既有 Product session/upstream transport，只访问 BFF。单一总 10s 从 session 读取前开始，涵盖 fetch/body，累计 1MiB、fatal UTF-8、取消和迟到清理；不改变 session owner。后继实施闭集：现 src/app/api/hub/[...path]/route.ts、tests/app/hub-proxy.test.ts、INDEX.md；新 src/hub/mcp-personal.schema.ts、tests/hub/mcp-personal-schema.test.ts；以及本任务三设计前缀。具名 proxy/schema RED→GREEN、type/lint 后冻结，Root 完整门与正常浏览器验收。此读取片不声称个人 CRUD、授权 connection 或 Admin 完成。
+
+<!-- END:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
 
 ## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）

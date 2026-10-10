@@ -1,3 +1,13 @@
+<!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
+## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
+
+Web 无持久业务 owner，无 SQL/Redis/store 新增。本人 connector/connection 事实只读正式 BFF 投影，身份来自现 HttpOnly Product session，并由 BFF 正规 IAM/owner 准入裁决；不复制 owner 数据，不与静态推荐或 active connections 混用，不合成连接成功。
+
+取消、到期或身份变化不转成授权，不持久 credential/owner 记录，不自动重试。每次请求总 10s/1MiB UTF-8 边界保持；四读与原 active 投影分离。三设计原 mixed 全文 suffix 与两 mixed tests 逐字节保护，Root 按新前缀选择性接收；此读取片不缩小后继本人 CRUD、授权 connection 与原 Admin 管理目标。
+
+<!-- END:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
 
 ## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）

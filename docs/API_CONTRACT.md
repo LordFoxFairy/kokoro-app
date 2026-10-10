@@ -1,3 +1,15 @@
+<!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
+## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
+
+唯一机器源为 BFF 已发行 public 13.3.0 / 137 operations；Web snapshot 与正式 canonical SHA256 均为 `0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209`，不 repin/生成。
+
+仅 GET /api/hub/self/mcp/connectors、/connectors/{connector_id}、/connectors/{connector_id}/connections、/connections/{connection_id} 保 self 映射对应 /v1/self/mcp 正式路径。list connectors 仅 status/limit/cursor，list connections 仅 limit/cursor，detail 零 query；canonical ID≤191、opaque cursor≤2048、limit 1–100。拒重复/未知 query、body、任何 Content-Length（含 0，仅本地拒绝、不 forward）、Transfer-Encoding、Idempotency-Key、未发行写和 provider 路径。旧 active projection 的路径/query/wire 不变。
+
+按四 operation strict snake_case 成功 envelope、connector 五字段/connection 六字段及资源/filter/分页绑定；错误 error{code,message,retryable} 无 meta，逐 status/code 闭集 400/401/403/429/502/503，404 仅两个 detail 与 connector 下 connections，不适用于 connector 总 list；429/503 retryable=true，其余 false。实际字段与枚举引用机器，不复制第二规范。严格 JSON/request ID/no-store、存在时合法 Retry-After、10s 总预算和 1MiB UTF-8 body；拒 redirect/alias/fallback。
+
+<!-- END:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-PERSONAL-LIFECYCLE-D0 -->
 
 ## T-K03.14-WEB-PERSONAL-LIFECYCLE D0（目标，未实施）
