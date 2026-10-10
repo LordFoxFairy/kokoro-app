@@ -859,3 +859,27 @@ it("groups two actual category badges in a wrapping row without an empty categor
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
   expect(css).toMatch(/\.categories\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap;/u)
 })
+
+
+it("matches the reference frame budget without stretching its compact summary hero", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:95vw;[^}]*max-width:960px;[^}]*height:min\(600px,calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:12px;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
+  expect(css).toMatch(/\.hero\s*\{[^}]*flex:0 0 auto;[^}]*padding:61px 24px 20px;/u)
+  expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:20px 24px 32px;/u)
+  expect(css).toMatch(/\.actions button\s*\{[^}]*height:32px;[^}]*font-size:14px;/u)
+})
+
+it("uses the reference share arrow rather than the connected-node share icon", async () => {
+  stubOwnerReads()
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  expect(screen.getByRole("button", { name: "分享技能" }).querySelector("svg")).toHaveClass("lucide-share")
+})
+
+
+it("makes short-viewport summaries scroll as a whole without changing independent reader scrolling", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
+  expect(css).toMatch(/@media\(max-height:42rem\)\s*\{\s*\.dialog:not\(\.readerDialog\)\[data-slot="dialog-content"\]\s*\{\s*overflow:auto;\s*\}/u)
+  expect(css).toMatch(/\.dialog:not\(\.readerDialog\) \.body\s*\{\s*flex:0 0 auto;\s*overflow:visible;\s*\}/u)
+  expect(css).toMatch(/\.readerDialog \.fileList,\.readerDialog \.fileContent\s*\{[^}]*overflow:auto;/u)
+})

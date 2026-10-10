@@ -3,7 +3,7 @@
 import Image from "next/image"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronDown, ChevronRight, Download, FileText, Folder, MessageCircle, Plus, Share2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Download, FileText, Folder, MessageCircle, Plus, Share } from "lucide-react"
 import { useEffect, useRef, useState, type RefObject } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -202,7 +202,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
         }}
       >
         {readerOpen ? null : <div className={styles.topActions}>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share2 aria-hidden="true" /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share aria-hidden="true" /></Button>
           {downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={t("skills.detailDownloadShort")} disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
         </div>}
         {readerOpen ? <DialogHeader className={styles.readerHeader}>
