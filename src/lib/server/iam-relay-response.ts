@@ -31,7 +31,8 @@ function rawLocationPath(value: string): string | null {
 
 export function validIamRpCallbackNavigation(value: string, webOrigin: string): boolean {
   if (!safeHeaderValue(value, 8192) || value.startsWith("//") || value.includes("\\") || value.includes("#")) return false
-  if (rawLocationPath(value) !== "/api/auth/callback/kokoro-iam") return false
+  const rawPath = rawLocationPath(value)
+  if (rawPath !== "/api/auth/callback/kokoro-iam" && rawPath !== "/manage/api/auth/callback/kokoro-iam") return false
   try {
     const target = new URL(value, webOrigin)
     if (target.origin !== webOrigin || target.username !== "" || target.password !== "") return false
