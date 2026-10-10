@@ -400,8 +400,8 @@ it("uses one finite budget for fetch headers plus body, and clears successful re
 })
 
 const presentationCases = (["zh", "en"] as const).flatMap((locale) => (["official", "third_party"] as const).flatMap((scope) => [
-  { locale, scope, tag: "CODING", category: locale === "zh" ? "程式设计" : "Coding" },
-  { locale, scope, tag: "DATA", category: locale === "zh" ? "资料" : "Data" },
+  { locale, scope, tag: "CODING", category: locale === "zh" ? "编程" : "Coding" },
+  { locale, scope, tag: "DATA", category: locale === "zh" ? "数据" : "Data" },
   { locale, scope, tag: "AUTOMATION", category: locale === "zh" ? "自动化" : "Automation" },
   { locale, scope, tag: "BUSINESS", category: locale === "zh" ? "商业" : "Business" },
   { locale, scope, tag: "DESIGN", category: locale === "zh" ? "设计" : "Design" },
@@ -1042,4 +1042,17 @@ it("keeps real example text at 13/18 and its icon at 16 so padding produces the 
   const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
   expect(css).toMatch(/\.examples button span\s*\{[^}]*font-size:13px;[^}]*line-height:18px;/u)
   expect(css).toMatch(/\.examples svg\s*\{[^}]*width:1rem;[^}]*height:1rem;[^}]*flex:0 0 1rem;/u)
+})
+
+
+it("uses the reference eight Chinese category labels in the catalog menu", async () => {
+  stubOwnerReads()
+  renderLive()
+  await screen.findByTestId("skills-catalog-grid")
+  fireEvent.pointerDown(screen.getByRole("button", { name: "技能分类" }))
+  const menu = await screen.findByRole("menu", { name: "技能分类" })
+  for (const name of ["全部", "编程", "数据", "自动化", "商业", "设计", "媒体", "内容", "应用"]) {
+    expect(within(menu).getByRole("menuitem", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
+  }
+  expect(within(menu).getAllByRole("menuitem")).toHaveLength(9)
 })
