@@ -1,3 +1,28 @@
+<!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-API_CONTRACT-D0 -->
+
+## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前 Web main `3d2b419f971aaa3478b22d7f4e96f34190dff79b` 已有真实目录/包reader/安装动作；普通目录上传仍调用旧preview/confirm，个人设置的新建仍手填个人publish元数据，两者尚未消费正规local-import。事实源为正式BFF `939bf0e1da98a313233a923c6aa55481d06f5aca` 与Platform `32666c1c18360e707048a1104efe6b50e375002f`；既有协议已足够，不新增owner API/RPC/SQL/依赖。此D0仅新增本具名前缀，下面原mixed全文逐字节保留，不表示实现或浏览器验收通过。
+
+### 唯一机器/运行事实
+BFF browser-private/version1：`src/http/routes/local-skill-import.policy.ts`、`local-skill-import.ts`、`src/http/local-skill-import-input.ts`与`src/infrastructure/clients/platform/local-skill-import-response.ts`；Platform既有`SkillCatalogService`四个LocalSkillImport RPC及source/local-skill-import.state/service是状态机事实。不将本browser-private操作塞入Public13.1 OpenAPI或另建可编辑owner契约；现generated pin不动。
+
+Web目标唯一 `/api/hub/skills/local-imports` POST、`/{intent_id}/complete` POST、`/{intent_id}/finalize` POST、`/{intent_id}` GET，精确映射BFF `/browser/v1/skills/local-imports`对应路径。closed method/segments/query与一次decode的安全ID；写请求必须单一合法idempotency-key、fresh Origin/session/可信BFF头，身份不从body自报。GET无body/key；Finalize必须实际零body，拒JSON{}，不套个人Publish audience/CAS。Begin/Complete JSON≤65,536 bytes，所有响应累计≤1MiB，fatal UTF8/JSON媒体/no-store/request-id/strict未知字段失败闭合。
+
+Begin输入exact(filename,size_bytes:number正safe integer,content_sha256小写64hex)；文件名≤255、无路径/控制字符、满足owner小写.zip/.skill后缀。Begin201返回intent_id/skill_id/phase=upload_pending/upload_id/transfer_reference/expires_at/replayed。Complete exact(upload_id,source_version_id,size_bytes,content_sha256)；源版本只能真实PUT x-amz-version-id或owner Get已完成proof，不能生成/从URL推算。Complete200含intent_id/skill_id/phase=uploaded/upload_proof/scan_state/expires_at/replayed；proof的upload/version/size/hash与原冻结命令逐项核对，scan只接受pending/clean/infected/unknown。
+
+Finalize200 strict data(intent_id,phase=completed,skill,installation,replayed)，完整skill采用实际SkillProductRecord projection（包括package_phase，不能误套少字段managed envelope）；安装采用现完整personalInstallation schema。核intent/预留series、skill.source_ref与skill.skill_id、skill↔installation的source/series/decimal revision、个人active/owner事实，再显示实际结果。不合成示例/标签/名称，也不把首次series=revision偶然相等当规则。
+
+Get200 strict data(intent_id,skill_id,phase,expires_at，按phase可选upload_proof/rejection_code/skill/installation)：upload_pending无proof；uploaded/rejected/completed有真实proof；rejected需rejection_code；非completed不含skill/installation；completed必须skill但installation可缺失；expired不臆造proof。Get没有replayed/transfer/upload_id独立字段/scan_state。Get completed installation若缺失或已停用，展示实际事实，不根据phase造安装成功。
+
+错误按四operation实际code/status闭集，引用当前route/admission：400 invalid_local_skill_import_request/local_skill_import_idempotency_key_required，404 local_skill_import_not_found，409 local_skill_import_idempotency_conflict，412 local_skill_import_precondition_failed，413 request_body_too_large，429 local_skill_import_rate_limited，502 local_skill_import_response_invalid，503 local_skill_import_dependency_unavailable，加fresh admission/IAM精确状态代码。GET不挂写skill action，写核create_draft+install。拒任意异常message码与personal/official别族错配；Web本地拒绝用本片闭集，不把缺字段、412或未知状态转空/成功。
+
+BFF本身Get2s、Begin/Complete10s、Finalize20s总界；Web GET/Begin/Complete各10s、Finalize20s单请求总预算覆盖admission/fetch/body，边界不得重置计时；对象PUT本片20s（现publish仍60s），严格消费owner transfer.url/method/required_headers/expires_at，credentials omit/redirect error/no-referrer，真实version头校验、非成功不Complete。caller取消、慢不close/超限body、迟到fetch/reader需finally清timer、取消/释放body，不能只Promise.race而遗留请求。
+
+验证精确四path/status/shape/identity/proof绑定，Finalize零body、错误族错配、unknown原key/body、Get各phase/缺installation、账号切换/locator过期/无File、慢流/超限/取消，以及两入口同一真实普通上传。保旧publish完整60s/ACK测试，不能因提取PUT破坏已有版本包链。
+
+<!-- END:T-K03.14-WEB-LOCAL-IMPORT-API_CONTRACT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-API_CONTRACT-D0 -->
 
 ## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）

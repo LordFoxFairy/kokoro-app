@@ -1,3 +1,38 @@
+<!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-TECHNICAL_DESIGN-D0 -->
+
+## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前 Web main `3d2b419f971aaa3478b22d7f4e96f34190dff79b` 已有真实目录/包reader/安装动作；普通目录上传仍调用旧preview/confirm，个人设置的新建仍手填个人publish元数据，两者尚未消费正规local-import。事实源为正式BFF `939bf0e1da98a313233a923c6aa55481d06f5aca` 与Platform `32666c1c18360e707048a1104efe6b50e375002f`；既有协议已足够，不新增owner API/RPC/SQL/依赖。此D0仅新增本具名前缀，下面原mixed全文逐字节保留，不表示实现或浏览器验收通过。
+
+### 归属、放置与入口
+Web拥有普通用户拖放/选择一个.zip/.skill的状态与同源adapter；BFF拥有fresh admission/公开投影，Platform/Storage拥有意图、包解析、扫描、个人active版本与安装事务。浏览器仅计算原文件SHA256，不解析ZIP、SKILL.md或生成name/summary；Finalize由owner解析真实SKILL.md元数据并建立个人owner可见技能及安装，绝不是官方/Admin发布。
+
+| 对象 | 采用/淘汰与生命周期 |
+| --- | --- |
+| consumer schema/client | 新普通 `src/hub/skill-local-import.schema.ts` / `skill-local-import-client.ts`，分别承载运行时闭集与网络编排；不继续塞大schemas.ts、也不新wire目录/通用API框架 |
+| UI阶段 | 新普通 `src/ui/skills/personal-skill-import-flow.ts` 管原File/hash/冻结命令与恢复；现SkillUploadDialog管拖放与loading/error/unknown/完成，不与网络/schema揉成一文件 |
+| 对象PUT | 新业务普通 `src/hub/skill-package-transfer.ts` 提取现publish PUT（保持60s）并让local-import以20s消费真实required_headers；淘汰跨能力调用整个publish client及复制PUT。不是utils/new模块，不改已有publish协议 |
+| 同源 | 扩现hub catch-all四个exact local-import路径，Browser→Web→BFF→owner；不直内部owner/透传任意路径、不另建route树 |
+
+目录与个人设置的“新建/上传”统一现SkillUploadDialog；不要求用户填写Admin风格发布字段。PersonalSkillPublishDialog/flow/client保留已有draft的包更新、恢复和正式生命周期，不误删真实draft/版本/Admin职责；新local导入不走其CreateDraft→Publish链。现skills-panel仅接同一上传组件，不恢复合成发布/目录；旧previewUpload/confirmUpload网络方法、候选schema和dev factory实现随最后callsite替换删除，其他GitHub与preview业务不改。
+
+### 状态、失败与恢复
+浏览器阶段为hashing→begin→put→complete→finalize→completed，另有running/unknown/rejected/expired/error。每写阶段冻结实际body与独立key：Begin文件名/长度/hash；Complete真实upload_id/source_version_id/长度/hash；Finalize无body。未知结果保原意图，不生成新key换body；有原命令则只重放该原命令，关闭取消等待/阻止迟到响应，但不宣称owner写入回滚。
+
+Get权威phase恢复：upload_pending没有upload_id/transfer，只有原Begin body/key和同一File齐全且未过期才原键重放Begin取回transfer；缺失则明确重选/重新开始的显式新意图，不盲创建新intent、不称完整自动恢复。uploaded返回真实proof但无scan_state，可由用户显式继续零body Finalize，扫描仍由owner核验；不从Get推算PUT版本。completed返回真实skill，installation可缺失，缺失不造“已安装”；rejected/expired终止该意图，显式重选另起。恢复过程中401/403失败闭合。
+
+非secret sessionStorage locator采用具名前缀 `kokoro.skills.local-import.v1`，按既有可信session subject/generation隔离，仅保存intent_id及定位所需过期标记；不保存key/body/File/transfer/proof/凭证/权限。新账号或匿名边界撤销旧请求并清旧locator；恢复前核当前可信主体且再次GET，locator不授权。超过Begin expires_at清理；storage不可用仍可当前内存继续，但不宣称刷新找回。刷新丢key不叫原重放；明确已知intent_id的权威恢复与新的显式命令意图。
+
+### 后继精准manifest（D0后由Root一次授权）
+新增4 source：`src/hub/skill-local-import.schema.ts`、`src/hub/skill-local-import-client.ts`、`src/hub/skill-package-transfer.ts`、`src/ui/skills/personal-skill-import-flow.ts`。
+新增3相邻tests：`tests/hub/skill-local-import-client.test.ts`、`tests/hub/skill-local-import-flow.test.ts`、`tests/hub/skill-package-transfer.test.ts`。
+现代码/索引：`src/ui/skills/skill-upload-dialog.tsx`及相邻`.module.css`、`src/features/app/kokoro-skills-surface.tsx`、`src/ui/skills/personal-skills-read.tsx`、`src/ui/skills/skills-panel.tsx`、`src/hub/client.ts`、`src/hub/schemas.ts`、`src/dev/preview-clients.ts`、`src/hub/skill-publish-client.ts`、`src/app/api/hub/[...path]/route.ts`、`src/i18n/messages.ts`、`src/i18n/overlays.ts`、`src/ui/skills/INDEX.md`、`INDEX.md`。
+现tests：`tests/ui/kokoro-skills-surface.test.tsx`、`tests/ui/skills-import-regression.test.tsx`、`tests/ui/skills-panel.test.tsx`、`tests/hub/client.test.ts`、`tests/hub/skill-publish-client.test.ts`、`tests/app/hub-proxy.test.ts`。仅本片调用/旧上传断言换成真实流程，所有其它业务断言保留。三mixed原正文和两mixed tests排除。
+
+先client/adapter+transfer切片，再flow/统一UI；每片真实RED→具名tests/type/lint与freeze，Root审查/集成/提交和真实拖放→MinIO→Complete→Finalize→本人安装/目录刷新验收。无业务写入授权前不实施；默认system门/全产品完工不由纯测试替代。
+
+<!-- END:T-K03.14-WEB-LOCAL-IMPORT-TECHNICAL_DESIGN-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-TECHNICAL_DESIGN-D0 -->
 
 ## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）

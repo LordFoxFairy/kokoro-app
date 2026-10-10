@@ -1,3 +1,22 @@
+<!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-DATA_MODEL-D0 -->
+
+## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前 Web main `3d2b419f971aaa3478b22d7f4e96f34190dff79b` 已有真实目录/包reader/安装动作；普通目录上传仍调用旧preview/confirm，个人设置的新建仍手填个人publish元数据，两者尚未消费正规local-import。事实源为正式BFF `939bf0e1da98a313233a923c6aa55481d06f5aca` 与Platform `32666c1c18360e707048a1104efe6b50e375002f`；既有协议已足够，不新增owner API/RPC/SQL/依赖。此D0仅新增本具名前缀，下面原mixed全文逐字节保留，不表示实现或浏览器验收通过。
+
+### 唯一数据owner与浏览器状态
+Web无业务SQL/Redis/数据库schema，不新建store或复制Platform导入意图/命令receipt/Storage对象表。Platform状态为intent→upload_pending→uploaded→completed/rejected/expired；terminal不逆转，Get公开projection不含内部intent阶段或命令receipt。Finalize在owner事务内建立个人active revision和安装；Web只显示返回事实，不自行“发布官方”或填安装状态。
+
+当前页内存持有File、原size/hash、Begin/Complete/Finalize各被冻结的body/key、真实transfer与PUT source_version_id、当前intent/阶段和已核验owner ACK。未知操作不改body/key，异步generation隔离关闭/切账号/重选文件后的旧响应；取消浏览器等待不删除owner对象，不清理共享数据。
+
+sessionStorage仅非secret intent_id locator及过期定位信息，具名前缀kokoro.skills.local-import.v1，绑定既有可信session subject；它是UI定位而非业务事实/权限缓存。凭证、body/key/File/transfer/proof不得持久化。过期、匿名/换账号清旧locator，恢复每次fresh GET且401/403终止；storage不可用/locator丢失/未知Begin尚无intent_id时明确刷新恢复边界，不声称找回原命令。
+
+恢复uploaded的proof只来自真实owner；没有PUT ACK或owner proof时不编source_version_id。upload_pending GET无transfer/upload_id，缺原Begin/File需用户显式重新选择新意图，不自动造新intent或复用不相关文件。uploaded无scan_state，不显示“扫描clean”；completed必有skill但允许无installation，只显示实际完成/安装事实。当前目录统一SKILL_CATALOG_RESOURCE_KEY与个人settings相应权威重读，在实际Finalize/Get完成事实后才刷新，不插合成catalog卡片/示例。
+
+旧个人draft/publish状态继续归owner，已有draft恢复/更新、安装启停与Admin版本链保留；普通新建移到local-import，不混CAS包阶段或复制数据库。D0仅三前缀；所有原mixed正文、两mixed tests与任务外tracked字节受保护，Root精准index/提交，实施后真实owner与浏览器门另验。
+
+<!-- END:T-K03.14-WEB-LOCAL-IMPORT-DATA_MODEL-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-CATALOG-PACKAGE-DETAIL-DATA_MODEL-D0 -->
 
 ## T-K03.14-WEB-CATALOG-PACKAGE-DETAIL D0：真实目录包详情目标（2026-10-10；待实施）
