@@ -227,7 +227,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.createPersonal")}<ChevronDown aria-hidden="true" /></Button>
+              <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className={styles.createMenu}>
               <DropdownMenuGroup>
