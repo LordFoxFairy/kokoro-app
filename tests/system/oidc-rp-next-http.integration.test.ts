@@ -2177,7 +2177,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           appCompileReadinessStatus = appResponse.status
           const compiledReady = (
             appResponse.status === 200 ||
-            (appResponse.status === 307 && appResponse.headers.location === "/login")
+            (appResponse.status === 307 && appResponse.headers.location === "/login?return_to=%2Fapp")
           ) && nextErrorCategories(output).length === 0
           if (compiledReady) {
             appCompileReadinessMs = Date.now() - compileStartedAt
@@ -5095,7 +5095,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const page = await context.newPage()
       page.on("request", (request) => {
         const url = new URL(request.url())
-        if (url.pathname.startsWith("/api/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) {
+        const refreshForm = new URLSearchParams(request.postData() ?? "")
+        const canonicalCsrfRefresh = request.method() === "POST" &&
+          url.origin === `http://localhost:${nextPort}` && url.pathname === "/api/auth/session" && url.search === "" &&
+          request.headers()["content-type"] === "application/x-www-form-urlencoded" &&
+          [...refreshForm.keys()].length === 1 && refreshForm.has("csrfToken") && (refreshForm.get("csrfToken")?.length ?? 0) > 0
+        if (!canonicalCsrfRefresh && url.pathname.startsWith("/api/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) {
           browserWrites.push({ method: request.method(), path: `${url.pathname}${url.search}` })
         }
         if (request.method() === "PATCH") browserPatches.push({ path: `${url.pathname}${url.search}`,
@@ -5424,6 +5429,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
         .toBe(`/app/project/${moveProjectB}`)
 
+      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectB)}"]`)
+      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
       const projectList = page.locator('[data-conversation-list="project-conversation"]')
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
         timeout: 10_000,
