@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { HubClientError, hasHubNoStoreDirective } from "./client"
-import { shareSchemas, shareCreateSchema, shareIdSchema, shareErrorSchema, shareErrorAllowed, shareMatches, type ShareOperation } from "./skill-share.schema"
+import { shareSchemas, shareCreateSchema, shareIdSchema, shareAckSchema, shareRevisionSchema, shareErrorSchema, shareErrorAllowed, shareMatches, type ShareOperation } from "./skill-share.schema"
 
 async function command<O extends ShareOperation>(operation: O, identity: string, origin: string, body?: z.infer<typeof shareCreateSchema>, signal?: AbortSignal): Promise<z.infer<(typeof shareSchemas)[O]>> {
   const encoded = body === undefined ? undefined : JSON.stringify(body)
@@ -16,8 +16,8 @@ async function command<O extends ShareOperation>(operation: O, identity: string,
   })
   try {
     joined.throwIfAborted()
-    response = await within(fetch(operation === "create" ? "/api/hub/skill-shares" : `/api/hub/skill-shares/${encodeURIComponent(identity)}${operation === "summary" ? "/skill" : ""}`, {
-      method: operation === "create" ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined,
+    response = await within(fetch(operation === "create" ? "/api/hub/skill-shares" : `/api/hub/skill-shares/${encodeURIComponent(identity)}${operation === "summary" ? "/skill" : operation === "download" ? "/download" : ""}`, {
+      method: operation === "create" || operation === "download" ? "POST" : "GET", credentials: "same-origin", cache: "no-store", redirect: "error", signal: joined,
       headers: { accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) },
       ...(body === undefined ? {} : { body: encoded! }),
     }).then((value) => { if (joined.aborted) void value.body?.cancel().catch(() => undefined); return value }))
@@ -69,6 +69,12 @@ export function createSkillShareClient(origin: string = window.location.origin) 
   return {
     create: (body: z.infer<typeof shareCreateSchema>, signal?: AbortSignal) => { const input = shareCreateSchema.parse(body); return command("create", input.source_ref, origin, input, signal) },
     resolve: (id: string, signal?: AbortSignal) => command("resolve", shareIdSchema.parse(id), origin, undefined, signal),
+    download: async (id: string, sourceRef: string, revision: string, signal?: AbortSignal) => {
+      const source = shareAckSchema.shape.source_ref.parse(sourceRef), version = shareRevisionSchema.parse(revision)
+      const value = await command("download", shareIdSchema.parse(id), origin, undefined, signal)
+      if (value.source_ref !== source || value.revision !== version) throw new HubClientError("parse", "Shared download revision mismatch", null, 200)
+      return value
+    },
     summary: (id: string, signal?: AbortSignal) => command("summary", shareIdSchema.parse(id), origin, undefined, signal),
   }
 }

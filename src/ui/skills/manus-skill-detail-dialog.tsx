@@ -76,6 +76,12 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
   const identity = !open ? null : sharedSummary ? JSON.stringify(["shared", boundary.subject, sharedSummary.share_id, sharedSummary.source_ref]) : skill?.skill_id ? JSON.stringify([skill.skill_id, skill.revision_skill_id]) : null
   const [currentIdentity, setCurrentIdentity] = useState(identity)
+  const downloadIdentity = sharedSummary ? JSON.stringify([identity, boundary.admitted]) : identity
+  const [currentDownloadIdentity, setCurrentDownloadIdentity] = useState(downloadIdentity)
+  if (currentDownloadIdentity !== downloadIdentity) {
+    setCurrentDownloadIdentity(downloadIdentity)
+    setDownloading(false)
+  }
 
   // Reset browser presentation state by the selected resource identity, not
   // synchronously inside the external request effect.
@@ -93,17 +99,19 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
     setCollapsedFolders(new Set())
   }
 
+  const sharedDownloadAdmitted = sharedSummary ? boundary.admitted : true
+  const sharedDownloadSubject = sharedSummary ? boundary.subject : null
   useEffect(() => {
-    if (!open || !skill?.skill_id || sharedSummary) return
+    if (!open || sharedSummary && !sharedDownloadAdmitted || !skill?.skill_id && !sharedSummary) return
     const controller = new AbortController()
     activeRequest.current = controller
-    void getManusSkillDetail(skill.skill_id, controller.signal).then((next) => {
+    if (!sharedSummary && skill?.skill_id) void getManusSkillDetail(skill.skill_id, controller.signal).then((next) => {
       if (!controller.signal.aborted) setDetail(next)
     }).catch(() => {
       if (!controller.signal.aborted) setFailed(true)
     })
     return () => { controller.abort(); if (activeRequest.current === controller) activeRequest.current = null }
-  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary])
+  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject])
 
   const boundRevision = open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
     && detail.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
@@ -160,11 +168,16 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
 
   const download = async () => {
     const controller = activeRequest.current
-    if (!skill?.skill_id || downloading || controller === null || controller.signal.aborted) return
+    if ((!skill?.skill_id && !sharedSummary) || downloading || controller === null || controller.signal.aborted) return
     setDownloading(true)
     try {
-      const result = await downloadManusSkill(skill.skill_id, controller.signal)
-      if (!controller.signal.aborted) window.location.assign(result.downloadInfo.downloadUrl)
+      if (sharedSummary) {
+        const result = await createSkillShareClient().download(sharedSummary.share_id, sharedSummary.source_ref, sharedSummary.skill.revision, controller.signal)
+        if (!controller.signal.aborted) window.location.assign(`/api${result.download_info.download_url}`)
+      } else if (skill?.skill_id) {
+        const result = await downloadManusSkill(skill.skill_id, controller.signal)
+        if (!controller.signal.aborted) window.location.assign(result.downloadInfo.downloadUrl)
+      }
     } catch { if (!controller.signal.aborted) setFailed(true) }
     finally { if (!controller.signal.aborted) setDownloading(false) }
   }
@@ -283,7 +296,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
       >
         {readerOpen ? null : <div className={styles.topActions}>
           {sharedSummary || skill?.revision_skill_id ? <Button type="button" variant="ghost" size="icon-sm" aria-label={t("skills.detailShare")} disabled={shareIdentity === null || shareStatus === "pending" || shareStatus === "unknown"} onClick={() => void share()}><Share aria-hidden="true" /></Button> : null}
-          {downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={t("skills.detailDownloadShort")} disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
+          {downloadInfo || sharedSummary ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label={t("skills.detailDownloadShort")} disabled={downloading || Boolean(sharedSummary && !boundary.admitted)} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
         </div>}
         {readerOpen ? <DialogHeader className={styles.readerHeader}>
           <Button type="button" variant="ghost" onClick={() => setReaderOpen(false)}><ChevronRight className={styles.backIcon} aria-hidden="true" />{t("skills.packageBack")}</Button>

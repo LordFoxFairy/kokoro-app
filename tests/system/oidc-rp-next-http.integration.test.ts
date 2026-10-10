@@ -1820,8 +1820,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           response.writeHead(identityStatus, { "content-type": "application/json", "cache-control": "no-store" })
           const payload = JSON.stringify(identityStatus === 200
             ? invalidIdentityShape
-              ? { data: { user_id: identityUserId, tenant_id: identityTenantId, access_token: "must-not-pass" }, meta: { request_id: "req_fixture" } }
-              : { data: { user_id: identityUserId, tenant_id: identityTenantId }, meta: { request_id: "req_fixture" } }
+              ? { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false, access_token: "must-not-pass" }, meta: { request_id: "req_fixture" } }
+              : { data: { user_id: identityUserId, tenant_id: identityTenantId, platform_admin: false }, meta: { request_id: "req_fixture" } }
             : { error: { code: "identity_rejected", message: "rejected", retryable: false } })
           if (slowIdentity) {
             const timer = setTimeout(() => response.end(payload), 6_000)
@@ -4784,14 +4784,15 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }
 
-  function expectServerFirstAnonymousRedirect(response: HttpResult): void {
+  function expectServerFirstAnonymousRedirect(response: HttpResult, expectedTarget = "/app"): void {
+    const loginLocation = `/login?${new URLSearchParams({ return_to: expectedTarget })}`
     expect(response.body).not.toContain('data-testid="runtime-loading"')
     if (response.status >= 300 && response.status < 400) {
-      expect(response.headers.location).toBe("/login")
+      expect(response.headers.location).toBe(loginLocation)
       return
     }
     expect(response.status).toBe(200)
-    expect(response.body).toMatch(/(?:NEXT_REDIRECT[^<]{0,512}\/login|<meta[^>]+url=\/login)/u)
+    expect(response.body).toContain(loginLocation)
   }
 
   it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
@@ -4801,7 +4802,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
     const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response)
+    expectServerFirstAnonymousRedirect(response, "/app/skills")
   })
 
 

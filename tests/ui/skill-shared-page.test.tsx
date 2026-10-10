@@ -24,7 +24,7 @@ it("retains a canonical shared return target for an anonymous user without readi
   expect(screen.getByRole("link", { name: "登录并继续" })).toHaveAttribute("href", "/login?return_to=%2Fskills%2Fshared%2Fshare-old")
   expect(fetcher).not.toHaveBeenCalled()
 })
-it("renders the exact old summary, hides unsupported download and installs only the revision ACK", async () => {
+it("renders the exact old summary, offers exact download and installs only the revision ACK", async () => {
   const fetcher = vi.fn(async (path: string, init?: RequestInit) => reads(path) ?? (init?.method === "POST" ? json({ data: { installation, change: "installed", event_id: "install-event", replayed: false } }) : json({ data: [] })))
   vi.stubGlobal("fetch", fetcher)
   render(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
@@ -36,7 +36,7 @@ it("renders the exact old summary, hides unsupported download and installs only 
   expect(post?.[0]).toBe("/api/hub/self/skill-installations")
   expect(JSON.parse(String(post?.[1]?.body))).toEqual({ source_ref: "skill:revision-old" })
   expect(fetcher.mock.calls.some(([path]) => path.includes("GetSkill") || path.includes("Download"))).toBe(false)
-  expect(screen.queryByRole("button", { name: "下载技能" })).toBeNull()
+  expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled()
   expect(screen.getByRole("button", { name: "Actual example" })).toBeDisabled()
 })
 it("keeps another actual pinned revision without upgrading or displaying fake installed", async () => {
@@ -85,4 +85,21 @@ it("rejects a shared package directory with the same UID but another decimal rev
   expect(screen.queryByRole("button", { name: "SKILL.md" })).toBeNull()
   expect(fetcher.mock.calls.filter(([path]) => path.includes("/package"))).toHaveLength(1)
   expect(fetcher.mock.calls.some(([path]) => path.includes("file_path="))).toBe(false)
+})
+
+it("offers exact shared revision download without consulting catalog current", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (path: string) => reads(path) ?? json({ data: [] })))
+  render(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
+  await screen.findByText(skill.display_name)
+  expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled()
+})
+
+it("shows a failed exact download binding in the current dialog without a current-series fallback", async () => {
+  const fetcher = vi.fn(async (path: string) => reads(path) ?? (path.endsWith("/download") ? json({ data: { source_ref: "skill:series", revision: "2", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "wrong.zip", expires_at: "2099-01-01T00:00:00Z" } } }) : json({ data: [] })))
+  vi.stubGlobal("fetch", fetcher); render(<LocaleProvider><SharedSkillPage /></LocaleProvider>)
+  await screen.findByText(skill.display_name)
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  await waitFor(() => expect(screen.getByText("技能详情暂时不可用")).toBeInTheDocument())
+  expect(fetcher.mock.calls.filter(([path]) => path.endsWith("/download"))).toHaveLength(1)
+  expect(fetcher.mock.calls.some(([path]) => path.includes("DownloadSkill") || path.includes("GetSkill"))).toBe(false)
 })

@@ -1238,3 +1238,18 @@ it.each([
   expect(response.status).toBe(400)
   expect(requestWithDomain).not.toHaveBeenCalled()
 })
+
+it("prepares an exact shared download through the published browser-private route with zero body", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const data = { source_ref: "skill:revision-old", revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "real.skill", expires_at: "2999-01-01T00:00:00Z" } }
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ data }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "prepare-request" } }))
+  const response = await POST(new Request("http://localhost/api/hub/skill-shares/share-old/download", { method: "POST", headers: { origin: "http://localhost" } }), params(["skill-shares", "share-old", "download"]))
+  expect(response.status).toBe(200); expect(await response.json()).toEqual({ data })
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/browser/v1/skill-shares/share-old/download")
+  expect(vi.mocked(requestWithDomain).mock.calls[0]?.[2]?.body).toBeUndefined()
+})
+it.each(["query", "body", "key", "length", "encoding", "origin"])("exact shared download rejects %s before owner IO", async mode => {
+  const { POST } = await import("@/app/api/hub/[...path]/route")
+  const response = await POST(new Request(`http://localhost/api/hub/skill-shares/share-old/download${mode === "query" ? "?extra=1" : ""}`, { method: "POST", headers: { origin: mode === "origin" ? "https://other.example" : "http://localhost", ...(mode === "key" ? { "idempotency-key": "forbidden" } : mode === "length" ? { "content-length": "1" } : mode === "encoding" ? { "transfer-encoding": "chunked" } : {}) }, ...(mode === "body" ? { body: "x" } : {}) }), params(["skill-shares", "share-old", "download"]))
+  expect(response.status).toBe(mode === "origin" ? 403 : 400); expect(requestWithDomain).not.toHaveBeenCalled()
+})

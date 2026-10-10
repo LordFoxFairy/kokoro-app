@@ -569,14 +569,15 @@ async function proxySkillShare(request: Request, path: string[]): Promise<Respon
   const requestId = crypto.randomUUID()
   const fail = (fault: ProjectionFault) => projectionError(fault, requestId)
   const url = new URL(request.url)
-  const operation: ShareOperation | undefined = path.length === 1 && request.method === "POST" ? "create" : path.length === 2 && request.method === "GET" ? "resolve" : path.length === 3 && path[2] === "skill" && request.method === "GET" ? "summary" : undefined
+  const operation: ShareOperation | undefined = path.length === 3 && path[2] === "download" && request.method === "POST" ? "download" : path.length === 1 && request.method === "POST" ? "create" : path.length === 2 && request.method === "GET" ? "resolve" : path.length === 3 && path[2] === "skill" && request.method === "GET" ? "summary" : undefined
   if (!operation || path[0] !== "skill-shares" || path.length > 1 && !shareIdSchema.safeParse(path[1]).success || url.pathname !== `/api/hub/${path.map(encodeURIComponent).join("/")}` || url.search || url.hash || request.headers.has("idempotency-key")) return fail("invalidSkillRequest")
-  if (operation !== "create" && (request.body !== null || request.headers.has("content-length") || request.headers.has("transfer-encoding"))) return fail("invalidSkillRequest")
+  if (operation !== "create" && operation !== "download" && (request.body !== null || request.headers.has("content-length") || request.headers.has("transfer-encoding"))) return fail("invalidSkillRequest")
+  if (operation === "download" && (request.headers.has("transfer-encoding") || request.headers.has("content-length") && request.headers.get("content-length") !== "0")) return fail("invalidSkillRequest")
   if (operation === "create" && !JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "")) return fail("invalidSkillRequest")
   const config = productBffConfig()
   if (config === null) return fail("configuration")
   if (!config.bffBaseUrl) return fail("bffNotConfigured")
-  if ((operation === "create" || request.headers.has("origin")) && request.headers.get("origin") !== config.session.webOrigin) return fail("forbidden")
+  if ((operation === "create" || operation === "download" || request.headers.has("origin")) && request.headers.get("origin") !== config.session.webOrigin) return fail("forbidden")
   const deadline = new AbortController()
   const joined = AbortSignal.any([request.signal, deadline.signal])
   const budget = 10_000
@@ -605,11 +606,13 @@ async function proxySkillShare(request: Request, path: string[]): Promise<Respon
           joined.throwIfAborted()
           if (part.done) break
           count += part.value.byteLength
+          if (operation === "download" && count > 0) return fail("invalidSkillRequest")
           if (count > MAX_SKILL_COMMAND_BYTES) return fail("tooLarge")
           chunks.push(part.value)
         }
       } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock() }
       if (count) {
+        if (operation === "download") return fail("invalidSkillRequest")
         const bytes = new Uint8Array(count)
         let offset = 0
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
@@ -625,7 +628,7 @@ async function proxySkillShare(request: Request, path: string[]): Promise<Respon
     const headers = productBffHeaders(config, claims, requestId)
     headers.set("accept", "application/json")
     if (body !== undefined) headers.set("content-type", "application/json")
-    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/${path.map(encodeURIComponent).join("/")}`
+    const target = `${config.bffBaseUrl.replace(/\/+$/u, "")}/${operation === "download" ? "browser/v1" : "v1"}/${path.map(encodeURIComponent).join("/")}`
     upstream = await within(requestWithDomain(target, config.domain, {
       method: request.method, headers: Object.fromEntries(headers), ...(body === undefined ? {} : { body }), signal: joined,
       timeoutMs: Math.max(1, expires - Date.now()), maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576,
@@ -670,7 +673,7 @@ async function proxySkillShare(request: Request, path: string[]): Promise<Respon
     const retryAfter = upstream.headers.get("retry-after")
     if (retryAfter !== null && (upstream.status !== 429 || !/^[1-9][0-9]{0,4}$/u.test(retryAfter))) return fail("invalidOwnerResponse")
     return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "private, no-store", "x-request-id": ownerId!, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
-  } catch { return fail("bffUnavailable") }
+  } catch { return operation === "download" && deadline.signal.aborted ? NextResponse.json({ error: { code: "skill_deadline_exceeded", message: "Skill download deadline exceeded", retryable: true } }, { status: 504, headers: { "cache-control": "private, no-store", "x-request-id": requestId } }) : fail("bffUnavailable") }
   finally { clearTimeout(timer); void upstream?.body?.cancel().catch(() => undefined) }
 }
 

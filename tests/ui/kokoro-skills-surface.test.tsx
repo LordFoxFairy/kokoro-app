@@ -10,7 +10,8 @@ import { invalidate } from "@/lib/query"
 import { createHubClient } from "@/hub/client"
 import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
-vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "test-user", generation: 1 } }) }))
+const sessionBoundary = vi.hoisted(() => ({ admitted: true, subject: "test-user", generation: 1 }))
+vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: sessionBoundary }) }))
 
 const catalog = {
   skills: [{
@@ -31,6 +32,7 @@ function renderLive(onTrySkill = vi.fn()) {
 }
 
 beforeEach(() => {
+  sessionBoundary.admitted = true
   window.localStorage.clear()
   window.localStorage.setItem("kokoro.locale", "zh")
   invalidate("hub/skills/standalone-catalog")
@@ -988,4 +990,39 @@ it("reuses the real package tree for a shared old revision without current metad
   expect(await screen.findByText("Owner text")).toBeInTheDocument()
   expect(screen.getByRole("navigation", { name: "技能文件" })).toBeInTheDocument()
   expect(fetcher).toHaveBeenCalledTimes(2)
+})
+
+it("retires a pending shared download on lost admission and permits a new attempt after readmission", async () => {
+  const summary = { share_id: "incoming", source_ref: "skill:revision-old", skill: { skill_id: "revision-old", series_id: "series", revision: "1", display_name: "Old", description: "Real", tags: [], category_keys: [], example_prompts: [], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official" as const, source_kind: "official" as const } }
+  const pending: Array<{ signal: AbortSignal; finish: (response: Response) => void }> = []
+  const fetcher = vi.fn((_path: string, init: RequestInit) => new Promise<Response>(finish => { pending.push({ signal: init.signal!, finish }) }))
+  vi.stubGlobal("fetch", fetcher)
+  const view = () => <LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const rendered = render(view())
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  expect(screen.getByRole("button", { name: "下载技能" })).toBeDisabled()
+  sessionBoundary.admitted = false; rendered.rerender(view())
+  expect(pending[0]?.signal.aborted).toBe(true)
+  sessionBoundary.admitted = true; rendered.rerender(view())
+  await waitFor(() => expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled())
+  fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  const late = () => new Response(JSON.stringify({ data: { source_ref: summary.source_ref, revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "old.zip", expires_at: "2099-01-01T00:00:00Z" } } }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "late-download" } })
+  pending[0]!.finish(late()); await Promise.resolve(); await Promise.resolve()
+  expect(screen.getByRole("button", { name: "下载技能" })).toBeDisabled()
+  expect(screen.queryByText("技能详情暂时不可用")).toBeNull()
+  rendered.unmount(); expect(pending[1]?.signal.aborted).toBe(true); pending[1]!.finish(late())
+})
+it("preserves the catalog download lifecycle when only shared admission changes", async () => {
+  let signal!: AbortSignal, rejectDownload!: (error: Error) => void
+  vi.stubGlobal("fetch", vi.fn((path: string, init: RequestInit) => path.endsWith("DownloadSkill") ? new Promise<Response>((_resolve, reject) => { signal = init.signal!; rejectDownload = reject }) : Promise.resolve(response(ownerDetail))))
+  const view = () => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const rendered = render(view())
+  const button = await screen.findByRole("button", { name: "下载技能" }); fireEvent.click(button)
+  await waitFor(() => expect(signal).toBeDefined())
+  sessionBoundary.admitted = false; rendered.rerender(view())
+  expect(signal.aborted).toBe(false)
+  sessionBoundary.admitted = true; rendered.rerender(view())
+  rejectDownload(new Error("Owner download failed"))
+  await waitFor(() => expect(screen.getByRole("button", { name: "下载技能" })).toBeEnabled())
 })

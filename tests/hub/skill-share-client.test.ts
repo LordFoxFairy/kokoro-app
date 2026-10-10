@@ -71,3 +71,28 @@ describe("formal Skill Share client", () => {
     await expect(createSkillShareClient(origin).resolve(ack.share_id)).rejects.toMatchObject({ reason: "parse" }); expect(cancel).toHaveBeenCalledOnce()
   })
 })
+
+const downloadAck = { source_ref: "skill:revision-old", revision: "1", download_info: { download_url: `/skill-downloads/${"a".repeat(43)}`, filename: "actual.skill", expires_at: "2099-10-10T00:00:00Z" } }
+it("prepares the shared exact revision with zero body and no idempotency", async () => {
+  const fetcher = vi.fn().mockResolvedValue(response({ data: downloadAck })); vi.stubGlobal("fetch", fetcher)
+  expect(await createSkillShareClient(origin).download("share-old", "skill:revision-old", "1")).toEqual(downloadAck)
+  expect(fetcher.mock.calls[0]?.[0]).toBe("/api/hub/skill-shares/share-old/download")
+  const init = fetcher.mock.calls[0]?.[1] as RequestInit
+  expect(init.method).toBe("POST"); expect(init.body).toBeUndefined()
+  expect(new Headers(init.headers).has("content-type")).toBe(false); expect(new Headers(init.headers).has("idempotency-key")).toBe(false)
+})
+it.each([
+  { ...downloadAck, source_ref: "skill:series" }, { ...downloadAck, revision: "2" }, { ...downloadAck, extra: true },
+  { ...downloadAck, download_info: { ...downloadAck.download_info, download_url: "https://object.example/raw.zip" } },
+  { ...downloadAck, download_info: { ...downloadAck.download_info, download_url: `${downloadAck.download_info.download_url}?extra=1` } },
+  { ...downloadAck, download_info: { ...downloadAck.download_info, filename: "../wrong.zip" } },
+  { ...downloadAck, download_info: { ...downloadAck.download_info, expires_at: "2000-01-01T00:00:00Z" } },
+])("rejects a changed exact download binding or invalid handle %j", async data => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ data })))
+  await expect(createSkillShareClient(origin).download("share-old", "skill:revision-old", "1")).rejects.toMatchObject({ reason: "parse" })
+})
+it.each([[504, "skill_deadline_exceeded", "http"], [403, "skill_download_forbidden", "http"], [403, "skill_forbidden", "parse"], [503, "skill_deadline_exceeded", "parse"]])("keeps exact download error status %s/%s closed", async (status, code, reason) => {
+  const fetcher = vi.fn().mockResolvedValue(response({ error: { code, message: "Owner error", retryable: true } }, Number(status))); vi.stubGlobal("fetch", fetcher)
+  await expect(createSkillShareClient(origin).download("share-old", "skill:revision-old", "1")).rejects.toMatchObject({ reason })
+  expect(fetcher).toHaveBeenCalledOnce()
+})
