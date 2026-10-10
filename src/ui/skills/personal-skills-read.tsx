@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -181,7 +182,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         {action.kind === "unknown" ? <Button type="button" variant="outline" onClick={() => void perform(action.intent, undefined, true)}>{t("skills.retry")}</Button> : null}
         {action.kind === "confirmed" && action.id ? <Button type="button" variant="outline" onClick={() => void perform(action.intent, action.id)}>{t("skills.personal.checkCurrent")}</Button> : null}
         {action.kind === "rejected" && action.intent.operation !== "install" ? <Button type="button" variant="outline" onClick={() => void perform(action.intent, action.intent.resource)}>{t("skills.personal.checkCurrent")}</Button> : null}
-        {action.current ? <p data-testid="installation-current">{action.current.source_ref} · {action.current.revision} · {action.current.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {action.current.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p> : null}
+        {action.current ? <p data-testid="installation-current">{action.current.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {action.current.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p> : null}
       </Alert> : null}
       {view === "published" ? <>
       {pageState.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("skills.loading")}</div> : null}
@@ -192,7 +193,8 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           <CardContent className="space-y-2 p-4">
             <Button type="button" variant="ghost" className="h-auto px-0 text-left font-semibold" onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
             <p className="text-sm text-muted-foreground">{skill.description}</p>
-            <p className="text-xs text-muted-foreground" data-testid="personal-skill-provenance">{skill.source_ref} · {skill.revision}</p>
+            <div className="flex flex-wrap gap-1" aria-label="技能标签">{skill.categories.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
+            <p className="text-xs text-muted-foreground">{skill.installed ? t("skills.personal.installed") : t("skills.personal.removed")}</p>
             <Button type="button" variant="outline" disabled={actionLocked} onClick={() => startAction("install", skill.source_ref)}>{t("skills.personal.install")}</Button>
           </CardContent>
         </Card>
@@ -229,7 +231,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         {installations.kind === "ready" ? <>
           {installations.page.data.length === 0 ? <p>{t("skills.personal.empty")}</p> : null}
           {installations.page.data.map((item) => <Card key={item.installation_id}><CardContent className="space-y-2 p-4">
-            <p>{item.source_ref} · {item.revision}</p>
+            <p className="font-medium">{item.installed ? t("skills.personal.installed") : t("skills.personal.removed")}</p>
             <p>{item.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {item.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" disabled={actionLocked} onClick={() => void perform({ operation: "get", resource: item.installation_id }, item.installation_id)}>{t("skills.personal.checkCurrent")}</Button>
@@ -248,9 +250,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           <DialogTitle>{detail?.kind === "ready" ? detail.skill.name : t("skills.title")}</DialogTitle>
           <DialogDescription>{detail?.kind === "ready" ? detail.skill.summary : t("skills.loading")}</DialogDescription>
           {detail?.kind === "ready" ? <div className="space-y-2 text-sm">
-            <p>{detail.skill.source_ref} · {detail.skill.revision}</p>
-            <p>{detail.skill.status}</p>
-            <p>{detail.skill.tags.join(", ")}</p>
+            {detail.skill.tags.length > 0 ? <div className="flex flex-wrap gap-1" aria-label="技能标签">{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
           </div> : null}
           {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
         </DialogContent>
