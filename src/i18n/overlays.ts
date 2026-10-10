@@ -159,6 +159,19 @@ const firstSiteFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillsFallback: Partial<Record<MessageKey, string>> = {
+  "skills.localImport.hint": "Choose one archive containing SKILL.md. Its owner reads the metadata and adds it to My skills.",
+  "skills.localImport.session": "Confirm your current sign-in before uploading.",
+  "skills.localImport.processing": "Importing skill…",
+  "skills.localImport.unknown": "The result is unconfirmed. Retry preserves the original command, or check the current import state.",
+  "skills.localImport.recoverable": "An unfinished import was found. Check its current state before continuing.",
+  "skills.localImport.reselect": "The original file or upload credentials are missing. Select a file explicitly to start a new import.",
+  "skills.localImport.expired": "This import expired. Select a file again.",
+  "skills.localImport.complete": "Skill imported and added to My skills.",
+  "skills.localImport.installationUnconfirmed": "Skill imported; its current installation is unconfirmed.",
+  "skills.localImport.check": "Check import status",
+  "skills.localImport.continue": "Continue import",
+  "skills.localImport.replace": "Select and upload again",
+
   "skills.mySkills": "My skills",
   "skills.createPersonal": "Create a personal skill",
   "skills.createWithBrand": "Create a skill with {brand}",

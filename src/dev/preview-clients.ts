@@ -17,8 +17,6 @@ import type {
   SkillCatalogCard,
   SkillQuota,
   SkillRevision,
-  UploadConfirm,
-  UploadPreview,
 } from "@/hub/schemas"
 import type { TeamClient, TeamMember, TeamRole } from "@/team/client"
 
@@ -118,7 +116,7 @@ export function createPreviewHubClient(): HubClient {
   let servers: McpServerView[] = []
   let secrets: McpSecret[] = []
   let customApiCount = 0
-  let quota = { ...previewQuota }
+  const quota = { ...previewQuota }
   const previewGithub = (repository: string, signal?: AbortSignal): Promise<GithubImportResult> =>
     abortable(signal, () => githubPreviewFor(repository))
   return {
@@ -189,43 +187,6 @@ export function createPreviewHubClient(): HubClient {
         }
       }
       return Promise.resolve()
-    },
-    previewUpload: (): Promise<UploadPreview> => Promise.resolve({
-      namespace: previewQuota.namespace,
-      candidates: [{
-        name: "new-skill",
-        valid: true,
-        errors: [],
-        description: "预览上传的技能包",
-        content_hash: "preview:new-skill",
-        package_size: 4096,
-        file_count: 1,
-        files: [{ path: "SKILL.md", size: 4096 }],
-        conflicts: { official: false, namespace: false },
-      }],
-    }),
-    confirmUpload: async (_zip, names): Promise<UploadConfirm> => {
-      const selected = names ?? ["new-skill"]
-      const results = selected.map((name) => {
-        const contentHash = `preview:${name}`
-        const existing = skills.find((skill) => skill.name === name && skill.scope === "personal")
-        if (existing?.content_hash === contentHash) {
-          return { name, status: "unchanged" as const, revision: 1, content_hash: contentHash, error: null }
-        }
-        const imported: SkillCard = {
-          name,
-          description: "预览上传的技能包",
-          content_hash: contentHash,
-          scope: "personal",
-          enabled: true,
-          updated_at: previewUpdatedAt,
-        }
-        skills = [...skills.filter((skill) => !(skill.name === name && skill.scope === "personal")), imported]
-        return { name, status: "published" as const, revision: 1, content_hash: contentHash, error: null }
-      })
-      const personalCount = new Set(skills.filter((skill) => skill.scope === "personal").map((skill) => skill.content_hash)).size
-      quota = { ...quota, package_count: Math.max(previewQuota.package_count, personalCount) }
-      return { namespace: quota.namespace, results }
     },
     previewGithub,
     importGithub: async (repository, signal) => {

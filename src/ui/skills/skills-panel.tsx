@@ -279,8 +279,6 @@ function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySki
         onImported={handleGithubImported}
       />
       <SkillUploadDialog
-        key={uploadOpen ? "skill-upload-open" : "skill-upload-closed"}
-        client={client}
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         returnFocusRef={uploadReturnFocusRef}

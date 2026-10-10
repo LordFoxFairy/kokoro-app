@@ -276,18 +276,10 @@ describe("hub client", () => {
     expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-toggle:/)
   })
 
-  it("posts the zip as multipart with a JSON names field on confirm", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ data: { namespace: "team_1", results: [] } }))
-    vi.stubGlobal("fetch", fetchMock)
-    await createHubClient().confirmUpload(new Blob(["zip"]), ["a", "b"])
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(init.method).toBe("POST")
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-upload:/)
-    const form = init.body as FormData
-    expect(form.get("names")).toBe('["a","b"]')
-    expect(form.get("file")).toBeInstanceOf(Blob)
+  it("removes retired preview/confirm methods instead of exposing nonexistent upload endpoints", () => {
+    const client = createHubClient()
+    expect(client).not.toHaveProperty("previewUpload")
+    expect(client).not.toHaveProperty("confirmUpload")
   })
 
   it("previews a GitHub repository through the optional BFF contract", async () => {

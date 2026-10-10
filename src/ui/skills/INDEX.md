@@ -1,3 +1,8 @@
+<!-- T-K03.14-WEB-LOCAL-IMPORT UI slice -->
+- `skill-upload-dialog.tsx`：目录/个人新建共用普通拖放 `.zip`/`.skill`；不手填发布元数据、不消费旧preview/confirm。
+- `personal-skill-import-flow.ts`：原File/hash、冻结命令与未知结果、当前账号locator及GET恢复；只浏览器状态，不解析ZIP、不拥有持久业务事实。
+- `personal-skill-publish-dialog.tsx` 保留已存在draft包更新/恢复，不是普通新建入口。导入完成后重新读取权威目录/个人列表，不生成卡片。
+
 # ui/skills — 技能面板
 
 ## W3 第二阶段 B 当前边界

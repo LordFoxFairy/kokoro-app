@@ -11,6 +11,12 @@ import { ThemeProvider } from "@/ui/theme/theme-context"
 import { createSessionClient } from "@/engine/client"
 import * as pageClients from "@/ui/shell/page-clients"
 
+vi.mock("@/ui/auth/use-session-state", () => ({
+  // Ordinary upload consumes an already verified session boundary. Session refresh
+  // transport is covered by its own suite, not this business fetch dispatcher.
+  useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "fixture-user", generation: 1 } }),
+}))
+
 const { registerCustomMcp, registerCustomApi, uploadConnectorIcon, endProductSession } = vi.hoisted(() => ({
   registerCustomMcp: vi.fn().mockResolvedValue({}),
   registerCustomApi: vi.fn().mockResolvedValue({}),
@@ -128,7 +134,7 @@ describe("SettingsModal 设置中心模态", () => {
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
     expect(await screen.findByText("我的技能")).toBeInTheDocument()
     expect(screen.queryByRole("switch")).toBeNull()
-    expect(screen.getByRole("button", { name: "发布个人技能" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "上传技能" })).toBeInTheDocument()
     expect(screen.queryByRole("menuitem", { name: "上传技能" })).toBeNull()
     expect(screen.queryByRole("menuitem", { name: "从 GitHub 导入" })).toBeNull()
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })

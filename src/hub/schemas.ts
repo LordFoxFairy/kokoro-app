@@ -201,44 +201,6 @@ export const skillRevisionsSchema = z.object({ revisions: z.array(skillRevisionS
 
 // —— 上传预检 / 发布 ——
 
-const uploadFileEntrySchema = z
-  .object({ path: z.string().min(1), size: z.number().int() })
-  .strict()
-
-const uploadCandidateSchema = z
-  .object({
-    name: z.string().min(1),
-    valid: z.boolean(),
-    errors: z.array(z.string()),
-    description: z.string().nullable(),
-    content_hash: z.string().nullable(),
-    package_size: z.number().int(),
-    file_count: z.number().int(),
-    files: z.array(uploadFileEntrySchema),
-    conflicts: z.object({ official: z.boolean(), namespace: z.boolean() }).strict(),
-  })
-  .strict()
-export type UploadCandidate = z.infer<typeof uploadCandidateSchema>
-
-export const uploadPreviewSchema = z
-  .object({ namespace: z.string().min(1), candidates: z.array(uploadCandidateSchema) })
-  .strict()
-export type UploadPreview = z.infer<typeof uploadPreviewSchema>
-
-const confirmResultSchema = z
-  .object({
-    name: z.string().min(1),
-    status: z.enum(["published", "unchanged", "failed"]),
-    revision: z.number().int().nullable(),
-    content_hash: z.string().nullable(),
-    error: z.string().nullable(),
-  })
-  .strict()
-export const uploadConfirmSchema = z
-  .object({ namespace: z.string().min(1), results: z.array(confirmResultSchema) })
-  .strict()
-export type UploadConfirm = z.infer<typeof uploadConfirmSchema>
-
 // —— GitHub 技能导入（可选 BFF 扩展）——
 
 // GitHub 导入入口与 zip 上传入口分开建模。当前 Web fixture 先使用本地预览，
@@ -434,8 +396,6 @@ export function skillDisablePath(name: string, scope?: string): string {
 export function skillRevisionsPath(name: string, scope?: string): string {
   return `/self/skills/${encodeURIComponent(name)}/revisions${skillScopeQuery(scope)}`
 }
-export const skillUploadPreviewPath = "/self/skills/upload/preview"
-export const skillUploadConfirmPath = "/self/skills/upload/confirm"
 export const skillGithubPreviewPath = "/self/skills/github/preview"
 export const skillGithubImportPath = "/self/skills/github/import"
 

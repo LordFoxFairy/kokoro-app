@@ -1,7 +1,7 @@
 // 技能面板组件测试：池渲染（official/own 徽标）+ 停用成功后离池 + required 撞 409 锁定 +
-// 固定回调 + 上传 preview→confirm 两段 + GitHub 单提交导入。hub 客户端为注入 fake（不打网络）。
+// 固定回调 + 本地导入 正规 owner 四阶段 + GitHub 单提交导入。hub 客户端为注入 fake（不打网络）。
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useRef, useState } from "react"
 
 import { createHubClient, HubClientError, type HubClient } from "@/hub/client"
@@ -11,6 +11,23 @@ import { LocaleProvider } from "@/i18n/context"
 import { GithubImportDialog, parseGithubRepository } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { SkillsContent, SkillsPanel } from "@/ui/skills/skills-panel"
+
+import { webcrypto } from "node:crypto"
+const localImportMock = vi.hoisted(() => ({ begin: vi.fn(), putPackage: vi.fn(), complete: vi.fn(), finalize: vi.fn(), get: vi.fn() }))
+vi.mock("@/hub/skill-local-import-client", () => ({ createSkillLocalImportClient: () => localImportMock }))
+vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "test-user", generation: 1 } }) }))
+const localExpiry = "2999-01-01T00:00:00Z"
+const localSkill = { name: "new-skill", summary: "Owner metadata", series_id: "series", skill_id: "revision" }
+const localBegin = { intent_id: "intent", skill_id: "series", upload_id: "upload", phase: "upload_pending", expires_at: localExpiry, transfer_reference: { method: "PUT", url: "https://objects.example/put", required_headers: { "content-type": "application/zip" }, expires_at: localExpiry }, replayed: false }
+beforeEach(() => {
+  window.sessionStorage.clear()
+  vi.stubGlobal("crypto", webcrypto)
+  for (const mock of Object.values(localImportMock)) mock.mockReset()
+  localImportMock.begin.mockResolvedValue(localBegin)
+  localImportMock.putPackage.mockResolvedValue({ source_version_id: "real-version" })
+  localImportMock.complete.mockResolvedValue({ intent_id: "intent", skill_id: "series", scan_state: "clean" })
+  localImportMock.finalize.mockResolvedValue({ skill: localSkill, installation: { installed: true, enabled: true } })
+})
 
 const OFFICIAL: SkillCard = { name: "brainstorming", description: "explore", content_hash: "h1", scope: "official" }
 const OWN: SkillCard = { name: "my-skill", description: "mine", content_hash: "h2", scope: "team_1" }
@@ -31,8 +48,6 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
     }),
     skillRevisions: vi.fn().mockResolvedValue([]),
     setSkillEnabled: vi.fn().mockResolvedValue(undefined),
-    previewUpload: vi.fn(),
-    confirmUpload: vi.fn(),
     listMcpServers: vi.fn().mockResolvedValue([]),
     registerMcpServer: vi.fn(),
     setMcpEnabled: vi.fn().mockResolvedValue(undefined),
@@ -862,151 +877,11 @@ describe("SkillsPanel", () => {
     }
   })
 
-  it("previews .skill archives in the dedicated upload dialog and publishes selected candidates", async () => {
-    const client = makeClient({
-      previewUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        candidates: [{ name: "new-skill", valid: true, conflicts: { namespace: false, official: false } }],
-      }),
-      confirmUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        results: [{ name: "new-skill", status: "published", error: null }],
-      }),
-    })
-    render(
-      <LocaleProvider>
-        <SkillUploadDialog client={client} open onOpenChange={vi.fn()} />
-      </LocaleProvider>,
-    )
 
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    const input = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    fireEvent.change(input, { target: { files: [new File(["skill"], "new.skill", { type: "application/octet-stream" })] } })
-    expect(await within(dialog).findByText("new-skill")).toBeInTheDocument()
-    expect(client.previewUpload).toHaveBeenCalledWith(expect.anything(), expect.any(AbortSignal))
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Publish selected" }))
-    await waitFor(() => expect(client.confirmUpload).toHaveBeenCalledWith(expect.anything(), ["new-skill"], expect.any(AbortSignal)))
-    expect(await within(dialog).findByText("Skill published to this workspace")).toBeInTheDocument()
-  })
 
-  it("keeps an invalid upload recoverable without calling the hub", async () => {
-    const previewUpload = vi.fn()
-    render(
-      <LocaleProvider>
-        <SkillUploadDialog client={makeClient({ previewUpload })} open onOpenChange={vi.fn()} />
-      </LocaleProvider>,
-    )
 
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    const input = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    fireEvent.change(input, { target: { files: [new File(["text"], "notes.txt", { type: "text/plain" })] } })
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Upload failed")
-    expect(previewUpload).not.toHaveBeenCalled()
-    expect(within(dialog).getByRole("button", { name: "Drag and drop or click to upload" })).toBeInTheDocument()
-  })
 
-  it("rejects an arbitrary binary file even when its MIME type is octet-stream", async () => {
-    const previewUpload = vi.fn()
-    render(
-      <LocaleProvider>
-        <SkillUploadDialog client={makeClient({ previewUpload })} open onOpenChange={vi.fn()} />
-      </LocaleProvider>,
-    )
-
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    fireEvent.change(within(dialog).getByTestId("skill-upload-input"), {
-      target: { files: [new File(["binary"], "package.bin", { type: "application/octet-stream" })] },
-    })
-
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Upload failed")
-    expect(previewUpload).not.toHaveBeenCalled()
-  })
-
-  it("shows a useful empty state when the upload preview contains no candidates", async () => {
-    const client = makeClient({
-      previewUpload: vi.fn().mockResolvedValue({ namespace: "team_1", candidates: [] }),
-    })
-    render(
-      <LocaleProvider>
-        <SkillUploadDialog client={client} open onOpenChange={vi.fn()} />
-      </LocaleProvider>,
-    )
-
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    fireEvent.change(within(dialog).getByTestId("skill-upload-input"), {
-      target: { files: [new File(["zip"], "empty.zip", { type: "application/zip" })] },
-    })
-
-    expect(await within(dialog).findByTestId("skill-upload-empty")).toBeInTheDocument()
-    expect(within(dialog).getByText("No matching skills")).toBeInTheDocument()
-    expect(within(dialog).getByRole("button", { name: "Publish selected" })).toBeDisabled()
-  })
-
-  it("aborts an in-flight upload preview when the dialog closes", async () => {
-    let resolvePreview!: (value: {
-      namespace: string
-      candidates: []
-    }) => void
-    let requestSignal!: AbortSignal
-    const previewUpload = vi.fn<NonNullable<HubClient["previewUpload"]>>((_file, signal) => {
-      requestSignal = signal!
-      return new Promise((resolve) => { resolvePreview = resolve })
-    })
-    const client = makeClient({ previewUpload })
-
-    function Harness() {
-      const [open, setOpen] = useState(true)
-      return (
-        <LocaleProvider>
-          <SkillUploadDialog client={client} open={open} onOpenChange={setOpen} />
-        </LocaleProvider>
-      )
-    }
-
-    render(<Harness />)
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    fireEvent.change(within(dialog).getByTestId("skill-upload-input"), {
-      target: { files: [new File(["zip"], "skills.zip", { type: "application/zip" })] },
-    })
-    await waitFor(() => expect(previewUpload).toHaveBeenCalledTimes(1))
-
-    fireEvent.click(dialog.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!)
-    await waitFor(() => expect(screen.queryByTestId("skill-upload-dialog")).toBeNull())
-    expect(requestSignal.aborted).toBe(true)
-
-    resolvePreview({ namespace: "team_1", candidates: [] })
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(screen.queryByTestId("skill-upload-dialog")).toBeNull()
-  })
-
-  it("ignores a duplicate publish click before the upload request resolves", async () => {
-    let resolveConfirm!: (value: { namespace: string; results: { name: string; status: "published"; revision: number | null; content_hash: string | null; error: null }[] }) => void
-    const confirmUpload = vi.fn().mockImplementation(() => new Promise((resolve) => { resolveConfirm = resolve }))
-    const client = makeClient({
-      previewUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        candidates: [{ name: "single-submit", valid: true, conflicts: { namespace: false, official: false } }],
-      }),
-      confirmUpload,
-    })
-    render(
-      <LocaleProvider>
-        <SkillUploadDialog client={client} open onOpenChange={vi.fn()} />
-      </LocaleProvider>,
-    )
-
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    fireEvent.change(within(dialog).getByTestId("skill-upload-input"), { target: { files: [new File(["zip"], "skills.zip", { type: "application/zip" })] } })
-    await within(dialog).findByText("single-submit")
-    const publish = within(dialog).getByRole("button", { name: "Publish selected" })
-    fireEvent.click(publish)
-    fireEvent.click(publish)
-    await waitFor(() => expect(confirmUpload).toHaveBeenCalledTimes(1))
-
-    resolveConfirm({ namespace: "team_1", results: [{ name: "single-submit", status: "published", revision: 1, content_hash: "h", error: null }] })
-    expect(await within(dialog).findByText("Skill published to this workspace")).toBeInTheDocument()
-  })
 
   it("hydrates cursor-paginated catalog pages into one scroll surface", async () => {
     const listSkillCatalog = vi.fn()
@@ -1102,112 +977,8 @@ describe("SkillsPanel", () => {
     await waitFor(() => expect(secondClose).toHaveBeenCalledTimes(1), { timeout: 500 })
   })
 
-  it("runs the upload preview→confirm two-stage flow", async () => {
-    const client = makeClient({
-      previewUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        candidates: [
-          {
-            name: "fresh",
-            valid: true,
-            errors: [],
-            description: "d",
-            content_hash: "h",
-            package_size: 10,
-            file_count: 1,
-            files: [{ path: "SKILL.md", size: 10 }],
-            conflicts: { official: false, namespace: false },
-          },
-          {
-            name: "broken",
-            valid: false,
-            errors: ["missing SKILL.md"],
-            description: null,
-            content_hash: null,
-            package_size: 0,
-            file_count: 0,
-            files: [],
-            conflicts: { official: false, namespace: false },
-          },
-        ],
-      }),
-      confirmUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        results: [
-          { name: "fresh", status: "published", revision: 1, content_hash: "h", error: null },
-          { name: "broken", status: "failed", revision: null, content_hash: null, error: "bad package" },
-        ],
-      }),
-    })
-    renderPanel(client)
-    await screen.findByText("brainstorming")
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Upload a skill" }))
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    const file = new File(["zip-bytes"], "skills.zip", { type: "application/zip" })
-    const input = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    fireEvent.change(input, { target: { files: [file] } })
-    await screen.findByText("fresh")
-    expect(within(dialog).getByText("missing SKILL.md")).toBeInTheDocument()
-    expect(client.previewUpload).toHaveBeenCalled()
-    fireEvent.click(within(dialog).getByText("Publish selected"))
-    await waitFor(() => expect(client.confirmUpload).toHaveBeenCalledWith(expect.anything(), ["fresh"], expect.any(AbortSignal)))
-    await within(dialog).findByText("Skill published to this workspace")
-    expect(within(dialog).getByText(/bad package/)).toBeInTheDocument()
-  })
 
-  it("上传预览或发布期间锁定文件选择，避免并发覆盖当前流程", async () => {
-    let resolveConfirm!: (value: { results: { name: string; status: string }[] }) => void
-    const client = makeClient({
-      previewUpload: vi.fn().mockResolvedValue({
-        namespace: "team_1",
-        candidates: [{ name: "fresh", valid: true, conflicts: { namespace: false, official: false } }],
-      }),
-      confirmUpload: vi.fn().mockReturnValue(new Promise((resolve) => { resolveConfirm = resolve })),
-    })
-    renderPanel(client)
-    await screen.findByText("brainstorming")
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Upload a skill" }))
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    const input = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    fireEvent.change(input, { target: { files: [new File(["zip"], "skills.zip", { type: "application/zip" })] } })
-    await within(dialog).findByText("fresh")
-    fireEvent.click(within(dialog).getByText("Publish selected"))
-    await waitFor(() => expect(client.confirmUpload).toHaveBeenCalled())
-    expect(within(dialog).queryByTestId("skill-upload-input")).toBeNull()
-    expect(within(dialog).getByRole("button", { name: "Publishing…" })).toBeDisabled()
-    expect(within(dialog).getByRole("button", { name: "Publishing…" })).toHaveAttribute("aria-busy", "true")
-    resolveConfirm({ results: [{ name: "fresh", status: "published" }] })
-    await within(dialog).findByText("Skill published to this workspace")
-  })
 
-  it("预览失败后可以重新选择同一个 zip", async () => {
-    const client = makeClient({
-      previewUpload: vi.fn()
-        .mockRejectedValueOnce(new Error("preview failed"))
-        .mockResolvedValueOnce({
-          namespace: "team_1",
-          candidates: [{ name: "fresh", valid: true, conflicts: { namespace: false, official: false } }],
-        }),
-    })
-    renderPanel(client)
-    await screen.findByText("brainstorming")
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Create" }), { button: 0, ctrlKey: false })
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Upload a skill" }))
-    const dialog = await screen.findByTestId("skill-upload-dialog")
-    const input = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    const file = new File(["zip"], "skills.zip", { type: "application/zip" })
-
-    fireEvent.change(input, { target: { files: [file] } })
-    await within(dialog).findByText("Upload failed — check the zip and try again")
-    fireEvent.click(within(dialog).getByRole("button", { name: "Drag and drop or click to upload" }))
-    const retryInput = within(dialog).getByTestId("skill-upload-input") as HTMLInputElement
-    fireEvent.change(retryInput, { target: { files: [file] } })
-
-    await within(dialog).findByText("fresh")
-    expect(client.previewUpload).toHaveBeenCalledTimes(2)
-  })
 
   it("uses the wire-format third_party scope and renders third-party catalog results", async () => {
     const listSkillCatalog = vi.fn().mockImplementation(({ scope }: { scope?: string }) => Promise.resolve({
@@ -1269,4 +1040,73 @@ describe("SkillsPanel", () => {
     await waitFor(() => expect(setSkillEnabled).toHaveBeenCalledWith("disabled-skill", true, "official"))
     expect(within(catalog).getByRole("button", { name: "Added disabled-skill" })).toBeDisabled()
   })
+})
+
+function renderImportDialog(onPublished = vi.fn()) { return render(<LocaleProvider><SkillUploadDialog open onOpenChange={vi.fn()} onPublished={onPublished} /></LocaleProvider>) }
+function pickImportFile(name = "mine.skill") { fireEvent.change(screen.getByTestId("skill-upload-input"), { target: { files: [new File(["zip"], name, { type: "application/octet-stream" })] } }) }
+it("imports a .skill through owner metadata and actual version proof, no selectable preview candidates", async () => {
+  const completed = vi.fn(); renderImportDialog(completed); pickImportFile()
+  expect(await screen.findByText("new-skill")).toBeInTheDocument()
+  expect(await screen.findByText("Skill imported and added to My skills.")).toBeInTheDocument()
+  expect(localImportMock.begin).toHaveBeenCalledWith(expect.objectContaining({ filename: "mine.skill", size_bytes: 3, content_sha256: expect.stringMatching(/^[a-f0-9]{64}$/u) }), expect.any(String), expect.any(AbortSignal))
+  expect(localImportMock.complete).toHaveBeenCalledWith("intent", expect.objectContaining({ source_version_id: "real-version" }), expect.any(String), expect.any(AbortSignal))
+  expect(completed).toHaveBeenCalledOnce()
+  expect(screen.queryByRole("checkbox")).toBeNull()
+})
+it.each(["notes.txt", "package.bin", "UPPER.ZIP"])("rejects invalid archive %s without owner IO and leaves file picker available", async (name) => {
+  renderImportDialog(); pickImportFile(name)
+  expect(await screen.findByRole("alert")).toHaveTextContent("Upload failed")
+  expect(localImportMock.begin).not.toHaveBeenCalled()
+  expect(screen.getByRole("button", { name: "Drag and drop or click to upload" })).toBeEnabled()
+})
+it("owner rejection replaces obsolete empty-candidate preview with useful recoverable error", async () => {
+  localImportMock.begin.mockRejectedValue(new HubClientError("http", "invalid metadata", "invalid_local_skill_import_request", 400))
+  renderImportDialog(); pickImportFile()
+  expect(await screen.findByRole("alert")).toHaveTextContent("Upload failed")
+  expect(localImportMock.finalize).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Select and upload again" }))
+  expect(screen.getByTestId("skill-upload-input")).toBeInTheDocument()
+})
+it("close aborts Begin and ignores its late response, while reopening preserves original unknown intent", async () => {
+  let resolve!: (data: typeof localBegin) => void
+  localImportMock.begin.mockImplementationOnce(() => new Promise((r) => { resolve = r }))
+  function Harness() { const [open, setOpen] = useState(true); return <LocaleProvider><button onClick={() => setOpen(true)}>Reopen</button><SkillUploadDialog open={open} onOpenChange={setOpen} /></LocaleProvider> }
+  render(<Harness />); pickImportFile()
+  await waitFor(() => expect(localImportMock.begin).toHaveBeenCalledOnce())
+  fireEvent.click(screen.getByRole("button", { name: "Close skill upload" }))
+  expect(localImportMock.begin.mock.calls[0]?.[2].aborted).toBe(true)
+  resolve(localBegin); await act(async () => { await Promise.resolve() })
+  expect(localImportMock.putPackage).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole("button", { name: "Reopen" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("unconfirmed")
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+  await screen.findByText("new-skill")
+  expect(localImportMock.begin.mock.calls[1]?.slice(0, 2)).toEqual(localImportMock.begin.mock.calls[0]?.slice(0, 2))
+})
+it("locks file choice and duplicate continuation during pending Finalize", async () => {
+  let resolve!: (value: unknown) => void
+  localImportMock.finalize.mockImplementationOnce(() => new Promise((r) => { resolve = r }))
+  renderImportDialog(); pickImportFile()
+  await waitFor(() => expect(localImportMock.finalize).toHaveBeenCalledOnce())
+  expect(screen.queryByTestId("skill-upload-input")).toBeNull()
+  expect(screen.getByRole("status")).toHaveTextContent("Importing skill")
+  resolve({ skill: localSkill, installation: { installed: true, enabled: true } })
+  expect(await screen.findByText("Skill imported and added to My skills.")).toBeInTheDocument()
+})
+it("unknown Complete retry keeps the original proof/body/key and does not create another upload", async () => {
+  localImportMock.complete.mockRejectedValueOnce(new HubClientError("network", "unknown", null, null))
+  renderImportDialog(); pickImportFile()
+  expect(await screen.findByRole("alert")).toHaveTextContent("unconfirmed")
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+  await screen.findByText("new-skill")
+  expect(localImportMock.complete.mock.calls[1]?.slice(0, 3)).toEqual(localImportMock.complete.mock.calls[0]?.slice(0, 3))
+  expect(localImportMock.begin).toHaveBeenCalledOnce(); expect(localImportMock.putPackage).toHaveBeenCalledOnce()
+})
+it("explicit file replacement recovers a rejected Begin and reselects the same file", async () => {
+  localImportMock.begin.mockRejectedValueOnce(new HubClientError("http", "invalid", "invalid_local_skill_import_request", 400))
+  renderImportDialog(); pickImportFile(); await screen.findByRole("alert")
+  fireEvent.click(screen.getByRole("button", { name: "Select and upload again" })); pickImportFile()
+  await screen.findByText("new-skill")
+  expect(localImportMock.begin).toHaveBeenCalledTimes(2)
+  expect(localImportMock.begin.mock.calls[0]?.[1]).not.toBe(localImportMock.begin.mock.calls[1]?.[1])
 })

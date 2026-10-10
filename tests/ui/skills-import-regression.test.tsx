@@ -5,6 +5,8 @@ import { LocaleProvider } from "@/i18n/context"
 import { createPreviewHubClient } from "@/dev/preview-clients"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 
+vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "test-user", generation: 1 } }) }))
+
 const { browserHubClientMock } = vi.hoisted(() => ({ browserHubClientMock: vi.fn() }))
 
 vi.mock("@/ui/shell/page-clients", () => ({ browserHubClient: browserHubClientMock }))

@@ -8,6 +8,12 @@ import type { HubClient } from "@/hub/client"
 import type { SkillPublishClient } from "@/hub/skill-publish-client"
 import { PersonalSkillPublishDialog } from "@/ui/skills/personal-skill-publish-dialog"
 
+vi.mock("@/ui/auth/use-session-state", () => ({
+  // Ordinary upload consumes an already verified session boundary. Session refresh
+  // transport is covered by its own suite, not this business fetch dispatcher.
+  useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "fixture-user", generation: 1 } }),
+}))
+
 beforeEach(() => { window.localStorage.clear(); window.localStorage.setItem("kokoro.locale", "zh") })
 afterEach(cleanup)
 

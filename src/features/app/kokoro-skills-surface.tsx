@@ -327,7 +327,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       </main>
 
       <GithubImportDialog client={client} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog client={client} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
+      <SkillUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
       <ManusSkillDetailDialog
         key={detailSkill?.skill_id ?? "closed"}
         skill={currentDetailSkill}

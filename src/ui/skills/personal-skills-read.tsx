@@ -15,6 +15,7 @@ import type { ManagedPersonalSkill, InstallationPage, PersonalInstallation } fro
 import { invalidate } from "@/lib/query"
 import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { useT } from "@/i18n/context"
+import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 
 type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: Awaited<ReturnType<typeof publishClient.listPublished>> }
@@ -51,6 +52,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
   const [generation, setGeneration] = useState(0)
   const [pageState, setPageState] = useState<PageState>({ kind: "loading" })
   const [detail, setDetail] = useState<DetailState>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const [publishOpen, setPublishOpen] = useState(false)
   const [resumeBase, setResumeBase] = useState<ManagedPersonalSkill | null>(null)
   const [draftPage, setDraftPage] = useState<Awaited<ReturnType<typeof publishClient.listDrafts>> | null>(null)
@@ -188,7 +190,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">{t("skills.title")}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => { setResumeBase(null); setPublishOpen(true) }}>{t("skills.publishTitle")}</Button>
+          <Button type="button" onClick={() => setImportOpen(true)}>{t("skills.uploadSkill")}</Button>
           {!embedded && onOpenSettings ? <Button type="button" variant="outline" onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
         </div>
       </header>
@@ -282,6 +284,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
           {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
         </DialogContent>
       </Dialog>
+      <SkillUploadDialog open={importOpen} onOpenChange={setImportOpen} onPublished={() => { invalidate(SKILL_CATALOG_RESOURCE_KEY); setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1); setInstallationGeneration((value) => value + 1) }} />
       <PersonalSkillPublishDialog key={resumeBase?.skill_id ?? "new"} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )

@@ -9,6 +9,8 @@ import { invalidate } from "@/lib/query"
 import { createHubClient } from "@/hub/client"
 import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
+vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "test-user", generation: 1 } }) }))
+
 const catalog = {
   skills: [{
     skillId: "skill-manim", displayName: "Manim 动画师", userDescription: "使用 Manim 生成数学动画。",
@@ -796,4 +798,12 @@ it.each([true, false])("executes current installation facts after a fresh read w
   expect(JSON.parse(String(commands[0]?.init.body))).toEqual({ enabled: true })
   expect(screen.getByTestId("manus-skill-detail-dialog")).toBe(dialog)
   expect(await within(dialog).findByRole("button", { name: "已添加到我的技能" })).toBeDisabled()
+})
+
+it("ordinary personal new skill opens the same archive dropzone without publish metadata fields", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ skills: [], next_cursor: null }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner" } })))
+  render(<LocaleProvider><PersonalSkillsRead client={createHubClient()} /></LocaleProvider>)
+  fireEvent.click(screen.getByRole("button", { name: "上传技能" }))
+  expect(await screen.findByTestId("skill-upload-dialog")).toBeInTheDocument()
+  expect(screen.queryByLabelText("技能名称")).toBeNull()
 })

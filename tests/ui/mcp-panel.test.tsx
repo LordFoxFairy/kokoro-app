@@ -46,8 +46,6 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
     skillQuota: vi.fn(),
     skillRevisions: vi.fn(),
     setSkillEnabled: vi.fn(),
-    previewUpload: vi.fn(),
-    confirmUpload: vi.fn(),
     listMcpServers: vi.fn().mockResolvedValue([OFFICIAL, OWN]),
     registerMcpServer: vi.fn().mockResolvedValue(OWN),
     setMcpEnabled: vi.fn().mockResolvedValue(undefined),

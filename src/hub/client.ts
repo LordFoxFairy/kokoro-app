@@ -40,10 +40,6 @@ import {
   skillQuotaSchema,
   skillRevisionsPath,
   skillRevisionsSchema,
-  skillUploadConfirmPath,
-  skillUploadPreviewPath,
-  uploadConfirmSchema,
-  uploadPreviewSchema,
   type McpRegisterInput,
   type CustomMcpRegisterInput,
   type CustomApiCreateInput,
@@ -55,8 +51,6 @@ import {
   type SkillCatalog,
   type SkillQuota,
   type SkillRevision,
-  type UploadConfirm,
-  type UploadPreview,
   type GithubImportResult,
   mcpConnectionPageSchema,
   mcpConnectionErrorAllowed,
@@ -344,8 +338,6 @@ export type HubClient = {
   skillRevisions: (name: string, scope?: string) => Promise<SkillRevision[]>
   /** `scope` disambiguates same-name official/third-party/personal projections. */
   setSkillEnabled: (name: string, enabled: boolean, scope?: string) => Promise<void>
-  previewUpload: (zip: Blob, signal?: AbortSignal) => Promise<UploadPreview>
-  confirmUpload: (zip: Blob, names: string[] | null, signal?: AbortSignal) => Promise<UploadConfirm>
   /** Optional GitHub preview/import endpoints; preview clients may omit them. */
   previewGithub?: (repository: string, signal?: AbortSignal) => Promise<GithubImportResult>
   importGithub?: (repository: string, signal?: AbortSignal) => Promise<GithubImportResult>
@@ -379,16 +371,6 @@ async function mutate(path: string, method: "POST" | "DELETE"): Promise<void> {
   if (!response.ok) {
     throw await readError(response)
   }
-}
-
-function uploadForm(zip: Blob, names: string[] | null): FormData {
-  const form = new FormData()
-  // hub upload-routes 读 multipart「file」字段为 zip；names 是 JSON 数组字符串字段（选择发布，缺省=全部）。
-  form.set("file", zip, "skills.zip")
-  if (names !== null) {
-    form.set("names", JSON.stringify(names))
-  }
-  return form
 }
 
 export function createHubClient(): HubClient {
@@ -435,25 +417,6 @@ export function createHubClient(): HubClient {
         throw await readError(response)
       }
     },
-    previewUpload: (zip, signal) =>
-      requestData(
-        skillUploadPreviewPath,
-        uploadPreviewSchema,
-        withOptionalSignal({
-          method: "POST",
-          body: uploadForm(zip, null),
-        }, signal),
-      ),
-    confirmUpload: (zip, names, signal) =>
-      requestData(
-        skillUploadConfirmPath,
-        uploadConfirmSchema,
-        withOptionalSignal({
-          method: "POST",
-          headers: idempotencyHeaders("skill-upload"),
-          body: uploadForm(zip, names),
-        }, signal),
-      ),
     previewGithub: async (repository, signal) => {
       const canonical = canonicalGithubRepository(repository)
       const body = githubImportRequestSchema.parse({ repository: canonical })

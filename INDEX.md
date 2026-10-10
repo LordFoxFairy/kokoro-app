@@ -1,3 +1,6 @@
+<!-- T-K03.14-WEB-LOCAL-IMPORT UI slice -->
+普通Skills本地导入：`src/ui/skills/skill-upload-dialog.tsx` + `personal-skill-import-flow.ts` → `src/hub/skill-local-import-client.ts` → 现同源四路径。旧preview/confirm client/schema/factory已删除；personal publish仅保已有draft更新/恢复。
+
 ## R256 侧栏会话命中入口
 
 现 workspace-rail-items.module.css 限定 conversation sibling flow 保标题/改名/移动/删除命中区独立；folder、读准入、路由与数据不改。真实原浏览器证据及未验项见 CURRENT/ACCEPTANCE；后台入口当前仍需正式管理员准入接线。
