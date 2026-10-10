@@ -1,3 +1,20 @@
+<!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
+## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前Web `745f273` 保留已验收local-import、独立真实包reader和revision安装；GitHub仍为self伪路径、旧URL直接Import及合成installed卡片。Root正常浏览器已证旧Import404，未创建draft/install。目标消费正式BFF `486ec7e80e834471878dd031553571d7f16c03bd` / public `13.2.0` / canonical OpenAPI SHA256 `3e4dd272fa8180b8f2a2bacc88d37f99ed5c77eaba05ef03e858ab766f891206`，Platform `4f7501b`；以下为批准设计，不表示代码、generated pin或浏览器已接通。只加此前缀，下面原mixed全文逐字节保留。
+
+### 唯一机器源与同源闭集
+机器源为正式BFF `/Users/nako/.codex/worktrees/kokoro-r257-bff-normal/contract/openapi/v1/openapi.yaml` 的 `previewGithubSkill` / `importGithubSkill` 及 `src/http/routes/skill-github-import.ts`。Web新增两精确browser-private POST：`/api/hub/skills/github/preview`→`/v1/skills/github/preview`；`/api/hub/skills/github/import`→`/v1/skills/github/import`。旧self伪路径保持拒绝，不alias/fallback；拒其它method/segments/query，JSON请求累计≤65,536bytes，保Origin/在线session/可信上下文。
+
+Preview exact `{repository_url,path?}`，无Idempotency-Key；200 `{data:...}` strict联合：selection_required=true仅repository_url/commit/paths；false仅selector/metadata/repository/content_sha256/size_bytes，按机器完整nested schema与实际绑定验证，不复用旧GithubImportResult。Import exact四字段owner/repository/commit/path，必须单一合法原Idempotency-Key；201 strict七字段skill_id/source_ref/status=draft/state_version/valid=true/content_digest/manifest_identity，source_ref必须绑定skill_id，state_version是正signed64 decimal。13.2五处path上限256字符已与运行selector一致；owner archive UTF8相对文件路径含文件名256bytes是另一边界，不放宽它；历史provenance/URL上限不机械替换。
+
+现PublishDraft携带明确audience=owner与Import ACK expected_state_version；现Install使用真实revision source_ref。成功ACK逐项核资源/状态，不拿series作安装source。Preview/Import的SkillProductErrorResponse与实际admission/runSkillRoute错误按operation×status闭集：400 invalid_skill_request、401 session_authentication_required/session_invalid、403 service_auth_failed/session_forbidden/product_tenant_forbidden/skill_forbidden、404 skill_not_found、409 skill_idempotency_conflict/skill_command_in_progress、412 skill_precondition_failed、413 request_body_too_large、429 session_rate_limited/skill_rate_limited、502 skill_response_invalid、503 product_tenant_not_configured/iam_admission_unavailable/skill_dependency_unavailable；拒旧dotted alias与code/status错配。Publish/Install保持各自现正式错误族，不串用。
+
+每次网络请求10秒总deadline包括fetch与body读取，累计响应≤1MiB，fatalUTF8/JSON、严格envelope、request-id/no-store；取消/超限/失败finally cancel，迟到response也清理。Preview不自动发写，Import未知不得换selector/key重试。
+
+<!-- END:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-API_CONTRACT-D0 -->
 
 ## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）

@@ -1,3 +1,24 @@
+<!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
+## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前Web `745f273` 保留已验收local-import、独立真实包reader和revision安装；GitHub仍为self伪路径、旧URL直接Import及合成installed卡片。Root正常浏览器已证旧Import404，未创建draft/install。目标消费正式BFF `486ec7e80e834471878dd031553571d7f16c03bd` / public `13.2.0` / canonical OpenAPI SHA256 `3e4dd272fa8180b8f2a2bacc88d37f99ed5c77eaba05ef03e858ab766f891206`，Platform `4f7501b`；以下为批准设计，不表示代码、generated pin或浏览器已接通。只加此前缀，下面原mixed全文逐字节保留。
+
+### Owner、目录取舍与完整链
+Web只拥有浏览器意图、显示和同源adapter；BFF聚合GitHub与Product API，Platform/Storage拥有真实draft/包/发布/安装。浏览器不请求GitHub或内部owner，不解析ZIP，不执行仓库代码。
+
+比较继续扩旧HubClient与focused现hub模块：采用两个普通schema/client文件，分别承载wire闭集与网络生命周期；淘汰旧optional方法及其假结果，不新建wire目录/通用框架。现skills目录普通flow承载阶段意图，现dialog承载输入、path选择与状态；不把网络/schema揉入UI。Publish与Installation复用已存在严格客户端，不复制协议。
+
+Preview→单路径metadata或多路径选择→冻结immutable selector Import→validated draft ACK→冻结owner/CAS Publish→真实source_ref Install→权威重读。多path直接保原repository_url解析的owner/repository、原commit与用户选path；不再次floating Preview换commit，不为未返回的各path合成metadata。Import201仅draft；Publish成功也非installed，安装成功依据真实ACK。删除旧GitHub方法/schema/self路径引用、dev GitHub factory与surface合成hash/installed；保其它preview、连接器、本地导入、已有draft更新/恢复、真实reader及Admin职责。
+### 后继精确文件集与阶段门
+网络5：新 `src/hub/skill-github-import.schema.ts`、`src/hub/skill-github-import-client.ts`、`tests/hub/skill-github-import-client.test.ts`；现 `src/app/api/hub/[...path]/route.ts`、`tests/app/hub-proxy.test.ts`。
+
+UI/删除19（网络验收后另授）：新 `src/ui/skills/personal-skill-github-import-flow.ts`、`tests/hub/skill-github-import-flow.test.ts`；现 `src/ui/skills/github-import-dialog.tsx`、`src/ui/skills/github-import-dialog.module.css`、`src/features/app/kokoro-skills-surface.tsx`、`src/ui/skills/skills-panel.tsx`、`src/hub/client.ts`、`src/hub/schemas.ts`、`src/dev/preview-clients.ts`、`src/i18n/messages.ts`、`src/i18n/overlays.ts`、`src/ui/skills/INDEX.md`、`INDEX.md`、`tests/hub/client.test.ts`、`tests/dev/preview-clients.test.ts`、`tests/ui/skills-import-regression.test.tsx`、`tests/ui/skills-panel.test.tsx`、`tests/ui/settings-modal.test.tsx`、`tests/ui/kokoro-skills-surface.test.tsx`。
+
+先真实RED：精确path/body/联合响应、原commit多path选择、201draft不等于installed、每阶段同body/key/CAS重放、错资源/状态/错误码、慢流/超限/取消/迟到主体隔离；focused测试、Node22 type/lint、冻结任务外字节后交Root全纯/build/真实浏览器与提交。不新增owner接口、依赖、目录或服务；generated pin维护若需范围外路径，先交Root裁决。
+
+<!-- END:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-TECHNICAL_DESIGN-D0 -->
 
 ## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）

@@ -1,3 +1,18 @@
+<!-- BEGIN:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
+## T-K03.14-WEB-GITHUB-IMPORT D0（2026-10-10；目标，尚未实施）
+
+当前Web `745f273` 保留已验收local-import、独立真实包reader和revision安装；GitHub仍为self伪路径、旧URL直接Import及合成installed卡片。Root正常浏览器已证旧Import404，未创建draft/install。目标消费正式BFF `486ec7e80e834471878dd031553571d7f16c03bd` / public `13.2.0` / canonical OpenAPI SHA256 `3e4dd272fa8180b8f2a2bacc88d37f99ed5c77eaba05ef03e858ab766f891206`，Platform `4f7501b`；以下为批准设计，不表示代码、generated pin或浏览器已接通。只加此前缀，下面原mixed全文逐字节保留。
+
+### 无Web持久owner与恢复约束
+Web无业务SQL/Redis/新store；不复制owner draft/安装/receipt。内存按可信session subject隔离，只有admitted可开始或继续，失去admitted先abort等待，匿名/换主体清本片意图，generation仅等待取消代数而非持久授权。每阶段独立保存冻结selector/body/key及真实ACK，迟到结果绑定原主体/资源，不污染新弹窗。
+
+Import冻结原四selector/key；Publish冻结真实draft ID、Import ACK CAS、owner audience/body/key；Install冻结真实revision source_ref/key。unknown只重放原body/key/CAS，不get最新CAS后偷换同key。关闭取消等待不声称owner回滚，原阶段内存可在同主体显式继续；修改repository/path须显式新意图而非改原命令。
+
+刷新丢内存key/body不称原重放，不持久化凭证、命令key/body或伪receipt。若已知真实draft ID，可用既有managed/package读取权威事实并由用户显式新后续意图；Import未知且没有skill ID时缺少原命令恢复身份，明确边界，不新建重复draft冒恢复。Import ACK仅validated draft，Publish仅active/owner，只有真实installation ACK/权威安装读才显示安装；不得构造content_hash卡片或假installed/enabled。成功invalidate并重读现目录/个人资源，不合成metadata、示例、文件树。原local-import locator/流程及已有安装pin职责不改。
+
+<!-- END:T-K03.14-WEB-GITHUB-IMPORT-D0 -->
+
 <!-- BEGIN:T-K03.14-WEB-LOCAL-IMPORT-DATA_MODEL-D0 -->
 
 ## T-K03.14-WEB-LOCAL-IMPORT D0（2026-10-10；目标，尚未实施）
