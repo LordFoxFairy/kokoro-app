@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { SkillCatalogCard } from "@/hub/schemas"
-import { getManusSkillDetail, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
+import { downloadManusSkill, getManusSkillDetail, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 
@@ -39,6 +39,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (!open || !skill?.skill_id) return
@@ -59,6 +60,15 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
     })
     return () => controller.abort()
   }, [open, skill?.skill_id])
+
+  const download = async () => {
+    if (!skill?.skill_id || downloading) return
+    setDownloading(true)
+    try {
+      const result = await downloadManusSkill(skill.skill_id)
+      window.location.assign(result.downloadInfo.downloadUrl)
+    } finally { setDownloading(false) }
+  }
 
   if (!skill) return null
   const record = detail?.skill.id === skill.skill_id ? detail?.skill : null
@@ -84,7 +94,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, onOpenChange
       >
         <div className={styles.topActions}>
           <Button type="button" variant="ghost" size="icon-sm" aria-label="分享技能" onClick={() => void navigator.clipboard?.writeText(window.location.href)}><Share2 aria-hidden="true" /></Button>
-          {detail?.downloadInfo ? <a className={styles.iconLink} href={detail.downloadInfo.downloadUrl} aria-label="下载技能"><Download aria-hidden="true" /></a> : null}
+          {detail?.downloadInfo ? <Button type="button" variant="ghost" size="icon-sm" className={styles.iconLink} aria-label="下载技能" disabled={downloading} onClick={() => void download()}><Download aria-hidden="true" /></Button> : null}
         </div>
         <DialogHeader className={styles.hero}>
           <div className={styles.copy}>

@@ -132,3 +132,14 @@ export type ManusSkillDetail = z.infer<typeof skillDetailSchema>
 export async function getManusSkillDetail(skillId: string): Promise<ManusSkillDetail> {
   return post("GetSkill", { skillId }, skillDetailSchema)
 }
+
+/** Uses the distinct Manus service operation instead of treating a GetSkill
+ * response as a permanent download authority. */
+export async function downloadManusSkill(skillId: string): Promise<ManusSkillDetail> {
+  const response = await fetch("/api/skill.v1.SkillService/DownloadSkill", {
+    method: "POST", cache: "no-store", headers: { "content-type": "application/json" }, body: JSON.stringify({ skillId }),
+  })
+  const raw: unknown = await response.json().catch(() => null)
+  if (!response.ok) throw new Error("skill_download_failed")
+  return skillDetailSchema.parse(raw)
+}

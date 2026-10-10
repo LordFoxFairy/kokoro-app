@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
+import { downloadManusSkill } from "@/ui/skills/manus-skill-client"
 
 const catalog = {
   skills: [{
@@ -29,6 +30,16 @@ beforeEach(() => {
   invalidate("hub/skills/standalone-catalog")
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+it("uses the distinct Manus DownloadSkill service operation", async () => {
+  const fetchMock = vi.fn(async () => response({
+    skill: { id: "skill-manim", displayName: "Manim 动画师" },
+    downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" },
+  }))
+  vi.stubGlobal("fetch", fetchMock)
+  await expect(downloadManusSkill("skill-manim")).resolves.toMatchObject({ downloadInfo: { filename: "manim.skill" } })
+  expect(fetchMock).toHaveBeenCalledWith("/api/skill.v1.SkillService/DownloadSkill", expect.objectContaining({ method: "POST", body: JSON.stringify({ skillId: "skill-manim" }) }))
+})
 
 it("uses the exact Manus-style list operations, not the retired flattened catalog endpoint", async () => {
   const fetchMock = vi.fn(async (path: string, _init?: RequestInit) => {
