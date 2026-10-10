@@ -182,6 +182,12 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
     })
   }
 
+  const metadata = [
+    publisherLabel,
+    updated ? t("skills.updatedAt", { date: updated }) : undefined,
+    skill.usage_count ? t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) }) : undefined,
+  ].filter((value): value is string => Boolean(value))
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -203,14 +209,14 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
           <Button type="button" variant="ghost" onClick={() => setReaderOpen(false)}><ChevronRight className={styles.backIcon} aria-hidden="true" />{t("skills.packageBack")}</Button>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="sr-only">{t("skills.packageReader")}</DialogDescription>
-        </DialogHeader> : <DialogHeader className={styles.hero}>
+        </DialogHeader> : <DialogHeader className={styles.hero} data-has-cover={Boolean(cover)}>
           <div className={styles.copy}>
-            {categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}
+            {categoryLabels.length > 0 ? <div className={styles.categories}>{categoryLabels.slice(0, 2).map((label) => <Badge key={label} variant="secondary">{label}</Badge>)}</div> : null}
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription className={styles.meta}>{publisherLabel ? <>{publisherLabel}<span aria-hidden="true">|</span></> : null}{updated ? <>{t("skills.updatedAt", { date: updated })}<span aria-hidden="true">|</span></> : null}{skill.usage_count ? <>{t("skills.usedCount", { count: Number(skill.usage_count).toLocaleString(locale) })}</> : null}</DialogDescription>
+            <DialogDescription className={styles.meta}>{metadata.map((value, index) => <span key={index}>{index > 0 ? <span className={styles.separator} aria-hidden="true">|</span> : null}{value}</span>)}</DialogDescription>
             <div className={styles.actions}>
-              <Button type="button" variant="outline" disabled={boundRevision === null} onClick={() => readerOpen ? setReaderOpen(false) : restartReader()}>{readerOpen ? t("skills.packageBack") : t("skills.packageViewDetails")}</Button>
               <Button type="button" onClick={() => onAdd(skill)} disabled={busy || installed}>{installed ? t("skills.addedToMine") : <><Plus aria-hidden="true" />{t("skills.addToMine")}</>}</Button>
+              <Button type="button" variant="outline" disabled={boundRevision === null} onClick={restartReader}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
             </div>
           </div>
           {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}

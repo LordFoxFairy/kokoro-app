@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -806,4 +807,55 @@ it("ordinary personal new skill opens the same archive dropzone without publish 
   fireEvent.click(screen.getByRole("button", { name: "上传技能" }))
   expect(await screen.findByTestId("skill-upload-dialog")).toBeInTheDocument()
   expect(screen.queryByLabelText("技能名称")).toBeNull()
+})
+
+
+it.each([false, true])("keeps summary actions ordered and metadata separators between actual fields (cover=%s)", async hasCover => {
+  const { coverImage: _cover, ...withoutCover } = ownerDetailFields
+  void _cover
+  stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill: hasCover ? ownerDetailFields : withoutCover })
+  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision, usage_count: undefined }} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  await within(dialog).findByRole("button", { name: "下载技能" })
+  const add = within(dialog).getByRole("button", { name: "已添加到我的技能" })
+  const view = within(dialog).getByRole("button", { name: "查看详情" })
+  expect(add.compareDocumentPosition(view) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(view.querySelector("svg")).not.toBeNull()
+  const metadata = dialog.querySelector('[data-slot="dialog-description"]')!
+  expect(metadata.textContent?.trim()).not.toMatch(/\|$/u)
+  expect(metadata.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1)
+  expect(dialog.querySelector('[data-slot="dialog-header"]')).toHaveAttribute("data-has-cover", String(hasCover))
+})
+
+it("uses compact left-aligned summary rules with cover-only width reservation and a narrow layout", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*display:flex;/u)
+  expect(css).toMatch(/\.hero\s*\{[^}]*flex-direction:row;[^}]*align-items:flex-start;/u)
+  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:15rem;/u)
+  expect(css).toMatch(/\.copy h2\s*\{[^}]*font-size:1\.25rem; line-height:1\.3;/u)
+  expect(css).toMatch(/\.copy\s*\{[^}]*max-width:100%;/u)
+  expect(css).toMatch(/\.hero\[data-has-cover="true"\] \.copy\s*\{[^}]*max-width:calc\(100% - 15rem\);/u)
+  expect(css).toMatch(/@media\(max-width:42rem\)[\s\S]*\.hero\[data-has-cover="true"\] \.copy\{max-width:100%\}/u)
+})
+
+
+it("keeps decorative covers non-interactive and out of narrow summary copy", () => {
+  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
+  expect(css).toMatch(/\.cover\s*\{[^}]*pointer-events:none;/u)
+  expect(css).toMatch(/@media\(max-width:42rem\)[^\n]*\.cover\{display:none\}/u)
+})
+
+
+it("groups two actual category badges in a wrapping row without an empty category placeholder", async () => {
+  stubOwnerReads()
+  const props = { skill: { ...localizedSkill, skill_id: "series-current" }, open: true, onOpenChange: vi.fn(), onAdd: vi.fn(), onTry: vi.fn() }
+  const view = render(<LocaleProvider><ManusSkillDetailDialog {...props} categoryLabels={["媒体", "应用"]} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "下载技能" })
+  const media = screen.getByText("媒体")
+  expect(media.parentElement).toBe(screen.getByText("应用").parentElement)
+  expect(media.parentElement?.className).toContain("categories")
+  view.rerender(<LocaleProvider><ManusSkillDetailDialog {...props} categoryLabels={[]} /></LocaleProvider>)
+  expect(screen.getByTestId("manus-skill-detail-dialog").querySelector('[class*="categories"]')).toBeNull()
+  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
+  expect(css).toMatch(/\.categories\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap;/u)
 })
