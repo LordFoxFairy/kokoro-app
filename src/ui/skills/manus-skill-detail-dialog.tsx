@@ -19,6 +19,8 @@ type Props = {
   skill: SkillCatalogCard | null
   open: boolean
   busy?: boolean
+  installationState?: Readonly<{ installed: boolean; enabled: boolean }>
+  actionFailed?: boolean
   publisherLabel?: string
   categoryLabels?: readonly string[]
   onOpenChange: (open: boolean) => void
@@ -37,7 +39,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
+export function ManusSkillDetailDialog({ skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef }: Props) {
   const { locale, t } = useLocale()
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
@@ -151,7 +153,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
   const description = record?.userDescription ?? record?.description ?? skill.description
   const examples = record?.exampleQuestions ?? skill.example_questions ?? []
   const updated = displayDate(record?.updatedAt ?? (skill.updated_at ? new Date(skill.updated_at * 1000).toISOString() : undefined), locale)
-  const installed = record?.added ?? skill.installed
+  const installed = installationState === undefined ? record?.added ?? skill.installed : installationState.installed && installationState.enabled
   const cover = record?.coverImage ?? skill.cover_image
 
   // Folder nodes are presentation-only prefixes of the owner-approved paths.
@@ -213,6 +215,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, publisherLab
           </div>
           {cover ? <div className={styles.cover}><Image src={cover} alt="" fill sizes="180px" unoptimized /></div> : null}
         </DialogHeader>}
+        {actionFailed ? <p className={styles.status} role="alert">{t("skills.addError")}</p> : null}
         {readerOpen ? null : <section className={styles.body}>
           <p className={styles.description}>{description}</p>
           {loading ? <p className={styles.status}>{t("skills.detailLoading")}</p> : null}

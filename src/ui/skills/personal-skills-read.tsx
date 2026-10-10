@@ -12,6 +12,8 @@ import { Spinner } from "@/components/ui/spinner"
 import { createSkillInstallationClient, HubClientError, type HubClient } from "@/hub/client"
 import { createSkillPublishClient } from "@/hub/skill-publish-client"
 import type { ManagedPersonalSkill, InstallationPage, PersonalInstallation } from "@/hub/schemas"
+import { invalidate } from "@/lib/query"
+import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { useT } from "@/i18n/context"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 
@@ -96,6 +98,7 @@ export function PersonalSkillsRead({ client, embedded = false, onOpenSettings }:
         const receipt = intent.operation === "install" ? await installationClient.install(intent.resource, intent.key, signal)
           : intent.operation === "remove" ? await installationClient.remove(intent.resource, intent.key, signal)
             : await installationClient.setEnabled(intent.resource, intent.enabled === true, intent.key, signal)
+        invalidate(SKILL_CATALOG_RESOURCE_KEY)
         if (activeAction.current !== running) return
         running.id = receipt.installation.installation_id
       }

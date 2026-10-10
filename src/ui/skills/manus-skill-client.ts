@@ -3,6 +3,8 @@ import { z } from "zod"
 import { hasHubNoStoreDirective, type HubClient } from "@/hub/client"
 import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
+export const SKILL_CATALOG_RESOURCE_KEY = "hub/skills/standalone-catalog"
+
 const categories = {
   SKILL_HUB_TAG_CODING: "coding",
   SKILL_HUB_TAG_DATA: "data",

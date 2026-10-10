@@ -1,12 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
+import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
 import { createHubClient } from "@/hub/client"
-import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage } from "@/ui/skills/manus-skill-client"
+import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
 const catalog = {
   skills: [{
@@ -581,4 +582,218 @@ it("switches the same dialog to an independent real folder tree reader and back 
   expect(screen.getByTestId("manus-skill-detail-dialog")).toBe(dialog)
   expect(within(dialog).getByText("Summary")).toBeInTheDocument()
   expect(screen.queryByRole("tree")).toBeNull()
+})
+
+const actionInstallation = { display_name: "Current", summary: "Summary", source_status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "catalog", state_version: "5" }, tags: [], installation_id: "installation-current", source_ref: `skill:${ownerRevision}`, series_id: "series-current", revision: "4", installed: true, enabled: true, installed_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z" }
+const installationJson = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "private, no-store", "x-request-id": "installation-action" } })
+function actionReads(input: string, installed = false, enabled = false): Response | undefined {
+  if (input.endsWith("ListHubSkills")) return response({ ...ownerHub, nextPageToken: undefined })
+  if (input.endsWith("ListSkills")) return response(installed ? { userAddedSkills: [{ ...ownerDetailFields, enabled }], officialSkills: [] } : { userAddedSkills: [], officialSkills: [] })
+  if (input.endsWith("GetSkill")) return response({ ...ownerDetail, skill: { ...ownerDetailFields, added: installed } })
+  return undefined
+}
+it("installs the exact catalog revision and synchronizes the same dialog only after its bound ACK", async () => {
+  const calls: RequestInit[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const read = actionReads(String(input), calls.length > 0, calls.length > 0); if (read) return read
+    calls.push(init!)
+    return installationJson({ data: { installation: actionInstallation, change: "installed", event_id: "event-action", replayed: false } })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  fireEvent.click(await within(dialog).findByRole("button", { name: "添加到我的技能" }))
+  await waitFor(() => expect(calls).toHaveLength(1))
+  expect(JSON.parse(String(calls[0]?.body))).toEqual({ source_ref: `skill:${ownerRevision}` })
+  expect(await within(dialog).findByRole("button", { name: "已添加到我的技能" })).toBeDisabled()
+})
+it("shows failed install in its current dialog and retains the original body and key for unknown outcome retry", async () => {
+  const calls: RequestInit[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const read = actionReads(String(input), calls.length > 1, calls.length > 1); if (read) return read
+    calls.push(init!)
+    if (calls.length === 1) throw new Error("connection ended before ACK")
+    return installationJson({ data: { installation: actionInstallation, change: "installed", event_id: "event-action", replayed: true } })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  const add = await within(dialog).findByRole("button", { name: "添加到我的技能" })
+  fireEvent.click(add)
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("添加")
+  fireEvent.click(add)
+  await waitFor(() => expect(calls).toHaveLength(2))
+  expect(calls[1]?.body).toBe(calls[0]?.body)
+  expect(new Headers(calls[1]?.headers).get("idempotency-key")).toBe(new Headers(calls[0]?.headers).get("idempotency-key"))
+  expect(await within(dialog).findByRole("button", { name: "已添加到我的技能" })).toBeDisabled()
+})
+it("enables the unique existing installation without reinstalling or changing its old revision pin", async () => {
+  const commands: { url: string; init: RequestInit }[] = []
+  const old = { ...actionInstallation, source_ref: "skill:revision-old", revision: "1", enabled: false }
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input); const read = actionReads(url, true, commands.length > 0); if (read) return read
+    if (init?.method === "GET") return installationJson({ data: [old] })
+    commands.push({ url, init: init! })
+    return installationJson({ data: { installation: { ...old, enabled: true }, change: "enabled", event_id: "event-enabled", replayed: false } })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  const add = await within(dialog).findByRole("button", { name: "添加到我的技能" })
+  expect(add).not.toBeDisabled()
+  fireEvent.click(add)
+  await waitFor(() => expect(commands).toHaveLength(1))
+  expect(commands[0]?.url).toBe("/api/hub/self/skill-installations/installation-current/enabled")
+  expect(commands[0]?.init.method).toBe("PUT")
+  expect(JSON.parse(String(commands[0]?.init.body))).toEqual({ enabled: true })
+  expect(await within(dialog).findByRole("button", { name: "已添加到我的技能" })).toBeDisabled()
+})
+
+it("fails closed before installation I/O when the catalog has no exact revision", async () => {
+  const commands: string[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith("ListHubSkills")) return response({ ...ownerHub, nextPageToken: undefined, skills: [{ ...ownerHub.skills[0], currentVersion: undefined, coverImage: undefined }] })
+    const read = actionReads(url); if (read) return read
+    commands.push(url); throw new Error("unexpected mutation")
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  fireEvent.click(await within(dialog).findByRole("button", { name: "添加到我的技能" }))
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("添加失败")
+  expect(commands).toEqual([])
+})
+it.each([{ series_id: "different-series" }, { source_ref: "skill:different-revision" }, { enabled: false }])("rejects installation ACK resource/state mismatch %j without claiming success", async fields => {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => actionReads(String(input)) ?? installationJson({ data: { installation: { ...actionInstallation, ...fields }, change: "installed", event_id: "event-action", replayed: false } })))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  fireEvent.click(await within(dialog).findByRole("button", { name: "添加到我的技能" }))
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("添加失败")
+  expect(within(dialog).queryByRole("button", { name: "已添加到我的技能" })).toBeNull()
+})
+it.each([0, 2])("rejects %i matching live installations instead of falling back to reinstall", async count => {
+  const mutations: string[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input); const read = actionReads(url, true); if (read) return read
+    if (init?.method === "GET") return installationJson({ data: Array.from({ length: count }, (_, index) => ({ ...actionInstallation, installation_id: `installation-${index}`, enabled: false })) })
+    mutations.push(url); throw new Error("unexpected mutation")
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  fireEvent.click(await within(dialog).findByRole("button", { name: "添加到我的技能" }))
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("添加失败")
+  expect(mutations).toEqual([])
+})
+it("locks duplicate actions synchronously and does not apply an old ACK to another selected resource", async () => {
+  let resolve!: (value: Response) => void
+  const commands: RequestInit[] = []
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith("ListHubSkills")) return response({ ...ownerHub, nextPageToken: undefined, skills: [ownerHub.skills[0], { ...ownerHub.skills[0], skillId: "another-series", displayName: "Another", currentVersion: { versionUid: "another-revision" }, coverImage: undefined }] })
+    if (url.endsWith("GetSkill") && JSON.parse(String(init?.body)).skillId === "another-series") return response({ ...ownerDetail, skill: { ...ownerDetailFields, id: "another-series", displayName: "Another", version: "another-revision", added: false, coverImage: undefined } })
+    const read = actionReads(url); if (read) return read
+    commands.push(init!)
+    return new Promise<Response>(accept => { resolve = accept })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  let dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  const add = await within(dialog).findByRole("button", { name: "添加到我的技能" })
+  fireEvent.click(add); fireEvent.click(add)
+  await waitFor(() => expect(commands).toHaveLength(1))
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }))
+  fireEvent.click(screen.getByRole("button", { name: "Another" }))
+  dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  resolve(installationJson({ data: { installation: actionInstallation, change: "installed", event_id: "event-action", replayed: false } }))
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "添加到我的技能" })).not.toBeDisabled())
+  expect(within(dialog).queryByRole("button", { name: "已添加到我的技能" })).toBeNull()
+  expect(within(dialog).queryByRole("alert")).toBeNull()
+})
+
+it("refreshes the authoritative catalog after settings disables an ACK-installed skill and makes re-enable available", async () => {
+  let installed = false
+  let enabled = false
+  let catalogReads = 0
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith("ListHubSkills")) { catalogReads += 1; return response({ ...ownerHub, nextPageToken: undefined }) }
+    if (url.endsWith("ListSkills")) return response({ userAddedSkills: installed ? [{ ...ownerDetailFields, enabled }] : [], officialSkills: [] })
+    if (url.endsWith("GetSkill")) return response({ ...ownerDetail, skill: { ...ownerDetailFields, added: installed } })
+    if (url.includes("/self/skills/managed")) return installationJson({ data: { skills: [], next_cursor: null }, meta: { request_id: "installation-action" } })
+    if (url.startsWith("/api/hub/self/skill-installations")) {
+      if (init?.method === "POST") { installed = true; enabled = true; return installationJson({ data: { installation: actionInstallation, change: "installed", event_id: "install-event", replayed: false } }) }
+      if (init?.method === "PUT") { enabled = JSON.parse(String(init.body)).enabled; return installationJson({ data: { installation: { ...actionInstallation, enabled }, change: enabled ? "enabled" : "disabled", event_id: "state-event", replayed: false } }) }
+      return installationJson({ data: url.includes("installation-current") ? { ...actionInstallation, enabled } : [{ ...actionInstallation, enabled }] })
+    }
+    throw new Error(`unexpected ${url}`)
+  }))
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} /><PersonalSkillsRead client={createHubClient()} embedded /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "添加 Current" }))
+  await screen.findByRole("button", { name: "已添加 Current" })
+  await waitFor(() => expect(catalogReads).toBe(2))
+  const settings = screen.getByTestId("personal-skills-read")
+  fireEvent.click(within(settings).getByRole("button", { name: "本人安装" }))
+  fireEvent.click(await within(settings).findByRole("button", { name: "停用" }))
+  await within(settings).findByTestId("installation-current")
+  await waitFor(() => expect(catalogReads).toBe(3))
+  expect(await screen.findByRole("button", { name: "添加 Current" })).not.toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "Current" }))
+  const dialog = screen.getByTestId("manus-skill-detail-dialog")
+  expect(await within(dialog).findByRole("button", { name: "添加到我的技能" })).not.toBeDisabled()
+})
+it("keeps the catalog and confirmed ACK state visible when its invalidated authority read fails", async () => {
+  let acknowledged = false
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.endsWith("ListHubSkills") && acknowledged) throw new Error("catalog temporarily unavailable")
+    const read = actionReads(url); if (read) return read
+    acknowledged = true
+    return installationJson({ data: { installation: actionInstallation, change: "installed", event_id: "event-action", replayed: false } })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "添加 Current" }))
+  expect(await screen.findByRole("alert")).toHaveTextContent("技能池加载失败")
+  expect(screen.getByRole("button", { name: "Current" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "已添加 Current" })).toBeDisabled()
+  expect(screen.queryByTestId("skills-loading")).toBeNull()
+})
+
+it.each([true, false])("executes current installation facts after a fresh read while the same modal stays open (initial installed=%s)", async initiallyInstalled => {
+  let installed = initiallyInstalled
+  let enabled = initiallyInstalled
+  let refreshed = false
+  let reads = 0
+  const commands: { url: string; init: RequestInit }[] = []
+  const oldPin = { ...actionInstallation, source_ref: "skill:revision-old", revision: "1", enabled: false }
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith("ListHubSkills")) {
+      reads += 1
+      return response({ ...ownerHub, nextPageToken: undefined, skills: [{ ...ownerHub.skills[0], ...(refreshed ? { currentVersion: { versionUid: "new-catalog-revision" }, coverImage: "/api/v1/skills/new-catalog-revision/cover" } : {}) }] })
+    }
+    const read = actionReads(url, installed, enabled); if (read) return read
+    if (init?.method === "GET") return installationJson({ data: [{ ...oldPin, enabled }] })
+    commands.push({ url, init: init! }); enabled = true
+    return installationJson({ data: { installation: { ...oldPin, enabled: true }, change: "enabled", event_id: "enable-existing", replayed: false } })
+  }))
+  renderLive()
+  fireEvent.click(await screen.findByRole("button", { name: "Current" }))
+  const dialog = await screen.findByTestId("manus-skill-detail-dialog")
+  await within(dialog).findByRole("button", { name: "下载技能" })
+  installed = true; enabled = false; refreshed = true
+  invalidate(SKILL_CATALOG_RESOURCE_KEY)
+  await waitFor(() => expect(reads).toBe(2))
+  await waitFor(() => expect(document.querySelector('button[aria-label="添加 Current"]')).toHaveAttribute("data-installed", "true"))
+  const add = await within(dialog).findByRole("button", { name: "添加到我的技能" })
+  expect(add).not.toBeDisabled()
+  fireEvent.click(add)
+  await waitFor(() => expect(commands).toHaveLength(1))
+  expect(commands[0]?.url).toBe("/api/hub/self/skill-installations/installation-current/enabled")
+  expect(commands[0]?.init.method).toBe("PUT")
+  expect(JSON.parse(String(commands[0]?.init.body))).toEqual({ enabled: true })
+  expect(screen.getByTestId("manus-skill-detail-dialog")).toBe(dialog)
+  expect(await within(dialog).findByRole("button", { name: "已添加到我的技能" })).toBeDisabled()
 })
