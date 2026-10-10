@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
+import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
@@ -141,4 +142,45 @@ it("adds the server-selected skill through the typed installation boundary", asy
   await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => path === "/api/hub/self/skill-installations")).toBe(true))
   const call = fetchMock.mock.calls.find(([path]) => path === "/api/hub/self/skill-installations")
   expect(JSON.parse(String(call?.[1]?.body))).toEqual({ source_ref: "skill:skill-manim" })
+})
+
+const dialogLocales = [
+  { locale: "zh", share: "分享技能", download: "下载技能", add: "添加到我的技能", added: "已添加到我的技能", loading: "正在加载技能详情…", failed: "技能详情暂时不可用", updated: "更新于 2026年5月22日", used: "已使用 37,000 次" },
+  { locale: "en", share: "Share skill", download: "Download skill", add: "Add to my skills", added: "Added to my skills", loading: "Loading skill details…", failed: "Skill details are temporarily unavailable", updated: "Updated May 22, 2026", used: "Used 37,000 times" },
+] as const
+const localizedSkill = { skill_id: "skill-manim", name: "Manim", description: "Server description", content_hash: "owner-checksum", scope: "official", enabled: false, installed: false, usage_count: "37000" }
+
+it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and actions without changing callbacks", async (labels) => {
+  window.localStorage.setItem("kokoro.locale", labels.locale)
+  let finish: ((value: Response) => void) | undefined
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve })))
+  const onAdd = vi.fn()
+  const onTry = vi.fn()
+  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>)
+  expect(await screen.findByText(labels.loading)).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: labels.share })).toBeInTheDocument()
+  finish!(response({ skill: { id: "skill-manim", displayName: "Manim", updatedAt: "2026-05-22T00:00:00.000Z", exampleQuestions: ["Real example"], added: false }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } }))
+  expect(await screen.findByRole("button", { name: labels.download })).toBeEnabled()
+  const dialog = screen.getByTestId("manus-skill-detail-dialog")
+  expect(dialog).toHaveTextContent(labels.updated)
+  expect(dialog).toHaveTextContent(labels.used)
+  expect(dialog).toHaveTextContent("Manus")
+  fireEvent.click(screen.getByRole("button", { name: labels.add }))
+  expect(onAdd).toHaveBeenCalledWith(localizedSkill)
+  fireEvent.click(screen.getByRole("button", { name: "Real example" }))
+  expect(onTry).toHaveBeenCalledWith("Real example")
+})
+
+it.each(dialogLocales)("localizes $locale installed action and preserves disabled state", async (labels) => {
+  window.localStorage.setItem("kokoro.locale", labels.locale)
+  vi.stubGlobal("fetch", vi.fn(async () => response({ skill: { id: "skill-manim", displayName: "Manim", added: true }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } })))
+  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  expect(await screen.findByRole("button", { name: labels.added })).toBeDisabled()
+})
+
+it.each(dialogLocales)("localizes $locale actual detail read failure", async (labels) => {
+  window.localStorage.setItem("kokoro.locale", labels.locale)
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("owner unavailable")))
+  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  expect(await screen.findByText(labels.failed)).toBeInTheDocument()
 })
