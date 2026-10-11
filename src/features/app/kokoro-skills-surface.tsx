@@ -327,7 +327,19 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                 const actionPending = busy === stateKey
                 const categoryValues = skillCategories(skill)
                 return (
-                  <Card className={styles.card} key={stateKey}>
+                  <Card
+                    className={styles.card}
+                    key={stateKey}
+                    onClick={(event) => {
+                      // The reference directory opens its preview from the
+                      // card surface. Keep the explicit artwork/title/add
+                      // controls independent so their native semantics and
+                      // focus order are unchanged.
+                      if (event.target instanceof Element && event.target.closest("button")) return
+                      detailRef.current = event.currentTarget
+                      setDetailSkill(skill)
+                    }}
+                  >
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
                       {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
                     </button>

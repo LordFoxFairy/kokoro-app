@@ -117,6 +117,23 @@ it("uses one Manus-style category filter instead of a duplicate category rail", 
   expect(screen.getByRole("button", { name: "技能分类：媒体" })).toHaveTextContent("媒体")
 })
 
+it("opens the Manus detail from the whole catalog card body, not only its illustration or title", async () => {
+  const fetchMock = vi.fn(async (path: string) => {
+    if (path.endsWith("/ListHubSkills")) return response(catalog)
+    if (path.endsWith("/ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("/GetSkill")) return response({
+      skill: { id: "skill-manim", displayName: "Manim 动画师", userDescription: "使用 Manim 生成数学动画。", exampleQuestions: ["创建一个几何证明动画。"], tags: { values: ["SKILL_HUB_TAG_MEDIA"] }, added: false },
+      downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" },
+    })
+    throw new Error(`unexpected ${path}`)
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  renderLive()
+
+  fireEvent.click(await screen.findByText("使用 Manim 生成数学动画。"))
+  expect(await screen.findByTestId("manus-skill-detail-dialog")).toBeInTheDocument()
+})
+
 it("opens a stable server-backed detail dialog with real detail fields and examples", async () => {
   const fetchMock = vi.fn(async (path: string) => {
     if (path.endsWith("/ListHubSkills")) return response(catalog)

@@ -271,6 +271,7 @@
   box-shadow: none;
   gap: 0;
   padding-block: 0;
+  cursor: pointer;
 }
 .cardArt {
   position: relative;
