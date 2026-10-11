@@ -2,7 +2,8 @@ import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, ra
 
 import { createClient } from "redis"
 
-const MAX_SESSION_SECONDS = 60 * 60
+/** Product login persists for one week; short-lived access tokens rotate independently. */
+export const PRODUCT_SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 const RESERVATION_MS = 10_000
 export const MAX_REFRESH_CREDENTIAL_BYTES = 8192
 
@@ -69,19 +70,19 @@ export type StoreConfig = Readonly<{ redisUrl: string; webOrigin: string; secret
 export type SessionCandidate = Readonly<{ id: string; expiresAt: number }>
 
 export function newSessionCandidate(): SessionCandidate {
-  return { id: randomUUID(), expiresAt: Date.now() + MAX_SESSION_SECONDS * 1_000 }
+  return { id: randomUUID(), expiresAt: Date.now() + PRODUCT_SESSION_MAX_AGE_SECONDS * 1_000 }
 }
 
 export async function createSession(config: StoreConfig, refresh: string, candidate: SessionCandidate = newSessionCandidate()): Promise<SessionCandidate> {
   if (!validRefreshCredential(refresh)) throw new Error("invalid Product Session refresh credential")
   const { id, expiresAt } = candidate
   if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now() ||
-    expiresAt > Date.now() + MAX_SESSION_SECONDS * 1_000) throw new Error("invalid Product Session expiry")
+    expiresAt > Date.now() + PRODUCT_SESSION_MAX_AGE_SECONDS * 1_000) throw new Error("invalid Product Session expiry")
   const [record, tombstone] = keys(config.webOrigin, id)
   const value: Active = { state: "active", generation: 0, refresh: encrypt(config, id, 0, refresh), expiresAt }
   const script = `if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
     return redis.call('SET', KEYS[1], ARGV[1], 'NX', 'EX', ARGV[2]) and 1 or 0`
-  const stored = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [JSON.stringify(value), String(MAX_SESSION_SECONDS)] }))
+  const stored = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [JSON.stringify(value), String(PRODUCT_SESSION_MAX_AGE_SECONDS)] }))
   if (stored !== 1) throw new Error("Product Session collision")
   return { id, expiresAt }
 }
@@ -132,7 +133,7 @@ export async function invalidatePending(config: StoreConfig, id: string, reserva
   const script = `local raw=redis.call('GET', KEYS[1]); if not raw then return 0 end
     local v=cjson.decode(raw); if v.state ~= 'refreshing' or v.reservation ~= ARGV[1] then return 0 end
     redis.call('SET', KEYS[2], '1', 'EX', ARGV[2], 'NX'); redis.call('DEL', KEYS[1]); return 1`
-  await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [reservation, String(MAX_SESSION_SECONDS + 60)] }))
+  await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [reservation, String(PRODUCT_SESSION_MAX_AGE_SECONDS + 60)] }))
 }
 
 export async function tombstoneSession(config: StoreConfig, id: string, expectedGeneration: number): Promise<{ status: "active" | "pending" | "missing" | "repeat" | "stale"; refresh?: string }> {
@@ -148,7 +149,7 @@ export async function tombstoneSession(config: StoreConfig, id: string, expected
     if not raw then return {'missing'} end
     if v.state == 'active' then return {'active', v.refresh, tostring(v.generation)} end
     return {'pending'}`
-  const result = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(MAX_SESSION_SECONDS + 60), String(expectedGeneration)] }))
+  const result = await withRedis(config.redisUrl, (client) => client.eval(script, { keys: [record, tombstone], arguments: [String(PRODUCT_SESSION_MAX_AGE_SECONDS + 60), String(expectedGeneration)] }))
   if (!Array.isArray(result)) throw new Error("invalid tombstone result")
   const status = result[0]
   if (status === "active" && typeof result[1] === "string" && typeof result[2] === "string") {

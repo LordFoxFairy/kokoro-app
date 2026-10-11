@@ -1,9 +1,8 @@
 import { decode, encode } from "next-auth/jwt"
 
-import { inspectSession, type StoreConfig } from "./product-session-store"
+import { inspectSession, PRODUCT_SESSION_MAX_AGE_SECONDS, type StoreConfig } from "./product-session-store"
 
 const COOKIE = "kokoro_product_session"
-const SESSION_SECONDS = 60 * 60
 export const MAX_ACCESS_CREDENTIAL_BYTES = 2048
 
 export function validAccessCredential(value: unknown): value is string {
@@ -58,7 +57,7 @@ function secureProductCookie(webOrigin: string): boolean {
 
 export async function productSessionCookie(claims: ProductClaims, secret: string, webOrigin: string): Promise<string> {
   if (!validClaims(claims)) throw new Error("invalid Product Session claims")
-  const maxAge = Math.max(0, Math.min(SESSION_SECONDS, Math.floor((claims.expiresAt - Date.now()) / 1000)))
+  const maxAge = Math.max(0, Math.min(PRODUCT_SESSION_MAX_AGE_SECONDS, Math.floor((claims.expiresAt - Date.now()) / 1000)))
   const value = await encode({ token: { ...claims }, secret, salt: "kokoro-product-session-v1", maxAge })
   const cookie = `${COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secureProductCookie(webOrigin) ? "; Secure" : ""}`
   if (Buffer.byteLength(cookie, "utf8") > 4096) throw new Error("Product Session cookie too large")

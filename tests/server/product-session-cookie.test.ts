@@ -11,6 +11,14 @@ const claims = { id: "00000000-0000-4000-8000-000000000000", generation: 0,
 describe("Product cookie secure transport boundary", () => {
   afterEach(() => vi.unstubAllEnvs())
 
+  it("keeps an authenticated Product session for the configured seven-day window", async () => {
+    const week = 7 * 24 * 60 * 60
+    const longLivedClaims = { ...claims, expiresAt: Date.now() + (week + 60) * 1_000 }
+
+    expect(await productSessionCookie(longLivedClaims, "secret", "http://localhost:3000"))
+      .toContain(`; Max-Age=${week}; HttpOnly; SameSite=Lax`)
+  })
+
   it("sets Secure for an HTTPS public origin even in development mode", async () => {
     vi.stubEnv("NODE_ENV", "development")
     expect(await productSessionCookie(claims, "secret", "https://web.example.test"))
