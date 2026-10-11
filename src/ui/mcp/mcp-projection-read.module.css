@@ -193,27 +193,27 @@
 .editorActions { justify-content: flex-end; gap: .5rem; padding-top: .25rem; }
 .editorActions button { height: 2.45rem; min-height: 2.45rem; border-radius: .6rem; font-size: .85rem; }
 
-/* The live Manus connector view is a compact provider sheet: identity, one
- * action, prompt buttons, then the owner-supplied metadata and links. */
-.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(42rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); flex-direction: column; gap: 0; overflow: auto; padding: 0; border: 1px solid rgb(0 0 0 / 9%); border-radius: 1.25rem; background: rgb(250 250 249); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
-.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1rem; right: 1rem; z-index: 3; }
-.providerDetailHeader { display: flex; flex: 0 0 auto; align-items: flex-start; gap: 1rem; padding: 3.25rem 3rem 1.5rem; }
-.providerDetailLogo { position: static; display: inline-flex; width: 3.5rem; height: 3.5rem; flex: 0 0 3.5rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-radius: .75rem; background: rgb(255 255 254); box-shadow: 0 .35rem .8rem rgb(0 0 0 / 5%); }
-.providerDetailLogo img { object-fit: contain; padding: .7rem; }
-.providerDetailLogo svg { width: 1.6rem; height: 1.6rem; color: var(--muted-foreground); }
-.providerDetailCopy { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; text-align: left; }
-.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: 1.25rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.6rem; }
-.providerDetailDescription { max-width: 31rem; margin: .35rem 0 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.35rem; }
-.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; margin-top: .9rem; }
-.providerDetailActions button { height: 2.35rem; min-height: 2.35rem; border-radius: .55rem; background: rgb(28 28 28); padding: 0 .95rem; font-size: .875rem; font-weight: 650; }
+/* Manus provider details are a wide, calm canvas: identity and action at the
+ * left, the provider's real mark at the right, then a single scrollable body. */
+.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(78rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); height: min(62rem,calc(100dvh - 2rem)); min-height: 0; max-height: calc(100dvh - 2rem); flex-direction: column; gap: 0; overflow: hidden; padding: 0; border: 1px solid rgb(0 0 0 / 9%); border-radius: 1rem; background: rgb(250 250 249); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
+.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1.4rem; right: 1.5rem; z-index: 3; }
+.providerDetailHeader { position: relative; display: flex; min-height: 17.5rem; flex: 0 0 auto; align-items: center; padding: 3rem 3rem 2rem; border-bottom: 1px solid rgb(0 0 0 / 8%); }
+.providerDetailLogo { pointer-events: none; position: absolute; right: 5rem; bottom: 0; display: inline-flex; width: 12rem; height: 14rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-bottom: 0; border-radius: .75rem .75rem 0 0; background: rgb(255 255 254); box-shadow: 0 .75rem 1.5rem rgb(0 0 0 / 10%); }
+.providerDetailLogo img { object-fit: contain; padding: 1.75rem; }
+.providerDetailLogo svg { width: 2.25rem; height: 2.25rem; color: var(--muted-foreground); }
+.providerDetailCopy { display: flex; width: 100%; min-width: 0; max-width: calc(100% - 15rem); flex-direction: column; align-items: flex-start; gap: .75rem; text-align: left; }
+.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 680; letter-spacing: -.035em; line-height: 1.13; }
+.providerDetailDescription { max-width: 42rem; margin: 0; color: var(--muted-foreground); font-size: 1rem; line-height: 1.5rem; }
+.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .65rem; margin-top: .75rem; }
+.providerDetailActions button { height: 2.8rem; min-height: 2.8rem; border-radius: .7rem; background: rgb(28 28 28); padding: 0 .95rem; font-size: .95rem; font-weight: 650; }
 .providerDetailActions button:hover { background: rgb(48 48 48); }
-.providerDetailBody { display: flex; min-width: 0; flex-direction: column; gap: 1.5rem; padding: .5rem 3rem 2rem; }
+.providerDetailBody { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 1.5rem; overflow: auto; padding: 2.5rem 3rem 3rem; }
 .examplePromptSection h3,
 .providerDetailMetadata h3,
 .providerDetailLinks h3 { margin: 0 0 .65rem; font-size: .95rem; font-weight: 650; line-height: 1.4rem; }
-.examplePromptList { display: grid; grid-template-columns: 1fr; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.examplePromptList { display: grid; grid-template-columns: 1fr; gap: .75rem; margin: 0; padding: 0; list-style: none; }
 .examplePromptList li { min-width: 0; }
-.examplePromptList button { display: flex; box-sizing: border-box; width: 100%; min-width: 0; min-height: 3.5rem; align-items: flex-start; gap: .6rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .7rem; background: rgb(255 255 254); padding: .9rem 1rem; color: var(--foreground); font: inherit; font-size: .8125rem; line-height: 1.25rem; text-align: left; cursor: pointer; }
+.examplePromptList button { display: flex; box-sizing: border-box; width: 100%; min-width: 0; min-height: 4.75rem; align-items: center; gap: .875rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .75rem; background: rgb(255 255 254); padding: 1rem; color: var(--foreground); font: inherit; font-size: .95rem; line-height: 1.4rem; text-align: left; cursor: pointer; }
 .examplePromptList button:hover { background: rgb(55 53 47 / 3%); border-color: rgb(0 0 0 / 15%); }
 .examplePromptList button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .examplePromptList button span { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -242,8 +242,11 @@
   .categoryRail { display: none; }
   .compactFilter { display: block; }
   .connectorGrid { grid-template-columns: 1fr; }
-  .providerDetailHeader { padding: 3rem 1.25rem 1.25rem; }
-  .providerDetailBody { gap: 1rem; padding: .5rem 1rem 1rem; }
+  .providerDetailDialog[data-slot="dialog-content"] { height: calc(100dvh - 1.25rem); }
+  .providerDetailHeader { min-height: 0; padding: 3.5rem 1.25rem 1.5rem; align-items: flex-start; }
+  .providerDetailLogo { display: none; }
+  .providerDetailCopy { max-width: 100%; }
+  .providerDetailBody { gap: 1rem; padding: 1.5rem 1.25rem 2rem; }
   .providerDetailMetadata dl { grid-template-columns: 1fr; gap: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) { .refreshing svg { animation: none; } }

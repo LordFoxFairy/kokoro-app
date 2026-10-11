@@ -262,7 +262,7 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
-  it("opens the compact Manus connector detail with prompts and owner metadata", async () => {
+  it("opens the wide Manus connector detail with prompts and owner metadata", async () => {
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
@@ -312,12 +312,12 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title controls";/u)
     expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem,calc\(100vw - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: flex-start;[^}]*padding: 3\.25rem 3rem 1\.5rem;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;[^}]*text-align: left;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: static;[^}]*width: 3\.5rem;[^}]*height: 3\.5rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem,calc\(100vw - 2rem\)\);[^}]*height: min\(62rem,calc\(100dvh - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*position: relative;[^}]*min-height: 17\.5rem;[^}]*border-bottom:/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*max-width: calc\(100% - 15rem\);[^}]*align-items: flex-start;[^}]*text-align: left;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: absolute;[^}]*right: 5rem;[^}]*width: 12rem;[^}]*height: 14rem;/u)
     expect(css).toMatch(/\.examplePromptList\s*\{[^}]*grid-template-columns: 1fr;/u)
-    expect(css).toMatch(/\.examplePromptList button\s*\{[^}]*min-height: 3\.5rem;[^}]*padding: \.9rem 1rem;/u)
+    expect(css).toMatch(/\.examplePromptList button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 100%;[^}]*height: 8\.75rem;/u)
