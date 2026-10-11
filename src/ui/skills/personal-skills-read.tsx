@@ -19,6 +19,7 @@ import { PersonalSkillWithdrawDialog } from "./personal-skill-withdraw-dialog"
 import { useT } from "@/i18n/context"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
+import styles from "./personal-skills-read.module.css"
 
 type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: Awaited<ReturnType<typeof publishClient.listPublished>> }
 type DetailState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; skill: ManagedPersonalSkill } | null
@@ -198,17 +199,17 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
 
   const page = pageState.kind === "ready" ? pageState.page : null
   return (
-    <section className="space-y-4" data-testid="personal-skills-read">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("skills.title")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => setImportOpen(true)}>{t("skills.uploadSkill")}</Button>
-          {!embedded && onOpenSettings ? <Button type="button" variant="outline" onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
+    <section className={styles.surface} data-testid="personal-skills-read">
+      <header className={styles.header}>
+        <div><p className={styles.eyebrow}>{t("skills.mySkills")}</p><h1>{t("skills.title")}</h1></div>
+        <div className={styles.headerActions}>
+          <Button type="button" className={styles.primaryAction} onClick={() => setImportOpen(true)}>{t("skills.uploadSkill")}</Button>
+          {!embedded && onOpenSettings ? <Button type="button" variant="outline" className={styles.secondaryAction} onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
         </div>
       </header>
-      <nav className="flex gap-2" aria-label={t("skills.title")}>
-        <Button type="button" variant={view === "published" ? "default" : "outline"} aria-pressed={view === "published"} onClick={() => changeView("published")}>{t("skills.personal.published")}</Button>
-        <Button type="button" variant={view === "installations" ? "default" : "outline"} aria-pressed={view === "installations"} onClick={() => changeView("installations")}>{t("skills.personal.installations")}</Button>
+      <nav className={styles.tabs} aria-label={t("skills.title")}>
+        <Button type="button" variant={view === "published" ? "default" : "outline"} className={styles.tab} aria-pressed={view === "published"} onClick={() => changeView("published")}>{t("skills.personal.published")}</Button>
+        <Button type="button" variant={view === "installations" ? "default" : "outline"} className={styles.tab} aria-pressed={view === "installations"} onClick={() => changeView("installations")}>{t("skills.personal.installations")}</Button>
       </nav>
       {action.kind !== "idle" ? <Alert role={action.kind === "unknown" || action.kind === "rejected" || action.kind === "confirmed" ? "alert" : "status"}>
         <AlertDescription>{action.kind === "busy" ? t("skills.loading") : action.kind === "unknown" ? t("skills.personal.unknown") : action.kind === "confirmed" ? t(action.intent.operation === "get" ? "skills.personal.rejected" : "skills.personal.confirmed") : action.kind === "rejected" ? errorLabel(action.status) : t("skills.personal.currentConfirmed")}</AlertDescription>
@@ -219,20 +220,20 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
         {action.kind === "rejected" && action.intent.operation !== "install" ? <Button type="button" variant="outline" onClick={() => void perform(action.intent, action.intent.resource)}>{t("skills.personal.checkCurrent")}</Button> : null}
         {action.current ? <p data-testid="installation-current">{action.current.installed ? t("skills.personal.installed") : t("skills.personal.removed")} · {action.current.enabled ? t("skills.personal.enabled") : t("skills.personal.disabled")}</p> : null}
       </Alert> : null}
-      <Button type="button" variant="outline" onClick={() => { setCursor(null); setHistory([]); setDraftPage(null); setDraftError(false); setView("drafts") }}>{t("skills.publishDrafts")}</Button>
+      <Button type="button" variant="outline" className={styles.draftAction} onClick={() => { setCursor(null); setHistory([]); setDraftPage(null); setDraftError(false); setView("drafts") }}>{t("skills.publishDrafts")}</Button>
       {view === "published" ? <>
       {pageState.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("skills.loading")}</div> : null}
       {pageState.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("skills.retry")}</Button></Alert> : null}
-      {page?.skills.length === 0 ? <p className="text-muted-foreground">{t("skills.noMatch")}</p> : null}
-      {page ? <div className="grid gap-3 sm:grid-cols-2" data-testid="personal-skills-grid">{page.skills.map((skill) => (
-        <Card key={skill.source_ref}>
-          <CardContent className="space-y-2 p-4">
-            <Button type="button" variant="ghost" className="h-auto px-0 text-left font-semibold" onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
-            <p className="text-sm text-muted-foreground">{skill.summary}</p>
-            <time dateTime={skill.skill_updated_at}>{t("skills.updatedAt", { date: skill.skill_updated_at.slice(0, 10) })}</time>
-            <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{skill.category_keys.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
+      {page?.skills.length === 0 ? <p className={styles.empty}>{t("skills.noMatch")}</p> : null}
+      {page ? <div className={styles.grid} data-testid="personal-skills-grid">{page.skills.map((skill) => (
+        <Card key={skill.source_ref} className={styles.card}>
+          <CardContent className={styles.cardContent}>
+            <Button type="button" variant="ghost" className={styles.skillName} onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
+            <p className={styles.summary}>{skill.summary}</p>
+            <time className={styles.metadata} dateTime={skill.skill_updated_at}>{t("skills.updatedAt", { date: skill.skill_updated_at.slice(0, 10) })}</time>
+            <div className={styles.tags} aria-label={t("skills.tagsLabel")}>{skill.category_keys.map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div>
 
-            <Button type="button" variant="outline" disabled={actionLocked} onClick={() => startAction("install", skill.source_ref)}>{t("skills.personal.install")}</Button>
+            <Button type="button" variant="outline" className={styles.installAction} disabled={actionLocked} onClick={() => startAction("install", skill.source_ref)}>{t("skills.personal.install")}</Button>
           </CardContent>
         </Card>
       ))}</div> : null}
