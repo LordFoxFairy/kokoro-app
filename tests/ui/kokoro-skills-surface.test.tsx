@@ -442,7 +442,7 @@ it("catalog art consumes the owner revision-bound cover_image instead of a serie
   expect(card.querySelector("img")?.getAttribute("src")).toBe(`/api/hub/skills/${ownerRevision}/cover`)
   expect(card.querySelector("img")?.getAttribute("src")).not.toContain("/self/skills/series-current/")
 })
-it("catalog art stays empty without an owner cover fact instead of synthesizing a series request", async () => {
+it("renders a neutral branded fallback without requesting a synthetic cover", async () => {
   const { coverImage: _cover, ...noCover } = ownerHub.skills[0]!
   void _cover
   stubOwnerReads({ ...ownerHub, nextPageToken: undefined, skills: [noCover] })
@@ -450,6 +450,7 @@ it("catalog art stays empty without an owner cover fact instead of synthesizing 
   const title = await screen.findByRole("button", { name: "Current" })
   const card = title.closest('[data-slot="card"]') as HTMLElement
   expect(card.querySelector("img")).toBeNull()
+  expect(card.querySelector('[class*="coverUnavailable"] svg')).toBeInTheDocument()
 })
 
 const packageFiles = [{ path: "SKILL.md", size_bytes: "12" }, { path: "notes.txt", size_bytes: "6" }]
