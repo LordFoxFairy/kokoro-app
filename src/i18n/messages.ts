@@ -86,7 +86,7 @@ export const zh = {
   "rail.sortName": "按名称",
   "rail.navChat": "对话",
   "rail.navAgent": "Agent",
-  "rail.navPlugins": "外挂",
+  "rail.navPlugins": "连接器",
   "plugins.manageConnectors": "管理连接器",
   "plugins.create": "建立",
   "plugins.search": "搜索连接器、资料来源",

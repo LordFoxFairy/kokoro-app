@@ -34,7 +34,7 @@ function renderPlugins(onOpenSettings = vi.fn()) {
 it("插件页将已认证用户交给真实连接器投影，而不是渲染静态目录", () => {
   renderPlugins()
 
-  expect(screen.getByRole("heading", { name: "外挂", level: 1 })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "连接器", level: 1 })).toBeInTheDocument()
   expect(screen.getByTestId("mcp-projection-read")).toHaveTextContent("user-verified")
   expect(projection).toHaveBeenCalledWith(expect.objectContaining({
     client: hub,
