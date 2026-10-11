@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -83,11 +83,6 @@ function subscribeProjection(
 
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
-}
-
-function providerLinkLabel(value: string): string {
-  const url = new URL(value)
-  return `${url.host}${url.pathname === "/" ? "" : url.pathname}`
 }
 
 const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
@@ -298,7 +293,7 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
           <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
         </label>
         <div className={styles.categoryRail} aria-label={t("mcp.provider")}>
-          <Button type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === "all" || undefined} onClick={() => setCategoryFilter("all")}>{t("plugins.viewAll")}</Button>
+          <Button type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === "all" || undefined} onClick={() => setCategoryFilter("all")}>{t("mcp.categoryAll")}</Button>
           {categoryOptions.map((category) => <Button key={category} type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === category || undefined} onClick={() => setCategoryFilter(category)}>{categoryLabel(category)}</Button>)}
         </div>
       </div> : null}
@@ -366,19 +361,12 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
               {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4.5rem" unoptimized /> : <Cable />}
             </span>
             <div className={styles.providerDetailCopy}>
-              {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
-              {selectedProvider.author ? <DialogDescription className={styles.providerDetailAttribution}>{selectedProvider.author}</DialogDescription> : null}
-              <Button type="button" className={styles.detailAddAction} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })} disabled={actionId !== null}>{actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("mcp.addConnector")}</Button>
             </div>
           </header>
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
-            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul> : null}
-            {selectedProvider.website || selectedProvider.privacy_url ? <div className={styles.providerLinks}>
-              {selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.website)}<ExternalLink aria-hidden="true" /></a> : null}
-              {selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.privacy_url)}<ExternalLink aria-hidden="true" /></a> : null}
-            </div> : null}
+            {selectedProvider.example_prompts.length > 0 ? <><h3 className={styles.examplePromptHeading}>{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul></> : null}
           </section>
         </> : null}
       </DialogContent>

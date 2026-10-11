@@ -919,6 +919,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mcp.errInvalid": "Something's off: check the name, URL and transport.",
   "mcp.errGeneric": "Something went wrong — please try again.",
   "mcp.provider": "Connector provider",
+  "mcp.categoryAll": "All",
+  "mcp.examplePrompts": "Example prompts",
   "mcp.description": "Description",
   "mcp.edit": "Edit",
   "mcp.pending": "Waiting to connect",

@@ -116,7 +116,7 @@ describe("McpPanel", () => {
     expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
     expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "View all" })).toHaveAttribute("data-active", "true")
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("data-active", "true")
     expect(screen.queryByRole("combobox")).toBeNull()
     expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
@@ -252,12 +252,10 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
-  it("opens a provider detail sheet from owner metadata and starts the same provider connection", async () => {
-    const createMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
+  it("opens a Manus-style provider detail dialog from owner metadata without creating a connector", async () => {
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
-      createMcpPersonalConnector,
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -268,24 +266,20 @@ describe("McpPanel", () => {
     expect(detail).toHaveAttribute("data-detail-layout", "manus")
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
-    expect(within(detail).getByRole("link", { name: "provider.example.com" })).toHaveAttribute("href", "https://provider.example.com")
-    expect(within(detail).getByRole("link", { name: "provider.example.com/privacy" })).toHaveAttribute("href", "https://provider.example.com/privacy")
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
-
-    fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
-    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Provider One" })).toBeNull())
+    expect(within(detail).queryByRole("button", { name: "Add connector" })).toBeNull()
+    expect(within(detail).queryByRole("link")).toBeNull()
   })
 
   it("uses the Manus directory proportions and keeps provider artwork tied to known local assets", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 61px 24px 20px;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(40rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(44rem, calc\(100dvh - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 4rem 2rem 1\.5rem;/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*text-align: center;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4\.5rem;[^}]*height: 4\.5rem;/u)
-    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4rem;[^}]*height: 4rem;/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5\.625rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
     expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/u)

@@ -889,6 +889,8 @@ export const zh = {
   "mcp.errInvalid": "填写有误：请检查名称、URL 和传输方式。",
   "mcp.errGeneric": "操作失败，请稍后再试。",
   "mcp.provider": "连接器提供方",
+  "mcp.categoryAll": "全部",
+  "mcp.examplePrompts": "示例提示词",
   "mcp.categoryEfficiency": "效率",
   "mcp.categoryCreation": "创作",
   "mcp.categoryBusiness": "商业",
