@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 import { createSkillDraftRequestSchema, skillDraftSchema, beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema, completeSkillUploadSchema, validateSkillDraftRequestSchema, validateSkillDraftSchema, skillPublishRequestSchema, publishSkillDraftSchema, skillUploadStateSchema, managedPersonalSkillSchema, personalInstallationSchema, installationErrorAllowed, type InstallationOperation } from "@/hub/schemas"
 
-const OWNER_COMMIT = "e1769b56aefa2e00e6460195c049cea81a9eea3b"
-const OWNER_SHA256 = "0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209"
-const OWNER_VERSION = "13.3.0"
+const OWNER_COMMIT = "4c8dc33a34dc78f1d282130f8622e0da8e0b2df6"
+const OWNER_SHA256 = "db093b698cc48951422236b8742464465ca8b06b721dab126f2f66d70938f8b4"
+const OWNER_VERSION = "14.0.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -148,10 +148,32 @@ function assertProjectionSemantics(spec: Spec): void {
   exactShape(shape(spec, "McpConnectionProjection"), ["connection_id", "connector_id", "server_id", "provider_key", "transport", "status"])
 }
 
+function assertPersonalMcpCrudSemantics(spec: Spec): void {
+  const mutationErrors = ["400", "401", "403", "404", "409", "412", "413", "429", "502", "503"]
+  for (const [method, path, id, success] of [
+    ["post", "/v1/self/mcp/connectors", "createPersonalMcpConnector", "201"],
+    ["patch", "/v1/self/mcp/connectors/{connector_id}", "updatePersonalMcpConnector", "200"],
+    ["put", "/v1/self/mcp/connectors/{connector_id}/enabled", "setPersonalMcpConnectorEnabled", "200"],
+    ["delete", "/v1/self/mcp/connectors/{connector_id}", "removePersonalMcpConnector", "200"],
+  ] as const) {
+    const value = operation(spec, path, method)
+    expect(value.operationId).toBe(id)
+    expect(Object.keys(value.responses ?? {}).sort()).toEqual([success, ...mutationErrors].sort())
+  }
+  assertGet(spec, "/v1/self/mcp/providers", "listPersonalMcpProviders", "#/components/schemas/PersonalMcpProviderListResponse", {
+    "400": "PersonalMcpBadRequest", "401": "PersonalMcpUnauthorized", "403": "PersonalMcpForbidden", "429": "PersonalMcpRateLimited", "502": "PersonalMcpBadGateway", "503": "PersonalMcpUnavailable",
+  })
+  assertGet(spec, "/v1/self/mcp/providers/{provider_key}", "getPersonalMcpProvider", "#/components/schemas/PersonalMcpProviderDetailResponse", {
+    "400": "PersonalMcpBadRequest", "401": "PersonalMcpUnauthorized", "403": "PersonalMcpForbidden", "404": "PersonalMcpNotFound", "429": "PersonalMcpRateLimited", "502": "PersonalMcpBadGateway", "503": "PersonalMcpUnavailable",
+  })
+  expect(shape(spec, "PersonalMcpConnector").required).toEqual(["connector_id", "connector_type", "provider_key", "status", "approved_scopes", "enabled", "state_version"])
+  expect(Object.keys(shape(spec, "PersonalMcpProvider").properties ?? {})).toEqual(["provider_key", "display_name", "description", "directory_type", "category_keys", "example_prompts", "author", "website", "privacy_url", "enabled", "state_version"])
+}
+
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("e1769b56aefa2e00e6460195c049cea81a9eea3b")
+    expect(OWNER_COMMIT).toBe("4c8dc33a34dc78f1d282130f8622e0da8e0b2df6")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -166,6 +188,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       expect(operation(spec, path, method).operationId).toBe(id)
 
     }
+    assertPersonalMcpCrudSemantics(spec)
     expect(operation(spec, "/v1/skills/{skill_id}/publish", "post")["x-kokoro-empty-body"]).toBeUndefined()
     for (const name of ["BeginSkillPackageUploadRequest", "CompleteSkillPackageUploadRequest", "ValidateSkillDraftRequest"]) expect(shape(spec, name).required).toContain("expected_state_version")
   })
@@ -278,11 +301,11 @@ it("compares all five installation operation/status error families, including mu
   }
 })
 
-it("pins the formal Public13.3 exact shared revision operation without replacing Resolve", async () => {
+it("pins the current public revision's shared-skill operation without replacing Resolve", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("0a9683b38cfd30534931dd0cd7821e3ccded94d6d15613a711cebc1f1e83a209")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("13.3.0")
+  expect(spec.info.version).toBe(OWNER_VERSION)
   expect(spec.paths["/v1/skill-shares/{share_id}/skill"].get.operationId).toBe("getSharedSkillRevision")
   expect(spec.components.schemas.SkillShareResponse.properties.data.required).toEqual(["share_id", "source_ref", "url", "created_at", "expires_at", "revoked_at"])
 })

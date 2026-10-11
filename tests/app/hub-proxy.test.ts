@@ -1318,7 +1318,7 @@ it.each(["versions", "withdraw"] as const)("personal lifecycle %s sends a fixed-
 
 
 describe("personal MCP four canonical reads", () => {
-  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: ["tools.read"] }
+  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: ["tools.read"], enabled: true, state_version: "2" }
   const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], policy_digest: "a".repeat(64), status: "active" }
   it.each([
     ["connectors", { items: [connector], next_cursor: null }],
@@ -1336,9 +1336,9 @@ describe("personal MCP four canonical reads", () => {
 })
 
 describe("personal MCP closed adapter boundaries", () => {
-  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: [] }
+  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: [], enabled: true, state_version: "2" }
   const owner = (data: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal", ...headers } })
-  it.each(["connectors?limit=01", "connectors?limit=101", "connectors?status=disabled", "connectors?cursor=bad%20cursor", "connectors?limit=1&limit=1", "connectors?tenant=forged", "connectors/connector-1?limit=1", "connectors/connector-1/connections?status=active", "connectors/%63onnector-1", "connectors/providers/extra", "providers", "connections/connection-1/extra"])("rejects unissued/canonical/query variant %s before owner", async suffix => {
+  it.each(["connectors?limit=01", "connectors?limit=101", "connectors?status=disabled", "connectors?cursor=bad%20cursor", "connectors?limit=1&limit=1", "connectors?tenant=forged", "connectors/connector-1?limit=1", "connectors/connector-1/connections?status=active", "connectors/%63onnector-1", "connectors/providers/extra", "providers?limit=01", "connections/connection-1/extra"])("rejects unissued/canonical/query variant %s before owner", async suffix => {
     const { GET } = await import("@/app/api/hub/[...path]/route")
     const url = new URL(`http://localhost/api/hub/self/mcp/${suffix}`)
     const response = await GET(new Request(url), params(url.pathname.slice("/api/hub/".length).split("/").map(decodeURIComponent)))
@@ -1453,4 +1453,41 @@ it("personal MCP accepts only owner Retry-After seconds 1 through 86400", async 
     const response = await GET(new Request("http://localhost/api/hub/self/mcp/connectors"), params(["self", "mcp", "connectors"]))
     expect(response.status).toBe(expected)
   }
+})
+
+describe("personal MCP 14.0 provider and command adapter", () => {
+  const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "pending", approved_scopes: [], enabled: false, state_version: "1", display_name: "Connector", description: "" }
+  const provider = { provider_key: "provider-one", display_name: "Provider", directory_type: "app", category_keys: ["development"], example_prompts: ["Help"], enabled: true, state_version: "2" }
+  const owner = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } })
+  it("forwards the formal provider list and rejects old aliases", async () => {
+    const { GET } = await import("@/app/api/hub/[...path]/route")
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ data: { items: [provider], next_cursor: null } }))
+    const response = await GET(new Request("http://localhost/api/hub/self/mcp/providers?directory_type=app&category_key=development"), params(["self", "mcp", "providers"]))
+    expect(response.status).toBe(200)
+    expect(vi.mocked(requestWithDomain).mock.calls[0]?.[0]).toBe("http://bff.test/v1/self/mcp/providers?directory_type=app&category_key=development")
+    vi.mocked(requestWithDomain).mockClear()
+    expect((await GET(new Request("http://localhost/api/hub/self/mcp/providers/provider-one?limit=1"), params(["self", "mcp", "providers", "provider-one"]))).status).toBe(400)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+  it.each([
+    ["POST", ["self", "mcp", "connectors"], { provider_key: "provider-one", connector_type: "mcp", display_name: "Connector", description: "" }, 201],
+    ["PATCH", ["self", "mcp", "connectors", "connector-1"], { display_name: "Connector", description: "", expected_state_version: "1" }, 200],
+    ["PUT", ["self", "mcp", "connectors", "connector-1", "enabled"], { enabled: false, expected_state_version: "1" }, 200],
+    ["DELETE", ["self", "mcp", "connectors", "connector-1"], { expected_state_version: "1" }, 200],
+  ] as const)("strictly relays %s personal command", async (method, path, body, status) => {
+    const route = await import("@/app/api/hub/[...path]/route")
+    const result = method === "DELETE" ? { ...connector, status: "revoked" } : connector
+    vi.mocked(requestWithDomain).mockResolvedValue(owner({ data: { connector: result } }, status))
+    const response = await route[method](new Request(`http://localhost/api/hub/${path.join("/")}`, { method, headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-key" }, body: JSON.stringify(body) }), params([...path]))
+    expect(response.status).toBe(status)
+    const options = vi.mocked(requestWithDomain).mock.calls[0]?.[2]
+    expect(options?.headers).toMatchObject({ "idempotency-key": "original-key", "content-type": "application/json", authorization: "Bearer product-access" })
+  })
+  it("rejects missing key, duplicate body fields, and unauthorized command before owner", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const body = '{"provider_key":"provider-one","provider_key":"other","connector_type":"mcp","display_name":"Connector","description":""}'
+    expect((await POST(new Request("http://localhost/api/hub/self/mcp/connectors", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-key" }, body }), params(["self", "mcp", "connectors"]))).status).toBe(400)
+    expect((await POST(new Request("http://localhost/api/hub/self/mcp/connectors", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: JSON.stringify({}) }), params(["self", "mcp", "connectors"]))).status).toBe(400)
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,4 @@
-// BFF e1769b56 / Public13.3 exact Skill Share consumer. No current-series fallback.
+// BFF 4c8dc33 / Public14.0 exact Skill Share consumer. No current-series fallback.
 import { z } from "zod"
 
 export const shareIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
