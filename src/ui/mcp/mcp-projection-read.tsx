@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ChevronDown, Link2, ListFilter, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, ExternalLink, Link2, ListFilter, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -401,7 +401,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
             </div>
           </header>
           <section className={styles.providerDetailBody}>
-            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" /><span>{prompt}</span></li>)}</ul> : null}
+            {selectedProvider.example_prompts.length > 0 ? <section className={styles.examplePromptSection} aria-labelledby="mcp-example-prompts"><h3 id="mcp-example-prompts">{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><button type="button"><MessageCircle aria-hidden="true" /><span>{prompt}</span></button></li>)}</ul></section> : null}
             <section className={styles.providerDetailMetadata} data-testid="mcp-provider-detail-metadata" aria-label={t("mcp.details")}>
               <h3>{t("mcp.details")}</h3>
               <dl>
@@ -410,6 +410,13 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
                 {selectedProvider.author ? <div><dt>{t("mcp.detailAuthor")}</dt><dd>{selectedProvider.author}</dd></div> : null}
               </dl>
             </section>
+            {selectedProvider.website || selectedProvider.privacy_url ? <section className={styles.providerDetailLinks} aria-label={t("mcp.detailMoreInformation")}>
+              <h3>{t("mcp.detailMoreInformation")}</h3>
+              <div>
+                {selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{t("mcp.detailWebsite")}</a> : null}
+                {selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{t("mcp.detailPrivacyPolicy")}</a> : null}
+              </div>
+            </section> : null}
           </section>
         </> : null}
       </DialogContent>

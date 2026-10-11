@@ -174,31 +174,39 @@
 .editorActions { justify-content: flex-end; gap: .5rem; padding-top: .25rem; }
 .editorActions button { height: 2.45rem; min-height: 2.45rem; border-radius: .6rem; font-size: .85rem; }
 
-/* The live Manus connector preview is a compact, centred provider sheet:
- * identity first, then a two-column prompt grid and owner metadata. */
+/* The live Manus connector view is a compact provider sheet: identity, one
+ * action, prompt buttons, then the owner-supplied metadata and links. */
 .providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(42rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); flex-direction: column; gap: 0; overflow: auto; padding: 0; border: 1px solid rgb(0 0 0 / 9%); border-radius: 1.25rem; background: rgb(250 250 249); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
 .providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1rem; right: 1rem; z-index: 3; }
-.providerDetailHeader { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; padding: 3.5rem 2.5rem 1.5rem; text-align: center; }
-.providerDetailLogo { position: static; display: inline-flex; width: 4rem; height: 4rem; flex: 0 0 4rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-radius: .75rem; background: rgb(255 255 254); box-shadow: 0 .35rem .8rem rgb(0 0 0 / 5%); }
+.providerDetailHeader { display: flex; flex: 0 0 auto; align-items: flex-start; gap: 1rem; padding: 3.25rem 3rem 1.5rem; }
+.providerDetailLogo { position: static; display: inline-flex; width: 3.5rem; height: 3.5rem; flex: 0 0 3.5rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-radius: .75rem; background: rgb(255 255 254); box-shadow: 0 .35rem .8rem rgb(0 0 0 / 5%); }
 .providerDetailLogo img { object-fit: contain; padding: .7rem; }
 .providerDetailLogo svg { width: 1.6rem; height: 1.6rem; color: var(--muted-foreground); }
-.providerDetailCopy { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; text-align: center; }
-.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 1rem 0 0; overflow-wrap: anywhere; font-size: 1.35rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.75rem; }
-.providerDetailDescription { max-width: 35rem; margin: .35rem 0 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.35rem; }
-.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: .9rem; }
+.providerDetailCopy { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; text-align: left; }
+.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: 1.25rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.6rem; }
+.providerDetailDescription { max-width: 31rem; margin: .35rem 0 0; color: var(--muted-foreground); font-size: .875rem; line-height: 1.35rem; }
+.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; margin-top: .9rem; }
 .providerDetailActions button { height: 2.35rem; min-height: 2.35rem; border-radius: .55rem; background: rgb(28 28 28); padding: 0 .95rem; font-size: .875rem; font-weight: 650; }
 .providerDetailActions button:hover { background: rgb(48 48 48); }
-.providerDetailBody { display: flex; min-width: 0; flex-direction: column; gap: 1.5rem; padding: .5rem 1.5rem 1.5rem; }
-.examplePromptList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
-.examplePromptList li { display: flex; box-sizing: border-box; min-width: 0; min-height: 6.5rem; align-items: flex-start; gap: .5rem; padding: 1rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .75rem; color: var(--foreground); font-size: .8125rem; line-height: 1.25rem; }
-.examplePromptList li span { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.providerDetailBody { display: flex; min-width: 0; flex-direction: column; gap: 1.5rem; padding: .5rem 3rem 2rem; }
+.examplePromptSection h3,
+.providerDetailMetadata h3,
+.providerDetailLinks h3 { margin: 0 0 .65rem; font-size: .95rem; font-weight: 650; line-height: 1.4rem; }
+.examplePromptList { display: grid; grid-template-columns: 1fr; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.examplePromptList li { min-width: 0; }
+.examplePromptList button { display: flex; box-sizing: border-box; width: 100%; min-width: 0; min-height: 3.5rem; align-items: flex-start; gap: .6rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .7rem; background: rgb(255 255 254); padding: .9rem 1rem; color: var(--foreground); font: inherit; font-size: .8125rem; line-height: 1.25rem; text-align: left; cursor: pointer; }
+.examplePromptList button:hover { background: rgb(55 53 47 / 3%); border-color: rgb(0 0 0 / 15%); }
+.examplePromptList button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.examplePromptList button span { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .examplePromptList svg { width: 1.05rem; height: 1.05rem; flex: 0 0 1.05rem; color: var(--muted-foreground); }
 .providerDetailMetadata { min-width: 0; }
-.providerDetailMetadata h3 { margin: 0 0 .65rem; font-size: .95rem; font-weight: 650; line-height: 1.4rem; }
 .providerDetailMetadata dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.5rem; margin: 0; padding: 1rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .75rem; }
 .providerDetailMetadata dl > div { min-width: 0; }
 .providerDetailMetadata dt { color: var(--foreground); font-size: .8125rem; font-weight: 600; line-height: 1.25rem; }
 .providerDetailMetadata dd { margin: .2rem 0 0; overflow-wrap: anywhere; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.25rem; }
+.providerDetailLinks > div { display: flex; flex-wrap: wrap; gap: .5rem .9rem; }
+.providerDetailLinks a { display: inline-flex; align-items: center; gap: .35rem; color: var(--foreground); font-size: .8125rem; line-height: 1.25rem; text-decoration: underline; text-underline-offset: 3px; }
+.providerDetailLinks a svg { width: .9rem; height: .9rem; }
 
 @media (min-width: 48rem) {
   .providerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -213,7 +221,6 @@
   .connectorGrid { grid-template-columns: 1fr; }
   .providerDetailHeader { padding: 3rem 1.25rem 1.25rem; }
   .providerDetailBody { gap: 1rem; padding: .5rem 1rem 1rem; }
-  .examplePromptList { grid-template-columns: 1fr; }
   .providerDetailMetadata dl { grid-template-columns: 1fr; gap: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) { .refreshing svg { animation: none; } }
