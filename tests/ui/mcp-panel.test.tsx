@@ -119,6 +119,41 @@ describe("McpPanel", () => {
     expect(listMcpPersonalProviders).toHaveBeenCalledTimes(1)
   })
 
+  it("revoking read admission aborts the stale projection without duplicating the next identity read", async () => {
+    let connectorSignal: AbortSignal | undefined
+    let providerSignal: AbortSignal | undefined
+    let resolveStale!: (value: { items: typeof CONNECTOR[]; next_cursor: null }) => void
+    const stale = new Promise<{ items: typeof CONNECTOR[]; next_cursor: null }>((resolve) => { resolveStale = resolve })
+    const listMcpPersonalConnectors = vi.fn()
+      .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { connectorSignal = signal; return stale })
+      .mockResolvedValueOnce({ items: [{ ...CONNECTOR, connector_id: "connector-b", display_name: "Connector B" }], next_cursor: null })
+    const listMcpPersonalProviders = vi.fn()
+      .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { providerSignal = signal; return stale.then(() => ({ items: [PROVIDER], next_cursor: null })) })
+      .mockResolvedValueOnce({ items: [PROVIDER], next_cursor: null })
+    const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders })
+    const renderContent = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
+      <LocaleProvider><McpContent client={client} embedded brandName="Acme" readBoundary={boundary} /></LocaleProvider>
+    )
+    const view = render(renderContent({ admitted: true, subject: "reader-a", generation: 1 }))
+
+    await waitFor(() => expect(listMcpPersonalConnectors).toHaveBeenCalledOnce())
+    await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledOnce())
+    view.rerender(renderContent({ admitted: false, subject: "reader-a", generation: 2 }))
+    await waitFor(() => expect(connectorSignal?.aborted).toBe(true))
+    expect(providerSignal?.aborted).toBe(true)
+    expect(screen.queryByTestId("mcp-projection-read")).toBeNull()
+
+    resolveStale({ items: [CONNECTOR], next_cursor: null })
+    await Promise.resolve()
+    expect(screen.queryByText("Workspace search")).toBeNull()
+
+    view.rerender(renderContent({ admitted: true, subject: "reader-b", generation: 3 }))
+    await waitFor(() => expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText("Connector B")).toBeInTheDocument()
+    expect(screen.queryByText("Workspace search")).toBeNull()
+  })
+
   it("does not present revoked connector audit records as active user connections", async () => {
     const revoked = { ...CONNECTOR, status: "revoked" as const, enabled: false }
     const client = makeClient({

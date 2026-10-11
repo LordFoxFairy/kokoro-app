@@ -45,7 +45,10 @@ const CATEGORIES: readonly { value: SkillCategory; key: MessageKey }[] = [
   { value: "apps", key: "skills.categoryApps" },
 ]
 
-const actionIdentity = (skill: Pick<SkillCatalogCard, "skill_id" | "revision_skill_id">) => JSON.stringify([skill.skill_id, skill.revision_skill_id])
+const actionIdentity = (skill: Pick<SkillCatalogCard, "skill_id" | "revision_skill_id" | "scope" | "name" | "content_hash">) => JSON.stringify([
+  skill.skill_id ?? `${skill.scope}:${skill.name}`,
+  skill.revision_skill_id ?? skill.content_hash,
+])
 type InstallationIntent = Readonly<{ seriesId: string; sourceRef: string; key: string; installationId?: string }>
 
 

@@ -20,30 +20,60 @@ type Projection = { connectors: McpPersonalConnectorPage; providers: McpPersonal
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
 type Editor = { kind: "edit"; connector: McpPersonalConnector }
 
-// StrictMode intentionally replays effects during local development. Share
-// only an in-flight, immutable projection GET for one authenticated lifecycle;
-// explicit refreshes carry a new generation and always read fresh owner truth.
-const projectionInflight = new WeakMap<object, Map<string, Promise<Projection>>>()
+type ProjectionFlight = {
+  controller: AbortController
+  promise: Promise<Projection>
+  subscribers: number
+}
 
-function readProjection(client: HubClient, key: string, cursor: string | null): Promise<Projection> {
+type ProjectionSubscription = {
+  promise: Promise<Projection>
+  release: () => void
+}
+
+// StrictMode intentionally replays effects during local development. One owner
+// read is shared for one authenticated lifecycle. The final subscriber releases
+// it on a microtask: StrictMode's immediate remount reclaims the same read,
+// while a real logout or identity switch aborts the abandoned network request.
+const projectionInflight = new WeakMap<object, Map<string, ProjectionFlight>>()
+
+function subscribeProjection(client: HubClient, key: string, cursor: string | null): ProjectionSubscription {
   let requests = projectionInflight.get(client)
   if (requests === undefined) {
     requests = new Map()
     projectionInflight.set(client, requests)
   }
-  const current = requests.get(key)
-  if (current !== undefined) return current
-
-  const request = Promise.all([
-    client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }),
-    client.listMcpPersonalProviders({ limit: 100 }),
-  ]).then(([connectors, providers]) => ({ connectors, providers }))
-  requests.set(key, request)
-  const clear = (): void => {
-    if (requests?.get(key) === request) requests.delete(key)
+  let flight = requests.get(key)
+  if (flight === undefined) {
+    const controller = new AbortController()
+    const promise = Promise.all([
+      client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }, controller.signal),
+      client.listMcpPersonalProviders({ limit: 100 }, controller.signal),
+    ]).then(([connectors, providers]) => ({ connectors, providers }))
+    flight = { controller, promise, subscribers: 0 }
+    requests.set(key, flight)
+    const clear = (): void => {
+      if (requests?.get(key) === flight) requests.delete(key)
+    }
+    void promise.then(clear, clear)
   }
-  void request.then(clear, clear)
-  return request
+
+  flight.subscribers += 1
+  let released = false
+  return {
+    promise: flight.promise,
+    release: () => {
+      if (released) return
+      released = true
+      flight.subscribers -= 1
+      if (flight.subscribers !== 0) return
+      queueMicrotask(() => {
+        if (flight?.subscribers !== 0 || requests?.get(key) !== flight) return
+        requests.delete(key)
+        flight.controller.abort()
+      })
+    },
+  }
 }
 
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
@@ -87,7 +117,8 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     const requestCursor = cursor
     const requestGeneration = generation
     const requestKey = JSON.stringify([identity, requestCursor, requestGeneration])
-    void readProjection(client, requestKey, requestCursor).then(
+    const subscription = subscribeProjection(client, requestKey, requestCursor)
+    void subscription.promise.then(
       ({ connectors, providers }) => {
         if (!active || requestCursor !== cursor || requestGeneration !== generation) return
         setState({ kind: "ready", data: { connectors, providers } })
@@ -100,7 +131,10 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     ).finally(() => {
       if (active && requestCursor === cursor && requestGeneration === generation) setRefreshing(false)
     })
-    return () => { active = false }
+    return () => {
+      active = false
+      subscription.release()
+    }
   }, [client, cursor, generation, identity])
 
   const projection = state.kind === "ready" ? state.data : null

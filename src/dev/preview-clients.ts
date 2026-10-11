@@ -159,7 +159,14 @@ export function createPreviewHubClient(): HubClient {
         (!scope || skill.scope === scope)
         && (normalized === "" || skill.name.toLocaleLowerCase().includes(normalized) || skill.description.toLocaleLowerCase().includes(normalized)),
       )
-      return Promise.resolve({ skills: filtered, next_cursor: null })
+      return Promise.resolve({
+        skills: filtered.map((skill) => ({
+          ...skill,
+          skill_id: skill.skill_id ?? `preview-catalog:${skill.scope}:${skill.name}`,
+          revision_skill_id: skill.revision_skill_id ?? `preview-revision:${skill.scope}:${skill.content_hash}`,
+        })),
+        next_cursor: null,
+      })
     },
     skillQuota: () => Promise.resolve(quota),
     skillRevisions: (name: string, scope?: string): Promise<SkillRevision[]> => Promise.resolve([
