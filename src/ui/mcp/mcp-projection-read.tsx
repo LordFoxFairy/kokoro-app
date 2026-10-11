@@ -390,7 +390,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader} data-has-logo="true">
             <span className={styles.providerDetailLogo} data-testid="mcp-provider-detail-logo" aria-hidden="true">
-              {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="10rem" unoptimized /> : <Cable />}
+              {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4rem" unoptimized /> : <Cable />}
             </span>
             <div className={styles.providerDetailCopy}>
               {selectedProvider.category_keys.length > 0 ? <div className={styles.providerDetailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
@@ -399,7 +399,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
               {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
               <div className={styles.providerDetailActions}>
                 <Button type="button" disabled={actionId !== null} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })}>
-                  {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("plugins.addConnector", { name: selectedProvider.display_name })}
+                  {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("settings.connect")}
                 </Button>
               </div>
             </div>
