@@ -35,7 +35,7 @@ import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 import { GithubImportDialog } from "./github-import-dialog"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { SkillDetailDialog } from "./skill-detail-dialog"
-import { PersonalSkillsRead } from "./personal-skills-read"
+import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target
@@ -140,7 +140,22 @@ type SkillsContentProps = {
 }
 
 export function SkillsContent(props: SkillsContentProps) {
-  if (props.preview !== true) return <PersonalSkillsRead client={props.client} embedded={props.embedded ?? false} />
+  // The live Settings page is the same product catalog as /app/skills: it
+  // consumes the formal Manus-compatible service methods, rather than a
+  // second state-heavy dashboard with different labels and loading behavior.
+  // The dedicated lifecycle reader remains the owner UI for publish/draft
+  // workflows and is not used as the normal catalog presentation.
+  if (props.preview !== true) {
+    return <KokoroSkillsSurface
+      preview={false}
+      embedded={props.embedded ?? false}
+      hideMySkills
+      {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
+      {...(props.onCreateWithAi === undefined ? {} : { onCreateSkillWithAi: props.onCreateWithAi })}
+      {...(props.onTrySkill === undefined ? {} : { onTrySkill: props.onTrySkill })}
+      onPrompt={() => undefined}
+    />
+  }
   return <PreviewSkillsContent {...props} />
 }
 

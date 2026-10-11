@@ -9,6 +9,20 @@
   color: var(--foreground);
 }
 
+/* Settings owns the only vertical scrollbar.  Keeping the catalog's layout
+ * intact here avoids the visible jump caused by two independently scrolling
+ * containers refreshing at once. */
+.embedded {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.embedded .scroller {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .personalPage {
   flex: 1;
   width: 100%;
