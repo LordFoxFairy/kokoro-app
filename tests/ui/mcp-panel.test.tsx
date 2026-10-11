@@ -267,12 +267,13 @@ describe("McpPanel", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Provider One" })).toBeNull())
   })
 
-  it("uses the same measured detail geometry as the Skills catalog without inventing a provider cover", () => {
+  it("uses the same measured detail geometry as the Skills catalog without inventing provider artwork", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
+    const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 61px 24px 20px;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
-    expect(css).toMatch(/\.providerDetailMedia \{ display: none; \}/u)
+    expect(source).not.toMatch(/providerMonogram/u)
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {
