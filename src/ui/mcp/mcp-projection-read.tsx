@@ -285,7 +285,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
         </Button>
         {onCreateMcp ? <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button ref={createTriggerRef} type="button" className={styles.createButton}>
+            <Button ref={createTriggerRef} type="button" variant="outline" className={styles.createButton}>
               {t("plugins.create")}<ChevronDown aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
