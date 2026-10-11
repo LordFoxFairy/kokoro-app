@@ -84,7 +84,7 @@
 .featuredProvider {
   display: flex;
   min-height: 5.5rem;
-  flex: 0 0 13.5rem;
+  flex: 0 0 17.5rem;
   align-items: center;
   gap: .75rem;
   border: 1px solid rgb(0 0 0 / 10%);
@@ -132,7 +132,7 @@
 .connectionSection { min-width: 0; }
 .providerGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: .8rem;
   margin: 0;
   padding: 0;
@@ -201,29 +201,23 @@
 .editorActions { justify-content: flex-end; gap: .5rem; padding-top: .25rem; }
 .editorActions button { height: 2.45rem; min-height: 2.45rem; border-radius: .6rem; font-size: .85rem; }
 
-/* Connector details use the same wide Manus sheet geometry as Skills: a
- * left-aligned identity/action header, artwork at the right edge, then a
- * calm description and prompt list. Provider fields stay owner-sourced. */
-.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(78rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); height: min(62rem,calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); min-height: 0; flex-direction: column; gap: 0; overflow: hidden; padding: 0; border: 1px solid rgb(0 0 0 / 12%); border-radius: 1rem; background: rgb(255 255 254); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
-.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1.4rem; right: 1.5rem; z-index: 3; }
-.providerDetailHeader { position: relative; display: flex; min-height: 17.5rem; flex: 0 0 auto; flex-direction: row; align-items: center; padding: 3rem 3rem 2rem; border-bottom: 1px solid rgb(0 0 0 / 9%); text-align: left; }
-.providerDetailCopy { display: flex; width: 100%; min-width: 0; max-width: calc(100% - 15rem); flex: 0 1 auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
-.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 680; letter-spacing: -.035em; line-height: 1.13; }
-.providerDetailMeta { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .35rem; margin-bottom: .65rem; }
-.providerDetailMeta span { border-radius: .35rem; background: rgb(55 53 47 / 7%); padding: .22rem .48rem; color: rgb(55 53 47 / 76%); font-size: .8rem; font-weight: 550; line-height: 1rem; }
-.providerDetailAuthor { margin: .6rem 0 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.3rem; }
-.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .65rem; margin-top: 1.5rem; }
-.providerDetailActions button { min-height: 2.8rem; border-radius: .7rem; font-weight: 650; }
-.providerDetailPrimaryAction { background: rgb(28 28 28); color: rgb(255 255 254); }
-.providerDetailPrimaryAction:hover { background: rgb(45 45 45); }
-.providerDetailLogo { position: absolute; right: 5rem; bottom: 0; display: inline-flex; width: 12rem; height: 14rem; align-items: center; justify-content: center; overflow: hidden; border-radius: .75rem .75rem 0 0; background: rgb(250 250 249); box-shadow: 0 .75rem 1.5rem rgb(0 0 0 / 10%); }
-.providerDetailLogo img { object-fit: contain; padding: 1.35rem; }
-.providerDetailLogo svg { width: 3rem; height: 3rem; color: var(--muted-foreground); }
-.providerDetailBody { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; padding: 2.5rem 3rem 3rem; }
-.providerDetailDescription { max-width: 66rem; margin: 0 0 2.25rem; color: var(--foreground); font-size: 1.15rem; line-height: 1.75rem; text-align: left; }
-.examplePromptList { display: grid; gap: .75rem; margin: 0; padding: 0; list-style: none; }
-.examplePromptList li { display: flex; box-sizing: border-box; min-height: 4.75rem; align-items: center; gap: .875rem; padding: 1rem; border: 1px solid var(--border); border-radius: .875rem; color: var(--foreground); font-size: .95rem; line-height: 1.4rem; }
-.examplePromptList svg { width: 1rem; height: 1rem; flex: 0 0 1rem; color: var(--muted-foreground); }
+/* Manus opens connector details as a compact information sheet. Connecting is
+ * deliberately kept on the directory card's + action: opening details is a
+ * read-only, non-jumping operation. */
+.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(42rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); height: min(46rem,calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); min-height: 0; flex-direction: column; gap: 0; overflow: hidden; padding: 0; border: 1px solid rgb(0 0 0 / 12%); border-radius: 1rem; background: rgb(255 255 254); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
+.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1.1rem; right: 1.1rem; z-index: 3; }
+.providerDetailHeader { display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; padding: 4rem 1.5rem 1.25rem; text-align: center; }
+.providerDetailLogo { position: relative; display: inline-flex; width: 4rem; height: 4rem; flex: 0 0 4rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 5%); border-radius: .65rem; background: rgb(255 255 254); }
+.providerDetailLogo img { object-fit: contain; padding: .45rem; }
+.providerDetailLogo svg { width: 1.65rem; height: 1.65rem; color: var(--muted-foreground); }
+.providerDetailCopy { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; }
+.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 1rem 0 0; overflow-wrap: anywhere; font-size: 1.35rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.65rem; }
+.providerDetailDescription { max-width: 34rem; margin: .55rem 0 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.45rem; text-align: center; }
+.providerDetailBody { min-height: 0; flex: 1 1 auto; overflow: auto; padding: .95rem 1.5rem 1.5rem; border-top: 1px solid rgb(0 0 0 / 8%); }
+.examplePromptTitle { margin: 0 0 .7rem; font-size: .9rem; font-weight: 650; line-height: 1.3rem; }
+.examplePromptList { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.examplePromptList li { display: flex; box-sizing: border-box; min-height: 5.8rem; align-items: center; gap: .875rem; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; color: var(--foreground); font-size: .9rem; line-height: 1.4rem; }
+.examplePromptList svg { width: 1.15rem; height: 1.15rem; flex: 0 0 1.15rem; color: var(--muted-foreground); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 42rem) {
@@ -231,11 +225,8 @@
   .header h2 { font-size: 1.5rem; }
   .headerControls { justify-content: stretch; flex-wrap: wrap; }
   .viewToggle { width: 100%; }
-  .providerGrid,
   .connectorGrid { grid-template-columns: 1fr; }
-  .providerDetailHeader { min-height: 0; padding: 3.5rem 1.25rem 1.5rem; align-items: flex-start; }
-  .providerDetailCopy { max-width: 100%; }
-  .providerDetailLogo { display: none; }
-  .providerDetailBody { padding: 1.5rem 1.25rem 2rem; }
+  .providerDetailHeader { padding: 3.5rem 1.25rem 1.25rem; }
+  .providerDetailBody { padding: .95rem 1.25rem 1.25rem; }
 }
 @media (prefers-reduced-motion: reduce) { .refreshing svg { animation: none; } }

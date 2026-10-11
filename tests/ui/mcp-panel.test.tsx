@@ -270,8 +270,8 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
-    expect(within(detail).getByText("开发")).toBeInTheDocument()
-    expect(within(detail).getByRole("button", { name: "Add Provider One" })).toBeInTheDocument()
+    expect(within(detail).getByText("Example prompts")).toBeInTheDocument()
+    expect(within(detail).queryByRole("button", { name: "Add Provider One" })).toBeNull()
     expect(within(detail).queryByRole("button", { name: "Manage connectors" })).toBeNull()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
@@ -280,18 +280,18 @@ describe("McpPanel", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.featuredRail\s*\{[^}]*overflow-x: auto;/u)
-    expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 13\.5rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem,calc\(100vw - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*flex-direction: row;[^}]*padding: 3rem 3rem 2rem;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*right: 5rem;[^}]*width: 12rem;[^}]*height: 14rem;/u)
-    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
+    expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 17\.5rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem,calc\(100vw - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*padding: 4rem 1\.5rem 1\.25rem;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: center;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4rem;[^}]*height: 4rem;/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5\.8rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
     expect(css).not.toMatch(/\.highlightCard\s*\{/u)
     expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 2\.5rem;[^}]*height: 2\.5rem;/u)
-    expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
+    expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/u)
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {
@@ -635,11 +635,11 @@ describe("McpPanel", () => {
   })
 })
 
-it("uses Manus's compact two-column connector directory on desktop and one column on mobile", () => {
+it("uses Manus's full-width one-column connector directory", () => {
   const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
-  expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: \.8rem;/u)
+  expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: \.8rem;/u)
   expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
-  expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.providerGrid,[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
+  expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
 
 it("keeps the full Manus category rail even when the current owner catalog is sparse", async () => {

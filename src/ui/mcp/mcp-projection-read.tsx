@@ -367,29 +367,19 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
       <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")} data-detail-layout="manus">
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader} data-has-logo="true">
-            <div className={styles.providerDetailCopy}>
-              <div className={styles.providerDetailMeta}>
-                {selectedProvider.category_keys.slice(0, 2).map((category) => <span key={category}>{categoryLabel(category)}</span>)}
-              </div>
-              <DialogTitle>{selectedProvider.display_name}</DialogTitle>
-              {selectedProvider.author ? <p className={styles.providerDetailAuthor}>{selectedProvider.author}</p> : null}
-              <div className={styles.providerDetailActions}>
-                <Button type="button" className={styles.providerDetailPrimaryAction} disabled={actionId !== null} onClick={() => connectProvider(selectedProvider, () => {
-                  setSelectedProvider(null)
-                  setView("connections")
-                })}>
-                  {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                  {t("plugins.addConnector", { name: selectedProvider.display_name })}
-                </Button>
-              </div>
-            </div>
             <span className={styles.providerDetailLogo} data-testid="mcp-provider-detail-logo" aria-hidden="true">
               {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="10rem" unoptimized /> : <Cable />}
             </span>
+            <div className={styles.providerDetailCopy}>
+              <DialogTitle>{selectedProvider.display_name}</DialogTitle>
+              {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
+            </div>
           </header>
           <section className={styles.providerDetailBody}>
-            {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
-            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul> : null}
+            {selectedProvider.example_prompts.length > 0 ? <>
+              <h3 className={styles.examplePromptTitle}>{t("mcp.examplePrompts")}</h3>
+              <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul>
+            </> : null}
           </section>
         </> : null}
       </DialogContent>
