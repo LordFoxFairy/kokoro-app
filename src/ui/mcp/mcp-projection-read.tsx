@@ -271,6 +271,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
 
   const editorTitle = t("mcp.edit")
   const categoryLabel = (category: McpPersonalProvider["category_keys"][number]) => t(categoryMessage[category])
+  const providerTypeLabel = (provider: McpPersonalProvider) => provider.directory_type === "app" ? t("mcp.directoryTypeApp") : t("mcp.directoryTypeDataSource")
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
@@ -340,9 +341,6 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
               </span>
             </button>
-            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider, () => setView("connections"))} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
-              {actionId === `connect:${provider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            </Button>
           </li>)}
         </ul>}
       </section> : <section className={styles.connectionSection} aria-label={t("mcp.title")}>
@@ -393,9 +391,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
               {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4rem" unoptimized /> : <Cable />}
             </span>
             <div className={styles.providerDetailCopy}>
-              {selectedProvider.category_keys.length > 0 ? <div className={styles.providerDetailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
-              {selectedProvider.author ? <p className={styles.providerDetailAuthor}>{selectedProvider.author}</p> : null}
               {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
               <div className={styles.providerDetailActions}>
                 <Button type="button" disabled={actionId !== null} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })}>
@@ -409,6 +405,15 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
               <h3 className={styles.examplePromptTitle}>{t("mcp.examplePrompts")}</h3>
               <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul>
             </> : null}
+            <section className={styles.providerDetailSection} aria-label={t("mcp.details")}>
+              <h3 className={styles.examplePromptTitle}>{t("mcp.details")}</h3>
+              <dl className={styles.providerDetailMetadata} data-testid="mcp-provider-detail-metadata">
+                {selectedProvider.category_keys.length > 0 ? <div><dt>{t("mcp.detailCategory")}</dt><dd>{selectedProvider.category_keys.map(categoryLabel).join("、")}</dd></div> : null}
+                <div><dt>{t("mcp.detailConnectorType")}</dt><dd>{providerTypeLabel(selectedProvider)}</dd></div>
+                {selectedProvider.author ? <div><dt>{t("mcp.detailAuthor")}</dt><dd>{selectedProvider.author}</dd></div> : null}
+                {selectedProvider.website || selectedProvider.privacy_url ? <div><dt>{t("mcp.detailMoreInformation")}</dt><dd className={styles.providerDetailLinks}>{selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer">{t("mcp.detailWebsite")}</a> : null}{selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer">{t("mcp.detailPrivacyPolicy")}</a> : null}</dd></div> : null}
+              </dl>
+            </section>
           </section>
         </> : null}
       </DialogContent>
