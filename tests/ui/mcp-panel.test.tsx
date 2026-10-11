@@ -81,7 +81,7 @@ afterEach(() => {
 })
 
 describe("McpPanel", () => {
-  const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], author: "Acme", website: "https://provider.example.com", privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1" }
+  const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], author: "Acme", website: "https://provider.example.com", privacy_url: "https://provider.example.com/privacy", cover_image_url: "https://cdn.example.test/connectors/provider-one.webp", updated_at: "2026-10-11T12:34:56.000Z", enabled: true, state_version: "1" }
   const CONNECTOR = { connector_id: "connector-one", connector_type: "mcp" as const, provider_key: "provider-one", status: "active" as const, approved_scopes: ["tools.read"], enabled: true, state_version: "2", display_name: "Workspace search", description: "Search the workspace" }
 
   it("keeps the provider directory separate from managed connectors until the user switches views", async () => {
@@ -108,8 +108,8 @@ describe("McpPanel", () => {
 
   it("matches the Manus connector directory hierarchy with real local provider logos", async () => {
     const providers = [
-      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email." },
-      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories." },
+      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
+      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
     ]
     const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
@@ -119,10 +119,8 @@ describe("McpPanel", () => {
     expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
     expect(within(screen.getByRole("navigation", { name: "Connector categories" })).getByRole("button", { name: "All" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).toBeNull()
-    expect(screen.getByTestId("mcp-featured-provider-gmail")).toHaveTextContent("Gmail")
-    expect(screen.getByTestId("mcp-featured-provider-github")).toHaveTextContent("GitHub")
-    expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
-    expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
+    expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="https://cdn.example.test/connectors/gmail.webp"]')).not.toBeNull()
+    expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="https://cdn.example.test/connectors/github.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
   })
 
@@ -253,8 +251,8 @@ describe("McpPanel", () => {
     fireEvent.click(within(provider).getByRole("button", { name: "Provider One" }))
     expect(await screen.findByRole("heading", { name: "Example prompts" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Connect me" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Website" })).toHaveAttribute("href", "https://provider.example.com")
-    expect(screen.getByRole("link", { name: "Privacy policy" })).toHaveAttribute("href", "https://provider.example.com/privacy")
+    expect(screen.getByText("Acme")).toBeInTheDocument()
+    expect(screen.getByText(/Updated /)).toBeInTheDocument()
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
 
     await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
@@ -280,14 +278,11 @@ describe("McpPanel", () => {
     expect(within(detail).getByRole("heading", { name: "Example prompts" })).toBeInTheDocument()
     expect(within(detail).getByRole("button", { name: "Connect me" })).toBeInTheDocument()
     expect(within(detail).getByRole("button", { name: "Connect" })).toBeInTheDocument()
-    const metadata = within(detail).getByTestId("mcp-provider-detail-metadata")
-    expect(metadata).toHaveTextContent("Details")
-    expect(metadata).toHaveTextContent("Category")
-    expect(metadata).toHaveTextContent("开发")
-    expect(metadata).toHaveTextContent("Connector type")
-    expect(metadata).toHaveTextContent("应用")
-    expect(metadata).toHaveTextContent("Author")
-    expect(metadata).toHaveTextContent("Acme")
+    expect(within(detail).getByText("开发")).toBeInTheDocument()
+    expect(within(detail).getByText("Acme")).toBeInTheDocument()
+    expect(within(detail).getByText(/Updated /)).toBeInTheDocument()
+    expect(within(detail).queryByText("Connector type")).toBeNull()
+    expect(within(detail).queryByRole("link", { name: "Website" })).toBeNull()
     expect(within(detail).queryByRole("button", { name: "Manage connectors" })).toBeNull()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
@@ -308,7 +303,6 @@ describe("McpPanel", () => {
   it("uses the observed Manus connector directory hierarchy", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).toMatch(/\.featuredRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title controls";/u)
     expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
@@ -318,8 +312,9 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: absolute;[^}]*right: 5rem;[^}]*width: 12rem;[^}]*height: 14rem;/u)
     expect(css).toMatch(/\.examplePromptList\s*\{[^}]*grid-template-columns: 1fr;/u)
     expect(css).toMatch(/\.examplePromptList button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
-    expect(source).toMatch(/providerLogoAssets/u)
-    expect(source).toMatch(/providers\.slice\(0, 4\)/u)
+    expect(source).not.toMatch(/providerLogoAssets/u)
+    expect(source).toMatch(/cover_image_url/u)
+    expect(source).not.toMatch(/featuredProvider/u)
     expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 100%;[^}]*height: 8\.75rem;/u)
     expect(css).toMatch(/@media \(min-width: 48rem\) \{[\s\S]*?\.providerGrid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   })

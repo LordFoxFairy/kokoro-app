@@ -39,7 +39,7 @@ export type McpPersonalConnection = z.infer<typeof mcpPersonalConnectionSchema>
 const category = z.enum(["efficiency", "creation", "business", "development", "finance", "travel", "health"])
 export const mcpPersonalProviderSchema = z.object({
   provider_key: providerKey, display_name: scalar(1, 100), description: scalar(0, 1000).optional(), directory_type: z.enum(["app", "data_source"]),
-  category_keys: z.array(category).refine(unique), example_prompts: z.array(scalar(1, 1000)).max(10), author: scalar(1, 100).optional(), website: safeUrl.optional(), privacy_url: safeUrl.optional(), enabled: z.boolean(), state_version: stateVersion,
+  category_keys: z.array(category).refine(unique), example_prompts: z.array(scalar(1, 1000)).max(10), author: scalar(1, 100).optional(), website: safeUrl.optional(), privacy_url: safeUrl.optional(), cover_image_url: safeUrl.optional(), updated_at: z.string().datetime({ offset: true }).optional(), enabled: z.boolean(), state_version: stateVersion,
 }).strict()
 export type McpPersonalProvider = z.infer<typeof mcpPersonalProviderSchema>
 

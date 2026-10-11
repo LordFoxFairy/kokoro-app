@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 import { createSkillDraftRequestSchema, skillDraftSchema, beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema, completeSkillUploadSchema, validateSkillDraftRequestSchema, validateSkillDraftSchema, skillPublishRequestSchema, publishSkillDraftSchema, skillUploadStateSchema, managedPersonalSkillSchema, personalInstallationSchema, installationErrorAllowed, type InstallationOperation } from "@/hub/schemas"
 
-const OWNER_COMMIT = "4c8dc33a34dc78f1d282130f8622e0da8e0b2df6"
-const OWNER_SHA256 = "db093b698cc48951422236b8742464465ca8b06b721dab126f2f66d70938f8b4"
-const OWNER_VERSION = "14.0.0"
+const OWNER_COMMIT = "efae80cdd03c22a6d886b55ce3a248cf7efd9453"
+const OWNER_SHA256 = "81256204cad561d022755075b27e955289261ebc6db49c09ff151a1fbafa68b7"
+const OWNER_VERSION = "14.4.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -167,13 +167,13 @@ function assertPersonalMcpCrudSemantics(spec: Spec): void {
     "400": "PersonalMcpBadRequest", "401": "PersonalMcpUnauthorized", "403": "PersonalMcpForbidden", "404": "PersonalMcpNotFound", "429": "PersonalMcpRateLimited", "502": "PersonalMcpBadGateway", "503": "PersonalMcpUnavailable",
   })
   expect(shape(spec, "PersonalMcpConnector").required).toEqual(["connector_id", "connector_type", "provider_key", "status", "approved_scopes", "enabled", "state_version"])
-  expect(Object.keys(shape(spec, "PersonalMcpProvider").properties ?? {})).toEqual(["provider_key", "display_name", "description", "directory_type", "category_keys", "example_prompts", "author", "website", "privacy_url", "enabled", "state_version"])
+  expect(Object.keys(shape(spec, "PersonalMcpProvider").properties ?? {})).toEqual(["provider_key", "display_name", "description", "directory_type", "category_keys", "example_prompts", "author", "website", "privacy_url", "cover_image_url", "updated_at", "enabled", "state_version"])
 }
 
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("4c8dc33a34dc78f1d282130f8622e0da8e0b2df6")
+    expect(OWNER_COMMIT).toBe("efae80cdd03c22a6d886b55ce3a248cf7efd9453")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)

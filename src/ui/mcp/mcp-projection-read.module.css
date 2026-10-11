@@ -90,17 +90,6 @@
 
 .providerDetailTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-.featuredRail { display: flex; min-width: 0; gap: .75rem; overflow-x: auto; overscroll-behavior-inline: contain; padding: .1rem 0 .4rem; scrollbar-width: none; }
-.featuredRail::-webkit-scrollbar { display: none; }
-.featuredProvider { display: flex; width: min(17rem, 76vw); min-height: 5.1rem; flex: 0 0 min(17rem, 76vw); align-items: center; gap: .8rem; overflow: hidden; border: 1px solid rgb(0 0 0 / 9%); border-radius: .85rem; background: rgb(255 255 254); padding: .75rem; color: var(--foreground); text-align: left; cursor: pointer; }
-.featuredProvider:hover { border-color: rgb(0 0 0 / 18%); background: rgb(55 53 47 / 2%); }
-.featuredProvider:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.featuredProviderLogo { position: relative; display: inline-flex; width: 3.25rem; height: 3.25rem; flex: 0 0 3.25rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-radius: .7rem; background: rgb(55 53 47 / 3%); }
-.featuredProviderLogo img { object-fit: contain; padding: .55rem; }
-.featuredProviderLogo svg { width: 1.35rem; height: 1.35rem; color: var(--muted-foreground); }
-.featuredProviderCopy { display: flex; min-width: 0; flex-direction: column; gap: .18rem; }
-.featuredProviderCopy strong { overflow: hidden; font-size: .9rem; font-weight: 650; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
-.featuredProviderCopy span { display: -webkit-box; overflow: hidden; color: var(--muted-foreground); font-size: .78rem; line-height: 1.1rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .directoryControls { display: flex; min-height: 2.9rem; align-items: center; flex-wrap: wrap; gap: .55rem .75rem; }
 .searchField { position: relative; display: block; width: min(100%, 32rem); min-width: 14rem; flex: 1 1 22rem; }
 .searchField > svg { position: absolute; z-index: 1; top: 50%; left: 1rem; width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); transform: translateY(-50%); }
@@ -203,14 +192,16 @@
 .providerDetailLogo svg { width: 2.25rem; height: 2.25rem; color: var(--muted-foreground); }
 .providerDetailCopy { display: flex; width: 100%; min-width: 0; max-width: calc(100% - 15rem); flex-direction: column; align-items: flex-start; gap: .75rem; text-align: left; }
 .providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 680; letter-spacing: -.035em; line-height: 1.13; }
-.providerDetailDescription { max-width: 42rem; margin: 0; color: var(--muted-foreground); font-size: 1rem; line-height: 1.5rem; }
+.providerDetailChips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.providerDetailChips span { border-radius: .3rem; background: rgb(55 53 47 / 7%); padding: .22rem .48rem; color: var(--muted-foreground); font-size: .8rem; font-weight: 550; line-height: 1.1rem; }
+.providerDetailMeta { display: flex; flex-wrap: wrap; gap: .65rem; color: var(--muted-foreground); font-size: .9rem; line-height: 1.35rem; }
+.providerDetailMeta span + span { border-left: 1px solid rgb(0 0 0 / 14%); padding-left: .65rem; }
 .providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .65rem; margin-top: .75rem; }
 .providerDetailActions button { height: 2.8rem; min-height: 2.8rem; border-radius: .7rem; background: rgb(28 28 28); padding: 0 .95rem; font-size: .95rem; font-weight: 650; }
 .providerDetailActions button:hover { background: rgb(48 48 48); }
 .providerDetailBody { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 1.5rem; overflow: auto; padding: 2.5rem 3rem 3rem; }
-.examplePromptSection h3,
-.providerDetailMetadata h3,
-.providerDetailLinks h3 { margin: 0 0 .65rem; font-size: .95rem; font-weight: 650; line-height: 1.4rem; }
+.providerSummary { max-width: 68rem; margin: 0; color: var(--foreground); font-size: 1.1rem; line-height: 1.65rem; }
+.examplePromptSection h3 { margin: 0 0 .65rem; font-size: .95rem; font-weight: 650; line-height: 1.4rem; }
 .examplePromptList { display: grid; grid-template-columns: 1fr; gap: .75rem; margin: 0; padding: 0; list-style: none; }
 .examplePromptList li { min-width: 0; }
 .examplePromptList button { display: flex; box-sizing: border-box; width: 100%; min-width: 0; min-height: 4.75rem; align-items: center; gap: .875rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .75rem; background: rgb(255 255 254); padding: 1rem; color: var(--foreground); font: inherit; font-size: .95rem; line-height: 1.4rem; text-align: left; cursor: pointer; }
@@ -218,14 +209,6 @@
 .examplePromptList button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .examplePromptList button span { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .examplePromptList svg { width: 1.05rem; height: 1.05rem; flex: 0 0 1.05rem; color: var(--muted-foreground); }
-.providerDetailMetadata { min-width: 0; }
-.providerDetailMetadata dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.5rem; margin: 0; padding: 1rem; border: 1px solid rgb(0 0 0 / 8%); border-radius: .75rem; }
-.providerDetailMetadata dl > div { min-width: 0; }
-.providerDetailMetadata dt { color: var(--foreground); font-size: .8125rem; font-weight: 600; line-height: 1.25rem; }
-.providerDetailMetadata dd { margin: .2rem 0 0; overflow-wrap: anywhere; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.25rem; }
-.providerDetailLinks > div { display: flex; flex-wrap: wrap; gap: .5rem .9rem; }
-.providerDetailLinks a { display: inline-flex; align-items: center; gap: .35rem; color: var(--foreground); font-size: .8125rem; line-height: 1.25rem; text-decoration: underline; text-underline-offset: 3px; }
-.providerDetailLinks a svg { width: .9rem; height: .9rem; }
 
 @media (min-width: 48rem) {
   .providerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -247,6 +230,5 @@
   .providerDetailLogo { display: none; }
   .providerDetailCopy { max-width: 100%; }
   .providerDetailBody { gap: 1rem; padding: 1.5rem 1.25rem 2rem; }
-  .providerDetailMetadata dl { grid-template-columns: 1fr; gap: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) { .refreshing svg { animation: none; } }

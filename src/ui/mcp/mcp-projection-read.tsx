@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ChevronDown, ExternalLink, Link2, ListFilter, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, Link2, ListFilter, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -89,35 +89,12 @@ function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pendin
 
 const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
 
-const providerLogoAssets: Readonly<Record<string, string>> = {
-  "ahrefs-api": "/assets/connectors/ahrefs-api.webp",
-  "cloudflare-api": "/assets/connectors/cloudflare-api.webp",
-  "elevenlabs-api": "/assets/connectors/elevenlabs-api.webp",
-  "github": "/assets/connectors/github.webp",
-  "gmail": "/assets/connectors/gmail.webp",
-  "google-calendar": "/assets/connectors/google-calendar.webp",
-  "google-gemini": "/assets/connectors/google-gemini.webp",
-  "google-workspace": "/assets/connectors/google-workspace.webp",
-  "grok": "/assets/connectors/grok.webp",
-  "higgsfield": "/assets/connectors/higgsfield.webp",
-  "instagram": "/assets/connectors/instagram.svg",
-  "instagram-creator": "/assets/connectors/instagram-creator.svg",
-  "mailchimp": "/assets/connectors/mailchimp.webp",
-  "meta-ads": "/assets/connectors/meta-ads.svg",
-  "my-browser": "/assets/connectors/my-browser.webp",
-  "n8n-api": "/assets/connectors/n8n-api.webp",
-  "notion": "/assets/connectors/notion.webp",
-  "openai": "/assets/connectors/openai.webp",
-  "openrouter-api": "/assets/connectors/openrouter-api.webp",
-  "outlook": "/assets/connectors/outlook.svg",
-  "perplexity": "/assets/connectors/perplexity.webp",
-  "similarweb-api": "/assets/connectors/similarweb-api.webp",
-  "tiktok": "/assets/connectors/tiktok.svg",
-  "typeform": "/assets/connectors/typeform.webp",
+function providerLogo(provider: Pick<McpPersonalProvider, "cover_image_url">): string | undefined {
+  return provider.cover_image_url
 }
 
-function providerLogo(provider: Pick<McpPersonalProvider, "provider_key">): string | undefined {
-  return providerLogoAssets[provider.provider_key]
+function formatProviderDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "long", day: "numeric" }).format(new Date(value))
 }
 
 /**
@@ -219,9 +196,6 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
   // sparse. The taxonomy is UI vocabulary, not a fabricated provider record;
   // cards still come only from the Platform projection above.
   const categoryOptions = Object.keys(categoryMessage) as Array<keyof typeof categoryMessage>
-  // The owner controls this list's sort order. The directory's lead strip uses
-  // that confirmed order instead of browser-side popularity or fabricated IDs.
-  const featuredProviders = providers.slice(0, 4)
   const providerByKey = new Map(providers.map((provider) => [provider.provider_key, provider]))
 
   const reload = () => {
@@ -313,12 +287,6 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
     {projection ? <div className={styles.content}>
       {view === "catalog" ? <>
-        {featuredProviders.length > 0 ? <section className={styles.featuredRail} aria-label={t("plugins.connectors")}>
-          {featuredProviders.map((provider) => <button key={provider.provider_key} type="button" className={styles.featuredProvider} data-testid={`mcp-featured-provider-${provider.provider_key}`} onClick={() => setSelectedProvider(provider)}>
-            <span className={styles.featuredProviderLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.75rem" unoptimized /> : <Cable />}</span>
-            <span className={styles.featuredProviderCopy}><strong>{provider.display_name}</strong>{provider.description ? <span>{provider.description}</span> : null}</span>
-          </button>)}
-        </section> : null}
         <div className={styles.directoryControls}>
           <label className={styles.searchField}>
             <Search aria-hidden="true" />
@@ -410,8 +378,12 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
               {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4rem" unoptimized /> : <Cable />}
             </span>
             <div className={styles.providerDetailCopy}>
+              {selectedProvider.category_keys.length > 0 ? <div className={styles.providerDetailChips}>{selectedProvider.category_keys.slice(0, 2).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
-              {selectedProvider.description ? <DialogDescription className={styles.providerDetailDescription}>{selectedProvider.description}</DialogDescription> : null}
+              {selectedProvider.author || selectedProvider.updated_at ? <div className={styles.providerDetailMeta}>
+                {selectedProvider.author ? <span>{selectedProvider.author}</span> : null}
+                {selectedProvider.updated_at ? <span>{t("skills.updatedAt", { date: formatProviderDate(selectedProvider.updated_at) })}</span> : null}
+              </div> : null}
               <div className={styles.providerDetailActions}>
                 <Button type="button" disabled={actionId !== null} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })}>
                   {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("settings.connect")}
@@ -420,22 +392,8 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
             </div>
           </header>
           <section className={styles.providerDetailBody}>
+            {selectedProvider.description ? <DialogDescription className={styles.providerSummary}>{selectedProvider.description}</DialogDescription> : null}
             {selectedProvider.example_prompts.length > 0 ? <section className={styles.examplePromptSection} aria-labelledby="mcp-example-prompts"><h3 id="mcp-example-prompts">{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><button type="button" onClick={() => { onPrompt?.(prompt); setSelectedProvider(null) }}><MessageCircle aria-hidden="true" /><span>{prompt}</span></button></li>)}</ul></section> : null}
-            <section className={styles.providerDetailMetadata} data-testid="mcp-provider-detail-metadata" aria-label={t("mcp.details")}>
-              <h3>{t("mcp.details")}</h3>
-              <dl>
-                {selectedProvider.category_keys.length > 0 ? <div><dt>{t("mcp.detailCategory")}</dt><dd>{selectedProvider.category_keys.map(categoryLabel).join("、")}</dd></div> : null}
-                <div><dt>{t("mcp.detailConnectorType")}</dt><dd>{t(selectedProvider.directory_type === "app" ? "mcp.directoryTypeApp" : "mcp.directoryTypeDataSource")}</dd></div>
-                {selectedProvider.author ? <div><dt>{t("mcp.detailAuthor")}</dt><dd>{selectedProvider.author}</dd></div> : null}
-              </dl>
-            </section>
-            {selectedProvider.website || selectedProvider.privacy_url ? <section className={styles.providerDetailLinks} aria-label={t("mcp.detailMoreInformation")}>
-              <h3>{t("mcp.detailMoreInformation")}</h3>
-              <div>
-                {selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{t("mcp.detailWebsite")}</a> : null}
-                {selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" />{t("mcp.detailPrivacyPolicy")}</a> : null}
-              </div>
-            </section> : null}
           </section>
         </> : null}
       </DialogContent>

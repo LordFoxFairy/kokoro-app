@@ -140,7 +140,8 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByRole("menuitem", { name: "从 GitHub 导入" })).toBeNull()
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
     expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "管理连接器" }))
+    expect(await screen.findByRole("button", { name: "删除" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "停用" })).toBeInTheDocument()
   })
 
@@ -1101,7 +1102,9 @@ it("R255 正式设置嵌入 MCP 投影仅显示一个连接器标题", async () 
   try {
     renderSettings(() => {}, undefined, false, undefined, "mcp")
     expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
-    expect(screen.getAllByRole("heading", { name: /^已新增的连接器$/ })).toHaveLength(1)
+    fireEvent.click(screen.getByRole("button", { name: "管理连接器" }))
+    await screen.findByRole("button", { name: "删除" })
+    expect(screen.getAllByRole("heading", { name: "连接器" })).toHaveLength(1)
   } finally {
     cleanup()
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
