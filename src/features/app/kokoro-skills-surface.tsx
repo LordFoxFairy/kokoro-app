@@ -282,6 +282,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         ) : null}
           <div className={styles.content}>
           <div className={styles.filterRow}>
+            <nav className={styles.categoryRail} aria-label={t("skills.categoryAria")}>
+              {CATEGORIES.map(({ value, key }) => <button key={value} type="button" aria-pressed={category === value} onClick={() => setCategory(value)}>{t(key)}</button>)}
+            </nav>
             <div className={styles.compactFilter}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

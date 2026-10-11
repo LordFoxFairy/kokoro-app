@@ -117,10 +117,10 @@ describe("McpPanel", () => {
     expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
     expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument()
+    expect(within(screen.getByRole("navigation", { name: "Connector categories" })).getByRole("button", { name: "All" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).toBeNull()
-    expect(screen.queryByTestId("mcp-featured-provider-gmail")).toBeNull()
-    expect(screen.queryByTestId("mcp-featured-provider-github")).toBeNull()
+    expect(screen.getByTestId("mcp-featured-provider-gmail")).toHaveTextContent("Gmail")
+    expect(screen.getByTestId("mcp-featured-provider-github")).toHaveTextContent("GitHub")
     expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
@@ -305,11 +305,12 @@ describe("McpPanel", () => {
     expect(onPrompt).toHaveBeenCalledWith("Connect me")
   })
 
-  it("uses the Manus directory hierarchy without an invented featured-provider rail", () => {
+  it("uses the observed Manus connector directory hierarchy", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).not.toMatch(/\.featuredRail\s*\{/u)
-    expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title search" "title controls";/u)
+    expect(css).toMatch(/\.featuredRail\s*\{[^}]*display: flex;/u)
+    expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title controls";/u)
+    expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem,calc\(100vw - 2rem\)\);/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: flex-start;[^}]*padding: 3\.25rem 3rem 1\.5rem;/u)
@@ -318,9 +319,7 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.examplePromptList\s*\{[^}]*grid-template-columns: 1fr;/u)
     expect(css).toMatch(/\.examplePromptList button\s*\{[^}]*min-height: 3\.5rem;[^}]*padding: \.9rem 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
-    expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
-    expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
-    expect(css).not.toMatch(/\.highlightCard\s*\{/u)
+    expect(source).toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 100%;[^}]*height: 8\.75rem;/u)
     expect(css).toMatch(/@media \(min-width: 48rem\) \{[\s\S]*?\.providerGrid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   })
@@ -681,8 +680,8 @@ it("uses Manus's visual catalog cards with one-column/mobile and two-column/desk
   const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-  fireEvent.pointerDown(await screen.findByRole("button", { name: "全部" }), { button: 0, ctrlKey: false })
-  for (const name of ["效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(await screen.findByRole("menuitem", { name })).toBeInTheDocument()
+  const rail = await screen.findByRole("navigation", { name: "连接器分类" })
+  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
 })
 
 it("uses the observed Manus Chinese connector category labels", async () => {
@@ -701,8 +700,8 @@ it("uses the observed Manus Chinese connector category labels", async () => {
   }))
   const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
-  fireEvent.pointerDown(await screen.findByRole("button", { name: "全部" }), { button: 0, ctrlKey: false })
-  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(await screen.findByRole("menuitem", { name })).toBeInTheDocument()
+  const rail = await screen.findByRole("navigation", { name: "连接器分类" })
+  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
 })
 
 it("exposes Manus-style connector creation from the directory header", async () => {

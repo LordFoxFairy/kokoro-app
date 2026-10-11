@@ -15,14 +15,15 @@
   align-items: center;
 }
 
-/* Manus keeps the page header quiet: title at left, search and actions at
- * right, then one compact filter before the actual catalog. */
+/* Manus keeps the page header quiet: title at left and actions at right; the
+ * catalogue then leads with owner-ordered providers, search, and direct categories. */
 .header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34rem);
-  grid-template-areas: "title search" "title controls";
-  gap: .7rem 1rem;
-  margin-bottom: 1.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title controls";
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 .header h2 {
   grid-area: title;
@@ -89,8 +90,19 @@
 
 .providerDetailTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-.directoryControls { display: flex; min-height: 2.9rem; align-items: center; }
-.searchField { position: relative; display: block; grid-area: search; width: 100%; min-width: 0; }
+.featuredRail { display: flex; min-width: 0; gap: .75rem; overflow-x: auto; overscroll-behavior-inline: contain; padding: .1rem 0 .4rem; scrollbar-width: none; }
+.featuredRail::-webkit-scrollbar { display: none; }
+.featuredProvider { display: flex; width: min(17rem, 76vw); min-height: 5.1rem; flex: 0 0 min(17rem, 76vw); align-items: center; gap: .8rem; overflow: hidden; border: 1px solid rgb(0 0 0 / 9%); border-radius: .85rem; background: rgb(255 255 254); padding: .75rem; color: var(--foreground); text-align: left; cursor: pointer; }
+.featuredProvider:hover { border-color: rgb(0 0 0 / 18%); background: rgb(55 53 47 / 2%); }
+.featuredProvider:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.featuredProviderLogo { position: relative; display: inline-flex; width: 3.25rem; height: 3.25rem; flex: 0 0 3.25rem; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgb(0 0 0 / 7%); border-radius: .7rem; background: rgb(55 53 47 / 3%); }
+.featuredProviderLogo img { object-fit: contain; padding: .55rem; }
+.featuredProviderLogo svg { width: 1.35rem; height: 1.35rem; color: var(--muted-foreground); }
+.featuredProviderCopy { display: flex; min-width: 0; flex-direction: column; gap: .18rem; }
+.featuredProviderCopy strong { overflow: hidden; font-size: .9rem; font-weight: 650; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
+.featuredProviderCopy span { display: -webkit-box; overflow: hidden; color: var(--muted-foreground); font-size: .78rem; line-height: 1.1rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.directoryControls { display: flex; min-height: 2.9rem; align-items: center; flex-wrap: wrap; gap: .55rem .75rem; }
+.searchField { position: relative; display: block; width: min(100%, 32rem); min-width: 14rem; flex: 1 1 22rem; }
 .searchField > svg { position: absolute; z-index: 1; top: 50%; left: 1rem; width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); transform: translateY(-50%); }
 .searchField :global(input) { width: 100%; height: 2.9rem; min-height: 2.9rem; border: 1px solid rgb(0 0 0 / 13%); border-radius: .8rem; background: rgb(255 255 254); padding: 0 1rem 0 3rem; box-shadow: none; font-size: .95rem; }
 .searchField :global(input):focus-visible { border-color: rgb(0 0 0 / 44%); box-shadow: 0 0 0 3px rgb(0 0 0 / 7%); }
@@ -98,6 +110,13 @@
 .filterTrigger svg { width: 1.1rem; height: 1.1rem; }
 .filterMenu { min-width: 9rem; }
 .filterMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.35rem; padding: .55rem .7rem; }
+.categoryRail { display: flex; min-width: 0; align-items: center; gap: .125rem; overflow-x: auto; scrollbar-width: none; }
+.categoryRail::-webkit-scrollbar { display: none; }
+.categoryRail button { height: 2.5rem; flex: 0 0 auto; border: 0; border-radius: .625rem; background: transparent; padding: 0 .7rem; color: var(--muted-foreground); font: inherit; font-size: .875rem; font-weight: 500; line-height: 1.25rem; cursor: pointer; }
+.categoryRail button:hover { background: rgb(55 53 47 / 5%); color: var(--foreground); }
+.categoryRail button[aria-pressed="true"] { background: rgb(55 53 47 / 8%); color: var(--foreground); font-weight: 600; }
+.categoryRail button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.compactFilter { display: none; }
 
 .providerSection,
 .connectionSection { min-width: 0; }
@@ -214,10 +233,14 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 42rem) {
-  .header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "search" "controls"; }
+  .header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "controls"; }
   .header h2 { font-size: 1.5rem; }
   .headerControls { justify-content: stretch; flex-wrap: wrap; }
   .viewToggle { width: 100%; }
+  .directoryControls { align-items: stretch; }
+  .directoryControls .searchField { width: 100%; flex-basis: 100%; }
+  .categoryRail { display: none; }
+  .compactFilter { display: block; }
   .connectorGrid { grid-template-columns: 1fr; }
   .providerDetailHeader { padding: 3rem 1.25rem 1.25rem; }
   .providerDetailBody { gap: 1rem; padding: .5rem 1rem 1rem; }

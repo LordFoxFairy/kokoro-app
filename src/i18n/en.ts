@@ -303,6 +303,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "plugins.manageConnectors": "Manage connectors",
   "plugins.create": "Create",
   "plugins.search": "Search connectors and data sources",
+  "mcp.categoryAria": "Connector categories",
   "plugins.connectors": "Connectors",
   "plugins.connectorsDescription": "Connect apps and APIs to share your workflows.",
   "plugins.dataSources": "Data sources",
