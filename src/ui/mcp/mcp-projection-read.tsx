@@ -362,10 +362,13 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
       <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")} data-detail-layout="manus">
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader}>
+            <span className={styles.providerDetailLogo} data-testid="mcp-provider-detail-logo" aria-hidden="true">
+              {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4.5rem" unoptimized /> : <Cable />}
+            </span>
             <div className={styles.providerDetailCopy}>
               {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
-              {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
+              {selectedProvider.author ? <DialogDescription className={styles.providerDetailAttribution}>{selectedProvider.author}</DialogDescription> : null}
               <Button type="button" className={styles.detailAddAction} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })} disabled={actionId !== null}>{actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("mcp.addConnector")}</Button>
             </div>
           </header>

@@ -270,6 +270,7 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByRole("link", { name: "provider.example.com" })).toHaveAttribute("href", "https://provider.example.com")
     expect(within(detail).getByRole("link", { name: "provider.example.com/privacy" })).toHaveAttribute("href", "https://provider.example.com/privacy")
+    expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
 
     fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
@@ -282,6 +283,8 @@ describe("McpPanel", () => {
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 61px 24px 20px;/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*text-align: center;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4\.5rem;[^}]*height: 4\.5rem;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
