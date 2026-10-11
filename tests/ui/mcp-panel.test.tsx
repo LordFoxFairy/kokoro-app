@@ -118,6 +118,8 @@ describe("McpPanel", () => {
     expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("data-active", "true")
     expect(screen.queryByRole("combobox")).toBeNull()
+    expect(screen.getByTestId("mcp-featured-provider-gmail")).toHaveTextContent("Gmail")
+    expect(screen.getByTestId("mcp-featured-provider-github")).toHaveTextContent("GitHub")
     expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
   })
@@ -252,7 +254,7 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
-  it("opens a Manus-style provider detail dialog with the real add and management actions", async () => {
+  it("opens a Manus-style provider detail dialog with only supported actions", async () => {
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
@@ -269,17 +271,19 @@ describe("McpPanel", () => {
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
     expect(within(detail).getByText("开发")).toBeInTheDocument()
     expect(within(detail).getByRole("button", { name: "Add Provider One" })).toBeInTheDocument()
-    expect(within(detail).getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
+    expect(within(detail).queryByRole("button", { name: "Manage connectors" })).toBeNull()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
-  it("uses the Manus directory proportions and keeps provider artwork tied to known local assets", () => {
+  it("uses the Manus directory hierarchy and keeps provider artwork tied to owner data", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(62rem, calc\(100dvh - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(10rem, 16rem\);[^}]*padding: 3rem 3rem 2rem;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 10rem;[^}]*height: 10rem;/u)
+    expect(css).toMatch(/\.featuredRail\s*\{[^}]*overflow-x: auto;/u)
+    expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 13\.5rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem, calc\(100vw - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*padding: 3\.5rem 2rem 2rem;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: center;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 6rem;[^}]*height: 6rem;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)

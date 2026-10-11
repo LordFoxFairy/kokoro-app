@@ -282,6 +282,17 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
     {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
 
     {projection ? <div className={styles.content}>
+      {view === "catalog" && providers.length > 0 ? <section className={styles.featuredSection} aria-label={t("mcp.provider")}>
+        <div className={styles.featuredRail}>
+          {providers.map((provider) => <button key={provider.provider_key} type="button" className={styles.featuredProvider} data-testid={`mcp-featured-provider-${provider.provider_key}`} onClick={() => setSelectedProvider(provider)} aria-label={`Featured ${provider.display_name}`}>
+            <span className={styles.featuredProviderLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="3rem" unoptimized /> : <Cable />}</span>
+            <span className={styles.featuredProviderCopy}>
+              <span>{provider.display_name}</span>
+              {provider.description ? <small>{provider.description}</small> : null}
+            </span>
+          </button>)}
+        </div>
+      </section> : null}
       {view === "catalog" ? <div className={styles.directoryControls}>
         <label className={styles.searchField}>
           <Search aria-hidden="true" />
@@ -367,12 +378,6 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
                   {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
                   {t("plugins.addConnector", { name: selectedProvider.display_name })}
                 </Button>
-                <Button type="button" variant="outline" className={styles.providerDetailSecondaryAction} disabled={actionId !== null} onClick={() => {
-                  setSelectedProvider(null)
-                  setRefreshing(true)
-                  setRefreshError(false)
-                  setView("connections")
-                }}>{t("plugins.manageConnectors")}</Button>
               </div>
             </div>
             <span className={styles.providerDetailLogo} data-testid="mcp-provider-detail-logo" aria-hidden="true">
