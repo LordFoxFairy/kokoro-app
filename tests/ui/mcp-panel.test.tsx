@@ -3,12 +3,13 @@
 // text 输入按 placeholder 定位；Radix Select 按 aria-label 打开后选择可见选项。
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { useRef, useState } from "react"
+import { StrictMode, useRef, useState } from "react"
 
 import { createHubClient, HubClientError, type HubClient } from "@/hub/client"
 import type { McpSecret, McpServerView } from "@/hub/schemas"
 import { LocaleProvider } from "@/i18n/context"
 import { McpContent, McpCreateDialog, McpPanel } from "@/ui/mcp/mcp-panel"
+import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 
 const OFFICIAL: McpServerView = {
   scope: "official",
@@ -104,6 +105,18 @@ describe("McpPanel", () => {
       "/api/hub/self/mcp/connectors",
       "/api/hub/self/mcp/providers",
     ])
+  })
+
+  it("shares a single initial owner projection across StrictMode effect replay", async () => {
+    const listMcpPersonalConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
+    const listMcpPersonalProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
+    const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders })
+
+    render(<StrictMode><LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" /></LocaleProvider></StrictMode>)
+
+    await screen.findByText("Workspace search")
+    expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(1)
+    expect(listMcpPersonalProviders).toHaveBeenCalledTimes(1)
   })
 
   it("does not present revoked connector audit records as active user connections", async () => {

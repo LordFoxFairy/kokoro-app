@@ -20,6 +20,32 @@ type Projection = { connectors: McpPersonalConnectorPage; providers: McpPersonal
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
 type Editor = { kind: "edit"; connector: McpPersonalConnector }
 
+// StrictMode intentionally replays effects during local development. Share
+// only an in-flight, immutable projection GET for one authenticated lifecycle;
+// explicit refreshes carry a new generation and always read fresh owner truth.
+const projectionInflight = new WeakMap<object, Map<string, Promise<Projection>>>()
+
+function readProjection(client: HubClient, key: string, cursor: string | null): Promise<Projection> {
+  let requests = projectionInflight.get(client)
+  if (requests === undefined) {
+    requests = new Map()
+    projectionInflight.set(client, requests)
+  }
+  const current = requests.get(key)
+  if (current !== undefined) return current
+
+  const request = Promise.all([
+    client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }),
+    client.listMcpPersonalProviders({ limit: 100 }),
+  ]).then(([connectors, providers]) => ({ connectors, providers }))
+  requests.set(key, request)
+  const clear = (): void => {
+    if (requests?.get(key) === request) requests.delete(key)
+  }
+  void request.then(clear, clear)
+  return request
+}
+
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
 }
@@ -57,26 +83,24 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
-    const controller = new AbortController()
+    let active = true
     const requestCursor = cursor
     const requestGeneration = generation
-    void Promise.all([
-      client.listMcpPersonalConnectors(requestCursor === null ? {} : { cursor: requestCursor }, controller.signal),
-      client.listMcpPersonalProviders({ limit: 100 }, controller.signal),
-    ]).then(
-      ([connectors, providers]) => {
-        if (controller.signal.aborted || requestCursor !== cursor || requestGeneration !== generation) return
+    const requestKey = JSON.stringify([identity, requestCursor, requestGeneration])
+    void readProjection(client, requestKey, requestCursor).then(
+      ({ connectors, providers }) => {
+        if (!active || requestCursor !== cursor || requestGeneration !== generation) return
         setState({ kind: "ready", data: { connectors, providers } })
       },
       () => {
-        if (controller.signal.aborted || requestCursor !== cursor || requestGeneration !== generation) return
+        if (!active || requestCursor !== cursor || requestGeneration !== generation) return
         setRefreshError(true)
         setState((current) => current.kind === "ready" ? current : { kind: "error" })
       },
     ).finally(() => {
-      if (!controller.signal.aborted && requestCursor === cursor && requestGeneration === generation) setRefreshing(false)
+      if (active && requestCursor === cursor && requestGeneration === generation) setRefreshing(false)
     })
-    return () => { controller.abort() }
+    return () => { active = false }
   }, [client, cursor, generation, identity])
 
   const projection = state.kind === "ready" ? state.data : null

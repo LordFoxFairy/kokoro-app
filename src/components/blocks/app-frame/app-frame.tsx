@@ -623,6 +623,7 @@ function AppFrameRuntime({
   }
 
   const emptyStateProps: EmptyStateProps = {
+    ...(projectReadBoundary === undefined ? {} : { projectReadBoundary }),
     projectInstructionContext: projectReads.context,
     projectHistoryStatus: projectReads.instructionHistory.status,
     projectHistoryRetryable: projectReads.instructionHistory.status === "error" && projectReads.instructionHistory.retryable,

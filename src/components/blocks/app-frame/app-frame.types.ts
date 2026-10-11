@@ -102,6 +102,11 @@ export type AppFrameProps = {
 }
 
 export type EmptyStateProps = {
+  /**
+   * The shell's current admission decision. Route-owned surfaces must use this
+   * boundary before mounting their own browser reads.
+   */
+  projectReadBoundary?: ProjectReadBoundary
   projectInstructionContext?: object
   projectHistoryStatus?: "blocked" | "loading" | "ready" | "error"
   projectHistoryRetryable?: boolean
