@@ -276,11 +276,8 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {t("skills.added")} {lastAddedSkill}
           </span>
         ) : null}
-        <div className={styles.content}>
+          <div className={styles.content}>
           <div className={styles.filterRow}>
-            <nav className={styles.categoryRail} aria-label={t("skills.categoryAria")}>
-              {CATEGORIES.map(({ value, key }) => <Button key={value} type="button" variant="ghost" className={styles.categoryButton} data-active={category === value || undefined} onClick={() => setCategory(value)}>{t(key)}</Button>)}
-            </nav>
             <div className={styles.compactFilter}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -40,12 +40,12 @@
 
 .header {
   display: grid;
-  width: min(78rem, calc(100% - 4rem));
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1.5rem;
+  width: min(60rem, calc(100% - 4rem));
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 29rem);
+  align-items: start;
+  gap: 2rem;
   margin: 0 auto;
-  padding: 0.5rem 0 0.25rem;
+  padding: 2.5rem 0 0.75rem;
 }
 
 .header h1 {
@@ -59,13 +59,15 @@
 .headerTools {
   display: flex;
   min-width: 0;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: flex-start;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 .headerActions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.5rem;
 }
 .mySkillsButton,
@@ -119,17 +121,17 @@
   scrollbar-width: thin;
 }
 .content {
-  width: min(78rem, calc(100% - 4rem));
+  width: min(60rem, calc(100% - 4rem));
   margin: 0 auto;
   padding: 0 0 4rem;
 }
 .searchField {
   position: relative;
   display: flex;
-  width: 13rem;
+  width: 100%;
   min-width: 0;
   height: 3rem;
-  flex: 0 1 13rem;
+  flex: 0 1 auto;
   align-items: center;
 }
 .searchField > svg {
@@ -163,30 +165,7 @@
   align-items: center;
   padding: 0.5rem 0 0.75rem;
 }
-.categoryRail {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.15rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.categoryRail::-webkit-scrollbar { display: none; }
-.categoryButton {
-  height: 2.15rem;
-  min-height: 2.15rem;
-  flex: 0 0 auto;
-  border-radius: 0.5rem;
-  padding: 0 0.65rem;
-  color: var(--muted-foreground);
-  font-size: 0.85rem;
-  font-weight: 550;
-}
-.categoryButton[data-active="true"] {
-  background: rgb(55 53 47 / 8%);
-  color: var(--foreground);
-}
-.compactFilter { display: none; }
+.compactFilter { display: block; }
 .filterButton {
   height: 2.75rem;
   min-height: 2.75rem;
@@ -264,8 +243,8 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
 }
 .loadMore {
   display: flex;
@@ -485,9 +464,6 @@
     gap: 1rem;
     padding-top: 1.5rem;
   }
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .header h1 {
     margin-top: 0;
   }
@@ -500,8 +476,6 @@
     justify-self: start;
   }
   .searchField { width: 100%; }
-  .categoryRail { display: none; }
-  .compactFilter { display: block; }
 }
 
 @media (max-width: 42rem) {
