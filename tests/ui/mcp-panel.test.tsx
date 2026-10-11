@@ -1,6 +1,7 @@
 // 连接面板组件测试：server 池渲染（official 只读 / 自有可启停软删 + enabled 徽标）+ 启停/软删重取 +
 // 注册向导（既有 handle / 新建凭据）+ 错误人话化 + 凭据 tab 创建/删除。hub 客户端为注入 fake（不打网络）。
 // text 输入按 placeholder 定位；Radix Select 按 aria-label 打开后选择可见选项。
+import { readFileSync } from "node:fs"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { StrictMode, useRef, useState } from "react"
@@ -239,6 +240,14 @@ describe("McpPanel", () => {
     fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
     await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Provider One" })).toBeNull())
+  })
+
+  it("uses the same measured detail geometry as the Skills catalog without inventing a provider cover", () => {
+    const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 61px 24px 20px;/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
+    expect(css).toMatch(/\.providerDetailMedia \{ display: none; \}/u)
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {

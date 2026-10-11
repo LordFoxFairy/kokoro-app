@@ -1080,3 +1080,10 @@ it("uses the Manus-style identity, summary and real-example composition for a pe
   expect(dialog).not.toHaveTextContent("技术详情")
   expect(dialog).not.toHaveTextContent("SKILL.md")
 })
+
+it("uses the catalog detail dialog's measured 800px/600px geometry for personal details", () => {
+  const css = readFileSync("src/ui/skills/personal-skills-read.module.css", "utf8")
+  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.detailHero\s*\{[^}]*padding: 61px 24px 20px;/u)
+  expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
+})
