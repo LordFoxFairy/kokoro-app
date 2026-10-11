@@ -282,7 +282,10 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 10rem;[^}]*height: 10rem;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
-    expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
+    expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
+    expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
+    expect(css).not.toMatch(/\.highlightCard\s*\{/u)
+    expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 2\.5rem;[^}]*height: 2\.5rem;/u)
     expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   })
 
@@ -632,6 +635,17 @@ it("uses Manus's compact two-column connector directory on desktop and one colum
   expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: \.8rem;/u)
   expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.providerGrid,[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
+})
+
+it("keeps the full Manus category rail even when the current owner catalog is sparse", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const sparseProvider = { provider_key: "provider-development", display_name: "Development", description: "Real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: [], website: undefined, privacy_url: undefined, enabled: true, state_version: "1" }
+  const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
+  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) {
+    expect(await screen.findByRole("button", { name })).toBeInTheDocument()
+  }
 })
 
 it("uses the observed Manus Chinese connector category labels", async () => {

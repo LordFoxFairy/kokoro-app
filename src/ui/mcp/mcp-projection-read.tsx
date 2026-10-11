@@ -202,9 +202,11 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
       .some((value) => value.toLocaleLowerCase().includes(normalizedProviderQuery))
     return matchesQuery && (categoryFilter === "all" || provider.category_keys.includes(categoryFilter as McpPersonalProvider["category_keys"][number]))
   })
-  const categoryOptions = [...new Set(providers.flatMap((provider) => provider.category_keys))]
+  // Manus keeps the category rail stable even while the owner's current page is
+  // sparse. The taxonomy is UI vocabulary, not a fabricated provider record;
+  // cards still come only from the Platform projection above.
+  const categoryOptions = Object.keys(categoryMessage) as Array<keyof typeof categoryMessage>
   const providerByKey = new Map(providers.map((provider) => [provider.provider_key, provider]))
-  const providerHighlights = providers.slice(0, 4)
 
   const reload = () => {
     setRefreshing(true)
@@ -280,12 +282,6 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
     {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
 
     {projection ? <div className={styles.content}>
-      {view === "catalog" && providerHighlights.length > 0 ? <section className={styles.providerHighlights} aria-label={t("mcp.provider")}>
-        {providerHighlights.map((provider) => <button type="button" key={provider.provider_key} className={styles.highlightCard} onClick={() => setSelectedProvider(provider)}>
-          <span className={styles.highlightLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.5rem" unoptimized /> : <Cable />}</span>
-          <span>{provider.description ?? provider.display_name}</span>
-        </button>)}
-      </section> : null}
       {view === "catalog" ? <div className={styles.directoryControls}>
         <label className={styles.searchField}>
           <Search aria-hidden="true" />
