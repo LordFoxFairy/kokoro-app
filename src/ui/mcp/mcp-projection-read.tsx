@@ -126,11 +126,13 @@ function providerLogo(provider: Pick<McpPersonalProvider, "provider_key">): stri
  * flight, so an asynchronous mutation never replaces the user's page with a
  * loading screen or shifts the list beneath the pointer.
  */
-export function McpProjectionRead({ client, identity, onCreateMcp }: {
+export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
   client: HubClient
   embedded?: boolean
   identity: string
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
+  /** The shell owns the composer and conversation transition for catalogue prompts. */
+  onPrompt?: (prompt: string) => void
 }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
@@ -401,7 +403,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
             </div>
           </header>
           <section className={styles.providerDetailBody}>
-            {selectedProvider.example_prompts.length > 0 ? <section className={styles.examplePromptSection} aria-labelledby="mcp-example-prompts"><h3 id="mcp-example-prompts">{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><button type="button"><MessageCircle aria-hidden="true" /><span>{prompt}</span></button></li>)}</ul></section> : null}
+            {selectedProvider.example_prompts.length > 0 ? <section className={styles.examplePromptSection} aria-labelledby="mcp-example-prompts"><h3 id="mcp-example-prompts">{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><button type="button" onClick={() => { onPrompt?.(prompt); setSelectedProvider(null) }}><MessageCircle aria-hidden="true" /><span>{prompt}</span></button></li>)}</ul></section> : null}
             <section className={styles.providerDetailMetadata} data-testid="mcp-provider-detail-metadata" aria-label={t("mcp.details")}>
               <h3>{t("mcp.details")}</h3>
               <dl>

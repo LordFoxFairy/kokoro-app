@@ -8,14 +8,16 @@ import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
 
 import styles from "./kokoro-plugins-surface.module.css"
 
-type KokoroPluginsSurfaceProps = Pick<EmptyStateProps, "preview" | "onCreateMcp" | "projectReadBoundary">
+type KokoroPluginsSurfaceProps = Pick<EmptyStateProps, "onCreateMcp" | "preview" | "projectReadBoundary"> & {
+  onPrompt?: EmptyStateProps["onPrompt"]
+}
 
 /**
  * The plugins route is a live projection of Platform-owned MCP providers and
  * user connectors. It intentionally has no fixture directory: a card is only
  * rendered after the BFF has admitted and returned the provider metadata.
  */
-export function KokoroPluginsSurface({ preview = false, projectReadBoundary, onCreateMcp }: KokoroPluginsSurfaceProps) {
+export function KokoroPluginsSurface({ preview = false, projectReadBoundary, onCreateMcp, onPrompt }: KokoroPluginsSurfaceProps) {
   const client = useMemo(() => browserHubClient({ preview }), [preview])
   const boundary = projectReadBoundary
 
@@ -31,7 +33,7 @@ export function KokoroPluginsSurface({ preview = false, projectReadBoundary, onC
   return (
     <div className={styles.page} data-testid="plugins-page">
       <div className={styles.content}>
-        {identity === null ? null : <McpProjectionRead key={identity} client={client} embedded identity={identity} {...(onCreateMcp === undefined ? {} : { onCreateMcp })} />}
+        {identity === null ? null : <McpProjectionRead key={identity} client={client} embedded identity={identity} {...(onCreateMcp === undefined ? {} : { onCreateMcp })} {...(onPrompt === undefined ? {} : { onPrompt })} />}
       </div>
     </div>
   )

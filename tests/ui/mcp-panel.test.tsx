@@ -292,6 +292,19 @@ describe("McpPanel", () => {
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
+  it("sends a connector example prompt into the workspace interaction instead of rendering a dead card", async () => {
+    const onPrompt = vi.fn()
+    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
+    render(<LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" onPrompt={onPrompt} /></LocaleProvider>)
+
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Connect me" }))
+
+    expect(onPrompt).toHaveBeenCalledOnce()
+    expect(onPrompt).toHaveBeenCalledWith("Connect me")
+  })
+
   it("uses the Manus directory hierarchy without an invented featured-provider rail", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
