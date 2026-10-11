@@ -1,33 +1,39 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
+import { Link2, LoaderCircle, Pencil, Plus, Power, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { HubClient } from "@/hub/client"
-import type { McpPersonalConnector, McpPersonalConnectorPage, McpPersonalProviderPage } from "@/hub/mcp-personal.schema"
+import type { McpPersonalConnector, McpPersonalConnectorPage, McpPersonalProvider, McpPersonalProviderPage } from "@/hub/mcp-personal.schema"
 import { useT } from "@/i18n/context"
+
+import styles from "./mcp-projection-read.module.css"
 
 type Projection = { connectors: McpPersonalConnectorPage; providers: McpPersonalProviderPage }
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
+type Editor = { kind: "create"; providerKey: string } | { kind: "edit"; connector: McpPersonalConnector }
 
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
 }
 
-function connectorVariant(status: McpPersonalConnector["status"]): "secondary" | "default" | "destructive" | "outline" {
-  if (status === "active") return "default"
-  if (status === "error") return "destructive"
-  if (status === "revoked") return "outline"
-  return "secondary"
+function providerInitial(provider: McpPersonalProvider): string {
+  return provider.display_name.trim().slice(0, 1).toLocaleUpperCase() || "·"
 }
 
+/**
+ * Platform is the source of every provider and connector rendered here.  This
+ * component only retains the last confirmed projection while a refresh is in
+ * flight, so an asynchronous mutation never replaces the user's page with a
+ * loading screen or shifts the list beneath the pointer.
+ */
 export function McpProjectionRead({ client, embedded = false, identity }: { client: HubClient; embedded?: boolean; identity: string }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
@@ -38,11 +44,10 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [refreshError, setRefreshError] = useState(false)
   const [actionId, setActionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [editor, setEditor] = useState<Editor | null>(null)
   const [providerKey, setProviderKey] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -79,18 +84,27 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     setGeneration((value) => value + 1)
   }
   const resetEditor = () => {
-    setCreateOpen(false)
-    setEditingId(null)
+    setEditor(null)
     setDeleteId(null)
     setDisplayName("")
     setDescription("")
   }
-  const beginEdit = (connector: McpPersonalConnector) => {
-    setEditingId(connector.connector_id)
+  const openCreate = (key = providers[0]?.provider_key ?? "") => {
+    if (!key) return
+    setProviderKey(key)
+    setDisplayName("")
+    setDescription("")
     setDeleteId(null)
-    setCreateOpen(false)
+    setActionError(false)
+    setEditor({ kind: "create", providerKey: key })
+  }
+  const beginEdit = (connector: McpPersonalConnector) => {
+    setProviderKey(connector.provider_key)
     setDisplayName(connector.display_name ?? "")
     setDescription(connector.description ?? "")
+    setDeleteId(null)
+    setActionError(false)
+    setEditor({ kind: "edit", connector })
   }
   const runAction = async (id: string, action: () => Promise<unknown>) => {
     setActionId(id)
@@ -125,47 +139,86 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     }))
   }
 
-  return <section className="space-y-4" data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      {embedded ? null : <h2 className="text-xl font-semibold">{t("mcp.title")}</h2>}
-      <Button type="button" onClick={() => { setCreateOpen(true); setEditingId(null); setDeleteId(null); setActionError(false) }} disabled={providers.length === 0 || actionId !== null}>
-        {t("mcp.addConnector")}
+  const editorProvider = providerByKey.get(providerKey)
+  const editorTitle = editor?.kind === "edit" ? t("mcp.edit") : t("mcp.addConnector")
+
+  return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
+    <header className={styles.header}>
+      {embedded ? <div /> : <h2>{t("mcp.title")}</h2>}
+      <Button type="button" className={styles.primaryAction} onClick={() => openCreate()} disabled={providers.length === 0 || actionId !== null}>
+        <Plus aria-hidden="true" />{t("mcp.addConnector")}
       </Button>
-    </div>
-    {state.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
-    {state.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={reload}>{t("mcp.retry")}</Button></Alert> : null}
-    {refreshError && projection ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={reload}>{t("mcp.retry")}</Button></Alert> : null}
-    {actionError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
-    {createOpen ? <Card><CardContent className="p-4"><form className="grid gap-3 sm:max-w-xl" onSubmit={submitCreate}>
-      <div className="grid gap-2"><Label htmlFor="mcp-provider">{t("mcp.provider")}</Label><select id="mcp-provider" className="h-9 rounded-md border border-input bg-transparent px-3 text-sm" value={providerKey} onChange={(event) => setProviderKey(event.target.value)}>{providers.map((provider) => <option key={provider.provider_key} value={provider.provider_key}>{provider.display_name}</option>)}</select></div>
-      <div className="grid gap-2"><Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label><Input id="mcp-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required /></div>
-      <div className="grid gap-2"><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
-      <div className="flex gap-2"><Button type="submit" disabled={actionId !== null || !providerKey}>{actionId === "create" ? <Spinner aria-hidden="true" /> : null}{t("mcp.create")}</Button><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button></div>
-    </form></CardContent></Card> : null}
-    {projection?.connectors.items.length === 0 ? <div className="space-y-2"><p className="text-muted-foreground">{t("mcp.empty")}</p>{providers.length === 0 ? <p className="text-sm text-muted-foreground">{t("mcp.noProviders")}</p> : null}</div> : null}
-    {projection ? <ul className="grid gap-3 sm:grid-cols-2">{projection.connectors.items.map((connector) => {
-      const provider = providerByKey.get(connector.provider_key)
-      const connectorName = connector.display_name || provider?.display_name || connector.provider_key
-      const providerName = provider?.display_name ?? connector.provider_key
-      const busy = actionId === connector.connector_id
-      const editing = editingId === connector.connector_id
-      const deleting = deleteId === connector.connector_id
-      return <li key={connector.connector_id}><Card data-testid="mcp-projection"><CardContent className="space-y-3 p-4">
-        {editing ? <form className="grid gap-3" onSubmit={(event) => submitEdit(event, connector)}>
-          <div className="grid gap-2"><Label htmlFor={`mcp-edit-name-${connector.connector_id}`}>{t("mcp.fieldName")}</Label><Input id={`mcp-edit-name-${connector.connector_id}`} value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required /></div>
-          <div className="grid gap-2"><Label htmlFor={`mcp-edit-description-${connector.connector_id}`}>{t("mcp.description")}</Label><Textarea id={`mcp-edit-description-${connector.connector_id}`} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
-          <div className="flex gap-2"><Button type="submit" disabled={busy}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.saveChanges")}</Button><Button type="button" variant="outline" onClick={resetEditor} disabled={busy}>{t("mcp.cancel")}</Button></div>
-        </form> : <>
-          <div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{connectorName}</p>{providerName !== connectorName ? <p className="text-sm text-muted-foreground">{providerName}</p> : null}</div><Badge variant={connectorVariant(connector.status)}>{t(connectorStatusKey(connector.status))}</Badge></div>
-          {connector.description ? <p className="text-sm text-muted-foreground">{connector.description}</p> : null}
-          {connector.status === "pending" ? <p className="text-sm text-muted-foreground">{t("mcp.connectingHint")}</p> : null}
-          {deleting ? <div className="flex flex-wrap gap-2"><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpPersonalConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}>{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpPersonalConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditingId(null) }}>{t("mcp.delete")}</Button></div>}
-        </>}
-      </CardContent></Card></li>
-    })}</ul> : null}
-    {projection ? <nav className="flex gap-2" aria-label="MCP pages">
-      <Button type="button" variant="outline" disabled={history.length === 0 || actionId !== null} onClick={() => { const previous = history.at(-1) ?? null; setRefreshing(true); setRefreshError(false); setHistory((items) => items.slice(0, -1)); setCursor(previous) }}>{t("plugins.previous")}</Button>
-      <Button type="button" variant="outline" disabled={!projection.connectors.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
-    </nav> : null}
+    </header>
+
+    {state.kind === "loading" ? <div className={styles.loading} role="status"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
+    {state.kind === "error" ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={reload}>{t("mcp.retry")}</Button></Alert> : null}
+    {refreshError && projection ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={reload}>{t("mcp.retry")}</Button></Alert> : null}
+    {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
+
+    {projection ? <div className={styles.content}>
+      <section className={styles.providerSection} aria-label={t("mcp.provider")}>
+        <div className={styles.sectionHeading}>
+          <div><p className={styles.eyebrow}>{t("mcp.provider")}</p><h3>{t("plugins.connectors")}</h3></div>
+          {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
+        </div>
+        {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : <ul className={styles.providerGrid}>
+          {providers.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
+            <div className={styles.providerMark} aria-hidden="true">{providerInitial(provider)}</div>
+            <div className={styles.providerCopy}>
+              <h4>{provider.display_name}</h4>
+              {provider.description ? <p>{provider.description}</p> : null}
+              {provider.category_keys.length > 0 ? <div className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{category}</span>)}</div> : null}
+            </div>
+            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => openCreate(provider.provider_key)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
+              <Plus aria-hidden="true" />
+            </Button>
+          </li>)}
+        </ul>}
+      </section>
+
+      <section className={styles.connectionSection} aria-label={t("mcp.title")}>
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>{t("mcp.title")}</p><h3>{t("mcp.tabServers")}</h3></div></div>
+        {projection.connectors.items.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{projection.connectors.items.map((connector) => {
+          const provider = providerByKey.get(connector.provider_key)
+          const connectorName = connector.display_name || provider?.display_name || connector.provider_key
+          const providerName = provider?.display_name ?? connector.provider_key
+          const busy = actionId === connector.connector_id
+          const deleting = deleteId === connector.connector_id
+          return <li key={connector.connector_id} className={styles.connectorCard} data-testid="mcp-projection">
+            <div className={styles.connectorTop}>
+              <div className={styles.connectorIdentity}><span className={styles.providerMark} aria-hidden="true">{provider ? providerInitial(provider) : "·"}</span><div><h4>{connectorName}</h4>{providerName !== connectorName ? <p>{providerName}</p> : null}</div></div>
+              <span className={styles.status} data-status={connector.status}>{t(connectorStatusKey(connector.status))}</span>
+            </div>
+            {connector.description ? <p className={styles.connectorDescription}>{connector.description}</p> : null}
+            {connector.status === "pending" ? <p className={styles.pendingHint}>{t("mcp.connectingHint")}</p> : null}
+            {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpPersonalConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpPersonalConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
+          </li>
+        })}</ul>}
+      </section>
+
+      <nav className={styles.pagination} aria-label="MCP pages">
+        <Button type="button" variant="outline" disabled={history.length === 0 || actionId !== null} onClick={() => { const previous = history.at(-1) ?? null; setRefreshing(true); setRefreshError(false); setHistory((items) => items.slice(0, -1)); setCursor(previous) }}>{t("plugins.previous")}</Button>
+        <Button type="button" variant="outline" disabled={!projection.connectors.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
+      </nav>
+    </div> : null}
+
+    <Dialog open={editor !== null} onOpenChange={(open) => { if (!open && actionId === null) resetEditor() }}>
+      <DialogContent className={styles.editorDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")}>
+        <DialogHeader className={styles.editorHeader}>
+          <DialogTitle>{editorTitle}</DialogTitle>
+          <DialogDescription>{editor?.kind === "edit" ? t("mcp.description") : (editorProvider?.description ?? t("mcp.provider"))}</DialogDescription>
+        </DialogHeader>
+        {editor?.kind === "create" ? <form className={styles.editorForm} onSubmit={submitCreate}>
+          <div className={styles.field}><Label htmlFor="mcp-provider">{t("mcp.provider")}</Label><select id="mcp-provider" value={providerKey} onChange={(event) => { setProviderKey(event.target.value); setEditor({ kind: "create", providerKey: event.target.value }) }}>{providers.map((provider) => <option key={provider.provider_key} value={provider.provider_key}>{provider.display_name}</option>)}</select></div>
+          <div className={styles.field}><Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label><Input id="mcp-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required autoFocus /></div>
+          <div className={styles.field}><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
+          <footer className={styles.editorActions}><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button><Button type="submit" disabled={actionId !== null || !providerKey}>{actionId === "create" ? <Spinner aria-hidden="true" /> : null}{t("mcp.create")}</Button></footer>
+        </form> : editor?.kind === "edit" ? <form className={styles.editorForm} onSubmit={(event) => submitEdit(event, editor.connector)}>
+          <div className={styles.field}><Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label><Input id="mcp-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required autoFocus /></div>
+          <div className={styles.field}><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
+          <footer className={styles.editorActions}><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button><Button type="submit" disabled={actionId !== null}>{actionId === editor.connector.connector_id ? <Spinner aria-hidden="true" /> : null}{t("mcp.saveChanges")}</Button></footer>
+        </form> : null}
+      </DialogContent>
+    </Dialog>
   </section>
 }

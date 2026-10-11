@@ -136,6 +136,26 @@ describe("McpPanel", () => {
     expect(listMcpPersonalConnectors.mock.calls.length).toBeGreaterThan(1)
   })
 
+  it("keeps the live connector list in place while a provider-specific add dialog opens", async () => {
+    const client = makeClient({
+      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+    })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    const existing = await screen.findByText("Workspace search")
+    const provider = await screen.findByTestId("mcp-provider-card-provider-one")
+    expect(provider).toHaveTextContent("Provider One")
+    expect(provider).toHaveTextContent("A real provider")
+
+    fireEvent.click(within(provider).getByRole("button", { name: "Add Provider One" }))
+
+    const dialog = await screen.findByRole("dialog", { name: "Add connector" })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByLabelText("Connector provider")).toHaveValue("provider-one")
+    expect(existing).toBeInTheDocument()
+  })
+
   it("retains the rendered list during a refresh and retires a late prior identity response", async () => {
     let resolveSecond!: (value: { items: typeof CONNECTOR[]; next_cursor: string | null }) => void
     const listA = vi.fn()
