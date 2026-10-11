@@ -79,11 +79,14 @@ function startFetch(entry: Entry): void {
 }
 
 // 订阅 key 并按需触发取数：挂载即后台刷新（in-flight 则去重共享）。返回退订。
-export function subscribeResource(key: string, fetcher: Fetcher, onChange: () => void): () => void {
+export function subscribeResource(key: string, fetcher: Fetcher, onChange: () => void, revalidateOnSubscribe = true): () => void {
   const entry = ensure(key)
   entry.fetcher = fetcher
   entry.listeners.add(onChange)
-  if (!entry.inflight) {
+  // A mounted catalog can opt out of remount revalidation. Commands still use
+  // invalidate/refetch as the explicit freshness boundary, so returning to an
+  // unchanged surface neither flashes nor repeats the same owner reads.
+  if (!entry.inflight && (revalidateOnSubscribe || entry.snapshot.data === undefined)) {
     startFetch(entry)
   }
   return () => {

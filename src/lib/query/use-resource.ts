@@ -20,7 +20,12 @@ export type ResourceResult<T> = {
   refetch: () => void
 }
 
-export function useResource<T>(key: string, fetcher: () => Promise<T>): ResourceResult<T> {
+export type UseResourceOptions = Readonly<{
+  /** Keep a confirmed snapshot when this surface remounts; explicit invalidation still refreshes it. */
+  revalidateOnSubscribe?: boolean
+}>
+
+export function useResource<T>(key: string, fetcher: () => Promise<T>, options: UseResourceOptions = {}): ResourceResult<T> {
   // fetcher 经 ref 取用（初值即当次 fetcher，后续渲染由 effect 同步）：引用变化不重订阅，
   // subscribe/refetch 回调始终调最新 fetcher。ref 写在 effect 内以合规 react-compiler。
   const fetcherRef = useRef(fetcher)
@@ -29,8 +34,8 @@ export function useResource<T>(key: string, fetcher: () => Promise<T>): Resource
   })
 
   const subscribe = useCallback(
-    (onChange: () => void) => subscribeResource(key, () => fetcherRef.current(), onChange),
-    [key],
+    (onChange: () => void) => subscribeResource(key, () => fetcherRef.current(), onChange, options.revalidateOnSubscribe),
+    [key, options.revalidateOnSubscribe],
   )
 
   const snapshot = useSyncExternalStore(

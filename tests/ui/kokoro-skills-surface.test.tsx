@@ -100,6 +100,19 @@ it("loads one Manus catalog page at a time instead of eagerly walking every curs
   expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(2)
 })
 
+it("keeps the confirmed Manus catalog across a route remount without duplicate list reads", async () => {
+  const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
+  vi.stubGlobal("fetch", fetchMock)
+  renderLive()
+  await screen.findByRole("button", { name: "Manim 动画师" })
+  cleanup()
+
+  renderLive()
+  expect(await screen.findByRole("button", { name: "Manim 动画师" })).toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListHubSkills"))).toHaveLength(1)
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(1)
+})
+
 it("uses one Manus-style category filter instead of a duplicate category rail", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)

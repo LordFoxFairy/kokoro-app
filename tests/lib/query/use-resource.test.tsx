@@ -47,3 +47,14 @@ describe("useResource", () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
 })
+
+it("keeps an explicitly cached resource across a remount without a duplicate owner read", async () => {
+  const fetcher = vi.fn().mockResolvedValue("catalog")
+  const first = renderHook(() => useResource("r/catalog", fetcher, { revalidateOnSubscribe: false }))
+  await waitFor(() => expect(first.result.current.data).toBe("catalog"))
+  first.unmount()
+
+  const second = renderHook(() => useResource("r/catalog", fetcher, { revalidateOnSubscribe: false }))
+  expect(second.result.current).toMatchObject({ data: "catalog", loading: false })
+  expect(fetcher).toHaveBeenCalledTimes(1)
+})

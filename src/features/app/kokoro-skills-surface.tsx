@@ -85,7 +85,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     const base = browserHubClient({ preview })
     return preview ? base : createManusSkillHubClient(base)
   }, [preview])
-  const catalog = useResource<SkillCatalog>(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`, useCallback(() => client.listSkillCatalog(), [client]))
+  const catalog = useResource<SkillCatalog>(
+    `${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`,
+    useCallback(() => client.listSkillCatalog(), [client]),
+    { revalidateOnSubscribe: false },
+  )
   const [pageState, setPageState] = useState<Readonly<{ base: SkillCatalog | undefined; pages: readonly SkillCatalog[] }>>({ base: undefined, pages: [] })
   const [loadingMoreFor, setLoadingMoreFor] = useState<SkillCatalog | undefined>()
   const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>()
