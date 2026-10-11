@@ -454,7 +454,7 @@
   height: 1.5rem;
 }
 
-@media (max-width: 72rem) {
+@media (max-width: 48rem) {
   .header,
   .content {
     width: min(100% - 2rem, 42rem);

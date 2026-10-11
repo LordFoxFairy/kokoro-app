@@ -1166,6 +1166,7 @@ it("uses Manus's responsive three-to-two-to-one catalog geometry without inventi
   expect(css).not.toContain("grid-template-columns: repeat(3, minmax(0, 1fr));")
   expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?display: flex;[\s\S]*?flex-direction: column;/u)
   expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: start;/u)
+  expect(css).toMatch(/@media \(max-width: 48rem\) \{[\s\S]*?\.header\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
   expect(css).toContain("aspect-ratio: 2 / 1;")
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
   expect(css).not.toMatch(/\.categoryRail\s*\{/u)
