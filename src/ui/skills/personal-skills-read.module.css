@@ -137,8 +137,95 @@
 
 .installAction { margin-top: auto; }
 
+/* The personal owner API provides no cover or package reader. Keep the same
+ * identity → summary → examples hierarchy as the catalog without invented UI. */
+.detailOverlay {
+  background: rgb(0 0 0 / 46%);
+  backdrop-filter: blur(4px);
+}
+
+.detailDialog[data-slot="dialog-content"] {
+  display: flex;
+  width: min(76rem, calc(100vw - 3rem));
+  max-width: calc(100vw - 3rem);
+  min-height: min(34rem, calc(100dvh - 3rem));
+  max-height: calc(100dvh - 3rem);
+  flex-direction: column;
+  gap: 0;
+  overflow: auto;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 14%);
+  border-radius: 1.125rem;
+  background: rgb(255 255 254);
+  box-shadow: 0 28px 72px rgb(0 0 0 / 26%);
+}
+
+.detailDialog > :global([data-slot="dialog-close"]) { top: 1.5rem; right: 1.75rem; }
+
+.detailHero {
+  display: flex;
+  min-height: 17rem;
+  align-items: flex-end;
+  padding: 4.5rem 5rem 2rem 3rem;
+  border-bottom: 1px solid rgb(0 0 0 / 9%);
+}
+
+.detailCopy { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; }
+.detailCategories, .detailTags { display: flex; flex-wrap: wrap; gap: .4rem; }
+.detailCategories { margin-bottom: .8rem; }
+.detailCategories :global([data-slot="badge"]), .detailTags :global([data-slot="badge"]) {
+  border: 0;
+  border-radius: .35rem;
+  background: rgb(55 53 47 / 7%);
+  color: rgb(55 53 47 / 76%);
+  font-size: .8rem;
+  font-weight: 500;
+}
+.detailCopy :global([data-slot="dialog-title"]) {
+  margin: 0;
+  font-size: clamp(1.9rem, 3.1vw, 2.45rem);
+  font-weight: 680;
+  letter-spacing: -.05em;
+  line-height: 1.14;
+}
+.detailMeta { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .55rem; color: var(--muted-foreground); font-size: 1rem; line-height: 1.5rem; }
+.detailMeta > span:first-child { color: var(--foreground); }
+.detailActions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
+.detailActions button { min-height: 2.8rem; border-radius: .7rem; padding-inline: 1rem; font-size: 1rem; font-weight: 600; }
+.detailBody { padding: 2.5rem 3rem 3rem; }
+.detailSummary { max-width: 62rem; margin: 0; color: var(--foreground); font-size: 1.1rem; line-height: 1.75rem; }
+.detailExamples { display: grid; gap: .75rem; margin-top: 2rem; }
+.detailExamples button {
+  display: flex;
+  width: 100%;
+  min-height: 5.5rem;
+  align-items: center;
+  gap: .9rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 1rem;
+  background: rgb(255 255 254);
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-align: left;
+  cursor: pointer;
+}
+.detailExamples button:hover { border-color: rgb(0 0 0 / 20%); background: rgb(55 53 47 / 3%); }
+.detailExamples button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.detailExamples svg { width: 1.45rem; height: 1.45rem; flex: 0 0 1.45rem; color: var(--muted-foreground); }
+.detailTags { margin-top: 1.25rem; }
+.detailState { display: flex; min-height: 20rem; align-items: center; justify-content: center; margin: 0; border: 0; border-radius: 0; }
+
 @media (max-width: 42rem) {
   .header { min-height: 0; flex-direction: column; }
   .grid { grid-template-columns: 1fr; }
   .headerActions { width: 100%; }
+  .detailDialog[data-slot="dialog-content"] { width: calc(100vw - 1rem); max-width: calc(100vw - 1rem); min-height: min(32rem, calc(100dvh - 1rem)); max-height: calc(100dvh - 1rem); }
+  .detailDialog > :global([data-slot="dialog-close"]) { top: 1rem; right: 1rem; }
+  .detailHero { min-height: 13.5rem; padding: 3.75rem 1.25rem 1.5rem; }
+  .detailBody { padding: 1.5rem 1.25rem 2rem; }
+  .detailSummary { font-size: 1rem; line-height: 1.6rem; }
+  .detailExamples button { min-height: 4.5rem; padding: .875rem 1rem; }
 }

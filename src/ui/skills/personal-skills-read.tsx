@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { MessageCircle } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +14,8 @@ import { createSkillInstallationClient, HubClientError, type HubClient } from "@
 import { createSkillPublishClient } from "@/hub/skill-publish-client"
 import type { ManagedPersonalSkill, InstallationPage, PersonalInstallation } from "@/hub/schemas"
 import { invalidate } from "@/lib/query"
+import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
+import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { useSessionProbe } from "@/ui/auth/use-session-state"
 import { PersonalSkillWithdrawDialog } from "./personal-skill-withdraw-dialog"
@@ -197,6 +200,15 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
     )
   }
 
+  const startExample = (prompt: string) => {
+    // Keep examples on the shared composer instead of creating a second chat transport.
+    stashPendingDraft(prompt)
+    detailController.current?.abort()
+    detailRequest.current += 1
+    setDetail(null)
+    navigateMountedSurface("/app")
+  }
+
   const page = pageState.kind === "ready" ? pageState.page : null
   return (
     <section className={styles.surface} data-testid="personal-skills-read">
@@ -289,19 +301,29 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
         </> : null}
       </section>}
       <Dialog open={detail !== null} onOpenChange={(open) => { if (!open) { detailController.current?.abort(); detailRequest.current += 1; setDetail(null) } }}>
-        <DialogContent data-testid="personal-skill-detail">
-          <DialogTitle>{detail?.kind === "ready" ? detail.skill.name : t("skills.title")}</DialogTitle>
-          <DialogDescription>{detail?.kind === "ready" ? detail.skill.summary : t("skills.loading")}</DialogDescription>
-          {detail?.kind === "ready" ? <div className="space-y-2 text-sm">
-            <time dateTime={detail.skill.skill_updated_at}>{t("skills.updatedAt", { date: detail.skill.skill_updated_at.slice(0, 10) })}</time>
-            {detail.skill.example_prompts.length ? <ul>{detail.skill.example_prompts.map((prompt, index) => <li key={index}>{prompt}</li>)}</ul> : null}
-            {admitted && detail.skill.product.source_kind === "personal" && ["active", "disabled"].includes(detail.skill.status) ? <div className="flex flex-wrap gap-2">
-              <Button type="button" disabled={withdrawTarget !== null} onClick={() => { setLifecycleSubject(boundary.subject); setResumeBase(detail.skill); setDetail(null); setPublishOpen(true) }}>{t("skills.lifecycle.update")}</Button>
-              <Button type="button" disabled={withdrawTarget !== null && withdrawTarget.skill_id !== detail.skill.skill_id} onClick={() => { setLifecycleSubject(boundary.subject); setWithdrawTarget(current => lifecycleSubject === boundary.subject ? current ?? detail.skill : detail.skill); setWithdrawOpen(true) }}>{t("skills.lifecycle.withdraw")}</Button>
-            </div> : null}
-            {detail.skill.tags.length > 0 ? <div className="flex flex-wrap gap-1" aria-label={t("skills.tagsLabel")}>{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
-          </div> : null}
-          {detail?.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : null}
+        <DialogContent className={styles.detailDialog} overlayClassName={styles.detailOverlay ?? ""} data-detail-layout="manus" data-testid="personal-skill-detail">
+          {detail?.kind === "ready" ? <>
+            <header className={styles.detailHero}>
+              <div className={styles.detailCopy}>
+                {detail.skill.category_keys.length > 0 ? <div className={styles.detailCategories}>{detail.skill.category_keys.slice(0, 2).map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div> : null}
+                <DialogTitle>{detail.skill.name}</DialogTitle>
+                <DialogDescription className={styles.detailMeta}>
+                  <span>{detail.skill.publisher_profile?.status === "found" ? detail.skill.publisher_profile.display_name : t("skills.own")}</span>
+                  <span aria-hidden="true">|</span>
+                  <time dateTime={detail.skill.skill_updated_at}>{t("skills.updatedAt", { date: detail.skill.skill_updated_at.slice(0, 10) })}</time>
+                </DialogDescription>
+                {admitted && detail.skill.product.source_kind === "personal" && ["active", "disabled"].includes(detail.skill.status) ? <div className={styles.detailActions}>
+                  <Button type="button" disabled={withdrawTarget !== null} onClick={() => { setLifecycleSubject(boundary.subject); setResumeBase(detail.skill); setDetail(null); setPublishOpen(true) }}>{t("skills.lifecycle.update")}</Button>
+                  <Button type="button" variant="outline" disabled={withdrawTarget !== null && withdrawTarget.skill_id !== detail.skill.skill_id} onClick={() => { setLifecycleSubject(boundary.subject); setWithdrawTarget(current => lifecycleSubject === boundary.subject ? current ?? detail.skill : detail.skill); setWithdrawOpen(true) }}>{t("skills.lifecycle.withdraw")}</Button>
+                </div> : null}
+              </div>
+            </header>
+            <section className={styles.detailBody}>
+              <p className={styles.detailSummary}>{detail.skill.summary}</p>
+              {detail.skill.example_prompts.length > 0 ? <div className={styles.detailExamples}>{detail.skill.example_prompts.map((prompt) => <button key={prompt} type="button" onClick={() => startExample(prompt)}><MessageCircle aria-hidden="true" /><span>{prompt}</span></button>)}</div> : null}
+              {detail.skill.tags.length > 0 ? <div className={styles.detailTags} aria-label={t("skills.tagsLabel")}>{detail.skill.tags.map((tag) => <Badge key={tag} variant="secondary">{tag}</Badge>)}</div> : null}
+            </section>
+          </> : detail?.kind === "error" ? <Alert className={styles.detailState} variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription></Alert> : <p className={styles.detailState} role="status">{t("skills.loading")}</p>}
         </DialogContent>
       </Dialog>
       {withdrawTarget ? <PersonalSkillWithdrawDialog key={`${lifecycleSubject}:${withdrawTarget.skill_id}`} skill={withdrawTarget} client={publishClient} admitted={admitted && lifecycleSubject === boundary.subject} open={withdrawOpen && lifecycleSubject === boundary.subject} onOpenChange={setWithdrawOpen} onReadCurrent={() => { setWithdrawTarget(null); setWithdrawOpen(false); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} onConfirmed={() => { setWithdrawTarget(null); setWithdrawOpen(false); invalidate(SKILL_CATALOG_RESOURCE_KEY); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} /> : null}

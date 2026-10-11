@@ -7,7 +7,7 @@ import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { LocaleProvider } from "@/i18n/context"
 import { invalidate } from "@/lib/query"
-import { createHubClient } from "@/hub/client"
+import { createHubClient, type HubClient } from "@/hub/client"
 import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
 const sessionBoundary = vi.hoisted(() => ({ admitted: true, subject: "test-user", generation: 1 }))
@@ -1056,4 +1056,27 @@ it("uses the reference eight Chinese category labels in the catalog menu", async
     expect(within(menu).getByRole("menuitem", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
   }
   expect(within(menu).getAllByRole("menuitem")).toHaveLength(9)
+})
+
+it("uses the Manus-style identity, summary and real-example composition for a personal skill detail", async () => {
+  const managed = {
+    skill_id: "mine", source_ref: "skill:mine", series_id: "mine-series", revision: "1",
+    name: "本地清单", summary: "仅根据当前输入整理待办事项。", tags: ["personal"], status: "active" as const,
+    skill_updated_at: "2026-10-11T00:00:00.000Z", example_prompts: ["帮我整理今天的待办事项。"], category_keys: ["automation"],
+    product: { source_kind: "personal" as const, publication_audience: "owner" as const, state_version: "1" },
+  }
+  const client = {
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [managed], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn().mockResolvedValue(managed),
+  } as unknown as HubClient
+  render(<LocaleProvider><PersonalSkillsRead client={client} /></LocaleProvider>)
+
+  fireEvent.click(await screen.findByRole("button", { name: "本地清单" }))
+  const dialog = await screen.findByTestId("personal-skill-detail")
+  expect(dialog).toHaveAttribute("data-detail-layout", "manus")
+  expect(dialog).toHaveTextContent("自有")
+  expect(dialog).toHaveTextContent("仅根据当前输入整理待办事项。")
+  expect(within(dialog).getByRole("button", { name: "帮我整理今天的待办事项。" })).toBeInTheDocument()
+  expect(dialog).not.toHaveTextContent("技术详情")
+  expect(dialog).not.toHaveTextContent("SKILL.md")
 })

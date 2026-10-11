@@ -229,6 +229,7 @@ describe("McpPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
 
     const detail = await screen.findByRole("dialog", { name: "Provider One" })
+    expect(detail).toHaveAttribute("data-detail-layout", "manus")
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByRole("link", { name: "provider.example.com" })).toHaveAttribute("href", "https://provider.example.com")

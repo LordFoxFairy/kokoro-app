@@ -282,7 +282,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     </Dialog>
 
     <Dialog open={selectedProvider !== null} onOpenChange={(open) => { if (!open) setSelectedProvider(null) }}>
-      <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")}>
+      <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")} data-detail-layout="manus">
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader}>
             <div className={styles.providerDetailCopy}>
