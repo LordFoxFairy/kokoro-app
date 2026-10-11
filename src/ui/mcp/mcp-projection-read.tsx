@@ -1,7 +1,7 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { Link2, LoaderCircle, Pencil, Plus, Power, Trash2 } from "lucide-react"
+import { ExternalLink, Link2, LoaderCircle, Pencil, Plus, Power, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,11 @@ function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pendin
 
 function providerInitial(provider: McpPersonalProvider): string {
   return provider.display_name.trim().slice(0, 1).toLocaleUpperCase() || "·"
+}
+
+function providerLinkLabel(value: string): string {
+  const url = new URL(value)
+  return `${url.host}${url.pathname === "/" ? "" : url.pathname}`
 }
 
 /**
@@ -240,6 +245,10 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
             {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}</ul> : null}
+            {selectedProvider.website || selectedProvider.privacy_url ? <div className={styles.providerLinks}>
+              {selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.website)}<ExternalLink aria-hidden="true" /></a> : null}
+              {selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.privacy_url)}<ExternalLink aria-hidden="true" /></a> : null}
+            </div> : null}
           </section>
         </> : null}
       </DialogContent>

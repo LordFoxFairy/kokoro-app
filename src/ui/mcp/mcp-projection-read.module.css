@@ -195,6 +195,11 @@
 .providerDetailDescription { margin: 0; color: rgb(35 35 34); font-size: 1rem; line-height: 1.75rem; }
 .examplePromptList { display: flex; margin: 0; padding: 0; flex-direction: column; gap: .75rem; list-style: none; }
 .examplePromptList li { padding: 1rem 1.125rem; border: 1px solid rgb(0 0 0 / 9%); border-radius: .875rem; color: rgb(55 53 47 / 84%); font-size: .875rem; line-height: 1.375rem; }
+.providerLinks { display: flex; flex-wrap: wrap; gap: .5rem .875rem; }
+.providerLinks a { display: inline-flex; min-width: 0; align-items: center; gap: .25rem; overflow: hidden; color: var(--muted-foreground); font-size: .8125rem; line-height: 1.25rem; text-decoration: underline; text-underline-offset: .1875rem; }
+.providerLinks a:hover { color: var(--foreground); }
+.providerLinks a:focus-visible { border-radius: .25rem; outline: 2px solid var(--ring); outline-offset: .1875rem; }
+.providerLinks svg { width: .875rem; height: .875rem; flex: 0 0 .875rem; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 42rem) { .providerGrid, .connectorGrid { grid-template-columns: 1fr; } .providerCard { min-height: 6.75rem; } .content { gap: 1.75rem; } .providerDetailHeader { min-height: 0; flex-direction: column; align-items: flex-start; gap: 1.25rem; padding: 3.5rem 1.5rem 1.75rem; } .providerDetailMark { width: 5rem; height: 5rem; flex-basis: 5rem; font-size: 2rem; } .providerDetailCopy :global([data-slot="dialog-title"]) { font-size: 1.625rem; line-height: 2rem; } .providerDetailBody { padding: 1.5rem; } }

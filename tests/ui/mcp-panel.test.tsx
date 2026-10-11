@@ -79,7 +79,7 @@ afterEach(() => {
 })
 
 describe("McpPanel", () => {
-  const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], enabled: true, state_version: "1" }
+  const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], website: "https://provider.example.com", privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1" }
   const CONNECTOR = { connector_id: "connector-one", connector_type: "mcp" as const, provider_key: "provider-one", status: "active" as const, approved_scopes: ["tools.read"], enabled: true, state_version: "2", display_name: "Workspace search", description: "Search the workspace" }
 
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
@@ -169,6 +169,8 @@ describe("McpPanel", () => {
     const detail = await screen.findByRole("dialog", { name: "Provider One" })
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
+    expect(within(detail).getByRole("link", { name: "provider.example.com" })).toHaveAttribute("href", "https://provider.example.com")
+    expect(within(detail).getByRole("link", { name: "provider.example.com/privacy" })).toHaveAttribute("href", "https://provider.example.com/privacy")
     expect(screen.getByText("Workspace search")).toBeInTheDocument()
 
     fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
