@@ -1113,3 +1113,15 @@ it("uses the catalog detail dialog's measured 800px/600px geometry for personal 
   expect(css).toMatch(/\.detailHero\s*\{[^}]*padding: 61px 24px 20px;/u)
   expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
 })
+
+it("uses the compact three-column Manus catalog geometry without inventing cover data", () => {
+  const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
+  expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));")
+  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?flex-direction: row;/u)
+  expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: center;/u)
+  expect(css).toContain("height: 9.5rem;")
+  expect(css).toContain("min-height: 9.5rem;")
+  expect(css).toMatch(/@media \(max-width: 58rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
+  expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
+  expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
+})
