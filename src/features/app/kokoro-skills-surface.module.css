@@ -40,39 +40,39 @@
 
 .header {
   display: flex;
-  height: 3.5rem;
-  min-height: 3.5rem;
+  height: 5.25rem;
+  min-height: 5.25rem;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0 1.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+  padding: 0 2rem;
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 2rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
 }
 
 .headerActions { display: flex; align-items: center; gap: .5rem; }
-.mySkillsButton, .createButton { height: 2rem; min-height: 2rem; border-radius: .5rem; padding-inline: .625rem; font-size: .8125rem; gap: .25rem; }
-.createButton svg { width: 1rem; height: 1rem; }
+.mySkillsButton, .createButton { height: 2.75rem; min-height: 2.75rem; border-radius: .75rem; padding-inline: .875rem; font-size: 1rem; font-weight: 600; gap: .375rem; }
+.createButton svg { width: 1.125rem; height: 1.125rem; }
 .createMenu { width: 15.75rem; min-width: 15.75rem; border: 0; padding: .25rem; box-sizing: border-box; }
 .createMenu :global([data-slot="dropdown-menu-item"]) { height: 2.25rem; min-height: 2.25rem; border-radius: .5rem; padding: .5rem; gap: .5rem; font-size: .875rem; line-height: 1.25rem; }
 .createMenuIcon { display: inline-flex; width: 1.25rem; height: 1.25rem; flex: 0 0 1.25rem; align-items: center; justify-content: center; }
 .createMenuIcon svg, .createMenuIcon img { width: 1rem; height: 1rem; }
 
 .scroller { min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: thin; }
-.content { width: min(60rem, calc(100% - 3rem)); margin: 0 auto; padding: .5rem 0 2rem; }
-.searchField { position: relative; display: flex; align-items: center; width: 100%; height: 2.25rem; }
-.searchField > svg { position: absolute; left: .75rem; z-index: 1; width: 1rem; height: 1rem; color: var(--muted-foreground); pointer-events: none; }
-.searchField input { width: 100%; height: 2.25rem; min-height: 2.25rem; border-radius: .5rem; padding-left: 2.25rem; padding-right: 2.5rem; box-shadow: none; font-size: .875rem; }
+.content { width: min(60rem, calc(100% - 3rem)); margin: 0 auto; padding: 1rem 0 3rem; }
+.searchField { position: relative; display: flex; align-items: center; width: 100%; height: 3rem; }
+.searchField > svg { position: absolute; left: 1rem; z-index: 1; width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); pointer-events: none; }
+.searchField input { width: 100%; height: 3rem; min-height: 3rem; border-radius: .875rem; padding-left: 3rem; padding-right: 3rem; box-shadow: none; font-size: 1rem; }
 .searchField button { position: absolute; right: .25rem; color: var(--muted-foreground); }
 
-.filterRow { display:flex; min-height:5.25rem; align-items:center; }
-.filterButton { height:2.75rem; min-height:2.75rem; gap:.5rem; border-radius:.75rem; padding-inline:.875rem; font-size:1rem; }
+.filterRow { display:flex; min-height:5.75rem; align-items:center; }
+.filterButton { height:3rem; min-height:3rem; gap:.5rem; border-radius:.75rem; padding-inline:1rem; font-size:1rem; }
 .filterButton svg { width:1.1rem; height:1.1rem; }.filterButton svg:last-child { width:1rem; height:1rem; }
 .filterPlaceholder { display:inline-block; width:1rem; }
 
@@ -88,25 +88,25 @@
 .importNotice [data-slot="alert-description"] span { display: block; overflow: hidden; color: var(--muted-foreground); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .importNotice button { flex: 0 0 2rem; }
 
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
-.card { min-width: 0; overflow: hidden; border: .5px solid color-mix(in srgb, var(--foreground) 16%, transparent); border-radius: .75rem; background: rgb(250 250 250); box-shadow: none; gap: 0; padding-block: 0; }
-.cardArt { position:relative; display:block; width:100%; height:12.25rem; min-height:12.25rem; overflow:hidden; border:0; background:rgb(55 53 47 / 6%); cursor:pointer; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.card { min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-radius: 1rem; background: rgb(250 250 250); box-shadow: none; gap: 0; padding-block: 0; }
+.cardArt { position:relative; display:block; width:100%; height:12.75rem; min-height:12.75rem; overflow:hidden; border:0; background:rgb(55 53 47 / 6%); cursor:pointer; }
 .cardArt img { object-fit:cover; transition:transform .18s ease; }.cardArt:hover img { transform:scale(1.02); }
 .coverUnavailable { display:flex; width:100%; height:100%; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 42%,rgb(255 255 255 / 78%),transparent 44%),linear-gradient(145deg,rgb(55 53 47 / 3%),rgb(55 53 47 / 9%)); color:rgb(55 53 47 / 34%); }
 .coverUnavailable svg { width:2.25rem; height:2.25rem; stroke-width:1.5; }
-.artSkeleton { width: 100%; height: 12.25rem; min-height: 12.25rem; border-radius: 0; }
-.cardBody { display: flex; min-width: 0; height: 8.875rem; min-height: 8.875rem; box-sizing: border-box; flex-direction: column; padding: .75rem 1rem 0; }
-.cardTitle { width: fit-content; max-width: 100%; height: 1.25rem; min-height: 1.25rem; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--card-foreground); font: inherit; font-size: .875rem; font-weight: 600; line-height: 1.25rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.artSkeleton { width: 100%; height: 12.75rem; min-height: 12.75rem; border-radius: 0; }
+.cardBody { display: flex; min-width: 0; height: 13rem; min-height: 13rem; box-sizing: border-box; flex-direction: column; padding: 1rem 1.25rem 0; }
+.cardTitle { width: fit-content; max-width: 100%; height: 1.75rem; min-height: 1.75rem; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--card-foreground); font: inherit; font-size: 1.25rem; font-weight: 650; line-height: 1.75rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .cardTitle:hover { text-decoration: underline; text-underline-offset: .15rem; }
-.cardDescription { display: -webkit-box; height: 2rem; min-height: 2rem; margin: .125rem 0 .5rem; overflow: hidden; color: var(--muted-foreground); font-size: .75rem; line-height: 1rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.cardMeta { display: flex; height: 1.25rem; min-width: 0; align-items: center; gap: .25rem; overflow: hidden; color: var(--muted-foreground); font-size: .75rem; line-height: 1rem; white-space: nowrap; }
-.metaPill { display: inline-flex; height: 1.25rem; min-width: 0; flex: 0 0 auto; align-items: center; gap: .25rem; overflow: hidden; box-sizing: border-box; padding: .125rem .25rem; border-radius: .25rem; background: rgb(55 53 47 / 6%); color: var(--muted-foreground); }
-.metaPill svg { width: .875rem; height: .875rem; flex: 0 0 .875rem; }
-.owner { max-width: 7.5rem; text-overflow: ellipsis; }
+.cardDescription { display: -webkit-box; height: 3.25rem; min-height: 3.25rem; margin: .125rem 0 .75rem; overflow: hidden; color: var(--muted-foreground); font-size: .9375rem; line-height: 1.125rem; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.cardMeta { display: flex; height: 1.5rem; min-width: 0; align-items: center; gap: .375rem; overflow: hidden; color: var(--muted-foreground); font-size: .875rem; line-height: 1.125rem; white-space: nowrap; }
+.metaPill { display: inline-flex; height: 1.5rem; min-width: 0; flex: 0 0 auto; align-items: center; gap: .25rem; overflow: hidden; box-sizing: border-box; padding: .125rem .375rem; border-radius: .375rem; background: rgb(55 53 47 / 6%); color: var(--muted-foreground); }
+.metaPill svg { width: 1rem; height: 1rem; flex: 0 0 1rem; }
+.owner { max-width: 9rem; text-overflow: ellipsis; }
 .owner > span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.cardFooter { display: flex; height: 3rem; min-height: 3rem; align-items: center; justify-content: space-between; gap: .5rem; margin: 0 -1rem; padding: 0 .625rem 0 1rem; color: var(--muted-foreground); font-size: .75rem; line-height: 1rem; }
-.cardFooter button { width: 1.75rem; height: 1.75rem; min-height: 1.75rem; border-radius: .5rem; }
-.cardFooter button svg { width: 1rem; height: 1rem; }
+.cardFooter { display: flex; height: 3.75rem; min-height: 3.75rem; align-items: center; justify-content: space-between; gap: .5rem; margin: 0 -1.25rem; padding: 0 .875rem 0 1.25rem; color: var(--muted-foreground); font-size: .9375rem; line-height: 1.125rem; }
+.cardFooter button { width: 2.25rem; height: 2.25rem; min-height: 2.25rem; border-radius: .625rem; }
+.cardFooter button svg { width: 1.125rem; height: 1.125rem; }
 .cardError { margin: .375rem 0 0; color: var(--destructive); font-size: .6875rem; }
 .titleSkeleton { width: 45%; height: 1rem; }
 .lineSkeleton { width: 90%; height: 2rem; margin-top: .5rem; }
@@ -121,8 +121,8 @@
 @media (max-width: 42rem) {
   .grid { grid-template-columns: 1fr; }
   .personalPage { padding-inline: 1rem; }
-  .header { padding-inline: 1rem; }
-  .header h1 { font-size: 1rem; }
+  .header { height:4.5rem; min-height:4.5rem; padding-inline: 1rem; }
+  .header h1 { font-size: 1.5rem; }
   .mySkillsButton { display: none; }
   .content { width: calc(100% - 2rem); }
 }
