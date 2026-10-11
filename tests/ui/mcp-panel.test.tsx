@@ -178,6 +178,22 @@ describe("McpPanel", () => {
     expect(within(editor).getByLabelText("Connector provider")).toHaveValue("provider-one")
   })
 
+  it("filters the provider directory without replacing the connector projection", async () => {
+    const secondProvider = { ...PROVIDER, provider_key: "provider-two", display_name: "Calendar One", description: "Calendar provider" }
+    const client = makeClient({
+      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER, secondProvider], next_cursor: null }),
+    })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    await screen.findByText("Workspace search")
+    fireEvent.change(screen.getByRole("searchbox", { name: /search connectors/i }), { target: { value: "calendar" } })
+
+    expect(screen.getByTestId("mcp-provider-card-provider-two")).toHaveTextContent("Calendar One")
+    expect(screen.queryByTestId("mcp-provider-card-provider-one")).toBeNull()
+    expect(screen.getByText("Workspace search")).toBeInTheDocument()
+  })
+
   it("retains the rendered list during a refresh and retires a late prior identity response", async () => {
     let resolveSecond!: (value: { items: typeof CONNECTOR[]; next_cursor: string | null }) => void
     const listA = vi.fn()

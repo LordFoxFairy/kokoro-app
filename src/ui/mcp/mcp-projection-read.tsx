@@ -1,7 +1,7 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { ExternalLink, Link2, LoaderCircle, Pencil, Plus, Power, Trash2 } from "lucide-react"
+import { Cable, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -22,10 +22,6 @@ type Editor = { kind: "create"; providerKey: string } | { kind: "edit"; connecto
 
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
-}
-
-function providerInitial(provider: McpPersonalProvider): string {
-  return provider.display_name.trim().slice(0, 1).toLocaleUpperCase() || "·"
 }
 
 function providerLinkLabel(value: string): string {
@@ -51,6 +47,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [actionError, setActionError] = useState(false)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<McpPersonalProvider | null>(null)
+  const [providerQuery, setProviderQuery] = useState("")
   const [providerKey, setProviderKey] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
@@ -82,6 +79,12 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
   const projection = state.kind === "ready" ? state.data : null
   const providers = projection?.providers.items ?? []
+  const normalizedProviderQuery = providerQuery.trim().toLocaleLowerCase()
+  const displayedProviders = normalizedProviderQuery
+    ? providers.filter((provider) => [provider.display_name, provider.description, provider.author, ...provider.category_keys]
+      .filter((value): value is string => Boolean(value))
+      .some((value) => value.toLocaleLowerCase().includes(normalizedProviderQuery)))
+    : providers
   const providerByKey = new Map(providers.map((provider) => [provider.provider_key, provider]))
 
   const reload = () => {
@@ -164,14 +167,18 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
     {projection ? <div className={styles.content}>
       <section className={styles.providerSection} aria-label={t("mcp.provider")}>
-        <div className={styles.sectionHeading}>
-          <div><p className={styles.eyebrow}>{t("mcp.provider")}</p><h3>{t("plugins.connectors")}</h3></div>
+        <div className={styles.directoryToolbar}>
+          <label className={styles.searchField}>
+            <Search aria-hidden="true" />
+            <span className="sr-only">{t("plugins.search")}</span>
+            <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
+          </label>
           {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
         </div>
-        {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : <ul className={styles.providerGrid}>
-          {providers.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
+        {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
+          {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
-              <span className={styles.providerMark} aria-hidden="true">{providerInitial(provider)}</span>
+              <span className={styles.providerMedia} aria-hidden="true"><Cable /></span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
@@ -195,7 +202,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           const deleting = deleteId === connector.connector_id
           return <li key={connector.connector_id} className={styles.connectorCard} data-testid="mcp-projection">
             <div className={styles.connectorTop}>
-              <div className={styles.connectorIdentity}><span className={styles.providerMark} aria-hidden="true">{provider ? providerInitial(provider) : "·"}</span><div><h4>{connectorName}</h4>{providerName !== connectorName ? <p>{providerName}</p> : null}</div></div>
+              <div className={styles.connectorIdentity}><span className={styles.connectorMark} aria-hidden="true"><Cable /></span><div><h4>{connectorName}</h4>{providerName !== connectorName ? <p>{providerName}</p> : null}</div></div>
               <span className={styles.status} data-status={connector.status}>{t(connectorStatusKey(connector.status))}</span>
             </div>
             {connector.description ? <p className={styles.connectorDescription}>{connector.description}</p> : null}
@@ -234,17 +241,17 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
       <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")}>
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader}>
-            <div className={styles.providerDetailMark} aria-hidden="true">{providerInitial(selectedProvider)}</div>
             <div className={styles.providerDetailCopy}>
               {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{category}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
               {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
               <Button type="button" className={styles.detailAddAction} onClick={() => openCreate(selectedProvider.provider_key)} disabled={actionId !== null}><Plus aria-hidden="true" />{t("mcp.addConnector")}</Button>
             </div>
+            <div className={styles.providerDetailMedia} aria-hidden="true"><Cable /></div>
           </header>
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
-            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}</ul> : null}
+            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul> : null}
             {selectedProvider.website || selectedProvider.privacy_url ? <div className={styles.providerLinks}>
               {selectedProvider.website ? <a href={selectedProvider.website} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.website)}<ExternalLink aria-hidden="true" /></a> : null}
               {selectedProvider.privacy_url ? <a href={selectedProvider.privacy_url} target="_blank" rel="noreferrer">{providerLinkLabel(selectedProvider.privacy_url)}<ExternalLink aria-hidden="true" /></a> : null}
