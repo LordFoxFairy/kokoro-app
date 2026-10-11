@@ -158,29 +158,29 @@
 
 .filterRow {
   display: flex;
-  min-height: 5rem;
-  align-items: center;
-}
-.filterButton {
-  height: 3rem;
   min-height: 3rem;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
-  padding-inline: 1rem;
-  font-size: 1rem;
+  align-items: center;
+  gap: 0.125rem;
+  overflow-x: auto;
+  padding: 0.25rem 0;
+  scrollbar-width: none;
 }
-.filterButton svg {
-  width: 1.1rem;
-  height: 1.1rem;
+.filterRow::-webkit-scrollbar { display: none; }
+.categoryButton {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  flex: 0 0 auto;
+  border-radius: 0.5rem;
+  padding-inline: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+  font-weight: 550;
 }
-.filterButton svg:last-child {
-  width: 1rem;
-  height: 1rem;
+.categoryButton[data-active="true"] {
+  background: rgb(55 53 47 / 8%);
+  color: var(--foreground);
 }
-.filterPlaceholder {
-  display: inline-block;
-  width: 1rem;
-}
+
 
 /* Dialog portals sit above the catalog, so the surface-specific overlay must
  * soften the page behind them without changing the shared Dialog primitive. */

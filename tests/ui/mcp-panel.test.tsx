@@ -105,6 +105,23 @@ describe("McpPanel", () => {
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
+  it("matches the Manus connector directory hierarchy with real local provider logos", async () => {
+    const providers = [
+      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email." },
+      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories." },
+    ]
+    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "View all" })).toHaveAttribute("data-active", "true")
+    expect(screen.queryByRole("combobox")).toBeNull()
+    expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
+    expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
+  })
+
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
     const requests: string[] = []
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -260,13 +277,15 @@ describe("McpPanel", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Provider One" })).toBeNull())
   })
 
-  it("uses the same measured detail geometry as the Skills catalog without inventing provider artwork", () => {
+  it("uses the Manus directory proportions and keeps provider artwork tied to known local assets", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 61px 24px 20px;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
-    expect(source).not.toMatch(/providerMonogram/u)
+    expect(source).toMatch(/providerLogoAssets/u)
+    expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
+    expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/u)
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {

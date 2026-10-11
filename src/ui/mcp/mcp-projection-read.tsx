@@ -1,7 +1,8 @@
 "use client"
 
+import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ChevronDown, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, SlidersHorizontal, Trash2 } from "lucide-react"
+import { Cable, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -91,13 +92,44 @@ function providerLinkLabel(value: string): string {
 
 const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
 
+const providerLogoAssets: Readonly<Record<string, string>> = {
+  "ahrefs-api": "/assets/connectors/ahrefs-api.webp",
+  "cloudflare-api": "/assets/connectors/cloudflare-api.webp",
+  "elevenlabs-api": "/assets/connectors/elevenlabs-api.webp",
+  "github": "/assets/connectors/github.webp",
+  "gmail": "/assets/connectors/gmail.webp",
+  "google-calendar": "/assets/connectors/google-calendar.webp",
+  "google-gemini": "/assets/connectors/google-gemini.webp",
+  "google-workspace": "/assets/connectors/google-workspace.webp",
+  "grok": "/assets/connectors/grok.webp",
+  "higgsfield": "/assets/connectors/higgsfield.webp",
+  "instagram": "/assets/connectors/instagram.svg",
+  "instagram-creator": "/assets/connectors/instagram-creator.svg",
+  "mailchimp": "/assets/connectors/mailchimp.webp",
+  "meta-ads": "/assets/connectors/meta-ads.svg",
+  "my-browser": "/assets/connectors/my-browser.webp",
+  "n8n-api": "/assets/connectors/n8n-api.webp",
+  "notion": "/assets/connectors/notion.webp",
+  "openai": "/assets/connectors/openai.webp",
+  "openrouter-api": "/assets/connectors/openrouter-api.webp",
+  "outlook": "/assets/connectors/outlook.svg",
+  "perplexity": "/assets/connectors/perplexity.webp",
+  "similarweb-api": "/assets/connectors/similarweb-api.webp",
+  "tiktok": "/assets/connectors/tiktok.svg",
+  "typeform": "/assets/connectors/typeform.webp",
+}
+
+function providerLogo(provider: Pick<McpPersonalProvider, "provider_key">): string | undefined {
+  return providerLogoAssets[provider.provider_key]
+}
+
 /**
  * Platform is the source of every provider and connector rendered here.  This
  * component only retains the last confirmed projection while a refresh is in
  * flight, so an asynchronous mutation never replaces the user's page with a
  * loading screen or shifts the list beneath the pointer.
  */
-export function McpProjectionRead({ client, embedded = false, identity }: { client: HubClient; embedded?: boolean; identity: string }) {
+export function McpProjectionRead({ client, identity }: { client: HubClient; embedded?: boolean; identity: string }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
   const [history, setHistory] = useState<Array<string | null>>([])
@@ -177,6 +209,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   })
   const categoryOptions = [...new Set(providers.flatMap((provider) => provider.category_keys))]
   const providerByKey = new Map(providers.map((provider) => [provider.provider_key, provider]))
+  const providerHighlights = providers.slice(0, 4)
 
   const reload = () => {
     setRefreshing(true)
@@ -233,13 +266,15 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
-      <h2>{embedded ? t("rail.navPlugins") : t("mcp.title")}</h2>
+      <h2>{t("rail.navPlugins")}</h2>
       <div className={styles.headerControls}>
-        <label className={styles.searchField}>
-          <Search aria-hidden="true" />
-          <span className="sr-only">{t("plugins.search")}</span>
-          <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
-        </label>
+        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
+          setRefreshing(true)
+          setRefreshError(false)
+          setView((current) => current === "catalog" ? "connections" : "catalog")
+        }}>
+          {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
+        </Button>
         {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
       </div>
     </header>
@@ -250,33 +285,32 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
 
     {projection ? <div className={styles.content}>
-      <div className={styles.catalogToolbar}>
-        <label className={styles.categoryFilter}>
-          <SlidersHorizontal aria-hidden="true" />
-          <span className="sr-only">{t("mcp.provider")}</span>
-          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label={t("mcp.provider")}>
-            <option value="all">{t("plugins.viewAll")}</option>
-            {categoryOptions.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}
-          </select>
-          <ChevronDown aria-hidden="true" />
+      {view === "catalog" && providerHighlights.length > 0 ? <section className={styles.providerHighlights} aria-label={t("mcp.provider")}>
+        {providerHighlights.map((provider) => <button type="button" key={provider.provider_key} className={styles.highlightCard} onClick={() => setSelectedProvider(provider)}>
+          <span className={styles.highlightLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.5rem" unoptimized /> : <Cable />}</span>
+          <span>{provider.description ?? provider.display_name}</span>
+        </button>)}
+      </section> : null}
+      {view === "catalog" ? <div className={styles.directoryControls}>
+        <label className={styles.searchField}>
+          <Search aria-hidden="true" />
+          <span className="sr-only">{t("plugins.search")}</span>
+          <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
         </label>
-        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
-          setRefreshing(true)
-          setRefreshError(false)
-          setView((current) => current === "catalog" ? "connections" : "catalog")
-        }}>
-          {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
-        </Button>
-      </div>
+        <div className={styles.categoryRail} aria-label={t("mcp.provider")}>
+          <Button type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === "all" || undefined} onClick={() => setCategoryFilter("all")}>{t("plugins.viewAll")}</Button>
+          {categoryOptions.map((category) => <Button key={category} type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === category || undefined} onClick={() => setCategoryFilter(category)}>{categoryLabel(category)}</Button>)}
+        </div>
+      </div> : null}
 
       {view === "catalog" ? <section className={styles.providerSection} aria-label={t("mcp.provider")}>
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
           {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
+              <span className={styles.providerLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.4rem" unoptimized /> : <Cable />}</span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
-                {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</span> : null}
               </span>
             </button>
             <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider, () => setView("connections"))} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
