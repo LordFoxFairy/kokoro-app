@@ -20,6 +20,53 @@ import { ownerCoverPath } from "@/ui/skills/manus-skill-client"
 
 import styles from "./manus-skill-detail-dialog.module.css"
 
+type DetailFlight = {
+  controller: AbortController
+  promise: Promise<ManusSkillDetail>
+  subscribers: number
+}
+
+type DetailSubscription = {
+  promise: Promise<ManusSkillDetail>
+  release: () => void
+}
+
+// React StrictMode replays the dialog effect during local development. Detail
+// reads are immutable for a selected series, so both mounts share one owner
+// request; the last release aborts only after the replay window has elapsed.
+const detailInflight = new Map<string, DetailFlight>()
+
+function subscribeSkillDetail(skillId: string): DetailSubscription {
+  let flight = detailInflight.get(skillId)
+  if (flight === undefined) {
+    const controller = new AbortController()
+    const promise = getManusSkillDetail(skillId, controller.signal)
+    flight = { controller, promise, subscribers: 0 }
+    detailInflight.set(skillId, flight)
+    const clear = (): void => {
+      if (detailInflight.get(skillId) === flight) detailInflight.delete(skillId)
+    }
+    void promise.then(clear, clear)
+  }
+
+  flight.subscribers += 1
+  let released = false
+  return {
+    promise: flight.promise,
+    release: () => {
+      if (released) return
+      released = true
+      flight.subscribers -= 1
+      if (flight.subscribers !== 0) return
+      queueMicrotask(() => {
+        if (flight?.subscribers !== 0 || detailInflight.get(skillId) !== flight) return
+        detailInflight.delete(skillId)
+        flight.controller.abort()
+      })
+    },
+  }
+}
+
 type Props = {
   sharedSummary?: ShareSummary
   onAddShared?: () => void
@@ -65,7 +112,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const activeRequest = useRef<AbortController | null>(null)
+  const downloadRequest = useRef<AbortController | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [directory, setDirectory] = useState<CatalogPackageData | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
@@ -82,6 +129,13 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
     setCurrentDownloadIdentity(downloadIdentity)
     setDownloading(false)
   }
+
+  // A download is private to the open resource and its current admission. Do
+  // not allow a close, skill switch, or lost admission to leave it in flight.
+  useEffect(() => () => {
+    downloadRequest.current?.abort()
+    downloadRequest.current = null
+  }, [downloadIdentity])
 
   // Reset browser presentation state by the selected resource identity, not
   // synchronously inside the external request effect.
@@ -103,14 +157,18 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   const sharedDownloadSubject = sharedSummary ? boundary.subject : null
   useEffect(() => {
     if (!open || sharedSummary && !sharedDownloadAdmitted || !skill?.skill_id && !sharedSummary) return
-    const controller = new AbortController()
-    activeRequest.current = controller
-    if (!sharedSummary && skill?.skill_id) void getManusSkillDetail(skill.skill_id, controller.signal).then((next) => {
-      if (!controller.signal.aborted) setDetail(next)
+    if (sharedSummary || !skill?.skill_id) return
+    let active = true
+    const subscription = subscribeSkillDetail(skill.skill_id)
+    void subscription.promise.then((next) => {
+      if (active) setDetail(next)
     }).catch(() => {
-      if (!controller.signal.aborted) setFailed(true)
+      if (active) setFailed(true)
     })
-    return () => { controller.abort(); if (activeRequest.current === controller) activeRequest.current = null }
+    return () => {
+      active = false
+      subscription.release()
+    }
   }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject])
 
   const boundRevision = open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
@@ -167,8 +225,10 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
   }
 
   const download = async () => {
-    const controller = activeRequest.current
-    if ((!skill?.skill_id && !sharedSummary) || downloading || controller === null || controller.signal.aborted) return
+    if ((!skill?.skill_id && !sharedSummary) || downloading) return
+    const controller = new AbortController()
+    downloadRequest.current?.abort()
+    downloadRequest.current = controller
     setDownloading(true)
     try {
       if (sharedSummary) {
@@ -179,7 +239,10 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
         if (!controller.signal.aborted) window.location.assign(result.downloadInfo.downloadUrl)
       }
     } catch { if (!controller.signal.aborted) setFailed(true) }
-    finally { if (!controller.signal.aborted) setDownloading(false) }
+    finally {
+      if (downloadRequest.current === controller) downloadRequest.current = null
+      if (!controller.signal.aborted) setDownloading(false)
+    }
   }
 
   const sourceRef = boundRevision === null ? null : `skill:${boundRevision}`

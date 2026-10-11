@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { StrictMode } from "react"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
@@ -223,6 +224,14 @@ it.each(dialogLocales)("localizes $locale actual detail read failure", async (la
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("owner unavailable")))
   render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   expect(await screen.findByText(labels.failed)).toBeInTheDocument()
+})
+
+it("shares one owner detail read across StrictMode's effect replay", async () => {
+  const fetchMock = vi.fn(async () => response({ skill: { id: "skill-manim", displayName: "Manim" }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } }))
+  vi.stubGlobal("fetch", fetchMock)
+  render(<StrictMode><LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider></StrictMode>)
+  await screen.findByRole("button", { name: "下载技能" })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
 })
 
 // The actual 939bf0e read projection, including optional owner metadata.
@@ -858,12 +867,12 @@ it.each([false, true])("keeps summary actions ordered and metadata separators be
   expect(dialog.querySelector('[data-slot="dialog-header"]')).toHaveAttribute("data-has-cover", String(hasCover))
 })
 
-it("uses compact left-aligned summary rules with cover-only width reservation and a narrow layout", () => {
+it("uses the wide Manus-style summary layout with cover-only width reservation", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
   expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*display:flex;/u)
-  expect(css).toMatch(/\.hero\s*\{[^}]*flex-direction:row;[^}]*align-items:flex-start;/u)
-  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:15rem;/u)
-  expect(css).toMatch(/\.copy h2\s*\{[^}]*font-size:1\.25rem; line-height:1\.3;/u)
+  expect(css).toMatch(/\.hero\s*\{[^}]*flex-direction:row;[^}]*align-items:center;/u)
+  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:17.5rem;/u)
+  expect(css).toMatch(/\.copy h2\s*\{[^}]*font-size:clamp\(1\.8rem, 3vw, 2\.6rem\);/u)
   expect(css).toMatch(/\.copy\s*\{[^}]*max-width:100%;/u)
   expect(css).toMatch(/\.hero\[data-has-cover="true"\] \.copy\s*\{[^}]*max-width:calc\(100% - 15rem\);/u)
   expect(css).toMatch(/@media\(max-width:42rem\)[\s\S]*\.hero\[data-has-cover="true"\] \.copy\{max-width:100%\}/u)
@@ -892,13 +901,13 @@ it("groups two actual category badges in a wrapping row without an empty categor
 })
 
 
-it("matches the reference frame budget without stretching its compact summary hero", () => {
+it("matches the wide Manus detail frame at desktop while retaining a compact mobile layout", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:95vw;[^}]*max-width:800px;[^}]*height:min\(600px,calc\(100dvh - 2rem\)\);/u)
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:12px;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
-  expect(css).toMatch(/\.hero\s*\{[^}]*flex:0 0 auto;[^}]*padding:61px 24px 20px;/u)
-  expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:20px 24px 32px;/u)
-  expect(css).toMatch(/\.actions button\s*\{[^}]*height:32px;[^}]*font-size:14px;/u)
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(78rem,calc\(100vw - 2rem\)\);[^}]*max-width:calc\(100vw - 2rem\);[^}]*height:min\(62rem,calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:1rem;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
+  expect(css).toMatch(/\.hero\s*\{[^}]*min-height:17\.5rem;[^}]*padding:3rem 3rem 2rem;/u)
+  expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:2\.5rem 3rem 3rem;/u)
+  expect(css).toMatch(/\.actions button\s*\{[^}]*min-height:2\.8rem;[^}]*font-weight:650;/u)
 })
 
 it("uses the reference share arrow rather than the connected-node share icon", async () => {
@@ -1059,17 +1068,17 @@ it("preserves the catalog download lifecycle when only shared admission changes"
 
 it("matches the measured summary typography and example dimensions while keeping the independent reader width", () => {
   const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
-  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:800px;/u)
+  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(78rem,calc\(100vw - 2rem\)\);/u)
   expect(css).toMatch(/\.readerDialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:960px;/u)
-  expect(css).toMatch(/\.description\s*\{[^}]*font-size:14px;[^}]*line-height:20px;/u)
-  expect(css).toMatch(/\.description\s*\{[^}]*margin:0 0 24px;/u)
-  expect(css).toMatch(/\.examples button\s*\{[^}]*min-height:44px;[^}]*padding:12px;[^}]*border-radius:12px;/u)
-  expect(css).toMatch(/\.actions button\s*\{[^}]*height:32px;[^}]*padding:0 8px;[^}]*line-height:18px;/u)
+  expect(css).toMatch(/\.description\s*\{[^}]*font-size:1\.15rem;[^}]*line-height:1\.75rem;/u)
+  expect(css).toMatch(/\.description\s*\{[^}]*margin:0 0 2\.25rem;/u)
+  expect(css).toMatch(/\.examples button\s*\{[^}]*min-height:4\.75rem;[^}]*padding:1rem;[^}]*border-radius:12px;/u)
+  expect(css).toMatch(/\.actions button\s*\{[^}]*height:2\.8rem;[^}]*padding:0 \.95rem;[^}]*line-height:1\.2rem;/u)
 })
 
-it("keeps real example text at 13/18 and its icon at 16 so padding produces the measured 44px row", () => {
+it("keeps real example text and its icon at the wide detail scale", () => {
   const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
-  expect(css).toMatch(/\.examples button span\s*\{[^}]*font-size:13px;[^}]*line-height:18px;/u)
+  expect(css).toMatch(/\.examples button span\s*\{[^}]*font-size:\.95rem;[^}]*line-height:1\.4rem;/u)
   expect(css).toMatch(/\.examples svg\s*\{[^}]*width:1rem;[^}]*height:1rem;[^}]*flex:0 0 1rem;/u)
 })
 
@@ -1107,16 +1116,16 @@ it("uses the Manus-style identity, summary and real-example composition for a pe
   expect(dialog).not.toHaveTextContent("SKILL.md")
 })
 
-it("uses the catalog detail dialog's measured 800px/600px geometry for personal details", () => {
+it("uses the same wide Manus geometry for personal details", () => {
   const css = readFileSync("src/ui/skills/personal-skills-read.module.css", "utf8")
-  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: 95vw;[^}]*max-width: 800px;[^}]*height: min\(600px, calc\(100dvh - 2rem\)\);/u)
-  expect(css).toMatch(/\.detailHero\s*\{[^}]*padding: 61px 24px 20px;/u)
-  expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 44px;[^}]*padding: 12px;/u)
+  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(62rem, calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.detailHero\s*\{[^}]*min-height: 17\.5rem;[^}]*padding: 3rem 3rem 2rem;/u)
+  expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
 })
 
-it("uses the compact three-column Manus catalog geometry without inventing cover data", () => {
+it("uses the two-column Manus catalog geometry without inventing cover data", () => {
   const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
-  expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));")
+  expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));")
   expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?flex-direction: row;/u)
   expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: center;/u)
   expect(css).toContain("height: 9.5rem;")

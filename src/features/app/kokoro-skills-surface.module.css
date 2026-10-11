@@ -40,7 +40,7 @@
 
 .header {
   display: grid;
-  width: min(74rem, calc(100% - 4rem));
+  width: min(78rem, calc(100% - 4rem));
   grid-template-columns: minmax(9rem, 1fr) minmax(32rem, 3fr);
   align-items: center;
   gap: 1rem;
@@ -121,7 +121,7 @@
   scrollbar-width: thin;
 }
 .content {
-  width: min(74rem, calc(100% - 4rem));
+  width: min(78rem, calc(100% - 4rem));
   margin: 0 auto;
   padding: 0 0 4rem;
 }
@@ -223,7 +223,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 .loadMore {
