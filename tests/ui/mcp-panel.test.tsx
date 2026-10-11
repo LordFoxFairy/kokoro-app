@@ -252,7 +252,7 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
-  it("opens a Manus-style provider detail dialog from owner metadata without creating a connector", async () => {
+  it("opens a Manus-style provider detail dialog with the real add and management actions", async () => {
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
@@ -267,19 +267,20 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
+    expect(within(detail).getByText("开发")).toBeInTheDocument()
+    expect(within(detail).getByRole("button", { name: "Add Provider One" })).toBeInTheDocument()
+    expect(within(detail).getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
-    expect(within(detail).queryByRole("button", { name: "Add connector" })).toBeNull()
-    expect(within(detail).queryByRole("link")).toBeNull()
   })
 
   it("uses the Manus directory proportions and keeps provider artwork tied to known local assets", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(40rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(44rem, calc\(100dvh - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*padding: 4rem 2rem 1\.5rem;/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*text-align: center;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4rem;[^}]*height: 4rem;/u)
-    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5\.625rem;[^}]*padding: 1rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(62rem, calc\(100dvh - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(10rem, 16rem\);[^}]*padding: 3rem 3rem 2rem;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 10rem;[^}]*height: 10rem;/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
     expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
