@@ -100,15 +100,20 @@ it("loads one Manus catalog page at a time instead of eagerly walking every curs
   expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(2)
 })
 
-it("uses the Manus filter menu rather than an always-expanded category rail", async () => {
+it("uses Manus's desktop category rail while retaining the compact filter menu", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)
   renderLive()
   await screen.findByTestId("skills-catalog-grid")
 
   const filter = screen.getByRole("button", { name: "技能分类：全部" })
+  const categoryRail = screen.getByRole("navigation", { name: "技能分类" })
   expect(filter).toHaveTextContent("全部")
-  expect(screen.queryByRole("navigation", { name: "技能分类" })).toBeNull()
+  expect(within(categoryRail).getByRole("button", { name: "全部" })).toHaveAttribute("data-active", "true")
+  expect(within(categoryRail).getByRole("button", { name: "媒体" })).toBeInTheDocument()
+
+  fireEvent.click(within(categoryRail).getByRole("button", { name: "媒体" }))
+  expect(within(categoryRail).getByRole("button", { name: "媒体" })).toHaveAttribute("data-active", "true")
 
   fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
   const menu = await screen.findByRole("menu")
@@ -1160,24 +1165,26 @@ it("uses the same wide Manus geometry for personal details", () => {
   expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
 })
 
-it("uses the two-column Manus catalog geometry without inventing cover data", () => {
+it("uses Manus's responsive three-to-two-to-one catalog geometry without inventing cover data", () => {
   const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
+  expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));")
   expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));")
-  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/u)
+  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?display: flex;[\s\S]*?justify-content: flex-start;/u)
   expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: center;/u)
-  expect(css).toContain("height: 12rem;")
-  expect(css).toContain("min-height: 12rem;")
-  expect(css).toMatch(/@media \(max-width: 58rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
+  expect(css).toContain("aspect-ratio: 2 / 1;")
+  expect(css).toMatch(/@media \(max-width: 72rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
+  expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
+  expect(css).toMatch(/\.compactFilter\s*\{\s*display: none;/u)
   expect(css).not.toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.mySkillsButton\s*\{\s*display:\s*none;/u)
   expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
 })
 
-it("uses the two-row Manus catalog header and the taller illustrated card proportions", () => {
+it("uses Manus's compact desktop header and proportional illustrated cards", () => {
   const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
-  expect(css).toMatch(/\.headerTools\s*\{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\);/u)
-  expect(css).toMatch(/\.headerActions\s*\{[^}]*justify-self: end;/u)
-  expect(css).toMatch(/\.cardArt\s*\{[^}]*height: 12rem;[^}]*min-height: 12rem;/u)
-  expect(css).toMatch(/\.artSkeleton\s*\{[^}]*height: 12rem;[^}]*min-height: 12rem;/u)
+  expect(css).toMatch(/\.headerTools\s*\{[^}]*display: flex;[^}]*justify-content: flex-start;/u)
+  expect(css).toMatch(/\.searchField\s*\{[^}]*width: 13rem;[^}]*flex: 0 1 13rem;/u)
+  expect(css).toMatch(/\.cardArt\s*\{[^}]*aspect-ratio: 2 \/ 1;/u)
+  expect(css).toMatch(/\.artSkeleton\s*\{[^}]*aspect-ratio: 2 \/ 1;/u)
   expect(css).toMatch(/\.card\s*\{[^}]*background: rgb\(255 255 254\);/u)
 })

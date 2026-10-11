@@ -278,25 +278,30 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         ) : null}
         <div className={styles.content}>
           <div className={styles.filterRow}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={styles.filterButton}
-                  aria-label={`${t("skills.categoryAria")}：${t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}`}
-                >
-                  <SlidersHorizontal aria-hidden="true" />
-                  {t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}
-                  <ChevronDown aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className={styles.filterMenu}>
-                <DropdownMenuGroup>
-                  {CATEGORIES.map(({ value, key }) => <DropdownMenuItem key={value} data-active={category === value || undefined} onSelect={() => setCategory(value)}>{t(key)}</DropdownMenuItem>)}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <nav className={styles.categoryRail} aria-label={t("skills.categoryAria")}>
+              {CATEGORIES.map(({ value, key }) => <Button key={value} type="button" variant="ghost" className={styles.categoryButton} data-active={category === value || undefined} onClick={() => setCategory(value)}>{t(key)}</Button>)}
+            </nav>
+            <div className={styles.compactFilter}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={styles.filterButton}
+                    aria-label={`${t("skills.categoryAria")}：${t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}`}
+                  >
+                    <SlidersHorizontal aria-hidden="true" />
+                    {t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className={styles.filterMenu}>
+                  <DropdownMenuGroup>
+                    {CATEGORIES.map(({ value, key }) => <DropdownMenuItem key={value} data-active={category === value || undefined} onSelect={() => setCategory(value)}>{t(key)}</DropdownMenuItem>)}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
           {importNotice ? (

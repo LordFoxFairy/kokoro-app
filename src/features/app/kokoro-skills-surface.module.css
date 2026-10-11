@@ -41,11 +41,11 @@
 .header {
   display: grid;
   width: min(78rem, calc(100% - 4rem));
-  grid-template-columns: minmax(9rem, 1fr) minmax(32rem, 3fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   margin: 0 auto;
-  padding: 1.25rem 0 0.75rem;
+  padding: 0.5rem 0 0.25rem;
 }
 
 .header h1 {
@@ -57,16 +57,15 @@
 }
 
 .headerTools {
-  display: grid;
+  display: flex;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
 }
 .headerActions {
   display: flex;
   align-items: center;
-  justify-self: end;
   gap: 0.5rem;
 }
 .mySkillsButton,
@@ -127,10 +126,11 @@
 .searchField {
   position: relative;
   display: flex;
-  align-items: center;
-  width: 100%;
+  width: 13rem;
   min-width: 0;
   height: 3rem;
+  flex: 0 1 13rem;
+  align-items: center;
 }
 .searchField > svg {
   position: absolute;
@@ -159,10 +159,34 @@
 
 .filterRow {
   display: flex;
-  min-height: 5.5rem;
+  min-height: 3rem;
   align-items: center;
-  padding: 1rem 0;
+  padding: 0.5rem 0 0.75rem;
 }
+.categoryRail {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.categoryRail::-webkit-scrollbar { display: none; }
+.categoryButton {
+  height: 2.15rem;
+  min-height: 2.15rem;
+  flex: 0 0 auto;
+  border-radius: 0.5rem;
+  padding: 0 0.65rem;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  font-weight: 550;
+}
+.categoryButton[data-active="true"] {
+  background: rgb(55 53 47 / 8%);
+  color: var(--foreground);
+}
+.compactFilter { display: none; }
 .filterButton {
   height: 2.75rem;
   min-height: 2.75rem;
@@ -240,7 +264,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 .loadMore {
@@ -273,8 +297,9 @@
   position: relative;
   display: block;
   width: 100%;
-  height: 12rem;
-  min-height: 12rem;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   border: 0;
   background: rgb(55 53 47 / 6%);
@@ -305,8 +330,9 @@
 }
 .artSkeleton {
   width: 100%;
-  height: 12rem;
-  min-height: 12rem;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 2 / 1;
   border-radius: 0;
 }
 .cardBody {
@@ -449,7 +475,7 @@
   height: 1.5rem;
 }
 
-@media (max-width: 58rem) {
+@media (max-width: 72rem) {
   .header,
   .content {
     width: min(100% - 2rem, 42rem);
@@ -465,9 +491,17 @@
   .header h1 {
     margin-top: 0;
   }
+  .headerTools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
   .headerActions {
     justify-self: start;
   }
+  .searchField { width: 100%; }
+  .categoryRail { display: none; }
+  .compactFilter { display: block; }
 }
 
 @media (max-width: 42rem) {
