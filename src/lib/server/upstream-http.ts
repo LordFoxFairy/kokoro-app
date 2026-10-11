@@ -284,6 +284,12 @@ export function requestWithDomain(
     return Promise.reject(new UpstreamRequestTooLargeError())
   }
   const deadline = deadlineFor(options.signal, options.timeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS)
+  // This transport buffers request bodies before the hop. Declare that exact
+  // length instead of letting Node choose chunked transfer encoding: owner
+  // mutation boundaries can then verify framing before parsing a command.
+  const outgoingHeaders = new Headers(headersWithForwardedHost(options.headers, domain))
+  if (options.body === undefined) outgoingHeaders.delete("content-length")
+  else outgoingHeaders.set("content-length", String(options.body.byteLength))
 
   return new Promise((resolve, reject) => {
     let settled = false
@@ -301,7 +307,7 @@ export function requestWithDomain(
     }
     const client = requestFn(target, {
       method: options.method,
-      headers: headersWithForwardedHost(options.headers, domain),
+      headers: Object.fromEntries(outgoingHeaders.entries()),
       signal: deadline.controller.signal,
     }, (response) => {
       responseStarted = true

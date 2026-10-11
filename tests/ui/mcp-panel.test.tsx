@@ -106,6 +106,19 @@ describe("McpPanel", () => {
     ])
   })
 
+  it("does not present revoked connector audit records as active user connections", async () => {
+    const revoked = { ...CONNECTOR, status: "revoked" as const, enabled: false }
+    const client = makeClient({
+      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [revoked], next_cursor: null }),
+      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+    })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    expect(await screen.findByText("No connectors yet.")).toBeInTheDocument()
+    expect(screen.queryByText("Workspace search")).toBeNull()
+    expect(screen.queryByText("Removed")).toBeNull()
+  })
+
   it("uses formal create, CAS update, enable, and remove commands then reloads owner truth", async () => {
     const listMcpPersonalConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
     const listMcpPersonalProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })

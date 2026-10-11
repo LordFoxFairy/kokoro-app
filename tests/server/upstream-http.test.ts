@@ -89,6 +89,33 @@ describe("server upstream transport", () => {
     expect(receivedSite).toBeUndefined()
   })
 
+  it("frames buffered request bodies with their exact content length", async () => {
+    let receivedLength = ""
+    let receivedEncoding = ""
+    let receivedBody = ""
+    const server = createServer((request, response) => {
+      receivedLength = request.headers["content-length"]?.toString() ?? ""
+      receivedEncoding = request.headers["transfer-encoding"]?.toString() ?? ""
+      request.setEncoding("utf8")
+      request.on("data", (chunk) => { receivedBody += chunk })
+      request.on("end", () => { response.writeHead(204); response.end() })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (address === null || typeof address === "string") throw new Error("fixture server did not bind")
+
+    const payload = new TextEncoder().encode('{"provider":"github"}').buffer
+    const response = await requestWithDomain(`http://127.0.0.1:${address.port}/commands`, "dev.kokoro.localhost", {
+      method: "POST", headers: { "content-type": "application/json", "content-length": "1" }, body: payload,
+    })
+
+    expect(response.status).toBe(204)
+    expect(receivedLength).toBe(String(payload.byteLength))
+    expect(receivedEncoding).toBe("")
+    expect(receivedBody).toBe('{"provider":"github"}')
+  })
+
   it("preserves a streaming response and injects RFC 7239 Forwarded", async () => {
     let receivedForwarded = ""
     const server = createServer((request, response) => {

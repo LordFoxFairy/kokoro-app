@@ -223,20 +223,27 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     <div className={styles.surface} data-testid="skills-surface" data-web-skin="kokoro">
       <header className={styles.header}>
         <h1>{t("skills.title")}</h1>
-        <div className={styles.headerActions}>
-          <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className={styles.createMenu}>
-              <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi() : startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { uploadRef.current = createRef.current; setUploadOpen(true) }}><span className={styles.createMenuIcon}><Upload aria-hidden="true" /></span>{t("skills.uploadSkill")}</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { githubRef.current = createRef.current; setGithubOpen(true) }}><span className={styles.createMenuIcon}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} /></span>{t("skills.importGithub")}</DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className={styles.headerTools}>
+          <label className={styles.searchField}>
+            <Search aria-hidden="true" />
+            <Input type="search" value={query} aria-label={t("skills.searchPlaceholder")} placeholder={t("skills.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
+            {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
+          </label>
+          <div className={styles.headerActions}>
+            <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className={styles.createMenu}>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi() : startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { uploadRef.current = createRef.current; setUploadOpen(true) }}><span className={styles.createMenuIcon}><Upload aria-hidden="true" /></span>{t("skills.uploadSkill")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { githubRef.current = createRef.current; setGithubOpen(true) }}><span className={styles.createMenuIcon}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} /></span>{t("skills.importGithub")}</DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
@@ -247,12 +254,6 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           </span>
         ) : null}
         <div className={styles.content}>
-          <label className={styles.searchField}>
-            <Search aria-hidden="true" />
-            <Input type="search" value={query} aria-label={t("skills.searchPlaceholder")} placeholder={t("skills.searchPlaceholder")} onChange={(event) => setQuery(event.target.value)} />
-            {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
-          </label>
-
           <div className={styles.filterRow}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

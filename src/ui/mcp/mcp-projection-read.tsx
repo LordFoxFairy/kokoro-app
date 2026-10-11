@@ -29,6 +29,10 @@ function providerLinkLabel(value: string): string {
   return `${url.host}${url.pathname === "/" ? "" : url.pathname}`
 }
 
+const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
+
+function providerMonogram(provider: McpPersonalProvider): string { return [...provider.display_name.trim()][0]?.toLocaleUpperCase() ?? "M" }
+
 /**
  * Platform is the source of every provider and connector rendered here.  This
  * component only retains the last confirmed projection while a refresh is in
@@ -79,6 +83,10 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
   const projection = state.kind === "ready" ? state.data : null
   const providers = projection?.providers.items ?? []
+  // Revocation is retained by Platform for auditability, but is no longer a
+  // usable user connection. Keep it out of this live-connection surface while
+  // preserving the owner response (and its cursor) unchanged.
+  const visibleConnectors = projection?.connectors.items.filter((connector) => connector.status !== "revoked") ?? []
   const normalizedProviderQuery = providerQuery.trim().toLocaleLowerCase()
   const displayedProviders = normalizedProviderQuery
     ? providers.filter((provider) => [provider.display_name, provider.description, provider.author, ...provider.category_keys]
@@ -151,13 +159,22 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
   const editorProvider = providerByKey.get(providerKey)
   const editorTitle = editor?.kind === "edit" ? t("mcp.edit") : t("mcp.addConnector")
+  const categoryLabel = (category: McpPersonalProvider["category_keys"][number]) => t(categoryMessage[category])
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
-      {embedded ? <div /> : <h2>{t("mcp.title")}</h2>}
-      <Button type="button" className={styles.primaryAction} onClick={() => openCreate()} disabled={providers.length === 0 || actionId !== null}>
-        <Plus aria-hidden="true" />{t("mcp.addConnector")}
-      </Button>
+      <h2>{embedded ? t("rail.navPlugins") : t("mcp.title")}</h2>
+      <div className={styles.headerControls}>
+        <label className={styles.searchField}>
+          <Search aria-hidden="true" />
+          <span className="sr-only">{t("plugins.search")}</span>
+          <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
+        </label>
+        {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
+        <Button type="button" className={styles.primaryAction} onClick={() => openCreate()} disabled={providers.length === 0 || actionId !== null}>
+          <Plus aria-hidden="true" />{t("mcp.addConnector")}
+        </Button>
+      </div>
     </header>
 
     {state.kind === "loading" ? <div className={styles.loading} role="status"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
@@ -167,22 +184,14 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
     {projection ? <div className={styles.content}>
       <section className={styles.providerSection} aria-label={t("mcp.provider")}>
-        <div className={styles.directoryToolbar}>
-          <label className={styles.searchField}>
-            <Search aria-hidden="true" />
-            <span className="sr-only">{t("plugins.search")}</span>
-            <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
-          </label>
-          {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
-        </div>
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
           {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
-              <span className={styles.providerMedia} aria-hidden="true"><Cable /></span>
+              <span className={styles.providerMedia} aria-hidden="true"><span>{providerMonogram(provider)}</span></span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
-                {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{category}</span>)}</span> : null}
+                {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</span> : null}
               </span>
             </button>
             <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => openCreate(provider.provider_key)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
@@ -194,7 +203,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
 
       <section className={styles.connectionSection} aria-label={t("mcp.title")}>
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>{t("mcp.title")}</p><h3>{t("mcp.tabServers")}</h3></div></div>
-        {projection.connectors.items.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{projection.connectors.items.map((connector) => {
+        {visibleConnectors.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
           const provider = providerByKey.get(connector.provider_key)
           const connectorName = connector.display_name || provider?.display_name || connector.provider_key
           const providerName = provider?.display_name ?? connector.provider_key
@@ -242,12 +251,12 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader}>
             <div className={styles.providerDetailCopy}>
-              {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{category}</span>)}</div> : null}
+              {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
               {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
               <Button type="button" className={styles.detailAddAction} onClick={() => openCreate(selectedProvider.provider_key)} disabled={actionId !== null}><Plus aria-hidden="true" />{t("mcp.addConnector")}</Button>
             </div>
-            <div className={styles.providerDetailMedia} aria-hidden="true"><Cable /></div>
+            <div className={styles.providerDetailMedia} aria-hidden="true">{providerMonogram(selectedProvider)}</div>
           </header>
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
