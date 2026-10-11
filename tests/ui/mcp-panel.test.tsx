@@ -258,7 +258,7 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
-  it("opens a Manus-style provider detail dialog with only supported actions", async () => {
+  it("opens the compact Manus connector detail with prompts and owner metadata", async () => {
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
@@ -273,11 +273,16 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("A real provider")).toBeInTheDocument()
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
-    expect(within(detail).getByText("Example prompts")).toBeInTheDocument()
+    expect(within(detail).queryByText("Example prompts")).toBeNull()
     expect(within(detail).getByRole("button", { name: "Connect" })).toBeInTheDocument()
-    expect(within(detail).getByText("开发")).toBeInTheDocument()
-    expect(within(detail).getByText("Acme")).toBeInTheDocument()
-    expect(within(detail).queryByTestId("mcp-provider-detail-metadata")).toBeNull()
+    const metadata = within(detail).getByTestId("mcp-provider-detail-metadata")
+    expect(metadata).toHaveTextContent("详情")
+    expect(metadata).toHaveTextContent("分类")
+    expect(metadata).toHaveTextContent("开发")
+    expect(metadata).toHaveTextContent("连接器类型")
+    expect(metadata).toHaveTextContent("应用")
+    expect(metadata).toHaveTextContent("作者")
+    expect(metadata).toHaveTextContent("Acme")
     expect(within(detail).queryByRole("button", { name: "Manage connectors" })).toBeNull()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
@@ -288,12 +293,12 @@ describe("McpPanel", () => {
     expect(css).not.toMatch(/\.featuredRail\s*\{/u)
     expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title search" "title controls";/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem,calc\(100vw - 4rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: flex-start;[^}]*padding: 3rem 17rem 2rem 3rem;[^}]*text-align: left;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;[^}]*text-align: left;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: absolute;[^}]*width: 10rem;[^}]*height: 12rem;/u)
-    expect(css).toMatch(/\.examplePromptList\s*\{[^}]*grid-template-columns: 1fr;/u)
-    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem,calc\(100vw - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*padding: 3\.5rem 2\.5rem 1\.5rem;[^}]*text-align: center;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: center;[^}]*text-align: center;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: static;[^}]*width: 4rem;[^}]*height: 4rem;/u)
+    expect(css).toMatch(/\.examplePromptList\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 6\.5rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
