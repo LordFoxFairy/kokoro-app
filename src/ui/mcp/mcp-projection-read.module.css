@@ -616,8 +616,8 @@
   }
 }
 
-/* Manus connector catalogue: compact directory, horizontal discovery strip,
- * then a full-width list. Provider contents remain owner-projected. */
+/* Manus connector catalogue: compact two-column directory and a horizontal
+ * discovery strip. Provider contents remain owner-projected. */
 .header {
   align-items: center;
   margin-bottom: 1.5rem;
@@ -700,10 +700,10 @@
 }
 .catalogToolbar,
 .categoryFilter { display: none; }
-.providerGrid { grid-template-columns: minmax(0, 1fr); gap: .65rem; }
+.providerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
 .providerCard {
   display: flex;
-  min-height: 4.85rem;
+  min-height: 5.25rem;
   align-items: stretch;
   border-radius: .75rem;
   box-shadow: none;
@@ -734,4 +734,5 @@
   .header { gap: 1rem; margin-bottom: 1rem; }
   .header h2 { font-size: 1.5rem; }
   .providerHighlights { grid-auto-columns: minmax(14rem, 82%); }
+  .providerCard { min-height: 5.25rem; }
 }

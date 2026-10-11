@@ -282,7 +282,7 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5\.625rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(css).toMatch(/\.providerHighlights\s*\{[^}]*grid-auto-flow: column;/u)
-    expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/u)
+    expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {
@@ -624,4 +624,11 @@ describe("McpPanel", () => {
     await waitFor(() => expect(client.deleteMcpSecret).toHaveBeenCalledWith(SECRET.handle))
     await waitFor(() => expect(screen.getByText("Save credential")).toHaveFocus())
   })
+})
+
+it("uses Manus's compact two-column connector directory on desktop and one column on mobile", () => {
+  const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
+  expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*gap: \.8rem;/u)
+  expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
+  expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.providerGrid,[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
