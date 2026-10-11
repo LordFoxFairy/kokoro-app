@@ -103,6 +103,7 @@ describe("McpPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Browse connectors" }))
     expect(screen.queryByText("Workspace search")).toBeNull()
+    await waitFor(() => expect(screen.getByTestId("mcp-projection-read")).not.toHaveAttribute("aria-busy", "true"))
   })
 
   it("matches the Manus connector directory hierarchy with real local provider logos", async () => {
@@ -280,10 +281,10 @@ describe("McpPanel", () => {
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.featuredRail\s*\{[^}]*overflow-x: auto;/u)
     expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 13\.5rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem, calc\(100vw - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*padding: 3\.5rem 2rem 2rem;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: center;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 6rem;[^}]*height: 6rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem,calc\(100vw - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*flex-direction: row;[^}]*padding: 3rem 3rem 2rem;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*right: 5rem;[^}]*width: 12rem;[^}]*height: 14rem;/u)
     expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)

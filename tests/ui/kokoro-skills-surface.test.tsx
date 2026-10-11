@@ -100,16 +100,21 @@ it("loads one Manus catalog page at a time instead of eagerly walking every curs
   expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(2)
 })
 
-it("uses the visible Manus category rail rather than hiding categories in a menu", async () => {
+it("uses the Manus filter menu rather than an always-expanded category rail", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)
   renderLive()
   await screen.findByTestId("skills-catalog-grid")
-  const rail = screen.getByRole("navigation", { name: "技能分类" })
-  for (const name of ["全部", "编程", "数据", "自动化", "商业", "设计", "媒体", "内容", "应用"]) {
-    expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
-  }
-  expect(within(rail).getByRole("button", { name: "全部" })).toHaveAttribute("data-active", "true")
+
+  const filter = screen.getByRole("button", { name: "技能分类：全部" })
+  expect(filter).toHaveTextContent("全部")
+  expect(screen.queryByRole("navigation", { name: "技能分类" })).toBeNull()
+
+  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
+  const menu = await screen.findByRole("menu")
+  expect(within(menu).getByRole("menuitem", { name: "媒体" })).toBeInTheDocument()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "媒体" }))
+  expect(screen.getByRole("button", { name: "技能分类：媒体" })).toHaveTextContent("媒体")
 })
 
 it("opens a stable server-backed detail dialog with real detail fields and examples", async () => {
@@ -256,7 +261,9 @@ it("renders the owner APPS category in the existing filter and uses revision cov
   stubOwnerReads()
   renderLive()
   await screen.findByRole("button", { name: "Current" })
-  fireEvent.click(within(screen.getByRole("navigation", { name: "技能分类" })).getByRole("button", { name: "应用" }))
+  const filter = screen.getByRole("button", { name: "技能分类：全部" })
+  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "应用" }))
   fireEvent.click(screen.getByRole("button", { name: "查看技能详情 Current" }))
   await screen.findByRole("button", { name: "下载技能" })
   const cover = screen.getByTestId("manus-skill-detail-dialog").querySelector("img")
@@ -1083,14 +1090,16 @@ it("keeps real example text and its icon at the wide detail scale", () => {
 })
 
 
-it("uses the reference eight Chinese category labels in the catalog rail", async () => {
+it("keeps the reference category vocabulary inside the Manus filter menu", async () => {
   stubOwnerReads()
   renderLive()
-  const rail = await screen.findByRole("navigation", { name: "技能分类" })
+  const filter = await screen.findByRole("button", { name: "技能分类：全部" })
+  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
+  const menu = await screen.findByRole("menu")
   for (const name of ["全部", "编程", "数据", "自动化", "商业", "设计", "媒体", "内容", "应用"]) {
-    expect(within(rail).getByRole("button", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
   }
-  expect(within(rail).getAllByRole("button")).toHaveLength(9)
+  expect(within(menu).getAllByRole("menuitem")).toHaveLength(9)
 })
 
 it("uses the Manus-style identity, summary and real-example composition for a personal skill detail", async () => {

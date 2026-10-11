@@ -201,28 +201,28 @@
 .editorActions { justify-content: flex-end; gap: .5rem; padding-top: .25rem; }
 .editorActions button { height: 2.45rem; min-height: 2.45rem; border-radius: .6rem; font-size: .85rem; }
 
-/* Connector details are intentionally a compact provider sheet, not the wide
- * Skills artifact inspector. All text remains Platform-sourced. */
-.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(42rem, calc(100vw - 2rem)); max-width: calc(100vw - 2rem); max-height: min(46rem, calc(100dvh - 2rem)); min-height: 0; flex-direction: column; gap: 0; overflow: hidden; padding: 0; border: 1px solid rgb(0 0 0 / 12%); border-radius: 1.25rem; background: rgb(255 255 254); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
-.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1.2rem; right: 1.2rem; z-index: 3; }
-.providerDetailHeader { display: flex; min-height: 20rem; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: .95rem; padding: 3.5rem 2rem 2rem; text-align: center; }
-.providerDetailCopy { display: flex; width: auto; min-width: 0; max-width: 36rem; flex: 0 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
-.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: clamp(1.65rem, 4vw, 2.15rem); font-weight: 680; letter-spacing: -.035em; line-height: 1.14; }
-.providerDetailMeta { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; margin-bottom: .65rem; }
+/* Connector details use the same wide Manus sheet geometry as Skills: a
+ * left-aligned identity/action header, artwork at the right edge, then a
+ * calm description and prompt list. Provider fields stay owner-sourced. */
+.providerDetailDialog[data-slot="dialog-content"] { display: flex; width: min(78rem,calc(100vw - 2rem)); max-width: calc(100vw - 2rem); height: min(62rem,calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); min-height: 0; flex-direction: column; gap: 0; overflow: hidden; padding: 0; border: 1px solid rgb(0 0 0 / 12%); border-radius: 1rem; background: rgb(255 255 254); box-shadow: 0 24px 56px rgb(0 0 0 / 20%); }
+.providerDetailDialog > :global([data-slot="dialog-close"]) { top: 1.4rem; right: 1.5rem; z-index: 3; }
+.providerDetailHeader { position: relative; display: flex; min-height: 17.5rem; flex: 0 0 auto; flex-direction: row; align-items: center; padding: 3rem 3rem 2rem; border-bottom: 1px solid rgb(0 0 0 / 9%); text-align: left; }
+.providerDetailCopy { display: flex; width: 100%; min-width: 0; max-width: calc(100% - 15rem); flex: 0 1 auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+.providerDetailCopy :global([data-slot="dialog-title"]) { margin: 0; overflow-wrap: anywhere; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 680; letter-spacing: -.035em; line-height: 1.13; }
+.providerDetailMeta { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .35rem; margin-bottom: .65rem; }
 .providerDetailMeta span { border-radius: .35rem; background: rgb(55 53 47 / 7%); padding: .22rem .48rem; color: rgb(55 53 47 / 76%); font-size: .8rem; font-weight: 550; line-height: 1rem; }
 .providerDetailAuthor { margin: .6rem 0 0; color: var(--muted-foreground); font-size: .9rem; line-height: 1.3rem; }
-.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: center; gap: .65rem; margin-top: 1.2rem; }
+.providerDetailActions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .65rem; margin-top: 1.5rem; }
 .providerDetailActions button { min-height: 2.8rem; border-radius: .7rem; font-weight: 650; }
 .providerDetailPrimaryAction { background: rgb(28 28 28); color: rgb(255 255 254); }
 .providerDetailPrimaryAction:hover { background: rgb(45 45 45); }
-.providerDetailLogo { position: relative; display: inline-flex; order: -1; width: 6rem; height: 6rem; flex: 0 0 6rem; align-items: center; justify-content: center; overflow: hidden; border-radius: 1rem; background: rgb(250 250 249); }
-.providerDetailLogo img { object-fit: contain; padding: .45rem; }
-.providerDetailLogo svg { width: 2.4rem; height: 2.4rem; color: var(--muted-foreground); }
-.providerDetailBody { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; border-top: 1px solid rgb(0 0 0 / 9%); padding: 1.75rem 2rem 2rem; }
-.providerDetailDescription { max-width: 36rem; margin: 0 0 1.5rem; color: var(--foreground); font-size: 1rem; line-height: 1.55rem; text-align: left; }
-.examplePromptHeading { margin: 0 0 .8rem; font-size: .9375rem; font-weight: 650; letter-spacing: -.0125em; line-height: 1.25rem; }
-.examplePromptList { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
-.examplePromptList li { display: flex; box-sizing: border-box; min-height: 4.75rem; align-items: center; gap: .875rem; padding: 1rem; border: 1px solid var(--border); border-radius: .875rem; color: var(--foreground); font-size: .9rem; line-height: 1.35rem; }
+.providerDetailLogo { position: absolute; right: 5rem; bottom: 0; display: inline-flex; width: 12rem; height: 14rem; align-items: center; justify-content: center; overflow: hidden; border-radius: .75rem .75rem 0 0; background: rgb(250 250 249); box-shadow: 0 .75rem 1.5rem rgb(0 0 0 / 10%); }
+.providerDetailLogo img { object-fit: contain; padding: 1.35rem; }
+.providerDetailLogo svg { width: 3rem; height: 3rem; color: var(--muted-foreground); }
+.providerDetailBody { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow: auto; padding: 2.5rem 3rem 3rem; }
+.providerDetailDescription { max-width: 66rem; margin: 0 0 2.25rem; color: var(--foreground); font-size: 1.15rem; line-height: 1.75rem; text-align: left; }
+.examplePromptList { display: grid; gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.examplePromptList li { display: flex; box-sizing: border-box; min-height: 4.75rem; align-items: center; gap: .875rem; padding: 1rem; border: 1px solid var(--border); border-radius: .875rem; color: var(--foreground); font-size: .95rem; line-height: 1.4rem; }
 .examplePromptList svg { width: 1rem; height: 1rem; flex: 0 0 1rem; color: var(--muted-foreground); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -233,7 +233,9 @@
   .viewToggle { width: 100%; }
   .providerGrid,
   .connectorGrid { grid-template-columns: 1fr; }
-  .providerDetailHeader { min-height: 18rem; padding: 3rem 1.25rem 1.5rem; }
+  .providerDetailHeader { min-height: 0; padding: 3.5rem 1.25rem 1.5rem; align-items: flex-start; }
+  .providerDetailCopy { max-width: 100%; }
+  .providerDetailLogo { display: none; }
   .providerDetailBody { padding: 1.5rem 1.25rem 2rem; }
 }
 @media (prefers-reduced-motion: reduce) { .refreshing svg { animation: none; } }

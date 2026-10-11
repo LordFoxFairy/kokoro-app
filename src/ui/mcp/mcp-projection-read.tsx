@@ -153,7 +153,10 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
     // Switching back to a populated catalog must not make a second full owner
     // request. A new generation is created only by an explicit refresh or a
     // successful mutation, so it remains the one clear invalidation boundary.
-    if (completedReads.current.has(requestKey)) return
+    if (completedReads.current.has(requestKey)) {
+      setRefreshing(false)
+      return
+    }
     const subscription = subscribeProjection(client, requestKey, requestCursor, resource)
     void subscription.promise.then(
       (next) => {
@@ -363,7 +366,7 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
     <Dialog open={selectedProvider !== null} onOpenChange={(open) => { if (!open) setSelectedProvider(null) }}>
       <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")} data-detail-layout="manus">
         {selectedProvider ? <>
-          <header className={styles.providerDetailHeader}>
+          <header className={styles.providerDetailHeader} data-has-logo="true">
             <div className={styles.providerDetailCopy}>
               <div className={styles.providerDetailMeta}>
                 {selectedProvider.category_keys.slice(0, 2).map((category) => <span key={category}>{categoryLabel(category)}</span>)}
@@ -386,7 +389,7 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
           </header>
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
-            {selectedProvider.example_prompts.length > 0 ? <><h3 className={styles.examplePromptHeading}>{t("mcp.examplePrompts")}</h3><ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul></> : null}
+            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}><MessageCircle aria-hidden="true" />{prompt}</li>)}</ul> : null}
           </section>
         </> : null}
       </DialogContent>

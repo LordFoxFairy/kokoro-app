@@ -4,7 +4,7 @@ import type { GithubImported } from "@/ui/skills/personal-skill-github-import-fl
 
 import Image from "next/image"
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
+import { Check, ChevronDown, LoaderCircle, Plus, Search, SlidersHorizontal, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -277,8 +277,26 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           </span>
         ) : null}
         <div className={styles.content}>
-          <div className={styles.filterRow} role="navigation" aria-label={t("skills.categoryAria")}>
-            {CATEGORIES.map(({ value, key }) => <Button key={value} type="button" variant="ghost" className={styles.categoryButton} data-active={category === value || undefined} onClick={() => setCategory(value)}>{t(key)}</Button>)}
+          <div className={styles.filterRow}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={styles.filterButton}
+                  aria-label={`${t("skills.categoryAria")}：${t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}`}
+                >
+                  <SlidersHorizontal aria-hidden="true" />
+                  {t(CATEGORIES.find((item) => item.value === category)?.key ?? "skills.categoryAll")}
+                  <ChevronDown aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className={styles.filterMenu}>
+                <DropdownMenuGroup>
+                  {CATEGORIES.map(({ value, key }) => <DropdownMenuItem key={value} data-active={category === value || undefined} onSelect={() => setCategory(value)}>{t(key)}</DropdownMenuItem>)}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {importNotice ? (
