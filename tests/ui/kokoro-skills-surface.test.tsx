@@ -1116,6 +1116,34 @@ it("uses the Manus-style identity, summary and real-example composition for a pe
   expect(dialog).not.toHaveTextContent("SKILL.md")
 })
 
+it("opens the owner-approved package tree from a personal skill detail without replacing its summary", async () => {
+  const managed = {
+    skill_id: "mine", source_ref: "skill:mine", series_id: "mine-series", revision: "1",
+    name: "本地清单", summary: "仅根据当前输入整理待办事项。", tags: ["personal"], status: "active" as const,
+    skill_updated_at: "2026-10-11T00:00:00.000Z", example_prompts: ["帮我整理今天的待办事项。"], category_keys: ["automation"],
+    product: { source_kind: "personal" as const, publication_audience: "owner" as const, state_version: "1" },
+  }
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify({ data: {
+    source_ref: "skill:mine", revision: "1", files: [{ path: "SKILL.md", size_bytes: "16" }, { path: "assets/readme.txt", size_bytes: "7" }],
+    selected_file: String(input).includes("file_path=SKILL.md") ? { path: "SKILL.md", text: "# 清单\n\n正文" } : null,
+  } }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "package-read" } })))
+  const client = {
+    listPersonalSkills: vi.fn().mockResolvedValue({ skills: [managed], next_cursor: null }),
+    getPublishedPersonalSkill: vi.fn().mockResolvedValue(managed),
+  } as unknown as HubClient
+  render(<LocaleProvider><PersonalSkillsRead client={client} /></LocaleProvider>)
+
+  fireEvent.click(await screen.findByRole("button", { name: "本地清单" }))
+  const dialog = await screen.findByTestId("personal-skill-detail")
+  fireEvent.click(within(dialog).getByRole("button", { name: "查看详情" }))
+
+  expect(await within(dialog).findByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
+  expect(within(dialog).getByRole("button", { name: "assets" })).toBeInTheDocument()
+  expect(await within(dialog).findByRole("heading", { name: "清单" })).toBeInTheDocument()
+  expect(globalThis.fetch).toHaveBeenCalledWith("/api/hub/skills/mine/package", expect.objectContaining({ method: "GET" }))
+  expect(within(dialog).getByText("本地清单")).toBeInTheDocument()
+})
+
 it("uses the same wide Manus geometry for personal details", () => {
   const css = readFileSync("src/ui/skills/personal-skills-read.module.css", "utf8")
   expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(62rem, calc\(100dvh - 2rem\)\);/u)

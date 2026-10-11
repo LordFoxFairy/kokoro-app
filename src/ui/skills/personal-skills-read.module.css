@@ -191,6 +191,8 @@
 .detailMeta > span:first-child { color: var(--foreground); }
 .detailActions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.5rem; }
 .detailActions button { box-sizing: border-box; min-height: 2.8rem; height: 2.8rem; border-radius: .7rem; padding: 0 .95rem; font-size: .95rem; font-weight: 650; line-height: 1.2rem; }
+.detailReaderAction { min-height: 2.8rem; height: 2.8rem; margin-top: .65rem; border-radius: .7rem; padding: 0 .95rem; font-size: .95rem; font-weight: 650; line-height: 1.2rem; }
+.detailReaderAction svg { width: 1.1rem; height: 1.1rem; }
 .detailBody { min-height: 0; flex: 1 1 auto; overflow: auto; padding: 2.5rem 3rem 3rem; }
 .detailSummary { max-width: 66rem; margin: 0 0 2.25rem; color: var(--foreground); font-size: 1.15rem; line-height: 1.75rem; }
 .detailExamples { display: grid; gap: .75rem; margin: 0; }

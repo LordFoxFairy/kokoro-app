@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { MessageCircle } from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { ChevronDown, ChevronRight, FileText, Folder, MessageCircle } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +24,10 @@ import { PersonalSkillWithdrawDialog } from "./personal-skill-withdraw-dialog"
 import { useT } from "@/i18n/context"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
+import { getManusSkillPackage } from "./manus-skill-client"
 import styles from "./personal-skills-read.module.css"
+import readerStyles from "./manus-skill-detail-dialog.module.css"
+import type { CatalogPackageData } from "@/hub/schemas"
 
 type PageState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; page: Awaited<ReturnType<typeof publishClient.listPublished>> }
 type DetailState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; skill: ManagedPersonalSkill } | null
@@ -68,6 +73,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
   const [generation, setGeneration] = useState(0)
   const [pageState, setPageState] = useState<PageState>({ kind: "loading" })
   const [detail, setDetail] = useState<DetailState>(null)
+  const [packageReaderOpen, setPackageReaderOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [publishOpen, setPublishOpen] = useState(false)
   const [resumeBase, setResumeBase] = useState<ManagedPersonalSkill | null>(null)
@@ -193,6 +199,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
     const controller = new AbortController()
     detailController.current = controller
     const request = ++detailRequest.current
+    setPackageReaderOpen(false)
     setDetail({ kind: "loading" })
     void client.getPublishedPersonalSkill(id, controller.signal).then(
       (skill) => { if (request === detailRequest.current) setDetail(skill.source_ref === sourceRef ? { kind: "ready", skill } : { kind: "error" }) },
@@ -300,9 +307,9 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
           </nav>
         </> : null}
       </section>}
-      <Dialog open={detail !== null} onOpenChange={(open) => { if (!open) { detailController.current?.abort(); detailRequest.current += 1; setDetail(null) } }}>
-        <DialogContent className={styles.detailDialog} overlayClassName={styles.detailOverlay ?? ""} data-detail-layout="manus" data-testid="personal-skill-detail">
-          {detail?.kind === "ready" ? <>
+      <Dialog open={detail !== null} onOpenChange={(open) => { if (!open) { detailController.current?.abort(); detailRequest.current += 1; setPackageReaderOpen(false); setDetail(null) } }}>
+        <DialogContent className={packageReaderOpen ? `${styles.detailDialog} ${readerStyles.readerDialog}` : styles.detailDialog} overlayClassName={styles.detailOverlay ?? ""} data-detail-layout="manus" data-testid="personal-skill-detail">
+          {detail?.kind === "ready" && packageReaderOpen ? <PersonalSkillPackageReader key={detail.skill.skill_id} skillId={detail.skill.skill_id} title={detail.skill.name} onBack={() => setPackageReaderOpen(false)} /> : detail?.kind === "ready" ? <>
             <header className={styles.detailHero}>
               <div className={styles.detailCopy}>
                 {detail.skill.category_keys.length > 0 ? <div className={styles.detailCategories}>{detail.skill.category_keys.slice(0, 2).map((category) => <Badge key={category} variant="secondary">{category}</Badge>)}</div> : null}
@@ -316,6 +323,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
                   <Button type="button" disabled={withdrawTarget !== null} onClick={() => { setLifecycleSubject(boundary.subject); setResumeBase(detail.skill); setDetail(null); setPublishOpen(true) }}>{t("skills.lifecycle.update")}</Button>
                   <Button type="button" variant="outline" disabled={withdrawTarget !== null && withdrawTarget.skill_id !== detail.skill.skill_id} onClick={() => { setLifecycleSubject(boundary.subject); setWithdrawTarget(current => lifecycleSubject === boundary.subject ? current ?? detail.skill : detail.skill); setWithdrawOpen(true) }}>{t("skills.lifecycle.withdraw")}</Button>
                 </div> : null}
+                <Button type="button" variant="outline" className={styles.detailReaderAction} onClick={() => setPackageReaderOpen(true)}><FileText aria-hidden="true" />{t("skills.packageViewDetails")}</Button>
               </div>
             </header>
             <section className={styles.detailBody}>
@@ -331,4 +339,102 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
       <PersonalSkillPublishDialog key={`${boundary.subject}:${resumeBase?.skill_id ?? "new"}`} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} admitted={admitted && (!resumeBase || resumeBase.status === "draft" || lifecycleSubject === boundary.subject)} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )
+}
+
+/** The personal owner surface opens the same authenticated package inspector as
+ * the catalog detail. The directory and every text byte are returned by the
+ * admitted BFF endpoint; folder nodes are only presentation prefixes. */
+function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: string; title: string; onBack: () => void }) {
+  const t = useT()
+  const [directory, setDirectory] = useState<CatalogPackageData | null>(null)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<CatalogPackageData["selected_file"]>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [collapsedFolders, setCollapsedFolders] = useState<ReadonlySet<string>>(new Set())
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void getManusSkillPackage(skillId, undefined, controller.signal).then((value) => {
+      if (controller.signal.aborted) return
+      setDirectory(value)
+      const initialPath = value.files.some((file) => file.path === "SKILL.md") ? "SKILL.md" : value.files[0]?.path ?? null
+      setSelectedPath(initialPath)
+      setSelectedFile(null)
+      setLoading(initialPath !== null)
+    }).catch(() => {
+      if (!controller.signal.aborted) { setFailed(true); setLoading(false) }
+    })
+    return () => controller.abort()
+  }, [skillId, attempt])
+
+  useEffect(() => {
+    if (directory === null || selectedPath === null) return
+    const controller = new AbortController()
+    void getManusSkillPackage(skillId, selectedPath, controller.signal, directory).then((value) => {
+      if (controller.signal.aborted) return
+      setSelectedFile(value.selected_file)
+      setLoading(false)
+    }).catch(() => {
+      if (!controller.signal.aborted) { setFailed(true); setLoading(false) }
+    })
+    return () => controller.abort()
+  }, [directory, selectedPath, skillId])
+
+  const selectFile = (path: string) => {
+    if (path === selectedPath) return
+    setSelectedPath(path)
+    setSelectedFile(null)
+    setLoading(true)
+    setFailed(false)
+  }
+
+  const retry = () => {
+    setDirectory(null)
+    setSelectedPath(null)
+    setSelectedFile(null)
+    setLoading(true)
+    setFailed(false)
+    setAttempt((value) => value + 1)
+  }
+
+  const renderFiles = (prefix: string): ReactNode => {
+    const entries = new Map<string, { path: string; folder: boolean }>()
+    for (const file of directory?.files ?? []) {
+      if (!file.path.startsWith(prefix)) continue
+      const remainder = file.path.slice(prefix.length)
+      const name = remainder.split("/")[0]!
+      entries.set(name, { path: `${prefix}${name}`, folder: remainder.includes("/") })
+    }
+    return [...entries].map(([name, entry]) => {
+      if (!entry.folder) return <li key={entry.path}><button type="button" aria-label={entry.path} aria-pressed={entry.path === selectedPath} onClick={() => selectFile(entry.path)}><FileText aria-hidden="true" /><span>{name}</span></button></li>
+      const expanded = !collapsedFolders.has(entry.path)
+      return <li key={entry.path}>
+        <button type="button" aria-label={name} aria-expanded={expanded} onClick={() => setCollapsedFolders((current) => { const next = new Set(current); if (next.has(entry.path)) next.delete(entry.path); else next.add(entry.path); return next })}>{expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}<Folder aria-hidden="true" /><span>{name}</span></button>
+        {expanded ? <ul>{renderFiles(`${entry.path}/`)}</ul> : null}
+      </li>
+    })
+  }
+
+  return <>
+    <header className={readerStyles.readerHeader}>
+      <Button type="button" variant="ghost" onClick={onBack}><ChevronRight className={readerStyles.backIcon} aria-hidden="true" />{t("skills.packageBack")}</Button>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogDescription className="sr-only">{t("skills.packageReader")}</DialogDescription>
+    </header>
+    <section className={readerStyles.reader} aria-label={t("skills.packageReader")}>
+      <nav className={readerStyles.fileList} aria-label={t("skills.detailFiles")}><ul>{renderFiles("")}</ul></nav>
+      <div className={readerStyles.fileContent} aria-busy={loading}>
+        {selectedPath !== null ? <div className={readerStyles.fileHeading}><FileText aria-hidden="true" /><span>{selectedPath}</span></div> : null}
+        {loading ? <p role="status">{t("skills.packageLoading")}</p> : null}
+        {failed ? <div role="alert"><p>{t("skills.packageUnavailable")}</p><Button type="button" variant="outline" onClick={retry}>{t("skills.packageRetry")}</Button></div> : null}
+        {!loading && !failed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
+        {!loading && !failed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}
+        {!loading && !failed && selectedFile !== null ? selectedFile.path.toLowerCase().endsWith(".md")
+          ? <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{ img: ({ alt }) => <span>{alt}</span>, a: ({ children }) => <span>{children}</span> }}>{selectedFile.text}</ReactMarkdown>
+          : <pre>{selectedFile.text}</pre> : null}
+      </div>
+    </section>
+  </>
 }
