@@ -70,16 +70,6 @@
   border-color: rgb(0 0 0 / 44%);
   box-shadow: 0 0 0 3px rgb(0 0 0 / 7%);
 }
-.primaryAction {
-  height: 2.9rem;
-  min-height: 2.9rem;
-  flex: 0 0 auto;
-  border-radius: 0.75rem;
-  padding-inline: 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-.primaryAction svg,
 .providerAction svg,
 .actions svg,
 .refreshing svg {

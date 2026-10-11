@@ -18,7 +18,7 @@ import styles from "./mcp-projection-read.module.css"
 
 type Projection = { connectors: McpPersonalConnectorPage; providers: McpPersonalProviderPage }
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
-type Editor = { kind: "create"; providerKey: string } | { kind: "edit"; connector: McpPersonalConnector }
+type Editor = { kind: "edit"; connector: McpPersonalConnector }
 
 function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
@@ -52,7 +52,6 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [editor, setEditor] = useState<Editor | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<McpPersonalProvider | null>(null)
   const [providerQuery, setProviderQuery] = useState("")
-  const [providerKey, setProviderKey] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -68,7 +67,6 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
       ([connectors, providers]) => {
         if (controller.signal.aborted || requestCursor !== cursor || requestGeneration !== generation) return
         setState({ kind: "ready", data: { connectors, providers } })
-        setProviderKey((current) => current || providers.items[0]?.provider_key || "")
       },
       () => {
         if (controller.signal.aborted || requestCursor !== cursor || requestGeneration !== generation) return
@@ -106,30 +104,20 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     setDisplayName("")
     setDescription("")
   }
-  const openCreate = (key = providers[0]?.provider_key ?? "") => {
-    if (!key) return
-    setProviderKey(key)
-    setDisplayName("")
-    setDescription("")
-    setDeleteId(null)
-    setActionError(false)
-    setSelectedProvider(null)
-    setEditor({ kind: "create", providerKey: key })
-  }
   const beginEdit = (connector: McpPersonalConnector) => {
-    setProviderKey(connector.provider_key)
     setDisplayName(connector.display_name ?? "")
     setDescription(connector.description ?? "")
     setDeleteId(null)
     setActionError(false)
     setEditor({ kind: "edit", connector })
   }
-  const runAction = async (id: string, action: () => Promise<unknown>) => {
+  const runAction = async (id: string, action: () => Promise<unknown>, onSuccess?: () => void) => {
     setActionId(id)
     setActionError(false)
     try {
       await action()
       resetEditor()
+      onSuccess?.()
       reload()
     } catch {
       setActionError(true)
@@ -137,15 +125,13 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
       setActionId(null)
     }
   }
-  const submitCreate = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!providerKey || !displayName.trim()) return
-    void runAction("create", () => client.createMcpPersonalConnector({
-      provider_key: providerKey,
+  const connectProvider = (provider: McpPersonalProvider, onSuccess?: () => void) => {
+    void runAction(`connect:${provider.provider_key}`, () => client.createMcpPersonalConnector({
+      provider_key: provider.provider_key,
       connector_type: "mcp",
-      display_name: displayName.trim(),
-      description: description.trim(),
-    }))
+      display_name: provider.display_name,
+      description: provider.description ?? "",
+    }), onSuccess)
   }
   const submitEdit = (event: FormEvent<HTMLFormElement>, connector: McpPersonalConnector) => {
     event.preventDefault()
@@ -157,8 +143,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     }))
   }
 
-  const editorProvider = providerByKey.get(providerKey)
-  const editorTitle = editor?.kind === "edit" ? t("mcp.edit") : t("mcp.addConnector")
+  const editorTitle = t("mcp.edit")
   const categoryLabel = (category: McpPersonalProvider["category_keys"][number]) => t(categoryMessage[category])
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
@@ -171,9 +156,6 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
         </label>
         {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
-        <Button type="button" className={styles.primaryAction} onClick={() => openCreate()} disabled={providers.length === 0 || actionId !== null}>
-          <Plus aria-hidden="true" />{t("mcp.addConnector")}
-        </Button>
       </div>
     </header>
 
@@ -194,8 +176,8 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
                 {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</span> : null}
               </span>
             </button>
-            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => openCreate(provider.provider_key)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
-              <Plus aria-hidden="true" />
+            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
+              {actionId === `connect:${provider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
             </Button>
           </li>)}
         </ul>}
@@ -231,14 +213,9 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
       <DialogContent className={styles.editorDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")}>
         <DialogHeader className={styles.editorHeader}>
           <DialogTitle>{editorTitle}</DialogTitle>
-          <DialogDescription>{editor?.kind === "edit" ? t("mcp.description") : (editorProvider?.description ?? t("mcp.provider"))}</DialogDescription>
+          <DialogDescription>{t("mcp.description")}</DialogDescription>
         </DialogHeader>
-        {editor?.kind === "create" ? <form className={styles.editorForm} onSubmit={submitCreate}>
-          <div className={styles.field}><Label htmlFor="mcp-provider">{t("mcp.provider")}</Label><select id="mcp-provider" value={providerKey} onChange={(event) => { setProviderKey(event.target.value); setEditor({ kind: "create", providerKey: event.target.value }) }}>{providers.map((provider) => <option key={provider.provider_key} value={provider.provider_key}>{provider.display_name}</option>)}</select></div>
-          <div className={styles.field}><Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label><Input id="mcp-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required autoFocus /></div>
-          <div className={styles.field}><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
-          <footer className={styles.editorActions}><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button><Button type="submit" disabled={actionId !== null || !providerKey}>{actionId === "create" ? <Spinner aria-hidden="true" /> : null}{t("mcp.create")}</Button></footer>
-        </form> : editor?.kind === "edit" ? <form className={styles.editorForm} onSubmit={(event) => submitEdit(event, editor.connector)}>
+        {editor ? <form className={styles.editorForm} onSubmit={(event) => submitEdit(event, editor.connector)}>
           <div className={styles.field}><Label htmlFor="mcp-display-name">{t("mcp.fieldName")}</Label><Input id="mcp-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={100} required autoFocus /></div>
           <div className={styles.field}><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
           <footer className={styles.editorActions}><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button><Button type="submit" disabled={actionId !== null}>{actionId === editor.connector.connector_id ? <Spinner aria-hidden="true" /> : null}{t("mcp.saveChanges")}</Button></footer>
@@ -254,7 +231,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
               {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
               {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
-              <Button type="button" className={styles.detailAddAction} onClick={() => openCreate(selectedProvider.provider_key)} disabled={actionId !== null}><Plus aria-hidden="true" />{t("mcp.addConnector")}</Button>
+              <Button type="button" className={styles.detailAddAction} onClick={() => connectProvider(selectedProvider, () => setSelectedProvider(null))} disabled={actionId !== null}>{actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("mcp.addConnector")}</Button>
             </div>
             <div className={styles.providerDetailMedia} aria-hidden="true">{providerMonogram(selectedProvider)}</div>
           </header>

@@ -130,11 +130,9 @@ describe("McpPanel", () => {
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     await screen.findByText("Workspace search")
-    fireEvent.click(screen.getByRole("button", { name: "Add connector" }))
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "New connector" } })
-    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Read files" } })
-    fireEvent.click(screen.getByRole("button", { name: "Create" }))
-    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "Read files" }))
+    const provider = await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(within(provider).getByRole("button", { name: "Add Provider One" }))
+    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Edited connector" } })
@@ -149,10 +147,12 @@ describe("McpPanel", () => {
     expect(listMcpPersonalConnectors.mock.calls.length).toBeGreaterThan(1)
   })
 
-  it("keeps the live connector list in place while a provider-specific add dialog opens", async () => {
+  it("connects a provider from its card without replacing the live connector list", async () => {
+    const createMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      createMcpPersonalConnector,
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -163,16 +163,17 @@ describe("McpPanel", () => {
 
     fireEvent.click(within(provider).getByRole("button", { name: "Add Provider One" }))
 
-    const dialog = await screen.findByRole("dialog", { name: "Add connector" })
-    expect(dialog).toBeInTheDocument()
-    expect(within(dialog).getByLabelText("Connector provider")).toHaveValue("provider-one")
+    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    expect(screen.queryByRole("dialog", { name: "Add connector" })).toBeNull()
     expect(existing).toBeInTheDocument()
   })
 
-  it("opens a provider detail sheet from owner metadata and hands off to the same add flow", async () => {
+  it("opens a provider detail sheet from owner metadata and starts the same provider connection", async () => {
+    const createMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
     const client = makeClient({
       listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      createMcpPersonalConnector,
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -187,8 +188,8 @@ describe("McpPanel", () => {
     expect(screen.getByText("Workspace search")).toBeInTheDocument()
 
     fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
-    const editor = await screen.findByRole("dialog", { name: "Add connector" })
-    expect(within(editor).getByLabelText("Connector provider")).toHaveValue("provider-one")
+    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Provider One" })).toBeNull())
   })
 
   it("filters the provider directory without replacing the connector projection", async () => {
