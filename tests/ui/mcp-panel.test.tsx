@@ -156,6 +156,26 @@ describe("McpPanel", () => {
     expect(existing).toBeInTheDocument()
   })
 
+  it("opens a provider detail sheet from owner metadata and hands off to the same add flow", async () => {
+    const client = makeClient({
+      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+    })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    await screen.findByText("Workspace search")
+    fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
+
+    const detail = await screen.findByRole("dialog", { name: "Provider One" })
+    expect(within(detail).getByText("A real provider")).toBeInTheDocument()
+    expect(within(detail).getByText("Connect me")).toBeInTheDocument()
+    expect(screen.getByText("Workspace search")).toBeInTheDocument()
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
+    const editor = await screen.findByRole("dialog", { name: "Add connector" })
+    expect(within(editor).getByLabelText("Connector provider")).toHaveValue("provider-one")
+  })
+
   it("retains the rendered list during a refresh and retires a late prior identity response", async () => {
     let resolveSecond!: (value: { items: typeof CONNECTOR[]; next_cursor: string | null }) => void
     const listA = vi.fn()

@@ -45,6 +45,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [actionId, setActionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState(false)
   const [editor, setEditor] = useState<Editor | null>(null)
+  const [selectedProvider, setSelectedProvider] = useState<McpPersonalProvider | null>(null)
   const [providerKey, setProviderKey] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
@@ -96,6 +97,7 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     setDescription("")
     setDeleteId(null)
     setActionError(false)
+    setSelectedProvider(null)
     setEditor({ kind: "create", providerKey: key })
   }
   const beginEdit = (connector: McpPersonalConnector) => {
@@ -163,12 +165,14 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
         </div>
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : <ul className={styles.providerGrid}>
           {providers.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
-            <div className={styles.providerMark} aria-hidden="true">{providerInitial(provider)}</div>
-            <div className={styles.providerCopy}>
-              <h4>{provider.display_name}</h4>
-              {provider.description ? <p>{provider.description}</p> : null}
-              {provider.category_keys.length > 0 ? <div className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{category}</span>)}</div> : null}
-            </div>
+            <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
+              <span className={styles.providerMark} aria-hidden="true">{providerInitial(provider)}</span>
+              <span className={styles.providerCopy}>
+                <span className={styles.providerName}>{provider.display_name}</span>
+                {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
+                {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{category}</span>)}</span> : null}
+              </span>
+            </button>
             <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => openCreate(provider.provider_key)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
               <Plus aria-hidden="true" />
             </Button>
@@ -218,6 +222,26 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           <div className={styles.field}><Label htmlFor="mcp-description">{t("mcp.description")}</Label><Textarea id="mcp-description" value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></div>
           <footer className={styles.editorActions}><Button type="button" variant="outline" onClick={resetEditor} disabled={actionId !== null}>{t("mcp.cancel")}</Button><Button type="submit" disabled={actionId !== null}>{actionId === editor.connector.connector_id ? <Spinner aria-hidden="true" /> : null}{t("mcp.saveChanges")}</Button></footer>
         </form> : null}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={selectedProvider !== null} onOpenChange={(open) => { if (!open) setSelectedProvider(null) }}>
+      <DialogContent className={styles.providerDetailDialog} overlayClassName={styles.editorOverlay ?? ""} closeLabel={t("mcp.cancel")}>
+        {selectedProvider ? <>
+          <header className={styles.providerDetailHeader}>
+            <div className={styles.providerDetailMark} aria-hidden="true">{providerInitial(selectedProvider)}</div>
+            <div className={styles.providerDetailCopy}>
+              {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{category}</span>)}</div> : null}
+              <DialogTitle>{selectedProvider.display_name}</DialogTitle>
+              {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
+              <Button type="button" className={styles.detailAddAction} onClick={() => openCreate(selectedProvider.provider_key)} disabled={actionId !== null}><Plus aria-hidden="true" />{t("mcp.addConnector")}</Button>
+            </div>
+          </header>
+          <section className={styles.providerDetailBody}>
+            {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
+            {selectedProvider.example_prompts.length > 0 ? <ul className={styles.examplePromptList}>{selectedProvider.example_prompts.map((prompt) => <li key={prompt}>{prompt}</li>)}</ul> : null}
+          </section>
+        </> : null}
       </DialogContent>
     </Dialog>
   </section>
