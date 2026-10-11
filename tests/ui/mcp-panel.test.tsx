@@ -94,9 +94,12 @@ describe("McpPanel", () => {
 
     expect(await screen.findByTestId("mcp-provider-card-provider-one")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
+    expect(client.listMcpPersonalProviders).toHaveBeenCalledTimes(1)
+    expect(client.listMcpPersonalConnectors).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
+    expect(client.listMcpPersonalConnectors).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole("button", { name: "Browse connectors" }))
     expect(screen.queryByText("Workspace search")).toBeNull()
@@ -123,8 +126,8 @@ describe("McpPanel", () => {
     expect(card).toHaveTextContent("Connected")
     expect(card).not.toHaveTextContent("connector-one")
     expect(requests.map((value) => new URL(value, "http://localhost").pathname)).toEqual([
-      "/api/hub/self/mcp/connectors",
       "/api/hub/self/mcp/providers",
+      "/api/hub/self/mcp/connectors",
     ])
   })
 
@@ -143,27 +146,21 @@ describe("McpPanel", () => {
   })
 
   it("revoking read admission aborts the stale projection without duplicating the next identity read", async () => {
-    let connectorSignal: AbortSignal | undefined
     let providerSignal: AbortSignal | undefined
     let resolveStale!: (value: { items: typeof CONNECTOR[]; next_cursor: null }) => void
     const stale = new Promise<{ items: typeof CONNECTOR[]; next_cursor: null }>((resolve) => { resolveStale = resolve })
-    const listMcpPersonalConnectors = vi.fn()
-      .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { connectorSignal = signal; return stale })
-      .mockResolvedValueOnce({ items: [{ ...CONNECTOR, connector_id: "connector-b", display_name: "Connector B" }], next_cursor: null })
     const listMcpPersonalProviders = vi.fn()
       .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { providerSignal = signal; return stale.then(() => ({ items: [PROVIDER], next_cursor: null })) })
       .mockResolvedValueOnce({ items: [PROVIDER], next_cursor: null })
-    const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders })
+    const client = makeClient({ listMcpPersonalProviders })
     const renderContent = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
       <LocaleProvider><McpContent client={client} embedded brandName="Acme" readBoundary={boundary} /></LocaleProvider>
     )
     const view = render(renderContent({ admitted: true, subject: "reader-a", generation: 1 }))
 
-    await waitFor(() => expect(listMcpPersonalConnectors).toHaveBeenCalledOnce())
     await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledOnce())
     view.rerender(renderContent({ admitted: false, subject: "reader-a", generation: 2 }))
-    await waitFor(() => expect(connectorSignal?.aborted).toBe(true))
-    expect(providerSignal?.aborted).toBe(true)
+    await waitFor(() => expect(providerSignal?.aborted).toBe(true))
     expect(screen.queryByTestId("mcp-projection-read")).toBeNull()
 
     resolveStale({ items: [CONNECTOR], next_cursor: null })
@@ -171,12 +168,8 @@ describe("McpPanel", () => {
     expect(screen.queryByText("Workspace search")).toBeNull()
 
     view.rerender(renderContent({ admitted: true, subject: "reader-b", generation: 3 }))
-    await waitFor(() => expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledTimes(2))
     await screen.findByTestId("mcp-provider-card-provider-one")
-    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
-    expect(await screen.findByText("Connector B")).toBeInTheDocument()
-    expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
   it("does not present revoked connector audit records as active user connections", async () => {

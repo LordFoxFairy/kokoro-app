@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useEffect, useState } from "react"
+import { type FormEvent, useEffect, useRef, useState } from "react"
 import { Cable, ChevronDown, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, SlidersHorizontal, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,18 +16,18 @@ import { useT } from "@/i18n/context"
 
 import styles from "./mcp-projection-read.module.css"
 
-type Projection = { connectors: McpPersonalConnectorPage; providers: McpPersonalProviderPage }
+type Projection = { connectors?: McpPersonalConnectorPage; providers: McpPersonalProviderPage }
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
 type Editor = { kind: "edit"; connector: McpPersonalConnector }
 
 type ProjectionFlight = {
   controller: AbortController
-  promise: Promise<Projection>
+  promise: Promise<Partial<Projection>>
   subscribers: number
 }
 
 type ProjectionSubscription = {
-  promise: Promise<Projection>
+  promise: Promise<Partial<Projection>>
   release: () => void
 }
 
@@ -37,7 +37,12 @@ type ProjectionSubscription = {
 // while a real logout or identity switch aborts the abandoned network request.
 const projectionInflight = new WeakMap<object, Map<string, ProjectionFlight>>()
 
-function subscribeProjection(client: HubClient, key: string, cursor: string | null): ProjectionSubscription {
+function subscribeProjection(
+  client: HubClient,
+  key: string,
+  cursor: string | null,
+  resource: "providers" | "connectors",
+): ProjectionSubscription {
   let requests = projectionInflight.get(client)
   if (requests === undefined) {
     requests = new Map()
@@ -46,10 +51,9 @@ function subscribeProjection(client: HubClient, key: string, cursor: string | nu
   let flight = requests.get(key)
   if (flight === undefined) {
     const controller = new AbortController()
-    const promise = Promise.all([
-      client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }, controller.signal),
-      client.listMcpPersonalProviders({ limit: 100 }, controller.signal),
-    ]).then(([connectors, providers]) => ({ connectors, providers }))
+    const promise = resource === "providers"
+      ? client.listMcpPersonalProviders({ limit: 100 }, controller.signal).then((providers) => ({ providers }))
+      : client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }, controller.signal).then((connectors) => ({ connectors }))
     flight = { controller, promise, subscribers: 0 }
     requests.set(key, flight)
     const clear = (): void => {
@@ -111,19 +115,40 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const completedReads = useRef(new Set<string>())
 
   useEffect(() => {
     let active = true
     const requestCursor = cursor
     const requestGeneration = generation
-    const requestKey = JSON.stringify([identity, requestCursor, requestGeneration])
-    const subscription = subscribeProjection(client, requestKey, requestCursor)
+    const resource = view === "catalog" ? "providers" : "connectors"
+    const requestKey = JSON.stringify([identity, requestCursor, requestGeneration, resource])
+    // Switching back to a populated catalog must not make a second full owner
+    // request. A new generation is created only by an explicit refresh or a
+    // successful mutation, so it remains the one clear invalidation boundary.
+    if (completedReads.current.has(requestKey)) return
+    const subscription = subscribeProjection(client, requestKey, requestCursor, resource)
     void subscription.promise.then(
-      ({ connectors, providers }) => {
+      (next) => {
         if (!active || requestCursor !== cursor || requestGeneration !== generation) return
-        setState({ kind: "ready", data: { connectors, providers } })
+        completedReads.current.add(requestKey)
+        setState((current) => {
+          if (resource === "providers") {
+            if (next.providers === undefined) return current
+            return {
+              kind: "ready",
+              data: {
+                providers: next.providers,
+                ...(current.kind === "ready" && current.data.connectors !== undefined ? { connectors: current.data.connectors } : {}),
+              },
+            }
+          }
+          if (next.connectors === undefined || current.kind !== "ready") return current
+          return { kind: "ready", data: { ...current.data, connectors: next.connectors } }
+        })
       },
       () => {
+        completedReads.current.delete(requestKey)
         if (!active || requestCursor !== cursor || requestGeneration !== generation) return
         setRefreshError(true)
         setState((current) => current.kind === "ready" ? current : { kind: "error" })
@@ -135,14 +160,14 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
       active = false
       subscription.release()
     }
-  }, [client, cursor, generation, identity])
+  }, [client, cursor, generation, identity, view])
 
   const projection = state.kind === "ready" ? state.data : null
   const providers = projection?.providers.items ?? []
   // Revocation is retained by Platform for auditability, but is no longer a
   // usable user connection. Keep it out of this live-connection surface while
   // preserving the owner response (and its cursor) unchanged.
-  const visibleConnectors = projection?.connectors.items.filter((connector) => connector.status !== "revoked") ?? []
+  const visibleConnectors = projection?.connectors?.items.filter((connector) => connector.status !== "revoked") ?? []
   const normalizedProviderQuery = providerQuery.trim().toLocaleLowerCase()
   const displayedProviders = providers.filter((provider) => {
     const matchesQuery = normalizedProviderQuery.length === 0 || [provider.display_name, provider.description, provider.author, ...provider.category_keys]
@@ -235,7 +260,11 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           </select>
           <ChevronDown aria-hidden="true" />
         </label>
-        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => setView((current) => current === "catalog" ? "connections" : "catalog")}>
+        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
+          setRefreshing(true)
+          setRefreshError(false)
+          setView((current) => current === "catalog" ? "connections" : "catalog")
+        }}>
           {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
         </Button>
       </div>
@@ -256,7 +285,8 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
           </li>)}
         </ul>}
       </section> : <section className={styles.connectionSection} aria-label={t("mcp.title")}>
-        {visibleConnectors.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
+        {projection.connectors === undefined ? <div className={styles.loading} role="status"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
+        {projection.connectors !== undefined && (visibleConnectors.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
           const provider = providerByKey.get(connector.provider_key)
           const connectorName = connector.display_name || provider?.display_name || connector.provider_key
           const providerName = provider?.display_name ?? connector.provider_key
@@ -271,12 +301,12 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
             {connector.status === "pending" ? <p className={styles.pendingHint}>{t("mcp.connectingHint")}</p> : null}
             {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpPersonalConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpPersonalConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
           </li>
-        })}</ul>}
+        })}</ul>)}
       </section>}
 
       {view === "connections" ? <nav className={styles.pagination} aria-label="MCP pages">
         <Button type="button" variant="outline" disabled={history.length === 0 || actionId !== null} onClick={() => { const previous = history.at(-1) ?? null; setRefreshing(true); setRefreshError(false); setHistory((items) => items.slice(0, -1)); setCursor(previous) }}>{t("plugins.previous")}</Button>
-        <Button type="button" variant="outline" disabled={!projection.connectors.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
+        <Button type="button" variant="outline" disabled={!projection.connectors?.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors?.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
       </nav> : null}
     </div> : null}
 
