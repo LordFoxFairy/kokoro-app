@@ -1,7 +1,7 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { Cable, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, ExternalLink, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, SlidersHorizontal, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -87,8 +87,6 @@ function providerLinkLabel(value: string): string {
 
 const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
 
-function providerMonogram(provider: McpPersonalProvider): string { return [...provider.display_name.trim()][0]?.toLocaleUpperCase() ?? "M" }
-
 /**
  * Platform is the source of every provider and connector rendered here.  This
  * component only retains the last confirmed projection while a refresh is in
@@ -108,6 +106,8 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   const [editor, setEditor] = useState<Editor | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<McpPersonalProvider | null>(null)
   const [providerQuery, setProviderQuery] = useState("")
+  const [view, setView] = useState<"catalog" | "connections">("catalog")
+  const [categoryFilter, setCategoryFilter] = useState("all")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -144,11 +144,13 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
   // preserving the owner response (and its cursor) unchanged.
   const visibleConnectors = projection?.connectors.items.filter((connector) => connector.status !== "revoked") ?? []
   const normalizedProviderQuery = providerQuery.trim().toLocaleLowerCase()
-  const displayedProviders = normalizedProviderQuery
-    ? providers.filter((provider) => [provider.display_name, provider.description, provider.author, ...provider.category_keys]
+  const displayedProviders = providers.filter((provider) => {
+    const matchesQuery = normalizedProviderQuery.length === 0 || [provider.display_name, provider.description, provider.author, ...provider.category_keys]
       .filter((value): value is string => Boolean(value))
-      .some((value) => value.toLocaleLowerCase().includes(normalizedProviderQuery)))
-    : providers
+      .some((value) => value.toLocaleLowerCase().includes(normalizedProviderQuery))
+    return matchesQuery && (categoryFilter === "all" || provider.category_keys.includes(categoryFilter as McpPersonalProvider["category_keys"][number]))
+  })
+  const categoryOptions = [...new Set(providers.flatMap((provider) => provider.category_keys))]
   const providerByKey = new Map(providers.map((provider) => [provider.provider_key, provider]))
 
   const reload = () => {
@@ -223,26 +225,37 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
     {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
 
     {projection ? <div className={styles.content}>
-      <section className={styles.providerSection} aria-label={t("mcp.provider")}>
+      <div className={styles.catalogToolbar}>
+        <label className={styles.categoryFilter}>
+          <SlidersHorizontal aria-hidden="true" />
+          <span className="sr-only">{t("mcp.provider")}</span>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} aria-label={t("mcp.provider")}>
+            <option value="all">{t("plugins.viewAll")}</option>
+            {categoryOptions.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}
+          </select>
+          <ChevronDown aria-hidden="true" />
+        </label>
+        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => setView((current) => current === "catalog" ? "connections" : "catalog")}>
+          {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
+        </Button>
+      </div>
+
+      {view === "catalog" ? <section className={styles.providerSection} aria-label={t("mcp.provider")}>
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
           {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
-              <span className={styles.providerMedia} aria-hidden="true"><span>{providerMonogram(provider)}</span></span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
                 {provider.category_keys.length > 0 ? <span className={styles.categoryList}>{provider.category_keys.slice(0, 3).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</span> : null}
               </span>
             </button>
-            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider)} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
+            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider, () => setView("connections"))} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
               {actionId === `connect:${provider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
             </Button>
           </li>)}
         </ul>}
-      </section>
-
-      <section className={styles.connectionSection} aria-label={t("mcp.title")}>
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>{t("mcp.title")}</p><h3>{t("mcp.tabServers")}</h3></div></div>
+      </section> : <section className={styles.connectionSection} aria-label={t("mcp.title")}>
         {visibleConnectors.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
           const provider = providerByKey.get(connector.provider_key)
           const connectorName = connector.display_name || provider?.display_name || connector.provider_key
@@ -259,12 +272,12 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
             {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpPersonalConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpPersonalConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
           </li>
         })}</ul>}
-      </section>
+      </section>}
 
-      <nav className={styles.pagination} aria-label="MCP pages">
+      {view === "connections" ? <nav className={styles.pagination} aria-label="MCP pages">
         <Button type="button" variant="outline" disabled={history.length === 0 || actionId !== null} onClick={() => { const previous = history.at(-1) ?? null; setRefreshing(true); setRefreshError(false); setHistory((items) => items.slice(0, -1)); setCursor(previous) }}>{t("plugins.previous")}</Button>
         <Button type="button" variant="outline" disabled={!projection.connectors.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
-      </nav>
+      </nav> : null}
     </div> : null}
 
     <Dialog open={editor !== null} onOpenChange={(open) => { if (!open && actionId === null) resetEditor() }}>
@@ -289,9 +302,8 @@ export function McpProjectionRead({ client, embedded = false, identity }: { clie
               {selectedProvider.category_keys.length > 0 ? <div className={styles.detailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
               {selectedProvider.author ? <DialogDescription>{selectedProvider.author}</DialogDescription> : null}
-              <Button type="button" className={styles.detailAddAction} onClick={() => connectProvider(selectedProvider, () => setSelectedProvider(null))} disabled={actionId !== null}>{actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("mcp.addConnector")}</Button>
+              <Button type="button" className={styles.detailAddAction} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })} disabled={actionId !== null}>{actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("mcp.addConnector")}</Button>
             </div>
-            <div className={styles.providerDetailMedia} aria-hidden="true">{providerMonogram(selectedProvider)}</div>
           </header>
           <section className={styles.providerDetailBody}>
             {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}

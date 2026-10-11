@@ -84,6 +84,24 @@ describe("McpPanel", () => {
   const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], website: "https://provider.example.com", privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1" }
   const CONNECTOR = { connector_id: "connector-one", connector_type: "mcp" as const, provider_key: "provider-one", status: "active" as const, approved_scopes: ["tools.read"], enabled: true, state_version: "2", display_name: "Workspace search", description: "Search the workspace" }
 
+  it("keeps the provider directory separate from managed connectors until the user switches views", async () => {
+    const client = makeClient({
+      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+    })
+
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    expect(await screen.findByTestId("mcp-provider-card-provider-one")).toBeInTheDocument()
+    expect(screen.queryByText("Workspace search")).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
+    expect(await screen.findByText("Workspace search")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Browse connectors" }))
+    expect(screen.queryByText("Workspace search")).toBeNull()
+  })
+
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
     const requests: string[] = []
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -97,6 +115,8 @@ describe("McpPanel", () => {
 
     render(<McpContent client={createHubClient()} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     const card = await screen.findByTestId("mcp-projection")
     expect(card).toHaveTextContent("Workspace search")
     expect(card).toHaveTextContent("Provider One")
@@ -115,6 +135,8 @@ describe("McpPanel", () => {
 
     render(<StrictMode><LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" /></LocaleProvider></StrictMode>)
 
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     await screen.findByText("Workspace search")
     expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(1)
     expect(listMcpPersonalProviders).toHaveBeenCalledTimes(1)
@@ -151,6 +173,8 @@ describe("McpPanel", () => {
     view.rerender(renderContent({ admitted: true, subject: "reader-b", generation: 3 }))
     await waitFor(() => expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledTimes(2))
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     expect(await screen.findByText("Connector B")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
@@ -163,6 +187,8 @@ describe("McpPanel", () => {
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     expect(await screen.findByText("No connectors yet.")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
     expect(screen.queryByText("Removed")).toBeNull()
@@ -178,10 +204,10 @@ describe("McpPanel", () => {
     const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders, createMcpPersonalConnector, updateMcpPersonalConnector, setMcpPersonalConnectorEnabled, removeMcpPersonalConnector })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-    await screen.findByText("Workspace search")
     const provider = await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(within(provider).getByRole("button", { name: "Add Provider One" }))
     await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await screen.findByText("Workspace search")
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Edited connector" } })
@@ -205,7 +231,6 @@ describe("McpPanel", () => {
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-    const existing = await screen.findByText("Workspace search")
     const provider = await screen.findByTestId("mcp-provider-card-provider-one")
     expect(provider).toHaveTextContent("Provider One")
     expect(provider).toHaveTextContent("A real provider")
@@ -214,7 +239,7 @@ describe("McpPanel", () => {
 
     await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
     expect(screen.queryByRole("dialog", { name: "Add connector" })).toBeNull()
-    expect(existing).toBeInTheDocument()
+    expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
   it("opens a provider detail sheet from owner metadata and starts the same provider connection", async () => {
@@ -226,7 +251,7 @@ describe("McpPanel", () => {
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-    await screen.findByText("Workspace search")
+    await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
 
     const detail = await screen.findByRole("dialog", { name: "Provider One" })
@@ -235,7 +260,7 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByRole("link", { name: "provider.example.com" })).toHaveAttribute("href", "https://provider.example.com")
     expect(within(detail).getByRole("link", { name: "provider.example.com/privacy" })).toHaveAttribute("href", "https://provider.example.com/privacy")
-    expect(screen.getByText("Workspace search")).toBeInTheDocument()
+    expect(screen.queryByText("Workspace search")).toBeNull()
 
     fireEvent.click(within(detail).getByRole("button", { name: "Add connector" }))
     await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
@@ -258,12 +283,12 @@ describe("McpPanel", () => {
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-    await screen.findByText("Workspace search")
+    await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.change(screen.getByRole("searchbox", { name: /search connectors/i }), { target: { value: "calendar" } })
 
     expect(screen.getByTestId("mcp-provider-card-provider-two")).toHaveTextContent("Calendar One")
     expect(screen.queryByTestId("mcp-provider-card-provider-one")).toBeNull()
-    expect(screen.getByText("Workspace search")).toBeInTheDocument()
+    expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
   it("retains the rendered list during a refresh and retires a late prior identity response", async () => {
@@ -277,6 +302,8 @@ describe("McpPanel", () => {
     const boundary = { admitted: true, subject: "reader-a", generation: 1 } as const
     const view = render(<McpContent client={clientA} embedded brandName="Acme" readBoundary={boundary} />, { wrapper: LocaleProvider })
 
+    await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     await screen.findByText("Workspace search")
     fireEvent.click(screen.getByRole("button", { name: "Next page" }))
     expect(screen.getByText("Workspace search")).toBeInTheDocument()

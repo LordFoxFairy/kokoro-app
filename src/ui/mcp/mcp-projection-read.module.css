@@ -111,8 +111,48 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2.75rem;
+  gap: 1.25rem;
 }
+.catalogToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.categoryFilter {
+  position: relative;
+  display: inline-flex;
+  height: 2.35rem;
+  align-items: center;
+  gap: .55rem;
+  border: 1px solid rgb(0 0 0 / 13%);
+  border-radius: .7rem;
+  background: rgb(255 255 254);
+  padding: 0 .75rem;
+  color: var(--foreground);
+}
+.categoryFilter > svg { width: 1rem; height: 1rem; flex: 0 0 1rem; color: var(--muted-foreground); }
+.categoryFilter > svg:last-child { pointer-events: none; }
+.categoryFilter select {
+  min-width: 4.25rem;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 550;
+  outline: 0;
+}
+.viewToggle {
+  height: 2.35rem;
+  min-height: 2.35rem;
+  border-radius: .7rem;
+  padding: 0 .85rem;
+  font-size: .875rem;
+  font-weight: 600;
+}
+.viewToggle[data-active="true"] { background: rgb(55 53 47 / 7%); }
 .providerSection,
 .connectionSection {
   min-width: 0;
@@ -137,7 +177,7 @@
 }
 .providerCard {
   position: relative;
-  min-height: 18.75rem;
+  min-height: 13rem;
   overflow: hidden;
   transition:
     border-color 160ms ease,
@@ -167,37 +207,12 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.providerMedia {
-  display: flex;
-  height: 9.75rem;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid rgb(0 0 0 / 7%);
-  background:
-    radial-gradient(circle at 50% 38%, rgb(255 255 255 / 90%), transparent 45%),
-    linear-gradient(140deg, rgb(247 247 245), rgb(237 237 233));
-  color: rgb(55 53 47 / 68%);
-}
-.providerMedia > span {
-  display: inline-flex;
-  width: 4.25rem;
-  height: 4.25rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgb(0 0 0 / 11%);
-  border-radius: 1rem;
-  background: rgb(255 255 254);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 6%);
-  font-size: 1.9rem;
-  font-weight: 650;
-  letter-spacing: -0.06em;
-}
 .providerCopy {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 1.05rem 1.15rem 1.2rem;
+  padding: 1.15rem 1.15rem 3.85rem;
 }
 .providerName {
   max-width: 100%;
@@ -228,7 +243,8 @@
   display: flex;
   min-width: 0;
   gap: 0.35rem;
-  margin-top: 0.8rem;
+  margin-top: auto;
+  padding-top: 0.8rem;
   overflow: hidden;
 }
 .categoryList span {
@@ -593,8 +609,17 @@
   .connectorGrid {
     grid-template-columns: 1fr;
   }
+  .catalogToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .categoryFilter,
+  .viewToggle {
+    width: 100%;
+  }
+  .categoryFilter select { flex: 1; }
   .providerCard {
-    min-height: 17.5rem;
+    min-height: 13rem;
   }
   .providerDetailDialog[data-slot="dialog-content"] { width: 95vw; max-width: 800px; min-height: 0; }
   .providerDetailHeader { min-height: 0; padding: 61px 24px 20px; }
