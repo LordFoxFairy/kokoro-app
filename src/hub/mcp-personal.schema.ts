@@ -11,7 +11,7 @@ const scalar = (min: number, max: number) => z.string().refine(value => !/[\uD80
 const status = z.enum(["pending", "active", "error", "revoked"])
 const unique = (values: string[]) => new Set(values).size === values.length
 const safeUrl = z.string().max(2048).refine(value => { try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password } catch { return false } })
-const connector = z.object({
+export const mcpPersonalConnectorSchema = z.object({
   connector_id: mcpPersonalIdSchema,
   connector_type: z.enum(["builtin", "byok", "mcp"]),
   provider_key: providerKey,
@@ -24,7 +24,9 @@ const connector = z.object({
   created_at: z.string().datetime({ offset: true }).optional(),
   updated_at: z.string().datetime({ offset: true }).optional(),
 }).strict()
-const connection = z.object({
+export type McpPersonalConnector = z.infer<typeof mcpPersonalConnectorSchema>
+
+export const mcpPersonalConnectionSchema = z.object({
   connection_id: mcpPersonalIdSchema,
   connector_id: mcpPersonalIdSchema,
   server_id: mcpPersonalIdSchema,
@@ -32,17 +34,27 @@ const connection = z.object({
   policy_digest: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/u),
   status: z.enum(["active", "revoked"]),
 }).strict()
+export type McpPersonalConnection = z.infer<typeof mcpPersonalConnectionSchema>
+
 const category = z.enum(["efficiency", "creation", "business", "development", "finance", "travel", "health"])
-const provider = z.object({
+export const mcpPersonalProviderSchema = z.object({
   provider_key: providerKey, display_name: scalar(1, 100), description: scalar(0, 1000).optional(), directory_type: z.enum(["app", "data_source"]),
   category_keys: z.array(category).refine(unique), example_prompts: z.array(scalar(1, 1000)).max(10), author: scalar(1, 100).optional(), website: safeUrl.optional(), privacy_url: safeUrl.optional(), enabled: z.boolean(), state_version: stateVersion,
 }).strict()
+export type McpPersonalProvider = z.infer<typeof mcpPersonalProviderSchema>
+
 const page = <T extends z.ZodTypeAny>(item: T) => z.object({ items: z.array(item).max(100), next_cursor: cursor.nullable() }).strict()
+export const mcpPersonalConnectorPageSchema = page(mcpPersonalConnectorSchema)
+export const mcpPersonalConnectionPageSchema = page(mcpPersonalConnectionSchema)
+export const mcpPersonalProviderPageSchema = page(mcpPersonalProviderSchema)
+export type McpPersonalConnectorPage = z.infer<typeof mcpPersonalConnectorPageSchema>
+export type McpPersonalConnectionPage = z.infer<typeof mcpPersonalConnectionPageSchema>
+export type McpPersonalProviderPage = z.infer<typeof mcpPersonalProviderPageSchema>
 export const mcpPersonalSchemas = {
-  connectors: z.object({ data: page(connector) }).strict(), connector: z.object({ data: z.object({ connector }).strict() }).strict(),
-  connections: z.object({ data: page(connection) }).strict(), connection: z.object({ data: z.object({ connection }).strict() }).strict(),
-  providers: z.object({ data: page(provider) }).strict(), provider: z.object({ data: z.object({ provider }).strict() }).strict(),
-  create: z.object({ data: z.object({ connector }).strict() }).strict(), update: z.object({ data: z.object({ connector }).strict() }).strict(), enabled: z.object({ data: z.object({ connector }).strict() }).strict(), remove: z.object({ data: z.object({ connector }).strict() }).strict(),
+  connectors: z.object({ data: mcpPersonalConnectorPageSchema }).strict(), connector: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(),
+  connections: z.object({ data: mcpPersonalConnectionPageSchema }).strict(), connection: z.object({ data: z.object({ connection: mcpPersonalConnectionSchema }).strict() }).strict(),
+  providers: z.object({ data: mcpPersonalProviderPageSchema }).strict(), provider: z.object({ data: z.object({ provider: mcpPersonalProviderSchema }).strict() }).strict(),
+  create: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), update: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), enabled: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), remove: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(),
 }
 export const mcpPersonalCommandRequestSchemas = {
   create: z.object({ provider_key: providerKey, connector_type: z.enum(["builtin", "byok", "mcp"]), display_name: scalar(1, 100), description: scalar(0, 1000) }).strict(),
@@ -50,6 +62,10 @@ export const mcpPersonalCommandRequestSchemas = {
   enabled: z.object({ enabled: z.boolean(), expected_state_version: stateVersion }).strict(),
   remove: z.object({ expected_state_version: stateVersion }).strict(),
 }
+export type McpPersonalCreateInput = z.infer<typeof mcpPersonalCommandRequestSchemas.create>
+export type McpPersonalUpdateInput = z.infer<typeof mcpPersonalCommandRequestSchemas.update>
+export type McpPersonalEnabledInput = z.infer<typeof mcpPersonalCommandRequestSchemas.enabled>
+export type McpPersonalRemoveInput = z.infer<typeof mcpPersonalCommandRequestSchemas.remove>
 export const mcpPersonalErrors: Record<number, readonly string[]> = {
   400: ["invalid_mcp_personal_request"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"], 404: ["mcp_personal_not_found"],
   409: ["mcp_personal_idempotency_conflict", "mcp_personal_command_in_progress"], 412: ["mcp_personal_precondition_failed"], 413: ["mcp_personal_body_too_large"], 429: ["session_rate_limited"], 502: ["mcp_personal_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "mcp_personal_dependency_unavailable"],

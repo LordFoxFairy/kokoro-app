@@ -110,6 +110,41 @@ describe("hub client", () => {
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(["/api/hub/self/mcp/connections", "/api/hub/self/mcp/connections"])
   })
 
+  it("uses formal personal connector V1 routes, strict envelopes, idempotency, and CAS payloads", async () => {
+    const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: ["tools.read"], enabled: true, state_version: "2", display_name: "Connector", description: "Ready" }
+    const provider = { provider_key: "provider-one", display_name: "Provider One", directory_type: "app", category_keys: ["development"], example_prompts: ["Connect me"], enabled: true, state_version: "1" }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(publicResponse({ data: { items: [connector], next_cursor: null } }))
+      .mockResolvedValueOnce(publicResponse({ data: { items: [provider], next_cursor: null } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, connector_id: "connector-2", status: "pending", enabled: false, state_version: "1" } } }, 201))
+      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, display_name: "Renamed", state_version: "3" } } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, enabled: false, state_version: "3" } } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, enabled: false, status: "revoked", state_version: "3" } } }))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createHubClient()
+
+    await expect(client.listMcpPersonalConnectors({ status: "active", limit: 25, cursor: "opaque" })).resolves.toEqual({ items: [connector], next_cursor: null })
+    await expect(client.listMcpPersonalProviders({ directory_type: "app", category_key: "development", limit: 25 })).resolves.toEqual({ items: [provider], next_cursor: null })
+    await expect(client.createMcpPersonalConnector({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })).resolves.toMatchObject({ connector_id: "connector-2", enabled: false })
+    await expect(client.updateMcpPersonalConnector("connector-1", { display_name: "Renamed", description: "Ready", expected_state_version: "2" })).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" })
+    await expect(client.setMcpPersonalConnectorEnabled("connector-1", { enabled: false, expected_state_version: "2" })).resolves.toMatchObject({ enabled: false })
+    await expect(client.removeMcpPersonalConnector("connector-1", { expected_state_version: "2" })).resolves.toMatchObject({ status: "revoked" })
+
+    expect(fetchMock.mock.calls.map(([path]) => new URL(path, "http://localhost").pathname)).toEqual([
+      "/api/hub/self/mcp/connectors", "/api/hub/self/mcp/providers", "/api/hub/self/mcp/connectors", "/api/hub/self/mcp/connectors/connector-1", "/api/hub/self/mcp/connectors/connector-1/enabled", "/api/hub/self/mcp/connectors/connector-1",
+    ])
+    const connectorQuery = new URL(fetchMock.mock.calls[0]![0], "http://localhost").searchParams
+    expect([...connectorQuery]).toEqual([["status", "active"], ["limit", "25"], ["cursor", "opaque"]])
+    const createInit = fetchMock.mock.calls[2]![1] as RequestInit
+    expect(createInit.method).toBe("POST")
+    expect(createInit.headers).toMatchObject({ "content-type": "application/json" })
+    expect((createInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-personal:/u)
+    expect(JSON.parse(String(createInit.body))).toEqual({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })
+    expect(JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body))).toEqual({ display_name: "Renamed", description: "Ready", expected_state_version: "2" })
+    expect(JSON.parse(String((fetchMock.mock.calls[4]![1] as RequestInit).body))).toEqual({ enabled: false, expected_state_version: "2" })
+    expect(JSON.parse(String((fetchMock.mock.calls[5]![1] as RequestInit).body))).toEqual({ expected_state_version: "2" })
+  })
+
   it("bounds MCP connection response bytes, UTF-8, error status and caller cancellation", async () => {
     const validHeaders = { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "connection-read" }
     const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "provider", transport: "streamable_http", status: "active" }

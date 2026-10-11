@@ -6,6 +6,7 @@ import type { BillingClient } from "@/billing/client"
 import type { PlanCatalog, PricingClient } from "@/billing/pricing"
 import type { BillingLedger } from "@/contract/http"
 import type { HubClient } from "@/hub/client"
+import type { McpPersonalConnector, McpPersonalProvider } from "@/hub/mcp-personal.schema"
 import type {
   McpRegisterInput,
   CustomApiView,
@@ -61,6 +62,19 @@ export function createPreviewHubClient(): HubClient {
   // product empty state. Registration remains available for interaction QA.
   let servers: McpServerView[] = []
   let secrets: McpSecret[] = []
+  let personalConnectors: McpPersonalConnector[] = []
+  const personalProviders: McpPersonalProvider[] = [
+    {
+      provider_key: "preview-notes",
+      display_name: "Preview Notes",
+      description: "Preview-only personal connector provider.",
+      directory_type: "app",
+      category_keys: ["efficiency"],
+      example_prompts: ["Save this note to my workspace."],
+      enabled: true,
+      state_version: "1",
+    },
+  ]
   let customApiCount = 0
   const quota = { ...previewQuota }
   return {
@@ -76,6 +90,44 @@ export function createPreviewHubClient(): HubClient {
       server_id: `preview-server-${index + 1}`, provider_key: server.name,
       transport: "streamable_http" as const, status: "active" as const,
     })) }),
+    listMcpPersonalConnectors: () => Promise.resolve({ items: personalConnectors, next_cursor: null }),
+    listMcpPersonalProviders: () => Promise.resolve({ items: personalProviders, next_cursor: null }),
+    createMcpPersonalConnector: (input) => {
+      const connector: McpPersonalConnector = {
+        connector_id: `preview-connector-${personalConnectors.length + 1}`,
+        connector_type: input.connector_type,
+        provider_key: input.provider_key,
+        status: "pending",
+        approved_scopes: [],
+        enabled: false,
+        state_version: "1",
+        display_name: input.display_name,
+        description: input.description,
+      }
+      personalConnectors = [...personalConnectors, connector]
+      return Promise.resolve(connector)
+    },
+    updateMcpPersonalConnector: (connectorId, input) => {
+      const existing = personalConnectors.find((connector) => connector.connector_id === connectorId)
+      if (existing === undefined) return Promise.reject(new Error("preview connector not found"))
+      const updated = { ...existing, display_name: input.display_name, description: input.description, state_version: String(Number(existing.state_version) + 1) }
+      personalConnectors = personalConnectors.map((connector) => connector.connector_id === connectorId ? updated : connector)
+      return Promise.resolve(updated)
+    },
+    setMcpPersonalConnectorEnabled: (connectorId, input) => {
+      const existing = personalConnectors.find((connector) => connector.connector_id === connectorId)
+      if (existing === undefined) return Promise.reject(new Error("preview connector not found"))
+      const updated = { ...existing, enabled: input.enabled, state_version: String(Number(existing.state_version) + 1) }
+      personalConnectors = personalConnectors.map((connector) => connector.connector_id === connectorId ? updated : connector)
+      return Promise.resolve(updated)
+    },
+    removeMcpPersonalConnector: (connectorId) => {
+      const existing = personalConnectors.find((connector) => connector.connector_id === connectorId)
+      if (existing === undefined) return Promise.reject(new Error("preview connector not found"))
+      const updated = { ...existing, enabled: false, status: "revoked" as const, state_version: String(Number(existing.state_version) + 1) }
+      personalConnectors = personalConnectors.map((connector) => connector.connector_id === connectorId ? updated : connector)
+      return Promise.resolve(updated)
+    },
     listSkillPool: () => Promise.resolve(skills),
     listSkillCatalog: ({ scope, query } = {}): Promise<SkillCatalog> => {
       const installedByKey = new Map(skills.map((skill) => [skillKey(skill), skill]))

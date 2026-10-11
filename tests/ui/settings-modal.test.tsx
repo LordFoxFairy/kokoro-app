@@ -51,6 +51,12 @@ vi.mock("@/ui/shell/page-clients", () => ({
     listPersonalSkills: vi.fn().mockResolvedValue({ skills: [{ skill_id: "mine", source_ref: "skill:mine", series_id: "series", name: "我的技能", summary: "Personal", revision: "2", status: "active", tags: [], category_keys: [], example_prompts: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "5" } }], next_cursor: null }),
     getPublishedPersonalSkill: vi.fn().mockResolvedValue({ skill_id: "mine", source_ref: "skill:mine", revision: "2", status: "active", name: "我的技能", summary: "Personal", tags: [], series_id: "series", category_keys: [], example_prompts: [], skill_updated_at: "2026-10-10T00:00:00Z", product: { publication_audience: "owner", state_version: "5" } }),
     listMcpConnections: vi.fn().mockResolvedValue({ connections: [{ connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", provider_key: "Owner MCP", transport: "streamable_http", status: "active" }] }),
+    listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [{ connector_id: "connector-1", connector_type: "mcp", provider_key: "owner-mcp", status: "active", approved_scopes: [], enabled: true, state_version: "2", display_name: "Owner MCP", description: "Actual personal connector" }], next_cursor: null }),
+    listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [{ provider_key: "owner-mcp", display_name: "Owner MCP", directory_type: "app", category_keys: ["development"], example_prompts: ["Use it"], enabled: true, state_version: "1" }], next_cursor: null }),
+    createMcpPersonalConnector: vi.fn(),
+    updateMcpPersonalConnector: vi.fn(),
+    setMcpPersonalConnectorEnabled: vi.fn(),
+    removeMcpPersonalConnector: vi.fn(),
     listSkillPool: vi.fn().mockResolvedValue([
       { name: "YouTube 影片研究", description: "利用第一手影片证据强化深度研究。", content_hash: "preview:youtube", scope: "official", enabled: false, updated_at: Date.UTC(2026, 7, 28) },
       { name: "Typst PDF 制作工具", description: "使用 Typst 生成专业、高品质的 PDF 文件。", content_hash: "preview:typst", scope: "official", enabled: true, updated_at: Date.UTC(2026, 7, 28) },
@@ -124,7 +130,7 @@ afterEach(() => {
 })
 
 describe("SettingsModal 设置中心模态", () => {
-  it("正式 Skills/MCP 设置只呈现 owner 只读投影", async () => {
+  it("正式 Skills/MCP 设置呈现 owner 连接器投影与正式 CRUD 控件", async () => {
     renderSettings()
     fireEvent.keyDown(screen.getByTestId("settings-tab-skills"), { key: "Enter" })
     expect(await screen.findByText("我的技能")).toBeInTheDocument()
@@ -134,8 +140,8 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByRole("menuitem", { name: "从 GitHub 导入" })).toBeNull()
     fireEvent.keyDown(screen.getByTestId("settings-tab-mcp"), { key: "Enter" })
     expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "删除" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "启用" })).toBeNull()
+    expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "停用" })).toBeInTheDocument()
   })
 
   it("非预览账户退出调用 Product signout，而不是旧 logout", async () => {
@@ -1091,7 +1097,7 @@ describe("R255 preset retirement: Settings model-only preferences", () => {
   })
 })
 
-it("R255 正式设置嵌入 MCP 投影仅显示一个已新增的连接器标题", async () => {
+it("R255 正式设置嵌入 MCP 投影仅显示一个连接器标题", async () => {
   try {
     renderSettings(() => {}, undefined, false, undefined, "mcp")
     expect(await screen.findByText("Owner MCP")).toBeInTheDocument()
