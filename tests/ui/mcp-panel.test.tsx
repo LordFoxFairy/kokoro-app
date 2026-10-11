@@ -271,7 +271,7 @@ describe("McpPanel", () => {
     expect(within(detail).getByText("Connect me")).toBeInTheDocument()
     expect(within(detail).getByTestId("mcp-provider-detail-logo")).toBeInTheDocument()
     expect(within(detail).getByText("Example prompts")).toBeInTheDocument()
-    expect(within(detail).queryByRole("button", { name: "Add Provider One" })).toBeNull()
+    expect(within(detail).getByRole("button", { name: "Add Provider One" })).toBeInTheDocument()
     expect(within(detail).queryByRole("button", { name: "Manage connectors" })).toBeNull()
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
@@ -281,11 +281,11 @@ describe("McpPanel", () => {
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.featuredRail\s*\{[^}]*overflow-x: auto;/u)
     expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 17\.5rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(42rem,calc\(100vw - 2rem\)\);/u)
-    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: center;[^}]*padding: 4rem 1\.5rem 1\.25rem;/u)
-    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: center;/u)
-    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 4rem;[^}]*height: 4rem;/u)
-    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5\.8rem;[^}]*padding: 1rem;/u)
+    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(88rem,calc\(100vw - 2rem\)\);/u)
+    expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*grid-template-columns: minmax\(0,1fr\) 15rem;[^}]*padding: 4\.5rem 3rem 1\.5rem;/u)
+    expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;/u)
+    expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*width: 12rem;[^}]*height: 12rem;/u)
+    expect(css).toMatch(/\.examplePromptList li\s*\{[^}]*min-height: 5rem;[^}]*padding: 1rem 1\.2rem;/u)
     expect(source).toMatch(/providerLogoAssets/u)
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
@@ -639,6 +639,7 @@ it("uses Manus's full-width one-column connector directory", () => {
   const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
   expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: \.8rem;/u)
   expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
+  expect(css).toMatch(/\.header h2\s*\{[^}]*font-size: 1\.25rem;/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
 
@@ -672,4 +673,23 @@ it("uses the observed Manus Chinese connector category labels", async () => {
   for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) {
     expect(await screen.findByRole("button", { name })).toBeInTheDocument()
   }
+})
+
+it("exposes Manus-style connector creation from the directory header", async () => {
+  const onCreateMcp = vi.fn()
+  const client = makeClient({
+    listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [{
+      provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const,
+      category_keys: ["development" as const], example_prompts: ["Connect me"], website: "https://provider.example.com",
+      privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1",
+    }], next_cursor: null }),
+  })
+  render(<McpProjectionRead client={client} identity="reader-a:1" onCreateMcp={onCreateMcp} />, { wrapper: LocaleProvider })
+
+  await screen.findByTestId("mcp-provider-card-provider-one")
+  window.localStorage.setItem("kokoro.locale", "zh")
+  fireEvent.pointerDown(screen.getByRole("button", { name: "创建" }), { button: 0, ctrlKey: false })
+  const menu = await screen.findByRole("menu")
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "透过 URL 添加 MCP" }))
+  expect(onCreateMcp).toHaveBeenCalledWith("url", expect.any(HTMLButtonElement))
 })

@@ -88,7 +88,7 @@ export const zh = {
   "rail.navAgent": "Agent",
   "rail.navPlugins": "连接器",
   "plugins.manageConnectors": "管理连接器",
-  "plugins.create": "建立",
+  "plugins.create": "创建",
   "plugins.search": "搜索连接器",
   "plugins.connectors": "连接器",
   "plugins.connectorsDescription": "连接应用程序和 API 以分享您的使用情境。",

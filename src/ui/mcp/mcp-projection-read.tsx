@@ -2,11 +2,12 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
@@ -14,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { HubClient } from "@/hub/client"
 import type { McpPersonalConnector, McpPersonalConnectorPage, McpPersonalProvider, McpPersonalProviderPage } from "@/hub/mcp-personal.schema"
 import { useT } from "@/i18n/context"
+import type { McpCreateMode } from "./mcp-panel-model"
 
 import styles from "./mcp-projection-read.module.css"
 
@@ -124,7 +126,12 @@ function providerLogo(provider: Pick<McpPersonalProvider, "provider_key">): stri
  * flight, so an asynchronous mutation never replaces the user's page with a
  * loading screen or shifts the list beneath the pointer.
  */
-export function McpProjectionRead({ client, identity }: { client: HubClient; embedded?: boolean; identity: string }) {
+export function McpProjectionRead({ client, identity, onCreateMcp }: {
+  client: HubClient
+  embedded?: boolean
+  identity: string
+  onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
+}) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
   const [history, setHistory] = useState<Array<string | null>>([])
@@ -143,6 +150,7 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
   const [description, setDescription] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const completedReads = useRef(new Set<string>())
+  const createTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     let active = true
@@ -275,6 +283,20 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
         }}>
           {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
         </Button>
+        {onCreateMcp ? <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button ref={createTriggerRef} type="button" className={styles.createButton}>
+              {t("plugins.create")}<ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className={styles.createMenu}>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={() => onCreateMcp("form", createTriggerRef.current)}>{t("mcp.register")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onCreateMcp("url", createTriggerRef.current)}>{t("mcp.urlTitle")}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onCreateMcp("json", createTriggerRef.current)}>{t("mcp.jsonImportTitle")}</DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu> : null}
         {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
       </div>
     </header>
@@ -371,8 +393,15 @@ export function McpProjectionRead({ client, identity }: { client: HubClient; emb
               {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="10rem" unoptimized /> : <Cable />}
             </span>
             <div className={styles.providerDetailCopy}>
+              {selectedProvider.category_keys.length > 0 ? <div className={styles.providerDetailCategories}>{selectedProvider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}
               <DialogTitle>{selectedProvider.display_name}</DialogTitle>
+              {selectedProvider.author ? <p className={styles.providerDetailAuthor}>{selectedProvider.author}</p> : null}
               {selectedProvider.description ? <p className={styles.providerDetailDescription}>{selectedProvider.description}</p> : null}
+              <div className={styles.providerDetailActions}>
+                <Button type="button" disabled={actionId !== null} onClick={() => connectProvider(selectedProvider, () => { setSelectedProvider(null); setView("connections") })}>
+                  {actionId === `connect:${selectedProvider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}{t("plugins.addConnector", { name: selectedProvider.display_name })}
+                </Button>
+              </div>
             </div>
           </header>
           <section className={styles.providerDetailBody}>

@@ -1163,11 +1163,20 @@ it("uses the same wide Manus geometry for personal details", () => {
 it("uses the two-column Manus catalog geometry without inventing cover data", () => {
   const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
   expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));")
-  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?flex-direction: row;/u)
+  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?display: grid;[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/u)
   expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: center;/u)
-  expect(css).toContain("height: 9.5rem;")
-  expect(css).toContain("min-height: 9.5rem;")
+  expect(css).toContain("height: 12rem;")
+  expect(css).toContain("min-height: 12rem;")
   expect(css).toMatch(/@media \(max-width: 58rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
   expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
+})
+
+it("uses the two-row Manus catalog header and the taller illustrated card proportions", () => {
+  const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
+  expect(css).toMatch(/\.headerTools\s*\{[^}]*display: grid;[^}]*grid-template-columns: minmax\(0, 1fr\);/u)
+  expect(css).toMatch(/\.headerActions\s*\{[^}]*justify-self: end;/u)
+  expect(css).toMatch(/\.cardArt\s*\{[^}]*height: 12rem;[^}]*min-height: 12rem;/u)
+  expect(css).toMatch(/\.artSkeleton\s*\{[^}]*height: 12rem;[^}]*min-height: 12rem;/u)
+  expect(css).toMatch(/\.card\s*\{[^}]*background: rgb\(255 255 254\);/u)
 })
