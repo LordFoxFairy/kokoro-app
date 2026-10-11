@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { createSkillInstallationClient, type HubClient } from "@/hub/client"
+import { createSkillInstallationClient } from "@/hub/client"
 import type { SkillCatalog, SkillCatalogCard, CatalogSkillCategory, PersonalInstallation } from "@/hub/schemas"
 import { browserHubClient } from "@/ui/shell/page-clients"
 import { invalidate, useResource } from "@/lib/query"
@@ -56,22 +56,12 @@ function skillCategories(skill: Pick<SkillCatalogCard, "categories">): Exclude<S
   return [...new Set(skill.categories ?? [])]
 }
 
-async function listAllCatalog(client: HubClient): Promise<SkillCatalog> {
-  const pages: SkillCatalog[] = []
-  const cursors = new Set<string>()
-  let cursor: string | undefined
-  for (let page = 0; ; page += 1) {
-    const result = await client.listSkillCatalog(cursor === undefined ? {} : { cursor })
-    pages.push(result)
-    const next = result.next_cursor
-    if (!next || cursors.has(next)) break
-    if (page >= 99) throw new Error("skill catalog pagination exceeded the supported page limit")
-    cursors.add(next)
-    cursor = next
-  }
+function mergeCatalogPages(pages: readonly SkillCatalog[]): SkillCatalog {
   const byKey = new Map<string, SkillCatalog["skills"][number]>()
-  for (const page of pages) for (const skill of page.skills) byKey.set(skill.skill_id ?? `${skill.scope}/${skill.name}`, skill)
-  return { skills: [...byKey.values()], next_cursor: null }
+  for (const page of pages) {
+    for (const skill of page.skills) byKey.set(skill.skill_id ?? `${skill.scope}/${skill.name}`, skill)
+  }
+  return { skills: [...byKey.values()], next_cursor: pages.at(-1)?.next_cursor ?? null }
 }
 
 function formatUsage(value: string): string {
@@ -95,7 +85,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     const base = browserHubClient({ preview })
     return preview ? base : createManusSkillHubClient(base)
   }, [preview])
-  const catalog = useResource<SkillCatalog>(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`, useCallback(() => listAllCatalog(client), [client]))
+  const catalog = useResource<SkillCatalog>(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`, useCallback(() => client.listSkillCatalog(), [client]))
+  const [pageState, setPageState] = useState<Readonly<{ base: SkillCatalog | undefined; pages: readonly SkillCatalog[] }>>({ base: undefined, pages: [] })
+  const [loadingMoreFor, setLoadingMoreFor] = useState<SkillCatalog | undefined>()
+  const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>()
+  const loadingMoreRef = useRef(false)
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState<SkillCategory>("all")
   const [githubOpen, setGithubOpen] = useState(false)
@@ -113,9 +107,35 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const uploadRef = useRef<HTMLElement | null>(null)
   const detailRef = useRef<HTMLElement | null>(null)
 
+  // Manus lists a single cursor page on entry. Pages are tied to the exact
+  // first-page snapshot, so a background refresh immediately ignores old
+  // append state instead of flashing it while an effect resets local state.
+  const additionalPages = useMemo(() => pageState.base === catalog.data ? pageState.pages : [], [catalog.data, pageState])
+  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
+  const loadingMore = loadingMoreFor === catalog.data
+  const loadMoreFailed = loadMoreFailedFor === catalog.data
+  const loadMore = useCallback(async () => {
+    const cursor = displayedCatalog?.next_cursor
+    const base = catalog.data
+    if (!cursor || base === undefined || loadingMoreRef.current) return
+    loadingMoreRef.current = true
+    setLoadingMoreFor(base)
+    setLoadMoreFailedFor(undefined)
+    try {
+      const page = await client.listSkillCatalog({ cursor })
+      if (page.next_cursor === cursor) throw new Error("skill catalog cursor did not advance")
+      setPageState((current) => ({ base, pages: current.base === base ? [...current.pages, page] : [page] }))
+    } catch {
+      setLoadMoreFailedFor(base)
+    } finally {
+      loadingMoreRef.current = false
+      setLoadingMoreFor(undefined)
+    }
+  }, [catalog.data, client, displayedCatalog?.next_cursor])
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
-    return (catalog.data?.skills ?? []).map((skill) => {
+    return (displayedCatalog?.skills ?? []).map((skill) => {
       const facts = skill.skill_id === undefined ? undefined : installationFacts[skill.skill_id]
       return facts === undefined || facts.catalog !== catalog.data ? skill : { ...skill, installed: facts.installed, enabled: facts.enabled }
     }).filter((skill) => {
@@ -125,7 +145,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         || skill.description.toLocaleLowerCase().includes(normalized)
       return matchesCategory && matchesQuery
     })
-  }, [catalog.data, category, installationFacts, query])
+  }, [catalog.data, category, displayedCatalog?.skills, installationFacts, query])
 
   const startChat = useCallback((prompt: string) => {
     // When the catalog is mounted inside the app shell, hand the prompt to
@@ -285,8 +305,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           ) : filtered.length === 0 ? (
             <div className={styles.emptyState} data-testid="skills-catalog-empty"><Search aria-hidden="true" /><p>{t("skills.noMatch")}</p></div>
           ) : (
-            <div className={styles.grid} data-testid="skills-catalog-grid">
-              {filtered.map((skill) => {
+            <>
+              <div className={styles.grid} data-testid="skills-catalog-grid">
+                {filtered.map((skill) => {
                 const stateKey = actionIdentity(skill)
                 const enabled = skill.enabled
                 const installed = skill.installed
@@ -314,8 +335,17 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                     </CardContent>
                   </Card>
                 )
-              })}
-            </div>
+                })}
+              </div>
+              {displayedCatalog?.next_cursor ? (
+                <div className={styles.loadMore}>
+                  {loadMoreFailed ? <p role="alert">{t("skills.loadError")}</p> : null}
+                  <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore} aria-busy={loadingMore}>
+                    {loadingMore ? <Spinner aria-hidden="true" /> : null}{t("rail.loadMore")}
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       </main>

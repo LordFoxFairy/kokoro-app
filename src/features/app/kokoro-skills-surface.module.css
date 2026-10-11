@@ -223,6 +223,22 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.25rem;
 }
+.loadMore {
+  display: flex;
+  min-height: 5.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.loadMore p {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.875rem;
+}
+.loadMore button {
+  min-width: 7rem;
+}
 .card {
   min-width: 0;
   overflow: hidden;

@@ -68,6 +68,37 @@ it("uses the exact Manus-style list operations, not the retired flattened catalo
   expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ pageSize: 30, includeOfficialSkills: true })
 })
 
+it("loads one Manus catalog page at a time instead of eagerly walking every cursor", async () => {
+  const secondPage = {
+    ...catalog,
+    skills: [{
+      skillId: "skill-search", displayName: "互联网技能搜索器", userDescription: "从已验证的仓库中搜索技能。",
+      publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL",
+      tags: { values: ["SKILL_HUB_TAG_AUTOMATION"] }, currentVersion: { versionUid: "skill-search" },
+    }],
+    nextPageToken: undefined,
+  }
+  const firstPage = { ...catalog, nextPageToken: "page-2" }
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith("/ListHubSkills")) {
+      return JSON.parse(String(init?.body)).pageToken === "page-2" ? response(secondPage) : response(firstPage)
+    }
+    if (path.endsWith("/ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    throw new Error(`unexpected ${path}`)
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  renderLive()
+
+  expect(await screen.findByRole("button", { name: "Manim 动画师" })).toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListHubSkills"))).toHaveLength(1)
+  expect(screen.queryByRole("button", { name: "互联网技能搜索器" })).toBeNull()
+
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  expect(await screen.findByRole("button", { name: "互联网技能搜索器" })).toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListHubSkills"))).toHaveLength(2)
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(2)
+})
+
 it("uses the compact Manus-style filter trigger rather than an always-visible category strip", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)
