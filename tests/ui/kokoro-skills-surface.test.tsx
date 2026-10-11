@@ -1169,6 +1169,7 @@ it("uses the two-column Manus catalog geometry without inventing cover data", ()
   expect(css).toContain("min-height: 12rem;")
   expect(css).toMatch(/@media \(max-width: 58rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
+  expect(css).not.toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.mySkillsButton\s*\{\s*display:\s*none;/u)
   expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
 })
 

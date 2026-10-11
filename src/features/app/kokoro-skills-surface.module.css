@@ -487,9 +487,6 @@
   .header h1 {
     font-size: 1.625rem;
   }
-  .mySkillsButton {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

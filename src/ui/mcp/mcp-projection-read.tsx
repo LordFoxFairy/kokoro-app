@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ChevronDown, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, SlidersHorizontal, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -275,29 +275,36 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
       <h2>{t("rail.navPlugins")}</h2>
-      <div className={styles.headerControls}>
-        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
-          setRefreshing(true)
-          setRefreshError(false)
-          setView((current) => current === "catalog" ? "connections" : "catalog")
-        }}>
-          {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
-        </Button>
-        {onCreateMcp ? <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button ref={createTriggerRef} type="button" variant="outline" className={styles.createButton}>
-              {t("plugins.create")}<ChevronDown aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className={styles.createMenu}>
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={() => onCreateMcp("form", createTriggerRef.current)}>{t("mcp.register")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onCreateMcp("url", createTriggerRef.current)}>{t("mcp.urlTitle")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onCreateMcp("json", createTriggerRef.current)}>{t("mcp.jsonImportTitle")}</DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu> : null}
-        {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
+      <div className={styles.headerTools}>
+        {view === "catalog" ? <label className={styles.searchField}>
+          <Search aria-hidden="true" />
+          <span className="sr-only">{t("plugins.search")}</span>
+          <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
+        </label> : null}
+        <div className={styles.headerActions}>
+          <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
+            setRefreshing(true)
+            setRefreshError(false)
+            setView((current) => current === "catalog" ? "connections" : "catalog")
+          }}>
+            {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
+          </Button>
+          {onCreateMcp ? <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button ref={createTriggerRef} type="button" variant="outline" className={styles.createButton}>
+                {t("plugins.create")}<ChevronDown aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={styles.createMenu}>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onSelect={() => onCreateMcp("form", createTriggerRef.current)}>{t("mcp.register")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onCreateMcp("url", createTriggerRef.current)}>{t("mcp.urlTitle")}</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onCreateMcp("json", createTriggerRef.current)}>{t("mcp.jsonImportTitle")}</DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu> : null}
+          {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
+        </div>
       </div>
     </header>
 
@@ -307,42 +314,38 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
     {actionError ? <Alert variant="destructive" role="alert" className={styles.alert}><AlertDescription>{t("mcp.actionFailed")}</AlertDescription></Alert> : null}
 
     {projection ? <div className={styles.content}>
-      {view === "catalog" && providers.length > 0 ? <section className={styles.featuredSection} aria-label={t("mcp.provider")}>
-        <div className={styles.featuredRail}>
-          {providers.map((provider) => <button key={provider.provider_key} type="button" className={styles.featuredProvider} data-testid={`mcp-featured-provider-${provider.provider_key}`} onClick={() => setSelectedProvider(provider)} aria-label={`Featured ${provider.display_name}`}>
-            <span className={styles.featuredProviderLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="3rem" unoptimized /> : <Cable />}</span>
-            <span className={styles.featuredProviderCopy}>
-              <span>{provider.display_name}</span>
-              {provider.description ? <small>{provider.description}</small> : null}
-            </span>
-          </button>)}
-        </div>
-      </section> : null}
-      {view === "catalog" ? <div className={styles.directoryControls}>
-        <label className={styles.searchField}>
-          <Search aria-hidden="true" />
-          <span className="sr-only">{t("plugins.search")}</span>
-          <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
-        </label>
-        <div className={styles.categoryRail} aria-label={t("mcp.provider")}>
-          <Button type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === "all" || undefined} onClick={() => setCategoryFilter("all")}>{t("mcp.categoryAll")}</Button>
-          {categoryOptions.map((category) => <Button key={category} type="button" variant="ghost" className={styles.categoryButton} data-active={categoryFilter === category || undefined} onClick={() => setCategoryFilter(category)}>{categoryLabel(category)}</Button>)}
-        </div>
+      {view === "catalog" ? <div className={styles.filterRow}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" className={styles.filterButton} aria-label={`${t("mcp.provider")}: ${categoryFilter === "all" ? t("mcp.categoryAll") : categoryLabel(categoryFilter as keyof typeof categoryMessage)}`}>
+              <SlidersHorizontal aria-hidden="true" />
+              {categoryFilter === "all" ? t("mcp.categoryAll") : categoryLabel(categoryFilter as keyof typeof categoryMessage)}
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className={styles.filterMenu}>
+            <DropdownMenuGroup>
+              <DropdownMenuItem data-active={categoryFilter === "all" || undefined} onSelect={() => setCategoryFilter("all")}>{t("mcp.categoryAll")}</DropdownMenuItem>
+              {categoryOptions.map((item) => <DropdownMenuItem key={item} data-active={categoryFilter === item || undefined} onSelect={() => setCategoryFilter(item)}>{categoryLabel(item)}</DropdownMenuItem>)}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div> : null}
 
       {view === "catalog" ? <section className={styles.providerSection} aria-label={t("mcp.provider")}>
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
           {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
-              <span className={styles.providerLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.4rem" unoptimized /> : <Cable />}</span>
+              <span className={styles.providerArtwork} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="8rem" unoptimized /> : <Cable />}</span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
+                {provider.category_keys.length > 0 ? <span className={styles.providerMeta}>{provider.category_keys.map((item) => <span key={item}>{categoryLabel(item)}</span>)}</span> : null}
               </span>
             </button>
-            <Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider, () => setView("connections"))} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
+            <footer className={styles.providerFooter}><Button type="button" variant="outline" size="sm" className={styles.providerAction} disabled={actionId !== null} onClick={() => connectProvider(provider, () => setView("connections"))} aria-label={t("plugins.addConnector", { name: provider.display_name })}>
               {actionId === `connect:${provider.provider_key}` ? <Spinner aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            </Button>
+            </Button></footer>
           </li>)}
         </ul>}
       </section> : <section className={styles.connectionSection} aria-label={t("mcp.title")}>
