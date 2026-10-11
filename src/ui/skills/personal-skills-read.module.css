@@ -146,9 +146,9 @@
 
 .detailDialog[data-slot="dialog-content"] {
   display: flex;
-  width: min(78rem, calc(100vw - 2rem));
+  width: min(90rem, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
-  height: min(62rem, calc(100dvh - 2rem));
+  height: min(68rem, calc(100dvh - 2rem));
   min-height: 0;
   max-height: calc(100dvh - 2rem);
   flex-direction: column;
@@ -163,7 +163,7 @@
 
 .detailHero {
   display: flex;
-  min-height: 17.5rem;
+  min-height: 19rem;
   flex: 0 0 auto;
   align-items: center;
   padding: 3rem 3rem 2rem;
@@ -223,7 +223,7 @@
   .header { min-height: 0; flex-direction: column; }
   .grid { grid-template-columns: 1fr; }
   .headerActions { width: 100%; }
-  .detailDialog[data-slot="dialog-content"] { width: min(78rem, calc(100vw - 2rem)); min-height: 0; }
+  .detailDialog[data-slot="dialog-content"] { width: min(90rem, calc(100vw - 2rem)); min-height: 0; }
   .detailHero { min-height: 0; align-items: flex-start; padding: 3.5rem 1.25rem 1.5rem; }
   .detailBody { padding: 1.5rem 1.25rem 2rem; }
   .detailSummary { font-size: 1rem; line-height: 1.55rem; }

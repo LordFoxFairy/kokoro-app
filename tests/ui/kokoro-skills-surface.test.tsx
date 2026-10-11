@@ -905,7 +905,7 @@ it("uses the wide Manus-style summary layout with cover-only width reservation",
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
   expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*display:flex;/u)
   expect(css).toMatch(/\.hero\s*\{[^}]*flex-direction:row;[^}]*align-items:center;/u)
-  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:17.5rem;/u)
+  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:19rem;/u)
   expect(css).toMatch(/\.copy h2\s*\{[^}]*font-size:clamp\(1\.8rem, 3vw, 2\.6rem\);/u)
   expect(css).toMatch(/\.copy\s*\{[^}]*max-width:100%;/u)
   expect(css).toMatch(/\.hero\[data-has-cover="true"\] \.copy\s*\{[^}]*max-width:calc\(100% - 15rem\);/u)
@@ -937,9 +937,9 @@ it("groups two actual category badges in a wrapping row without an empty categor
 
 it("matches the wide Manus detail frame at desktop while retaining a compact mobile layout", () => {
   const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(78rem,calc\(100vw - 2rem\)\);[^}]*max-width:calc\(100vw - 2rem\);[^}]*height:min\(62rem,calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(90rem,calc\(100vw - 2rem\)\);[^}]*max-width:calc\(100vw - 2rem\);[^}]*height:min\(68rem,calc\(100dvh - 2rem\)\);/u)
   expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:1rem;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
-  expect(css).toMatch(/\.hero\s*\{[^}]*min-height:17\.5rem;[^}]*padding:3rem 3rem 2rem;/u)
+  expect(css).toMatch(/\.hero\s*\{[^}]*min-height:19rem;[^}]*padding:3rem 3rem 2rem;/u)
   expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:2\.5rem 3rem 3rem;/u)
   expect(css).toMatch(/\.actions button\s*\{[^}]*min-height:2\.8rem;[^}]*font-weight:650;/u)
 })
@@ -1102,7 +1102,7 @@ it("preserves the catalog download lifecycle when only shared admission changes"
 
 it("matches the measured summary typography and example dimensions while keeping the independent reader width", () => {
   const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
-  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(78rem,calc\(100vw - 2rem\)\);/u)
+  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(90rem,calc\(100vw - 2rem\)\);/u)
   expect(css).toMatch(/\.readerDialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:960px;/u)
   expect(css).toMatch(/\.description\s*\{[^}]*font-size:1\.15rem;[^}]*line-height:1\.75rem;/u)
   expect(css).toMatch(/\.description\s*\{[^}]*margin:0 0 2\.25rem;/u)
@@ -1182,8 +1182,8 @@ it("opens the owner-approved package tree from a personal skill detail without r
 
 it("uses the same wide Manus geometry for personal details", () => {
   const css = readFileSync("src/ui/skills/personal-skills-read.module.css", "utf8")
-  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(62rem, calc\(100dvh - 2rem\)\);/u)
-  expect(css).toMatch(/\.detailHero\s*\{[^}]*min-height: 17\.5rem;[^}]*padding: 3rem 3rem 2rem;/u)
+  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(90rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(68rem, calc\(100dvh - 2rem\)\);/u)
+  expect(css).toMatch(/\.detailHero\s*\{[^}]*min-height: 19rem;[^}]*padding: 3rem 3rem 2rem;/u)
   expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
 })
 
