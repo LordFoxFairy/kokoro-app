@@ -78,18 +78,13 @@ function formatUsage(value: string): string {
   return `${compact >= 100 ? Math.round(compact) : compact.toFixed(1).replace(/\.0$/u, "")}k`
 }
 
-type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill"> & Readonly<{
-  /** Reuse the product catalog inside Settings without creating a second scroll surface. */
-  embedded?: boolean
-  /** Settings already is the user's skills destination; do not render a duplicate jump. */
-  hideMySkills?: boolean
-}>
+type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
   return <PreviewKokoroSkillsSurface {...props} />
 }
 
-function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, embedded = false, hideMySkills = false }: KokoroSkillsSurfaceProps) {
+function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
   const t = useT()
   const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
@@ -225,11 +220,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   })()
 
   return (
-    <div className={cn(styles.surface, embedded && styles.embedded)} data-testid="skills-surface" data-web-skin="kokoro" data-embedded={embedded || undefined}>
+    <div className={styles.surface} data-testid="skills-surface" data-web-skin="kokoro">
       <header className={styles.header}>
         <h1>{t("skills.title")}</h1>
         <div className={styles.headerActions}>
-          {!hideMySkills ? <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
+          <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>

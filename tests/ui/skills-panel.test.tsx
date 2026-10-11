@@ -11,7 +11,6 @@ import { parseGithubRepository } from "@/ui/skills/github-import-dialog"
 import { SkillDetailDialog } from "@/ui/skills/skill-detail-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { SkillsContent, SkillsPanel } from "@/ui/skills/skills-panel"
-import { PersonalSkillsRead } from "@/ui/skills/personal-skills-read"
 
 import { webcrypto } from "node:crypto"
 const localImportMock = vi.hoisted(() => ({ begin: vi.fn(), putPackage: vi.fn(), complete: vi.fn(), finalize: vi.fn(), get: vi.fn() }))
@@ -580,38 +579,11 @@ it("does not expose a fake Share action for a preview skill with no owner identi
   expect(screen.getByRole("button", { name: "试试看" })).toBeInTheDocument()
 })
 
-it("uses the Manus-compatible catalog inside live settings instead of the retired personal-state dashboard", async () => {
-  const calls: string[] = []
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const path = String(input)
-    calls.push(path)
-    if (path.endsWith("/ListHubSkills")) return Response.json({
-      skills: [{
-        skillId: "skill-settings", displayName: "设置中的技能", userDescription: "由正式目录提供。",
-        publisherType: "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL", tags: { values: ["SKILL_HUB_TAG_AUTOMATION"] },
-        currentVersion: { versionUid: "revision-settings" }, usageCount: "1200",
-      }],
-      tagOptions: { values: [] },
-    })
-    if (path.endsWith("/ListSkills")) return Response.json({ userAddedSkills: [], officialSkills: [] })
-    throw new Error(`unexpected ${path}`)
-  }))
-
-  render(<LocaleProvider><SkillsContent client={makeClient()} preview={false} pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>)
-
-  expect(await screen.findByRole("button", { name: "设置中的技能" })).toBeInTheDocument()
-  expect(screen.queryByText("本人安装")).toBeNull()
-  expect(calls).toEqual([
-    "/api/skill.v1.SkillOptionalService/ListHubSkills",
-    "/api/skill.v1.SkillOptionalService/ListSkills",
-  ])
-})
-
-it("personal lifecycle displays real skill update time and examples in its dedicated management reader", async () => {
+it("personal lifecycle displays real skill update time and examples in the current detail", async () => {
   const skill = { skill_id: "mine", source_ref: "skill:mine", series_id: "series", revision: "1", name: "真实个人技能", summary: "真实摘要", tags: [], status: "active", skill_updated_at: "2026-10-10T00:00:00Z", example_prompts: ["真实例子"], category_keys: [], product: { state_version: "4", publication_audience: "owner", source_kind: "personal" } }
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ data: { skills: [skill], next_cursor: null }, meta: { request_id: "owner-1" } }, { headers: { "cache-control": "no-store", "x-request-id": "owner-1" } })))
   const client = makeClient({ listPersonalSkills: vi.fn().mockResolvedValue({ skills: [skill], next_cursor: null }), getPublishedPersonalSkill: vi.fn().mockResolvedValue(skill) })
-  render(<LocaleProvider><PersonalSkillsRead client={client} embedded /></LocaleProvider>)
+  render(<LocaleProvider><SkillsContent client={client} preview={false} pinned={[]} onTogglePin={() => {}} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "真实个人技能" }))
   expect(await screen.findByText("真实例子")).toBeInTheDocument()
   expect(document.querySelector('time[datetime="2026-10-10T00:00:00Z"]')).not.toBeNull()

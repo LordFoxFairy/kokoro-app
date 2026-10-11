@@ -542,7 +542,7 @@ export function SettingsModal({
                 tabIndex={0}
               >
                 <div className={styles.contentColumn}>
-                  {panelTab !== "skills" ? <header
+                  <header
                     className={styles.panelHeader}
                     data-panel={panelTab}
                     data-with-description={panelTab === "shortcuts" || panelTab === "personalization" || (panelTab === "integration" && integrationId === null) || undefined}
@@ -568,8 +568,10 @@ export function SettingsModal({
                           ? t("settings.generalTitle")
                           : panelTab === "shortcuts"
                             ? t("settings.shortcutsTitle")
+                          : panelTab === "skills"
+                            ? t("skills.addedTitle")
                             : nav.find((entry) => entry.key === panelTab)?.label
-                              ?? (panelTab === "subscription" ? t("settings.subTitle") : "")}
+                          ?? (panelTab === "subscription" ? t("settings.subTitle") : "")}
                     </h1>
                     {panelTab === "shortcuts" ? (
                       <p className={styles.panelDescription}>{t("settings.shortcutsDescription")}</p>
@@ -578,7 +580,7 @@ export function SettingsModal({
                     ) : panelTab === "integration" && integrationId === null ? (
                       <p className={styles.panelDescription}>{t("settings.integrationDescription")}</p>
                     ) : null}
-                  </header> : null}
+                  </header>
                   {renderPanel(panelTab)}
                 </div>
               </ScrollArea>
