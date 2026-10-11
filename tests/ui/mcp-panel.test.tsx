@@ -632,3 +632,24 @@ it("uses Manus's compact two-column connector directory on desktop and one colum
   expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.providerGrid,[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
+
+it("uses the observed Manus Chinese connector category labels", async () => {
+  window.localStorage.setItem("kokoro.locale", "zh")
+  const providers = (["efficiency", "creation", "business", "development", "finance", "travel", "health"] as const).map((category) => ({
+    provider_key: `provider-${category}`,
+    display_name: category,
+    description: `${category} provider`,
+    directory_type: "app" as const,
+    category_keys: [category],
+    example_prompts: [],
+    website: undefined,
+    privacy_url: undefined,
+    enabled: true,
+    state_version: "1",
+  }))
+  const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) {
+    expect(await screen.findByRole("button", { name })).toBeInTheDocument()
+  }
+})
