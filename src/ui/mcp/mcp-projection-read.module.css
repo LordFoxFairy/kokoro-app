@@ -15,21 +15,25 @@
   align-items: center;
 }
 
-/* The catalog follows Manus's two-layer directory: a real provider rail,
- * then search/category controls, then compact cards. */
+/* Manus keeps the page header quiet: title at left, search and actions at
+ * right, then one compact filter before the actual catalog. */
 .header {
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34rem);
+  grid-template-areas: "title search" "title controls";
+  gap: .7rem 1rem;
+  margin-bottom: 1.75rem;
 }
 .header h2 {
+  grid-area: title;
   margin: 0;
-  font-size: 1.25rem;
+  align-self: center;
+  font-size: 1.75rem;
   font-weight: 650;
   letter-spacing: -.045em;
   line-height: 1.2;
 }
-.headerControls { gap: .5rem; }
+.headerControls { grid-area: controls; justify-content: flex-end; gap: .5rem; }
 .viewToggle {
   height: 2.35rem;
   min-height: 2.35rem;
@@ -83,60 +87,17 @@
   gap: 1.1rem;
 }
 
-.featuredSection { min-width: 0; }
-.featuredRail {
-  display: flex;
-  gap: .75rem;
-  overflow-x: auto;
-  padding: .1rem 0 .4rem;
-  scrollbar-width: none;
-}
-.featuredRail::-webkit-scrollbar { display: none; }
-.featuredProvider {
-  display: flex;
-  min-height: 5.5rem;
-  flex: 0 0 17.5rem;
-  align-items: center;
-  gap: .75rem;
-  border: 1px solid rgb(0 0 0 / 10%);
-  border-radius: .85rem;
-  background: rgb(255 255 254);
-  padding: .8rem;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.featuredProvider:hover { border-color: rgb(0 0 0 / 22%); background: rgb(55 53 47 / 2%); }
-.featuredProvider:focus-visible,
 .providerDetailTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.featuredProviderLogo {
-  position: relative;
-  display: inline-flex;
-  width: 3rem;
-  height: 3rem;
-  flex: 0 0 3rem;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgb(0 0 0 / 5%);
-  border-radius: .75rem;
-  background: rgb(255 255 254);
-}
-.featuredProviderLogo img { object-fit: contain; padding: .25rem; }
-.featuredProviderLogo svg { width: 1.4rem; height: 1.4rem; color: var(--muted-foreground); }
-.featuredProviderCopy { display: grid; min-width: 0; gap: .15rem; }
-.featuredProviderCopy > span { overflow: hidden; font-size: .9rem; font-weight: 650; line-height: 1.2rem; text-overflow: ellipsis; white-space: nowrap; }
-.featuredProviderCopy small { display: -webkit-box; overflow: hidden; color: var(--muted-foreground); font-size: .75rem; line-height: 1rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
-.directoryControls { display: grid; gap: .65rem; }
-.searchField { position: relative; display: block; width: 100%; min-width: 0; }
+.directoryControls { display: flex; min-height: 2.9rem; align-items: center; }
+.searchField { position: relative; display: block; grid-area: search; width: 100%; min-width: 0; }
 .searchField > svg { position: absolute; z-index: 1; top: 50%; left: 1rem; width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); transform: translateY(-50%); }
 .searchField :global(input) { width: 100%; height: 2.9rem; min-height: 2.9rem; border: 1px solid rgb(0 0 0 / 13%); border-radius: .8rem; background: rgb(255 255 254); padding: 0 1rem 0 3rem; box-shadow: none; font-size: .95rem; }
 .searchField :global(input):focus-visible { border-color: rgb(0 0 0 / 44%); box-shadow: 0 0 0 3px rgb(0 0 0 / 7%); }
-.categoryRail { display: flex; gap: .15rem; overflow-x: auto; padding: .05rem 0; scrollbar-width: none; }
-.categoryRail::-webkit-scrollbar { display: none; }
-.categoryButton { height: 2.15rem; min-height: 2.15rem; flex: 0 0 auto; border-radius: .5rem; padding: 0 .65rem; color: var(--muted-foreground); font-size: .85rem; font-weight: 550; }
-.categoryButton[data-active="true"] { background: rgb(55 53 47 / 8%); color: var(--foreground); }
+.filterTrigger { height: 2.9rem; min-height: 2.9rem; border-radius: .75rem; padding: 0 .85rem; font-size: .95rem; font-weight: 550; }
+.filterTrigger svg { width: 1.1rem; height: 1.1rem; }
+.filterMenu { min-width: 9rem; }
+.filterMenu :global([data-slot="dropdown-menu-item"]) { min-height: 2.35rem; padding: .55rem .7rem; }
 
 .providerSection,
 .connectionSection { min-width: 0; }
@@ -242,8 +203,8 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 42rem) {
-  .header { align-items: stretch; flex-direction: column; }
-  .header h2 { font-size: 1.25rem; }
+  .header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "search" "controls"; }
+  .header h2 { font-size: 1.5rem; }
   .headerControls { justify-content: stretch; flex-wrap: wrap; }
   .viewToggle { width: 100%; }
   .connectorGrid { grid-template-columns: 1fr; }

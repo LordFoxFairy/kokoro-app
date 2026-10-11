@@ -117,10 +117,10 @@ describe("McpPanel", () => {
     expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
     expect(screen.getByPlaceholderText("Search connectors and data sources")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("data-active", "true")
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox")).toBeNull()
-    expect(screen.getByTestId("mcp-featured-provider-gmail")).toHaveTextContent("Gmail")
-    expect(screen.getByTestId("mcp-featured-provider-github")).toHaveTextContent("GitHub")
+    expect(screen.queryByTestId("mcp-featured-provider-gmail")).toBeNull()
+    expect(screen.queryByTestId("mcp-featured-provider-github")).toBeNull()
     expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
@@ -282,11 +282,12 @@ describe("McpPanel", () => {
     expect(screen.queryByText("Workspace search")).toBeNull()
   })
 
-  it("uses the Manus directory hierarchy and keeps provider artwork tied to owner data", () => {
+  it("uses the Manus directory hierarchy without an invented featured-provider rail", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
-    expect(css).toMatch(/\.featuredRail\s*\{[^}]*overflow-x: auto;/u)
-    expect(css).toMatch(/\.featuredProvider\s*\{[^}]*flex: 0 0 17\.5rem;/u)
+    expect(css).not.toMatch(/\.featuredRail\s*\{/u)
+    expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title search" "title controls";/u)
+    expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(78rem,calc\(100vw - 4rem\)\);/u)
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*align-items: flex-start;[^}]*padding: 3rem 17rem 2rem 3rem;[^}]*text-align: left;/u)
     expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*align-items: flex-start;[^}]*text-align: left;/u)
@@ -646,20 +647,19 @@ it("uses Manus's visual catalog cards with one-column/mobile and two-column/desk
   const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
   expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: \.8rem;/u)
   expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 17\.25rem;/u)
-  expect(css).toMatch(/\.header h2\s*\{[^}]*font-size: 1\.25rem;/u)
+  expect(css).toMatch(/\.header h2\s*\{[^}]*font-size: 1\.75rem;/u)
   expect(css).toMatch(/@media \(min-width: 48rem\) \{[\s\S]*?\.providerGrid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
 
-it("keeps the full Manus category rail even when the current owner catalog is sparse", async () => {
+  it("keeps the Manus category choices behind one compact filter control", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const sparseProvider = { provider_key: "provider-development", display_name: "Development", description: "Real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: [], website: undefined, privacy_url: undefined, enabled: true, state_version: "1" }
   const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) {
-    expect(await screen.findByRole("button", { name })).toBeInTheDocument()
-  }
+  fireEvent.pointerDown(await screen.findByRole("button", { name: "全部" }), { button: 0, ctrlKey: false })
+  for (const name of ["效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(await screen.findByRole("menuitem", { name })).toBeInTheDocument()
 })
 
 it("uses the observed Manus Chinese connector category labels", async () => {
@@ -678,9 +678,8 @@ it("uses the observed Manus Chinese connector category labels", async () => {
   }))
   const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
-  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) {
-    expect(await screen.findByRole("button", { name })).toBeInTheDocument()
-  }
+  fireEvent.pointerDown(await screen.findByRole("button", { name: "全部" }), { button: 0, ctrlKey: false })
+  for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(await screen.findByRole("menuitem", { name })).toBeInTheDocument()
 })
 
 it("exposes Manus-style connector creation from the directory header", async () => {
