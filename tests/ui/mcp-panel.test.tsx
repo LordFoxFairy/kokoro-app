@@ -123,6 +123,7 @@ describe("McpPanel", () => {
     expect(screen.getByTestId("mcp-featured-provider-github")).toHaveTextContent("GitHub")
     expect(screen.getByTestId("mcp-provider-card-gmail").querySelector('img[src="/assets/connectors/gmail.webp"]')).not.toBeNull()
     expect(screen.getByTestId("mcp-provider-card-github").querySelector('img[src="/assets/connectors/github.webp"]')).not.toBeNull()
+    expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
   })
 
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
@@ -296,7 +297,7 @@ describe("McpPanel", () => {
     expect(source).not.toMatch(/providers\.slice\(0, 4\)/u)
     expect(css).not.toMatch(/\.providerHighlights\s*\{/u)
     expect(css).not.toMatch(/\.highlightCard\s*\{/u)
-    expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 2\.5rem;[^}]*height: 2\.5rem;/u)
+    expect(css).toMatch(/\.providerLogo\s*\{[^}]*width: 100%;[^}]*height: 8\.75rem;/u)
     expect(css).toMatch(/@media \(min-width: 48rem\) \{[\s\S]*?\.providerGrid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   })
 
@@ -641,10 +642,10 @@ describe("McpPanel", () => {
   })
 })
 
-it("uses Manus's compact one-column/mobile and two-column/desktop connector directory", () => {
+it("uses Manus's visual catalog cards with one-column/mobile and two-column/desktop layout", () => {
   const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
   expect(css).toMatch(/\.providerGrid\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*gap: \.8rem;/u)
-  expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 5\.25rem;/u)
+  expect(css).toMatch(/\.providerCard\s*\{[^}]*min-height: 17\.25rem;/u)
   expect(css).toMatch(/\.header h2\s*\{[^}]*font-size: 1\.25rem;/u)
   expect(css).toMatch(/@media \(min-width: 48rem\) \{[\s\S]*?\.providerGrid\s*\{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/u)
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)

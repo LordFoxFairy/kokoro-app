@@ -338,6 +338,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp }: {
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
+                {provider.category_keys.length > 0 ? <span className={styles.providerTags}>{provider.category_keys.map((category) => <span key={category}>{categoryLabel(category)}</span>)}</span> : null}
               </span>
             </button>
           </li>)}
