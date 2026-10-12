@@ -4,6 +4,12 @@
   color: var(--foreground);
 }
 
+/* The settings shell ends at the title divider. Keep the connector controls
+   on the same 24px content baseline as Manus rather than pinning them to it. */
+.surface[data-settings-layout="true"] {
+  padding-top: 1.5rem;
+}
+
 .header,
 .settingsToolbar,
 .toolbarActions,

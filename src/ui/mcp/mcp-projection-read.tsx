@@ -285,7 +285,7 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
   const editorTitle = t("mcp.edit")
   const categoryLabel = (category: McpConnectorProvider["category_keys"][number]) => t(categoryMessage[category])
 
-  return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
+  return <section className={styles.surface} data-testid="mcp-projection-read" data-settings-layout={settingsLayout || undefined} aria-busy={refreshing || undefined}>
     <header className={styles.header}>
       {settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
       <McpSettingsToolbar
