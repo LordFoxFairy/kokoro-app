@@ -3,14 +3,13 @@
 
 .dialogContent[data-slot="dialog-content"] {
   display: flex;
-  /* Manus uses an 80vw desktop dialog envelope: at the inspected 1280px
-   * viewport that is a 1024px panel. The 220px navigation rail therefore
-   * leaves the same content measure as the reference, rather than stretching
-   * the settings page across almost the entire workspace. */
-  width: min(80vw, 80rem);
+  /* The desktop settings workbench occupies the same broad envelope as the
+   * Manus reference. A 92vw cap preserves the wide, two-column content
+   * measure; the view remains inside the viewport on narrower screens. */
+  width: min(92vw, 75rem);
   min-width: min(45rem, calc(100vw - 1rem));
   max-width: calc(100vw - 1rem);
-  height: min(90vh, 54rem);
+  height: min(92vh, 62rem);
   max-height: calc(100vh - 1rem);
   flex-direction: column;
   gap: 0;
@@ -64,9 +63,9 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  /* Manus keeps the desktop rail at 220px: 12px outer insets leave a 196px
-   * control column, regardless of the dialog width. */
-  grid-template-columns: 13.75rem minmax(0, 1fr);
+  /* The reference keeps a roomy 296px settings rail, so labels, groups and
+   * icons remain scannable instead of being compressed into a narrow strip. */
+  grid-template-columns: 18.5rem minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   color: var(--foreground);
 }
