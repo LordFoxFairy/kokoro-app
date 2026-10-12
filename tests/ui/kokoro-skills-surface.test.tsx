@@ -113,18 +113,17 @@ it("keeps the confirmed Manus catalog across a route remount without duplicate l
   expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(1)
 })
 
-it("uses the Manus desktop category rail with direct category buttons", async () => {
+it("uses the Manus desktop category filter instead of a category rail", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)
   renderLive()
   await screen.findByTestId("skills-catalog-grid")
 
-  const rail = screen.getByRole("navigation", { name: "技能分类" })
-  expect(within(rail).getByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true")
-  const media = within(rail).getByRole("button", { name: "媒体" })
-  fireEvent.click(media)
-  expect(media).toHaveAttribute("aria-pressed", "true")
-  expect(within(rail).getByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "false")
+  expect(screen.queryByRole("navigation", { name: "技能分类" })).toBeNull()
+  const filter = screen.getByRole("button", { name: "技能分类：全部" })
+  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "媒体" }))
+  expect(screen.getByRole("button", { name: "技能分类：媒体" })).toBeInTheDocument()
 })
 
 it("opens the Manus detail from the whole catalog card body, not only its illustration or title", async () => {
@@ -1196,9 +1195,8 @@ it("uses Manus's responsive three-to-two-to-one catalog geometry without inventi
   expect(css).toMatch(/@media \(max-width: 48rem\) \{[\s\S]*?\.header\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
   expect(css).toContain("aspect-ratio: 2 / 1;")
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
-  expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
-  expect(css).toMatch(/@media \(max-width: 48rem\) \{[\s\S]*?\.categoryRail\s*\{[^}]*display: none;/u)
-  expect(css).toMatch(/@media \(max-width: 48rem\) \{[\s\S]*?\.compactFilter\s*\{[^}]*display: block;/u)
+  expect(css).toMatch(/\.categoryFilter\s*\{[^}]*display: block;/u)
+  expect(css).not.toMatch(/\.categoryRail/u)
   expect(css).not.toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.mySkillsButton\s*\{\s*display:\s*none;/u)
   expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
 })
