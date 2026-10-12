@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 import { createSkillDraftRequestSchema, skillDraftSchema, beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema, completeSkillUploadSchema, validateSkillDraftRequestSchema, validateSkillDraftSchema, skillPublishRequestSchema, publishSkillDraftSchema, skillUploadStateSchema, managedPersonalSkillSchema, personalInstallationSchema, installationErrorAllowed, type InstallationOperation } from "@/hub/schemas"
 
-const OWNER_COMMIT = "efae80cdd03c22a6d886b55ce3a248cf7efd9453"
-const OWNER_SHA256 = "81256204cad561d022755075b27e955289261ebc6db49c09ff151a1fbafa68b7"
-const OWNER_VERSION = "14.4.0"
+const OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
+const OWNER_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
+const OWNER_VERSION = "14.5.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -30,6 +30,9 @@ type Operation = {
   operationId?: string
   description?: string
   "x-kokoro-empty-body"?: string
+  "x-kokoro-idempotency"?: string
+  parameters?: Array<{ name?: string; in?: string; required?: boolean }>
+  requestBody?: { content?: { "application/json"?: { schema?: { $ref?: string } } } }
   responses?: Record<string, Response>
 }
 type Spec = {
@@ -170,10 +173,44 @@ function assertPersonalMcpCrudSemantics(spec: Spec): void {
   expect(Object.keys(shape(spec, "PersonalMcpProvider").properties ?? {})).toEqual(["provider_key", "display_name", "description", "directory_type", "category_keys", "example_prompts", "author", "website", "privacy_url", "cover_image_url", "updated_at", "enabled", "state_version"])
 }
 
+function assertPersonalMcpAuthorizationLifecycle(spec: Spec): void {
+  const standardErrors = ["400", "401", "403", "404", "413", "429", "502", "503"]
+  for (const [path, id] of [
+    ["/v1/self/mcp/connectors/{connector_id}/authorization", "beginPersonalMcpConnectorAuthorization"],
+    ["/v1/self/mcp/connectors/{connector_id}/authorization/reconnect", "reconnectPersonalMcpConnectorAuthorization"],
+  ] as const) {
+    const value = operation(spec, path, "post")
+    expect(value.operationId).toBe(id)
+    expect(value["x-kokoro-idempotency"]).toBe("none")
+    expect(value.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/PersonalMcpConnectorAuthorizationRequest")
+    expect(Object.keys(value.responses ?? {}).sort()).toEqual(["200", ...standardErrors].sort())
+  }
+
+  const callback = operation(spec, "/v1/self/mcp/authorization/callback", "post")
+  expect(callback.operationId).toBe("completePersonalMcpConnectorAuthorization")
+  expect(callback["x-kokoro-idempotency"]).toBe("none")
+  expect(callback.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/CompletePersonalMcpConnectorAuthorizationRequest")
+  expect(Object.keys(callback.responses ?? {}).sort()).toEqual(["200", ...standardErrors].sort())
+
+  const connection = operation(spec, "/v1/self/mcp/connections", "post")
+  expect(connection.operationId).toBe("createPersonalMcpConnection")
+  expect(connection["x-kokoro-idempotency"]).toBe("required")
+  expect(connection.parameters).toHaveLength(1)
+  expect(connection.parameters?.[0]).toMatchObject({ name: "Idempotency-Key", in: "header", required: true })
+  expect(connection.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/CreatePersonalMcpConnectionRequest")
+  expect(Object.keys(connection.responses ?? {}).sort()).toEqual(["201", ...standardErrors, "409", "412"].sort())
+
+  exactShape(shape(spec, "PersonalMcpConnectorAuthorizationRequest"), ["server_id", "expected_state_version"])
+  expect((shape(spec, "CompletePersonalMcpConnectorAuthorizationRequest") as Shape & { oneOf: Shape[] }).oneOf).toHaveLength(2)
+  exactShape(shape(spec, "CreatePersonalMcpConnectionRequest"), ["connector_id", "server_id", "allowed_selectors", "expected_state_version"])
+  exactShape(shape(spec, "PersonalMcpConnectorAuthorizationResponse"), ["data"])
+  exactShape(shape(spec, "PersonalMcpConnectionDetailResponse"), ["data"])
+}
+
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("efae80cdd03c22a6d886b55ce3a248cf7efd9453")
+    expect(OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -189,6 +226,7 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
 
     }
     assertPersonalMcpCrudSemantics(spec)
+    assertPersonalMcpAuthorizationLifecycle(spec)
     expect(operation(spec, "/v1/skills/{skill_id}/publish", "post")["x-kokoro-empty-body"]).toBeUndefined()
     for (const name of ["BeginSkillPackageUploadRequest", "CompleteSkillPackageUploadRequest", "ValidateSkillDraftRequest"]) expect(shape(spec, name).required).toContain("expected_state_version")
   })
