@@ -19,13 +19,18 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
   const [oauthClientId, setOauthClientId] = useState("")
   const [oauthClientSecret, setOauthClientSecret] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const canSubmit = name.trim().length > 0 && /^https:\/\//i.test(url.trim()) && !submitting
 
   const submit = async (enabled: boolean): Promise<void> => {
     if (!canSubmit) return
+    setError("")
     setSubmitting(true)
     try {
-      await client.registerCustomMcp?.({
+      if (!client.registerCustomMcp) {
+        throw new Error("custom MCP registration is unavailable")
+      }
+      await client.registerCustomMcp({
         name: name.trim(),
         transport: "streamable_http",
         endpoint_url: url.trim(),
@@ -38,6 +43,8 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
         enabled,
       })
       await onDone()
+    } catch {
+      setError(t("mcp.error"))
     } finally {
       setSubmitting(false)
     }
@@ -66,6 +73,7 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
       <Input autoComplete="off" aria-label={t("mcp.oauthClientId")} value={oauthClientId} placeholder={t("mcp.oauthClientId")} onChange={(event) => setOauthClientId(event.target.value)} />
       <Input type="password" autoComplete="new-password" aria-label={t("mcp.oauthClientSecret")} value={oauthClientSecret} placeholder={t("mcp.oauthClientSecret")} onChange={(event) => setOauthClientSecret(event.target.value)} />
     </div> : null}
+    {error ? <p className={styles.compactDialogError} role="alert">{error}</p> : null}
     <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
     <div className={styles.urlMcpActions}>
       <Button type="button" variant="outline" onClick={onCancel}>{t("mcp.cancel")}</Button>
