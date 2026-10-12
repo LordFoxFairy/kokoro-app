@@ -4,10 +4,13 @@
 .dialogContent[data-slot="dialog-content"] {
   display: flex;
   /* The desktop settings surface is the workbench, not a narrow popover. */
-  width: min(92vw, 90rem);
+  /* Manus keeps the desktop settings workbench at a 90% viewport envelope.
+   * At the inspected 793×764 reference size this resolves to 720×688px,
+   * preserving the 220px rail and its 196px controls without shifting them. */
+  width: min(90vw, 90rem);
   min-width: min(45rem, calc(100vw - 1rem));
   max-width: calc(100vw - 1rem);
-  height: min(92vh, 54rem);
+  height: min(90vh, 54rem);
   max-height: calc(100vh - 1rem);
   flex-direction: column;
   gap: 0;
