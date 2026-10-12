@@ -3,11 +3,11 @@
 
 .dialogContent[data-slot="dialog-content"] {
   display: flex;
-  /* The desktop settings surface is the workbench, not a narrow popover. */
-  /* Manus keeps the desktop settings workbench at a 90% viewport envelope.
-   * At the inspected 793×764 reference size this resolves to 720×688px,
-   * preserving the 220px rail and its 196px controls without shifting them. */
-  width: min(90vw, 90rem);
+  /* Manus uses an 80vw desktop dialog envelope: at the inspected 1280px
+   * viewport that is a 1024px panel. The 220px navigation rail therefore
+   * leaves the same content measure as the reference, rather than stretching
+   * the settings page across almost the entire workspace. */
+  width: min(80vw, 80rem);
   min-width: min(45rem, calc(100vw - 1rem));
   max-width: calc(100vw - 1rem);
   height: min(90vh, 54rem);
@@ -80,7 +80,7 @@
   align-items: stretch;
   gap: 0;
   overflow: hidden;
-  padding: 1.5rem 0.75rem 0;
+  padding: 1.4375rem 0.75rem 0;
   border-right: 1px solid var(--border);
   background: var(--background);
 }
@@ -91,21 +91,21 @@
   flex-direction: column;
   gap: 0.25rem;
   margin: 0;
-  padding: 0.25rem 0 0.75rem;
+  padding: 0.25rem 0.5rem 0.75rem;
 }
 
 .brandIdentity {
   display: flex;
   min-width: 0;
-  min-height: 2.5rem;
+  min-height: 2rem;
   align-items: center;
   gap: 0.625rem;
 }
 
 .brandAvatar {
-  width: 2.5rem;
-  height: 2.5rem;
-  flex: 0 0 2.5rem;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
   color: var(--primary-foreground);
 }
 
@@ -155,7 +155,7 @@
   display: flex;
   width: 100%;
   align-items: center;
-  margin: 0.25rem 0 0.75rem;
+  margin: 0.25rem 0 0.5rem;
 }
 
 .settingsSearch > svg {
@@ -170,8 +170,8 @@
 
 .settingsSearch :global(input[data-slot="input"]) {
   width: 100%;
-  height: 2.25rem;
-  min-height: 2.25rem;
+  height: 2rem;
+  min-height: 2rem;
   padding-left: 2.25rem;
   border: 1px solid rgb(0 0 0 / 12%);
   border-radius: 0.5rem;
@@ -309,7 +309,7 @@
   top: 0;
   display: flex;
   width: 100%;
-  height: 6.625rem;
+  height: 5rem;
   flex: 0 0 auto;
   flex-direction: column;
   justify-content: flex-end;
@@ -336,11 +336,11 @@
 }
 
 .panelHeader[data-panel="mcp"] {
-  height: 6.625rem;
+  height: 5rem;
 }
 
 .panelHeader[data-panel="account"]:has(.panelBack) {
-  height: 6.625rem;
+  height: 5rem;
 }
 
 .panelDescription {
