@@ -140,15 +140,40 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
     ...base,
     listSkillPool: async (): Promise<SkillCard[]> => {
       const installed = await post("ListSkills", {}, manuscriptListSchema)
+      // ListSkills repeats an installed official skill in userAddedSkills to
+      // carry the per-user enabled state. It is still one official skill in
+      // the Settings grid; render its official metadata once and merge that
+      // user state instead of producing two visually identical cards.
+      const userAddedById = new Map(
+        installed.userAddedSkills
+          .filter((skill) => skill.added !== false)
+          .map((skill) => [skill.id, skill]),
+      )
+      const officialIds = new Set(
+        installed.officialSkills
+          .filter((skill) => skill.added === true)
+          .map((skill) => skill.id),
+      )
       const cards = [
-        ...installed.userAddedSkills.filter((skill) => skill.added !== false).map((skill) => toInstalledCard(skill, "personal")),
-        ...installed.officialSkills.filter((skill) => skill.added === true).map((skill) => toInstalledCard(skill, "official")),
+        ...installed.userAddedSkills
+          .filter((skill) => skill.added !== false && !officialIds.has(skill.id))
+          .map((skill) => toInstalledCard(skill, "personal")),
+        ...installed.officialSkills
+          .filter((skill) => skill.added === true)
+          .map((skill) => toInstalledCard(
+            {
+              ...skill,
+              ...(skill.enabled === undefined && userAddedById.get(skill.id)?.enabled !== undefined
+                ? { enabled: userAddedById.get(skill.id)?.enabled }
+                : {}),
+            },
+            "official",
+          )),
       ]
       const seen = new Set<string>()
       return cards.filter((skill) => {
-        const key = `${skill.scope}/${skill.content_hash}`
-        if (seen.has(key)) return false
-        seen.add(key)
+        if (seen.has(skill.content_hash)) return false
+        seen.add(skill.content_hash)
         return true
       })
     },
