@@ -439,6 +439,46 @@ describe("McpPanel", () => {
     expect(navigate).toHaveBeenCalledWith("https://provider.example.com/oauth/authorize")
   })
 
+  it("restarts a pending authorization through the owner-issued connector route", async () => {
+    const navigate = vi.fn()
+    const provider = { ...PROVIDER, connection_server_id: "server-one" }
+    const pending = {
+      ...CONNECTOR,
+      status: "pending" as const,
+      enabled: false,
+      state_version: "2",
+    }
+    const reconnectMcpConnectorAuthorization = vi.fn().mockResolvedValue({
+      authorization: {
+        authorization_id: "authorization-two",
+        authorization_url: "https://provider.example.com/oauth/retry",
+        expires_at: "2026-10-12T12:59:56.000Z",
+      },
+      connector: { ...pending, state_version: "4" },
+    })
+    const client = makeClient({
+      listMcpConnectors: vi.fn().mockResolvedValue({ items: [pending], next_cursor: null }),
+      listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+      reconnectMcpConnectorAuthorization,
+    })
+    render(
+      <LocaleProvider>
+        <McpProjectionRead client={client} embedded identity="reader-a:1" initialView="connections" onAuthorizationNavigate={navigate} />
+      </LocaleProvider>,
+    )
+
+    await screen.findByTestId("mcp-projection")
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+
+    await waitFor(() =>
+      expect(reconnectMcpConnectorAuthorization).toHaveBeenCalledWith("connector-one", {
+        server_id: "server-one",
+        expected_state_version: "2",
+      }),
+    )
+    expect(navigate).toHaveBeenCalledWith("https://provider.example.com/oauth/retry")
+  })
+
   it("opens the wide Manus connector detail with prompts and owner metadata", async () => {
     const client = makeClient({
       listMcpConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),

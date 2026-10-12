@@ -272,6 +272,16 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
       return connector
     }, onSuccess)
   }
+  const restartAuthorization = (connector: McpConnector, serverId: string) => {
+    void runAction(`reconnect:${connector.connector_id}`, async () => {
+      const started = await client.reconnectMcpConnectorAuthorization(connector.connector_id, {
+        server_id: serverId,
+        expected_state_version: connector.state_version,
+      })
+      const navigate = onAuthorizationNavigate ?? ((authorizationUrl: string) => window.location.assign(authorizationUrl))
+      navigate(started.authorization.authorization_url)
+    })
+  }
   const submitEdit = (event: FormEvent<HTMLFormElement>, connector: McpConnector) => {
     event.preventDefault()
     if (!displayName.trim()) return
@@ -351,7 +361,12 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
           const connectorName = connector.display_name || provider?.display_name || connector.provider_key
           const providerName = provider?.display_name ?? connector.provider_key
           const busy = actionId === connector.connector_id
+          const restarting = actionId === `reconnect:${connector.connector_id}`
           const deleting = deleteId === connector.connector_id
+          const connectionServerId = provider?.connection_server_id
+          const canRestartAuthorization =
+            (connector.status === "pending" || connector.status === "error") &&
+            connectionServerId !== undefined
           return <li key={connector.connector_id} className={styles.connectorCard} data-testid="mcp-projection">
             <div className={styles.connectorTop}>
               <div className={styles.connectorIdentity}><span className={styles.connectorMark} aria-hidden="true"><Cable /></span><div><h4>{connectorName}</h4>{providerName !== connectorName ? <p>{providerName}</p> : null}</div></div>
@@ -359,7 +374,7 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
             </div>
             {connector.description ? <p className={styles.connectorDescription}>{connector.description}</p> : null}
             {connector.status === "pending" ? <p className={styles.pendingHint}>{t("mcp.connectingHint")}</p> : null}
-            {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
+            {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy || restarting} onClick={() => void runAction(connector.connector_id, () => client.removeMcpConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy || restarting} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || restarting || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{canRestartAuthorization ? <Button type="button" variant="outline" size="sm" disabled={busy || restarting} onClick={() => restartAuthorization(connector, connectionServerId!)}>{restarting ? <Spinner aria-hidden="true" /> : <Link2 aria-hidden="true" />}{t("mcp.retry")}</Button> : null}{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy || restarting} onClick={() => void runAction(connector.connector_id, () => client.setMcpConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || restarting || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
           </li>
         })}</ul>)}
       </section>}
