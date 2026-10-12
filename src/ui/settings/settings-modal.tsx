@@ -118,10 +118,17 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useLocale();
   const resolvedBrandName = brandName ?? "Kokoro";
-  // The shell is the single owner of the selected Settings tab. Keeping this
-  // dialog mounted while that value changes preserves child subscriptions and
-  // prevents the visible flash and duplicate reads caused by remounting.
-  const tab = initialTab;
+  // Keep the mounted shell immediately responsive to a rail click, then
+  // reconcile it with a deep link or outer-shell change. The previous
+  // render-only value made the modal depend on parent navigation to reflect
+  // a click, which broke standalone settings flows and caused a perceptible
+  // delayed tab swap.
+  const [localTab, setLocalTab] = useState<{
+    source: SettingsTab;
+    value: SettingsTab;
+  }>(() => ({ source: initialTab, value: initialTab }));
+  const tab =
+    localTab.source === initialTab ? localTab.value : initialTab;
   const [integrationId, setIntegrationId] =
     useState<SettingsIntegrationId | null>(() =>
       initialTab === "integration" ? integrationIdFromLocation() : null,
@@ -143,6 +150,7 @@ export function SettingsModal({
   const [previewPinnedSkills, setPreviewPinnedSkills] = useState<
     readonly string[]
   >([]);
+
   const togglePreviewPinnedSkill = (name: string): void => {
     setPreviewPinnedSkills((current) =>
       current.includes(name)
@@ -166,6 +174,7 @@ export function SettingsModal({
   }, [domainUpgradeOpen]);
 
   const selectTab = (next: SettingsTab): void => {
+    setLocalTab({ source: initialTab, value: next });
     if (next !== "integration") setIntegrationId(null);
     if (next !== "account") setAccountLoginMethods(false);
     onTabChange?.(next);

@@ -263,12 +263,15 @@ const PANEL_KEYS = [
 const NAV_TAB_KEYS = [
   "account",
   "credits",
+  "subscription",
   "appearance",
   "shortcuts",
+  "chat",
   "personalization",
   "mcp",
   "skills",
   "computer",
+  "deployment",
   "integration",
 ];
 
@@ -331,7 +334,7 @@ describe("SettingsModal 设置中心模态", () => {
       await screen.findByRole("searchbox", { name: /搜索技能|Search skills/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /浏览技能|Browse skills/ }),
+      screen.getByRole("button", { name: /探索技能|Browse skills/ }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /添加|Create/ }),
@@ -369,21 +372,25 @@ describe("SettingsModal 设置中心模态", () => {
     for (const key of NAV_TAB_KEYS) {
       expect(screen.getByTestId(`settings-tab-${key}`)).toBeInTheDocument();
     }
-    expect(screen.queryByTestId("settings-tab-chat")).toBeNull();
+    expect(screen.getByTestId("settings-tab-chat")).toBeInTheDocument();
     expect(screen.queryByText("Studio")).toBeNull();
     expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("—");
-    expect(screen.getByText("个人", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("个人版", { exact: true })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "搜索" })).toHaveAttribute(
       "placeholder",
       "搜索",
     );
   });
 
-  it("设置导航只呈现账户设置范围内的 owner-backed 面板", () => {
+  it("设置导航呈现全部已有 owner-backed 面板，不伪造缺失功能", () => {
     renderSettings();
 
-    expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
+    expect(
+      screen.getByTestId("settings-tab-subscription"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("settings-tab-deployment"),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("settings-tab-mail")).toBeNull();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
     expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
@@ -1549,11 +1556,11 @@ describe("SettingsModal 设置中心模态", () => {
       within(urlDialog).getByRole("button", { name: /进阶设置/ }),
     );
     expect(
-      within(urlDialog).getByRole("textbox", { name: "OAuth 用户端 ID" }),
-    ).toBeInTheDocument();
+      within(urlDialog).queryByRole("textbox", { name: "OAuth 用户端 ID" }),
+    ).toBeNull();
     expect(
-      within(urlDialog).getByLabelText("OAuth 用户端密钥"),
-    ).toHaveAttribute("autocomplete", "new-password");
+      within(urlDialog).queryByLabelText("OAuth 用户端密钥"),
+    ).toBeNull();
   });
 
   it("没有真实 DialogTrigger 时关闭也能把焦点交还给稳定的导航按钮", async () => {
