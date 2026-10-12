@@ -871,7 +871,7 @@ export const zh = {
   "mcp.toolsCount": "{count} 个工具",
   "mcp.toolsAll": "全部工具",
   "mcp.register": "注册连接",
-  "mcp.addConnector": "新增连接器",
+  "mcp.addConnector": "添加连接器",
   "mcp.browse": "浏览连接器",
   "mcp.create": "创建",
   "mcp.registerTitle": "注册 MCP 服务",
