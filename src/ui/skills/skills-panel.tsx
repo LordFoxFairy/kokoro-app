@@ -1134,10 +1134,13 @@ function formatBytes(bytes: number): string {
 }
 
 function formatSkillDate(timestamp: number): string {
+  // The current Skill owner contract projects Unix seconds. Keep the display
+  // correct for existing millisecond values while never rendering 2026 as 1970.
+  const milliseconds = timestamp < 10_000_000_000 ? timestamp * 1_000 : timestamp
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "UTC",
-  }).format(timestamp)
+  }).format(milliseconds)
 }
