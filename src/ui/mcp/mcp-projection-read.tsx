@@ -113,12 +113,14 @@ function formatProviderDate(value: string): string {
  * flight, so an asynchronous mutation never replaces the user's page with a
  * loading screen or shifts the list beneath the pointer.
  */
-export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt, brandName = "Kokoro", initialView = "catalog", settingsLayout = false }: {
+export function McpProjectionRead({ client, identity, onAuthorizationNavigate, onCreateMcp, onPrompt, brandName = "Kokoro", initialView = "catalog", settingsLayout = false }: {
   client: HubClient
   embedded?: boolean
   initialView?: "catalog" | "connections"
   settingsLayout?: boolean
   identity: string
+  /** Browser navigation is injected only by tests; Platform owns the issued OAuth URL. */
+  onAuthorizationNavigate?: (authorizationUrl: string) => void
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
   /** The shell owns the composer and conversation transition for catalogue prompts. */
   onPrompt?: (prompt: string) => void
@@ -248,12 +250,27 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt, bra
     }
   }
   const connectProvider = (provider: McpSelfProvider, onSuccess?: () => void) => {
-    void runAction(`connect:${provider.provider_key}`, () => client.createMcpSelfConnector({
-      provider_key: provider.provider_key,
-      connector_type: "mcp",
-      display_name: provider.display_name,
-      description: provider.description ?? "",
-    }), onSuccess)
+    void runAction(`connect:${provider.provider_key}`, async () => {
+      const connector = await client.createMcpSelfConnector({
+        provider_key: provider.provider_key,
+        connector_type: "mcp",
+        display_name: provider.display_name,
+        description: provider.description ?? "",
+      })
+      // A pending connector is the owner's explicit indication that this
+      // provider needs OAuth. The Browser only supplies the opaque server ID
+      // from the current Provider projection; it never assembles provider URLs
+      // or OAuth parameters itself.
+      if (connector.status === "pending" && provider.connection_server_id !== undefined) {
+        const started = await client.beginMcpSelfConnectorAuthorization(connector.connector_id, {
+          server_id: provider.connection_server_id,
+          expected_state_version: connector.state_version,
+        })
+        const navigate = onAuthorizationNavigate ?? ((authorizationUrl: string) => window.location.assign(authorizationUrl))
+        navigate(started.authorization.authorization_url)
+      }
+      return connector
+    }, onSuccess)
   }
   const submitEdit = (event: FormEvent<HTMLFormElement>, connector: McpSelfConnector) => {
     event.preventDefault()

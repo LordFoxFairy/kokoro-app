@@ -288,6 +288,34 @@ describe("McpPanel", () => {
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
+  it("starts the owner-issued OAuth lifecycle from a provider detail when a managed server is available", async () => {
+    const navigate = vi.fn()
+    const provider = { ...PROVIDER, connection_server_id: "server-one" }
+    const created = { ...CONNECTOR, connector_id: "connector-created", status: "pending" as const, enabled: false, state_version: "1" }
+    const createMcpSelfConnector = vi.fn().mockResolvedValue(created)
+    const beginMcpSelfConnectorAuthorization = vi.fn().mockResolvedValue({
+      authorization: { authorization_id: "authorization-one", authorization_url: "https://provider.example.com/oauth/authorize", expires_at: "2026-10-12T12:39:56.000Z" },
+      connector: { ...created, state_version: "2" },
+    })
+    const client = makeClient({
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [provider], next_cursor: null }),
+      createMcpSelfConnector,
+      beginMcpSelfConnectorAuthorization,
+    })
+    render(<LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" onAuthorizationNavigate={navigate} /></LocaleProvider>)
+
+    const card = await screen.findByTestId("mcp-provider-card-provider-one")
+    fireEvent.click(within(card).getByRole("button", { name: "Provider One" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
+
+    await waitFor(() => expect(beginMcpSelfConnectorAuthorization).toHaveBeenCalledWith("connector-created", {
+      server_id: "server-one",
+      expected_state_version: "1",
+    }))
+    expect(createMcpSelfConnector).toHaveBeenCalledOnce()
+    expect(navigate).toHaveBeenCalledWith("https://provider.example.com/oauth/authorize")
+  })
+
   it("opens the wide Manus connector detail with prompts and owner metadata", async () => {
     const client = makeClient({
       listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
