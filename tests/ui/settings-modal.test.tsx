@@ -270,7 +270,6 @@ const NAV_TAB_KEYS = [
   "skills",
   "computer",
   "integration",
-  "team",
 ];
 
 function renderSettings(
@@ -380,7 +379,7 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航只呈现已有 owner-backed 面板，不插入非 Manus 的部署和套餐行", () => {
+  it("设置导航只呈现账户设置范围内的 owner-backed 面板", () => {
     renderSettings();
 
     expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
@@ -388,7 +387,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByTestId("settings-tab-mail")).toBeNull();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
     expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
-    expect(screen.getByTestId("settings-tab-team")).toHaveTextContent("创建团队");
+    expect(screen.queryByTestId("settings-tab-team")).toBeNull();
   });
 
   it("技能导入完成后只关闭子弹窗，不卸载设置中心", async () => {

@@ -24,7 +24,6 @@ import {
   Shapes,
   Sparkles,
   UserRound,
-  Users,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -109,7 +108,6 @@ export function SettingsNavigation({
       icon: Plug,
       group: "data",
     },
-    { key: "team", label: t("settings.createTeam"), icon: Users },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const renderedNav =
