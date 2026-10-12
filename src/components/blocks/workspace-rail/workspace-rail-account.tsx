@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type RefObject, type SVGProps } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, ShieldCheck, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
 
@@ -30,16 +30,6 @@ import { accountStyles, railStyles } from "./workspace-rail-styles"
 // The existing admission marker only retires a display result; it grants no access.
 function readCreditActor(): string | null | undefined {
   try { return window.localStorage.getItem("kokoro.web.auth-index-subject") } catch { return undefined }
-}
-
-export function ComputerStatusIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg data-slot="computer-status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect x="2.5" y="4" width="16" height="12" rx="2" />
-      <path d="M7 20h7.5M10.5 16v4" />
-      <circle cx="19" cy="16" r="2.5" fill="var(--sidebar)" />
-    </svg>
-  )
 }
 
 export type WorkspaceRailAccountProps = {
@@ -221,18 +211,6 @@ export function WorkspaceRailAccount({
         </DropdownMenuContent>
       </DropdownMenu>
       <span className={railStyles.accountStatus}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={railStyles.utilityAction}
-          data-testid="rail-utility-device"
-          data-rail-anchor="utility"
-          aria-label={t("settings.computerTitle")}
-          onClick={() => onOpenSettings("computer")}
-        >
-          <ComputerStatusIcon className={railStyles.icon} aria-hidden="true" />
-        </Button>
         <Popover>
           <PopoverTrigger asChild>
             <Button

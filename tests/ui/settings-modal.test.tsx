@@ -249,9 +249,6 @@ const PANEL_KEYS = [
   "account",
   "appearance",
   "personalization",
-  "computer",
-  "deployment",
-  "integration",
   "chat",
   "shortcuts",
   "credits",
@@ -277,7 +274,7 @@ function renderSettings(
   onClose: () => void = () => {},
   onTabChange?: (tab: SettingsTab) => void,
   preview = false,
-  onStartDeployment?: (kind: "website" | "app") => void,
+  _onStartDeployment?: (kind: "website" | "app") => void,
   initialTab: SettingsTab = "account",
   onCreateSkillWithAi?: () => void,
 ) {
@@ -290,8 +287,6 @@ function renderSettings(
     onClose,
   };
   if (onTabChange !== undefined) props.onTabChange = onTabChange;
-  if (onStartDeployment !== undefined)
-    props.onStartDeployment = onStartDeployment;
   if (onCreateSkillWithAi !== undefined)
     props.onCreateSkillWithAi = onCreateSkillWithAi;
   return render(
@@ -536,117 +531,6 @@ describe("SettingsModal 设置中心模态", () => {
     ).toMatchObject({ nickname: "小可" });
     expect(screen.queryByRole("tab", { name: "知识" })).toBeNull();
     expect(screen.queryByRole("button", { name: /匯入记忆/ })).toBeNull();
-  });
-
-  it("部署页面提供网站、应用和域名三个真实入口", async () => {
-    const onStartDeployment = vi.fn();
-    const onTabChange = vi.fn();
-    renderSettings(
-      () => {},
-      onTabChange,
-      true,
-      onStartDeployment,
-      "deployment",
-    );
-    expect(screen.getByTestId("settings-deployment")).toBeInTheDocument();
-    expect(screen.getByText("尚无网站")).toBeInTheDocument();
-    expect(screen.getByText("尚无应用程序")).toBeInTheDocument();
-    expect(screen.getByText("尚无已购买的域名")).toBeInTheDocument();
-
-    const websiteIcon = document.querySelector(
-      '[data-deployment-kind="website"] > div > svg',
-    );
-    const appIcon = document.querySelector(
-      '[data-deployment-kind="app"] > div > svg',
-    );
-    const domainIcon = document.querySelector(
-      '[data-deployment-kind="domain"] > div > svg',
-    );
-    expect(websiteIcon).toHaveAttribute("viewBox", "0 0 14 14");
-    expect(appIcon).toHaveAttribute("viewBox", "0 0 21.068 29.068");
-    expect(domainIcon).toHaveClass("lucide-globe");
-
-    const createButtons = screen.getAllByRole("button", { name: "立即建立" });
-    const websiteCreateButton = createButtons.at(0);
-    const appCreateButton = createButtons.at(1);
-    if (websiteCreateButton === undefined || appCreateButton === undefined) {
-      throw new Error("Expected website and app deployment buttons");
-    }
-    fireEvent.click(websiteCreateButton);
-    fireEvent.click(appCreateButton);
-    expect(onStartDeployment).toHaveBeenNthCalledWith(1, "website");
-    expect(onStartDeployment).toHaveBeenNthCalledWith(2, "app");
-
-    const buyDomain = screen.getByRole("button", { name: "立即购买" });
-    buyDomain.focus();
-    fireEvent.click(buyDomain);
-    const upgradeDialog = screen.getByRole("dialog", {
-      name: "升级方案以购买域名",
-    });
-    expect(
-      within(upgradeDialog).getByText(
-        "升级方案以购买域名。免费方案仅支持 Acme 子域名。",
-      ),
-    ).toBeInTheDocument();
-    expect(upgradeDialog.querySelector(".lucide-globe")).toBeInTheDocument();
-    expect(
-      within(upgradeDialog).getByRole("button", { name: "关闭对话框" }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("domain-upgrade-toast")).toHaveTextContent(
-      "请先升级",
-    );
-    expect(onTabChange).not.toHaveBeenCalledWith("subscription");
-
-    fireEvent.click(
-      within(upgradeDialog).getByRole("button", { name: "取消" }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "升级方案以购买域名" }),
-      ).toBeNull(),
-    );
-    await waitFor(() => expect(buyDomain).toHaveFocus());
-
-    fireEvent.click(buyDomain);
-    fireEvent.keyDown(
-      screen.getByRole("dialog", { name: "升级方案以购买域名" }),
-      { key: "Escape" },
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "升级方案以购买域名" }),
-      ).toBeNull(),
-    );
-    await waitFor(() => expect(buyDomain).toHaveFocus());
-
-    fireEvent.click(buyDomain);
-    fireEvent.click(
-      within(
-        screen.getByRole("dialog", { name: "升级方案以购买域名" }),
-      ).getByRole("button", { name: "立即升级" }),
-    );
-    expect(onTabChange).toHaveBeenLastCalledWith("subscription");
-    await waitFor(() =>
-      expect(
-        screen.getByTestId("settings-panel-subscription"),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  it("整合详情深链在刷新挂载时恢复选中项", () => {
-    window.history.replaceState(
-      {},
-      "",
-      "/app#/account/settings/integration/zapier",
-    );
-    renderSettings(() => {}, undefined, true, undefined, "integration");
-    expect(
-      screen.getByTestId("settings-integration-detail"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Zapier", level: 1 }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /试试看/ })).toHaveLength(9);
   });
 
   it("快捷键 tab 独立于对话偏好并呈现 Manus 风格快捷键行", () => {

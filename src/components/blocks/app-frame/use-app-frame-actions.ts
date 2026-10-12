@@ -233,18 +233,6 @@ export function useAppFrameActions({
     }
   }, [focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
 
-  const startDeploymentFromSettings = useCallback((kind: "website" | "app") => {
-    // Deployment shortcuts mirror the matching welcome actions: preserve the
-    // current empty workspace and hand the prompt directly to its Composer.
-    // Creating another session here would move the draft to a different
-    // per-conversation key before React can render it.
-    closeSettings()
-    setDeploymentIntent(kind)
-    window.requestAnimationFrame(() => {
-      focusComposer()
-    })
-  }, [closeSettings, focusComposer, setDeploymentIntent])
-
   const startSkillCreationFromSettings = useCallback(() => {
     // Manus treats “create with AI” as a prompt starter, not an upload form:
     // close Settings, return to the direct Composer, and seed the skill
@@ -292,7 +280,6 @@ export function useAppFrameActions({
     selectConversationWithUrl,
     startNewChatFromCommand,
     startNewChatAndFocus,
-    startDeploymentFromSettings,
     startSkillCreationFromSettings,
     startSkillUseFromSettings,
     dismissCreationIntent,

@@ -4,15 +4,13 @@ import { ChevronRight } from "lucide-react";
 
 import { useLocale } from "@/i18n/context";
 
-import type { SettingsIntegrationId, SettingsTab } from "./settings-types";
+import type { SettingsTab } from "./settings-types";
 import styles from "./settings-modal.module.css";
 
 type SettingsPanelHeaderProps = {
   tab: SettingsTab;
   accountLoginMethods: boolean;
-  integrationId: SettingsIntegrationId | null;
   onBackFromLoginMethods: () => void;
-  onBackFromIntegration: () => void;
 };
 
 function panelTitle(
@@ -32,12 +30,6 @@ function panelTitle(
       return t("settings.accountTitle");
     case "personalization":
       return t("settings.personalizationTitle");
-    case "computer":
-      return t("settings.computerTitle");
-    case "deployment":
-      return t("settings.deploymentTitle");
-    case "integration":
-      return t("settings.integrationTitle");
     case "chat":
       return t("settings.chatTitle");
     case "credits":
@@ -49,27 +41,17 @@ function panelTitle(
   }
 }
 
-/** Header is separate from panel bodies so every setting section shares the
- * same inspected 24px/30px heading and border rhythm. */
+/** Shared settings heading for panels backed by a current owner contract. */
 export function SettingsPanelHeader({
   tab,
   accountLoginMethods,
-  integrationId,
   onBackFromLoginMethods,
-  onBackFromIntegration,
 }: SettingsPanelHeaderProps) {
   const { t } = useLocale();
-  const hasDescription =
-    tab === "shortcuts" ||
-    tab === "personalization" ||
-    (tab === "integration" && integrationId === null);
+  const hasDescription = tab === "shortcuts" || tab === "personalization";
   const title = accountLoginMethods
     ? t("settings.loginMethod")
-    : integrationId !== null
-      ? integrationId === "line"
-        ? "LINE"
-        : t(`settings.integration.${integrationId}.name`)
-      : panelTitle(t, tab);
+    : panelTitle(t, tab);
 
   return (
     <header
@@ -88,16 +70,6 @@ export function SettingsPanelHeader({
             <ChevronRight aria-hidden="true" />
           </button>
         ) : null}
-        {integrationId !== null ? (
-          <button
-            type="button"
-            className={styles.panelBack}
-            onClick={onBackFromIntegration}
-            aria-label={t("settings.integrationBack")}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
-        ) : null}
         <span>{title}</span>
       </h1>
       {tab === "shortcuts" ? (
@@ -108,11 +80,6 @@ export function SettingsPanelHeader({
       {tab === "personalization" ? (
         <p className={styles.panelDescription}>
           {t("settings.personalizationDescription")}
-        </p>
-      ) : null}
-      {tab === "integration" && integrationId === null ? (
-        <p className={styles.panelDescription}>
-          {t("settings.integrationDescription")}
         </p>
       ) : null}
     </header>

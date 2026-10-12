@@ -2,9 +2,6 @@ export type SettingsTab =
   | "account"
   | "appearance"
   | "personalization"
-  | "computer"
-  | "deployment"
-  | "integration"
   | "chat"
   | "shortcuts"
   | "credits"
@@ -17,9 +14,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   "account",
   "appearance",
   "personalization",
-  "computer",
-  "deployment",
-  "integration",
   "chat",
   "shortcuts",
   "credits",
@@ -27,13 +21,4 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   "skills",
   "mcp",
   "team",
-];
-
-export type SettingsIntegrationId = "zapier" | "slack" | "telegram" | "line";
-
-export const SETTINGS_INTEGRATIONS: readonly SettingsIntegrationId[] = [
-  "zapier",
-  "slack",
-  "telegram",
-  "line",
 ];

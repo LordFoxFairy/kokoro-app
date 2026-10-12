@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type RefObject } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { HubClient } from "@/hub/client";
 import type { SkillCard } from "@/hub/schemas";
@@ -25,13 +25,10 @@ import {
   AccountCard,
   AppearanceCard,
   ChatPrefsCard,
-  DeploymentSettingsCard,
-  IntegrationSettingsCard,
-  MyComputerCard,
   PersonalizationCard,
   ShortcutsCard,
 } from "./sections";
-import type { SettingsIntegrationId, SettingsTab } from "./settings-types";
+import type { SettingsTab } from "./settings-types";
 
 type SettingsPanelContentProps = {
   tab: SettingsTab;
@@ -41,16 +38,11 @@ type SettingsPanelContentProps = {
   hubClient: HubClient;
   teamClient: TeamClient;
   accountLoginMethods: boolean;
-  integrationId: SettingsIntegrationId | null;
   previewPinnedSkills: readonly string[];
-  domainUpgradeReturnRef: RefObject<HTMLElement | null>;
   onAccountLoginMethodsChange: (open: boolean) => void;
   onOpenSubscription: () => void;
-  onIntegrationSelect: (id: SettingsIntegrationId | null) => void;
   onTogglePreviewPinnedSkill: (name: string) => void;
   onOpenPricing: () => void;
-  onBuyDomain: () => void;
-  onStartDeployment?: (kind: "website" | "app") => void;
   onCreateSkillWithAi?: () => void;
   onTrySkill?: (skill: SkillCard) => void;
 };
@@ -66,16 +58,11 @@ export function SettingsPanelContent({
   hubClient,
   teamClient,
   accountLoginMethods,
-  integrationId,
   previewPinnedSkills,
-  domainUpgradeReturnRef,
   onAccountLoginMethodsChange,
   onOpenSubscription,
-  onIntegrationSelect,
   onTogglePreviewPinnedSkill,
   onOpenPricing,
-  onBuyDomain,
-  onStartDeployment,
   onCreateSkillWithAi,
   onTrySkill,
 }: SettingsPanelContentProps) {
@@ -94,32 +81,6 @@ export function SettingsPanelContent({
       return <AppearanceCard preview={preview} />;
     case "personalization":
       return <PersonalizationCard preview={preview} />;
-    case "computer":
-      return <MyComputerCard brandName={brandName} preview={preview} />;
-    case "deployment":
-      return (
-        <DeploymentSettingsCard
-          {...(onStartDeployment === undefined
-            ? {}
-            : { onStart: onStartDeployment })}
-          onBuyDomain={() => {
-            domainUpgradeReturnRef.current =
-              document.activeElement instanceof HTMLElement
-                ? document.activeElement
-                : null;
-            onBuyDomain();
-          }}
-        />
-      );
-    case "integration":
-      return (
-        <IntegrationSettingsCard
-          brandName={brandName}
-          preview={preview}
-          selected={integrationId}
-          onSelect={onIntegrationSelect}
-        />
-      );
     case "chat":
       return <ChatPrefsCard preview={preview} />;
     case "shortcuts":

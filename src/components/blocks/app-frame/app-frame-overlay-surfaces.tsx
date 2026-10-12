@@ -17,7 +17,6 @@ export type AppFrameOverlaySurfacesProps = {
   readBoundary?: ProjectReadBoundary
   onCloseSettings: () => void
   onTabChange: (tab: SettingsTab) => void
-  onStartDeployment: (kind: "website" | "app") => void
   onCreateSkillWithAi: () => void
   onTrySkill: (skill: SkillCard, prompt?: string) => void
   settingsReturnFocusRef: RefObject<HTMLElement | null>
@@ -43,7 +42,6 @@ export function AppFrameOverlaySurfaces({
   readBoundary,
   onCloseSettings,
   onTabChange,
-  onStartDeployment,
   onCreateSkillWithAi,
   onTrySkill,
   settingsReturnFocusRef,
@@ -70,7 +68,6 @@ export function AppFrameOverlaySurfaces({
           {...(readBoundary === undefined ? {} : { readBoundary })}
           onClose={onCloseSettings}
           onTabChange={onTabChange}
-          onStartDeployment={onStartDeployment}
           onCreateSkillWithAi={onCreateSkillWithAi}
           onTrySkill={onTrySkill}
           returnFocusRef={settingsReturnFocusRef}

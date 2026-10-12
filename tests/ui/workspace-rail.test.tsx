@@ -449,7 +449,7 @@ it("收起态不复制直接会话或孤立专案会话 stop，并保留专案�
   expect(screen.queryByTestId("rail-direct-chat")).toBeNull()
   expect(screen.getByTestId("rail-project")).toHaveAttribute("data-navigation-section", "project")
   expect(screen.queryByTestId("rail-project-conversation")).toBeNull()
-  expect(screen.getByTestId("rail-utility-device")).toHaveAttribute("data-rail-anchor", "utility")
+  expect(screen.queryByTestId("rail-utility-device")).toBeNull()
   expect(screen.getByTestId("rail-utility-notifications")).toHaveAttribute("data-rail-anchor", "utility")
   expect(screen.getByTestId("rail-utility-account")).toHaveAttribute("data-rail-anchor", "account")
 })
@@ -465,7 +465,7 @@ it("当前专案由文件夹内的明确加号创建一次新会话，不替换�
   expect(onNewChat).toHaveBeenCalledTimes(1)
 })
 
-it("展开态账户卡左对齐，设备与通知动作保留在同一行", () => {
+it("展开态账户卡左对齐，通知动作保留在同一行", () => {
   renderRail({ brandName: "Kokoro" })
 
   const rail = document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')
@@ -479,7 +479,7 @@ it("展开态账户卡左对齐，设备与通知动作保留在同一行", () =
   expect(account).toHaveTextContent("Kokoro")
   expect(account).toHaveTextContent("个人工作区")
   expect(account).toHaveClass(userTriggerClass)
-  expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeInTheDocument()
+  expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeNull()
   expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
   // jsdom does not calculate flex layout; lock the desktop CSS contract here
   // and verify the resulting geometry with the browser viewport check.
@@ -839,9 +839,8 @@ it("runtime manifest 的一级页面与设置入口使用各自导航语义", ()
   expect(screen.getByTestId("rail-library")).toHaveAttribute("href", "/app/library")
   expect(screen.getByTestId("rail-mcp")).toHaveAttribute("href", "/app/plugins")
   expect(screen.getByTestId("rail-mcp").querySelector('[data-slot="plugins-icon"]')?.querySelectorAll("circle")).toHaveLength(4)
-  expect(document.querySelector('[data-slot="computer-status-icon"] circle')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole("button", { name: "我的电脑" }))
-  expect(onOpenSettings).toHaveBeenLastCalledWith("computer")
+  expect(screen.queryByRole("button", { name: "我的电脑" })).toBeNull()
+  expect(onOpenSettings).not.toHaveBeenCalledWith("computer")
   fireEvent.click(screen.getByRole("button", { name: "打开通知" }))
   expect(onOpenSettings).not.toHaveBeenCalledWith("appearance")
   expect(onOpenNotifications).toHaveBeenLastCalledWith(expect.any(HTMLElement))

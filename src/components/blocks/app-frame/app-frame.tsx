@@ -803,7 +803,6 @@ function AppFrameRuntime({
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       onCloseSettings={overlays.closeSettings}
       onTabChange={(tab) => navigationState.syncSettingsUrl(tab, "replace")}
-      onStartDeployment={actions.startDeploymentFromSettings}
       onCreateSkillWithAi={actions.startSkillCreationFromSettings}
       onTrySkill={actions.startSkillUseFromSettings}
       settingsReturnFocusRef={overlays.settingsReturnFocusRef}

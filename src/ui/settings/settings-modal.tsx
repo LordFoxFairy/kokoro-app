@@ -7,23 +7,13 @@
 // 会话态由 AppFrame 保证（仅在信封有效时渲染），本组件不再自持匿名闸。
 // 壳层只编排导航与面板；每个设置能力在 sections/ 或独立产品面板中维护。
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 
 import { useLocale } from "@/i18n/context";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogPortal,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, Globe } from "lucide-react";
 import { browserHubClient, browserTeamClient } from "@/ui/shell/page-clients";
 import type { SkillCard } from "@/hub/schemas";
 import styles from "./settings-modal.module.css";
@@ -31,23 +21,9 @@ import { useOverlayClose } from "@/ui/shell/use-overlay-close";
 import { SettingsNavigation } from "./settings-navigation";
 import { SettingsPanelContent } from "./settings-panel-content";
 import { SettingsPanelHeader } from "./settings-panel-header";
-import {
-  SETTINGS_INTEGRATIONS,
-  SETTINGS_TABS,
-  type SettingsIntegrationId,
-  type SettingsTab,
-} from "./settings-types";
+import { SETTINGS_TABS, type SettingsTab } from "./settings-types";
 
 export type { SettingsTab } from "./settings-types";
-
-function integrationIdFromLocation(): SettingsIntegrationId | null {
-  if (typeof window === "undefined") return null;
-  const match = window.location.hash.match(
-    /^#\/account\/settings\/integration\/([^/?#]+)$/,
-  );
-  const value = match?.[1];
-  return SETTINGS_INTEGRATIONS.find((id) => id === value) ?? null;
-}
 
 function isFocusTargetAvailable(
   target: HTMLElement | null,
@@ -98,7 +74,6 @@ type SettingsModalProps = {
   focusScopeRef?: RefObject<HTMLElement | null>;
   // 内部切 tab 时上抛,供 shell 同步 URL `?settings=`(刷新/深链/可分享)。
   onTabChange?: (tab: SettingsTab) => void;
-  onStartDeployment?: (kind: "website" | "app") => void;
   onCreateSkillWithAi?: () => void;
   onTrySkill?: (skill: SkillCard) => void;
 };
@@ -112,7 +87,6 @@ export function SettingsModal({
   onTabChange,
   returnFocusRef,
   focusScopeRef,
-  onStartDeployment,
   onCreateSkillWithAi,
   onTrySkill,
 }: SettingsModalProps) {
@@ -127,16 +101,8 @@ export function SettingsModal({
     source: SettingsTab;
     value: SettingsTab;
   }>(() => ({ source: initialTab, value: initialTab }));
-  const tab =
-    localTab.source === initialTab ? localTab.value : initialTab;
-  const [integrationId, setIntegrationId] =
-    useState<SettingsIntegrationId | null>(() =>
-      initialTab === "integration" ? integrationIdFromLocation() : null,
-    );
+  const tab = localTab.source === initialTab ? localTab.value : initialTab;
   const [accountLoginMethods, setAccountLoginMethods] = useState(false);
-  const [domainUpgradeOpen, setDomainUpgradeOpen] = useState(false);
-  const domainUpgradeReturnRef = useRef<HTMLElement | null>(null);
-  const domainUpgradeWasOpenRef = useRef(false);
   const { open, requestClose } = useOverlayClose(onClose);
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
   // Keep one injected Hub client for the lifetime of the settings surface.
@@ -159,37 +125,10 @@ export function SettingsModal({
     );
   };
 
-  useEffect(() => {
-    const wasOpen = domainUpgradeWasOpenRef.current;
-    domainUpgradeWasOpenRef.current = domainUpgradeOpen;
-    if (!wasOpen || domainUpgradeOpen) return;
-    // The nested Radix focus scope restores the parent dialog first. Handoff
-    // after its close animation so the deployment action, not the first rail
-    // tab, becomes the final keyboard destination.
-    const timer = window.setTimeout(
-      () => domainUpgradeReturnRef.current?.focus({ preventScroll: true }),
-      220,
-    );
-    return () => window.clearTimeout(timer);
-  }, [domainUpgradeOpen]);
-
   const selectTab = (next: SettingsTab): void => {
     setLocalTab({ source: initialTab, value: next });
-    if (next !== "integration") setIntegrationId(null);
     if (next !== "account") setAccountLoginMethods(false);
     onTabChange?.(next);
-  };
-
-  const selectIntegration = (next: SettingsIntegrationId | null): void => {
-    setIntegrationId(next);
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.delete("settings");
-    url.hash =
-      next === null
-        ? "#/account/settings/integration"
-        : `#/account/settings/integration/${next}`;
-    window.history.replaceState(window.history.state, "", url);
   };
 
   return (
@@ -304,11 +243,9 @@ export function SettingsModal({
                         <SettingsPanelHeader
                           tab={panelTab}
                           accountLoginMethods={accountLoginMethods}
-                          integrationId={integrationId}
                           onBackFromLoginMethods={() =>
                             setAccountLoginMethods(false)
                           }
-                          onBackFromIntegration={() => selectIntegration(null)}
                         />
                         <SettingsPanelContent
                           tab={panelTab}
@@ -320,18 +257,11 @@ export function SettingsModal({
                           hubClient={hubClient}
                           teamClient={teamClient}
                           accountLoginMethods={accountLoginMethods}
-                          integrationId={integrationId}
                           previewPinnedSkills={previewPinnedSkills}
-                          domainUpgradeReturnRef={domainUpgradeReturnRef}
                           onAccountLoginMethodsChange={setAccountLoginMethods}
                           onOpenSubscription={() => selectTab("subscription")}
-                          onIntegrationSelect={selectIntegration}
                           onTogglePreviewPinnedSkill={togglePreviewPinnedSkill}
                           onOpenPricing={() => selectTab("subscription")}
-                          onBuyDomain={() => setDomainUpgradeOpen(true)}
-                          {...(onStartDeployment === undefined
-                            ? {}
-                            : { onStartDeployment })}
                           {...(onCreateSkillWithAi === undefined
                             ? {}
                             : { onCreateSkillWithAi })}
@@ -344,59 +274,6 @@ export function SettingsModal({
               ))}
             </div>
           </Tabs>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={domainUpgradeOpen} onOpenChange={setDomainUpgradeOpen}>
-        {domainUpgradeOpen ? (
-          <DialogPortal>
-            <div
-              className={styles.domainUpgradeToast}
-              data-testid="domain-upgrade-toast"
-              role="status"
-            >
-              <Check aria-hidden="true" />
-              <span>{t("settings.upgradeRequired")}</span>
-            </div>
-          </DialogPortal>
-        ) : null}
-        <DialogContent
-          className={styles.domainUpgradeDialog}
-          overlayClassName={styles.domainUpgradeOverlay ?? ""}
-          closeLabel={t("shell.closeDialog")}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            if (event.currentTarget instanceof HTMLElement)
-              event.currentTarget.focus();
-          }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-          }}
-        >
-          <Globe className={styles.domainUpgradeIcon} aria-hidden="true" />
-          <div className={styles.domainUpgradeCopy}>
-            <DialogTitle>{t("settings.domainUpgradeTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("settings.domainUpgradeDescription", {
-                brand: brandName ?? "Kokoro",
-              })}
-            </DialogDescription>
-          </div>
-          <DialogFooter className={styles.domainUpgradeActions}>
-            <DialogClose asChild>
-              <Button type="button" variant="ghost">
-                {t("firstSite.cancel")}
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              onClick={() => {
-                setDomainUpgradeOpen(false);
-                selectTab("subscription");
-              }}
-            >
-              {t("settings.upgradeNow")}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
