@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { parseMcpOAuthCallback } from "@/ui/mcp/mcp-oauth-callback"
+import { parseMcpOAuthCallback } from "@/ui/mcp/mcp-oauth-callback-payload"
 
 describe("parseMcpOAuthCallback", () => {
   it("accepts exactly one standard success callback", () => {

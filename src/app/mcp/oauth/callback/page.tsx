@@ -1,4 +1,5 @@
-import { McpOAuthCallback, parseMcpOAuthCallback } from "@/ui/mcp/mcp-oauth-callback"
+import { McpOAuthCallback } from "@/ui/mcp/mcp-oauth-callback"
+import { parseMcpOAuthCallback } from "@/ui/mcp/mcp-oauth-callback-payload"
 
 type CallbackSearchParameters = Record<string, string | readonly string[] | undefined>
 
