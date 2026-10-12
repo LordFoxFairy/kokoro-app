@@ -8,7 +8,7 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 const projection = vi.fn(({ identity }: { identity: string }) => (
   <section data-testid="mcp-projection-read">真实连接器目录：{identity}</section>
 ))
-const hub = { listMcpSelfProviders: vi.fn(), listMcpSelfConnectors: vi.fn() }
+const hub = { listMcpConnectorProviders: vi.fn(), listMcpConnectors: vi.fn() }
 
 vi.mock("@/ui/mcp/mcp-projection-read", () => ({ McpProjectionRead: (props: { identity: string }) => projection(props) }))
 vi.mock("@/ui/shell/page-clients", () => ({ browserHubClient: () => hub }))

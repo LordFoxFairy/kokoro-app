@@ -14,7 +14,7 @@ export function McpOAuthCallback({ payload, client, onComplete }: { payload: Mcp
   useEffect(() => {
     if (payload === undefined) return
     let active = true
-    void hubClient.completeMcpSelfConnectorAuthorization(payload).then(
+    void hubClient.completeMcpConnectorAuthorization(payload).then(
       () => {
         if (!active) return
         if (onComplete !== undefined) onComplete()

@@ -23,15 +23,15 @@ describe("parseMcpOAuthCallback", () => {
   })
 
   it("posts the provider callback through the same-origin Hub client before returning to connectors", async () => {
-    const completeMcpSelfConnectorAuthorization = vi.fn().mockResolvedValue({ connector: { connector_id: "connector-one" } })
+    const completeMcpConnectorAuthorization = vi.fn().mockResolvedValue({ connector: { connector_id: "connector-one" } })
     const onComplete = vi.fn()
     render(<McpOAuthCallback
-      client={{ completeMcpSelfConnectorAuthorization } as unknown as HubClient}
+      client={{ completeMcpConnectorAuthorization } as unknown as HubClient}
       payload={{ state: "opaque-state", code: "authorization-code" }}
       onComplete={onComplete}
     />)
 
-    await waitFor(() => expect(completeMcpSelfConnectorAuthorization).toHaveBeenCalledWith({ state: "opaque-state", code: "authorization-code" }))
+    await waitFor(() => expect(completeMcpConnectorAuthorization).toHaveBeenCalledWith({ state: "opaque-state", code: "authorization-code" }))
     expect(onComplete).toHaveBeenCalledOnce()
     expect(screen.getByRole("heading", { name: "正在完成连接器授权" })).toBeInTheDocument()
   })

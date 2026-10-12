@@ -5,7 +5,7 @@
  * object semantics before applying its Zod schema. This stays beside the MCP
  * wire schema instead of borrowing a Project-specific parser.
  */
-export function parseMcpSelfJson(text: string): unknown {
+export function parseMcpConnectorJson(text: string): unknown {
   const value: unknown = JSON.parse(text)
   const tokens = text.match(/"(?:[^"\\]|\\[\s\S])*"|[{}\[\]:,]|[^\s{}\[\]:,]+/gu) ?? []
   let cursor = 0

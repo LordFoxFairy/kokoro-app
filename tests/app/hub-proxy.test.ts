@@ -865,13 +865,13 @@ describe("/api/hub/[...path] proxy", () => {
     expect(await oversized.json()).toMatchObject({ error: { code: "request_body_too_large" } })
   })
 
-  it("closes non-self aliases for public Skill and MCP paths before any relaxed generic proxying", async () => {
+  it("closes retired self aliases and public Skill aliases before generic proxying", async () => {
     const { GET, POST } = await import("@/app/api/hub/[...path]/route")
     const cases = [
       POST(new Request("http://localhost/api/hub/skills/drafts", { method: "POST", body: "X".repeat(600 * 1024) }), params(["skills", "drafts"])),
       POST(new Request("http://localhost/api/hub/skills/mine/publish", { method: "POST", body: "{}" }), params(["skills", "mine", "publish"])),
       POST(new Request("http://localhost/api/hub/skills/mine/publish", { method: "POST" }), params(["skills", "mine", "publish"])),
-      GET(new Request("http://localhost/api/hub/mcp/servers"), params(["mcp", "servers"])),
+      GET(new Request("http://localhost/api/hub/self/mcp/servers"), params(["self", "mcp", "servers"])),
     ]
     for (const response of await Promise.all(cases)) {
       expect(response.status).toBe(404)

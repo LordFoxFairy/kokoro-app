@@ -4,31 +4,31 @@
 import { z, ZodError, type ZodTypeAny } from "zod"
 import { createSkillPublishClient } from "./skill-publish-client"
 import {
-  mcpSelfConnectorPageSchema,
-  mcpSelfConnectorSchema,
-  mcpSelfErrorAllowed,
-  mcpSelfErrorSchema,
-  mcpSelfProviderPageSchema,
-  type McpSelfCommandOperation,
-  type McpSelfConnector,
-  type McpSelfConnectorPage,
-  type McpSelfCreateInput,
-  type McpSelfEnabledInput,
-  type McpSelfProviderPage,
-  type McpSelfRemoveInput,
-  type McpSelfUpdateInput,
-} from "./mcp-self.schema"
+  mcpConnectorPageSchema,
+  mcpConnectorSchema,
+  mcpConnectorErrorAllowed,
+  mcpConnectorErrorSchema,
+  mcpConnectorProviderPageSchema,
+  type McpConnectorCommandOperation,
+  type McpConnector,
+  type McpConnectorPage,
+  type McpConnectorCreateInput,
+  type McpConnectorEnabledInput,
+  type McpConnectorProviderPage,
+  type McpConnectorRemoveInput,
+  type McpConnectorUpdateInput,
+} from "./mcp-connector.schema"
 import {
-  mcpSelfAuthorizationDataSchemas,
-  mcpSelfAuthorizationErrorAllowed,
-  type McpSelfAuthorizationCallback,
-  type McpSelfAuthorizationCompleted,
-  type McpSelfAuthorizationInput,
-  type McpSelfAuthorizationOperation,
-  type McpSelfAuthorizationStarted,
-  type McpSelfConnectionCreated,
-  type McpSelfCreateConnectionInput,
-} from "./mcp-self-authorization.schema"
+  mcpConnectorAuthorizationDataSchemas,
+  mcpConnectorAuthorizationErrorAllowed,
+  type McpConnectorAuthorizationCallback,
+  type McpConnectorAuthorizationCompleted,
+  type McpConnectorAuthorizationInput,
+  type McpConnectorAuthorizationOperation,
+  type McpConnectorAuthorizationStarted,
+  type McpConnectorConnectionCreated,
+  type McpConnectorCreateConnectionInput,
+} from "./mcp-connector-authorization.schema"
 
 import {
   installationIdSchema,
@@ -348,8 +348,8 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
   }
 }
 
-const MCP_SELF_RESPONSE_BYTES = 1024 * 1024
-const MCP_SELF_TIMEOUT_MS = 10_000
+const MCP_CONNECTOR_RESPONSE_BYTES = 1024 * 1024
+const MCP_CONNECTOR_TIMEOUT_MS = 10_000
 
 /**
  * The current-user connector API is a distinct, closed V1 contract. Keep its
@@ -357,15 +357,15 @@ const MCP_SELF_TIMEOUT_MS = 10_000
  * success from a JSON shape. This mirrors the browser-private adapter's
  * no-store/request-id/media invariants and makes late responses cancellable.
  */
-async function requestMcpSelf<T extends ZodTypeAny>(
-  operation: McpSelfCommandOperation | McpSelfAuthorizationOperation | "connectors" | "providers",
+async function requestMcpConnector<T extends ZodTypeAny>(
+  operation: McpConnectorCommandOperation | McpConnectorAuthorizationOperation | "connectors" | "providers",
   path: string,
   schema: T,
   init?: RequestInit,
   signal?: AbortSignal,
 ): Promise<z.infer<T>> {
   const deadline = new AbortController()
-  const timer = setTimeout(() => deadline.abort(new DOMException("MCP current-user request timed out", "TimeoutError")), MCP_SELF_TIMEOUT_MS)
+  const timer = setTimeout(() => deadline.abort(new DOMException("MCP current-user request timed out", "TimeoutError")), MCP_CONNECTOR_TIMEOUT_MS)
   const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
   let response: Response | undefined
   try {
@@ -379,7 +379,7 @@ async function requestMcpSelf<T extends ZodTypeAny>(
       throw new HubClientError("parse", "invalid MCP current-user response headers", null, response.status)
     }
     const declared = response.headers.get("content-length")
-    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > MCP_SELF_RESPONSE_BYTES)) {
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > MCP_CONNECTOR_RESPONSE_BYTES)) {
       throw new HubClientError("parse", "MCP current-user response is too large", null, response.status)
     }
     if (response.body === null) throw new HubClientError("parse", "missing MCP current-user response body", null, response.status)
@@ -391,7 +391,7 @@ async function requestMcpSelf<T extends ZodTypeAny>(
         const part = await reader.read()
         if (part.done) break
         size += part.value.byteLength
-        if (size > MCP_SELF_RESPONSE_BYTES) throw new HubClientError("parse", "MCP current-user response is too large", null, response.status)
+        if (size > MCP_CONNECTOR_RESPONSE_BYTES) throw new HubClientError("parse", "MCP current-user response is too large", null, response.status)
         chunks.push(part.value)
       }
     } finally {
@@ -417,11 +417,11 @@ async function requestMcpSelf<T extends ZodTypeAny>(
       if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
       return parsed.data.data
     }
-    const parsed = mcpSelfErrorSchema.safeParse(raw)
+    const parsed = mcpConnectorErrorSchema.safeParse(raw)
     const authorizationOperation = ["beginAuthorization", "reconnectAuthorization", "completeAuthorization", "createConnection"].includes(operation)
     const errorAllowed = authorizationOperation
-      ? mcpSelfAuthorizationErrorAllowed(response.status, parsed.data)
-      : mcpSelfErrorAllowed(operation as McpSelfCommandOperation | "connectors" | "providers", response.status, parsed.data)
+      ? mcpConnectorAuthorizationErrorAllowed(response.status, parsed.data)
+      : mcpConnectorErrorAllowed(operation as McpConnectorCommandOperation | "connectors" | "providers", response.status, parsed.data)
     if (!parsed.success || !errorAllowed) throw new HubClientError("parse", "invalid MCP current-user error", null, response.status)
     throw new HubClientError(
       "http",
@@ -459,22 +459,22 @@ export type HubClient = {
     query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string },
     signal?: AbortSignal,
   ) => Promise<McpConnectionPage>
-  listMcpSelfConnectors: (
+  listMcpConnectors: (
     query?: { status?: "pending" | "active" | "error" | "revoked"; limit?: number; cursor?: string },
     signal?: AbortSignal,
-  ) => Promise<McpSelfConnectorPage>
-  listMcpSelfProviders: (
+  ) => Promise<McpConnectorPage>
+  listMcpConnectorProviders: (
     query?: { query?: string; directory_type?: "app" | "data_source"; category_key?: string; limit?: number; cursor?: string },
     signal?: AbortSignal,
-  ) => Promise<McpSelfProviderPage>
-  createMcpSelfConnector: (input: McpSelfCreateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
-  updateMcpSelfConnector: (connectorId: string, input: McpSelfUpdateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
-  setMcpSelfConnectorEnabled: (connectorId: string, input: McpSelfEnabledInput, signal?: AbortSignal) => Promise<McpSelfConnector>
-  removeMcpSelfConnector: (connectorId: string, input: McpSelfRemoveInput, signal?: AbortSignal) => Promise<McpSelfConnector>
-  beginMcpSelfConnectorAuthorization: (connectorId: string, input: McpSelfAuthorizationInput, signal?: AbortSignal) => Promise<McpSelfAuthorizationStarted>
-  reconnectMcpSelfConnectorAuthorization: (connectorId: string, input: McpSelfAuthorizationInput, signal?: AbortSignal) => Promise<McpSelfAuthorizationStarted>
-  completeMcpSelfConnectorAuthorization: (input: McpSelfAuthorizationCallback, signal?: AbortSignal) => Promise<McpSelfAuthorizationCompleted>
-  createMcpSelfConnection: (input: McpSelfCreateConnectionInput, signal?: AbortSignal) => Promise<McpSelfConnectionCreated>
+  ) => Promise<McpConnectorProviderPage>
+  createMcpConnector: (input: McpConnectorCreateInput, signal?: AbortSignal) => Promise<McpConnector>
+  updateMcpConnector: (connectorId: string, input: McpConnectorUpdateInput, signal?: AbortSignal) => Promise<McpConnector>
+  setMcpConnectorEnabled: (connectorId: string, input: McpConnectorEnabledInput, signal?: AbortSignal) => Promise<McpConnector>
+  removeMcpConnector: (connectorId: string, input: McpConnectorRemoveInput, signal?: AbortSignal) => Promise<McpConnector>
+  beginMcpConnectorAuthorization: (connectorId: string, input: McpConnectorAuthorizationInput, signal?: AbortSignal) => Promise<McpConnectorAuthorizationStarted>
+  reconnectMcpConnectorAuthorization: (connectorId: string, input: McpConnectorAuthorizationInput, signal?: AbortSignal) => Promise<McpConnectorAuthorizationStarted>
+  completeMcpConnectorAuthorization: (input: McpConnectorAuthorizationCallback, signal?: AbortSignal) => Promise<McpConnectorAuthorizationCompleted>
+  createMcpConnectorConnection: (input: McpConnectorCreateConnectionInput, signal?: AbortSignal) => Promise<McpConnectorConnectionCreated>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
   skillQuota: () => Promise<SkillQuota>
@@ -531,108 +531,108 @@ export function createHubClient(): HubClient {
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
       return readMcpConnections(`${mcpConnectionsPath}${search.size === 0 ? "" : `?${search}`}`, signal)
     },
-    listMcpSelfConnectors: (query = {}, signal) => {
+    listMcpConnectors: (query = {}, signal) => {
       const search = new URLSearchParams()
       if (query.status !== undefined) search.set("status", query.status)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpSelf("connectors", `/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpSelfConnectorPageSchema, undefined, signal)
+      return requestMcpConnector("connectors", `/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpConnectorPageSchema, undefined, signal)
     },
-    listMcpSelfProviders: (query = {}, signal) => {
+    listMcpConnectorProviders: (query = {}, signal) => {
       const search = new URLSearchParams()
       if (query.query !== undefined) search.set("query", query.query)
       if (query.directory_type !== undefined) search.set("directory_type", query.directory_type)
       if (query.category_key !== undefined) search.set("category_key", query.category_key)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpSelf("providers", `/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpSelfProviderPageSchema, undefined, signal)
+      return requestMcpConnector("providers", `/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpConnectorProviderPageSchema, undefined, signal)
     },
-    createMcpSelfConnector: async (input, signal) =>
+    createMcpConnector: async (input, signal) =>
       (
-        await requestMcpSelf(
+        await requestMcpConnector(
           "create",
           "/mcp/connectors",
-          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          z.object({ connector: mcpConnectorSchema }).strict(),
           {
             method: "POST",
-            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
             body: JSON.stringify(input),
           },
           signal,
         )
       ).connector,
-    updateMcpSelfConnector: async (connectorId, input, signal) =>
+    updateMcpConnector: async (connectorId, input, signal) =>
       (
-        await requestMcpSelf(
+        await requestMcpConnector(
           "update",
           `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          z.object({ connector: mcpConnectorSchema }).strict(),
           {
             method: "PATCH",
-            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
             body: JSON.stringify(input),
           },
           signal,
         )
       ).connector,
-    setMcpSelfConnectorEnabled: async (connectorId, input, signal) =>
+    setMcpConnectorEnabled: async (connectorId, input, signal) =>
       (
-        await requestMcpSelf(
+        await requestMcpConnector(
           "enabled",
           `/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`,
-          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          z.object({ connector: mcpConnectorSchema }).strict(),
           {
             method: "PUT",
-            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
             body: JSON.stringify(input),
           },
           signal,
         )
       ).connector,
-    removeMcpSelfConnector: async (connectorId, input, signal) =>
+    removeMcpConnector: async (connectorId, input, signal) =>
       (
-        await requestMcpSelf(
+        await requestMcpConnector(
           "remove",
           `/mcp/connectors/${encodeURIComponent(connectorId)}`,
-          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          z.object({ connector: mcpConnectorSchema }).strict(),
           {
             method: "DELETE",
-            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }),
             body: JSON.stringify(input),
           },
           signal,
         )
       ).connector,
-    beginMcpSelfConnectorAuthorization: (connectorId, input, signal) =>
-      requestMcpSelf(
+    beginMcpConnectorAuthorization: (connectorId, input, signal) =>
+      requestMcpConnector(
         "beginAuthorization",
         `/mcp/connectors/${encodeURIComponent(connectorId)}/authorization`,
-        mcpSelfAuthorizationDataSchemas.beginAuthorization,
+        mcpConnectorAuthorizationDataSchemas.beginAuthorization,
         { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
         signal,
       ),
-    reconnectMcpSelfConnectorAuthorization: (connectorId, input, signal) =>
-      requestMcpSelf(
+    reconnectMcpConnectorAuthorization: (connectorId, input, signal) =>
+      requestMcpConnector(
         "reconnectAuthorization",
         `/mcp/connectors/${encodeURIComponent(connectorId)}/authorization/reconnect`,
-        mcpSelfAuthorizationDataSchemas.reconnectAuthorization,
+        mcpConnectorAuthorizationDataSchemas.reconnectAuthorization,
         { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
         signal,
       ),
-    completeMcpSelfConnectorAuthorization: (input, signal) =>
-      requestMcpSelf(
+    completeMcpConnectorAuthorization: (input, signal) =>
+      requestMcpConnector(
         "completeAuthorization",
         "/mcp/authorization/callback",
-        mcpSelfAuthorizationDataSchemas.completeAuthorization,
+        mcpConnectorAuthorizationDataSchemas.completeAuthorization,
         { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
         signal,
       ),
-    createMcpSelfConnection: (input, signal) =>
-      requestMcpSelf(
+    createMcpConnectorConnection: (input, signal) =>
+      requestMcpConnector(
         "createConnection",
         "/mcp/connections",
-        mcpSelfAuthorizationDataSchemas.createConnection,
-        { method: "POST", headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }), body: JSON.stringify(input) },
+        mcpConnectorAuthorizationDataSchemas.createConnection,
+        { method: "POST", headers: idempotencyHeaders("mcp-connector", { ...JSON_HEADERS }), body: JSON.stringify(input) },
         signal,
       ),
     listSkillPool: async () => (await requestData(skillPoolPath, skillPoolSchema)).skills,

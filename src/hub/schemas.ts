@@ -483,7 +483,7 @@ export const skillRevisionsSchema = z.object({ revisions: z.array(skillRevisionS
 
 // —— GitHub 技能导入（可选 BFF 扩展）——
 
-// —— MCP server 池（self 面）——
+// —— MCP server 池（浏览器私有连接器面）——
 
 // 传输种类：与 hub contract/mcp-storage.MCP_TRANSPORTS 对齐（http / streamable_http）。
 export const MCP_TRANSPORTS = ["http", "streamable_http"] as const
@@ -569,7 +569,7 @@ export function mcpConnectionErrorAllowed(status: number, code: string): boolean
 export const mcpServerPoolSchema = z.object({ servers: z.array(mcpServerViewSchema) }).strict()
 export const mcpServerRegisteredSchema = z.object({ server: mcpServerViewSchema }).strict()
 
-// self 注册体（门后）：scope 恒取信封头（不进 body）；secret_ref 仅 handle:srt_... 引用或省略。
+// 浏览器私有注册体：scope 恒取受信信封（不进 body）；secret_ref 仅 handle:srt_... 引用或省略。
 export type McpRegisterInput = {
   name: string
   transport: McpTransport
@@ -630,7 +630,7 @@ export type CustomApiView = z.infer<typeof customApiViewSchema>
 export const connectorAssetUploadedSchema = z.object({ asset_id: z.string().min(1), url: z.string().min(1) }).strict()
 export type ConnectorAssetUploaded = z.infer<typeof connectorAssetUploadedSchema>
 
-// —— MCP secret handle（self 面）——
+// —— MCP secret handle（浏览器私有连接器面）——
 
 // 列表项：句柄 + 名称 + 创建毫秒时间戳（hub SecretListItem 的 camelCase 回传）。值只进不出，绝不回显。
 const mcpSecretSchema = z.object({ handle: z.string().min(1), name: z.string().min(1), createdAt: z.number().int() }).strict()
@@ -639,25 +639,25 @@ export type McpSecret = z.infer<typeof mcpSecretSchema>
 export const mcpSecretListSchema = z.object({ secrets: z.array(mcpSecretSchema) }).strict()
 export const mcpSecretCreatedSchema = z.object({ handle: z.string().min(1) }).strict()
 
-// self 面路径（浏览器同源前缀 /api/hub → BFF 前缀 /hub → hub self 面）。
+// 浏览器同源 MCP 路径（/api/hub → BFF browser-private adapter）。
 export const HUB_BASE = "/api/hub"
 export const mcpConnectionsPath = "/mcp/connections"
-export const mcpServersPath = "/self/mcp/servers"
+export const mcpServersPath = "/mcp/servers"
 export function mcpEnablePath(name: string): string {
-  return `/self/mcp/servers/${encodeURIComponent(name)}/enable`
+  return `/mcp/servers/${encodeURIComponent(name)}/enable`
 }
 export function mcpDisablePath(name: string): string {
-  return `/self/mcp/servers/${encodeURIComponent(name)}/disable`
+  return `/mcp/servers/${encodeURIComponent(name)}/disable`
 }
 export function mcpServerPath(name: string): string {
-  return `/self/mcp/servers/${encodeURIComponent(name)}`
+  return `/mcp/servers/${encodeURIComponent(name)}`
 }
-export const mcpSecretsPath = "/self/mcp/secrets"
+export const mcpSecretsPath = "/mcp/secrets"
 export const customMcpConnectorsPath = "/self/connectors/mcp"
 export const customApiConnectorsPath = "/self/connectors/custom-apis"
 export const connectorAssetsPath = "/self/connectors/assets"
 export function mcpSecretPath(handle: string): string {
-  return `/self/mcp/secrets/${encodeURIComponent(handle)}`
+  return `/mcp/secrets/${encodeURIComponent(handle)}`
 }
 export const skillPoolPath = "/self/skills/pool"
 export const skillCatalogPath = "/self/skills/catalog"

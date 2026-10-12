@@ -147,7 +147,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
         },
       ],
     }),
-    listMcpSelfConnectors: vi.fn().mockResolvedValue({
+    listMcpConnectors: vi.fn().mockResolvedValue({
       items: [
         {
           connector_id: "connector-1",
@@ -163,7 +163,7 @@ vi.mock("@/ui/shell/page-clients", () => ({
       ],
       next_cursor: null,
     }),
-    listMcpSelfProviders: vi.fn().mockResolvedValue({
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({
       items: [
         {
           provider_key: "owner-mcp",
@@ -177,14 +177,14 @@ vi.mock("@/ui/shell/page-clients", () => ({
       ],
       next_cursor: null,
     }),
-    createMcpSelfConnector: vi.fn(),
-    updateMcpSelfConnector: vi.fn(),
-    setMcpSelfConnectorEnabled: vi.fn(),
-    removeMcpSelfConnector: vi.fn(),
-    beginMcpSelfConnectorAuthorization: vi.fn(),
-    reconnectMcpSelfConnectorAuthorization: vi.fn(),
-    completeMcpSelfConnectorAuthorization: vi.fn(),
-    createMcpSelfConnection: vi.fn(),
+    createMcpConnector: vi.fn(),
+    updateMcpConnector: vi.fn(),
+    setMcpConnectorEnabled: vi.fn(),
+    removeMcpConnector: vi.fn(),
+    beginMcpConnectorAuthorization: vi.fn(),
+    reconnectMcpConnectorAuthorization: vi.fn(),
+    completeMcpConnectorAuthorization: vi.fn(),
+    createMcpConnectorConnection: vi.fn(),
     listSkillPool: vi.fn().mockResolvedValue([
       {
         name: "YouTube 影片研究",

@@ -1,20 +1,20 @@
 import {
-  mcpSelfIdSchema,
-  mcpSelfMatches,
-  mcpSelfErrorAllowed,
-  mcpSelfCommandRequestSchemas,
-  type McpSelfCommandOperation,
-  type McpSelfOperation,
-} from "@/hub/mcp-self.schema"
+  mcpConnectorIdSchema,
+  mcpConnectorMatches,
+  mcpConnectorErrorAllowed,
+  mcpConnectorCommandRequestSchemas,
+  type McpConnectorCommandOperation,
+  type McpConnectorOperation,
+} from "@/hub/mcp-connector.schema"
 import {
-  mcpSelfAuthorizationCallbackSchema,
-  mcpSelfAuthorizationErrorAllowed,
-  mcpSelfAuthorizationMatches,
-  mcpSelfAuthorizationRequestSchema,
-  mcpSelfCreateConnectionSchema,
-  type McpSelfAuthorizationOperation,
-} from "@/hub/mcp-self-authorization.schema"
-import { parseMcpSelfJson } from "@/hub/mcp-self-json"
+  mcpConnectorAuthorizationCallbackSchema,
+  mcpConnectorAuthorizationErrorAllowed,
+  mcpConnectorAuthorizationMatches,
+  mcpConnectorAuthorizationRequestSchema,
+  mcpConnectorCreateConnectionSchema,
+  type McpConnectorAuthorizationOperation,
+} from "@/hub/mcp-connector-authorization.schema"
+import { parseMcpConnectorJson } from "@/hub/mcp-connector-json"
 import {
   createPersonalSkillVersionRequestSchema,
   createPersonalSkillVersionSchema,
@@ -295,7 +295,7 @@ function bffBusinessPath(path: string[]): string[] {
 // Current-user MCP owns its browser-private BFF adapter. Lifecycle commands sit
 // here because they share the same authorization/session boundary as CRUD; no
 // browser path is allowed to reach Platform directly.
-async function proxyMcpSelf(request: Request, path: string[]): Promise<Response> {
+async function proxyMcpConnector(request: Request, path: string[]): Promise<Response> {
   const supplied = request.headers.get("x-kokoro-request-id")
   const requestId = supplied !== null && PROJECTION_REQUEST_ID.test(supplied) ? supplied : crypto.randomUUID()
   const fail = (httpStatus: number, code: string) =>
@@ -310,7 +310,7 @@ async function proxyMcpSelf(request: Request, path: string[]): Promise<Response>
       { status: httpStatus, headers: { "cache-control": "no-store", "x-request-id": requestId } },
     )
   const url = new URL(request.url)
-  const operation: McpSelfOperation | McpSelfAuthorizationOperation | undefined =
+  const operation: McpConnectorOperation | McpConnectorAuthorizationOperation | undefined =
     path.length === 2 && path[1] === "connectors" && request.method === "GET"
       ? "connectors"
       : path.length === 2 && path[1] === "connectors" && request.method === "POST"
@@ -360,7 +360,7 @@ async function proxyMcpSelf(request: Request, path: string[]): Promise<Response>
           : []
   if (
     path[0] !== "mcp" ||
-    (id !== undefined && !(operation === "provider" ? /^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u : mcpSelfIdSchema.safeParse(id).success)) ||
+    (id !== undefined && !(operation === "provider" ? /^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u : mcpConnectorIdSchema.safeParse(id).success)) ||
     url.pathname !== `/api/hub/${path.map(encodeURIComponent).join("/")}` ||
     url.hash ||
     [...query.keys()].some((key) => !allowed.includes(key) || query.getAll(key).length !== 1) ||
@@ -403,7 +403,7 @@ async function proxyMcpSelf(request: Request, path: string[]): Promise<Response>
     if (mutation) {
       try {
         body = await readBoundedRequestBody(request, 65_536)
-        input = parseMcpSelfJson(new TextDecoder("utf-8", { fatal: true }).decode(body))
+        input = parseMcpConnectorJson(new TextDecoder("utf-8", { fatal: true }).decode(body))
       } catch (error) {
         return fail(
           error instanceof UpstreamRequestTooLargeError ? 413 : 400,
@@ -412,11 +412,11 @@ async function proxyMcpSelf(request: Request, path: string[]): Promise<Response>
       }
       const accepted = authorization
         ? operation === "beginAuthorization" || operation === "reconnectAuthorization"
-          ? mcpSelfAuthorizationRequestSchema.safeParse(input).success
+          ? mcpConnectorAuthorizationRequestSchema.safeParse(input).success
           : operation === "completeAuthorization"
-            ? mcpSelfAuthorizationCallbackSchema.safeParse(input).success
-            : mcpSelfCreateConnectionSchema.safeParse(input).success
-        : mcpSelfCommandRequestSchemas[operation as McpSelfCommandOperation].safeParse(input).success
+            ? mcpConnectorAuthorizationCallbackSchema.safeParse(input).success
+            : mcpConnectorCreateConnectionSchema.safeParse(input).success
+        : mcpConnectorCommandRequestSchemas[operation as McpConnectorCommandOperation].safeParse(input).success
       if (!accepted) return fail(400, "invalid_mcp_personal_request")
     }
     signal.throwIfAborted()
@@ -496,11 +496,11 @@ async function proxyMcpSelf(request: Request, path: string[]): Promise<Response>
     const valid =
       upstream.status === expected
         ? authorization
-          ? mcpSelfAuthorizationMatches(operation as McpSelfAuthorizationOperation, raw, id, input)
-          : mcpSelfMatches(operation as McpSelfOperation, raw, id, query, input)
+          ? mcpConnectorAuthorizationMatches(operation as McpConnectorAuthorizationOperation, raw, id, input)
+          : mcpConnectorMatches(operation as McpConnectorOperation, raw, id, query, input)
         : authorization
-          ? mcpSelfAuthorizationErrorAllowed(upstream.status, raw)
-          : mcpSelfErrorAllowed(operation as McpSelfOperation, upstream.status, raw)
+          ? mcpConnectorAuthorizationErrorAllowed(upstream.status, raw)
+          : mcpConnectorErrorAllowed(operation as McpConnectorOperation, upstream.status, raw)
     if (!valid) return fail(502, "mcp_personal_response_invalid")
     const retryAfter = upstream.headers.get("retry-after")
     if (retryAfter !== null && (upstream.status !== 429 || !/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) || Number(retryAfter) > 86400))
@@ -1615,6 +1615,8 @@ async function proxyPersonalSkillLifecycle(request: Request, path: string[]): Pr
 
 export async function proxyHubRequest(request: Request, context: { params: Promise<{ path: string[] }> }): Promise<Response> {
   const { path } = await context.params
+  // Retire the old browser `/self/mcp` namespace. MCP is a first-class private adapter route.
+  if (path[0] === "self" && path[1] === "mcp") return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   if (
     path[0] === "mcp" &&
     (path[1] === "connectors" ||
@@ -1622,7 +1624,7 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
       path[1] === "authorization" ||
       (path[1] === "connections" && (path.length > 2 || request.method !== "GET")))
   )
-    return proxyMcpSelf(request, path)
+    return proxyMcpConnector(request, path)
   if (path[0] === "self" && path[1] === "skills" && ["versions", "withdraw"].includes(path[3] ?? "")) return proxyPersonalSkillLifecycle(request, path)
   if (path[0] === "skill-shares") return proxySkillShare(request, path)
   if (path[0] === "skills" && path[1] === "github") return proxyGithubSkillImport(request, path)
@@ -1634,7 +1636,7 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
   if (path[0] === "skill-installations" || (path[0] === "self" && path[1] === "skill-installations")) return proxyInstallation(request, path)
   const search = new URL(request.url).search
   const businessPath = bffBusinessPath(path ?? [])
-  if (path[0] !== "self" && (businessPath[0] === "skills" || (businessPath[0] === "mcp" && businessPath[1] === "servers"))) {
+  if (path[0] !== "self" && businessPath[0] === "skills") {
     return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   }
   const managedSkillPath = path[0] === "self" && path[1] === "skills" && path[2] === "managed"
