@@ -99,6 +99,7 @@ export const zh = {
   "plugins.next": "下一页",
   "plugins.scrollForward": "向前滚动",
   "plugins.scrollBackward": "向后滚动",
+  "plugins.featured": "精选连接器",
   "plugins.viewAll": "查看全部",
   "plugins.showLess": "收起",
   "plugins.addConnector": "新增 {name}",

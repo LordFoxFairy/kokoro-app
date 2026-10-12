@@ -312,6 +312,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "plugins.next": "Next page",
   "plugins.scrollForward": "Scroll forward",
   "plugins.scrollBackward": "Scroll backward",
+  "plugins.featured": "Featured connectors",
   "plugins.viewAll": "View all",
   "plugins.showLess": "Show less",
   "plugins.addConnector": "Add {name}",

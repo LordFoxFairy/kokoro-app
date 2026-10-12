@@ -88,6 +88,49 @@
   gap: 1.1rem;
 }
 
+/* Manus starts the connector directory with a quiet horizontal set of real
+ * provider highlights, then leaves search and categories as the next stable
+ * reading step. The rail is presentation-only: every item remains the owner
+ * projection and opens the same detail dialog as its directory card. */
+.featuredSection { min-width: 0; }
+.featuredRail {
+  display: flex;
+  min-width: 0;
+  gap: .75rem;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0;
+  scrollbar-width: none;
+  list-style: none;
+  scroll-snap-type: x proximity;
+}
+.featuredRail::-webkit-scrollbar { display: none; }
+.featuredRail > li { width: min(18rem, calc((100% - 2.25rem) / 4)); min-width: 14rem; flex: 0 0 auto; scroll-snap-align: start; }
+.featuredCard {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 5.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: .875rem;
+  background: rgb(55 53 47 / 3%);
+  padding: .875rem 1rem;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+.featuredCard:hover { border-color: rgb(0 0 0 / 16%); background: rgb(55 53 47 / 5%); }
+.featuredCard:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.featuredCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: .25rem; }
+.featuredCopy strong { overflow: hidden; font-size: .9rem; font-weight: 650; line-height: 1.25rem; text-overflow: ellipsis; white-space: nowrap; }
+.featuredCopy > span { display: -webkit-box; overflow: hidden; color: var(--muted-foreground); font-size: .78rem; line-height: 1.08rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.featuredLogo { position: relative; display: inline-flex; width: 3rem; height: 3rem; flex: 0 0 3rem; align-items: center; justify-content: center; overflow: hidden; border-radius: .7rem; background: rgb(255 255 254); }
+.featuredLogo img { object-fit: contain; padding: .35rem; }
+.featuredLogo svg { width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); }
+
 .providerDetailTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .directoryControls { display: flex; min-height: 2.9rem; align-items: center; flex-wrap: wrap; gap: .55rem .75rem; }
@@ -222,6 +265,7 @@
   .viewToggle { width: 100%; }
   .directoryControls { align-items: stretch; }
   .directoryControls .searchField { width: 100%; flex-basis: 100%; }
+  .featuredRail > li { width: min(18rem, 82vw); }
   .categoryRail { display: none; }
   .compactFilter { display: block; }
   .connectorGrid { grid-template-columns: 1fr; }

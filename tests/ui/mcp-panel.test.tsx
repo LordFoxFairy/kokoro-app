@@ -124,6 +124,20 @@ describe("McpPanel", () => {
     expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
   })
 
+  it("keeps the owner-ordered connector highlights above the search directory", async () => {
+    const providers = [
+      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
+      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
+    ]
+    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    const highlights = await screen.findByRole("region", { name: "Featured connectors" })
+    expect(within(highlights).getByRole("button", { name: "查看精选连接器 Gmail" })).toHaveTextContent("Search and summarize email.")
+    expect(within(highlights).getByRole("button", { name: "查看精选连接器 GitHub" })).toHaveTextContent("Manage repositories.")
+    expect(highlights.compareDocumentPosition(screen.getByPlaceholderText("Search connectors and data sources")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  })
+
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
     const requests: string[] = []
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {

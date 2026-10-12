@@ -181,6 +181,10 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
   const projection = state.kind === "ready" ? state.data : null
   const providers = projection?.providers.items ?? []
+  // The owner list order is the directory's presentation order. Keep the
+  // leading real providers in the same compact rail Manus places above search;
+  // no browser-side provider fixtures or popularity ordering are invented.
+  const highlightedProviders = providers.slice(0, 6)
   // Revocation is retained by Platform for auditability, but is no longer a
   // usable user connection. Keep it out of this live-connection surface while
   // preserving the owner response (and its cursor) unchanged.
@@ -287,6 +291,16 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
     {projection ? <div className={styles.content}>
       {view === "catalog" ? <>
+        {highlightedProviders.length > 0 ? <section className={styles.featuredSection} aria-label={t("plugins.featured")}>
+          <ul className={styles.featuredRail}>
+            {highlightedProviders.map((provider) => <li key={provider.provider_key}>
+              <button type="button" className={styles.featuredCard} onClick={() => setSelectedProvider(provider)} aria-label={`查看精选连接器 ${provider.display_name}`}>
+                <span className={styles.featuredCopy}><strong>{provider.display_name}</strong>{provider.description ? <span>{provider.description}</span> : null}</span>
+                <span className={styles.featuredLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="3rem" unoptimized /> : <Cable />}</span>
+              </button>
+            </li>)}
+          </ul>
+        </section> : null}
         <div className={styles.directoryControls}>
           <label className={styles.searchField}>
             <Search aria-hidden="true" />
