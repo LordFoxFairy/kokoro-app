@@ -15,10 +15,13 @@ import type { LucideProps } from "lucide-react";
 import {
   Cable,
   ChevronsUpDown,
+  CreditCard,
   Keyboard,
+  MessageSquareText,
   Monitor,
   Plug,
   Puzzle,
+  Rocket,
   Search,
   Settings2,
   Shapes,
@@ -70,10 +73,9 @@ export function SettingsNavigation({
   const [scrollbar, setScrollbar] = useState({ height: 0, top: 2 });
   const tabListRef = useRef<HTMLDivElement | null>(null);
 
-  // The visible rail follows the inspected Manus IA exactly where Kokoro has
-  // a real owner-backed panel: account, general settings, capabilities, then
-  // data & integrations. Plan and deployment remain reachable from their
-  // owning flows; they are not inserted as arbitrary rail rows.
+  // Every row here opens an owner-backed panel. Keep the same grouped rail
+  // rhythm as Manus, while exposing Kokoro capabilities that were already
+  // implemented but hidden from the settings entry point.
   const nav: readonly SettingsNavigationEntry[] = [
     {
       key: "account",
@@ -82,6 +84,11 @@ export function SettingsNavigation({
       group: "account",
     },
     { key: "credits", label: t("settings.creditsTitle"), icon: Sparkles },
+    {
+      key: "subscription",
+      label: t("settings.subTitle"),
+      icon: CreditCard,
+    },
     {
       key: "appearance",
       label: t("settings.generalTitle"),
@@ -94,6 +101,11 @@ export function SettingsNavigation({
       icon: Keyboard,
     },
     {
+      key: "chat",
+      label: t("settings.chatTitle"),
+      icon: MessageSquareText,
+    },
+    {
       key: "personalization",
       label: t("settings.personalizationTitle"),
       icon: Shapes,
@@ -102,6 +114,11 @@ export function SettingsNavigation({
     { key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { key: "skills", label: t("rail.navSkills"), icon: Puzzle },
     { key: "computer", label: t("settings.computerTitle"), icon: Monitor },
+    {
+      key: "deployment",
+      label: t("settings.deploymentTitle"),
+      icon: Rocket,
+    },
     {
       key: "integration",
       label: t("settings.integrationTitle"),
