@@ -56,10 +56,11 @@ describe("current-user MCP strict owner wire", () => {
 
 describe("current-user MCP 14.0 commands and provider directory", () => {
   const managed = { ...connector, display_name: "Connector", description: "", enabled: false, state_version: "1", status: "pending" as const }
-  const provider = { provider_key: "provider-one", display_name: "Provider", directory_type: "app" as const, category_keys: ["development"], example_prompts: ["Help"], enabled: true, state_version: "2" }
+  const provider = { provider_key: "provider-one", display_name: "Provider", directory_type: "app" as const, category_keys: ["development"], example_prompts: ["Help"], connection_server_id: "server-1", enabled: true, state_version: "2" }
   it("binds actual provider directory and closed command acknowledgements", () => {
     expect(mcpSelfMatches("providers", { data: { items: [provider], next_cursor: null } }, undefined, new URLSearchParams("directory_type=app&category_key=development"))).toBe(true)
     expect(mcpSelfMatches("provider", { data: { provider } }, "provider-one", new URLSearchParams())).toBe(true)
+    expect(mcpSelfSchemas.provider.safeParse({ data: { provider: { ...provider, connection_server_id: "invalid space" } } }).success).toBe(false)
     const create = { provider_key: "provider-one", connector_type: "mcp", display_name: "Connector", description: "" }
     expect(mcpSelfMatches("create", { data: { connector: managed } }, undefined, new URLSearchParams(), create)).toBe(true)
     expect(mcpSelfMatches("create", { data: { connector: { ...managed, enabled: true } } }, undefined, new URLSearchParams(), create)).toBe(false)
