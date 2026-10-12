@@ -11,6 +11,15 @@ import type { HubClient } from "@/hub/client"
 
 import styles from "./mcp-create-dialog.module.css"
 
+function isMcpEndpointUrl(value: string): boolean {
+  try {
+    const endpoint = new URL(value)
+    return endpoint.protocol === "https:" && endpoint.hostname.length > 0 && endpoint.username === "" && endpoint.password === "" && endpoint.search === "" && endpoint.hash === ""
+  } catch {
+    return false
+  }
+}
+
 export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; onCancel: () => void; onDone: () => Promise<void> }) {
   const t = useT()
   const [name, setName] = useState("")
@@ -18,7 +27,7 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
   const [advanced, setAdvanced] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
-  const canSubmit = name.trim().length > 0 && /^https:\/\//i.test(url.trim()) && !submitting
+  const canSubmit = name.trim().length > 0 && isMcpEndpointUrl(url.trim()) && !submitting
 
   const submit = async (enabled: boolean): Promise<void> => {
     if (!canSubmit) return
