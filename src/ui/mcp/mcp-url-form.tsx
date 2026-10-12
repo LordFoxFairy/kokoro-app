@@ -16,8 +16,6 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
   const [advanced, setAdvanced] = useState(false)
-  const [oauthClientId, setOauthClientId] = useState("")
-  const [oauthClientSecret, setOauthClientSecret] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const canSubmit = name.trim().length > 0 && /^https:\/\//i.test(url.trim()) && !submitting
@@ -36,10 +34,7 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
         endpoint_url: url.trim(),
         icon_asset_id: null,
         instructions: null,
-        headers: [
-          { name: "OAuth-Client-Id", value: oauthClientId },
-          { name: "OAuth-Client-Secret", value: oauthClientSecret },
-        ].filter((header) => header.value.length > 0),
+        headers: [],
         enabled,
       })
       await onDone()
@@ -69,10 +64,7 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
       <small>{t("mcp.optional")}</small>
       <ChevronDown aria-hidden="true" />
     </button>
-    {advanced ? <div className={styles.advancedFields}>
-      <Input autoComplete="off" aria-label={t("mcp.oauthClientId")} value={oauthClientId} placeholder={t("mcp.oauthClientId")} onChange={(event) => setOauthClientId(event.target.value)} />
-      <Input type="password" autoComplete="new-password" aria-label={t("mcp.oauthClientSecret")} value={oauthClientSecret} placeholder={t("mcp.oauthClientSecret")} onChange={(event) => setOauthClientSecret(event.target.value)} />
-    </div> : null}
+    {advanced ? <p className={styles.urlWarning}>{t("mcp.urlOAuthDiscovery")}</p> : null}
     {error ? <p className={styles.compactDialogError} role="alert">{error}</p> : null}
     <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
     <div className={styles.urlMcpActions}>

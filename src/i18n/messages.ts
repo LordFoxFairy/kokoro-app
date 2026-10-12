@@ -897,6 +897,7 @@ export const zh = {
   "mcp.advancedSettings": "进阶设置",
   "mcp.oauthClientId": "OAuth 用户端 ID",
   "mcp.oauthClientSecret": "OAuth 用户端密钥",
+  "mcp.urlOAuthDiscovery": "如服务器要求 OAuth，平台会在连接时按 MCP 标准发现并发起授权。",
   "mcp.urlWarning":
     "仅使用您信任的开发者提供的连接器。平台不会控制开发者所提供的工具，也无法证实它们是否如预期运作或是否会改变。",
   "mcp.saveAndPublish": "保存并发布",
