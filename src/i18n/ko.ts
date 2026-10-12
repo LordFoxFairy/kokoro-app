@@ -1207,8 +1207,6 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.urlTitle": "URL로 MCP 추가",
   "mcp.urlNamePlaceholder": "예: 사용자 지정 서버",
   "mcp.advancedSettings": "고급 설정",
-  "mcp.oauthClientId": "OAuth 클라이언트 ID",
-  "mcp.oauthClientSecret": "OAuth 클라이언트 보안 비밀",
   "mcp.urlWarning": "신뢰할 수 있는 개발자가 제공한 커넥터만 사용하세요. 플랫폼은 개발자 도구를 통제하지 않으며 예상대로 작동하는지 확인할 수 없습니다.",
   "mcp.saveAndPublish": "저장 및 게시",
   "settings.importMemoryDescription": "다른 AI 제공자가 기억하는 사용자 정보를 Kokoro로 가져옵니다.",

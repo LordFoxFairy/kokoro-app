@@ -1207,8 +1207,6 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.urlTitle": "Добавить MCP по URL",
   "mcp.urlNamePlaceholder": "например, Мой сервер",
   "mcp.advancedSettings": "Расширенные настройки",
-  "mcp.oauthClientId": "Идентификатор клиента OAuth",
-  "mcp.oauthClientSecret": "Секрет клиента OAuth",
   "mcp.urlWarning": "Используйте только коннекторы доверенных разработчиков. Платформа не контролирует их инструменты и не может подтвердить их поведение.",
   "mcp.saveAndPublish": "Сохранить и опубликовать",
 

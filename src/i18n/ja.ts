@@ -1202,8 +1202,6 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.urlTitle": "URL から MCP を追加",
   "mcp.urlNamePlaceholder": "例：カスタムサーバー",
   "mcp.advancedSettings": "詳細設定",
-  "mcp.oauthClientId": "OAuth クライアント ID",
-  "mcp.oauthClientSecret": "OAuth クライアントシークレット",
   "mcp.urlWarning": "信頼できる開発者が提供するコネクターのみ使用してください。プラットフォームは提供ツールを管理せず、その動作を保証できません。",
   "mcp.saveAndPublish": "保存して公開",
   "mcp.customInstructions": "メモ",

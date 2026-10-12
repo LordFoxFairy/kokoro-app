@@ -1207,8 +1207,6 @@ export const es: Partial<Record<MessageKey, string>> = {
   "mcp.urlTitle": "Añadir MCP mediante URL",
   "mcp.urlNamePlaceholder": "p. ej., Mi servidor personalizado",
   "mcp.advancedSettings": "Configuración avanzada",
-  "mcp.oauthClientId": "ID de cliente OAuth",
-  "mcp.oauthClientSecret": "Secreto de cliente OAuth",
   "mcp.urlWarning": "Usa únicamente conectores de desarrolladores de confianza. La plataforma no controla sus herramientas ni puede confirmar su comportamiento.",
   "mcp.saveAndPublish": "Guardar y publicar",
 
