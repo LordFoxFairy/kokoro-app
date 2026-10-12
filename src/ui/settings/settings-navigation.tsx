@@ -18,15 +18,13 @@ import {
   CreditCard,
   Keyboard,
   MessageSquareText,
-  Monitor,
-  Plug,
   Puzzle,
-  Rocket,
   Search,
   Settings2,
   Shapes,
   Sparkles,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -39,11 +37,7 @@ import styles from "./settings-modal.module.css";
 
 type SettingsNavKey = SettingsTab;
 
-type SettingsNavigationGroup =
-  | "account"
-  | "settings"
-  | "features"
-  | "data";
+type SettingsNavigationGroup = "account" | "settings" | "features";
 
 type SettingsNavigationEntry = {
   key: SettingsNavKey;
@@ -89,6 +83,7 @@ export function SettingsNavigation({
       label: t("settings.subTitle"),
       icon: CreditCard,
     },
+    { key: "team", label: t("rail.navTeams"), icon: UsersRound },
     {
       key: "appearance",
       label: t("settings.generalTitle"),
@@ -113,18 +108,6 @@ export function SettingsNavigation({
     },
     { key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { key: "skills", label: t("rail.navSkills"), icon: Puzzle },
-    { key: "computer", label: t("settings.computerTitle"), icon: Monitor },
-    {
-      key: "deployment",
-      label: t("settings.deploymentTitle"),
-      icon: Rocket,
-    },
-    {
-      key: "integration",
-      label: t("settings.integrationTitle"),
-      icon: Plug,
-      group: "data",
-    },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const renderedNav =
@@ -233,9 +216,7 @@ export function SettingsNavigation({
                   ? t("settings.groupGeneral")
                   : entry.group === "features"
                     ? t("settings.groupFeatures")
-                    : entry.group === "data"
-                        ? t("settings.groupData")
-                        : null;
+                    : null;
             return (
               <Fragment key={key}>
                 {groupLabel ? (
@@ -253,9 +234,6 @@ export function SettingsNavigation({
                   data-settings-team={key === "team" ? "true" : undefined}
                   data-settings-subscription={
                     key === "subscription" ? "true" : undefined
-                  }
-                  data-settings-integration={
-                    key === "integration" ? "true" : undefined
                   }
                 >
                   <Icon aria-hidden="true" />

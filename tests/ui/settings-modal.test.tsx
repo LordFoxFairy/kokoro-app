@@ -264,15 +264,13 @@ const NAV_TAB_KEYS = [
   "account",
   "credits",
   "subscription",
+  "team",
   "appearance",
   "shortcuts",
   "chat",
   "personalization",
   "mcp",
   "skills",
-  "computer",
-  "deployment",
-  "integration",
 ];
 
 function renderSettings(
@@ -385,16 +383,14 @@ describe("SettingsModal 设置中心模态", () => {
   it("设置导航呈现全部已有 owner-backed 面板，不伪造缺失功能", () => {
     renderSettings();
 
-    expect(
-      screen.getByTestId("settings-tab-subscription"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId("settings-tab-deployment"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("settings-tab-subscription")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
+    expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
+    expect(screen.queryByTestId("settings-tab-integration")).toBeNull();
+    expect(screen.queryByTestId("settings-tab-computer")).toBeNull();
     expect(screen.queryByTestId("settings-tab-mail")).toBeNull();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
     expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-team")).toBeNull();
   });
 
   it("技能导入完成后只关闭子弹窗，不卸载设置中心", async () => {
@@ -513,19 +509,22 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("radio", { name: "深色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "自动" })).toBeChecked();
     expect(screen.getByTestId("settings-default-model")).toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "声音提醒" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "浏览器通知" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("switch", { name: "关于 Acme 的广告" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "声音提醒" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "浏览器通知" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "关于 Acme 的广告" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("个性化 tab 提供资料、知识切换和可持久化字段", async () => {
+  it("个性化 tab 只呈现有 BFF 契约的资料字段", () => {
     renderSettings(() => {}, undefined, true, undefined, "personalization");
     expect(screen.getByTestId("settings-personalization")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "个性化", level: 1 }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Kokoro 使用此资讯为所有任务打造个性化回应。"),
     ).toBeInTheDocument();
     const nickname = screen.getByRole("textbox", { name: "昵称" });
     fireEvent.change(nickname, { target: { value: "小可" } });
@@ -535,214 +534,8 @@ describe("SettingsModal 设置中心模态", () => {
         window.localStorage.getItem("kokoro.personalization.preview") ?? "{}",
       ),
     ).toMatchObject({ nickname: "小可" });
-    expect(document.querySelector(".lucide-layout-grid")).toBeInTheDocument();
-    const importMemoryTrigger = screen.getByRole("button", {
-      name: /^匯入记忆$/,
-    });
-    fireEvent.click(importMemoryTrigger);
-    expect(
-      screen.getByRole("dialog", { name: "匯入记忆" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: "粘贴回应内容" }),
-    ).toBeInTheDocument();
-    const cancelButtons = screen.getAllByRole("button", { name: "取消" });
-    const cancelButton = cancelButtons.at(0);
-    if (cancelButton === undefined) {
-      throw new Error("Expected the memory import cancel button");
-    }
-    fireEvent.click(cancelButton);
-    expect(screen.getByRole("textbox", { name: "昵称" })).toHaveValue("小可");
-    await waitFor(() => expect(importMemoryTrigger).toHaveFocus());
-  });
-
-  it("个性化知识入口保留帮助语义并打开完整新增表单", async () => {
-    renderSettings(() => {}, undefined, true, undefined, "personalization");
-
-    const knowledgeTab = screen.getByRole("tab", { name: "知识" });
-    expect(
-      knowledgeTab.querySelector("svg[aria-hidden='true']"),
-    ).toBeInTheDocument();
-    fireEvent.click(knowledgeTab);
-    const addKnowledgeTrigger = screen.getByRole("button", { name: "新增" });
-    fireEvent.click(addKnowledgeTrigger);
-
-    const dialog = screen.getByRole("dialog", { name: "新增知识" });
-    expect(
-      within(dialog).getByRole("textbox", { name: "名称" }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("textbox", { name: "使用时机" }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByRole("textbox", { name: "内容" }),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText("0 / 2000")).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
-    await waitFor(() => expect(addKnowledgeTrigger).toHaveFocus());
-
-    fireEvent.click(addKnowledgeTrigger);
-    const reopenedDialog = screen.getByRole("dialog", { name: "新增知识" });
-    fireEvent.change(
-      within(reopenedDialog).getByRole("textbox", { name: "名称" }),
-      { target: { value: "发布检查清单" } },
-    );
-    fireEvent.change(
-      within(reopenedDialog).getByRole("textbox", { name: "使用时机" }),
-      { target: { value: "准备发布时" } },
-    );
-    fireEvent.change(
-      within(reopenedDialog).getByRole("textbox", { name: "内容" }),
-      { target: { value: "abc" } },
-    );
-    expect(within(reopenedDialog).getByText("3 / 2000")).toBeInTheDocument();
-    const saveKnowledge = within(reopenedDialog).getByRole("button", {
-      name: "保存",
-    });
-    expect(saveKnowledge).toBeEnabled();
-    fireEvent.click(saveKnowledge);
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "新增知识" }),
-      ).not.toBeInTheDocument(),
-    );
-    expect(screen.getByText("发布检查清单")).toBeInTheDocument();
-    await waitFor(() => expect(addKnowledgeTrigger).toHaveFocus());
-
-    const searchKnowledge = screen.getByRole("textbox", { name: "搜索知识" });
-    fireEvent.change(searchKnowledge, { target: { value: "不存在" } });
-    expect(screen.queryByText("发布检查清单")).toBeNull();
-    fireEvent.change(searchKnowledge, { target: { value: "发布" } });
-    expect(screen.getByText("发布检查清单")).toBeInTheDocument();
-  });
-
-  it("记忆导入支持复制、输入启用和预览态提交关闭", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-personalization"), {
-      key: "Enter",
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^匯入记忆$/ }));
-
-    const dialog = screen.getByRole("dialog", { name: "匯入记忆" });
-    const promptScroller = within(dialog).getByLabelText("复制此提示词");
-    expect(promptScroller).toBeInTheDocument();
-    expect(promptScroller).toHaveTextContent("基本资讯");
-    expect(promptScroller).toHaveTextContent("偏好与指令");
-    expect(
-      promptScroller.parentElement?.querySelector('[aria-hidden="true"]'),
-    ).toBeInTheDocument();
-    const importButton = within(dialog).getByRole("button", { name: "导入" });
-    expect(importButton).toBeDisabled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "复制" }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(
-      within(dialog).getByRole("button", { name: "已复制" }),
-    ).toBeInTheDocument();
-
-    fireEvent.change(
-      within(dialog).getByRole("textbox", { name: "粘贴回应内容" }),
-      {
-        target: { value: "偏好简洁回答并使用中文。" },
-      },
-    );
-    expect(importButton).toBeEnabled();
-    fireEvent.click(importButton);
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "匯入记忆" }),
-      ).not.toBeInTheDocument(),
-    );
-  });
-
-  it("My Computer 页面可配置储存并打开独立订单确认弹窗", () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-computer"), {
-      key: "Enter",
-    });
-    expect(screen.getByTestId("settings-computer")).toBeInTheDocument();
-    expect(
-      screen.getByText("持续的云工作空间，全天候可用。"),
-    ).toBeInTheDocument();
-    expect(
-      screen
-        .getByTestId("settings-computer")
-        .querySelector("svg[viewBox='0 0 32 32']"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId("settings-computer").querySelector(".lucide-monitor"),
-    ).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /立即建立/ }));
-    const dialog = screen.getByRole("dialog", { name: "建立云端电脑" });
-    expect(dialog).toHaveTextContent("Standard");
-    expect(dialog).toHaveTextContent("$30");
-    expect(
-      within(dialog).getByRole("slider", { name: "储存大小（GB）" }),
-    ).toHaveAttribute("aria-valuenow", "70");
-    fireEvent.click(within(dialog).getByRole("button", { name: "250 GB" }));
-    expect(
-      within(dialog).getByRole("spinbutton", { name: "储存大小（GB）" }),
-    ).toHaveValue(250);
-    expect(dialog).toHaveTextContent("$48");
-    fireEvent.click(within(dialog).getByRole("button", { name: "下一步" }));
-    const orderDialog = screen.getByRole("dialog", { name: "确认您的订单" });
-    expect(orderDialog).toHaveTextContent("180 GB 额外储存空间");
-    expect(orderDialog).toHaveTextContent("$48 /每月");
-    expect(
-      within(orderDialog).getByRole("button", { name: "支付" }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("computer-create-dialog")).toBeInTheDocument();
-    const orderCancelButtons = within(orderDialog).getAllByRole("button", {
-      name: "取消",
-    });
-    const orderCancelButton = orderCancelButtons.at(0);
-    if (orderCancelButton === undefined) {
-      throw new Error("Expected the order dialog cancel button");
-    }
-    fireEvent.click(orderCancelButton);
-    expect(screen.queryByRole("dialog", { name: "确认您的订单" })).toBeNull();
-    expect(
-      screen.getByRole("dialog", { name: "建立云端电脑" }),
-    ).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "下一步" }));
-    fireEvent.click(
-      within(screen.getByRole("dialog", { name: "确认您的订单" })).getByRole(
-        "button",
-        { name: "支付" },
-      ),
-    );
-    expect(screen.queryByRole("dialog", { name: "确认您的订单" })).toBeNull();
-    expect(screen.queryByTestId("computer-create-dialog")).toBeNull();
-    expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
-  });
-
-  it("My Computer 本地电脑 Tab 显示文件夹授权状态并可返回云电脑", () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-computer"), {
-      key: "Enter",
-    });
-    fireEvent.click(screen.getByRole("tab", { name: "本地电脑" }));
-    expect(screen.getByRole("tab", { name: "本地电脑" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    const localPanel = screen.getByTestId("settings-local-computer");
-    expect(
-      within(localPanel).getByText("需要资料夹存取权限"),
-    ).toBeInTheDocument();
-    expect(
-      within(localPanel).getByRole("link", { name: "Acme 桌面版" }),
-    ).toHaveAttribute("href", "kokoro://app");
-    expect(localPanel.querySelector(".lucide-folder-plus")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "立即建立" })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "云电脑" }));
-    expect(
-      screen.getByRole("button", { name: "立即建立" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "知识" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /匯入记忆/ })).toBeNull();
   });
 
   it("部署页面提供网站、应用和域名三个真实入口", async () => {
@@ -834,86 +627,9 @@ describe("SettingsModal 设置中心模态", () => {
     );
     expect(onTabChange).toHaveBeenLastCalledWith("subscription");
     await waitFor(() =>
-      expect(screen.getByTestId("settings-panel-subscription")).toBeInTheDocument(),
-    );
-  });
-
-  it("整合页面提供四项卡片、详情返回和连接状态", async () => {
-    renderSettings(() => {}, undefined, true);
-    fireEvent.keyDown(screen.getByTestId("settings-tab-integration"), {
-      key: "Enter",
-    });
-    expect(screen.getByTestId("settings-integration")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /在 Zapier 中使用 Acme/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /在 Slack 中使用 Acme/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Telegram/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Line/ })).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /在 Zapier 中使用 Acme/ }),
-    );
-    expect(
-      screen.getByTestId("settings-integration-detail"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Zapier", level: 1 }),
-    ).toBeInTheDocument();
-    const zapierLinks = screen.getAllByRole("link", { name: /试试看/ });
-    expect(zapierLinks).toHaveLength(9);
-    const firstZapierLink = zapierLinks.at(0);
-    const secondZapierLink = zapierLinks.at(1);
-    if (firstZapierLink === undefined || secondZapierLink === undefined) {
-      throw new Error("Expected the first two Zapier links");
-    }
-    expect(firstZapierLink).toHaveAttribute(
-      "href",
-      "https://zapier.com/apps/manus/integrations",
-    );
-    expect(secondZapierLink).toHaveAttribute(
-      "href",
-      "https://zapier.com/webintent/create-zap?template=255666880",
-    );
-    expect(secondZapierLink.getAttribute("href")).not.toContain(
-      "sign_up_email",
-    );
-    expect(window.location.hash).toBe("#/account/settings/integration/zapier");
-    fireEvent.click(screen.getByRole("button", { name: "返回整合" }));
-    expect(window.location.hash).toBe("#/account/settings/integration");
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /在 Slack 中使用 Acme/ }),
-    );
-    expect(screen.getByText("mute")).toBeInTheDocument();
-    expect(screen.getByText("unmute")).toBeInTheDocument();
-    expect(screen.getByText("!skip")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /文件/ })).toHaveAttribute(
-      "href",
-      "https://api.slack.com/docs",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "返回整合" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /Line/ }));
-    expect(
-      screen.getByRole("heading", { name: "LINE", level: 1 }),
-    ).toBeInTheDocument();
-    expect(
-      screen
-        .getByRole("button", { name: "连接" })
-        .querySelector(".lucide-arrow-up-right"),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "返回整合" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /Telegram/ }));
-    const connect = screen.getByRole("button", { name: "连接" });
-    fireEvent.click(connect);
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "已连接" })).toBeDisabled(),
+      expect(
+        screen.getByTestId("settings-panel-subscription"),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -1558,9 +1274,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(
       within(urlDialog).queryByRole("textbox", { name: "OAuth 用户端 ID" }),
     ).toBeNull();
-    expect(
-      within(urlDialog).queryByLabelText("OAuth 用户端密钥"),
-    ).toBeNull();
+    expect(within(urlDialog).queryByLabelText("OAuth 用户端密钥")).toBeNull();
   });
 
   it("没有真实 DialogTrigger 时关闭也能把焦点交还给稳定的导航按钮", async () => {

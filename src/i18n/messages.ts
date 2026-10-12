@@ -895,7 +895,8 @@ export const zh = {
   "mcp.urlTitle": "通过 URL 添加 MCP",
   "mcp.urlNamePlaceholder": "例如：我的自定义服务器",
   "mcp.advancedSettings": "进阶设置",
-  "mcp.urlOAuthDiscovery": "如服务器要求 OAuth，平台会在连接时按 MCP 标准发现并发起授权。",
+  "mcp.urlOAuthDiscovery":
+    "如服务器要求 OAuth，平台会在连接时按 MCP 标准发现并发起授权。",
   "mcp.urlWarning":
     "仅使用您信任的开发者提供的连接器。平台不会控制开发者所提供的工具，也无法证实它们是否如预期运作或是否会改变。",
   "mcp.saveAndPublish": "保存并发布",
@@ -1249,6 +1250,9 @@ export const zh = {
   "settings.moreSections": "更多设置分区",
   "settings.personalizationTitle": "个性化",
   "settings.personalizationDescription": "管理你的身份及 Kokoro 记忆的内容",
+  "settings.personalizationLoadFailed": "个性化设置暂时无法加载，请重试。",
+  "settings.personalizationSaveFailed": "个性化设置暂时无法保存，请重试。",
+  "settings.personalizationConflict": "设置已在其他位置更新，请刷新后再保存。",
   "settings.personalProfile": "个人资料",
   "settings.knowledge": "知识",
   "settings.importFromAi": "从其他 AI 匯入记忆",
