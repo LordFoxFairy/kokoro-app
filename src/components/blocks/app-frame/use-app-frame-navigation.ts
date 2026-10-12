@@ -85,6 +85,7 @@ export function useAppFrameNavigation({
   }, [])
 
   const syncSettingsUrl = useCallback((tab: SettingsTab | null, mode: "push" | "replace"): void => {
+    setSettingsTab(tab)
     if (typeof window === "undefined") {
       return
     }

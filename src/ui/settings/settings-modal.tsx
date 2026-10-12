@@ -118,9 +118,10 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useLocale();
   const resolvedBrandName = brandName ?? "Kokoro";
-  // 内部自持选中 tab,初值取 initialTab。shell 主动开到不同 tab 时以 key 重挂载本组件重置初值
-  // (故此处无需 effect 同步 initialTab);内部切 tab 不改 shell 态、不重挂,选中态自然保持。
-  const [tab, setTab] = useState<SettingsTab>(initialTab);
+  // The shell is the single owner of the selected Settings tab. Keeping this
+  // dialog mounted while that value changes preserves child subscriptions and
+  // prevents the visible flash and duplicate reads caused by remounting.
+  const tab = initialTab;
   const [integrationId, setIntegrationId] =
     useState<SettingsIntegrationId | null>(() =>
       initialTab === "integration" ? integrationIdFromLocation() : null,
@@ -165,7 +166,6 @@ export function SettingsModal({
   }, [domainUpgradeOpen]);
 
   const selectTab = (next: SettingsTab): void => {
-    setTab(next);
     if (next !== "integration") setIntegrationId(null);
     if (next !== "account") setAccountLoginMethods(false);
     onTabChange?.(next);

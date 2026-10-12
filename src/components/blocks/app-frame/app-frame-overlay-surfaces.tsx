@@ -64,7 +64,6 @@ export function AppFrameOverlaySurfaces({
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
       {mounted && settingsTab !== null ? (
         <SettingsModal
-          key={settingsTab}
           {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
           preview={preview}
