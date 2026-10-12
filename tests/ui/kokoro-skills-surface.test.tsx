@@ -163,6 +163,29 @@ it("opens a stable server-backed detail dialog with real detail fields and examp
   expect(fetchMock.mock.calls.some(([path]) => path.endsWith("/GetSkill"))).toBe(true)
 })
 
+it("reopens a confirmed skill detail without a second request or loading flash", async () => {
+  const fetchMock = vi.fn(async (path: string) => {
+    if (path.endsWith("/ListHubSkills")) return response(catalog)
+    if (path.endsWith("/ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("/GetSkill")) return response({
+      skill: { id: "skill-manim", displayName: "Manim 动画师", userDescription: "使用 Manim 生成数学动画。", exampleQuestions: ["创建一个几何证明动画。"], added: false },
+      downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" },
+    })
+    throw new Error(`unexpected ${path}`)
+  })
+  vi.stubGlobal("fetch", fetchMock)
+  renderLive()
+
+  fireEvent.click(await screen.findByRole("button", { name: "查看技能详情 Manim 动画师" }))
+  await screen.findByText("创建一个几何证明动画。")
+  fireEvent.click(screen.getByRole("button", { name: "Close" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看技能详情 Manim 动画师" }))
+
+  expect(await screen.findByText("创建一个几何证明动画。")).toBeInTheDocument()
+  expect(screen.queryByText("正在加载技能详情…")).toBeNull()
+  expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("/GetSkill"))).toHaveLength(1)
+})
+
 it("does not retain a previous skill action while the next detail is loading", async () => {
   const catalogWithTwoSkills = {
     tagOptions: { values: [] },

@@ -35,16 +35,46 @@ type DetailSubscription = {
 // reads are immutable for a selected series, so both mounts share one owner
 // request; the last release aborts only after the replay window has elapsed.
 const detailInflight = new Map<string, DetailFlight>()
+const detailCache = new Map<string, ManusSkillDetail>()
+const fetchScopeIds = new WeakMap<typeof globalThis.fetch, number>()
+let nextFetchScopeId = 1
 
-function subscribeSkillDetail(skillId: string): DetailSubscription {
-  let flight = detailInflight.get(skillId)
+function currentFetchScope(): number {
+  const fetcher = globalThis.fetch
+  let id = fetchScopeIds.get(fetcher)
+  if (id === undefined) {
+    id = nextFetchScopeId
+    nextFetchScopeId += 1
+    fetchScopeIds.set(fetcher, id)
+  }
+  return id
+}
+
+function rememberDetail(key: string, detail: ManusSkillDetail): void {
+  // The directory revision is part of the key. A later publication therefore
+  // naturally reads a fresh detail record, while closing and reopening the
+  // same card keeps the already-confirmed panel in place instead of flashing
+  // a second loading state.
+  detailCache.delete(key)
+  detailCache.set(key, detail)
+  if (detailCache.size > 48) detailCache.delete(detailCache.keys().next().value!)
+}
+
+function subscribeSkillDetail(cacheKey: string, skillId: string): DetailSubscription {
+  const cached = detailCache.get(cacheKey)
+  if (cached !== undefined) return { promise: Promise.resolve(cached), release: () => undefined }
+
+  let flight = detailInflight.get(cacheKey)
   if (flight === undefined) {
     const controller = new AbortController()
-    const promise = getManusSkillDetail(skillId, controller.signal)
+    const promise = getManusSkillDetail(skillId, controller.signal).then((detail) => {
+      rememberDetail(cacheKey, detail)
+      return detail
+    })
     flight = { controller, promise, subscribers: 0 }
-    detailInflight.set(skillId, flight)
+    detailInflight.set(cacheKey, flight)
     const clear = (): void => {
-      if (detailInflight.get(skillId) === flight) detailInflight.delete(skillId)
+      if (detailInflight.get(cacheKey) === flight) detailInflight.delete(cacheKey)
     }
     void promise.then(clear, clear)
   }
@@ -59,8 +89,8 @@ function subscribeSkillDetail(skillId: string): DetailSubscription {
       flight.subscribers -= 1
       if (flight.subscribers !== 0) return
       queueMicrotask(() => {
-        if (flight?.subscribers !== 0 || detailInflight.get(skillId) !== flight) return
-        detailInflight.delete(skillId)
+        if (flight?.subscribers !== 0 || detailInflight.get(cacheKey) !== flight) return
+        detailInflight.delete(cacheKey)
         flight.controller.abort()
       })
     },
@@ -159,7 +189,8 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
     if (!open || sharedSummary && !sharedDownloadAdmitted || !skill?.skill_id && !sharedSummary) return
     if (sharedSummary || !skill?.skill_id) return
     let active = true
-    const subscription = subscribeSkillDetail(skill.skill_id)
+    const cacheKey = JSON.stringify([currentFetchScope(), boundary.subject ?? "anonymous", skill.skill_id, skill.revision_skill_id ?? null])
+    const subscription = subscribeSkillDetail(cacheKey, skill.skill_id)
     void subscription.promise.then((next) => {
       if (active) setDetail(next)
     }).catch(() => {
@@ -169,7 +200,7 @@ export function ManusSkillDetailDialog({ skill, open, busy = false, installation
       active = false
       subscription.release()
     }
-  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject])
+  }, [open, skill?.skill_id, skill?.revision_skill_id, sharedSummary, sharedDownloadAdmitted, sharedDownloadSubject, boundary.subject])
 
   const boundRevision = open && sharedSummary ? boundary.admitted ? sharedSummary.skill.skill_id : null : open && skill?.revision_skill_id !== undefined && detail !== null && detail.skill.id === skill.skill_id
     && detail.skill.version === skill.revision_skill_id ? skill.revision_skill_id : null
