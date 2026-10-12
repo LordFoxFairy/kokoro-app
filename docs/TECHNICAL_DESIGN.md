@@ -308,42 +308,6 @@ browser Hub client的新Connection read另以现client内局部strict helper施�
 
 <!-- R257-MCP-WEB-D0-TECH-END -->
 
-## R257-MCP-WEB-D0：本人 MCP Connection 页面消费者（2026-10-06；仅设计）
-
-**当前与目标。** Web `30aa83d70e9d54a804b4eaf8e2211abaa6cb02d9` 的正常 `McpProjectionRead` 仍请求 `/api/hub/self/mcp/servers`，解析并显示全局 Server declaration；Root 已在正常 tab 11 取得该 wrong-resource 200 RED。目标只把此 live read 切到 BFF 待发布的 public 8.0.0 `GET /v1/mcp/connections`，显示当前已准入 subject 的 active Connection 六字段。BFF D0 已提交 `d776194`，但机器/source尚未发布，故本节不编造BFF commit或digest；消费者源码必须等Root固定正式artifact后另卡实施。preview管理表单、Server注册/启停/删除不是此read的fallback，也不因此验收。
-
-### §8 放置与边界
-
-| 项 | 决定 |
-| --- | --- |
-| Owner | Platform拥有Connection/Connector/current authorization/Server；BFF发布本人public投影；Web只拥有同源adapter、严格consumer与页面请求生命周期。 |
-| 当前事实 | `src/hub/schemas.ts`定义Server projection，`src/hub/client.ts`的`listMcpProjections`请求servers，`src/ui/mcp/mcp-projection-read.tsx`分页展示Server；`src/app/api/hub/[...path]/route.ts`负责当前Session admission与可信BFF运输。 |
-| 采用方案 | 沿现`/api/hub/self/*`→BFF `/v1/*`、现HubClient、McpProjectionRead和public snapshot门原位替换资源；不建第二MCP client、store、query framework或直连Platform。 |
-| 身份/依赖 | browser只带HttpOnly session；adapter每次重新`admittedProductSession`并由服务器生成BFF身份头。禁止浏览器tenant/subject/header/body赋权，不把IAM后台资格或第三方帐号/费用当本人读取前置。 |
-| 数据/API | 无Web数据库、localStorage、IndexedDB、Redis、cookie字段或缓存事实；只内存保存当前actor下filters/cursor/page。固定BFF public artifact发布后，checked-in snapshot复制owner原字节并更新现generator provenance。 |
-| 删除项 | 删除live Server projection schema/path/client/UI字段及其preview假read；不保servers alias、双读、页面按Server过滤Connection或错误回退为empty。Server管理preview路径仍属显式preview分支，不冒live能力。 |
-| 验证 | contract snapshot mutation、Hub client/adapter真实Response、组件race/cancel/page/filter、原preview回归；最终Root正常登录A/B、empty/positive/分页/刷新/撤销与硬刷新浏览器。 |
-
-### 请求与页面生命周期
-
-HubClient目标输入为可选`connection_id/provider_key/limit/cursor`，由`URLSearchParams`各写一次；connection/provider filter改变时同步清cursor、历史和旧page并发新读。cursor只opaque传递，末页缺字段；前一页只使用本组件保存的访问历史，不解码/排序/重签。页面不按Server declaration去重或补名，同一server的多个connection分别显示。
-
-adapter只接受GET、`self/mcp/connections`与四个closed query；重复/未知/空值、ID/provider/limit/cursor边界在BFF socket前拒绝。它沿现Product Session准入生成request ID与BFF身份头，忽略浏览器伪造的`x-kokoro-*`。上游仍使用现`requestWithDomain`的总deadline、header/body cap、redirect拒绝和request.signal；响应须JSON、private no-store、合法request-id、strict closed success/error后才返回浏览器。401/403/429保持当前session语义；400是filter/cursor输入错误；502/503显式错误，不变空列表。
-
-browser Hub client的新Connection read另以现client内局部strict helper施加一次10秒总deadline，覆盖同源response headers、有限body读取、fatal UTF-8解码、JSON与Zod parse；成功/error body同限1MiB，超限、超时、取消、非法UTF-8或schema不合格分别收敛为现类型化错误。不得复用当前plain `fetch` + `response.json()`的无界`requestPublicRead`，也不得把legacy `readError`宽松解析带入新operation；helper只服务此正式read，不抽新网络framework或顺手重写Skills/其他Hub调用。
-
-`McpProjectionRead`的effect必须持本次actor marker、filter tuple、cursor与generation；cleanup主动AbortController.abort，而不只以boolean忽略回调。卸载、重试、filter变化、翻页、Session re-admission/A→B使旧request失效；迟到成功/失败不得覆盖新actor、新filter或已卸载视图。一次仅一个当前读，无自动遍历全页、后台预取或无限重试。loading/error/empty/ready/page控件保持；empty只表示本人此刻无可见active Connection，不提示已授权、已可调用或管理成功。六字段是strict传输闭集而非六列debug界面：Card主层只呈现provider与人类可读的“已连接”状态，opaque connection/connector/server ID仅放可访问的次要详情；transport可作低层详情，不展示内部permission、declaration、secret或原始owner诊断。
-
-### 后继最窄文件集（均未授权写入）
-
-1. 固定合同：`src/generated/bff-public-openapi.yaml`复制未来BFF正式8.0.0原字节；`scripts/generate-bff-team-client.mjs`与`scripts/generate-bff-agent-failure.mjs`只更新固定commit/digest并正规write/check，派生物由现生成器决定，禁止手改。`contract/README.md`只在正式pin片记录证据。
-2. consumer/adapter：`src/hub/schemas.ts`、`src/hub/client.ts`、`src/app/api/hub/[...path]/route.ts`、`src/ui/mcp/mcp-projection-read.tsx`；`mcp-content.tsx`现已挂此组件，除真实接线差异外不预改。若UI正式暴露两个filter需要新文案，沿现i18n字典完整补齐；不得硬编码技术标签或先建filter框架。
-3. 现测试：`tests/contract/bff-skills-mcp-public.test.ts`、`tests/hub/client.test.ts`、`tests/app/hub-proxy.test.ts`、`tests/ui/mcp-panel.test.tsx`；现`contract/api-contract.test.ts`及whole-public pin测试仅在固定artifact实际diff要求时更新，不为计数批改。
-
-有效RED必须让当前正常组件收到合法BFF Connection响应却因旧Server path/shape/字段而失败，而非ENOENT、future import、未登录或mock缺方法。正负门覆盖六字段closed shape、拒旧Server字段/额外secret、query单值与边界、filter清page、分页终止、同server多connection、不缓存empty、A→B/撤准入/重试/卸载迟到退役、错误不转empty，以及adapter零伪造身份。最后真实浏览器需本人合法Connection正控；正常empty只能验空态，不能私SQL/preview/假授权造数据。
-
-<!-- R257-MCP-WEB-D0-TECH-END -->
-
 ## T-C01.R255-PRESET-RETIRE（06:12）：旧 Agent preset 消费者退役设计（D0 阶段记录）
 
 本前缀记录实施前的 D0 收口决定，覆盖下方历史 AGENT-PRESET / namespace profile 选择说明，其他原文逐字保留；基线为 Web main aaf577dcfd7045c89bf2d68c80eff8e0e34ba152、Root 6455e04a7cf661068a1c7d106a2d0003527fc223，现已完成本片源码静态退役。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
@@ -509,79 +473,6 @@ Owner仍现Web Skills浏览器边界。沿现src/hub/schemas.ts唯一Validate六
 
 Root批准/tmp/r251-web-v2-consumer-preflight.md的现18路径，先真实Response V2接受/V1拒绝行为RED，再实施；权限、single-flight、unknown原key、扫描、ACK后权威GET、账号fence保持。原三D0 mixed后缀和系统mixed排除，不顺带auth/布局/交易设计。Root独审/重跑与精确提交后真实持久owner选包→扫描→Validate→Publish→Install/启停/移除→刷新，工程门不算页面完成。当前未改源码/生成。
 
-## R242-WEB-RENAME-D0：Project name consumer design gate（2026-10-05；仅设计）
-
-### 当前态、owner 与证据
-
-本节是 R242 Web consumer 的设计门；它只定义页面侧如何消费 BFF 已交付的 Project name command，不宣称本仓已有实现、页面验收或用户页面通过。Project 的 name、rename receipt、幂等及权限事实 owner 是 `kokoro-bff`；Web `kokoro` 只拥有同源浏览器适配、短生命周期编辑意图和受版本围栏保护的页面投影。正式 producer 基线为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`，public contract `7.2.0`，OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。Web formal 归档基线为 `5e0963648db0cb0e1a60de42ea025670b32aba85`；本候选副本仅供本设计门写入。
-
-本轮边界更正：BFF owner 响应严格要求 `Cache-Control: no-store`；Web same-origin browser-private 响应严格要求现 canonical `Cache-Control: private, no-store, max-age=0`。两层不共用宽松或 `includes` 判定。
-
-现有页面有 Workspace rail 的 Project 导航和 workspace header 的 Project menu；header menu 当前只有 Account/Upgrade，`use-app-frame-project.ts` 具备 create/instruction/resource/skill/openProject 入口但没有 rename，`use-project-list.ts` 的既有刷新也没有“ACK 后强制 canonical detail + list”语义。因此“BFF producer 已完成”不等于 Web 页面或整页验收完成。本节保留这一当前缺口，不把受控 peer、历史审计或旧 authentication evidence 升格为用户页面证据。
-
-### 放置表与准入
-
-| 项 | 当前事实 | R242-D0 准入结论 |
-| --- | --- | --- |
-| Owner | BFF 持久化 Project name/receipt；Web 仅浏览器适配与临时编辑态 | 不在 Web 建 DB、schema、cache 或第二 name owner |
-| browser-private adapter | 现有 `src/app/api/hub/[...path]/route.ts` 是通用转发，未提供 rename 的 exact dispatch、owner request-id 保留与 strict response gate | 未来在现同源 API 边界加精确 rename 分支；不得以 generic PATCH forwarding 作为验收 |
-| wire/parser | Web contract/client 目录已有按能力聚合的普通文件位置 | 未来在现目录增 `src/contract/project-rename.ts`；同源 server helper 使用 `src/lib/server/project-rename.ts`；运行时先 strict parse，再进入状态 |
-| feature orchestration | 现有 project hook/header/menu 承担页面编排 | 未来扩展 `src/features/app/project-rename.ts` 与现 hook/header/menu；不建通用 mutation framework |
-| tests | 当前 formal 仍缺本命令的 Web consumer 证据 | 实施后须增加 parser/adapter/route/real Next+Chromium 及 BFF-backed acceptance；本 D0 不改 test |
-| generated/contract/package | producer contract 由 BFF owner 维护；Web 不复制可编辑 owner 事实 | 本 D0 不改 generated、contract、package、lock 或 source；未来只按 artifact repin 规则更新只读生成物 |
-
-允许文件集严格引用 `/tmp/r241-web-project-rename-consumer-audit.md` §3–4：新增 `src/contract/project-rename.ts`、`src/features/app/project-rename.ts`、`src/lib/server/project-rename.ts`；现 `src/app/api/hub/[...path]/route.ts` 仅增加 exact dispatch；现 `src/components/blocks/app-frame/use-app-frame-project.ts`、`src/features/app/use-project-list.ts`、`src/components/blocks/app-frame/{app-frame.tsx,app-frame-main-surface.tsx}`、`src/components/blocks/workspace-header/{workspace-header.types.ts,workspace-header.tsx,workspace-header-session-actions.tsx,workspace-header-project-menu.tsx}`、`src/i18n/messages.ts` 及当前语言字典按职责接线。其余 source/test/pin/generated/contract/package/lock/Git/共享资源本阶段不写；未来 repin 仅按下方 artifact 规则处理。
-
-准入是闭集：canonical `project_<lowercase UUID>` target、一个稳定 visible-ASCII `Idempotency-Key`（长度 1..128，禁止 comma 与 space）、一个 JSON body、exact PATCH 端点、同源 session、strict response parser、单次 10 秒 monotonic 总预算、ACK 后 target detail GET 再 collection list、subject/route/generation fence、显式 retry。slug、alias、导航路径、localStorage、IndexedDB、Redis、SQL、owner SDK、generic mutation、自动重试和本地持久 name 均在闭集外。
-
-### 目标流程与状态机
-
-1. 用户在现有 Project menu 进入 rename dialog；draft 只在 mounted 页面内保存 raw input。Escape/Cancel 在发送前结束 intent，产生 0 次 PATCH、0 次 owner receipt；发送后的取消只终止本地等待并进入 unknown/read-authority 分支，不假设 owner 没有写入。
-2. Save 先以 ECMAScript `trim()` 生成 `normalizedName`：长度 1..160 个 UTF-16 code units，拒绝 NUL 与 lone surrogate；内部空白、大小写保持原值；不执行 NFC normalization。保存 `targetProjectId`、normalized body 与一次新生成的稳定 visible-ASCII key（1..128，禁止 comma/space）；pending 时禁用重复 Save，简单方案同时禁止关闭。
-3. browser-private exact adapter 仅将 `PATCH /api/hub/projects/{canonicalId}/name` 映射到 BFF `PATCH /v1/projects/{canonicalId}/name`，转发 JSON、`Content-Type`、唯一 `Idempotency-Key`；不经过会把 path/body 重新解释的通用动作代理。请求 headers、body、strict parse 与 response 全部共用 10 秒 monotonic 总预算；finally 清理 timer、abort listener 和本地 pending。
-4. 仅 HTTP 200、`x-request-id` bounded、`cache-control: private, no-store, max-age=0`（owner upstream 为 `no-store`）、闭合 JSON、`data.project_id === targetProjectId` 且 `data.name === normalizedName` 才是 ACK accepted。ACK 是原命令 receipt，不是当前 Project resource，不能直接 `setName` 或作为 sidebar/h1 的唯一投影。
-5. ACK accepted 后，先使旧 detail/list read generation 失效并 abort 可中止的旧读，强制对 frozen target 发 fresh canonical GET，再发 fresh collection list。只有同 subject、同 route scope、同 generation 的 fresh owner read 才能更新 sidebar、header、h1 或导航；不因所有导航一律增加 GET。
-6. unknown（503、网络、超时、abort、坏 headers/body、严格不匹配）保留原始 input、canonical target、同一个 key/body；只允许用户显式以同一意图 retry，且 retry 是同一 PATCH 语义。GET 失败只允许 GET-only retry；不自动重试、不换 key、不创建兼容 alias。
-
-页面状态为 `idle → pending → confirming-read → confirmed | unknown | error`。`confirmed` 只在 fresh canonical GET 与 collection list 都完成后对页面可见；ACK 到 fresh read 之间显示既有 loading/partial-safe 状态，不把 receipt 临时写成资源。401/403 清除敏感编辑 intent，abort/fence 其余结果；新 subject、route 或 epoch 的晚到 A 结果不得覆盖 B dialog、draft、focus、name 或 navigation。
-
-### 依赖方向与未来实现切片
-
-允许：页面组件/hooks → feature orchestration → contract/parser 与同源 adapter → BFF public contract。页面仅读同源 `/api/*`；不得直连 IAM、System、Agent、Platform、Billing、Storage、Scheduler，亦不得读 owner DB/Redis。BFF producer 的 schema、错误代码和 request-id 是输入事实；Web 不复制可编辑 owner 事实。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。
-
-后续实现按小切片顺序：
-
-1. 在现 contract/client 同目录加入严格 rename schema/parser 和 10 秒预算 helper，补 parser unit。
-2. 在现 API route 加 exact rename dispatch、request-id/cache-control 保留和 adapter error mapping，补 route/integration。
-3. 扩现 hook/header/menu，加入 pending/unknown/confirmed-read 状态、focus/keyboard/i18n token 和 generation fences。
-4. 用真实 Next/Chromium、真实 BFF PostgreSQL receipt 与 fresh GET/list 验证页面；再执行 Web owner 全部门禁。
-
-不新建 `utils/`、通用 mutation 层、第二 project store、server cache 或独立 rename 进程；不移动现有文件，不复制 BFF 可编辑 contract。
-
-### 设计门、失败安全与退出条件
-
-必须证明：0 PATCH 的 pre-send cancel；稳定 key/body 的显式 retry；严格 ACK closure；ACK 不直投资源；ACK 后 detail→list 顺序；旧 read generation、subject/route/epoch 和 auth fence；503/unknown 不丢原 intent；GET failure 不重发 PATCH；pending 无重复 Save/关闭；同源 exact path；10 秒总预算及 cleanup；现有 i18n/design token/accessibility/reduced-motion 状态复用。
-
-本 D0 的退出条件仅是三份当前设计与 producer pin 对齐、旧 formal 文本作为 exact suffix 保留、实现边界闭集且无跨 owner 写入；它不表示 source、test、build、e2e 或整页已通过。验证命令在实现交接后由 Root 在主仓执行：`pnpm contract`、`pnpm test:architecture`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`、`pnpm test:e2e`。
-
----
-
-## R239 当前认证与工作区恢复边界
-
-Web 首文档采用 server-first Product Session admission：可信 Host、配置与现有 HttpOnly session/generation/tombstone/expiry 校验通过时，只向客户端传递无 claims 的 `serverAdmitted` 布尔值；anonymous 固定进入 `/login`，配置或 Redis 失败 fail closed。客户端 checking 阶段只挂载 data-free、禁用的工作区壳，不挂载 Runtime、Conversation、draft 或 owner clients。
-
-浏览器 probe 成功后才挂载 Runtime。可信 anonymous 同步卸载 Runtime 并且每个 mounted generation 只发起一次 native `/login`，不恢复旧 timer、自动 Retry 或可见中转页；checking 超时进入 unavailable 时卸载 admission 壳，显示显式 Retry，Retry 仍不得触发登录跳转或私有 owner I/O。
-
-首次 Conversation snapshot 的 headers、body、严格解析与全部 process 分页共享单一 10 秒 monotonic 预算；timeout、abort、dispose 或 scope/generation 改变均不采用 partial/late 结果，显式 Retry 从 owner 重读。pagehide 只 flush 已捕获的 exact pending draft key/value，不延长 debounce，也不复活已清空草稿。
-
-受控真实 Next/Chromium 系统矩阵用于验证本切片的 server-first、data-free、恢复与 fail-closed 边界，但不证明原用户 3310 页面根因或恢复，也不构成真实费用闭环。
-
-下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
-
-## R238 当前认证与恢复准入
-
-本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
-
 ## R186-W-SNAPSHOT-DEADLINE：首次水合单一总预算（2026-10-04；tests-first）
 
 首次Conversation snapshot与其全部process分页共用一个私有固定10秒monotonic总预算，覆盖等待headers、读取body、解析及逐页耗尽，后续页面不得重置时钟。scope/conversation generation变化、engine dispose或预算耗尽都abort整次读取；partial snapshot/process不采用、不先开stream。首次超时沿现hydration error surface与显式Retry收敛，保草稿且不推断Run terminal；重试重新读取owner真态。已建立的AG-UI stream及snapshot后active-run reattach继续使用各自现有生命周期，不受该短预算截断。本片不新增wire、API、schema或第二网络协议。
@@ -604,20 +495,6 @@ R176真实Chromium对照证明：纯HTML与Next在held native document navigatio
 
 正式 `/api/auth/session` 成功且 auth-index fence 通过后才首次 mount Runtime；此前 ProjectReadBoundary 仍 blocked，所有本地旧 Conversation/draft与 BFF sessions/models/agents/Chat I/O 为零。首 probe 401/unavailable 必须卸下 booting shell并走现 unavailable UI；server-admitted document 的 anonymous 撤权保留同一 data-free booting壳并走现 native sign-in，不显示旧会话；成功后的 focus/revocation 与身份切换规则不变。局部目标文件为现 layout、AppGate、AppFrame props/AppFrame（必要时现 MainSurface presentation）；现 data hooks不改。旧 document 卡住的实际原因仍未知。
 
-## R167-SERVER-FIRST：`/app` 首文档 Product Session gate（2026-10-03；待 tests-first）
-
-当前 `src/app/app/layout.tsx` 的 SSR 无条件渲染 client `AppGate`，而生产态 `useSessionProbe` 初值固定为 `checking`，所以无会话的首个 HTML 也只能先输出 `runtime-loading`，再依赖水合、浏览器探针和 document navigation 离开。该独立缺口不等同于原 `conv_ffd7` 的直接根因；Root 已在同一 IAB 的新文档真实打开并 reload 原会话，旧文档 21/22 仍控制超时。
-
-| 放置项 | 决定 |
-| --- | --- |
-| Owner/目标 | Web 继续唯一拥有 Product Session cookie 解码、Redis generation/tombstone admission 与首文档 UX gate。初始 `/app` 及 nested route 在服务端先判定 Product Session；anonymous 不再等待水合后才离开 spinner。 |
-| 当前事实 | `product-session.ts` 的 `currentProductSession` 已复用 cookie decode/expiry 与 Redis inspection；`/api/auth/session` 另检查 `accessExpiresAt`。Redis owner 操作已有 2 秒界。现 layout 没有 server admission，AppGate 仍负责挂载后的 focus/visibility/retry/revocation。 |
-| 采用位置 | 扩展现 `src/app/app/layout.tsx` 作为 `/app/**` 首文档共同边界；从现 `oidcRpConfig(process.env)` 取得 session 所需配置，并复用 `currentProductSession` 加 access expiry。layout 优于全局 proxy：proxy 保持 security headers/IAM relay，业务 admission 留在现 app segment owner。若需收口 access-expiry 判断，只在现 `product-session.ts` 增加窄 helper；不建新文件、模块或认证抽象。 |
-| 状态/失败 | null、stale generation/tombstone 或 access expired 固定 `redirect("/login")`。配置或 Redis 失败必须 fail closed 到有限 unavailable 首屏，不误当 anonymous、不启动 OIDC、不传 claims/access/session id/subject 给 client。显式 preview 仍只允许非 production 已有开关。成功才渲染原 AppGate，且 client/BFF 每请求 admission 不删。 |
-| 淘汰/验证 | 淘汰 anonymous 首文档必须先 SSR spinner 再 client redirect 的唯一依赖；不删除 AppGate 后续 recheck。先在现真实 Next fixture 对 `/app` 与 `/app/skills` 无 cookie 写 RED：响应只能是实际 3xx Location `/login`，或 Next streaming redirect 的 200 表达；两者均不得含 `runtime-loading`。再覆盖 active cookie、expired/stale、Redis/config failure 与 preview。 |
-
-首个测试阶段只改三份 D0 与现 `tests/system/oidc-rp-next-http.integration.test.ts`；后继源码候选严格限现 `layout.tsx`、`product-session.ts`、`app-gate.tsx`、`use-session-state.ts`。Server Component layout 在 client navigation 可复用，因此本片只改善 initial document，不取代已挂载 tab 的 R165 recovery。redirect 的具体 HTTP status 必须以真实 Next 输出为准；不预写固定 307，streaming redirect 也必须严格证明固定 `/login` 且没有 spinner。
-
 ## R170-W-MOVE-UI：ACK-gated Conversation Move（2026-10-04；候选已实现，发布待 Root 集成）
 
 Root 已裁决运行中 Move：strict matching ACK 后立即导航到 target scope 并保留 canonical Conversation query；target-scope engine 从 owner snapshot/replay 继续观察已准入 Run，释放旧 scoped engine/stream不得发 cancel，下一条新消息才按新scope准入。非active行成功只刷新source list，绝不抢焦点。
@@ -633,18 +510,34 @@ Root 已裁决运行中 Move：strict matching ACK 后立即导航到 target sco
 R194-W1只闭合当前mounted scope内的三个真实RED：late matching ACK后的owner GET、owner已commit但响应丢失的原key恢复，以及503/409 `idempotency_in_progress` unknown分类。最小源码仍限现`machine.ts`与`app-frame.tsx`及其既有邻测试；不改wire/client/adapter，不建page registry、park、verified actor或第二binding truth。matching ACK后的本地cache处理继续best-effort，异常不得把confirmed改为unknown或中断dispose。跨scope unknown/late ACK、route未dispose及blocked-storage硬刷新归W2 OPEN；true-Next fixture不冒充真实BFF/PostgreSQL或原3310已启用。
 
 R195-W2把一次Move command的内存生命周期从view engine提升到当前页面的单槽coordinator，但不提升为业务事实：它冻结verified subject、canonical session/target与原commandId/body，pending请求继续使用现client的10秒总预算；scope切换、React卸载和旧engine `dispose()`只解除view subscriber，不abort或清除该operation，也不park旧engine/stream/reconnect。matching ACK先结算owner outcome，并当下以receipt已校验的source scope+sessionId精确驱逐已有内存与持久browser Conversation索引；这是view-cache reconcile，不调用owner DELETE、不删除Message/Run、不触碰其他scope或Project B草稿。source与target只递增有界per-scope version，使ACK后首页GET采用新的实际request identity且不复用pre-ACK inflight；target绝不插入假行，其他scope不得刷新。驱逐在每个ACK当下完成，不保存等待重挂载的per-session token，不会被下一次Move覆盖，也不阻塞连续Move或累积map/journal。storage写失败不把owner ACK改成unknown，已变更的当前document内存索引仍抑制旧source复活，blocked-storage硬刷新继续OPEN；分页只reconcile实际读取的canonical page，不扩未加载页扫描协议。
-unknown保同一冻结command，mount/focus/GET均不得重发，只有原subject下用户明确Retry才调用一次同key/body；closed reject释放operation。身份生命周期使用三个显式动作：`admitVerifiedSubject(subject)`只接受可信probe事实，`suspendVerifiedSubject(subject)`在temporary unavailable时禁start/retry但允许同epoch pending outcome结算，`revokeSubject(reason)`仅用于可信anonymous、verified subject变化、logout、pagehide或真正document coordinator teardown。普通probe effect cleanup与React StrictMode replay不得revoke。每个command捕获slot identity、subject与epoch；所有then/catch/ACK invalidation写入前同时核三者。revoke先递增epoch、abort pending并清slot，随后abort rejection不得复活unknown或发布invalidation；React订阅者只在自身cleanup时unsubscribe，不由revoke清除仍mounted listener。同subject恢复只解除suspend，不自动retry。document唯一pagehide handler永久且幂等安装，每次pagehide都revoke；browser index marker仍不是subject proof。
+
+unknown保同一冻结command，mount/focus/GET均不得重发，只有原subject下用户明确Retry才调用一次同key/body；closed reject释放operation。身份生命周期使用三个显式动作：`admitVerifiedSubject(subject)`只接受可信probe事实，`suspendVerifiedSubject(subject)`在temporary unavailable时禁start/retry但允许同epoch pending outcome结算，`revokeSubject(reason)`仅用于可信anonymous、verified subject变化、logout、pagehide或真正document coordinator teardown。普通probe effect cleanup与React StrictMode replay不得revoke。每个command捕获slot identity、subject与epoch；所有then/catch/ACK invalidation写入前同时核三者。revoke先递增epoch、abort pending并清slot/subscribers，随后abort rejection不得复活unknown或发布invalidation；同subject恢复只解除suspend，不自动retry。pagehide listener由页面coordinator owner安装一次并幂等移除，browser index marker仍不是subject proof。
 
 放置比较沿已批准方案收敛：不采用`retainBrowserEngine`增加owner或park engine，因为这会错误延长整套store/SSE/reconnect生命周期；也不把operation塞入`use-session-list`、localStorage或通用registry。采用同目录唯一普通文件`src/ui/shell/conversation-move-coordinator.ts`承接单槽与epoch/subject，`page-clients.ts`只构造唯一document实例、管理一次pagehide，并按source scope+sessionId调用通用browser index reconcile；这比继续扩写page client更符合单一变化原因。`use-session-state.ts`把可信probe的admit/suspend/revoke事实送入coordinator，`app-gate.tsx`只作生命周期接线。`app-frame.tsx`改为订阅/发起/显式retry与view fence，不再让scope engine拥有command。`use-session-list.ts`只承接per-scope version与post-ACK request identity；现`use-conversation-list.ts`按fresh owner membership正常收敛合成视图，不保存Move待办。`machine.ts`删除Move intent、retry、abort与`confirmedActiveMove`双轨，只保不含target/retry/command的通用local Conversation cache reconcile能力。必要的现props/types与邻测试随职责调整，不扩client/adapter/wire。
 
 后继GREEN允许的最小source集合固定为新增`src/ui/shell/conversation-move-coordinator.ts`、现`src/ui/shell/page-clients.ts`、`src/ui/auth/use-session-state.ts`、`src/ui/auth/app-gate.tsx`、`src/components/blocks/app-frame/app-frame.tsx`及必要现types、`src/ui/rail/use-session-list.ts`、`src/ui/shell/use-conversation-list.ts`、`src/engine/machine.ts`及必要现engine types；对应只改现page-client/auth/machine/AppFrame/session-list/conversation-list邻测试与冻结R195 system case。优先复用现`removeConversation`与engine commit path，若无法在这些职责内做到精确cache reconcile须先报告。只有静态引用证明旧engine Move transport接线必须删除时，才另请Root授权`execution-adapter.ts`，不得借机改client wire。禁止修改公开contract、Move client/adapter语义、CSS/i18n、Project owner或BFF。实现必须在同片删除engine与coordinator并存的command truth、旧engine retry入口及只刷新当前view的W1接线，不保兼容alias/fallback。
 
+---
+
+## R167-SERVER-FIRST：`/app` 首文档 Product Session gate（2026-10-03；待 tests-first）
+
+当前 `src/app/app/layout.tsx` 的 SSR 无条件渲染 client `AppGate`，而生产态 `useSessionProbe` 初值固定为 `checking`，所以无会话的首个 HTML 也只能先输出 `runtime-loading`，再依赖水合、浏览器探针和 document navigation 离开。该独立缺口不等同于原 `conv_ffd7` 的直接根因；Root 已在同一 IAB 的新文档真实打开并 reload 原会话，旧文档 21/22 仍控制超时。
+
+| 放置项 | 决定 |
+| --- | --- |
+| Owner/目标 | Web 继续唯一拥有 Product Session cookie 解码、Redis generation/tombstone admission 与首文档 UX gate。初始 `/app` 及 nested route 在服务端先判定 Product Session；anonymous 不再等待水合后才离开 spinner。 |
+| 当前事实 | `product-session.ts` 的 `currentProductSession` 已复用 cookie decode/expiry 与 Redis inspection；`/api/auth/session` 另检查 `accessExpiresAt`。Redis owner 操作已有 2 秒界。现 layout 没有 server admission，AppGate 仍负责挂载后的 focus/visibility/retry/revocation。 |
+| 采用位置 | 扩展现 `src/app/app/layout.tsx` 作为 `/app/**` 首文档共同边界；从现 `oidcRpConfig(process.env)` 取得 session 所需配置，并复用 `currentProductSession` 加 access expiry。layout 优于全局 proxy：proxy 保持 security headers/IAM relay，业务 admission 留在现 app segment owner。若需收口 access-expiry 判断，只在现 `product-session.ts` 增加窄 helper；不建新文件、模块或认证抽象。 |
+| 状态/失败 | null、stale generation/tombstone 或 access expired 固定 `redirect("/login")`。配置或 Redis 失败必须 fail closed 到有限 unavailable 首屏，不误当 anonymous、不启动 OIDC、不传 claims/access/session id/subject 给 client。显式 preview 仍只允许非 production 已有开关。成功才渲染原 AppGate，且 client/BFF 每请求 admission 不删。 |
+| 淘汰/验证 | 淘汰 anonymous 首文档必须先 SSR spinner 再 client redirect 的唯一依赖；不删除 AppGate 后续 recheck。先在现真实 Next fixture 对 `/app` 与 `/app/skills` 无 cookie 写 RED：响应只能是实际 3xx Location `/login`，或 Next streaming redirect 的 200 表达；两者均不得含 `runtime-loading`。再覆盖 active cookie、expired/stale、Redis/config failure 与 preview。 |
+
+首个测试阶段只改三份 D0 与现 `tests/system/oidc-rp-next-http.integration.test.ts`；后继源码候选严格限现 `layout.tsx`、`product-session.ts`、`app-gate.tsx`、`use-session-state.ts`。Server Component layout 在 client navigation 可复用，因此本片只改善 initial document，不取代已挂载 tab 的 R165 recovery。redirect 的具体 HTTP status 必须以真实 Next 输出为准；不预写固定 307，streaming redirect 也必须严格证明固定 `/login` 且没有 spinner。
 
 ---
 
-## R158-W-MOVE-D0：Conversation Move consumer 第一片（2026-10-04；A候选待 Root 集成）
+## R158-W-MOVE-D0：Conversation Move consumer 第一片（2026-10-04；候选已实现，发布待 Root 集成）
 
-本仓只消费 BFF 已发布文档基线 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码基线 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a` 的唯一 public OpenAPI 7.1，canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`；BFF 继续唯一拥有 Conversation 归属、Move receipt 与事务。本A片固定public 7.1 pin、strict Move client与browser-private adapter；engine/UI归后继B片，原3310运行副本尚未因此启用。本D0不把fixture验收写成真实BFF发布，也不关闭原用户 `conv_ffd7` loading P0。
+本仓只消费 BFF 已发布文档基线 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码基线 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a` 的唯一 public OpenAPI 7.1，canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`；BFF 继续唯一拥有 Conversation 归属、Move receipt 与事务。当前混合候选已连接Move client/engine/UI，但原3310运行副本尚未因此启用；本 D0 不把fixture验收写成真实BFF发布，也不关闭原用户 `conv_ffd7` loading P0。
 
 | 放置项 | 决定 |
 | --- | --- |
@@ -663,7 +556,7 @@ Move 失败新增私有 `src/engine/conversation-move-error.ts`，而不扩写�
 
 第一片后继精确 source 是 `src/generated/bff-public-openapi.yaml`、`scripts/generate-bff-team-client.mjs`、`scripts/generate-bff-agent-failure.mjs`、`src/generated/bff-agent-failure.ts`、`src/generated/bff-team/**`（正规生成的既有 15 文件）、新增 `src/contract/conversation-move.ts` 与 `src/engine/conversation-move-error.ts`、现 `src/contract/http.ts`、`src/contract/paths.ts`、`src/engine/client.ts`、`src/dev/preview-transport.ts`、`src/app/api/session/[...path]/route.ts` 与 `src/lib/server/bff-response.ts`；测试替身连带 `tests/engine/fakes.ts`。route/helper只增加 Move operation-scoped 识别/投影，其余 generic envelope路径与`client-error.ts`原行为不变。机器/行为 RED 限现 `contract/api-contract.test.ts`、`tests/contract/http-paths.test.ts`、`tests/engine/client.test.ts`、新增专属 `tests/engine/conversation-move-error.test.ts`、`tests/dev/preview-transport.test.ts`、`tests/app/session-proxy.test.ts`、`tests/server/bff-response.test.ts`、`tests/system/session-route-http.integration.test.ts`（仅mock-auth direct route正负例，不称真实Next），以及必须复用真实 Next+Redis+Product cookie fixture做正向无`meta` owner response与slow body总预算的 `tests/system/oidc-rp-next-http.integration.test.ts`。client测试必须实际覆盖pre-aborted caller零fetch、在途caller abort、无caller signal的10秒timeout、slow body也受同一预算、success/error/abort后timer与listener清理；专属Error纯测试不能替代这些生命周期与真Next系统门。现 `tests/system/product-bff-next-http.integration.test.ts` 的dead-Redis负例不是该正向门。固定 blob 的现消费者还包括 `tests/contract/bff-agent-failure-public.test.ts`、`bff-team-public.test.ts`、`bff-library-{artifact,file}-public.test.ts`、`bff-project-{create,resource}-public.test.ts`、`bff-skills-mcp-public.test.ts`；升级 provenance/digest 时必须全部保持旧 fragment 断言并正规 check，不能只改摘要。
 
-A片只证明machine pin、strict schema/client和same-origin adapter的静态/隔离测试边界；engine/UI单意图、ACK后投影、运行中会话保持与真实用户journey归B片。无新目录、进程、依赖、公开Web route、SQL/schema/Redis/browser persistence。
+第一片的machine pin、strict schema/client和same-origin HTTP已被R170候选消费；其单意图、ACK后导航/来源缓存失效与运行中会话保持仍不新增目录、进程、依赖、公开Web route、SQL/schema/Redis/browser persistence。
 
 ---
 

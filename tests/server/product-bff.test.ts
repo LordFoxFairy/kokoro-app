@@ -61,4 +61,5 @@ describe("Product BFF admission", () => {
     expect(headers.get("x-kokoro-principal-id")).toBeNull();
     expect(headers.get("x-kokoro-tenant-id")).toBeNull();
   });
+
 });

@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { hasHubNoStoreDirective, type HubClient } from "@/hub/client"
-import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
+import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 export const SKILL_CATALOG_RESOURCE_KEY = "hub/skills/standalone-catalog"
 
@@ -17,6 +17,12 @@ const categories = {
 } as const
 
 type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
+type InstalledSkill = z.infer<typeof manuscriptListSchema>["userAddedSkills"][number]
+type ManusSkillHubClient = Omit<HubClient, "listSkillCatalog"> & {
+  listSkillCatalog: (
+    input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal },
+  ) => Promise<SkillCatalog>
+}
 
 async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", body: unknown, schema: T, signal?: AbortSignal): Promise<z.infer<T>> {
   const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
@@ -110,14 +116,42 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
   }
 }
 
+function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"): SkillCard {
+  const updatedAt = [skill.updatedAt, skill.addTime, skill.createdAt]
+    .map((value) => value === undefined ? Number.NaN : Date.parse(value))
+    .find(Number.isFinite)
+  return {
+    name: skill.displayName ?? skill.name ?? skill.id,
+    description: skill.userDescription ?? skill.description ?? "",
+    content_hash: skill.id,
+    scope,
+    enabled: skill.enabled ?? false,
+    ...(updatedAt === undefined ? {} : { updated_at: Math.floor(updatedAt / 1000) }),
+  }
+}
+
 /**
  * Keeps the existing page component while replacing its retired flattened
  * catalog transport with the Manus-compatible BFF methods. The adapter is a
  * read projection only; mutations remain on the typed installation boundary.
  */
-export function createManusSkillHubClient(base: HubClient): Omit<HubClient, "listSkillCatalog"> & { listSkillCatalog: (input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal }) => Promise<SkillCatalog> } {
+export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient {
   return {
     ...base,
+    listSkillPool: async (): Promise<SkillCard[]> => {
+      const installed = await post("ListSkills", {}, manuscriptListSchema)
+      const cards = [
+        ...installed.userAddedSkills.filter((skill) => skill.added !== false).map((skill) => toInstalledCard(skill, "personal")),
+        ...installed.officialSkills.filter((skill) => skill.added === true).map((skill) => toInstalledCard(skill, "official")),
+      ]
+      const seen = new Set<string>()
+      return cards.filter((skill) => {
+        const key = `${skill.scope}/${skill.content_hash}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    },
     listSkillCatalog: async (input = {}): Promise<SkillCatalog> => {
       const [hub, installed] = await Promise.all([
         post("ListHubSkills", {

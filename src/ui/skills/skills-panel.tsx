@@ -35,7 +35,6 @@ import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 import { GithubImportDialog } from "./github-import-dialog"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { SkillDetailDialog } from "./skill-detail-dialog"
-import { PersonalSkillsRead } from "./personal-skills-read"
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target
@@ -140,11 +139,15 @@ type SkillsContentProps = {
 }
 
 export function SkillsContent(props: SkillsContentProps) {
-  if (props.preview !== true) return <PersonalSkillsRead client={props.client} embedded={props.embedded ?? false} />
-  return <PreviewSkillsContent {...props} />
+  return <InstalledSkillsContent {...props} />
 }
 
-function PreviewSkillsContent({ client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
+/**
+ * The same installed-skill surface is used in preview and live sessions. The
+ * client is the only data seam, so the live Settings page never falls back to
+ * the older publisher-management layout with a different information model.
+ */
+function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const githubReturnFocusRef = useRef<HTMLElement | null>(null)

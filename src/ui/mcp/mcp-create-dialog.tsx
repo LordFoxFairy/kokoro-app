@@ -11,6 +11,7 @@ import type { McpCreateMode } from "./mcp-panel-model"
 import { CustomMcpForm } from "./mcp-custom-form"
 import { JsonMcpImportForm } from "./mcp-json-import-form"
 import { UrlMcpForm } from "./mcp-url-form"
+import { CustomApiDialog } from "./connector-catalog-dialog"
 
 export function McpCreateDialog({
   client,
@@ -32,6 +33,18 @@ export function McpCreateDialog({
   const complete = async (): Promise<void> => {
     await onDone?.()
     close()
+  }
+
+  if (mode === "api") {
+    return (
+      <CustomApiDialog
+        client={client}
+        open={open}
+        onOpenChange={onOpenChange}
+        returnFocusRef={returnFocusRef ?? { current: null }}
+        {...(onDone === undefined ? {} : { onDone })}
+      />
+    )
   }
 
   return (

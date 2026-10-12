@@ -2,11 +2,30 @@
 // 查表），未译键在解析层回退中文源。新增文案 = 这里加一行 zh key；各语言译文单独维护。
 // 新增一种语言 = 在 Locale/LOCALES 加码 + overlays.ts 挂上(不改解析层)。
 
-export type Locale = "zh" | "en" | "ja" | "ko" | "es" | "fr" | "de" | "pt" | "ru"
+export type Locale =
+  | "zh"
+  | "en"
+  | "ja"
+  | "ko"
+  | "es"
+  | "fr"
+  | "de"
+  | "pt"
+  | "ru";
 
-export const LOCALES: readonly Locale[] = ["zh", "en", "ja", "ko", "es", "fr", "de", "pt", "ru"]
-export const DEFAULT_LOCALE: Locale = "zh"
-export const LOCALE_STORAGE_KEY = "kokoro.locale"
+export const LOCALES: readonly Locale[] = [
+  "zh",
+  "en",
+  "ja",
+  "ko",
+  "es",
+  "fr",
+  "de",
+  "pt",
+  "ru",
+];
+export const DEFAULT_LOCALE: Locale = "zh";
+export const LOCALE_STORAGE_KEY = "kokoro.locale";
 
 // 各语言的母语显示名(语言切换器用;不参与翻译)。
 export const LOCALE_NAMES: Record<Locale, string> = {
@@ -19,20 +38,25 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   de: "Deutsch",
   pt: "Português",
   ru: "Русский",
-}
+};
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
   "firstSite.renameProject": "重命名项目",
   "firstSite.projectName": "项目名称",
-  "firstSite.projectRenameDescription": "名称确认后将重新读取当前项目；会话与草稿保持不变。",
-  "firstSite.projectRenameInvalid": "请输入 1–160 个字符的项目名称，不含无效字符。",
+  "firstSite.projectRenameDescription":
+    "名称确认后将重新读取当前项目；会话与草稿保持不变。",
+  "firstSite.projectRenameInvalid":
+    "请输入 1–160 个字符的项目名称，不含无效字符。",
   "firstSite.projectRenameForbidden": "当前身份无权改名，请检查登录状态。",
   "firstSite.projectRenameSaving": "正在提交改名…",
   "firstSite.projectRenameReading": "正在核对当前项目名称…",
-  "firstSite.projectRenameReadFailed": "改名请求已确认或待核对。读取失败，请仅重新读取项目。",
-  "firstSite.projectRenameUnknown": "结果未知。重试将复用同一改名请求，不会创建新操作。",
-  "firstSite.projectRenameRejected": "改名请求被拒绝，请核对当前项目后重新编辑。",
+  "firstSite.projectRenameReadFailed":
+    "改名请求已确认或待核对。读取失败，请仅重新读取项目。",
+  "firstSite.projectRenameUnknown":
+    "结果未知。重试将复用同一改名请求，不会创建新操作。",
+  "firstSite.projectRenameRejected":
+    "改名请求被拒绝，请核对当前项目后重新编辑。",
   "firstSite.projectRenameReadRetry": "重新读取项目",
   "firstSite.projectRenameRetry": "重试同一改名",
   "firstSite.projectRenameRestart": "核对后重新编辑",
@@ -65,7 +89,8 @@ export const zh = {
   "firstSite.projectsUnavailable": "专案不可用",
   "firstSite.conversationsLoading": "正在加载会话…",
   "firstSite.conversationsError": "会话暂时无法加载。",
-  "firstSite.independentScheduledTasks": "定时任务独立管理，不是此专案的会话列表。",
+  "firstSite.independentScheduledTasks":
+    "定时任务独立管理，不是此专案的会话列表。",
   "firstSite.openScheduledTasks": "打开定时任务",
   "rail.conversationSort": "排序会话",
   "rail.brandSub": "こころ",
@@ -94,7 +119,8 @@ export const zh = {
   "plugins.connectors": "连接器",
   "plugins.connectorsDescription": "连接应用程序和 API 以分享您的使用情境。",
   "plugins.dataSources": "资料来源",
-  "plugins.dataSourcesDescription": "从内建资料来源取得更深入的洞察和更丰富的答案。",
+  "plugins.dataSourcesDescription":
+    "从内建资料来源取得更深入的洞察和更丰富的答案。",
   "plugins.previous": "上一页",
   "plugins.next": "下一页",
   "plugins.scrollForward": "向前滚动",
@@ -104,18 +130,24 @@ export const zh = {
   "plugins.showLess": "收起",
   "plugins.addConnector": "新增 {name}",
   "plugins.removeConnector": "移除 {name}",
-  "plugins.featuredBrowserDescription": "通过您自己的浏览器安全地执行复杂任务。",
+  "plugins.featuredBrowserDescription":
+    "通过您自己的浏览器安全地执行复杂任务。",
   "plugins.featuredGmailDescription": "获取 Gmail 的个人邮件助手。",
   "plugins.featuredNotionDescription": "连接您的 Notion 工作区并跨工具搜索。",
   "plugins.featuredMetaDescription": "自动优化 Meta Ads，节省时间并提升收益。",
-  "plugins.sourceSimilarwebDescription": "分析网站流量、受众、排名、渠道和搜索表现。",
-  "plugins.sourceWorldBankDescription": "查询世界银行发布的经济、人口、教育和能源统计数据。",
-  "plugins.sourceTwitterDescription": "检索公开帖子、用户资料、互动指标和热门趋势。",
+  "plugins.sourceSimilarwebDescription":
+    "分析网站流量、受众、排名、渠道和搜索表现。",
+  "plugins.sourceWorldBankDescription":
+    "查询世界银行发布的经济、人口、教育和能源统计数据。",
+  "plugins.sourceTwitterDescription":
+    "检索公开帖子、用户资料、互动指标和热门趋势。",
   "plugins.sourceBrand24Description": "监测品牌提及、情绪趋势和关键影响者。",
   "plugins.sourceAhrefsDescription": "分析 SEO 表现、排名、关键词和外链。",
-  "plugins.sourceCoinGeckoDescription": "访问加密资产行情、价格走势与市场数据。",
+  "plugins.sourceCoinGeckoDescription":
+    "访问加密资产行情、价格走势与市场数据。",
   "plugins.sourcePopHiveDescription": "查询公共卫生指标和地区趋势数据。",
-  "plugins.sourceMorningstarDescription": "访问全球证券的投资数据、研究和分析。",
+  "plugins.sourceMorningstarDescription":
+    "访问全球证券的投资数据、研究和分析。",
   "plugins.sourceAlpacaDescription": "查询股票、加密货币、期权和实时市场数据。",
   "plugins.sourceAlphaVantageDescription": "访问实时与历史市场数据和技术指标。",
   "plugins.sourceFredDescription": "查询美国经济时间序列、指标和发布数据。",
@@ -180,15 +212,18 @@ export const zh = {
   "notifications.empty": "目前没有新消息",
   "notifications.markRead": "标记为已读",
   "notifications.featureTitle": "Kokoro 工作区焕新",
-  "notifications.featureDescription": "更清晰的任务状态、更顺手的工作区导航，以及更流畅的协作体验。",
+  "notifications.featureDescription":
+    "更清晰的任务状态、更顺手的工作区导航，以及更流畅的协作体验。",
   "notifications.playPreview": "播放功能预览",
   "notifications.fixtureWorkspaceDate": "8月18日",
   "notifications.fixtureConnectorDate": "7月26日",
   "notifications.fixtureConnectorTitle": "连接器中心已升级",
-  "notifications.fixtureConnectorDescription": "在一个地方管理您的工具连接，并为不同工作区保留独立配置。",
+  "notifications.fixtureConnectorDescription":
+    "在一个地方管理您的工具连接，并为不同工作区保留独立配置。",
   "notifications.fixtureWelcomeDate": "今天",
   "notifications.fixtureWelcomeTitle": "欢迎来到 Kokoro",
-  "notifications.fixtureWelcomeDescription": "从一个直接会话开始，让 Kokoro 帮您完成下一件重要的事。",
+  "notifications.fixtureWelcomeDescription":
+    "从一个直接会话开始，让 Kokoro 帮您完成下一件重要的事。",
   "notifications.fixtureMediaLabel": "Kokoro 工作区",
   "rail.inviteFriendsTitle": "邀请朋友使用 {brand}",
   "rail.inviteFriendsHint": "分享链接，一起完成更多任务",
@@ -201,7 +236,8 @@ export const zh = {
   "rail.renameSave": "保存标题",
   "rail.renameCancel": "取消重命名",
   "rail.deleteConfirmTitle": "删除会话？",
-  "rail.deleteConfirmDescription": "删除“{title}”后，相关会话记录将从最近列表中移除。",
+  "rail.deleteConfirmDescription":
+    "删除“{title}”后，相关会话记录将从最近列表中移除。",
   "rail.deleteConfirm": "确认删除",
   "rail.deleteFailed": "删除失败。会话仍保留，请重试。",
   "rail.deleteCancel": "取消",
@@ -232,13 +268,15 @@ export const zh = {
   "scenario.writePrompt": "帮我写一篇关于「主题」的文章，风格专业、结构清晰。",
   "scenario.researchTitle": "做一份调研",
   "scenario.researchDesc": "查资料、找证据、出报告",
-  "scenario.researchPrompt": "帮我研究「主题」，收集可靠信息并整理成一份带要点和结论的报告。",
+  "scenario.researchPrompt":
+    "帮我研究「主题」，收集可靠信息并整理成一份带要点和结论的报告。",
   "scenario.dataTitle": "分析数据",
   "scenario.dataDesc": "找趋势、出结论、给建议",
   "scenario.dataPrompt": "帮我分析这份数据，找出关键趋势和可执行的结论。",
   "scenario.planTitle": "做一份方案",
   "scenario.planDesc": "定目标、拆步骤、排计划",
-  "scenario.planPrompt": "帮我做一份「目标」的方案，包含目标、步骤、时间与分工。",
+  "scenario.planPrompt":
+    "帮我做一份「目标」的方案，包含目标、步骤、时间与分工。",
   "scenario.codeTitle": "写点代码",
   "scenario.codeDesc": "脚本、原型、技术方案",
   "scenario.codePrompt": "帮我写一个「功能」的脚本，并说明如何运行和调整。",
@@ -247,7 +285,8 @@ export const zh = {
   "scenario.summaryPrompt": "把这段内容整理成清晰的要点和行动项：",
   // composer 输入区
   "composer.editArea": "消息编辑区",
-  "composer.disclaimer": "Kokoro 是 AI Agent，可能会出错。使用前请核对重要信息。",
+  "composer.disclaimer":
+    "Kokoro 是 AI Agent，可能会出错。使用前请核对重要信息。",
   "composer.inputAria": "对话输入",
   "composer.placeholder": "把想说的告诉我。",
   "composer.directPlaceholder": "向 {brand} 提问任何问题",
@@ -375,7 +414,8 @@ export const zh = {
   "thread.toolCount": "{tools} 个工具",
   "thread.toolCountFailed": "{tools} 个工具（{failed} 失败）",
   "thread.subCount": "{subs} 个子智能体",
-  "thread.awaitingBatch": "这一步有 {count} 个工具待你审批，全部决定后一并提交、并行执行。",
+  "thread.awaitingBatch":
+    "这一步有 {count} 个工具待你审批，全部决定后一并提交、并行执行。",
   "thread.verbActive": "{verb}中…",
   "thread.verbActiveShort": "{verb}中",
   "thread.retry": "重试",
@@ -385,7 +425,8 @@ export const zh = {
   "fail.assembly": "这个空间的配置有误，本轮无法启动——请联系管理员检查配置。",
   "fail.enqueue": "服务暂时不可用，这一轮没能开始。稍后重试即可。",
   "fail.dispatch": "这一轮没能送达执行，已安全结束。",
-  "fail.contract": "客户端与服务端版本不兼容，这一轮无法执行——请刷新页面，若仍不行请联系管理员。",
+  "fail.contract":
+    "客户端与服务端版本不兼容，这一轮无法执行——请刷新页面，若仍不行请联系管理员。",
   "fail.internal": "出了点内部问题，这一轮没能完成。",
   "fail.modelUnavailable": "当前模型暂时不可用，这一轮已停止。",
   "fail.dependencyUnavailable": "执行所需的服务暂时不可用，这一轮已停止。",
@@ -442,7 +483,7 @@ export const zh = {
   "skills.viewDetails": "查看技能详情",
   "skills.community": "社区",
   "skills.usedCount": "已使用 {count} 次",
-  "skills.addedTitle": "已新增的技能",
+  "skills.addedTitle": "已添加的技能",
   "skills.subtitle": "管理这个工作区可用的技能，或上传你自己的。",
   "skills.close": "关闭技能面板",
   "skills.tabPool": "技能池",
@@ -461,10 +502,11 @@ export const zh = {
   "skills.filterPersonal": "个人",
   "skills.filterThirdParty": "第三方",
   "skills.browse": "浏览技能",
-  "skills.create": "创建",
+  "skills.create": "添加",
   "skills.createWithAi": "使用 AI 创建技能",
   "skills.createWithBrand": "使用 {brand} 建立技能",
-  "skills.createPrompt": "帮我使用 /skill-creator 一起创建一个技能。首先问我这个技能应该做什么。",
+  "skills.createPrompt":
+    "帮我使用 /skill-creator 一起创建一个技能。首先问我这个技能应该做什么。",
   "skills.uploadSkill": "上传技能",
   "skills.publishDrafts": "草稿",
   "skills.publishResumeDraft": "继续处理",
@@ -475,12 +517,14 @@ export const zh = {
   "skills.publishReplaceUpload": "重新选择并上传",
   "skills.publishChooseAudience": "请选择可见范围",
   "skills.publishTitle": "发布个人技能",
-  "skills.publishDescription": "选择单个 ZIP 包。只有发布回执确认 ACTIVE 后才会显示成功。",
+  "skills.publishDescription":
+    "选择单个 ZIP 包。只有发布回执确认 ACTIVE 后才会显示成功。",
   "skills.publishFile": "ZIP 文件（最多 32 MiB）",
   "skills.lifecycle.update": "更新技能",
   "skills.lifecycle.examples": "示例问题（每行一项）",
   "skills.lifecycle.withdraw": "撤回技能",
-  "skills.lifecycle.withdrawWarning": "撤回这个版本后将不可继续使用；已有安装不会自动升级。",
+  "skills.lifecycle.withdrawWarning":
+    "撤回这个版本后将不可继续使用；已有安装不会自动升级。",
   "skills.lifecycle.reason": "撤回原因",
   "skills.lifecycle.confirmWithdraw": "确认撤回",
   "skills.lifecycle.withdrawSuccess": "已确认撤回",
@@ -494,8 +538,10 @@ export const zh = {
   "skills.publishCancel": "取消上传",
   "skills.publishClose": "关闭",
   "skills.publishError": "发布未完成。请检查文件或稍后重新开始。",
-  "skills.publishInvalidFile": "ZIP 文件名不符合要求：不能有首尾空格、路径字符，UTF-8 最多 255 字节。请重新选择文件。",
-  "skills.publishMetadataTooLarge": "名称、简介和标签的请求总量超过 65,536 字节。请缩短内容后重试。",
+  "skills.publishInvalidFile":
+    "ZIP 文件名不符合要求：不能有首尾空格、路径字符，UTF-8 最多 255 字节。请重新选择文件。",
+  "skills.publishMetadataTooLarge":
+    "名称、简介和标签的请求总量超过 65,536 字节。请缩短内容后重试。",
   "skills.publishPending": "上传正在扫描中，稍后可用同一次尝试继续验证。",
   "skills.publishAuth": "当前登录或权限已失效。重新登录后可重试同一次尝试。",
   "skills.publishRestart": "当前尝试已被 owner 拒绝，需要明确重新开始。",
@@ -503,7 +549,8 @@ export const zh = {
   "skills.publishRetry": "重试同一次尝试",
   "skills.publishCheckAgain": "继续检查扫描结果",
   "skills.publishRecheck": "重新核对发布状态",
-  "skills.publishUnknown": "发布结果尚未确认，请勿重复上传；请稍后查看个人技能列表。技能 ID",
+  "skills.publishUnknown":
+    "发布结果尚未确认，请勿重复上传；请稍后查看个人技能列表。技能 ID",
   "skills.publishSuccess": "个人技能已发布",
   "skills.publishStage.hashing": "正在校验文件…",
   "skills.publishStage.draft": "正在创建草稿…",
@@ -515,7 +562,8 @@ export const zh = {
   "skills.importGithub": "从 GitHub 导入",
   "skills.githubChoosePath": "选择技能目录",
   "skills.githubSelectedPath": "已选择技能目录",
-  "skills.githubUnknown": "结果尚未确认。重试会保留原提交意图；刷新后原提交身份不再保留。",
+  "skills.githubUnknown":
+    "结果尚未确认。重试会保留原提交意图；刷新后原提交身份不再保留。",
   "skills.githubConfirmOwner": "添加到我的技能（仅自己可见）",
   "skills.githubStagePreview": "正在读取仓库技能目录…",
   "skills.githubStageImport": "正在创建个人技能草稿…",
@@ -530,7 +578,8 @@ export const zh = {
   "skills.githubImporting": "正在导入技能，请稍候…",
   "skills.githubDone": "完成",
   "skills.githubClose": "关闭 GitHub 导入",
-  "skills.githubInvalid": "请输入有效的 GitHub 仓库地址，例如 https://github.com/owner/repo。",
+  "skills.githubInvalid":
+    "请输入有效的 GitHub 仓库地址，例如 https://github.com/owner/repo。",
   "skills.githubImportFailed": "导入失败，请稍后重试。",
   "skills.githubImported": "技能已添加到我的技能。",
   "skills.githubImportNotice": "已导入「{name}」，现在可在技能列表中使用。",
@@ -549,7 +598,8 @@ export const zh = {
   "skills.githubFixtureDescription": "来自 {owner}/{name} 的技能预览。",
   "skills.detailClose": "关闭技能详情",
   "skills.detailTry": "试试看",
-  "skills.tryPrompt": "我刚为 {brand} 新增了 {name} 技能，你能用一些很棒的示例示范一下吗？",
+  "skills.tryPrompt":
+    "我刚为 {brand} 新增了 {name} 技能，你能用一些很棒的示例示范一下吗？",
   "skills.detailFiles": "技能文件",
   "skills.detailDescription": "技能说明",
   "skills.detailDescriptionFallback": "暂无技能说明。",
@@ -610,22 +660,28 @@ export const zh = {
   "skills.uploadClose": "关闭上传技能",
   "skills.uploadDrop": "拖放或点击以上传",
   "skills.uploadRequirements": "文件需求",
-  "skills.uploadRequirementZip": "根目录中包含 SKILL.md 文件的 .zip 或 .skill 文件",
-  "skills.uploadRequirementYaml": "SKILL.md 包含以 YAML 格式编写的技能名称与描述",
+  "skills.uploadRequirementZip":
+    "根目录中包含 SKILL.md 文件的 .zip 或 .skill 文件",
+  "skills.uploadRequirementYaml":
+    "SKILL.md 包含以 YAML 格式编写的技能名称与描述",
   "skills.uploadLearn": "了解更多关于创建技能的信息",
   "skills.uploadOr": "或",
   "skills.uploadExample": "查看示例",
   "skills.uploadChooseCandidates": "从 {namespace} 中选择要发布的技能",
   "skills.uploadComplete": "技能已发布到当前工作区",
-  "skills.localImport.hint": "拖放或选择一个技能包，由系统读取 SKILL.md 并添加到我的技能。",
+  "skills.localImport.hint":
+    "拖放或选择一个技能包，由系统读取 SKILL.md 并添加到我的技能。",
   "skills.localImport.session": "请先确认当前登录状态，再继续上传。",
   "skills.localImport.processing": "正在导入技能…",
-  "skills.localImport.unknown": "结果尚未确认。重试会保留原命令；也可查询当前导入状态。",
+  "skills.localImport.unknown":
+    "结果尚未确认。重试会保留原命令；也可查询当前导入状态。",
   "skills.localImport.recoverable": "找到未完成的导入，请查询当前状态后继续。",
-  "skills.localImport.reselect": "原文件或上传凭据已丢失，请明确重新选择并开始新导入。",
+  "skills.localImport.reselect":
+    "原文件或上传凭据已丢失，请明确重新选择并开始新导入。",
   "skills.localImport.expired": "此导入已过期，请重新选择文件。",
   "skills.localImport.complete": "技能已导入并添加到我的技能。",
-  "skills.localImport.installationUnconfirmed": "技能已导入；当前安装状态尚未确认。",
+  "skills.localImport.installationUnconfirmed":
+    "技能已导入；当前安装状态尚未确认。",
   "skills.localImport.check": "查询导入状态",
   "skills.localImport.continue": "继续导入",
   "skills.localImport.replace": "重新选择并上传",
@@ -758,7 +814,8 @@ export const zh = {
   "team.confirmLeave": "确认退出",
   "team.signOut": "退出登录",
   "team.leftSignoutFailed": "已退出团队，请手动退出登录。",
-  "team.savedRefreshFailed": "操作已提交，但列表刷新失败。请刷新列表确认结果，不要重复提交。",
+  "team.savedRefreshFailed":
+    "操作已提交，但列表刷新失败。请刷新列表确认结果，不要重复提交。",
   "team.accept": "接受",
   "team.accepting": "接受中…",
   "team.decline": "拒绝",
@@ -787,7 +844,7 @@ export const zh = {
   "team.errGeneric": "操作失败，请稍后再试。",
   // 连接面板（MCP-UX）：MCP server 注册/启停/软删 + 凭据 handle 管理
   "rail.navMcp": "连接",
-  "mcp.title": "我的连接器",
+  "mcp.title": "已添加的连接器",
   "mcp.subtitle": "注册并管理这个工作区的 MCP server，以及它们用到的凭据。",
   "mcp.close": "关闭连接面板",
   "mcp.tabServers": "已连接",
@@ -797,7 +854,8 @@ export const zh = {
   "mcp.retry": "重试",
   "mcp.empty": "还没有连接器。",
   "mcp.emptyGuide": "注册 MCP server 把外部工具接进来;官方连接由平台上架。",
-  "mcp.emptyGuideEmbedded": "将 {brand} 与你的日常应用程序、API 和 MCP 连接起来",
+  "mcp.emptyGuideEmbedded":
+    "将 {brand} 与你的日常应用程序、API 和 MCP 连接起来",
   "mcp.searchPlaceholder": "搜索连接器",
   "mcp.noMatch": "没有匹配的连接",
   "mcp.confirmDelete": "确认删除",
@@ -827,26 +885,28 @@ export const zh = {
   "mcp.customIconTooLarge": "图示必须小于 1 MB。",
   "mcp.customInstructions": "备注",
   "mcp.optional": "（选填）",
-  "mcp.customInstructionsPlaceholder": "提供 MCP 文件或说明，以告知助手如何及何时使用此 MCP",
+  "mcp.customInstructionsPlaceholder":
+    "提供 MCP 文件或说明，以告知助手如何及何时使用此 MCP",
   "mcp.customServerUrl": "服务器 URL",
-  "mcp.jsonImportTitle": "透过 JSON 导入",
+  "mcp.jsonImportTitle": "通过 JSON 导入",
   "mcp.jsonImportDescription": "请粘贴您的设置 JSON",
   "mcp.jsonImportAction": "导入",
   "mcp.jsonImportInvalid": "JSON 格式无效，或缺少 mcpServers 配置。",
-  "mcp.urlTitle": "透过 URL 添加 MCP",
-  "mcp.urlNamePlaceholder": "例如：我的自订服务器",
+  "mcp.urlTitle": "通过 URL 添加 MCP",
+  "mcp.urlNamePlaceholder": "例如：我的自定义服务器",
   "mcp.advancedSettings": "进阶设置",
   "mcp.oauthClientId": "OAuth 用户端 ID",
   "mcp.oauthClientSecret": "OAuth 用户端密钥",
-  "mcp.urlWarning": "仅使用您信任的开发者提供的连接器。平台不会控制开发者所提供的工具，也无法证实它们是否如预期运作或是否会改变。",
+  "mcp.urlWarning":
+    "仅使用您信任的开发者提供的连接器。平台不会控制开发者所提供的工具，也无法证实它们是否如预期运作或是否会改变。",
   "mcp.saveAndPublish": "保存并发布",
-  "mcp.customHeaders": "自订 headers",
+  "mcp.customHeaders": "自定义 Headers",
   "mcp.customHeaderName": "Header {count} 名称",
   "mcp.customHeaderValue": "Header {count} 值",
   "mcp.customHeaderNamePlaceholder": "Header 名称",
   "mcp.customHeaderValuePlaceholder": "Header 值",
   "mcp.customRemoveHeader": "移除 header",
-  "mcp.customAddHeader": "新增自订 header",
+  "mcp.customAddHeader": "新增自定义 Header",
   "mcp.customSaveOptions": "保存选项",
   "mcp.customPublishToProjects": "发布到专案",
   "mcp.customSaveEnabled": "保存并启用",
@@ -915,7 +975,8 @@ export const zh = {
   "mcp.active": "已连接",
   "mcp.error": "连接异常",
   "mcp.revoked": "已移除",
-  "mcp.connectingHint": "该连接器正在等待完成授权或配置。准备就绪后会自动显示为已连接。",
+  "mcp.connectingHint":
+    "该连接器正在等待完成授权或配置。准备就绪后会自动显示为已连接。",
   "mcp.noProviders": "当前没有可添加的连接器提供方。",
   "mcp.saveChanges": "保存修改",
   "mcp.deleteConfirm": "确认移除",
@@ -924,67 +985,87 @@ export const zh = {
   "connectorCatalog.close": "关闭连接器目录",
   "connectorCatalog.search": "搜索连接器",
   "connectorCatalog.apps": "应用",
-  "connectorCatalog.customApi": "自订 API",
-  "connectorCatalog.customMcp": "自订 MCP",
+  "connectorCatalog.customApi": "自定义 API",
+  "connectorCatalog.customMcp": "自定义 MCP",
   "connectorCatalog.projects": "专案",
   "connectorCatalog.create": "创建",
   "connectorCatalog.addLabel": "添加 {name}",
   "connectorCatalog.addedLabel": "移除 {name}",
-  "connectorCatalog.customApiTitle": "自订 API",
-  "connectorCatalog.customApiDescription": "连接你自己的 API，并将可用操作作为工具提供给任务。",
-  "connectorCatalog.customMcpTitle": "自订 MCP",
-  "connectorCatalog.customMcpDescription": "尚未新增自订 MCP。",
-  "connectorCatalog.createCustomMcp": "创建自订 MCP",
+  "connectorCatalog.customApiTitle": "自定义 API",
+  "connectorCatalog.customApiDescription":
+    "连接你自己的 API，并将可用操作作为工具提供给任务。",
+  "connectorCatalog.customMcpTitle": "自定义 MCP",
+  "connectorCatalog.customMcpDescription": "尚未新增自定义 MCP。",
+  "connectorCatalog.createCustomMcp": "创建自定义 MCP",
   "connectorCatalog.projectsTitle": "专案连接器",
-  "connectorCatalog.projectsDescription": "发布你的自订 MCP 和 API 连接器以与专案共享。",
+  "connectorCatalog.projectsDescription":
+    "发布你的自定义 MCP 和 API 连接器以与项目共享。",
   "connectorCatalog.browserDescription": "在你自己的浏览器上访问网页",
   "connectorCatalog.gmailDescription": "撰写邮件，搜索会话并快速生成摘要",
-  "connectorCatalog.githubDescription": "管理代码仓库，追踪代码变更和协作团队专案",
-  "connectorCatalog.instagramDescription": "生成并发布 Instagram 帖子、限时动态或 Reels",
-  "connectorCatalog.workspaceDescription": "快速访问文件、智能搜索内容并管理文档",
-  "connectorCatalog.metaDescription": "自动生成广告洞察与优化方案，以节省时间并最大化利润",
-  "connectorCatalog.calendarDescription": "查看日程安排，管理活动并有效优化你的时间",
+  "connectorCatalog.githubDescription":
+    "管理代码仓库，追踪代码变更和协作团队专案",
+  "connectorCatalog.instagramDescription":
+    "生成并发布 Instagram 帖子、限时动态或 Reels",
+  "connectorCatalog.workspaceDescription":
+    "快速访问文件、智能搜索内容并管理文档",
+  "connectorCatalog.metaDescription":
+    "自动生成广告洞察与优化方案，以节省时间并最大化利润",
+  "connectorCatalog.calendarDescription":
+    "查看日程安排，管理活动并有效优化你的时间",
   "connectorCatalog.notionDescription": "搜索和更新内容，实现自动化流程",
-  "connectorCatalog.creatorDescription": "寻找契合品牌影响力、领域与风格的创作者",
-  "connectorCatalog.higgsfieldDescription": "用 Higgsfield 创作电影级影像和影片",
-  "connectorCatalog.importMcpJson": "透过 JSON 汇入 MCP",
-  "connectorCatalog.addMcpUrl": "透过 URL 添加 MCP",
-  "connectorCatalog.beta": "测试版",
-  "connectorCatalog.customApiCreateTitle": "新增自订 API",
-  "connectorCatalog.customApiCreateDescription": "使用自订 API 连接器来整合任何支持密钥或令牌授权的外部服务。",
-  "connectorCatalog.customApiClose": "关闭新增自订 API",
+  "connectorCatalog.creatorDescription":
+    "寻找契合品牌影响力、领域与风格的创作者",
+  "connectorCatalog.higgsfieldDescription":
+    "用 Higgsfield 创作电影级影像和影片",
+  "connectorCatalog.importMcpJson": "通过 JSON 导入 MCP",
+  "connectorCatalog.addMcpUrl": "通过 URL 添加 MCP",
+  "connectorCatalog.beta": "Beta",
+  "connectorCatalog.customApiCreateTitle": "新增自定义 API",
+  "connectorCatalog.customApiCreateDescription":
+    "使用自定义 API 连接器来整合任何支持密钥或令牌授权的外部服务。",
+  "connectorCatalog.customApiClose": "关闭新增自定义 API",
   "connectorCatalog.name": "名称",
-  "connectorCatalog.namePlaceholder": "我的自订 API",
+  "connectorCatalog.namePlaceholder": "我的自定义 API",
   "connectorCatalog.icon": "图示",
   "connectorCatalog.upload": "上传",
   "connectorCatalog.uploadIcon": "上传 API 图示",
-  "connectorCatalog.iconHint": "PNG 或 JPG，最大 1 MB。建议尺寸为 256×256 像素。",
+  "connectorCatalog.iconHint":
+    "PNG 或 JPG，最大 1 MB。建议尺寸为 256×256 像素。",
   "connectorCatalog.iconTypeError": "请选择 PNG 或 JPG 图像。",
   "connectorCatalog.iconSizeError": "图像大小不能超过 1 MB。",
   "connectorCatalog.notes": "备注",
   "connectorCatalog.optional": "（选填）",
-  "connectorCatalog.notesPlaceholder": "提供 API 文件或说明，以告知 Kokoro 如何及何时使用此 API",
+  "connectorCatalog.notesPlaceholder":
+    "提供 API 文件或说明，以告知 Kokoro 如何及何时使用此 API",
   "connectorCatalog.secrets": "密钥",
   "connectorCatalog.environmentVariables": "（环境变量）",
   "connectorCatalog.secretName": "密钥名称",
   "connectorCatalog.secretNamePlaceholder": "SOME_UNIQUE_KEY_NAME",
   "connectorCatalog.secretValue": "数值",
-  "connectorCatalog.secretValuePlaceholder": "Value of the secret, such as sk-example-1234",
+  "connectorCatalog.secretValuePlaceholder":
+    "Value of the secret, such as sk-example-1234",
   "connectorCatalog.addSecret": "添加密钥",
   "connectorCatalog.removeSecret": "移除密钥",
-  "connectorCatalog.outlookDescription": "在 Kokoro 中撰写、搜索并管理 Outlook 电子邮件",
+  "connectorCatalog.outlookDescription":
+    "在 Kokoro 中撰写、搜索并管理 Outlook 电子邮件",
   "connectorCatalog.tiktokDescription": "自动化 TikTok 广告投放管理与效果报告",
-  "connectorCatalog.elevenLabsApiDescription": "生成逼真语音、克隆声音与音频内容",
-  "connectorCatalog.openAiDescription": "利用 GPT 模型系列进行智能文本生成与处理",
-  "connectorCatalog.openRouterDescription": "访问多种 AI 模型，统一管理 API 调用",
+  "connectorCatalog.elevenLabsApiDescription":
+    "生成逼真语音、克隆声音与音频内容",
+  "connectorCatalog.openAiDescription":
+    "利用 GPT 模型系列进行智能文本生成与处理",
+  "connectorCatalog.openRouterDescription":
+    "访问多种 AI 模型，统一管理 API 调用",
   "connectorCatalog.grokDescription": "获取即时资讯，进行智能对话与分析",
-  "connectorCatalog.similarwebDescription": "分析网站流量，获取竞争对手市场洞察",
+  "connectorCatalog.similarwebDescription":
+    "分析网站流量，获取竞争对手市场洞察",
   "connectorCatalog.ahrefsDescription": "优化 SEO 策略，分析关键词与外链数据",
   "connectorCatalog.n8nDescription": "建立自动化工作流，连接各种应用服务",
   "connectorCatalog.perplexityDescription": "搜索即时资讯，获得准确引用与答案",
-  "connectorCatalog.cloudflareDescription": "使用 Cloudflare API 自动化并管理网络基础设施",
+  "connectorCatalog.cloudflareDescription":
+    "使用 Cloudflare API 自动化并管理网络基础设施",
   "connectorCatalog.typeformDescription": "创建表单、收集回应并管理 webhook",
-  "connectorCatalog.mailchimpDescription": "管理受众、发送营销活动并追踪邮件表现",
+  "connectorCatalog.mailchimpDescription":
+    "管理受众、发送营销活动并追踪邮件表现",
   "connectorCatalog.geminiDescription": "处理文本、图片和代码等多模态内容",
   // 输入框模型选择器（MODEL-UX）
   "composer.modelSwitch": "切换模型",
@@ -1097,7 +1178,8 @@ export const zh = {
   "marketing.navOpen": "打开导航",
   "marketing.navClose": "关闭导航",
   "marketing.heroTitle": "把想法说给它，收回能用的成果",
-  "marketing.heroSubtitle": "对话式地交代任务，它会自己规划、动手、交付；关键决定仍然由你拍板。",
+  "marketing.heroSubtitle":
+    "对话式地交代任务，它会自己规划、动手、交付；关键决定仍然由你拍板。",
   "marketing.heroInputPlaceholder": "描述你想完成的事，回车即可开始…",
   "marketing.heroInputAria": "描述你想完成的任务",
   "marketing.heroStart": "开始",
@@ -1109,28 +1191,39 @@ export const zh = {
   "marketing.chipTeam": "团队协作",
   "marketing.chipModel": "多模型",
   "marketing.capsHeading": "它能为你做什么",
-  "marketing.capsSubheading": "不是又一个聊天框，而是一个会规划、动手、把成果交到你手里的伙伴。",
+  "marketing.capsSubheading":
+    "不是又一个聊天框，而是一个会规划、动手、把成果交到你手里的伙伴。",
   "marketing.capChatTitle": "对话即协作，关键处由你把关",
-  "marketing.capChatBody": "自然语言交代任务，它自主推进；涉及有风险的动作时会停下来请你批准或修改，绝不擅自越界。",
+  "marketing.capChatBody":
+    "自然语言交代任务，它自主推进；涉及有风险的动作时会停下来请你批准或修改，绝不擅自越界。",
   "marketing.capSkillsTitle": "技能库，按需装配能力",
-  "marketing.capSkillsBody": "从技能池挑选或上传你自己的技能包，为这个工作区装配它需要的专长——用多少装多少。",
+  "marketing.capSkillsBody":
+    "从技能池挑选或上传你自己的技能包，为这个工作区装配它需要的专长——用多少装多少。",
   "marketing.capMcpTitle": "连接你的工具与数据",
-  "marketing.capMcpBody": "通过 MCP 接入你自己的服务与数据源，凭据加密保管、永不回显，连接按名称安全引用。",
+  "marketing.capMcpBody":
+    "通过 MCP 接入你自己的服务与数据源，凭据加密保管、永不回显，连接按名称安全引用。",
   "marketing.capDeliverTitle": "成果可交付、可分享",
-  "marketing.capDeliverBody": "产出的文件与成果汇集到作品库，一键生成可撤销的只读分享链接，交付给需要的人。",
+  "marketing.capDeliverBody":
+    "产出的文件与成果汇集到作品库，一键生成可撤销的只读分享链接，交付给需要的人。",
   "marketing.capTeamTitle": "与团队共享一个工作区",
-  "marketing.capTeamBody": "在个人空间与团队之间自由切换，邀请成员、共享技能与连接，各自的会话互不打扰。",
+  "marketing.capTeamBody":
+    "在个人空间与团队之间自由切换，邀请成员、共享技能与连接，各自的会话互不打扰。",
   "marketing.capModelTitle": "多模型，随任务切换",
-  "marketing.capModelBody": "同一段对话里按需要挑选合适的模型与 agent，快答与深思各取所长。",
+  "marketing.capModelBody":
+    "同一段对话里按需要挑选合适的模型与 agent，快答与深思各取所长。",
   "marketing.faqHeading": "常见问题",
   "marketing.faqBillingQ": "怎么计费？",
-  "marketing.faqBillingA": "按实际用量从余额扣减，模型调用与工具调用都记在账单流水里，随时可查。没有隐藏订阅。",
+  "marketing.faqBillingA":
+    "按实际用量从余额扣减，模型调用与工具调用都记在账单流水里，随时可查。没有隐藏订阅。",
   "marketing.faqDataQ": "我的数据归谁？",
-  "marketing.faqDataA": "你的会话、文件与凭据都属于你的工作区。凭据加密保存、永不回显；分享链接可随时撤销。",
+  "marketing.faqDataA":
+    "你的会话、文件与凭据都属于你的工作区。凭据加密保存、永不回显；分享链接可随时撤销。",
   "marketing.faqTeamQ": "支持团队协作吗？",
-  "marketing.faqTeamA": "支持。可在个人空间与多个团队间切换，邀请成员、分配角色，共享这个工作区的技能与连接。",
+  "marketing.faqTeamA":
+    "支持。可在个人空间与多个团队间切换，邀请成员、分配角色，共享这个工作区的技能与连接。",
   "marketing.faqMcpQ": "能接入我自己的工具吗？",
-  "marketing.faqMcpA": "可以。通过 MCP 注册你自己的服务，配置允许的工具范围，凭据由系统加密托管。",
+  "marketing.faqMcpA":
+    "可以。通过 MCP 注册你自己的服务，配置允许的工具范围，凭据由系统加密托管。",
   "marketing.ctaTitle": "现在就把第一件事交给它",
   "marketing.ctaBody": "使用现有账号登录，即可开始。",
   "marketing.ctaButton": "开始使用",
@@ -1152,7 +1245,7 @@ export const zh = {
   "settings.title": "设置",
   "settings.groupGeneral": "设置",
   "settings.groupFeatures": "功能",
-  "settings.groupData": "数据与整合",
+  "settings.groupData": "数据与集成",
   "settings.search": "搜索",
   "settings.moreSections": "更多设置分区",
   "settings.personalizationTitle": "个性化",
@@ -1160,23 +1253,29 @@ export const zh = {
   "settings.personalProfile": "个人资料",
   "settings.knowledge": "知识",
   "settings.importFromAi": "从其他 AI 匯入记忆",
-  "settings.importFromAiHint": "使用来自其他 AI 提供商的对话内容自动填写你的个人资料。",
+  "settings.importFromAiHint":
+    "使用来自其他 AI 提供商的对话内容自动填写你的个人资料。",
   "settings.nickname": "昵称",
   "settings.nicknamePlaceholder": "简",
   "settings.occupation": "职业",
   "settings.occupationPlaceholder": "产品设计师",
   "settings.aboutYou": "更多关于你的资讯",
-  "settings.aboutYouPlaceholder": "我是一名位于纽约市的分析师，主要从事 React 和 SQL。",
+  "settings.aboutYouPlaceholder":
+    "我是一名位于纽约市的分析师，主要从事 React 和 SQL。",
   "settings.aboutYouHint": "Kokoro 使用此资讯为所有任务打造个性化回应。",
   "settings.customInstructions": "自订指令",
-  "settings.customInstructionsPlaceholder": "简洁直接。除非我另行声明，否则默认使用 Python。撰写文档时，采用专业语气并引用来源。",
+  "settings.customInstructionsPlaceholder":
+    "简洁直接。除非我另行声明，否则默认使用 Python。撰写文档时，采用专业语气并引用来源。",
   "settings.importMemory": "匯入记忆",
-  "settings.importMemoryDescription": "将其他 AI 提供商关于你的记忆导入到 Kokoro。",
+  "settings.importMemoryDescription":
+    "将其他 AI 提供商关于你的记忆导入到 Kokoro。",
   "settings.copyPrompt": "复制此提示词",
   "settings.copyPromptHint": "将其粘贴到你之前使用过的其他 AI 提供商中。",
-  "settings.memoryTransferPrompt": "生成一份全面的转移文件，包含所有可用的持久性用户上下文资讯，包括：\n\n- 已保存的记忆\n- 自定义指令\n- 在先前对话中观察到的长期行为模式\n\n全程以「用户」指代用户，不要使用第一人称或第二人称代词。仅包含在未来对话中仍然有用的资讯。\n\n排除：\n- 本请求中的指令与格式要求\n- 临时命名规则与一次性约束\n- 仅从当前互动推断的偏好\n- 只适用于当前任务的观察\n\n如果某项资讯在未来无关的对话中不再真实或有用，请省略；无法确定属于持久性上下文还是任务指令时，也请省略。尽可能保留用户的原始措辞。\n\n按照以下顺序组织输出：\n\n基本资讯\n- 用户偏好的名字或别名\n- 语言\n- 一般位置或时区\n\n工作与教育\n- 当前和过往职位、公司与职责\n- 教育经历与专业技能\n\n个人背景\n- 人际关系、家庭与兴趣爱好\n- 个人项目\n- 长期观察到的性格与交流模式\n\n偏好与指令\n- 持续的回应偏好与常设指令\n- 重复的工作流程模式\n- 已知的反感、限制与需要更正之处\n\n对于任何缺失的类别，请写「无可用资讯」。仅输出纯文字，不使用代码块或巢状项目符号。",
+  "settings.memoryTransferPrompt":
+    "生成一份全面的转移文件，包含所有可用的持久性用户上下文资讯，包括：\n\n- 已保存的记忆\n- 自定义指令\n- 在先前对话中观察到的长期行为模式\n\n全程以「用户」指代用户，不要使用第一人称或第二人称代词。仅包含在未来对话中仍然有用的资讯。\n\n排除：\n- 本请求中的指令与格式要求\n- 临时命名规则与一次性约束\n- 仅从当前互动推断的偏好\n- 只适用于当前任务的观察\n\n如果某项资讯在未来无关的对话中不再真实或有用，请省略；无法确定属于持久性上下文还是任务指令时，也请省略。尽可能保留用户的原始措辞。\n\n按照以下顺序组织输出：\n\n基本资讯\n- 用户偏好的名字或别名\n- 语言\n- 一般位置或时区\n\n工作与教育\n- 当前和过往职位、公司与职责\n- 教育经历与专业技能\n\n个人背景\n- 人际关系、家庭与兴趣爱好\n- 个人项目\n- 长期观察到的性格与交流模式\n\n偏好与指令\n- 持续的回应偏好与常设指令\n- 重复的工作流程模式\n- 已知的反感、限制与需要更正之处\n\n对于任何缺失的类别，请写「无可用资讯」。仅输出纯文字，不使用代码块或巢状项目符号。",
   "settings.pasteResponse": "粘贴回应内容",
-  "settings.pasteResponseHint": "Kokoro 将用其填写你的个人资料。你可以随时编辑。",
+  "settings.pasteResponseHint":
+    "Kokoro 将用其填写你的个人资料。你可以随时编辑。",
   "settings.pasteResponsePlaceholder": "将回应粘贴到这里...",
   "settings.importMemoryAction": "导入",
   "settings.knowledgeHint": "管理从对话和导入内容中保存的知识。",
@@ -1211,36 +1310,45 @@ export const zh = {
   "settings.addAuthorizedSender": "新增授权发件人",
   "settings.workflowIntroTitle": "如何使用工作流电子邮件？",
   "settings.workflowIntroOne": "使用自订说明建立工作流电子邮件",
-  "settings.workflowIntroOneHint": "例如，me-newsletter@kokoro.bot 用于摘要每日简报。",
+  "settings.workflowIntroOneHint":
+    "例如，me-newsletter@kokoro.bot 用于摘要每日简报。",
   "settings.workflowIntroTwo": "直接发送电子邮件",
-  "settings.workflowIntroTwoHint": "转寄或发送电子邮件到工作流电子邮件以将其转换为任务。",
+  "settings.workflowIntroTwoHint":
+    "转寄或发送电子邮件到工作流电子邮件以将其转换为任务。",
   "settings.workflowIntroThree": "透过电子邮件规则自动化",
-  "settings.workflowIntroThreeHint": "设定 Gmail、Outlook 或其他邮件规则以自动转寄邮件。",
+  "settings.workflowIntroThreeHint":
+    "设定 Gmail、Outlook 或其他邮件规则以自动转寄邮件。",
   "settings.addNow": "立即新增",
   "settings.workflowFormHint": "自订额外的电子邮件地址和说明来处理不同的任务。",
   "settings.emailAddress": "电子邮件地址",
-  "settings.workflowInstructionHint": "发送到 {address} 的电子邮件会根据以下提示词建立任务。",
-  "settings.workflowInstructionPlaceholder": "收集每日简报的资讯来源并整理到投影片中。",
-  "settings.computerTitle": "我的电脑",
+  "settings.workflowInstructionHint":
+    "发送到 {address} 的电子邮件会根据以下提示词建立任务。",
+  "settings.workflowInstructionPlaceholder":
+    "收集每日简报的资讯来源并整理到投影片中。",
+  "settings.computerTitle": "电脑",
   "settings.cloudComputer": "云电脑",
   "settings.localComputer": "本地电脑",
   "settings.folderAccessRequired": "需要资料夹存取权限",
   "settings.folderAccessPrefix": "在您的 ",
   "settings.desktopApp": "{brand} 桌面版",
-  "settings.folderAccessSuffix": " 中选择并授权一个资料夹，允许 {brand} 读取、编辑档案，并在您的工作空间中执行命令。",
+  "settings.folderAccessSuffix":
+    " 中选择并授权一个资料夹，允许 {brand} 读取、编辑档案，并在您的工作空间中执行命令。",
   "settings.computerAlwaysAvailable": "持续的云工作空间，全天候可用。",
-  "settings.computerAlwaysAvailableHint": "全天候运行的云端电脑，具备持续存储——可随时运行与建置。",
+  "settings.computerAlwaysAvailableHint":
+    "全天候运行的云端电脑，具备持续存储——可随时运行与建置。",
   "settings.createNow": "立即建立",
   "settings.createCloudComputer": "建立云端电脑",
   "settings.computerUpgradeHint": "升级你的订阅以获得一台免费的云端电脑。",
   "settings.recommended": "推荐",
   "settings.perMonth": "/ 月",
   "settings.computerPlanBasic": "个人专案",
-  "settings.computerPlanBasicHint": "执行简单的自动化工具，或让小型脚本 24/7 持续运行。",
+  "settings.computerPlanBasicHint":
+    "执行简单的自动化工具，或让小型脚本 24/7 持续运行。",
   "settings.computerPlanStandard": "标准效能",
   "settings.computerPlanStandardHint": "托管活跃的网站、开发环境和 API 服务。",
   "settings.computerPlanAdvanced": "高容量",
-  "settings.computerPlanAdvancedHint": "小型团队应用、线上资料库，或一次管理多项业务服务。",
+  "settings.computerPlanAdvancedHint":
+    "小型团队应用、线上资料库，或一次管理多项业务服务。",
   "settings.compute": "运算能力",
   "settings.virtualCpu": "虚拟 CPU",
   "settings.memory": "记忆体",
@@ -1275,16 +1383,20 @@ export const zh = {
   "dataManagement.archivedTasks": "已封存任务",
   "dataManagement.noArchivedTasks": "尚无已封存的任务。",
   "dataManagement.authorizedApps": "授权应用",
-  "dataManagement.authorizedAppsDescription": "您已授予访问账户权限的应用程序和服务。",
+  "dataManagement.authorizedAppsDescription":
+    "您已授予访问账户权限的应用程序和服务。",
   "dataManagement.cloudBrowser": "云端浏览器数据",
   "dataManagement.cloudBrowserDetailTitle": "云浏览器",
-  "dataManagement.cloudBrowserDescription": "管理使用云端浏览器期间存储的 Cookie 及其他网站数据。",
+  "dataManagement.cloudBrowserDescription":
+    "管理使用云端浏览器期间存储的 Cookie 及其他网站数据。",
   "dataManagement.noAuthorizedApps": "无已授权的应用程序",
-  "dataManagement.noAuthorizedAppsDescription": "您授权访问账户的应用程序和服务将显示在此处。",
+  "dataManagement.noAuthorizedAppsDescription":
+    "您授权访问账户的应用程序和服务将显示在此处。",
   "dataManagement.persistSignIn": "在任务间保持登录状态",
   "dataManagement.learnMore": "了解更多",
   "dataManagement.cookiesTitle": "Cookies 和其他网站数据",
-  "dataManagement.cookiesEmpty": "您访问过的网站的 Cookie 和其他网站数据将显示在这里",
+  "dataManagement.cookiesEmpty":
+    "您访问过的网站的 Cookie 和其他网站数据将显示在这里",
   "dataManagement.revoke": "撤销",
   "dataManagement.remove": "移除",
   "dataManagement.loadError": "数据管理内容加载失败。",
@@ -1302,7 +1414,8 @@ export const zh = {
   "settings.deploymentAppIntent": "开发应用",
   "settings.deploymentAppSuggestions": "应用示例",
   "settings.domainUpgradeTitle": "升级方案以购买域名",
-  "settings.domainUpgradeDescription": "升级方案以购买域名。免费方案仅支持 {brand} 子域名。",
+  "settings.domainUpgradeDescription":
+    "升级方案以购买域名。免费方案仅支持 {brand} 子域名。",
   "settings.upgradeNow": "立即升级",
   "settings.upgradeRequired": "请先升级",
   "firstSite.appSuggestionLearning": "创建学习计划与进度管理工具",
@@ -1310,7 +1423,7 @@ export const zh = {
   "firstSite.appSuggestionPersonalSpending": "建立个人支出追踪应用程序",
   "firstSite.appSuggestionTasks": "创建具有任务管理功能的待办事项应用程序",
   "firstSite.appSuggestionProductivity": "建立个人效率工具套件",
-  "settings.integrationTitle": "整合",
+  "settings.integrationTitle": "集成",
   "settings.integrationDescription": "在您喜爱的应用程序中建立工作流程",
   "settings.integrationBack": "返回整合",
   "settings.connect": "连接",
@@ -1322,28 +1435,43 @@ export const zh = {
   "settings.exploreZapTemplates": "探索 Zap 范本",
   "settings.integration.zapier.name": "Zapier",
   "settings.integration.zapier.title": "在 Zapier 中使用 {brand}",
-  "settings.integration.zapier.description": "透过 Zapier 将 {brand} 连结至数千个应用程序",
-  "settings.integration.zapier.overview": "{brand} 现已与 Zapier 整合，让您能将 {brand} 融入数千个应用程序之中。轻松建立自动化工作流程，连结您的常用工具，消除手动及重复的流程。透过简单且不需要程式设置，您可以触发动作、同步资讯并自订流程以满足您的需求—帮助您节省时间并完成更多工作。",
-  "settings.integration.zapier.template.calendly": "使用 {brand} 提供的 AI 支援研究来准备 Calendly 会议",
+  "settings.integration.zapier.description":
+    "透过 Zapier 将 {brand} 连结至数千个应用程序",
+  "settings.integration.zapier.overview":
+    "{brand} 现已与 Zapier 整合，让您能将 {brand} 融入数千个应用程序之中。轻松建立自动化工作流程，连结您的常用工具，消除手动及重复的流程。透过简单且不需要程式设置，您可以触发动作、同步资讯并自订流程以满足您的需求—帮助您节省时间并完成更多工作。",
+  "settings.integration.zapier.template.calendly":
+    "使用 {brand} 提供的 AI 支援研究来准备 Calendly 会议",
   "settings.integration.zapier.template.calendly.pair": "Calendly + {brand}",
-  "settings.integration.zapier.template.googleForms": "使用 {brand} 从 Google 表单回应中提取洞见",
-  "settings.integration.zapier.template.googleForms.pair": "Google Form + {brand}",
-  "settings.integration.zapier.template.teams": "使用 {brand} 从 Microsoft Teams 讨论中提取行动项目",
-  "settings.integration.zapier.template.teams.pair": "Microsoft Teams + {brand}",
-  "settings.integration.zapier.template.outlook": "使用 {brand} 从 Outlook 电子邮件中建立任务",
+  "settings.integration.zapier.template.googleForms":
+    "使用 {brand} 从 Google 表单回应中提取洞见",
+  "settings.integration.zapier.template.googleForms.pair":
+    "Google Form + {brand}",
+  "settings.integration.zapier.template.teams":
+    "使用 {brand} 从 Microsoft Teams 讨论中提取行动项目",
+  "settings.integration.zapier.template.teams.pair":
+    "Microsoft Teams + {brand}",
+  "settings.integration.zapier.template.outlook":
+    "使用 {brand} 从 Outlook 电子邮件中建立任务",
   "settings.integration.zapier.template.outlook.pair": "Outlook + {brand}",
-  "settings.integration.zapier.template.salesforce": "使用 {brand} 评估新的 Salesforce 潜在客户",
-  "settings.integration.zapier.template.salesforce.pair": "Salesforce + {brand}",
-  "settings.integration.zapier.template.shopify": "使用 {brand} 根据新的 Shopify 订单建立购后活动",
+  "settings.integration.zapier.template.salesforce":
+    "使用 {brand} 评估新的 Salesforce 潜在客户",
+  "settings.integration.zapier.template.salesforce.pair":
+    "Salesforce + {brand}",
+  "settings.integration.zapier.template.shopify":
+    "使用 {brand} 根据新的 Shopify 订单建立购后活动",
   "settings.integration.zapier.template.shopify.pair": "Shopify + {brand}",
-  "settings.integration.zapier.template.zendesk": "使用 {brand} 自动化分配和回应 Zendesk 工单",
+  "settings.integration.zapier.template.zendesk":
+    "使用 {brand} 自动化分配和回应 Zendesk 工单",
   "settings.integration.zapier.template.zendesk.pair": "Zendesk + {brand}",
-  "settings.integration.zapier.template.zoom": "使用 {brand} 从 Zoom 会议记录中提取行动项目",
+  "settings.integration.zapier.template.zoom":
+    "使用 {brand} 从 Zoom 会议记录中提取行动项目",
   "settings.integration.zapier.template.zoom.pair": "Zoom + {brand}",
   "settings.integration.slack.name": "Slack",
   "settings.integration.slack.title": "在 Slack 中使用 {brand}",
-  "settings.integration.slack.description": "在 Slack 中使用 @{brand} 将任务分配给 {brand}",
-  "settings.integration.slack.overview": "在频道或执行绪中标记 @{brand}。{brand} 将从中建立任务并持续更新您。",
+  "settings.integration.slack.description":
+    "在 Slack 中使用 @{brand} 将任务分配给 {brand}",
+  "settings.integration.slack.overview":
+    "在频道或执行绪中标记 @{brand}。{brand} 将从中建立任务并持续更新您。",
   "settings.integration.slack.tips": "提示：",
   "settings.integration.slack.muteHint": "停止 {brand} 追踪此执行绪中的新讯息",
   "settings.integration.slack.unmuteHint": "撤销上述操作",
@@ -1400,7 +1528,8 @@ export const zh = {
   "settings.changeEmailTitle": "更改电子邮件地址",
   "settings.changeEmailSecurity": "为确保账户安全，请完成双步骤验证。",
   "settings.verifyIdentity": "验证身份",
-  "settings.verifyIdentityHint": "验证身份以继续操作。点击发送即可接收验证码至 {email}",
+  "settings.verifyIdentityHint":
+    "验证身份以继续操作。点击发送即可接收验证码至 {email}",
   "settings.verificationCode": "输入验证码",
   "settings.send": "发送",
   "settings.next": "下一页",
@@ -1420,29 +1549,36 @@ export const zh = {
   "settings.deleteAccount": "删除账户",
   "settings.deleteAccountHint": "此操作将删除您的账户及所有数据。",
   "settings.confirmDeleteAccount": "确认删除账户",
-  "settings.deleteWarningPermanent": "一旦您的账户被删除，您的所有数据将被永久删除且无法恢复。",
-  "settings.deleteWarningRetention": "您的所有数据将在 30 天后永久删除，但在法律要求或许可的情况下，我们可能保留一小部分数据更长时间。",
-  "settings.deleteWarningSubscription": "您的订阅将自动续订，除非手动取消。我们无法为您取消订阅。",
+  "settings.deleteWarningPermanent":
+    "一旦您的账户被删除，您的所有数据将被永久删除且无法恢复。",
+  "settings.deleteWarningRetention":
+    "您的所有数据将在 30 天后永久删除，但在法律要求或许可的情况下，我们可能保留一小部分数据更长时间。",
+  "settings.deleteWarningSubscription":
+    "您的订阅将自动续订，除非手动取消。我们无法为您取消订阅。",
   "settings.verifyEmail": "验证您的电子邮件 {email}",
   "settings.sendCode": "发送验证码",
   "settings.appearanceTitle": "外观与语言",
-  "settings.generalTitle": "一般",
+  "settings.generalTitle": "通用",
   "settings.appearanceSection": "外观",
   "settings.notificationsGroup": "通讯偏好",
   "settings.browserNotifications": "浏览器通知",
-  "settings.browserNotificationsHint": "当有新进展或任务完成时，浏览器会收到通知。",
+  "settings.browserNotificationsHint":
+    "当有新进展或任务完成时，浏览器会收到通知。",
   "settings.soundNotifications": "声音提醒",
   "settings.soundNotificationsHint": "当您不在时，任务完成会播放一次提示音。",
   "settings.productUpdates": "接收产品更新",
-  "settings.productUpdatesHint": "抢先体验新功能发布和成功案例，以便优化您的工作流程。",
+  "settings.productUpdatesHint":
+    "抢先体验新功能发布和成功案例，以便优化您的工作流程。",
   "settings.brandAds": "关于 Kokoro 的广告",
-  "settings.brandAdsHint": "启用后，我们可能会与营销合作伙伴共享收集到的个人信息，以便在其他应用程序、网站和平台上展示 Kokoro 的广告。",
+  "settings.brandAdsHint":
+    "启用后，我们可能会与营销合作伙伴共享收集到的个人信息，以便在其他应用程序、网站和平台上展示 Kokoro 的广告。",
   "settings.theme": "主题",
   "settings.language": "语言",
-  "settings.chatTitle": "对话偏好",
+  "settings.chatTitle": "聊天偏好",
   "settings.shortcutsNavTitle": "快捷键",
   "settings.shortcutsTitle": "键盘快捷键",
-  "settings.shortcutsDescription": "自定义快捷键——点击任意操作旁的按键，然后按下新的组合键。",
+  "settings.shortcutsDescription":
+    "自定义快捷键——点击任意操作旁的按键，然后按下新的组合键。",
   "settings.shortcutEditLabel": "编辑{name}快捷键",
   "settings.shortcutClearLabel": "清除{name}快捷键",
   "settings.shortcutClickEdit": "点击编辑",
@@ -1462,6 +1598,7 @@ export const zh = {
   "settings.creditsTitle": "用量与计费",
   "settings.creditsMenu": "积分",
   "settings.subTitle": "订阅套餐",
+  "settings.createTeam": "创建团队",
   "settings.subViewLedger": "查看流水",
   "settings.capsTitle": "能力入口",
   "settings.capSkills": "技能库",
@@ -1506,9 +1643,11 @@ export const zh = {
   "firstSite.skills": "技能",
   "firstSite.noSkills": "暂无已添加的技能",
   "firstSite.skillBuilder": "技能构建器",
-  "firstSite.projectSkillsHint": "输入 /（例如 /skill-creator）手动选用已新增的技能",
+  "firstSite.projectSkillsHint":
+    "输入 /（例如 /skill-creator）手动选用已新增的技能",
   "firstSite.viewMySkills": "检视我的技能",
-  "firstSite.skillBuilderDescription": "用于创建或更新技能的指南，这些技能通过专业知识、工作流程或工具集成来扩充 {brand}。对于任何修改或改进请求，必须先阅读此技能并遵循其更新工作流程，而非直接编辑文件。",
+  "firstSite.skillBuilderDescription":
+    "用于创建或更新技能的指南，这些技能通过专业知识、工作流程或工具集成来扩充 {brand}。对于任何修改或改进请求，必须先阅读此技能并遵循其更新工作流程，而非直接编辑文件。",
   "firstSite.manageSkills": "管理技能",
   "firstSite.enableSkill": "启用技能",
   "firstSite.disableSkill": "停用技能",
@@ -1518,7 +1657,8 @@ export const zh = {
   "firstSite.websitesHint": "在一个地方追踪版本、分析和更新。",
   "firstSite.addWebsiteToProject": "新增网站至当前专案",
   "firstSite.searchWebsites": "搜索网站",
-  "firstSite.addWebsitePrompt": "我要为这个工作区添加一个网站，并设置持续跟踪和更新。",
+  "firstSite.addWebsitePrompt":
+    "我要为这个工作区添加一个网站，并设置持续跟踪和更新。",
   "firstSite.scheduledTasks": "定时任务",
   "firstSite.scheduledTasksHint": "在此专案中于预设时间执行任务。",
   "firstSite.projectScheduledTasks": "专案排程任务",
@@ -1540,7 +1680,8 @@ export const zh = {
   "firstSite.autoApprove": "自动核准",
   "firstSite.autoApproveHint": "在传送或发布前，自动核准确认提示并继续执行。",
   "firstSite.advancedSettings": "进阶设定",
-  "firstSite.advancedSettingsHint": "管理执行选项、代理类型、连接器以及专案或云端电脑使用情况。",
+  "firstSite.advancedSettingsHint":
+    "管理执行选项、代理类型、连接器以及专案或云端电脑使用情况。",
   "firstSite.executionMode": "执行选项",
   "firstSite.sameTask": "同一任务",
   "firstSite.agent": "Agent",
@@ -1573,14 +1714,16 @@ export const zh = {
   "firstSite.resourceListEmpty": "暂无文件和资源。",
   "firstSite.resourceLoadMore": "加载更多文件",
   "firstSite.resourceUploading": "正在上传…",
-  "firstSite.resourceUploadRestart": "{name} 的上传已终止。请重新选择文件开始新上传。",
+  "firstSite.resourceUploadRestart":
+    "{name} 的上传已终止。请重新选择文件开始新上传。",
   "firstSite.resourceUploadRejected": "{name} 未上传。请检查文件或访问权限。",
   "firstSite.resourceUploadFailed": "{name} 上传失败，请重试。",
   "firstSite.resourceInfected": "{name} 未通过安全检查。",
   "firstSite.resourceTooLarge": "{name} 超过 1 MB 上传限制。",
   "firstSite.resourceRetryUpload": "重试上传 {name}",
   "firstSite.projectInstructionsSaveError": "保存失败，请重试。",
-  "firstSite.editInstructionsPrompt": "打开专案指令编辑器，帮我设置这个工作区在所有任务中遵循的长期偏好。",
+  "firstSite.editInstructionsPrompt":
+    "打开专案指令编辑器，帮我设置这个工作区在所有任务中遵循的长期偏好。",
   "firstSite.skillsPrompt": "打开技能面板，帮我为这个工作区添加技能。",
   "firstSite.chooseModel": "选择 Kokoro 模型",
   "firstSite.models": "模型",
@@ -1610,9 +1753,12 @@ export const zh = {
   "firstSite.presentationPlaceholder": "描述您的简报主题",
   "firstSite.designPlaceholder": "描述您想要生成的图片",
   "firstSite.gamePlaceholder": "描述您想要制作的游戏",
-  "firstSite.presentationPrompt": "帮我制作一份关于「主题」的简报，包含清晰的大纲、关键要点和可直接用于投影片的内容。",
-  "firstSite.designPrompt": "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
-  "firstSite.gamePrompt": "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
+  "firstSite.presentationPrompt":
+    "帮我制作一份关于「主题」的简报，包含清晰的大纲、关键要点和可直接用于投影片的内容。",
+  "firstSite.designPrompt":
+    "帮我设计一张关于「主题」的视觉作品，说明风格、版式、色彩和需要传达的核心信息。",
+  "firstSite.gamePrompt":
+    "帮我制作一个关于「主题」的游戏，说明核心玩法、目标、规则和基本操作。",
   "firstSite.presentationExamples": "范例提示词",
   "firstSite.presentationTemplates": "选择模板",
   "firstSite.slideCount": "幻灯片数量：{range}",
@@ -1626,27 +1772,39 @@ export const zh = {
   "firstSite.presentationTemplateReview": "季度业务回顾",
   "firstSite.designCardData": "制作咖啡趋势的数据图表",
   "firstSite.designCardDataDescription": "将复杂数据整理成一眼看懂的视觉故事。",
-  "firstSite.designCardDataPrompt": "为咖啡品牌制作一组展示销售趋势的数据图表。",
+  "firstSite.designCardDataPrompt":
+    "为咖啡品牌制作一组展示销售趋势的数据图表。",
   "firstSite.designCardMenu": "设计日式餐厅菜单界面",
   "firstSite.designCardMenuDescription": "为高端餐厅设计一套清晰、精致的菜单。",
-  "firstSite.designCardMenuPrompt": "设计一套日式餐厅的菜单界面，风格精致、易于点餐。",
+  "firstSite.designCardMenuPrompt":
+    "设计一套日式餐厅的菜单界面，风格精致、易于点餐。",
   "firstSite.designCardWearable": "设计智慧手环及包装",
-  "firstSite.designCardWearableDescription": "从产品外观到包装，完成一套统一设计。",
-  "firstSite.designCardWearablePrompt": "为一款智慧手环设计产品外观和包装概念。",
+  "firstSite.designCardWearableDescription":
+    "从产品外观到包装，完成一套统一设计。",
+  "firstSite.designCardWearablePrompt":
+    "为一款智慧手环设计产品外观和包装概念。",
   "firstSite.designCardSaas": "设计 SaaS 产品发布海报套组",
   "firstSite.designCardSaasDescription": "为产品发布制作一组有层次的宣传视觉。",
-  "firstSite.designCardSaasPrompt": "设计一组 SaaS 产品发布海报，突出功能亮点和品牌气质。",
+  "firstSite.designCardSaasPrompt":
+    "设计一组 SaaS 产品发布海报，突出功能亮点和品牌气质。",
   "firstSite.desktopBanner": "创作你自己的游戏",
   "firstSite.getStarted": "开始使用",
-  "firstSite.starterDataDescription": "把这组数据整理成易懂的图表，说明趋势、异常与原因，并给出可执行的下一步建议。",
-  "firstSite.starterWritingDescription": "围绕一个主题起草结构清晰的文章，再根据目标读者和使用场景优化表达。",
-  "firstSite.starterResearchDescription": "研究一个主题，整理可靠来源、关键证据和结论，最后输出一份易读的报告。",
-  "firstSite.starterPlanDescription": "把一个目标拆解成明确步骤、时间节点和优先级，形成可以立即执行的计划。",
-  "firstSite.starterCodeDescription": "为一个具体功能编写可运行的脚本，并解释配置、运行方式和后续调整方法。",
-  "firstSite.starterSummaryDescription": "将一段复杂材料整理成重点、结论和待办事项，方便快速理解并继续推进。",
+  "firstSite.starterDataDescription":
+    "把这组数据整理成易懂的图表，说明趋势、异常与原因，并给出可执行的下一步建议。",
+  "firstSite.starterWritingDescription":
+    "围绕一个主题起草结构清晰的文章，再根据目标读者和使用场景优化表达。",
+  "firstSite.starterResearchDescription":
+    "研究一个主题，整理可靠来源、关键证据和结论，最后输出一份易读的报告。",
+  "firstSite.starterPlanDescription":
+    "把一个目标拆解成明确步骤、时间节点和优先级，形成可以立即执行的计划。",
+  "firstSite.starterCodeDescription":
+    "为一个具体功能编写可运行的脚本，并解释配置、运行方式和后续调整方法。",
+  "firstSite.starterSummaryDescription":
+    "将一段复杂材料整理成重点、结论和待办事项，方便快速理解并继续推进。",
   "firstSite.suggestionsTitle": "以下是您可以使用 {brand} 做的事情：",
   "firstSite.dismissSuggestions": "关闭建议",
-  "firstSite.desktopBannerHint": "创造解谜、策略、冒险等各种游戏，或打造你所想象的一切游戏。",
+  "firstSite.desktopBannerHint":
+    "创造解谜、策略、冒险等各种游戏，或打造你所想象的一切游戏。",
   "firstSite.more": "更多",
   "firstSite.previous": "上一组",
   "firstSite.promptBrief": "制作简报",
@@ -1656,7 +1814,8 @@ export const zh = {
   "firstSite.promptDesign": "设计",
   "firstSite.promptGame": "制作游戏",
   "firstSite.keepProjectOrganized": "让你的网站井然有序",
-  "firstSite.keepProjectOrganizedHint": "将所有任务、版本和更新集中保存在一个地方。",
+  "firstSite.keepProjectOrganizedHint":
+    "将所有任务、版本和更新集中保存在一个地方。",
   "firstSite.addToProject": "新增到专案",
   "firstSite.whatToBuild": "您想建立什么？",
   "firstSite.addWebsiteReference": "新增网站参考",
@@ -1676,9 +1835,12 @@ export const zh = {
   "firstSite.ideaProductLaunch": "产品发布页",
   "firstSite.ideaWaitlist": "构建候补名单着陆页",
   "firstSite.ideaAppDownload": "应用程序下载着陆页",
-  "firstSite.ideaProductPrompt": "为新产品建立一个发布页，突出核心价值、功能亮点、用户评价和立即行动。",
-  "firstSite.ideaWaitlistPrompt": "建立一个候补名单着陆页，说明产品价值并收集访客的邮箱地址。",
-  "firstSite.ideaAppDownloadPrompt": "建立一个应用程序下载着陆页，展示产品亮点、应用商店链接和明确的行动按钮。",
+  "firstSite.ideaProductPrompt":
+    "为新产品建立一个发布页，突出核心价值、功能亮点、用户评价和立即行动。",
+  "firstSite.ideaWaitlistPrompt":
+    "建立一个候补名单着陆页，说明产品价值并收集访客的邮箱地址。",
+  "firstSite.ideaAppDownloadPrompt":
+    "建立一个应用程序下载着陆页，展示产品亮点、应用商店链接和明确的行动按钮。",
   "firstSite.builtInIntegrations": "强大的内建整合",
   "firstSite.integrationModels": "大型模型",
   "firstSite.integrationCommerce": "Shopify",
@@ -1691,7 +1853,8 @@ export const zh = {
   "firstSite.integrationPayments": "Stripe",
   "firstSite.integrationSpeech": "语音转文字",
   "firstSite.nextStep": "你的下一步正在成形。",
-  "firstSite.subhead": "从任务、问题或一个粗略想法开始。Kokoro 会帮你整理出下一步有用的行动。",
+  "firstSite.subhead":
+    "从任务、问题或一个粗略想法开始。Kokoro 会帮你整理出下一步有用的行动。",
   "firstSite.previewWorking": "预览正在处理“{task}”。登录后将切换到真实会话。",
   "firstSite.liveWorking": "Kokoro 正在处理“{task}”。",
   "firstSite.working": "处理中",
@@ -1729,7 +1892,8 @@ export const zh = {
   "agents.skillsTitle": "自定义技能",
   "agents.skillsDescription": "为你的助理配备特定领域的专业知识。",
   "agents.chatAppsTitle": "在聊天应用中使用",
-  "agents.chatAppsDescription": "可用于 Telegram、LINE 和 Slack。更多平台即将推出。",
+  "agents.chatAppsDescription":
+    "可用于 Telegram、LINE 和 Slack。更多平台即将推出。",
   "agents.comingSoon": "即将上线",
   "agents.platforms": "连接平台",
   "agents.platform.telegram": "Telegram",
@@ -1744,15 +1908,18 @@ export const zh = {
   "firstSite.next": "下一步",
   "firstSite.liveNext": "菜单与视觉 token 来自实时 System 配置。",
   "firstSite.previewNext": "后端配置连接期间，预览 fixture 会保持工作区可用。",
-  "skills.shareUnknown": "分享创建结果暂未确认。不要重复提交；只有明确需要另一条链接时才重新创建。",
+  "skills.shareUnknown":
+    "分享创建结果暂未确认。不要重复提交；只有明确需要另一条链接时才重新创建。",
   "skills.shareNew": "创建新的分享",
-  "skills.shareCopyFailed": "链接已创建，复制失败。再次点击分享可复制同一条链接。",
+  "skills.shareCopyFailed":
+    "链接已创建，复制失败。再次点击分享可复制同一条链接。",
   "skills.shareFailed": "分享创建失败，请重试。",
   "skills.shareUnavailable": "分享暂不可用或已失效。",
   "skills.shareLogin": "请登录后查看分享的技能。",
   "skills.shareSignIn": "登录并继续",
   "skills.shareInstallationUnavailable": "暂时无法确认安装状态，请重试。",
-  "skills.shareOtherPin": "我的技能中已安装该技能的其他固定版本；本页不会自动升级。",
-} as const
+  "skills.shareOtherPin":
+    "我的技能中已安装该技能的其他固定版本；本页不会自动升级。",
+} as const;
 
-export type MessageKey = keyof typeof zh
+export type MessageKey = keyof typeof zh;

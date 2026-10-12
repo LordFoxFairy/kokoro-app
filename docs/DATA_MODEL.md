@@ -156,18 +156,6 @@ Platform独占Connector、Connection、current authorization与Server；BFF只�
 
 <!-- R257-MCP-WEB-D0-DATA-END -->
 
-## R257-MCP-WEB-D0：本人 Connection 页面无持久化事实（2026-10-06；仅设计）
-
-Platform独占Connector、Connection、current authorization与Server；BFF只发布当前本人投影。Web不新增数据库、表、SQL、Redis、localStorage、IndexedDB、cookie字段、离线cache、receipt、outbox或同步store，也不复制owner eligibility。Server declaration不是本人Connection，旧Server read/shape不得保留为fallback。
-
-唯一瞬时状态为当前已准入actor marker下的filter tuple、opaque cursor历史、当前page及loading/error generation。filter、actor、Session admission、重试、卸载变化会取消/退役旧读；不得跨actor复用page、empty、cursor或错误。浏览器刷新必须从BFF/Platform重读current事实；多页不是跨请求数据库snapshot，撤权可使后页或刷新变化。
-
-六字段只用于strict传输投影，不要求六字段全部成为主视觉内容；主Card只显示provider与人类可读连接状态，opaque ID仅为次要详情。Web不持久保存URL、secret、headers、provider credential、scope、proof、工具清单、permission、declaration或授权缓存。active只描述owner本次合格投影，不证明Agent invoke权限、第三方帐号、计费或后台管理员资格。创建/授权/enable/invoke/revoke仍是独立owner命令与验收，本D0不创建其本地状态。browser client的10秒总deadline与1MiB body cap只约束单次内存读取，不形成缓存或持久事实。
-
-本片不改任何source/schema/机器快照。未来固定BFF artifact后，contract/client/adapter/component测试证明消费边界；最终Root用正常Session A/B及owner真实Connection/撤销/分页/硬刷新验收。只有empty而无合法positive不能关闭用户连接旅程。
-
-<!-- R257-MCP-WEB-D0-DATA-END -->
-
 ## T-C01.R255-PRESET-RETIRE（06:12）：唯一 model-only 浏览器偏好目标
 
 本前缀记录实施前的 D0 收口：冻结时源码仍为 model+agent strict 偏好，下述是当时裁决的实现边界，现已完成 model-only 源码静态退役，原数据模型全文保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
@@ -269,83 +257,6 @@ Web不新增SQL/实体/角色/cookie。现origin+state digest Redis key仍NX/TTL
 
 仅消费者wire identity值域与固定contract provenance改变。Web无SQL/Redis/cookie/localStorage/IndexedDB/新receipt或ZIP身份映射；manifest、scan、draft、release/install仍属于Platform/Storage/BFF既有owner。现一次File/key/attempt/unknown意图仅瞬时UI，账户切换fence和ACK后权威GET保持。不复制owner ZIP解析，不持久化旧新映射、不后台造包，不改auth return/业务归属。当前三D0只prefix，原mixed全文保留；实现与用户验收待后继。
 
-## R242-WEB-RENAME-D0：Project name consumer data boundary（2026-10-05；仅设计）
-
-### owner 与持久化结论
-
-Project name、rename receipt、idempotency receipt、tenant/subject admission 和 canonical Project resource 都由 `kokoro-bff` owner 持久化。Web 无持久化 owner：本命令不新增 PostgreSQL schema/table/migration、Redis key、server cache、localStorage、IndexedDB、browser business store、generated data model 或 retention rule；不复制可编辑 owner 事实。正式 producer pin 是 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` / public `7.2.0` / OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`；Web formal `5e0963648db0cb0e1a60de42ea025670b32aba85` 的旧全文在本节之后保持 exact suffix。
-
-Web 只在当前 mounted subject/route/generation 中保存一个临时 command intent。它是网络生命周期数据，不是 Project name 真相；fresh canonical GET 与 fresh collection list 才能产生页面 resource projection。
-
-### 临时状态形状
-
-实现可在现有 project hook/feature state 中表达下列单一 intent（字段名为设计语义，不是本阶段新增代码）：
-
-```ts
-type ProjectRenameIntent = {
-  targetProjectId: string                 // verified canonical project_<UUID>
-  rawInput: string                        // dialog draft, mounted-only
-  normalizedName: string                  // trim, 1..160 UTF-16, no NUL/lone surrogate
-  body: { name: string }                  // immutable during request/retry
-  idempotencyKey: string                  // visible ASCII 1..128, no comma/space
-  subjectKey: string                      // trusted session/subject fence
-  routeKey: string                       // current workspace/route fence
-  generation: number                     // mounted/read generation
-  status: "pending" | "confirming-read" | "confirmed" | "unknown" | "error"
-  abortController: AbortController       // request-local, not persisted
-  deadlineAt: number                     // monotonic budget, not wall-clock fact
-}
-```
-
-`rawInput` 可被用户编辑；一旦发送，`normalizedName`、body、target 和 key 冻结。编辑为新名称先结束旧 intent 并重新读取 owner，再创建全新 key/body；不得把同一个 key 当作两个 payload 的容器。
-
-### 生命周期与写入边界
-
-| 时点 | Web 临时状态 | owner/页面事实 | 允许的网络动作 |
-| --- | --- | --- | --- |
-| open/edit | raw input | 当前 Project resource 不变 | 0 次 PATCH |
-| pre-send cancel/Escape | intent 丢弃 | owner 不变；页面保持原 resource | 0 次 PATCH、0 receipt |
-| pending | target/key/body 冻结；重复 Save/简单关闭 disabled | 不把 draft 写入 resource | 一次 exact PATCH，10 秒总预算 |
-| ACK accepted | status=`confirming-read`；receipt 仅作本地证据 | receipt 不替代 Project | target detail GET → collection list |
-| fresh reads complete | intent 可清理；页面采用 owner reads | canonical detail/list 是唯一当前投影 | 无额外 PATCH |
-| 503/network/timeout/bad ACK | status=`unknown`，保留 input/target/key/body | 不推断成功/失败 owner 事实 | 仅显式同意的同 key/body PATCH retry |
-| GET read failure | status=`unknown` 或 read error | 不丢 ACK 证据、不写新 name | GET-only retry |
-| 401/403/subject change | intent 清敏并 fenced | 资源由新 subject/route 重读 | 不重发旧 PATCH |
-
-发送后的 cancel/abort 不等于 owner-zero-write；若 owner 可能已接受，页面进入 unknown 并要求 authority read。`pending` 禁重复保存和关闭是本 D0 的简单失败安全方案；不可恢复的 route/subject/generation 变化直接丢弃旧 intent，禁止旧回调写新 surface。
-
-### 不变量、围栏与删除语义
-
-1. 未发送前 cancel 的 PATCH/receipt 计数为零；发送后所有结果都以 `subjectKey + routeKey + generation + targetProjectId` 校验。
-2. ACK 必须同时匹配 frozen target 与 normalized name；ACK 不是资源，不触发本地 `setName`，也不形成第二个 name truth。
-3. 页面 confirmed 只来自 fresh canonical target GET 及随后 fresh list；旧 list/detail、ACK、导航缓存和 draft 不能覆盖新 generation。
-4. stable key 只绑定一个 body；503/unknown 显式 retry 复用 key/body，用户改名则旧 intent 结束并新建 key。
-5. timeout、caller abort、dispose、subject/route/epoch 变化都清理 timer/listeners/controller；迟到值只能被丢弃，不能改变新 dialog、focus、navigation 或 name。
-6. Web 不保存 Project name snapshot 作为独立事实，不改变 BFF receipt retention、tenant boundary、数据库事务、表或索引。
-7. 本命令没有删除 Project、slug、alias、conversation、history 或 list item 的语义；`project_not_found` 只表示当前 owner read 事实，不触发本地伪删除。
-
-### 设计验证边界
-
-本 D0 只交付 owner、临时状态、生命周期、读后投影与无 schema 结论；不改 canonical schema、API contract 文件、generated 类型、source/test/package/lock。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。后续实现必须以真实 BFF receipt、detail/list fresh read、auth/route/generation race 及真实 Next/Chromium 测试证明上述不变量；Root 在主仓执行 Web owner 门禁后再决定页面模块是否通过。
-
----
-
-## R239 当前认证与工作区恢复数据边界
-
-本片不新增数据库、schema、migration、Redis key、browser business store、server cache、receipt 或第二身份事实。`serverAdmitted` 与 booting/unavailable 只存在于当前 render；data-free shell 不保存 subject、claims、Conversation、timeline 或 draft，也不读取 owner 私有数据。
-
-checking 只显示 disabled shell；probe timeout/unavailable 会卸载该壳与 composer，并保持 timeline、draft、snapshot/runtime owner I/O 为零，直到显式 Retry。可信 anonymous 卸载 Runtime 后只执行一次 native `/login`；不持久化 timer、navigation failure 或 Retry 中转状态。
-
-Snapshot/process 的 10 秒 deadline、AbortController 与分页累积只属于当前 mounted generation；全部严格验证前不写 thread、cursor、Run、Message 或 Conversation 投影，partial/late 结果丢弃。pagehide 只提交当时已捕获的 exact pending draft key/value；不改变 draft owner、retention 或清空语义。
-
-受控系统矩阵不证明原用户 3310 根因或恢复，亦不新增或验证费用数据事实。
-
-下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
-
-## R238 当前认证与恢复准入
-
-本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
-
 ## R186-W-SNAPSHOT-DEADLINE：仅mounted读取生命周期（2026-10-04；tests-first）
 
 10秒snapshot总预算、AbortController、开始时刻与分页累积仅属于当前mounted engine generation，不持久化。完整snapshot与全部process页严格校验前不写thread、cursor、Run、Message或Conversation事实；timeout/dispose/scope切换丢弃临时累积及迟到回调。草稿与本地Conversation索引不因超时删除，显式Retry仍从owner snapshot重建。无localStorage/IndexedDB/SQL/Redis/schema或retention变化。
@@ -362,12 +273,6 @@ anonymous时复用的booting composition仍只存在于当前React树，不保�
 
 `serverAdmitted`与`booting`只存在于单次RSC/render composition，不写数据库、Redis、cookie、localStorage/IndexedDB、server cache、receipt或auth index，不跨reload恢复。booting subtree不mount任何data controller，因此不能读取旧Conversation/draft或创建owner请求；Product Session、subject、generation/tombstone与expiry仍由现owner及正式probe拥有。probe成功才mount Runtime；unavailable销毁booting presentation，anonymous撤权则保留无数据booting presentation等待native sign-in，二者都不采纳旧主体投影。
 
-## R167-SERVER-FIRST：无新增数据 owner（2026-10-03；待 tests-first）
-
-首文档 gate 不新增 Web 数据库、schema、migration、Redis key、browser storage、server cache、receipt或第二 session。它只读取现 HttpOnly Product Session 与现 Redis generation/tombstone，并检查 cookie claim 的 `accessExpiresAt`；可信事实和 retention 仍由现 Product Session owner路径维护。null/stale/tombstoned/expired 只驱动固定 `/login` redirect，不把 anonymous 写成持久状态；配置/Redis失败只形成当前请求的 fail-closed unavailable 输出。任何 claims/access/id/subject 均不得进入 RSC/client props、HTML、日志或 URL。
-
-成功后的 AppGate probe、browser auth-index marker 与 Conversation cache 边界保持不变；后者不是认证事实。layout 的首次 document 判定也不是后续 client navigation、focus revocation 或 BFF admission 的缓存。旧 IAB 文档卡住与新文档真实恢复并存，本片不新增诊断数据推断旧文档根因。
-
 ## R170-W-MOVE-UI：仅mounted intent（2026-10-04；候选已实现，发布待 Root 集成）
 
 Web不新增schema、Redis、localStorage/IndexedDB、receipt或Conversation归属缓存。唯一新增内存值是mounted engine的nullable frozen Move intent：canonical session、target Project或null、稳定command identity、`pending|unknown`。它不跨reload恢复，不成为owner事实；confirmed/rejected释放，unknown只供用户显式同值重试；无intent retry返回null，不制造空session/target/key记录。ACK前及失败时ConversationStore、draft、thread、Run、Message、cursor和scope均不改；ACK后target membership仍通过owner snapshot/list读取，不把receipt写成假列表项。
@@ -375,12 +280,20 @@ Web不新增schema、Redis、localStorage/IndexedDB、receipt或Conversation归�
 旧scope stream释放不产生cancel；已准入Run继续由owner事实与target-scope replay观察。matching ACK先把当前意图结算为durable confirmed，再由generation/view fence限制导航、错误和焦点投影；同scope来源owner GET不受旧UI projection否决，并以canonical membership更新view cache。503与409 `idempotency_in_progress`不代表未执行，保留同一`sessionId/targetProjectId/commandId`为unknown供人工恢复。全程不保存target副本、不创建第二binding truth、不改变Conversation/Message身份。cache storage/observer异常仍fail-contained。跨scope unknown/late ACK、route未dispose与blocked-storage硬刷新归W2 OPEN。
 
 R195-W2把上述瞬时intent改为当前document内、verified subject绑定的单槽Move command，而不是mounted engine字段。槽只含subject、epoch/slot identity、canonical session、target Project或null、稳定commandId/body、`pending|unknown`及必要的Promise/AbortController/subscriber；不保存owner binding、Project membership、Conversation/Message副本或第二receipt。scope engine dispose只移除subscriber，不能清槽或中断仍在10秒client预算内的请求。matching ACK当下按source scope+sessionId精确evict已有内存/持久browser Conversation索引并释放command；随后只保留source/target有界per-scope version，version与实际request generation共同保证不采用pre-ACK inflight。不存在等待GET消费的per-session token、队列、map或journal，因此连续confirmed Move不会覆盖遗漏前一session；target membership仍只来自fresh owner GET，其他scope缓存不变。
-unknown不设后台timer、轮询、自动POST或无限队列，只能由原verified subject显式同key/bodyRetry。可信anonymous、subject change、logout、pagehide和document teardown先递增epoch，再清槽并abort pending；React订阅者只在自身cleanup时unsubscribe，document唯一永久pagehide handler在每次离页都revoke；所有迟到callback须匹配slot/epoch/subject，abort rejection不得复活状态或invalidation。普通effect cleanup/StrictMode replay不清槽；temporary unavailable只suspend start/retry，同subject pending可结算，恢复不自动重发。command槽与per-scope version不写新的localStorage/IndexedDB/Redis/SQL事实、不跨reload恢复；既有browser索引的best-effort写失败仍保持confirmed，当前document内存eviction继续隐藏source，blocked-storage硬刷新仍无恢复保证。后继实现必须删除engine内旧Move intent/retry/confirmedActiveMove双轨；machine只保不含target/command的通用local cache reconcile，不能把page槽与engine槽并存，也不能park engine冒充operation保留。
 
+unknown不设后台timer、轮询、自动POST或无限队列，只能由原verified subject显式同key/bodyRetry。可信anonymous、subject change、logout、pagehide和document teardown先递增epoch，再清槽/subscribers并abort pending；所有迟到callback须匹配slot/epoch/subject，abort rejection不得复活状态或invalidation。普通effect cleanup/StrictMode replay不清槽；temporary unavailable只suspend start/retry，同subject pending可结算，恢复不自动重发。command槽与per-scope version不写新的localStorage/IndexedDB/Redis/SQL事实、不跨reload恢复；既有browser索引的best-effort写失败仍保持confirmed，当前document内存eviction继续隐藏source，blocked-storage硬刷新仍无恢复保证。后继实现必须删除engine内旧Move intent/retry/confirmedActiveMove双轨；machine只保不含target/command的通用local cache reconcile，不能把page槽与engine槽并存，也不能park engine冒充operation保留。
 
 ---
 
-## R158-W-MOVE-D0：Move client 瞬时数据边界（2026-10-04；A候选待 Root 集成）
+## R167-SERVER-FIRST：无新增数据 owner（2026-10-03；待 tests-first）
+
+首文档 gate 不新增 Web 数据库、schema、migration、Redis key、browser storage、server cache、receipt或第二 session。它只读取现 HttpOnly Product Session 与现 Redis generation/tombstone，并检查 cookie claim 的 `accessExpiresAt`；可信事实和 retention 仍由现 Product Session owner路径维护。null/stale/tombstoned/expired 只驱动固定 `/login` redirect，不把 anonymous 写成持久状态；配置/Redis失败只形成当前请求的 fail-closed unavailable 输出。任何 claims/access/id/subject 均不得进入 RSC/client props、HTML、日志或 URL。
+
+成功后的 AppGate probe、browser auth-index marker 与 Conversation cache 边界保持不变；后者不是认证事实。layout 的首次 document 判定也不是后续 client navigation、focus revocation 或 BFF admission 的缓存。旧 IAB 文档卡住与新文档真实恢复并存，本片不新增诊断数据推断旧文档根因。
+
+---
+
+## R158-W-MOVE-D0：Move client 瞬时数据边界（2026-10-04；候选已实现，发布待 Root 集成）
 
 Conversation 的 current Project/direct 归属、Move idempotency receipt 与事务始终由 BFF 持久拥有。Web 第一片不新增数据库、schema、migration、Redis、localStorage/IndexedDB、server cache、第二 receipt或归属表；只在一次 client调用与operation-scoped同源投影中传递并校验：canonical `conversationId`、canonical `targetProjectId | null`、稳定 `commandId`，strict ACK 的 `session_id/project_ref`，以及 typed error的 owner code/retryable。请求身份只从 owner必需 `x-request-id` header投影，不伪造 `meta`。
 
@@ -389,11 +302,11 @@ Conversation 的 current Project/direct 归属、Move idempotency receipt 与事
 私有10秒预算与caller abort只终止本地等待：即使发生在headers后slow body或ACK parse期间，也保留同一`conversationId/targetProjectId/commandId`语义为unknown，不写本地取消事实。timer与listener只是单次调用资源，finally释放，不进入页面状态、storage或后继重放身份。
 非法caller session ID、target或command key在owner调用前以专属`parse`失败结束，不携带owner字段、零fetch且不产生任何归属写入。
 
-required `SessionClient.moveSession` 的 preview与通用engine fake只允许显式typed rejection，不创建receipt、修改preview `projectRef` 或提供optional fallback。A片没有调用该方法的UI/engine；把required接口补齐不等于用户可操作。调用参数与ACK只活在当前Promise/AbortSignal生命周期，unknown后的同键恢复归B片单意图状态机。
+required `SessionClient.moveSession` 的 preview与通用engine fake只允许显式typed rejection，不创建receipt、修改preview `projectRef` 或提供optional fallback。当前候选已有R170 UI/engine调用该方法；调用参数与ACK只活在当前Promise/AbortSignal生命周期，unknown后的同键恢复仍由单意图状态机负责，owner binding仍只有BFF一份。
 
 失败投影也不持久化：只有专属`ConversationMoveError`的`owner`分支携带完整validated status/code/retryable/requestId/retryAfter；network、parse、adapter、unsupported均为互斥本地分类且没有owner字段。下一片可据此把可确认owner拒绝与结果unknown分开，但不得把network/adapter失败推断为“未执行”或据retryable自动重发。
 
-A片没有engine/UI状态机，因此没有乐观归属、ACK后本地投影或reload恢复；这些归B片以single intent、generation/dispose guard与真实用户测试设计。现同源catchall adapter只转发受信身份和owner wire，不拥有Move数据。原用户 `conv_ffd7` loading P0与本数据切片独立保持开放。
+现同源catchall adapter只转发受信身份和owner wire，不拥有Move数据；R170候选的single intent、generation/dispose guard与来源view-cache失效也不持久化归属。原用户 `conv_ffd7` loading P0 与本数据切片独立保持开放。
 
 ---
 

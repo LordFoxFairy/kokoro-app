@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { type FormEvent, useEffect, useRef, useState } from "react"
-import { Cable, ChevronDown, Link2, ListFilter, LoaderCircle, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
+import { Cable, ChevronDown, Link2, ListFilter, MessageCircle, Pencil, Plus, Power, Search, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,12 @@ import type { McpSelfConnector, McpSelfConnectorPage, McpSelfProvider, McpSelfPr
 import { useT } from "@/i18n/context"
 import type { McpCreateMode } from "./mcp-panel-model"
 
+import { McpEmptyConnections } from "./mcp-empty-connections"
+import { McpSettingsToolbar } from "./mcp-settings-toolbar"
 import styles from "./mcp-projection-read.module.css"
 
 type Projection = { connectors?: McpSelfConnectorPage; providers: McpSelfProviderPage }
+type ProjectionResource = "providers" | "connectors" | "projection"
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
 type Editor = { kind: "edit"; connector: McpSelfConnector }
 
@@ -44,7 +47,7 @@ function subscribeProjection(
   client: HubClient,
   key: string,
   cursor: string | null,
-  resource: "providers" | "connectors",
+  resource: ProjectionResource,
 ): ProjectionSubscription {
   let requests = projectionInflight.get(client)
   if (requests === undefined) {
@@ -56,7 +59,12 @@ function subscribeProjection(
     const controller = new AbortController()
     const promise = resource === "providers"
       ? client.listMcpSelfProviders({ limit: 100 }, controller.signal).then((providers) => ({ providers }))
-      : client.listMcpSelfConnectors(cursor === null ? {} : { cursor }, controller.signal).then((connectors) => ({ connectors }))
+      : resource === "connectors"
+        ? client.listMcpSelfConnectors(cursor === null ? {} : { cursor }, controller.signal).then((connectors) => ({ connectors }))
+        : Promise.all([
+            client.listMcpSelfProviders({ limit: 100 }, controller.signal),
+            client.listMcpSelfConnectors(cursor === null ? {} : { cursor }, controller.signal),
+          ]).then(([providers, connectors]) => ({ providers, connectors }))
     flight = { controller, promise, subscribers: 0 }
     requests.set(key, flight)
     const clear = (): void => {
@@ -105,13 +113,16 @@ function formatProviderDate(value: string): string {
  * flight, so an asynchronous mutation never replaces the user's page with a
  * loading screen or shifts the list beneath the pointer.
  */
-export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
+export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt, brandName = "Kokoro", initialView = "catalog", settingsLayout = false }: {
   client: HubClient
   embedded?: boolean
+  initialView?: "catalog" | "connections"
+  settingsLayout?: boolean
   identity: string
   onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
   /** The shell owns the composer and conversation transition for catalogue prompts. */
   onPrompt?: (prompt: string) => void
+  brandName?: string
 }) {
   const t = useT()
   const [cursor, setCursor] = useState<string | null>(null)
@@ -125,19 +136,20 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [selectedProvider, setSelectedProvider] = useState<McpSelfProvider | null>(null)
   const [providerQuery, setProviderQuery] = useState("")
-  const [view, setView] = useState<"catalog" | "connections">("catalog")
+  const [view, setView] = useState<"catalog" | "connections">(initialView)
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [displayName, setDisplayName] = useState("")
   const [description, setDescription] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const completedReads = useRef(new Set<string>())
-  const createTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     let active = true
     const requestCursor = cursor
     const requestGeneration = generation
-    const resource = view === "catalog" ? "providers" : "connectors"
+    // State kind deliberately does not invalidate a completed read: in settings
+    // the initial connections projection already contains both resources.
+    const resource: ProjectionResource = view === "catalog" ? "providers" : state.kind === "ready" ? "connectors" : "projection"
     const requestKey = JSON.stringify([identity, requestCursor, requestGeneration, resource])
     // Switching back to a populated catalog must not make a second full owner
     // request. A new generation is created only by an explicit refresh or a
@@ -162,7 +174,9 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
               },
             }
           }
-          if (next.connectors === undefined || current.kind !== "ready") return current
+          if (next.connectors === undefined) return current
+          if (next.providers !== undefined) return { kind: "ready", data: { providers: next.providers, connectors: next.connectors } }
+          if (current.kind !== "ready") return current
           return { kind: "ready", data: { ...current.data, connectors: next.connectors } }
         })
       },
@@ -179,6 +193,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
       active = false
       subscription.release()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- state.kind only selects the first resource; adding it repeats that read.
   }, [client, cursor, generation, identity, view])
 
   const projection = state.kind === "ready" ? state.data : null
@@ -255,31 +270,15 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
-      <h2>{t("rail.navPlugins")}</h2>
-      <div className={styles.headerControls}>
-        <Button type="button" variant="outline" className={styles.viewToggle} data-active={view === "connections" || undefined} aria-pressed={view === "connections"} onClick={() => {
-          setRefreshing(true)
-          setRefreshError(false)
-          setView((current) => current === "catalog" ? "connections" : "catalog")
-        }}>
-          {view === "catalog" ? t("plugins.manageConnectors") : t("mcp.browse")}
-        </Button>
-        {onCreateMcp ? <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button ref={createTriggerRef} type="button" variant="outline" className={styles.createButton}>
-              {t("plugins.create")}<ChevronDown aria-hidden="true" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className={styles.createMenu}>
-            <DropdownMenuGroup>
-              <DropdownMenuItem onSelect={() => onCreateMcp("form", createTriggerRef.current)}>{t("mcp.register")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onCreateMcp("url", createTriggerRef.current)}>{t("mcp.urlTitle")}</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onCreateMcp("json", createTriggerRef.current)}>{t("mcp.jsonImportTitle")}</DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu> : null}
-        {refreshing ? <span className={styles.refreshing} role="status"><LoaderCircle aria-hidden="true" />{t("mcp.loading")}</span> : null}
-      </div>
+      {settingsLayout ? null : <h2>{t("rail.navPlugins")}</h2>}
+      <McpSettingsToolbar
+        view={view}
+        refreshing={refreshing}
+        query={providerQuery}
+        onQueryChange={setProviderQuery}
+        onBrowse={() => { setRefreshing(true); setRefreshError(false); setView((current) => current === "connections" ? "catalog" : "connections") }}
+        {...(onCreateMcp === undefined ? {} : { onCreate: onCreateMcp })}
+      />
     </header>
 
     {state.kind === "loading" ? <div className={styles.loading} role="status"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
@@ -290,11 +289,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
     {projection ? <div className={styles.content}>
       {view === "catalog" ? <>
         <div className={styles.directoryControls}>
-          <label className={styles.searchField}>
-            <Search aria-hidden="true" />
-            <span className="sr-only">{t("plugins.search")}</span>
-            <Input type="search" value={providerQuery} onChange={(event) => setProviderQuery(event.target.value)} placeholder={t("plugins.search")} />
-          </label>
+
           <nav className={styles.categoryRail} aria-label={t("mcp.categoryAria")}>
             <button type="button" aria-pressed={categoryFilter === "all"} onClick={() => setCategoryFilter("all")}>{t("mcp.categoryAll")}</button>
             {categoryOptions.map((category) => <button key={category} type="button" aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)}>{categoryLabel(category)}</button>)}
@@ -334,7 +329,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
         </ul>}
       </section> : <section className={styles.connectionSection} aria-label={t("mcp.title")}>
         {projection.connectors === undefined ? <div className={styles.loading} role="status"><Spinner aria-hidden="true" />{t("mcp.loading")}</div> : null}
-        {projection.connectors !== undefined && (visibleConnectors.length === 0 ? <div className={styles.emptyConnections}><p>{t("mcp.empty")}</p></div> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
+        {projection.connectors !== undefined && (visibleConnectors.length === 0 ? <McpEmptyConnections brandName={brandName} onBrowse={() => { setRefreshing(true); setRefreshError(false); setView("catalog") }} /> : <ul className={styles.connectorGrid}>{visibleConnectors.map((connector) => {
           const provider = providerByKey.get(connector.provider_key)
           const connectorName = connector.display_name || provider?.display_name || connector.provider_key
           const providerName = provider?.display_name ?? connector.provider_key

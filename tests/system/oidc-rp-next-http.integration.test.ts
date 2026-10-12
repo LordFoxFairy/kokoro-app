@@ -9,7 +9,7 @@ import type { Duplex } from "node:stream"
 
 import { createClient } from "redis"
 import { decode } from "next-auth/jwt"
-import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
+import { chromium, type Browser, type BrowserContext, type CDPSession, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
@@ -83,195 +83,8 @@ async function close(server: Server): Promise<void> {
   if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }
 
-type SessionProbeFault = "pass" | "pending" | "unavailable"
-
-async function sessionProbeProxy(nextPort: number): Promise<{
-  port: number
-  server: Server
-  close: () => Promise<void>
-  setFault: (fault: SessionProbeFault) => void
-  releasePending: () => void
-  sessionResponseDiagnostics: () => readonly {
-    status: number
-    authenticated: boolean | null
-    completed_at_ms: number
-  }[]
-  setListBodyPending: (pending: boolean) => void
-  releaseListBodies: () => void
-  sessionRequests: () => number
-  listRequests: () => number
-  heldListBodies: () => number
-  loginRequests: () => number
-  upgradeDiagnostics: () => readonly { path: string; requests: number }[]
-  connectDiagnostics: () => Readonly<{ requests: number; established: boolean }>
-  resourceDiagnostics: () => readonly { path: string; requests: number; upstream_statuses: readonly number[] }[]
-}> {
-  let fault: SessionProbeFault = "pass"
-  let probes = 0
-  let lists = 0
-  let logins = 0
-  let holdListBody = false
-  const sessionResponses: { status: number; authenticated: boolean | null; completed_at_ms: number }[] = []
-  const pending = new Set<{ request: import("node:http").IncomingMessage; response: import("node:http").ServerResponse }>()
-  const pendingListBodies = new Set<{ response: import("node:http").ServerResponse; tail: Buffer }>()
-  const resources = new Map<string, { requests: number; upstreamStatuses: number[] }>()
-  const upgrades = new Map<string, number>()
-  const upstreamRequests = new Set<ReturnType<typeof httpRequest>>()
-  const tunnelSockets = new Set<Duplex>()
-  let connectRequests = 0
-  let connectEstablished = false
-
-  const forward = (request: import("node:http").IncomingMessage, response: import("node:http").ServerResponse): void => {
-    if (response.destroyed) return
-    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
-    const resource = resources.get(target.pathname) ?? { requests: 0, upstreamStatuses: [] }
-    resource.requests += 1
-    resources.set(target.pathname, resource)
-    const upstream = httpRequest({ hostname: "127.0.0.1", port: nextPort, method: request.method,
-      path: `${target.pathname}${target.search}`, headers: { ...request.headers, host: `localhost:${nextPort}` } }, (reply) => {
-      if (resource.upstreamStatuses.length < 8) resource.upstreamStatuses.push(reply.statusCode ?? 0)
-      if (request.method === "GET" && target.pathname === "/api/auth/session") {
-        const chunks: Buffer[] = []
-        let size = 0
-        reply.on("data", (chunk: Buffer) => {
-          if (size + chunk.length <= 64 * 1024) chunks.push(chunk)
-          size += chunk.length
-        })
-        reply.once("end", () => {
-          let authenticated: boolean | null = null
-          if (size <= 64 * 1024) {
-            try {
-              const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { authenticated?: unknown }
-              if (typeof parsed.authenticated === "boolean") authenticated = parsed.authenticated
-            } catch { /* closed diagnostic only */ }
-          }
-          if (sessionResponses.length < 8) {
-            sessionResponses.push({ status: reply.statusCode ?? 0, authenticated, completed_at_ms: Date.now() })
-          }
-        })
-      }
-      response.writeHead(reply.statusCode ?? 502, reply.headers)
-      if (holdListBody && request.method === "GET" && target.pathname === "/api/session/sessions" && reply.statusCode === 200) {
-        const chunks: Buffer[] = []
-        reply.on("data", (chunk: Buffer) => chunks.push(chunk))
-        reply.once("end", () => {
-          const body = Buffer.concat(chunks)
-          const split = Math.max(0, body.length - 1)
-          if (split > 0) response.write(body.subarray(0, split))
-          const held = { response, tail: body.subarray(split) }
-          pendingListBodies.add(held)
-          response.once("close", () => pendingListBodies.delete(held))
-        })
-      } else reply.pipe(response)
-    })
-    upstreamRequests.add(upstream)
-    upstream.once("close", () => upstreamRequests.delete(upstream))
-    response.once("close", () => upstream.destroy())
-    request.once("aborted", () => upstream.destroy())
-    upstream.once("error", () => {
-      if (!response.headersSent) response.writeHead(502, { "content-type": "application/json" })
-      response.end(JSON.stringify({ error: { code: "fixture_upstream_unavailable" } }))
-    })
-    if (request.method === "GET" || request.method === "HEAD") upstream.end()
-    else request.pipe(upstream)
-  }
-
-  const server = createServer((request, response) => {
-    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
-    if (target.pathname === "/login") logins += 1
-    if (request.method === "GET" && target.pathname === "/api/session/sessions") lists += 1
-    if (request.method === "GET" && target.pathname === "/api/auth/session") {
-      probes += 1
-      if (fault === "pending") {
-        const held = { request, response }
-        pending.add(held)
-        response.once("close", () => pending.delete(held))
-        return
-      }
-      if (fault === "unavailable") {
-        response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" })
-        response.end(JSON.stringify({ error: { code: "product_session_unavailable", message: "fixture unavailable" } }))
-        return
-      }
-    }
-    forward(request, response)
-  })
-  server.on("upgrade", (request, socket) => {
-    const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
-    upgrades.set(target.pathname, (upgrades.get(target.pathname) ?? 0) + 1)
-    socket.destroy()
-  })
-  server.on("connect", (request, clientSocket, head) => {
-    connectRequests += 1
-    tunnelSockets.add(clientSocket)
-    clientSocket.once("close", () => tunnelSockets.delete(clientSocket))
-    if (request.url !== `localhost:${nextPort}`) {
-      clientSocket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
-      return
-    }
-    const upstreamSocket = netConnect({ host: "127.0.0.1", port: nextPort })
-    tunnelSockets.add(upstreamSocket)
-    upstreamSocket.once("close", () => tunnelSockets.delete(upstreamSocket))
-    clientSocket.once("error", () => upstreamSocket.destroy())
-    upstreamSocket.once("error", () => clientSocket.destroy())
-    upstreamSocket.once("connect", () => {
-      connectEstablished = true
-      clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n")
-      if (head.length > 0) upstreamSocket.write(head)
-      clientSocket.pipe(upstreamSocket)
-      upstreamSocket.pipe(clientSocket)
-    })
-  })
-  const port = await listen(server)
-  return {
-    port,
-    server,
-    close: async () => {
-      for (const held of pending) {
-        held.request.destroy()
-        held.response.destroy()
-      }
-      pending.clear()
-      for (const held of pendingListBodies) held.response.destroy()
-      pendingListBodies.clear()
-      for (const request of upstreamRequests) request.destroy()
-      for (const socket of tunnelSockets) socket.destroy()
-      upstreamRequests.clear()
-      tunnelSockets.clear()
-      await close(server)
-    },
-    setFault: (next) => { fault = next },
-    releasePending: () => {
-      for (const held of pending) {
-        pending.delete(held)
-        forward(held.request, held.response)
-      }
-    },
-    sessionResponseDiagnostics: () => sessionResponses.slice(),
-    setListBodyPending: (next) => { holdListBody = next },
-    releaseListBodies: () => {
-      holdListBody = false
-      for (const held of pendingListBodies) {
-        pendingListBodies.delete(held)
-        if (!held.response.destroyed) held.response.end(held.tail)
-      }
-    },
-    sessionRequests: () => probes,
-    listRequests: () => lists,
-    heldListBodies: () => pendingListBodies.size,
-    loginRequests: () => logins,
-    upgradeDiagnostics: () => [...upgrades.entries()].slice(0, 20).map(([path, requests]) => ({ path, requests })),
-    connectDiagnostics: () => ({ requests: connectRequests, established: connectEstablished }),
-    resourceDiagnostics: () => [...resources.entries()].slice(0, 100).map(([path, value]) => ({
-      path,
-      requests: value.requests,
-      upstream_statuses: value.upstreamStatuses,
-    })),
-  }
-}
-
-type AuthRecoveryFault = "pass" | "pending" | "pending_body" | "unavailable" | "anonymous"
-type AuthRecoveryBodyDiagnostic = {
+type SessionProbeFault = "pass" | "pending" | "pending_body" | "unavailable" | "anonymous"
+type SessionBodyDiagnostic = {
   headersFlushed: boolean
   partialWritten: boolean
   closed: boolean
@@ -323,14 +136,95 @@ function observeAnonymousSafetyHandoff(): void {
   document.addEventListener("DOMContentLoaded", observe, { once: true })
 }
 
-async function authRecoveryProxy(nextPort: number): Promise<{
+type NativeNavigationDiagnostic = Readonly<{
+  runtime: "ok" | "local_deadline" | "protocol_error" | "exception_details" | "missing_value"
+  late: "not_applicable" | "resolved" | "rejected" | "pending"
+  elapsed: "under_500ms" | "500_to_2000ms" | "over_2000ms"
+  protocol_error: "context_destroyed" | "target_closed" | "session_closed" | "timeout" | "other" | null
+  page: "ok" | "deadline" | "protocol_error"
+  frame_started: number
+  frame_stopped: number
+  contexts_cleared: number
+  contexts_created: number
+}>
+
+type NativeNavigationEvents = {
+  frame_started: number
+  frame_stopped: number
+  contexts_cleared: number
+  contexts_created: number
+}
+
+async function observeNativeNavigation(cdp: CDPSession): Promise<NativeNavigationEvents> {
+  const events = { frame_started: 0, frame_stopped: 0, contexts_cleared: 0, contexts_created: 0 }
+  cdp.on("Page.frameStartedLoading", () => { events.frame_started += 1 })
+  cdp.on("Page.frameStoppedLoading", () => { events.frame_stopped += 1 })
+  cdp.on("Runtime.executionContextsCleared", () => { events.contexts_cleared += 1 })
+  cdp.on("Runtime.executionContextCreated", () => { events.contexts_created += 1 })
+  await Promise.all([cdp.send("Page.enable"), cdp.send("Runtime.enable")])
+  return events
+}
+
+async function nativeNavigationDiagnostic(
+  cdp: CDPSession,
+  events: NativeNavigationEvents,
+): Promise<NativeNavigationDiagnostic> {
+  const started = Date.now()
+  const settled = cdp.send("Runtime.evaluate", {
+    expression: "({ diagnostic: true })",
+    returnByValue: true,
+    awaitPromise: false,
+  }).then((value) => ({ state: "resolved" as const, value }), (error: unknown) => ({ state: "rejected" as const, error }))
+  const first = await Promise.race([
+    settled,
+    new Promise<{ state: "deadline" }>((resolve) => setTimeout(() => resolve({ state: "deadline" }), 500)),
+  ])
+  let observed: typeof first | { state: "pending" } = first
+  if (first.state === "deadline") {
+    observed = await Promise.race([
+      settled,
+      new Promise<{ state: "pending" }>((resolve) => setTimeout(() => resolve({ state: "pending" }), 1_500)),
+    ])
+  }
+  const elapsedMs = Date.now() - started
+  const elapsed = elapsedMs < 500 ? "under_500ms" : elapsedMs <= 2_000 ? "500_to_2000ms" : "over_2000ms"
+  const classifyError = (error: unknown): NativeNavigationDiagnostic["protocol_error"] => {
+    const message = error instanceof Error ? error.message.toLowerCase() : ""
+    if (message.includes("context") && (message.includes("destroy") || message.includes("not found"))) return "context_destroyed"
+    if (message.includes("target") && (message.includes("close") || message.includes("crash"))) return "target_closed"
+    if (message.includes("session") && (message.includes("close") || message.includes("detach"))) return "session_closed"
+    if (message.includes("timeout") || message.includes("timed out")) return "timeout"
+    return "other"
+  }
+  let runtime: NativeNavigationDiagnostic["runtime"]
+  let late: NativeNavigationDiagnostic["late"] = "not_applicable"
+  let protocolError: NativeNavigationDiagnostic["protocol_error"] = null
+  if (first.state === "deadline") {
+    runtime = "local_deadline"
+    late = observed.state === "resolved" ? "resolved" : observed.state === "rejected" ? "rejected" : "pending"
+    if (observed.state === "rejected") protocolError = classifyError(observed.error)
+  } else if (first.state === "rejected") {
+    runtime = "protocol_error"
+    protocolError = classifyError(first.error)
+  } else if (first.value.exceptionDetails !== undefined) runtime = "exception_details"
+  else if (first.value.result.value === undefined) runtime = "missing_value"
+  else runtime = "ok"
+
+  const page = await Promise.race([
+    cdp.send("Page.getFrameTree").then(() => "ok" as const, () => "protocol_error" as const),
+    new Promise<"deadline">((resolve) => setTimeout(() => resolve("deadline"), 500)),
+  ])
+  return { runtime, late, elapsed, protocol_error: protocolError, page, ...events }
+}
+
+async function sessionProbeProxy(nextPort: number): Promise<{
   port: number
   server: Server
   close: () => Promise<void>
-  setFault: (fault: AuthRecoveryFault) => void
+  setFault: (fault: SessionProbeFault) => void
   releasePending: () => void
   releaseSessionBodies: () => void
-  sessionBodyDiagnostics: () => readonly AuthRecoveryBodyDiagnostic[]
+  sessionBodyDiagnostics: () => readonly SessionBodyDiagnostic[]
   setLoginPending: (pending: boolean) => void
   releaseLoginRequests: () => void
   forwardLoginRequests: () => void
@@ -362,6 +256,9 @@ async function authRecoveryProxy(nextPort: number): Promise<{
     messages: number
     runtime_manifest: number
   }[]
+  r176Heartbeats: () => readonly { phase: "before_navigation" | "held_navigation"; ticks: number }[]
+  r176HeldDocuments: () => number
+  releaseR176HeldDocuments: () => void
   setListBodyPending: (pending: boolean) => void
   releaseListBodies: () => void
   sessionRequests: () => number
@@ -378,7 +275,7 @@ async function authRecoveryProxy(nextPort: number): Promise<{
     upstream_statuses: readonly number[]
   }[]
 }> {
-  let fault: AuthRecoveryFault = "pass"
+  let fault: SessionProbeFault = "pass"
   let probes = 0
   let lists = 0
   let logins = 0
@@ -387,7 +284,7 @@ async function authRecoveryProxy(nextPort: number): Promise<{
   const pending = new Set<{ request: import("node:http").IncomingMessage; response: import("node:http").ServerResponse }>()
   const sessionBodies: {
     response: import("node:http").ServerResponse
-    diagnostic: AuthRecoveryBodyDiagnostic
+    diagnostic: SessionBodyDiagnostic
   }[] = []
   const pendingLogins = new Set<{
     request: import("node:http").IncomingMessage
@@ -420,6 +317,8 @@ async function authRecoveryProxy(nextPort: number): Promise<{
     messages: number
     runtime_manifest: number
   }[] = []
+  const r176Heartbeats: { phase: "before_navigation" | "held_navigation"; ticks: number }[] = []
+  const r176HeldDocuments = new Set<import("node:http").ServerResponse>()
   const pendingListBodies = new Set<{ response: import("node:http").ServerResponse; tail: Buffer }>()
   const resources = new Map<string, {
     requests: number
@@ -499,6 +398,42 @@ async function authRecoveryProxy(nextPort: number): Promise<{
 
   const server = createServer((request, response) => {
     const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
+    if (request.method === "GET" && target.pathname === "/__fixture/r176-static-control") {
+      const navigate = target.searchParams.get("navigate") === "1"
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" })
+      response.end(`<!doctype html><html><body><main>control</main><script>
+        let ticks = 0;
+        const report = (phase) => fetch('/__fixture/r176-heartbeat', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({phase, ticks: Math.min(ticks, 20)}), keepalive: true }).catch(() => undefined);
+        report('before_navigation');
+        setInterval(() => { ticks += 1; report(${navigate ? "'held_navigation'" : "'before_navigation'"}); }, 100);
+        ${navigate ? "setTimeout(() => location.replace('/__fixture/r176-held-document'), 100);" : ""}
+      </script></body></html>`)
+      return
+    }
+    if (request.method === "POST" && target.pathname === "/__fixture/r176-heartbeat") {
+      const chunks: Buffer[] = []
+      let size = 0
+      request.on("data", (chunk: Buffer) => { size += chunk.length; if (size <= 256) chunks.push(chunk) })
+      request.once("end", () => {
+        if (size <= 256 && r176Heartbeats.length < 32) {
+          try {
+            const value = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>
+            if ((value.phase === "before_navigation" || value.phase === "held_navigation") &&
+              typeof value.ticks === "number" && Number.isInteger(value.ticks) && value.ticks >= 0 && value.ticks <= 20) {
+              r176Heartbeats.push({ phase: value.phase, ticks: value.ticks })
+            }
+          } catch { /* closed fixture observation */ }
+        }
+        response.writeHead(204, { "cache-control": "no-store" })
+        response.end()
+      })
+      return
+    }
+    if (request.method === "GET" && target.pathname === "/__fixture/r176-held-document") {
+      r176HeldDocuments.add(response)
+      response.once("close", () => r176HeldDocuments.delete(response))
+      return
+    }
     if (request.method === "POST" && target.pathname === "/__fixture/anonymous-handoff") {
       const chunks: Buffer[] = []
       let size = 0
@@ -560,7 +495,7 @@ async function authRecoveryProxy(nextPort: number): Promise<{
       }
       if (fault === "pending_body") {
         const startedAt = Date.now()
-        const diagnostic: AuthRecoveryBodyDiagnostic = {
+        const diagnostic: SessionBodyDiagnostic = {
           headersFlushed: false, partialWritten: false, closed: false, ended: false,
           elapsedMs: null, lateTailAttempted: false, lateTailDiscarded: false,
         }
@@ -638,6 +573,8 @@ async function authRecoveryProxy(nextPort: number): Promise<{
         held.response.destroy()
       }
       pendingLogins.clear()
+      for (const response of r176HeldDocuments) response.destroy()
+      r176HeldDocuments.clear()
       for (const held of pendingListBodies) held.response.destroy()
       pendingListBodies.clear()
       for (const request of upstreamRequests) request.destroy()
@@ -697,6 +634,17 @@ async function authRecoveryProxy(nextPort: number): Promise<{
     sessionResponseDiagnostics: () => sessionResponses.slice(),
     anonymousHandoffDiagnostics: () => anonymousHandoffs.slice(),
     anonymousHandoffOwnerDiagnostics: () => anonymousHandoffOwners.slice(),
+    r176Heartbeats: () => r176Heartbeats.slice(),
+    r176HeldDocuments: () => r176HeldDocuments.size,
+    releaseR176HeldDocuments: () => {
+      for (const response of r176HeldDocuments) {
+        r176HeldDocuments.delete(response)
+        if (!response.destroyed) {
+          response.writeHead(204, { "cache-control": "no-store" })
+          response.end()
+        }
+      }
+    },
     setListBodyPending: (next) => { holdListBody = next },
     releaseListBodies: () => {
       holdListBody = false
@@ -720,7 +668,6 @@ async function authRecoveryProxy(nextPort: number): Promise<{
     })),
   }
 }
-
 
 async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
@@ -1181,6 +1128,47 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   let identityStatus = 200
   let sessionListStatus = 200
   let deleteSessionStatus = 200
+  let holdDeleteSession = false
+  let deleteSessionCommitted = false
+  let deleteSessionBCommitted = false
+  let renameSessionStatus = 200
+  const renameSessionRequests: { path: string; body: string }[] = []
+  let renameLifecycleFixture = false
+  let renameLifecycleLostAck = false
+  let renameLifecycleTitle = "Bounded list beta"
+  let failNextRenameLifecycleList = false
+  let releaseHeldRenameA: (() => void) | undefined
+  const releaseRenameA = (): void => {
+    const release = releaseHeldRenameA
+    if (release !== undefined) release()
+  }
+  const renameLifecycleListResponses: { status: number; title: string }[] = []
+  let releaseDeleteSession: (() => void) | undefined
+  const releaseHeldDeleteSession = (): void => {
+    const release = releaseDeleteSession
+    if (release !== undefined) release()
+  }
+  const deleteSessionRequests: { url: string; idempotencyKey: string | undefined }[] = []
+  let projectDeleteFixtureEnabled = false
+  let projectDeleteStatus = 200
+  let projectDeleteHeld = false
+  let projectDeleteCommitted = false
+  let releaseProjectDelete: (() => void) | undefined
+  const projectDeleteRequests: { url: string; idempotencyKey: string | undefined }[] = []
+  const projectDeleteScopeGets: string[][] = []
+  const projectDeleteProject = "project_44444444-4444-4444-8444-444444444444"
+  const projectDeleteConversationA = "conv_cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  const projectDeleteConversationB = "conv_dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+  const projectDeleteDirectConversation = "conv_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+  const releaseHeldProjectDelete = (): void => {
+    const release = releaseProjectDelete
+    releaseProjectDelete = undefined
+    release?.()
+  }
+  let sessionSnapshotRequests = 0
+  let coldSnapshotStatus: 200 | 503 | undefined
+  const coldSnapshotResponses: number[] = []
+  const sessionBoundaryRequests: { method: string; path: string }[] = []
   type MoveFixtureResponse = {
     status: number
     body: unknown
@@ -1210,38 +1198,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   const moveConversationB = "conv_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
   const moveProjectA = "project_22222222-2222-4222-8222-222222222222"
   const moveProjectB = "project_33333333-3333-4333-8333-333333333333"
-  const resetMoveFixture = (): void => {
-    moveFixtureResponse = undefined
-    moveBoundaryRequests.length = 0
-  }
-  // R242 owns only this peer's Project seed and held command/read responses.
-  const renameProjectId = "project_44444444-4444-4444-8444-444444444444"
-  const renameConversationId = "conv_cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-  const renameOldName = "R242 原项目"
-  const renameSubmittedName = "中文项目  A"
-  const renameCurrentName = "当前权威项目 B"
-  const renameThreadBody = "R242 existing Project conversation must stay unchanged"
-  let renameFixtureEnabled = false
-  let renameOwnerName = renameOldName
-  let renameAckSent = false
-  let releaseRenameAck: (() => void) | undefined
-  let releaseRenameRead: (() => void) | undefined
-  const renameRequests: { method: string; path: string; idempotencyKey: string | undefined; body: string }[] = []
-  const renameReads: { path: string; afterAck: boolean; name: string }[] = []
-  const renameResource = () => ({
-    id: renameProjectId, name: renameOwnerName, slug: "r242-original-project", description: "",
-    instruction: "", created_at: "2026-10-05T10:00:00.000Z", updated_at: "2026-10-05T11:00:00.000Z",
-  })
-  let holdDeleteSession = false
-  let deleteSessionCommitted = false
-  let releaseDeleteSession: (() => void) | undefined
-  const releaseHeldDeleteSession = (): void => {
-    const release = releaseDeleteSession
-    if (release !== undefined) release()
-  }
-  const deleteSessionRequests: { url: string; idempotencyKey: string | undefined }[] = []
-  let sessionSnapshotRequests = 0
-  const sessionBoundaryRequests: { method: string; path: string }[] = []
   let invalidIdentityShape = false
   let slowIdentity = false
   let output = ""
@@ -1519,11 +1475,54 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     response: BrowserResponse | null,
     proxy: Awaited<ReturnType<typeof sessionProbeProxy>>,
     outputStart: number,
+    failureDiagnostic?: (stage: string) => Promise<string>,
   ): Promise<void> {
     try {
       await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(expected)
     } catch {
-      throw new Error(await browserProbeDiagnostic(stage, page, response, proxy, outputStart))
+      throw new Error(failureDiagnostic === undefined
+        ? await browserProbeDiagnostic(stage, page, response, proxy, outputStart)
+        : await failureDiagnostic(stage))
+    }
+  }
+
+  async function requireStableAuthenticatedWorkspace(
+    stage: string,
+    page: Page,
+    response: BrowserResponse | null,
+    proxy: Awaited<ReturnType<typeof sessionProbeProxy>>,
+    outputStart: number,
+    deadline: number,
+    failureDiagnostic?: (stage: string) => Promise<string>,
+  ): Promise<void> {
+    const remaining = (): number => Math.max(1, deadline - Date.now())
+    try {
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+
+      const sessionsBeforeReload = proxy.sessionRequests()
+      const reloadResponse = await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+      if (reloadResponse?.status() !== 200) {
+        throw new Error(`reload document status ${reloadResponse?.status() ?? "missing"}`)
+      }
+      await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBeGreaterThan(sessionsBeforeReload)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
+      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+    } catch (error) {
+      const diagnostic = failureDiagnostic === undefined
+        ? await browserProbeDiagnostic(stage, page, response, proxy, outputStart)
+        : await failureDiagnostic(stage)
+      throw new Error(diagnostic, { cause: error })
     }
   }
 
@@ -1832,73 +1831,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           } else response.end(payload)
           return
         }
-        if (renameFixtureEnabled && (request.url === "/v1/projects" ||
-          request.url?.startsWith(`/v1/projects/${renameProjectId}`) ||
-          request.url === `/v1/sessions?project_ref=${renameProjectId}` ||
-          request.url === `/v1/sessions/${renameConversationId}`)) {
-          expect(request.headers.cookie).toBeUndefined()
-          expect(request.headers["x-kokoro-service"]).toBe("web-bff")
-          expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
-          expect(request.headers.forwarded).toBe("host=localhost")
-          expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
-          const sendRenameJson = (data: unknown): void => {
-            if (response.destroyed) return
-            response.writeHead(200, {
-              "content-type": "application/json", "cache-control": "no-store", "x-request-id": "req_r242_owner",
-            })
-            response.end(JSON.stringify(data))
-          }
-          if (request.method === "PATCH" && request.url === `/v1/projects/${renameProjectId}/name`) {
-            const chunks: Buffer[] = []
-            request.on("data", (chunk: Buffer) => chunks.push(chunk))
-            request.on("end", () => {
-              renameRequests.push({ method: request.method ?? "<unknown>", path: request.url ?? "<unknown>",
-                idempotencyKey: typeof request.headers["idempotency-key"] === "string" ? request.headers["idempotency-key"] : undefined,
-                body: Buffer.concat(chunks).toString("utf8") })
-              expect(request.headers["content-type"]).toMatch(/^application\/json(?:;\s*charset=utf-8)?$/iu)
-              // A valid first-success receipt A can precede a newer canonical resource B.
-              releaseRenameAck = () => {
-                releaseRenameAck = undefined
-                if (response.destroyed) return
-                renameOwnerName = renameCurrentName
-                renameAckSent = true
-                sendRenameJson({ data: { project_id: renameProjectId, name: renameSubmittedName } })
-              }
-              response.once("close", () => { releaseRenameAck = undefined })
-            })
-            return
-          }
-          if (request.method === "GET" && (request.url === "/v1/projects" || request.url === `/v1/projects/${renameProjectId}`)) {
-            renameReads.push({ path: request.url, afterAck: renameAckSent, name: renameOwnerName })
-            const payload = request.url === "/v1/projects"
-              ? { data: { projects: [renameResource()] }, meta: { request_id: "req_r242_list" } }
-              : { data: { project: renameResource() }, meta: { request_id: "req_r242_detail" } }
-            if (renameAckSent && request.url === `/v1/projects/${renameProjectId}` &&
-              renameReads.filter((read) => read.afterAck && read.path === `/v1/projects/${renameProjectId}`).length === 1) {
-              releaseRenameRead = () => { releaseRenameRead = undefined; sendRenameJson(payload) }
-              response.once("close", () => { releaseRenameRead = undefined })
-            } else sendRenameJson(payload)
-            return
-          }
-          if (request.method === "GET" && request.url === `/v1/projects/${renameProjectId}/instruction-revisions`) {
-            sendRenameJson({ data: { items: [] }, meta: { request_id: "req_r242_instructions" } })
-            return
-          }
-          if (request.method === "GET" && request.url === `/v1/sessions?project_ref=${renameProjectId}`) {
-            sendRenameJson({ data: { sessions: [{ session_id: renameConversationId, title: "R242 existing conversation",
-              updated_at: "2026-10-05T11:00:00.000Z" }], next_cursor: null }, meta: { request_id: "req_r242_sessions" } })
-            return
-          }
-          if (request.method === "GET" && request.url === `/v1/sessions/${renameConversationId}`) {
-            sendRenameJson({ data: { session: { session_id: renameConversationId, title: "R242 existing conversation",
-              owner_id: "user-one", created_at: "2026-10-05T10:00:00.000Z", updated_at: "2026-10-05T11:00:00.000Z" },
-            messages: [{ message_id: "message-r242-existing", role: "user", content: renameThreadBody,
-              status: "completed", created_at: "2026-10-05T11:00:00.000Z" }], execution_process: null,
-            files: [], deliveries: [], deliveries_has_more: false, event_watermark: null }, meta: { request_id: "req_r242_snapshot" } })
-            return
-          }
-          response.writeHead(404)
-          response.end()
+        if (request.method === "GET" && request.url === "/v1/projects" && projectDeleteFixtureEnabled) {
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({ data: { projects: [
+            { id: projectDeleteProject, name: "Delete fixture project", slug: "delete-fixture-project", description: "", created_at: "2026-10-03T10:00:00.000Z", updated_at: "2026-10-03T10:00:00.000Z" },
+          ] }, meta: { request_id: "req_project_delete_projects" } }))
           return
         }
         if (request.method === "GET" && request.url === "/v1/projects" && moveUiFixtureEnabled) {
@@ -1907,6 +1844,83 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             { id: moveProjectA, name: "Move target alpha", slug: "move-target-alpha", description: "", created_at: "2026-10-03T10:00:00.000Z", updated_at: "2026-10-03T10:00:00.000Z" },
             { id: moveProjectB, name: "Move target beta", slug: "move-target-beta", description: "", created_at: "2026-10-03T10:00:00.000Z", updated_at: "2026-10-03T10:00:00.000Z" },
           ] }, meta: { request_id: "req_move_projects" } }))
+          return
+        }
+        if (request.method === "GET" && request.url === "/v1/sessions?scope=direct") {
+          expect(request.headers.cookie).toBeUndefined()
+          expect(request.headers["x-kokoro-service"]).toBe("web-bff")
+          expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
+          expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
+          const effectiveSessionListStatus = renameLifecycleFixture && failNextRenameLifecycleList
+            ? 503
+            : sessionListStatus
+          if (renameLifecycleFixture) {
+            renameLifecycleListResponses.push({ status: effectiveSessionListStatus, title: renameLifecycleTitle })
+            failNextRenameLifecycleList = false
+          }
+          const moveSessions = [
+            ...(moveBindingProjectRef === null ? [
+              { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+            ] : []),
+            { session_id: moveConversationB, title: "Move conversation beta", updated_at: "2026-10-03T11:00:00.000Z" },
+          ]
+          if (moveBindingFixtureEnabled) {
+            moveBindingScopeGets.push({
+              scope: "direct",
+              bindingAtRead: moveBindingProjectRef,
+              sessionIds: moveSessions.map((session) => session.session_id),
+            })
+          }
+          response.writeHead(effectiveSessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify(effectiveSessionListStatus === 200 ? {
+            data: { sessions: projectDeleteFixtureEnabled ? [
+              { session_id: projectDeleteDirectConversation, title: "Direct conversation C", updated_at: "2026-10-03T09:00:00.000Z" },
+            ] : moveUiFixtureEnabled ? moveSessions : [
+              ...(deleteSessionCommitted ? [] : [
+                { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+              ]),
+              ...(deleteSessionBCommitted ? [] : [
+                { session_id: "session-list-b", title: renameLifecycleFixture ? renameLifecycleTitle : "Bounded list beta", updated_at: "2026-10-03T11:00:00.000Z" },
+              ]),
+            ], next_cursor: null },
+            meta: { request_id: "req_r141_list" },
+          } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          return
+        }
+        if (request.method === "GET" && request.url === `/v1/sessions?project_ref=${projectDeleteProject}` && projectDeleteFixtureEnabled) {
+          const sessions = [
+            ...(projectDeleteCommitted ? [] : [
+              { session_id: projectDeleteConversationA, title: "Project conversation A", updated_at: "2026-10-03T12:00:00.000Z" },
+            ]),
+            { session_id: projectDeleteConversationB, title: "Project conversation B", updated_at: "2026-10-03T11:00:00.000Z" },
+          ]
+          projectDeleteScopeGets.push(sessions.map((session) => session.session_id))
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({
+            data: { sessions, next_cursor: null },
+            meta: { request_id: "req_project_delete_list" },
+          }))
+          return
+        }
+        const moveProjectScope = request.url?.match(/^\/v1\/sessions\?project_ref=(project_[0-9a-f-]+)$/u)?.[1]
+        if (request.method === "GET" && moveBindingFixtureEnabled &&
+          (moveProjectScope === moveProjectA || moveProjectScope === moveProjectB)) {
+          const projectSessions = moveProjectScope === moveProjectA && moveBindingProjectRef === moveProjectA ? [
+            { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
+          ] : []
+          moveBindingScopeGets.push({
+            scope: `project:${moveProjectScope}`,
+            bindingAtRead: moveBindingProjectRef,
+            sessionIds: projectSessions.map((session) => session.session_id),
+          })
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({
+            data: {
+              sessions: projectSessions,
+              next_cursor: null,
+            },
+            meta: { request_id: "req_move_binding_project_list" },
+          }))
           return
         }
         const defaultFixtureMovePath = "/v1/sessions/conv_11111111-1111-4111-8111-111111111111/move"
@@ -1929,7 +1943,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
             if (request.url !== fixtureMovePath) {
               response.writeHead(400, {
-                "content-type": "application/json", "cache-control": "no-store",
+                "content-type": "application/json",
+                "cache-control": "no-store",
                 "x-request-id": "req_move_owner_invalid_query",
               })
               response.end(JSON.stringify({
@@ -1939,19 +1954,24 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             }
             expect(configured).toBeDefined()
             const headers: Record<string, string> = {
-              "content-type": configured?.contentType ?? "application/json", "cache-control": "no-store",
+              "content-type": configured?.contentType ?? "application/json",
+              "cache-control": "no-store",
             }
             if (configured?.requestId !== undefined) headers["x-request-id"] = configured.requestId
             if (configured?.retryAfter !== undefined) headers["retry-after"] = configured.retryAfter
             const settle = (): void => {
               if (moveBindingFixtureEnabled && configured?.status === 200) {
                 const parsedBody = JSON.parse(moveBoundaryRequests.at(-1)?.body ?? "null") as { target_project_id?: unknown } | null
-                const configuredBody = configured.body as { data?: { session_id?: unknown; project_ref?: unknown } } | null
+                const configuredBody = configured.body as {
+                  data?: { session_id?: unknown; project_ref?: unknown }
+                } | null
                 const pathSessionId = fixtureMovePath.slice("/v1/sessions/".length, -"/move".length)
                 const targetProjectId = parsedBody?.target_project_id
-                if ((typeof targetProjectId === "string" || targetProjectId === null) &&
+                if (
+                  (typeof targetProjectId === "string" || targetProjectId === null) &&
                   configuredBody?.data?.session_id === pathSessionId &&
-                  configuredBody.data.project_ref === targetProjectId) {
+                  configuredBody.data.project_ref === targetProjectId
+                ) {
                   moveBindingProjectRef = targetProjectId
                 }
               }
@@ -1974,84 +1994,94 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
           response.end(JSON.stringify({ data: { session_id: "session-no-meta" } }))
           return
         }
-        if (request.method === "GET" && request.url === "/v1/sessions?scope=direct") {
-          expect(request.headers.cookie).toBeUndefined()
-          expect(request.headers["x-kokoro-service"]).toBe("web-bff")
-          expect(request.headers["x-kokoro-internal-secret"]).toBe("rp-bff-secret")
-          expect(["Bearer access-opaque", "Bearer access-rotated"]).toContain(request.headers.authorization)
-          const moveSessions = [
-            ...(moveBindingProjectRef === null ? [
-              { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
-            ] : []),
-            { session_id: moveConversationB, title: "Move conversation beta", updated_at: "2026-10-03T11:00:00.000Z" },
-          ]
-          if (moveBindingFixtureEnabled) {
-            moveBindingScopeGets.push({ scope: "direct", bindingAtRead: moveBindingProjectRef,
-              sessionIds: moveSessions.map((session) => session.session_id) })
-          }
-          response.writeHead(sessionListStatus, { "content-type": "application/json", "cache-control": "no-store" })
-          response.end(JSON.stringify(sessionListStatus === 200 ? {
-            data: { sessions: moveUiFixtureEnabled ? moveSessions : [
-              ...(deleteSessionCommitted ? [] : [
-                { session_id: "session-list-a", title: "Bounded list alpha", updated_at: "2026-10-03T12:00:00.000Z" },
-              ]),
-              { session_id: "session-list-b", title: "Bounded list beta", updated_at: "2026-10-03T11:00:00.000Z" },
-            ], next_cursor: null }, meta: { request_id: "req_r141_list" },
-          } : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
-          return
-        }
-        const moveProjectScope = request.url?.match(/^\/v1\/sessions\?project_ref=(project_[0-9a-f-]+)$/u)?.[1]
-        if (request.method === "GET" && moveBindingFixtureEnabled &&
-          (moveProjectScope === moveProjectA || moveProjectScope === moveProjectB)) {
-          const projectSessions = moveProjectScope === moveProjectA && moveBindingProjectRef === moveProjectA ? [
-            { session_id: moveConversationA, title: "Move conversation alpha", updated_at: "2026-10-03T12:00:00.000Z" },
-          ] : []
-          moveBindingScopeGets.push({ scope: `project:${moveProjectScope}`, bindingAtRead: moveBindingProjectRef,
-            sessionIds: projectSessions.map((session) => session.session_id) })
-          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
-          response.end(JSON.stringify({ data: { sessions: projectSessions, next_cursor: null },
-            meta: { request_id: "req_move_binding_project_list" } }))
-          return
-        }
         if (request.method === "GET" && moveUiFixtureEnabled &&
           (request.url === `/v1/sessions/${moveConversationA}` || request.url === `/v1/sessions/${moveConversationB}`)) {
           const sessionId = request.url.slice("/v1/sessions/".length)
           const moveMessages = moveBindingFixtureEnabled && sessionId === moveConversationA ? [{
-            message_id: "message-move-binding-a", role: "user",
-            content: "R192 binding survives the filtered view move", status: "completed",
+            message_id: "message-move-binding-a",
+            role: "user",
+            content: "R192 binding survives the filtered view move",
+            status: "completed",
             created_at: "2026-10-03T12:00:00.000Z",
           }] : []
           if (moveBindingFixtureEnabled) {
-            moveBindingSnapshotGets.push({ sessionId, bindingAtRead: moveBindingProjectRef,
-              messageIds: moveMessages.map((message) => message.message_id) })
+            moveBindingSnapshotGets.push({
+              sessionId,
+              bindingAtRead: moveBindingProjectRef,
+              messageIds: moveMessages.map((message) => message.message_id),
+            })
           }
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify({ data: { session: {
             session_id: sessionId, title: sessionId === moveConversationA ? "Move conversation alpha" : "Move conversation beta",
             owner_id: "user-one", created_at: "2026-10-03T11:59:00.000Z", updated_at: "2026-10-03T12:00:00.000Z",
-          }, messages: moveMessages, execution_process: null, files: [], deliveries: [], deliveries_has_more: false,
-          event_watermark: null }, meta: { request_id: "req_move_snapshot" } }))
+          }, messages: moveMessages, execution_process: null, files: [], deliveries: [], deliveries_has_more: false, event_watermark: null },
+          meta: { request_id: "req_move_snapshot" } }))
           return
         }
-        if (
-          request.method === "GET" &&
-          (request.url === "/v1/sessions/session-list-a" || request.url === "/v1/sessions/session-list-a?scope=direct")
-        ) {
+        if (request.method === "GET" && projectDeleteFixtureEnabled &&
+          request.url === `/v1/sessions/${projectDeleteConversationA}`) {
           sessionSnapshotRequests += 1
           response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
           response.end(JSON.stringify({
             data: {
               session: {
-                session_id: "session-list-a",
-                title: "Bounded list alpha",
+                session_id: projectDeleteConversationA,
+                title: "Project conversation A",
                 owner_id: "user-one",
                 created_at: "2026-10-03T11:59:00.000Z",
                 updated_at: "2026-10-03T12:00:00.000Z",
               },
               messages: [{
-                message_id: "message-r143-user-a",
+                message_id: "message-project-delete-a",
                 role: "user",
-                content: "R143 authoritative conversation A body",
+                content: "R231 authoritative project conversation A body",
+                status: "completed",
+                created_at: "2026-10-03T12:00:00.000Z",
+              }],
+              execution_process: null,
+              files: [],
+              deliveries: [],
+              deliveries_has_more: false,
+              event_watermark: null,
+            },
+            meta: { request_id: "req_project_delete_snapshot" },
+          }))
+          return
+        }
+        if (
+          request.method === "GET" &&
+          (request.url === "/v1/sessions/session-list-a" || request.url === "/v1/sessions/session-list-a?scope=direct" ||
+            request.url === "/v1/sessions/session-list-b" || request.url === "/v1/sessions/session-list-b?scope=direct")
+        ) {
+          const sessionId = request.url.includes("session-list-b") ? "session-list-b" : "session-list-a"
+          const title = sessionId === "session-list-a" ? "Bounded list alpha" : "Bounded list beta"
+          sessionSnapshotRequests += 1
+          if (sessionId === "session-list-a" && coldSnapshotStatus !== undefined) {
+            coldSnapshotResponses.push(coldSnapshotStatus)
+            if (coldSnapshotStatus === 503) {
+              response.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" })
+              response.end(JSON.stringify({ error: { code: "service_unavailable", message: "Snapshot temporarily unavailable" },
+                meta: { request_id: "req_r229_cold_snapshot" } }))
+              return
+            }
+          }
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({
+            data: {
+              session: {
+                session_id: sessionId,
+                title,
+                owner_id: "user-one",
+                created_at: "2026-10-03T11:59:00.000Z",
+                updated_at: "2026-10-03T12:00:00.000Z",
+              },
+              messages: [{
+                message_id: sessionId === "session-list-a" ? "message-r143-user-a" : "message-r188-user-b",
+                role: "user",
+                content: sessionId === "session-list-a"
+                  ? "R143 authoritative conversation A body"
+                  : "R188 authoritative conversation B body",
                 status: "completed",
                 created_at: "2026-10-03T12:00:00.000Z",
               }],
@@ -2063,6 +2093,50 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             },
             meta: { request_id: "req_r143_snapshot" },
           }))
+          return
+        }
+        if (request.method === "PATCH" && request.url === "/v1/sessions/session-list-b/title") {
+          const chunks: Buffer[] = []
+          request.on("data", (chunk: Buffer) => chunks.push(chunk))
+          request.on("end", () => {
+            const body = Buffer.concat(chunks).toString("utf8")
+            renameSessionRequests.push({ path: request.url ?? "<unknown>", body })
+            if (renameLifecycleFixture) {
+              const ordinal = renameSessionRequests.length
+              const requestedTitle = (JSON.parse(body) as { title: string }).title
+              if (renameLifecycleLostAck && ordinal === 1) {
+                renameLifecycleTitle = requestedTitle
+                response.destroy()
+                return
+              }
+              const send = (status: number): void => {
+                if (status === 200) renameLifecycleTitle = requestedTitle
+                response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" })
+                response.end(JSON.stringify(status === 200
+                  ? { data: { ok: true }, meta: { request_id: `req_r190_rename_${ordinal}` } }
+                  : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+              }
+              if (ordinal === 1) releaseHeldRenameA = () => { releaseHeldRenameA = undefined; send(200) }
+              else send(ordinal === 2 ? 503 : 200)
+              return
+            }
+            response.writeHead(renameSessionStatus, { "content-type": "application/json", "cache-control": "no-store" })
+            response.end(JSON.stringify(renameSessionStatus === 200
+              ? { data: { ok: true }, meta: { request_id: "req_r188_rename" } }
+              : { error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+          })
+          return
+        }
+        if (request.method === "DELETE" && request.url?.startsWith("/v1/sessions/session-list-b")) {
+          deleteSessionRequests.push({
+            url: request.url,
+            idempotencyKey: typeof request.headers["idempotency-key"] === "string"
+              ? request.headers["idempotency-key"]
+              : undefined,
+          })
+          deleteSessionBCommitted = true
+          response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          response.end(JSON.stringify({ data: { status: "deleted" }, meta: { request_id: "req_r188_delete_b" } }))
           return
         }
         if (request.method === "DELETE" && request.url?.startsWith("/v1/sessions/session-list-a")) {
@@ -2083,6 +2157,28 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
             }
           }
           if (holdDeleteSession) releaseDeleteSession = send
+          else send()
+          return
+        }
+        if (request.method === "DELETE" && projectDeleteFixtureEnabled &&
+          request.url === `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`) {
+          projectDeleteRequests.push({
+            url: request.url,
+            idempotencyKey: typeof request.headers["idempotency-key"] === "string"
+              ? request.headers["idempotency-key"]
+              : undefined,
+          })
+          const send = (): void => {
+            if (response.destroyed) return
+            response.writeHead(projectDeleteStatus, { "content-type": "application/json", "cache-control": "no-store" })
+            if (projectDeleteStatus === 200) {
+              projectDeleteCommitted = true
+              response.end(JSON.stringify({ data: { status: "deleted" }, meta: { request_id: "req_project_delete" } }))
+            } else {
+              response.end(JSON.stringify({ error: { code: "service_unavailable", message: "fixture unavailable", retryable: true } }))
+            }
+          }
+          if (projectDeleteHeld) releaseProjectDelete = send
           else send()
           return
         }
@@ -2175,11 +2271,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         try {
           appResponse = await http(nextPort, "/app", "GET", "", {}, Math.min(5_000, setupDeadline - Date.now()))
           appCompileReadinessStatus = appResponse.status
-          const compiledReady = (
-            appResponse.status === 200 ||
-            (appResponse.status === 307 && appResponse.headers.location === "/login?return_to=%2Fapp")
-          ) && nextErrorCategories(output).length === 0
-          if (compiledReady) {
+          const anonymousRedirectReady = appResponse.status === 307 &&
+            appResponse.headers.location === "/login?return_to=%2Fapp" &&
+            !appResponse.body.includes('data-testid="runtime-loading"')
+          if (appResponse.status === 200 || anonymousRedirectReady) {
             appCompileReadinessMs = Date.now() - compileStartedAt
             return
           }
@@ -2225,6 +2320,19 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     if (typeof claims?.id === "string") productIds.add(claims.id)
   }
 
+  async function authenticatedProductJar(): Promise<string> {
+    const { signin, jar, location } = await start()
+    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
+    expect(authorize.status).toBe(302)
+    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
+    await recordProduct(callback)
+    expect(callback.status).toBe(303)
+    expect(callback.headers.location).toBe("/app")
+    expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
+      .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(true)
+    return cookieHeader(signin, callback)
+  }
+
   async function admitBrowserContext(context: BrowserContext): Promise<void> {
     const jar = await authenticatedProductJar()
     const origin = `http://localhost:${nextPort}`
@@ -2246,6 +2354,28 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       return keys
     } finally { client.destroy() }
   }
+
+  function expectServerFirstAnonymousRedirect(response: HttpResult, expectedTarget = "/app"): void {
+    const loginLocation = `/login?${new URLSearchParams({ return_to: expectedTarget })}`
+    expect(response.body).not.toContain('data-testid="runtime-loading"')
+    if (response.status >= 300 && response.status < 400) {
+      expect(response.headers.location).toBe(loginLocation)
+      return
+    }
+    expect(response.status).toBe(200)
+    const escapedLocation = loginLocation.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
+    expect(response.body).toMatch(new RegExp(`(?:NEXT_REDIRECT[^<]{0,512}${escapedLocation}|<meta[^>]+url=${escapedLocation})(?=[;\\s"'<]|$)`, "u"))
+  }
+
+  it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
+    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
+    expectServerFirstAnonymousRedirect(response)
+  })
+
+  it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
+    const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
+    expectServerFirstAnonymousRedirect(response, "/app/skills")
+  })
 
   it("rejects undefined and non-root-relative fixture HTTP targets instead of requesting the app root", async () => {
     await expect(http(nextPort, undefined as unknown as string)).rejects.toThrow("fixture HTTP target must be root-relative")
@@ -2279,19 +2409,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(manifestChanges.some(({ change }) => change === "appeared" || change === "changed_valid")).toBe(true)
     expect(manifestChanges.every(({ change }) => !["changed_invalid", "disappeared", "unavailable"].includes(change))).toBe(true)
   })
-
-  async function authenticatedProductJar(): Promise<string> {
-    const { signin, jar, location } = await start()
-    const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
-    expect(authorize.status).toBe(302)
-    const callback = await http(nextPort, authorize.headers.location as string, "GET", "", { cookie: jar })
-    await recordProduct(callback)
-    expect(callback.status).toBe(303)
-    expect(callback.headers.location).toBe("/app")
-    expect((callback.headers["set-cookie"] as string[] | undefined ?? [])
-      .some((cookie) => cookie.startsWith("kokoro_product_session="))).toBe(true)
-    return cookieHeader(signin, callback)
-  }
 
   it("keeps code exchange and userinfo server-only, then establishes an encrypted Product Session", async () => {
     const { signin, jar, location, state } = await start()
@@ -2345,7 +2462,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       10_000,
     )
 
-    resetMoveFixture()
+    moveBoundaryRequests.length = 0
     for (const [index, [targetProjectId, commandId]] of ([
       [projectId, projectCommandId],
       [null, directCommandId],
@@ -2410,7 +2527,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   }, 60_000)
 
   it("R164 treats a normalized bare query as canonical but rejects a nonempty Move query locally", async () => {
-    resetMoveFixture()
     const productJar = await authenticatedProductJar()
     const sessionId = "conv_11111111-1111-4111-8111-111111111111"
     const projectId = "project_22222222-2222-4222-8222-222222222222"
@@ -2457,7 +2573,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
   }, 60_000)
 
   it("R164 accepts only the application/json media type for strict Move owner responses", async () => {
-    resetMoveFixture()
     const productJar = await authenticatedProductJar()
     const sessionId = "conv_11111111-1111-4111-8111-111111111111"
     const projectId = "project_22222222-2222-4222-8222-222222222222"
@@ -3013,17 +3128,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       if (!await page.locator('[data-server-admitted-shell="true"]').isVisible()) {
         throw new Error(await browserProbeDiagnostic("pending_loading", page, response, proxy, outputStart))
       }
-      const composer = page.locator('[data-slot="composer-input"]')
-      expect(await composer.isVisible()).toBe(true)
-      expect(await composer.isDisabled()).toBe(true)
-      expect(await composer.inputValue()).toBe("")
-      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
-      expect(await page.getByTestId("runtime-loading").count()).toBe(0)
-      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
-      expect(proxy.resourceDiagnostics()
-        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
-        .reduce((total, resource) => total + resource.requests, 0)).toBe(0)
-      expect(proxy.loginRequests()).toBe(0)
       await page.evaluate(() => {
         window.dispatchEvent(new Event("focus"))
         window.dispatchEvent(new Event("focus"))
@@ -3034,15 +3138,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       catch { throw new Error(await browserProbeDiagnostic("pending_alert", page, response, proxy, outputStart)) }
       expect(proxy.sessionRequests()).toBe(1)
       expect(new URL(page.url()).pathname).toBe("/app")
-      expect(await page.locator('[data-server-admitted-shell="true"]').count()).toBe(0)
-      expect(await composer.count()).toBe(0)
-      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
-      expect(await page.getByTestId("runtime-loading").count()).toBe(0)
-      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
-      expect(proxy.resourceDiagnostics()
-        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
-        .reduce((total, resource) => total + resource.requests, 0)).toBe(0)
-      expect(proxy.loginRequests()).toBe(0)
 
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 18_000
@@ -3054,13 +3149,113 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await requireStableAuthenticatedWorkspace(
         "pending_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      expect(proxy.loginRequests()).toBe(0)
       await expect.poll(() => alert.count(), { timeout: recoveryBudget() }).toBe(0)
       await context.close()
     } finally {
       proxy.releasePending()
       try { await browser?.close() }
       finally { await proxy.close() }
+    }
+  }, 60_000)
+
+  it("R227 aborts an unfinished 200 session body and recovers on Retry without accepting its late anonymous tail", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    const outputStart = output.length
+    try {
+      proxy.setFault("pending_body")
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" },
+        args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const bodyResponses: BrowserResponse[] = []
+      let failedBodies = 0
+      let finishedBodies = 0
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/auth/session" &&
+          response.headers()["x-kokoro-test-session-body"] === "pending") bodyResponses.push(response)
+      })
+      page.on("requestfailed", (request) => {
+        if (bodyResponses.some((response) => response.request() === request)) failedBodies += 1
+      })
+      page.on("requestfinished", (request) => {
+        if (bodyResponses.some((response) => response.request() === request)) finishedBodies += 1
+      })
+      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
+        "session_body_document", page, response, proxy, outputStart,
+      ))
+      await requireSessionProbe("session_body_probe", 1, page, response, proxy, outputStart)
+      await expect.poll(() => bodyResponses.length, { timeout: 10_000 }).toBe(1)
+      expect(bodyResponses[0]?.status()).toBe(200)
+      await expect.poll(() => proxy.sessionBodyDiagnostics()).toEqual([{
+        headersFlushed: true, partialWritten: true, closed: false, ended: false,
+        elapsedMs: null, lateTailAttempted: false, lateTailDiscarded: false,
+      }])
+      expect(await page.locator('[data-server-admitted-shell="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(false)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(proxy.resourceDiagnostics().filter(({ path }) => path.startsWith("/api/session/") ||
+        path === "/api/system/runtime-manifest")).toEqual([])
+
+      const retry = page.getByRole("button", { name: /Retry|重试/u })
+      const alert = page.getByRole("alert").filter({ has: retry })
+      await alert.waitFor({ timeout: 12_000 })
+      await expect.poll(() => failedBodies).toBe(1)
+      await expect.poll(() => proxy.sessionBodyDiagnostics()[0]?.closed).toBe(true)
+      const aborted = proxy.sessionBodyDiagnostics()[0]
+      expect(aborted).toMatchObject({ ended: false, lateTailAttempted: false })
+      expect(aborted?.elapsedMs).toBeGreaterThanOrEqual(9_000)
+      expect(aborted?.elapsedMs).toBeLessThanOrEqual(12_000)
+      expect(finishedBodies).toBe(0)
+      expect(proxy.sessionRequests()).toBe(1)
+      expect(proxy.loginRequests()).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
+
+      proxy.setFault("pass")
+      const recoveryDeadline = Date.now() + 18_000
+      const remaining = (): number => Math.max(1, recoveryDeadline - Date.now())
+      await retry.click()
+      await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBe(2)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
+      await expect.poll(() => alert.count(), { timeout: remaining() }).toBe(0)
+      await composer.fill("r227-session-body-recovered")
+      proxy.releaseSessionBodies()
+      expect(proxy.sessionBodyDiagnostics()[0]).toMatchObject({
+        closed: true, ended: false, lateTailAttempted: true, lateTailDiscarded: true,
+      })
+      // Observe subsequent browser turns in the same document before reload.
+      // The old body is transport-cancelled, not a synthetic stale callback.
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      }))
+      expect(await composer.inputValue()).toBe("r227-session-body-recovered")
+      expect(await composer.isEnabled()).toBe(true)
+      expect(await alert.count()).toBe(0)
+      expect(proxy.sessionRequests()).toBe(2)
+      expect(proxy.loginRequests()).toBe(0)
+      expect(bodyResponses).toHaveLength(1)
+      expect(failedBodies).toBe(1)
+      expect(finishedBodies).toBe(0)
+      await composer.fill("")
+      await requireStableAuthenticatedWorkspace(
+        "session_body_recovery", page, response, proxy, outputStart, recoveryDeadline,
+      )
+      expect(proxy.loginRequests()).toBe(0)
+    } finally {
+      proxy.releaseSessionBodies()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
     }
   }, 60_000)
 
@@ -3096,7 +3291,6 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await requireStableAuthenticatedWorkspace(
         "unavailable_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      expect(proxy.loginRequests()).toBe(0)
       await context.close()
     } finally {
       try { await browser?.close() }
@@ -3125,14 +3319,235 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         }
         throw new AggregateError([error], `${error instanceof Error ? error.message : "anonymous probe failed"}\n${control}`)
       }
-      await expect.poll(() => proxy.loginRequests()).toBeGreaterThan(0)
+      const terminalDeadline = Date.now() + 18_000
+      const terminalBudget = (): number => Math.max(1, terminalDeadline - Date.now())
+      try { await expect.poll(() => proxy.loginRequests(), { timeout: terminalBudget() }).toBeGreaterThan(0) }
+      catch { throw new Error(await browserProbeDiagnostic("anonymous_login", page, response, proxy, outputStart)) }
       expect(proxy.sessionRequests()).toBeGreaterThanOrEqual(1)
+      await requireStableAuthenticatedWorkspace(
+        "anonymous_terminal", page, response, proxy, outputStart, terminalDeadline,
+      )
       await context.close()
     } finally {
       try { await browser?.close() }
       finally { await proxy.close() }
     }
-  }, 30_000)
+  }, 60_000)
+
+  it("R175 removes private Runtime before a server-admitted document hands anonymous control to native login", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    const outputStart = output.length
+    try {
+      proxy.setLoginPending(true)
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(observeAnonymousSafetyHandoff)
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
+        "anonymous_handoff_document", page, response, proxy, outputStart,
+      ))
+      const runtimeDeadline = Date.now() + 12_000
+      await requireStableAuthenticatedWorkspace(
+        "anonymous_handoff_runtime", page, response, proxy, outputStart, runtimeDeadline,
+      )
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill("private-draft-must-not-survive-anonymous-handoff")
+      const ownerRequests = (): number => proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)
+      const ownerBaseline = ownerRequests()
+      const probeBaseline = proxy.sessionRequests()
+
+      proxy.setFault("anonymous")
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
+      await expect.poll(() => proxy.anonymousHandoffDiagnostics().length, { timeout: 10_000 }).toBe(1)
+      expect(proxy.anonymousHandoffDiagnostics()[0]).toEqual({
+        phase: "commit",
+        booting: true,
+        main: true,
+        composer_disabled: true,
+        all_controls_disabled: true,
+        runtime_loading: false,
+        app_frame_loading: false,
+        private_timeline: false,
+        draft_nonempty: false,
+        alert_visible: false,
+        retry_visible: false,
+      })
+      expect(ownerRequests()).toBe(ownerBaseline)
+      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
+      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
+      expect(proxy.loginRequests()).toBe(1)
+    } finally {
+      proxy.releaseLoginRequests()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R177 keeps anonymous native handoff data-free without reviving a visible retry interstitial", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    const outputStart = output.length
+    try {
+      proxy.setLoginPending(true)
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(observeAnonymousSafetyHandoff)
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
+        "no_interstitial_document", page, response, proxy, outputStart,
+      ))
+      await requireStableAuthenticatedWorkspace(
+        "no_interstitial_runtime", page, response, proxy, outputStart, Date.now() + 12_000,
+      )
+      await page.locator('[data-slot="composer-input"]').fill("private-draft-must-be-removed-before-native-login")
+      const ownerRequests = (): number => proxy.resourceDiagnostics()
+        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
+        .reduce((total, resource) => total + resource.requests, 0)
+      const ownerSnapshot = () => ({
+        session_owner: proxy.resourceDiagnostics().filter(({ path }) => path.startsWith("/api/session/"))
+          .reduce((total, resource) => total + resource.requests, 0),
+        session_collection: proxy.resourceDiagnostics().find(({ path }) => path === "/api/session/sessions")?.requests ?? 0,
+        messages: proxy.resourceDiagnostics().filter(({ path }) => /^\/api\/session\/sessions\/[^/]+\/messages$/u.test(path))
+          .reduce((total, resource) => total + resource.requests, 0),
+        runtime_manifest: proxy.resourceDiagnostics().find(({ path }) => path === "/api/system/runtime-manifest")?.requests ?? 0,
+      })
+      const ownerBaseline = ownerRequests()
+      const ownerBeforeHandoff = ownerSnapshot()
+      const probeBaseline = proxy.sessionRequests()
+      const resource = (path: string) => proxy.resourceDiagnostics().find((candidate) => candidate.path === path)
+      const appDocumentsBeforeHandoff = resource("/app")?.request_categories.document ?? 0
+
+      proxy.setFault("anonymous")
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
+      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
+      await expect.poll(
+        () => proxy.anonymousHandoffDiagnostics().filter(({ phase }) => phase === "watchdog").length,
+        { timeout: 12_000 },
+      ).toBe(1)
+      const expectedSafeShell = {
+        booting: true,
+        main: true,
+        composer_disabled: true,
+        all_controls_disabled: true,
+        runtime_loading: false,
+        app_frame_loading: false,
+        private_timeline: false,
+        draft_nonempty: false,
+        alert_visible: false,
+        retry_visible: false,
+      }
+      expect(proxy.anonymousHandoffDiagnostics()).toEqual([
+        { phase: "commit", ...expectedSafeShell },
+        { phase: "watchdog", ...expectedSafeShell },
+      ])
+      console.log("KOKORO_TEST_R178_HANDOFF_OWNER_DIAGNOSTIC " + JSON.stringify({
+        before_handoff: ownerBeforeHandoff,
+        at_beacons: proxy.anonymousHandoffOwnerDiagnostics(),
+        after_watchdog: ownerSnapshot(),
+      }))
+      expect(ownerRequests()).toBe(ownerBaseline)
+      expect(proxy.loginRequests()).toBe(1)
+      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
+
+      proxy.setFault("pass")
+      proxy.forwardLoginRequests()
+      const recoveryDeadline = Date.now() + 18_000
+      await requireStableAuthenticatedWorkspace(
+        "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
+      )
+      expect(resource("/login")?.upstream_statuses).toContain(302)
+      expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
+      expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
+      expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
+      expect(proxy.sessionResponseDiagnostics().at(-1)).toMatchObject({ status: 200, authenticated: true })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill("r177-native-login-recovered")
+      await expect.poll(() => composer.inputValue(), { timeout: Math.max(1, recoveryDeadline - Date.now()) })
+        .toBe("r177-native-login-recovered")
+      await composer.fill("")
+    } finally {
+      proxy.releaseLoginRequests()
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R176 classifies Runtime and Page observability across a held native document navigation", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let baselineContext: BrowserContext | undefined
+    let heldContext: BrowserContext | undefined
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      baselineContext = await browser.newContext()
+      const baselinePage = await baselineContext.newPage()
+      const baselineCdp = await baselineContext.newCDPSession(baselinePage)
+      const baselineEvents = await observeNativeNavigation(baselineCdp)
+      const baselineResponse = await baselinePage.goto(
+        `http://localhost:${nextPort}/__fixture/r176-static-control?navigate=0`,
+        { waitUntil: "domcontentloaded", timeout: 5_000 },
+      )
+      expect(baselineResponse?.status()).toBe(200)
+      await expect.poll(() => proxy.r176Heartbeats().length, { timeout: 2_000 }).toBeGreaterThan(0)
+      const baseline = await nativeNavigationDiagnostic(baselineCdp, baselineEvents)
+      expect(baseline.runtime).toBe("ok")
+      expect(baseline.page).toBe("ok")
+
+      heldContext = await browser.newContext()
+      const heldPage = await heldContext.newPage()
+      const heldCdp = await heldContext.newCDPSession(heldPage)
+      const heldEvents = await observeNativeNavigation(heldCdp)
+      const heldResponse = await heldPage.goto(
+        `http://localhost:${nextPort}/__fixture/r176-static-control?navigate=1`,
+        { waitUntil: "domcontentloaded", timeout: 5_000 },
+      )
+      expect(heldResponse?.status()).toBe(200)
+      await expect.poll(() => proxy.r176HeldDocuments(), { timeout: 2_000 }).toBe(1)
+      const heartbeatBaseline = proxy.r176Heartbeats().filter(({ phase }) => phase === "held_navigation").length
+      const held = await nativeNavigationDiagnostic(heldCdp, heldEvents)
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      const heartbeatAfter = proxy.r176Heartbeats().filter(({ phase }) => phase === "held_navigation").length
+      console.log("KOKORO_TEST_R176_NATIVE_DIAGNOSTIC " + JSON.stringify({
+        baseline,
+        held,
+        held_heartbeat_advanced: heartbeatAfter > heartbeatBaseline,
+      }))
+      expect(proxy.r176HeldDocuments()).toBe(1)
+    } finally {
+      proxy.releaseR176HeldDocuments()
+      try { await heldContext?.close() }
+      finally {
+        try { await baselineContext?.close() }
+        finally {
+          try { await browser?.close() }
+          finally { await proxy.close() }
+        }
+      }
+    }
+  }, 60_000)
+
 
   it("R139 preserves a first tab's conversation index and draft when the same subject opens a second app document", async () => {
     const browser = await chromium.launch({ headless: true })
@@ -3260,6 +3675,1464 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       finally { await proxy.close() }
     }
   }, 45_000)
+
+  it("R183 shows a safe rail failure when the Move owner rejects without changing the active draft or route", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 409,
+      requestId: "req_move_owner_rejected",
+      body: { error: { code: "idempotency_conflict", message: "fixture owner detail must stay private", retryable: false } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await expect.poll(() => composer.isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await selectA.getByText("Move conversation alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await selectA.click()
+      await composer.fill("R183 owner rejection preserves this active draft")
+      const beforeUrl = page.url()
+      const beforeListRequests = proxy.listRequests()
+
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      const alert = directList.getByRole("alert").filter({
+        hasText: /The conversation could not be moved\. Refresh and try again\.|移动失败，请刷新后重试。/u,
+      })
+      await alert.waitFor({ state: "visible", timeout: 10_000 })
+      expect(await alert.textContent()).not.toMatch(/fixture owner detail|idempotency_conflict|req_move_owner_rejected/u)
+      expect(page.url()).toBe(beforeUrl)
+      expect(await composer.inputValue()).toBe("R183 owner rejection preserves this active draft")
+      expect(await selectA.getAttribute("aria-pressed")).toBe("true")
+      expect(proxy.listRequests()).toBe(beforeListRequests)
+      expect(moveBoundaryRequests).toHaveLength(1)
+      expect(paths.some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
+  it("R183 disables every competing Move while one row is pending and retries an unknown result only on its original row", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_retry_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: 15_000 }).toBe(true)
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const rowB = directList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`,
+      )
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await selectA.click()
+      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      const moveA = rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u })
+      const moveB = rowB.getByRole("button", { name: /Move conversation Move conversation beta|移动会话 Move conversation beta/u })
+      await moveA.click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      await expect.poll(() => moveA.isDisabled(), { timeout: 10_000 }).toBe(true)
+      await expect.poll(() => moveB.isDisabled(), { timeout: 10_000 }).toBe(true)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      moveFixtureMode = "close"
+      releaseMove()
+      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      await moveA.click()
+      const retryItems = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retryItems.waitFor({ state: "visible", timeout: 10_000 })
+      expect(await retryItems.count()).toBe(1)
+      await page.keyboard.press("Escape")
+      await moveB.click()
+      expect(await page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u }).count()).toBe(0)
+      await page.keyboard.press("Escape")
+      await moveA.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R192 keeps a moved Conversation out of Direct after return and reload while preserving its Project history", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_binding_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(moveBoundaryRequests[0]?.body).toBe(JSON.stringify({ target_project_id: moveProjectA }))
+      expect(moveBoundaryRequests[0]?.idempotencyKey).toMatch(
+        /^move_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+      )
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+
+      const directGetsAfterCommitBaseline = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directGetsAfterCommitBaseline)
+      const directReturnRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directReturnRead).toEqual({
+        scope: "direct",
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationB],
+      })
+      const directGetsBeforeReload = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      await page.reload({ waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const reloadedDirectList = page.locator('[data-conversation-list="direct"]')
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directGetsBeforeReload)
+      const directReloadRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directReloadRead).toEqual({
+        scope: "direct",
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationB],
+      })
+      await expect.poll(() => reloadedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBeNull()
+
+      const snapshotGetsBeforeProjectOpen = moveBindingSnapshotGets.length
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
+      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      const projectList = page.locator('[data-conversation-list="project-conversation"]')
+      await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
+        .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
+      expect(moveBindingSnapshotGets.at(-1)).toEqual({
+        sessionId: moveConversationA,
+        bindingAtRead: moveProjectA,
+        messageIds: ["message-move-binding-a"],
+      })
+      await projectList.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBindingScopeGets).toContainEqual({
+        scope: `project:${moveProjectA}`,
+        bindingAtRead: moveProjectA,
+        sessionIds: [moveConversationA],
+      })
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R194 reconciles a late matching ACK with a post-commit source GET without stealing the newly active draft", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_late_confirmed_reconcile",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const composer = page.locator('[data-slot="composer-input"]')
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
+      await selectA.click()
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      const preCommitReads = moveBindingScopeGets.filter((entry) => entry.scope === "direct")
+      expect(preCommitReads.length).toBeGreaterThan(0)
+      expect(preCommitReads.at(-1)).toEqual({
+        scope: "direct", bindingAtRead: null, sessionIds: [moveConversationA, moveConversationB],
+      })
+      const sourceGetsBeforeAck = preCommitReads.length
+      await selectB.click()
+      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await composer.fill("R194 keep the newly active B draft")
+      const stableUrl = page.url()
+
+      releaseMove()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(sourceGetsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
+        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
+      })
+      await expect.poll(() => directList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), { timeout: 10_000 })
+        .toBe(0)
+      expect(page.url()).toBe(stableUrl)
+      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
+      expect(await composer.inputValue()).toBe("R194 keep the newly active B draft")
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R188 retains an unknown Move identity after active switch and retries only its original row", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_switched_unknown_retry",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
+      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
+      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
+      const moveA = rowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      })
+      await selectA.click()
+      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await moveA.click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      await selectB.click()
+      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      const stableUrl = page.url()
+      const listRequestsBeforeUnknown = proxy.listRequests()
+      moveFixtureMode = "close"
+      releaseMove()
+      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
+      expect(page.url()).toBe(stableUrl)
+      expect(proxy.listRequests()).toBe(listRequestsBeforeUnknown)
+
+      await moveA.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      expect(page.url()).toBe(stableUrl)
+      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R194 recovers a committed Move after the owner socket closes with the exact command and preserves one Conversation history", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "commit-close"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_committed_lost_ack",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await rowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      const ownerMutationsBefore = paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value)).length
+
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(moveBindingProjectRef).toBe(moveProjectA)
+      await expect.poll(() => rowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).isEnabled(), { timeout: 10_000 }).toBe(true)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+
+      moveFixtureMode = "respond"
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectA}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBindingSnapshotGets.at(-1)).toEqual({
+        sessionId: moveConversationA,
+        bindingAtRead: moveProjectA,
+        messageIds: ["message-move-binding-a"],
+      })
+      expect(paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value))).toHaveLength(ownerMutationsBefore)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it.each([
+    [503, "business_store_unavailable"],
+    [409, "idempotency_in_progress"],
+  ] as const)("R194 keeps typed %s %s Move outcomes unknown and retries the exact command", async (status, code) => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveFixtureMode = "respond"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status,
+      requestId: `req_move_unknown_${status}`,
+      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      moveFixtureResponse = {
+        status: 200,
+        requestId: `req_move_unknown_retry_${status}`,
+        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+      }
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
+    } finally {
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R195 reconciles a cross-scope matching Move ACK without stealing the mounted Project draft", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = {
+      status: 200,
+      requestId: "req_move_cross_scope_confirmed",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(0)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
+        scope: `project:${moveProjectA}`, bindingAtRead: null, sessionIds: [],
+      })
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(0)
+      const projectBReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length
+      const composer = page.locator('[data-slot="composer-input"]')
+      const projectBDraft = "R195 keep the mounted Project B draft"
+      await composer.fill(projectBDraft)
+      const directReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
+      const targetReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length
+
+      releaseMove()
+      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 }).toBe(moveProjectA)
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
+      expect(await composer.inputValue()).toBe(projectBDraft)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
+        .toBeGreaterThan(directReadsBeforeAck)
+      const returnedDirectList = page.locator('[data-conversation-list="direct"]')
+      await expect.poll(() => returnedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
+        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
+      })
+
+      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
+        timeout: 10_000,
+      }).toBeGreaterThan(targetReadsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
+        scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
+      })
+      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
+      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      await page.locator('[data-conversation-list="project-conversation"]')
+        .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
+        .toBe(projectBDraft)
+      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
+        timeout: 10_000,
+      }).toBe(projectBReadsBeforeAck + 1)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual({
+        scope: `project:${moveProjectB}`, bindingAtRead: moveProjectA, sessionIds: [],
+      })
+      expect(moveBoundaryRequests).toHaveLength(1)
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it.each([
+    ["committed lost ACK", "commit-close", 200, "lost_ack"],
+    ["typed unavailable", "respond", 503, "business_store_unavailable"],
+  ] as const)("R195 retains a cross-scope %s Move command for one explicit exact retry", async (
+    _outcome, releaseMode, status, code,
+  ) => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    moveUiFixtureEnabled = true
+    moveBindingFixtureEnabled = true
+    moveBindingProjectRef = null
+    moveBindingScopeGets.length = 0
+    moveBindingSnapshotGets.length = 0
+    moveFixtureMode = "hold"
+    moveBoundaryRequests.length = 0
+    moveFixtureResponse = status === 200 ? {
+      status,
+      requestId: "req_move_cross_scope_lost_ack",
+      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+    } : {
+      status,
+      requestId: "req_move_cross_scope_unavailable",
+      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
+    }
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
+      await directRowA.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      }).click()
+      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
+      const frozenRequest = moveBoundaryRequests[0]
+
+      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+        .toBe(`/app/project/${moveProjectB}`)
+      const projectBDraft = `R195 ${code} keeps Project B mounted`
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill(projectBDraft)
+      moveFixtureMode = releaseMode
+      releaseMove()
+      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 })
+        .toBe(status === 200 ? moveProjectA : null)
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
+      expect(await composer.inputValue()).toBe(projectBDraft)
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      const recoveryProject = status === 200 ? moveProjectA : null
+      if (recoveryProject === null) {
+        await page.locator('a[href="/app"]').first().click()
+        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      } else {
+        await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
+        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+          .toBe(`/app/project/${moveProjectA}`)
+      }
+      if (recoveryProject !== null) {
+        const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(recoveryProject)}"]`)
+        if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
+        expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
+      }
+      const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
+      const recoveryRow = recoveryList.locator(
+        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
+      )
+      const moveButton = recoveryRow.getByRole("button", {
+        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
+      })
+      await moveButton.waitFor({ state: "visible", timeout: 10_000 })
+      await page.locator('[data-slot="composer-input"]').focus()
+      expect(moveBoundaryRequests).toHaveLength(1)
+
+      const retainedConversation = recoveryRow.locator(`[data-conversation-id="${moveConversationA}"]`)
+      await retainedConversation.click()
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe(moveConversationA)
+      await moveButton.click()
+      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
+      await retry.waitFor({ state: "visible", timeout: 10_000 })
+      expect(moveBoundaryRequests).toHaveLength(1)
+      moveFixtureMode = "respond"
+      moveFixtureResponse = {
+        status: 200,
+        requestId: `req_move_cross_scope_retry_${status}`,
+        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
+      }
+      await retry.click()
+      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(moveBoundaryRequests[1]).toEqual(frozenRequest)
+      await expect.poll(() => {
+        const url = new URL(page.url())
+        return `${url.pathname}${url.search}`
+      }, { timeout: 10_000 }).toBe(
+        `/app/project/${moveProjectA}?conversation=${encodeURIComponent(moveConversationA)}`,
+      )
+      await page.getByText("R192 binding survives the filtered view move", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+    } finally {
+      moveBindingFixtureEnabled = false
+      moveBindingProjectRef = null
+      moveBindingScopeGets.length = 0
+      moveBindingSnapshotGets.length = 0
+      moveUiFixtureEnabled = false
+      moveFixtureMode = "respond"
+      moveFixtureResponse = undefined
+      releaseMove()
+      moveBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 50_000)
+
+  it("R229 recovers a cold conversation deep link from a real snapshot 503 through manual Retry", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    coldSnapshotStatus = 503
+    coldSnapshotResponses.length = 0
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      // A new storage-free context must fail before A has ever become an active conversation.
+      expect((await context.storageState()).origins).toEqual([])
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      const browserSnapshotStatuses: number[] = []
+      page.on("response", (response) => {
+        if (new URL(response.url()).pathname === "/api/session/sessions/session-list-a") {
+          browserSnapshotStatuses.push(response.status())
+        }
+      })
+      const target = `http://localhost:${nextPort}/app?conversation=session-list-a`
+      const document = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 15_000 })
+      expect(document?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expect.poll(() => coldSnapshotResponses, { timeout: 10_000 }).toEqual([503])
+      await expect.poll(() => browserSnapshotStatuses, { timeout: 10_000 }).toEqual([503])
+      expect(sessionSnapshotRequests).toBe(1)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe("session-list-a")
+      const errorSurface = page.getByTestId("app-frame-conversation-error")
+      const loading = page.getByTestId("app-frame-loading")
+      // On failure the oracle retains both the real peer status and the actually rendered branch.
+      await expect.poll(async () => ({
+        errorVisible: await errorSurface.isVisible(),
+        loadingVisible: await loading.isVisible(),
+        snapshotStatuses: [...browserSnapshotStatuses],
+      }), { timeout: 12_000 }).toEqual({ errorVisible: true, loadingVisible: false, snapshotStatuses: [503] })
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+      expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
+
+      coldSnapshotStatus = 200
+      await errorSurface.getByRole("button", { name: /Retry|重试/u }).click()
+      await expect.poll(() => coldSnapshotResponses, { timeout: 10_000 }).toEqual([503, 200])
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(1)
+      expect(await errorSurface.count()).toBe(0)
+      expect(await loading.count()).toBe(0)
+      expect(new URL(page.url()).pathname).toBe("/app")
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe("session-list-a")
+      expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
+
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => coldSnapshotResponses, { timeout: 10_000 }).toEqual([503, 200, 200])
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(1)
+      expect(new URL(page.url()).searchParams.get("conversation")).toBe("session-list-a")
+      expect(await errorSurface.count()).toBe(0)
+      expect(await loading.count()).toBe(0)
+      expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
+    } finally {
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally {
+          try { await proxy.close() }
+          finally {
+            coldSnapshotStatus = undefined
+            coldSnapshotResponses.length = 0
+            sessionSnapshotRequests = 0
+            sessionBoundaryRequests.length = 0
+          }
+        }
+      }
+    }
+  }, 60_000)
+
+  it("R233 keeps an authenticated deep link recoverable when only its Conversation index read is denied", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: BrowserContext | undefined
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await context.addInitScript(() => {
+        const originalGetItem = Storage.prototype.getItem
+        const target = window as unknown as { __kokoroDeniedConversationReads: number }
+        target.__kokoroDeniedConversationReads = 0
+        Storage.prototype.getItem = function (candidate: string): string | null {
+          if (candidate === "kokoro.web.conversations.direct") {
+            target.__kokoroDeniedConversationReads += 1
+            throw new DOMException("conversation storage denied", "SecurityError")
+          }
+          return originalGetItem.call(this, candidate)
+        }
+      })
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      observeBrowserDiagnostics(page)
+      const pageErrors: string[] = []
+      page.on("pageerror", (error) => pageErrors.push(error.name))
+      const target = `http://localhost:${nextPort}/app?conversation=session-list-a`
+
+      const deniedReads = async (): Promise<number> => page.evaluate(() =>
+        (window as unknown as { __kokoroDeniedConversationReads?: number }).__kokoroDeniedConversationReads ?? 0)
+        .catch(() => -1)
+      const diagnostic = async (stage: string): Promise<string> => {
+        const observed = browserDiagnostics.get(page)
+        return `${stage} selective Conversation storage diagnostic: ${JSON.stringify({
+          denied_conversation_reads: await deniedReads(),
+          session_responses: proxy.sessionResponseDiagnostics(),
+          snapshot_requests: sessionSnapshotRequests,
+          boundary_requests: sessionBoundaryRequests.slice(-12),
+          runtime_loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
+          app_frame_loading_count: await diagnosticWithin(page.getByTestId("app-frame-loading").count(), -1),
+          body_count: await diagnosticWithin(page.getByText("R143 authoritative conversation A body", { exact: true }).count(), -1),
+          composer_count: await diagnosticWithin(page.locator('[data-slot="composer-input"]').count(), -1),
+          page_error_categories: pageErrors,
+          browser_error_categories: [...observed?.categories ?? []],
+          request_failures: observed?.requestFailures ?? [],
+          url_path_search: (() => { try { const url = new URL(page.url()); return `${url.pathname}${url.search}` } catch { return "<invalid>" } })(),
+        })}`
+      }
+      const converge = async (stage: "cold" | "reload"): Promise<void> => {
+        const sessionBaseline = proxy.sessionResponseDiagnostics().length
+        const snapshotBaseline = sessionSnapshotRequests
+        const deadline = Date.now() + 12_000
+        const remaining = (): number => Math.max(1, deadline - Date.now())
+        try {
+          const response = stage === "cold"
+            ? await page.goto(target, { waitUntil: "domcontentloaded", timeout: remaining() })
+            : await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+          expect(response?.status()).toBe(200)
+          await expect.poll(() => proxy.sessionResponseDiagnostics().slice(sessionBaseline), { timeout: remaining() })
+            .toContainEqual(expect.objectContaining({ status: 200, authenticated: true }))
+          await expect.poll(deniedReads, { timeout: remaining() }).toBeGreaterThan(0)
+          await expect.poll(() => sessionSnapshotRequests, { timeout: remaining() }).toBeGreaterThan(snapshotBaseline)
+          await page.getByText("R143 authoritative conversation A body", { exact: true })
+            .waitFor({ state: "visible", timeout: remaining() })
+          const composer = page.locator('[data-slot="composer-input"]')
+          await composer.waitFor({ state: "visible", timeout: remaining() })
+          await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
+          expect(await page.getByTestId("runtime-loading").count()).toBe(0)
+          expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+          expect(pageErrors).toEqual([])
+          expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(
+            "/app?conversation=session-list-a",
+          )
+          expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
+        } catch (error) {
+          throw new Error(await diagnostic(stage), { cause: error })
+        }
+      }
+
+      await converge("cold")
+      await converge("reload")
+    } finally {
+      sessionSnapshotRequests = 0
+      sessionBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 45_000)
+
+  it("R186 bounds an initial snapshot across headers and recovery instead of leaving the workspace loading forever", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    let releaseHeldSnapshot: (() => Promise<void>) | undefined
+    let browserSnapshotRequests = 0
+    sessionSnapshotRequests = 0
+    sessionBoundaryRequests.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
+      await conversationA.click()
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
+        .toBe("session-list-a")
+      const composer = page.locator('[data-slot="composer-input"]')
+      const draft = "R186 snapshot timeout keeps this local draft"
+      await composer.fill(draft)
+      const successfulSnapshotsBeforeHold = sessionSnapshotRequests
+
+      await page.route(/\/api\/session\/sessions\/session-list-a(?:\?scope=direct)?$/u, async (route) => {
+        browserSnapshotRequests += 1
+        if (browserSnapshotRequests !== 1) {
+          await route.continue()
+          return
+        }
+        await new Promise<void>((resolve) => {
+          let released = false
+          releaseHeldSnapshot = async () => {
+            if (released) return
+            released = true
+            try { await route.continue() }
+            catch { /* an owned deadline may already have aborted the held browser request */ }
+            finally { resolve() }
+          }
+        })
+      })
+      const heldReload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(heldReload?.status()).toBe(200)
+      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(1)
+      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
+      expect(await page.getByTestId("app-frame-loading").isVisible()).toBe(true)
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
+
+      const errorSurface = page.getByTestId("app-frame-conversation-error")
+      await errorSurface.waitFor({ state: "visible", timeout: 12_000 })
+      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
+      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
+
+      await errorSurface.getByRole("button", { name: /Retry|重试/u }).click()
+      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(2)
+      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 })
+        .toBe(successfulSnapshotsBeforeHold + 1)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      expect(await composer.inputValue()).toBe(draft)
+
+      await releaseHeldSnapshot?.()
+      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(1)
+      const snapshotRequestsBeforeReload = sessionSnapshotRequests
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 }).toBe(draft)
+      expect(sessionSnapshotRequests).toBeGreaterThan(snapshotRequestsBeforeReload)
+    } finally {
+      await releaseHeldSnapshot?.()
+      sessionSnapshotRequests = 0
+      sessionBoundaryRequests.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R188 exercises Direct list, open, rejected rename, non-active delete and an empty local composer through the real rail", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    renameSessionStatus = 503
+    renameSessionRequests.length = 0
+    deleteSessionRequests.length = 0
+    deleteSessionCommitted = false
+    deleteSessionBCommitted = false
+    sessionSnapshotRequests = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rowA = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-a"])')
+      const rowB = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
+      const selectA = rowA.locator('[data-conversation-id="session-list-a"]')
+      const selectB = rowB.locator('[data-conversation-id="session-list-b"]')
+      await selectA.click()
+      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await page.getByText("R143 authoritative conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      const composer = page.locator('[data-slot="composer-input"]')
+      await composer.fill("R188 direct A draft")
+
+      await selectB.click()
+      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await page.getByText("R188 authoritative conversation B body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      await composer.fill("R188 direct B draft")
+      await selectA.click()
+      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe("R188 direct A draft")
+      await selectB.click()
+      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe("R188 direct B draft")
+
+      await rowB.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      const renameInput = directList.locator('[data-slot="sidebar-menu-item"][data-editing="true"]')
+        .getByRole("textbox", { name: "Chat title" })
+      await renameInput.fill("Rejected owner title")
+      await renameInput.press("Enter")
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(renameSessionRequests).toEqual([{
+        path: "/v1/sessions/session-list-b/title",
+        body: JSON.stringify({ title: "Rejected owner title" }),
+      }])
+      await directList.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(await directList.getByText("Rejected owner title", { exact: true }).count()).toBe(0)
+
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const reloadedList = page.locator('[data-conversation-list="direct"]')
+      const reloadedA = reloadedList.locator('[data-conversation-id="session-list-a"]')
+      await reloadedList.getByText("Bounded list beta", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await reloadedA.click()
+      await expect.poll(() => reloadedA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
+      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
+        .toBe("R188 direct A draft")
+      const beforeDeleteUrl = page.url()
+      await reloadedList.getByRole("button", { name: "Delete chat Bounded list beta" }).click()
+      const dialog = page.getByRole("alertdialog")
+      await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
+      await expect.poll(() => deleteSessionRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(deleteSessionRequests[0]).toEqual({
+        url: "/v1/sessions/session-list-b?scope=direct",
+        idempotencyKey: expect.stringMatching(/^session-mutation:/u),
+      })
+      await expect.poll(() => reloadedList.getByText("Bounded list beta", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
+      expect(await reloadedA.getAttribute("aria-pressed")).toBe("true")
+      expect(page.url()).toBe(beforeDeleteUrl)
+      expect(await page.locator('[data-slot="composer-input"]').inputValue()).toBe("R188 direct A draft")
+
+      await page.getByTestId("rail-new-conversation").click()
+      await expect.poll(() => reloadedA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("false")
+      expect(await reloadedList.getByText("New chat", { exact: true }).count()).toBe(0)
+      expect(await reloadedList.locator('[data-conversation-id]').count()).toBe(1)
+    } finally {
+      renameSessionStatus = 200
+      renameSessionRequests.length = 0
+      deleteSessionRequests.length = 0
+      deleteSessionCommitted = false
+      deleteSessionBCommitted = false
+      sessionSnapshotRequests = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R190 serializes rail renames and reconciles only from post-ACK owner lists", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    renameLifecycleFixture = true
+    renameLifecycleLostAck = false
+    renameLifecycleTitle = "Bounded list beta"
+    failNextRenameLifecycleList = false
+    releaseHeldRenameA = undefined
+    renameSessionRequests.length = 0
+    renameLifecycleListResponses.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const rename = async (currentTitle: string, nextTitle: string): Promise<void> => {
+        const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
+        await row.getByRole("button", { name: `Rename chat ${currentTitle}` }).click()
+        const input = directList.getByRole("textbox", { name: "Chat title" })
+        await input.fill(nextTitle)
+        await input.press("Enter")
+        await directList.getByText(nextTitle, { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      }
+
+      await rename("Bounded list beta", "R190 title A")
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(1)
+      await rename("R190 title A", "R190 title B")
+      expect(renameSessionRequests).toHaveLength(1)
+
+      releaseRenameA()
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(renameSessionRequests.map(({ body }) => JSON.parse(body))).toEqual([
+        { title: "R190 title A" },
+        { title: "R190 title B" },
+      ])
+      await expect.poll(() => renameLifecycleListResponses.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(2)
+      await directList.getByText("R190 title A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(await directList.getByText("R190 title B", { exact: true }).count()).toBe(0)
+
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const reloadedList = page.locator('[data-conversation-list="direct"]')
+      const reloadedRow = reloadedList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
+      await reloadedList.getByText("R190 title A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+
+      const listsBeforeCanonicalC = renameLifecycleListResponses.length
+      await reloadedRow.getByRole("button", { name: "Rename chat R190 title A" }).click()
+      await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical C")
+      await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(3)
+      await reloadedList.getByText("R190 canonical C", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await expect.poll(() => renameLifecycleListResponses.length, { timeout: 10_000 }).toBeGreaterThan(listsBeforeCanonicalC)
+      expect(renameLifecycleListResponses.at(-1)).toEqual({ status: 200, title: "R190 canonical C" })
+
+      failNextRenameLifecycleList = true
+      await reloadedRow.getByRole("button", { name: "Rename chat R190 canonical C" }).click()
+      await reloadedList.getByRole("textbox", { name: "Chat title" }).fill("R190 canonical D")
+      await reloadedList.getByRole("textbox", { name: "Chat title" }).press("Enter")
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(4)
+      await expect.poll(() => renameLifecycleListResponses.at(-1)?.status, { timeout: 10_000 }).toBe(503)
+      expect(await reloadedList.getByText("R190 title B", { exact: true }).count()).toBe(0)
+      expect(await reloadedList.getByText("R190 title A", { exact: true }).count()).toBe(0)
+
+      await reloadedList.getByRole("button", { name: /Retry|重试/u }).click()
+      await expect.poll(() => renameLifecycleListResponses.at(-1), { timeout: 10_000 }).toEqual({
+        status: 200,
+        title: "R190 canonical D",
+      })
+      await reloadedList.getByText("R190 canonical D", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(await reloadedList.getByText("R190 canonical C", { exact: true }).count()).toBe(0)
+    } finally {
+      releaseRenameA()
+      renameLifecycleFixture = false
+      renameLifecycleLostAck = false
+      renameLifecycleTitle = "Bounded list beta"
+      failNextRenameLifecycleList = false
+      releaseHeldRenameA = undefined
+      renameSessionRequests.length = 0
+      renameLifecycleListResponses.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R190 reconciles a committed rail rename after the owner response is lost", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    renameLifecycleFixture = true
+    renameLifecycleLostAck = true
+    renameLifecycleTitle = "Bounded list beta"
+    failNextRenameLifecycleList = false
+    releaseHeldRenameA = undefined
+    renameSessionRequests.length = 0
+    renameLifecycleListResponses.length = 0
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const directList = page.locator('[data-conversation-list="direct"]')
+      const row = directList.locator('[data-slot="sidebar-menu-item"]:has([data-conversation-id="session-list-b"])')
+      const listsBeforeRename = renameLifecycleListResponses.length
+      await row.getByRole("button", { name: "Rename chat Bounded list beta" }).click()
+      const input = directList.getByRole("textbox", { name: "Chat title" })
+      await input.fill("R190 lost ACK canonical A")
+      await input.press("Enter")
+
+      await expect.poll(() => renameSessionRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(JSON.parse(renameSessionRequests[0]?.body ?? "null")).toEqual({ title: "R190 lost ACK canonical A" })
+      await expect.poll(() => renameLifecycleListResponses.length, { timeout: 10_000 }).toBeGreaterThan(listsBeforeRename)
+      await directList.getByText("R190 lost ACK canonical A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(await directList.getByText("Bounded list beta", { exact: true }).count()).toBe(0)
+
+      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      expect(reload?.status()).toBe(200)
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      await page.locator('[data-conversation-list="direct"]')
+        .getByText("R190 lost ACK canonical A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+    } finally {
+      releaseRenameA()
+      renameLifecycleFixture = false
+      renameLifecycleLostAck = false
+      renameLifecycleTitle = "Bounded list beta"
+      failNextRenameLifecycleList = false
+      releaseHeldRenameA = undefined
+      renameSessionRequests.length = 0
+      renameLifecycleListResponses.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R231 keeps a Project conversation and draft stable until its exact-scope DELETE ACK, then reloads canonical membership", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    let page: Page | undefined
+    projectDeleteFixtureEnabled = true
+    projectDeleteStatus = 200
+    projectDeleteHeld = true
+    projectDeleteCommitted = false
+    projectDeleteRequests.length = 0
+    projectDeleteScopeGets.length = 0
+    releaseProjectDelete = undefined
+    sessionSnapshotRequests = 0
+    const pathStart = paths.length
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app/project/${projectDeleteProject}`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const projectList = page.locator('[data-conversation-list="project-conversation"]')
+      const rowA = projectList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${projectDeleteConversationA}"])`)
+      await rowA.getByText("Project conversation A", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      await rowA.locator(`[data-conversation-id="${projectDeleteConversationA}"]`).click()
+      await page.getByText("R231 authoritative project conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      const composer = page.locator('[data-slot="composer-input"]')
+      const draft = "R231 held project delete preserves this draft"
+      await composer.fill(draft)
+      const scopeGetsBeforeDelete = projectDeleteScopeGets.length
+      const routeBeforeDelete = page.url()
+
+      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      const dialog = page.getByRole("alertdialog")
+      await dialog.getByRole("button", { name: "Delete chat", exact: true }).click()
+      await expect.poll(() => projectDeleteRequests.length, { timeout: 10_000 }).toBe(1)
+      expect(projectDeleteRequests).toEqual([{
+        url: `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`,
+        idempotencyKey: expect.stringMatching(/^session-mutation:[0-9a-f-]+$/u),
+      }])
+      expect(projectDeleteRequests[0]?.url).not.toContain("scope=direct")
+      expect(projectDeleteScopeGets).toHaveLength(scopeGetsBeforeDelete)
+      expect(page.url()).toBe(routeBeforeDelete)
+      expect(await composer.inputValue()).toBe(draft)
+      expect(await projectList.getByText("Project conversation A", { exact: true }).count()).toBe(1)
+      expect(await projectList.getByText("Project conversation B", { exact: true }).count()).toBe(1)
+      expect(await dialog.isVisible()).toBe(true)
+      expect(await dialog.getByRole("button", { name: "Delete chat", exact: true }).isDisabled()).toBe(true)
+
+      releaseHeldProjectDelete()
+      await expect.poll(() => projectList.getByText("Project conversation A", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => projectDeleteScopeGets.length, { timeout: 10_000 }).toBe(scopeGetsBeforeDelete + 1)
+      expect(projectDeleteScopeGets.at(-1)).toEqual([projectDeleteConversationB])
+      expect(projectDeleteRequests).toHaveLength(1)
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${projectDeleteProject}`)
+      expect(new URL(page.url()).searchParams.get("conversation")).not.toBe(projectDeleteConversationA)
+      expect(await composer.inputValue()).toBe("")
+      expect(await projectList.getByText("Project conversation B", { exact: true }).count()).toBe(1)
+
+      const scopeGetsBeforeReload = projectDeleteScopeGets.length
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      await expect.poll(() => projectDeleteScopeGets.length, { timeout: 10_000 }).toBeGreaterThan(scopeGetsBeforeReload)
+      const reloadedProjectList = page.locator('[data-conversation-list="project-conversation"]')
+      expect(await reloadedProjectList.getByText("Project conversation A", { exact: true }).count()).toBe(0)
+      await reloadedProjectList.getByText("Project conversation B", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+
+      await page.locator('a[href="/app"]').first().click()
+      const activePage = page
+      await expect.poll(() => new URL(activePage.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      await expandDesktopRail(page)
+      await page.locator('[data-conversation-list="direct"]')
+        .getByText("Direct conversation C", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
+      expect(paths.slice(pathStart).some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+    } finally {
+      projectDeleteFixtureEnabled = false
+      projectDeleteStatus = 200
+      projectDeleteHeld = false
+      projectDeleteCommitted = false
+      releaseHeldProjectDelete()
+      releaseProjectDelete = undefined
+      projectDeleteRequests.length = 0
+      projectDeleteScopeGets.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
+
+  it("R231 preserves a Project conversation on DELETE 503 and succeeds only after an explicit retry", async () => {
+    const proxy = await sessionProbeProxy(nextPort)
+    let browser: Browser | undefined
+    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
+    projectDeleteFixtureEnabled = true
+    projectDeleteStatus = 503
+    projectDeleteHeld = false
+    projectDeleteCommitted = false
+    projectDeleteRequests.length = 0
+    projectDeleteScopeGets.length = 0
+    const pathStart = paths.length
+    try {
+      browser = await chromium.launch({ headless: true,
+        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
+      context = await browser.newContext()
+      await admitBrowserContext(context)
+      const page = await context.newPage()
+      await page.goto(`http://localhost:${nextPort}/app/project/${projectDeleteProject}`, { waitUntil: "domcontentloaded" })
+      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
+      await expandDesktopRail(page)
+      const projectList = page.locator('[data-conversation-list="project-conversation"]')
+      const rowA = projectList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${projectDeleteConversationA}"])`)
+      await rowA.locator(`[data-conversation-id="${projectDeleteConversationA}"]`).click()
+      await page.getByText("R231 authoritative project conversation A body", { exact: true })
+        .waitFor({ state: "visible", timeout: 10_000 })
+      const composer = page.locator('[data-slot="composer-input"]')
+      const draft = "R231 rejected project delete preserves this draft"
+      await composer.fill(draft)
+      const routeBeforeDelete = page.url()
+      const scopeGetsBeforeDelete = projectDeleteScopeGets.length
+
+      await rowA.getByRole("button", { name: "Delete chat Project conversation A" }).click()
+      const dialog = page.getByRole("alertdialog")
+      const confirm = dialog.getByRole("button", { name: "Delete chat", exact: true })
+      await confirm.click()
+      await expect.poll(() => projectDeleteRequests.length, { timeout: 10_000 }).toBe(1)
+      await dialog.getByRole("alert").waitFor({ state: "visible", timeout: 10_000 })
+      expect(projectDeleteRequests[0]).toEqual({
+        url: `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`,
+        idempotencyKey: expect.stringMatching(/^session-mutation:[0-9a-f-]+$/u),
+      })
+      expect(projectDeleteScopeGets).toHaveLength(scopeGetsBeforeDelete)
+      expect(page.url()).toBe(routeBeforeDelete)
+      expect(await composer.inputValue()).toBe(draft)
+      expect(await projectList.getByText("Project conversation A", { exact: true }).count()).toBe(1)
+      expect(await projectList.getByText("Project conversation B", { exact: true }).count()).toBe(1)
+      expect(await confirm.isEnabled()).toBe(true)
+      expect(paths.slice(pathStart).some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+
+      projectDeleteStatus = 200
+      await confirm.click()
+      await expect.poll(() => projectDeleteRequests.length, { timeout: 10_000 }).toBe(2)
+      expect(projectDeleteRequests.map((entry) => entry.url)).toEqual([
+        `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`,
+        `/v1/sessions/${projectDeleteConversationA}?project_ref=${projectDeleteProject}`,
+      ])
+      expect(projectDeleteRequests[1]?.idempotencyKey).toMatch(/^session-mutation:[0-9a-f-]+$/u)
+      expect(projectDeleteRequests[1]?.idempotencyKey).not.toBe(projectDeleteRequests[0]?.idempotencyKey)
+      await expect.poll(() => projectList.getByText("Project conversation A", { exact: true }).count(), { timeout: 10_000 }).toBe(0)
+      await expect.poll(() => projectDeleteScopeGets.length, { timeout: 10_000 }).toBe(scopeGetsBeforeDelete + 1)
+      expect(projectDeleteScopeGets.at(-1)).toEqual([projectDeleteConversationB])
+      expect(new URL(page.url()).pathname).toBe(`/app/project/${projectDeleteProject}`)
+      expect(await composer.inputValue()).toBe("")
+      expect(paths.slice(pathStart).some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
+    } finally {
+      projectDeleteFixtureEnabled = false
+      projectDeleteStatus = 200
+      projectDeleteHeld = false
+      projectDeleteCommitted = false
+      releaseHeldProjectDelete()
+      releaseProjectDelete = undefined
+      projectDeleteRequests.length = 0
+      projectDeleteScopeGets.length = 0
+      try { await context?.close() }
+      finally {
+        try { await browser?.close() }
+        finally { await proxy.close() }
+      }
+    }
+  }, 60_000)
 
   it("R143 keeps the conversation, active draft and list stable until an exact-scope DELETE ACK", async () => {
     const proxy = await sessionProbeProxy(nextPort)
@@ -3906,1556 +5779,4 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       userinfoRejected: true, jwksRejected: true, calls: 0 })
     expect(paths).toHaveLength(before)
   })
-
-  it("R183 shows a safe rail failure when the Move owner rejects without changing the active draft or route", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveFixtureMode = "respond"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 409,
-      requestId: "req_move_owner_rejected",
-      body: { error: { code: "idempotency_conflict", message: "fixture owner detail must stay private", retryable: false } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      const composer = page.locator('[data-slot="composer-input"]')
-      await expect.poll(() => composer.isEnabled(), { timeout: 15_000 }).toBe(true)
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(
-        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
-      )
-      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
-      await selectA.getByText("Move conversation alpha", { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await selectA.click()
-      await composer.fill("R183 owner rejection preserves this active draft")
-      const beforeUrl = page.url()
-      const beforeListRequests = proxy.listRequests()
-
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-
-      const alert = directList.getByRole("alert").filter({
-        hasText: /The conversation could not be moved\. Refresh and try again\.|移动失败，请刷新后重试。/u,
-      })
-      await alert.waitFor({ state: "visible", timeout: 10_000 })
-      expect(await alert.textContent()).not.toMatch(/fixture owner detail|idempotency_conflict|req_move_owner_rejected/u)
-      expect(page.url()).toBe(beforeUrl)
-      expect(await composer.inputValue()).toBe("R183 owner rejection preserves this active draft")
-      expect(await selectA.getAttribute("aria-pressed")).toBe("true")
-      expect(proxy.listRequests()).toBe(beforeListRequests)
-      expect(moveBoundaryRequests).toHaveLength(1)
-      expect(paths.some((value) => /\/runs\/[^/]+\/control(?:\?|$)/u.test(value))).toBe(false)
-    } finally {
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 45_000)
-
-  it("R183 disables every competing Move while one row is pending and retries an unknown result only on its original row", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveFixtureMode = "hold"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_retry_confirmed",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: 15_000 }).toBe(true)
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(
-        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
-      )
-      const rowB = directList.locator(
-        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`,
-      )
-      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
-      await selectA.click()
-      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      const moveA = rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u })
-      const moveB = rowB.getByRole("button", { name: /Move conversation Move conversation beta|移动会话 Move conversation beta/u })
-      await moveA.click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await expect.poll(() => moveA.isDisabled(), { timeout: 10_000 }).toBe(true)
-      await expect.poll(() => moveB.isDisabled(), { timeout: 10_000 }).toBe(true)
-      expect(moveBoundaryRequests).toHaveLength(1)
-
-      moveFixtureMode = "close"
-      releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
-      await moveA.click()
-      const retryItems = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retryItems.waitFor({ state: "visible", timeout: 10_000 })
-      expect(await retryItems.count()).toBe(1)
-      await page.keyboard.press("Escape")
-      await moveB.click()
-      expect(await page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u }).count()).toBe(0)
-      await page.keyboard.press("Escape")
-      await moveA.click()
-      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retry.waitFor({ state: "visible", timeout: 10_000 })
-      expect(moveBoundaryRequests).toHaveLength(1)
-
-      moveFixtureMode = "respond"
-      await retry.click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
-      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectA}`)
-    } finally {
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it("R192 keeps a moved Conversation out of Direct after return and reload while preserving its Project history", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    moveBindingSnapshotGets.length = 0
-    moveFixtureMode = "respond"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_binding_confirmed",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      expect(moveBoundaryRequests[0]?.body).toBe(JSON.stringify({ target_project_id: moveProjectA }))
-      expect(moveBoundaryRequests[0]?.idempotencyKey).toMatch(
-        /^move_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-      )
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectA}`)
-      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-
-      const directGetsAfterCommitBaseline = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await page.locator('a[href="/app"]').first().click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(directGetsAfterCommitBaseline)
-      const directReturnRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
-      expect(directReturnRead).toEqual({
-        scope: "direct",
-        bindingAtRead: moveProjectA,
-        sessionIds: [moveConversationB],
-      })
-      const directGetsBeforeReload = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await page.reload({ waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const reloadedDirectList = page.locator('[data-conversation-list="direct"]')
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(directGetsBeforeReload)
-      const directReloadRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
-      expect(directReloadRead).toEqual({
-        scope: "direct",
-        bindingAtRead: moveProjectA,
-        sessionIds: [moveConversationB],
-      })
-      await expect.poll(() => reloadedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
-        timeout: 10_000,
-      }).toBe(0)
-      expect(new URL(page.url()).searchParams.get("conversation")).toBeNull()
-
-      const snapshotGetsBeforeProjectOpen = moveBindingSnapshotGets.length
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectA}`)
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
-      const projectList = page.locator('[data-conversation-list="project-conversation"]')
-      await expect.poll(() => moveBindingSnapshotGets.length, { timeout: 10_000 })
-        .toBeGreaterThan(snapshotGetsBeforeProjectOpen)
-      expect(moveBindingSnapshotGets.at(-1)).toEqual({
-        sessionId: moveConversationA,
-        bindingAtRead: moveProjectA,
-        messageIds: ["message-move-binding-a"],
-      })
-      await projectList.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe(moveConversationA)
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      expect(moveBindingScopeGets).toContainEqual({
-        scope: `project:${moveProjectA}`,
-        bindingAtRead: moveProjectA,
-        sessionIds: [moveConversationA],
-      })
-      expect(moveBoundaryRequests).toHaveLength(1)
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveBindingSnapshotGets.length = 0
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it("R194 reconciles a late matching ACK with a post-commit source GET without stealing the newly active draft", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    moveFixtureMode = "hold"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_late_confirmed_reconcile",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const composer = page.locator('[data-slot="composer-input"]')
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
-      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
-      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
-      await selectA.click()
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-
-      const preCommitReads = moveBindingScopeGets.filter((entry) => entry.scope === "direct")
-      expect(preCommitReads.length).toBeGreaterThan(0)
-      expect(preCommitReads.at(-1)).toEqual({
-        scope: "direct", bindingAtRead: null, sessionIds: [moveConversationA, moveConversationB],
-      })
-      const sourceGetsBeforeAck = preCommitReads.length
-      await selectB.click()
-      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      await composer.fill("R194 keep the newly active B draft")
-      const stableUrl = page.url()
-
-      releaseMove()
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(sourceGetsBeforeAck)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
-        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
-      })
-      await expect.poll(() => directList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), { timeout: 10_000 })
-        .toBe(0)
-      expect(page.url()).toBe(stableUrl)
-      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
-      expect(await composer.inputValue()).toBe("R194 keep the newly active B draft")
-      expect(moveBoundaryRequests).toHaveLength(1)
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it("R188 retains an unknown Move identity after active switch and retries only its original row", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveFixtureMode = "hold"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_switched_unknown_retry",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      const rowB = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationB}"])`)
-      const selectA = rowA.locator(`[data-conversation-id="${moveConversationA}"]`)
-      const selectB = rowB.locator(`[data-conversation-id="${moveConversationB}"]`)
-      const moveA = rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
-      await selectA.click()
-      await expect.poll(() => selectA.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      await moveA.click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-
-      await selectB.click()
-      await expect.poll(() => selectB.getAttribute("aria-pressed"), { timeout: 10_000 }).toBe("true")
-      const stableUrl = page.url()
-      const listRequestsBeforeUnknown = proxy.listRequests()
-      moveFixtureMode = "close"
-      releaseMove()
-      await expect.poll(() => moveA.isEnabled(), { timeout: 10_000 }).toBe(true)
-      expect(page.url()).toBe(stableUrl)
-      expect(proxy.listRequests()).toBe(listRequestsBeforeUnknown)
-
-      await moveA.click()
-      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retry.waitFor({ state: "visible", timeout: 10_000 })
-      moveFixtureMode = "respond"
-      await retry.click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
-      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
-      expect(page.url()).toBe(stableUrl)
-      expect(await selectB.getAttribute("aria-pressed")).toBe("true")
-    } finally {
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it("R194 recovers a committed Move after the owner socket closes with the exact command and preserves one Conversation history", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    moveBindingSnapshotGets.length = 0
-    moveFixtureMode = "commit-close"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_committed_lost_ack",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await rowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      const ownerMutationsBefore = paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value)).length
-
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      expect(moveBindingProjectRef).toBe(moveProjectA)
-      await expect.poll(() => rowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).isEnabled(), { timeout: 10_000 }).toBe(true)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retry.waitFor({ state: "visible", timeout: 10_000 })
-
-      moveFixtureMode = "respond"
-      await retry.click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
-      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectA}`)
-      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      expect(moveBindingSnapshotGets.at(-1)).toEqual({
-        sessionId: moveConversationA,
-        bindingAtRead: moveProjectA,
-        messageIds: ["message-move-binding-a"],
-      })
-      expect(paths.filter((value) => /\/messages(?:\?|$)|\/runs(?:\/|\?|$)/u.test(value))).toHaveLength(ownerMutationsBefore)
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveBindingSnapshotGets.length = 0
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it.each([
-    [503, "business_store_unavailable"],
-    [409, "idempotency_in_progress"],
-  ] as const)("R194 keeps typed %s %s Move outcomes unknown and retries the exact command", async (status, code) => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveFixtureMode = "respond"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status,
-      requestId: `req_move_unknown_${status}`,
-      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      await rowA.getByRole("button", { name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u }).click()
-      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retry.waitFor({ state: "visible", timeout: 10_000 })
-      moveFixtureResponse = {
-        status: 200,
-        requestId: `req_move_unknown_retry_${status}`,
-        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-      }
-      await retry.click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
-      expect(moveBoundaryRequests[1]).toEqual(moveBoundaryRequests[0])
-    } finally {
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-  it("R195 reconciles a cross-scope matching Move ACK without stealing the mounted Project draft", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    moveBindingSnapshotGets.length = 0
-    moveFixtureMode = "hold"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = {
-      status: 200,
-      requestId: "req_move_cross_scope_confirmed",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
-      await expandDesktopRail(page)
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
-        timeout: 10_000,
-      }).toBeGreaterThan(0)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
-        scope: `project:${moveProjectA}`, bindingAtRead: null, sessionIds: [],
-      })
-      await page.locator('a[href="/app"]').first().click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await directRowA.locator(`[data-conversation-id="${moveConversationA}"]`).click()
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectB}`)
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
-        timeout: 10_000,
-      }).toBeGreaterThan(0)
-      const projectBReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length
-      const composer = page.locator('[data-slot="composer-input"]')
-      const projectBDraft = "R195 keep the mounted Project B draft"
-      await composer.fill(projectBDraft)
-      const directReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      const targetReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length
-
-      releaseMove()
-      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 }).toBe(moveProjectA)
-      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
-      expect(await composer.inputValue()).toBe(projectBDraft)
-      expect(moveBoundaryRequests).toHaveLength(1)
-
-      await page.locator('a[href="/app"]').first().click()
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(directReadsBeforeAck)
-      const returnedDirectList = page.locator('[data-conversation-list="direct"]')
-      await expect.poll(() => returnedDirectList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
-        timeout: 10_000,
-      }).toBe(0)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)).toEqual({
-        scope: "direct", bindingAtRead: moveProjectA, sessionIds: [moveConversationB],
-      })
-
-      await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).length, {
-        timeout: 10_000,
-      }).toBeGreaterThan(targetReadsBeforeAck)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectA}`).at(-1)).toEqual({
-        scope: `project:${moveProjectA}`, bindingAtRead: moveProjectA, sessionIds: [moveConversationA],
-      })
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectA)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
-      await page.locator('[data-conversation-list="project-conversation"]')
-        .locator(`[data-conversation-id="${moveConversationA}"]`).waitFor({ state: "visible", timeout: 10_000 })
-
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectB}`)
-      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
-        .toBe(projectBDraft)
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
-        timeout: 10_000,
-      }).toBe(projectBReadsBeforeAck + 1)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual({
-        scope: `project:${moveProjectB}`, bindingAtRead: moveProjectA, sessionIds: [],
-      })
-      expect(moveBoundaryRequests).toHaveLength(1)
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveBindingSnapshotGets.length = 0
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it.each([
-    ["committed lost ACK", "commit-close", 200, "lost_ack"],
-    ["typed unavailable", "respond", 503, "business_store_unavailable"],
-  ] as const)("R195 retains a cross-scope %s Move command for one explicit exact retry", async (
-    _outcome, releaseMode, status, code,
-  ) => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    moveBindingSnapshotGets.length = 0
-    moveFixtureMode = "hold"
-    moveBoundaryRequests.length = 0
-    moveFixtureResponse = status === 200 ? {
-      status,
-      requestId: "req_move_cross_scope_lost_ack",
-      body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-    } : {
-      status,
-      requestId: "req_move_cross_scope_unavailable",
-      body: { error: { code, message: "uncertain owner outcome", retryable: true } },
-    }
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const directRowA = directList.locator(`[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`)
-      await directRowA.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      }).click()
-      await page.getByRole("menuitem", { name: "Move target alpha", exact: true }).click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(1)
-      const frozenRequest = moveBoundaryRequests[0]
-
-      await page.getByRole("link", { name: "Move target beta", exact: true }).click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectB}`)
-      const projectBDraft = `R195 ${code} keeps Project B mounted`
-      const composer = page.locator('[data-slot="composer-input"]')
-      await composer.fill(projectBDraft)
-      moveFixtureMode = releaseMode
-      releaseMove()
-      await expect.poll(() => moveBindingProjectRef, { timeout: 10_000 })
-        .toBe(status === 200 ? moveProjectA : null)
-      expect(new URL(page.url()).pathname).toBe(`/app/project/${moveProjectB}`)
-      expect(await composer.inputValue()).toBe(projectBDraft)
-      expect(moveBoundaryRequests).toHaveLength(1)
-
-      const recoveryProject = status === 200 ? moveProjectA : null
-      if (recoveryProject === null) {
-        await page.locator('a[href="/app"]').first().click()
-        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
-      } else {
-        await page.getByRole("link", { name: "Move target alpha", exact: true }).click()
-        await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-          .toBe(`/app/project/${moveProjectA}`)
-      }
-      if (recoveryProject !== null) {
-        const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(recoveryProject)}"]`)
-        if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-        expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
-      }
-      const recoveryList = page.locator(`[data-conversation-list="${recoveryProject === null ? "direct" : "project-conversation"}"]`)
-      const recoveryRow = recoveryList.locator(
-        `[data-slot="sidebar-menu-item"]:has([data-conversation-id="${moveConversationA}"])`,
-      )
-      const moveButton = recoveryRow.getByRole("button", {
-        name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
-      })
-      await moveButton.waitFor({ state: "visible", timeout: 10_000 })
-      await page.locator('[data-slot="composer-input"]').focus()
-      expect(moveBoundaryRequests).toHaveLength(1)
-
-      const retainedConversation = recoveryRow.locator(`[data-conversation-id="${moveConversationA}"]`)
-      await retainedConversation.click()
-      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe(moveConversationA)
-      await moveButton.click()
-      const retry = page.getByRole("menuitem", { name: /Retry moving conversation|重试移动会话/u })
-      await retry.waitFor({ state: "visible", timeout: 10_000 })
-      expect(moveBoundaryRequests).toHaveLength(1)
-      moveFixtureMode = "respond"
-      moveFixtureResponse = {
-        status: 200,
-        requestId: `req_move_cross_scope_retry_${status}`,
-        body: { data: { session_id: moveConversationA, project_ref: moveProjectA } },
-      }
-      await retry.click()
-      await expect.poll(() => moveBoundaryRequests.length, { timeout: 10_000 }).toBe(2)
-      expect(moveBoundaryRequests[1]).toEqual(frozenRequest)
-      await expect.poll(() => {
-        const url = new URL(page.url())
-        return `${url.pathname}${url.search}`
-      }, { timeout: 10_000 }).toBe(`/app/project/${moveProjectA}?conversation=${moveConversationA}`)
-      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveBindingSnapshotGets.length = 0
-      moveUiFixtureEnabled = false
-      moveFixtureMode = "respond"
-      moveFixtureResponse = undefined
-      releaseMove()
-      moveBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 50_000)
-
-  it("R233 keeps an authenticated deep link recoverable when only its Conversation index read is denied", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    sessionSnapshotRequests = 0
-    sessionBoundaryRequests.length = 0
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await context.addInitScript(() => {
-        const originalGetItem = Storage.prototype.getItem
-        const target = window as unknown as { __kokoroDeniedConversationReads: number }
-        target.__kokoroDeniedConversationReads = 0
-        Storage.prototype.getItem = function (candidate: string): string | null {
-          if (candidate === "kokoro.web.conversations.direct") {
-            target.__kokoroDeniedConversationReads += 1
-            throw new DOMException("conversation storage denied", "SecurityError")
-          }
-          return originalGetItem.call(this, candidate)
-        }
-      })
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      observeBrowserDiagnostics(page)
-      const pageErrors: string[] = []
-      page.on("pageerror", (error) => pageErrors.push(error.name))
-      const target = `http://localhost:${nextPort}/app?conversation=session-list-a`
-
-      const deniedReads = async (): Promise<number> => page.evaluate(() =>
-        (window as unknown as { __kokoroDeniedConversationReads?: number }).__kokoroDeniedConversationReads ?? 0)
-        .catch(() => -1)
-      const diagnostic = async (stage: string): Promise<string> => {
-        const observed = browserDiagnostics.get(page)
-        return `${stage} selective Conversation storage diagnostic: ${JSON.stringify({
-          denied_conversation_reads: await deniedReads(),
-          session_responses: proxy.sessionResponseDiagnostics(),
-          snapshot_requests: sessionSnapshotRequests,
-          boundary_requests: sessionBoundaryRequests.slice(-12),
-          runtime_loading_count: await diagnosticWithin(page.getByTestId("runtime-loading").count(), -1),
-          app_frame_loading_count: await diagnosticWithin(page.getByTestId("app-frame-loading").count(), -1),
-          body_count: await diagnosticWithin(page.getByText("R143 authoritative conversation A body", { exact: true }).count(), -1),
-          composer_count: await diagnosticWithin(page.locator('[data-slot="composer-input"]').count(), -1),
-          page_error_categories: pageErrors,
-          browser_error_categories: [...observed?.categories ?? []],
-          request_failures: observed?.requestFailures ?? [],
-          url_path_search: (() => { try { const url = new URL(page.url()); return `${url.pathname}${url.search}` } catch { return "<invalid>" } })(),
-        })}`
-      }
-      const converge = async (stage: "cold" | "reload"): Promise<void> => {
-        const sessionBaseline = proxy.sessionResponseDiagnostics().length
-        const snapshotBaseline = sessionSnapshotRequests
-        const deadline = Date.now() + 12_000
-        const remaining = (): number => Math.max(1, deadline - Date.now())
-        try {
-          const response = stage === "cold"
-            ? await page.goto(target, { waitUntil: "domcontentloaded", timeout: remaining() })
-            : await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
-          expect(response?.status()).toBe(200)
-          await expect.poll(() => proxy.sessionResponseDiagnostics().slice(sessionBaseline), { timeout: remaining() })
-            .toContainEqual(expect.objectContaining({ status: 200, authenticated: true }))
-          await expect.poll(deniedReads, { timeout: remaining() }).toBeGreaterThan(0)
-          await expect.poll(() => sessionSnapshotRequests, { timeout: remaining() }).toBeGreaterThan(snapshotBaseline)
-          await page.getByText("R143 authoritative conversation A body", { exact: true })
-            .waitFor({ state: "visible", timeout: remaining() })
-          const composer = page.locator('[data-slot="composer-input"]')
-          await composer.waitFor({ state: "visible", timeout: remaining() })
-          await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
-          expect(await page.getByTestId("runtime-loading").count()).toBe(0)
-          expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
-          expect(pageErrors).toEqual([])
-          expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(
-            "/app?conversation=session-list-a",
-          )
-          expect(sessionBoundaryRequests.filter((request) => request.method === "POST")).toEqual([])
-        } catch (error) {
-          throw new Error(await diagnostic(stage), { cause: error })
-        }
-      }
-
-      await converge("cold")
-      await converge("reload")
-    } finally {
-      sessionSnapshotRequests = 0
-      sessionBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 45_000)
-
-
-  async function requireStableAuthenticatedWorkspace(
-    stage: string,
-    page: Page,
-    response: BrowserResponse | null,
-    proxy: Awaited<ReturnType<typeof sessionProbeProxy>>,
-    outputStart: number,
-    deadline: number,
-    failureDiagnostic?: (stage: string) => Promise<string>,
-  ): Promise<void> {
-    const remaining = (): number => Math.max(1, deadline - Date.now())
-    try {
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
-      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
-      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
-      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
-      expect(new URL(page.url()).pathname).toBe("/app")
-
-      const sessionsBeforeReload = proxy.sessionRequests()
-      const reloadResponse = await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
-      if (reloadResponse?.status() !== 200) {
-        throw new Error(`reload document status ${reloadResponse?.status() ?? "missing"}`)
-      }
-      await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBeGreaterThan(sessionsBeforeReload)
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
-      await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
-      await expect.poll(() => page.locator('[data-slot="composer-input"]').isEnabled(), { timeout: remaining() }).toBe(true)
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
-      await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
-      expect(new URL(page.url()).pathname).toBe("/app")
-    } catch (error) {
-      const diagnostic = failureDiagnostic === undefined
-        ? await browserProbeDiagnostic(stage, page, response, proxy, outputStart)
-        : await failureDiagnostic(stage)
-      throw new Error(diagnostic, { cause: error })
-    }
-  }
-
-  function expectServerFirstAnonymousRedirect(response: HttpResult, expectedTarget = "/app"): void {
-    const loginLocation = `/login?${new URLSearchParams({ return_to: expectedTarget })}`
-    expect(response.body).not.toContain('data-testid="runtime-loading"')
-    if (response.status >= 300 && response.status < 400) {
-      expect(response.headers.location).toBe(loginLocation)
-      return
-    }
-    expect(response.status).toBe(200)
-    const escapedLocation = loginLocation.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
-    expect(response.body).toMatch(new RegExp(`(?:NEXT_REDIRECT[^<]{0,512}${escapedLocation}|<meta[^>]+url=${escapedLocation})(?=[;\\s"'<]|$)`, "u"))
-  }
-
-  it("R167 redirects an anonymous initial app document before rendering the client loading gate", async () => {
-    const response = await http(nextPort, "/app", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response)
-  })
-
-  it("R167 applies the same server-first anonymous redirect to a nested app document", async () => {
-    const response = await http(nextPort, "/app/skills", "GET", "", {}, 10_000)
-    expectServerFirstAnonymousRedirect(response, "/app/skills")
-  })
-
-
-  it("R175 removes private Runtime before a server-admitted document hands anonymous control to native login", async () => {
-    const proxy = await authRecoveryProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    const outputStart = output.length
-    try {
-      proxy.setLoginPending(true)
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await context.addInitScript(observeAnonymousSafetyHandoff)
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      observeBrowserDiagnostics(page)
-      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
-        "anonymous_handoff_document", page, response, proxy, outputStart,
-      ))
-      const runtimeDeadline = Date.now() + 12_000
-      await requireStableAuthenticatedWorkspace(
-        "anonymous_handoff_runtime", page, response, proxy, outputStart, runtimeDeadline,
-      )
-      const composer = page.locator('[data-slot="composer-input"]')
-      await composer.fill("private-draft-must-not-survive-anonymous-handoff")
-      const ownerRequests = (): number => proxy.resourceDiagnostics()
-        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
-        .reduce((total, resource) => total + resource.requests, 0)
-      const ownerBaseline = ownerRequests()
-      const probeBaseline = proxy.sessionRequests()
-
-      proxy.setFault("anonymous")
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
-      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
-      await expect.poll(() => proxy.anonymousHandoffDiagnostics().length, { timeout: 10_000 }).toBe(1)
-      expect(proxy.anonymousHandoffDiagnostics()[0]).toEqual({
-        phase: "commit",
-        booting: true,
-        main: true,
-        composer_disabled: true,
-        all_controls_disabled: true,
-        runtime_loading: false,
-        app_frame_loading: false,
-        private_timeline: false,
-        draft_nonempty: false,
-        alert_visible: false,
-        retry_visible: false,
-      })
-      expect(ownerRequests()).toBe(ownerBaseline)
-      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
-      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
-      expect(proxy.loginRequests()).toBe(1)
-    } finally {
-      proxy.releaseLoginRequests()
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 60_000)
-
-  it("R177 keeps anonymous native handoff data-free without reviving a visible retry interstitial", async () => {
-    const proxy = await authRecoveryProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    const outputStart = output.length
-    try {
-      proxy.setLoginPending(true)
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await context.addInitScript(observeAnonymousSafetyHandoff)
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      observeBrowserDiagnostics(page)
-      const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
-        "no_interstitial_document", page, response, proxy, outputStart,
-      ))
-      await requireStableAuthenticatedWorkspace(
-        "no_interstitial_runtime", page, response, proxy, outputStart, Date.now() + 12_000,
-      )
-      await page.locator('[data-slot="composer-input"]').fill("private-draft-must-be-removed-before-native-login")
-      const ownerRequests = (): number => proxy.resourceDiagnostics()
-        .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
-        .reduce((total, resource) => total + resource.requests, 0)
-      const ownerSnapshot = () => ({
-        session_owner: proxy.resourceDiagnostics().filter(({ path }) => path.startsWith("/api/session/"))
-          .reduce((total, resource) => total + resource.requests, 0),
-        session_collection: proxy.resourceDiagnostics().find(({ path }) => path === "/api/session/sessions")?.requests ?? 0,
-        messages: proxy.resourceDiagnostics().filter(({ path }) => /^\/api\/session\/sessions\/[^/]+\/messages$/u.test(path))
-          .reduce((total, resource) => total + resource.requests, 0),
-        runtime_manifest: proxy.resourceDiagnostics().find(({ path }) => path === "/api/system/runtime-manifest")?.requests ?? 0,
-      })
-      const ownerBaseline = ownerRequests()
-      const ownerBeforeHandoff = ownerSnapshot()
-      const probeBaseline = proxy.sessionRequests()
-      const resource = (path: string) => proxy.resourceDiagnostics().find((candidate) => candidate.path === path)
-      const appDocumentsBeforeHandoff = resource("/app")?.request_categories.document ?? 0
-
-      proxy.setFault("anonymous")
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")))
-      await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
-      await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
-      await expect.poll(
-        () => proxy.anonymousHandoffDiagnostics().filter(({ phase }) => phase === "watchdog").length,
-        { timeout: 12_000 },
-      ).toBe(1)
-      const expectedSafeShell = {
-        booting: true,
-        main: true,
-        composer_disabled: true,
-        all_controls_disabled: true,
-        runtime_loading: false,
-        app_frame_loading: false,
-        private_timeline: false,
-        draft_nonempty: false,
-        alert_visible: false,
-        retry_visible: false,
-      }
-      expect(proxy.anonymousHandoffDiagnostics()).toEqual([
-        { phase: "commit", ...expectedSafeShell },
-        { phase: "watchdog", ...expectedSafeShell },
-      ])
-      console.log("KOKORO_TEST_R177_HANDOFF_OWNER_DIAGNOSTIC " + JSON.stringify({
-        before_handoff: ownerBeforeHandoff,
-        at_beacons: proxy.anonymousHandoffOwnerDiagnostics(),
-        after_watchdog: ownerSnapshot(),
-      }))
-      expect(ownerRequests()).toBe(ownerBaseline)
-      expect(proxy.loginRequests()).toBe(1)
-      expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
-
-      proxy.setFault("pass")
-      proxy.forwardLoginRequests()
-      const recoveryDeadline = Date.now() + 18_000
-      await requireStableAuthenticatedWorkspace(
-        "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
-      )
-      expect(resource("/login")?.upstream_statuses).toContain(302)
-      expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
-      expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
-      expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
-      expect(proxy.sessionResponseDiagnostics().at(-1)).toMatchObject({ status: 200, authenticated: true })
-      const composer = page.locator('[data-slot="composer-input"]')
-      await composer.fill("r177-native-login-recovered")
-      await expect.poll(() => composer.inputValue(), { timeout: Math.max(1, recoveryDeadline - Date.now()) })
-        .toBe("r177-native-login-recovered")
-      await composer.fill("")
-    } finally {
-      proxy.releaseLoginRequests()
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 60_000)
-
-  it("R186 bounds an initial snapshot across headers and recovery instead of leaving the workspace loading forever", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: Awaited<ReturnType<Browser["newContext"]>> | undefined
-    let releaseHeldSnapshot: (() => Promise<void>) | undefined
-    let browserSnapshotRequests = 0
-    sessionSnapshotRequests = 0
-    sessionBoundaryRequests.length = 0
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const conversationA = directList.locator('[data-conversation-id="session-list-a"]')
-      await conversationA.click()
-      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      await page.getByText("R143 authoritative conversation A body", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe("session-list-a")
-      const composer = page.locator('[data-slot="composer-input"]')
-      const draft = "R186 snapshot timeout keeps this local draft"
-      await composer.fill(draft)
-      const successfulSnapshotsBeforeHold = sessionSnapshotRequests
-
-      await page.route(/\/api\/session\/sessions\/session-list-a(?:\?scope=direct)?$/u, async (route) => {
-        browserSnapshotRequests += 1
-        if (browserSnapshotRequests !== 1) {
-          await route.continue()
-          return
-        }
-        await new Promise<void>((resolve) => {
-          let released = false
-          releaseHeldSnapshot = async () => {
-            if (released) return
-            released = true
-            try { await route.continue() }
-            catch { /* an owned deadline may already have aborted the held browser request */ }
-            finally { resolve() }
-          }
-        })
-      })
-      const heldReload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(heldReload?.status()).toBe(200)
-      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(1)
-      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
-      expect(await page.getByTestId("app-frame-loading").isVisible()).toBe(true)
-      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-
-      const errorSurface = page.getByTestId("app-frame-conversation-error")
-      await errorSurface.waitFor({ state: "visible", timeout: 12_000 })
-      expect(await page.getByTestId("app-frame-loading").count()).toBe(0)
-      expect(sessionSnapshotRequests).toBe(successfulSnapshotsBeforeHold)
-
-      await errorSurface.getByRole("button", { name: /Retry|重试/u }).click()
-      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(2)
-      await expect.poll(() => sessionSnapshotRequests, { timeout: 10_000 })
-        .toBe(successfulSnapshotsBeforeHold + 1)
-      await page.getByText("R143 authoritative conversation A body", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      expect(await composer.inputValue()).toBe(draft)
-
-      await releaseHeldSnapshot?.()
-      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(1)
-      const snapshotRequestsBeforeReload = sessionSnapshotRequests
-      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(reload?.status()).toBe(200)
-      await page.getByText("R143 authoritative conversation A body", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 }).toBe(draft)
-      expect(sessionSnapshotRequests).toBeGreaterThan(snapshotRequestsBeforeReload)
-    } finally {
-      await releaseHeldSnapshot?.()
-      sessionSnapshotRequests = 0
-      sessionBoundaryRequests.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 60_000)
-
-
-  it("R242 renames the canonical Project through its menu and renders fresh owner reads, not the ACK name", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    renameFixtureEnabled = true
-    renameOwnerName = renameOldName
-    renameAckSent = false
-    renameRequests.length = 0
-    renameReads.length = 0
-    const browserPatches: { path: string; key: string | undefined; body: string | null }[] = []
-    const browserWrites: { method: string; path: string }[] = []
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext({ locale: "zh-CN" })
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      page.on("request", (request) => {
-        const url = new URL(request.url())
-        const refreshForm = new URLSearchParams(request.postData() ?? "")
-        const canonicalCsrfRefresh = request.method() === "POST" &&
-          url.origin === `http://localhost:${nextPort}` && url.pathname === "/api/auth/session" && url.search === "" &&
-          request.headers()["content-type"] === "application/x-www-form-urlencoded" &&
-          [...refreshForm.keys()].length === 1 && refreshForm.has("csrfToken") && (refreshForm.get("csrfToken")?.length ?? 0) > 0
-        if (!canonicalCsrfRefresh && url.pathname.startsWith("/api/") && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method())) {
-          browserWrites.push({ method: request.method(), path: `${url.pathname}${url.search}` })
-        }
-        if (request.method() === "PATCH") browserPatches.push({ path: `${url.pathname}${url.search}`,
-          key: request.headers()["idempotency-key"], body: request.postData() })
-      })
-      await page.goto(`http://localhost:${nextPort}/app/project/${renameProjectId}`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const sidebarProject = page.locator(`[data-project-list="true"] [data-project-id="${renameProjectId}"]`)
-      await page.getByRole("heading", { name: renameOldName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await sidebarProject.getByRole("link", { name: renameOldName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      const identity = await context.request.get(`http://localhost:${nextPort}/api/auth/session`, { timeout: 10_000 })
-      expect(identity.status()).toBe(200)
-      expect(await identity.json()).toMatchObject({ authenticated: true, subject: "user-one" })
-      // The current page uses the collection for known ids: prove the real canonical detail adapter separately.
-      const initialDetail = await context.request.get(`http://localhost:${nextPort}/api/hub/projects/${renameProjectId}`, { timeout: 10_000 })
-      expect(initialDetail.status()).toBe(200)
-      expect(await initialDetail.json()).toMatchObject({ data: { project: { id: renameProjectId, name: renameOldName } } })
-      await page.locator(`[data-conversation-list="project-conversation"] [data-conversation-id="${renameConversationId}"]`).click()
-      await page.getByText(renameThreadBody, { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      const canonicalRoute = `/app/project/${renameProjectId}?conversation=${renameConversationId}`
-      await expect.poll(() => `${new URL(page.url()).pathname}${new URL(page.url()).search}`, { timeout: 10_000 }).toBe(canonicalRoute)
-      const composer = page.locator('[data-slot="composer-input"]')
-      const draft = "R242 保留当前项目会话草稿"
-      await composer.fill(draft)
-      expect(renameRequests).toHaveLength(0)
-      expect(renameReads.some((read) => read.path === `/v1/projects/${renameProjectId}` && read.name === renameOldName)).toBe(true)
-
-      const moreTrigger = page.locator('[data-slot="workspace-header"]').getByRole("button", { name: "更多设置分区", exact: true })
-      await moreTrigger.click()
-      // Pre-send cancel must close only the local dialog and restore focus, without a PATCH.
-      const renameMenu = page.getByRole("menuitem", { name: "重命名项目", exact: true })
-      await renameMenu.waitFor({ state: "visible", timeout: 10_000 })
-      await renameMenu.click()
-      const dialog = page.getByRole("dialog", { name: "重命名项目", exact: true })
-      await dialog.getByRole("button", { name: "取消", exact: true }).click()
-      await dialog.waitFor({ state: "detached", timeout: 10_000 })
-      await expect.poll(() => moreTrigger.evaluate((element) => element === document.activeElement), { timeout: 10_000 }).toBe(true)
-      expect(browserPatches).toHaveLength(0)
-      await moreTrigger.press("Enter")
-      await renameMenu.waitFor({ state: "visible", timeout: 10_000 })
-      await renameMenu.click()
-      await dialog.waitFor({ state: "visible", timeout: 10_000 })
-      const input = dialog.getByRole("textbox", { name: "项目名称", exact: true })
-      await input.fill(`  ${renameSubmittedName}  `)
-      const save = dialog.getByRole("button", { name: "保存", exact: true })
-      await save.click()
-      await expect.poll(() => renameRequests.length, { timeout: 10_000 }).toBe(1)
-      expect(browserPatches).toHaveLength(1)
-      const command = renameRequests[0]!
-      expect(command.method).toBe("PATCH")
-      expect(command.path).toBe(`/v1/projects/${renameProjectId}/name`)
-      expect(command.idempotencyKey).toMatch(/^[\x21-\x2b\x2d-\x7e]{1,128}$/u)
-      expect(command.body).toBe(JSON.stringify({ name: renameSubmittedName }))
-      expect(browserPatches[0]).toEqual({ path: `/api/hub/projects/${renameProjectId}/name`, key: command.idempotencyKey,
-        body: command.body })
-      expect(await save.isDisabled()).toBe(true)
-      expect(await dialog.getByRole("button", { name: "取消", exact: true }).isDisabled()).toBe(true)
-      expect(renameOwnerName).toBe(renameOldName)
-      expect(await sidebarProject.getByRole("link", { name: renameOldName, exact: true, includeHidden: true }).count()).toBe(1)
-      expect(await sidebarProject.getByRole("link", { name: renameOldName, exact: true, includeHidden: true }).isVisible()).toBe(true)
-      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
-      expect(await composer.inputValue()).toBe(draft)
-      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
-      expect(renameReads.filter((read) => read.afterAck)).toEqual([])
-
-      const ackResponse = page.waitForResponse((response) => response.request().method() === "PATCH" &&
-        new URL(response.url()).pathname === `/api/hub/projects/${renameProjectId}/name`, { timeout: 10_000 })
-      releaseRenameAck?.()
-      const ack = await ackResponse
-      expect(ack.status()).toBe(200)
-      expect(ack.headers()["x-request-id"]).toBe("req_r242_owner")
-      expect(ack.headers()["cache-control"]).toBe("private, no-store, max-age=0")
-      expect(await ack.json()).toEqual({ data: { project_id: renameProjectId, name: renameSubmittedName } })
-      await expect.poll(() => renameReads.filter((read) => read.afterAck).length, { timeout: 10_000 }).toBe(1)
-      expect(renameReads.filter((read) => read.afterAck)).toEqual([
-        { path: `/v1/projects/${renameProjectId}`, afterAck: true, name: renameCurrentName },
-      ])
-      expect(releaseRenameRead).toBeDefined()
-      // Hold fresh detail B: receipt A must never be installed as the resource projection.
-      expect(await sidebarProject.getByRole("link", { name: renameSubmittedName, exact: true, includeHidden: true }).count()).toBe(0)
-      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
-      expect(await composer.inputValue()).toBe(draft)
-      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
-      releaseRenameRead?.()
-      await expect.poll(() => renameReads.filter((read) => read.afterAck).map((read) => read.path), { timeout: 10_000 })
-        .toEqual([`/v1/projects/${renameProjectId}`, "/v1/projects"])
-      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      expect(await sidebarProject.getByRole("link", { name: renameSubmittedName, exact: true }).count()).toBe(0)
-      expect(renameRequests).toHaveLength(1)
-      // Fresh canonical list completion closes the dialog and restores the menu trigger before reload.
-      await dialog.waitFor({ state: "detached", timeout: 10_000 })
-      await expect.poll(() => moreTrigger.evaluate((element) => element === document.activeElement), { timeout: 10_000 }).toBe(true)
-      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
-      expect(await composer.inputValue()).toBe(draft)
-      expect(await page.getByText(renameThreadBody, { exact: true }).count()).toBe(1)
-      expect(browserWrites).toEqual([{ method: "PATCH", path: `/api/hub/projects/${renameProjectId}/name` }])
-
-      const readsBeforeReload = renameReads.length
-      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(reload?.status()).toBe(200)
-      await page.getByText(renameThreadBody, { exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expandDesktopRail(page)
-      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => composer.inputValue(), { timeout: 10_000 }).toBe(draft)
-      expect(`${new URL(page.url()).pathname}${new URL(page.url()).search}`).toBe(canonicalRoute)
-      expect(renameReads.length).toBeGreaterThan(readsBeforeReload)
-      expect(renameReads.slice(readsBeforeReload).every((read) => read.name === renameCurrentName)).toBe(true)
-      expect(renameRequests).toHaveLength(1)
-      await sidebarProject.getByRole("link", { name: renameCurrentName, exact: true }).click()
-      await page.getByRole("heading", { name: renameCurrentName, exact: true }).waitFor({ state: "visible", timeout: 10_000 })
-      expect(new URL(page.url()).pathname).toBe(`/app/project/${renameProjectId}`)
-      expect(browserWrites).toEqual([{ method: "PATCH", path: `/api/hub/projects/${renameProjectId}/name` }])
-      expect(browserPatches).toHaveLength(1)
-      expect(renameRequests).toHaveLength(1)
-    } finally {
-      releaseRenameAck?.()
-      releaseRenameRead?.()
-      releaseRenameAck = undefined
-      releaseRenameRead = undefined
-      renameFixtureEnabled = false
-      renameOwnerName = renameOldName
-      renameAckSent = false
-      renameRequests.length = 0
-      renameReads.length = 0
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 60_000)
-
-  it("R245 keeps a directly opened Conversation B after hard reload instead of restoring remembered A", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    moveUiFixtureEnabled = false
-    moveBindingFixtureEnabled = false
-    moveBindingProjectRef = null
-    sessionSnapshotRequests = 0
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(page)
-      const directList = page.locator('[data-conversation-list="direct"]')
-      const rememberedA = directList.locator('[data-conversation-id="session-list-a"]')
-      await rememberedA.click()
-      await page.getByText("R143 authoritative conversation A body", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe("session-list-a")
-
-      // The controlled fixture now exposes a distinct directly opened B with its own body.
-      moveUiFixtureEnabled = true
-      moveBindingFixtureEnabled = true
-      await page.goto(`http://localhost:${nextPort}/app?conversation=${moveConversationA}`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => new URL(page.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe(moveConversationA)
-      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-
-      const reload = await page.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(reload?.status()).toBe(200)
-      await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await page.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      expect(new URL(page.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      expect(await page.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-    } finally {
-      sessionSnapshotRequests = 0
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveUiFixtureEnabled = false
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 60_000)
-
-
-  it("R245 keeps B after reload when a live A tab writes its late owner snapshot back", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    let pageA: Awaited<ReturnType<Browser["newPage"]>> | undefined
-    let pageB: Awaited<ReturnType<Browser["newPage"]>> | undefined
-    let releaseHeldSnapshot: (() => Promise<void>) | undefined
-    let browserSnapshotRequests = 0
-    moveUiFixtureEnabled = false
-    moveBindingFixtureEnabled = false
-    moveBindingProjectRef = null
-    sessionSnapshotRequests = 0
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext()
-      await admitBrowserContext(context)
-      pageA = await context.newPage()
-      await pageA.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await pageA.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await expandDesktopRail(pageA)
-      const directListA = pageA.locator('[data-conversation-list="direct"]')
-      await directListA.locator('[data-conversation-id="session-list-a"]').click()
-      await pageA.getByText("R143 authoritative conversation A body", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => new URL(pageA!.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe("session-list-a")
-
-      // Reuse the real R186 request hold: A remains a live document while its
-      // second legitimate 200 snapshot is in flight; no storage or error is injected.
-      await pageA.route(/\/api\/session\/sessions\/session-list-a(?:\?scope=direct)?$/u, async (route) => {
-        browserSnapshotRequests += 1
-        if (browserSnapshotRequests !== 1) {
-          await route.continue()
-          return
-        }
-        await new Promise<void>((resolve) => {
-          let released = false
-          releaseHeldSnapshot = async () => {
-            if (released) return
-            released = true
-            try { await route.continue() }
-            catch { /* the owned request may already have been aborted during cleanup */ }
-            finally { resolve() }
-          }
-        })
-      })
-      const heldReload = await pageA.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(heldReload?.status()).toBe(200)
-      await expect.poll(() => browserSnapshotRequests, { timeout: 10_000 }).toBe(1)
-
-      moveUiFixtureEnabled = true
-      moveBindingFixtureEnabled = true
-      pageB = await context.newPage()
-      await pageB.goto(`http://localhost:${nextPort}/app?conversation=${moveConversationA}`, { waitUntil: "domcontentloaded" })
-      await pageB.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await pageB.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      await expect.poll(() => new URL(pageB!.url()).searchParams.get("conversation"), { timeout: 10_000 })
-        .toBe(moveConversationA)
-      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-
-      // Let A's real 200 owner response win after B is already stable. The
-      // resulting A write must be observed, not manufactured by the test.
-      await releaseHeldSnapshot?.()
-      await expect.poll(() => pageA!.getByText("R143 authoritative conversation A body", { exact: true }).count(), { timeout: 10_000 })
-        .toBe(1)
-      await expect.poll(() => pageB!.evaluate(() => {
-        const raw = window.localStorage.getItem("kokoro.web.conversations.direct")
-        if (raw === null) return null
-        try {
-          const parsed = JSON.parse(raw) as { activeId?: unknown; conversations?: { id?: unknown }[] }
-          return {
-            activeId: parsed.activeId ?? null,
-            conversationIds: parsed.conversations?.map((entry) => entry.id).filter((id): id is string => typeof id === "string") ?? [],
-          }
-        }
-        catch { return null }
-      }), { timeout: 10_000 }).toMatchObject({
-        activeId: "session-list-a",
-        conversationIds: expect.arrayContaining(["session-list-a", moveConversationA]),
-      })
-      expect(new URL(pageB.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      expect(await pageB.getByText("R192 binding survives the filtered view move", { exact: true }).count()).toBe(1)
-      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-
-      const reloadB = await pageB.reload({ waitUntil: "domcontentloaded", timeout: 12_000 })
-      expect(reloadB?.status()).toBe(200)
-      await pageB.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: 15_000 })
-      await pageB.getByText("R192 binding survives the filtered view move", { exact: true })
-        .waitFor({ state: "visible", timeout: 10_000 })
-      expect(new URL(pageB.url()).searchParams.get("conversation")).toBe(moveConversationA)
-      expect(await pageB.getByText("R143 authoritative conversation A body", { exact: true }).count()).toBe(0)
-    } finally {
-      await releaseHeldSnapshot?.()
-      sessionSnapshotRequests = 0
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveUiFixtureEnabled = false
-      try { await pageA?.close() }
-      finally {
-        try { await pageB?.close() }
-        finally {
-          try { await context?.close() }
-          finally {
-            try { await browser?.close() }
-            finally { await proxy.close() }
-          }
-        }
-      }
-    }
-  }, 60_000)
-
-
-  it("R247 exposes an explicit empty state for a settled project conversation rail", async () => {
-    const proxy = await sessionProbeProxy(nextPort)
-    let browser: Browser | undefined
-    let context: BrowserContext | undefined
-    moveUiFixtureEnabled = true
-    moveBindingFixtureEnabled = true
-    moveBindingProjectRef = null
-    moveBindingScopeGets.length = 0
-    try {
-      browser = await chromium.launch({ headless: true,
-        proxy: { server: `http://127.0.0.1:${proxy.port}`, bypass: "" }, args: ["--proxy-bypass-list=<-loopback>"] })
-      context = await browser.newContext({ locale: "en-US" })
-      await admitBrowserContext(context)
-      const page = await context.newPage()
-      await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
-      await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
-      await expandDesktopRail(page)
-
-      const projectLink = page.getByRole("link", { name: "Move target beta", exact: true })
-      await projectLink.waitFor({ state: "visible", timeout: 10_000 })
-      await projectLink.click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-        .toBe(`/app/project/${moveProjectB}`)
-
-      const targetFolderToggle = page.locator(`button[aria-controls="project-children-${encodeURIComponent(moveProjectB)}"]`)
-      if (await targetFolderToggle.getAttribute("aria-expanded") === "false") await targetFolderToggle.click()
-      expect(await targetFolderToggle.getAttribute("aria-expanded")).toBe("true")
-      const projectList = page.locator('[data-conversation-list="project-conversation"]')
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
-        timeout: 10_000,
-      }).toBeGreaterThan(0)
-      await expect.poll(() => projectList.getByRole("status", { name: "Loading chats…" }).count(), {
-        timeout: 10_000,
-      }).toBe(0)
-      expect(await projectList.getByRole("alert").count()).toBe(0)
-      const emptyStatus = projectList.getByRole("status").filter({
-        hasText: "No project conversations yet. Start one to begin.",
-      })
-      await emptyStatus.waitFor({ state: "visible", timeout: 10_000 })
-      expect(await emptyStatus.textContent()).toBe("No project conversations yet. Start one to begin.")
-    } finally {
-      moveBindingFixtureEnabled = false
-      moveBindingProjectRef = null
-      moveBindingScopeGets.length = 0
-      moveUiFixtureEnabled = false
-      try { await context?.close() }
-      finally {
-        try { await browser?.close() }
-        finally { await proxy.close() }
-      }
-    }
-  }, 45_000)
-
 })

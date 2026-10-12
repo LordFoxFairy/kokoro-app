@@ -8,7 +8,7 @@ export const MCP_KEY = "hub/mcp"
 export type Translate = ReturnType<typeof useT>
 export type McpData = { servers: McpServerView[]; secrets: McpSecret[] }
 export type ServerBusy = { name: string; action: "toggle" | "delete" } | null
-export type McpCreateMode = "form" | "json" | "url"
+export type McpCreateMode = "api" | "form" | "json" | "url"
 
 // hub 稳定错误码 → 人话文案。非 HubClientError 或未知码回退通用失败。
 export function humanizeError(t: Translate, error: unknown): string {

@@ -181,24 +181,6 @@ browser Hub client对此operation使用一次10秒总deadline与1MiB成功/error
 
 <!-- R257-MCP-WEB-D0-API-END -->
 
-## R257-MCP-WEB-D0：本人 Connection browser-private 消费契约（2026-10-06；仅设计）
-
-当前live Web读的是BFF `/v1/mcp/servers`的Server declaration。目标same-origin `GET /api/hub/self/mcp/connections`只转发到待发布BFF public 8.0.0同名GET；BFF目前只有D0 `d776194`，机器/source/immutable commit与digest待Root固定，故本节不是pin或发布声明。Browser不直连Platform，不接受Server旧shape兼容。
-
-输入closed为可选且单值`connection_id/provider_key/limit/cursor`：connection_id匹配`^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$`；provider_key为1..191 code points；limit仅无符号十进制1..100；cursor为1..2048 opaque。未知、重复、空、越界、body、transfer-encoding或Idempotency-Key拒400且零BFF调用。filter变化丢弃cursor/page历史，从首页读取；Web不解析cursor。
-
-200严格`{data:{connections:[...],next_cursor?:string}}`，所有object closed；每项required且只含：`connection_id`、`connector_id`、`server_id`、`provider_key`、`transport:"streamable_http"`、`status:"active"`。三个ID各自opaque，不能互代；不返回name、URL、declaration、secret、scope、token、proof或工具权限。多Connection可指向同Server且不得合并。terminal page省略next_cursor，不接受null/空串。
-
-所有响应必须JSON、`Cache-Control`含no-store及合法`x-request-id`。错误只接BFF固定closed envelope；当前Session admission的401/403/429、输入400、owner-invalid 502、dependency 503各自保留，不透传内部detail，不把任何错误改empty/preview。browser伪造tenant/subject/service/request身份不转发；adapter只使用每次当前Product Session派生的server headers。
-
-browser Hub client对此operation使用一次10秒总deadline与1MiB成功/error body cap，范围包含同源headers、body、fatal UTF-8、JSON和strict schema parse；超时、超限、取消、非法UTF-8或shape错误不得落入legacy宽松`readError`或无限`response.json()`等待。
-
-组件消费完整六字段用于strict验证，但主界面保持简洁Card：主信息为provider与人类可读连接状态，opaque connection/connector/server ID只在次要详情，transport仅按需辅助；不把六字段机械排成debug表，不显示内部permission、declaration、secret或owner诊断。loading/error/empty/ready与显式前后页保留。当前actor/filter/cursor/generation共同绑定请求；取消、卸载、重试、翻页、filter或actor变化后旧结果退役。empty仅为当前本人读取事实，不表示未安装Server、无第三方权限、费用状态或连接命令成功。后台`/admin`资格与此本人读取无耦合。
-
-机器事实源仍是未来固定的BFF `contract/openapi/v1/openapi.yaml`原字节；Web本地Zod是consumer narrowing，不成为第二public contract。固定pin、生成、源码与测试路径见TECH。当前tab11 Servers 200只证明wrong-resource RED，不是本契约正控。
-
-<!-- R257-MCP-WEB-D0-API-END -->
-
 ## T-C01.R255-PRESET-RETIRE（06:12）：退役未发布目录消费者，不改公开 agent 字段
 
 本前缀记录实施前的 D0 目标，冻结时生产仍发旧目录请求，现已完成本片源码静态退役；仅覆盖旧 preset 目录/选择说明，原 suffix、公开 agent 字段和 generated pin 保留。Root 已实际观察 workspace、Settings、hard refresh 零旧 agents 请求与 models 200 真空目录（不是模型可调用、切换保存用户链通过）；最终工程 65531 仍在运行，实际当前验收见 docs/CURRENT.md，不预报最终工程或整组 PASS。
@@ -297,91 +279,6 @@ public /api/auth/signin/kokoro-iam仍仅form csrfToken；内部typed Context传�
 
 本轮属已批准未上线clean-slate替换，不保旧snapshot/旧parser双轨；Team/failure生成pin精确更新，不手改输出。当前源码/生成未实施，真实整页Publish/Install未验。
 
-## R242-WEB-RENAME-D0：Project name consumer contract gate（2026-10-05；仅设计）
-
-### 契约身份与范围
-
-本节冻结 Web 对 BFF Project name command 的 browser-private 消费面，不新增 BFF public contract。producer 正式 pin：BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5`，public contract `7.2.0`，OpenAPI digest `bf64f0c66bea31a62285d64366686f3097bba21259b6c652977d28185097ed73`。Web formal 基线 `5e0963648db0cb0e1a60de42ea025670b32aba85` 的原全文作为本节之后的 exact suffix；本节是 candidate 的 D0 设计，不是已生成契约或已实现客户端。
-
-本轮边界更正：BFF owner 响应严格要求 `Cache-Control: no-store`；Web same-origin browser-private 响应严格要求现 canonical `Cache-Control: private, no-store, max-age=0`。两层不共用宽松或 `includes` 判定。
-
-Owner 是 BFF：Project name、canonical ID、receipt、幂等、tenant/subject admission 和持久化一致性均由 BFF 拥有。Web 只提供 same-origin adapter、strict parser、短生命周期 command intent 和读后投影。浏览器不自报 tenant、actor、subject 或权限，不直连任何内部 owner。
-
-### browser-private 到 public 的唯一映射
-
-| 层 | 允许的契约 |
-| --- | --- |
-| Browser | `PATCH /api/hub/projects/{canonicalProjectId}/name`；同源 HttpOnly session；`Content-Type: application/json`；唯一 ASCII `Idempotency-Key` |
-| Web adapter | 精确方法、精确 path、严格 JSON parse、`x-request-id` bounded、`cache-control: private, no-store, max-age=0`；仅映射已发布错误 envelope |
-| BFF public | `PATCH /v1/projects/{canonicalProjectId}/name`；BFF owner admission、receipt 和错误代码 |
-| 成功之后 | frozen target 的 fresh canonical Project GET，然后 fresh Project list；这是读回协议，不是新命令或第二写入 |
-
-不允许用通用 catch-all 将任意 PATCH 透传来代替上述 exact mapping；不允许 slug、display label、navigation path 或 conversation ID 作为 target alias。
-
-### 请求与严格成功闭集
-
-`canonicalProjectId` 必须是 BFF 规定的 `project_<UUID lowercase hex>`；Web 只接受当前 Project resource 给出的 canonical opaque ID。body 只有一个字段：
-
-```json
-{"name":"<normalizedName>"}
-```
-
-`normalizedName = rawInput.trim()`；其 UTF-16 code unit 数为 1..160，拒绝 NUL 与 lone surrogate；内部空白、case 保持原值；不执行 NFC normalization。body 不附带 project_id、tenant、subject、slug、display metadata 或客户端时间。每次新的 intent 生成一个稳定 visible-ASCII key（1..128，禁止 comma 与 space，单 header value）；retry 复用同一 key 和完全相同 body，用户修改名称则先结束旧 intent、读 owner，再以新 key 开始。
-
-只接受以下成功闭集：HTTP `200`；有 bounded `x-request-id`；`cache-control: private, no-store, max-age=0`（owner upstream 为 `no-store`）；JSON 无多余字段的已知 envelope；`data.project_id` 与 frozen target 完全相等；`data.name` 与 normalized input 完全相等。BFF 当前 receipt 形状为：
-
-```json
-{"data":{"project_id":"project_<UUID>","name":"<normalizedName>"}}
-```
-
-该 receipt 是命令确认，不是 Project resource 当前态；Web 不从它直接覆盖 sidebar、header 或 h1。
-
-### 预算、错误与重试
-
-headers、body、JSON parse 和 adapter 映射共用一次 10 秒 monotonic total budget；caller abort、scope/subject/route/epoch 变化或 timer 到期均终止本次等待，finally 清理 timer/listeners。没有分段 10 秒、自动 retry、指数 backoff 或新 key。
-
-BFF published closed error set（Web 只按状态与 code 展示/分类，不重写 owner 事实）如下：
-
-| HTTP | code | Web 处理 |
-| --- | --- | --- |
-| 400 | `invalid_project_rename`、`idempotency_key_required` | 输入/请求契约 error；保留编辑值，修正后需新意图 |
-| 401 | `session_authentication_required`、`session_invalid` | 清除敏感 intent，fence 迟到结果，回到现有登录/会话 surface |
-| 403 | `session_forbidden`、`product_tenant_forbidden`、`service_auth_failed` | 清除敏感 intent，显示既有权限 error；不改本地 name |
-| 404 | `project_not_found` | target 已不在 owner；不把 ACK 或草稿投影为资源 |
-| 409 | `idempotency_conflict` | key/body 不可继续猜测；保留 unknown/error 与原证据，要求显式重新开始 |
-| 429 | `session_rate_limited` | 显式 retry surface；不自动重发 |
-| 503 | `business_store_unavailable`、`iam_admission_unavailable`、`product_tenant_not_configured` | unknown；保留原 input/target/key/body，显式同意后同一意图 retry |
-
-Web-local closed fault classes 为 `request_timeout`、`request_aborted`、`network_error`、`invalid_headers`、`invalid_json`、`unexpected_status`、`ack_shape_mismatch`、`read_after_ack_failed`。这些不是 BFF error code；不得伪造为 `project_not_found` 或 owner success。503、网络、超时和 malformed ACK 的 retry 必须复用同 key/body；read-after-ACK GET 失败只进行 GET-only retry。
-
-### ACK 后读回与并发围栏
-
-收到 accepted ACK 后，Web 先失效并取消仍可取消的旧 detail/list reads；以同一 verified subject、route scope、mounted generation 对 frozen target 发 fresh canonical GET，再发 fresh list。只有两次 fresh owner read 通过 strict parse 才进入 `confirmed` 页面投影。若 subject、route、epoch 或 generation 已变化，晚到结果最多完成其自身请求清理，不能写入新 dialog/draft/name/focus/navigation。
-
-ACK 不等待当前旧资源更新、不增加所有导航的 GET；只为这次 mutation 目标强制 detail GET，随后按 list contract 读取 collection。原有对话重命名、Project create、Project list/history、Message PATCH 或其他 generic adapter 均不借用本命令的 body、key、ACK 或 read-back 语义。
-
-### 实施与验证边界
-
-后续允许的普通文件位置严格引用 `/tmp/r241-web-project-rename-consumer-audit.md` §3–4：新增 `src/contract/project-rename.ts`、`src/features/app/project-rename.ts`、`src/lib/server/project-rename.ts`；现 `src/app/api/hub/[...path]/route.ts` exact dispatch；现 app-frame/project-list/header/menu 接线及 `src/i18n/messages.ts`/语言字典。用现 design tokens 与 i18n token，不重画 UI。此阶段不改 `contract/`、generated、source、test、package、lock 或 BFF 文件。未来实现/repin 只能把只读 `src/generated/bff-public-openapi.yaml` 正常更新为 BFF `886a25a1c0158dbf71eb4b3b72522508b1c9a8f5` 已提交的原 bytes；随后按既有两个 generators 的升级 commit/version/digest 正常 `generate/check`，保留旧 90ops 与原 Chat/Team 断言；不另建第二 contract 或 Project SDK。完成实现后须在主仓以真实 Next/Chromium 与真实 BFF 组合执行 contract/architecture/lint/typecheck/test/build/e2e；本设计门不产生通过结论。
-
----
-
-## R239 当前认证与工作区恢复契约
-
-本片不新增公开 API、browser-private route、wire schema 或 owner 协议。`serverAdmitted` 只是单次 RSC composition 的无 claims 布尔输入；Product Session、actor、subject、generation、tombstone 与 expiry 仍由现有受信 cookie/Redis/session probe 边界拥有，浏览器不得自报。
-
-首文档 anonymous 只允许固定 `/login`；配置/Redis/Host 异常投影为有限 unavailable，不能伪装 anonymous。客户端 checking 只允许 data-free disabled shell；probe unavailable/timeout 必须进入显式 Retry 且零 native login，可信 anonymous 才允许一次 native login handoff。
-
-Snapshot 与 process 继续消费既有 strict owner responses，但完整读取共享一个 10 秒总预算；任何 partial、迟到、坏 body 或分页未耗尽都不得成为成功投影。pagehide draft flush 是既有浏览器本地状态生命周期，不是网络 receipt 或新接口。
-
-验收结果以 Root progress 的实际 manifest 与绑定源码 SHA 为准；受控 peer 测试未宣称原用户 3310 已启用或正式 Billing/费用链路已闭环。
-
-下方R238优先级与五项当前设计继续约束此实施；R175旧watchdog/Retry时态由R177及本节替代。Git交付身份以本仓Git与Root收据为准；完整用户3310验收仍须另执行。
-
-## R238 当前认证与恢复准入
-
-本片以 R177 替代 R175 的 watchdog 部分：R175 只保留可信 anonymous 同步卸载 Runtime、data-free booting 壳及一次 native `/login`；不得保留旧 document 的 timer、anonymousNavigationFailed 或可见 Retry 中转。R186 的单一 10 秒 snapshot/process 读取预算独立有效，不用于推断 native navigation 或 Run 终态。其余历史段只保留阶段依据，验证及交付尚待 Root 实跑。
-
 ## R186-W-SNAPSHOT-DEADLINE：browser-private读取预算（2026-10-04；tests-first）
 
 同源snapshot请求及同一anchor的全部process-page请求共用固定10秒本地总预算，包含headers、body与严格schema解析；分页不得逐页获得新预算。耗尽是Web本地首次水合失败，显示现安全错误并只允许显式重读，不转换为owner error、Run terminal、空snapshot或partial成功，也不重发Message。scope/generation/dispose继续abort；公开BFF contract、请求参数、错误envelope与AG-UI stream wire均不变。
@@ -400,12 +297,6 @@ anonymous撤权后Web只发起一次固定`GET /login` document navigation；不
 
 真实Next门包括：正式cookie的原始GET `/app` 返回200，HTML含实际main/composer且不含runtime/app-frame spinner；浏览器hold首个真实session probe时同一booting shell可见且owner请求为零，release可信200后Runtime首次mount并保持原R147 cold/reload oracle；首次unavailable不得展示旧Conversation。这不是旧document恢复证明。
 
-## R167-SERVER-FIRST：首文档认证边界（2026-10-03；待 tests-first）
-
-`/app` 与所有 `/app/**` 是 Web browser-private 页面边界，不新增公开 API。首次 document GET 在渲染 client `AppGate` 前，以现 Product Session cookie、当前 Redis generation/tombstone 和 `accessExpiresAt` 作同一 owner admission：无 cookie、无效/过期 cookie、stale generation、tombstone 或过期 access 固定进入相对 `/login`。具体 wire 允许真实 Next 的非 streaming 3xx `Location: /login` 或 streaming 200 redirect 表达；不得预设 307，也不得在任一表达中输出 `runtime-loading`、claims、access credential、session id、subject、cookie或查询参数。
-
-配置缺失、Redis超时/失败不是 anonymous，必须 fail closed 为有限 unavailable 首屏，不跳 `/login`、不触发第二 OIDC transaction。active session 继续渲染 AppGate，并保留 `GET /api/auth/session`、BFF adapter 与后续 revocation 的既有每请求检查。显式 preview 只沿用非 production 开关；production 不从失败降级 preview。无新 endpoint、error envelope、owner contract 或 query。本 D0 的真实 HTTP RED 只验证首文档边界；后继实现与 active/failure 矩阵通过前不称协议已发布，也不把它当原旧文档卡住的因果证明。
-
 ## R170-W-MOVE-UI：内部调用与用户可见状态（2026-10-04；候选已实现，发布待 Root 集成）
 
 本片不新增HTTP/API；只消费required `SessionClient.moveSession`。Engine冻结canonical `sessionId`、`targetProjectId|null`与一次`commandId`，同一显式retry复用三者。没有unknown intent时retry返回`null`且零owner调用；pending时重复同意图共享结果，不同target也返回rejected而不换key。只有validated matching 200 ACK返回confirmed；明确且终局的owner拒绝为rejected；network/deadline/abort/parse/adapter、503及409 `idempotency_in_progress`为unknown。UI不得从list差异推断成功、不得换key自动retry、不得在ACK前导航。
@@ -415,12 +306,20 @@ active confirmed导航为Project target `/app/project/<canonical>?conversation=<
 matching confirmed receipt先确立durable outcome，再应用generation/view fence：旧UI projection不导航、不显示错误、不抢焦点，但同scope来源仍必须发起新的owner GET并按canonical membership移除已移动Conversation。该对账不新增HTTP字段、receipt、entity或binding事实，也不自动重发Move。R194-W1只覆盖当前scope；跨scope unknown/late ACK、route未dispose及blocked-storage硬刷新仍为W2 OPEN。
 
 R195-W2仍不新增HTTP、cookie、header、error code或owner字段。页面单槽Move coordinator只在现可信session probe已admit的verified subject下调用required `SessionClient.moveSession`，冻结原`sessionId/targetProjectId/commandId`与由此产生的同一body；scope/route/view engine不是调用身份。matching 200 ACK即使原view已unmount也必须结算，并立即按source scope+sessionId精确驱逐现browser内存/持久Conversation索引，再递增source/target有界per-scope version以取得新的canonical GET；不保存可被连续Move覆盖的per-session待办，不阻止下一次Move，不插target假行。旧view不得导航、报错或抢焦点。network/abort/parse/adapter、任意503及409 `idempotency_in_progress`继续为unknown：mount、focus、canonical GET和scope切换都不得自动POST，只有同一verified subject的明确Retry可再发一次完全相同的`Idempotency-Key`与body。
-可信anonymous、subject change、logout、pagehide或真正document coordinator teardown通过epoch-fenced revoke清除/abort冻结command；普通probe effect cleanup与StrictMode replay不构成revoke。新subject既看不到也不能重试旧subject command，revoke后的迟到resolve/reject不得恢复unknown、发布reconciliation或导航。session probe temporary unavailable只suspend start/retry，不把owner outcome分类为closed rejection；同subject、同epoch的pending ACK仍可结算，恢复只解冻现slot且不以新key/body自动重发。React订阅者只在自身cleanup时unsubscribe；document唯一pagehide handler永久且幂等安装，并在每次pagehide执行revoke。上述均为browser内部生命周期，不改变BFF 7.1 Move、same-origin route或10秒client预算。后继必须删除engine-owned intent/retry双轨，禁止同时从engine与coordinator发Move。
 
+可信anonymous、subject change、logout、pagehide或真正document coordinator teardown通过epoch-fenced revoke清除/abort冻结command；普通probe effect cleanup与StrictMode replay不构成revoke。新subject既看不到也不能重试旧subject command，revoke后的迟到resolve/reject不得恢复unknown、发布reconciliation或导航。session probe temporary unavailable只suspend start/retry，不把owner outcome分类为closed rejection；同subject、同epoch的pending ACK仍可结算，恢复只解冻现slot且不以新key/body自动重发。上述均为browser内部生命周期，不改变BFF 7.1 Move、same-origin route或10秒client预算。后继必须删除engine-owned intent/retry双轨，禁止同时从engine与coordinator发Move。
 
 ---
 
-## R158-W-MOVE-D0：public 7.1 Move 消费合同（2026-10-04；A候选待 Root 集成）
+## R167-SERVER-FIRST：首文档认证边界（2026-10-03；待 tests-first）
+
+`/app` 与所有 `/app/**` 是 Web browser-private 页面边界，不新增公开 API。首次 document GET 在渲染 client `AppGate` 前，以现 Product Session cookie、当前 Redis generation/tombstone 和 `accessExpiresAt` 作同一 owner admission：无 cookie、无效/过期 cookie、stale generation、tombstone 或过期 access 固定进入相对 `/login`。具体 wire 允许真实 Next 的非 streaming 3xx `Location: /login` 或 streaming 200 redirect 表达；不得预设 307，也不得在任一表达中输出 `runtime-loading`、claims、access credential、session id、subject、cookie或查询参数。
+
+配置缺失、Redis超时/失败不是 anonymous，必须 fail closed 为有限 unavailable 首屏，不跳 `/login`、不触发第二 OIDC transaction。active session 继续渲染 AppGate，并保留 `GET /api/auth/session`、BFF adapter 与后续 revocation 的既有每请求检查。显式 preview 只沿用非 production 开关；production 不从失败降级 preview。无新 endpoint、error envelope、owner contract 或 query。本 D0 的真实 HTTP RED 只验证首文档边界；后继实现与 active/failure 矩阵通过前不称协议已发布，也不把它当原旧文档卡住的因果证明。
+
+---
+
+## R158-W-MOVE-D0：public 7.1 Move 消费合同（2026-10-04；候选已实现，发布待 Root 集成）
 
 唯一 owner 机器事实是 BFF 已发布 public OpenAPI 7.1 canonical SHA-256 `784f77e2c350c43d4fc4bc32933eace136185204ba49ddd738413f9b4b5b4fb5`（文档 `5e119cd6fc007f4ad8ffae048a8fcef687d9a8dc`、源码 `6c5cee0ca5b64dd7e1a855eae1022290eb16cd9a`）的 `POST /v1/sessions/{id}/move`。Web 后继第一片增加 Session client，并在现 `/api/session/[...path]` 内增加仅限该 operation 的响应投影；不增加新的浏览器公开 API、独立 proxy、engine action 或 UI。
 
@@ -431,6 +330,7 @@ R195-W2仍不新增HTTP、cookie、header、error code或owner字段。页面单
 - Move 不取消当前 Run/stream，不改 Message、Share、AG-UI cursor 或 Artifact 关联；只影响后续 message/Run admission。Web 第一片不投影这些事实，后继 UI/engine 必须在严格 ACK 后才更新视图。
 
 Web client公开的首片边界固定为 `moveSession(input: MoveSessionInput): Promise<MoveSessionReceipt>`；`MoveSessionInput` 是 readonly `{sessionId:string; targetProjectId:string|null; commandId:string; signal?:AbortSignal}`，`MoveSessionReceipt` 是 readonly `{session_id:string; project_ref:string|null}`。该方法是 `SessionClient` required member，不发布optional/feature-detection兼容轨。preview固定抛专属`ConversationMoveError`的`unsupported`分支，不得改变preview sessions或生成假ACK；这不是owner业务错误码。生产实现不得经过现 `postJson`，因为后者会trim/缺省生成key并接受任意`response.ok`，与Move的exact command identity和strict 200冲突。
+当前候选已由R170 engine/UI消费此required方法；机器契约字段与owner语义不变，Web没有新增公开endpoint或第二归属协议。
 caller传入的非法session ID、target或command key统一是专属`{kind:"parse"}`本地失败：不附owner status/code/retryable/requestId/retryAfter，不发fetch，也不写任何会话归属。
 
 生产Move client自带不可配置的10秒总预算，起点在fetch前，终点在完整body读取、JSON解析与ACK关联校验后；不是只包response headers，也不继承Web→BFF 15秒上界。内部controller组合可选caller signal：已aborted signal不发请求；在途abort转发；timeout与caller abort都拒绝为本地`network` unknown，保原commandId且不自动重发或推断owner取消。所有路径finally清timer/abort listener。该预算只属于Move，不改变其它SessionClient HTTP行为。
@@ -441,7 +341,7 @@ Move client拒绝值只使用专属closed `ConversationMoveError.details`：成�
 
 机器 pin 更新必须复制 owner committed blob 到 `src/generated/bff-public-openapi.yaml`，把现 Team 与 Agent-failure generator 的 version/commit/digest provenance 更新到 7.1/上述完整 digest，并正规再生/check `src/generated/bff-agent-failure.ts` 与 `src/generated/bff-team/**`。`contract/api-contract.test.ts` 必须新增 Move path/parameter/request/200/error graph并保现 Scheduled/collection断言；七个现 `tests/contract/bff-*-public.test.ts` 继续保护 Team、failure、Library、Project、Skills/MCP fragment，不因全 blob升级删除或放宽。
 
-engine/UI如何暴露Move、意图生命周期和用户journey归后继B片；这些不是机器字段或新公开合同。A片不宣称浏览器用户Move已可用，不关闭原loading P0。
+engine/UI的Move意图生命周期与用户journey已在R170候选实现，但仍不是机器字段或新公开合同；正式发布及真实owner环境启用待Root集成，不关闭原loading P0。
 
 ---
 

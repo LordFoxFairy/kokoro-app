@@ -157,11 +157,13 @@ export function CustomApiDialog({
   open,
   onOpenChange,
   returnFocusRef,
+  onDone,
 }: {
   client: HubClient
   open: boolean
   onOpenChange: (open: boolean) => void
   returnFocusRef: RefObject<HTMLElement | null>
+  onDone?: () => Promise<void>
 }) {
   const t = useT()
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -213,6 +215,7 @@ export function CustomApiDialog({
         secrets: secrets.map((secret) => ({ name: secret.name.trim(), value: secret.value })),
         enabled: true,
       })
+      await onDone?.()
       close()
     } catch {
       setSubmitError(t("mcp.errGeneric"))

@@ -16,6 +16,7 @@ import { MCP_KEY, type McpData } from "./mcp-panel-model"
 import { ServersTab } from "./mcp-servers-tab"
 import { SecretsTab } from "./mcp-secrets-tab"
 import { McpProjectionRead } from "./mcp-projection-read"
+import type { McpCreateMode } from "./mcp-panel-model"
 
 export type McpContentProps = {
   client: HubClient
@@ -23,24 +24,27 @@ export type McpContentProps = {
   embedded?: boolean
   brandName?: string
   readBoundary?: ProjectReadBoundary
+  onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
+  initialView?: "catalog" | "connections"
+  settingsLayout?: boolean
 }
 
 export function McpContent(props: McpContentProps) {
   if (props.preview !== true) {
     if (!props.readBoundary?.admitted || props.readBoundary.subject === null) return null
     const identity = `${props.readBoundary.subject}:${props.readBoundary.generation}`
-    return <McpProjectionScope client={props.client} embedded={props.embedded ?? false} identity={identity} />
+    return <McpProjectionScope client={props.client} embedded={props.embedded ?? false} identity={identity} initialView={props.initialView ?? "catalog"} settingsLayout={props.settingsLayout ?? false} {...(props.brandName === undefined ? {} : { brandName: props.brandName })} {...(props.onCreateMcp === undefined ? {} : { onCreateMcp: props.onCreateMcp })} />
   }
   return <PreviewMcpContent {...props} />
 }
 
-function McpProjectionScope({ client, embedded, identity }: { client: HubClient; embedded: boolean; identity: string }) {
+function McpProjectionScope({ client, embedded, identity, brandName, onCreateMcp, initialView, settingsLayout }: { client: HubClient; embedded: boolean; identity: string; brandName?: string; onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void; initialView: "catalog" | "connections"; settingsLayout: boolean }) {
   const [scope, setScope] = useState({ client, identity, generation: 0 })
   if (scope.client !== client || scope.identity !== identity) {
     setScope({ client, identity, generation: scope.generation + 1 })
     return null
   }
-  return <McpProjectionRead key={`${identity}:${scope.generation}`} client={client} embedded={embedded} identity={identity} />
+  return <McpProjectionRead key={`${identity}:${scope.generation}`} client={client} embedded={embedded} identity={identity} initialView={initialView} settingsLayout={settingsLayout} {...(brandName === undefined ? {} : { brandName })} {...(onCreateMcp === undefined ? {} : { onCreateMcp })} />
 }
 
 function PreviewMcpContent({ client, embedded = false, brandName = "Workspace" }: McpContentProps) {
