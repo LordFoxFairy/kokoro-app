@@ -364,7 +364,7 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
         })}</ul>)}
       </section>}
 
-      {view === "connections" ? <nav className={styles.pagination} aria-label="MCP pages">
+      {view === "connections" && visibleConnectors.length > 0 ? <nav className={styles.pagination} aria-label="MCP pages">
         <Button type="button" variant="outline" disabled={history.length === 0 || actionId !== null} onClick={() => { const previous = history.at(-1) ?? null; setRefreshing(true); setRefreshError(false); setHistory((items) => items.slice(0, -1)); setCursor(previous) }}>{t("plugins.previous")}</Button>
         <Button type="button" variant="outline" disabled={!projection.connectors?.next_cursor || actionId !== null} onClick={() => { const next = projection.connectors?.next_cursor; if (!next || next === cursor || history.includes(next)) { setRefreshError(true); return }; setRefreshing(true); setRefreshError(false); setHistory((items) => [...items, cursor]); setCursor(next) }}>{t("plugins.next")}</Button>
       </nav> : null}

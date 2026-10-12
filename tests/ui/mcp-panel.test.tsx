@@ -232,6 +232,7 @@ describe("McpPanel", () => {
     expect(await screen.findByText("No connectors yet.")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
     expect(screen.queryByText("Removed")).toBeNull()
+    expect(screen.queryByRole("navigation", { name: "MCP pages" })).toBeNull()
   })
 
   it("uses formal create, CAS update, enable, and remove commands then reloads owner truth", async () => {
@@ -360,6 +361,7 @@ describe("McpPanel", () => {
     const css = readFileSync("src/ui/mcp/mcp-projection-read.module.css", "utf8")
     const source = readFileSync("src/ui/mcp/mcp-projection-read.tsx", "utf8")
     expect(css).toMatch(/\.header\s*\{[^}]*grid-template-areas: "title controls";/u)
+    expect(css).toMatch(/\.header:not\(:has\(h2\)\) \.searchField\s*\{[^}]*width: 16\.5rem;[^}]*flex: 0 0 16\.5rem;/u)
     expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
     expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(90rem,calc\(100vw - 2rem\)\);[^}]*height: min\(68rem,calc\(100dvh - 2rem\)\);/u)

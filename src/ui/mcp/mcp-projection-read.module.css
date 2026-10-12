@@ -36,6 +36,9 @@
 }
 .settingsToolbar { grid-area: controls; min-width: 0; justify-content: space-between; gap: .75rem; }
 .header:not(:has(h2)) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "controls"; }
+/* Manus settings keeps the connector search at a fixed reading width; it
+   should not stretch across the blank state when the dialog is wide. */
+.header:not(:has(h2)) .searchField { width: 16.5rem; min-width: 16.5rem; flex: 0 0 16.5rem; }
 .toolbarActions { flex: 0 0 auto; gap: .5rem; }
 .toolbarButton {
   height: 2rem;
@@ -226,6 +229,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 42rem) {
   .settingsToolbar { align-items: stretch; flex-direction: column; }
+  .header:not(:has(h2)) .searchField { width: 100%; min-width: 0; flex: 1 1 auto; }
   .toolbarActions { justify-content: flex-end; flex-wrap: wrap; }
   .directoryControls { align-items: stretch; }
   .directoryControls .searchField { width: 100%; flex-basis: 100%; }
