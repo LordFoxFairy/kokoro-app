@@ -5,16 +5,16 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
 
-const BFF_OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const BFF_PUBLIC_OPENAPI_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const BFF_PUBLIC_OPENAPI_VERSION = "14.5.0"
+const BFF_OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const BFF_PUBLIC_OPENAPI_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const BFF_PUBLIC_OPENAPI_VERSION = "14.7.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 describe("pinned BFF project resource contract", () => {
   it("pins the exact BFF owner public OpenAPI blob", async () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
-    expect(BFF_OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
+    expect(BFF_OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -33,7 +33,9 @@ describe("pinned BFF project resource contract", () => {
     expect(get.parameters.find((param) => param.name === "limit")?.schema).toMatchObject({ minimum: 1, maximum: 100, default: 50 })
     expect(get.parameters.find((param) => param.name === "cursor")?.schema).toMatchObject({ maxLength: 4096 })
     expect(get.responses["200"]?.content?.["application/json"]?.schema.$ref).toBe("#/components/schemas/ProjectResourceListResponse")
-    const page = spec.components.schemas.ProjectResourceListResponse as { properties: { data: { properties: { items: { maxItems: number; items: { properties: Record<string, unknown> } } } } } }
+    const page = spec.components.schemas.ProjectResourceListResponse as {
+      properties: { data: { properties: { items: { maxItems: number; items: { properties: Record<string, unknown> } } } } }
+    }
     expect(page.properties.data.properties.items.maxItems).toBe(100)
     expect(page.properties.data.properties.items.items.properties.scan_state).toMatchObject({ enum: ["clean"] })
     expect(page.properties.data.properties.items.items.properties).not.toHaveProperty("upload_id")

@@ -4,11 +4,27 @@ import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
 import YAML from "yaml"
-import { createSkillDraftRequestSchema, skillDraftSchema, beginSkillUploadRequestSchema, beginSkillUploadSchema, completeSkillUploadRequestSchema, completeSkillUploadSchema, validateSkillDraftRequestSchema, validateSkillDraftSchema, skillPublishRequestSchema, publishSkillDraftSchema, skillUploadStateSchema, managedPersonalSkillSchema, personalInstallationSchema, installationErrorAllowed, type InstallationOperation } from "@/hub/schemas"
+import {
+  createSkillDraftRequestSchema,
+  skillDraftSchema,
+  beginSkillUploadRequestSchema,
+  beginSkillUploadSchema,
+  completeSkillUploadRequestSchema,
+  completeSkillUploadSchema,
+  validateSkillDraftRequestSchema,
+  validateSkillDraftSchema,
+  skillPublishRequestSchema,
+  publishSkillDraftSchema,
+  skillUploadStateSchema,
+  managedPersonalSkillSchema,
+  personalInstallationSchema,
+  installationErrorAllowed,
+  type InstallationOperation,
+} from "@/hub/schemas"
 
-const OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const OWNER_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const OWNER_VERSION = "14.5.0"
+const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const OWNER_VERSION = "14.7.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -98,31 +114,58 @@ function assertProjectionSemantics(spec: Spec): void {
   expect(field(validated, "content_digest").pattern).toBe("^[a-f0-9]{64}$")
   expect(field(validated, "manifest_identity").pattern).toBe("^(?:skill-md-v1|zip-v2):sha256:[a-f0-9]{64}$")
   const readErrors = {
-    "400": "PlatformProjectionReadBadRequest", "401": "PlatformProjectionReadUnauthorized",
-    "403": "PlatformProjectionReadForbidden", "429": "PlatformProjectionReadRateLimited",
-    "502": "PlatformProjectionReadBadGateway", "503": "PlatformProjectionReadUnavailable",
+    "400": "PlatformProjectionReadBadRequest",
+    "401": "PlatformProjectionReadUnauthorized",
+    "403": "PlatformProjectionReadForbidden",
+    "429": "PlatformProjectionReadRateLimited",
+    "502": "PlatformProjectionReadBadGateway",
+    "503": "PlatformProjectionReadUnavailable",
   }
   assertGet(spec, "/v1/self/skills", "listManagedPersonalSkills", "#/components/schemas/ManagedPersonalSkillListResponse", {
-    "400": "ManagedPersonalSkillBadRequest", "401": "ManagedPersonalSkillUnauthorized", "403": "ManagedPersonalSkillForbidden", "429": "ManagedPersonalSkillRateLimited", "502": "ManagedPersonalSkillBadGateway", "503": "ManagedPersonalSkillUnavailable",
+    "400": "ManagedPersonalSkillBadRequest",
+    "401": "ManagedPersonalSkillUnauthorized",
+    "403": "ManagedPersonalSkillForbidden",
+    "429": "ManagedPersonalSkillRateLimited",
+    "502": "ManagedPersonalSkillBadGateway",
+    "503": "ManagedPersonalSkillUnavailable",
   })
   assertGet(spec, "/v1/self/skills/{skill_id}", "getManagedPersonalSkill", "#/components/schemas/ManagedPersonalSkillDetailResponse", {
-    "400": "ManagedPersonalSkillBadRequest", "401": "ManagedPersonalSkillUnauthorized",
-    "403": "ManagedPersonalSkillForbidden", "404": "ManagedPersonalSkillNotFound",
-    "429": "ManagedPersonalSkillRateLimited", "502": "ManagedPersonalSkillBadGateway",
+    "400": "ManagedPersonalSkillBadRequest",
+    "401": "ManagedPersonalSkillUnauthorized",
+    "403": "ManagedPersonalSkillForbidden",
+    "404": "ManagedPersonalSkillNotFound",
+    "429": "ManagedPersonalSkillRateLimited",
+    "502": "ManagedPersonalSkillBadGateway",
     "503": "ManagedPersonalSkillUnavailable",
   })
   expect(operation(spec, "/v1/self/skills/{skill_id}", "get").responses?.["200"]?.$ref).toBe("#/components/responses/ManagedPersonalSkillDetailOk")
   assertGet(spec, "/v1/mcp/servers", "listMcpServers", "#/components/schemas/McpServerListResponse", readErrors)
   assertGet(spec, "/v1/mcp/connections", "listSelfMcpConnections", "#/components/schemas/McpConnectionListResponse", {
-    "400": "McpConnectionReadBadRequest", "401": "McpConnectionReadUnauthorized",
-    "403": "McpConnectionReadForbidden", "429": "McpConnectionReadRateLimited",
-    "502": "McpConnectionReadBadGateway", "503": "McpConnectionReadUnavailable",
+    "400": "McpConnectionReadBadRequest",
+    "401": "McpConnectionReadUnauthorized",
+    "403": "McpConnectionReadForbidden",
+    "429": "McpConnectionReadRateLimited",
+    "502": "McpConnectionReadBadGateway",
+    "503": "McpConnectionReadUnavailable",
   })
 
   const published = shape(spec, "ManagedPersonalSkillResource")
-  expect(published.required).toEqual(["skill_id", "source_ref", "series_id", "revision", "name", "summary", "tags", "status", "skill_updated_at", "example_prompts", "category_keys", "product"])
+  expect(published.required).toEqual([
+    "skill_id",
+    "source_ref",
+    "series_id",
+    "revision",
+    "name",
+    "summary",
+    "tags",
+    "status",
+    "skill_updated_at",
+    "example_prompts",
+    "category_keys",
+    "product",
+  ])
   expect(published.additionalProperties).toBe(false)
-  expect((field(published, "status") as Shape & {enum: string[]}).enum).toEqual(["draft", "active", "disabled", "withdrawn", "quarantined"])
+  expect((field(published, "status") as Shape & { enum: string[] }).enum).toEqual(["draft", "active", "disabled", "withdrawn", "quarantined"])
   expect(field(published, "revision").pattern).toBe("^[1-9][0-9]*$")
   const publishedResponse = shape(spec, "ManagedPersonalSkillDetailResponse")
   exactShape(publishedResponse, ["data", "meta"])
@@ -151,66 +194,10 @@ function assertProjectionSemantics(spec: Spec): void {
   exactShape(shape(spec, "McpConnectionProjection"), ["connection_id", "connector_id", "server_id", "provider_key", "transport", "status"])
 }
 
-function assertPersonalMcpCrudSemantics(spec: Spec): void {
-  const mutationErrors = ["400", "401", "403", "404", "409", "412", "413", "429", "502", "503"]
-  for (const [method, path, id, success] of [
-    ["post", "/v1/self/mcp/connectors", "createPersonalMcpConnector", "201"],
-    ["patch", "/v1/self/mcp/connectors/{connector_id}", "updatePersonalMcpConnector", "200"],
-    ["put", "/v1/self/mcp/connectors/{connector_id}/enabled", "setPersonalMcpConnectorEnabled", "200"],
-    ["delete", "/v1/self/mcp/connectors/{connector_id}", "removePersonalMcpConnector", "200"],
-  ] as const) {
-    const value = operation(spec, path, method)
-    expect(value.operationId).toBe(id)
-    expect(Object.keys(value.responses ?? {}).sort()).toEqual([success, ...mutationErrors].sort())
-  }
-  assertGet(spec, "/v1/self/mcp/providers", "listPersonalMcpProviders", "#/components/schemas/PersonalMcpProviderListResponse", {
-    "400": "PersonalMcpBadRequest", "401": "PersonalMcpUnauthorized", "403": "PersonalMcpForbidden", "429": "PersonalMcpRateLimited", "502": "PersonalMcpBadGateway", "503": "PersonalMcpUnavailable",
-  })
-  assertGet(spec, "/v1/self/mcp/providers/{provider_key}", "getPersonalMcpProvider", "#/components/schemas/PersonalMcpProviderDetailResponse", {
-    "400": "PersonalMcpBadRequest", "401": "PersonalMcpUnauthorized", "403": "PersonalMcpForbidden", "404": "PersonalMcpNotFound", "429": "PersonalMcpRateLimited", "502": "PersonalMcpBadGateway", "503": "PersonalMcpUnavailable",
-  })
-  expect(shape(spec, "PersonalMcpConnector").required).toEqual(["connector_id", "connector_type", "provider_key", "status", "approved_scopes", "enabled", "state_version"])
-  expect(Object.keys(shape(spec, "PersonalMcpProvider").properties ?? {})).toEqual(["provider_key", "display_name", "description", "directory_type", "category_keys", "example_prompts", "author", "website", "privacy_url", "cover_image_url", "updated_at", "enabled", "state_version"])
-}
-
-function assertPersonalMcpAuthorizationLifecycle(spec: Spec): void {
-  const standardErrors = ["400", "401", "403", "404", "413", "429", "502", "503"]
-  for (const [path, id] of [
-    ["/v1/self/mcp/connectors/{connector_id}/authorization", "beginPersonalMcpConnectorAuthorization"],
-    ["/v1/self/mcp/connectors/{connector_id}/authorization/reconnect", "reconnectPersonalMcpConnectorAuthorization"],
-  ] as const) {
-    const value = operation(spec, path, "post")
-    expect(value.operationId).toBe(id)
-    expect(value["x-kokoro-idempotency"]).toBe("none")
-    expect(value.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/PersonalMcpConnectorAuthorizationRequest")
-    expect(Object.keys(value.responses ?? {}).sort()).toEqual(["200", ...standardErrors].sort())
-  }
-
-  const callback = operation(spec, "/v1/self/mcp/authorization/callback", "post")
-  expect(callback.operationId).toBe("completePersonalMcpConnectorAuthorization")
-  expect(callback["x-kokoro-idempotency"]).toBe("none")
-  expect(callback.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/CompletePersonalMcpConnectorAuthorizationRequest")
-  expect(Object.keys(callback.responses ?? {}).sort()).toEqual(["200", ...standardErrors].sort())
-
-  const connection = operation(spec, "/v1/self/mcp/connections", "post")
-  expect(connection.operationId).toBe("createPersonalMcpConnection")
-  expect(connection["x-kokoro-idempotency"]).toBe("required")
-  expect(connection.parameters).toHaveLength(1)
-  expect(connection.parameters?.[0]).toMatchObject({ name: "Idempotency-Key", in: "header", required: true })
-  expect(connection.requestBody?.content?.["application/json"]?.schema?.$ref).toBe("#/components/schemas/CreatePersonalMcpConnectionRequest")
-  expect(Object.keys(connection.responses ?? {}).sort()).toEqual(["201", ...standardErrors, "409", "412"].sort())
-
-  exactShape(shape(spec, "PersonalMcpConnectorAuthorizationRequest"), ["server_id", "expected_state_version"])
-  expect((shape(spec, "CompletePersonalMcpConnectorAuthorizationRequest") as Shape & { oneOf: Shape[] }).oneOf).toHaveLength(2)
-  exactShape(shape(spec, "CreatePersonalMcpConnectionRequest"), ["connector_id", "server_id", "allowed_selectors", "expected_state_version"])
-  exactShape(shape(spec, "PersonalMcpConnectorAuthorizationResponse"), ["data"])
-  exactShape(shape(spec, "PersonalMcpConnectionDetailResponse"), ["data"])
-}
-
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
+    expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -223,12 +210,10 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
       ["post", "/v1/skills/{skill_id}/publish", "publishSkill"],
     ] as const) {
       expect(operation(spec, path, method).operationId).toBe(id)
-
     }
-    assertPersonalMcpCrudSemantics(spec)
-    assertPersonalMcpAuthorizationLifecycle(spec)
     expect(operation(spec, "/v1/skills/{skill_id}/publish", "post")["x-kokoro-empty-body"]).toBeUndefined()
-    for (const name of ["BeginSkillPackageUploadRequest", "CompleteSkillPackageUploadRequest", "ValidateSkillDraftRequest"]) expect(shape(spec, name).required).toContain("expected_state_version")
+    for (const name of ["BeginSkillPackageUploadRequest", "CompleteSkillPackageUploadRequest", "ValidateSkillDraftRequest"])
+      expect(shape(spec, name).required).toContain("expected_state_version")
   })
 
   it("pins GET success refs, status-specific errors/headers and nested cursor/item shape", async () => {
@@ -238,18 +223,43 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("rejects actual parsed-spec mutations through the same consumer assertions", async () => {
     const original = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
     const mutations: Array<(candidate: Spec) => void> = [
-      (candidate) => { field(shape(candidate, "SkillValidateResource"), "manifest_identity").pattern = "^zip-v1:sha256:[a-f0-9]{64}$" },
-      (candidate) => { operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["200"]!.$ref = "#/components/responses/ServiceUnavailable" },
-      (candidate) => { candidate.components.responses.ManagedPersonalSkillDetailOk!.headers!["Cache-Control"]!.schema!.const = "public" },
-      (candidate) => { delete operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["404"] },
-      (candidate) => { operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["404"]!.$ref = "#/components/responses/ManagedPersonalSkillForbidden" },
-      (candidate) => { field(field(shape(candidate, "ManagedPersonalSkillListResponse"), "data"), "skills").items!.$ref = "#/components/schemas/SkillRevision" },
-      (candidate) => { field(field(shape(candidate, "ManagedPersonalSkillListResponse"), "data"), "next_cursor").type = "integer" },
-      (candidate) => { field(field(shape(candidate, "McpServerListResponse"), "data"), "servers").items!.$ref = "#/components/schemas/McpServer" },
-      (candidate) => { (field(shape(candidate, "ManagedPersonalSkillResource"), "status") as Shape & {enum: string[]}).enum = ["draft"] },
-      (candidate) => { field(shape(candidate, "ManagedPersonalSkillDetailResponse"), "data").$ref = "#/components/schemas/Skill" },
-      (candidate) => { shape(candidate, "McpServerProjection").properties!.secret_ref = { type: "string" } },
-      (candidate) => { shape(candidate, "ManagedPersonalSkillResource").properties!.secret_ref = { type: "string" }; shape(candidate, "ManagedPersonalSkillResource").additionalProperties = true },
+      (candidate) => {
+        field(shape(candidate, "SkillValidateResource"), "manifest_identity").pattern = "^zip-v1:sha256:[a-f0-9]{64}$"
+      },
+      (candidate) => {
+        operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["200"]!.$ref = "#/components/responses/ServiceUnavailable"
+      },
+      (candidate) => {
+        candidate.components.responses.ManagedPersonalSkillDetailOk!.headers!["Cache-Control"]!.schema!.const = "public"
+      },
+      (candidate) => {
+        delete operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["404"]
+      },
+      (candidate) => {
+        operation(candidate, "/v1/self/skills/{skill_id}", "get").responses!["404"]!.$ref = "#/components/responses/ManagedPersonalSkillForbidden"
+      },
+      (candidate) => {
+        field(field(shape(candidate, "ManagedPersonalSkillListResponse"), "data"), "skills").items!.$ref = "#/components/schemas/SkillRevision"
+      },
+      (candidate) => {
+        field(field(shape(candidate, "ManagedPersonalSkillListResponse"), "data"), "next_cursor").type = "integer"
+      },
+      (candidate) => {
+        field(field(shape(candidate, "McpServerListResponse"), "data"), "servers").items!.$ref = "#/components/schemas/McpServer"
+      },
+      (candidate) => {
+        ;(field(shape(candidate, "ManagedPersonalSkillResource"), "status") as Shape & { enum: string[] }).enum = ["draft"]
+      },
+      (candidate) => {
+        field(shape(candidate, "ManagedPersonalSkillDetailResponse"), "data").$ref = "#/components/schemas/Skill"
+      },
+      (candidate) => {
+        shape(candidate, "McpServerProjection").properties!.secret_ref = { type: "string" }
+      },
+      (candidate) => {
+        shape(candidate, "ManagedPersonalSkillResource").properties!.secret_ref = { type: "string" }
+        shape(candidate, "ManagedPersonalSkillResource").additionalProperties = true
+      },
     ]
     for (const mutate of mutations) {
       const candidate = structuredClone(original)
@@ -264,9 +274,27 @@ it("pins the five Personal installation operations, safe projection and strict e
   for (const [method, path, id, success, errors] of [
     ["post", "/v1/skill-installations", "installPersonalSkill", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
     ["get", "/v1/skill-installations", "listPersonalSkillInstallations", "SkillInstallationListSuccess", [400, 401, 403, 413, 429, 502, 503, 504]],
-    ["get", "/v1/skill-installations/{installation_id}", "getPersonalSkillInstallation", "SkillInstallationReadSuccess", [400, 401, 403, 404, 413, 429, 502, 503, 504]],
-    ["delete", "/v1/skill-installations/{installation_id}", "removePersonalSkillInstallation", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
-    ["put", "/v1/skill-installations/{installation_id}/enabled", "setPersonalSkillInstallationEnabled", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
+    [
+      "get",
+      "/v1/skill-installations/{installation_id}",
+      "getPersonalSkillInstallation",
+      "SkillInstallationReadSuccess",
+      [400, 401, 403, 404, 413, 429, 502, 503, 504],
+    ],
+    [
+      "delete",
+      "/v1/skill-installations/{installation_id}",
+      "removePersonalSkillInstallation",
+      "SkillInstallationMutationSuccess",
+      [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504],
+    ],
+    [
+      "put",
+      "/v1/skill-installations/{installation_id}/enabled",
+      "setPersonalSkillInstallationEnabled",
+      "SkillInstallationMutationSuccess",
+      [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504],
+    ],
   ] as const) {
     const value = operation(spec, path, method)
     expect(value.operationId).toBe(id)
@@ -278,7 +306,27 @@ it("pins the five Personal installation operations, safe projection and strict e
       expect(resolved?.headers?.["Cache-Control"]?.schema?.const).toBe("no-store")
     }
   }
-  expect(Object.keys(shape(spec, "SkillInstallation").properties ?? {})).toEqual(["example_prompts", "installation_id", "source_ref", "series_id", "revision", "installed", "enabled", "installed_at", "updated_at", "skill_updated_at", "removed_at", "display_name", "summary", "source_status", "category_keys", "product", "publisher_profile", "available_update", "tags"])
+  expect(Object.keys(shape(spec, "SkillInstallation").properties ?? {})).toEqual([
+    "example_prompts",
+    "installation_id",
+    "source_ref",
+    "series_id",
+    "revision",
+    "installed",
+    "enabled",
+    "installed_at",
+    "updated_at",
+    "skill_updated_at",
+    "removed_at",
+    "display_name",
+    "summary",
+    "source_status",
+    "category_keys",
+    "product",
+    "publisher_profile",
+    "available_update",
+    "tags",
+  ])
   expect(shape(spec, "SkillInstallation").required).not.toContain("removed_at")
   expect(shape(spec, "SkillInstallation").additionalProperties).toBe(false)
   const page = shape(spec, "SkillInstallationListEnvelope")
@@ -288,21 +336,32 @@ it("pins the five Personal installation operations, safe projection and strict e
   expect(Object.keys(field(page, "meta").properties ?? {})).toEqual(["next_cursor"])
 })
 
-
 it("compares every live publish/managed/installation component field matrix to the final owner snapshot", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   const matrices = [
-    ["CreateSkillDraftRequest", createSkillDraftRequestSchema.shape], ["SkillDraftResource", skillDraftSchema.shape],
-    ["BeginSkillPackageUploadRequest", beginSkillUploadRequestSchema.shape], ["SkillPackageBeginResource", beginSkillUploadSchema.shape],
-    ["CompleteSkillPackageUploadRequest", completeSkillUploadRequestSchema.shape], ["SkillPackageCompleteResource", completeSkillUploadSchema.shape],
-    ["ValidateSkillDraftRequest", validateSkillDraftRequestSchema.shape], ["SkillValidateResource", validateSkillDraftSchema.shape],
-    ["SkillAudienceRequest", skillPublishRequestSchema.shape], ["SkillPublishResource", publishSkillDraftSchema.shape],
-    ["ManagedPersonalSkillResource", managedPersonalSkillSchema.shape], ["SkillInstallation", personalInstallationSchema.innerType().innerType().shape],
+    ["CreateSkillDraftRequest", createSkillDraftRequestSchema.shape],
+    ["SkillDraftResource", skillDraftSchema.shape],
+    ["BeginSkillPackageUploadRequest", beginSkillUploadRequestSchema.shape],
+    ["SkillPackageBeginResource", beginSkillUploadSchema.shape],
+    ["CompleteSkillPackageUploadRequest", completeSkillUploadRequestSchema.shape],
+    ["SkillPackageCompleteResource", completeSkillUploadSchema.shape],
+    ["ValidateSkillDraftRequest", validateSkillDraftRequestSchema.shape],
+    ["SkillValidateResource", validateSkillDraftSchema.shape],
+    ["SkillAudienceRequest", skillPublishRequestSchema.shape],
+    ["SkillPublishResource", publishSkillDraftSchema.shape],
+    ["ManagedPersonalSkillResource", managedPersonalSkillSchema.shape],
+    ["SkillInstallation", personalInstallationSchema.innerType().innerType().shape],
   ] as const
   for (const [name, fields] of matrices) {
     const machine = shape(spec, name)
     expect(Object.keys(fields).sort(), name).toEqual(Object.keys(machine.properties ?? {}).sort())
-    expect(Object.entries(fields).filter(([, schema]) => !schema.isOptional()).map(([field]) => field).sort(), name).toEqual([...(machine.required ?? [])].sort())
+    expect(
+      Object.entries(fields)
+        .filter(([, schema]) => !schema.isOptional())
+        .map(([field]) => field)
+        .sort(),
+      name,
+    ).toEqual([...(machine.required ?? [])].sort())
     expect(machine.additionalProperties, name).toBe(false)
   }
   const upload = shape(spec, "SkillPackageUploadState") as Shape & { oneOf: Array<Shape & { properties?: Record<string, Shape | false> }> }
@@ -314,25 +373,40 @@ it("compares every live publish/managed/installation component field matrix to t
       return discriminator?.const === phase || discriminator?.enum?.includes(phase)
     })
     expect(machine, phase).toBeDefined()
-    expect(Object.keys(consumer.shape).sort(), phase).toEqual(Object.keys(upload.properties ?? {}).filter((field) => machine!.properties?.[field] !== false).sort())
-    expect(Object.entries(consumer.shape).filter(([, schema]) => !schema.isOptional()).map(([field]) => field).sort(), phase).toEqual([...new Set([...(upload.required ?? []), ...(machine!.required ?? [])])].sort())
+    expect(Object.keys(consumer.shape).sort(), phase).toEqual(
+      Object.keys(upload.properties ?? {})
+        .filter((field) => machine!.properties?.[field] !== false)
+        .sort(),
+    )
+    expect(
+      Object.entries(consumer.shape)
+        .filter(([, schema]) => !schema.isOptional())
+        .map(([field]) => field)
+        .sort(),
+      phase,
+    ).toEqual([...new Set([...(upload.required ?? []), ...(machine!.required ?? [])])].sort())
   }
 })
 
 it("compares all five installation operation/status error families, including mutation-only skill authorization", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   for (const [method, path, consumer] of [
-    ["post", "/v1/skill-installations", "install"], ["get", "/v1/skill-installations", "list"],
-    ["get", "/v1/skill-installations/{installation_id}", "get"], ["delete", "/v1/skill-installations/{installation_id}", "remove"],
+    ["post", "/v1/skill-installations", "install"],
+    ["get", "/v1/skill-installations", "list"],
+    ["get", "/v1/skill-installations/{installation_id}", "get"],
+    ["delete", "/v1/skill-installations/{installation_id}", "remove"],
     ["put", "/v1/skill-installations/{installation_id}/enabled", "setEnabled"],
   ] as const) {
     const responses = operation(spec, path, method).responses!
     for (const [status, reference] of Object.entries(responses)) {
       if (status === "200") continue
-      const response = resolvedResponse(spec, reference) as Response & { content: { "application/json": { schema: { allOf: Array<{ properties?: { error?: { properties?: { code?: { enum?: string[] } } } } }> } } } }
+      const response = resolvedResponse(spec, reference) as Response & {
+        content: { "application/json": { schema: { allOf: Array<{ properties?: { error?: { properties?: { code?: { enum?: string[] } } } } }> } } }
+      }
       const codes = response.content["application/json"].schema.allOf[1]?.properties?.error?.properties?.code?.enum
       expect(codes, `${consumer}:${status}`).toBeDefined()
-      for (const code of codes!) expect(installationErrorAllowed(consumer as InstallationOperation, Number(status), code), `${consumer}:${status}:${code}`).toBe(true)
+      for (const code of codes!)
+        expect(installationErrorAllowed(consumer as InstallationOperation, Number(status), code), `${consumer}:${status}:${code}`).toBe(true)
       expect(installationErrorAllowed(consumer, Number(status), "unpublished_error"), `${consumer}:${status}`).toBe(false)
     }
     expect(installationErrorAllowed(consumer, 403, "skill_forbidden")).toBe(!["list", "get"].includes(consumer))
@@ -345,5 +419,12 @@ it("pins the current public revision's shared-skill operation without replacing 
   const spec = YAML.parse(bytes.toString())
   expect(spec.info.version).toBe(OWNER_VERSION)
   expect(spec.paths["/v1/skill-shares/{share_id}/skill"].get.operationId).toBe("getSharedSkillRevision")
-  expect(spec.components.schemas.SkillShareResponse.properties.data.required).toEqual(["share_id", "source_ref", "url", "created_at", "expires_at", "revoked_at"])
+  expect(spec.components.schemas.SkillShareResponse.properties.data.required).toEqual([
+    "share_id",
+    "source_ref",
+    "url",
+    "created_at",
+    "expires_at",
+    "revoked_at",
+  ])
 })

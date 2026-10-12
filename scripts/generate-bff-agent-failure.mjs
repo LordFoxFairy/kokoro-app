@@ -10,9 +10,9 @@ import YAML from "yaml"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-agent-failure.ts")
-const ownerCommit = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const expectedDigest = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const expectedVersion = "14.5.0"
+const ownerCommit = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const expectedDigest = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const expectedVersion = "14.7.0"
 const expectedChatMessageFingerprint = "0ef4d13e0f9e383830e2d1cb65a391cb6fad67985bf3bc9dd3beeb0682beb41b"
 
 const digest = (value) => createHash("sha256").update(value).digest("hex")
@@ -20,7 +20,10 @@ const digest = (value) => createHash("sha256").update(value).digest("hex")
 function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`
   if (value !== null && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(",")}}`
   }
   return JSON.stringify(value)
 }
@@ -29,11 +32,7 @@ export function inspectBffAgentFailureContract(spec) {
   assert.equal(spec?.info?.version, expectedVersion, "BFF public OpenAPI version drift")
   const chatMessage = spec?.components?.schemas?.ChatMessage
   assert.ok(chatMessage, "missing BFF ChatMessage schema")
-  assert.equal(
-    digest(stableJson(chatMessage)),
-    expectedChatMessageFingerprint,
-    "BFF ChatMessage failure fragment drift",
-  )
+  assert.equal(digest(stableJson(chatMessage)), expectedChatMessageFingerprint, "BFF ChatMessage failure fragment drift")
 
   const roles = chatMessage.properties.role.enum
   const failure = chatMessage.properties.failure
@@ -73,8 +72,4 @@ async function main() {
   process.stdout.write(`BFF Agent failure artifact ${mode.slice(2)} passed (owner SHA-256 ${expectedDigest})\n`)
 }
 
-if (
-  process.argv[1]
-  && existsSync(process.argv[1])
-  && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
-) await main()
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))) await main()

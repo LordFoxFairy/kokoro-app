@@ -31,9 +31,19 @@ import {
 } from "./mcp-self-authorization.schema"
 
 import {
-  installationIdSchema, installationKeySchema, installationSourceSchema, installationListQuerySchema,
-  installationReceiptMatches, installationResponseSchema, installationErrorSchema, installationErrorAllowed,
-  type InstallationOperation, type InstallationListQuery, type InstallationPage, type InstallationReceipt, type PersonalInstallation,
+  installationIdSchema,
+  installationKeySchema,
+  installationSourceSchema,
+  installationListQuerySchema,
+  installationReceiptMatches,
+  installationResponseSchema,
+  installationErrorSchema,
+  installationErrorAllowed,
+  type InstallationOperation,
+  type InstallationListQuery,
+  type InstallationPage,
+  type InstallationReceipt,
+  type PersonalInstallation,
   HUB_BASE,
   hubDataSchema,
   hubErrorSchema,
@@ -93,7 +103,15 @@ export class HubClientError extends Error {
   readonly requestId: string | null
   readonly retryAfter: string | null
 
-  constructor(reason: HubFailureReason, message: string, code: string | null, status: number | null, retryable = false, requestId: string | null = null, retryAfter: string | null = null) {
+  constructor(
+    reason: HubFailureReason,
+    message: string,
+    code: string | null,
+    status: number | null,
+    retryable = false,
+    requestId: string | null = null,
+    retryAfter: string | null = null,
+  ) {
     super(message)
     this.name = "HubClientError"
     this.reason = reason
@@ -122,9 +140,7 @@ export function parseGithubRepository(value: string): GithubRepository | null {
   const input = value.trim()
   if (input === "") return null
 
-  const candidate = /^https?:\/\//i.test(input)
-    ? input
-    : `https://github.com/${input.replace(/^\/+/, "")}`
+  const candidate = /^https?:\/\//i.test(input) ? input : `https://github.com/${input.replace(/^\/+/, "")}`
   let url: URL
   try {
     url = new URL(candidate)
@@ -158,8 +174,6 @@ export function parseGithubRepository(value: string): GithubRepository | null {
   }
 }
 
-
-
 function isAbortError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
 }
@@ -172,7 +186,7 @@ async function readError(response: Response): Promise<HubClientError> {
   let code: string | null = null
   let message = `hub request failed with status ${response.status}`
   try {
-    const raw = await response.json() as unknown
+    const raw = (await response.json()) as unknown
     const parsed = hubErrorSchema.safeParse(raw)
     if (parsed.success) {
       code = parsed.data.error.code
@@ -181,9 +195,7 @@ async function readError(response: Response): Promise<HubClientError> {
       // Keep the canonical envelope first, but tolerate the flat forms used
       // by older BFF adapters so typed GitHub errors still reach the UI.
       const body = raw as Record<string, unknown>
-      const nested = typeof body.error === "object" && body.error !== null
-        ? body.error as Record<string, unknown>
-        : null
+      const nested = typeof body.error === "object" && body.error !== null ? (body.error as Record<string, unknown>) : null
       const firstString = (...values: unknown[]) => values.find((value): value is string => typeof value === "string" && value.length > 0)
       code = firstString(nested?.code, body.code, body.error_code, body.errorCode) ?? null
       message = firstString(nested?.message, body.message, body.error_message, body.errorMessage, body.detail) ?? message
@@ -214,11 +226,7 @@ async function parseData<T extends ZodTypeAny>(response: Response, inner: T): Pr
   }
 }
 
-async function requestData<T extends ZodTypeAny>(
-  path: string,
-  inner: T,
-  init?: RequestInit,
-): Promise<z.infer<T>> {
+async function requestData<T extends ZodTypeAny>(path: string, inner: T, init?: RequestInit): Promise<z.infer<T>> {
   let response: Response
   try {
     response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", ...init })
@@ -244,9 +252,18 @@ export function hasHubNoStoreDirective(headers: Headers): boolean {
   let found = false
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
-    if (escaped) { escaped = false; continue }
-    if (quoted && char === "\\") { escaped = true; continue }
-    if (char === '"') { quoted = !quoted; continue }
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (quoted && char === "\\") {
+      escaped = true
+      continue
+    }
+    if (char === '"') {
+      quoted = !quoted
+      continue
+    }
     // A comma inside an extension's quoted value is not a directive boundary.
     if (char === "," && !quoted) {
       found ||= value.slice(start, index).trim().toLowerCase() === "no-store"
@@ -266,9 +283,11 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
   let response: Response | undefined
   try {
     response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error", signal: joined })
-    if (!hasHubNoStoreDirective(response.headers)
-      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "")
-      || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
+    if (
+      !hasHubNoStoreDirective(response.headers) ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(response.headers.get("x-request-id") ?? "") ||
+      !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
+    ) {
       throw new HubClientError("parse", "invalid BFF connection response headers", null, response.status)
     }
     const declared = response.headers.get("content-length")
@@ -294,9 +313,14 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
     joined.throwIfAborted()
     const bytes = new Uint8Array(size)
     let offset = 0
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.byteLength
+    }
     let raw: unknown
-    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch (error) {
+    try {
+      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))
+    } catch (error) {
       throw new HubClientError("parse", describeUnknown(error), null, response.status)
     }
     if (response.status === 200) {
@@ -305,8 +329,16 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
       return parsed.data.data
     }
     const parsed = mcpConnectionReadErrorSchema.safeParse(raw)
-    if (!parsed.success || !mcpConnectionErrorAllowed(response.status, parsed.data.error.code)) throw new HubClientError("parse", "invalid BFF connection error", null, response.status)
-    throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status, parsed.data.error.retryable, response.headers.get("x-request-id"))
+    if (!parsed.success || !mcpConnectionErrorAllowed(response.status, parsed.data.error.code))
+      throw new HubClientError("parse", "invalid BFF connection error", null, response.status)
+    throw new HubClientError(
+      "http",
+      parsed.data.error.message,
+      parsed.data.error.code,
+      response.status,
+      parsed.data.error.retryable,
+      response.headers.get("x-request-id"),
+    )
   } catch (error) {
     if (error instanceof HubClientError) throw error
     throw new HubClientError(isAbortError(error) || joined.aborted ? "aborted" : "network", describeUnknown(error), null, response?.status ?? null)
@@ -339,9 +371,11 @@ async function requestMcpSelf<T extends ZodTypeAny>(
   try {
     response = await fetch(`${HUB_BASE}${path}`, { cache: "no-store", redirect: "error", ...init, signal: joined })
     const requestId = response.headers.get("x-request-id")
-    if (!hasHubNoStoreDirective(response.headers)
-      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
-      || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
+    if (
+      !hasHubNoStoreDirective(response.headers) ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "") ||
+      !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
+    ) {
       throw new HubClientError("parse", "invalid MCP current-user response headers", null, response.status)
     }
     const declared = response.headers.get("content-length")
@@ -367,9 +401,14 @@ async function requestMcpSelf<T extends ZodTypeAny>(
     joined.throwIfAborted()
     const bytes = new Uint8Array(size)
     let offset = 0
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.byteLength
+    }
     let raw: unknown
-    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch (error) {
+    try {
+      raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))
+    } catch (error) {
       throw new HubClientError("parse", describeUnknown(error), null, response.status)
     }
     const expected = operation === "create" || operation === "createConnection" ? 201 : 200
@@ -384,7 +423,15 @@ async function requestMcpSelf<T extends ZodTypeAny>(
       ? mcpSelfAuthorizationErrorAllowed(response.status, parsed.data)
       : mcpSelfErrorAllowed(operation as McpSelfCommandOperation | "connectors" | "providers", response.status, parsed.data)
     if (!parsed.success || !errorAllowed) throw new HubClientError("parse", "invalid MCP current-user error", null, response.status)
-    throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status, parsed.data.error.retryable, requestId, response.status === 429 ? response.headers.get("retry-after") : null)
+    throw new HubClientError(
+      "http",
+      parsed.data.error.message,
+      parsed.data.error.code,
+      response.status,
+      parsed.data.error.retryable,
+      requestId,
+      response.status === 429 ? response.headers.get("retry-after") : null,
+    )
   } catch (error) {
     if (error instanceof HubClientError) throw error
     throw new HubClientError(isAbortError(error) || joined.aborted ? "aborted" : "network", describeUnknown(error), null, response?.status ?? null)
@@ -408,9 +455,18 @@ function idempotencyHeaders(prefix: string, headers: Record<string, string> = {}
 export type HubClient = {
   listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<z.infer<typeof managedPersonalSkillPageSchema>>
   getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<ManagedPersonalSkill>
-  listMcpConnections: (query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpConnectionPage>
-  listMcpSelfConnectors: (query?: { status?: "pending" | "active" | "error" | "revoked"; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpSelfConnectorPage>
-  listMcpSelfProviders: (query?: { query?: string; directory_type?: "app" | "data_source"; category_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpSelfProviderPage>
+  listMcpConnections: (
+    query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string },
+    signal?: AbortSignal,
+  ) => Promise<McpConnectionPage>
+  listMcpSelfConnectors: (
+    query?: { status?: "pending" | "active" | "error" | "revoked"; limit?: number; cursor?: string },
+    signal?: AbortSignal,
+  ) => Promise<McpSelfConnectorPage>
+  listMcpSelfProviders: (
+    query?: { query?: string; directory_type?: "app" | "data_source"; category_key?: string; limit?: number; cursor?: string },
+    signal?: AbortSignal,
+  ) => Promise<McpSelfProviderPage>
   createMcpSelfConnector: (input: McpSelfCreateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
   updateMcpSelfConnector: (connectorId: string, input: McpSelfUpdateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
   setMcpSelfConnectorEnabled: (connectorId: string, input: McpSelfEnabledInput, signal?: AbortSignal) => Promise<McpSelfConnector>
@@ -463,7 +519,8 @@ export function createHubClient(): HubClient {
     listPersonalSkills: (cursor, signal) => createSkillPublishClient().listPublished(cursor, signal),
     getPublishedPersonalSkill: async (id, signal) => {
       const skill = await createSkillPublishClient().getManaged(id, signal)
-      if (skill.skill_id !== id || skill.source_ref !== `skill:${id}` || skill.status !== "active") throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
+      if (skill.skill_id !== id || skill.source_ref !== `skill:${id}` || skill.status !== "active")
+        throw new HubClientError("parse", "published Skill identity mismatch", null, 200)
       return skill
     },
     listMcpConnections: (query = {}, signal) => {
@@ -479,7 +536,7 @@ export function createHubClient(): HubClient {
       if (query.status !== undefined) search.set("status", query.status)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpSelf("connectors", `/self/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpSelfConnectorPageSchema, undefined, signal)
+      return requestMcpSelf("connectors", `/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpSelfConnectorPageSchema, undefined, signal)
     },
     listMcpSelfProviders: (query = {}, signal) => {
       const search = new URLSearchParams()
@@ -488,64 +545,96 @@ export function createHubClient(): HubClient {
       if (query.category_key !== undefined) search.set("category_key", query.category_key)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpSelf("providers", `/self/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpSelfProviderPageSchema, undefined, signal)
+      return requestMcpSelf("providers", `/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpSelfProviderPageSchema, undefined, signal)
     },
-    createMcpSelfConnector: async (input, signal) => (
-      await requestMcpSelf("create", "/self/mcp/connectors", z.object({ connector: mcpSelfConnectorSchema }).strict(), {
-        method: "POST",
-        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
-        body: JSON.stringify(input),
-      }, signal)
-    ).connector,
-    updateMcpSelfConnector: async (connectorId, input, signal) => (
-      await requestMcpSelf("update", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
-        method: "PATCH",
-        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
-        body: JSON.stringify(input),
-      }, signal)
-    ).connector,
-    setMcpSelfConnectorEnabled: async (connectorId, input, signal) => (
-      await requestMcpSelf("enabled", `/self/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
-        method: "PUT",
-        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
-        body: JSON.stringify(input),
-      }, signal)
-    ).connector,
-    removeMcpSelfConnector: async (connectorId, input, signal) => (
-      await requestMcpSelf("remove", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
-        method: "DELETE",
-        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
-        body: JSON.stringify(input),
-      }, signal)
-    ).connector,
-    beginMcpSelfConnectorAuthorization: (connectorId, input, signal) => requestMcpSelf(
-      "beginAuthorization",
-      `/self/mcp/connectors/${encodeURIComponent(connectorId)}/authorization`,
-      mcpSelfAuthorizationDataSchemas.beginAuthorization,
-      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
-      signal,
-    ),
-    reconnectMcpSelfConnectorAuthorization: (connectorId, input, signal) => requestMcpSelf(
-      "reconnectAuthorization",
-      `/self/mcp/connectors/${encodeURIComponent(connectorId)}/authorization/reconnect`,
-      mcpSelfAuthorizationDataSchemas.reconnectAuthorization,
-      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
-      signal,
-    ),
-    completeMcpSelfConnectorAuthorization: (input, signal) => requestMcpSelf(
-      "completeAuthorization",
-      "/self/mcp/authorization/callback",
-      mcpSelfAuthorizationDataSchemas.completeAuthorization,
-      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
-      signal,
-    ),
-    createMcpSelfConnection: (input, signal) => requestMcpSelf(
-      "createConnection",
-      "/self/mcp/connections",
-      mcpSelfAuthorizationDataSchemas.createConnection,
-      { method: "POST", headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }), body: JSON.stringify(input) },
-      signal,
-    ),
+    createMcpSelfConnector: async (input, signal) =>
+      (
+        await requestMcpSelf(
+          "create",
+          "/mcp/connectors",
+          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          {
+            method: "POST",
+            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            body: JSON.stringify(input),
+          },
+          signal,
+        )
+      ).connector,
+    updateMcpSelfConnector: async (connectorId, input, signal) =>
+      (
+        await requestMcpSelf(
+          "update",
+          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
+          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          {
+            method: "PATCH",
+            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            body: JSON.stringify(input),
+          },
+          signal,
+        )
+      ).connector,
+    setMcpSelfConnectorEnabled: async (connectorId, input, signal) =>
+      (
+        await requestMcpSelf(
+          "enabled",
+          `/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`,
+          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          {
+            method: "PUT",
+            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            body: JSON.stringify(input),
+          },
+          signal,
+        )
+      ).connector,
+    removeMcpSelfConnector: async (connectorId, input, signal) =>
+      (
+        await requestMcpSelf(
+          "remove",
+          `/mcp/connectors/${encodeURIComponent(connectorId)}`,
+          z.object({ connector: mcpSelfConnectorSchema }).strict(),
+          {
+            method: "DELETE",
+            headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
+            body: JSON.stringify(input),
+          },
+          signal,
+        )
+      ).connector,
+    beginMcpSelfConnectorAuthorization: (connectorId, input, signal) =>
+      requestMcpSelf(
+        "beginAuthorization",
+        `/mcp/connectors/${encodeURIComponent(connectorId)}/authorization`,
+        mcpSelfAuthorizationDataSchemas.beginAuthorization,
+        { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+        signal,
+      ),
+    reconnectMcpSelfConnectorAuthorization: (connectorId, input, signal) =>
+      requestMcpSelf(
+        "reconnectAuthorization",
+        `/mcp/connectors/${encodeURIComponent(connectorId)}/authorization/reconnect`,
+        mcpSelfAuthorizationDataSchemas.reconnectAuthorization,
+        { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+        signal,
+      ),
+    completeMcpSelfConnectorAuthorization: (input, signal) =>
+      requestMcpSelf(
+        "completeAuthorization",
+        "/mcp/authorization/callback",
+        mcpSelfAuthorizationDataSchemas.completeAuthorization,
+        { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+        signal,
+      ),
+    createMcpSelfConnection: (input, signal) =>
+      requestMcpSelf(
+        "createConnection",
+        "/mcp/connections",
+        mcpSelfAuthorizationDataSchemas.createConnection,
+        { method: "POST", headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }), body: JSON.stringify(input) },
+        signal,
+      ),
     listSkillPool: async () => (await requestData(skillPoolPath, skillPoolSchema)).skills,
     listSkillCatalog: (params = {}) => {
       const search = new URLSearchParams()
@@ -556,8 +645,7 @@ export function createHubClient(): HubClient {
       return requestData(`${skillCatalogPath}${suffix ? `?${suffix}` : ""}`, skillCatalogSchema)
     },
     skillQuota: () => requestData(skillQuotaPath, skillQuotaSchema),
-    skillRevisions: async (name, scope) =>
-      (await requestData(skillRevisionsPath(name, scope), skillRevisionsSchema)).revisions,
+    skillRevisions: async (name, scope) => (await requestData(skillRevisionsPath(name, scope), skillRevisionsSchema)).revisions,
     setSkillEnabled: async (name, enabled, scope) => {
       const path = enabled ? skillEnablePath(name, scope) : skillDisablePath(name, scope)
       let response: Response
@@ -601,11 +689,12 @@ export function createHubClient(): HubClient {
           body: JSON.stringify(input),
         })
       ).server,
-    registerCustomApi: (input) => requestData(customApiConnectorsPath, customApiViewSchema, {
-      method: "POST",
-      headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
-      body: JSON.stringify(input),
-    }),
+    registerCustomApi: (input) =>
+      requestData(customApiConnectorsPath, customApiViewSchema, {
+        method: "POST",
+        headers: idempotencyHeaders("hub-mutation", { ...JSON_HEADERS }),
+        body: JSON.stringify(input),
+      }),
     uploadConnectorIcon: (file) => {
       const form = new FormData()
       form.set("file", file, file.name)
@@ -630,7 +719,6 @@ export function createHubClient(): HubClient {
   }
 }
 
-
 export type SkillInstallationClient = {
   list: (query?: InstallationListQuery, signal?: AbortSignal) => Promise<InstallationPage>
   get: (id: string, signal?: AbortSignal) => Promise<PersonalInstallation>
@@ -642,70 +730,112 @@ export type SkillInstallationClient = {
 export function createSkillInstallationClient(): SkillInstallationClient {
   const base = "/api/hub/self/skill-installations"
   const idPath = (id: string) => `${base}/${encodeURIComponent(installationIdSchema.parse(id))}`
-  const commandHeaders = (key: string, json: boolean) => ({ ...(json ? { "content-type": "application/json" } : {}), "idempotency-key": installationKeySchema.parse(key) })
+  const commandHeaders = (key: string, json: boolean) => ({
+    ...(json ? { "content-type": "application/json" } : {}),
+    "idempotency-key": installationKeySchema.parse(key),
+  })
   async function request(operation: InstallationOperation, path: string, init: RequestInit, signal?: AbortSignal) {
     const deadline = new AbortController()
     const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
     const timer = setTimeout(() => deadline.abort(), 10_000)
     let response: Response | undefined
-    const within = <T,>(work: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
-      const abort = () => reject(joined.reason)
-      joined.addEventListener("abort", abort, { once: true })
-      void work.then(resolve, reject).finally(() => joined.removeEventListener("abort", abort))
-      if (joined.aborted) abort()
-    })
+    const within = <T>(work: Promise<T>): Promise<T> =>
+      new Promise((resolve, reject) => {
+        const abort = () => reject(joined.reason)
+        joined.addEventListener("abort", abort, { once: true })
+        void work.then(resolve, reject).finally(() => joined.removeEventListener("abort", abort))
+        if (joined.aborted) abort()
+      })
     try {
       joined.throwIfAborted()
-      response = await within(fetch(path, { ...init, cache: "no-store", redirect: "error", signal: joined }).then((value) => {
-        if (joined.aborted) void value.body?.cancel().catch(() => undefined)
-        return value
-      }))
+      response = await within(
+        fetch(path, { ...init, cache: "no-store", redirect: "error", signal: joined }).then((value) => {
+          if (joined.aborted) void value.body?.cancel().catch(() => undefined)
+          return value
+        }),
+      )
       joined.throwIfAborted()
       if (response === undefined) throw new HubClientError("network", "Missing installation response", null, null)
-    const requestId = response.headers.get("x-request-id")
-    const retryAfter = response.status === 429 ? response.headers.get("retry-after") : null
-    if (!hasHubNoStoreDirective(response.headers) || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
-      || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")
-      || retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter)) {
-      throw new HubClientError("parse", "Invalid installation response headers", null, response.status)
-    }
-    const declared = response.headers.get("content-length")
-    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576) || response.body === null) throw new HubClientError("parse", "Invalid installation body size", null, response.status)
-    const reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
-    let size = 0
-    const cancel = () => { void reader.cancel().catch(() => undefined) }
-    joined.addEventListener("abort", cancel, { once: true })
-    try {
-      for (;;) {
-        const part = await within(reader.read())
-        joined.throwIfAborted()
-        if (part.done) break
-        size += part.value.byteLength
-        if (size > 1_048_576) throw new HubClientError("parse", "Installation body is too large", null, response.status)
-        chunks.push(part.value)
+      const requestId = response.headers.get("x-request-id")
+      const retryAfter = response.status === 429 ? response.headers.get("retry-after") : null
+      if (
+        !hasHubNoStoreDirective(response.headers) ||
+        !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "") ||
+        !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "") ||
+        (retryAfter !== null && !/^[1-9][0-9]{0,4}$/u.test(retryAfter))
+      ) {
+        throw new HubClientError("parse", "Invalid installation response headers", null, response.status)
       }
-    } finally { joined.removeEventListener("abort", cancel); void reader.cancel().catch(() => undefined); reader.releaseLock() }
-    if (declared !== null && Number(declared) !== size) throw new HubClientError("parse", "Installation body size mismatch", null, response.status)
-    const bytes = new Uint8Array(size)
-    let offset = 0
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-    let raw: unknown
-    try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { throw new HubClientError("parse", "Invalid installation JSON", null, response.status) }
-    if (response.status !== 200) {
-      const error = installationErrorSchema.safeParse(raw)
-      if (!error.success || !installationErrorAllowed(operation, response.status, error.data.error.code)) throw new HubClientError("parse", "Invalid installation error", null, response.status)
-      throw new HubClientError("http", "Installation request rejected", error.data.error.code, response.status, error.data.error.retryable, requestId, retryAfter)
-    }
-    const result = installationResponseSchema(operation).safeParse(raw)
-    if (!result.success) throw new HubClientError("parse", "Invalid installation response", null, response.status)
-    return result.data
+      const declared = response.headers.get("content-length")
+      if ((declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > 1_048_576)) || response.body === null)
+        throw new HubClientError("parse", "Invalid installation body size", null, response.status)
+      const reader = response.body.getReader()
+      const chunks: Uint8Array[] = []
+      let size = 0
+      const cancel = () => {
+        void reader.cancel().catch(() => undefined)
+      }
+      joined.addEventListener("abort", cancel, { once: true })
+      try {
+        for (;;) {
+          const part = await within(reader.read())
+          joined.throwIfAborted()
+          if (part.done) break
+          size += part.value.byteLength
+          if (size > 1_048_576) throw new HubClientError("parse", "Installation body is too large", null, response.status)
+          chunks.push(part.value)
+        }
+      } finally {
+        joined.removeEventListener("abort", cancel)
+        void reader.cancel().catch(() => undefined)
+        reader.releaseLock()
+      }
+      if (declared !== null && Number(declared) !== size) throw new HubClientError("parse", "Installation body size mismatch", null, response.status)
+      const bytes = new Uint8Array(size)
+      let offset = 0
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset)
+        offset += chunk.byteLength
+      }
+      let raw: unknown
+      try {
+        raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))
+      } catch {
+        throw new HubClientError("parse", "Invalid installation JSON", null, response.status)
+      }
+      if (response.status !== 200) {
+        const error = installationErrorSchema.safeParse(raw)
+        if (!error.success || !installationErrorAllowed(operation, response.status, error.data.error.code))
+          throw new HubClientError("parse", "Invalid installation error", null, response.status)
+        throw new HubClientError(
+          "http",
+          "Installation request rejected",
+          error.data.error.code,
+          response.status,
+          error.data.error.retryable,
+          requestId,
+          retryAfter,
+        )
+      }
+      const result = installationResponseSchema(operation).safeParse(raw)
+      if (!result.success) throw new HubClientError("parse", "Invalid installation response", null, response.status)
+      return result.data
     } catch (error) {
       if (error instanceof HubClientError) throw error
       throw new HubClientError(signal?.aborted ? "aborted" : "network", "Installation request did not complete", null, response?.status ?? null)
-    } finally { clearTimeout(timer); void response?.body?.cancel().catch(() => undefined) }
+    } finally {
+      clearTimeout(timer)
+      void response?.body?.cancel().catch(() => undefined)
+    }
   }
-  const receipt = async (operation: "install" | "setEnabled" | "remove", path: string, init: RequestInit, identity: string, enabled?: boolean, signal?: AbortSignal): Promise<InstallationReceipt> => {
+  const receipt = async (
+    operation: "install" | "setEnabled" | "remove",
+    path: string,
+    init: RequestInit,
+    identity: string,
+    enabled?: boolean,
+    signal?: AbortSignal,
+  ): Promise<InstallationReceipt> => {
     const result = await request(operation, path, init, signal)
     if (!("installation" in result.data)) throw new HubClientError("parse", "Invalid installation receipt", null, 200)
     const value = result.data
@@ -723,13 +853,29 @@ export function createSkillInstallationClient(): SkillInstallationClient {
     },
     get: async (id, signal) => {
       const result = await request("get", idPath(id), { method: "GET" }, signal)
-      if (!("installation_id" in result.data) || result.data.installation_id !== id) throw new HubClientError("parse", "Installation identity mismatch", null, 200)
+      if (!("installation_id" in result.data) || result.data.installation_id !== id)
+        throw new HubClientError("parse", "Installation identity mismatch", null, 200)
       return result.data
     },
-    install: (sourceRef, key, signal) => receipt("install", base, { method: "POST", headers: commandHeaders(key, true), body: JSON.stringify({ source_ref: installationSourceSchema.parse(sourceRef) }) }, sourceRef, undefined, signal),
+    install: (sourceRef, key, signal) =>
+      receipt(
+        "install",
+        base,
+        { method: "POST", headers: commandHeaders(key, true), body: JSON.stringify({ source_ref: installationSourceSchema.parse(sourceRef) }) },
+        sourceRef,
+        undefined,
+        signal,
+      ),
     setEnabled: (id, enabled, key, signal) => {
       if (typeof enabled !== "boolean") throw new HubClientError("parse", "Invalid enabled state", null, null)
-      return receipt("setEnabled", `${idPath(id)}/enabled`, { method: "PUT", headers: commandHeaders(key, true), body: JSON.stringify({ enabled }) }, id, enabled, signal)
+      return receipt(
+        "setEnabled",
+        `${idPath(id)}/enabled`,
+        { method: "PUT", headers: commandHeaders(key, true), body: JSON.stringify({ enabled }) },
+        id,
+        enabled,
+        signal,
+      )
     },
     remove: (id, key, signal) => receipt("remove", idPath(id), { method: "DELETE", headers: commandHeaders(key, false) }, id, undefined, signal),
   }

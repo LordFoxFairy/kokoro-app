@@ -12,7 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourcePath = join(root, "src/generated/bff-public-openapi.yaml")
 const outputPath = join(root, "src/generated/bff-team")
 const configPath = join(root, "openapi-ts.bff-team.config.ts")
-const expectedDigest = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
+const expectedDigest = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
 const operations = [
   ["GET", "/v1/team/members"],
   ["GET", "/v1/team/invitations"],
@@ -39,7 +39,10 @@ function narrowedTeamSpec(spec) {
   const components = { securitySchemes: spec.components?.securitySchemes ?? {} }
   const refs = new Set()
   const visit = (value) => {
-    if (Array.isArray(value)) { for (const item of value) visit(item); return }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
     if (value === null || typeof value !== "object") return
     for (const [key, item] of Object.entries(value)) {
       if (key === "$ref" && typeof item === "string") refs.add(item)
@@ -69,7 +72,7 @@ async function files(directory, prefix = "") {
   const result = []
   for (const entry of await readdir(join(directory, prefix), { withFileTypes: true })) {
     const relative = join(prefix, entry.name)
-    if (entry.isDirectory()) result.push(...await files(directory, relative))
+    if (entry.isDirectory()) result.push(...(await files(directory, relative)))
     else result.push(relative)
   }
   return result.sort()
@@ -111,28 +114,42 @@ async function normalizeExactOptionalProperties(directory) {
     ],
   ])
   await normalizeGenerated(directory, "client/utils.gen.ts", [
-    ["            allowReserved: options.allowReserved,", "            ...(options.allowReserved === undefined ? {} : { allowReserved: options.allowReserved }),", 3],
+    [
+      "            allowReserved: options.allowReserved,",
+      "            ...(options.allowReserved === undefined ? {} : { allowReserved: options.allowReserved }),",
+      3,
+    ],
     ["    path: options.path,", "    ...(options.path === undefined ? {} : { path: options.path }),", 1],
     ["    query: options.query,", "    ...(options.query === undefined ? {} : { query: options.query }),", 1],
   ])
-  await normalizeGenerated(directory, "core/params.gen.ts", [[
-    `        map.set(config.key, {
+  await normalizeGenerated(directory, "core/params.gen.ts", [
+    [
+      `        map.set(config.key, {
           in: config.in,
           map: config.map,
         });`,
-    `        map.set(config.key, {
+      `        map.set(config.key, {
           in: config.in,
           ...(config.map === undefined ? {} : { map: config.map }),
         });`,
-    1,
-  ]])
+      1,
+    ],
+  ])
   await normalizeGenerated(directory, "core/pathSerializer.gen.ts", [
-    [`        allowReserved,
-        name,`, `        ...(allowReserved === undefined ? {} : { allowReserved }),
-        name,`, 1],
-    [`        allowReserved,
-        name:`, `        ...(allowReserved === undefined ? {} : { allowReserved }),
-        name:`, 1],
+    [
+      `        allowReserved,
+        name,`,
+      `        ...(allowReserved === undefined ? {} : { allowReserved }),
+        name,`,
+      1,
+    ],
+    [
+      `        allowReserved,
+        name:`,
+      `        ...(allowReserved === undefined ? {} : { allowReserved }),
+        name:`,
+      1,
+    ],
   ])
   await normalizeGenerated(directory, "core/serverSentEvents.gen.ts", [
     ["          body: options.serializedBody,", "          ...(options.serializedBody === undefined ? {} : { body: options.serializedBody }),", 1],

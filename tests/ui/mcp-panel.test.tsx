@@ -85,8 +85,32 @@ afterEach(() => {
 })
 
 describe("McpPanel", () => {
-  const PROVIDER = { provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: ["Connect me"], author: "Acme", website: "https://provider.example.com", privacy_url: "https://provider.example.com/privacy", cover_image_url: "https://cdn.example.test/connectors/provider-one.webp", updated_at: "2026-10-11T12:34:56.000Z", enabled: true, state_version: "1" }
-  const CONNECTOR = { connector_id: "connector-one", connector_type: "mcp" as const, provider_key: "provider-one", status: "active" as const, approved_scopes: ["tools.read"], enabled: true, state_version: "2", display_name: "Workspace search", description: "Search the workspace" }
+  const PROVIDER = {
+    provider_key: "provider-one",
+    display_name: "Provider One",
+    description: "A real provider",
+    directory_type: "app" as const,
+    category_keys: ["development" as const],
+    example_prompts: ["Connect me"],
+    author: "Acme",
+    website: "https://provider.example.com",
+    privacy_url: "https://provider.example.com/privacy",
+    cover_image_url: "https://cdn.example.test/connectors/provider-one.webp",
+    updated_at: "2026-10-11T12:34:56.000Z",
+    enabled: true,
+    state_version: "1",
+  }
+  const CONNECTOR = {
+    connector_id: "connector-one",
+    connector_type: "mcp" as const,
+    provider_key: "provider-one",
+    status: "active" as const,
+    approved_scopes: ["tools.read"],
+    enabled: true,
+    state_version: "2",
+    display_name: "Workspace search",
+    description: "Search the workspace",
+  }
 
   it("keeps the provider directory separate from managed connectors until the user switches views", async () => {
     const client = makeClient({
@@ -94,7 +118,9 @@ describe("McpPanel", () => {
       listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
 
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     expect(await screen.findByTestId("mcp-provider-card-provider-one")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
@@ -112,11 +138,25 @@ describe("McpPanel", () => {
 
   it("matches the Manus connector directory hierarchy with real local provider logos", async () => {
     const providers = [
-      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
-      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
+      {
+        ...PROVIDER,
+        provider_key: "gmail",
+        display_name: "Gmail",
+        description: "Search and summarize email.",
+        cover_image_url: "https://cdn.example.test/connectors/gmail.webp",
+      },
+      {
+        ...PROVIDER,
+        provider_key: "github",
+        display_name: "GitHub",
+        description: "Manage repositories.",
+        cover_image_url: "https://cdn.example.test/connectors/github.webp",
+      },
     ]
     const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Manage connectors" })).toBeInTheDocument()
@@ -132,7 +172,9 @@ describe("McpPanel", () => {
     const providerWithoutCover = { ...PROVIDER }
     Reflect.deleteProperty(providerWithoutCover, "cover_image_url")
     const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [providerWithoutCover], next_cursor: null }) })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     const card = await screen.findByTestId("mcp-provider-card-provider-one")
     expect(card.querySelector('img[src="/integrations/default-connector.svg"]')).not.toBeNull()
@@ -140,11 +182,25 @@ describe("McpPanel", () => {
 
   it("renders each owner provider once in the searchable directory", async () => {
     const providers = [
-      { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
-      { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
+      {
+        ...PROVIDER,
+        provider_key: "gmail",
+        display_name: "Gmail",
+        description: "Search and summarize email.",
+        cover_image_url: "https://cdn.example.test/connectors/gmail.webp",
+      },
+      {
+        ...PROVIDER,
+        provider_key: "github",
+        display_name: "GitHub",
+        description: "Manage repositories.",
+        cover_image_url: "https://cdn.example.test/connectors/github.webp",
+      },
     ]
     const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     expect(await screen.findByTestId("mcp-provider-card-gmail")).toBeInTheDocument()
     expect(screen.getByTestId("mcp-provider-card-github")).toBeInTheDocument()
@@ -154,16 +210,24 @@ describe("McpPanel", () => {
 
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
     const requests: string[] = []
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const path = input instanceof Request ? input.url : String(input)
-      requests.push(path)
-      const data = new URL(path, "http://localhost").pathname.endsWith("/providers")
-        ? { items: [PROVIDER], next_cursor: null }
-        : { items: [CONNECTOR], next_cursor: null }
-      return new Response(JSON.stringify({ data }), { status: 200, headers: { "cache-control": "private, no-store", "content-type": "application/json", "x-request-id": "mcp-self-read" } })
-    }))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = input instanceof Request ? input.url : String(input)
+        requests.push(path)
+        const data = new URL(path, "http://localhost").pathname.endsWith("/providers")
+          ? { items: [PROVIDER], next_cursor: null }
+          : { items: [CONNECTOR], next_cursor: null }
+        return new Response(JSON.stringify({ data }), {
+          status: 200,
+          headers: { "cache-control": "private, no-store", "content-type": "application/json", "x-request-id": "mcp-self-read" },
+        })
+      }),
+    )
 
-    render(<McpContent client={createHubClient()} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={createHubClient()} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
@@ -172,10 +236,7 @@ describe("McpPanel", () => {
     expect(card).toHaveTextContent("Provider One")
     expect(card).toHaveTextContent("Connected")
     expect(card).not.toHaveTextContent("connector-one")
-    expect(requests.map((value) => new URL(value, "http://localhost").pathname)).toEqual([
-      "/api/hub/self/mcp/providers",
-      "/api/hub/self/mcp/connectors",
-    ])
+    expect(requests.map((value) => new URL(value, "http://localhost").pathname)).toEqual(["/api/hub/mcp/providers", "/api/hub/mcp/connectors"])
   })
 
   it("shares a single initial owner projection across StrictMode effect replay", async () => {
@@ -183,7 +244,13 @@ describe("McpPanel", () => {
     const listMcpSelfProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
     const client = makeClient({ listMcpSelfConnectors, listMcpSelfProviders })
 
-    render(<StrictMode><LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" /></LocaleProvider></StrictMode>)
+    render(
+      <StrictMode>
+        <LocaleProvider>
+          <McpProjectionRead client={client} embedded identity="reader-a:1" />
+        </LocaleProvider>
+      </StrictMode>,
+    )
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
@@ -194,14 +261,22 @@ describe("McpPanel", () => {
 
   it("revoking read admission aborts the stale projection without duplicating the next identity read", async () => {
     let providerSignal: AbortSignal | undefined
-    let resolveStale!: (value: { items: typeof CONNECTOR[]; next_cursor: null }) => void
-    const stale = new Promise<{ items: typeof CONNECTOR[]; next_cursor: null }>((resolve) => { resolveStale = resolve })
-    const listMcpSelfProviders = vi.fn()
-      .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { providerSignal = signal; return stale.then(() => ({ items: [PROVIDER], next_cursor: null })) })
+    let resolveStale!: (value: { items: (typeof CONNECTOR)[]; next_cursor: null }) => void
+    const stale = new Promise<{ items: (typeof CONNECTOR)[]; next_cursor: null }>((resolve) => {
+      resolveStale = resolve
+    })
+    const listMcpSelfProviders = vi
+      .fn()
+      .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => {
+        providerSignal = signal
+        return stale.then(() => ({ items: [PROVIDER], next_cursor: null }))
+      })
       .mockResolvedValueOnce({ items: [PROVIDER], next_cursor: null })
     const client = makeClient({ listMcpSelfProviders })
     const renderContent = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
-      <LocaleProvider><McpContent client={client} embedded brandName="Acme" readBoundary={boundary} /></LocaleProvider>
+      <LocaleProvider>
+        <McpContent client={client} embedded brandName="Acme" readBoundary={boundary} />
+      </LocaleProvider>
     )
     const view = render(renderContent({ admitted: true, subject: "reader-a", generation: 1 }))
 
@@ -225,7 +300,9 @@ describe("McpPanel", () => {
       listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [revoked], next_cursor: null }),
       listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
@@ -238,23 +315,47 @@ describe("McpPanel", () => {
   it("uses formal create, CAS update, enable, and remove commands then reloads owner truth", async () => {
     const listMcpSelfConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
     const listMcpSelfProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
-    const createMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
+    const createMcpSelfConnector = vi
+      .fn()
+      .mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
     const updateMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, display_name: "Edited connector", state_version: "3" })
     const setMcpSelfConnectorEnabled = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, state_version: "3" })
     const removeMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, status: "revoked", state_version: "3" })
-    const client = makeClient({ listMcpSelfConnectors, listMcpSelfProviders, createMcpSelfConnector, updateMcpSelfConnector, setMcpSelfConnectorEnabled, removeMcpSelfConnector })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    const client = makeClient({
+      listMcpSelfConnectors,
+      listMcpSelfProviders,
+      createMcpSelfConnector,
+      updateMcpSelfConnector,
+      setMcpSelfConnectorEnabled,
+      removeMcpSelfConnector,
+    })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     const provider = await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(within(provider).getByRole("button", { name: "Provider One" }))
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
-    await waitFor(() => expect(createMcpSelfConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await waitFor(() =>
+      expect(createMcpSelfConnector).toHaveBeenCalledWith({
+        provider_key: "provider-one",
+        connector_type: "mcp",
+        display_name: "Provider One",
+        description: "A real provider",
+      }),
+    )
     await screen.findByText("Workspace search")
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Edited connector" } })
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
-    await waitFor(() => expect(updateMcpSelfConnector).toHaveBeenCalledWith("connector-one", { display_name: "Edited connector", description: "Search the workspace", expected_state_version: "2" }))
+    await waitFor(() =>
+      expect(updateMcpSelfConnector).toHaveBeenCalledWith("connector-one", {
+        display_name: "Edited connector",
+        description: "Search the workspace",
+        expected_state_version: "2",
+      }),
+    )
 
     fireEvent.click(screen.getByRole("button", { name: "Disable" }))
     await waitFor(() => expect(setMcpSelfConnectorEnabled).toHaveBeenCalledWith("connector-one", { enabled: false, expected_state_version: "2" }))
@@ -265,13 +366,17 @@ describe("McpPanel", () => {
   })
 
   it("connects a provider from its Manus-style detail without replacing the live connector list", async () => {
-    const createMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
+    const createMcpSelfConnector = vi
+      .fn()
+      .mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
     const client = makeClient({
       listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
       createMcpSelfConnector,
     })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     const provider = await screen.findByTestId("mcp-provider-card-provider-one")
     expect(provider).toHaveTextContent("Provider One")
@@ -284,7 +389,14 @@ describe("McpPanel", () => {
     expect(screen.getByText(/Updated /)).toBeInTheDocument()
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
 
-    await waitFor(() => expect(createMcpSelfConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await waitFor(() =>
+      expect(createMcpSelfConnector).toHaveBeenCalledWith({
+        provider_key: "provider-one",
+        connector_type: "mcp",
+        display_name: "Provider One",
+        description: "A real provider",
+      }),
+    )
     expect(screen.queryByRole("dialog", { name: "Add connector" })).toBeNull()
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
@@ -295,7 +407,11 @@ describe("McpPanel", () => {
     const created = { ...CONNECTOR, connector_id: "connector-created", status: "pending" as const, enabled: false, state_version: "1" }
     const createMcpSelfConnector = vi.fn().mockResolvedValue(created)
     const beginMcpSelfConnectorAuthorization = vi.fn().mockResolvedValue({
-      authorization: { authorization_id: "authorization-one", authorization_url: "https://provider.example.com/oauth/authorize", expires_at: "2026-10-12T12:39:56.000Z" },
+      authorization: {
+        authorization_id: "authorization-one",
+        authorization_url: "https://provider.example.com/oauth/authorize",
+        expires_at: "2026-10-12T12:39:56.000Z",
+      },
       connector: { ...created, state_version: "2" },
     })
     const client = makeClient({
@@ -303,16 +419,22 @@ describe("McpPanel", () => {
       createMcpSelfConnector,
       beginMcpSelfConnectorAuthorization,
     })
-    render(<LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" onAuthorizationNavigate={navigate} /></LocaleProvider>)
+    render(
+      <LocaleProvider>
+        <McpProjectionRead client={client} embedded identity="reader-a:1" onAuthorizationNavigate={navigate} />
+      </LocaleProvider>,
+    )
 
     const card = await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(within(card).getByRole("button", { name: "Provider One" }))
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
 
-    await waitFor(() => expect(beginMcpSelfConnectorAuthorization).toHaveBeenCalledWith("connector-created", {
-      server_id: "server-one",
-      expected_state_version: "1",
-    }))
+    await waitFor(() =>
+      expect(beginMcpSelfConnectorAuthorization).toHaveBeenCalledWith("connector-created", {
+        server_id: "server-one",
+        expected_state_version: "1",
+      }),
+    )
     expect(createMcpSelfConnector).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith("https://provider.example.com/oauth/authorize")
   })
@@ -322,7 +444,9 @@ describe("McpPanel", () => {
       listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
@@ -347,7 +471,11 @@ describe("McpPanel", () => {
   it("sends a connector example prompt into the workspace interaction instead of rendering a dead card", async () => {
     const onPrompt = vi.fn()
     const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
-    render(<LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" onPrompt={onPrompt} /></LocaleProvider>)
+    render(
+      <LocaleProvider>
+        <McpProjectionRead client={client} embedded identity="reader-a:1" onPrompt={onPrompt} />
+      </LocaleProvider>,
+    )
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Provider One" }))
@@ -364,7 +492,9 @@ describe("McpPanel", () => {
     expect(css).toMatch(/\.header:not\(:has\(h2\)\) \.searchField\s*\{[^}]*width: 16\.5rem;[^}]*flex: 0 0 16\.5rem;/u)
     expect(css).toMatch(/\.categoryRail\s*\{[^}]*display: flex;/u)
     expect(css).toMatch(/\.filterTrigger\s*\{[^}]*height: 2\.9rem;/u)
-    expect(css).toMatch(/\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(90rem,calc\(100vw - 2rem\)\);[^}]*height: min\(68rem,calc\(100dvh - 2rem\)\);/u)
+    expect(css).toMatch(
+      /\.providerDetailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(90rem,calc\(100vw - 2rem\)\);[^}]*height: min\(68rem,calc\(100dvh - 2rem\)\);/u,
+    )
     expect(css).toMatch(/\.providerDetailHeader\s*\{[^}]*position: relative;[^}]*min-height: 19rem;[^}]*border-bottom:/u)
     expect(css).toMatch(/\.providerDetailCopy\s*\{[^}]*max-width: calc\(100% - 15rem\);[^}]*align-items: flex-start;[^}]*text-align: left;/u)
     expect(css).toMatch(/\.providerDetailLogo\s*\{[^}]*position: absolute;[^}]*right: 5rem;[^}]*width: 12rem;[^}]*height: 14rem;/u)
@@ -383,7 +513,9 @@ describe("McpPanel", () => {
       listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
       listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER, secondProvider], next_cursor: null }),
     })
-    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+      wrapper: LocaleProvider,
+    })
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.change(screen.getByRole("searchbox", { name: /search connectors/i }), { target: { value: "calendar" } })
@@ -394,13 +526,21 @@ describe("McpPanel", () => {
   })
 
   it("retains the rendered list during a refresh and retires a late prior identity response", async () => {
-    let resolveSecond!: (value: { items: typeof CONNECTOR[]; next_cursor: string | null }) => void
-    const listA = vi.fn()
+    let resolveSecond!: (value: { items: (typeof CONNECTOR)[]; next_cursor: string | null }) => void
+    const listA = vi
+      .fn()
       .mockResolvedValueOnce({ items: [CONNECTOR], next_cursor: "next" })
-      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve }))
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve
+        }),
+      )
     const providersA = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
     const clientA = makeClient({ listMcpSelfConnectors: listA, listMcpSelfProviders: providersA })
-    const clientB = makeClient({ listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
+    const clientB = makeClient({
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+    })
     const boundary = { admitted: true, subject: "reader-a", generation: 1 } as const
     const view = render(<McpContent client={clientA} embedded brandName="Acme" readBoundary={boundary} />, { wrapper: LocaleProvider })
 
@@ -419,10 +559,14 @@ describe("McpPanel", () => {
     function Harness() {
       const [open, setOpen] = useState(true)
       const triggerRef = useRef<HTMLButtonElement | null>(null)
-      return <>
-        <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>Create direct MCP</button>
-        <McpCreateDialog client={client} mode="form" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef} />
-      </>
+      return (
+        <>
+          <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>
+            Create direct MCP
+          </button>
+          <McpCreateDialog client={client} mode="form" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef} />
+        </>
+      )
     }
     const view = render(<Harness />, { wrapper: LocaleProvider })
 
@@ -435,11 +579,19 @@ describe("McpPanel", () => {
     view.unmount()
     const noop = () => undefined
     const emptyRef = { current: null }
-    const json = render(<LocaleProvider><McpCreateDialog client={client} mode="json" open onOpenChange={noop} returnFocusRef={emptyRef} /></LocaleProvider>)
+    const json = render(
+      <LocaleProvider>
+        <McpCreateDialog client={client} mode="json" open onOpenChange={noop} returnFocusRef={emptyRef} />
+      </LocaleProvider>,
+    )
     expect(await screen.findByRole("dialog", { name: "Import via JSON" })).toBeInTheDocument()
 
     json.unmount()
-    render(<LocaleProvider><McpCreateDialog client={client} mode="url" open onOpenChange={noop} returnFocusRef={emptyRef} /></LocaleProvider>)
+    render(
+      <LocaleProvider>
+        <McpCreateDialog client={client} mode="url" open onOpenChange={noop} returnFocusRef={emptyRef} />
+      </LocaleProvider>,
+    )
     expect(await screen.findByRole("dialog", { name: /Add MCP via URL/ })).toBeInTheDocument()
   })
 
@@ -447,44 +599,48 @@ describe("McpPanel", () => {
     const registerCustomMcp = vi.fn().mockResolvedValue({})
     const client = makeClient({ registerCustomMcp })
     const onDone = vi.fn().mockResolvedValue(undefined)
-    const view = render(
-      <McpCreateDialog client={client} mode="json" open onOpenChange={vi.fn()} onDone={onDone} />,
-      { wrapper: LocaleProvider },
-    )
+    const view = render(<McpCreateDialog client={client} mode="json" open onOpenChange={vi.fn()} onDone={onDone} />, { wrapper: LocaleProvider })
     const editor = await screen.findByRole("textbox", { name: "Paste your configuration JSON" })
-    fireEvent.change(editor, { target: { value: JSON.stringify({
-      mcpServers: {
-        events: {
-          type: "sse",
-          url: "https://sse.example.test/mcp",
-          headers: { Authorization: "Bearer TOKEN" },
-        },
+    fireEvent.change(editor, {
+      target: {
+        value: JSON.stringify({
+          mcpServers: {
+            events: {
+              type: "sse",
+              url: "https://sse.example.test/mcp",
+              headers: { Authorization: "Bearer TOKEN" },
+            },
+          },
+        }),
       },
-    }) } })
+    })
     fireEvent.click(screen.getByRole("button", { name: "Import" }))
 
-    await waitFor(() => expect(registerCustomMcp).toHaveBeenCalledWith({
-      name: "events",
-      transport: "http",
-      endpoint_url: "https://sse.example.test/mcp",
-      icon_asset_id: null,
-      instructions: null,
-      headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
-      enabled: true,
-    }))
+    await waitFor(() =>
+      expect(registerCustomMcp).toHaveBeenCalledWith({
+        name: "events",
+        transport: "http",
+        endpoint_url: "https://sse.example.test/mcp",
+        icon_asset_id: null,
+        instructions: null,
+        headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
+        enabled: true,
+      }),
+    )
     expect(onDone).toHaveBeenCalledTimes(1)
 
     view.unmount()
     registerCustomMcp.mockClear()
     onDone.mockClear()
-    render(
-      <McpCreateDialog client={client} mode="json" open onOpenChange={vi.fn()} onDone={onDone} />,
-      { wrapper: LocaleProvider },
-    )
+    render(<McpCreateDialog client={client} mode="json" open onOpenChange={vi.fn()} onDone={onDone} />, { wrapper: LocaleProvider })
     const stdioEditor = await screen.findByRole("textbox", { name: "Paste your configuration JSON" })
-    fireEvent.change(stdioEditor, { target: { value: JSON.stringify({
-      mcpServers: { local: { command: "npx", args: ["-y", "mcp-server-example"] } },
-    }) } })
+    fireEvent.change(stdioEditor, {
+      target: {
+        value: JSON.stringify({
+          mcpServers: { local: { command: "npx", args: ["-y", "mcp-server-example"] } },
+        }),
+      },
+    })
     fireEvent.click(screen.getByRole("button", { name: "Import" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The JSON is invalid or does not contain an mcpServers configuration.")
@@ -548,15 +704,17 @@ describe("McpPanel", () => {
     fireEvent.change(headerValue, { target: { value: "Bearer TOKEN" } })
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }))
 
-    await waitFor(() => expect(registerCustomMcp).toHaveBeenCalledWith({
-      name: "custom-search",
-      transport: "http",
-      endpoint_url: "https://mcp.example.test/mcp",
-      icon_asset_id: null,
-      instructions: "Use for research",
-      headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
-      enabled: true,
-    }))
+    await waitFor(() =>
+      expect(registerCustomMcp).toHaveBeenCalledWith({
+        name: "custom-search",
+        transport: "http",
+        endpoint_url: "https://mcp.example.test/mcp",
+        icon_asset_id: null,
+        instructions: "Use for research",
+        headers: [{ name: "Authorization", value: "Bearer TOKEN" }],
+        enabled: true,
+      }),
+    )
     expect(registerCustomMcp.mock.calls[0]?.[0]).not.toHaveProperty("tenant_id")
   })
 
@@ -587,7 +745,12 @@ describe("McpPanel", () => {
   it("locks every server mutation while one toggle is pending", async () => {
     let resolve!: () => void
     const client = makeClient({
-      setMcpEnabled: vi.fn(() => new Promise<void>((done) => { resolve = done })),
+      setMcpEnabled: vi.fn(
+        () =>
+          new Promise<void>((done) => {
+            resolve = done
+          }),
+      ),
     })
     renderPanel(client)
     await screen.findByText("my-tools")
@@ -658,32 +821,24 @@ describe("McpPanel", () => {
     fireEvent.click(screen.getByText("Save"))
     await waitFor(() => expect(client.createMcpSecret).toHaveBeenCalledWith("svc-key", "super-secret"))
     await waitFor(() =>
-      expect(client.registerMcpServer).toHaveBeenCalledWith(
-        expect.objectContaining({ secret_ref: "handle:srt_000000000000000000000000000000ff" }),
-      ),
+      expect(client.registerMcpServer).toHaveBeenCalledWith(expect.objectContaining({ secret_ref: "handle:srt_000000000000000000000000000000ff" })),
     )
   })
 
   it("humanizes a private-url rejection on register", async () => {
     const client = makeClient({
-      registerMcpServer: vi
-        .fn()
-        .mockRejectedValue(new HubClientError("http", "forbidden", "hub.mcp_url_forbidden", 400)),
+      registerMcpServer: vi.fn().mockRejectedValue(new HubClientError("http", "forbidden", "hub.mcp_url_forbidden", 400)),
     })
     renderPanel(client)
     await screen.findByText("my-tools")
     openRegister("bad", "http://10.0.0.1/mcp")
     fireEvent.click(screen.getByText("Save"))
-    await screen.findByText(
-      "URL didn't pass validation: it must be https, not private, and must not embed credentials.",
-    )
+    await screen.findByText("URL didn't pass validation: it must be https, not private, and must not embed credentials.")
   })
 
   it("humanizes the mutation-disabled gate on register", async () => {
     const client = makeClient({
-      registerMcpServer: vi
-        .fn()
-        .mockRejectedValue(new HubClientError("http", "disabled", "capability_registration_disabled", 503)),
+      registerMcpServer: vi.fn().mockRejectedValue(new HubClientError("http", "disabled", "capability_registration_disabled", 503)),
     })
     renderPanel(client)
     await screen.findByText("my-tools")
@@ -727,11 +882,24 @@ it("uses Manus's visual catalog cards with one-column/mobile and two-column/desk
   expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.connectorGrid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
 })
 
-  it("keeps the Manus category choices behind one compact filter control", async () => {
+it("keeps the Manus category choices behind one compact filter control", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
-  const sparseProvider = { provider_key: "provider-development", display_name: "Development", description: "Real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: [], website: undefined, privacy_url: undefined, enabled: true, state_version: "1" }
+  const sparseProvider = {
+    provider_key: "provider-development",
+    display_name: "Development",
+    description: "Real provider",
+    directory_type: "app" as const,
+    category_keys: ["development" as const],
+    example_prompts: [],
+    website: undefined,
+    privacy_url: undefined,
+    enabled: true,
+    state_version: "1",
+  }
   const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
-  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+    wrapper: LocaleProvider,
+  })
 
   const rail = await screen.findByRole("navigation", { name: "连接器分类" })
   for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
@@ -752,7 +920,9 @@ it("uses the observed Manus Chinese connector category labels", async () => {
     state_version: "1",
   }))
   const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
-  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+  render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, {
+    wrapper: LocaleProvider,
+  })
   const rail = await screen.findByRole("navigation", { name: "连接器分类" })
   for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
 })
@@ -760,11 +930,23 @@ it("uses the observed Manus Chinese connector category labels", async () => {
 it("exposes Manus-style connector creation from the directory header", async () => {
   const onCreateMcp = vi.fn()
   const client = makeClient({
-    listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [{
-      provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const,
-      category_keys: ["development" as const], example_prompts: ["Connect me"], website: "https://provider.example.com",
-      privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1",
-    }], next_cursor: null }),
+    listMcpSelfProviders: vi.fn().mockResolvedValue({
+      items: [
+        {
+          provider_key: "provider-one",
+          display_name: "Provider One",
+          description: "A real provider",
+          directory_type: "app" as const,
+          category_keys: ["development" as const],
+          example_prompts: ["Connect me"],
+          website: "https://provider.example.com",
+          privacy_url: "https://provider.example.com/privacy",
+          enabled: true,
+          state_version: "1",
+        },
+      ],
+      next_cursor: null,
+    }),
   })
   render(<McpProjectionRead client={client} identity="reader-a:1" onCreateMcp={onCreateMcp} />, { wrapper: LocaleProvider })
 

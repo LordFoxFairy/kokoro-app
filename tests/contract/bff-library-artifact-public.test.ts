@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const OWNER_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const OWNER_VERSION = "14.5.0"
+const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const OWNER_VERSION = "14.7.0"
 
 it("pins the BFF Artifact Product page, binary and two-part selector", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
+  expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -24,22 +24,30 @@ it("pins the BFF Artifact Product page, binary and two-part selector", async () 
   expect(list?.operationId).toBe("listLibrary")
   expect(list?.parameters).toContainEqual(expect.objectContaining({ name: "kind", required: true, schema: { type: "string", enum: ["file", "artifact"] } }))
   expect(spec.components.schemas.LibraryListResponse).toMatchObject({
-    properties: { data: { oneOf: [
-      { $ref: "#/components/schemas/LibraryEmptyPage" },
-      { $ref: "#/components/schemas/LibraryFilePage" },
-      { $ref: "#/components/schemas/LibraryArtifactPage" },
-    ] } },
+    properties: {
+      data: {
+        oneOf: [
+          { $ref: "#/components/schemas/LibraryEmptyPage" },
+          { $ref: "#/components/schemas/LibraryFilePage" },
+          { $ref: "#/components/schemas/LibraryArtifactPage" },
+        ],
+      },
+    },
   })
   expect(spec.components.schemas.LibraryEmptyPage).toMatchObject({ properties: { items: { maxItems: 0 }, next_cursor: { type: ["string", "null"] } } })
-  expect(spec.components.schemas.LibraryArtifactPage).toMatchObject({ properties: { items: { minItems: 1, items: { $ref: "#/components/schemas/LibraryArtifactItem" } } } })
+  expect(spec.components.schemas.LibraryArtifactPage).toMatchObject({
+    properties: { items: { minItems: 1, items: { $ref: "#/components/schemas/LibraryArtifactItem" } } },
+  })
   const detail = spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}"]?.get
   const content = spec.paths["/v1/library/artifacts/{conversation_id}/{artifact_id}/content"]?.get
   expect(detail?.operationId).toBe("getLibraryArtifact")
   expect(content?.operationId).toBe("downloadLibraryArtifact")
-  expect(content?.parameters).toEqual(expect.arrayContaining([
-    expect.objectContaining({ name: "conversation_id", in: "path", required: true }),
-    expect.objectContaining({ name: "artifact_id", in: "path", required: true }),
-  ]))
+  expect(content?.parameters).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: "conversation_id", in: "path", required: true }),
+      expect.objectContaining({ name: "artifact_id", in: "path", required: true }),
+    ]),
+  )
   expect(content?.responses).toHaveProperty("200.headers.Content-Length.schema.maximum", 1_073_741_824)
   expect(content?.responses).toHaveProperty("200.headers.Referrer-Policy.schema.const", "no-referrer")
   expect(content?.responses).toHaveProperty("200.content.*/*.schema.format", "binary")

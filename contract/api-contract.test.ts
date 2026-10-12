@@ -53,20 +53,42 @@ const eventFixtures: Array<[string, Record<string, unknown>]> = [
   ["thinking.delta", { segment_id: "segment_1", delta: "thinking" }],
   ["tool.invoked", { segment_id: "segment_1", tool_id: "tool_1", name: "search", args: {} }],
   ["tool.output.delta", { segment_id: "segment_1", tool_id: "tool_1", name: "search", delta: "result" }],
-  ["interaction.state", {
-    interaction_revision: 1, pause_revision: 1, pause_ref: "pause_1", phase: "waiting", action_result: null,
-    groups: [{ group_id: "group_1", items: [{ item_id: "item_1", request_id: "request_1", kind: "tool_approval", allowed_decisions: ["approve"],
-      display: { name: "search", description: "Approve search", editable: false, input_schema: {} } }] }],
-  }],
   [
-    "tool.returned",
-    { segment_id: "segment_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false },
+    "interaction.state",
+    {
+      interaction_revision: 1,
+      pause_revision: 1,
+      pause_ref: "pause_1",
+      phase: "waiting",
+      action_result: null,
+      groups: [
+        {
+          group_id: "group_1",
+          items: [
+            {
+              item_id: "item_1",
+              request_id: "request_1",
+              kind: "tool_approval",
+              allowed_decisions: ["approve"],
+              display: { name: "search", description: "Approve search", editable: false, input_schema: {} },
+            },
+          ],
+        },
+      ],
+    },
   ],
+  ["tool.returned", { segment_id: "segment_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false }],
   [
     "delivery.created",
     {
-      artifact_id: "artifact_1", asset_id: "asset_1", artifact_kind: "document", tool_call_id: "tool_1",
-      path: "deliveries/report.pdf", title: "Report", mime: "application/pdf", size: 12,
+      artifact_id: "artifact_1",
+      asset_id: "asset_1",
+      artifact_kind: "document",
+      tool_call_id: "tool_1",
+      path: "deliveries/report.pdf",
+      title: "Report",
+      mime: "application/pdf",
+      size: 12,
       content_hash: "a".repeat(64),
     },
   ],
@@ -75,21 +97,12 @@ const eventFixtures: Array<[string, Record<string, unknown>]> = [
     "subagent.started",
     { segment_id: "segment_1", subagent_id: "subagent_1", name: "Research", description: "desc", subagent_type: "general", source: "built-in" },
   ],
-  [
-    "subagent.finished",
-    { segment_id: "segment_1", subagent_id: "subagent_1", name: "Research", subagent_type: "general", source: "built-in" },
-  ],
+  ["subagent.finished", { segment_id: "segment_1", subagent_id: "subagent_1", name: "Research", subagent_type: "general", source: "built-in" }],
   ["subagent.thinking.delta", { segment_id: "segment_1", subagent_id: "subagent_1", delta: "thinking" }],
   ["subagent.text.delta", { segment_id: "segment_1", subagent_id: "subagent_1", text: "text" }],
   ["subagent.text.completed", { segment_id: "segment_1", subagent_id: "subagent_1", text: "text" }],
-  [
-    "subagent.tool.invoked",
-    { segment_id: "segment_1", subagent_id: "subagent_1", tool_id: "tool_1", name: "search", args: {} },
-  ],
-  [
-    "subagent.tool.returned",
-    { segment_id: "segment_1", subagent_id: "subagent_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false },
-  ],
+  ["subagent.tool.invoked", { segment_id: "segment_1", subagent_id: "subagent_1", tool_id: "tool_1", name: "search", args: {} }],
+  ["subagent.tool.returned", { segment_id: "segment_1", subagent_id: "subagent_1", tool_id: "tool_1", name: "search", result: "ok", is_error: false }],
   ["run.completed", { status: "completed", token_usage: { input_tokens: 1, output_tokens: 2 } }],
   ["run.failed", { profile: { source: "agent", code: "internal_error", retryable: false } }],
 ]
@@ -122,16 +135,18 @@ describe("checked-in HTTP request and response contracts", () => {
   })
 
   it("accepts the canonical message request and rejects missing/unknown fields", () => {
-    expect(messageCreateParamsSchema.parse({
-      idempotency_key: "request_1",
-      content: "hello",
-      model: "model_1",
-      agent: "general",
-      thinking: true,
-      selected_skill_source_refs: ["skill:skill_1"],
-      mcp_servers: ["server_1"],
-      project_ref: "project_1",
-    })).toMatchObject({ idempotency_key: "request_1", content: "hello" })
+    expect(
+      messageCreateParamsSchema.parse({
+        idempotency_key: "request_1",
+        content: "hello",
+        model: "model_1",
+        agent: "general",
+        thinking: true,
+        selected_skill_source_refs: ["skill:skill_1"],
+        mcp_servers: ["server_1"],
+        project_ref: "project_1",
+      }),
+    ).toMatchObject({ idempotency_key: "request_1", content: "hello" })
 
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", tenant_id: "tenant_1" }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", thinking: "medium" }).success).toBe(false)
@@ -139,8 +154,16 @@ describe("checked-in HTTP request and response contracts", () => {
     for (const invalid of ["skill:skill_1\n", "skill:skill_1\r", "skill:skill_1\u2028", " skill:skill_1", "skill:"]) {
       expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: [invalid] }).success).toBe(false)
     }
-    expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: ["skill:a", "skill:a"] }).success).toBe(false)
-    expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: Array.from({ length: 17 }, (_, index) => `skill:s${index}`) }).success).toBe(false)
+    expect(
+      messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "hello", selected_skill_source_refs: ["skill:a", "skill:a"] }).success,
+    ).toBe(false)
+    expect(
+      messageCreateParamsSchema.safeParse({
+        idempotency_key: "request_1",
+        content: "hello",
+        selected_skill_source_refs: Array.from({ length: 17 }, (_, index) => `skill:s${index}`),
+      }).success,
+    ).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "", content: "hello" }).success).toBe(false)
     expect(messageCreateParamsSchema.safeParse({ idempotency_key: "request_1", content: "" }).success).toBe(false)
   })
@@ -171,13 +194,15 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(sessionListSchema.parse({ sessions: [], next_cursor: "" }).next_cursor).toBe("")
     expect(sessionListSchema.parse({ sessions: [], next_cursor: null }).next_cursor).toBeNull()
     expect(messageCreateReceiptSchema.parse({ run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" })).toBeTruthy()
-    expect(runControlReceiptSchema.parse({
-      run_id: "run_1",
-      command_id: "command_1",
-      request_digest: "sha256:abc",
-      status: "succeeded",
-      replayed: false,
-    })).toMatchObject({ run_id: "run_1", command_id: "command_1", status: "succeeded" })
+    expect(
+      runControlReceiptSchema.parse({
+        run_id: "run_1",
+        command_id: "command_1",
+        request_digest: "sha256:abc",
+        status: "succeeded",
+        replayed: false,
+      }),
+    ).toMatchObject({ run_id: "run_1", command_id: "command_1", status: "succeeded" })
 
     expect(sessionSnapshotSchema.safeParse({ ...sessionSnapshot, data: {} }).success).toBe(false)
     expect(sessionListSchema.safeParse({ sessions: [] }).success).toBe(false)
@@ -194,36 +219,41 @@ describe("checked-in HTTP request and response contracts", () => {
     expect(errorResponseSchema.safeParse({ error: "unauthenticated", requestId: "req_1" }).success).toBe(false)
   })
 
-  it.each(AGENT_FAILURE_TUPLES)(
-    "accepts the published safe Message failure tuple $code retryable=$retryable",
-    (failure) => {
-      expect(sessionSnapshotSchema.safeParse({
+  it.each(AGENT_FAILURE_TUPLES)("accepts the published safe Message failure tuple $code retryable=$retryable", (failure) => {
+    expect(
+      sessionSnapshotSchema.safeParse({
         ...sessionSnapshot,
-        messages: [{
-          message_id: "assistant_failed",
-          role: "assistant",
-          content: "partial answer",
-          status: "failed",
-          created_at: "2026-09-30T00:00:00.000Z",
-          run_id: "run_failed",
-          failure,
-        }],
-      }).success).toBe(true)
-    },
-  )
+        messages: [
+          {
+            message_id: "assistant_failed",
+            role: "assistant",
+            content: "partial answer",
+            status: "failed",
+            created_at: "2026-09-30T00:00:00.000Z",
+            run_id: "run_failed",
+            failure,
+          },
+        ],
+      }).success,
+    ).toBe(true)
+  })
 
   it("keeps Message failure optional for a failed assistant with a run", () => {
-    expect(sessionSnapshotSchema.safeParse({
-      ...sessionSnapshot,
-      messages: [{
-        message_id: "assistant_failed_without_profile",
-        role: "assistant",
-        content: "",
-        status: "failed",
-        created_at: "2026-09-30T00:00:00.000Z",
-        run_id: "run_failed",
-      }],
-    }).success).toBe(true)
+    expect(
+      sessionSnapshotSchema.safeParse({
+        ...sessionSnapshot,
+        messages: [
+          {
+            message_id: "assistant_failed_without_profile",
+            role: "assistant",
+            content: "",
+            status: "failed",
+            created_at: "2026-09-30T00:00:00.000Z",
+            run_id: "run_failed",
+          },
+        ],
+      }).success,
+    ).toBe(true)
   })
 
   it.each([
@@ -236,19 +266,23 @@ describe("checked-in HTTP request and response contracts", () => {
     ["empty run", { run_id: "" }],
     ["blank run", { run_id: "   " }],
   ] as const)("rejects a Message failure with %s", (_label, override) => {
-    expect(sessionSnapshotSchema.safeParse({
-      ...sessionSnapshot,
-      messages: [{
-        message_id: "invalid_failure_message",
-        role: "assistant",
-        content: "",
-        status: "failed",
-        created_at: "2026-09-30T00:00:00.000Z",
-        run_id: "run_failed",
-        failure: AGENT_FAILURE_TUPLES[0],
-        ...override,
-      }],
-    }).success).toBe(false)
+    expect(
+      sessionSnapshotSchema.safeParse({
+        ...sessionSnapshot,
+        messages: [
+          {
+            message_id: "invalid_failure_message",
+            role: "assistant",
+            content: "",
+            status: "failed",
+            created_at: "2026-09-30T00:00:00.000Z",
+            run_id: "run_failed",
+            failure: AGENT_FAILURE_TUPLES[0],
+            ...override,
+          },
+        ],
+      }).success,
+    ).toBe(false)
   })
 
   it.each([
@@ -258,36 +292,45 @@ describe("checked-in HTTP request and response contracts", () => {
     { source: "agent", code: "internal_error" },
     null,
   ])("rejects an invalid Message failure profile %#", (failure) => {
-    expect(sessionSnapshotSchema.safeParse({
-      ...sessionSnapshot,
-      messages: [{
-        message_id: "invalid_failure_profile",
-        role: "assistant",
-        content: "",
-        status: "failed",
-        created_at: "2026-09-30T00:00:00.000Z",
-        run_id: "run_failed",
-        failure,
-      }],
-    }).success).toBe(false)
+    expect(
+      sessionSnapshotSchema.safeParse({
+        ...sessionSnapshot,
+        messages: [
+          {
+            message_id: "invalid_failure_profile",
+            role: "assistant",
+            content: "",
+            status: "failed",
+            created_at: "2026-09-30T00:00:00.000Z",
+            run_id: "run_failed",
+            failure,
+          },
+        ],
+      }).success,
+    ).toBe(false)
   })
 
-  it.each(AGENT_FAILURE_CODES.filter(
-    (code) => code !== "model_unavailable" && code !== "dependency_unavailable",
-  ))("rejects retryable=true for the permanent Message failure %s", (code) => {
-    expect(sessionSnapshotSchema.safeParse({
-      ...sessionSnapshot,
-      messages: [{
-        message_id: "invalid_retryable_failure",
-        role: "assistant",
-        content: "",
-        status: "failed",
-        created_at: "2026-09-30T00:00:00.000Z",
-        run_id: "run_failed",
-        failure: { source: "agent", code, retryable: true },
-      }],
-    }).success).toBe(false)
-  })
+  it.each(AGENT_FAILURE_CODES.filter((code) => code !== "model_unavailable" && code !== "dependency_unavailable"))(
+    "rejects retryable=true for the permanent Message failure %s",
+    (code) => {
+      expect(
+        sessionSnapshotSchema.safeParse({
+          ...sessionSnapshot,
+          messages: [
+            {
+              message_id: "invalid_retryable_failure",
+              role: "assistant",
+              content: "",
+              status: "failed",
+              created_at: "2026-09-30T00:00:00.000Z",
+              run_id: "run_failed",
+              failure: { source: "agent", code, retryable: true },
+            },
+          ],
+        }).success,
+      ).toBe(false)
+    },
+  )
 })
 
 describe("checked-in SSE event union", () => {
@@ -299,7 +342,13 @@ describe("checked-in SSE event union", () => {
   it("rejects negative watermarks, unknown event fields, and unstable failure codes", () => {
     expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, seq: -1, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
     expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, extra: true, kind: "run.completed", payload: { status: "completed" } }).success).toBe(false)
-    expect(chatProjectionEventSchema.safeParse({ ...eventEnvelope, kind: "run.failed", payload: { profile: { source: "agent", code: "unknown_failure", retryable: false } } }).success).toBe(false)
+    expect(
+      chatProjectionEventSchema.safeParse({
+        ...eventEnvelope,
+        kind: "run.failed",
+        payload: { profile: { source: "agent", code: "unknown_failure", retryable: false } },
+      }).success,
+    ).toBe(false)
     expect(RUNTIME_AGENT_FAILURE_CODES).toContain("contract_incompatible")
   })
 })
@@ -317,13 +366,22 @@ describe("cursor pagination and same-origin client paths", () => {
 
   it("keeps direct and project Chat on the same message/control contract with header-only message identity", async () => {
     const receipt = { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [], next_cursor: null }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [], next_cursor: null }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run_1", command_id: "cancel_1", request_digest: "sha256:cancel", status: "succeeded", replayed: false }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run_2", command_id: "resume_1", request_digest: "sha256:resume", status: "succeeded", replayed: false }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ run_id: "run_1", command_id: "cancel_1", request_digest: "sha256:cancel", status: "succeeded", replayed: false }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ run_id: "run_2", command_id: "resume_1", request_digest: "sha256:resume", status: "succeeded", replayed: false }), {
+          status: 200,
+        }),
+      )
     vi.stubGlobal("fetch", fetchMock)
 
     const client = createSessionClient({ baseUrl: "/api/session" })
@@ -337,11 +395,17 @@ describe("cursor pagination and same-origin client paths", () => {
       project_ref: "project/1",
     })
     await client.sendControl("direct_session", "run_1", { kind: "run.cancel" }, "cancel_1")
-    await client.sendControl("project_session", "run_2", {
-      kind: "run.resume",
-      expected_pause_revision: 1, pause_ref: "pause_1",
-      decisions: [{ type: "submit", item_id: "tool_1", value: { answer: "yes" } }],
-    }, "resume_1")
+    await client.sendControl(
+      "project_session",
+      "run_2",
+      {
+        kind: "run.resume",
+        expected_pause_revision: 1,
+        pause_ref: "pause_1",
+        decisions: [{ type: "submit", item_id: "tool_1", value: { answer: "yes" } }],
+      },
+      "resume_1",
+    )
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/session/sessions?scope=direct")
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/session/sessions?project_ref=project%2F1")
@@ -350,14 +414,19 @@ describe("cursor pagination and same-origin client paths", () => {
     expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/session/sessions/direct_session/runs/run_1/control")
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/session/sessions/project_session/runs/run_2/control")
     expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({ content: "hello", selected_skill_source_refs: [] })
-    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({ content: "project task", selected_skill_source_refs: [], project_ref: "project/1" })
+    expect(JSON.parse((fetchMock.mock.calls[3]?.[1] as RequestInit).body as string)).toEqual({
+      content: "project task",
+      selected_skill_source_refs: [],
+      project_ref: "project/1",
+    })
     expect(new Headers((fetchMock.mock.calls[2]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("direct_1")
     expect(new Headers((fetchMock.mock.calls[3]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("project_1")
     expect(JSON.parse((fetchMock.mock.calls[4]?.[1] as RequestInit).body as string)).toEqual({ kind: "run.cancel" })
     expect(new Headers((fetchMock.mock.calls[4]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("cancel_1")
     expect(JSON.parse((fetchMock.mock.calls[5]?.[1] as RequestInit).body as string)).toEqual({
       kind: "run.resume",
-      expected_pause_revision: 1, pause_ref: "pause_1",
+      expected_pause_revision: 1,
+      pause_ref: "pause_1",
       decisions: [{ type: "submit", item_id: "tool_1", value: { answer: "yes" } }],
     })
     expect(new Headers((fetchMock.mock.calls[5]?.[1] as RequestInit).headers).get("idempotency-key")).toBe("resume_1")
@@ -365,7 +434,9 @@ describe("cursor pagination and same-origin client paths", () => {
 
   it("reuses the message key and unchanged canonical body when an unacknowledged intent is retried", async () => {
     const receipt = { run_id: "run_1", user_message_id: "message_1", assistant_message_id: "message_2" }
-    const fetchMock = vi.fn().mockRejectedValueOnce(new Error("connection reset"))
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("connection reset"))
       .mockResolvedValueOnce(new Response(JSON.stringify(receipt), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
     const client = createSessionClient({ baseUrl: "/api/session" })
@@ -386,11 +457,7 @@ describe("cursor pagination and same-origin client paths", () => {
     const fetchMock = vi.fn()
     vi.stubGlobal("fetch", fetchMock)
     const client = createSessionClient({ baseUrl: "/api/session" })
-    const invalid = [
-      { idempotency_key: "stable", content: "hello", tenant_id: "forged" },
-      { idempotency_key: "", content: "hello" },
-      { content: "hello" },
-    ]
+    const invalid = [{ idempotency_key: "stable", content: "hello", tenant_id: "forged" }, { idempotency_key: "", content: "hello" }, { content: "hello" }]
     for (const body of invalid) {
       await expect(client.createMessage("session_1", body as never)).rejects.toMatchObject({ reason: "parse" })
     }
@@ -419,10 +486,12 @@ describe("cursor pagination and same-origin client paths", () => {
         controller.close()
       },
     })
-    const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    )
     vi.stubGlobal("fetch", fetchMock)
     const onEvent = vi.fn()
     const onCursor = vi.fn()
@@ -448,7 +517,6 @@ describe("cursor pagination and same-origin client paths", () => {
   })
 })
 
-
 import {
   makePublic4Decisions as r66Decisions,
   makePublic4Interaction as r66Interaction,
@@ -458,37 +526,50 @@ import {
 
 describe("R66 public4 wire/head and closed resume", () => {
   it("keeps a legal unchanged create/receipt control before testing the breaking fields", () => {
-    expect(messageCreateParamsSchema.safeParse({
-      content: "R66 control", idempotency_key: "r66_create",
-      thinking: false, selected_skill_source_refs: [],
-    }).success).toBe(true)
-    expect(messageCreateReceiptSchema.safeParse({
-      run_id: "run_1", user_message_id: "r66_user", assistant_message_id: "r66_assistant",
-    }).success).toBe(true)
-    expect(runControlReceiptSchema.safeParse({
-      run_id: "run_1", command_id: "r66_control", request_digest: "sha256:r66",
-      status: "succeeded", replayed: false,
-    }).success).toBe(true)
+    expect(
+      messageCreateParamsSchema.safeParse({
+        content: "R66 control",
+        idempotency_key: "r66_create",
+        thinking: false,
+        selected_skill_source_refs: [],
+      }).success,
+    ).toBe(true)
+    expect(
+      messageCreateReceiptSchema.safeParse({
+        run_id: "run_1",
+        user_message_id: "r66_user",
+        assistant_message_id: "r66_assistant",
+      }).success,
+    ).toBe(true)
+    expect(
+      runControlReceiptSchema.safeParse({
+        run_id: "run_1",
+        command_id: "r66_control",
+        request_digest: "sha256:r66",
+        status: "succeeded",
+        replayed: false,
+      }).success,
+    ).toBe(true)
   })
 
-  it.each(["none", "queued", "active", "waiting", "resuming"] as const)(
-    "accepts the owner %s snapshot without old top-level pending fields",
-    (state) => {
-      const raw = r66Snapshot({ state })
-      const parsed = sessionSnapshotSchema.safeParse(raw)
-      expect(parsed.success).toBe(true)
-      if (!parsed.success) return
-      expect(parsed.data).toEqual(raw)
-      expect(parsed.data).not.toHaveProperty("active_run")
-      expect(parsed.data).not.toHaveProperty("pending_pauses")
-    },
-  )
+  it.each(["none", "queued", "active", "waiting", "resuming"] as const)("accepts the owner %s snapshot without old top-level pending fields", (state) => {
+    const raw = r66Snapshot({ state })
+    const parsed = sessionSnapshotSchema.safeParse(raw)
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data).toEqual(raw)
+    expect(parsed.data).not.toHaveProperty("active_run")
+    expect(parsed.data).not.toHaveProperty("pending_pauses")
+  })
 
   it("rejects the legacy snapshot even when it still satisfies the old consumer", () => {
-    expect(sessionSnapshotSchema.safeParse({
-      ...r66Snapshot({ state: "none" }),
-      active_run: { run_id: "run_1", status: "running" }, pending_pauses: [],
-    }).success).toBe(false)
+    expect(
+      sessionSnapshotSchema.safeParse({
+        ...r66Snapshot({ state: "none" }),
+        active_run: { run_id: "run_1", status: "running" },
+        pending_pauses: [],
+      }).success,
+    ).toBe(false)
   })
 
   it.each(r66Decisions())("accepts the closed owner $type item_id decision", (decision) => {
@@ -510,13 +591,20 @@ describe("R66 public4 wire/head and closed resume", () => {
   })
 
   it("rejects decisions-only/tool_id/request_id rather than keeping public3 aliases", () => {
-    expect(runControlBodySchema.safeParse({
-      kind: "run.resume", session_id: "conv_9",
-      decisions: [{ type: "approve", tool_id: "item_approve" }],
-    }).success).toBe(false)
-    expect(resumeDecisionSchema.safeParse({
-      type: "submit", request_id: "item_submit", value: { text: "answer" },
-    }).success).toBe(false)
+    expect(
+      runControlBodySchema.safeParse({
+        kind: "run.resume",
+        session_id: "conv_9",
+        decisions: [{ type: "approve", tool_id: "item_approve" }],
+      }).success,
+    ).toBe(false)
+    expect(
+      resumeDecisionSchema.safeParse({
+        type: "submit",
+        request_id: "item_submit",
+        value: { text: "answer" },
+      }).success,
+    ).toBe(false)
   })
 
   it("checks complete cardinality, global uniqueness and display privacy after the legal control", () => {
@@ -533,15 +621,16 @@ describe("R66 public4 wire/head and closed resume", () => {
       { ...state, groups: [...state.groups, firstGroup] },
       { ...state, groups: [{ ...firstGroup, items: [firstItem, firstItem] }] },
       { ...state, groups: [{ ...firstGroup, items: [{ ...firstItem, args: { token: "private" } }] }] },
-      { ...state, groups: [{ ...firstGroup, items: [{ ...firstItem,
-        display: { ...firstItem.display, result_preview: "preview without provenance" },
-      }] }] },
+      { ...state, groups: [{ ...firstGroup, items: [{ ...firstItem, display: { ...firstItem.display, result_preview: "preview without provenance" } }] }] },
       { ...state, action_result: { command_id: "old", pause_revision: 3, kind: "accepted" } },
     ]
     for (const invalid of invalidStates) {
-      expect(sessionSnapshotSchema.safeParse({
-        ...legal, execution_head: { run_id: "run_1", state: "waiting", pending_pauses: [invalid] },
-      }).success).toBe(false)
+      expect(
+        sessionSnapshotSchema.safeParse({
+          ...legal,
+          execution_head: { run_id: "run_1", state: "waiting", pending_pauses: [invalid] },
+        }).success,
+      ).toBe(false)
     }
     for (const head of [
       null,
@@ -549,17 +638,23 @@ describe("R66 public4 wire/head and closed resume", () => {
       { run_id: "run_1", state: "waiting", pending_pauses: [] },
       { run_id: "run_1", state: "waiting", pending_pauses: [state, state] },
       { run_id: "run_1", state: "resuming", pending_pauses: [state] },
-    ]) expect(sessionSnapshotSchema.safeParse({ ...legal, execution_head: head }).success).toBe(false)
+    ])
+      expect(sessionSnapshotSchema.safeParse({ ...legal, execution_head: head }).success).toBe(false)
   })
 
   it("preserves omitted versus explicit nullable display/validation without changing business null", () => {
     const state = r66Interaction()
     const group = state.groups.at(0)
     if (!group) throw new Error("R66 fixture requires a first group")
-    const items = group.items.map((item, index) => index === 0 ? {
-      ...item, validation: null,
-      display: { ...item.display, result_preview: null, truncated: null, source: null },
-    } : item)
+    const items = group.items.map((item, index) =>
+      index === 0
+        ? {
+            ...item,
+            validation: null,
+            display: { ...item.display, result_preview: null, truncated: null, source: null },
+          }
+        : item,
+    )
     const raw = r66Snapshot({ interaction: { ...state, groups: [{ ...group, items }, ...state.groups.slice(1)] } })
     const parsed = sessionSnapshotSchema.safeParse(raw)
     expect(parsed.success).toBe(true)
@@ -578,31 +673,42 @@ async function r76PublicSpec() {
   const spec = r76Yaml.parse(bytes.toString("utf8")) as {
     info: { version: string }
     components: {
-      schemas: Record<string, {
-        type: string; required: string[]; additionalProperties: boolean
-        properties: Record<string, { type: string | string[]; format?: string; minLength?: number; pattern?: string }>
-      }>
-      parameters: Record<string, {
-        name: string
-        in: string
-        required: boolean
-        description: string
-        schema: { type: string; enum?: string[]; minLength?: number; default?: string }
-      }>
+      schemas: Record<
+        string,
+        {
+          type: string
+          required: string[]
+          additionalProperties: boolean
+          properties: Record<string, { type: string | string[]; format?: string; minLength?: number; pattern?: string }>
+        }
+      >
+      parameters: Record<
+        string,
+        {
+          name: string
+          in: string
+          required: boolean
+          description: string
+          schema: { type: string; enum?: string[]; minLength?: number; default?: string }
+        }
+      >
     }
-    paths: Record<string, {
-      get: {
-        operationId: string
-        description: string
-        parameters: Array<{ $ref: string }>
-        responses: Record<string, { $ref?: string }>
+    paths: Record<
+      string,
+      {
+        get: {
+          operationId: string
+          description: string
+          parameters: Array<{ $ref: string }>
+          responses: Record<string, { $ref?: string }>
+        }
+        post: {
+          parameters: Array<{ $ref: string }>
+          requestBody: { required: boolean; content: { "application/json": { schema: { $ref: string } } } }
+          responses: Record<string, { $ref?: string }>
+        }
       }
-      post: {
-        parameters: Array<{ $ref: string }>
-        requestBody: { required: boolean; content: { "application/json": { schema: { $ref: string } } } }
-        responses: Record<string, { $ref?: string }>
-      }
-    }>
+    >
   }
   return { bytes, spec }
 }
@@ -610,8 +716,8 @@ async function r76PublicSpec() {
 describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", () => {
   it("consumes the exact locally accepted public14.5 canonical bytes", async () => {
     const { bytes, spec } = await r76PublicSpec()
-    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186")
-    expect(spec.info.version).toBe("14.5.0")
+    expect(r76Hash("sha256").update(bytes).digest("hex")).toBe("68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d")
+    expect(spec.info.version).toBe("14.7.0")
   })
 
   it("requires a present nullable owner next run while create accepts only an optional recurrence anchor", async () => {
@@ -624,7 +730,15 @@ describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", (
     expect(create.additionalProperties).toBe(false)
     expect(create.required).toEqual(["title", "prompt", "frequency", "time", "timezone"])
     expect(Object.keys(create.properties)).toEqual([
-      "project_id", "title", "prompt", "frequency", "time", "timezone", "recurrence_anchor_at", "expires_at", "auto_approve",
+      "project_id",
+      "title",
+      "prompt",
+      "frequency",
+      "time",
+      "timezone",
+      "recurrence_anchor_at",
+      "expires_at",
+      "auto_approve",
     ])
     expect(create.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
     expect(create.properties.next_run_at).toBeUndefined()
@@ -641,7 +755,16 @@ describe("R255 ScheduledTask owner recurrence graph under the public14.5 pin", (
     expect(patch.additionalProperties).toBe(false)
     expect(patch.required ?? []).toEqual([])
     expect(Object.keys(patch.properties)).toEqual([
-      "title", "prompt", "frequency", "time", "timezone", "recurrence_anchor_at", "expires_at", "auto_approve", "enabled", "status",
+      "title",
+      "prompt",
+      "frequency",
+      "time",
+      "timezone",
+      "recurrence_anchor_at",
+      "expires_at",
+      "auto_approve",
+      "enabled",
+      "status",
     ])
     expect(patch.properties.recurrence_anchor_at).toEqual({ type: "string", format: "date-time" })
     expect(patch.properties.next_run_at).toBeUndefined()
@@ -771,10 +894,9 @@ const MOVE_EXPECTED_ERROR_CODES = {
 
 function assertMoveMachineSemantics(document: OpenApiObject): void {
   const { pathItem, operation } = moveOperation(document)
-  const parameters = [
-    ...openApiArray(pathItem.parameters, "Move path parameters"),
-    ...openApiArray(operation.parameters, "Move operation parameters"),
-  ].map((parameter) => resolveOpenApi(document, parameter))
+  const parameters = [...openApiArray(pathItem.parameters, "Move path parameters"), ...openApiArray(operation.parameters, "Move operation parameters")].map(
+    (parameter) => resolveOpenApi(document, parameter),
+  )
   expect(parameters.map((parameter) => [parameter.name, parameter.in, parameter.required])).toEqual([
     ["id", "path", true],
     ["Idempotency-Key", "header", true],
@@ -812,8 +934,9 @@ function assertMoveMachineSemantics(document: OpenApiObject): void {
   const sessionPattern = new RegExp(openApiObject(dataProperties.session_id, "Move session id").pattern as string, "u")
   expect(sessionPattern.test("conv_12345678-1234-1234-1234-123456789abc")).toBe(true)
   expect(sessionPattern.test("session_alias")).toBe(false)
-  const projectVariants = openApiArray(openApiObject(dataProperties.project_ref, "Move project ref").oneOf, "Move project variants")
-    .map((variant) => openApiObject(variant, "Move project variant"))
+  const projectVariants = openApiArray(openApiObject(dataProperties.project_ref, "Move project ref").oneOf, "Move project variants").map((variant) =>
+    openApiObject(variant, "Move project variant"),
+  )
   expect(projectVariants.some((variant) => variant.type === "null")).toBe(true)
   const projectString = projectVariants.find((variant) => variant.type === "string")
   expect(projectString).toBeDefined()
@@ -826,7 +949,9 @@ function assertMoveMachineSemantics(document: OpenApiObject): void {
   expect(errorResponse).toMatchObject({ type: "object", required: ["error"], additionalProperties: false })
   const error = openApiObject(openApiObject(errorResponse.properties, "error response properties").error, "Move error")
   expect(error).toMatchObject({
-    type: "object", required: ["code", "message", "retryable"], additionalProperties: false,
+    type: "object",
+    required: ["code", "message", "retryable"],
+    additionalProperties: false,
   })
   const errorProperties = openApiObject(error.properties, "Move error properties")
   expect(openApiObject(errorProperties.code, "Move error code")).toEqual({
@@ -850,7 +975,6 @@ function assertMoveMachineSemantics(document: OpenApiObject): void {
 }
 
 describe("R164 public7.1 Conversation Move machine graph", () => {
-
   it("pins the canonical path, closed request, strict 200 receipt, and complete typed error graph", async () => {
     const document = (await r76PublicSpec()).spec as unknown as OpenApiObject
     assertMoveMachineSemantics(document)
@@ -865,10 +989,9 @@ describe("R164 public7.1 Conversation Move machine graph", () => {
       "x-kokoro-permission": "chat.session.update",
     })
 
-    const parameters = [
-      ...openApiArray(pathItem.parameters, "Move path parameters"),
-      ...openApiArray(operation.parameters, "Move operation parameters"),
-    ].map((parameter) => resolveOpenApi(document, parameter))
+    const parameters = [...openApiArray(pathItem.parameters, "Move path parameters"), ...openApiArray(operation.parameters, "Move operation parameters")].map(
+      (parameter) => resolveOpenApi(document, parameter),
+    )
     expect(parameters.map((parameter) => [parameter.name, parameter.in, parameter.required])).toEqual([
       ["id", "path", true],
       ["Idempotency-Key", "header", true],
@@ -878,7 +1001,10 @@ describe("R164 public7.1 Conversation Move machine graph", () => {
     expect(pathPattern.test("conv_12345678-1234-1234-1234-123456789abc")).toBe(true)
     expect(pathPattern.test("session_slug")).toBe(false)
     expect(openApiObject(parameters[1]!.schema, "Move key schema")).toMatchObject({
-      type: "string", minLength: 1, maxLength: 128, pattern: "^[\\x21-\\x2B\\x2D-\\x7E]+$",
+      type: "string",
+      minLength: 1,
+      maxLength: 128,
+      pattern: "^[\\x21-\\x2B\\x2D-\\x7E]+$",
     })
 
     const requestBody = openApiObject(operation.requestBody, "Move request body")
@@ -900,7 +1026,9 @@ describe("R164 public7.1 Conversation Move machine graph", () => {
     expect(Object.keys(openApiObject(receipt.properties, "Move receipt properties"))).toEqual(["data"])
     const data = openApiObject(openApiObject(receipt.properties, "Move receipt properties").data, "Move receipt data")
     expect(data).toMatchObject({
-      type: "object", required: ["session_id", "project_ref"], additionalProperties: false,
+      type: "object",
+      required: ["session_id", "project_ref"],
+      additionalProperties: false,
     })
     expect(Object.keys(openApiObject(data.properties, "Move data properties")).sort()).toEqual(["project_ref", "session_id"])
 
@@ -910,7 +1038,9 @@ describe("R164 public7.1 Conversation Move machine graph", () => {
       const requestId = openApiObject(headers["x-request-id"], `${status} request id`)
       expect(requestId.required).toBe(true)
       expect(openApiObject(requestId.schema, `${status} request id schema`)).toMatchObject({
-        type: "string", minLength: 1, maxLength: 128,
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
       })
       const cacheControl = openApiObject(headers["Cache-Control"], `${status} cache control`)
       expect(cacheControl.required).toBe(true)
@@ -919,16 +1049,15 @@ describe("R164 public7.1 Conversation Move machine graph", () => {
         const content = openApiObject(response.content, `${status} content`)
         const media = openApiObject(content["application/json"], `${status} media`)
         const errorStatus = Number(status) as keyof typeof MOVE_EXPECTED_ERROR_CODES
-        expect(moveCodeEnums(document, openApiObject(media.schema, `${status} schema`))).toEqual(
-          MOVE_EXPECTED_ERROR_CODES[errorStatus],
-        )
+        expect(moveCodeEnums(document, openApiObject(media.schema, `${status} schema`))).toEqual(MOVE_EXPECTED_ERROR_CODES[errorStatus])
       }
     }
     const rateLimit = resolveOpenApi(document, responses["429"])
     const retryAfter = openApiObject(openApiObject(rateLimit.headers, "429 headers")["Retry-After"], "Retry-After")
     expect(retryAfter.required).toBe(false)
     expect(openApiObject(retryAfter.schema, "Retry-After schema")).toEqual({
-      type: "string", pattern: "^[1-9][0-9]{0,4}$",
+      type: "string",
+      pattern: "^[1-9][0-9]{0,4}$",
     })
   })
 

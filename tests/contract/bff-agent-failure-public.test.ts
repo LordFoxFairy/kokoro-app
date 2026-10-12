@@ -12,9 +12,9 @@ import YAML from "yaml"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const BFF_PUBLIC_OPENAPI_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const BFF_PUBLIC_OPENAPI_VERSION = "14.5.0"
+const BFF_OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const BFF_PUBLIC_OPENAPI_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const BFF_PUBLIC_OPENAPI_VERSION = "14.7.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -103,22 +103,102 @@ function mutateSpec(spec: FailureSpecFixture, mutate: (draft: FailureSpecFixture
 }
 
 const SEMANTIC_MUTANTS: readonly [string, (draft: FailureSpecFixture) => void][] = [
-  ["public version", (draft) => { draft.info.version = "2.0.1" }],
-  ["restored owner system role", (draft) => { draft.components.schemas.ChatMessage.properties.role.enum = ["user", "assistant", "system"] }],
-  ["failure exact properties", (draft) => { draft.components.schemas.ChatMessage.properties.failure.properties.detail = { type: "string" } }],
-  ["failure additional properties", (draft) => { draft.components.schemas.ChatMessage.properties.failure.additionalProperties = true }],
-  ["failure required keys", (draft) => { draft.components.schemas.ChatMessage.properties.failure.required = ["source", "code"] }],
-  ["failure closed code enum", (draft) => { draft.components.schemas.ChatMessage.properties.failure.properties.code.enum.pop() }],
-  ["failure source", (draft) => { draft.components.schemas.ChatMessage.properties.failure.properties.source.const = "web" }],
-  ["failure source type", (draft) => { draft.components.schemas.ChatMessage.properties.failure.properties.source.type = "number" }],
-  ["retryable condition", (draft) => { draft.components.schemas.ChatMessage.properties.failure.if.properties.retryable.const = false }],
-  ["retryable true codes", (draft) => { draft.components.schemas.ChatMessage.properties.failure.then.properties.code.enum = ["internal_error"] }],
-  ["one-way presence guard", (draft) => { delete draft.components.schemas.ChatMessage.allOf[0].if.required }],
-  ["run presence guard", (draft) => { draft.components.schemas.ChatMessage.allOf[0].then.required = [] }],
-  ["assistant role guard", (draft) => { draft.components.schemas.ChatMessage.allOf[0].then.properties.role.const = "system" }],
-  ["failed assistant guard", (draft) => { draft.components.schemas.ChatMessage.allOf[0].then.properties.status.const = "completed" }],
-  ["nonempty run guard", (draft) => { draft.components.schemas.ChatMessage.allOf[0].then.properties.run_id.minLength = 0 }],
-  ["one-way profile presence", (draft) => { draft.components.schemas.ChatMessage.required.push("failure") }],
+  [
+    "public version",
+    (draft) => {
+      draft.info.version = "2.0.1"
+    },
+  ],
+  [
+    "restored owner system role",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.role.enum = ["user", "assistant", "system"]
+    },
+  ],
+  [
+    "failure exact properties",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.properties.detail = { type: "string" }
+    },
+  ],
+  [
+    "failure additional properties",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.additionalProperties = true
+    },
+  ],
+  [
+    "failure required keys",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.required = ["source", "code"]
+    },
+  ],
+  [
+    "failure closed code enum",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.properties.code.enum.pop()
+    },
+  ],
+  [
+    "failure source",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.properties.source.const = "web"
+    },
+  ],
+  [
+    "failure source type",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.properties.source.type = "number"
+    },
+  ],
+  [
+    "retryable condition",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.if.properties.retryable.const = false
+    },
+  ],
+  [
+    "retryable true codes",
+    (draft) => {
+      draft.components.schemas.ChatMessage.properties.failure.then.properties.code.enum = ["internal_error"]
+    },
+  ],
+  [
+    "one-way presence guard",
+    (draft) => {
+      delete draft.components.schemas.ChatMessage.allOf[0].if.required
+    },
+  ],
+  [
+    "run presence guard",
+    (draft) => {
+      draft.components.schemas.ChatMessage.allOf[0].then.required = []
+    },
+  ],
+  [
+    "assistant role guard",
+    (draft) => {
+      draft.components.schemas.ChatMessage.allOf[0].then.properties.role.const = "system"
+    },
+  ],
+  [
+    "failed assistant guard",
+    (draft) => {
+      draft.components.schemas.ChatMessage.allOf[0].then.properties.status.const = "completed"
+    },
+  ],
+  [
+    "nonempty run guard",
+    (draft) => {
+      draft.components.schemas.ChatMessage.allOf[0].then.properties.run_id.minLength = 0
+    },
+  ],
+  [
+    "one-way profile presence",
+    (draft) => {
+      draft.components.schemas.ChatMessage.required.push("failure")
+    },
+  ],
 ]
 
 describe("pinned BFF Agent failure public contract", () => {
@@ -126,7 +206,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
+    expect(BFF_OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })
@@ -212,11 +292,7 @@ describe("pinned BFF Agent failure public contract", () => {
       const fixtureGenerated = join(fixture, "src/generated/bff-agent-failure.ts")
       await mkdir(dirname(fixtureGenerator), { recursive: true })
       await mkdir(dirname(fixtureSnapshot), { recursive: true })
-      await Promise.all([
-        copyFile(GENERATOR, fixtureGenerator),
-        copyFile(SNAPSHOT, fixtureSnapshot),
-        copyFile(GENERATED, fixtureGenerated),
-      ])
+      await Promise.all([copyFile(GENERATOR, fixtureGenerator), copyFile(SNAPSHOT, fixtureSnapshot), copyFile(GENERATED, fixtureGenerated)])
       await symlink(resolve(ROOT, "node_modules"), join(fixture, "node_modules"), "dir")
 
       const run = () => spawnSync(process.execPath, [fixtureGenerator, "--check"], { cwd: fixture, encoding: "utf8" })

@@ -6,13 +6,13 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
-const OWNER_COMMIT = "b3d955fb03c08417f61943848e6c7bafe902d447"
-const OWNER_SHA256 = "7fbbc8cc899c84654616c2fbc5d923524d331b240e32df97620c6eece7b0d186"
-const OWNER_VERSION = "14.5.0"
+const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
+const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
+const OWNER_VERSION = "14.7.0"
 
 it("pins the BFF owner Library file operation and distinct Asset wire", async () => {
   const bytes = await readFile(SNAPSHOT)
-  expect(OWNER_COMMIT).toBe("b3d955fb03c08417f61943848e6c7bafe902d447")
+  expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -76,12 +76,14 @@ it("pins the private personal file binary download without redirect or idempoten
   expect(get["x-kokoro-owner"]).toBe("kokoro-bff")
   expect(get["x-kokoro-idempotency"]).toBe("none")
   expect(get.parameters).toContainEqual(expect.objectContaining({ name: "asset_id", in: "path", required: true }))
-  expect(get.responses["200"]?.headers).toEqual(expect.objectContaining({
-    "Content-Disposition": expect.any(Object),
-    "Content-Length": expect.any(Object),
-    "Referrer-Policy": expect.any(Object),
-    "X-Content-Type-Options": expect.any(Object),
-  }))
+  expect(get.responses["200"]?.headers).toEqual(
+    expect.objectContaining({
+      "Content-Disposition": expect.any(Object),
+      "Content-Length": expect.any(Object),
+      "Referrer-Policy": expect.any(Object),
+      "X-Content-Type-Options": expect.any(Object),
+    }),
+  )
   expect(get.responses["200"]?.content).toHaveProperty("*/*")
   for (const status of ["400", "401", "403", "404", "429", "502", "503"]) expect(get.responses).toHaveProperty(status)
   expect(get.responses).not.toHaveProperty("302")
