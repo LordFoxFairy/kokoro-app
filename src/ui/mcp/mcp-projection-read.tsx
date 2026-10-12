@@ -89,8 +89,10 @@ function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pendin
 
 const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.categoryCreation", business: "mcp.categoryBusiness", development: "mcp.categoryDevelopment", finance: "mcp.categoryFinance", travel: "mcp.categoryTravel", health: "mcp.categoryHealth" } as const
 
-function providerLogo(provider: Pick<McpPersonalProvider, "cover_image_url">): string | undefined {
-  return provider.cover_image_url
+const DEFAULT_CONNECTOR_ARTWORK = "/integrations/default-connector.svg"
+
+function providerArtwork(provider: Pick<McpPersonalProvider, "cover_image_url">): string {
+  return provider.cover_image_url ?? DEFAULT_CONNECTOR_ARTWORK
 }
 
 function formatProviderDate(value: string): string {
@@ -296,7 +298,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
             {highlightedProviders.map((provider) => <li key={provider.provider_key}>
               <button type="button" className={styles.featuredCard} onClick={() => setSelectedProvider(provider)} aria-label={`查看精选连接器 ${provider.display_name}`}>
                 <span className={styles.featuredCopy}><strong>{provider.display_name}</strong>{provider.description ? <span>{provider.description}</span> : null}</span>
-                <span className={styles.featuredLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="3rem" unoptimized /> : <Cable />}</span>
+                <span className={styles.featuredLogo} aria-hidden="true"><Image src={providerArtwork(provider)} alt="" fill sizes="3rem" priority unoptimized /></span>
               </button>
             </li>)}
           </ul>
@@ -335,7 +337,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
         {providers.length === 0 ? <div className={styles.emptyProvider}><Link2 aria-hidden="true" /><p>{t("mcp.noProviders")}</p></div> : displayedProviders.length === 0 ? <div className={styles.emptyProvider}><Search aria-hidden="true" /><p>{t("mcp.noMatch")}</p></div> : <ul className={styles.providerGrid}>
           {displayedProviders.map((provider) => <li key={provider.provider_key} className={styles.providerCard} data-testid={`mcp-provider-card-${provider.provider_key}`}>
             <button type="button" className={styles.providerDetailTrigger} onClick={() => setSelectedProvider(provider)} aria-label={provider.display_name}>
-              <span className={styles.providerLogo} aria-hidden="true">{providerLogo(provider) ? <Image src={providerLogo(provider)!} alt="" fill sizes="2.4rem" unoptimized /> : <Cable />}</span>
+              <span className={styles.providerLogo} aria-hidden="true"><Image src={providerArtwork(provider)} alt="" fill sizes="2.4rem" unoptimized /></span>
               <span className={styles.providerCopy}>
                 <span className={styles.providerName}>{provider.display_name}</span>
                 {provider.description ? <span className={styles.providerDescription}>{provider.description}</span> : null}
@@ -389,7 +391,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
         {selectedProvider ? <>
           <header className={styles.providerDetailHeader} data-has-logo="true">
             <span className={styles.providerDetailLogo} data-testid="mcp-provider-detail-logo" aria-hidden="true">
-              {providerLogo(selectedProvider) ? <Image src={providerLogo(selectedProvider)!} alt="" fill sizes="4rem" unoptimized /> : <Cable />}
+              <Image src={providerArtwork(selectedProvider)} alt="" fill sizes="4rem" unoptimized />
             </span>
             <div className={styles.providerDetailCopy}>
               {selectedProvider.category_keys.length > 0 ? <div className={styles.providerDetailChips}>{selectedProvider.category_keys.slice(0, 2).map((category) => <span key={category}>{categoryLabel(category)}</span>)}</div> : null}

@@ -124,6 +124,16 @@ describe("McpPanel", () => {
     expect(screen.getByTestId("mcp-provider-card-github")).toHaveTextContent("开发")
   })
 
+  it("renders the local connector artwork when an owner record has no cover", async () => {
+    const providerWithoutCover = { ...PROVIDER }
+    Reflect.deleteProperty(providerWithoutCover, "cover_image_url")
+    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [providerWithoutCover], next_cursor: null }) })
+    render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
+
+    const card = await screen.findByTestId("mcp-provider-card-provider-one")
+    expect(card.querySelector('img[src="/integrations/default-connector.svg"]')).not.toBeNull()
+  })
+
   it("keeps the owner-ordered connector highlights above the search directory", async () => {
     const providers = [
       { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },

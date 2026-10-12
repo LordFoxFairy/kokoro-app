@@ -1,0 +1,10 @@
+<svg width="720" height="420" viewBox="0 0 720 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="420" rx="36" fill="#F5F5F3"/>
+  <path d="M99 273C174 273 190 151 280 151C365 151 375 273 451 273C525 273 548 191 627 191" stroke="#252525" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="99" cy="273" r="42" fill="#181818"/>
+  <circle cx="280" cy="151" r="42" fill="#181818"/>
+  <circle cx="451" cy="273" r="42" fill="#181818"/>
+  <circle cx="627" cy="191" r="42" fill="#181818"/>
+  <path d="M99 252V294M78 273H120M280 130V172M259 151H301M451 252V294M430 273H472M627 170V212M606 191H648" stroke="#F8F8F7" stroke-width="10" stroke-linecap="round"/>
+  <text x="360" y="365" text-anchor="middle" fill="#777772" font-family="ui-sans-serif, system-ui, sans-serif" font-size="25" font-weight="600" letter-spacing="2">CONNECTOR</text>
+</svg>
