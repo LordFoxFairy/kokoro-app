@@ -252,7 +252,6 @@ const PANEL_KEYS = [
   "chat",
   "shortcuts",
   "credits",
-  "subscription",
   "skills",
   "mcp",
   "team",
@@ -260,14 +259,13 @@ const PANEL_KEYS = [
 const NAV_TAB_KEYS = [
   "account",
   "credits",
-  "subscription",
-  "team",
   "appearance",
   "shortcuts",
   "chat",
   "personalization",
   "mcp",
   "skills",
+  "team",
 ];
 
 function renderSettings(
@@ -375,15 +373,16 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航呈现全部已有 owner-backed 面板，不伪造缺失功能", () => {
+  it("设置导航保留真实面板，并以置灰行呈现尚未接通的 Manus 分区", () => {
     renderSettings();
 
-    expect(screen.getByTestId("settings-tab-subscription")).toBeInTheDocument();
+    expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
+    for (const id of ["mail", "computer", "email", "phone", "wallet", "integration"]) {
+      expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
+    }
     expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
     expect(screen.queryByTestId("settings-tab-integration")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-computer")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-mail")).toBeNull();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
     expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
   });

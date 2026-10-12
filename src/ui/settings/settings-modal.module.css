@@ -261,6 +261,30 @@
   display: none;
 }
 
+.placeholderTab {
+  display: flex;
+  width: 100%;
+  min-height: 2rem;
+  flex: 0 0 2rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.5rem 0.875rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  opacity: 0.52;
+  pointer-events: none;
+  user-select: none;
+}
+
+.placeholderTab > svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+}
+
 .tabLabel {
   min-width: 0;
   overflow: visible;
@@ -511,6 +535,11 @@
   }
 
   .tabRail .tab[data-slot="tabs-trigger"] {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .tabRail .placeholderTab {
     justify-content: center;
     padding-inline: 0;
   }
