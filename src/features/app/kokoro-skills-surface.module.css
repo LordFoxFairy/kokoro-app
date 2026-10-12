@@ -41,7 +41,7 @@
 
 .header {
   display: grid;
-  width: min(60rem, calc(100% - 4rem));
+  width: min(72rem, calc(100% - 3rem));
   grid-template-columns: minmax(0, 1fr) minmax(20rem, 29rem);
   align-items: start;
   gap: 2rem;
@@ -122,7 +122,7 @@
   scrollbar-width: thin;
 }
 .content {
-  width: min(60rem, calc(100% - 4rem));
+  width: min(72rem, calc(100% - 3rem));
   margin: 0 auto;
   padding: 0 0 4rem;
 }
@@ -160,49 +160,40 @@
   color: var(--muted-foreground);
 }
 
-.filterRow {
+.categoryTabs {
   display: flex;
-  min-height: 3rem;
-  align-items: center;
-  padding: 0.5rem 0 0.75rem;
+  min-width: 0;
+  gap: 0.25rem;
+  margin: 0 0 1rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
 }
-.categoryFilter { display: block; }
-.filterButton {
-  height: 2.75rem;
-  min-height: 2.75rem;
-  border-color: rgb(0 0 0 / 14%);
-  border-radius: 0.75rem;
-  background: var(--background);
-  padding-inline: 0.875rem;
-  color: var(--foreground);
-  font-size: 1rem;
-  font-weight: 500;
-}
-.filterButton svg:first-child {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-.filterButton svg:last-child {
-  width: 1rem;
-  height: 1rem;
-  margin-left: 0.125rem;
+.categoryTabs::-webkit-scrollbar { display: none; }
+.categoryTabs button {
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0.625rem;
+  background: transparent;
+  padding: 0 0.75rem;
   color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  cursor: pointer;
 }
-.filterMenu {
-  min-width: 10.5rem;
-  border-color: rgb(0 0 0 / 12%);
-  border-radius: 0.75rem;
-  padding: 0.25rem;
-}
-.filterMenu :global([data-slot="dropdown-menu-item"]) {
-  min-height: 2.25rem;
-  border-radius: 0.5rem;
-  padding-inline: 0.625rem;
-  font-size: 0.9375rem;
-}
-.filterMenu :global([data-slot="dropdown-menu-item"])[data-active="true"] {
+.categoryTabs button:hover { color: var(--foreground); }
+.categoryTabs button[aria-pressed="true"] {
   background: rgb(55 53 47 / 8%);
   color: var(--foreground);
+  font-weight: 600;
+}
+.categoryTabs button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 
@@ -244,8 +235,8 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
 }
 .loadMore {
   display: flex;
@@ -456,6 +447,10 @@
   height: 1.5rem;
 }
 
+@container (max-width: 60rem) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @container (max-width: 48rem) {
   .header,
   .content {
@@ -480,7 +475,7 @@
   .searchField { width: 100%; }
 }
 
-@media (max-width: 42rem) {
+@container (max-width: 42rem) {
   .grid {
     grid-template-columns: 1fr;
   }

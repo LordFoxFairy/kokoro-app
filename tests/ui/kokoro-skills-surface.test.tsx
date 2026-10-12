@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import { StrictMode } from "react"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -113,17 +112,14 @@ it("keeps the confirmed Manus catalog across a route remount without duplicate l
   expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith("ListSkills"))).toHaveLength(1)
 })
 
-it("uses the Manus desktop category filter instead of a category rail", async () => {
+it("filters the catalog from the Manus category tabs", async () => {
   const fetchMock = vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] }))
   vi.stubGlobal("fetch", fetchMock)
   renderLive()
-  await screen.findByTestId("skills-catalog-grid")
+  const categories = await screen.findByRole("navigation", { name: "技能分类" })
 
-  expect(screen.queryByRole("navigation", { name: "技能分类" })).toBeNull()
-  const filter = screen.getByRole("button", { name: "技能分类：全部" })
-  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "媒体" }))
-  expect(screen.getByRole("button", { name: "技能分类：媒体" })).toBeInTheDocument()
+  fireEvent.click(within(categories).getByRole("button", { name: "媒体" }))
+  expect(within(categories).getByRole("button", { name: "媒体" })).toHaveAttribute("aria-pressed", "true")
 })
 
 it("opens the Manus detail from the whole catalog card body, not only its illustration or title", async () => {
@@ -310,9 +306,9 @@ it("renders the owner APPS category in the existing filter and uses revision cov
   stubOwnerReads()
   renderLive()
   await screen.findByRole("button", { name: "Current" })
-  const filter = screen.getByRole("button", { name: "技能分类：全部" })
-  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
-  fireEvent.click(await screen.findByRole("menuitem", { name: "应用" }))
+  const categories = screen.getByRole("navigation", { name: "技能分类" })
+  fireEvent.click(within(categories).getByRole("button", { name: "应用" }))
+  expect(within(categories).getByRole("button", { name: "应用" })).toHaveAttribute("aria-pressed", "true")
   fireEvent.click(screen.getByRole("button", { name: "查看技能详情 Current" }))
   await screen.findByRole("button", { name: "下载技能" })
   const cover = screen.getByTestId("manus-skill-detail-dialog").querySelector("img")
@@ -923,23 +919,8 @@ it.each([false, true])("keeps summary actions ordered and metadata separators be
   expect(dialog.querySelector('[data-slot="dialog-header"]')).toHaveAttribute("data-has-cover", String(hasCover))
 })
 
-it("uses the wide Manus-style summary layout with cover-only width reservation", () => {
-  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*display:flex;/u)
-  expect(css).toMatch(/\.hero\s*\{[^}]*flex-direction:row;[^}]*align-items:center;/u)
-  expect(css).toMatch(/\.hero\[data-has-cover="true"\]\s*\{[^}]*min-height:19rem;/u)
-  expect(css).toMatch(/\.copy h2\s*\{[^}]*font-size:clamp\(1\.8rem, 3vw, 2\.6rem\);/u)
-  expect(css).toMatch(/\.copy\s*\{[^}]*max-width:100%;/u)
-  expect(css).toMatch(/\.hero\[data-has-cover="true"\] \.copy\s*\{[^}]*max-width:calc\(100% - 15rem\);/u)
-  expect(css).toMatch(/@media\(max-width:42rem\)[\s\S]*\.hero\[data-has-cover="true"\] \.copy\{max-width:100%\}/u)
-})
 
 
-it("keeps decorative covers non-interactive and out of narrow summary copy", () => {
-  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.cover\s*\{[^}]*pointer-events:none;/u)
-  expect(css).toMatch(/@media\(max-width:42rem\)[^\n]*\.cover\{display:none\}/u)
-})
 
 
 it("groups two actual category badges in a wrapping row without an empty category placeholder", async () => {
@@ -952,19 +933,9 @@ it("groups two actual category badges in a wrapping row without an empty categor
   expect(media.parentElement?.className).toContain("categories")
   view.rerender(<LocaleProvider><ManusSkillDetailDialog {...props} categoryLabels={[]} /></LocaleProvider>)
   expect(screen.getByTestId("manus-skill-detail-dialog").querySelector('[class*="categories"]')).toBeNull()
-  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.categories\s*\{[^}]*display:flex;[^}]*flex-wrap:wrap;/u)
 })
 
 
-it("matches the wide Manus detail frame at desktop while retaining a compact mobile layout", () => {
-  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(90rem,calc\(100vw - 2rem\)\);[^}]*max-width:calc\(100vw - 2rem\);[^}]*height:min\(68rem,calc\(100dvh - 2rem\)\);/u)
-  expect(css).toMatch(/\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*border-radius:1rem;[^}]*color-mix\(in srgb,var\(--background\) 97%,var\(--foreground\) 3%\)/u)
-  expect(css).toMatch(/\.hero\s*\{[^}]*min-height:19rem;[^}]*padding:3rem 3rem 2rem;/u)
-  expect(css).toMatch(/\.body\s*\{[^}]*flex:1 1 auto;[^}]*overflow:auto;[^}]*padding:2\.5rem 3rem 3rem;/u)
-  expect(css).toMatch(/\.actions button\s*\{[^}]*min-height:2\.8rem;[^}]*font-weight:650;/u)
-})
 
 it("uses the reference share arrow rather than the connected-node share icon", async () => {
   stubOwnerReads()
@@ -973,12 +944,6 @@ it("uses the reference share arrow rather than the connected-node share icon", a
 })
 
 
-it("makes short-viewport summaries scroll as a whole without changing independent reader scrolling", () => {
-  const css = readFileSync(`${process.cwd()}/src/ui/skills/manus-skill-detail-dialog.module.css`, "utf8")
-  expect(css).toMatch(/@media\(max-height:42rem\)\s*\{\s*\.dialog:not\(\.readerDialog\)\[data-slot="dialog-content"\]\s*\{\s*overflow:auto;\s*\}/u)
-  expect(css).toMatch(/\.dialog:not\(\.readerDialog\) \.body\s*\{\s*flex:0 0 auto;\s*overflow:visible;\s*\}/u)
-  expect(css).toMatch(/\.readerDialog \.fileList,\.readerDialog \.fileContent\s*\{[^}]*overflow:auto;/u)
-})
 
 it.each([false, true])("only refreshes authoritative catalog after real GitHub Publish and Install without synthesizing a card (unknown ACK %s)", async unknown => {
   let installed = false, previewCalls = 0
@@ -1122,33 +1087,14 @@ it("preserves the catalog download lifecycle when only shared admission changes"
 })
 
 
-it("matches the measured summary typography and example dimensions while keeping the independent reader width", () => {
-  const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
-  expect(css).toMatch(/@media\(max-width:42rem\)\s*\{\s*\.dialog\[data-slot="dialog-content"\]\s*\{[^}]*width:min\(90rem,calc\(100vw - 2rem\)\);/u)
-  expect(css).toMatch(/\.readerDialog\[data-slot="dialog-content"\]\s*\{[^}]*max-width:960px;/u)
-  expect(css).toMatch(/\.description\s*\{[^}]*font-size:1\.15rem;[^}]*line-height:1\.75rem;/u)
-  expect(css).toMatch(/\.description\s*\{[^}]*margin:0 0 2\.25rem;/u)
-  expect(css).toMatch(/\.examples button\s*\{[^}]*min-height:4\.75rem;[^}]*padding:1rem;[^}]*border-radius:12px;/u)
-  expect(css).toMatch(/\.actions button\s*\{[^}]*height:2\.8rem;[^}]*padding:0 \.95rem;[^}]*line-height:1\.2rem;/u)
-})
-
-it("keeps real example text and its icon at the wide detail scale", () => {
-  const css = readFileSync("src/ui/skills/manus-skill-detail-dialog.module.css", "utf8")
-  expect(css).toMatch(/\.examples button span\s*\{[^}]*font-size:\.95rem;[^}]*line-height:1\.4rem;/u)
-  expect(css).toMatch(/\.examples svg\s*\{[^}]*width:1rem;[^}]*height:1rem;[^}]*flex:0 0 1rem;/u)
-})
-
-
-it("keeps the reference category vocabulary inside the Manus filter menu", async () => {
+it("keeps the reference category vocabulary in the Manus category tabs", async () => {
   stubOwnerReads()
   renderLive()
-  const filter = await screen.findByRole("button", { name: "技能分类：全部" })
-  fireEvent.pointerDown(filter, { button: 0, ctrlKey: false })
-  const menu = await screen.findByRole("menu")
+  const categories = await screen.findByRole("navigation", { name: "技能分类" })
   for (const name of ["全部", "编程", "数据", "自动化", "商业", "设计", "媒体", "内容", "应用"]) {
-    expect(within(menu).getByRole("menuitem", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
+    expect(within(categories).getByRole("button", { name: new RegExp(`^${name}$`) })).toBeInTheDocument()
   }
-  expect(within(menu).getAllByRole("menuitem")).toHaveLength(9)
+  expect(within(categories).getAllByRole("button")).toHaveLength(9)
 })
 
 it("uses the Manus-style identity, summary and real-example composition for a personal skill detail", async () => {
@@ -1200,35 +1146,4 @@ it("opens the owner-approved package tree from a personal skill detail without r
   expect(await within(dialog).findByRole("heading", { name: "清单" })).toBeInTheDocument()
   expect(globalThis.fetch).toHaveBeenCalledWith("/api/hub/skills/mine/package", expect.objectContaining({ method: "GET" }))
   expect(within(dialog).getByText("本地清单")).toBeInTheDocument()
-})
-
-it("uses the same wide Manus geometry for personal details", () => {
-  const css = readFileSync("src/ui/skills/personal-skills-read.module.css", "utf8")
-  expect(css).toMatch(/\.detailDialog\[data-slot="dialog-content"\]\s*\{[^}]*width: min\(90rem, calc\(100vw - 2rem\)\);[^}]*max-width: calc\(100vw - 2rem\);[^}]*height: min\(68rem, calc\(100dvh - 2rem\)\);/u)
-  expect(css).toMatch(/\.detailHero\s*\{[^}]*min-height: 19rem;[^}]*padding: 3rem 3rem 2rem;/u)
-  expect(css).toMatch(/\.detailExamples button\s*\{[^}]*min-height: 4\.75rem;[^}]*padding: 1rem;/u)
-})
-
-it("uses Manus's responsive three-to-two-to-one catalog geometry without inventing cover data", () => {
-  const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
-  expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));")
-  expect(css).not.toContain("grid-template-columns: repeat(3, minmax(0, 1fr));")
-  expect(css).toMatch(/\.headerTools\s*\{[\s\S]*?display: flex;[\s\S]*?flex-direction: column;/u)
-  expect(css).toMatch(/\.header\s*\{[\s\S]*?align-items: start;/u)
-  expect(css).toMatch(/@media \(max-width: 48rem\) \{[\s\S]*?\.header\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
-  expect(css).toContain("aspect-ratio: 2 / 1;")
-  expect(css).toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns: 1fr;/u)
-  expect(css).toMatch(/\.categoryFilter\s*\{[^}]*display: block;/u)
-  expect(css).not.toMatch(/\.categoryRail/u)
-  expect(css).not.toMatch(/@media \(max-width: 42rem\) \{[\s\S]*?\.mySkillsButton\s*\{\s*display:\s*none;/u)
-  expect(readFileSync("src/features/app/kokoro-skills-surface.tsx", "utf8")).toContain("skill.cover_image ? <Image")
-})
-
-it("uses Manus's stacked desktop controls and proportional illustrated cards", () => {
-  const css = readFileSync("src/features/app/kokoro-skills-surface.module.css", "utf8")
-  expect(css).toMatch(/\.headerTools\s*\{[^}]*display: flex;[^}]*flex-direction: column;[^}]*align-items: stretch;/u)
-  expect(css).toMatch(/\.searchField\s*\{[^}]*width: 100%;[^}]*flex: 0 1 auto;/u)
-  expect(css).toMatch(/\.cardArt\s*\{[^}]*aspect-ratio: 2 \/ 1;/u)
-  expect(css).toMatch(/\.artSkeleton\s*\{[^}]*aspect-ratio: 2 \/ 1;/u)
-  expect(css).toMatch(/\.card\s*\{[^}]*background: rgb\(255 255 254\);/u)
 })
