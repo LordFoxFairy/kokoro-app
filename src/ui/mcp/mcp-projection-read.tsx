@@ -13,15 +13,15 @@ import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { HubClient } from "@/hub/client"
-import type { McpPersonalConnector, McpPersonalConnectorPage, McpPersonalProvider, McpPersonalProviderPage } from "@/hub/mcp-personal.schema"
+import type { McpSelfConnector, McpSelfConnectorPage, McpSelfProvider, McpSelfProviderPage } from "@/hub/mcp-self.schema"
 import { useT } from "@/i18n/context"
 import type { McpCreateMode } from "./mcp-panel-model"
 
 import styles from "./mcp-projection-read.module.css"
 
-type Projection = { connectors?: McpPersonalConnectorPage; providers: McpPersonalProviderPage }
+type Projection = { connectors?: McpSelfConnectorPage; providers: McpSelfProviderPage }
 type ReadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; data: Projection }
-type Editor = { kind: "edit"; connector: McpPersonalConnector }
+type Editor = { kind: "edit"; connector: McpSelfConnector }
 
 type ProjectionFlight = {
   controller: AbortController
@@ -55,8 +55,8 @@ function subscribeProjection(
   if (flight === undefined) {
     const controller = new AbortController()
     const promise = resource === "providers"
-      ? client.listMcpPersonalProviders({ limit: 100 }, controller.signal).then((providers) => ({ providers }))
-      : client.listMcpPersonalConnectors(cursor === null ? {} : { cursor }, controller.signal).then((connectors) => ({ connectors }))
+      ? client.listMcpSelfProviders({ limit: 100 }, controller.signal).then((providers) => ({ providers }))
+      : client.listMcpSelfConnectors(cursor === null ? {} : { cursor }, controller.signal).then((connectors) => ({ connectors }))
     flight = { controller, promise, subscribers: 0 }
     requests.set(key, flight)
     const clear = (): void => {
@@ -83,7 +83,7 @@ function subscribeProjection(
   }
 }
 
-function connectorStatusKey(status: McpPersonalConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
+function connectorStatusKey(status: McpSelfConnector["status"]): "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked" {
   return `mcp.${status}` as "mcp.pending" | "mcp.active" | "mcp.error" | "mcp.revoked"
 }
 
@@ -91,7 +91,7 @@ const categoryMessage = { efficiency: "mcp.categoryEfficiency", creation: "mcp.c
 
 const DEFAULT_CONNECTOR_ARTWORK = "/integrations/default-connector.svg"
 
-function providerArtwork(provider: Pick<McpPersonalProvider, "cover_image_url">): string {
+function providerArtwork(provider: Pick<McpSelfProvider, "cover_image_url">): string {
   return provider.cover_image_url ?? DEFAULT_CONNECTOR_ARTWORK
 }
 
@@ -123,7 +123,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
   const [actionId, setActionId] = useState<string | null>(null)
   const [actionError, setActionError] = useState(false)
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [selectedProvider, setSelectedProvider] = useState<McpPersonalProvider | null>(null)
+  const [selectedProvider, setSelectedProvider] = useState<McpSelfProvider | null>(null)
   const [providerQuery, setProviderQuery] = useState("")
   const [view, setView] = useState<"catalog" | "connections">("catalog")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -183,10 +183,6 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
   const projection = state.kind === "ready" ? state.data : null
   const providers = projection?.providers.items ?? []
-  // The owner list order is the directory's presentation order. Keep the
-  // leading real providers in the same compact rail Manus places above search;
-  // no browser-side provider fixtures or popularity ordering are invented.
-  const highlightedProviders = providers.slice(0, 6)
   // Revocation is retained by Platform for auditability, but is no longer a
   // usable user connection. Keep it out of this live-connection surface while
   // preserving the owner response (and its cursor) unchanged.
@@ -196,7 +192,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
     const matchesQuery = normalizedProviderQuery.length === 0 || [provider.display_name, provider.description, provider.author, ...provider.category_keys]
       .filter((value): value is string => Boolean(value))
       .some((value) => value.toLocaleLowerCase().includes(normalizedProviderQuery))
-    return matchesQuery && (categoryFilter === "all" || provider.category_keys.includes(categoryFilter as McpPersonalProvider["category_keys"][number]))
+    return matchesQuery && (categoryFilter === "all" || provider.category_keys.includes(categoryFilter as McpSelfProvider["category_keys"][number]))
   })
   // Manus keeps the category rail stable even while the owner's current page is
   // sparse. The taxonomy is UI vocabulary, not a fabricated provider record;
@@ -215,7 +211,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
     setDisplayName("")
     setDescription("")
   }
-  const beginEdit = (connector: McpPersonalConnector) => {
+  const beginEdit = (connector: McpSelfConnector) => {
     setDisplayName(connector.display_name ?? "")
     setDescription(connector.description ?? "")
     setDeleteId(null)
@@ -236,18 +232,18 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
       setActionId(null)
     }
   }
-  const connectProvider = (provider: McpPersonalProvider, onSuccess?: () => void) => {
-    void runAction(`connect:${provider.provider_key}`, () => client.createMcpPersonalConnector({
+  const connectProvider = (provider: McpSelfProvider, onSuccess?: () => void) => {
+    void runAction(`connect:${provider.provider_key}`, () => client.createMcpSelfConnector({
       provider_key: provider.provider_key,
       connector_type: "mcp",
       display_name: provider.display_name,
       description: provider.description ?? "",
     }), onSuccess)
   }
-  const submitEdit = (event: FormEvent<HTMLFormElement>, connector: McpPersonalConnector) => {
+  const submitEdit = (event: FormEvent<HTMLFormElement>, connector: McpSelfConnector) => {
     event.preventDefault()
     if (!displayName.trim()) return
-    void runAction(connector.connector_id, () => client.updateMcpPersonalConnector(connector.connector_id, {
+    void runAction(connector.connector_id, () => client.updateMcpSelfConnector(connector.connector_id, {
       display_name: displayName.trim(),
       description: description.trim(),
       expected_state_version: connector.state_version,
@@ -255,7 +251,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
   }
 
   const editorTitle = t("mcp.edit")
-  const categoryLabel = (category: McpPersonalProvider["category_keys"][number]) => t(categoryMessage[category])
+  const categoryLabel = (category: McpSelfProvider["category_keys"][number]) => t(categoryMessage[category])
 
   return <section className={styles.surface} data-testid="mcp-projection-read" aria-busy={refreshing || undefined}>
     <header className={styles.header}>
@@ -293,16 +289,6 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
 
     {projection ? <div className={styles.content}>
       {view === "catalog" ? <>
-        {highlightedProviders.length > 0 ? <section className={styles.featuredSection} aria-label={t("plugins.featured")}>
-          <ul className={styles.featuredRail}>
-            {highlightedProviders.map((provider) => <li key={provider.provider_key}>
-              <button type="button" className={styles.featuredCard} onClick={() => setSelectedProvider(provider)} aria-label={`查看精选连接器 ${provider.display_name}`}>
-                <span className={styles.featuredCopy}><strong>{provider.display_name}</strong>{provider.description ? <span>{provider.description}</span> : null}</span>
-                <span className={styles.featuredLogo} aria-hidden="true"><Image src={providerArtwork(provider)} alt="" fill sizes="3rem" priority unoptimized /></span>
-              </button>
-            </li>)}
-          </ul>
-        </section> : null}
         <div className={styles.directoryControls}>
           <label className={styles.searchField}>
             <Search aria-hidden="true" />
@@ -318,7 +304,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="outline" className={styles.filterTrigger}>
                   <ListFilter aria-hidden="true" />
-                  {categoryFilter === "all" ? t("mcp.categoryAll") : categoryLabel(categoryFilter as McpPersonalProvider["category_keys"][number])}
+                  {categoryFilter === "all" ? t("mcp.categoryAll") : categoryLabel(categoryFilter as McpSelfProvider["category_keys"][number])}
                   <ChevronDown aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
@@ -361,7 +347,7 @@ export function McpProjectionRead({ client, identity, onCreateMcp, onPrompt }: {
             </div>
             {connector.description ? <p className={styles.connectorDescription}>{connector.description}</p> : null}
             {connector.status === "pending" ? <p className={styles.pendingHint}>{t("mcp.connectingHint")}</p> : null}
-            {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpPersonalConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpPersonalConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
+            {deleting ? <div className={styles.actions}><Button type="button" variant="destructive" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.removeMcpSelfConnector(connector.connector_id, { expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : null}{t("mcp.deleteConfirm")}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDeleteId(null)}>{t("mcp.cancel")}</Button></div> : <div className={styles.actions}><Button type="button" variant="outline" size="sm" disabled={busy || connector.status === "revoked"} onClick={() => beginEdit(connector)}><Pencil aria-hidden="true" />{t("mcp.edit")}</Button>{connector.status === "active" ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void runAction(connector.connector_id, () => client.setMcpSelfConnectorEnabled(connector.connector_id, { enabled: !connector.enabled, expected_state_version: connector.state_version }))}>{busy ? <Spinner aria-hidden="true" /> : <Power aria-hidden="true" />}{connector.enabled ? t("mcp.disable") : t("mcp.enable")}</Button> : null}<Button type="button" variant="ghost" size="sm" className={styles.removeAction} disabled={busy || connector.status === "revoked"} onClick={() => { setDeleteId(connector.connector_id); setEditor(null) }}><Trash2 aria-hidden="true" />{t("mcp.delete")}</Button></div>}
           </li>
         })}</ul>)}
       </section>}

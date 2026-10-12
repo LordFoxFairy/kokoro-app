@@ -1,5 +1,6 @@
-import { mcpPersonalIdSchema, mcpPersonalMatches, mcpPersonalErrorAllowed, mcpPersonalCommandRequestSchemas, type McpPersonalOperation } from "@/hub/mcp-personal.schema"
-import { parseMcpPersonalCommandJson } from "@/hub/mcp-personal-command"
+import { mcpSelfIdSchema, mcpSelfMatches, mcpSelfErrorAllowed, mcpSelfCommandRequestSchemas, type McpSelfCommandOperation, type McpSelfOperation } from "@/hub/mcp-self.schema"
+import { mcpSelfAuthorizationCallbackSchema, mcpSelfAuthorizationErrorAllowed, mcpSelfAuthorizationMatches, mcpSelfAuthorizationRequestSchema, mcpSelfCreateConnectionSchema, type McpSelfAuthorizationOperation } from "@/hub/mcp-self-authorization.schema"
+import { parseMcpSelfJson } from "@/hub/mcp-self-json"
 import { createPersonalSkillVersionRequestSchema, createPersonalSkillVersionSchema, withdrawPersonalSkillRequestSchema, withdrawPersonalSkillSchema, personalSkillLifecycleErrors, personalSkillLifecycleErrorSchema } from "@/hub/schemas"
 import { shareSchemas, shareIdSchema, shareCreateSchema, shareErrorSchema, shareErrorAllowed, shareMatches, type ShareOperation } from "@/hub/skill-share.schema"
 import { githubSchemas, githubPreviewRequestSchema, githubPreviewSchema, githubSelectorSchema, githubKeySchema, githubErrorSchema, githubErrorAllowed, githubPreviewMatches, type GithubImportOperation } from "@/hub/skill-github-import.schema"
@@ -187,32 +188,44 @@ function bffBusinessPath(path: string[]): string[] {
   return path
 }
 
-// Caller-owned MCP resources use a closed browser-private adapter; active Connection projection stays separate.
-async function proxyMcpPersonalRead(request: Request, path: string[]): Promise<Response> {
+// Current-user MCP owns its browser-private BFF adapter. Lifecycle commands sit
+// here because they share the same authorization/session boundary as CRUD; no
+// browser path is allowed to reach Platform directly.
+async function proxyMcpSelf(request: Request, path: string[]): Promise<Response> {
   const supplied = request.headers.get("x-kokoro-request-id")
   const requestId = supplied !== null && PROJECTION_REQUEST_ID.test(supplied) ? supplied : crypto.randomUUID()
   const fail = (httpStatus: number, code: string) => NextResponse.json({ error: { code, message: code, retryable: httpStatus === 429 || httpStatus === 503 || httpStatus === 409 && code === "mcp_personal_command_in_progress" } }, { status: httpStatus, headers: { "cache-control": "no-store", "x-request-id": requestId } })
   const url = new URL(request.url)
-  const operation: McpPersonalOperation | undefined = path.length === 3 && path[2] === "connectors" && request.method === "GET" ? "connectors"
+  const operation: McpSelfOperation | McpSelfAuthorizationOperation | undefined = path.length === 3 && path[2] === "connectors" && request.method === "GET" ? "connectors"
     : path.length === 3 && path[2] === "connectors" && request.method === "POST" ? "create"
       : path.length === 4 && path[2] === "connectors" && request.method === "PATCH" ? "update"
         : path.length === 4 && path[2] === "connectors" && request.method === "DELETE" ? "remove"
           : path.length === 5 && path[2] === "connectors" && path[4] === "enabled" && request.method === "PUT" ? "enabled"
-            : path.length === 5 && path[2] === "connectors" && path[4] === "connections" && request.method === "GET" ? "connections"
-              : path.length === 4 && path[2] === "connectors" && request.method === "GET" ? "connector"
-                : path.length === 4 && path[2] === "connections" && request.method === "GET" ? "connection"
-                  : path.length === 3 && path[2] === "providers" && request.method === "GET" ? "providers"
-                    : path.length === 4 && path[2] === "providers" && request.method === "GET" ? "provider" : undefined
-  const mutation = operation === "create" || operation === "update" || operation === "enabled" || operation === "remove"
-  const id = operation === "connector" || operation === "update" || operation === "remove" || operation === "enabled" || operation === "connections" || operation === "connection" || operation === "provider" ? path[3] : undefined
+            : path.length === 5 && path[2] === "connectors" && path[4] === "authorization" && request.method === "POST" ? "beginAuthorization"
+              : path.length === 6 && path[2] === "connectors" && path[4] === "authorization" && path[5] === "reconnect" && request.method === "POST" ? "reconnectAuthorization"
+                : path.length === 5 && path[2] === "connectors" && path[4] === "connections" && request.method === "GET" ? "connections"
+                  : path.length === 4 && path[2] === "connectors" && request.method === "GET" ? "connector"
+                    : path.length === 4 && path[2] === "connections" && request.method === "GET" ? "connection"
+                      : path.length === 3 && path[2] === "connections" && request.method === "POST" ? "createConnection"
+                        : path.length === 4 && path[2] === "authorization" && path[3] === "callback" && request.method === "POST" ? "completeAuthorization"
+                          : path.length === 3 && path[2] === "providers" && request.method === "GET" ? "providers"
+                            : path.length === 4 && path[2] === "providers" && request.method === "GET" ? "provider" : undefined
+  if (operation === undefined) return fail(400, "invalid_mcp_personal_request")
+  const authorization = ["beginAuthorization", "reconnectAuthorization", "completeAuthorization", "createConnection"].includes(operation)
+  const mutation = !["connectors", "connector", "connections", "connection", "providers", "provider"].includes(operation)
+  const requiresIdempotency = ["create", "update", "enabled", "remove", "createConnection"].includes(operation)
+  const id = ["connector", "update", "remove", "enabled", "connections", "connection", "provider", "beginAuthorization", "reconnectAuthorization"].includes(operation) ? path[3] : undefined
   const query = url.searchParams
   const allowed = operation === "connectors" ? ["status", "limit", "cursor"] : operation === "connections" ? ["limit", "cursor"] : operation === "providers" ? ["query", "directory_type", "category_key", "limit", "cursor"] : []
-  if (operation === undefined || path[0] !== "self" || path[1] !== "mcp" || id !== undefined && !(operation === "provider" ? /^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u : mcpPersonalIdSchema.safeParse(id).success)
+  if (path[0] !== "self" || path[1] !== "mcp" || id !== undefined && !(operation === "provider" ? /^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u : mcpSelfIdSchema.safeParse(id).success)
     || url.pathname !== `/api/hub/${path.map(encodeURIComponent).join("/")}` || url.hash || [...query.keys()].some(key => !allowed.includes(key) || query.getAll(key).length !== 1)
     || query.has("limit") && !/^(?:[1-9]|[1-9][0-9]|100)(?![\s\S])/u.test(query.get("limit")!) || query.has("cursor") && !/^[A-Za-z0-9_-]{1,2048}(?![\s\S])/u.test(query.get("cursor")!)
     || query.has("status") && !["pending", "active", "error", "revoked"].includes(query.get("status")!) || query.has("query") && (!query.get("query") || [...query.get("query")!].length > 1000)
     || query.has("directory_type") && !["app", "data_source"].includes(query.get("directory_type")!) || query.has("category_key") && !["efficiency", "creation", "business", "development", "finance", "travel", "health"].includes(query.get("category_key")!)) return fail(400, "invalid_mcp_personal_request")
-  if (mutation ? !sameOriginOk(request) || !JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "") || !/^[\x21-\x7e]{1,191}(?![\s\S])/u.test(request.headers.get("idempotency-key") ?? "") : request.body !== null || ["content-length", "transfer-encoding", "idempotency-key"].some(name => request.headers.has(name))) return fail(400, "invalid_mcp_personal_request")
+  const key = request.headers.get("idempotency-key")
+  if (mutation
+    ? !sameOriginOk(request) || !JSON_MEDIA_TYPE.test(request.headers.get("content-type") ?? "") || requiresIdempotency && !/^[\x21-\x7e]{1,191}(?![\s\S])/u.test(key ?? "") || !requiresIdempotency && key !== null
+    : request.body !== null || ["content-length", "transfer-encoding", "idempotency-key"].some(name => request.headers.has(name))) return fail(400, "invalid_mcp_personal_request")
   const config = productBffConfig()
   if (!config?.bffBaseUrl) return fail(503, "product_tenant_not_configured")
   if (!mutation && request.headers.has("origin") && request.headers.get("origin") !== config.session.webOrigin) return fail(403, "session_forbidden")
@@ -222,13 +235,23 @@ async function proxyMcpPersonalRead(request: Request, path: string[]): Promise<R
   try {
     let body: ArrayBuffer | undefined; let input: unknown
     if (mutation) {
-      try { body = await readBoundedRequestBody(request, 65_536); input = parseMcpPersonalCommandJson(new TextDecoder("utf-8", { fatal: true }).decode(body)) } catch (error) { return fail(error instanceof UpstreamRequestTooLargeError ? 413 : 400, error instanceof UpstreamRequestTooLargeError ? "mcp_personal_body_too_large" : "invalid_mcp_personal_request") }
-      if (!mcpPersonalCommandRequestSchemas[operation].safeParse(input).success) return fail(400, "invalid_mcp_personal_request")
+      try { body = await readBoundedRequestBody(request, 65_536); input = parseMcpSelfJson(new TextDecoder("utf-8", { fatal: true }).decode(body)) } catch (error) { return fail(error instanceof UpstreamRequestTooLargeError ? 413 : 400, error instanceof UpstreamRequestTooLargeError ? "mcp_personal_body_too_large" : "invalid_mcp_personal_request") }
+      const accepted = authorization
+        ? operation === "beginAuthorization" || operation === "reconnectAuthorization"
+          ? mcpSelfAuthorizationRequestSchema.safeParse(input).success
+          : operation === "completeAuthorization"
+            ? mcpSelfAuthorizationCallbackSchema.safeParse(input).success
+            : mcpSelfCreateConnectionSchema.safeParse(input).success
+        : mcpSelfCommandRequestSchemas[operation as McpSelfCommandOperation].safeParse(input).success
+      if (!accepted) return fail(400, "invalid_mcp_personal_request")
     }
     signal.throwIfAborted(); const claims = await within(admittedProductSession(request, config)).catch(() => undefined); signal.throwIfAborted()
     if (claims === undefined) return fail(503, "iam_admission_unavailable"); if (claims === null) return fail(401, "session_authentication_required")
     const headers = productBffHeaders(config, claims, requestId); headers.set("accept", "application/json")
-    if (mutation) { headers.set("content-type", "application/json"); headers.set("idempotency-key", request.headers.get("idempotency-key")!) }
+    if (mutation) {
+      headers.set("content-type", "application/json")
+      if (requiresIdempotency) headers.set("idempotency-key", key!)
+    }
     upstream = await within(requestWithDomain(`${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/${path.map(encodeURIComponent).join("/")}${url.search}`, config.domain, { method: request.method, headers: Object.fromEntries(headers), ...(body === undefined ? {} : { body }), signal, timeoutMs: Math.max(1, expires - performance.now()), maxResponseBytes: 1_048_576, maxErrorResponseBytes: 1_048_576, strictResponseLength: true }).then(value => { if (signal.aborted) void value.body?.cancel().catch(() => undefined); return value }))
     signal.throwIfAborted(); if (upstream === undefined) return fail(503, "mcp_personal_dependency_unavailable")
     const ownerId = upstream.headers.get("x-request-id")
@@ -239,8 +262,15 @@ async function proxyMcpPersonalRead(request: Request, path: string[]): Promise<R
     if (length !== null && Number(length) !== size) return fail(502, "mcp_personal_response_invalid")
     const bytes = new Uint8Array(size); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
     let raw: unknown; try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch { return fail(502, "mcp_personal_response_invalid") }
-    const expected = operation === "create" ? 201 : 200
-    if (upstream.status === expected ? !mcpPersonalMatches(operation, raw, id, query, input) : !mcpPersonalErrorAllowed(operation, upstream.status, raw)) return fail(502, "mcp_personal_response_invalid")
+    const expected = operation === "create" || operation === "createConnection" ? 201 : 200
+    const valid = upstream.status === expected
+      ? authorization
+        ? mcpSelfAuthorizationMatches(operation as McpSelfAuthorizationOperation, raw, id, input)
+        : mcpSelfMatches(operation as McpSelfOperation, raw, id, query, input)
+      : authorization
+        ? mcpSelfAuthorizationErrorAllowed(upstream.status, raw)
+        : mcpSelfErrorAllowed(operation as McpSelfOperation, upstream.status, raw)
+    if (!valid) return fail(502, "mcp_personal_response_invalid")
     const retryAfter = upstream.headers.get("retry-after"); if (retryAfter !== null && (upstream.status !== 429 || (!/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) || Number(retryAfter) > 86400))) return fail(502, "mcp_personal_response_invalid")
     return NextResponse.json(raw, { status: upstream.status, headers: { "cache-control": "no-store", "x-request-id": ownerId!, ...(retryAfter === null ? {} : { "retry-after": retryAfter }) } })
   } catch (error) { return error instanceof UpstreamResponseTooLargeError || error instanceof UpstreamResponseIncompleteError ? fail(502, "mcp_personal_response_invalid") : fail(503, "mcp_personal_dependency_unavailable") }
@@ -905,8 +935,8 @@ export async function proxyHubRequest(
   context: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await context.params
-  if (path[0] === "self" && path[1] === "mcp" && (path[2] === "connectors" || path[2] === "providers" || path[2] === "connections" && (path.length > 3 || request.method !== "GET"))
-    || path[0] === "mcp" && ["connectors", "providers"].includes(path[1] ?? "")) return proxyMcpPersonalRead(request, path)
+  if (path[0] === "self" && path[1] === "mcp" && (path[2] === "connectors" || path[2] === "providers" || path[2] === "authorization" || path[2] === "connections" && (path.length > 3 || request.method !== "GET"))
+    || path[0] === "mcp" && ["connectors", "providers"].includes(path[1] ?? "")) return proxyMcpSelf(request, path)
   if (path[0] === "self" && path[1] === "skills" && ["versions", "withdraw"].includes(path[3] ?? "")) return proxyPersonalSkillLifecycle(request, path)
   if (path[0] === "skill-shares") return proxySkillShare(request, path)
   if (path[0] === "skills" && path[1] === "github") return proxyGithubSkillImport(request, path)

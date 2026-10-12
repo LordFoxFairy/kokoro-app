@@ -1437,6 +1437,60 @@ describe("personal MCP closed adapter boundaries", () => {
 })
 
 
+describe("current-user MCP OAuth lifecycle adapter", () => {
+  const pendingConnector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "pending", approved_scopes: ["tools.read"], enabled: false, state_version: "2" }
+  const activeConnector = { ...pendingConnector, status: "active", state_version: "3" }
+  const authorization = { authorization_id: "authorization-1", authorization_url: "https://oauth.example.test/authorize?state=opaque", expires_at: "2027-01-15T08:00:00.000Z" }
+  const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], policy_digest: "a".repeat(64), status: "active" }
+  const owner = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-self-oauth" } })
+
+  it("forwards each formal lifecycle path with the owner-required idempotency semantics", async () => {
+    vi.mocked(requestWithDomain)
+      .mockResolvedValueOnce(owner({ data: { authorization, connector: pendingConnector } }))
+      .mockResolvedValueOnce(owner({ data: { authorization, connector: pendingConnector } }))
+      .mockResolvedValueOnce(owner({ data: { connector: activeConnector } }))
+      .mockResolvedValueOnce(owner({ data: { connection } }, 201))
+    const route = await import("@/app/api/hub/[...path]/route")
+    const invoke = (path: string[], body: unknown, headers: HeadersInit = {}) => route.POST(
+      new Request(`http://localhost/api/hub/${path.join("/")}`, {
+        method: "POST",
+        headers: { origin: "http://localhost", "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      }),
+      params(path),
+    )
+
+    await expect(invoke(["self", "mcp", "connectors", "connector-1", "authorization"], { server_id: "server-1", expected_state_version: "1" })).resolves.toMatchObject({ status: 200 })
+    await expect(invoke(["self", "mcp", "connectors", "connector-1", "authorization", "reconnect"], { server_id: "server-1", expected_state_version: "1" })).resolves.toMatchObject({ status: 200 })
+    await expect(invoke(["self", "mcp", "authorization", "callback"], { state: "opaque", code: "code" })).resolves.toMatchObject({ status: 200 })
+    await expect(invoke(["self", "mcp", "connections"], { connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], expected_state_version: "3" }, { "idempotency-key": "connection-key" })).resolves.toMatchObject({ status: 201 })
+
+    expect(vi.mocked(requestWithDomain).mock.calls.map(([url]) => url)).toEqual([
+      "http://bff.test/v1/self/mcp/connectors/connector-1/authorization",
+      "http://bff.test/v1/self/mcp/connectors/connector-1/authorization/reconnect",
+      "http://bff.test/v1/self/mcp/authorization/callback",
+      "http://bff.test/v1/self/mcp/connections",
+    ])
+    for (const index of [0, 1, 2]) expect(vi.mocked(requestWithDomain).mock.calls[index]?.[2]?.headers).not.toHaveProperty("idempotency-key")
+    expect(vi.mocked(requestWithDomain).mock.calls[3]?.[2]?.headers).toMatchObject({ "idempotency-key": "connection-key" })
+  })
+
+  it("rejects callback ambiguity and wrong idempotency placement before the BFF", async () => {
+    const { POST } = await import("@/app/api/hub/[...path]/route")
+    const invalid = [
+      [["self", "mcp", "authorization", "callback"], { state: "opaque", code: "code", error: "access_denied" }, {}],
+      [["self", "mcp", "connectors", "connector-1", "authorization"], { server_id: "server-1", expected_state_version: "1" }, { "idempotency-key": "forbidden" }],
+      [["self", "mcp", "connections"], { connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], expected_state_version: "1" }, {}],
+    ] as const
+    for (const [path, body, extra] of invalid) {
+      const response = await POST(new Request(`http://localhost/api/hub/${path.join("/")}`, { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", ...extra }, body: JSON.stringify(body) }), params([...path]))
+      expect(response.status).toBe(400)
+    }
+    expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled()
+  })
+})
+
+
 it("personal MCP rejects malformed UTF8 and non-self connector aliases", async () => {
   const { GET } = await import("@/app/api/hub/[...path]/route")
   vi.mocked(requestWithDomain).mockResolvedValue(new Response(new Uint8Array([0xff]), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-personal" } }))

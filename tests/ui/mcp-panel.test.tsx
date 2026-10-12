@@ -43,12 +43,16 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
     listPersonalSkills: vi.fn().mockResolvedValue({ skills: [], next_cursor: null }),
     getPublishedPersonalSkill: vi.fn(),
     listMcpConnections: vi.fn().mockResolvedValue({ connections: [] }),
-    listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
-    listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
-    createMcpPersonalConnector: vi.fn(),
-    updateMcpPersonalConnector: vi.fn(),
-    setMcpPersonalConnectorEnabled: vi.fn(),
-    removeMcpPersonalConnector: vi.fn(),
+    listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }),
+    createMcpSelfConnector: vi.fn(),
+    updateMcpSelfConnector: vi.fn(),
+    setMcpSelfConnectorEnabled: vi.fn(),
+    removeMcpSelfConnector: vi.fn(),
+    beginMcpSelfConnectorAuthorization: vi.fn(),
+    reconnectMcpSelfConnectorAuthorization: vi.fn(),
+    completeMcpSelfConnectorAuthorization: vi.fn(),
+    createMcpSelfConnection: vi.fn(),
     listSkillPool: vi.fn(),
     listSkillCatalog: vi.fn(),
     skillQuota: vi.fn(),
@@ -86,20 +90,20 @@ describe("McpPanel", () => {
 
   it("keeps the provider directory separate from managed connectors until the user switches views", async () => {
     const client = makeClient({
-      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
-      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
 
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     expect(await screen.findByTestId("mcp-provider-card-provider-one")).toBeInTheDocument()
     expect(screen.queryByText("Workspace search")).toBeNull()
-    expect(client.listMcpPersonalProviders).toHaveBeenCalledTimes(1)
-    expect(client.listMcpPersonalConnectors).not.toHaveBeenCalled()
+    expect(client.listMcpSelfProviders).toHaveBeenCalledTimes(1)
+    expect(client.listMcpSelfConnectors).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
-    expect(client.listMcpPersonalConnectors).toHaveBeenCalledTimes(1)
+    expect(client.listMcpSelfConnectors).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole("button", { name: "Browse connectors" }))
     expect(screen.queryByText("Workspace search")).toBeNull()
@@ -111,7 +115,7 @@ describe("McpPanel", () => {
       { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
       { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
     ]
-    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+    const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument()
@@ -127,25 +131,25 @@ describe("McpPanel", () => {
   it("renders the local connector artwork when an owner record has no cover", async () => {
     const providerWithoutCover = { ...PROVIDER }
     Reflect.deleteProperty(providerWithoutCover, "cover_image_url")
-    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [providerWithoutCover], next_cursor: null }) })
+    const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [providerWithoutCover], next_cursor: null }) })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     const card = await screen.findByTestId("mcp-provider-card-provider-one")
     expect(card.querySelector('img[src="/integrations/default-connector.svg"]')).not.toBeNull()
   })
 
-  it("keeps the owner-ordered connector highlights above the search directory", async () => {
+  it("renders each owner provider once in the searchable directory", async () => {
     const providers = [
       { ...PROVIDER, provider_key: "gmail", display_name: "Gmail", description: "Search and summarize email.", cover_image_url: "https://cdn.example.test/connectors/gmail.webp" },
       { ...PROVIDER, provider_key: "github", display_name: "GitHub", description: "Manage repositories.", cover_image_url: "https://cdn.example.test/connectors/github.webp" },
     ]
-    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+    const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
-    const highlights = await screen.findByRole("region", { name: "Featured connectors" })
-    expect(within(highlights).getByRole("button", { name: "查看精选连接器 Gmail" })).toHaveTextContent("Search and summarize email.")
-    expect(within(highlights).getByRole("button", { name: "查看精选连接器 GitHub" })).toHaveTextContent("Manage repositories.")
-    expect(highlights.compareDocumentPosition(screen.getByPlaceholderText("Search connectors and data sources")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(await screen.findByTestId("mcp-provider-card-gmail")).toBeInTheDocument()
+    expect(screen.getByTestId("mcp-provider-card-github")).toBeInTheDocument()
+    expect(screen.getAllByText("Gmail")).toHaveLength(1)
+    expect(screen.getAllByText("GitHub")).toHaveLength(1)
   })
 
   it("reads personal connectors and provider metadata through the formal owner routes", async () => {
@@ -156,7 +160,7 @@ describe("McpPanel", () => {
       const data = new URL(path, "http://localhost").pathname.endsWith("/providers")
         ? { items: [PROVIDER], next_cursor: null }
         : { items: [CONNECTOR], next_cursor: null }
-      return new Response(JSON.stringify({ data }), { status: 200, headers: { "cache-control": "private, no-store", "content-type": "application/json", "x-request-id": "mcp-personal-read" } })
+      return new Response(JSON.stringify({ data }), { status: 200, headers: { "cache-control": "private, no-store", "content-type": "application/json", "x-request-id": "mcp-self-read" } })
     }))
 
     render(<McpContent client={createHubClient()} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
@@ -175,33 +179,33 @@ describe("McpPanel", () => {
   })
 
   it("shares a single initial owner projection across StrictMode effect replay", async () => {
-    const listMcpPersonalConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
-    const listMcpPersonalProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
-    const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders })
+    const listMcpSelfConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
+    const listMcpSelfProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
+    const client = makeClient({ listMcpSelfConnectors, listMcpSelfProviders })
 
     render(<StrictMode><LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" /></LocaleProvider></StrictMode>)
 
     await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(screen.getByRole("button", { name: "Manage connectors" }))
     await screen.findByText("Workspace search")
-    expect(listMcpPersonalConnectors).toHaveBeenCalledTimes(1)
-    expect(listMcpPersonalProviders).toHaveBeenCalledTimes(1)
+    expect(listMcpSelfConnectors).toHaveBeenCalledTimes(1)
+    expect(listMcpSelfProviders).toHaveBeenCalledTimes(1)
   })
 
   it("revoking read admission aborts the stale projection without duplicating the next identity read", async () => {
     let providerSignal: AbortSignal | undefined
     let resolveStale!: (value: { items: typeof CONNECTOR[]; next_cursor: null }) => void
     const stale = new Promise<{ items: typeof CONNECTOR[]; next_cursor: null }>((resolve) => { resolveStale = resolve })
-    const listMcpPersonalProviders = vi.fn()
+    const listMcpSelfProviders = vi.fn()
       .mockImplementationOnce((_query?: unknown, signal?: AbortSignal) => { providerSignal = signal; return stale.then(() => ({ items: [PROVIDER], next_cursor: null })) })
       .mockResolvedValueOnce({ items: [PROVIDER], next_cursor: null })
-    const client = makeClient({ listMcpPersonalProviders })
+    const client = makeClient({ listMcpSelfProviders })
     const renderContent = (boundary: { admitted: boolean; subject: string | null; generation: number }) => (
       <LocaleProvider><McpContent client={client} embedded brandName="Acme" readBoundary={boundary} /></LocaleProvider>
     )
     const view = render(renderContent({ admitted: true, subject: "reader-a", generation: 1 }))
 
-    await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledOnce())
+    await waitFor(() => expect(listMcpSelfProviders).toHaveBeenCalledOnce())
     view.rerender(renderContent({ admitted: false, subject: "reader-a", generation: 2 }))
     await waitFor(() => expect(providerSignal?.aborted).toBe(true))
     expect(screen.queryByTestId("mcp-projection-read")).toBeNull()
@@ -211,15 +215,15 @@ describe("McpPanel", () => {
     expect(screen.queryByText("Workspace search")).toBeNull()
 
     view.rerender(renderContent({ admitted: true, subject: "reader-b", generation: 3 }))
-    await waitFor(() => expect(listMcpPersonalProviders).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(listMcpSelfProviders).toHaveBeenCalledTimes(2))
     await screen.findByTestId("mcp-provider-card-provider-one")
   })
 
   it("does not present revoked connector audit records as active user connections", async () => {
     const revoked = { ...CONNECTOR, status: "revoked" as const, enabled: false }
     const client = makeClient({
-      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [revoked], next_cursor: null }),
-      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [revoked], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -231,40 +235,40 @@ describe("McpPanel", () => {
   })
 
   it("uses formal create, CAS update, enable, and remove commands then reloads owner truth", async () => {
-    const listMcpPersonalConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
-    const listMcpPersonalProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
-    const createMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
-    const updateMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, display_name: "Edited connector", state_version: "3" })
-    const setMcpPersonalConnectorEnabled = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, state_version: "3" })
-    const removeMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, status: "revoked", state_version: "3" })
-    const client = makeClient({ listMcpPersonalConnectors, listMcpPersonalProviders, createMcpPersonalConnector, updateMcpPersonalConnector, setMcpPersonalConnectorEnabled, removeMcpPersonalConnector })
+    const listMcpSelfConnectors = vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null })
+    const listMcpSelfProviders = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
+    const createMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
+    const updateMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, display_name: "Edited connector", state_version: "3" })
+    const setMcpSelfConnectorEnabled = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, state_version: "3" })
+    const removeMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, enabled: false, status: "revoked", state_version: "3" })
+    const client = makeClient({ listMcpSelfConnectors, listMcpSelfProviders, createMcpSelfConnector, updateMcpSelfConnector, setMcpSelfConnectorEnabled, removeMcpSelfConnector })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
     const provider = await screen.findByTestId("mcp-provider-card-provider-one")
     fireEvent.click(within(provider).getByRole("button", { name: "Provider One" }))
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
-    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await waitFor(() => expect(createMcpSelfConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
     await screen.findByText("Workspace search")
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Edited connector" } })
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
-    await waitFor(() => expect(updateMcpPersonalConnector).toHaveBeenCalledWith("connector-one", { display_name: "Edited connector", description: "Search the workspace", expected_state_version: "2" }))
+    await waitFor(() => expect(updateMcpSelfConnector).toHaveBeenCalledWith("connector-one", { display_name: "Edited connector", description: "Search the workspace", expected_state_version: "2" }))
 
     fireEvent.click(screen.getByRole("button", { name: "Disable" }))
-    await waitFor(() => expect(setMcpPersonalConnectorEnabled).toHaveBeenCalledWith("connector-one", { enabled: false, expected_state_version: "2" }))
+    await waitFor(() => expect(setMcpSelfConnectorEnabled).toHaveBeenCalledWith("connector-one", { enabled: false, expected_state_version: "2" }))
     fireEvent.click(screen.getByRole("button", { name: "Delete" }))
     fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }))
-    await waitFor(() => expect(removeMcpPersonalConnector).toHaveBeenCalledWith("connector-one", { expected_state_version: "2" }))
-    expect(listMcpPersonalConnectors.mock.calls.length).toBeGreaterThan(1)
+    await waitFor(() => expect(removeMcpSelfConnector).toHaveBeenCalledWith("connector-one", { expected_state_version: "2" }))
+    expect(listMcpSelfConnectors.mock.calls.length).toBeGreaterThan(1)
   })
 
   it("connects a provider from its Manus-style detail without replacing the live connector list", async () => {
-    const createMcpPersonalConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
+    const createMcpSelfConnector = vi.fn().mockResolvedValue({ ...CONNECTOR, connector_id: "connector-created", status: "pending", enabled: false, state_version: "1" })
     const client = makeClient({
-      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
-      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
-      createMcpPersonalConnector,
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      createMcpSelfConnector,
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -279,15 +283,15 @@ describe("McpPanel", () => {
     expect(screen.getByText(/Updated /)).toBeInTheDocument()
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }))
 
-    await waitFor(() => expect(createMcpPersonalConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
+    await waitFor(() => expect(createMcpSelfConnector).toHaveBeenCalledWith({ provider_key: "provider-one", connector_type: "mcp", display_name: "Provider One", description: "A real provider" }))
     expect(screen.queryByRole("dialog", { name: "Add connector" })).toBeNull()
     expect(await screen.findByText("Workspace search")).toBeInTheDocument()
   })
 
   it("opens the wide Manus connector detail with prompts and owner metadata", async () => {
     const client = makeClient({
-      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
-      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }),
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -313,7 +317,7 @@ describe("McpPanel", () => {
 
   it("sends a connector example prompt into the workspace interaction instead of rendering a dead card", async () => {
     const onPrompt = vi.fn()
-    const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
+    const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
     render(<LocaleProvider><McpProjectionRead client={client} embedded identity="reader-a:1" onPrompt={onPrompt} /></LocaleProvider>)
 
     await screen.findByTestId("mcp-provider-card-provider-one")
@@ -346,8 +350,8 @@ describe("McpPanel", () => {
   it("filters the provider directory without replacing the connector projection", async () => {
     const secondProvider = { ...PROVIDER, provider_key: "provider-two", display_name: "Calendar One", description: "Calendar provider" }
     const client = makeClient({
-      listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
-      listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER, secondProvider], next_cursor: null }),
+      listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [CONNECTOR], next_cursor: null }),
+      listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER, secondProvider], next_cursor: null }),
     })
     render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
@@ -365,8 +369,8 @@ describe("McpPanel", () => {
       .mockResolvedValueOnce({ items: [CONNECTOR], next_cursor: "next" })
       .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve }))
     const providersA = vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null })
-    const clientA = makeClient({ listMcpPersonalConnectors: listA, listMcpPersonalProviders: providersA })
-    const clientB = makeClient({ listMcpPersonalConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
+    const clientA = makeClient({ listMcpSelfConnectors: listA, listMcpSelfProviders: providersA })
+    const clientB = makeClient({ listMcpSelfConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [PROVIDER], next_cursor: null }) })
     const boundary = { admitted: true, subject: "reader-a", generation: 1 } as const
     const view = render(<McpContent client={clientA} embedded brandName="Acme" readBoundary={boundary} />, { wrapper: LocaleProvider })
 
@@ -696,7 +700,7 @@ it("uses Manus's visual catalog cards with one-column/mobile and two-column/desk
   it("keeps the Manus category choices behind one compact filter control", async () => {
   window.localStorage.setItem("kokoro.locale", "zh")
   const sparseProvider = { provider_key: "provider-development", display_name: "Development", description: "Real provider", directory_type: "app" as const, category_keys: ["development" as const], example_prompts: [], website: undefined, privacy_url: undefined, enabled: true, state_version: "1" }
-  const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
+  const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [sparseProvider], next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
 
   const rail = await screen.findByRole("navigation", { name: "连接器分类" })
@@ -717,7 +721,7 @@ it("uses the observed Manus Chinese connector category labels", async () => {
     enabled: true,
     state_version: "1",
   }))
-  const client = makeClient({ listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
+  const client = makeClient({ listMcpSelfProviders: vi.fn().mockResolvedValue({ items: providers, next_cursor: null }) })
   render(<McpContent client={client} embedded brandName="Acme" readBoundary={{ admitted: true, subject: "reader-a", generation: 1 }} />, { wrapper: LocaleProvider })
   const rail = await screen.findByRole("navigation", { name: "连接器分类" })
   for (const name of ["全部", "效率", "创作", "商业", "开发", "财经", "出行", "健康"]) expect(within(rail).getByRole("button", { name })).toBeInTheDocument()
@@ -726,7 +730,7 @@ it("uses the observed Manus Chinese connector category labels", async () => {
 it("exposes Manus-style connector creation from the directory header", async () => {
   const onCreateMcp = vi.fn()
   const client = makeClient({
-    listMcpPersonalProviders: vi.fn().mockResolvedValue({ items: [{
+    listMcpSelfProviders: vi.fn().mockResolvedValue({ items: [{
       provider_key: "provider-one", display_name: "Provider One", description: "A real provider", directory_type: "app" as const,
       category_keys: ["development" as const], example_prompts: ["Connect me"], website: "https://provider.example.com",
       privacy_url: "https://provider.example.com/privacy", enabled: true, state_version: "1",

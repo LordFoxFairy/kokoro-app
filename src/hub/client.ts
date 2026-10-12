@@ -4,20 +4,31 @@
 import { z, ZodError, type ZodTypeAny } from "zod"
 import { createSkillPublishClient } from "./skill-publish-client"
 import {
-  mcpPersonalConnectorPageSchema,
-  mcpPersonalConnectorSchema,
-  mcpPersonalErrorAllowed,
-  mcpPersonalErrorSchema,
-  mcpPersonalProviderPageSchema,
-  type McpPersonalCommandOperation,
-  type McpPersonalConnector,
-  type McpPersonalConnectorPage,
-  type McpPersonalCreateInput,
-  type McpPersonalEnabledInput,
-  type McpPersonalProviderPage,
-  type McpPersonalRemoveInput,
-  type McpPersonalUpdateInput,
-} from "./mcp-personal.schema"
+  mcpSelfConnectorPageSchema,
+  mcpSelfConnectorSchema,
+  mcpSelfErrorAllowed,
+  mcpSelfErrorSchema,
+  mcpSelfProviderPageSchema,
+  type McpSelfCommandOperation,
+  type McpSelfConnector,
+  type McpSelfConnectorPage,
+  type McpSelfCreateInput,
+  type McpSelfEnabledInput,
+  type McpSelfProviderPage,
+  type McpSelfRemoveInput,
+  type McpSelfUpdateInput,
+} from "./mcp-self.schema"
+import {
+  mcpSelfAuthorizationDataSchemas,
+  mcpSelfAuthorizationErrorAllowed,
+  type McpSelfAuthorizationCallback,
+  type McpSelfAuthorizationCompleted,
+  type McpSelfAuthorizationInput,
+  type McpSelfAuthorizationOperation,
+  type McpSelfAuthorizationStarted,
+  type McpSelfConnectionCreated,
+  type McpSelfCreateConnectionInput,
+} from "./mcp-self-authorization.schema"
 
 import {
   installationIdSchema, installationKeySchema, installationSourceSchema, installationListQuerySchema,
@@ -305,24 +316,24 @@ async function readMcpConnections(path: string, signal?: AbortSignal): Promise<M
   }
 }
 
-const MCP_PERSONAL_RESPONSE_BYTES = 1024 * 1024
-const MCP_PERSONAL_TIMEOUT_MS = 10_000
+const MCP_SELF_RESPONSE_BYTES = 1024 * 1024
+const MCP_SELF_TIMEOUT_MS = 10_000
 
 /**
- * The personal connector API is a distinct, closed V1 contract. Keep its
+ * The current-user connector API is a distinct, closed V1 contract. Keep its
  * response validation here instead of letting UI components infer transport
  * success from a JSON shape. This mirrors the browser-private adapter's
  * no-store/request-id/media invariants and makes late responses cancellable.
  */
-async function requestMcpPersonal<T extends ZodTypeAny>(
-  operation: McpPersonalCommandOperation | "connectors" | "providers",
+async function requestMcpSelf<T extends ZodTypeAny>(
+  operation: McpSelfCommandOperation | McpSelfAuthorizationOperation | "connectors" | "providers",
   path: string,
   schema: T,
   init?: RequestInit,
   signal?: AbortSignal,
 ): Promise<z.infer<T>> {
   const deadline = new AbortController()
-  const timer = setTimeout(() => deadline.abort(new DOMException("MCP personal request timed out", "TimeoutError")), MCP_PERSONAL_TIMEOUT_MS)
+  const timer = setTimeout(() => deadline.abort(new DOMException("MCP current-user request timed out", "TimeoutError")), MCP_SELF_TIMEOUT_MS)
   const joined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal])
   let response: Response | undefined
   try {
@@ -331,13 +342,13 @@ async function requestMcpPersonal<T extends ZodTypeAny>(
     if (!hasHubNoStoreDirective(response.headers)
       || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(requestId ?? "")
       || !/^application\/json(?:;\s*charset=utf-8)?$/iu.test(response.headers.get("content-type") ?? "")) {
-      throw new HubClientError("parse", "invalid MCP personal response headers", null, response.status)
+      throw new HubClientError("parse", "invalid MCP current-user response headers", null, response.status)
     }
     const declared = response.headers.get("content-length")
-    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > MCP_PERSONAL_RESPONSE_BYTES)) {
-      throw new HubClientError("parse", "MCP personal response is too large", null, response.status)
+    if (declared !== null && (!/^(0|[1-9][0-9]*)$/u.test(declared) || Number(declared) > MCP_SELF_RESPONSE_BYTES)) {
+      throw new HubClientError("parse", "MCP current-user response is too large", null, response.status)
     }
-    if (response.body === null) throw new HubClientError("parse", "missing MCP personal response body", null, response.status)
+    if (response.body === null) throw new HubClientError("parse", "missing MCP current-user response body", null, response.status)
     const reader = response.body.getReader()
     const chunks: Uint8Array[] = []
     let size = 0
@@ -346,7 +357,7 @@ async function requestMcpPersonal<T extends ZodTypeAny>(
         const part = await reader.read()
         if (part.done) break
         size += part.value.byteLength
-        if (size > MCP_PERSONAL_RESPONSE_BYTES) throw new HubClientError("parse", "MCP personal response is too large", null, response.status)
+        if (size > MCP_SELF_RESPONSE_BYTES) throw new HubClientError("parse", "MCP current-user response is too large", null, response.status)
         chunks.push(part.value)
       }
     } finally {
@@ -361,16 +372,18 @@ async function requestMcpPersonal<T extends ZodTypeAny>(
     try { raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) } catch (error) {
       throw new HubClientError("parse", describeUnknown(error), null, response.status)
     }
-    const expected = operation === "create" ? 201 : 200
+    const expected = operation === "create" || operation === "createConnection" ? 201 : 200
     if (response.status === expected) {
       const parsed = z.object({ data: schema }).strict().safeParse(raw)
       if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
       return parsed.data.data
     }
-    const parsed = mcpPersonalErrorSchema.safeParse(raw)
-    if (!parsed.success || !mcpPersonalErrorAllowed(operation, response.status, parsed.data)) {
-      throw new HubClientError("parse", "invalid MCP personal error", null, response.status)
-    }
+    const parsed = mcpSelfErrorSchema.safeParse(raw)
+    const authorizationOperation = ["beginAuthorization", "reconnectAuthorization", "completeAuthorization", "createConnection"].includes(operation)
+    const errorAllowed = authorizationOperation
+      ? mcpSelfAuthorizationErrorAllowed(response.status, parsed.data)
+      : mcpSelfErrorAllowed(operation as McpSelfCommandOperation | "connectors" | "providers", response.status, parsed.data)
+    if (!parsed.success || !errorAllowed) throw new HubClientError("parse", "invalid MCP current-user error", null, response.status)
     throw new HubClientError("http", parsed.data.error.message, parsed.data.error.code, response.status, parsed.data.error.retryable, requestId, response.status === 429 ? response.headers.get("retry-after") : null)
   } catch (error) {
     if (error instanceof HubClientError) throw error
@@ -396,12 +409,16 @@ export type HubClient = {
   listPersonalSkills: (cursor?: string, signal?: AbortSignal) => Promise<z.infer<typeof managedPersonalSkillPageSchema>>
   getPublishedPersonalSkill: (id: string, signal?: AbortSignal) => Promise<ManagedPersonalSkill>
   listMcpConnections: (query?: { connection_id?: string; provider_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpConnectionPage>
-  listMcpPersonalConnectors: (query?: { status?: "pending" | "active" | "error" | "revoked"; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpPersonalConnectorPage>
-  listMcpPersonalProviders: (query?: { query?: string; directory_type?: "app" | "data_source"; category_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpPersonalProviderPage>
-  createMcpPersonalConnector: (input: McpPersonalCreateInput, signal?: AbortSignal) => Promise<McpPersonalConnector>
-  updateMcpPersonalConnector: (connectorId: string, input: McpPersonalUpdateInput, signal?: AbortSignal) => Promise<McpPersonalConnector>
-  setMcpPersonalConnectorEnabled: (connectorId: string, input: McpPersonalEnabledInput, signal?: AbortSignal) => Promise<McpPersonalConnector>
-  removeMcpPersonalConnector: (connectorId: string, input: McpPersonalRemoveInput, signal?: AbortSignal) => Promise<McpPersonalConnector>
+  listMcpSelfConnectors: (query?: { status?: "pending" | "active" | "error" | "revoked"; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpSelfConnectorPage>
+  listMcpSelfProviders: (query?: { query?: string; directory_type?: "app" | "data_source"; category_key?: string; limit?: number; cursor?: string }, signal?: AbortSignal) => Promise<McpSelfProviderPage>
+  createMcpSelfConnector: (input: McpSelfCreateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
+  updateMcpSelfConnector: (connectorId: string, input: McpSelfUpdateInput, signal?: AbortSignal) => Promise<McpSelfConnector>
+  setMcpSelfConnectorEnabled: (connectorId: string, input: McpSelfEnabledInput, signal?: AbortSignal) => Promise<McpSelfConnector>
+  removeMcpSelfConnector: (connectorId: string, input: McpSelfRemoveInput, signal?: AbortSignal) => Promise<McpSelfConnector>
+  beginMcpSelfConnectorAuthorization: (connectorId: string, input: McpSelfAuthorizationInput, signal?: AbortSignal) => Promise<McpSelfAuthorizationStarted>
+  reconnectMcpSelfConnectorAuthorization: (connectorId: string, input: McpSelfAuthorizationInput, signal?: AbortSignal) => Promise<McpSelfAuthorizationStarted>
+  completeMcpSelfConnectorAuthorization: (input: McpSelfAuthorizationCallback, signal?: AbortSignal) => Promise<McpSelfAuthorizationCompleted>
+  createMcpSelfConnection: (input: McpSelfCreateConnectionInput, signal?: AbortSignal) => Promise<McpSelfConnectionCreated>
   listSkillPool: () => Promise<SkillCard[]>
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
   skillQuota: () => Promise<SkillQuota>
@@ -457,50 +474,78 @@ export function createHubClient(): HubClient {
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
       return readMcpConnections(`${mcpConnectionsPath}${search.size === 0 ? "" : `?${search}`}`, signal)
     },
-    listMcpPersonalConnectors: (query = {}, signal) => {
+    listMcpSelfConnectors: (query = {}, signal) => {
       const search = new URLSearchParams()
       if (query.status !== undefined) search.set("status", query.status)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpPersonal("connectors", `/self/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpPersonalConnectorPageSchema, undefined, signal)
+      return requestMcpSelf("connectors", `/self/mcp/connectors${search.size === 0 ? "" : `?${search}`}`, mcpSelfConnectorPageSchema, undefined, signal)
     },
-    listMcpPersonalProviders: (query = {}, signal) => {
+    listMcpSelfProviders: (query = {}, signal) => {
       const search = new URLSearchParams()
       if (query.query !== undefined) search.set("query", query.query)
       if (query.directory_type !== undefined) search.set("directory_type", query.directory_type)
       if (query.category_key !== undefined) search.set("category_key", query.category_key)
       if (query.limit !== undefined) search.set("limit", String(query.limit))
       if (query.cursor !== undefined) search.set("cursor", query.cursor)
-      return requestMcpPersonal("providers", `/self/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpPersonalProviderPageSchema, undefined, signal)
+      return requestMcpSelf("providers", `/self/mcp/providers${search.size === 0 ? "" : `?${search}`}`, mcpSelfProviderPageSchema, undefined, signal)
     },
-    createMcpPersonalConnector: async (input, signal) => (
-      await requestMcpPersonal("create", "/self/mcp/connectors", z.object({ connector: mcpPersonalConnectorSchema }).strict(), {
+    createMcpSelfConnector: async (input, signal) => (
+      await requestMcpSelf("create", "/self/mcp/connectors", z.object({ connector: mcpSelfConnectorSchema }).strict(), {
         method: "POST",
-        headers: idempotencyHeaders("mcp-personal", { ...JSON_HEADERS }),
+        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
         body: JSON.stringify(input),
       }, signal)
     ).connector,
-    updateMcpPersonalConnector: async (connectorId, input, signal) => (
-      await requestMcpPersonal("update", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpPersonalConnectorSchema }).strict(), {
+    updateMcpSelfConnector: async (connectorId, input, signal) => (
+      await requestMcpSelf("update", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
         method: "PATCH",
-        headers: idempotencyHeaders("mcp-personal", { ...JSON_HEADERS }),
+        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
         body: JSON.stringify(input),
       }, signal)
     ).connector,
-    setMcpPersonalConnectorEnabled: async (connectorId, input, signal) => (
-      await requestMcpPersonal("enabled", `/self/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`, z.object({ connector: mcpPersonalConnectorSchema }).strict(), {
+    setMcpSelfConnectorEnabled: async (connectorId, input, signal) => (
+      await requestMcpSelf("enabled", `/self/mcp/connectors/${encodeURIComponent(connectorId)}/enabled`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
         method: "PUT",
-        headers: idempotencyHeaders("mcp-personal", { ...JSON_HEADERS }),
+        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
         body: JSON.stringify(input),
       }, signal)
     ).connector,
-    removeMcpPersonalConnector: async (connectorId, input, signal) => (
-      await requestMcpPersonal("remove", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpPersonalConnectorSchema }).strict(), {
+    removeMcpSelfConnector: async (connectorId, input, signal) => (
+      await requestMcpSelf("remove", `/self/mcp/connectors/${encodeURIComponent(connectorId)}`, z.object({ connector: mcpSelfConnectorSchema }).strict(), {
         method: "DELETE",
-        headers: idempotencyHeaders("mcp-personal", { ...JSON_HEADERS }),
+        headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }),
         body: JSON.stringify(input),
       }, signal)
     ).connector,
+    beginMcpSelfConnectorAuthorization: (connectorId, input, signal) => requestMcpSelf(
+      "beginAuthorization",
+      `/self/mcp/connectors/${encodeURIComponent(connectorId)}/authorization`,
+      mcpSelfAuthorizationDataSchemas.beginAuthorization,
+      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+      signal,
+    ),
+    reconnectMcpSelfConnectorAuthorization: (connectorId, input, signal) => requestMcpSelf(
+      "reconnectAuthorization",
+      `/self/mcp/connectors/${encodeURIComponent(connectorId)}/authorization/reconnect`,
+      mcpSelfAuthorizationDataSchemas.reconnectAuthorization,
+      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+      signal,
+    ),
+    completeMcpSelfConnectorAuthorization: (input, signal) => requestMcpSelf(
+      "completeAuthorization",
+      "/self/mcp/authorization/callback",
+      mcpSelfAuthorizationDataSchemas.completeAuthorization,
+      { method: "POST", headers: { ...JSON_HEADERS }, body: JSON.stringify(input) },
+      signal,
+    ),
+    createMcpSelfConnection: (input, signal) => requestMcpSelf(
+      "createConnection",
+      "/self/mcp/connections",
+      mcpSelfAuthorizationDataSchemas.createConnection,
+      { method: "POST", headers: idempotencyHeaders("mcp-self", { ...JSON_HEADERS }), body: JSON.stringify(input) },
+      signal,
+    ),
     listSkillPool: async () => (await requestData(skillPoolPath, skillPoolSchema)).skills,
     listSkillCatalog: (params = {}) => {
       const search = new URLSearchParams()

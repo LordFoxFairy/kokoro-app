@@ -1,11 +1,11 @@
 /**
- * Parses a personal MCP command without collapsing duplicate JSON keys.
+ * Parses a current-user MCP JSON body without collapsing duplicate JSON keys.
  *
  * The browser-private MCP adapter must preserve the owner contract's strict
  * object semantics before applying its Zod schema. This stays beside the MCP
  * wire schema instead of borrowing a Project-specific parser.
  */
-export function parseMcpPersonalCommandJson(text: string): unknown {
+export function parseMcpSelfJson(text: string): unknown {
   const value: unknown = JSON.parse(text)
   const tokens = text.match(/"(?:[^"\\]|\\[\s\S])*"|[{}\[\]:,]|[^\s{}\[\]:,]+/gu) ?? []
   let cursor = 0

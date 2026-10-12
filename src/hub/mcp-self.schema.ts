@@ -1,83 +1,83 @@
 import { z } from "zod"
 
-export type McpPersonalReadOperation = "connectors" | "connector" | "connections" | "connection" | "providers" | "provider"
-export type McpPersonalCommandOperation = "create" | "update" | "enabled" | "remove"
-export type McpPersonalOperation = McpPersonalReadOperation | McpPersonalCommandOperation
-export const mcpPersonalIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
+export type McpSelfReadOperation = "connectors" | "connector" | "connections" | "connection" | "providers" | "provider"
+export type McpSelfCommandOperation = "create" | "update" | "enabled" | "remove"
+export type McpSelfOperation = McpSelfReadOperation | McpSelfCommandOperation
+export const mcpSelfIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
 const providerKey = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u)
 const cursor = z.string().regex(/^[A-Za-z0-9_-]{1,2048}(?![\s\S])/u)
-const stateVersion = z.string().regex(/^[1-9][0-9]{0,15}(?![\s\S])/u).refine(value => BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER))
+export const mcpSelfStateVersionSchema = z.string().regex(/^[1-9][0-9]{0,15}(?![\s\S])/u).refine(value => BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER))
 const scalar = (min: number, max: number) => z.string().refine(value => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value) && [...value].length >= min && [...value].length <= max && (min === 0 || Boolean(value.trim())))
 const status = z.enum(["pending", "active", "error", "revoked"])
 const unique = (values: string[]) => new Set(values).size === values.length
 const safeUrl = z.string().max(2048).refine(value => { try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password } catch { return false } })
-export const mcpPersonalConnectorSchema = z.object({
-  connector_id: mcpPersonalIdSchema,
+export const mcpSelfConnectorSchema = z.object({
+  connector_id: mcpSelfIdSchema,
   connector_type: z.enum(["builtin", "byok", "mcp"]),
   provider_key: providerKey,
   status,
   approved_scopes: z.array(z.string().min(1).max(128).regex(/^\S+(?![\s\S])/u)).refine(unique),
   enabled: z.boolean(),
-  state_version: stateVersion,
+  state_version: mcpSelfStateVersionSchema,
   display_name: scalar(1, 100).optional(),
   description: scalar(0, 1000).optional(),
   created_at: z.string().datetime({ offset: true }).optional(),
   updated_at: z.string().datetime({ offset: true }).optional(),
 }).strict()
-export type McpPersonalConnector = z.infer<typeof mcpPersonalConnectorSchema>
+export type McpSelfConnector = z.infer<typeof mcpSelfConnectorSchema>
 
-export const mcpPersonalConnectionSchema = z.object({
-  connection_id: mcpPersonalIdSchema,
-  connector_id: mcpPersonalIdSchema,
-  server_id: mcpPersonalIdSchema,
+export const mcpSelfConnectionSchema = z.object({
+  connection_id: mcpSelfIdSchema,
+  connector_id: mcpSelfIdSchema,
+  server_id: mcpSelfIdSchema,
   allowed_selectors: z.array(z.string().min(1).max(256).regex(/^\S(?:[\s\S]*\S)?(?![\s\S])/u)).refine(unique),
   policy_digest: z.string().regex(/^[a-f0-9]{64}(?![\s\S])/u),
   status: z.enum(["active", "revoked"]),
 }).strict()
-export type McpPersonalConnection = z.infer<typeof mcpPersonalConnectionSchema>
+export type McpSelfConnection = z.infer<typeof mcpSelfConnectionSchema>
 
 const category = z.enum(["efficiency", "creation", "business", "development", "finance", "travel", "health"])
-export const mcpPersonalProviderSchema = z.object({
+export const mcpSelfProviderSchema = z.object({
   provider_key: providerKey, display_name: scalar(1, 100), description: scalar(0, 1000).optional(), directory_type: z.enum(["app", "data_source"]),
-  category_keys: z.array(category).refine(unique), example_prompts: z.array(scalar(1, 1000)).max(10), author: scalar(1, 100).optional(), website: safeUrl.optional(), privacy_url: safeUrl.optional(), cover_image_url: safeUrl.optional(), updated_at: z.string().datetime({ offset: true }).optional(), enabled: z.boolean(), state_version: stateVersion,
+  category_keys: z.array(category).refine(unique), example_prompts: z.array(scalar(1, 1000)).max(10), author: scalar(1, 100).optional(), website: safeUrl.optional(), privacy_url: safeUrl.optional(), cover_image_url: safeUrl.optional(), updated_at: z.string().datetime({ offset: true }).optional(), enabled: z.boolean(), state_version: mcpSelfStateVersionSchema,
 }).strict()
-export type McpPersonalProvider = z.infer<typeof mcpPersonalProviderSchema>
+export type McpSelfProvider = z.infer<typeof mcpSelfProviderSchema>
 
 const page = <T extends z.ZodTypeAny>(item: T) => z.object({ items: z.array(item).max(100), next_cursor: cursor.nullable() }).strict()
-export const mcpPersonalConnectorPageSchema = page(mcpPersonalConnectorSchema)
-export const mcpPersonalConnectionPageSchema = page(mcpPersonalConnectionSchema)
-export const mcpPersonalProviderPageSchema = page(mcpPersonalProviderSchema)
-export type McpPersonalConnectorPage = z.infer<typeof mcpPersonalConnectorPageSchema>
-export type McpPersonalConnectionPage = z.infer<typeof mcpPersonalConnectionPageSchema>
-export type McpPersonalProviderPage = z.infer<typeof mcpPersonalProviderPageSchema>
-export const mcpPersonalSchemas = {
-  connectors: z.object({ data: mcpPersonalConnectorPageSchema }).strict(), connector: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(),
-  connections: z.object({ data: mcpPersonalConnectionPageSchema }).strict(), connection: z.object({ data: z.object({ connection: mcpPersonalConnectionSchema }).strict() }).strict(),
-  providers: z.object({ data: mcpPersonalProviderPageSchema }).strict(), provider: z.object({ data: z.object({ provider: mcpPersonalProviderSchema }).strict() }).strict(),
-  create: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), update: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), enabled: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(), remove: z.object({ data: z.object({ connector: mcpPersonalConnectorSchema }).strict() }).strict(),
+export const mcpSelfConnectorPageSchema = page(mcpSelfConnectorSchema)
+export const mcpSelfConnectionPageSchema = page(mcpSelfConnectionSchema)
+export const mcpSelfProviderPageSchema = page(mcpSelfProviderSchema)
+export type McpSelfConnectorPage = z.infer<typeof mcpSelfConnectorPageSchema>
+export type McpSelfConnectionPage = z.infer<typeof mcpSelfConnectionPageSchema>
+export type McpSelfProviderPage = z.infer<typeof mcpSelfProviderPageSchema>
+export const mcpSelfSchemas = {
+  connectors: z.object({ data: mcpSelfConnectorPageSchema }).strict(), connector: z.object({ data: z.object({ connector: mcpSelfConnectorSchema }).strict() }).strict(),
+  connections: z.object({ data: mcpSelfConnectionPageSchema }).strict(), connection: z.object({ data: z.object({ connection: mcpSelfConnectionSchema }).strict() }).strict(),
+  providers: z.object({ data: mcpSelfProviderPageSchema }).strict(), provider: z.object({ data: z.object({ provider: mcpSelfProviderSchema }).strict() }).strict(),
+  create: z.object({ data: z.object({ connector: mcpSelfConnectorSchema }).strict() }).strict(), update: z.object({ data: z.object({ connector: mcpSelfConnectorSchema }).strict() }).strict(), enabled: z.object({ data: z.object({ connector: mcpSelfConnectorSchema }).strict() }).strict(), remove: z.object({ data: z.object({ connector: mcpSelfConnectorSchema }).strict() }).strict(),
 }
-export const mcpPersonalCommandRequestSchemas = {
+export const mcpSelfCommandRequestSchemas = {
   create: z.object({ provider_key: providerKey, connector_type: z.enum(["builtin", "byok", "mcp"]), display_name: scalar(1, 100), description: scalar(0, 1000) }).strict(),
-  update: z.object({ display_name: scalar(1, 100), description: scalar(0, 1000), expected_state_version: stateVersion }).strict(),
-  enabled: z.object({ enabled: z.boolean(), expected_state_version: stateVersion }).strict(),
-  remove: z.object({ expected_state_version: stateVersion }).strict(),
+  update: z.object({ display_name: scalar(1, 100), description: scalar(0, 1000), expected_state_version: mcpSelfStateVersionSchema }).strict(),
+  enabled: z.object({ enabled: z.boolean(), expected_state_version: mcpSelfStateVersionSchema }).strict(),
+  remove: z.object({ expected_state_version: mcpSelfStateVersionSchema }).strict(),
 }
-export type McpPersonalCreateInput = z.infer<typeof mcpPersonalCommandRequestSchemas.create>
-export type McpPersonalUpdateInput = z.infer<typeof mcpPersonalCommandRequestSchemas.update>
-export type McpPersonalEnabledInput = z.infer<typeof mcpPersonalCommandRequestSchemas.enabled>
-export type McpPersonalRemoveInput = z.infer<typeof mcpPersonalCommandRequestSchemas.remove>
-export const mcpPersonalErrors: Record<number, readonly string[]> = {
+export type McpSelfCreateInput = z.infer<typeof mcpSelfCommandRequestSchemas.create>
+export type McpSelfUpdateInput = z.infer<typeof mcpSelfCommandRequestSchemas.update>
+export type McpSelfEnabledInput = z.infer<typeof mcpSelfCommandRequestSchemas.enabled>
+export type McpSelfRemoveInput = z.infer<typeof mcpSelfCommandRequestSchemas.remove>
+export const mcpSelfErrors: Record<number, readonly string[]> = {
   400: ["invalid_mcp_personal_request"], 401: ["session_authentication_required", "session_invalid"], 403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"], 404: ["mcp_personal_not_found"],
   409: ["mcp_personal_idempotency_conflict", "mcp_personal_command_in_progress"], 412: ["mcp_personal_precondition_failed"], 413: ["mcp_personal_body_too_large"], 429: ["session_rate_limited"], 502: ["mcp_personal_response_invalid"], 503: ["product_tenant_not_configured", "iam_admission_unavailable", "mcp_personal_dependency_unavailable"],
 }
-export const mcpPersonalErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string().min(1), retryable: z.boolean() }).strict() }).strict()
-export function mcpPersonalErrorAllowed(operation: McpPersonalOperation, httpStatus: number, value: unknown): boolean {
-  const parsed = mcpPersonalErrorSchema.safeParse(value)
+export const mcpSelfErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string().min(1), retryable: z.boolean() }).strict() }).strict()
+export function mcpSelfErrorAllowed(operation: McpSelfOperation, httpStatus: number, value: unknown): boolean {
+  const parsed = mcpSelfErrorSchema.safeParse(value)
   if (!parsed.success || ((operation === "connectors" || operation === "providers") && httpStatus === 404)) return false
-  return (mcpPersonalErrors[httpStatus]?.includes(parsed.data.error.code) ?? false) && parsed.data.error.retryable === (httpStatus === 429 || httpStatus === 503 || httpStatus === 409 && parsed.data.error.code === "mcp_personal_command_in_progress")
+  return (mcpSelfErrors[httpStatus]?.includes(parsed.data.error.code) ?? false) && parsed.data.error.retryable === (httpStatus === 429 || httpStatus === 503 || httpStatus === 409 && parsed.data.error.code === "mcp_personal_command_in_progress")
 }
-export function mcpPersonalMatches(operation: McpPersonalOperation, value: unknown, id: string | undefined, query: URLSearchParams, input?: unknown): boolean {
-  const parsed = mcpPersonalSchemas[operation].safeParse(value)
+export function mcpSelfMatches(operation: McpSelfOperation, value: unknown, id: string | undefined, query: URLSearchParams, input?: unknown): boolean {
+  const parsed = mcpSelfSchemas[operation].safeParse(value)
   if (!parsed.success) return false
   const data = parsed.data.data as unknown as { connector?: Record<string, unknown>; connection?: Record<string, unknown>; provider?: Record<string, unknown>; items?: Array<Record<string, unknown>> }
   if (operation === "connector") return data.connector?.connector_id === id

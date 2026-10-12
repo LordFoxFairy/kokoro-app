@@ -123,12 +123,12 @@ describe("hub client", () => {
     vi.stubGlobal("fetch", fetchMock)
     const client = createHubClient()
 
-    await expect(client.listMcpPersonalConnectors({ status: "active", limit: 25, cursor: "opaque" })).resolves.toEqual({ items: [connector], next_cursor: null })
-    await expect(client.listMcpPersonalProviders({ directory_type: "app", category_key: "development", limit: 25 })).resolves.toEqual({ items: [provider], next_cursor: null })
-    await expect(client.createMcpPersonalConnector({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })).resolves.toMatchObject({ connector_id: "connector-2", enabled: false })
-    await expect(client.updateMcpPersonalConnector("connector-1", { display_name: "Renamed", description: "Ready", expected_state_version: "2" })).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" })
-    await expect(client.setMcpPersonalConnectorEnabled("connector-1", { enabled: false, expected_state_version: "2" })).resolves.toMatchObject({ enabled: false })
-    await expect(client.removeMcpPersonalConnector("connector-1", { expected_state_version: "2" })).resolves.toMatchObject({ status: "revoked" })
+    await expect(client.listMcpSelfConnectors({ status: "active", limit: 25, cursor: "opaque" })).resolves.toEqual({ items: [connector], next_cursor: null })
+    await expect(client.listMcpSelfProviders({ directory_type: "app", category_key: "development", limit: 25 })).resolves.toEqual({ items: [provider], next_cursor: null })
+    await expect(client.createMcpSelfConnector({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })).resolves.toMatchObject({ connector_id: "connector-2", enabled: false })
+    await expect(client.updateMcpSelfConnector("connector-1", { display_name: "Renamed", description: "Ready", expected_state_version: "2" })).resolves.toMatchObject({ display_name: "Renamed", state_version: "3" })
+    await expect(client.setMcpSelfConnectorEnabled("connector-1", { enabled: false, expected_state_version: "2" })).resolves.toMatchObject({ enabled: false })
+    await expect(client.removeMcpSelfConnector("connector-1", { expected_state_version: "2" })).resolves.toMatchObject({ status: "revoked" })
 
     expect(fetchMock.mock.calls.map(([path]) => new URL(path, "http://localhost").pathname)).toEqual([
       "/api/hub/self/mcp/connectors", "/api/hub/self/mcp/providers", "/api/hub/self/mcp/connectors", "/api/hub/self/mcp/connectors/connector-1", "/api/hub/self/mcp/connectors/connector-1/enabled", "/api/hub/self/mcp/connectors/connector-1",
@@ -138,11 +138,44 @@ describe("hub client", () => {
     const createInit = fetchMock.mock.calls[2]![1] as RequestInit
     expect(createInit.method).toBe("POST")
     expect(createInit.headers).toMatchObject({ "content-type": "application/json" })
-    expect((createInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-personal:/u)
+    expect((createInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-self:/u)
     expect(JSON.parse(String(createInit.body))).toEqual({ provider_key: "provider-one", connector_type: "mcp", display_name: "New connector", description: "" })
     expect(JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body))).toEqual({ display_name: "Renamed", description: "Ready", expected_state_version: "2" })
     expect(JSON.parse(String((fetchMock.mock.calls[4]![1] as RequestInit).body))).toEqual({ enabled: false, expected_state_version: "2" })
     expect(JSON.parse(String((fetchMock.mock.calls[5]![1] as RequestInit).body))).toEqual({ expected_state_version: "2" })
+  })
+
+  it("uses the exact self OAuth and Connection lifecycle routes and headers", async () => {
+    const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "pending", approved_scopes: ["tools.read"], enabled: false, state_version: "2" }
+    const authorization = { authorization_id: "authorization-1", authorization_url: "https://oauth.example.test/authorize?state=opaque", expires_at: "2027-01-15T08:00:00.000Z" }
+    const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], policy_digest: "a".repeat(64), status: "active" }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(publicResponse({ data: { authorization, connector } }))
+      .mockResolvedValueOnce(publicResponse({ data: { authorization, connector: { ...connector, state_version: "3" } } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, status: "active", state_version: "4" } } }))
+      .mockResolvedValueOnce(publicResponse({ data: { connection } }, 201))
+    vi.stubGlobal("fetch", fetchMock)
+    const client = createHubClient()
+
+    await expect(client.beginMcpSelfConnectorAuthorization("connector-1", { server_id: "server-1", expected_state_version: "1" })).resolves.toEqual({ authorization, connector })
+    await expect(client.reconnectMcpSelfConnectorAuthorization("connector-1", { server_id: "server-1", expected_state_version: "2" })).resolves.toMatchObject({ connector: { state_version: "3" } })
+    await expect(client.completeMcpSelfConnectorAuthorization({ state: "opaque", code: "code" })).resolves.toMatchObject({ connector: { status: "active" } })
+    await expect(client.createMcpSelfConnection({ connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], expected_state_version: "4" })).resolves.toEqual({ connection })
+
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/api/hub/self/mcp/connectors/connector-1/authorization",
+      "/api/hub/self/mcp/connectors/connector-1/authorization/reconnect",
+      "/api/hub/self/mcp/authorization/callback",
+      "/api/hub/self/mcp/connections",
+    ])
+    for (const index of [0, 1, 2]) {
+      const init = fetchMock.mock.calls[index]![1] as RequestInit
+      expect(init.method).toBe("POST")
+      expect(init.headers).toEqual({ "content-type": "application/json" })
+    }
+    const connectionInit = fetchMock.mock.calls[3]![1] as RequestInit
+    expect(connectionInit.headers).toMatchObject({ "content-type": "application/json" })
+    expect((connectionInit.headers as Record<string, string>)["Idempotency-Key"]).toMatch(/^mcp-self:/u)
   })
 
   it("bounds MCP connection response bytes, UTF-8, error status and caller cancellation", async () => {
