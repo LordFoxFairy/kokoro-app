@@ -33,6 +33,14 @@ const skillCategoriesSchema = z.array(z.enum(SKILL_CATEGORIES)).min(1).max(SKILL
 // 池只含「有效可用」项（official 上架∧用户未关 + 自有包）；required 官方技能恒在且拒关（disable→409）。
 const skillCardSchema = z
   .object({
+    // Installed Skill cards can carry the owner series/revision binding.
+    // When present, Settings opens the admitted package reader rather than a
+    // synthetic file outline.
+    skill_id: z.string().min(1).optional(),
+    revision_skill_id: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
+      .optional(),
     name: z.string().min(1),
     description: z.string(),
     content_hash: z.string().min(1),

@@ -302,6 +302,18 @@ it("consumes complete current Hub/List fields, APPS and independent installed/en
   expect(result.skills[0]).toMatchObject({ skill_id: "series-current", categories: ["apps"], installed: true, enabled: false, cover_image: `/api/hub/skills/${ownerRevision}/cover` })
   expect(result.next_cursor).toBe("cursor")
 })
+it("preserves installed owner bindings for the actual package reader", async () => {
+  stubOwnerReads()
+  const pool = await createManusSkillHubClient(createHubClient()).listSkillPool()
+  expect(pool).toEqual([
+    expect.objectContaining({
+      skill_id: "series-current",
+      revision_skill_id: ownerRevision,
+      content_hash: "series-current",
+    }),
+  ])
+})
+
 it("renders the owner APPS category in the existing filter and uses revision cover", async () => {
   stubOwnerReads()
   renderLive()

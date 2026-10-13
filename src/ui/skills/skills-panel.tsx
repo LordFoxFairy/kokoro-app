@@ -28,13 +28,14 @@ import { cn } from "@/lib/utils"
 import { invalidate, useAsyncAction, useResource } from "@/lib/query"
 import type { HubClient } from "@/hub/client"
 import { isRequiredLockError } from "@/hub/rules"
-import type { SkillCard, SkillCatalog, SkillQuota, SkillRevision } from "@/hub/schemas"
+import type { SkillCard, SkillCatalog, SkillCatalogCard, SkillQuota, SkillRevision } from "@/hub/schemas"
 
 import styles from "./skills-panel.module.css"
 import { useOverlayClose } from "@/ui/shell/use-overlay-close"
 import { GithubImportDialog } from "./github-import-dialog"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { SkillDetailDialog } from "./skill-detail-dialog"
+import { ManusSkillDetailDialog } from "./manus-skill-detail-dialog"
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target
@@ -287,26 +288,63 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
         returnFocusRef={uploadReturnFocusRef}
         onPublished={invalidateSkills}
       />
-      <SkillDetailDialog
-        skill={detailSkill}
-        {...(brandName === undefined ? {} : { brandName })}
-        open={detailSkill !== null}
-        onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
-        returnFocusRef={detailReturnFocusRef}
-        onTry={(skill, prompt) => {
-          if (onTrySkill) {
-            // Keep the existing one-argument Try callback shape intact. Only
-            // prompt cards add their visible text as a second argument.
-            if (prompt === undefined) onTrySkill(skill)
-            else onTrySkill(skill, prompt)
-          } else if (!pinned.includes(skill.name)) {
-            onTogglePin(skill.name)
-          }
-          setDetailSkill(null)
-        }}
-      />
+      {detailSkill?.skill_id !== undefined && detailSkill.revision_skill_id !== undefined ? (
+        <ManusSkillDetailDialog
+          skill={toInstalledCatalogCard(detailSkill)}
+          publisherLabel={brandName ?? "Kokoro"}
+          categoryLabels={detailSkill.categories ?? []}
+          open
+          installationState={{ installed: true, enabled: detailSkill.enabled === true }}
+          onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
+          returnFocusRef={detailReturnFocusRef}
+          onAdd={(skill) => void onSetEnabled(skill.name, true, skillStateKey(skill.scope, skill.name), skill.scope)}
+          onTry={(prompt) => {
+            if (onTrySkill) onTrySkill(detailSkill, prompt)
+            else if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name)
+            setDetailSkill(null)
+          }}
+        />
+      ) : (
+        <SkillDetailDialog
+          skill={detailSkill}
+          {...(brandName === undefined ? {} : { brandName })}
+          open={detailSkill !== null}
+          onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
+          returnFocusRef={detailReturnFocusRef}
+          onTry={(skill, prompt) => {
+            if (onTrySkill) {
+              // Keep the existing one-argument Try callback shape intact. Only
+              // prompt cards add their visible text as a second argument.
+              if (prompt === undefined) onTrySkill(skill)
+              else onTrySkill(skill, prompt)
+            } else if (!pinned.includes(skill.name)) {
+              onTogglePin(skill.name)
+            }
+            setDetailSkill(null)
+          }}
+        />
+      )}
     </>
   )
+}
+
+/** Converts an installed projection into the detail reader's owner-bound card. */
+function toInstalledCatalogCard(skill: SkillCard): SkillCatalogCard {
+  if (skill.skill_id === undefined || skill.revision_skill_id === undefined) {
+    throw new Error("installed skill is missing its owner binding")
+  }
+  return {
+    skill_id: skill.skill_id,
+    revision_skill_id: skill.revision_skill_id,
+    name: skill.name,
+    description: skill.description,
+    content_hash: skill.content_hash,
+    scope: skill.scope,
+    installed: true,
+    enabled: skill.enabled === true,
+    ...(skill.categories === undefined ? {} : { categories: skill.categories }),
+    ...(skill.updated_at === undefined ? {} : { updated_at: skill.updated_at }),
+  }
 }
 
 type ScopeFilter = "all" | "personal" | "official" | "thirdParty"
