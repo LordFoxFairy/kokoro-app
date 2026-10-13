@@ -9,6 +9,13 @@ import {
   mcpConnectorErrorAllowed,
   mcpConnectorErrorSchema,
   mcpConnectorProviderPageSchema,
+  mcpPrivateServerRegistrationInputSchema,
+  mcpPrivateServerRegistrationSchema,
+  mcpPrivateServerSchema,
+  type McpPrivateServer,
+  type McpPrivateServerOperation,
+  type McpPrivateServerRegistration,
+  type McpPrivateServerRegistrationInput,
   type McpConnectorCommandOperation,
   type McpConnector,
   type McpConnectorPage,
@@ -356,7 +363,7 @@ const MCP_CONNECTOR_TIMEOUT_MS = 10_000
  * no-store/request-id/media invariants and makes late responses cancellable.
  */
 async function requestMcpConnector<T extends ZodTypeAny>(
-  operation: McpConnectorCommandOperation | McpConnectorAuthorizationOperation | "connectors" | "providers",
+  operation: McpConnectorCommandOperation | McpConnectorAuthorizationOperation | McpPrivateServerOperation | "connectors" | "providers",
   path: string,
   schema: T,
   init?: RequestInit,
@@ -409,7 +416,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     } catch (error) {
       throw new HubClientError("parse", describeUnknown(error), null, response.status)
     }
-    const expected = operation === "create" || operation === "createConnection" ? 201 : 200
+    const expected = operation === "create" || operation === "createConnection" || operation === "registerServer" ? 201 : 200
     if (response.status === expected) {
       const parsed = z.object({ data: schema }).strict().safeParse(raw)
       if (!parsed.success) throw new HubClientError("parse", parsed.error.message, null, response.status)
@@ -417,9 +424,10 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     }
     const parsed = mcpConnectorErrorSchema.safeParse(raw)
     const authorizationOperation = ["beginAuthorization", "reconnectAuthorization", "completeAuthorization", "createConnection"].includes(operation)
+    const connectorOperation = operation === "registerServer" ? "create" : operation === "server" ? "connector" : operation
     const errorAllowed = authorizationOperation
       ? mcpConnectorAuthorizationErrorAllowed(response.status, parsed.data)
-      : mcpConnectorErrorAllowed(operation as McpConnectorCommandOperation | "connectors" | "providers", response.status, parsed.data)
+      : mcpConnectorErrorAllowed(connectorOperation as McpConnectorCommandOperation | "connectors" | "providers", response.status, parsed.data)
     if (!parsed.success || !errorAllowed) throw new HubClientError("parse", "invalid MCP current-user error", null, response.status)
     throw new HubClientError(
       "http",
@@ -466,6 +474,8 @@ export type HubClient = {
     signal?: AbortSignal,
   ) => Promise<McpConnectorProviderPage>
   createMcpConnector: (input: McpConnectorCreateInput, signal?: AbortSignal) => Promise<McpConnector>
+  registerPrivateMcpServer?: (input: McpPrivateServerRegistrationInput, signal?: AbortSignal) => Promise<McpPrivateServerRegistration>
+  getPrivateMcpServer?: (serverId: string, signal?: AbortSignal) => Promise<McpPrivateServer>
   updateMcpConnector: (connectorId: string, input: McpConnectorUpdateInput, signal?: AbortSignal) => Promise<McpConnector>
   setMcpConnectorEnabled: (connectorId: string, input: McpConnectorEnabledInput, signal?: AbortSignal) => Promise<McpConnector>
   removeMcpConnector: (connectorId: string, input: McpConnectorRemoveInput, signal?: AbortSignal) => Promise<McpConnector>
@@ -561,6 +571,8 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).connector,
+    registerPrivateMcpServer: (input, signal) => requestMcpConnector("registerServer", "/mcp/servers", mcpPrivateServerRegistrationSchema, { method: "POST", headers: idempotencyHeaders("mcp-private-server", { ...JSON_HEADERS }), body: JSON.stringify(mcpPrivateServerRegistrationInputSchema.parse(input)) }, signal),
+    getPrivateMcpServer: async (serverId, signal) => (await requestMcpConnector("server", `/mcp/servers/${encodeURIComponent(serverId)}`, z.object({ server: mcpPrivateServerSchema }).strict(), undefined, signal)).server,
     updateMcpConnector: async (connectorId, input, signal) =>
       (
         await requestMcpConnector(

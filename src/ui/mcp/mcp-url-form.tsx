@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { McpPrivateServerRegistration } from "@/hub/mcp-connector.schema"
 import { Button } from "@/components/ui/button"
 import { DialogTitle } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -14,17 +15,18 @@ import styles from "./mcp-create-dialog.module.css"
 function isMcpEndpointUrl(value: string): boolean {
   try {
     const endpoint = new URL(value)
-    return endpoint.protocol === "https:" && endpoint.hostname.length > 0 && endpoint.username === "" && endpoint.password === "" && endpoint.search === "" && endpoint.hash === ""
+    return value.trim() === value && endpoint.protocol === "https:" && endpoint.hostname.length > 0 && endpoint.username === "" && endpoint.password === "" && endpoint.hash === "" && endpoint.toString() === value
   } catch {
     return false
   }
 }
 
-export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; onCancel: () => void; onDone: () => Promise<void> }) {
+export function UrlMcpForm({ client, onCancel, onDone, onAuthorizationNavigate }: { client: HubClient; onCancel: () => void; onDone: () => Promise<void>; onAuthorizationNavigate?: (url: string) => void }) {
   const t = useT()
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
   const [advanced, setAdvanced] = useState(false)
+  const [registration, setRegistration] = useState<McpPrivateServerRegistration | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const canSubmit = name.trim().length > 0 && isMcpEndpointUrl(url.trim()) && !submitting
@@ -34,25 +36,33 @@ export function UrlMcpForm({ client, onCancel, onDone }: { client: HubClient; on
     setError("")
     setSubmitting(true)
     try {
-      if (!client.registerCustomMcp) {
-        throw new Error("custom MCP registration is unavailable")
+      const result = registration ?? await (async () => {
+        if (!client.registerPrivateMcpServer) throw new Error("private MCP registration is unavailable")
+        const created = await client.registerPrivateMcpServer({ display_name: name.trim(), server_url: url.trim() })
+        setRegistration(created)
+        return created
+      })()
+      if (enabled && result.connector.status === "pending") {
+        const started = await client.beginMcpConnectorAuthorization(result.connector.connector_id, {
+          server_id: result.server.server_id,
+          expected_state_version: result.connector.state_version,
+        })
+        ;(onAuthorizationNavigate ?? ((authorizationUrl: string) => window.location.assign(authorizationUrl)))(started.authorization.authorization_url)
       }
-      await client.registerCustomMcp({
-        name: name.trim(),
-        transport: "streamable_http",
-        endpoint_url: url.trim(),
-        icon_asset_id: null,
-        instructions: null,
-        headers: [],
-        enabled,
-      })
-      await onDone()
     } catch {
       setError(t("mcp.error"))
     } finally {
       setSubmitting(false)
     }
   }
+
+  if (registration !== null) return <section className={styles.urlMcpForm} aria-live="polite">
+    <DialogTitle className={styles.urlMcpTitle}>{registration.server.display_name}</DialogTitle>
+    <p className={styles.urlWarning}>{registration.connector.status === "pending" ? t("mcp.pending") : t("mcp.active")}</p>
+    {registration.connector.status === "pending"
+      ? <Button type="button" disabled={submitting} onClick={() => void submit(true)}>{t("settings.connect")}</Button>
+      : <Button type="button" onClick={() => void onDone()}>{t("mcp.save")}</Button>}
+  </section>
 
   return <form className={styles.urlMcpForm} onSubmit={(event) => { event.preventDefault(); void submit(false) }}>
     <DialogTitle className={styles.urlMcpTitle}>

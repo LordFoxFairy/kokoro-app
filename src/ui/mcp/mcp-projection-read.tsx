@@ -363,7 +363,7 @@ export function McpProjectionRead({ client, identity, onAuthorizationNavigate, o
           const busy = actionId === connector.connector_id
           const restarting = actionId === `reconnect:${connector.connector_id}`
           const deleting = deleteId === connector.connector_id
-          const connectionServerId = provider?.connection_server_id
+          const connectionServerId = provider?.connection_server_id ?? connector.server_id
           const canRestartAuthorization =
             (connector.status === "pending" || connector.status === "error") &&
             connectionServerId !== undefined
