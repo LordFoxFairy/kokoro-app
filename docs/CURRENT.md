@@ -1,3 +1,11 @@
+## SET-16 正式本地浏览器偏好验收（2026-10-14）
+
+代码固定 `dfb7ab5857f00ae73a9e68eb3a5d65129f2529f9`，Root正式运行代码基线 `915947bd8cb8f2ce3aa043c6355a0b0e0d15e59d`。42路径冻结经Root逐hash核对和独立审查，无新增确定P1/P2；Root独立10具名engine/UI文件合计398PASS，实际Next HTTPS两负控2PASS/3过滤，writer最终lint/type/build通过。私有冻结manifest曾错记347聚焦日志的命令集合，原文件保留、更正另记；347实际8文件含settings-modal/AppFrame，不含Root另验的machine/event-reducer，不能混用计数与命令。
+
+实际computer use已完成正规登录及通用页声音开关保存反馈→全页刷新仍开启→显式启用本页声音后locked提示消失；保持本页两分钟以上后仍显示开启且无locked提示，但没有据此宣称已观察到auth重验请求。两个营销开关真实disabledfalse，原四个可见关闭偏好已恢复。保存与显式启用操作分别约476ms/346ms，包含工具开销，非后端基准。浏览器OS通知许可未授予，正式模型任务完成后的实际系统通知/提示音仍受Agent/Billing授权硬门阻塞；不能据音频解锁或unit证据称听到了真实完成提示音。
+
+全量22FAIL原日志与首次strict-ready失败保留，未重跑全量/完整axe/visual。Skills/连接器无功能变更，完整设置Goal仍active；下方候选与待验记录均为该验收前的阶段历史。
+
 ## SET-16 通用通知与声音候选（2026-10-14，待Root冻结独审/浏览器验收）
 
 冻结V1放行撤回：独审确认正常每120秒/返回可见的同主体重验会因 readBoundary generation 错误退役任务锚与音频；Root已在三设计统一稳定资源身份与短期投递门，恢复单一 writer 做现有文件局部修复及具名回归。Root独立8文件335PASS仍未覆盖此生产生命周期。两proxy负控旧源码PASS而V1候选曾500；Root独立审计定位cold-start fixture误把500当ready，授权改为正规/iam/jwks===200。不把全测22失败统称旧失败，实际候选仍待Root独审/启动。
