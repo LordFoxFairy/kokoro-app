@@ -32,8 +32,10 @@ export async function readAccountProfile(request: Request): Promise<Response> {
       request.headers.get("content-length") !== "0")
   )
     return fail(400, "account_profile_invalid_request");
+  // Next may construct the internal URL with its bind hostname. Browser
+  // authority is the canonical Host/Origin boundary, not that internal host.
   if (
-    url.origin !== config.relay.webOrigin ||
+    url.protocol !== new URL(config.relay.webOrigin).protocol ||
     !matchesCanonicalWebRequest(request, config.relay, "GET")
   )
     return fail(403, "account_profile_forbidden");

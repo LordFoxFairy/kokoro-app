@@ -321,3 +321,41 @@ it("never follows redirects or leaks owner cookies",async()=>{
   requestWithDomain.mockResolvedValue(new Response(null,{status:302,headers:{location:"https://private.test", "set-cookie":"secret=issuer"}}));
   const response=await GET(request());expect(response.status).toBe(502);expect(response.headers.get("location")).toBeNull();expect(response.headers.get("set-cookie")).toBeNull();expect(requestWithDomain).toHaveBeenCalledTimes(1);
 });
+
+it("admits Next internal localhost URL with the canonical browser Host and Origin", async () => {
+  vi.stubEnv("KOKORO_WEB_ORIGIN", "http://127.0.0.1:3311");
+  vi.stubEnv("NEXTAUTH_URL", "http://127.0.0.1:3311/api/auth");
+  const response = await GET(
+    new Request("http://localhost:3311/api/account/profile", {
+      headers: { host: "127.0.0.1:3311", origin: "http://127.0.0.1:3311" },
+    }),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ data: { subject: "alice" } });
+});
+
+it.each([
+  { protocol: "http", host: "localhost:3311", origin: "http://127.0.0.1:3311" },
+  { protocol: "http", host: "evil.test", origin: "http://127.0.0.1:3311" },
+  { protocol: "http", host: "127.0.0.1:3311", origin: "http://localhost:3311" },
+  { protocol: "http", host: "127.0.0.1:3311", origin: "http://evil.test" },
+  {
+    protocol: "https",
+    host: "127.0.0.1:3311",
+    origin: "http://127.0.0.1:3311",
+  },
+])(
+  "retains canonical host/origin/protocol rejection for %j",
+  async ({ protocol, host, origin }) => {
+    vi.stubEnv("KOKORO_WEB_ORIGIN", "http://127.0.0.1:3311");
+    vi.stubEnv("NEXTAUTH_URL", "http://127.0.0.1:3311/api/auth");
+    const response = await GET(
+      new Request(`${protocol}://localhost:3311/api/account/profile`, {
+        headers: { host, origin },
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(currentProductSession).not.toHaveBeenCalled();
+    expect(requestWithDomain).not.toHaveBeenCalled();
+  },
+);

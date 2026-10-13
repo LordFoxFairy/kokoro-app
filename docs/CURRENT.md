@@ -1,3 +1,9 @@
+## SET-07 正式 Next 内部 URL 与浏览器 authority 修正（2026-10-13）
+
+Root实际候选组合登录后，账户资料被account_profile_forbidden拒绝：Next内部Request URL的bind hostname与正规浏览器Host不同。旧额外url.origin全等判断把内部bind hostname误当浏览器authority；不是IAM资料或登录失败。本片用已存在matchesCanonicalWebRequest核正规Host与可选Origin，同时保留URL协议与配置一致、path/query/body原校验，不添加hostname alias或更改launcher。
+
+新增真实Request构造差异回归在旧实现1FAIL/46PASS，最小修正后47PASS；非正规Host、非正规Origin及协议不一致五项负控均403且零session/owner I/O。Root冻结复跑账户server/client/card与modal共112PASS，完整lint、production build（含TypeScript）exit0；变更两文件ESLint、tsc --noEmit --incremental false与diff-check均exit0。实际浏览器需在固定新提交的隔离组合复验，不将unit fixture称为CUA通过。
+
 ## SET-08 设置键盘焦点恢复（2026-10-13）
 
 设置侧栏 focus-visible 改用真实 2px outline，并删除 active tab 清除焦点阴影的覆盖规则；鼠标交互仍由浏览器 focus-visible 判定。修复既存 CSS 门禁及键盘所选项无可见焦点的问题，不放宽架构测试。完整 architecture 50/50、原 settings modal 42/42 与 production build 通过；真实键盘浏览器验收仍待。
