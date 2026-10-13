@@ -31,7 +31,7 @@ describe("preview settings clients", () => {
     const before = await client.listSkillCatalog?.({ scope: "official" })
     expect(before?.skills.some((skill) => skill.name === "Skill Builder" && !skill.installed)).toBe(true)
 
-    await client.setSkillEnabled("Skill Builder", true)
+    await client.installSkill?.("skill:preview-catalog:official:Skill Builder")
 
     const after = await client.listSkillCatalog?.({ scope: "official", query: "Skill Builder" })
     expect(after?.skills[0]).toMatchObject({ name: "Skill Builder", installed: true, enabled: true })
@@ -45,7 +45,7 @@ describe("preview settings clients", () => {
     expect(before?.skills.map((skill) => skill.name)).toEqual(["copy-editor", "Notion Workspace"])
     expect(before?.skills.every((skill) => skill.scope === "third_party")).toBe(true)
 
-    await client.setSkillEnabled("Notion Workspace", true)
+    await client.installSkill?.("skill:preview-catalog:third_party:Notion Workspace")
 
     const after = await client.listSkillCatalog?.({ scope: "third_party", query: "Notion" })
     expect(after?.skills).toHaveLength(1)

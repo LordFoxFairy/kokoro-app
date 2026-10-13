@@ -90,7 +90,7 @@ function sourceKind(skill: HubSkill): "official" | "third_party" {
   return skill.publisherType === "SKILL_HUB_PUBLISHER_TYPE_MANUS_OFFICIAL" ? "official" : "third_party"
 }
 
-function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean }>>): SkillCatalogCard {
+function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>): SkillCatalogCard {
   const createdAt = skill.createdAt === undefined ? undefined : Date.parse(skill.createdAt)
   return {
     name: skill.displayName ?? skill.originalName ?? skill.skillId,
@@ -100,10 +100,12 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
     // from a title.
     content_hash: skill.currentVersion?.checksum ?? skill.skillId,
     skill_id: skill.skillId,
+    ...(skill.currentVersion?.versionUid === undefined ? {} : { source_ref: `skill:${skill.currentVersion.versionUid}` }),
     ...(skill.currentVersion?.versionUid === undefined ? {} : { revision_skill_id: skill.currentVersion.versionUid }),
     scope: sourceKind(skill),
     installed: added.get(skill.skillId)?.installed === true,
     enabled: added.get(skill.skillId)?.enabled === true,
+    ...(added.get(skill.skillId)?.installationId === undefined ? {} : { installation_id: added.get(skill.skillId)?.installationId }),
     categories: (skill.tags?.values ?? []).map((value) => {
       if (!(value in categories)) throw new Error("skill_response_invalid")
       return categories[value as keyof typeof categories]
@@ -122,6 +124,7 @@ function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"):
     .find(Number.isFinite)
   return {
     skill_id: skill.id,
+    ...(skill.installationId === undefined ? {} : { installation_id: skill.installationId }),
     ...(skill.version !== undefined && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(skill.version)
       ? { revision_skill_id: skill.version }
       : {}),
@@ -191,16 +194,25 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
         }, manuscriptHubPageSchema, input.signal),
         post("ListSkills", {}, manuscriptListSchema, input.signal),
       ])
-      const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean }>>()
+      const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>()
       for (const skill of installed.userAddedSkills) {
         if (added.has(skill.id) || skill.added === false) throw new Error("skill_response_invalid")
-        added.set(skill.id, { installed: true, enabled: skill.enabled === true })
+        added.set(skill.id, {
+          installed: true,
+          enabled: skill.enabled === true,
+          ...(skill.installationId === undefined ? {} : { installationId: skill.installationId }),
+        })
       }
       const seenOfficial = new Set<string>()
       for (const skill of installed.officialSkills) {
         if (seenOfficial.has(skill.id) || skill.added === false && added.has(skill.id)) throw new Error("skill_response_invalid")
         seenOfficial.add(skill.id)
-        if (!added.has(skill.id) && skill.added === true) added.set(skill.id, { installed: true, enabled: skill.enabled === true })
+        if (!added.has(skill.id) && skill.added === true)
+          added.set(skill.id, {
+            installed: true,
+            enabled: skill.enabled === true,
+            ...(skill.installationId === undefined ? {} : { installationId: skill.installationId }),
+          })
       }
       const skills = hub.skills
         .filter((skill) => input.scope === undefined || sourceKind(skill) === input.scope)

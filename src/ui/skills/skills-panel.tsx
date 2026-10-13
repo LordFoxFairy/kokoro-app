@@ -201,9 +201,19 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
     mutationAttemptRef.current += 1
   }, [])
 
-  const enabledAction = useAsyncAction(({ name, enabled, scope }: { name: string; enabled: boolean; scope?: string }) => client.setSkillEnabled(name, enabled, scope))
+  const enabledAction = useAsyncAction(async ({ skill, enabled }: { skill: SkillCard; enabled: boolean }) => {
+    if (skill.installation_id !== undefined) {
+      await client.setSkillEnabled(skill.installation_id, enabled)
+      return
+    }
+    if (enabled && skill.source_ref !== undefined && client.installSkill !== undefined) {
+      await client.installSkill(skill.source_ref)
+      return
+    }
+    throw new Error("skill installation identity is unavailable")
+  })
   const onSetEnabled = useCallback(
-    async (name: string, enabled: boolean, stateKey = name, scope?: string) => {
+    async (skill: SkillCard, enabled: boolean, stateKey = skillStateKey(skill.scope, skill.name)) => {
       // One mutation owns the shared hub action slot. State is for rendering;
       // the ref closes the same-frame double-click window before React commits
       // the busy state.
@@ -213,7 +223,7 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
       // 池内项恒为「已启用」：唯一动作是停用（停用后离池）。required 撞 409 → 锁定回滚。
       setBusy(stateKey)
       setDisableError(null)
-      const outcome = await enabledAction.run(scope === undefined ? { name, enabled } : { name, enabled, scope })
+      const outcome = await enabledAction.run({ skill, enabled })
       if (!mountedRef.current || attempt !== mutationAttemptRef.current) return
       setBusy(null)
       if (outcome.ok) {
@@ -248,7 +258,7 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
             expanded={expanded}
             client={client}
             onRetry={pool.refetch}
-            onDisable={(name, stateKey, scope) => onSetEnabled(name, false, stateKey, scope)}
+            onDisable={(skill, stateKey) => onSetEnabled(skill, false, stateKey)}
             onSetEnabled={onSetEnabled}
             enabledOverrides={enabledOverrides}
             installedOverrides={installedOverrides}
@@ -297,7 +307,7 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
           installationState={{ installed: true, enabled: detailSkill.enabled === true }}
           onOpenChange={(open) => { if (!open) setDetailSkill(null) }}
           returnFocusRef={detailReturnFocusRef}
-          onAdd={(skill) => void onSetEnabled(skill.name, true, skillStateKey(skill.scope, skill.name), skill.scope)}
+          onAdd={(skill) => void onSetEnabled(toSkillActionCard(skill), true, skillStateKey(skill.scope, skill.name))}
           onTry={(prompt) => {
             if (onTrySkill) onTrySkill(detailSkill, prompt)
             else if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name)
@@ -335,6 +345,8 @@ function toInstalledCatalogCard(skill: SkillCard): SkillCatalogCard {
   }
   return {
     skill_id: skill.skill_id,
+    ...(skill.installation_id === undefined ? {} : { installation_id: skill.installation_id }),
+    ...(skill.source_ref === undefined ? {} : { source_ref: skill.source_ref }),
     revision_skill_id: skill.revision_skill_id,
     name: skill.name,
     description: skill.description,
@@ -343,6 +355,21 @@ function toInstalledCatalogCard(skill: SkillCard): SkillCatalogCard {
     installed: true,
     enabled: skill.enabled === true,
     ...(skill.categories === undefined ? {} : { categories: skill.categories }),
+    ...(skill.updated_at === undefined ? {} : { updated_at: skill.updated_at }),
+  }
+}
+
+function toSkillActionCard(skill: SkillCatalogCard): SkillCard {
+  return {
+    ...(skill.skill_id === undefined ? {} : { skill_id: skill.skill_id }),
+    ...(skill.installation_id === undefined ? {} : { installation_id: skill.installation_id }),
+    ...(skill.source_ref === undefined ? {} : { source_ref: skill.source_ref }),
+    ...(skill.revision_skill_id === undefined ? {} : { revision_skill_id: skill.revision_skill_id }),
+    name: skill.name,
+    description: skill.description,
+    content_hash: skill.content_hash,
+    scope: skill.scope,
+    enabled: skill.enabled,
     ...(skill.updated_at === undefined ? {} : { updated_at: skill.updated_at }),
   }
 }
@@ -395,8 +422,8 @@ function PoolTab({
   expanded: string | null
   client: HubClient
   onRetry: () => void
-  onDisable: (name: string, stateKey: string, scope: string) => void
-  onSetEnabled: (name: string, enabled: boolean, stateKey?: string, scope?: string) => void
+  onDisable: (skill: SkillCard, stateKey: string) => void
+  onSetEnabled: (skill: SkillCard, enabled: boolean, stateKey?: string) => void
   enabledOverrides: ReadonlyMap<string, boolean>
   installedOverrides: ReadonlyMap<string, boolean>
   onTogglePin: (name: string) => void
@@ -680,7 +707,7 @@ function PoolTab({
                     pending={busy === stateKey}
                     locked={isLocked}
                     error={disableError === stateKey ? t("skills.disableError") : null}
-                    onEnabledChange={(enabled) => onSetEnabled(skill.name, enabled, stateKey, skill.scope)}
+                    onEnabledChange={(enabled) => onSetEnabled(skill, enabled, stateKey)}
                     onOpenDetail={(source) => onOpenDetail(skill, source)}
                   />
                 </li>
@@ -756,7 +783,7 @@ function PoolTab({
                         aria-busy={busy === stateKey}
                         onClick={() => {
                           setConfirming(null)
-                          onDisable(skill.name, stateKey, skill.scope)
+                          onDisable(skill, stateKey)
                           window.requestAnimationFrame(() => searchRef.current?.focus())
                         }}
                       >
@@ -919,7 +946,7 @@ function SkillCatalogDialog({
   errorName: string | null
   onOpenUpload: (returnFocusRef?: RefObject<HTMLElement | null>) => void
   onOpenGithub: (returnFocusRef?: RefObject<HTMLElement | null>) => void
-  onSetEnabled: (name: string, enabled: boolean, stateKey?: string, scope?: string) => void
+  onSetEnabled: (skill: SkillCard, enabled: boolean, stateKey?: string) => void
 }) {
   const t = useT()
   const [query, setQuery] = useState("")
@@ -1102,7 +1129,7 @@ function SkillCatalogDialog({
                         disabled={busy !== null || (installed && enabled)}
                         aria-busy={pending}
                         type="button"
-                        onClick={() => onSetEnabled(skill.name, true, stateKey, skill.scope)}
+                        onClick={() => onSetEnabled(toSkillActionCard(skill), true, stateKey)}
                       >
                         {pending ? <Spinner aria-hidden="true" /> : enabled ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
                       </Button>

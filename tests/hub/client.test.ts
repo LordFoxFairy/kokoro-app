@@ -528,21 +528,22 @@ describe("hub client", () => {
   it("surfaces the hub error code on a 409 required-skill disable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ error: { code: "hub.skill_required", message: "required" } }, 409)))
     const client = createHubClient()
-    await expect(client.setSkillEnabled("brainstorming", false)).rejects.toMatchObject({
+    await expect(client.setSkillEnabled("installation-brainstorming", false)).rejects.toMatchObject({
       code: "hub.skill_required",
       status: 409,
     } satisfies Partial<HubClientError>)
   })
 
-  it("sends the skill source scope when toggling a same-name projection", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+  it("mutates a skill installation by its stable identity rather than its display name", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { installation_id: "installation-copy-editor", enabled: false } }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await createHubClient().setSkillEnabled("copy-editor", false, "personal")
+    await createHubClient().setSkillEnabled("installation-copy-editor", false)
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/hub/self/skills/copy-editor/disable?scope=personal")
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled")
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-toggle:/)
+    expect(new Headers(init.headers).get("idempotency-key")).toMatch(/^skill-installation:/)
+    expect(init.body).toBe(JSON.stringify({ installationId: "installation-copy-editor", enabled: false }))
   })
 
   it("removes retired preview/confirm methods instead of exposing nonexistent upload endpoints", () => {

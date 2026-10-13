@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 // These are the exact public read methods used by the Manus-compatible Skill
 // surface.  The browser cannot choose an arbitrary BFF RPC path.
-const OPERATIONS = new Set(["ListSkills", "ListHubSkills", "GetSkill"])
+const OPERATIONS = new Set(["ListSkills", "ListHubSkills", "GetSkill", "SetSkillInstallationEnabled"])
 const JSON_MEDIA_TYPE = /^application\/json(?:\s*;\s*charset=utf-8)?$/iu
 
 function error(code: string, status: number): Response {
@@ -47,6 +47,11 @@ export async function POST(request: Request, context: { params: Promise<{ operat
   const headers = productBffHeaders(config, claims, requestId)
   headers.set("content-type", "application/json")
   headers.set("accept", "application/json")
+  if (operation === "SetSkillInstallationEnabled") {
+    const idempotencyKey = request.headers.get("idempotency-key")
+    if (idempotencyKey === null || idempotencyKey.trim() === "") return error("idempotency_key_required", 400)
+    headers.set("idempotency-key", idempotencyKey)
+  }
   let upstream: Response
   try {
     upstream = await requestWithDomain(
