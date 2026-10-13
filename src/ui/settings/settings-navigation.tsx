@@ -112,7 +112,7 @@ export function SettingsNavigation({
     { kind: "placeholder", id: "data-management", label: t("settings.dataManagementTitle"), icon: DatabaseBackup, group: "data" },
     { kind: "placeholder", id: "integration", label: t("settings.integrationTitle"), icon: Cable },
     { kind: "placeholder", id: "developer", label: t("settings.developerTitle"), icon: Code2 },
-    { kind: "tab", key: "team", label: t("settings.createTeam"), icon: Building2, group: "support" },
+    { kind: "tab", key: "team", label: t("rail.navTeams"), icon: Building2, group: "support" },
     { kind: "placeholder", id: "help", label: t("settings.helpTitle"), icon: CircleHelp },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();

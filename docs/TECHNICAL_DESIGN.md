@@ -1,3 +1,9 @@
+## SET-17 现有交易入口诚实禁用（2026-10-14，目标待验）
+
+仅修现有页面/adapter职责，不建立支付服务或新 capability 模块。固定 BFF `571173253ecd247b82c42b5fb8313bce7f3e29e5` 的 checkout 无条件503，目录GET正常；现 pricing-panel 不再试一次交易后禁用，而在首次展示真实非空目录时显示现不可用说明并禁用购买。删除不可达的 pending/redirect/事后失败状态；保目录 loading/error/retry/unavailable/empty 与所有升级导航。现 Team 导航复用 `rail.navTeams`，进入原固定团队成员/邀请/角色视图，不实施创建/切换团队。
+
+旧 `/billing/pay/[orderId]` 保留已发布位置的不可用页；现 mock-pay-panel 退役模拟支付POST、paid/retry状态与未经owner确认的订单显示，只保不可用说明、disabled动作和返回工作区。现 `/api/billing/mock-pay` 保留部署配置、同源Origin、ProductSession守卫，所有环境都返回503，删除旧development上游relay。三者沿现文件局部收敛；新文件/模块/依赖、BFF contract/generated、Skills/连接器均不涉及。具名测试覆盖非空目录真实金额和零checkout、直接页面零POST、adapter开发/生产503与Origin/匿名负控；Root实际浏览器验证目录/Team/直接入口，不能以组件控制目录冒真实商品或支付到账。
+
 ## SET-16 通用通知与声音 D0（2026-10-13，实现候选，待Root独审/浏览器验收）
 
 2026-10-14 生命周期修正裁决：既有通知模块局部修复，不新增文件、职责或契约。长期资源绑定可信原始 subject 与页面 engine/scope，短期 readBoundary admission/generation 只作为 layout 同步投递门；同主体定时或可见返回重验暂关投递，但保留已经正规锚定的 run、终态去重、待批徽标及已手势解锁音频，重验期间发生的信号不补播。真实主体改变、logout、preview、engine/scope/dispose 才退役资源，切会话关闭旧会话投递。设置异步许可仍按 admitted subject/generation 退役；音频另用每次 unlock attempt fence，旧 pending resume 不得关闭同主体后发的新解锁。须先复现同主体重验漏通知/关闭音频，再验证恢复、门关闭零投递、真实身份清理与迟到尝试隔离。下文“身份代际”清理指真实资源身份退役，不指正常 readBoundary 重验。

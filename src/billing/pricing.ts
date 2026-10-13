@@ -1,6 +1,6 @@
 // 价格/购买客户端（PAY-2）：经同源 `/api/billing` BFF 代理到 kokoro-billing 的 storefront 面
 // （BFF 从密封信封派生 teamId，并从部署配置注入 RFC 7239 `Forwarded`）。入站过 Zod（payment 属外部边界）；
-// 失败类型化上抛。诚实态优先：checkout 未开通（provider 未配置）由后端 501 驱动，绝不放假按钮。
+// 失败类型化上抛。当前配对 BFF checkout 固定503，目录UI预先禁用交易；下列运输协议不提供支付能力。
 
 import { z } from "zod"
 
@@ -23,8 +23,9 @@ const planCatalogSchema = z
   .strict()
 export type PlanCatalog = z.infer<typeof planCatalogSchema>
 
-// checkout 结果：ok=拿到 provider 跳转 URL（provider 已配置时）；unavailable=支付渠道未开通（501 诚实态）；
-// unauthenticated=未登录（购买要求登录）。展示层据此决定跳转 / 禁用按钮 + 联系站点文案。
+// Existing checkout transport result: ok carries a returned URL; unavailable maps HTTP501.
+// 当前配对 BFF 固定503，不会通过此协议提供 checkout；目录UI不调用它。
+// unauthenticated映射401；保留运输类型不表示当前交易可用。
 type CheckoutResult =
   | { status: "ok"; checkout_url: string }
   | { status: "unavailable" }
@@ -54,9 +55,9 @@ function describeUnknown(error: unknown): string {
 }
 
 export type PricingClient = {
-  // 在售套餐目录；payment 未配置（预览档）→ not_configured 错误，展示层据此显示未开通态。
+  // 正式套餐目录只读；503作为不可用，不能由目录非空推断支付能力。
   plans: () => Promise<PlanCatalog>
-  // 发起购买：诚实态——未开通（501）返回 unavailable，未登录（401）返回 unauthenticated，绝不假成功。
+  // 既有运输协议保留501/401映射；当前正规目录UI不发起此请求。
   checkout: (planId: string) => Promise<CheckoutResult>
 }
 
@@ -99,7 +100,7 @@ export function createPricingClient(): PricingClient {
       } catch (error) {
         throw new PricingClientError("network", describeUnknown(error), null)
       }
-      // 诚实态：状态真来自后端。501=支付渠道未开通（provider 未配置）；401=未登录（购买要求登录）。
+      // 保留既有运输状态映射；当前配对 BFF 返回503，UI不调用checkout。
       if (response.status === 501) {
         return { status: "unavailable" }
       }

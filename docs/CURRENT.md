@@ -1,3 +1,9 @@
+## SET-17 交易预禁用与团队入口源码（2026-10-14，待正式浏览器验收）
+
+局部切片基线 `08fd6a57516c4688dd63f4ab4f4c65105717d0c2`：现定价面板首次非空目录即disabled，移除checkout handler/redirect/事后失败状态，真实目录金额与全部读态保留；原直接pay页只显示不可用，不把URL当订单，不发模拟支付/合成paid，返回工作区。mock-pay同源adapter保配置、Origin与ProductSession守卫，所有环境准入后503，旧development支付relay已退役。Team导航复用现团队标签，成员/角色/邀请权限保留，不冒充创建团队。
+
+11 worker路径与三设计精确冻结经独立审查和Root逐hash/变更集合核对，无新增确定P1/P2。真实RED保留首次disabled、直接pay、dev/test adapter四失败与Team语义一失败；GREEN Root独立7具名文件91PASS，architecture/contract24文件328PASS，writer最终lint/typegen/tsc/build均0。没有Skills/连接器、i18n、契约生成/SQL/锁/依赖或资金数据修改；受控非空PLAN测试不是实际商品发布。全量22FAIL历史日志保留，未重复全测，不称全设置通过。Root正式运行和computer use目录/Team/直接入口验收仍待此源码提交后完成，完整设置Goal继续active。
+
 ## SET-16 正式本地浏览器偏好验收（2026-10-14）
 
 代码固定 `dfb7ab5857f00ae73a9e68eb3a5d65129f2529f9`，Root正式运行代码基线 `915947bd8cb8f2ce3aa043c6355a0b0e0d15e59d`。42路径冻结经Root逐hash核对和独立审查，无新增确定P1/P2；Root独立10具名engine/UI文件合计398PASS，实际Next HTTPS两负控2PASS/3过滤，writer最终lint/type/build通过。私有冻结manifest曾错记347聚焦日志的命令集合，原文件保留、更正另记；347实际8文件含settings-modal/AppFrame，不含Root另验的machine/event-reducer，不能混用计数与命令。

@@ -6,11 +6,10 @@ import { Empty, EmptyDescription } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 
-// 价格/购买面板（PAY-2）：套餐卡（权益列表 + 价格 + 购买按钮）。目录经 `/api/billing/plans` BFF 拉取
-// （site/owner 从信封派生）。诚实态优先：payment 未配置 / checkout 501 → 显式「支付暂未开通」+ 禁用购买，
-// 状态真来自后端，绝不放假按钮。金额/积分全程 BigInt 换算展示（不过 Number 丢精度）。
+// Read the canonical catalog; the paired BFF does not provide checkout.
+// Money and credits remain exact BigInt-based presentations.
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback } from "react"
 
 import { formatMicros, formatMinor } from "@/billing/format"
 import { planIntervalKey } from "@/billing/rules"
@@ -80,50 +79,11 @@ export function PricingContent({ client, embedded = false }: PricingContentProps
           ? { kind: "unavailable" }
           : { kind: "error" }
         : { kind: "loading" }
-  // 购买诚实态（来自后端 checkout 响应）：unavailable=501 未开通（禁用购买）；login=401 未登录。
-  const [purchaseNotice, setPurchaseNotice] = useState<"none" | "unavailable" | "login">("none")
-  const [pendingPlan, setPendingPlan] = useState<string | null>(null)
-  const purchaseNoticeRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (purchaseNotice === "none") return
-    const frame = window.requestAnimationFrame(() => purchaseNoticeRef.current?.focus())
-    return () => window.cancelAnimationFrame(frame)
-  }, [purchaseNotice])
-
-  const buy = useCallback(
-    async (planId: string) => {
-      setPendingPlan(planId)
-      setPurchaseNotice("none")
-      try {
-        const result = await client.checkout(planId)
-        if (result.status === "ok") {
-          // provider 已配置：跳转 provider 托管收银台（V1 无 provider，此路径暂不可达）。
-          window.location.assign(result.checkout_url)
-          return
-        }
-        // 诚实态：状态真来自后端。501=未开通（禁用后续购买）；401=未登录。
-        setPurchaseNotice(result.status === "unavailable" ? "unavailable" : "login")
-      } catch {
-        setPurchaseNotice("unavailable")
-      } finally {
-        setPendingPlan(null)
-      }
-    },
-    [client],
-  )
-
-  const checkoutBlocked = purchaseNotice === "unavailable"
-
   return (
     <div className={cn(styles.body, embedded && styles.embeddedBody)} data-embedded={embedded || undefined}>
-          {purchaseNotice === "unavailable" ? (
-            <Alert ref={purchaseNoticeRef} tabIndex={-1} variant="destructive" className={styles.unavailable}>
+          {catalog.kind === "ready" && catalog.plans.length > 0 ? (
+            <Alert className={styles.unavailable}>
               <AlertDescription>{t("pricing.unavailable")}</AlertDescription>
-            </Alert>
-          ) : purchaseNotice === "login" ? (
-            <Alert ref={purchaseNoticeRef} tabIndex={-1} variant="destructive" className={styles.unavailable}>
-              <AlertDescription>{t("pricing.loginRequired")}</AlertDescription>
             </Alert>
           ) : null}
 
@@ -170,15 +130,9 @@ export function PricingContent({ client, embedded = false }: PricingContentProps
                   <Button variant="default"
                     type="button"
                     className={styles.buy}
-                    disabled={checkoutBlocked || pendingPlan !== null}
-                    aria-busy={pendingPlan === plan.id}
-                    onClick={() => void buy(plan.id)}
+                    disabled
                   >
-                    {checkoutBlocked
-                      ? t("pricing.buyUnavailable")
-                      : pendingPlan === plan.id
-                        ? <><Spinner aria-hidden="true" />{t("pricing.buying")}</>
-                        : t("pricing.buy")}
+                    {t("pricing.buyUnavailable")}
                   </Button>
                 </li>
               ))}

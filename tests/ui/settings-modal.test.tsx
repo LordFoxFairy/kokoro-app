@@ -354,6 +354,28 @@ describe("SettingsModal 设置中心模态", () => {
     expect(normalizeSettingsTab("appearance")).toBe("appearance");
   });
 
+  it("keeps account upgrade as readable catalog navigation without a transaction", async () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange);
+    const upgrade = await screen.findByRole("button", { name: "升级" });
+    expect(upgrade).toBeEnabled();
+    fireEvent.click(upgrade);
+    expect(onTabChange).toHaveBeenCalledWith("subscription");
+    expect(screen.getByTestId("settings-panel-subscription")).not.toHaveAttribute("hidden");
+  });
+
+  it("labels the existing team management tab honestly and navigates without team creation", async () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange);
+    const team = screen.getByTestId("settings-tab-team");
+    expect(team).toHaveTextContent("团队");
+    expect(team).not.toHaveTextContent("创建");
+    fireEvent.keyDown(team, { key: "Enter" });
+    expect(onTabChange).toHaveBeenCalledWith("team");
+    expect(screen.getByTestId("settings-panel-team")).not.toHaveAttribute("hidden");
+    expect(screen.queryByRole("button", { name: "创建团队" })).toBeNull();
+  });
+
   it("默认渲染账户 tab 和完整设置导航，不把团队名冒充个人姓名", () => {
     renderSettings();
     expect(screen.getByTestId("settings-account")).toBeInTheDocument();

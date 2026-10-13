@@ -1,3 +1,7 @@
+## SET-17 支付未提供的现有边界（2026-10-14，目标待验）
+
+不新增/改写BFF public或owner机器契约。套餐GET仍经当前同源adapter消费正式目录；固定checkout503不提供交易，UI不发checkout请求。旧browser-private `/api/billing/mock-pay`保留配置503、Origin403、匿名401、准入失败503守卫，已准入请求在所有环境都503 `mock_pay_unavailable`，没有支付owner请求或成功ACK；其旧开发relay退役，在线身份准入所需的读取保留。直接pay页面只说明不可用，不证明URL中的orderId存在或已支付。Team只消费现有固定团队九操作，导航改名不产生创建tenant/team契约。验证守卫和零支付owner I/O，不调用支付或伪造账单。
+
 ## SET-16 通用通知与声音：沿已有任务契约（2026-10-13，实现候选）
 
 2026-10-14 修正：仍无 wire/generated 改动。可信原始 subject 与 engine/scope 是长期资源身份，readBoundary admission/generation 是同步投递门；同主体重验保留已验证锚、去重和已解锁音频，但门关闭期间零投递且不补播。设置授权异步结果仍绑定当次 admission/generation，Audio unlock 单次 attempt fence 防止旧完成影响新尝试；真实主体/logout/preview/engine/scope/dispose 退役。readBoundary generation 不授予新任务或历史通知资格。
