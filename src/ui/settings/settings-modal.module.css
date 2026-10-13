@@ -327,6 +327,21 @@
   padding-top: 0.75rem;
 }
 
+.supportDivider {
+  width: calc(100% - 1.75rem);
+  height: 1px;
+  flex: 0 0 1px;
+  margin: 0.75rem 0.875rem 0.5rem;
+  background: var(--border);
+}
+
+.helpExternal {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  margin-left: auto;
+}
+
 .content {
   display: flex;
   min-width: 0;
