@@ -253,16 +253,8 @@
 
 .tabRail .tab:focus-visible {
   border-color: transparent;
-  outline: 0;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
-  box-shadow: inset 0 0 0 2px var(--ring);
-}
-
-/* Opening the dialog deliberately focuses its selected row. The selected
- * surface is already the visible state, so it must not acquire a second dark
- * rectangle that Manus does not render on initial open. */
-.tabRail .tab[data-state="active"]:focus-visible {
-  box-shadow: none;
 }
 
 .tab[data-state="active"]::after {

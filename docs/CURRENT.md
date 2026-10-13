@@ -1,3 +1,7 @@
+## SET-08 设置键盘焦点恢复（2026-10-13）
+
+设置侧栏 focus-visible 改用真实 2px outline，并删除 active tab 清除焦点阴影的覆盖规则；鼠标交互仍由浏览器 focus-visible 判定。修复既存 CSS 门禁及键盘所选项无可见焦点的问题，不放宽架构测试。完整 architecture 50/50、原 settings modal 42/42 与 production build 通过；真实键盘浏览器验收仍待。
+
 ## SET-07 账户本人资料读取候选（2026-10-13）
 
 同设置功能分支feat/settings-interface，基线6871519；功能候选尚未切换日常运行环境。沿Root已定三设计D0，仅Web新增只读GET /api/account/profile；唯一oidcRpConfig含tenant、Product session及verifyProductIdentity经BFF /v1/me在线准入后，经BFF /iam/oauth2/userinfo读取。白名单subject/name/email/email_verified，缺可选字段null；sub匹配且最终同id/generation/subject session复验后才返回。私有no-store、canonical host/origin、无query/body、禁止redirect、5s总race覆盖初始store/准入/fetch/body/最终store、16KiB上限、取消与迟到body清理。不改Auth.js/session owner/IAM/BFF API/SQL/generated/锁。
