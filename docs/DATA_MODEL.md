@@ -1,3 +1,13 @@
+## SET-18 登录设备仅安全会话投影（D0 独审通过，2026-10-14）
+
+Web无本片业务数据库、Redis事实、device表、receipt、UA/IP采集或localStorage会话副本。现HttpOnly Product Session存储仍只为Web登录必要寿命与凭据边界，UI拿不到access/refresh/issuer cookie；现chat Session与登录Session不混用。IAM独占登录Session/凭据/撤销/Audit，BFF只发布非持久projection。
+
+列表/cursor/current sid/选中other/confirm/pending/error仅驻dialog的当前subject+admitted generation内存，关闭/身份退役/preview/unmount清空并主动取消；分页失败保已读部分且明确未完整，不写假空。current同owner安全记录，created/expires保持UTCinstant，UI按locale显示，不将创建时间伪造last-active/在线时间，未知设备信息直说未知。
+
+移除only提交ACK匹配后确认；unknown先重读核目标是否仍active，不能因本地删除一行冒owner撤权，也不能把404冒200。权威expired Session tombstone与关联凭据处理/清理均在IAM，Web无恢复、批量全部退出或永久成功receipt。检查old online admission必须依真实owner资格；不保证在途已准入工作回滚或所有token生成立刻停止。
+
+只换单一正规BFF artifact与生成消费物，不修改scope/client/resource/Member/Role正常数据；fresh login/provisioning只在Root具名自有测试组合正式完成。i18n新device文案不构建共享设置存储，也不触Skills/连接器键/组件。当前候选未实现，未资源/浏览器验收。
+
 ## SET-17 目录可读、交易不构造事实（2026-10-14，目标待验）
 
 Web不拥有商品/订单/支付/团队业务持久化，schema、SQL、Redis、资金及owner资源均不变。真实商品、金额、积分仅展示目录GET返回；非空不授予支付能力。旧模拟收银台不再维护paid/paying/retry或合成到账事实，不把URL参数当owner订单。现固定Team资源和角色权限保持，导航名称只描述已提供的成员管理。没有seed产品、开户、资金写或创建团队；真实非空目录/实际支付均不能由UI受控测试替代。

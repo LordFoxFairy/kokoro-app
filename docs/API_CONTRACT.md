@@ -1,3 +1,15 @@
+## SET-18 browser-private 登录Session（D0 独审通过，2026-10-14；未可调用）
+
+新同源GET /api/account/sessions只承接正式BFF GET /v1/account/sessions（limit1..100默认25、可选非空cursor≤2048）；DELETE /api/account/sessions/{sessionId}只承接正式BFF DELETE同sid，非空≤255且与正式owner约束一致，无query/body/Idempotency-Key。所有method/未知/重复参数/非法路径编码/非空body显式拒绝；其他method405并Allow。不与聊天/api/session混用，不新增IAM relay规则或通用URL。
+
+GET校验部署侧canonical webOrigin的scheme/Host，Origin缺省或精确同canonical值；DELETE要求Origin必须存在且精确canonical webOrigin，同时Host/scheme匹配，不能用现sameOriginOk的missing-Origin允许路径。不信Forwarded/browser origin选owner。HttpOnly currentProductSession为cookie边界，沿productBffConfig/productBffHeaders只向固定BFF传单Bearer；缺配置503、匿名/过期401、不合Origin403、存储/准入不可确认503，subject来自session/BFF，不从body。
+
+成功仅校验正式BFF15.1 generated closed response（current_session/sessions/created_at/expires_at，meta.request_id/next_cursor；撤销session_id/revoked:true与请求一致），零凭据、private/no-store、同一合法x-request-id。上游JSON/headers+body总1MiB/同request-id/no-store及状态code一致才输出，schema strip未知字段不可冒strict校验；错/多字段、current在other、重复ID/分页矛盾、错ACK、header绑定错误502。传输/timeout/不完整503，BFF正规拒绝沿正式closed error family，不透内部message/token。Web自有invalid_request400、forbidden_origin403、method_not_allowed405、session_required401、dependency_unavailable503、response_invalid502使用具名account_session前缀；同一error响应有安全message/request-id，不与public错误伪合并。
+
+DELETE结果未知只提示重新list核目标active，不自动retry/宣成功；current409、foreign/不存在404、本人expired保留重复200/cleanup后404由IAM经BFF裁决。响应返回前再读取同一当前Websession（opaqueID+ProductSession generation+subject+accessExpiresAt/session expiresAt仍有效，含同一ID/subject的刷新或权限代际变化），identity退役返回401/503而非把迟到数据给新用户；该未知也不证明owner写回滚。
+
+正式发行顺序：IAM0.12→BFF15.1不可变commit/digest→本仓正常narrow生成与完整出处更新；不从IAM源文件/未提交BFF复制类型，不放宽Team/Agent/Skills/MCP原schema。新scope只能正规provisioning与fresh authorize，不能修改旧refresh或用machine/admin替本人。当前机器仍BFF15.0，新增browser-private字段合同待正式artifact核验；本段不是实现/验收证据。
+
 ## SET-17 支付未提供的现有边界（2026-10-14，目标待验）
 
 不新增/改写BFF public或owner机器契约。套餐GET仍经当前同源adapter消费正式目录；固定checkout503不提供交易，UI不发checkout请求。旧browser-private `/api/billing/mock-pay`保留配置503、Origin403、匿名401、准入失败503守卫，已准入请求在所有环境都503 `mock_pay_unavailable`，没有支付owner请求或成功ACK；其旧开发relay退役，在线身份准入所需的读取保留。直接pay页面只说明不可用，不证明URL中的orderId存在或已支付。Team只消费现有固定团队九操作，导航改名不产生创建tenant/team契约。验证守卫和零支付owner I/O，不调用支付或伪造账单。

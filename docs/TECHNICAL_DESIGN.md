@@ -1,3 +1,21 @@
+## SET-18 账户登录设备（D0 独审通过，2026-10-14；上游未发行，源码未准入）
+
+实际Manus“已连接设备”分当前/其他设备，可显示浏览器与活跃城市；IAM当前只提供真实Session记录/UTC创建到期时间，不提供可靠设备/位置/last-active。本片实现安全会话管理，不伪造这些信息；Skills/连接器排除。IAM0.12与BFF public15.1尚未发行，本仓只设计，不消费未提交artifact。
+
+| 项 | 决定 |
+| --- | --- |
+| Owner / writer | IAM唯一拥有身份/登录Session/撤销/Audit，BFF发布public，Web只拥有同源adapter与交互状态。Root三设计/Git/资源/浏览器验收，后继billing_scheduler_audit为唯一源码writer；当前不授写入。 |
+| 当前事实 | Web160d2a44ff4af2d766078bd97708c29bcae659a6 clean；AccountCard读取真实姓名/邮箱/ID并保未提供账户操作disabled。当前消费BFF15.0全文SHA256 5f6b1178cb878718090ba65d6b0d563185078624af0d3d46a01e568af87264a4，Team与Agent failure生成器均依同一完整artifact；无设备API/UI。 |
+| 位置比较 / 粒度 | A复用/api/session聊天catchall或第三方登入方式dialog：淘汰，领域与权限不同。B在现AccountCard加独立“已连接设备”管理入口，采用普通account-devices-dialog、use-account-sessions、account-sessions-client与schema；同源具名account/sessions两route+server adapter：采用，不增sidebar大域/万能proxy/新服务。各文件分别视图、代际状态、浏览器I/O、schema、server I/O；现CSS追加具名token样式。 |
+| 依赖 | Browser→/api/account/sessions→BFF两具名public operation→IAM；浏览器零Bearer/issuer cookie读取，Web不直连owner/SDK/DB。沿现product-bff/product-session/upstream-http，可信subject来自HttpOnly session与BFF在线admission，不允许body自报current/user/tenant。 |
+| UI / 状态 | dialog打开且non-preview/当前admitted boundary才GET。current单独且无remove动作；others真实列表，空仅完整合法首屏，loading/error/retry/load-more/disabled/confirmation/submitting/known-success/unknown均显式。分页按owner cursor，保已读列表但失败不冒完整/空，不重复ID/current。只展示真创建/到期时间和未知设备信息，不补Chrome/城市/活跃；窄屏滚动/focus/键盘/locale沿现组件。 |
+| 撤销 / 退役 | 先确认目标other，再单次DELETE；ACK200且session_id匹配/true才显示成功并重读。unknown/timeout/取消不自动写retry、不乐观移除/假成功；提示重新读取核状态。current409/foreign404/拒绝明确。subject/generation/admitted/关闭/unmount同步退役reads与pending结果；迟到success/error不得改新身份或已关闭dialog。 |
+| 预算 / 失败 | browser每次读/写单10s与1MiB总响应字节，server自入口单10s覆盖cookie读取、BFF headers/body、最后同一当前session的ID/generation/subject/access及session寿命核对（同ID/subject刷新也退役）；取消主动退役挂起fetch/reader/迟到promise，原始非空body拒绝也在预算内。写不自动retry，身份期满用原正规登录/重新读取恢复。API守卫与严格公开generated校验见API前缀。 |
+| 生成 / 删除 | BFF正式public15.1 commit/digest后只替同一src/generated/bff-public-openapi.yaml；正常新增窄两operation生成器/config/generated，Team/Agent现生成器只更新完整出处与正常再生成，原Team/Agent字段和fingerprint保持。无旧15.0 fallback/双pin/手改generated，新device键覆盖既有九locale且不改Skills/连接器键。 |
+| 验证 / 顺序 | 正式owner→BFF发布后才冻结Websource集，先当前未提供设备功能RED、schema/adapter/生命周期/UI与负控GREEN，正规generator两次check、lint/type/build/contract/architecture；Root再自有exact-pin正常登录/真实list/remove/刷新和旧会话在线拒绝验收。受控UI不能替真实IAM/资源，完整设置Goal不因本片结束。 |
+
+候选路径：src/app/api/account/sessions/route.ts与[sessionId]/route.ts，src/lib/server/account-sessions.ts、src/lib/account-sessions.schema.ts，src/ui/settings/account-sessions-client.ts、use-account-sessions.ts、sections/account-devices-dialog.tsx；现AccountCard及settings-sections.module.css仅具名接线。动态params按本地Next文档Promise读取；未提供方法明确405/Allow，无通用catchall。
+
 ## SET-17 现有交易入口诚实禁用（2026-10-14，目标待验）
 
 仅修现有页面/adapter职责，不建立支付服务或新 capability 模块。固定 BFF `571173253ecd247b82c42b5fb8313bce7f3e29e5` 的 checkout 无条件503，目录GET正常；现 pricing-panel 不再试一次交易后禁用，而在首次展示真实非空目录时显示现不可用说明并禁用购买。删除不可达的 pending/redirect/事后失败状态；保目录 loading/error/retry/unavailable/empty 与所有升级导航。现 Team 导航复用 `rail.navTeams`，进入原固定团队成员/邀请/角色视图，不实施创建/切换团队。

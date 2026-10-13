@@ -1,3 +1,11 @@
+## SET-18 登录设备前端准备（2026-10-14；D0 独审通过）
+
+当前Web160d2a4仍无登录设备API/UI。本轮Root已读取AccountCard/真实profile、ProductSession/same-origin/Team与现单一public artifact消费、当前Next route/动态params官方本地文档，并写三设计候选。目标Account独立设备入口、真实本人Session与other单次移除、unknown重读及身份代际退役；未知设备/位置不伪造。IAM0.12源码实施中，BFF三设计独审通过/doc-only6372195而public仍15.0，因此Web只设计、未授source/机器/正常服务修改。
+
+Skills/连接器排除；本地账户刷新已正常读Owner/邮箱/user ID，正式3311仍原SET17。后继须串行固定owner/BFF发行artifact，再独审Web方案和source、工程门及Root真实正常旅程；设计稿不构成功能完成。
+
+独审唯一P2已补：server最终复核同一ProductSession ID/generation/subject及access/session两寿命，同ID/subject刷新也退役，仍同预算；复审无剩余确定P1/P2。三面方案已准入，上游尚未正式发行，因此源码/机器仍不授写入。
+
 ## SET-17 交易预禁用与团队入口正式验收（2026-10-14）
 
 正式运行代码 Web `50b291bf50e65cfcc169784848d2b69a91e80dae`、Root `a123e21718ebea0b78b2f7edadc8035be76a9b39`。Root只替换自有隔离运行，正规owner pins/fresh install/build/ready和匿名login302均通过。computer use正式登录后，团队标签与标题均为团队，真实Owner成员和角色表单可读；Account升级仍打开200空目录。直接旧pay URL显示不可用、实际disabled按钮、不显示未经验证orderId/paid；返回链接实际回到/app并加载工作区。首个Team等待locator误求投影未展示的邮箱，保留观察失败，实际成员Owner终态可见，不当产品失败。未邀请/购买/创建团队或修改偏好。
