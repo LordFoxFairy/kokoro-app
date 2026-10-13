@@ -1,3 +1,9 @@
+## SET-16 通用通知与声音：无业务持久化owner（2026-10-13，D0）
+
+Web不新增SQL/Redis、任务、权限或营销订阅事实。新的subject隔离localStorage只保存browser_notifications/sound_notifications浏览器偏好，营销字段恒false；不保存认证凭证、任务正文或推送地址。旧全局kokoro.communication-preferences不继承到不同身份，不自动迁移/删旧字节。subject用于缓存分区，不能成为认证依据。稳定SSR默认false，setItem失败不更新可见值/广播；storage事件按当前subject重读，不称跨设备同步或数据库事务。
+
+run/pause去重与音频手势资格只在现引擎/页面生命周期内存中；scope/session与可信subject/generation退役时清理。快照水合的已有pause仅作基线，terminal快照不投递；没有持久化通知队列或离线补播。Notification实例和AudioContext只由其创建者关闭，刷新需重新手势解锁音频。原会话/账户/Team/Skills/连接器数据不变。
+
 ## SET-SHORTCUTS：原浏览器偏好格式保留
 
 继续使用kokoro.web.keyboard-shortcuts，三个newTask/search/sidebar对象的key/primary/shift/alt形状不变。无Web业务数据库owner、无schema/服务端事实。旧数据不自动迁移或覆盖，primary按当前平台解释；坏JSON/schema按原规则读默认但不写回，旧重复组合不触发歧义动作。编辑/清空/重设须setItem成功后发布变化，失败保持原盘值；跨标签页重读及写前重读不声称数据库级并发事务。

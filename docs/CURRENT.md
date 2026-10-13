@@ -1,3 +1,17 @@
+## SET-16 通用通知与声音任务卡（2026-10-13，D0待独审）
+
+| 项 | 决定 |
+| --- | --- |
+| 目标/优先级 | P1：真实任务信号接线、可靠主体偏好、手势音频与不可用营销行；全设置Goal仍active |
+| 仓/基线 | Web feat/settings-interface，2a3dee7047c04aab73765da695aff5947b5023d9，起始clean；路径见主控私有任务卡 |
+| 角色 | Root三设计/提交/运行集成；billing_scheduler_audit唯一实现writer；storage_platform_audit只读设计/源码独审；runtime_audit只读正式执行先决条件审计 |
+| 允许范围 | engine task-notification/type/machine；notifications偏好及两投递文件；shell任务订阅与原awaiting hook/store清理；AppFrame与Appearance/Communication现组件、只appearance分支readBoundary；General专用i18n和具名测试/相邻INDEX、三设计及本记录 |
+| 排除 | Skills/连接器功能与测试、契约/generated/SQL/锁/依赖/服务、任务投递模式、支付/余额；不并行写其它仓 |
+| 依赖/未决 | 三设计SET16同决策、原固定正式任务协议；真实模型执行被Agent/Billing授权硬门阻塞。实际通知许可与声音需浏览器能力/明确手势，不能用fake完成任务 |
+| 验证/交付 | 先真实失败反例，再具名行为门；完整lint/type/architecture/contract/build，已知全测旧失败保留；worker不Git提交，交精确SHA冻结及日志，Root独审后提交/pin/正式浏览器验收 |
+
+实现尚未开始。三设计门不代表功能完成；没有SQL/contract待生成，正常既有contract两生成check与278断言由Root集成核验。此前快捷键已由Root2a3dee7固定并实际编辑/刷新/触发、恢复默认验收，下列旧“待Root”记录为历史。
+
 ## SET-SHORTCUTS：可靠快捷键候选（待Root审查与真实浏览器集成）
 
 现有快捷键新增保存失败反馈、冲突验证（含原始录制事件证明的旧符号/新fallback别名）、录制隔离、文本/dialog/repeat/IME负控、Mac与Ctrl平台提示，以及disabled语音行。存储键和用户配置保留。两个真实反例（吞写失败、重复绑定）RED后修复，专用组件/存储/实际Sidebar消费者回归通过；完整门禁输出及精确冻结由主控接收。尚未代表当前运行候选，需Root审查/提交/精确集成与浏览器编辑→刷新→触发证据后验收。

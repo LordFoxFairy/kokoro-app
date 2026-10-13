@@ -1,3 +1,9 @@
+## SET-16 通用通知与声音：沿已有任务契约（2026-10-13，D0）
+
+本片无新HTTP、owner API、权限、版本或generated改变。唯一任务事实仍为现固定BFF public15.0.0 validated AG-UI、MessageCreateReceipt与SessionSnapshot；Web只新增内部typed任务信号订阅，不成为第二套wire。完成严格取run.completed且status=completed，失败/取消/dispatch_failed/ACK/EOF不替代；快照event_watermark与active execution_head只用于正规恢复和锚定，不发历史通知。请求/音频许可是浏览器能力，不授权运行或服务端写入。
+
+主体及代际只来自已准入readBoundary，scope/session/run标识来自现引擎。不得从browser body、localStorage偏好、preview、ready或任意feature flag推断准入。营销通知没有正式owner契约，disabled且恒false；不新增假成功API。当前模型授权硬门与正式支付缺口仍未闭合。
+
 ## SET-SHORTCUTS：无网络协议变更
 
 快捷键编辑、清空和重设只写既有浏览器localStorage偏好，无请求、用户身份/API/权限/SQL/generated变更。保存成功只表示当前浏览器存储写入成功，不声称跨设备同步。语音输入无能力契约，显示不可用。

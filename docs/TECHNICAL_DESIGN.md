@@ -1,3 +1,15 @@
+## SET-16 通用通知与声音 D0（2026-10-13，目标，待实现验收）
+
+基线 `2a3dee7047c04aab73765da695aff5947b5023d9`。Web拥有浏览器偏好与页面内投递；BFF/Agent仍唯一拥有任务和终态事实。实际Manus通用页说明任务进展/完成通知、离开页面时完成响一次；现Web只按waiting相位通知、声音未接线、存储失败被吞且产品更新/广告仅假开关。当前正式模型执行受Agent/Billing授权硬门阻塞，不绕过，不以unit假响应冒充实际任务完成。
+
+采用现有 validated AG-UI → engine projection 边界。新增单一职责 `src/engine/task-notification.ts` 管理本页 exact MessageCreateReceipt 或可信 owner execution_head 锚定的 run；只发新进入待操作与 `run.completed(status=completed)` typed signal，取消/失败/dispatch_failed/EOF/连接异常/快照终态零完成。无锚的历史run.created不授资格。快照只设置active锚及已有pause基线，不发历史通知；同run终态、同pause身份/revision重放不重复。引擎用直接订阅逐个投递，禁止只用React最新快照丢掉batch事件。切会话、scope、身份代际、dispose清理；pending迟到回执不得复活。
+
+`src/ui/notifications/communication-preferences.ts` 只负责可信subject隔离的偏好存储/订阅，稳定SSR默认；成功setItem后才广播，失败保原值并可见。旧全局key不迁移，营销两字段恒false。新增 `task-browser-notification.ts` 负责Notification能力/许可/owned实例清理，`task-completion-sound.ts` 负责AudioContext手势解锁、一次短提示及退役清理；新 `src/ui/shell/use-task-notifications.ts` 绑定engine、已准入subject/generation与这两browser delivery。只在页面隐藏或失焦时投递完成提醒/声音；待操作提醒也不得从初次历史水合产生。没有后台worker或闭页保证。Notification.requestPermission与AudioContext创建/resume只来自设置明确手势，拒绝/不支持/失败可见，异步许可/音频回调须核原身份代际。刷新后保存的声音偏好不冒充audio已解锁，提供明确手势恢复；不自动补播。observer异常不得影响引擎投影。退役关闭owned Notification、音源/AudioContext及待操作注册表，不关闭其它页面资源。
+
+复用现有Appearance/Communication组件并传既有readBoundary，不新增认证探测或以preview/ready/任意feature flag当执行准入。原useAwaitingNotify保徽标/title，删除旧awaiting-notify系统投递路径以免双轨；不改Skills/连接器/任务投递模式。产品更新和广告没有owner交付契约，真实disabled且说明暂不可用。既有语言/主题保持原边界。
+
+文件粒度：上述四个新文件分别为任务信号规则、浏览器通知、音频生命周期、React订阅编排，不新建目录/依赖/服务。现machine仅锚定/接线；engine-types只新增typed订阅签名。设置组件只展示可靠偏好与反馈。API/DATA见同ID；无网络/SQL/generated/锁变更。验证须覆盖已锚成功与三个非成功终态、无锚重放/快照、批量及重连去重、迟到/身份退役、许可拒绝与投递异常、音频解锁/挂起/退役、保存失败及两个disabled营销行；lint/type/architecture/contract/build为静态门，Root正常浏览器保存→刷新与禁用验证为用户证据。实际模型任务→离开页面→唯一通知/声音仍需正式执行先决条件，不声称全设置完成。
+
 ## SET-SHORTCUTS：快捷键可靠编辑（候选，待浏览器验收）
 
 Web继续唯一拥有三动作的浏览器偏好；不新增服务或依赖。编辑在window capture阶段消费录制按键，Escape取消录制、Tab取消并继续焦点移动；纯修饰键、重复与IME不写入。新绑定要求平台primary加字母/数字/句点，可加Shift/Alt；明确拒绝部分浏览器保留键和动作冲突。录制保留原始事件，仅作为当次保存输入，不持久化；UI先查其他既有绑定是否匹配该事件，保存边界再次核验，拒绝旧语义符号与新物理fallback的已证别名重叠（如Shift+>与句点、Option+∆与J）。既有冲突不妨碍清空/重设恢复。字母/数字保留KeyboardEvent.key语义，避免改变非US键盘的已有配置；Option/Shift产出符号时新绑定可由code回落到物理字母/数字/句点，旧符号绑定仍按原key匹配。Mac primary为Meta，其他平台为Control，不接受二者同时按下。
