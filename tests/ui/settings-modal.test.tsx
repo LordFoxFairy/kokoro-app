@@ -261,9 +261,7 @@ const NAV_TAB_KEYS = [
   "credits",
   "appearance",
   "shortcuts",
-  "chat",
   "personalization",
-  "subscription",
   "mcp",
   "skills",
   "team",
@@ -364,7 +362,8 @@ describe("SettingsModal 设置中心模态", () => {
     for (const key of NAV_TAB_KEYS) {
       expect(screen.getByTestId(`settings-tab-${key}`)).toBeInTheDocument();
     }
-    expect(screen.getByTestId("settings-tab-chat")).toBeInTheDocument();
+    expect(screen.queryByTestId("settings-tab-chat")).toBeNull();
+    expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
     expect(screen.queryByText("Studio")).toBeNull();
     expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("—");
     expect(screen.getByText("个人版", { exact: true })).toBeInTheDocument();
@@ -374,12 +373,11 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航公开已实现的订阅面板，并以置灰行呈现尚未接通的 Manus 分区", () => {
+  it("设置导航遵循 Manus 的分组顺序，并以置灰行呈现尚未接通的分区", () => {
     renderSettings();
 
-    expect(screen.getByTestId("settings-tab-subscription")).toBeInTheDocument();
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
-    for (const id of ["mail", "computer", "email", "phone", "wallet", "integration"]) {
+    for (const id of ["mail", "computer", "email", "phone", "wallet", "data-management", "integration", "developer", "help"]) {
       expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
     }
     expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
@@ -472,7 +470,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByTestId("settings-account")).not.toBeInTheDocument();
   });
 
-  it("通用设置只展示已落地的主题、语言和对话偏好", () => {
+  it("通用设置展示外观、对话偏好与通信偏好", () => {
     renderSettings(() => {}, undefined, true);
     fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), {
       key: "Enter",
@@ -482,15 +480,9 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("radio", { name: "深色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "自动" })).toBeChecked();
     expect(screen.getByTestId("settings-default-model")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("switch", { name: "声音提醒" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("switch", { name: "浏览器通知" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("switch", { name: "关于 Acme 的广告" }),
-    ).not.toBeInTheDocument();
+    for (const label of ["声音提醒", "浏览器通知", "接收产品更新", "关于 Kokoro 的广告"]) {
+      expect(screen.getByRole("switch", { name: label })).toBeInTheDocument();
+    }
   });
 
   it("个性化 tab 只呈现有 BFF 契约的资料字段", () => {
