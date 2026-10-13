@@ -1,3 +1,7 @@
+## SET-13 Team权限视图不保存事实（2026-10-13）
+
+Role/Permission/Membership/Invitation与授权审计仍归IAM，public projection归BFF；Web没有业务数据库、权限缓存、团队/计划owner或新Redis/session事实。TeamRole八域仅用于完整可见目录及权限超集UI提示，当前mutation仍由IAM在线权威决定。唯一generated snapshot/provenance属于build-time固定依赖，不是业务持久化。原字节替换与正规生成遵守TECH/API的15.0.0开发配对裁决，旧pin不并存。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）

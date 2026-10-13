@@ -1,3 +1,7 @@
+## SET-13 Team public15开发消费目标（2026-10-13）
+
+等待BFF SET13不可变artifact后，完整snapshot正规单pin替换并生成既有Team/Agent-failure派生物，精确SHA/digest由验收记录补齐；此时未声称已接收或已运行。Team权限八域strict validation保持；public15.0.0是breaking，仅Root自有开发/v1配对，不作为minor、不泛用旧beta、日常/main/生产未激活。BFF基线95fbd894相对旧Web413e3bbe已有非Team机器差异会随完整artifact继承，不手工构造Web编辑契约。
+
 ## R257 MCP Connection 当前本地 owner artifact
 
 本人 Connection 只读消费者固定 BFF local immutable commit `6d46ec8bdd2d2ffaa06513fd0561272eae907919`、public `8.0.0` canonical OpenAPI SHA256 `8d5b452ba554f7b9ce723481a0a619abf12d9fb3174b9f15f52a395ad1372783`。这是当前本地 artifact pin；不表示 remote/registry 发布、正常服务激活或浏览器业务验收。下方旧 digest 仅保留其历史切片记录，不作为 R257 消费来源。

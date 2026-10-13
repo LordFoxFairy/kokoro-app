@@ -1,3 +1,17 @@
+## SET-13 完整Team角色消费 D0（2026-10-13，owner候选待冻结）
+
+| 项 | 决定 |
+| --- | --- |
+| Owner / 当前事实 | Web仅消费BFF public角色目录；基线77ebea4严格六域schema拒合法platform/skill。BFF95fbd894已有完整IAM验证投影，SET13发布15.0.0 breaking候选。 |
+| 目标 / 放置比较 | 扩现src/team/schema.ts及Team client/permissions/panel测试；采用现九operation generated窄图，淘汰unknown passthrough、裁权限、Web直连IAM及新权限registry。 |
+| 依赖 / 删除 | 先Root审提交不可变BFF artifact，再原字节替换唯一snapshot和两generator pin并正规生成；同/v1仅自有开发配对，删除旧pin，不双schema/fallback。 |
+| 数据 / 生命周期 | 无数据库、权限owner、OAuth/session/SQL/Redis变化。既有固定tenant/Bearer和视图权限提示保持，IAM写授权仍权威。 |
+| 验证 | 完整builtin角色经真实Response RED→GREEN、unknown域/动作/空数组拒绝及平台/技能权限超集负例；两generator检查、全部public provenance、contract/architecture/lint/type/build及实际当前Team页。 |
+
+Root本次仅批准自有开发15.0.0 breaking /v1同步候选，不切main/日常/生产；Admin消费者不可访问须后继核验。BFF14.7原正式95fbd894与Web旧413e3bbe完整snapshot已存在非Team差异（另一开发者已提交的安装identity browser-private契约），正常完整owner artifact将继承这些既有字节，不能把它们算本片Skills业务改动或手工裁掉；本片只扩Team窄图和校验，不实现Skills/MCP。
+
+Manus当前“创建团队”实际打开套餐选择；现KokoroTeam视图只管理部署固定团队成员/邀请/角色，无团队创建/切换契约，不能以此修复冒称创建团队完成。入口语义收敛作为后继UI切片，不在本次机器修复中引入虚拟团队或计划。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）

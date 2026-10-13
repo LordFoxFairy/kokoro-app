@@ -1,3 +1,9 @@
+## SET-13 TeamRole public15严格消费目标（2026-10-13）
+
+BFF是唯一可编辑public机器owner。等待SET13审查并提交后，由其不可变SHA/digest原字节替换src/generated/bff-public-openapi.yaml；两既有generator固定同一来源。正常生成Team SDK与Agent failure provenance，失败片段/roles/tuples及非Team语义不手改。TeamRole.permissions只接受现八域，platform仅execute，skill仅固定IAM十五动作，数组非空；未知域/动作继续拒绝，保原错误/paging/mutation输入/输出。
+
+strict response集合扩展为breaking，15.0.0 /v1仅Root此次自有开发配对，不能冒minor或稳定生产兼容。先owner固定、再Web单pin/生成/严格测试、最后Root真实组合；不混新旧response。Admin consumer与未来稳定/v2激活规则见BFF三设计，日常/main/生产切换未授权。完整snapshot会继承95fbd894相对于Web旧413e3bbe已有的非Team机器差异，本片不编辑这些owner字段或Skills/MCP运行行为。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
