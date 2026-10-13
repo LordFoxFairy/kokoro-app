@@ -222,10 +222,13 @@ export function SkillDetailDialog({ skill, brandName = "Kokoro", open, onOpenCha
 }
 
 function formatSkillDate(timestamp: number): string {
+  // The Skills owner projects Unix seconds. Preserve support for older
+  // millisecond fixtures so the detail dialog and installed-card date agree.
+  const milliseconds = timestamp < 10_000_000_000 ? timestamp * 1_000 : timestamp
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "UTC",
-  }).format(timestamp)
+  }).format(milliseconds)
 }
