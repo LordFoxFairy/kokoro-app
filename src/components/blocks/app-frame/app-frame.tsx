@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { activeMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
 import { useHydrated } from "@/lib/use-hydrated"
+import { matchesKeyboardShortcut, readKeyboardShortcuts } from "@/lib/keyboard-shortcuts"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
@@ -30,7 +31,6 @@ import { AppFrameShell } from "./app-frame-shell"
 import { DefaultEmptyState } from "./app-frame-status-surfaces"
 import {
   COMPACT_DESKTOP_RAIL_BREAKPOINT,
-  isNewChatShortcut,
   projectWorkspaceCapabilities,
   settingsTabFromLocation,
 } from "./app-frame-helpers"
@@ -482,12 +482,13 @@ function AppFrameRuntime({
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const shortcuts = readKeyboardShortcuts()
+      if (matchesKeyboardShortcut(event, shortcuts.search)) {
         event.preventDefault()
         openCommand()
         return
       }
-      if (isNewChatShortcut(event)) {
+      if (matchesKeyboardShortcut(event, shortcuts.newTask)) {
         event.preventDefault()
         startNewChatWithMoveFence()
       }

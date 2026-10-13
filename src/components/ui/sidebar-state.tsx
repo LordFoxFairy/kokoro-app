@@ -3,13 +3,13 @@
 import * as React from "react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { matchesKeyboardShortcut, readKeyboardShortcuts } from "@/lib/keyboard-shortcuts"
 import { cn } from "@/lib/utils"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 import {
   SIDEBAR_COOKIE_MAX_AGE,
   SIDEBAR_COOKIE_NAME,
-  SIDEBAR_KEYBOARD_SHORTCUT,
   SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_ICON,
 } from "./sidebar-constants"
@@ -99,10 +99,7 @@ function SidebarProvider({
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
-        (event.metaKey || event.ctrlKey)
-      ) {
+      if (matchesKeyboardShortcut(event, readKeyboardShortcuts().sidebar)) {
         event.preventDefault()
         toggleSidebar()
       }
