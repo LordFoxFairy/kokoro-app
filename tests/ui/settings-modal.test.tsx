@@ -263,6 +263,7 @@ const NAV_TAB_KEYS = [
   "shortcuts",
   "chat",
   "personalization",
+  "subscription",
   "mcp",
   "skills",
   "team",
@@ -373,10 +374,10 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("设置导航保留真实面板，并以置灰行呈现尚未接通的 Manus 分区", () => {
+  it("设置导航公开已实现的订阅面板，并以置灰行呈现尚未接通的 Manus 分区", () => {
     renderSettings();
 
-    expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
+    expect(screen.getByTestId("settings-tab-subscription")).toBeInTheDocument();
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
     for (const id of ["mail", "computer", "email", "phone", "wallet", "integration"]) {
       expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
@@ -439,28 +440,6 @@ describe("SettingsModal 设置中心模态", () => {
     );
     expect(focus).toHaveBeenCalledWith({ preventScroll: true });
     focus.mockRestore();
-  });
-
-  it("从下方设置项返回常规时清除导航残留滚动，不裁切首项", () => {
-    renderSettings();
-    const list = screen.getByRole("tablist");
-    Object.defineProperty(list, "scrollTop", { value: 180, writable: true });
-
-    fireEvent.keyDown(screen.getByTestId("settings-tab-appearance"), {
-      key: "Enter",
-    });
-
-    expect(list.scrollTop).toBe(0);
-  });
-
-  it("常规设置打开时在桌面窗口尺寸变化后清除导航残留滚动", async () => {
-    renderSettings(() => {}, undefined, false, undefined, "appearance");
-    const list = screen.getByRole("tablist");
-    Object.defineProperty(list, "scrollTop", { value: 48, writable: true });
-
-    fireEvent(window, new Event("resize"));
-
-    await waitFor(() => expect(list.scrollTop).toBe(0));
   });
 
   it("每个 Tab 都有真实对应的 shadcn tabpanel", () => {
@@ -729,30 +708,6 @@ describe("SettingsModal 设置中心模态", () => {
     expect(viewport).toContainElement(
       screen.getByTestId("settings-appearance"),
     );
-  });
-
-  it("左侧导航显示与真实滚动比例同步的固定 thumb", () => {
-    renderSettings(() => {}, undefined, false, undefined, "appearance");
-    const list = screen.getByRole("tablist");
-    Object.defineProperties(list, {
-      clientHeight: { configurable: true, value: 530 },
-      scrollHeight: { configurable: true, value: 602 },
-      scrollTop: { configurable: true, value: 0, writable: true },
-    });
-
-    fireEvent.scroll(list);
-    const thumb = screen.getByTestId("settings-nav-scrollbar");
-    expect(thumb).toHaveStyle({
-      height: "461px",
-      transform: "translateY(2px)",
-    });
-
-    list.scrollTop = 72;
-    fireEvent.scroll(list);
-    expect(thumb).toHaveStyle({
-      height: "461px",
-      transform: "translateY(67px)",
-    });
   });
 
   it("内嵌业务面板把横向 gutter 交给 Settings ScrollArea", async () => {

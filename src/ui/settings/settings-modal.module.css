@@ -205,11 +205,18 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0 0.75rem 0.375rem;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(166 166 166 / 65%) transparent;
 }
 
 .tabList::-webkit-scrollbar {
-  display: none;
+  display: block;
+  width: 0.25rem;
+}
+
+.tabList::-webkit-scrollbar-thumb {
+  border-radius: 0.4375rem;
+  background: rgb(166 166 166 / 65%);
 }
 
 .tabRail .tab[data-slot="tabs-trigger"] {
@@ -477,27 +484,6 @@
 
 .mcpBody :global([data-embedded="true"]) {
   padding-top: 1.5rem;
-}
-
-.navScrollbar {
-  position: absolute;
-  top: 0;
-  right: 0.125rem;
-  z-index: 1;
-  display: block;
-  width: 0.25rem;
-  border-radius: 0.4375rem;
-  background: rgb(166 166 166 / 50%);
-  opacity: 0;
-  pointer-events: none;
-}
-
-.navScrollbar[data-visible="true"] {
-  opacity: 0;
-}
-
-.tabRail:hover .navScrollbar[data-visible="true"] {
-  opacity: 1;
 }
 
 /* Browser zoom narrows the CSS viewport even on desktop. Collapse only the

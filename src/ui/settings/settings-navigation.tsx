@@ -2,13 +2,10 @@
 
 import {
   Fragment,
-  useCallback,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
   type ComponentType,
-  type CSSProperties,
   type RefObject,
 } from "react";
 import type { LucideProps } from "lucide-react";
@@ -84,7 +81,6 @@ export function SettingsNavigation({
 }: SettingsNavigationProps) {
   const { t } = useLocale();
   const [query, setQuery] = useState("");
-  const [scrollbar, setScrollbar] = useState({ height: 0, top: 2 });
   const tabListRef = useRef<HTMLDivElement | null>(null);
 
   const nav: readonly SettingsNavigationEntryOrPlaceholder[] = [
@@ -94,6 +90,7 @@ export function SettingsNavigation({
     { kind: "tab", key: "shortcuts", label: t("settings.shortcutsNavTitle"), icon: Keyboard },
     { kind: "tab", key: "chat", label: t("settings.chatTitle"), icon: MessageSquareText },
     { kind: "tab", key: "personalization", label: t("settings.personalizationTitle"), icon: Shapes, group: "features" },
+    { kind: "tab", key: "subscription", label: t("settings.subTitle"), icon: WalletCards },
     { kind: "tab", key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { kind: "tab", key: "skills", label: t("rail.navSkills"), icon: Puzzle },
     { kind: "placeholder", id: "mail", label: t("settings.mailTitle"), icon: Mail },
@@ -111,49 +108,22 @@ export function SettingsNavigation({
       (entry.kind === "tab" && entry.key === selectedTab) ||
       entry.label.toLocaleLowerCase().includes(normalizedQuery));
 
-  const syncScrollbar = useCallback((list: HTMLDivElement): void => {
-    const maxScroll = list.scrollHeight - list.clientHeight;
-    if (maxScroll <= 0 || list.clientHeight <= 0) {
-      setScrollbar({ height: 0, top: 2 });
-      return;
-    }
-    const height = Math.floor((list.clientHeight - 6) * (list.clientHeight / list.scrollHeight));
-    const travel = list.clientHeight - 4 - height;
-    setScrollbar({ height, top: 2 + Math.round((list.scrollTop / maxScroll) * travel) });
-  }, []);
-
-  const alignSelectedTab = useCallback((): void => {
+  // Preserve the reference panel's initial top-of-rail position. Only move
+  // enough to reveal a selected row that is actually outside the viewport;
+  // centering every selection clipped the account rows on initial open.
+  useLayoutEffect(() => {
     const list = tabListRef.current;
     const active = activeTabRef.current;
     if (!list || !active) return;
-    if (selectedTab === "appearance") {
-      list.scrollTop = 0;
-      syncScrollbar(list);
-      return;
-    }
     const listRect = list.getBoundingClientRect();
     const activeRect = active.getBoundingClientRect();
-    list.scrollTop += activeRect.top + activeRect.height / 2 - (listRect.top + listRect.height / 2);
-    syncScrollbar(list);
-  }, [activeTabRef, selectedTab, syncScrollbar]);
-
-  useLayoutEffect(() => { alignSelectedTab(); }, [alignSelectedTab]);
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(alignSelectedTab);
-    return () => window.cancelAnimationFrame(frame);
-  }, [alignSelectedTab]);
-  useEffect(() => {
-    if (selectedTab !== "appearance") return;
-    const reset = () => {
-      const list = tabListRef.current;
-      if (!list) return;
-      list.scrollTop = 0;
-      syncScrollbar(list);
-    };
-    reset();
-    window.addEventListener("resize", reset);
-    return () => window.removeEventListener("resize", reset);
-  }, [selectedTab, syncScrollbar]);
+    const edge = 4;
+    if (activeRect.top < listRect.top + edge) {
+      list.scrollTop += activeRect.top - listRect.top - edge;
+    } else if (activeRect.bottom > listRect.bottom - edge) {
+      list.scrollTop += activeRect.bottom - listRect.bottom + edge;
+    }
+  }, [activeTabRef, selectedTab]);
 
   const groupLabel = (group: SettingsNavigationGroup | undefined): string | null => {
     switch (group) {
@@ -186,7 +156,7 @@ export function SettingsNavigation({
         <Input value={query} aria-label={t("settings.search")} placeholder={t("settings.search")} onChange={(event) => setQuery(event.target.value)} />
       </label>
       <div className={styles.tabRail}>
-        <TabsList ref={tabListRef} className={styles.tabList} variant="line" onScroll={(event) => syncScrollbar(event.currentTarget)}>
+        <TabsList ref={tabListRef} className={styles.tabList} variant="line">
           {renderedNav.map((entry) => {
             const label = groupLabel(entry.group);
             const Icon = entry.icon;
@@ -217,7 +187,6 @@ export function SettingsNavigation({
             );
           })}
         </TabsList>
-        <span className={styles.navScrollbar} data-testid="settings-nav-scrollbar" data-visible={scrollbar.height > 0 || undefined} style={{ height: `${scrollbar.height}px`, transform: `translateY(${scrollbar.top}px)` } as CSSProperties} aria-hidden="true" />
       </div>
     </nav>
   );
