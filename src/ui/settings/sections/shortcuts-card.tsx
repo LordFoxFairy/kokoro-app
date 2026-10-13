@@ -115,8 +115,8 @@ export function ShortcutsCard() {
         <div className={styles.shortcutResetRow}>
           {saved ? <span className={styles.savedBadge} role="status" aria-label={t("settings.saved")}>{t("settings.saved")}</span> : null}
           <Button className={styles.shortcutReset} variant="outline" type="button" onClick={() => {
-            resetKeyboardShortcuts();
-            persist(readKeyboardShortcuts());
+            setShortcuts(resetKeyboardShortcuts());
+            setSaved(true);
             setRecording(null);
           }}>{t("settings.shortcutReset")}</Button>
         </div>

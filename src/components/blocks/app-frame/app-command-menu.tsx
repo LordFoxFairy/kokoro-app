@@ -12,6 +12,8 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { MessageSquarePlus, Settings2 } from "lucide-react"
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
+import { keyboardShortcutParts } from "@/lib/keyboard-shortcuts"
 import { cn } from "@/lib/utils"
 
 import type { SettingsTab } from "@/ui/settings/settings-modal"
@@ -59,6 +61,7 @@ export function AppCommandMenu({
   focusScopeRef,
 }: AppCommandMenuProps) {
   const t = useT()
+  const keyboardShortcuts = useKeyboardShortcuts()
   // Settings opens a second modal in the same event. Let that modal perform
   // its own focus handoff instead of briefly returning focus to the command
   // trigger and stealing it back from the newly opened panel.
@@ -123,7 +126,7 @@ export function AppCommandMenu({
           <CommandItem onSelect={() => run(onNewChat, true)}>
             <MessageSquarePlus />
             <span>{t("rail.newChat")}</span>
-            <CommandShortcut>{t("rail.newChatShortcut")}</CommandShortcut>
+            <CommandShortcut>{keyboardShortcutParts(keyboardShortcuts.newTask).join("")}</CommandShortcut>
           </CommandItem>
           {commandNavigation.map(({ key, label, tab, href, icon: Icon }) => (
             <CommandItem key={key} disabled={!tab && !href} onSelect={() => tab ? run(() => onOpenSettings(tab), true) : href ? run(() => navigateMountedSurface(href), true) : undefined}>
