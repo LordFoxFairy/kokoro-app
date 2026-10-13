@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { parseMcpConnectorJson } from "@/hub/mcp-connector-json"
-import { mcpConnectorSchemas, mcpConnectorMatches, mcpConnectorErrorAllowed } from "@/hub/mcp-connector.schema"
+import { mcpConnectorSchemas, mcpConnectorMatches, mcpConnectorErrorAllowed, mcpPrivateServerMatches } from "@/hub/mcp-connector.schema"
 
 const connector = { connector_id: "connector-1", connector_type: "mcp", provider_key: "provider-one", status: "active", approved_scopes: ["tools.read"], enabled: true, state_version: "2" }
 const connection = { connection_id: "connection-1", connector_id: "connector-1", server_id: "server-1", allowed_selectors: ["tool:read"], policy_digest: "a".repeat(64), status: "active" }
@@ -78,6 +78,19 @@ describe("current-user MCP 14.0 commands and provider directory", () => {
   it("preserves duplicate-key evidence before command schemas run", () => {
     expect(() => parseMcpConnectorJson('{"provider_key":"first","provider_key":"second"}')).toThrow(SyntaxError)
     expect(parseMcpConnectorJson('{"provider_key":"github"}')).toEqual({ provider_key: "github" })
+  })
+})
+
+describe("private URL MCP registration wire", () => {
+  const input = { display_name: "DeepWiki", server_url: "https://mcp.deepwiki.com/mcp" }
+  const server = { server_id: "server-1", display_name: input.display_name, server_url: input.server_url, status: "registered" as const, state_version: "1" }
+  const privateConnector = { ...connector, connector_id: "connector-private", server_id: server.server_id, display_name: input.display_name, description: "", approved_scopes: [], enabled: false, state_version: "1", status: "active" as const }
+
+  it("accepts active connectors after declaration succeeds and pending connectors only during OAuth", () => {
+    expect(mcpPrivateServerMatches("registerServer", { data: { server, connector: privateConnector } }, undefined, input)).toBe(true)
+    expect(mcpPrivateServerMatches("registerServer", { data: { server: { ...server, status: "pending" }, connector: { ...privateConnector, status: "pending" } } }, undefined, input)).toBe(true)
+    expect(mcpPrivateServerMatches("registerServer", { data: { server, connector: { ...privateConnector, status: "pending" } } }, undefined, input)).toBe(false)
+    expect(mcpPrivateServerMatches("registerServer", { data: { server: { ...server, status: "pending" }, connector: privateConnector } }, undefined, input)).toBe(false)
   })
 })
 

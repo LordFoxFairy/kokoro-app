@@ -46,7 +46,9 @@ export function mcpPrivateServerMatches(operation: McpPrivateServerOperation, va
   const parsed = z.object({ data: mcpPrivateServerRegistrationSchema }).strict().safeParse(value)
   if (!parsed.success || input === undefined || typeof input !== "object" || Array.isArray(input)) return false
   const command = input as Record<string, unknown>
-  return parsed.data.data.server.display_name === command.display_name && parsed.data.data.server.server_url === command.server_url && parsed.data.data.connector.server_id === parsed.data.data.server.server_id && parsed.data.data.connector.status === "pending" && !parsed.data.data.connector.enabled
+  const { server, connector } = parsed.data.data
+  const expectedConnectorStatus = server.status === "pending" ? "pending" : server.status === "registered" ? "active" : undefined
+  return server.display_name === command.display_name && server.server_url === command.server_url && connector.server_id === server.server_id && connector.status === expectedConnectorStatus && !connector.enabled
 }
 
 export const mcpConnectorConnectionSchema = z.object({
