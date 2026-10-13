@@ -2,7 +2,7 @@
 
 实际浏览器在已提交Web12f881e、IAMa63bcd0、Root81e616c2候选中完成正式登录、本人姓名/邮箱/ID读取、ID复制成功反馈、issuer确认退出与重新登录恢复；个性化四字段在前一Web020a5ea候选中经真实BFF保存且刷新恢复，设置侧栏真实focus-visible有2px outline。这些只证明对应路径，不代表完整设置、Chat、计费或设备管理已经接通。
 
-本次CUA复现账户积分卡片在深色主题中固定浅背景与继承浅字冲突；现账户和嵌入计费卡片改用既有secondary/foreground/border语义token，不改API、余额、套餐、数据或Skills/MCP。修正后完整architecture50/50与production build（含TypeScript）exit0；仅CSS与记录变化，未重复此前同基线业务/contract测试，实际深浅主题验收待固定新提交的正式组合。缺失真实余额仍不伪造为零。
+本次CUA复现账户积分卡片在深色主题中固定浅背景与继承浅字冲突；现账户和嵌入计费卡片改用既有secondary/foreground/border语义token，不改API、余额、套餐、数据或Skills/MCP。修正后完整architecture50/50与production build（含TypeScript）exit0；仅CSS与记录变化，未重复此前同基线业务/contract测试，固定Web82b5ba6的正式组合已通过真实浏览器登录→账户→浅色→账户→自动主题恢复→账户：账户积分卡片实际深/浅文字对比度分别13.41/15.96，姓名/邮箱/ID均真实读回；只证明该卡片及主题切换，不冒嵌入计费读取/完整视觉验收。缺失真实余额仍不伪造为零。
 
 ## SET-07 正式 Next 内部 URL 与浏览器 authority 修正（2026-10-13）
 
