@@ -78,7 +78,7 @@ export function SettingsPanelContent({
         />
       );
     case "appearance":
-      return <AppearanceCard preview={preview} />;
+      return <AppearanceCard />;
     case "personalization":
       return <PersonalizationCard preview={preview} />;
     case "chat":

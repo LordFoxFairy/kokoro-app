@@ -466,7 +466,8 @@ describe("SettingsModal 设置中心模态", () => {
     expect(
       screen.getByRole("heading", { name: "聊天偏好", level: 3 }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("settings-default-model")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-task-delivery")).toBeDisabled();
+    expect(screen.queryByTestId("settings-default-model")).not.toBeInTheDocument();
     expect(screen.queryByTestId("settings-account")).not.toBeInTheDocument();
   });
 
@@ -479,7 +480,7 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.getByRole("radio", { name: "浅色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "深色" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "自动" })).toBeChecked();
-    expect(screen.getByTestId("settings-default-model")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-task-delivery")).toBeDisabled();
     for (const label of ["声音提醒", "浏览器通知", "接收产品更新", "关于 Kokoro 的广告"]) {
       expect(screen.getByRole("switch", { name: label })).toBeInTheDocument();
     }

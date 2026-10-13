@@ -15,16 +15,12 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-import { ChatPreferencesSection } from "./chat-preferences-card";
+import { TaskDeliveryPreferencesSection } from "./task-delivery-preferences-section";
 import { CommunicationPreferencesSection } from "./communication-preferences-section";
 import styles from "./settings-sections.module.css";
 
 // —— 卡二：外观与语言 —— 主题三档（WEB-THEME）/ 语言（i18n）即时生效。
-export function AppearanceCard({
-  preview = false,
-}: {
-  preview?: boolean;
-}) {
+export function AppearanceCard() {
   const t = useT();
   const { mode, setMode } = useTheme();
   const { locale, setLocale } = useLocale();
@@ -101,7 +97,7 @@ export function AppearanceCard({
           </ToggleGroup>
         </div>
       </section>
-      <ChatPreferencesSection preview={preview} />
+      <TaskDeliveryPreferencesSection />
       <CommunicationPreferencesSection />
     </div>
   );

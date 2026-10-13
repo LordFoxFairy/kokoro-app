@@ -1581,6 +1581,9 @@ export const zh = {
   "settings.theme": "主题",
   "settings.language": "语言",
   "settings.chatTitle": "聊天偏好",
+  "settings.taskDelivery": "任务运行时的默认发送行为",
+  "settings.taskDeliveryHint": "当前默认将新消息排队，等待当前任务完成后发送。",
+  "settings.taskDeliveryQueue": "添加到队列",
   "settings.shortcutsNavTitle": "快捷键",
   "settings.shortcutsTitle": "键盘快捷键",
   "settings.shortcutsDescription":

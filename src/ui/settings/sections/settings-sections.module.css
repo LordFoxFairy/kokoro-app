@@ -178,9 +178,14 @@
 .chatPreferenceRow {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.preferenceCopy {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .chatPreferencesSection .select[data-slot="select-trigger"] {
@@ -197,10 +202,15 @@
 }
 
 .chatPreferenceHint {
-  margin: 0.5rem 0 0;
+  margin: 0.25rem 0 0;
   color: var(--muted-foreground);
   font-size: 0.75rem;
   line-height: 1rem;
+}
+
+.chatPreferencesSection .select[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .notificationSection {
