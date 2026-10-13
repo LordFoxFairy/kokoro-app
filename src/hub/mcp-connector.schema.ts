@@ -3,6 +3,7 @@ import { z } from "zod"
 export type McpConnectorReadOperation = "connectors" | "connector" | "connections" | "connection" | "providers" | "provider"
 export type McpConnectorCommandOperation = "create" | "update" | "enabled" | "remove"
 export type McpConnectorOperation = McpConnectorReadOperation | McpConnectorCommandOperation
+export type McpPrivateServerOperation = "registerServer" | "server"
 export const mcpConnectorIdSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}(?![\s\S])/u)
 const providerKey = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}(?![\s\S])/u)
 const cursor = z.string().regex(/^[A-Za-z0-9_-]{1,2048}(?![\s\S])/u)
@@ -19,12 +20,34 @@ export const mcpConnectorSchema = z.object({
   approved_scopes: z.array(z.string().min(1).max(128).regex(/^\S+(?![\s\S])/u)).refine(unique),
   enabled: z.boolean(),
   state_version: mcpConnectorStateVersionSchema,
+  server_id: mcpConnectorIdSchema.optional(),
   display_name: scalar(1, 100).optional(),
   description: scalar(0, 1000).optional(),
   created_at: z.string().datetime({ offset: true }).optional(),
   updated_at: z.string().datetime({ offset: true }).optional(),
 }).strict()
 export type McpConnector = z.infer<typeof mcpConnectorSchema>
+
+const privateServerUrl = z.string().max(2048).refine((value) => {
+  if (value.trim() !== value) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" && !url.username && !url.password && !url.hash && url.toString() === value
+  } catch { return false }
+})
+export const mcpPrivateServerSchema = z.object({ server_id: mcpConnectorIdSchema, display_name: scalar(1, 100), server_url: privateServerUrl, status: z.enum(["pending", "registered", "disabled"]), state_version: mcpConnectorStateVersionSchema }).strict()
+export const mcpPrivateServerRegistrationInputSchema = z.object({ display_name: scalar(1, 100), server_url: privateServerUrl }).strict()
+export const mcpPrivateServerRegistrationSchema = z.object({ server: mcpPrivateServerSchema, connector: mcpConnectorSchema }).strict()
+export type McpPrivateServer = z.infer<typeof mcpPrivateServerSchema>
+export type McpPrivateServerRegistrationInput = z.infer<typeof mcpPrivateServerRegistrationInputSchema>
+export type McpPrivateServerRegistration = z.infer<typeof mcpPrivateServerRegistrationSchema>
+export function mcpPrivateServerMatches(operation: McpPrivateServerOperation, value: unknown, serverId: string | undefined, input?: unknown): boolean {
+  if (operation === "server") return z.object({ data: z.object({ server: mcpPrivateServerSchema }).strict() }).strict().safeParse(value).data?.data.server.server_id === serverId
+  const parsed = z.object({ data: mcpPrivateServerRegistrationSchema }).strict().safeParse(value)
+  if (!parsed.success || input === undefined || typeof input !== "object" || Array.isArray(input)) return false
+  const command = input as Record<string, unknown>
+  return parsed.data.data.server.display_name === command.display_name && parsed.data.data.server.server_url === command.server_url && parsed.data.data.connector.server_id === parsed.data.data.server.server_id && parsed.data.data.connector.status === "pending" && !parsed.data.data.connector.enabled
+}
 
 export const mcpConnectorConnectionSchema = z.object({
   connection_id: mcpConnectorIdSchema,

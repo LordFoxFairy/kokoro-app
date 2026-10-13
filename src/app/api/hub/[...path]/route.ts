@@ -1,10 +1,13 @@
 import {
   mcpConnectorIdSchema,
+  mcpPrivateServerMatches,
+  mcpPrivateServerRegistrationInputSchema,
   mcpConnectorMatches,
   mcpConnectorErrorAllowed,
   mcpConnectorCommandRequestSchemas,
   type McpConnectorCommandOperation,
   type McpConnectorOperation,
+  type McpPrivateServerOperation,
 } from "@/hub/mcp-connector.schema"
 import {
   mcpConnectorAuthorizationCallbackSchema,
@@ -310,8 +313,12 @@ async function proxyMcpConnector(request: Request, path: string[]): Promise<Resp
       { status: httpStatus, headers: { "cache-control": "no-store", "x-request-id": requestId } },
     )
   const url = new URL(request.url)
-  const operation: McpConnectorOperation | McpConnectorAuthorizationOperation | undefined =
-    path.length === 2 && path[1] === "connectors" && request.method === "GET"
+  const operation: McpConnectorOperation | McpConnectorAuthorizationOperation | McpPrivateServerOperation | undefined =
+    path.length === 2 && path[1] === "servers" && request.method === "POST"
+      ? "registerServer"
+      : path.length === 3 && path[1] === "servers" && request.method === "GET"
+        ? "server"
+        : path.length === 2 && path[1] === "connectors" && request.method === "GET"
       ? "connectors"
       : path.length === 2 && path[1] === "connectors" && request.method === "POST"
         ? "create"
@@ -342,9 +349,10 @@ async function proxyMcpConnector(request: Request, path: string[]): Promise<Resp
                                 : undefined
   if (operation === undefined) return fail(400, "invalid_mcp_personal_request")
   const authorization = ["beginAuthorization", "reconnectAuthorization", "completeAuthorization", "createConnection"].includes(operation)
-  const mutation = !["connectors", "connector", "connections", "connection", "providers", "provider"].includes(operation)
-  const requiresIdempotency = ["create", "update", "enabled", "remove", "createConnection"].includes(operation)
-  const id = ["connector", "update", "remove", "enabled", "connections", "connection", "provider", "beginAuthorization", "reconnectAuthorization"].includes(
+  const privateServer = operation === "registerServer" || operation === "server"
+  const mutation = !["connectors", "connector", "connections", "connection", "providers", "provider", "server"].includes(operation)
+  const requiresIdempotency = ["create", "update", "enabled", "remove", "createConnection", "registerServer"].includes(operation)
+  const id = ["server", "connector", "update", "remove", "enabled", "connections", "connection", "provider", "beginAuthorization", "reconnectAuthorization"].includes(
     operation,
   )
     ? path[2]
@@ -416,7 +424,9 @@ async function proxyMcpConnector(request: Request, path: string[]): Promise<Resp
           : operation === "completeAuthorization"
             ? mcpConnectorAuthorizationCallbackSchema.safeParse(input).success
             : mcpConnectorCreateConnectionSchema.safeParse(input).success
-        : mcpConnectorCommandRequestSchemas[operation as McpConnectorCommandOperation].safeParse(input).success
+        : operation === "registerServer"
+          ? mcpPrivateServerRegistrationInputSchema.safeParse(input).success
+          : mcpConnectorCommandRequestSchemas[operation as McpConnectorCommandOperation].safeParse(input).success
       if (!accepted) return fail(400, "invalid_mcp_personal_request")
     }
     signal.throwIfAborted()
@@ -492,15 +502,18 @@ async function proxyMcpConnector(request: Request, path: string[]): Promise<Resp
     } catch {
       return fail(502, "mcp_personal_response_invalid")
     }
-    const expected = operation === "create" || operation === "createConnection" ? 201 : 200
+    const expected = operation === "create" || operation === "createConnection" || operation === "registerServer" ? 201 : 200
+    const connectorOperation = operation === "registerServer" ? "create" : operation === "server" ? "connector" : operation
     const valid =
       upstream.status === expected
         ? authorization
           ? mcpConnectorAuthorizationMatches(operation as McpConnectorAuthorizationOperation, raw, id, input)
-          : mcpConnectorMatches(operation as McpConnectorOperation, raw, id, query, input)
+          : privateServer
+            ? mcpPrivateServerMatches(operation as McpPrivateServerOperation, raw, id, input)
+            : mcpConnectorMatches(operation as McpConnectorOperation, raw, id, query, input)
         : authorization
           ? mcpConnectorAuthorizationErrorAllowed(upstream.status, raw)
-          : mcpConnectorErrorAllowed(operation as McpConnectorOperation, upstream.status, raw)
+          : mcpConnectorErrorAllowed(connectorOperation as McpConnectorOperation, upstream.status, raw)
     if (!valid) return fail(502, "mcp_personal_response_invalid")
     const retryAfter = upstream.headers.get("retry-after")
     if (retryAfter !== null && (upstream.status !== 429 || !/^[1-9][0-9]{0,4}(?![\s\S])/u.test(retryAfter) || Number(retryAfter) > 86400))
@@ -1619,7 +1632,8 @@ export async function proxyHubRequest(request: Request, context: { params: Promi
   if (path[0] === "self" && path[1] === "mcp") return NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
   if (
     path[0] === "mcp" &&
-    (path[1] === "connectors" ||
+    (path[1] === "servers" ||
+      path[1] === "connectors" ||
       path[1] === "providers" ||
       path[1] === "authorization" ||
       (path[1] === "connections" && (path.length > 2 || request.method !== "GET")))
