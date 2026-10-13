@@ -264,6 +264,7 @@ const NAV_TAB_KEYS = [
   "personalization",
   "mcp",
   "skills",
+  "subscription",
   "team",
 ];
 
@@ -363,7 +364,7 @@ describe("SettingsModal 设置中心模态", () => {
       expect(screen.getByTestId(`settings-tab-${key}`)).toBeInTheDocument();
     }
     expect(screen.queryByTestId("settings-tab-chat")).toBeNull();
-    expect(screen.queryByTestId("settings-tab-subscription")).toBeNull();
+    expect(screen.getByTestId("settings-tab-subscription")).toBeInTheDocument();
     expect(screen.queryByText("Studio")).toBeNull();
     expect(screen.getByRole("textbox", { name: "全名" })).toHaveValue("—");
     expect(screen.getByText("个人版", { exact: true })).toBeInTheDocument();
