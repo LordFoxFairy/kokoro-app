@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createPersistedStore } from "@/lib/persisted-store";
 
 export const shortcutIds = ["newTask", "search", "sidebar"] as const;
+export const KEYBOARD_SHORTCUTS_CHANGED_EVENT = "kokoro.keyboard-shortcuts.changed";
 export type ShortcutId = (typeof shortcutIds)[number];
 
 export type KeyboardShortcut = Readonly<{
@@ -50,10 +51,14 @@ export function readKeyboardShortcuts(): KeyboardShortcutMap {
 
 export function writeKeyboardShortcuts(value: KeyboardShortcutMap): void {
   store.write(value);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(KEYBOARD_SHORTCUTS_CHANGED_EVENT));
+  }
 }
 
-export function resetKeyboardShortcuts(): void {
-  store.write(defaults);
+export function resetKeyboardShortcuts(): KeyboardShortcutMap {
+  writeKeyboardShortcuts(defaults);
+  return defaults;
 }
 
 export function matchesKeyboardShortcut(
