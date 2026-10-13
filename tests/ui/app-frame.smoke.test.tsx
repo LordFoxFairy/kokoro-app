@@ -3307,7 +3307,8 @@ it("跨 macrotask 延迟 commit 的 AppFrame 才创建并持有可提交的 brow
       factoryCallsBeforeCommit: 0,
       storageSubscriptionsBeforeCommit: 0,
       factoryCallsAfterCommit: 1,
-      storageSubscriptionsAfterCommit: 1,
+      // Conversation store plus the two mounted shortcut hint consumers.
+      storageSubscriptionsAfterCommit: 3,
       engineCanSubmitBeforeSend: true,
       messagePostCount: 1,
     })

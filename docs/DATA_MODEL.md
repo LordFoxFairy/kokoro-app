@@ -1,3 +1,7 @@
+## SET-SHORTCUTS：原浏览器偏好格式保留
+
+继续使用kokoro.web.keyboard-shortcuts，三个newTask/search/sidebar对象的key/primary/shift/alt形状不变。无Web业务数据库owner、无schema/服务端事实。旧数据不自动迁移或覆盖，primary按当前平台解释；坏JSON/schema按原规则读默认但不写回，旧重复组合不触发歧义动作。编辑/清空/重设须setItem成功后发布变化，失败保持原盘值；跨标签页重读及写前重读不声称数据库级并发事务。
+
 ## SET-13 Team权限视图不保存事实（2026-10-13）
 
 Role/Permission/Membership/Invitation与授权审计仍归IAM，public projection归BFF；Web没有业务数据库、权限缓存、团队/计划owner或新Redis/session事实。TeamRole八域仅用于完整可见目录及权限超集UI提示，当前mutation仍由IAM在线权威决定。唯一generated snapshot/provenance属于build-time固定依赖，不是业务持久化。原字节替换与正规生成遵守TECH/API的15.0.0开发配对裁决，旧pin不并存。

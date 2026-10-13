@@ -506,6 +506,7 @@ describe("SettingsModal 设置中心模态", () => {
   });
 
   it("快捷键 tab 独立于对话偏好并呈现 Manus 风格快捷键行", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
     renderSettings();
     fireEvent.keyDown(screen.getByTestId("settings-tab-shortcuts"), {
       key: "Enter",

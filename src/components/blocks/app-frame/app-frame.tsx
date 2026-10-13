@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { activeMode } from "@/core/conversations"
 import { isCreditInsufficient } from "@/billing/rules"
 import { useHydrated } from "@/lib/use-hydrated"
-import { matchesKeyboardShortcut, readKeyboardShortcuts } from "@/lib/keyboard-shortcuts"
+import { matchesSavedKeyboardShortcut } from "@/lib/keyboard-shortcuts"
 import { useIsMobile } from "@/hooks/use-mobile"
 import type { SessionClient } from "@/engine/client"
 import { useT } from "@/i18n/context"
@@ -482,13 +482,12 @@ function AppFrameRuntime({
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      const shortcuts = readKeyboardShortcuts()
-      if (matchesKeyboardShortcut(event, shortcuts.search)) {
+      if (matchesSavedKeyboardShortcut(event, "search")) {
         event.preventDefault()
         openCommand()
         return
       }
-      if (matchesKeyboardShortcut(event, shortcuts.newTask)) {
+      if (matchesSavedKeyboardShortcut(event, "newTask")) {
         event.preventDefault()
         startNewChatWithMoveFence()
       }

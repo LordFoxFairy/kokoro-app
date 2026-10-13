@@ -1,3 +1,7 @@
+## SET-SHORTCUTS：可靠快捷键候选（待Root审查与真实浏览器集成）
+
+现有快捷键新增保存失败反馈、冲突验证（含原始录制事件证明的旧符号/新fallback别名）、录制隔离、文本/dialog/repeat/IME负控、Mac与Ctrl平台提示，以及disabled语音行。存储键和用户配置保留。两个真实反例（吞写失败、重复绑定）RED后修复，专用组件/存储/实际Sidebar消费者回归通过；完整门禁输出及精确冻结由主控接收。尚未代表当前运行候选，需Root审查/提交/精确集成与浏览器编辑→刷新→触发证据后验收。
+
 ## SET-13 团队完整权限消费候选（2026-10-13，待实际组合验收）
 
 固定BFF已审不可变22a476ea59624b806e8d0013e069efdd6bd26595、public15.0.0、canonical SHA256 5f6b1178cb878718090ba65d6b0d563185078624af0d3d46a01e568af87264a4。唯一snapshot来自owner Git blob原字节，两generator正常write/check；Team派生只新增两permission字段，其余14文件不变，Agent failure仅三个provenance字段变化。原14.7正式BFF相对于旧Web pin已含另一开发者的安装identity私有契约差异，完整snapshot正规继承，不手工裁owner字段；本片没有修改技能或连接器功能源码。

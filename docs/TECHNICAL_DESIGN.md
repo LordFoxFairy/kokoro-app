@@ -1,3 +1,9 @@
+## SET-SHORTCUTS：快捷键可靠编辑（候选，待浏览器验收）
+
+Web继续唯一拥有三动作的浏览器偏好；不新增服务或依赖。编辑在window capture阶段消费录制按键，Escape取消录制、Tab取消并继续焦点移动；纯修饰键、重复与IME不写入。新绑定要求平台primary加字母/数字/句点，可加Shift/Alt；明确拒绝部分浏览器保留键和动作冲突。录制保留原始事件，仅作为当次保存输入，不持久化；UI先查其他既有绑定是否匹配该事件，保存边界再次核验，拒绝旧语义符号与新物理fallback的已证别名重叠（如Shift+>与句点、Option+∆与J）。既有冲突不妨碍清空/重设恢复。字母/数字保留KeyboardEvent.key语义，避免改变非US键盘的已有配置；Option/Shift产出符号时新绑定可由code回落到物理字母/数字/句点，旧符号绑定仍按原key匹配。Mac primary为Meta，其他平台为Control，不接受二者同时按下。
+
+仅localStorage成功写入原key/shape后广播并显示已保存；失败保留原值并显示错误，不更新乐观缓存。useSyncExternalStore提供稳定SSR默认快照并订阅本页/跨页变化；平台提示水合后更新。运行消费者忽略文本编辑、dialog、已处理、repeat及composition事件；旧重复配置保留原字节，但歧义动作不执行，须用户重新绑定或恢复默认。语音行真实disabled，无录音或权限请求。
+
 ## SET-13 完整Team角色消费 D0（2026-10-13，owner候选待冻结）
 
 | 项 | 决定 |

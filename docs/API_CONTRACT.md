@@ -1,3 +1,7 @@
+## SET-SHORTCUTS：无网络协议变更
+
+快捷键编辑、清空和重设只写既有浏览器localStorage偏好，无请求、用户身份/API/权限/SQL/generated变更。保存成功只表示当前浏览器存储写入成功，不声称跨设备同步。语音输入无能力契约，显示不可用。
+
 ## SET-13 TeamRole public15严格消费目标（2026-10-13）
 
 BFF是唯一可编辑public机器owner。等待SET13审查并提交后，由其不可变SHA/digest原字节替换src/generated/bff-public-openapi.yaml；两既有generator固定同一来源。正常生成Team SDK与Agent failure provenance，失败片段/roles/tuples及非Team语义不手改。TeamRole.permissions只接受现八域，platform仅execute，skill仅固定IAM十五动作，数组非空；未知域/动作继续拒绝，保原错误/paging/mutation输入/输出。

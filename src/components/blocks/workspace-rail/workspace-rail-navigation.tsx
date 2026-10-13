@@ -23,8 +23,7 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts"
-import { keyboardShortcutParts } from "@/lib/keyboard-shortcuts"
+import { useKeyboardShortcuts, useKeyboardShortcutParts } from "@/hooks/use-keyboard-shortcuts"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
@@ -261,6 +260,7 @@ export function WorkspaceRailNavigation({
 }: WorkspaceRailNavigationProps) {
   const t = useT()
   const keyboardShortcuts = useKeyboardShortcuts()
+  const keyboardShortcutParts = useKeyboardShortcutParts()
   const enabledNavigation = navigation?.filter((item) => isRuntimeNavigationEnabled(item, featureFlags))
   const workbenchNavigation: WorkbenchNavigationItem[] = (enabledNavigation ?? []).map((item) => ({
     key: item.key,
