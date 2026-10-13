@@ -1,4 +1,10 @@
-## SET-17 交易预禁用与团队入口源码（2026-10-14，待正式浏览器验收）
+## SET-17 交易预禁用与团队入口正式验收（2026-10-14）
+
+正式运行代码 Web `50b291bf50e65cfcc169784848d2b69a91e80dae`、Root `a123e21718ebea0b78b2f7edadc8035be76a9b39`。Root只替换自有隔离运行，正规owner pins/fresh install/build/ready和匿名login302均通过。computer use正式登录后，团队标签与标题均为团队，真实Owner成员和角色表单可读；Account升级仍打开200空目录。直接旧pay URL显示不可用、实际disabled按钮、不显示未经验证orderId/paid；返回链接实际回到/app并加载工作区。首个Team等待locator误求投影未展示的邮箱，保留观察失败，实际成员Owner终态可见，不当产品失败。未邀请/购买/创建团队或修改偏好。
+
+升级操作到空态约576ms，含工具与观察开销、单样本，不作为后端基准；非空目录预禁用由受控组件测试证明，当前未seed商品，因此不冒真实非空商品CUA。零checkout/支付POST由source与具名测试支持，未声称浏览器另有网络抓包。完整设置Goal继续active，账户登录设备仍需IAM安全会话契约与正式消费者；支付、模型通知等完整链路继续未验。下方为该浏览器验收前源码记录。
+
+## SET-17 交易预禁用与团队入口源码（2026-10-14，阶段历史）
 
 局部切片基线 `08fd6a57516c4688dd63f4ab4f4c65105717d0c2`：现定价面板首次非空目录即disabled，移除checkout handler/redirect/事后失败状态，真实目录金额与全部读态保留；原直接pay页只显示不可用，不把URL当订单，不发模拟支付/合成paid，返回工作区。mock-pay同源adapter保配置、Origin与ProductSession守卫，所有环境准入后503，旧development支付relay已退役。Team导航复用现团队标签，成员/角色/邀请权限保留，不冒充创建团队。
 
