@@ -3704,8 +3704,17 @@ function R70NotifyHarness({ id, phase, brand = "R70Brand" }: { id: string; phase
 
 r66Describe("R70 waiting hook preserves notification lifecycle", () => {
   const a = "r70_notify_a", b = "r70_notify_b"
-  const prepareNotification = (permission: NotificationPermission) => {
+  const prepareNotification = (
+    permission: NotificationPermission,
+    browserNotifications = true,
+  ) => {
     r70SetAwaiting(a, false); r70SetAwaiting(b, false)
+    window.localStorage.setItem("kokoro.communication-preferences", JSON.stringify({
+      browser_notifications: browserNotifications,
+      sound_notifications: false,
+      product_updates: false,
+      brand_ads: false,
+    }))
     const construct = vi.fn(function NotificationFixture() {})
     Object.defineProperty(construct, "permission", { value: permission })
     const requestPermission = vi.fn().mockResolvedValue(permission)
@@ -3715,6 +3724,7 @@ r66Describe("R70 waiting hook preserves notification lifecycle", () => {
   }
   afterEach(() => {
     r70SetAwaiting(a, false); r70SetAwaiting(b, false)
+    window.localStorage.removeItem("kokoro.communication-preferences")
     vi.unstubAllGlobals()
   })
 
@@ -3747,6 +3757,14 @@ r66Describe("R70 waiting hook preserves notification lifecycle", () => {
     view.rerender(<R70NotifyHarness id={a} phase="waiting" />)
     expect(notification.construct).toHaveBeenCalledTimes(2)
     expect(document.title).toBe(`● (${r70ReadAwaiting().size}) R70Brand Web`)
+  })
+
+  it("keeps waiting without a desktop alert until browser notifications are enabled", () => {
+    const notification = prepareNotification("granted", false)
+    render(<R70NotifyHarness id={a} phase="waiting" />, { wrapper: LocaleProvider })
+    expect(r70ReadAwaiting().has(a)).toBe(true)
+    expect(notification.construct).not.toHaveBeenCalled()
+    expect(notification.requestPermission).not.toHaveBeenCalled()
   })
 
   it("keeps waiting and its badge when desktop notifications are denied without requesting permission again", () => {
