@@ -46,6 +46,7 @@ it("keeps the Manus-style action cluster visible and expands in place", async ()
   renderDialog()
 
   const dialog = screen.getByTestId("skill-detail-dialog")
+  expect(within(dialog).getByText("更新于 2026年8月28日")).toBeInTheDocument()
   expect(screen.queryByRole("button", { name: "分享技能" })).toBeNull()
   expect(screen.getByRole("button", { name: "更多技能操作" })).toBeInTheDocument()
   const expand = screen.getByRole("button", { name: "放大技能详情" })
@@ -72,4 +73,22 @@ it("exposes the skill download action from the more menu", async () => {
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
   fireEvent.click(screen.getByRole("button", { name: "关闭技能详情" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+})
+
+
+it("formats owner-projected Unix seconds without rendering a 1970 date", () => {
+  render(
+    <LocaleProvider>
+      <SkillDetailDialog
+        skill={{ ...skill, updated_at: Math.floor(skill.updated_at! / 1_000) }}
+        open
+        brandName="Kokoro"
+        onOpenChange={vi.fn()}
+        onTry={vi.fn()}
+      />
+    </LocaleProvider>,
+  )
+
+  expect(screen.getByText("更新于 2026年8月28日")).toBeInTheDocument()
+  expect(screen.queryByText(/1970年/u)).toBeNull()
 })
