@@ -10,11 +10,13 @@ import {
 } from "react";
 import type { LucideProps } from "lucide-react";
 import {
+  ArrowUpRight,
+  Building2,
   Cable,
   ChevronsUpDown,
   CircleHelp,
   Code2,
-  Database,
+  DatabaseBackup,
   Keyboard,
   Mail,
   Monitor,
@@ -25,7 +27,6 @@ import {
   Smartphone,
   Sparkles,
   UserRound,
-  UsersRound,
   WalletCards,
 } from "lucide-react";
 
@@ -42,7 +43,8 @@ type SettingsNavigationGroup =
   | "settings"
   | "features"
   | "assets"
-  | "data";
+  | "data"
+  | "support";
 
 type SettingsNavigationEntry = {
   kind: "tab";
@@ -106,10 +108,10 @@ export function SettingsNavigation({
     { kind: "placeholder", id: "email", label: t("settings.email"), icon: Mail, group: "assets" },
     { kind: "placeholder", id: "phone", label: t("settings.phoneTitle"), icon: Smartphone },
     { kind: "placeholder", id: "wallet", label: t("settings.walletTitle"), icon: WalletCards },
-    { kind: "placeholder", id: "data-management", label: t("settings.dataManagementTitle"), icon: Database, group: "data" },
+    { kind: "placeholder", id: "data-management", label: t("settings.dataManagementTitle"), icon: DatabaseBackup, group: "data" },
     { kind: "placeholder", id: "integration", label: t("settings.integrationTitle"), icon: Cable },
     { kind: "placeholder", id: "developer", label: t("settings.developerTitle"), icon: Code2 },
-    { kind: "tab", key: "team", label: t("settings.createTeam"), icon: UsersRound },
+    { kind: "tab", key: "team", label: t("settings.createTeam"), icon: Building2, group: "support" },
     { kind: "placeholder", id: "help", label: t("settings.helpTitle"), icon: CircleHelp },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -173,7 +175,9 @@ export function SettingsNavigation({
             const itemKey = entry.kind === "tab" ? entry.key : entry.id;
             return (
               <Fragment key={itemKey}>
-                {label ? <div className={styles.sectionLabel} aria-hidden="true">{label}</div> : null}
+                {entry.group === "support" && normalizedQuery.length === 0 ? (
+                  <div className={styles.supportDivider} aria-hidden="true" />
+                ) : label ? <div className={styles.sectionLabel} aria-hidden="true">{label}</div> : null}
                 {entry.kind === "tab" ? (
                   <TabsTrigger
                     value={entry.key}
@@ -191,6 +195,7 @@ export function SettingsNavigation({
                   <div className={styles.placeholderTab} data-testid={`settings-placeholder-${entry.id}`} aria-disabled="true">
                     <Icon aria-hidden="true" />
                     <span className={styles.tabLabel}>{entry.label}</span>
+                    {entry.id === "help" ? <ArrowUpRight className={styles.helpExternal} aria-hidden="true" /> : null}
                   </div>
                 )}
               </Fragment>
