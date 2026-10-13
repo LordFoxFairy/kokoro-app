@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CircleHelp, KeyRound, LogOut, Sparkles } from "lucide-react"
 
@@ -12,6 +12,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAccountProfile } from "../use-account-profile"
 
 import styles from "./settings-sections.module.css"
 
@@ -48,12 +51,14 @@ function LoginProviderIcon({ provider }: { provider: "google" | "microsoft" | "a
 export function AccountCard({
   brandName,
   preview = false,
+  readBoundary,
   loginMethodsOpen,
   onLoginMethodsChange,
   onOpenSubscription,
 }: {
   brandName?: string
   preview?: boolean
+  readBoundary?: ProjectReadBoundary
   loginMethodsOpen: boolean
   onLoginMethodsChange: (open: boolean) => void
   onOpenSubscription: () => void
@@ -62,7 +67,19 @@ export function AccountCard({
   const router = useRouter()
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
-  const account = preview ? { ...previewAccount, ...previewAccountEdits } : null
+  const live = useAccountProfile(preview, readBoundary);
+  const account = preview
+    ? { ...previewAccount, ...previewAccountEdits }
+    : live.profile
+      ? {
+          displayName: live.profile.name,
+          email: live.profile.email,
+          userId: live.profile.subject,
+          planLabel: null,
+          credits: null,
+          loginMethods: [],
+        }
+      : null;
   const [loggingOut, setLoggingOut] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
@@ -73,7 +90,69 @@ export function AccountCard({
   const [verificationBusy, setVerificationBusy] = useState<"email" | "delete" | null>(null)
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [loginMethodBusy, setLoginMethodBusy] = useState<AccountProjection["loginMethods"][number]["id"] | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copyState, setCopyState] = useState<{
+    scope: string;
+    status: "copied" | "failed";
+  } | null>(null);
+  const copyScope = preview ? "preview" : live.scope;
+  const copyRef = useRef({ scope: copyScope, version: 0, retired: false });
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useLayoutEffect(() => {
+    copyRef.current = {
+      scope: copyScope,
+      version: copyRef.current.version + 1,
+      retired: false,
+    };
+    clearTimeout(copyTimer.current);
+    return () => {
+      copyRef.current.retired = true;
+      copyRef.current.version++;
+      clearTimeout(copyTimer.current);
+    };
+  }, [copyScope]);
+  useEffect(
+    () => () => {
+      copyRef.current.retired = true;
+      clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+  const copied =
+    copyState?.scope === copyScope && copyState.status === "copied";
+  const copyUserId = async () => {
+    if (!account?.userId) return;
+    const active = copyRef.current;
+    const version = ++active.version;
+    clearTimeout(copyTimer.current);
+    try {
+      await navigator.clipboard.writeText(account.userId);
+      if (
+        active !== copyRef.current ||
+        active.retired ||
+        version !== active.version
+      )
+        return;
+      setCopyState({ scope: copyScope, status: "copied" });
+      copyTimer.current = setTimeout(() => {
+        if (
+          active === copyRef.current &&
+          !active.retired &&
+          version === active.version
+        )
+          setCopyState(null);
+      }, 1200);
+    } catch {
+      if (
+        active === copyRef.current &&
+        !active.retired &&
+        version === active.version
+      )
+        setCopyState({ scope: copyScope, status: "failed" });
+    }
+  };
+
 
   const logout = async (): Promise<void> => {
     setLoggingOut(true)
@@ -145,22 +224,24 @@ export function AccountCard({
     }
   }
 
+  if (loginMethodsOpen && !preview) return <p role="status">{t("firstSite.unavailable")}</p>
+
   if (loginMethodsOpen) {
     return (
       <div className={styles.loginMethods} data-testid="settings-login-methods">
         <div className={styles.loginProviderList}>
-          {(account?.loginMethods ?? previewAccount.loginMethods).map((method) => (
+          {(preview ? account?.loginMethods ?? previewAccount.loginMethods : []).map((method) => (
             <div className={styles.loginProvider} key={method.id}>
               <span className={styles.providerMark} data-provider={method.id}><LoginProviderIcon provider={method.id} /></span>
               <div><strong>{method.label}</strong>{method.account ? <span>{method.account}</span> : null}</div>
-              <Button variant="outline" size="sm" type="button" disabled={loginMethodBusy !== null} onClick={() => void toggleLoginMethod(method)}>
+              <Button variant="outline" size="sm" type="button" disabled={!preview || loginMethodBusy !== null} onClick={() => void toggleLoginMethod(method)}>
                 {loginMethodBusy === method.id ? <Spinner aria-hidden="true" /> : null}
                 {method.connected ? t("settings.disconnect") : t("settings.connect")}
               </Button>
             </div>
           ))}
         </div>
-        <div className={styles.passkeyHead}><div><strong>{t("settings.passkey")}</strong><span>{t("settings.passkeyHint")}</span></div><Button variant="outline" size="sm">{t("settings.addPasskey")}</Button></div>
+        <div className={styles.passkeyHead}><div><strong>{t("settings.passkey")}</strong><span>{t("settings.passkeyHint")}</span></div><Button variant="outline" size="sm" disabled={!preview}>{t("settings.addPasskey")}</Button></div>
         <Empty className={styles.passkeyEmpty}>
           <EmptyMedia><KeyRound aria-hidden="true" /></EmptyMedia>
           <EmptyHeader>
@@ -174,12 +255,15 @@ export function AccountCard({
 
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
+      {!preview && live.scope && live.phase==="loading" ? <p role="status">{t("billing.loading")}</p> : null}
+      {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
+      {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
       <div className={styles.accountIdentityRow}>
         <div className={styles.identity}>
           <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
-          <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} disabled={!preview} />
+          <Input className={styles.identityInput} value={displayName} onChange={(event) => { if(preview) setPreviewAccountEdits(current=>({...current,displayName:event.target.value})) }} readOnly={!preview} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} disabled={!preview} />
           </div>
         </div>
         <Button variant="outline" size="icon-sm" type="button" aria-label={t("settings.logout")} data-testid="settings-logout" onClick={() => void logout()} disabled={loggingOut}>
@@ -205,14 +289,14 @@ export function AccountCard({
             <strong>{t("settings.email")}</strong>
             <span>{account?.email ?? "—"}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" disabled={!account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
+          <Button variant="outline" size="sm" type="button" disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
         </div>
         <div className={styles.accountDetailRow}>
           <div>
             <strong>{t("settings.userId")}</strong>
             <span>{account?.userId ?? "—"}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" disabled={!account?.userId} onClick={() => { if (account?.userId) void navigator.clipboard.writeText(account.userId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }) }}>{copied ? t("settings.copied") : t("settings.copyUserId")}</Button>
+          <Button variant="outline" size="sm" type="button" disabled={!account?.userId} onClick={() => void copyUserId()}>{copied ? t("settings.copied") : t("settings.copyUserId")}</Button>
         </div>
         <div className={styles.accountDetailRow}>
           <div>

@@ -2402,3 +2402,15 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 | 生命周期 | 初读成功前禁止编辑/保存，失败可重试；保留最新草稿，串行失焦保存和后续脏字段，不丢用户编辑。复用 SettingsPanelContent 已有 readBoundary，仅向个性化透传；subject/generation/admitted 变化取消并退役读取/写入，不新增认证探测。revision 冲突保草稿，显式重新载入并显示差异/选择，禁止自动覆盖别人更新；未知写结果不自动重试。 |
 | 依赖 | section→本地 hook→同源 client→BFF，禁止 Web 访问 IAM/数据库。schema/error/request分别在settings普通文件维护本协议校验、错误类型与10s有限请求（含body、64KiB上限、迟到清理），不建立通用网络框架。每request独立controller，deadline不取消编辑session。既有 expected_revision CAS 和字段上限不变；safe integer/null iff0与ACK expected+1精确消费owner事实，preview 仍隔离于 live。 |
 | 删除/验证 | 删除 section 内重复四字段类型与旧不安全读取/保存编排；复用 schema 类型。新增真实交互回归覆盖读失败零写、连续编辑、冲突恢复、卸载取消；focused、contract、architecture、lint/type/test/build/e2e 由主控验收并记录未执行项。 |
+
+## SET-07：账户本人资料读取与设置展示（设计已定，待实现）
+
+| 项 | 决定 |
+| --- | --- |
+| Owner / writer | IAM持用户资料事实；Web仅安全投影、读取生命周期与展示；runtime_audit唯一Web writer，Root审查/提交。复用本设置功能分支，不另开按钮PR。 |
+| 当前事实 | AccountCard live资料为null，preview有独立示例；当前OIDC已请求openid/profile/email。IAM已有userinfo，BFF已有受控relay；无需新增owner API。 |
+| 位置比较 | 采用Next现app/api/account/profile/route.ts、现lib/server/account-profile.ts和现settings reader/hook；淘汰把资料action塞入Auth.js callback/session协议。不建新业务模块或持久store。共享wire schema放现lib/account-profile.schema.ts，避免server与UI复制或客户端import server。 |
+| 准入 / 依赖 | 唯一现oidcRpConfig提供tenant/relay/redis/auth配置，现Product session先验证有效且在线；verifyProductIdentity经BFF/v1/me核同subject与固定tenant。只经BFF调用/iam/oauth2/userinfo，服务端自行构造credential，不转发浏览器Authorization/Cookie/身份头。返回前复验原session id/generation/subject有效。 |
+| 状态 / 限制 | GET canonical host/origin、无query/body；总5秒包含初始store、在线准入、userinfo body和最终store，外层明确deadline race并清理迟到/取消I/O，最多16KiB JSON、无redirect。userinfo sub必须等于当前subject；optional姓名/邮箱/验证状态缺失显示不可用。所有响应private,no-store。UI只在已admitted boundary读取，换subject/generation/失准入同步清旧资料/abort并拒迟到结果；失败可重试。 |
+| 展示 / 删除 | live只显示真实姓名/邮箱/用户ID，可复制真实ID并处理复制失败；姓名、邮箱等写流程未接通时继续明确不可用，不因资料读取成功启用preview假写、不造计划/积分或登录方式。删除live null固定占位的读取缺口，保preview隔离。 |
+| 验证 | 无/过期session、Redis失败、在线准入失败、错tenant/subject、畸形/超限/慢body/redirect、userinfo非200、logout/generation退休、白名单/无token/cookie泄漏、缺可选字段、UI身份切换/重试/复制；Root最终类型/lint/契约/build及真实登录computer use。 |

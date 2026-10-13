@@ -1608,3 +1608,9 @@ id and does not resend POST.
 ## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
 
 沿用唯一现有 browser-private `/api/hub/preferences/personalization` → BFF `/v1/preferences/personalization`，GET 返回 personalization(nullable)/revision，PUT 四字段与 expected_revision，冲突码 personalization_revision_conflict。不新增 owner API、公开版本、generated pin 或 alias。昵称128、职业256、about2000、instructions8000的Unicode码点上限保持；编辑与响应校验使用同一规则，不使用UTF-16 maxLength。snapshot revision为非负safe integer，null iff revision0；PUT ACK必须四字段匹配且revision精确expected+1，不能接受跳跃。client 接收 AbortSignal，10s总deadline涵盖fetch与body、响应限64KiB；超时仅取消当前request、迟到body清理，不取消编辑session或自动重试。取消/迟到结果不得推进当前草稿或显示保存成功。首次读取失败不具备写入基准，禁止 PUT；冲突必须显式恢复，未知写结果保原草稿及状态，不自动换revision重放。
+
+## SET-07：本人资料 browser-private projection
+
+唯一新Web入口GET /api/account/profile，不是新的公开Product或IAM业务API；禁止query/body，canonical Web请求，GET以外不提供动作。调用现BFF /v1/me在线准入与/iam/oauth2/userinfo；不直接访问IAM。成功仅{data:{subject,name,email,email_verified}}，后3字段可为null，姓名/邮箱缺scope不是匿名或伪造默认值；userinfo sub与Product subject必须一致。其他IAM字段不透传，包含token、credential、cookie、Location或原始error body均不得回浏览器。
+
+所有响应private,no-store；无有效会话401、请求不合法400/403、依赖或登记未配置503、非法上游502，错误只用本片稳定安全类别，不显示原始异常。userinfo401/403失败关闭，429/5xx不得转成功空资料。单请求总5秒包含所有读取与body，上限16KiB，取消/迟到拒成功；身份校验与最终session复验同一原request，不由浏览器传subject/tenant。现IAM/BFF contract、generated pin和scope权限语义不变。

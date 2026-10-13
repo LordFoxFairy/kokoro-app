@@ -1,3 +1,11 @@
+## SET-07 账户本人资料读取候选（2026-10-13）
+
+同设置功能分支feat/settings-interface，基线6871519；功能候选尚未切换日常运行环境。沿Root已定三设计D0，仅Web新增只读GET /api/account/profile；唯一oidcRpConfig含tenant、Product session及verifyProductIdentity经BFF /v1/me在线准入后，经BFF /iam/oauth2/userinfo读取。白名单subject/name/email/email_verified，缺可选字段null；sub匹配且最终同id/generation/subject session复验后才返回。私有no-store、canonical host/origin、无query/body、禁止redirect、5s总race覆盖初始store/准入/fetch/body/最终store、16KiB上限、取消与迟到body清理。不改Auth.js/session owner/IAM/BFF API/SQL/generated/锁。
+
+账户旧源码真实交互RED1FAIL（有效boundary与真实资料fixture下姓名仍—），实现后同断言GREEN。live绑定既有readBoundary，身份代际变化同步隐藏旧资料并取消、失败可重试，姓名受控只读；即使有真实邮箱也不启用假邮箱写/验证码，计划积分不伪造，登录方式不可用，真实ID复制失败可见且迟到结果不跨身份。preview仍独立。Node22.22.2最新4文件106PASS（server41/client15/card8/原modal42）；此前连SET-05三文件7文件152PASS，后仅增加两条server期限/redirect测试。最终变更源码/测试ESLint、tsc --noEmit --incremental false与diff-check均exit0。完整contract/architecture/test/build/e2e本片未跑，由Root集中执行；真实登录浏览器由Root验收，不能以mock owner响应冒称真实IAM组合通过。整套设置目标仍未完成。
+
+Root 冻结后复跑账户、个性化与原 modal 共七文件 154/154 PASS；完整 lint、Next typegen＋typecheck、契约 278/278 及两生成校验、production build 均 exit0。独立只读审查未发现剩余 P1/P2。全测与架构既存失败仍按 SET-05 记录；尚未执行 test:e2e 或真实登录浏览器验收，不把本片静态及 mocked owner 测试当作实际服务闭环。
+
 ## SET-05 个性化可靠保存候选（2026-10-13）
 
 基线 main12acfc6b，独立 feat/settings-interface checkout；功能分支候选，尚未切换日常运行环境。四字段仍走既有 BFF CAS，无服务端/Skills/MCP/数据库/lock/generated 变更。首次读取失败禁编辑且零PUT；成功读取后可持续编辑，失焦写串行；旧ACK不覆盖新草稿；冲突/未知结果保草稿、只允许重读后明确采用服务器或以新revision保存。复用既有readBoundary取消并退役旧身份/卸载请求，不新建认证探测。服务器ACK必须四字段匹配且revision精确expected+1才显示成功。

@@ -72,6 +72,7 @@ export function SettingsPanelContent({
         <AccountCard
           brandName={brandName}
           preview={preview}
+          {...(readBoundary === undefined ? {} : { readBoundary })}
           loginMethodsOpen={accountLoginMethods}
           onLoginMethodsChange={onAccountLoginMethodsChange}
           onOpenSubscription={onOpenSubscription}

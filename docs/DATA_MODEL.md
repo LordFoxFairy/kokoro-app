@@ -1255,3 +1255,7 @@ BFF snapshot + command receipt + durable AG-UI events
 ## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
 
 Web 无新增持久业务数据/SQL/Redis；BFF personalization 唯一持久化 owner 与CAS revision保持。组件仅持 last acknowledged snapshot、当前草稿和待保存状态。preview 的浏览器测试数据与 live 完全分离，不将 localStorage 当本人服务器资料。冲突恢复保原草稿但必须由用户明确决定采用当前服务器资料或在新基准上保存，不能把旧草稿自动覆盖当前 owner 记录。
+
+## SET-07：账户资料数据边界
+
+无新增数据库、表、schema、Redis键、profile缓存或localStorage；IAM现User是唯一资料owner。Product session沿现有id/generation/subject与server-only access，Web不回传credential。资料只在当前已admitted身份的UI内存显示，换主体/失准入/卸载清理旧请求与旧显示，刷新重新经owner读。preview示例与live严格隔离，不用示例填补真实字段、计划、余额或登录方式。此片只读，不改姓名/邮箱、凭据、授权范围、账户删除或支付事实；后继写入分别按现owner能力实现，不以此读取片冒称整个账户设置完成。
