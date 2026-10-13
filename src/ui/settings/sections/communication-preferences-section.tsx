@@ -7,48 +7,13 @@ import { useT } from "@/i18n/context";
 
 import styles from "./settings-sections.module.css";
 
-type CommunicationPreference =
-  | "browser_notifications"
-  | "sound_notifications"
-  | "product_updates"
-  | "brand_ads";
-
-type CommunicationPreferences = Record<CommunicationPreference, boolean>;
-
-const STORAGE_KEY = "kokoro.communication-preferences";
-
-const DEFAULT_PREFERENCES: CommunicationPreferences = {
-  browser_notifications: false,
-  sound_notifications: false,
-  product_updates: false,
-  brand_ads: false,
-};
-
-function readPreferences(): CommunicationPreferences {
-  try {
-    const value: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return DEFAULT_PREFERENCES;
-    }
-    const candidate = value as Partial<Record<CommunicationPreference, unknown>>;
-    return {
-      browser_notifications: candidate.browser_notifications === true,
-      sound_notifications: candidate.sound_notifications === true,
-      product_updates: candidate.product_updates === true,
-      brand_ads: candidate.brand_ads === true,
-    };
-  } catch {
-    return DEFAULT_PREFERENCES;
-  }
-}
-
-function writePreferences(value: CommunicationPreferences): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-  } catch {
-    // Preference storage is optional; the current session remains interactive.
-  }
-}
+import {
+  enableBrowserNotifications,
+  readCommunicationPreferences,
+  type CommunicationPreference,
+  type CommunicationPreferences,
+  writeCommunicationPreferences,
+} from "@/ui/notifications/communication-preferences";
 
 type PreferenceRowProps = {
   id: CommunicationPreference;
@@ -87,16 +52,19 @@ function PreferenceRow({
 export function CommunicationPreferencesSection() {
   const t = useT();
   const [preferences, setPreferences] = useState<CommunicationPreferences>(
-    readPreferences,
+    readCommunicationPreferences,
   );
 
-  const setPreference = (
+  const setPreference = async (
     preference: CommunicationPreference,
     checked: boolean,
-  ): void => {
-    const next = { ...preferences, [preference]: checked };
+  ): Promise<void> => {
+    const enabled = preference === "browser_notifications" && checked
+      ? await enableBrowserNotifications()
+      : checked;
+    const next = { ...preferences, [preference]: enabled };
     setPreferences(next);
-    writePreferences(next);
+    writeCommunicationPreferences(next);
   };
 
   return (
@@ -113,7 +81,7 @@ export function CommunicationPreferencesSection() {
         hint={t("settings.browserNotificationsHint")}
         checked={preferences.browser_notifications}
         onCheckedChange={(checked) =>
-          setPreference("browser_notifications", checked)
+          void setPreference("browser_notifications", checked)
         }
       />
       <PreferenceRow
@@ -122,7 +90,7 @@ export function CommunicationPreferencesSection() {
         hint={t("settings.soundNotificationsHint")}
         checked={preferences.sound_notifications}
         onCheckedChange={(checked) =>
-          setPreference("sound_notifications", checked)
+          void setPreference("sound_notifications", checked)
         }
       />
       <PreferenceRow
@@ -130,14 +98,14 @@ export function CommunicationPreferencesSection() {
         title={t("settings.productUpdates")}
         hint={t("settings.productUpdatesHint")}
         checked={preferences.product_updates}
-        onCheckedChange={(checked) => setPreference("product_updates", checked)}
+        onCheckedChange={(checked) => void setPreference("product_updates", checked)}
       />
       <PreferenceRow
         id="brand_ads"
         title={t("settings.brandAds")}
         hint={t("settings.brandAdsHint")}
         checked={preferences.brand_ads}
-        onCheckedChange={(checked) => setPreference("brand_ads", checked)}
+        onCheckedChange={(checked) => void setPreference("brand_ads", checked)}
       />
     </section>
   );
