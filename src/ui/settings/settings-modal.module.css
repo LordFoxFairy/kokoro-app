@@ -63,9 +63,10 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  /* The reference keeps a roomy 296px settings rail, so labels, groups and
-   * icons remain scannable instead of being compressed into a narrow strip. */
-  grid-template-columns: 18.5rem minmax(0, 1fr);
+  /* Manus uses a 220px rail in its compact 720px dialog and grows it with the
+   * dialog until the desktop 296px measure. Keeping it fluid avoids consuming
+   * nearly half the panel on a narrow desktop viewport. */
+  grid-template-columns: clamp(13.75rem, 24.7%, 18.5rem) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   color: var(--foreground);
 }
