@@ -51,18 +51,27 @@ export function useProjectList(preview: boolean, boundary: ProjectReadBoundary |
   useEffect(() => {
     const readFence = readScopeRef.current
     if (!readFence || readFence.key !== key) return
-    const controller = new AbortController()
-    readFence.controllers.add(controller)
     const epoch = readFence.epoch
     let live = true
-    queueMicrotask(() => { if (live) setCollection(null) })
-    if (admitted) void listProjects(controller.signal).then(
-      (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller.signal.aborted) setCollection({ key, state: { status: "ready", data } }) },
-      (error: unknown) => {
-        if (live && readFence.active && epoch === readFence.epoch && !controller.signal.aborted) setCollection({ key, state: { status: "error", retryable: !denied(error) } })
-      },
-    )
-    return () => { live = false; controller.abort(); readFence.controllers.delete(controller) }
+    let controller: AbortController | null = null
+    queueMicrotask(() => {
+      if (!live || !readFence.active || readFence.key !== key || epoch !== readFence.epoch) return
+      setCollection(null)
+      if (!admitted) return
+      controller = new AbortController()
+      readFence.controllers.add(controller)
+      void listProjects(controller.signal).then(
+        (data) => { if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "ready", data } }) },
+        (error: unknown) => {
+          if (live && readFence.active && epoch === readFence.epoch && !controller?.signal.aborted) setCollection({ key, state: { status: "error", retryable: !denied(error) } })
+        },
+      )
+    })
+    return () => {
+      live = false
+      controller?.abort()
+      if (controller !== null) readFence.controllers.delete(controller)
+    }
   }, [admitted, key])
 
   const list: ProjectReadState<Project[]> = !admitted

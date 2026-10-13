@@ -100,6 +100,7 @@ export function SettingsPanelContent({
     case "skills":
       return (
         <SkillsSettingsContent
+          readBoundary={readBoundary ?? { admitted: false, subject: null, generation: 0 }}
           hubClient={hubClient}
           preview={preview}
           brandName={brandName}
@@ -126,6 +127,7 @@ export function SettingsPanelContent({
 }
 
 function SkillsSettingsContent({
+  readBoundary,
   hubClient,
   preview,
   brandName,
@@ -134,6 +136,7 @@ function SkillsSettingsContent({
   onTrySkill,
   onCreateWithAi,
 }: {
+  readBoundary: ProjectReadBoundary;
   hubClient: HubClient;
   preview: boolean;
   brandName: string;
@@ -148,6 +151,7 @@ function SkillsSettingsContent({
   );
   return (
     <SkillsContent
+      readBoundary={readBoundary}
       client={client}
       preview={preview}
       brandName={brandName}

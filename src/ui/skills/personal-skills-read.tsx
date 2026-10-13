@@ -41,17 +41,17 @@ type ActiveAction = { controller: AbortController; intent: InstallationIntent; i
 
 
 export function PersonalSkillsRead(props: { client: HubClient; embedded?: boolean; onOpenSettings?: (section: "skills", trigger: HTMLElement) => void }) {
-  const subject = useSessionProbe().projectReadBoundary.subject
-  return <PersonalSkillsReadScope key={subject ?? "anonymous"} {...props} />
+  const boundary = useSessionProbe().projectReadBoundary
+  return <PersonalSkillsReadScope key={boundary.subject ?? "anonymous"} {...props} boundary={boundary} />
 }
 
-function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
+function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings, boundary }: {
   client: HubClient
   embedded?: boolean
   onOpenSettings?: (section: "skills", trigger: HTMLElement) => void
+  boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary
 }) {
   const t = useT()
-  const boundary = useSessionProbe().projectReadBoundary
   const admitted = boundary.admitted && boundary.subject !== null
   const [withdrawTarget, setWithdrawTarget] = useState<ManagedPersonalSkill | null>(null)
   const [lifecycleSubject, setLifecycleSubject] = useState<string | null>(null)
@@ -335,7 +335,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings }: {
         </DialogContent>
       </Dialog>
       {withdrawTarget ? <PersonalSkillWithdrawDialog key={`${lifecycleSubject}:${withdrawTarget.skill_id}`} skill={withdrawTarget} client={publishClient} admitted={admitted && lifecycleSubject === boundary.subject} open={withdrawOpen && lifecycleSubject === boundary.subject} onOpenChange={setWithdrawOpen} onReadCurrent={() => { setWithdrawTarget(null); setWithdrawOpen(false); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} onConfirmed={() => { setWithdrawTarget(null); setWithdrawOpen(false); invalidate(SKILL_CATALOG_RESOURCE_KEY); setDetail(null); setPageState({ kind: "loading" }); setGeneration(value => value + 1); setInstallationGeneration(value => value + 1) }} /> : null}
-      <SkillUploadDialog open={importOpen} onOpenChange={setImportOpen} onPublished={() => { invalidate(SKILL_CATALOG_RESOURCE_KEY); setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1); setInstallationGeneration((value) => value + 1) }} />
+      <SkillUploadDialog readBoundary={boundary} open={importOpen} onOpenChange={setImportOpen} onPublished={() => { invalidate(SKILL_CATALOG_RESOURCE_KEY); setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1); setInstallationGeneration((value) => value + 1) }} />
       <PersonalSkillPublishDialog key={`${boundary.subject}:${resumeBase?.skill_id ?? "new"}`} {...(resumeBase ? { base: resumeBase } : {})} open={publishOpen} admitted={admitted && (!resumeBase || resumeBase.status === "draft" || lifecycleSubject === boundary.subject)} onOpenChange={setPublishOpen} client={publishClient} onPublished={() => { setView("published"); setCursor(null); setHistory([]); setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }} />
     </section>
   )

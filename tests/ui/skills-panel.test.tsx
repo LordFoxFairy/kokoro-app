@@ -12,6 +12,8 @@ import { SkillDetailDialog } from "@/ui/skills/skill-detail-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { SkillsContent, SkillsPanel } from "@/ui/skills/skills-panel"
 
+const readBoundary = { admitted: true, subject: "test-user", generation: 1 } as const
+
 import { webcrypto } from "node:crypto"
 const localImportMock = vi.hoisted(() => ({ begin: vi.fn(), putPackage: vi.fn(), complete: vi.fn(), finalize: vi.fn(), get: vi.fn() }))
 vi.mock("@/hub/skill-local-import-client", () => ({ createSkillLocalImportClient: () => localImportMock }))
@@ -71,13 +73,13 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
 }
 
 function renderPanel(client: HubClient, onTogglePin = vi.fn(), onClose = vi.fn()) {
-  return render(<SkillsPanel preview client={client} onClose={onClose} pinned={[]} onTogglePin={onTogglePin} />, {
+  return render(<SkillsPanel readBoundary={readBoundary} preview client={client} onClose={onClose} pinned={[]} onTogglePin={onTogglePin} />, {
     wrapper: LocaleProvider,
   })
 }
 
 function renderEmbedded(client: HubClient) {
-  return render(<SkillsContent preview client={client} pinned={[]} onTogglePin={vi.fn()} embedded />, {
+  return render(<SkillsContent readBoundary={readBoundary} preview client={client} pinned={[]} onTogglePin={vi.fn()} embedded />, {
     wrapper: LocaleProvider,
   })
 }
@@ -180,7 +182,7 @@ describe("SkillsPanel", () => {
     const onTrySkill = vi.fn()
     render(
       <LocaleProvider>
-        <SkillsContent preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
+        <SkillsContent readBoundary={readBoundary} preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
       </LocaleProvider>,
     )
     await screen.findByText("brainstorming")
@@ -202,7 +204,7 @@ describe("SkillsPanel", () => {
     ]
     render(
       <LocaleProvider>
-        <SkillsContent preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
+        <SkillsContent readBoundary={readBoundary} preview client={makeClient()} pinned={[]} onTogglePin={vi.fn()} onTrySkill={onTrySkill} />
       </LocaleProvider>,
     )
     await screen.findByText("brainstorming")
@@ -508,7 +510,7 @@ describe("SkillsPanel", () => {
   })
 })
 
-function renderImportDialog(onPublished = vi.fn()) { return render(<LocaleProvider><SkillUploadDialog open onOpenChange={vi.fn()} onPublished={onPublished} /></LocaleProvider>) }
+function renderImportDialog(onPublished = vi.fn()) { return render(<LocaleProvider><SkillUploadDialog readBoundary={readBoundary} open onOpenChange={vi.fn()} onPublished={onPublished} /></LocaleProvider>) }
 function pickImportFile(name = "mine.skill") { fireEvent.change(screen.getByTestId("skill-upload-input"), { target: { files: [new File(["zip"], name, { type: "application/octet-stream" })] } }) }
 it("imports a .skill through owner metadata and actual version proof, no selectable preview candidates", async () => {
   const completed = vi.fn(); renderImportDialog(completed); pickImportFile()
@@ -536,7 +538,7 @@ it("owner rejection replaces obsolete empty-candidate preview with useful recove
 it("close aborts Begin and ignores its late response, while reopening preserves original unknown intent", async () => {
   let resolve!: (data: typeof localBegin) => void
   localImportMock.begin.mockImplementationOnce(() => new Promise((r) => { resolve = r }))
-  function Harness() { const [open, setOpen] = useState(true); return <LocaleProvider><button onClick={() => setOpen(true)}>Reopen</button><SkillUploadDialog open={open} onOpenChange={setOpen} /></LocaleProvider> }
+  function Harness() { const [open, setOpen] = useState(true); return <LocaleProvider><button onClick={() => setOpen(true)}>Reopen</button><SkillUploadDialog readBoundary={readBoundary} open={open} onOpenChange={setOpen} /></LocaleProvider> }
   render(<Harness />); pickImportFile()
   await waitFor(() => expect(localImportMock.begin).toHaveBeenCalledOnce())
   fireEvent.click(screen.getByRole("button", { name: "Close skill upload" }))
@@ -548,6 +550,24 @@ it("close aborts Begin and ignores its late response, while reopening preserves 
   fireEvent.click(screen.getByRole("button", { name: "Retry" }))
   await screen.findByText("new-skill")
   expect(localImportMock.begin.mock.calls[1]?.slice(0, 2)).toEqual(localImportMock.begin.mock.calls[0]?.slice(0, 2))
+})
+it("keeps a same-subject recovery locator while admission is temporarily unknown", async () => {
+  window.sessionStorage.setItem("kokoro.skills.local-import.v1", JSON.stringify({
+    subject: "test-user", intent_id: "intent", expires_at: localExpiry,
+  }))
+  function Harness() {
+    const [boundary, setBoundary] = useState({ admitted: false, subject: null as string | null, generation: 1 })
+    const [open, setOpen] = useState(false)
+    return <LocaleProvider>
+      <button onClick={() => { setBoundary({ admitted: true, subject: "test-user", generation: 2 }); setOpen(true) }}>Admit same subject</button>
+      <SkillUploadDialog readBoundary={boundary} open={open} onOpenChange={setOpen} />
+    </LocaleProvider>
+  }
+  render(<Harness />)
+  expect(window.sessionStorage.getItem("kokoro.skills.local-import.v1")).not.toBeNull()
+  fireEvent.click(screen.getByRole("button", { name: "Admit same subject" }))
+  expect(await screen.findByRole("button", { name: "Check import status" })).toBeInTheDocument()
+  expect(window.sessionStorage.getItem("kokoro.skills.local-import.v1")).not.toBeNull()
 })
 it("locks file choice and duplicate continuation during pending Finalize", async () => {
   let resolve!: (value: unknown) => void
@@ -587,7 +607,7 @@ it("does not expose a fake Share action for a preview skill with no owner identi
 it("installed skill detail keeps the current pool update timestamp", async () => {
   const skill = { name: "真实个人技能", description: "真实摘要", content_hash: "real", scope: "personal", updated_at: Date.UTC(2026, 9, 10) }
   const client = makeClient({ listSkillPool: vi.fn().mockResolvedValue([skill]) })
-  render(<LocaleProvider><SkillsContent client={client} preview={false} pinned={[]} onTogglePin={() => {}} /></LocaleProvider>)
+  render(<LocaleProvider><SkillsContent readBoundary={readBoundary} client={client} preview={false} pinned={[]} onTogglePin={() => {}} /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "真实个人技能" }))
   expect(await screen.findByText(/2026年10月10日/)).toBeInTheDocument()
 })

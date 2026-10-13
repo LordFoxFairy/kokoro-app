@@ -23,7 +23,7 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 成功后刷新技能池；不会把 GitHub 地址误送入 zip 上传流程。
 
 ## 公开件
-- `SkillsPanel`（`skills-panel.tsx`）：props `client: HubClient` / `onClose` / `pinned` / `onTogglePin`。
+- `SkillsPanel`（`skills-panel.tsx`）：props `client: HubClient` / `readBoundary: ProjectReadBoundary` / `onClose` / `pinned` / `onTogglePin`；子 Dialog 只消费页面或 App shell 已确认的 boundary，不各自注册 Session probe。
 - `SkillUploadDialog`（`skill-upload-dialog.tsx`）：桌面独立上传入口，`.zip`/`.skill` dropzone + preview/candidate
   selection/confirm 状态；通过 `returnFocusRef` 回到 Create/Browse 触发点，关闭/卸载会取消当前 multipart 请求。
 

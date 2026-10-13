@@ -71,14 +71,15 @@ function formatUsage(value: string): string {
   return `${compact >= 100 ? Math.round(compact) : compact.toFixed(1).replace(/\.0$/u, "")}k`
 }
 
-type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill">
+type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill" | "projectReadBoundary">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
   return <PreviewKokoroSkillsSurface {...props} />
 }
 
-function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill }: KokoroSkillsSurfaceProps) {
+function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
+  const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
   const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   const client = useMemo(() => {
@@ -368,9 +369,10 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         </div>
       </main>
 
-      <GithubImportDialog open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
+      <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
+      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
       <ManusSkillDetailDialog
+        readBoundary={readBoundary}
         key={detailSkill?.skill_id ?? "closed"}
         skill={currentDetailSkill}
         publisherLabel={detailSkill === null ? "" : publisherLabel(detailSkill)}

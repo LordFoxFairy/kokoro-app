@@ -15,7 +15,7 @@ import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type Man
 
 import { createSkillShareClient } from "@/hub/skill-share-client"
 import type { ShareAck, ShareSummary } from "@/hub/skill-share.schema"
-import { useSessionProbe } from "@/ui/auth/use-session-state"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { ownerCoverPath } from "@/ui/skills/manus-skill-client"
 
 import styles from "./manus-skill-detail-dialog.module.css"
@@ -98,6 +98,7 @@ function subscribeSkillDetail(cacheKey: string, skillId: string): DetailSubscrip
 }
 
 type Props = {
+  readBoundary: ProjectReadBoundary
   sharedSummary?: ShareSummary
   onAddShared?: () => void
   installationNotice?: string | undefined
@@ -125,10 +126,8 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
+export function ManusSkillDetailDialog({ readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
   const { locale, t } = useLocale()
-  const probe = useSessionProbe()
-  const boundary = probe.projectReadBoundary
   const shareIntents = useRef(new Map<string, { ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
   const [shareStates, setShareStates] = useState<Record<string, ShareState>>({})

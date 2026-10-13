@@ -10,8 +10,12 @@ import { invalidate } from "@/lib/query"
 import { createHubClient, type HubClient } from "@/hub/client"
 import { createManusSkillHubClient, getManusSkillDetail, downloadManusSkill, getManusSkillPackage, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 
-const sessionBoundary = vi.hoisted(() => ({ admitted: true, subject: "test-user", generation: 1 }))
-vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: () => ({ state: "pass", projectReadBoundary: sessionBoundary }) }))
+const { sessionBoundary, useSessionProbeMock } = vi.hoisted(() => ({
+  sessionBoundary: { admitted: true, subject: "test-user", generation: 1 },
+  useSessionProbeMock: vi.fn(() => ({ state: "pass", projectReadBoundary: { admitted: true, subject: "test-user", generation: 1 } })),
+}))
+useSessionProbeMock.mockImplementation(() => ({ state: "pass", projectReadBoundary: sessionBoundary }))
+vi.mock("@/ui/auth/use-session-state", () => ({ useSessionProbe: useSessionProbeMock }))
 
 const catalog = {
   skills: [{
@@ -27,15 +31,23 @@ function response(value: unknown) {
 }
 
 function renderLive(onTrySkill = vi.fn()) {
-  render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} onTrySkill={onTrySkill} /></LocaleProvider>)
+  render(<LocaleProvider><KokoroSkillsSurface projectReadBoundary={sessionBoundary} preview={false} onPrompt={vi.fn()} onTrySkill={onTrySkill} /></LocaleProvider>)
   return onTrySkill
 }
 
 beforeEach(() => {
+  useSessionProbeMock.mockClear()
   sessionBoundary.admitted = true
   window.localStorage.clear()
   window.localStorage.setItem("kokoro.locale", "zh")
   invalidate("hub/skills/standalone-catalog")
+})
+
+it("uses the shell boundary without mounting session probes for closed skill dialogs", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (path: string) => response(path.endsWith("ListHubSkills") ? catalog : { userAddedSkills: [], officialSkills: [] })))
+  renderLive()
+  await screen.findByTestId("skills-catalog-grid")
+  expect(useSessionProbeMock).not.toHaveBeenCalled()
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
@@ -246,7 +258,7 @@ it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and act
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { finish = resolve })))
   const onAdd = vi.fn()
   const onTry = vi.fn()
-  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={localizedSkill} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={onAdd} onTry={onTry} /></LocaleProvider>)
   expect(await screen.findByText(labels.loading)).toBeInTheDocument()
   expect(screen.getByRole("button", { name: labels.share })).toBeInTheDocument()
   finish!(response({ skill: { id: "skill-manim", displayName: "Manim", updatedAt: "2026-05-22T00:00:00.000Z", exampleQuestions: ["Real example"], added: false }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } }))
@@ -265,21 +277,21 @@ it.each(dialogLocales)("localizes $locale dialog loading, metadata, aria and act
 it.each(dialogLocales)("localizes $locale installed action and preserves disabled state", async (labels) => {
   window.localStorage.setItem("kokoro.locale", labels.locale)
   vi.stubGlobal("fetch", vi.fn(async () => response({ skill: { id: "skill-manim", displayName: "Manim", added: true }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } })))
-  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   expect(await screen.findByRole("button", { name: labels.added })).toBeDisabled()
 })
 
 it.each(dialogLocales)("localizes $locale actual detail read failure", async (labels) => {
   window.localStorage.setItem("kokoro.locale", labels.locale)
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("owner unavailable")))
-  render(<LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   expect(await screen.findByText(labels.failed)).toBeInTheDocument()
 })
 
 it("shares one owner detail read across StrictMode's effect replay", async () => {
   const fetchMock = vi.fn(async () => response({ skill: { id: "skill-manim", displayName: "Manim" }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "manim.skill", expiresAt: "2026-10-10T00:00:00.000Z" } }))
   vi.stubGlobal("fetch", fetchMock)
-  render(<StrictMode><LocaleProvider><ManusSkillDetailDialog skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider></StrictMode>)
+  render(<StrictMode><LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={localizedSkill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider></StrictMode>)
   await screen.findByRole("button", { name: "下载技能" })
   expect(fetchMock).toHaveBeenCalledTimes(1)
 })
@@ -368,7 +380,7 @@ it("does not synthesize a cover when the owner has no cover fact", async () => {
   const { coverImage: _cover, ...skill } = ownerDetailFields
   void _cover
   stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill })
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   await screen.findByRole("button", { name: "下载技能" })
   expect(screen.getByTestId("manus-skill-detail-dialog").querySelector("img")).toBeNull()
 })
@@ -461,7 +473,7 @@ it.each(["close", "replace"])("aborts detail and download streams on dialog %s",
     if (blockDetail || String(_input).endsWith("DownloadSkill")) return new Response(new ReadableStream<Uint8Array>({ cancel: blockDetail ? cancelDetail : cancelDownload }), { headers: { "content-type": "application/json" } })
     return response(ownerDetail)
   }))
-  const view = (open: boolean, id = "series-current") => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: id }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const view = (open: boolean, id = "series-current") => <LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: id }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
   const rendered = render(view(true))
   await waitFor(() => expect(signals).toHaveLength(1))
   rendered.rerender(action === "close" ? view(false) : view(true, "another-series"))
@@ -520,7 +532,7 @@ it.each(presentationCases)("shares $locale $scope publisher and $tag label betwe
     if (operation.endsWith("GetSkill")) return response({ ...ownerDetail, skill: { ...ownerDetailFields, displayName: "Real catalog title", tags: { values: [`SKILL_HUB_TAG_${tag}`] }, exampleQuestions: [] } })
     throw new Error(`unexpected request ${operation}`)
   }))
-  render(<LocaleProvider><KokoroSkillsSurface preview={false} brandName="Kokoro Test" onPrompt={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><KokoroSkillsSurface projectReadBoundary={sessionBoundary} preview={false} brandName="Kokoro Test" onPrompt={vi.fn()} /></LocaleProvider>)
   const title = await screen.findByRole("button", { name: "Real catalog title" })
   const card = title.closest('[data-slot="card"]') as HTMLElement
   expect(within(card).getByText(publisher)).toBeInTheDocument()
@@ -568,7 +580,7 @@ it("opens visible ViewDetails and reads real SKILL.md then the selected UTF8 tex
     return response(ownerDetail)
   }))
   const skill = { ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }
-  render(<LocaleProvider><ManusSkillDetailDialog skill={skill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={skill} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   await screen.findByRole("button", { name: "下载技能" })
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
   expect(await screen.findByRole("heading", { name: "Owner text" })).toBeInTheDocument()
@@ -585,7 +597,7 @@ it("does not execute HTML or request Markdown images and external links in real 
   const data = { ...packageDirectory.data, files: [{ path: "SKILL.md", size_bytes: String(new TextEncoder().encode(text).byteLength) }] }
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).includes("/package") ? packageJson({ data: { ...data, selected_file: String(input).includes("file_path") ? { path: "SKILL.md", text } : null } }) : response(ownerDetail))
   vi.stubGlobal("fetch", fetchMock)
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   await screen.findByRole("button", { name: "下载技能" })
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
   await screen.findByRole("heading", { name: "Readable" })
@@ -596,7 +608,7 @@ it("does not execute HTML or request Markdown images and external links in real 
 it("blocks package inspection when current GetSkill revision differs from the catalog", async () => {
   const fetchMock = vi.fn(async () => response({ ...ownerDetail, skill: { ...ownerDetailFields, version: "new-revision", coverImage: "/api/v1/skills/new-revision/cover" } }))
   vi.stubGlobal("fetch", fetchMock)
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   await screen.findByText("技能版本已更新，请刷新目录后重试")
   expect(screen.getByRole("button", { name: "查看详情" })).toBeDisabled()
   expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -612,7 +624,7 @@ it.each(["close", "replace", "file"])("cancels package body on %s and never rend
     signal = init?.signal ?? undefined
     return new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "package-ui" } })
   }))
-  const view = (open: boolean, revision = ownerRevision) => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: revision }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const view = (open: boolean, revision = ownerRevision) => <LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: revision }} open={open} onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
   const rendered = render(view(true))
   await screen.findByRole("button", { name: "下载技能" })
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
@@ -650,7 +662,7 @@ it("switches the same dialog to an independent real folder tree reader and back 
     const path = new URL(url, "http://localhost").searchParams.get("file_path")
     return packageJson({ data: { ...packageDirectory.data, files, selected_file: path === null ? null : { path, text: path === "SKILL.md" ? "# Owner text" : "实际" } } })
   }))
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   await screen.findByRole("button", { name: "下载技能" })
   const dialog = screen.getByTestId("manus-skill-detail-dialog")
   expect(within(dialog).getByText("Summary")).toBeInTheDocument()
@@ -837,7 +849,7 @@ it("refreshes the authoritative catalog after settings disables an ACK-installed
     }
     throw new Error(`unexpected ${url}`)
   }))
-  render(<LocaleProvider><KokoroSkillsSurface preview={false} onPrompt={vi.fn()} /><PersonalSkillsRead client={createHubClient()} embedded /></LocaleProvider>)
+  render(<LocaleProvider><KokoroSkillsSurface projectReadBoundary={sessionBoundary} preview={false} onPrompt={vi.fn()} /><PersonalSkillsRead client={createHubClient()} embedded /></LocaleProvider>)
   fireEvent.click(await screen.findByRole("button", { name: "添加 Current" }))
   await screen.findByRole("button", { name: "已添加 Current" })
   await waitFor(() => expect(catalogReads).toBe(2))
@@ -918,7 +930,7 @@ it.each([false, true])("keeps summary actions ordered and metadata separators be
   const { coverImage: _cover, ...withoutCover } = ownerDetailFields
   void _cover
   stubOwnerReads(ownerHub, ownerLists, { ...ownerDetail, skill: hasCover ? ownerDetailFields : withoutCover })
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision, usage_count: undefined }} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision, usage_count: undefined }} publisherLabel="Kokoro" open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   const dialog = await screen.findByTestId("manus-skill-detail-dialog")
   await within(dialog).findByRole("button", { name: "下载技能" })
   const add = within(dialog).getByRole("button", { name: "已添加到我的技能" })
@@ -938,12 +950,12 @@ it.each([false, true])("keeps summary actions ordered and metadata separators be
 it("groups two actual category badges in a wrapping row without an empty category placeholder", async () => {
   stubOwnerReads()
   const props = { skill: { ...localizedSkill, skill_id: "series-current" }, open: true, onOpenChange: vi.fn(), onAdd: vi.fn(), onTry: vi.fn() }
-  const view = render(<LocaleProvider><ManusSkillDetailDialog {...props} categoryLabels={["媒体", "应用"]} /></LocaleProvider>)
+  const view = render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} {...props} categoryLabels={["媒体", "应用"]} /></LocaleProvider>)
   await screen.findByRole("button", { name: "下载技能" })
   const media = screen.getByText("媒体")
   expect(media.parentElement).toBe(screen.getByText("应用").parentElement)
   expect(media.parentElement?.className).toContain("categories")
-  view.rerender(<LocaleProvider><ManusSkillDetailDialog {...props} categoryLabels={[]} /></LocaleProvider>)
+  view.rerender(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} {...props} categoryLabels={[]} /></LocaleProvider>)
   expect(screen.getByTestId("manus-skill-detail-dialog").querySelector('[class*="categories"]')).toBeNull()
 })
 
@@ -951,7 +963,7 @@ it("groups two actual category badges in a wrapping row without an empty categor
 
 it("uses the reference share arrow rather than the connected-node share icon", async () => {
   stubOwnerReads()
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current" }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   expect(screen.getByRole("button", { name: "分享技能" }).querySelector("svg")).toHaveClass("lucide-share")
 })
 
@@ -1015,7 +1027,7 @@ it("creates a real revision Skill Share before copying only its service URL", as
     ? new Response(JSON.stringify({ data: { share_id: "actual-share", source_ref: "skill:revision-old", url, created_at: "2026-10-10T00:00:00.000Z", expires_at: null, revoked_at: null } }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-create" } })
     : response({ skill: { id: "series", version: "revision-old", name: "Actual skill" }, downloadInfo: { downloadUrl: "/api/skill-downloads/token", filename: "skill.zip", expiresAt: "2026-10-10T00:00:00.000Z" } }))
   vi.stubGlobal("fetch", fetchMock)
-  render(<LocaleProvider><ManusSkillDetailDialog skill={{ skill_id: "series", revision_skill_id: "revision-old", name: "Actual skill", description: "Real", content_hash: "legacy-display", scope: "official", installed: false, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ skill_id: "series", revision_skill_id: "revision-old", name: "Actual skill", description: "Real", content_hash: "legacy-display", scope: "official", installed: false, enabled: false }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   const share = await screen.findByRole("button", { name: "分享技能" })
   await waitFor(() => expect(share).not.toBeDisabled())
   fireEvent.click(share)
@@ -1034,7 +1046,7 @@ it.each(["clipboard", "unknown"])("keeps the Share intent after %s without autom
     return new Response(JSON.stringify({ data: { share_id: "share-old", source_ref: "skill:revision-old", url: `${window.location.origin}/skills/shared/share-old`, created_at: "2026-10-10T00:00:00Z", expires_at: null, revoked_at: null } }), { status: 201, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "share-create" } })
   }))
   const summary = { share_id: "incoming", source_ref: "skill:revision-old", skill: { skill_id: "revision-old", series_id: "series", revision: "1", display_name: "Old", description: "Real", tags: [], category_keys: [], example_prompts: [], created_at: "2026-10-10T00:00:00Z", updated_at: "2026-10-10T00:00:00Z", owner_type: "official" as const, source_kind: "official" as const } }
-  render(<LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   const share = screen.getByRole("button", { name: "分享技能" }); fireEvent.click(share)
   if (mode === "clipboard") {
     await screen.findByText(/链接已创建，复制失败/u); fireEvent.click(share)
@@ -1056,7 +1068,7 @@ it("reuses the real package tree for a shared old revision without current metad
     return packageJson({ data: { ...packageDirectory.data, selected_file: path.includes("file_path") ? { path: "SKILL.md", text: "# Owner text" } : null } })
   })
   vi.stubGlobal("fetch", fetcher)
-  render(<LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
+  render(<LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>)
   fireEvent.click(screen.getByRole("button", { name: "查看详情" }))
   expect(await screen.findByText("Owner text")).toBeInTheDocument()
   expect(screen.getByRole("navigation", { name: "技能文件" })).toBeInTheDocument()
@@ -1068,7 +1080,7 @@ it("retires a pending shared download on lost admission and permits a new attemp
   const pending: Array<{ signal: AbortSignal; finish: (response: Response) => void }> = []
   const fetcher = vi.fn((_path: string, init: RequestInit) => new Promise<Response>(finish => { pending.push({ signal: init.signal!, finish }) }))
   vi.stubGlobal("fetch", fetcher)
-  const view = () => <LocaleProvider><ManusSkillDetailDialog skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const view = () => <LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={null} sharedSummary={summary} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
   const rendered = render(view())
   fireEvent.click(screen.getByRole("button", { name: "下载技能" }))
   expect(screen.getByRole("button", { name: "下载技能" })).toBeDisabled()
@@ -1087,7 +1099,7 @@ it("retires a pending shared download on lost admission and permits a new attemp
 it("preserves the catalog download lifecycle when only shared admission changes", async () => {
   let signal!: AbortSignal, rejectDownload!: (error: Error) => void
   vi.stubGlobal("fetch", vi.fn((path: string, init: RequestInit) => path.endsWith("DownloadSkill") ? new Promise<Response>((_resolve, reject) => { signal = init.signal!; rejectDownload = reject }) : Promise.resolve(response(ownerDetail))))
-  const view = () => <LocaleProvider><ManusSkillDetailDialog skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
+  const view = () => <LocaleProvider><ManusSkillDetailDialog readBoundary={sessionBoundary} skill={{ ...localizedSkill, skill_id: "series-current", revision_skill_id: ownerRevision }} open onOpenChange={vi.fn()} onAdd={vi.fn()} onTry={vi.fn()} /></LocaleProvider>
   const rendered = render(view())
   const button = await screen.findByRole("button", { name: "下载技能" }); fireEvent.click(button)
   await waitFor(() => expect(signal).toBeDefined())

@@ -36,6 +36,7 @@ import { GithubImportDialog } from "./github-import-dialog"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { SkillDetailDialog } from "./skill-detail-dialog"
 import { ManusSkillDetailDialog } from "./manus-skill-detail-dialog"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target
@@ -74,6 +75,7 @@ function skillStateKey(scope: string, name: string): string {
 type Pool = { skills: SkillCard[]; quota: SkillQuota | null }
 
 type SkillsPanelProps = {
+  readBoundary: ProjectReadBoundary
   client: HubClient
   preview?: boolean
   brandName?: string
@@ -83,7 +85,7 @@ type SkillsPanelProps = {
   onTrySkill?: (skill: SkillCard, prompt?: string) => void
 }
 
-export function SkillsPanel({ client, preview = false, brandName, onClose, pinned, onTogglePin, onTrySkill }: SkillsPanelProps) {
+export function SkillsPanel({ readBoundary, client, preview = false, brandName, onClose, pinned, onTogglePin, onTrySkill }: SkillsPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -115,6 +117,7 @@ export function SkillsPanel({ client, preview = false, brandName, onClose, pinne
           </div>
         </header>
         <SkillsContent
+          readBoundary={readBoundary}
           client={client}
           preview={preview}
           {...(brandName === undefined ? {} : { brandName })}
@@ -128,6 +131,7 @@ export function SkillsPanel({ client, preview = false, brandName, onClose, pinne
 }
 
 type SkillsContentProps = {
+  readBoundary: ProjectReadBoundary
   client: HubClient
   preview?: boolean
   brandName?: string
@@ -148,7 +152,7 @@ export function SkillsContent(props: SkillsContentProps) {
  * client is the only data seam, so the live Settings page never falls back to
  * the older publisher-management layout with a different information model.
  */
-function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
+function InstalledSkillsContent({ readBoundary, client, brandName, pinned, onTogglePin, onTrySkill, embedded = false, onCreateWithAi }: SkillsContentProps) {
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const githubReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -287,12 +291,14 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
         </div>
       </div>
       <GithubImportDialog
+        readBoundary={readBoundary}
         open={githubOpen}
         onOpenChange={setGithubOpen}
         returnFocusRef={githubReturnFocusRef}
         onImported={handleGithubImported}
       />
       <SkillUploadDialog
+        readBoundary={readBoundary}
         open={uploadOpen}
         onOpenChange={setUploadOpen}
         returnFocusRef={uploadReturnFocusRef}
@@ -300,6 +306,7 @@ function InstalledSkillsContent({ client, brandName, pinned, onTogglePin, onTryS
       />
       {detailSkill?.skill_id !== undefined && detailSkill.revision_skill_id !== undefined ? (
         <ManusSkillDetailDialog
+          readBoundary={readBoundary}
           skill={toInstalledCatalogCard(detailSkill)}
           publisherLabel={brandName ?? "Kokoro"}
           categoryLabels={detailSkill.categories ?? []}
