@@ -29,8 +29,8 @@ beforeEach(() => {
   localImportMock.finalize.mockResolvedValue({ skill: localSkill, installation: { installed: true, enabled: true } })
 })
 
-const OFFICIAL: SkillCard = { name: "brainstorming", description: "explore", content_hash: "h1", scope: "official" }
-const OWN: SkillCard = { name: "my-skill", description: "mine", content_hash: "h2", scope: "team_1" }
+const OFFICIAL: SkillCard = { name: "brainstorming", description: "explore", content_hash: "h1", scope: "official", installation_id: "installation-brainstorming", source_ref: "skill:brainstorming-v1" }
+const OWN: SkillCard = { name: "my-skill", description: "mine", content_hash: "h2", scope: "team_1", installation_id: "installation-my-skill", source_ref: "skill:my-skill-v1" }
 
 function makeClient(overrides: Partial<HubClient> = {}): HubClient {
   return {
@@ -58,6 +58,7 @@ function makeClient(overrides: Partial<HubClient> = {}): HubClient {
     }),
     skillRevisions: vi.fn().mockResolvedValue([]),
     setSkillEnabled: vi.fn().mockResolvedValue(undefined),
+    installSkill: vi.fn().mockResolvedValue(undefined),
     listMcpServers: vi.fn().mockResolvedValue([]),
     registerMcpServer: vi.fn(),
     setMcpEnabled: vi.fn().mockResolvedValue(undefined),
@@ -111,7 +112,7 @@ describe("SkillsPanel", () => {
     fireEvent.click(screen.getAllByText("Disable")[0]!)
     await waitFor(() => expect(screen.getByText("Confirm disable")).toHaveFocus())
     fireEvent.click(screen.getByText("Confirm disable"))
-    await waitFor(() => expect(client.setSkillEnabled).toHaveBeenCalledWith("brainstorming", false, "official"))
+    await waitFor(() => expect(client.setSkillEnabled).toHaveBeenCalledWith("installation-brainstorming", false))
     // 停用成功后重取池（初次 + 停用后 = 2 次）。
     await waitFor(() => expect((client.listSkillPool as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2))
     await waitFor(() => expect(screen.getByPlaceholderText("Search skills")).toHaveFocus())
@@ -490,7 +491,7 @@ describe("SkillsPanel", () => {
   it("offers enable instead of add for an installed but disabled catalog skill", async () => {
     const setSkillEnabled = vi.fn().mockResolvedValue(undefined)
     const listSkillCatalog = vi.fn().mockResolvedValue({
-      skills: [{ name: "disabled-skill", description: "disabled description", content_hash: "catalog:disabled", scope: "official", installed: true, enabled: false }],
+      skills: [{ name: "disabled-skill", description: "disabled description", content_hash: "catalog:disabled", scope: "official", installed: true, enabled: false, installation_id: "installation-disabled", source_ref: "skill:disabled-v1" }],
       next_cursor: null,
     })
     renderEmbedded(makeClient({ listSkillCatalog, setSkillEnabled }))
@@ -502,7 +503,7 @@ describe("SkillsPanel", () => {
     expect(enable).toBeEnabled()
     fireEvent.click(enable)
 
-    await waitFor(() => expect(setSkillEnabled).toHaveBeenCalledWith("disabled-skill", true, "official"))
+    await waitFor(() => expect(setSkillEnabled).toHaveBeenCalledWith("installation-disabled", true))
     expect(within(catalog).getByRole("button", { name: "Added disabled-skill" })).toBeDisabled()
   })
 })

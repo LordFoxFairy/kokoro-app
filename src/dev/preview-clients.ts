@@ -22,14 +22,14 @@ import type { TeamClient, TeamMember, TeamRole } from "@/team/client"
 
 const previewUpdatedAt = Date.UTC(2026, 7, 28)
 const previewSkills: SkillCard[] = [
-  { name: "YouTube 影片研究", description: "利用第一手 YouTube 影片证据强化深度研究、行业分析、竞争情报与报告写作。", content_hash: "preview:youtube-research", scope: "official", enabled: false, categories: ["content"], updated_at: previewUpdatedAt },
-  { name: "财务分析", description: "使用结构化财务数据研究公司财务、市场价格、申报文件、财报与宏观经济指标。", content_hash: "preview:finance", scope: "official", enabled: false, categories: ["data", "business"], updated_at: previewUpdatedAt },
-  { name: "AI 影片生成器", description: "专业 AI 影片制作工作流程，适用于制作影片、短片、广告与任何生成式影片内容。", content_hash: "preview:video", scope: "official", enabled: false, categories: ["media"], updated_at: previewUpdatedAt },
-  { name: "Typst PDF 制作工具", description: "使用 Typst 生成专业、高品质的 PDF 文件，适用于报告、论文与精确排版文档。", content_hash: "preview:typst", scope: "official", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
-  { name: "游戏开发", description: "使用阶段式生产流程端到端构建可游玩的浏览器游戏，并完成架构、资产与视觉验证。", content_hash: "preview:games", scope: "official", enabled: true, categories: ["coding", "media"], updated_at: previewUpdatedAt },
-  { name: "Excel 生成器", description: "制作专业的 Excel 电子表格，兼顾结构化数据、美感、清晰呈现与数据分析。", content_hash: "preview:excel", scope: "official", enabled: false, categories: ["data"], updated_at: previewUpdatedAt },
-  { name: "research-brief", description: "整理资料并输出结构化研究简报。", content_hash: "preview:research-brief", scope: "personal", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
-  { name: "copy-editor", description: "润色、改写并统一文章语气。", content_hash: "preview:copy-editor", scope: "third_party", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
+  { name: "YouTube 影片研究", description: "利用第一手 YouTube 影片证据强化深度研究、行业分析、竞争情报与报告写作。", content_hash: "preview:youtube-research", scope: "official", installation_id: "preview-installation-youtube-research", source_ref: "skill:preview-youtube-research", enabled: false, categories: ["content"], updated_at: previewUpdatedAt },
+  { name: "财务分析", description: "使用结构化财务数据研究公司财务、市场价格、申报文件、财报与宏观经济指标。", content_hash: "preview:finance", scope: "official", installation_id: "preview-installation-finance", source_ref: "skill:preview-finance", enabled: false, categories: ["data", "business"], updated_at: previewUpdatedAt },
+  { name: "AI 影片生成器", description: "专业 AI 影片制作工作流程，适用于制作影片、短片、广告与任何生成式影片内容。", content_hash: "preview:video", scope: "official", installation_id: "preview-installation-video", source_ref: "skill:preview-video", enabled: false, categories: ["media"], updated_at: previewUpdatedAt },
+  { name: "Typst PDF 制作工具", description: "使用 Typst 生成专业、高品质的 PDF 文件，适用于报告、论文与精确排版文档。", content_hash: "preview:typst", scope: "official", installation_id: "preview-installation-typst", source_ref: "skill:preview-typst", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
+  { name: "游戏开发", description: "使用阶段式生产流程端到端构建可游玩的浏览器游戏，并完成架构、资产与视觉验证。", content_hash: "preview:games", scope: "official", installation_id: "preview-installation-games", source_ref: "skill:preview-games", enabled: true, categories: ["coding", "media"], updated_at: previewUpdatedAt },
+  { name: "Excel 生成器", description: "制作专业的 Excel 电子表格，兼顾结构化数据、美感、清晰呈现与数据分析。", content_hash: "preview:excel", scope: "official", installation_id: "preview-installation-excel", source_ref: "skill:preview-excel", enabled: false, categories: ["data"], updated_at: previewUpdatedAt },
+  { name: "research-brief", description: "整理资料并输出结构化研究简报。", content_hash: "preview:research-brief", scope: "personal", installation_id: "preview-installation-research-brief", source_ref: "skill:preview-research-brief", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
+  { name: "copy-editor", description: "润色、改写并统一文章语气。", content_hash: "preview:copy-editor", scope: "third_party", installation_id: "preview-installation-copy-editor", source_ref: "skill:preview-copy-editor", enabled: true, categories: ["content"], updated_at: previewUpdatedAt },
 ]
 
 const previewCatalogAdditions: SkillCatalogCard[] = [
@@ -177,22 +177,23 @@ export function createPreviewHubClient(): HubClient {
     skillRevisions: (name: string, scope?: string): Promise<SkillRevision[]> => Promise.resolve([
       { scope: scope ?? "preview", name, revision: 1, content_hash: `preview:${name}`, package_size: 122880, source: "local preview", created_at: Date.now() },
     ]),
-    setSkillEnabled: (name, enabled, scope) => {
-      const existing = skills.find((skill) => skill.name === name && (scope === undefined || skill.scope === scope))
-      if (existing) {
-        skills = skills.map((skill) => skill.name === name && (scope === undefined || skill.scope === scope) ? { ...skill, enabled } : skill)
-      } else if (enabled) {
-        const catalogSkill = previewCatalogAdditions.find((skill) => skill.name === name)
-        if (catalogSkill) {
-          skills = [...skills, {
-            name: catalogSkill.name,
-            description: catalogSkill.description,
-            content_hash: catalogSkill.content_hash,
-            scope: catalogSkill.scope,
-            enabled: true,
-            updated_at: catalogSkill.updated_at,
-          }]
-        }
+    setSkillEnabled: (installationId, enabled) => {
+      skills = skills.map((skill) => skill.installation_id === installationId ? { ...skill, enabled } : skill)
+      return Promise.resolve()
+    },
+    installSkill: (sourceRef) => {
+      const catalogSkill = previewCatalogAdditions.find((skill) => `skill:preview-catalog:${skill.scope}:${skill.name}` === sourceRef)
+      if (catalogSkill) {
+        skills = [...skills, {
+          name: catalogSkill.name,
+          description: catalogSkill.description,
+          content_hash: catalogSkill.content_hash,
+          scope: catalogSkill.scope,
+          installation_id: `preview-installation-${catalogSkill.scope}-${catalogSkill.name}`,
+          source_ref: sourceRef,
+          enabled: true,
+          updated_at: catalogSkill.updated_at,
+        }]
       }
       return Promise.resolve()
     },

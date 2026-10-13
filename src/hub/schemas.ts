@@ -37,6 +37,10 @@ const skillCardSchema = z
     // When present, Settings opens the admitted package reader rather than a
     // synthetic file outline.
     skill_id: z.string().min(1).optional(),
+    // The mutable identity is issued by the installation owner. It is never
+    // derived from a visible skill title or from the catalog series identity.
+    installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
@@ -61,6 +65,8 @@ const skillCatalogCardSchema = z
     // Catalog identity is independent from a display name. The Manus-style
     // read projection supplies this key; older local fixtures may omit it.
     skill_id: z.string().min(1).optional(),
+    installation_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
+    source_ref: z.string().regex(/^skill:[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u).optional(),
     revision_skill_id: z
       .string()
       .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u)
@@ -674,12 +680,6 @@ function skillScopeQuery(scope?: string): string {
   const normalized = scope?.trim()
   return normalized ? `?scope=${encodeURIComponent(normalized)}` : ""
 }
-export function skillEnablePath(name: string, scope?: string): string {
-  return `/self/skills/${encodeURIComponent(name)}/enable${skillScopeQuery(scope)}`
-}
-export function skillDisablePath(name: string, scope?: string): string {
-  return `/self/skills/${encodeURIComponent(name)}/disable${skillScopeQuery(scope)}`
-}
 export function skillRevisionsPath(name: string, scope?: string): string {
   return `/self/skills/${encodeURIComponent(name)}/revisions${skillScopeQuery(scope)}`
 }
@@ -872,6 +872,7 @@ const websiteDetailSchema = websiteOptional(websiteDetailFields)
   .strict()
 const websiteInstalledSchema = websiteOptional({
   ...websiteDetailFields,
+  installationId: websiteString.regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u),
   enabled: z.boolean(),
   icon: websiteString,
   skillConfig: websiteOptional({ teamSkillForceAdd: z.boolean() }),

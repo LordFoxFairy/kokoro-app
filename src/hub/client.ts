@@ -62,8 +62,6 @@ import {
   customApiViewSchema,
   customMcpConnectorsPath,
   mcpServersPath,
-  skillDisablePath,
-  skillEnablePath,
   skillPoolPath,
   skillPoolSchema,
   skillCatalogPath,
@@ -479,8 +477,10 @@ export type HubClient = {
   listSkillCatalog: (params?: { scope?: "official" | "third_party"; query?: string; cursor?: string }) => Promise<SkillCatalog>
   skillQuota: () => Promise<SkillQuota>
   skillRevisions: (name: string, scope?: string) => Promise<SkillRevision[]>
-  /** `scope` disambiguates same-name official/third-party/personal projections. */
-  setSkillEnabled: (name: string, enabled: boolean, scope?: string) => Promise<void>
+  /** Mutates one owner-issued installation. Display names and series IDs are never write identities. */
+  setSkillEnabled: (installationId: string, enabled: boolean) => Promise<void>
+  /** Creates an installation from the owner-issued immutable revision source. */
+  installSkill?: (sourceRef: string) => Promise<void>
   /** Optional GitHub preview/import endpoints; preview clients may omit them. */
   // MCP server 池（self 面）：列表 / 注册 / 启停 / 软删。
   listMcpServers: () => Promise<McpServerView[]>
@@ -646,14 +646,14 @@ export function createHubClient(): HubClient {
     },
     skillQuota: () => requestData(skillQuotaPath, skillQuotaSchema),
     skillRevisions: async (name, scope) => (await requestData(skillRevisionsPath(name, scope), skillRevisionsSchema)).revisions,
-    setSkillEnabled: async (name, enabled, scope) => {
-      const path = enabled ? skillEnablePath(name, scope) : skillDisablePath(name, scope)
+    setSkillEnabled: async (installationId, enabled) => {
       let response: Response
       try {
-        response = await fetch(`${HUB_BASE}${path}`, {
+        response = await fetch("/api/skill.v1.SkillOptionalService/SetSkillInstallationEnabled", {
           method: "POST",
           cache: "no-store",
-          headers: idempotencyHeaders("skill-toggle"),
+          headers: idempotencyHeaders("skill-installation", { ...JSON_HEADERS }),
+          body: JSON.stringify({ installationId, enabled }),
         })
       } catch (error) {
         throw new HubClientError("network", describeUnknown(error), null, null)
@@ -661,6 +661,9 @@ export function createHubClient(): HubClient {
       if (!response.ok) {
         throw await readError(response)
       }
+    },
+    installSkill: async (sourceRef) => {
+      await createSkillInstallationClient().install(sourceRef, createIdempotencyKey("skill-installation"))
     },
     listMcpServers: async () => (await requestData(mcpServersPath, mcpServerPoolSchema)).servers,
     registerMcpServer: async (input) =>
