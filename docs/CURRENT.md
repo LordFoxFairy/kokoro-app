@@ -1,3 +1,15 @@
+## SET-05 个性化可靠保存候选（2026-10-13）
+
+基线 main12acfc6b，独立 feat/settings-interface checkout；功能分支候选，尚未切换日常运行环境。四字段仍走既有 BFF CAS，无服务端/Skills/MCP/数据库/lock/generated 变更。首次读取失败禁编辑且零PUT；成功读取后可持续编辑，失焦写串行；旧ACK不覆盖新草稿；冲突/未知结果保草稿、只允许重读后明确采用服务器或以新revision保存。复用既有readBoundary取消并退役旧身份/卸载请求，不新建认证探测。服务器ACK必须四字段匹配且revision精确expected+1才显示成功。
+
+四个关键交互反例在旧源码真实RED（locale fixture纠正后4FAIL），实现后新card10项/client5项＋原settings-modal42项共57PASS。Node22.22.2直接已有vitest入口；变更文件ESLint0、直接tsc --noEmit0。Prettier使用已安装的Platform formatter（Web未安装formatter），只格式化本片5个文件。首次pnpm exec意外触发已有workspace依赖link检查，输出Already up to date；之后只直接Node运行现有工具，锁文件与原main工作树未变。尚未运行完整contract/architecture/test/build、Next typegen或真实API/浏览器；这些由主控独立验收。该局部候选不代表整套设置完成。
+
+独审两P2补充：旧client非法snapshot/跳revision/挂起fetch/慢body反例真实6FAIL7PASS；现在snapshot必须非负safe integer且null iff revision0，PUT ACK精确expected+1，非法expected_revision不发送。独立schema/error/request各守单一职责；每request私有controller与10s总deadline覆盖fetch和body，最大64KiB响应，超时不取消编辑session；慢body和迟到response均取消清理。最终4文件74PASS（card10/client20/hook2/modal42），包含总预算不随header重置、超时GET重试、未知PUT先重读再明确CAS、身份取消与迟到清理；最终全部变更源码/测试ESLint0、tsc --noEmit0。没有重跑完整门或服务端/浏览器验收，不冒称上线。
+
+码点与翻译复核：四字段按Unicode码点计数（128/256/2000/8000），移除原生UTF-16 maxLength，由编辑hook拒绝超限；补充四字段超BMP边界与客户端响应校验。新增五条恢复文案为全部八个非中文上线语言提供独立翻译，不依赖共享英文fallback。Node22.22.2聚焦4文件90PASS（card22/client24/hook2/modal42），变更源码/测试ESLint与tsc --noEmit --incremental false均exit0。i18n resolve为26PASS/1FAIL：日语1617/1708=94.6721%未达95%；只读HEAD基线同门已失败（日语1612/1703=94.6565%，其余六语言1581/1703=92.8362%）。本片新增五key使分子分母各增五，未引入该覆盖率失败，也未降低门禁或扩改既存未译key。真实API/浏览器及全设置验收仍由Root负责。
+
+主控复核：契约278/278及两生成检查通过，完整lint、Next typegen+TypeScript、production build均exit0；本片client/card/hook48项与既有modal42项分别通过。独审已关闭snapshot、总期限、Unicode三个P2，未发现剩余P1/P2。架构门49/50，失败为HEAD已存在的settings-modal outline移除；首轮全测3261通过、23失败、154跳过，涉及未配置Redis/缺少浏览器、已证实既存的i18n缺口，以及尚未单独归因的UI失败，不宣称全仓通过。正式登录fixture的scope登记不匹配正由IAM修复；真实API及computer use验收仍待完成，test:e2e未执行。此记录只证明当前功能候选的静态/局部门禁，不代表整套设置完成。
+
 ## R257 本人 Connection 读取与加载保护验收（2026-10-06）
 
 固定 BFF 6d46ec8 / public 8.0.0 / OpenAPI 8d5b452b；本人页改读 /self/mcp/connections，不再混 Server 目录。复用已有可信 subject/generation/admitted，重核同步撤旧页、换 client 退役游标；合法191 ID/响应早退取消、有限读取保持。重复当前或历史 next_cursor 提前进入错误态，不进入永久 loading，不自动重试。Root77585 两有效失败反例原字节保留；最终 b0d5466a 53路径冻结、独审1663f3d9无新增已证P0–P2。

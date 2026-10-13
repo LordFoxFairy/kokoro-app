@@ -80,7 +80,7 @@ export function SettingsPanelContent({
     case "appearance":
       return <AppearanceCard />;
     case "personalization":
-      return <PersonalizationCard preview={preview} />;
+      return <PersonalizationCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "chat":
       return <ChatPrefsCard preview={preview} />;
     case "shortcuts":

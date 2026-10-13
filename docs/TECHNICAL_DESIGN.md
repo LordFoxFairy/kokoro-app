@@ -2390,3 +2390,15 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 4. 更新状态机/UI consumer；删除旧 wire/fallback，而不是双读长期共存。
 5. 运行 contract、architecture、lint、typecheck、test、build、E2E/live smoke。
 6. 同 commit 更新 CURRENT、ACCEPTANCE 和必要 runbook。
+## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
+
+用户目标是整套设置尽量对齐 Manus；本切片仅修复已有真实个人资料保存，不代替账号、通用、团队、用量等后继。参考已登录 Manus 设置中的个人资料四字段及失焦保存，记忆导入/知识无 owner 契约保持不可用。
+
+| 项 | 当前方案 |
+| --- | --- |
+| Owner/基线 | Web 浏览器草稿与恢复唯一 writer runtime_audit；BFF 持久化 owner 不变。起始 App12acfc6b，feat/settings-interface，独立 checkout；原 main/3310 保留。 |
+| 当前事实 | 现 PersonalizationCard 在首次 GET 失败后允许以 revision0 PUT；错误后无重读入口；PUT 期间禁用所有字段；client 无取消。 |
+| 目标/位置 | 扩现 settings section 与 personalization-client；将异步编辑生命周期放 settings/use-personalization.ts（相较把网络、草稿、冲突塞进 JSX，独立 hook 可直接验证且不新建模块）。wire schema/error 如需调整分别拆到同目录普通文件，避免扩张混合 client 职责。 |
+| 生命周期 | 初读成功前禁止编辑/保存，失败可重试；保留最新草稿，串行失焦保存和后续脏字段，不丢用户编辑。复用 SettingsPanelContent 已有 readBoundary，仅向个性化透传；subject/generation/admitted 变化取消并退役读取/写入，不新增认证探测。revision 冲突保草稿，显式重新载入并显示差异/选择，禁止自动覆盖别人更新；未知写结果不自动重试。 |
+| 依赖 | section→本地 hook→同源 client→BFF，禁止 Web 访问 IAM/数据库。schema/error/request分别在settings普通文件维护本协议校验、错误类型与10s有限请求（含body、64KiB上限、迟到清理），不建立通用网络框架。每request独立controller，deadline不取消编辑session。既有 expected_revision CAS 和字段上限不变；safe integer/null iff0与ACK expected+1精确消费owner事实，preview 仍隔离于 live。 |
+| 删除/验证 | 删除 section 内重复四字段类型与旧不安全读取/保存编排；复用 schema 类型。新增真实交互回归覆盖读失败零写、连续编辑、冲突恢复、卸载取消；focused、contract、architecture、lint/type/test/build/e2e 由主控验收并记录未执行项。 |

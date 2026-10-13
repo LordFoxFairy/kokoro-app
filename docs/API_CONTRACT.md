@@ -1605,3 +1605,6 @@ fixture and never sends this mutation. Error response or malformed success stays
 Compatible extra owner fields are ignored by the consumer validator; required Project identity fields
 remain mandatory. Once a valid owner 200 has returned, a failed navigation retry reuses that confirmed
 id and does not resend POST.
+## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
+
+沿用唯一现有 browser-private `/api/hub/preferences/personalization` → BFF `/v1/preferences/personalization`，GET 返回 personalization(nullable)/revision，PUT 四字段与 expected_revision，冲突码 personalization_revision_conflict。不新增 owner API、公开版本、generated pin 或 alias。昵称128、职业256、about2000、instructions8000的Unicode码点上限保持；编辑与响应校验使用同一规则，不使用UTF-16 maxLength。snapshot revision为非负safe integer，null iff revision0；PUT ACK必须四字段匹配且revision精确expected+1，不能接受跳跃。client 接收 AbortSignal，10s总deadline涵盖fetch与body、响应限64KiB；超时仅取消当前request、迟到body清理，不取消编辑session或自动重试。取消/迟到结果不得推进当前草稿或显示保存成功。首次读取失败不具备写入基准，禁止 PUT；冲突必须显式恢复，未知写结果保原草稿及状态，不自动换revision重放。

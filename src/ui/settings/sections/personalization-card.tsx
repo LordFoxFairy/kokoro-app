@@ -1,125 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/context";
-import {
-  PersonalizationClientError,
-  readPersonalization,
-  replacePersonalization,
-} from "@/ui/settings/personalization-client";
-
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import { usePersonalization } from "../use-personalization";
 import styles from "./settings-sections.module.css";
 
-type ProfileState = "loading" | "ready" | "saving" | "error";
-
-type PersonalizationFields = {
-  nickname: string;
-  occupation: string;
-  about: string;
-  instructions: string;
-};
-
-function readPreviewFields(): PersonalizationFields {
-  if (typeof window === "undefined") return emptyFields();
-  const raw = window.localStorage.getItem("kokoro.personalization.preview");
-  if (raw === null) return emptyFields();
-  try {
-    const value = JSON.parse(raw) as Partial<PersonalizationFields>;
-    return {
-      nickname: value.nickname ?? "",
-      occupation: value.occupation ?? "",
-      about: value.about ?? "",
-      instructions: value.instructions ?? "",
-    };
-  } catch {
-    return emptyFields();
-  }
-}
-
-function emptyFields(): PersonalizationFields {
-  return { nickname: "", occupation: "", about: "", instructions: "" };
-}
-
-/** BFF-backed profile preferences. Memory import and knowledge entries remain
- * hidden until their owner exposes a durable contract instead of dead routes. */
+/** Four BFF-owned fields; memory and knowledge import have no owner contract. */
 export function PersonalizationCard({
   preview = false,
+  readBoundary,
 }: {
   preview?: boolean;
+  readBoundary?: ProjectReadBoundary;
 }) {
   const t = useT();
-  const [fields, setFields] = useState<PersonalizationFields>(() =>
-    preview ? readPreviewFields() : emptyFields(),
-  );
-  const [revision, setRevision] = useState(0);
-  const [state, setState] = useState<ProfileState>(
-    preview ? "ready" : "loading",
-  );
-  const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (preview) return;
-    let active = true;
-    void readPersonalization()
-      .then((snapshot) => {
-        if (!active) return;
-        setFields(snapshot.personalization ?? emptyFields());
-        setRevision(snapshot.revision);
-        setState("ready");
-      })
-      .catch(() => {
-        if (!active) return;
-        setMessage(t("settings.personalizationLoadFailed"));
-        setState("error");
-      });
-    return () => {
-      active = false;
-    };
-  }, [preview, t]);
-
-  const update = (field: keyof PersonalizationFields, value: string): void => {
-    setFields((current) => ({ ...current, [field]: value }));
-  };
-
-  const persist = async (): Promise<void> => {
-    if (preview) {
-      window.localStorage.setItem(
-        "kokoro.personalization.preview",
-        JSON.stringify(fields),
-      );
-      return;
-    }
-    if (state === "loading" || state === "saving") return;
-    setState("saving");
-    setMessage(null);
-    try {
-      const snapshot = await replacePersonalization(fields, revision);
-      setRevision(snapshot.revision);
-      setState("ready");
-      setMessage(t("settings.saved"));
-    } catch (error) {
-      setState("error");
-      setMessage(
-        error instanceof PersonalizationClientError &&
-          error.code === "personalization_revision_conflict"
-          ? t("settings.personalizationConflict")
-          : t("settings.personalizationSaveFailed"),
-      );
-    }
-  };
-
-  const disabled = !preview && (state === "loading" || state === "saving");
-
+  const profile = usePersonalization(preview, readBoundary);
+  const { fields, disabled, update, persist, phase } = profile;
+  const message =
+    phase === "load-error"
+      ? t("settings.personalizationLoadFailed")
+      : phase === "conflict"
+        ? t("settings.personalizationConflict")
+        : phase === "unknown"
+          ? t("settings.personalizationUnknown")
+          : phase === "review"
+            ? t("settings.personalizationReview")
+            : profile.saved
+              ? t("settings.saved")
+              : null;
   return (
     <section
       className={styles.personalization}
       data-testid="settings-personalization"
     >
       <div className={styles.personalizationProfile}>
-        {state === "loading" ? (
+        {phase === "loading" ? (
           <p className={styles.profileStatus}>{t("settings.loading")}</p>
         ) : null}
         {message !== null ? (
@@ -127,16 +45,44 @@ export function PersonalizationCard({
             {message}
           </p>
         ) : null}
+        {["load-error", "conflict", "unknown"].includes(phase) ? (
+          <Button variant="outline" onClick={profile.retry}>
+            {t("settings.personalizationReload")}
+          </Button>
+        ) : null}
+        {phase === "review" && profile.server !== null ? (
+          <div>
+            <dl>
+              <dt>{t("settings.nickname")}</dt>
+              <dd>{profile.server.personalization?.nickname || "—"}</dd>
+              <dt>{t("settings.occupation")}</dt>
+              <dd>{profile.server.personalization?.occupation || "—"}</dd>
+              <dt>{t("settings.aboutYou")}</dt>
+              <dd style={{ whiteSpace: "pre-wrap" }}>
+                {profile.server.personalization?.about || "—"}
+              </dd>
+              <dt>{t("settings.customInstructions")}</dt>
+              <dd style={{ whiteSpace: "pre-wrap" }}>
+                {profile.server.personalization?.instructions || "—"}
+              </dd>
+            </dl>
+            <Button variant="outline" onClick={profile.chooseServer}>
+              {t("settings.personalizationUseServer")}
+            </Button>
+            <Button onClick={profile.saveDraft}>
+              {t("settings.personalizationSaveDraft")}
+            </Button>
+          </div>
+        ) : null}
         <div className={styles.profileColumns}>
           <label>
             <span>{t("settings.nickname")}</span>
             <Input
               aria-label={t("settings.nickname")}
               disabled={disabled}
-              maxLength={128}
               placeholder={t("settings.nicknamePlaceholder")}
               value={fields.nickname}
-              onBlur={() => void persist()}
+              onBlur={persist}
               onChange={(event) => update("nickname", event.target.value)}
             />
           </label>
@@ -145,10 +91,9 @@ export function PersonalizationCard({
             <Input
               aria-label={t("settings.occupation")}
               disabled={disabled}
-              maxLength={256}
               placeholder={t("settings.occupationPlaceholder")}
               value={fields.occupation}
-              onBlur={() => void persist()}
+              onBlur={persist}
               onChange={(event) => update("occupation", event.target.value)}
             />
           </label>
@@ -158,10 +103,9 @@ export function PersonalizationCard({
           <Textarea
             aria-label={t("settings.aboutYou")}
             disabled={disabled}
-            maxLength={2000}
             placeholder={t("settings.aboutYouPlaceholder")}
             value={fields.about}
-            onBlur={() => void persist()}
+            onBlur={persist}
             onChange={(event) => update("about", event.target.value)}
           />
         </label>
@@ -171,10 +115,9 @@ export function PersonalizationCard({
           <Textarea
             aria-label={t("settings.customInstructions")}
             disabled={disabled}
-            maxLength={8000}
             placeholder={t("settings.customInstructionsPlaceholder")}
             value={fields.instructions}
-            onBlur={() => void persist()}
+            onBlur={persist}
             onChange={(event) => update("instructions", event.target.value)}
           />
         </label>

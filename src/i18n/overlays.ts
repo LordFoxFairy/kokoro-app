@@ -403,15 +403,76 @@ const conversationFallback: Partial<Record<MessageKey, string>> = {
   "rail.deleteFailed": "Delete failed. The chat is still available; try again.",
 }
 
+type PersonalizationRecoveryKey = "settings.personalizationUnknown" | "settings.personalizationReview" | "settings.personalizationReload" | "settings.personalizationUseServer" | "settings.personalizationSaveDraft"
+// Explicit product translations; these are not shared English fallbacks.
+const personalizationMessages: Record<Exclude<Locale, "zh">, Record<PersonalizationRecoveryKey, string>> = {
+  en: {
+    "settings.personalizationUnknown": "The save result is unconfirmed. Your draft is kept. Reload before deciding how to save.",
+    "settings.personalizationReview": "Current server profile is shown below; your draft remains in the fields. Choose which version to keep.",
+    "settings.personalizationReload": "Reload profile",
+    "settings.personalizationUseServer": "Use server profile",
+    "settings.personalizationSaveDraft": "Save my draft against the new version",
+  },
+  ja: {
+    "settings.personalizationUnknown": "保存結果を確認できません。下書きは保持されています。再読み込みしてから保存方法を選んでください。",
+    "settings.personalizationReview": "以下はサーバー上の現在のプロフィールです。入力欄には下書きが保持されています。どちらを採用するか選んでください。",
+    "settings.personalizationReload": "再読み込み",
+    "settings.personalizationUseServer": "サーバーのプロフィールを採用",
+    "settings.personalizationSaveDraft": "最新バージョンを基に下書きを保存",
+  },
+  ko: {
+    "settings.personalizationUnknown": "저장 결과를 확인할 수 없습니다. 초안은 유지됩니다. 다시 불러온 후 저장 방법을 선택하세요.",
+    "settings.personalizationReview": "아래는 현재 서버의 프로필입니다. 입력란에는 초안이 유지됩니다. 어느 내용을 사용할지 선택하세요.",
+    "settings.personalizationReload": "다시 불러오기",
+    "settings.personalizationUseServer": "서버 프로필 사용",
+    "settings.personalizationSaveDraft": "최신 버전을 기준으로 내 초안 저장",
+  },
+  es: {
+    "settings.personalizationUnknown": "No se ha confirmado el resultado del guardado. Tu borrador se conserva. Vuelve a cargar el perfil antes de decidir cómo guardarlo.",
+    "settings.personalizationReview": "Abajo se muestra el perfil actual del servidor; tu borrador permanece en los campos. Elige qué versión conservar.",
+    "settings.personalizationReload": "Volver a cargar el perfil",
+    "settings.personalizationUseServer": "Usar el perfil del servidor",
+    "settings.personalizationSaveDraft": "Guardar mi borrador sobre la nueva versión",
+  },
+  fr: {
+    "settings.personalizationUnknown": "Le résultat de l’enregistrement n’est pas confirmé. Votre brouillon est conservé. Rechargez le profil avant de choisir comment l’enregistrer.",
+    "settings.personalizationReview": "Le profil actuel du serveur est affiché ci-dessous ; votre brouillon reste dans les champs. Choisissez la version à conserver.",
+    "settings.personalizationReload": "Recharger le profil",
+    "settings.personalizationUseServer": "Utiliser le profil du serveur",
+    "settings.personalizationSaveDraft": "Enregistrer mon brouillon à partir de la nouvelle version",
+  },
+  de: {
+    "settings.personalizationUnknown": "Das Speicherergebnis ist nicht bestätigt. Ihr Entwurf bleibt erhalten. Laden Sie das Profil erneut, bevor Sie entscheiden, wie es gespeichert werden soll.",
+    "settings.personalizationReview": "Unten sehen Sie das aktuelle Profil auf dem Server. Ihr Entwurf bleibt in den Eingabefeldern erhalten. Wählen Sie die Version, die Sie behalten möchten.",
+    "settings.personalizationReload": "Profil neu laden",
+    "settings.personalizationUseServer": "Serverprofil übernehmen",
+    "settings.personalizationSaveDraft": "Meinen Entwurf auf Basis der neuen Version speichern",
+  },
+  pt: {
+    "settings.personalizationUnknown": "O resultado da gravação não foi confirmado. O seu rascunho foi preservado. Recarregue o perfil antes de decidir como o guardar.",
+    "settings.personalizationReview": "O perfil atual do servidor aparece abaixo; o seu rascunho permanece nos campos. Escolha a versão que pretende manter.",
+    "settings.personalizationReload": "Recarregar o perfil",
+    "settings.personalizationUseServer": "Usar o perfil do servidor",
+    "settings.personalizationSaveDraft": "Guardar o meu rascunho com base na nova versão",
+  },
+  ru: {
+    "settings.personalizationUnknown": "Результат сохранения не подтверждён. Ваш черновик сохранён. Загрузите профиль заново, прежде чем решать, как сохранить изменения.",
+    "settings.personalizationReview": "Ниже показан текущий профиль на сервере; ваш черновик остаётся в полях ввода. Выберите, какую версию оставить.",
+    "settings.personalizationReload": "Загрузить профиль заново",
+    "settings.personalizationUseServer": "Использовать профиль с сервера",
+    "settings.personalizationSaveDraft": "Сохранить мой черновик на основе новой версии",
+  },
+}
+
 // zh 是源字典(住 messages.ts),自身无 overlay;其余各挂 MT 生成(可人工精修)的增量覆盖。
 export const OVERLAYS: Record<Locale, Partial<Record<MessageKey, string>>> = {
   zh: {},
-  en: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...en },
-  ja: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ja },
-  ko: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ko },
-  es: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...es },
-  fr: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...fr },
-  de: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...de },
-  pt: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...pt },
-  ru: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ru },
+  en: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...en, ...personalizationMessages.en },
+  ja: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ja, ...personalizationMessages.ja },
+  ko: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ko, ...personalizationMessages.ko },
+  es: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...es, ...personalizationMessages.es },
+  fr: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...fr, ...personalizationMessages.fr },
+  de: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...de, ...personalizationMessages.de },
+  pt: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...pt, ...personalizationMessages.pt },
+  ru: { ...skillShareFallback, ...agentFallback, ...scheduledFallback, ...voiceFallback, ...composerFallback, ...firstSiteFallback, ...skillsFallback, ...skillPublishFallback, ...libraryFallback, ...notificationFallback, ...interactionFallback, ...conversationFallback, ...ru, ...personalizationMessages.ru },
 }

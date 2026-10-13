@@ -13,6 +13,7 @@
 `chat-prefs` 被 `@/ui/shell/use-composer-selectors` 读作选择器初值（新对话首帧预填，会话级锁语义不变）。
 
 ## 陷阱
+- SET-05：`use-personalization.ts` 只管理四字段草稿、last ACK 与串行失焦保存。复用 shell 的 `readBoundary`，失去准入/身份代际变化或卸载会取消并退役请求；不自行探测 session。首次 GET 未成功前禁编辑；冲突或未知写结果须重读并明确选择采用服务器或在新 revision 保存草稿，不能自动重放。服务器资料不写 live localStorage。`personalization-schema.ts` 校验safe integer/null iff0；`personalization-client.ts` 只接受精确expected+1且四字段匹配的ACK；`personalization-error.ts` 维护请求错误类型。`personalization-request.ts` 的10s总deadline覆盖fetch/body，超时仅取消本次request，不取消编辑session，64KiB响应上限与迟到body清理只属于本协议。四字段上限按Unicode码点计数，hook拒绝超限而不使用UTF-16原生maxLength；五条恢复文案在八个非中文上线语言均有独立翻译。
 - 当前 BFF v1 没有个人资料 projection；账户卡在 live 保留信息架构但不渲染未接线的读写动作，预览态只使用 `.test` fixture，浏览器不接收可信 tenant 轴。
 - 团队 tab 只使用固定部署租户的 BFF Team Product 客户端；侧栏品牌不由 IAM namespace 覆盖。
 - 技能/连接/团队/账单/定价内容使用独立 `XxxContent`（`@/ui/skills`、`@/ui/mcp`、`@/ui/team`、`@/ui/billing`），设置中心直接装配。成果库属于独立的 Session/Artifact 业务面，不再作为账户设置入口重复装配。

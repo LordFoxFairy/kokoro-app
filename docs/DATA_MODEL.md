@@ -1252,3 +1252,6 @@ BFF snapshot + command receipt + durable AG-UI events
 
 当前缺少统一 browser-data inventory 自动测试、logout 后草稿清理策略和用户可见数据清理入口；这些是隐私
 与产品决策项，不通过新增 Web 数据库解决。
+## SET-05 个性化可靠保存（2026-10-13，候选已实现，待主控验收）
+
+Web 无新增持久业务数据/SQL/Redis；BFF personalization 唯一持久化 owner 与CAS revision保持。组件仅持 last acknowledged snapshot、当前草稿和待保存状态。preview 的浏览器测试数据与 live 完全分离，不将 localStorage 当本人服务器资料。冲突恢复保原草稿但必须由用户明确决定采用当前服务器资料或在新基准上保存，不能把旧草稿自动覆盖当前 owner 记录。
