@@ -121,6 +121,10 @@ function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"):
     .map((value) => value === undefined ? Number.NaN : Date.parse(value))
     .find(Number.isFinite)
   return {
+    skill_id: skill.id,
+    ...(skill.version !== undefined && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(skill.version)
+      ? { revision_skill_id: skill.version }
+      : {}),
     name: skill.displayName ?? skill.name ?? skill.id,
     description: skill.userDescription ?? skill.description ?? "",
     content_hash: skill.id,
