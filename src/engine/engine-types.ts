@@ -9,6 +9,7 @@ import type { PersistedStore } from "@/lib/persisted-store"
 
 import { IDLE_MACHINE, type MachineState } from "./machine-state"
 import type { SessionScope } from "./session-scope"
+import type { TaskNotification } from "./task-notification"
 import type { ToolDecision } from "./hitl-staging"
 
 export type NoticeSpec = {
@@ -69,6 +70,9 @@ export const SERVER_ENGINE_SNAPSHOT: EngineSnapshot = {
 export type SessionEngine = {
   getSnapshot: () => EngineSnapshot
   subscribe: (listener: () => void) => () => void
+  /** Injected view-only engines may omit live delivery; canonical engine always provides it. */
+  retireTaskNotifications?: () => void
+  subscribeTaskNotifications?: (listener: (signal: TaskNotification) => void) => () => void
   // true only when this call synchronously accepted the intent into the local
   // submission lifecycle. Callers must retain drafts and route intent on false.
   submit: (content: string) => boolean

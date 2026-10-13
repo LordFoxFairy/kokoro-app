@@ -47,6 +47,7 @@ import {
   type StagedDecisions,
   type ToolDecision,
 } from "./hitl-staging"
+import { createTaskNotifications } from "./task-notification"
 import { REATTACH_TIMEOUT_MS, reattachPlanFromSnapshot } from "./reattach"
 
 // 状态机实现位于独立纯模块；这里保留原入口 re-export，避免下游 UI/test 改变 import 契约。
@@ -106,6 +107,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   const reattachTimeoutMs = deps.reattachTimeoutMs ?? REATTACH_TIMEOUT_MS
   const scope = deps.scope ?? DIRECT_SESSION_SCOPE
   const execution = createExecutionAdapter({ client: deps.client, scope })
+  const taskNotifications = createTaskNotifications()
+  const notificationAdmissions = new WeakMap<PendingSubmission, number>()
 
   let machine: MachineState = IDLE_MACHINE
   let store: ConversationStore | null = deps.storage.read()
@@ -268,6 +271,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     thread = reduction.thread
     machine = reduction.machine
+    taskNotifications.observe(events)
     if (machine.phase === "waiting" || machine.phase === "streaming") {
       // 待批帧：用户决策不设时限；streaming：reattach 已收到 live 事件即证明 run 活着。
       // 两者都撤 90s 兜底——否则长 run（>90s 工具执行）会被 TIMEOUT 误切流，UI 与真态撕裂。
@@ -345,6 +349,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     sessionId: string,
     sessionSnapshot: SessionSnapshot,
     liveDeliveries?: Pick<SessionStreamState, "deliveries" | "deliveriesHasMore">,
+    notificationGeneration = taskNotifications.generation(),
   ): void {
     const previous = thread
     const hydrated = stateFromSnapshot(sessionSnapshot)
@@ -379,6 +384,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     // created by openStream receives this exact snapshot's interaction baseline.
     closeStream()
     clearReattachTimer()
+    taskNotifications.anchorSnapshot(sessionId, sessionSnapshot, notificationGeneration)
     thread = hydrated
     machine = transition(machine, { type: "RESET" })
     const head = sessionSnapshot.execution_head
@@ -406,6 +412,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     const terminalRead = { generation, runs: terminalRuns }
     pendingTerminalRead = terminalRead
     const sessionGeneration = hydrateGeneration
+    const notificationGeneration = taskNotifications.generation()
     const cursorAtStart = thread.resumeCursor
     execution.fetchSnapshot(sessionId).then((sessionSnapshot) => {
       if (disposed || generation !== filesSyncGeneration || sessionGeneration !== hydrateGeneration || store?.activeId !== sessionId) return
@@ -436,7 +443,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           observedTerminalRuns.has(JSON.stringify([sessionId, head.run_id]))) {
           closeStream()
         } else adoptOwnerSnapshot(sessionId, sessionSnapshot, liveAdvanced
-          ? { deliveries: thread.deliveries, deliveriesHasMore: thread.deliveriesHasMore } : undefined)
+          ? { deliveries: thread.deliveries, deliveriesHasMore: thread.deliveriesHasMore } : undefined, notificationGeneration)
       }
       notify()
     }).catch(() => {
@@ -506,6 +513,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // snapshot-first 水合：GET /sessions/:sid → 当前读模型 + opaque AG-UI watermark 续流。
   function hydrate(sessionId: string, afterExpiredCursor = false): void {
+    taskNotifications.select(sessionId)
+    const notificationGeneration = taskNotifications.generation()
     hydrateGeneration += 1
     observedTerminalRuns.clear()
     pendingSteerReceipts.clear()
@@ -556,6 +565,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
             message.run_id === deferred.receipt.run_id &&
             (message.status === "completed" || message.status === "failed"),
         )
+        taskNotifications.anchorSnapshot(sessionId, sessionSnapshot, notificationGeneration)
         thread = stateFromSnapshot(sessionSnapshot)
         const submissionToRestore = afterExpiredCursor ? recoveredSubmission : pendingSubmission
         if (
@@ -697,6 +707,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (pendingSubmission !== submission || store?.activeId !== submission.sessionId) {
       return
     }
+    if (!ownerAlreadySettled) taskNotifications.anchorReceipt(submission.sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
     pendingSubmission = null
     recoveredSubmission = null
     recoveredSubmissionError = null
@@ -725,6 +736,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     recoveredSubmissionError = null
     deferredCreateReceipt = null
     const { sessionId, idempotencyKey } = submission
+    taskNotifications.select(sessionId)
+    notificationAdmissions.set(submission, taskNotifications.generation())
     execution
       .createMessage(submission)
       .then((receipt) => {
@@ -758,6 +771,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         recoveredSubmissionError = null
         deferredCreateReceipt = null
         thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
+        taskNotifications.anchorReceipt(sessionId, receipt, notificationAdmissions.get(submission) ?? -1)
         machine = transition(machine, { type: "RECEIPT", runId: receipt.run_id })
         openStream(sessionId, thread.resumeCursor)
         notify()
@@ -807,12 +821,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         sessionId: steerSessionId, content: trimmed, idempotencyKey: createId("idem"),
         options: messageExecutionOptions(activeMode(store)), optimisticUserId,
       }
+      notificationAdmissions.set(submission, taskNotifications.generation())
       pendingSteerReceipts.set(receiptToken, submission)
       execution.createMessage(submission)
         .then((receipt) => {
           if (disposed || store?.activeId !== steerSessionId || hydrateGeneration !== steerGeneration) {
             return
           }
+          taskNotifications.anchorReceipt(steerSessionId, receipt, notificationAdmissions.get(submission) ?? -1)
           const alreadyProjected = thread.messages.some((message) => message.id === receipt.user_message_id)
           thread = reconcileUserMessageId(thread, receipt.user_message_id, submission.optimisticUserId)
           const admitted = thread.messages.find((message) => message.id === receipt.user_message_id)
@@ -937,6 +953,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     machine = { ...machine, error: null }
     notify()
     const generation = hydrateGeneration
+    const notificationGeneration = taskNotifications.generation()
     const attempt = Symbol("resume-attempt")
     resumeAttempts.set(runId, attempt)
     const current = () => !disposed && store?.activeId === intent.sessionId && hydrateGeneration === generation &&
@@ -955,7 +972,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         // replace cards/pause. Never synthesize consumption or issue another POST.
         void execution.fetchSnapshot(intent.sessionId).then((owner) => {
           if (!current() || owner === null || thread.resumeCursor !== cursor) return
-          adoptOwnerSnapshot(intent.sessionId, owner)
+          adoptOwnerSnapshot(intent.sessionId, owner, undefined, notificationGeneration)
           if (frozenResumes.get(runId) === intent && machine.runId === runId) machine = { ...machine, error }
           notify()
         }).catch(() => { /* Retain the safe failure and last confirmed cards. */ })
@@ -978,6 +995,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
+    taskNotifications.select(next.activeId)
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
     connection = { status: "connected" }
@@ -1076,6 +1094,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     hydrating = false
+    taskNotifications.select(next.activeId)
     commitStore(next)
     notify()
     // 新会话本地新建、服务端必然不存在：不发无谓的 snapshot 请求。
@@ -1172,6 +1191,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   }
 
   function dispose(): void {
+    taskNotifications.dispose()
     disposed = true
     deleteIntentGeneration += 1
     deleteIntent = null
@@ -1230,6 +1250,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     pendingSteerReceipts.clear()
     unprojectedAdmissions.clear()
     store = external
+    taskNotifications.select(external?.activeId ?? null)
     if (external?.activeId) {
       hydrate(external.activeId)
     }
@@ -1244,6 +1265,8 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   return {
     getSnapshot: () => snapshot,
+    subscribeTaskNotifications: taskNotifications.subscribe,
+    retireTaskNotifications: taskNotifications.retire,
     subscribe: (listener) => {
       listeners.add(listener)
       return () => {

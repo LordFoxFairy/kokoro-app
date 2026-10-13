@@ -14,6 +14,7 @@ import {
   createConversationMoveCoordinator,
   type ConversationMoveResult,
 } from "@/ui/shell/conversation-move-coordinator"
+import { useTaskNotifications } from "@/ui/shell/use-task-notifications"
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
@@ -348,7 +349,9 @@ function AppFrameRuntime({
       }
     })
   }, [engine, isVisibleMoveLeaf, moveCoordinator, settleConversationMove])
-  const awaitingIds = useAwaitingNotify(activeId, machine.phase, t, brandName)
+  useTaskNotifications(engine, preview, projectReadBoundary)
+  const awaitingIdentity = JSON.stringify([preview, projectReadBoundary?.subject ?? null, sessionScopeKey(sessionScope)])
+  const awaitingIds = useAwaitingNotify(projectReadBoundary?.subject === null ? null : activeId, machine.phase, t, brandName, awaitingIdentity, engine)
 
   const draftRoute = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   const draftSelectionMatches = !projectWorkspace || routedConversationId === null || routedConversationId === activeId

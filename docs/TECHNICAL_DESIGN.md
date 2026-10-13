@@ -1,14 +1,20 @@
-## SET-16 通用通知与声音 D0（2026-10-13，目标，待实现验收）
+## SET-16 通用通知与声音 D0（2026-10-13，实现候选，待Root独审/浏览器验收）
+
+2026-10-14 生命周期修正裁决：既有通知模块局部修复，不新增文件、职责或契约。长期资源绑定可信原始 subject 与页面 engine/scope，短期 readBoundary admission/generation 只作为 layout 同步投递门；同主体定时或可见返回重验暂关投递，但保留已经正规锚定的 run、终态去重、待批徽标及已手势解锁音频，重验期间发生的信号不补播。真实主体改变、logout、preview、engine/scope/dispose 才退役资源，切会话关闭旧会话投递。设置异步许可仍按 admitted subject/generation 退役；音频另用每次 unlock attempt fence，旧 pending resume 不得关闭同主体后发的新解锁。须先复现同主体重验漏通知/关闭音频，再验证恢复、门关闭零投递、真实身份清理与迟到尝试隔离。下文“身份代际”清理指真实资源身份退役，不指正常 readBoundary 重验。
 
 基线 `2a3dee7047c04aab73765da695aff5947b5023d9`。Web拥有浏览器偏好与页面内投递；BFF/Agent仍唯一拥有任务和终态事实。实际Manus通用页说明任务进展/完成通知、离开页面时完成响一次；现Web只按waiting相位通知、声音未接线、存储失败被吞且产品更新/广告仅假开关。当前正式模型执行受Agent/Billing授权硬门阻塞，不绕过，不以unit假响应冒充实际任务完成。
 
 采用现有 validated AG-UI → engine projection 边界。新增单一职责 `src/engine/task-notification.ts` 管理本页 exact MessageCreateReceipt 或可信 owner execution_head 锚定的 run；只发新进入待操作与 `run.completed(status=completed)` typed signal，取消/失败/dispatch_failed/EOF/连接异常/快照终态零完成。无锚的历史run.created不授资格。快照只设置active锚及已有pause基线，不发历史通知；同run终态、同pause身份/revision重放不重复。引擎用直接订阅逐个投递，禁止只用React最新快照丢掉batch事件。切会话、scope、身份代际、dispose清理；pending迟到回执不得复活。
 
-`src/ui/notifications/communication-preferences.ts` 只负责可信subject隔离的偏好存储/订阅，稳定SSR默认；成功setItem后才广播，失败保原值并可见。旧全局key不迁移，营销两字段恒false。新增 `task-browser-notification.ts` 负责Notification能力/许可/owned实例清理，`task-completion-sound.ts` 负责AudioContext手势解锁、一次短提示及退役清理；新 `src/ui/shell/use-task-notifications.ts` 绑定engine、已准入subject/generation与这两browser delivery。只在页面隐藏或失焦时投递完成提醒/声音；待操作提醒也不得从初次历史水合产生。没有后台worker或闭页保证。Notification.requestPermission与AudioContext创建/resume只来自设置明确手势，拒绝/不支持/失败可见，异步许可/音频回调须核原身份代际。刷新后保存的声音偏好不冒充audio已解锁，提供明确手势恢复；不自动补播。observer异常不得影响引擎投影。退役关闭owned Notification、音源/AudioContext及待操作注册表，不关闭其它页面资源。
+`src/ui/notifications/communication-preferences.ts` 只负责可信subject隔离的偏好存储/订阅，稳定SSR默认；成功setItem后才广播，失败保原值并可见。旧全局key不迁移，营销两字段恒false。新增 `task-browser-notification.ts` 负责Notification能力/许可/owned实例清理，`task-completion-sound.ts` 负责AudioContext手势解锁、一次短提示及退役清理；新 `src/ui/shell/use-task-notifications.ts` 绑定engine/scope与受信原始subject的长期资源，layout已提交admission是每次投递门。只在页面隐藏或失焦时投递完成提醒/声音；待操作提醒也不得从初次历史水合产生。没有后台worker或闭页保证。Notification.requestPermission与AudioContext创建/resume只来自设置明确手势，拒绝/不支持/失败可见，异步许可/音频回调须核原身份代际。刷新后保存的声音偏好不冒充audio已解锁，提供明确手势恢复；不自动补播。observer异常不得影响引擎投影。退役关闭owned Notification、音源/AudioContext及待操作注册表，不关闭其它页面资源。
 
 复用现有Appearance/Communication组件并传既有readBoundary，不新增认证探测或以preview/ready/任意feature flag当执行准入。原useAwaitingNotify保徽标/title，删除旧awaiting-notify系统投递路径以免双轨；不改Skills/连接器/任务投递模式。产品更新和广告没有owner交付契约，真实disabled且说明暂不可用。既有语言/主题保持原边界。
 
 文件粒度：上述四个新文件分别为任务信号规则、浏览器通知、音频生命周期、React订阅编排，不新建目录/依赖/服务。现machine仅锚定/接线；engine-types只新增typed订阅签名。设置组件只展示可靠偏好与反馈。API/DATA见同ID；无网络/SQL/generated/锁变更。验证须覆盖已锚成功与三个非成功终态、无锚重放/快照、批量及重连去重、迟到/身份退役、许可拒绝与投递异常、音频解锁/挂起/退役、保存失败及两个disabled营销行；lint/type/architecture/contract/build为静态门，Root正常浏览器保存→刷新与禁用验证为用户证据。实际模型任务→离开页面→唯一通知/声音仍需正式执行先决条件，不声称全设置完成。
+
+实现补充：active execution_head搭配合法null watermark亦可锚定未来live事件，null不被解释为历史完成；快照自身不投递。引擎receipt/snapshot捕获通知代际，身份退役后迟到事实不能重授通知资格。Audio create/resume由手势同步启动，resume单次3s预算，超时/拒绝/退役关闭owned context并拒绝late复活；无自动resume或补播。任务观察者逐事件隔离异常；切会话/身份/scope关闭owned投递，声音刷新/退役后需再次手势。无新契约、SQL、依赖、营销订阅或Skills/连接器改动。
+
+V2实现补充（2026-10-14）：同subject临时失准入只更新layout投递门，长期observer/audio及engine锚保持；门内终态仍被正规引擎消费，不缓存或补播。真实资源替换仅退役旧engine，保留新engine已经合法锚定的owner head。AppFrame awaiting身份不含read generation，旧主体未变化的waiting投影不在退休后立即重登记。现page-clients engine lease在StrictMode重新取得时取消延迟release，真正无owner时正规engine.dispose清锚和listeners；hook关闭owned Notification/Audio并取消订阅，不增加第二个dispose owner。每次Audio unlock递增独立attempt fence，旧resolve/reject/timeout不得关闭同subject后发有效context；Settings组件仍以当次admission/generation取消迟到许可和保存。
 
 ## SET-SHORTCUTS：快捷键可靠编辑（候选，待浏览器验收）
 

@@ -1,3 +1,4 @@
+<!-- SET16：Appearance沿既有readBoundary配置subject隔离浏览器通知/声音，setItem成功才确认；营销两行disabledfalse，无owner订阅，不改Skills/连接器。 -->
 # ui/settings — 用户设置中心（模态）
 
 ## 职责

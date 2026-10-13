@@ -1200,3 +1200,12 @@
   font-size: 0.8125rem;
   line-height: 1.125rem;
 }
+
+.communicationFeedback {
+  margin-block: 0.75rem;
+  color: var(--muted-foreground);
+}
+.communicationFeedback button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

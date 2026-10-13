@@ -1,3 +1,4 @@
+<!-- SET16：use-task-notifications.ts 从已准入subject/generation订阅typed信号，hidden/blur时投递；切会话关闭owned提示/声音，身份及scope退役取消订阅；use-awaiting-notify.ts仅徽标/title。 -->
 # ui/shell — 页面装配层
 
 ## 职责

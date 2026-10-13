@@ -1,3 +1,4 @@
+<!-- SET16：三设计与CURRENT文首为通用通知/声音候选；不新增owner契约或数据，实际模型完成投递仍待正规执行先决条件。 -->
 <!-- SET-SHORTCUTS: 快捷键规则 src/lib/keyboard-shortcuts.ts；订阅 src/hooks/use-keyboard-shortcuts.ts；编辑 src/ui/settings/sections/shortcuts-card.tsx；回归 tests/lib/keyboard-shortcuts.test.ts 与 tests/ui/keyboard-shortcuts.test.tsx。 -->
 # Kokoro User Web 文档索引
 

@@ -1,8 +1,14 @@
-## SET-16 通用通知与声音：沿已有任务契约（2026-10-13，D0）
+## SET-16 通用通知与声音：沿已有任务契约（2026-10-13，实现候选）
+
+2026-10-14 修正：仍无 wire/generated 改动。可信原始 subject 与 engine/scope 是长期资源身份，readBoundary admission/generation 是同步投递门；同主体重验保留已验证锚、去重和已解锁音频，但门关闭期间零投递且不补播。设置授权异步结果仍绑定当次 admission/generation，Audio unlock 单次 attempt fence 防止旧完成影响新尝试；真实主体/logout/preview/engine/scope/dispose 退役。readBoundary generation 不授予新任务或历史通知资格。
 
 本片无新HTTP、owner API、权限、版本或generated改变。唯一任务事实仍为现固定BFF public15.0.0 validated AG-UI、MessageCreateReceipt与SessionSnapshot；Web只新增内部typed任务信号订阅，不成为第二套wire。完成严格取run.completed且status=completed，失败/取消/dispatch_failed/ACK/EOF不替代；快照event_watermark与active execution_head只用于正规恢复和锚定，不发历史通知。请求/音频许可是浏览器能力，不授权运行或服务端写入。
 
-主体及代际只来自已准入readBoundary，scope/session/run标识来自现引擎。不得从browser body、localStorage偏好、preview、ready或任意feature flag推断准入。营销通知没有正式owner契约，disabled且恒false；不新增假成功API。当前模型授权硬门与正式支付缺口仍未闭合。
+资源主体来自受信readBoundary原始subject，当次投递仍需layout已提交admission；设置授权异步结果受当次generation绑定，scope/session/run标识来自现引擎。不得从browser body、localStorage偏好、preview、ready或任意feature flag推断准入。营销通知没有正式owner契约，disabled且恒false；不新增假成功API。当前模型授权硬门与正式支付缺口仍未闭合。
+
+实现补充：active execution_head搭配合法null watermark亦可锚定未来live事件，null不被解释为历史完成；快照自身不投递。引擎receipt/snapshot捕获通知代际，身份退役后迟到事实不能重授通知资格。Audio create/resume由手势同步启动，resume单次3s预算，超时/拒绝/退役关闭owned context并拒绝late复活；无自动resume或补播。任务观察者逐事件隔离异常；切会话/身份/scope关闭owned投递，声音刷新/退役后需再次手势。无新契约、SQL、依赖、营销订阅或Skills/连接器改动。
+
+V2实现补充（2026-10-14）：同subject临时失准入只更新layout投递门，长期observer/audio及engine锚保持；门内终态仍被正规引擎消费，不缓存或补播。真实资源替换仅退役旧engine，保留新engine已经合法锚定的owner head。AppFrame awaiting身份不含read generation，旧主体未变化的waiting投影不在退休后立即重登记。现page-clients engine lease在StrictMode重新取得时取消延迟release，真正无owner时正规engine.dispose清锚和listeners；hook关闭owned Notification/Audio并取消订阅，不增加第二个dispose owner。每次Audio unlock递增独立attempt fence，旧resolve/reject/timeout不得关闭同subject后发有效context；Settings组件仍以当次admission/generation取消迟到许可和保存。
 
 ## SET-SHORTCUTS：无网络协议变更
 

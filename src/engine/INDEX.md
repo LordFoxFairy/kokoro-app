@@ -1,3 +1,4 @@
+<!-- SET16：task-notification.ts 只认本页MessageCreateReceipt或validated active execution_head及其nullable event_watermark；machine直接逐事件subscribeTaskNotifications，不用React快照充当消息队列。retireTaskNotifications使旧receipt/snapshot代际失效；view-only注入engine可无订阅，正式engine总接线。 -->
 # engine — 会话引擎（状态机 + 浏览器 I/O 唯一编排者）
 
 ## R141 会话列表读取边界

@@ -1,16 +1,26 @@
-## SET-16 通用通知与声音任务卡（2026-10-13，D0待独审）
+## SET-16 通用通知与声音候选（2026-10-14，待Root冻结独审/浏览器验收）
+
+冻结V1放行撤回：独审确认正常每120秒/返回可见的同主体重验会因 readBoundary generation 错误退役任务锚与音频；Root已在三设计统一稳定资源身份与短期投递门，恢复单一 writer 做现有文件局部修复及具名回归。Root独立8文件335PASS仍未覆盖此生产生命周期。两proxy负控旧源码PASS而V1候选曾500；Root独立审计定位cold-start fixture误把500当ready，授权改为正规/iam/jwks===200。不把全测22失败统称旧失败，实际候选仍待Root独审/启动。
+
+V2生命周期修复候选：先有3FAIL/20PASS真实RED（同主体重验漏完成、错误退役音频、旧unlock关闭后发有效context），后按稳定rawsubject+engine/scope资源和layout admission门修复。正规engine lease负责真正dispose清锚，StrictMode不新增重复资源owner；coupled subject+engine swap只退役旧engine，保留新合法owner head。Settings异步许可仍gen-bound，声音owner稳定subject，每gesture独立attempt fence；同主体重验保已有badge/audio，真实主体/preview/engine/scope清理，退休旧waiting投影不重新登记。V1 manifest及原logs完整保留，V2精确manifest另交；8文件347PASS，最终lint/next typegen/tsc/production build终态exit0。proxy fixture仅正规/iam/jwks===200 readiness变更，顺序冷启动两个负控2PASS/3filtered；首跑与build同期suite readiness未就绪亦保留失败log，不声称Redis因果。V1全测22FAIL未重跑，no-referrer旧baseline可复现，proxy新增失败有cold-start readiness因果并完成实际负控复验；未放行真实候选或实际模型通知。
 
 | 项 | 决定 |
 | --- | --- |
 | 目标/优先级 | P1：真实任务信号接线、可靠主体偏好、手势音频与不可用营销行；全设置Goal仍active |
-| 仓/基线 | Web feat/settings-interface，2a3dee7047c04aab73765da695aff5947b5023d9，起始clean；路径见主控私有任务卡 |
+| 仓/基线 | Web feat/settings-interface，D0基线5ba1030ee5e095cbf47464991cbef50b2f68eca9，起始clean；路径见主控私有任务卡 |
 | 角色 | Root三设计/提交/运行集成；billing_scheduler_audit唯一实现writer；storage_platform_audit只读设计/源码独审；runtime_audit只读正式执行先决条件审计 |
 | 允许范围 | engine task-notification/type/machine；notifications偏好及两投递文件；shell任务订阅与原awaiting hook/store清理；AppFrame与Appearance/Communication现组件、只appearance分支readBoundary；General专用i18n和具名测试/相邻INDEX、三设计及本记录 |
 | 排除 | Skills/连接器功能与测试、契约/generated/SQL/锁/依赖/服务、任务投递模式、支付/余额；不并行写其它仓 |
 | 依赖/未决 | 三设计SET16同决策、原固定正式任务协议；真实模型执行被Agent/Billing授权硬门阻塞。实际通知许可与声音需浏览器能力/明确手势，不能用fake完成任务 |
 | 验证/交付 | 先真实失败反例，再具名行为门；完整lint/type/architecture/contract/build，已知全测旧失败保留；worker不Git提交，交精确SHA冻结及日志，Root独审后提交/pin/正式浏览器验收 |
 
-实现尚未开始。三设计门不代表功能完成；没有SQL/contract待生成，正常既有contract两生成check与278断言由Root集成核验。此前快捷键已由Root2a3dee7固定并实际编辑/刷新/触发、恢复默认验收，下列旧“待Root”记录为历史。
+实现候选已接通唯一正规engine observer：本页exact receipt或validated active owner head（合法nullable watermark）锚定未来live waiting/completed；历史run.created不授资格，snapshot已有pause/终态不投递，只有status=completed成功，cancelled/failed/dispatch_failed/EOF无完成声。逐事件直接订阅保持batch，重放去重；真实资源身份退役使迟到receipt/snapshot不能重授资格，同主体read generation重验保留原通知资格，终态owner快照退休旧锚。subject分区偏好不迁移旧global，setItem成功才广播/确认，失败可见；营销disabledfalse并说明暂无owner服务。Notification与Audio资源只由本页关闭，Audio create/resume同步手势启动且resume预算3s，刷新/挂起/退役须显式再次启用，无历史补播；awaiting原badge/title保留，原系统投递双轨删除。Skills/连接器及所有owner事实不变。
+
+V1证据（不是V2完整验收）：两个原实现行为反例2FAIL（存储失败吞没、营销行仍enabled）后GREEN；8具名engine/UI文件334PASS，其后音频非running resume补充与最后adapter窄变更4文件38PASS，有单独终态日志。architecture+contract24files328PASS，两正规generator check通过；Node22.22.2 lint、next typegen/tsc、production build终态exit0，精确命令/日志/冻结由私有manifest交接。未安装依赖、未改SQL/契约/锁、未操作业务服务/DB/OS许可。
+
+一次全测3410PASS/22FAIL/154SKIP，不能称全量通过。旧日志比对多出两个proxy负控500与一个personal no-referrer HTTP超时，同时旧两个UI失败不再出现；Root已在immutable旧源码复现no-referrer超时，两proxy负控旧源码PASS，V2仅修正proxy fixture readiness后两个负控顺序实际PASS，不改变HTTP契约/assert/timeout；不能把22失败一概盖为旧失败。其余确切失败case与suite-hook异常见私有set16-all-tests.log/failure-audit JSON，保留资源/visual/i18n/Skills证据，不扩改受禁止功能。
+
+本候选尚未Git提交或启动服务。当前正常组合只Web/IAM/BFF/Billing，实际模型任务受正式Agent/Billing授权门阻塞；Root浏览器偏好保存→刷新、unsupported/disabled营销、音频手势/被拒等用户证据以及未来正常live任务完成→离开页面→一次通知/声音均待验。unit与生产build不替代这些实际验收，不称全设置Goal完成或已后台订阅。没有新网络/SQL/generated需求，原固定契约不变。此前快捷键已由Root2a3dee7固定并实际编辑/刷新/触发、恢复默认验收，下列旧“待Root”记录为历史。
 
 ## SET-SHORTCUTS：可靠快捷键候选（待Root审查与真实浏览器集成）
 

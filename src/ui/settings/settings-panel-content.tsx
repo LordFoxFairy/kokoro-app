@@ -79,7 +79,7 @@ export function SettingsPanelContent({
         />
       );
     case "appearance":
-      return <AppearanceCard />;
+      return <AppearanceCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "personalization":
       return <PersonalizationCard preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "chat":

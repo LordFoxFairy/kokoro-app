@@ -1,8 +1,14 @@
-## SET-16 通用通知与声音：无业务持久化owner（2026-10-13，D0）
+## SET-16 通用通知与声音：无业务持久化owner（2026-10-13，实现候选）
+
+2026-10-14 修正：同主体 readBoundary 重验只关闭同步投递门，不清内存 run 锚、终态去重、待批徽标或已解锁音频；门关闭期间不排队、不补播。真实主体/logout/preview/engine/scope/dispose 才清相应资源。偏好仍以 subject 分区，设置异步授权以 generation 防迟到，音频以独立 unlock attempt fence 防旧尝试清理新尝试；无新增持久事实。
 
 Web不新增SQL/Redis、任务、权限或营销订阅事实。新的subject隔离localStorage只保存browser_notifications/sound_notifications浏览器偏好，营销字段恒false；不保存认证凭证、任务正文或推送地址。旧全局kokoro.communication-preferences不继承到不同身份，不自动迁移/删旧字节。subject用于缓存分区，不能成为认证依据。稳定SSR默认false，setItem失败不更新可见值/广播；storage事件按当前subject重读，不称跨设备同步或数据库事务。
 
-run/pause去重与音频手势资格只在现引擎/页面生命周期内存中；scope/session与可信subject/generation退役时清理。快照水合的已有pause仅作基线，terminal快照不投递；没有持久化通知队列或离线补播。Notification实例和AudioContext只由其创建者关闭，刷新需重新手势解锁音频。原会话/账户/Team/Skills/连接器数据不变。
+run/pause去重与音频手势资格只在现引擎/页面生命周期内存中；scope/session及真实subject/页面资源退役时清理，不因同主体read generation重验清理。快照水合的已有pause仅作基线，terminal快照不投递；没有持久化通知队列或离线补播。Notification实例和AudioContext只由其创建者关闭，刷新需重新手势解锁音频。原会话/账户/Team/Skills/连接器数据不变。
+
+实现补充：active execution_head搭配合法null watermark亦可锚定未来live事件，null不被解释为历史完成；快照自身不投递。引擎receipt/snapshot捕获通知代际，身份退役后迟到事实不能重授通知资格。Audio create/resume由手势同步启动，resume单次3s预算，超时/拒绝/退役关闭owned context并拒绝late复活；无自动resume或补播。任务观察者逐事件隔离异常；切会话/身份/scope关闭owned投递，声音刷新/退役后需再次手势。无新契约、SQL、依赖、营销订阅或Skills/连接器改动。
+
+V2实现补充（2026-10-14）：同subject临时失准入只更新layout投递门，长期observer/audio及engine锚保持；门内终态仍被正规引擎消费，不缓存或补播。真实资源替换仅退役旧engine，保留新engine已经合法锚定的owner head。AppFrame awaiting身份不含read generation，旧主体未变化的waiting投影不在退休后立即重登记。现page-clients engine lease在StrictMode重新取得时取消延迟release，真正无owner时正规engine.dispose清锚和listeners；hook关闭owned Notification/Audio并取消订阅，不增加第二个dispose owner。每次Audio unlock递增独立attempt fence，旧resolve/reject/timeout不得关闭同subject后发有效context；Settings组件仍以当次admission/generation取消迟到许可和保存。
 
 ## SET-SHORTCUTS：原浏览器偏好格式保留
 

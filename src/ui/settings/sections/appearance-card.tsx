@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { Contrast, Moon, Sun } from "lucide-react";
 
 import { useLocale, useT } from "@/i18n/context";
@@ -20,7 +21,7 @@ import { CommunicationPreferencesSection } from "./communication-preferences-sec
 import styles from "./settings-sections.module.css";
 
 // —— 卡二：外观与语言 —— 主题三档（WEB-THEME）/ 语言（i18n）即时生效。
-export function AppearanceCard() {
+export function AppearanceCard({ preview = false, readBoundary }: { preview?: boolean; readBoundary?: ProjectReadBoundary }) {
   const t = useT();
   const { mode, setMode } = useTheme();
   const { locale, setLocale } = useLocale();
@@ -98,7 +99,7 @@ export function AppearanceCard() {
         </div>
       </section>
       <TaskDeliveryPreferencesSection />
-      <CommunicationPreferencesSection />
+      <CommunicationPreferencesSection preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
     </div>
   );
 }

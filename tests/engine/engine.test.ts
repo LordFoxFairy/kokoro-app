@@ -3135,3 +3135,41 @@ describe("R250 remote-list deletion boundary", () => {
     expect(deletion).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("SET16 canonical task observer wiring", () => {
+  it("delivers batch signals before one snapshot render and contains observer errors", async () => {
+    buildEngine()
+    const observed: string[] = []
+    engine.subscribeTaskNotifications?.(() => { throw new Error("isolated observer") })
+    engine.subscribeTaskNotifications?.((signal) => { observed.push(signal.kind) })
+    engine.submit("new task"); await settle()
+    client.lastStream().emit([
+      makeEvent("interaction.state", makeInteractionState("one", ["one"]), { session_id: "conv_1" }),
+      makeEvent("run.completed", { status: "completed" }, { session_id: "conv_1" }),
+    ])
+    await settle()
+    expect(observed).toEqual(["awaiting", "completed"])
+    expect(engine.getSnapshot().machine.phase).toBe("idle")
+  })
+  it("anchors a validated active snapshot but does not notify its existing waiting baseline", async () => {
+    buildConfiguredEngine(addConversation(null, "conv_1", 1000), (fake) => {
+      fake.nextSnapshot = async () => makeSnapshot({ sessionId: "conv_1", activeRun: { run_id: "run_1", status: "waiting_input" }, pendingPauses: [makePendingPause()], eventWatermark: CURSOR_3 })
+    })
+    const observer = vi.fn(); engine.subscribeTaskNotifications?.(observer)
+    await settle()
+    expect(observer).not.toHaveBeenCalled()
+    client.lastStream().emit([makeEvent("run.completed", { status: "completed" }, { session_id: "conv_1", seq: 4 })], [CURSOR_7])
+    await settle()
+    expect(observer).toHaveBeenCalledWith({ kind: "completed", sessionId: "conv_1", runId: "run_1" })
+  })
+  it("does not re-anchor a receipt that was pending at identity retirement", async () => {
+    buildEngine()
+    let resolve!: (receipt: ReturnType<typeof makeReceipt>) => void
+    client.nextCreate = () => new Promise((done) => { resolve = done })
+    const observer = vi.fn(); engine.subscribeTaskNotifications?.(observer)
+    engine.submit("pending task"); engine.retireTaskNotifications?.()
+    resolve(makeReceipt("run_1")); await settle()
+    client.lastStream().emit([makeEvent("run.completed", { status: "completed" }, { session_id: "conv_1" })]); await settle()
+    expect(observer).not.toHaveBeenCalled()
+  })
+})
