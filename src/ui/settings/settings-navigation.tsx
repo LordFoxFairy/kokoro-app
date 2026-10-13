@@ -12,9 +12,11 @@ import type { LucideProps } from "lucide-react";
 import {
   Cable,
   ChevronsUpDown,
+  CircleHelp,
+  Code2,
+  Database,
   Keyboard,
   Mail,
-  MessageSquareText,
   Monitor,
   Puzzle,
   Search,
@@ -40,8 +42,7 @@ type SettingsNavigationGroup =
   | "settings"
   | "features"
   | "assets"
-  | "integrations"
-  | "team";
+  | "data";
 
 type SettingsNavigationEntry = {
   kind: "tab";
@@ -53,7 +54,16 @@ type SettingsNavigationEntry = {
 
 type SettingsPlaceholderEntry = {
   kind: "placeholder";
-  id: "mail" | "computer" | "email" | "phone" | "wallet" | "integration";
+  id:
+    | "mail"
+    | "computer"
+    | "email"
+    | "phone"
+    | "wallet"
+    | "data-management"
+    | "integration"
+    | "developer"
+    | "help";
   label: string;
   icon: ComponentType<LucideProps>;
   group?: SettingsNavigationGroup;
@@ -71,8 +81,8 @@ type SettingsNavigationProps = {
 
 /**
  * Navigation only exposes a selectable tab when its backing capability exists.
- * The muted Manus-shaped rows reserve the information architecture without
- * pretending that Mail, devices, or assets already have an owner API.
+ * Muted rows keep the same information architecture as the reference surface
+ * without presenting an unfinished owner API as an interactive setting.
  */
 export function SettingsNavigation({
   brandName,
@@ -88,9 +98,7 @@ export function SettingsNavigation({
     { kind: "tab", key: "credits", label: t("settings.creditsTitle"), icon: Sparkles },
     { kind: "tab", key: "appearance", label: t("settings.generalTitle"), icon: Settings2, group: "settings" },
     { kind: "tab", key: "shortcuts", label: t("settings.shortcutsNavTitle"), icon: Keyboard },
-    { kind: "tab", key: "chat", label: t("settings.chatTitle"), icon: MessageSquareText },
     { kind: "tab", key: "personalization", label: t("settings.personalizationTitle"), icon: Shapes, group: "features" },
-    { kind: "tab", key: "subscription", label: t("settings.subTitle"), icon: WalletCards },
     { kind: "tab", key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { kind: "tab", key: "skills", label: t("rail.navSkills"), icon: Puzzle },
     { kind: "placeholder", id: "mail", label: t("settings.mailTitle"), icon: Mail },
@@ -98,8 +106,11 @@ export function SettingsNavigation({
     { kind: "placeholder", id: "email", label: t("settings.email"), icon: Mail, group: "assets" },
     { kind: "placeholder", id: "phone", label: t("settings.phoneTitle"), icon: Smartphone },
     { kind: "placeholder", id: "wallet", label: t("settings.walletTitle"), icon: WalletCards },
-    { kind: "placeholder", id: "integration", label: t("settings.integrationTitle"), icon: Cable, group: "integrations" },
-    { kind: "tab", key: "team", label: t("rail.navTeams"), icon: UsersRound, group: "team" },
+    { kind: "placeholder", id: "data-management", label: t("settings.dataManagementTitle"), icon: Database, group: "data" },
+    { kind: "placeholder", id: "integration", label: t("settings.integrationTitle"), icon: Cable },
+    { kind: "placeholder", id: "developer", label: t("settings.developerTitle"), icon: Code2 },
+    { kind: "tab", key: "team", label: t("settings.createTeam"), icon: UsersRound },
+    { kind: "placeholder", id: "help", label: t("settings.helpTitle"), icon: CircleHelp },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const renderedNav = normalizedQuery.length === 0
@@ -131,8 +142,7 @@ export function SettingsNavigation({
       case "settings": return t("settings.groupGeneral");
       case "features": return t("settings.groupFeatures");
       case "assets": return t("settings.assetsTitle");
-      case "integrations": return t("settings.groupData");
-      case "team": return t("rail.navTeams");
+      case "data": return t("settings.groupData");
       default: return null;
     }
   };
