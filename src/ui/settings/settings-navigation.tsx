@@ -103,6 +103,7 @@ export function SettingsNavigation({
     { kind: "tab", key: "personalization", label: t("settings.personalizationTitle"), icon: Shapes, group: "features" },
     { kind: "tab", key: "mcp", label: t("connectorCatalog.title"), icon: Cable },
     { kind: "tab", key: "skills", label: t("rail.navSkills"), icon: Puzzle },
+    { kind: "tab", key: "subscription", label: t("settings.subTitle"), icon: WalletCards },
     { kind: "placeholder", id: "mail", label: t("settings.mailTitle"), icon: Mail },
     { kind: "placeholder", id: "computer", label: t("settings.computerTitle"), icon: Monitor },
     { kind: "placeholder", id: "email", label: t("settings.email"), icon: Mail, group: "assets" },
