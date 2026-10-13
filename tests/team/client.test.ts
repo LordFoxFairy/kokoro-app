@@ -18,6 +18,28 @@ const role = { role_id: null, name: "owner", kind: "builtin", permissions: {
 afterEach(() => vi.unstubAllGlobals())
 
 describe("pinned Team Product browser client", () => {
+  it("preserves the complete IAM builtin role permissions through the real response parser", async () => {
+    const skill = ["create_draft", "create_version", "begin_upload", "complete_upload", "abort_upload", "validate_draft", "publish", "withdraw", "set_status", "install", "set_installation_enabled", "remove_installation", "update_draft", "discard_draft", "set_publication_audience"]
+    const builtinRoles = [
+      { role_id: null, name: "owner", kind: "builtin", permissions: { organization: ["update"], member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"], ac: ["create", "read", "update"], tenant: ["read"], audit: ["read"], platform: ["execute"], skill } },
+      { role_id: null, name: "admin", kind: "builtin", permissions: { organization: ["update"], member: ["create", "read", "update", "delete"], invitation: ["create", "read", "cancel"], ac: ["read"], tenant: ["read"], audit: ["read"], platform: ["execute"], skill } },
+      { role_id: null, name: "member", kind: "builtin", permissions: { member: ["read"], ac: ["read"], tenant: ["read"], platform: ["execute"] } },
+    ]
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ data: builtinRoles, meta: { request_id: "req-builtin", next_cursor: null } })))
+    expect((await createTeamClient().listRoles()).items).toEqual(builtinRoles)
+  })
+
+  it.each([
+    { unknown: ["read"] },
+    { platform: ["unknown"] },
+    { skill: ["unknown"] },
+    { platform: [] },
+    { skill: [] },
+  ])("rejects invalid permission domains or actions: %j", async (permissions) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ data: [{ ...role, permissions }], meta: { request_id: "req-invalid-role", next_cursor: null } })))
+    await expect(createTeamClient().listRoles()).rejects.toMatchObject({ code: "bff_bad_response" })
+  })
+
   it("uses generated Team GET operations through the same-origin adapter and preserves owner cursor", async () => {
     const fetcher = vi.fn(async (input: Request) => {
       const url = new URL(input.url)

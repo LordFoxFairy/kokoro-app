@@ -54,6 +54,12 @@ export const teamRoleSchema = z.object({
     ac: z.array(z.enum(["create", "read", "update"])).min(1).optional(),
     tenant: z.array(z.literal("read")).min(1).optional(),
     audit: z.array(z.literal("read")).min(1).optional(),
+    platform: z.array(z.literal("execute")).min(1).optional(),
+    skill: z.array(z.enum([
+      "create_draft", "create_version", "begin_upload", "complete_upload", "abort_upload",
+      "validate_draft", "publish", "withdraw", "set_status", "install", "set_installation_enabled",
+      "remove_installation", "update_draft", "discard_draft", "set_publication_audience",
+    ])).min(1).optional(),
   }).strict(),
 }).strict().transform((value): TeamRole => value as TeamRole)
 

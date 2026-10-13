@@ -1,3 +1,11 @@
+## SET-13 团队完整权限消费候选（2026-10-13，待实际组合验收）
+
+固定BFF已审不可变22a476ea59624b806e8d0013e069efdd6bd26595、public15.0.0、canonical SHA256 5f6b1178cb878718090ba65d6b0d563185078624af0d3d46a01e568af87264a4。唯一snapshot来自owner Git blob原字节，两generator正常write/check；Team派生只新增两permission字段，其余14文件不变，Agent failure仅三个provenance字段变化。原14.7正式BFF相对于旧Web pin已含另一开发者的安装identity私有契约差异，完整snapshot正规继承，不手工裁owner字段；本片没有修改技能或连接器功能源码。
+
+真实Response内置owner/admin/member解析与platform/skill完整权限超集两个新增反例在旧schema2FAIL/12PASS，现严格补两域后client/permissions/Team UI/adapter四文件36PASS；未知域、非法动作、空数组五类仍拒绝。新whole-artifact计数初次契约1FAIL/277PASS，因正式owner已有142项（旧Web141）；仅修正固定snapshot inventory计数后两生成检查与完整contract278PASS，architecture50PASS，lint/typecheck/production build均通过。一次全测为3356PASS/21FAIL/154SKIP，含缺Redis/代理资源、既存i18n/页面及技能相关失败，保留日志；计数修复后仅复跑已变化契约，不冒全测通过。浏览器实际团队目录/邀请与全量E2E、axe/视觉门尚未完成，Skills/MCP交另一开发者不扩改。
+
+本public15.0.0 breaking仅自有开发/v1配对候选，未切main/日常/生产；不是新增权限或IAM授权更改，也不代表新团队创建/切换或Admin适配。Root下一步固定Web/BFF精确gitlink并实际验证。
+
 ## SET-09 积分卡片主题修正与设置浏览器验收（2026-10-13）
 
 实际浏览器在已提交Web12f881e、IAMa63bcd0、Root81e616c2候选中完成正式登录、本人姓名/邮箱/ID读取、ID复制成功反馈、issuer确认退出与重新登录恢复；个性化四字段在前一Web020a5ea候选中经真实BFF保存且刷新恢复，设置侧栏真实focus-visible有2px outline。这些只证明对应路径，不代表完整设置、Chat、计费或设备管理已经接通。
