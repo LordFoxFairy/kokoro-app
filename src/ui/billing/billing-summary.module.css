@@ -1,5 +1,5 @@
 .balanceCard { padding: 1.1rem 1.25rem; background: var(--secondary); border-radius: var(--radius-xl); }
-[data-embedded="billing"] .balanceCard { width: 100%; height: 11.9375rem; min-height: 11.9375rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: #fafafa; }
+[data-embedded="billing"] .balanceCard { width: 100%; height: 11.9375rem; min-height: 11.9375rem; box-sizing: border-box; padding: 0 1rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--secondary); color: var(--foreground); }
 .embeddedBalanceContent { display: flex; height: 100%; min-height: 0; flex-direction: column; }
 .embeddedPlanHeader { display: flex; align-items: center; justify-content: space-between; height: 3.5625rem; min-height: 3.5625rem; gap: 1rem; border-bottom: 1px dashed var(--border); font-size: 1rem; }
 .embeddedPlanHeader strong { font-family: var(--font-serif); font-size: 1rem; font-weight: 700; line-height: 1.375rem; }

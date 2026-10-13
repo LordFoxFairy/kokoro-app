@@ -1,3 +1,9 @@
+## SET-09 积分卡片主题修正与设置浏览器验收（2026-10-13）
+
+实际浏览器在已提交Web12f881e、IAMa63bcd0、Root81e616c2候选中完成正式登录、本人姓名/邮箱/ID读取、ID复制成功反馈、issuer确认退出与重新登录恢复；个性化四字段在前一Web020a5ea候选中经真实BFF保存且刷新恢复，设置侧栏真实focus-visible有2px outline。这些只证明对应路径，不代表完整设置、Chat、计费或设备管理已经接通。
+
+本次CUA复现账户积分卡片在深色主题中固定浅背景与继承浅字冲突；现账户和嵌入计费卡片改用既有secondary/foreground/border语义token，不改API、余额、套餐、数据或Skills/MCP。修正后完整architecture50/50与production build（含TypeScript）exit0；仅CSS与记录变化，未重复此前同基线业务/contract测试，实际深浅主题验收待固定新提交的正式组合。缺失真实余额仍不伪造为零。
+
 ## SET-07 正式 Next 内部 URL 与浏览器 authority 修正（2026-10-13）
 
 Root实际候选组合登录后，账户资料被account_profile_forbidden拒绝：Next内部Request URL的bind hostname与正规浏览器Host不同。旧额外url.origin全等判断把内部bind hostname误当浏览器authority；不是IAM资料或登录失败。本片用已存在matchesCanonicalWebRequest核正规Host与可选Origin，同时保留URL协议与配置一致、path/query/body原校验，不添加hostname alias或更改launcher。
