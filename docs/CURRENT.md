@@ -1,8 +1,10 @@
-## SET-18 正常 DELETE 空流修补（2026-10-14，浏览器复验待执行）
+## SET-18 正常 DELETE 空流修补与真实设备撤销验收（2026-10-14）
 
 Root 已按正式 gitlinks 正常启动 SET-18，并取得十五项有序 scope 的真实新 code grant；真实浏览器登录及本人设备列表读取成功。退出其他会话实际被 Web 返回 400 account_session_invalid_request，目标仍在权威列表，不能称撤销成功；较晚旧 cookie 的 401 可能来自 access token 自然过期，已明确撤回其撤销证明用途。
 
-原因已核本仓 Next Node adapter：无正文的 DELETE 仍可带 EOF-only Request stream。现具名 adapter 在原十秒总预算内读取并证明 EOF，继续拒绝任何非零字节、非零 Content-Length、Transfer-Encoding 和不合法 Origin；不转发正文，不修改 owner 合同、身份检查或数据库。两 EOF 正控和悬挂输入反例在原实现 3FAIL/43PASS；修补后具名文件 46PASS，七个设备相关文件 124PASS。正常启动后的 CUA 撤销、权威重读及未过期旧会话在线拒绝仍须复验，不能用 unit 代替。
+原因已核本仓 Next Node adapter：无正文的 DELETE 仍可带 EOF-only Request stream。现具名 adapter 在原十秒总预算内读取并证明 EOF，继续拒绝任何非零字节、非零 Content-Length、Transfer-Encoding 和不合法 Origin；不转发正文，不修改 owner 合同、身份检查或数据库。两 EOF 正控和悬挂输入反例在原实现 3FAIL/43PASS；修补后具名文件 46PASS，七个设备相关文件 124PASS，完整 lint/typecheck/production build 成功；两源码 hash 独审无确定 P1/P2。
+
+Web修补10027a1ba7cd7477b5012a1124a7a98d35cf4aea由Root3386153eff8eac2797f3203848cd073b8de27894精确集成，正常 owned launcher fresh install/build/ready、selected-owner guard及十五项 scope 登录通过。实际 CUA 当前会话无移除入口，确认退出独立正规 code-grant 登录后得到真实 ACK，权威列表由两个其他会话变为一个，bootstrap与当前会话保持。被退出 cookie 随后访问设备列表与 Product identity均401；距该新登录95.66秒，小于正式300秒access寿命，排除自然到期。独立HTTP列表样本241.66ms、退出后拒绝57.6/28.45ms；均为单次本地请求，非性能基准。截图/私有收据保存在本地。仅验收这条设备链路，账户编辑/团队写入/真实完成通知/付款等仍未齐备，整套设置不称完成。
 
 ## SET-18 登录设备源码已接收（2026-10-14；正常运行待验）
 
