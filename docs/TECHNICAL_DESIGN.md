@@ -1,11 +1,15 @@
-## SET-18 账户登录设备（D0 独审通过，2026-10-14；上游未发行，源码未准入）
+## SET-18 账户登录设备（2026-10-14；源码已接收，正常运行待验）
 
-实际Manus“已连接设备”分当前/其他设备，可显示浏览器与活跃城市；IAM当前只提供真实Session记录/UTC创建到期时间，不提供可靠设备/位置/last-active。本片实现安全会话管理，不伪造这些信息；Skills/连接器排除。IAM0.12与BFF public15.1尚未发行，本仓只设计，不消费未提交artifact。
+正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。
+
+独审后继规则：未知DELETE结果设独立reconciliationRequired写栅栏，hook与移除确认共同守卫；分页读取、分页失败或首屏读取失败不得清除，只有成功首屏relist核对权威目标状态后恢复合法写入。提示notice不是写资格。原分页/身份取消/正常ACK读回规则不变。
+
+实际Manus“已连接设备”分当前/其他设备，可显示浏览器与活跃城市；IAM当前只提供真实Session记录/UTC创建到期时间，不提供可靠设备/位置/last-active。本片实现安全会话管理，不伪造这些信息；Skills/连接器排除。IAM0.12与BFF public15.1已正式发行，本仓只消费上述不可变Git artifact，不复制未提交类型。
 
 | 项 | 决定 |
 | --- | --- |
-| Owner / writer | IAM唯一拥有身份/登录Session/撤销/Audit，BFF发布public，Web只拥有同源adapter与交互状态。Root三设计/Git/资源/浏览器验收，后继billing_scheduler_audit为唯一源码writer；当前不授写入。 |
-| 当前事实 | Web160d2a44ff4af2d766078bd97708c29bcae659a6 clean；AccountCard读取真实姓名/邮箱/ID并保未提供账户操作disabled。当前消费BFF15.0全文SHA256 5f6b1178cb878718090ba65d6b0d563185078624af0d3d46a01e568af87264a4，Team与Agent failure生成器均依同一完整artifact；无设备API/UI。 |
+| Owner / writer | IAM唯一拥有身份/登录Session/撤销/Audit，BFF发布public，Web只拥有同源adapter与交互状态。Root三设计/Git/资源/浏览器验收，后继billing_scheduler_audit为唯一源码writer；当前仅授Root任务卡精确文件集。 |
+| 实施基线与结果 | 源基线 Web160d2a44ff4af2d766078bd97708c29bcae659a6；账户资料与未提供操作原样保留。现消费上述正式 BFF15.1 唯一完整artifact；设备两route/client/hook/dialog已接收。正常资源和用户旅程仍待Root成对验证，静态/局部测试不代表实际撤销成功。 |
 | 位置比较 / 粒度 | A复用/api/session聊天catchall或第三方登入方式dialog：淘汰，领域与权限不同。B在现AccountCard加独立“已连接设备”管理入口，采用普通account-devices-dialog、use-account-sessions、account-sessions-client与schema；同源具名account/sessions两route+server adapter：采用，不增sidebar大域/万能proxy/新服务。各文件分别视图、代际状态、浏览器I/O、schema、server I/O；现CSS追加具名token样式。 |
 | 依赖 | Browser→/api/account/sessions→BFF两具名public operation→IAM；浏览器零Bearer/issuer cookie读取，Web不直连owner/SDK/DB。沿现product-bff/product-session/upstream-http，可信subject来自HttpOnly session与BFF在线admission，不允许body自报current/user/tenant。 |
 | UI / 状态 | dialog打开且non-preview/当前admitted boundary才GET。current单独且无remove动作；others真实列表，空仅完整合法首屏，loading/error/retry/load-more/disabled/confirmation/submitting/known-success/unknown均显式。分页按owner cursor，保已读列表但失败不冒完整/空，不重复ID/current。只展示真创建/到期时间和未知设备信息，不补Chrome/城市/活跃；窄屏滚动/focus/键盘/locale沿现组件。 |

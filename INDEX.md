@@ -1,3 +1,4 @@
+<!-- SET18：账户已连接设备入口复用现AccountCard；account-sessions-client/use-account-sessions/account-devices-dialog分别负责I/O、身份代际状态和确认视图；/api/account/sessions两route→lib/server/account-sessions→正式BFF15.1；schema消费唯一artifact的正规bff-account-sessions窄生成。真实浏览器撤销验收见CURRENT，不伪造设备/位置。 -->
 <!-- SET16：engine/task-notification.ts 负责已锚typed live任务信号；notifications/communication-preferences.ts 按可信subject存浏览器偏好；task-browser-notification.ts/task-completion-sound.ts 分别拥有浏览器实例/手势音频；shell/use-task-notifications.ts 仅绑定已准入非preview页面；原awaiting只保badge/title。 -->
 <!-- SET-SHORTCUTS: 快捷键规则 src/lib/keyboard-shortcuts.ts；订阅 src/hooks/use-keyboard-shortcuts.ts；编辑 src/ui/settings/sections/shortcuts-card.tsx；回归 tests/lib/keyboard-shortcuts.test.ts 与 tests/ui/keyboard-shortcuts.test.tsx。 -->
 ### T-K03.13 本人 MCP 只读接线

@@ -1,4 +1,8 @@
-## SET-18 browser-private 登录Session（D0 独审通过，2026-10-14；未可调用）
+## SET-18 browser-private 登录Session（2026-10-14；源码已接收，运行待验）
+
+正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。
+
+独审后继规则：未知DELETE结果设独立reconciliationRequired写栅栏，hook与移除确认共同守卫；分页读取、分页失败或首屏读取失败不得清除，只有成功首屏relist核对权威目标状态后恢复合法写入。提示notice不是写资格。原分页/身份取消/正常ACK读回规则不变。
 
 新同源GET /api/account/sessions只承接正式BFF GET /v1/account/sessions（limit1..100默认25、可选非空cursor≤2048）；DELETE /api/account/sessions/{sessionId}只承接正式BFF DELETE同sid，非空≤255且与正式owner约束一致，无query/body/Idempotency-Key。所有method/未知/重复参数/非法路径编码/非空body显式拒绝；其他method405并Allow。不与聊天/api/session混用，不新增IAM relay规则或通用URL。
 
@@ -8,7 +12,7 @@ GET校验部署侧canonical webOrigin的scheme/Host，Origin缺省或精确同ca
 
 DELETE结果未知只提示重新list核目标active，不自动retry/宣成功；current409、foreign/不存在404、本人expired保留重复200/cleanup后404由IAM经BFF裁决。响应返回前再读取同一当前Websession（opaqueID+ProductSession generation+subject+accessExpiresAt/session expiresAt仍有效，含同一ID/subject的刷新或权限代际变化），identity退役返回401/503而非把迟到数据给新用户；该未知也不证明owner写回滚。
 
-正式发行顺序：IAM0.12→BFF15.1不可变commit/digest→本仓正常narrow生成与完整出处更新；不从IAM源文件/未提交BFF复制类型，不放宽Team/Agent/Skills/MCP原schema。新scope只能正规provisioning与fresh authorize，不能修改旧refresh或用machine/admin替本人。当前机器仍BFF15.0，新增browser-private字段合同待正式artifact核验；本段不是实现/验收证据。
+正式发行顺序：IAM0.12→BFF15.1不可变commit/digest→本仓正常narrow生成与完整出处更新；不从IAM源文件/未提交BFF复制类型，不放宽Team/Agent/Skills/MCP原schema。新scope只能正规provisioning与fresh authorize，不能修改旧refresh或用machine/admin替本人。当前源码唯一artifact已逐字节核验为BFF15.1；正常部署、fresh授权和真实用户旅程仍待成对验证。
 
 ## SET-17 支付未提供的现有边界（2026-10-14，目标待验）
 

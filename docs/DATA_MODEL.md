@@ -1,4 +1,8 @@
-## SET-18 登录设备仅安全会话投影（D0 独审通过，2026-10-14）
+## SET-18 登录设备仅安全会话投影（2026-10-14；源码已接收）
+
+正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。
+
+独审后继规则：未知DELETE结果设独立reconciliationRequired写栅栏，hook与移除确认共同守卫；分页读取、分页失败或首屏读取失败不得清除，只有成功首屏relist核对权威目标状态后恢复合法写入。提示notice不是写资格。原分页/身份取消/正常ACK读回规则不变。
 
 Web无本片业务数据库、Redis事实、device表、receipt、UA/IP采集或localStorage会话副本。现HttpOnly Product Session存储仍只为Web登录必要寿命与凭据边界，UI拿不到access/refresh/issuer cookie；现chat Session与登录Session不混用。IAM独占登录Session/凭据/撤销/Audit，BFF只发布非持久projection。
 
@@ -6,7 +10,7 @@ Web无本片业务数据库、Redis事实、device表、receipt、UA/IP采集或
 
 移除only提交ACK匹配后确认；unknown先重读核目标是否仍active，不能因本地删除一行冒owner撤权，也不能把404冒200。权威expired Session tombstone与关联凭据处理/清理均在IAM，Web无恢复、批量全部退出或永久成功receipt。检查old online admission必须依真实owner资格；不保证在途已准入工作回滚或所有token生成立刻停止。
 
-只换单一正规BFF artifact与生成消费物，不修改scope/client/resource/Member/Role正常数据；fresh login/provisioning只在Root具名自有测试组合正式完成。i18n新device文案不构建共享设置存储，也不触Skills/连接器键/组件。当前候选未实现，未资源/浏览器验收。
+只换单一正规BFF artifact与生成消费物，不修改scope/client/resource/Member/Role正常数据；fresh login/provisioning只在Root具名自有测试组合正式完成。i18n新device文案不构建共享设置存储，也不触Skills/连接器键/组件。当前候选已实现，未正常资源/浏览器验收。
 
 ## SET-17 目录可读、交易不构造事实（2026-10-14，目标待验）
 

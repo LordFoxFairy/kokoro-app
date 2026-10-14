@@ -206,3 +206,20 @@ it("unmount cancels a read; explicit preview never reads the live endpoint", asy
   );
   expect(screen.getByText("preview@example.test")).toBeVisible();
 });
+it("offers admitted users a separate login devices entry without enabling preview devices", async () => {
+  const view = render(card());
+  await screen.findByText("alice@example.test");
+  expect(screen.getByRole("button", { name: "Login devices" })).toBeEnabled();
+  view.rerender(card("alice", 2, true, true));
+  expect(screen.getByRole("button", { name: "Login devices" })).toBeDisabled();
+});
+it("places login devices in the existing account row between login methods and account deletion", async () => {
+  render(card()); await screen.findByText("alice@example.test")
+  const entry = screen.getByRole("button", { name: "Login devices" })
+  const row = entry.parentElement!
+  expect(row.querySelector("strong")).toHaveTextContent("Login devices")
+  expect(row.querySelector("span")).toHaveTextContent("Only confirmed sign-in sessions and their creation and expiry times are shown.")
+  expect(entry).toHaveTextContent("Manage")
+  expect(row.previousElementSibling).toHaveTextContent("Manage sign-in method")
+  expect(row.nextElementSibling).toHaveTextContent("Delete account")
+});

@@ -42,6 +42,31 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "settings.devices.rejected": "移除请求被拒绝。请重新读取当前会话后核实权限和目标。",
+  "settings.devices.conflict": "当前会话无法移除。请重新读取会话。",
+  "settings.devices.notFound": "目标会话不存在或已不可访问。请重新读取会话。",
+  "settings.devices.forbidden": "当前身份无权移除此会话。请核实登录状态并重新读取。",
+  "settings.devices.title": "登录设备",
+  "settings.devices.description": "仅显示已确认的登录会话及创建、到期时间。",
+  "settings.devices.unavailable": "请先登录以查看设备。",
+  "settings.devices.loading": "正在读取登录会话…",
+  "settings.devices.partial": "仅显示已读取的部分；请重新读取。",
+  "settings.devices.error": "无法读取登录会话。",
+  "settings.devices.removed": "已确认移除；正在重新读取会话。",
+  "settings.devices.unknownResult": "移除结果未知，请重新读取核实。",
+  "settings.devices.current": "当前会话",
+  "settings.devices.unknownDevice": "设备信息未知",
+  "settings.devices.created": "创建时间",
+  "settings.devices.expires": "到期时间",
+  "settings.devices.empty": "没有其他登录会话。",
+  "settings.devices.other": "其他会话",
+  "settings.devices.confirm": "确定移除此登录会话？",
+  "settings.devices.confirmRemove": "确认移除",
+  "settings.devices.cancel": "取消",
+  "settings.devices.remove": "移除",
+  "settings.devices.more": "读取更多",
+  "settings.devices.reload": "重新读取",
+
   "firstSite.renameProject": "重命名项目",
   "firstSite.projectName": "项目名称",
   "firstSite.projectRenameDescription":

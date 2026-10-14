@@ -1209,3 +1209,6 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+.devicesDialog { max-height: min(85dvh, 48rem); overflow-y: auto; }
+.deviceRow { display: grid; gap: var(--spacing-2, 0.5rem); border-block-end: 1px solid var(--border); padding-block: 1rem; overflow-wrap: anywhere; }

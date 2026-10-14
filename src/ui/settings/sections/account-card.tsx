@@ -16,6 +16,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useAccountProfile } from "../use-account-profile"
 
+import { AccountDevicesDialog } from "./account-devices-dialog"
+
 import styles from "./settings-sections.module.css"
 
 type AccountProjection = {
@@ -80,6 +82,7 @@ export function AccountCard({
           loginMethods: [],
         }
       : null;
+  const [devicesOpen, setDevicesOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
@@ -255,6 +258,7 @@ export function AccountCard({
 
   return (
     <div className={styles.accountSettings} data-settings-card data-testid="settings-account">
+      <AccountDevicesDialog open={devicesOpen} onOpenChange={setDevicesOpen} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />
       {!preview && live.scope && live.phase==="loading" ? <p role="status">{t("billing.loading")}</p> : null}
       {!preview && live.phase==="error" ? <div role="alert">{t("billing.loadError")}<Button variant="outline" size="sm" onClick={live.retry}>{t("billing.retry")}</Button></div> : null}
       {copyState?.scope===copyScope && copyState.status==="failed" ? <p role="alert">{t("share.projectCopyFailed")}</p> : null}
@@ -304,6 +308,13 @@ export function AccountCard({
             <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
           </div>
           <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
+        </div>
+        <div className={styles.accountDetailRow}>
+          <div>
+            <strong>{t("settings.devices.title")}</strong>
+            <span>{t("settings.devices.description")}</span>
+          </div>
+          <Button variant="outline" size="sm" type="button" aria-label={t("settings.devices.title")} disabled={preview || !readBoundary?.admitted || readBoundary.subject === null} onClick={() => setDevicesOpen(true)}>{t("settings.manage")}</Button>
         </div>
         <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
           <div>

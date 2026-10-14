@@ -1,10 +1,14 @@
-## SET-18 登录设备前端准备（2026-10-14；D0 独审通过）
+## SET-18 登录设备源码已接收（2026-10-14；正常运行待验）
 
-当前Web160d2a4仍无登录设备API/UI。本轮Root已读取AccountCard/真实profile、ProductSession/same-origin/Team与现单一public artifact消费、当前Next route/动态params官方本地文档，并写三设计候选。目标Account独立设备入口、真实本人Session与other单次移除、unknown重读及身份代际退役；未知设备/位置不伪造。IAM0.12源码实施中，BFF三设计独审通过/doc-only6372195而public仍15.0，因此Web只设计、未授source/机器/正常服务修改。
+正式前置为 IAM `284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9` / internal `0.12.0`，BFF `53996400e4100ed5940b104f0dce139d44fec383` / public `15.1.0` / 144 operations，唯一 canonical SHA256 `5972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d`。58 个实现、生成与测试路径已冻结，经独立审查和 Root 逐字节复核；独审没有剩余确定 P1/P2。设备入口采用既有账户行，位于登录方式之后、删除账户之前；当前会话无移除操作，其他会话需确认并取得真实 ACK 后重读。
 
-Skills/连接器排除；本地账户刷新已正常读Owner/邮箱/user ID，正式3311仍原SET17。后继须串行固定owner/BFF发行artifact，再独审Web方案和source、工程门及Root真实正常旅程；设计稿不构成功能完成。
+新增两条同源 account/sessions route、严格 schema、server adapter、独立 client/hook/dialog；按原十三 scope 顺序追加 account-session read/revoke。请求具有单次总期限、响应大小限制、取消、最终身份复核及严格合同绑定。未知 DELETE 设独立写栅栏，仅成功首屏读取清除；分页或读取失败不能恢复写资格。单一 BFF artifact 由正式 Git 对象原字节接收，三套窄生成共享出处，原 Team/Agent 字段保持。九种语言只追加设备键；没有 Skills/连接器业务变更。
 
-独审唯一P2已补：server最终复核同一ProductSession ID/generation/subject及access/session两寿命，同ID/subject刷新也退役，仍同预算；复审无剩余确定P1/P2。三面方案已准入，上游尚未正式发行，因此源码/机器仍不授写入。
+具名设备/账户/OIDC 七文件 120PASS；正常 contract 含三生成检查 280PASS、architecture 50PASS，lint/typecheck/build 成功。Root 使用既有真实测试资源和正式浏览器依赖执行正常全测：198 文件，3686PASS/9FAIL/0SKIP；旧源码相同环境完整对照为 193 文件，3605PASS/9FAIL/0SKIP。八个失败 case 在旧完整对照也失败，包括测试生成的 Next instrumentation 日志检查；不能据此断言失败原因已确定。候选另有桌面登录视觉超时，单独同文件四项通过；原全测失败保留，不放宽断言，也不称全仓绿。测试资源按起点核对并清理自有数据。
+
+正常 `pnpm test:e2e` 为 24 项：14PASS/6FAIL/4SKIP；六个桌面 case 均在现预览 fixture 的 `/app` navigation/networkidle 超时，原因未独立归因，不能称这些失败已修复或整仓 E2E 通过。预览退出后只恢复工具生成的 Next types 引用，不修改测试 oracle。
+
+当前正常运行仍为 SET-17；fresh code grant、两个真实登录会话、浏览器列表/撤销与旧会话在线拒绝尚待 Root 成对集成验证。真实 Session 创建/到期时间可展示，未知浏览器、位置和最后活跃时间不伪造。本条不表示设备用户旅程或整套设置已完成。
 
 ## SET-17 交易预禁用与团队入口正式验收（2026-10-14）
 
