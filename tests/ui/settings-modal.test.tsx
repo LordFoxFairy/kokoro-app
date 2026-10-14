@@ -559,8 +559,10 @@ describe("SettingsModal 设置中心模态", () => {
         window.localStorage.getItem("kokoro.personalization.preview") ?? "{}",
       ),
     ).toMatchObject({ nickname: "小可" });
-    expect(screen.queryByRole("tab", { name: "知识" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /匯入记忆/ })).toBeNull();
+    expect(screen.getByRole("tab", { name: "知识" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "匯入记忆" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "导入" })).toBeDisabled();
+    expect(screen.getByText("知识与记忆导入暂未接通。")).toBeInTheDocument();
   });
 
   it("快捷键 tab 独立于对话偏好并呈现 Manus 风格快捷键行", () => {

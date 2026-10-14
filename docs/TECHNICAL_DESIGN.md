@@ -1,3 +1,11 @@
+## SET27 个性化未接通入口（2026-10-15；正式D0）
+
+Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。
+
+Root实际Manus个性化页有个人资料/知识、从其他AI导入与导入记忆入口。现四字段已有真实owner，继续沿usePersonalization的可信身份、blur保存、冲突/未知写恢复。仅扩现PersonalizationCard及现语义CSS，复用Tabs line呈现：个人资料是唯一有效内容，知识trigger真实disabled，AI导入和导入记忆按钮真实disabled、无handler/file input/clipboard/network或假modal。明确本地化说明知识与记忆导入暂未接通，不造知识空列表或已保存事实。现头部说明已存在，不重复新增。现CSS只具名个性化class/对应注释，不格式化公共外观。
+
+先仅settings-modal现测试，旧个人资料case的两项“知识tab/匯入按钮不存在”断言经明确需求改变为真实disabled（最小精确两行逆变换可还原）；原case四字段与preview保存全部oracle/mock字节保护，其余全部测试保护。新增说明检查可放同case或窄新增后缀；不镜像组件细节或堆低价值测试。先实际RED由Root复现，再授源码/CSS与九locale。终态冻稿、独审、Root专项及规定完整门，不等同正常IAM/CUA页面已验证。Skills/连接器排除，完整设置Goal继续active。
+
 ## SET26 reader ownership correction (2026-10-15)
 
 Independent final review found a P2: Response.json owns a locked body reader, so body.cancel cannot release a real noncooperative stream. Only plans will own its reader, UTF-8 decoding and JSON.parse inside the same absolute 10s budget; cancellation cancels that reader and releases its lock, including parent retirement and late response cleanup. No new size/header policy, compatibility branch, checkout change or owner contract. Add real Response/ReadableStream deadline and parent-abort negative controls before the narrow source correction. Existing 171 assertions and strict catalog semantics remain.

@@ -1,3 +1,25 @@
+## SET27 个性化未接通入口正式接收（2026-10-15）
+
+个人资料/知识line tabs、AI导入及记忆导入入口已呈现；知识及导入按钮真实disabled/无handler，上方本地化说明用实例useId关联，不展示假知识空列表、导入流程或成功。四字段/保存/冲突/未知写恢复原子树逐字保留；source仅现Card与具名CSS，九locale单key。Root原源最终缺知识入口1FAIL/68SKIP再次复现，终态117专项PASS；12writer/920保护/Root7、原69测试两替换/两附加assert及locale/CSS逆核，独审无确定P1/P2，contract283/architecture50/lint/type/build通过。首轮zh键位置失败已修并保留日志。
+
+完整test3959PASS/7此前具名FAIL/0SKIP，202.44s；六持续UI/i18n与原生R177仍失败，其他native本波通过不证明完整门稳定。正规隔离Playwright18PASS/2阅读轴FAIL/4SKIP，35.1s；库存exact恢复。正常认证Browser及个性化窄屏视觉未验证。后继SET28用Root已在隔离副本证明的Web-only样式修复现阅读轴，原精确业务oracle不改；侧栏余额信任另续，技能/连接器排除，完整设置Goal继续active。
+
+## SET27 两项入口断言Root复现，具名源码准入（2026-10-15）
+
+原69项基线通过，需求允许的两条不存在→disabled断言更新后，Root真实1FAIL/68PASS，缺知识tab；导入按钮断言未到达，不虚称已复现两项。两行逆变换恢复原测试全文，931保护/Root7逐hash保持。现授runtime_audit仅D0具名Card/CSS/九locale一key及同case必要说明/AI导入disabled检查，原四字段持久化和其余68case全部保护。终态12/920/Root7冻结独审、Root复验/完整门待，正常浏览器仍未验证，整个设置Goal继续active。
+
+## SET27 个性化未接通入口（2026-10-15；正式D0）
+
+Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。
+
+Root实际Manus个性化页有个人资料/知识、从其他AI导入与导入记忆入口。现四字段已有真实owner，继续沿usePersonalization的可信身份、blur保存、冲突/未知写恢复。仅扩现PersonalizationCard及现语义CSS，复用Tabs line呈现：个人资料是唯一有效内容，知识trigger真实disabled，AI导入和导入记忆按钮真实disabled、无handler/file input/clipboard/network或假modal。明确本地化说明知识与记忆导入暂未接通，不造知识空列表或已保存事实。现头部说明已存在，不重复新增。现CSS只具名个性化class/对应注释，不格式化公共外观。
+
+无新增API/contract/owner/依赖/源文件/业务调用；知识与导入只可见禁用，不请求服务。四字段继续现正式profile读取与保存，不能误断言整个面板零请求。hook/client/schema与其他设置/source字节保护。
+
+没有知识/记忆导入持久化事实；不可展示假空、假导入成功或步骤。九locale唯一新增settings.personalizationMemoryUnavailable，中文“知识与记忆导入暂未接通。”；复用personalProfile/knowledge/importFromAi/importMemory标题，现中文匯入字形与其他旧keys/value保护。旧knowledgeHint/importMemoryDescription暗示可操作，不无条件显示。
+
+先仅settings-modal现测试，旧个人资料case的两项“知识tab/匯入按钮不存在”断言经明确需求改变为真实disabled（最小精确两行逆变换可还原）；原case四字段与preview保存全部oracle/mock字节保护，其余全部测试保护。新增说明检查可放同case或窄新增后缀；不镜像组件细节或堆低价值测试。先实际RED由Root复现，再授源码/CSS与九locale。终态冻稿、独审、Root专项及规定完整门，不等同正常IAM/CUA页面已验证。Skills/连接器排除，完整设置Goal继续active。
+
 ## SET26 用量与套餐可信读取正式接收（2026-10-15）
 
 两页及独立Panel明确preview/可信subject/generation/admitted，render同步隐藏旧余额/目录，layout退役owned请求；Pricing局部scope/client投影、明确loading/error/unavailable/empty/ready与手动单发重试。正式plans自有真实reader、单总10s、parent取消/迟到body清理及立即释放锁，caller预算并行；不改checkout整段、BigInt/ledger旧行为、全局QueryStore或BillingClient。首冻真实readerP2由Root两项RED复现后窄修，独审已关闭，无新增确定P1/P2。

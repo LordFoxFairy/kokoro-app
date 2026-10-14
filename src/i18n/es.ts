@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  "settings.personalizationMemoryUnavailable": "La importación de conocimientos y memoria aún no está conectada.",
   "settings.billingRequiresIdentity": "El uso y los planes se cargarán cuando se confirme el inicio de sesión.",
   "settings.modelPreferenceNotSaved": "La preferencia de modelo no se ha guardado; los nuevos chats no usarán esta selección sin guardar.",
   "settings.modelCatalogLoading": "Cargando el catálogo de modelos…",

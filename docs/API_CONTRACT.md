@@ -1,3 +1,9 @@
+## SET27 个性化未接通入口（2026-10-15；正式D0）
+
+Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。
+
+无新增API/contract/owner/依赖/源文件/业务调用；知识与导入只可见禁用，不请求服务。四字段继续现正式profile读取与保存，不能误断言整个面板零请求。hook/client/schema与其他设置/source字节保护。
+
 ## SET26 body retirement correction (2026-10-15)
 
 The plans optional AbortSignal and total 10s contract also retire the owned real body reader. Reading and decoding remain within that same budget; timeout and parent abort cancel the reader and release the lock. GET/no-store, schema, 503 mapping, money wire and the entire checkout transport stay unchanged. No additional body limit or header requirement.

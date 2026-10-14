@@ -1,14 +1,16 @@
 "use client";
 
+import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/i18n/context";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { usePersonalization } from "../use-personalization";
 import styles from "./settings-sections.module.css";
 
-/** Four BFF-owned fields; memory and knowledge import have no owner contract. */
+/** Four BFF-owned fields; unsupported memory and knowledge entries stay disabled. */
 export function PersonalizationCard({
   preview = false,
   readBoundary,
@@ -17,6 +19,7 @@ export function PersonalizationCard({
   readBoundary?: ProjectReadBoundary;
 }) {
   const t = useT();
+  const unavailableId = useId();
   const profile = usePersonalization(preview, readBoundary);
   const { fields, disabled, update, persist, phase } = profile;
   const message =
@@ -36,6 +39,26 @@ export function PersonalizationCard({
       className={styles.personalization}
       data-testid="settings-personalization"
     >
+      <Tabs value="profile">
+        <TabsList variant="line">
+          <TabsTrigger value="profile">{t("settings.personalProfile")}</TabsTrigger>
+          <TabsTrigger value="knowledge" disabled aria-describedby={unavailableId}>
+            {t("settings.knowledge")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="profile">
+          <p id={unavailableId} className={styles.personalizationUnavailable}>
+            {t("settings.personalizationMemoryUnavailable")}
+          </p>
+          <div className={styles.personalizationImport}>
+            <div>
+              <h3>{t("settings.importFromAi")}</h3>
+              <p>{t("settings.importFromAiHint")}</p>
+            </div>
+            <Button type="button" disabled aria-describedby={unavailableId}>
+              {t("settings.importMemoryAction")}
+            </Button>
+          </div>
       <div className={styles.personalizationProfile}>
         {phase === "loading" ? (
           <p className={styles.profileStatus}>{t("settings.loading")}</p>
@@ -122,6 +145,16 @@ export function PersonalizationCard({
           />
         </label>
       </div>
+          <div className={styles.personalizationImport}>
+            <div>
+              <h3>{t("settings.importMemory")}</h3>
+            </div>
+            <Button type="button" disabled aria-describedby={unavailableId}>
+              {t("settings.importMemory")}
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

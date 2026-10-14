@@ -1,5 +1,5 @@
 /* 设置分区内容皮肤。模态外壳由 settings-modal.module.css 负责；这里
-   只保留 Account / Appearance / Chat 三个分区实际使用的 class。 */
+   保留各设置分区实际使用的 class。 */
 
 .card {
   border: 1px solid var(--border);
@@ -1215,3 +1215,28 @@
 
 .nameActions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .nameActions p { color: var(--muted-foreground); font-size: 0.875rem; }
+
+.personalizationImport {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.personalizationImport h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.personalizationImport p,
+.personalizationUnavailable {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.personalizationImport p {
+  margin: 0;
+}
