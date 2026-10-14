@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.preferenceNotSaved": "Текущий выбор применён, но не сохранён. Обновление страницы может восстановить прежнюю настройку.",
+  "settings.retryPreferenceSave": "Повторить сохранение",
   "settings.name.save": "Сохранить имя",
   "settings.name.saving": "Сохранение…",
   "settings.name.saved": "Имя сохранено и прочитано заново.",

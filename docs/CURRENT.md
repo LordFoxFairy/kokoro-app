@@ -1,3 +1,29 @@
+## SET23 通用偏好失败反馈源码接收（2026-10-15）
+
+两Provider独立保存失败状态；当前选择即时生效，General对应行明确未保存/刷新可恢复，显式重试当前值成功只清自身错误。关闭重开Modal保Provider失败，真正重挂按持久值恢复。九locale各两新键，无新API/store/deps/CSS，旧key/值、SSR/system/协商/IAMlang保持。Root独核382f7196冻结13 writer/919原保护/7 Root、旧47case完整prefix与九locale逆变换；终态独审无确定P1/P2。
+
+最终稳定三case在原293源码/938保护副本实际3missing-alert FAIL，再冻结modal50/hydration47由Root独立97PASS。contract283/architecture50、lint/type/build通过；i18n99PASS2FAIL在原base同门实际复现，阈值不放宽。新增测试关闭需观察实际onClose状态、语言行用实际英文label的两窄修已登记，首轮测试定位/调度失败日志保留。
+
+正确配置full：3911PASS/11FAIL/0SKIP；原293全939原字节同配置full3910PASS/9FAIL。六既有UI/i18n失败保持，R175本轮双方同12≠11，R177已有原base复现；本轮final原生proxy三CSRF/signin503与原base另外两IAM relay/login启动失败不同，具体类别尚待诊断，不能写成全部同名旧失败或并发原因已证实。两版同过滤原生七项均7PASS/79SKIP，只证明具名隔离条件，非完整门绿。RP API导入图不经过本片Provider/Appearance路径，未发现直接改动因果证据，原生完整门稳定性作为现需求未闭环风险保留。
+
+隔离正常Playwright14PASS/6此前相同desktop timeout/4SKIP，非正常设置浏览器旅程。所有实际测试PG数据库/Redis键集合exact恢复，共享服务保持。现接收此具名源码至同一功能分支/PR，后继正常Web激活和浏览器验证仍待；紧接SET24退出失败后的永久busy修补，完整Goal active，Skills/连接器排除。
+
+SET23新增测试定位窄修准入：仅新case在已选English后取语言行combobox采用实际原en label“Interface language”，避免与模型等其他combobox歧义；不改旧locale/DOM/47prefix及重试行为断言。新case错误定位日志保留，最终测试需再对原293复现缺alert RED。
+
+SET23新增测试生命周期窄修准入：现Modal正常useOverlayClose延迟回调，DOM dialog消失尚不代表Harness的onClose已提交。仅新增SET23 Harness的reopen按钮aria-expanded={open}及该新case waitFor(false)后重开，观察真实父状态；原47prefix、三个首次missing-alert断言及原业务语义不变，不改产品关闭逻辑/延迟，不用任意sleep。终态重新冻结，并将最终测试在原293 source副本复现真RED，保首次RED历史。
+
+## SET23 Root真实RED已复现，具名source准入（2026-10-15）
+
+Root独核tests-only2562b4ba：原47case完整prefix逐字、931保护与7Root文档hash保持，独立固定Node22实际3FAIL/47SKIP均缺失accessible alert，真实dark/en立即生效与旧light/zh存储断言先通过，无setup/collection假RED。现授runtime_audit唯一writer仅src/ui/theme/theme-context.tsx、src/i18n/context.tsx、src/ui/settings/sections/appearance-card.tsx及九现locale文件追加两键；原三RED case/hash保持。原其余919 tracked保护（939减13writer减7Root）及旧键/SSR/system/协商/IAMlang全部保持；不授CSS/contract/generated/deps/其他source/Git/资源。现三设计策略有效，源码终态freeze/独审/Root复验与完整门仍待；正常设置Goal active。
+
+## SET23 通用语言与主题保存失败反馈（2026-10-15；D0通过，tests-only）
+
+归属Web现有浏览器偏好Provider和General AppearanceCard，是现文件局部修补，不新增模块、API、owner、依赖或存储框架。正式基线293ac84d7b2b6562b73e46c56436aadc4c1c2e3b，939 tracked clean已绑定；原主题/语言即时生效，setItem失败无提示，不能说整体不可用。候选独审无确定P1/P2。
+
+runtime_audit沿现角色为唯一实现writer；当前仅tests/ui/settings-modal.test.tsx追加真实Provider/Storage失败三case，旧prefix/oracle保持。先实测三个RED为缺失alert断言，再Root复现；尚未授source。后继source严格三现Provider/AppearanceCard与九语言，其余926原tracked保护，Root另独占三设计/CURRENT及docs/INDEX、src/i18n/INDEX、src/ui/settings/INDEX共7。Root保Git/index/资源/正常服务/CUA，worker只纯测试，不启动资源、安装依赖或改Git。完整设置Goal active，Skills/连接器排除。
+
+准入验证：真实dark radio与语言combobox键盘选English；写拒绝仍dark/en即时、原light/zh存储不变且两alert；Modal关闭重开保失败；重试仅清对应、写当前值、新挂恢复；无重试新挂回旧值。冻结逐hash及独审后复验相关provider/i18n/UI、contract/architecture/lint/type/build、完整test/E2E，失败记录不放宽oracle。正常浏览器仍待HTTP旧标签恢复，不以preview/fixture冒真实用户旅程。
+
 ## SET21/22 Data/Help 源码接收与运行接续（2026-10-15）
 
 正式消费BFF eec3244645d5129407147774ecb07e03848420c4/public15.3.0/146，canonical全文SHA256694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5。Data/Help可选择；Data同页三段与三管理行，仅本人任务分享具备正式读取/停止分享，其余容量明确不可用。Help只导航本产品实际账户/数据说明。createShare/revokeShare均单有界预算、正规share_id ACK，未知停止结果须完整重读再明确继续；身份变化退役旧操作。其他菜单与权限保持，Skills/连接器业务源码未修改。

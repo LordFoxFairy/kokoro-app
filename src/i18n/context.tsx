@@ -12,6 +12,7 @@ type TranslateFn = (key: MessageKey, vars?: Readonly<Record<string, string | num
 
 type LocaleContextValue = {
   locale: Locale
+  persistenceFailed: boolean
   setLocale: (next: Locale) => void
   t: TranslateFn
 }
@@ -24,6 +25,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated()
   // 用户在本次挂载内的显式切换：优先于协商结果。
   const [override, setOverride] = useState<Locale | null>(null)
+  const [persistenceFailed, setPersistenceFailed] = useState(false)
   let storedLocale: string | null = null
   if (hydrated) {
     try { storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY) }
@@ -43,14 +45,17 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const setLocale = useCallback((next: Locale) => {
     setOverride(next)
     if (typeof window !== "undefined") {
-      try { window.localStorage.setItem(LOCALE_STORAGE_KEY, next) }
-      catch { /* Keep the in-memory override when persistence is unavailable. */ }
+      try {
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, next)
+        setPersistenceFailed(false)
+      }
+      catch { setPersistenceFailed(true) /* Keep the immediately applied override. */ }
     }
   }, [])
 
   const value = useMemo<LocaleContextValue>(
-    () => ({ locale, setLocale, t: (key, vars) => resolveMessage(locale, key, vars) }),
-    [locale, setLocale],
+    () => ({ locale, setLocale, persistenceFailed, t: (key, vars) => resolveMessage(locale, key, vars) }),
+    [locale, setLocale, persistenceFailed],
   )
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>

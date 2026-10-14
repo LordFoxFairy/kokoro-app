@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  "settings.preferenceNotSaved": "A seleção atual foi aplicada, mas não foi guardada. Atualizar a página pode restaurar a definição anterior.",
+  "settings.retryPreferenceSave": "Tentar guardar novamente",
   "settings.name.save": "Guardar nome",
   "settings.name.saving": "A guardar…",
   "settings.name.saved": "Nome guardado e lido novamente.",

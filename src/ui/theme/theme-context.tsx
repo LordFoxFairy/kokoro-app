@@ -46,6 +46,7 @@ type ThemeContextValue = {
   mode: ThemeMode
   // 生效档（system 解析后）：true=暗。UI 据此显激活态。
   isDark: boolean
+  persistenceFailed: boolean
   setMode: (next: ThemeMode) => void
 }
 
@@ -55,6 +56,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated()
   // 用户本次挂载内的显式切换：优先于持久化值。
   const [override, setOverride] = useState<ThemeMode | null>(null)
+  const [persistenceFailed, setPersistenceFailed] = useState(false)
   // 系统色偏好：订阅 matchMedia（system 档下随系统实时切换；SSR/首帧恒 false）。
   const systemDark = useSyncExternalStore(subscribeSystemDark, getSystemDark, getServerSystemDark)
 
@@ -74,14 +76,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setMode = useCallback((next: ThemeMode) => {
     setOverride(next)
     if (typeof window !== "undefined") {
-      try { window.localStorage.setItem(THEME_STORAGE_KEY, next) }
-      catch { /* Keep the in-memory override when persistence is unavailable. */ }
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, next)
+        setPersistenceFailed(false)
+      }
+      catch { setPersistenceFailed(true) /* Keep the immediately applied override. */ }
     }
   }, [])
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ mode, isDark, setMode }),
-    [mode, isDark, setMode],
+    () => ({ mode, isDark, setMode, persistenceFailed }),
+    [mode, isDark, setMode, persistenceFailed],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

@@ -1515,3 +1515,150 @@ it("R255 正式设置嵌入 MCP 投影使用 Manus 的已添加连接器工具�
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 });
+
+
+// SET23: actual mounted providers and key-scoped persistence failures.
+describe("SET23 real preference persistence feedback", () => {
+  function mountPreferenceModal() {
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <ThemeProvider>
+          <LocaleProvider>
+            <button aria-expanded={open} onClick={() => setOpen(true)}>Reopen preferences fixture</button>
+            {open ? (
+              <SettingsModal
+                brandName="Acme"
+                preview
+                initialTab="appearance"
+                onClose={() => setOpen(false)}
+              />
+            ) : null}
+          </LocaleProvider>
+        </ThemeProvider>
+      );
+    }
+    return render(<Harness />);
+  }
+
+  async function selectEnglishWithKeyboard() {
+    const trigger = screen.getByRole("combobox", { name: "界面语言" });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const english = await screen.findByRole("option", { name: "English" });
+    // Real Radix content keyboard navigation: initial zh -> next en -> commit.
+    const listbox = screen.getByRole("listbox");
+    fireEvent.keyDown(listbox, { key: "Home" });
+    fireEvent.keyDown(screen.getByRole("option", { name: "中文" }), {
+      key: "ArrowDown",
+    });
+    await waitFor(() => expect(english).toHaveFocus());
+    fireEvent.keyDown(english, { key: "Enter" });
+    await waitFor(() => expect(document.documentElement.lang).toBe("en"));
+  }
+
+  function failPreferenceWrites() {
+    const native = Storage.prototype.setItem;
+    const blocked = new Set(["kokoro.theme", "kokoro.locale"]);
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(
+      function (this: Storage, key: string, value: string) {
+        if (this === window.localStorage && blocked.has(key))
+          throw new DOMException("preference persistence unavailable", "QuotaExceededError");
+        return native.call(this, key, value);
+      },
+    );
+    return { blocked, restore: () => spy.mockRestore() };
+  }
+
+  function preferenceAlerts() {
+    return screen.getAllByRole("alert");
+  }
+
+  it("theme and keyboard-selected English apply immediately but retain old stored values and announce failed persistence", async () => {
+    localStorage.setItem("kokoro.theme", "light");
+    localStorage.setItem("kokoro.locale", "zh");
+    const failure = failPreferenceWrites();
+    try {
+      mountPreferenceModal();
+      fireEvent.click(screen.getByRole("radio", { name: "深色" }));
+      await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
+      await selectEnglishWithKeyboard();
+      expect(localStorage.getItem("kokoro.theme")).toBe("light");
+      expect(localStorage.getItem("kokoro.locale")).toBe("zh");
+      expect(preferenceAlerts()).toHaveLength(2);
+      for (const alert of preferenceAlerts()) {
+        expect(alert).toHaveTextContent(/not saved/i);
+        expect(alert).toHaveTextContent(/refresh/i);
+        expect(within(alert).getByRole("button", { name: /retry saving/i })).toBeEnabled();
+      }
+    } finally {
+      failure.restore();
+    }
+  });
+
+  it("closing and reopening preserves mounted-provider errors; explicit retry clears only its own flag and true remount restores saved choices", async () => {
+    localStorage.setItem("kokoro.theme", "light");
+    localStorage.setItem("kokoro.locale", "zh");
+    const failure = failPreferenceWrites();
+    try {
+      const mounted = mountPreferenceModal();
+      fireEvent.click(screen.getByRole("radio", { name: "深色" }));
+      await selectEnglishWithKeyboard();
+      expect(document.documentElement).toHaveClass("dark");
+      expect(document.documentElement.lang).toBe("en");
+      expect(localStorage.getItem("kokoro.theme")).toBe("light");
+      expect(localStorage.getItem("kokoro.locale")).toBe("zh");
+      expect(preferenceAlerts()).toHaveLength(2);
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Reopen preferences fixture" })).toHaveAttribute("aria-expanded", "false"));
+      fireEvent.click(screen.getByRole("button", { name: "Reopen preferences fixture" }));
+      expect(preferenceAlerts()).toHaveLength(2);
+      expect(document.documentElement).toHaveClass("dark");
+      expect(document.documentElement.lang).toBe("en");
+      // Scope retry to its corresponding control's container, never an ordinal.
+      failure.blocked.delete("kokoro.locale");
+      const languageRow = screen.getByRole("combobox", { name: "Interface language" }).parentElement!;
+      fireEvent.click(within(languageRow).getByRole("button", { name: /retry saving/i }));
+      expect(localStorage.getItem("kokoro.locale")).toBe("en");
+      expect(localStorage.getItem("kokoro.theme")).toBe("light");
+      expect(preferenceAlerts()).toHaveLength(1);
+      failure.blocked.delete("kokoro.theme");
+      fireEvent.click(within(preferenceAlerts()[0]!).getByRole("button", { name: /retry saving/i }));
+      expect(localStorage.getItem("kokoro.theme")).toBe("dark");
+      expect(screen.queryByRole("alert")).toBeNull();
+      mounted.unmount();
+      mountPreferenceModal();
+      await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
+      expect(document.documentElement.lang).toBe("en");
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      failure.restore();
+    }
+  });
+
+  it("true provider unmount before retry restores old persisted light and Chinese rather than failed in-memory preferences", async () => {
+    localStorage.setItem("kokoro.theme", "light");
+    localStorage.setItem("kokoro.locale", "zh");
+    const failure = failPreferenceWrites();
+    try {
+      const mounted = mountPreferenceModal();
+      fireEvent.click(screen.getByRole("radio", { name: "深色" }));
+      await selectEnglishWithKeyboard();
+      expect(document.documentElement).toHaveClass("dark");
+      expect(document.documentElement.lang).toBe("en");
+      expect(localStorage.getItem("kokoro.theme")).toBe("light");
+      expect(localStorage.getItem("kokoro.locale")).toBe("zh");
+      expect(preferenceAlerts()).toHaveLength(2);
+      mounted.unmount();
+      mountPreferenceModal();
+      await waitFor(() => expect(document.documentElement).not.toHaveClass("dark"));
+      expect(document.documentElement.lang).toBe("zh");
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(localStorage.getItem("kokoro.theme")).toBe("light");
+      expect(localStorage.getItem("kokoro.locale")).toBe("zh");
+    } finally {
+      failure.restore();
+    }
+  });
+});

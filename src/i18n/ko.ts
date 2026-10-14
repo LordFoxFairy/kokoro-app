@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.preferenceNotSaved": "현재 선택은 적용되었지만 저장되지 않았습니다. 새로고침하면 이전 설정으로 돌아갈 수 있습니다.",
+  "settings.retryPreferenceSave": "저장 다시 시도",
   "settings.name.save": "이름 저장",
   "settings.name.saving": "저장 중…",
   "settings.name.saved": "이름을 저장하고 다시 읽었습니다.",

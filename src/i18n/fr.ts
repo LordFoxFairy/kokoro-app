@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.preferenceNotSaved": "Votre choix actuel est appliqué, mais n’a pas été enregistré. Une actualisation peut rétablir le réglage précédent.",
+  "settings.retryPreferenceSave": "Réessayer l’enregistrement",
   "settings.name.save": "Enregistrer le nom",
   "settings.name.saving": "Enregistrement…",
   "settings.name.saved": "Nom enregistré et relu.",

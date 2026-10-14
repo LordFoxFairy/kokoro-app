@@ -1,3 +1,4 @@
+<!-- SET23：AppearanceCard对应主题/语言行显示Provider各自保存失败及明确重试；Modal关闭重开不清Provider失败。 -->
 <!-- SET21/22：Data 与 Help 属于现设置模态，不新建页面框架。 -->
 ## SET21/22 数据管理与帮助
 

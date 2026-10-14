@@ -1,3 +1,4 @@
+<!-- SET23：LocaleProvider的当前选择与持久化失败分别建模；对应设置行明确未保存/可重试，不改旧key、协商或IAM表单lang保护。 -->
 # src/i18n — Web 界面静态 i18n
 
 ## 职责

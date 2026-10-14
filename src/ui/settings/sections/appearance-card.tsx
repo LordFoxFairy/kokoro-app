@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { TaskDeliveryPreferencesSection } from "./task-delivery-preferences-section";
@@ -23,8 +24,8 @@ import styles from "./settings-sections.module.css";
 // —— 卡二：外观与语言 —— 主题三档（WEB-THEME）/ 语言（i18n）即时生效。
 export function AppearanceCard({ preview = false, readBoundary }: { preview?: boolean; readBoundary?: ProjectReadBoundary }) {
   const t = useT();
-  const { mode, setMode } = useTheme();
-  const { locale, setLocale } = useLocale();
+  const { mode, setMode, persistenceFailed: themePersistenceFailed } = useTheme();
+  const { locale, setLocale, persistenceFailed: localePersistenceFailed } = useLocale();
   const themeOptions: { value: ThemeMode; label: string }[] = [
     { value: "light", label: t("theme.light") },
     { value: "dark", label: t("theme.dark") },
@@ -69,6 +70,14 @@ export function AppearanceCard({ preview = false, readBoundary }: { preview?: bo
               </SelectGroup>
             </SelectContent>
           </Select>
+          {localePersistenceFailed ? (
+            <div role="alert">
+              <p>{t("settings.preferenceNotSaved")}</p>
+              <Button variant="outline" size="sm" onClick={() => setLocale(locale)}>
+                {t("settings.retryPreferenceSave")}
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className={styles.generalRowStack}>
           <span className={styles.rowLabel}>{t("settings.theme")}</span>
@@ -96,6 +105,14 @@ export function AppearanceCard({ preview = false, readBoundary }: { preview?: bo
               );
             })}
           </ToggleGroup>
+          {themePersistenceFailed ? (
+            <div role="alert">
+              <p>{t("settings.preferenceNotSaved")}</p>
+              <Button variant="outline" size="sm" onClick={() => setMode(mode)}>
+                {t("settings.retryPreferenceSave")}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </section>
       <TaskDeliveryPreferencesSection />
