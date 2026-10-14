@@ -8,7 +8,9 @@ export type SettingsTab =
   | "subscription"
   | "skills"
   | "mcp"
-  | "team";
+  | "team"
+  | "data-management"
+  | "help";
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   "account",
@@ -21,4 +23,6 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   "skills",
   "mcp",
   "team",
+  "data-management",
+  "help",
 ];

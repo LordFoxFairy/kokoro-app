@@ -1,3 +1,17 @@
+SET21分享浏览器接缝准入澄清：现 engine/client.ts 仅 createShare/revokeShare 两方法可共用具名有界分享调用，createShare 增可选 AbortSignal，原 POST {}、idempotency key/value、路径编码和 flat ShareReceipt 保持。两分享操作各浏览器单10s覆盖 fetch/headers/body/strict ACK，停止分享外部单10s同时涵盖写与完整重读；不扩大 generic postJson、其他会话/SSE/Move 方法或 ShareButton 源，不新文件/框架/依赖。现 client-artifact-share 测试可沿这两个方法补具名 deadline/abort/坏ACK负控，原 oracle 保持。现 lint/type 通过是阶段输出，终态仍须重新冻结和复验。
+
+SET21/22阶段更新：两冻结原client/modal入口由Root实际复现4FAIL/47PASS，現沿CURRENT具名source/正常正式生成实施；D0预算/身份/closed ACK/恢复和当前同页Data结构不变。历史tests-only文字不再表示当前无source权限。
+
+SET21/22正式消费前置：BFF eec3244645d5129407147774ecb07e03848420c4，public15.3.0/146全文SHA256 694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5；当前只授CURRENT具名两现tests-only真RED，source/机器等待Root复现。旧15.2消费pin仅待正规整包原字节与正常窄生成更新，不手改生成。
+
+SET21/22参考页面澄清（Root实际CUA）：Manus Data为同页依次“已分享任务”“已分享文件”“已归档任务”三段，不是页内三个tab；其下授权应用、云浏览器数据、已购买域名各有管理入口。Web只新增Data/Help两导航tab，Data内容沿同页三段及三管理行。现只任务分享具备真实owner，其他段保不可用说明/禁用管理，不制造“暂无”的假空事实。Help为侧栏底部本产品帮助入口，不能复用Manus客服。
+
+## SET-21/22 Data/Help无Web持久化（2026-10-15；D0独审通过）
+
+Conversation/Share/Project有效性与撤销事实仅BFF持有；Web无新数据库/schema/SQL/cache/localStorage/receipt/share capability副本。build-time单正规public artifact不作为业务存储。Data当前admitted subject/generation内存仅保存安全四字段列表/cursor/页状态/选中确认目标/未知意图/写栅栏；layout retirement立即清scope并取消迟到工作。Help为静态真实产品说明，无客服消息/授权应用/云数据表。
+
+unknown或成功ACK后权威读取失败不能本地删行冒撤销；显式全量重读固定limit100/最多20页2000条/单10s，从首屏至next=null且各页无重复才形成一次完整观察，仍不称跨页事务快照。成功后显式“继续操作”才可解除锁；分页/不完整/失败/已退休scope不能清锁。无share_id或URL进入列表、cursor、草稿、日志；正规ACK必要share_id只当次有界解析。正常Chat-off不seed数据制造正向验收。
+
 ## SET-20 团队视图不拥有持久化（2026-10-15；V2冻结独审通过，Root集成验收中）
 
 Membership/Invitation/Role/Audit与LastOwner事务继续唯一IAM owner；BFF只正式Product adapter，Web没有业务表、跨owner SQL、cache或新receipt。Team snapshot、invite/role draft、pending意图、confirmation及reconciliationRequired只存在当次可信subject/generation/admitted生命周期的内存，真实scope退役清除且取消迟到结果。不将部分权限页或failed GET制造为空团队、邀请成功或新权限。

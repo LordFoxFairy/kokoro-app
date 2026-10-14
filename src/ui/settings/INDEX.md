@@ -1,3 +1,10 @@
+<!-- SET21/22：Data 与 Help 属于现设置模态，不新建页面框架。 -->
+## SET21/22 数据管理与帮助
+
+`shared-tasks-client.ts` 负责同源分享列表的有界读取，`use-shared-tasks.ts` 持有当前准入身份下的分页、停止分享确认和未知结果恢复。`sections/data-management-section.tsx` 同页展示已分享任务、已分享文件、已归档任务及三个管理入口；只有本人任务分享有正式 owner，其他能力显示不可用并禁用操作。停止分享调用既有 SessionClient，未知写结果须完整重读并明确继续；离开页面或身份退役取消请求并清空旧记录。
+
+`sections/help-section.tsx` 提供本产品已实现功能说明，使用现 `selectTab` 回调前往账户和数据管理设置。没有客服或反馈投递时不显示虚假提交成功。Skills 和连接器不属于本片修改范围。
+
 <!-- SET16：Appearance沿既有readBoundary配置subject隔离浏览器通知/声音，setItem成功才确认；营销两行disabledfalse，无owner订阅，不改Skills/连接器。 -->
 # ui/settings — 用户设置中心（模态）
 

@@ -1,3 +1,25 @@
+SET21分享浏览器接缝准入澄清：现 engine/client.ts 仅 createShare/revokeShare 两方法可共用具名有界分享调用，createShare 增可选 AbortSignal，原 POST {}、idempotency key/value、路径编码和 flat ShareReceipt 保持。两分享操作各浏览器单10s覆盖 fetch/headers/body/strict ACK，停止分享外部单10s同时涵盖写与完整重读；不扩大 generic postJson、其他会话/SSE/Move 方法或 ShareButton 源，不新文件/框架/依赖。现 client-artifact-share 测试可沿这两个方法补具名 deadline/abort/坏ACK负控，原 oracle 保持。现 lint/type 通过是阶段输出，终态仍须重新冻结和复验。
+
+SET21/22阶段更新：两冻结原client/modal入口由Root实际复现4FAIL/47PASS，現沿CURRENT具名source/正常正式生成实施；D0预算/身份/closed ACK/恢复和当前同页Data结构不变。历史tests-only文字不再表示当前无source权限。
+
+SET21/22正式消费前置：BFF eec3244645d5129407147774ecb07e03848420c4，public15.3.0/146全文SHA256 694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5；当前只授CURRENT具名两现tests-only真RED，source/机器等待Root复现。旧15.2消费pin仅待正规整包原字节与正常窄生成更新，不手改生成。
+
+SET21/22参考页面澄清（Root实际CUA）：Manus Data为同页依次“已分享任务”“已分享文件”“已归档任务”三段，不是页内三个tab；其下授权应用、云浏览器数据、已购买域名各有管理入口。Web只新增Data/Help两导航tab，Data内容沿同页三段及三管理行。现只任务分享具备真实owner，其他段保不可用说明/禁用管理，不制造“暂无”的假空事实。Help为侧栏底部本产品帮助入口，不能复用Manus客服。
+
+## SET-21/22 browser-private Data/Help（2026-10-15；D0独审通过）
+
+server以正规oidcRpConfig固定tenant及HttpOnly subject校验sht1；不接受browser/URL/body自报tenant。browser ProjectReadBoundary无tenant，只核subject与已由server验证的分页一致性。
+
+新列表title保旧原string；同毫秒session_id顺序使用正式owner拟定的UTF8字节序（COLLATE "C"），不以JS UTF16或localeCompare猜序。正式发行前仍不消费该候选。
+
+public唯一BFF，当前正式a88/15.2/145；拟15.3的GET /v1/account/shared-tasks在正式提交前不作为消费依据。后继单正规artifact+窄generated包含新GET和原createShare/revokeShare，旧能力shape/hash逆门不放宽。
+
+GET /api/account/shared-tasks映射新public GET；query仅canonical limit1..100（本页固定100）/非空≤2048 cursor，拒未知/重复/坏percent/UTF8/body framing/encoding/Idempotency-Key；200恰{data:{items:[{session_id,title,shared_at,expires_at}],next_cursor}}，无meta/capability/URL。cursor须closed sht1实际tenant/subject/limit/末条anchor一致、next唯一、items安全排序且唯一；空页next=null。public错误closed error.code/message/retryable及status按正式机器，Web私有metadata/会话/响应校验错误独立且不伪称public。no-store/requestID只header，429 Retry-After沿正式可缺省/存在1..86400，其余无。
+
+Share继续现/api/session/sessions/:id/share POST/DELETE，仅该exact路径入新有界支路；正规query scope/project_ref和Idempotency-Key保现语义，不加UUID/trim/ID长度猜测。POST真实{}、DELETE真实EOF（Node Next可能有空stream）。200原BFF closed data.share_id/meta.request_id严格原文+请求header绑定后投影原flat {share_id}；不存在session_id ACK字段，不能称ACK逐目标字段绑定。删除ok:true错误解析，无新停止分享endpoint。正规error envelope先闭集/请求ID验证后沿原flat错误，非法/未知响应502且视unknown；不透SQL/owner message。非share generic/SSE/Move行为保持。
+
+单10s含params/body/session/上游/最终六字段栅栏，BFF响应和browser响应总≤1MiB、fatal UTF8/BOM/decoded重复key/深度32，browser redirect:error。mutation明确canonical Origin，GET允许无Origin或完全一致。无自动重试/新scope/client/credentials；preview、Help、禁用区域零API。
+
 ## SET-20 browser-private Team 可靠性（2026-10-15；V2冻结独审通过，Root集成验收中）
 
 唯一正式合同仍为BFF a88/public15.2九个Team operation；本片不编辑snapshot/generated/public schema或IAM API。现/api/team/[...path]只映射现members/invitations/roles及六mutation；成功均200，closed data/meta字段与正式error envelope保持。caller actor/tenant永不从body读取，leave内部期望memberID只用于客户端ACK校验，不传输为身份字段。

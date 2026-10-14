@@ -1,3 +1,35 @@
+SET21分享浏览器接缝准入澄清：现 engine/client.ts 仅 createShare/revokeShare 两方法可共用具名有界分享调用，createShare 增可选 AbortSignal，原 POST {}、idempotency key/value、路径编码和 flat ShareReceipt 保持。两分享操作各浏览器单10s覆盖 fetch/headers/body/strict ACK，停止分享外部单10s同时涵盖写与完整重读；不扩大 generic postJson、其他会话/SSE/Move 方法或 ShareButton 源，不新文件/框架/依赖。现 client-artifact-share 测试可沿这两个方法补具名 deadline/abort/坏ACK负控，原 oracle 保持。现 lint/type 通过是阶段输出，终态仍须重新冻结和复验。
+
+SET21/22阶段更新：两冻结原client/modal入口由Root实际复现4FAIL/47PASS，現沿CURRENT具名source/正常正式生成实施；D0预算/身份/closed ACK/恢复和当前同页Data结构不变。历史tests-only文字不再表示当前无source权限。
+
+SET21/22正式消费前置：BFF eec3244645d5129407147774ecb07e03848420c4，public15.3.0/146全文SHA256 694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5；当前只授CURRENT具名两现tests-only真RED，source/机器等待Root复现。旧15.2消费pin仅待正规整包原字节与正常窄生成更新，不手改生成。
+
+SET21/22参考页面澄清（Root实际CUA）：Manus Data为同页依次“已分享任务”“已分享文件”“已归档任务”三段，不是页内三个tab；其下授权应用、云浏览器数据、已购买域名各有管理入口。Web只新增Data/Help两导航tab，Data内容沿同页三段及三管理行。现只任务分享具备真实owner，其他段保不可用说明/禁用管理，不制造“暂无”的假空事实。Help为侧栏底部本产品帮助入口，不能复用Manus客服。
+
+## SET-21/22 数据管理与帮助（2026-10-15；D0独审通过，尚未授源码）
+
+storage_platform_audit绑定26695df三设计独审无确定P1/P2。可信tenant由server正规oidcRpConfig配置取得，subject来自HttpOnly session；ProjectReadBoundary没有tenant，不新增浏览器自报身份。browser只核当前subject及各页cursor一致性，server逐页核可信tenant/subject/limit/anchor。该具体接线要求属于冻结后必须验证的边界。
+
+Root预读发现BFF SQL默认locale与JS UTF16排序、旧title限制不一致，已要求owner在新面修正：同毫秒ID按UTF8字节升序/SQL COLLATE "C"，Web使用相同字节比较；title不加trim/200完整字符串限制。等待正式机器说明，不放宽旧146以外能力。
+
+正式基线26695df038ea5a5d5f45e652c8bef789f0271db0/904 tracked clean，Root已保存逐文件hash。当前Data/Help仍placeholder；已有正规分享POST/DELETE，但revokeShare误按ok:true解析。BFF本人分享列表拟15.3/146正在唯一owner实现，正式提交/digest前不消费候选。本节确定后继方案，旧SET20以下仅历史。
+
+| 项 | 当前裁决 |
+| --- | --- |
+| Owner / 分工 | BFF唯一Conversation/Share/Project事实及public API；Web只同源HTTP、内存状态与UI。runtime_audit后继唯一source writer；Root四docs/INDEX/Git/实际资源/正常激活和CUA；storage_platform_audit独审。无Skills/连接器实现权限。 |
+| 位置比较 | A继续扩大generic session proxy并复制另一套认证/Share API：淘汰，会改变SSE/Move和既有DTO。B新普通app/api/account/shared-tasks/route.ts、lib/server/shared-tasks.ts承接正规列表；lib/server/session-share.ts独占现精确share mutation，catchall入口仅具名分派，采用。复用productBffConfig/headers/currentProductSession/requestWithDomain，不新认证、owner、模块或目录。 |
+| 粒度 | lib/shared-tasks.schema.ts只generated-derived闭集wire与分页/绑定校验；lib/shared-tasks-json.ts只这批列表和Share原文JSON codec（fatal UTF8/BOM/decoded duplicate/深度32，保原合法escaped UTF16）；settings/shared-tasks-client.ts只浏览器有界I/O，use-shared-tasks.ts只本页scope和恢复。sections/data-management-section.tsx与help-section.tsx分别一页视图，沿现barrel/CSS/tab/nav/header/panel接线。 |
+| 正规消费 | 等BFF正式15.3 Git对象的完整artifact原字节与发布digest，单pin替旧15.2。新窄generator/config/generated只GET列表及现POST/DELETE分享，正常生成不手改。四现窄generator及既有生成物只正规whole出处同步，原scoped形状/旧负控保持。 |
+| 列表 | 浏览器只GET /api/account/shared-tasks，server映射/v1/account/shared-tasks。limit固定100用于本页各次分页，cursor原sht1身份/limit/anchor绑定；closed四安全字段/session唯一/降序与tie ID升序/next确与末条一致，未知字段拒绝。不缓存share_id/url/capability、不推导完成状态；保合法旧ID/title，无伪空数据。 |
+| Share接缝 | exact raw POST/DELETE /api/session/sessions/:id/share先进入独立10s预算，再等待params并核真实decoded path一致；其他generic路径/SSE/Move保持。ID沿正式SessionId非空opaque string，不强加conv_UUID。query仅原scope/project_ref闭集，保原合法省略/空scope/direct及非空project_ref。现Idempotency-Key必需且沿已有原值规则，零自动重试；POST保持原合法{}，DELETE证明真实EOF，不用body===null判断。 |
+| HTTP / 身份 | GET origin缺省或canonical scheme/Host下完全相同，mutation必须明确完全相同Origin。metadata/query/params/body/HttpOnly session/BFF headers+body/最后session都共享server入口10s；browser每操作单10s且响应总≤1MiB。requestWithDomain不跟重定向，browser redirect:error；主动取消迟到/不合作fetch/read。最后id/generation/subject/access/accessExpiresAt/expiresAt六字段逐项等值且两expiry有效，才可返回。无浏览器Bearer/issuer Cookie。 |
+| Share ACK | 正式200恰data.share_id+meta.request_id，raw闭集/header请求ID一致/no-store/无Location或Set-Cookie后再投影原flat ShareReceipt。ACK没有session_id，不虚称字段级绑定目标；请求的canonical路径/已准入身份/最终六字段证明该请求上下文。engine/revokeShare改复用ShareReceipt/schema，原createShare合法DTO保持；不能把旧ok:true当成功。 |
+| 状态 / 恢复 | preview零API且明确能力不可用；只有admitted subject/generation可读写，layout阶段同步退休scope/确认/目标/所有迟到请求，立即busy ref防双击。loading/ready/empty/error/partial/pending/unknown/needsContinue显式。正常首屏/更多可分段展示；unknown、401、5xx、坏ACK或成功后读回失败锁全部停止分享，不能用分页或失败清锁。显式重读用固定100、最多20页/2000项和单10s预算，从首屏到next=null全量成功且无重复项/cursor才允许显示“继续操作”；用户明确继续才解锁，不宣称跨请求SQL快照。 |
+| 页面 / Help | Data按Manus同页三段：已分享任务可真实列出/确认停止分享；已分享文件/已归档任务和授权应用/云浏览器/域名管理无本产品owner能力，disabled并说明不可用，不请求fake空。Help同设置页给本产品真实可用操作及限制、可导航本产品设置；无Manus客服链接、假反馈发送或假订阅支付。文案不出现内部仓名/契约版本。 |
+| 删除 / 验证 | 删除两placeholder分支和旧错误revokeShare成功解析；单pin不双读/fallback。真实现client正规ACK拒绝、Data/Help不可选择及精确HTTP无route断言先RED，原ShareButton确认/失败/焦点与所有非share代理oracle保持。后续strict codec/schema/query/deadline/identity、scope恢复/preview、真实Next HTTP、locale/窄屏/键盘；正常contract/architecture/lint/type/test/build/E2E。冻结独审和Root复验后提交，真实CUA仍单独验收，不由纯测试代替。 |
+
+正常组合Chat-off不能创建持久化任务，空列表可验但不能seed正常DB冒分享成功。Root受控实际BFF HTTP→PG事实验证使用正式message/share/list/revoke链及idle worker；不冒正常模型或UI。新源与设计不授额外依赖/DDL/支付/Agent启动权限。
+
 ## SET-20 团队操作可靠恢复（2026-10-15；V2冻结独审通过，Root集成验收中）
 
 基线3ed206c26dd42df8b979c3b1cba8e9649e1c5a97、901tracked原字节Root已保存。正式BFF a88/public15.2的九个Team operation与IAM c64保持原合同，不新增owner/SQL/generated/pin。现Team实际支持成员/角色/邀请读取和六种mutation；两个只读审查已确认unknown后可重复写、异步身份未退役、ACK未绑定、无全程预算、Origin过宽、EOF-only拒绝、有界权限分页等缺口。Root旧三测试32PASS不是上述负控已覆盖。SET19源码/运行已发行，CUA暂待用户把data错误标签恢复HTTP；本片独立继续，不冒姓名浏览器门通过。

@@ -10,7 +10,7 @@ import { WorkspaceHeader } from "@/components/blocks/workspace-header/workspace-
 function makeClient(overrides: Partial<Pick<SessionClient, "createShare" | "revokeShare">> = {}) {
   return {
     createShare: vi.fn().mockResolvedValue({ share_id: "shr_abc123" }),
-    revokeShare: vi.fn().mockResolvedValue({ ok: true }),
+    revokeShare: vi.fn().mockResolvedValue({ share_id: "shr_abc123" }),
     ...overrides,
   }
 }
@@ -253,9 +253,9 @@ describe("ShareButton", () => {
   })
 
   it("locks copy and revoke while the share mutation is pending", async () => {
-    let resolveRevoke: ((value: { ok: true }) => void) | undefined
+    let resolveRevoke: ((value: { share_id: "shr_abc123" }) => void) | undefined
     const revokeShare = vi.fn().mockImplementation(
-      () => new Promise<{ ok: true }>((resolve) => { resolveRevoke = resolve }),
+      () => new Promise<{ share_id: "shr_abc123" }>((resolve) => { resolveRevoke = resolve }),
     )
     const client = makeClient({ revokeShare })
     render(<ShareButton client={client} sessionId="ses_1" />, { wrapper: LocaleProvider })
@@ -272,7 +272,7 @@ describe("ShareButton", () => {
     expect(revokeShare).toHaveBeenCalledTimes(1)
     expect(confirm).toBeDisabled()
     expect(copy).toBeDisabled()
-    resolveRevoke?.({ ok: true })
+    resolveRevoke?.({ share_id: "shr_abc123" })
     await waitFor(() => expect(screen.queryByText("Revoke share")).toBeNull())
   })
 

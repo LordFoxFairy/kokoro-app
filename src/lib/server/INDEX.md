@@ -1,3 +1,9 @@
+## SET21 分享边界
+
+`shared-tasks.ts` 承接具名 `/api/account/shared-tasks` GET，使用正式 BFF public artifact 的闭合 schema、单 10 秒总预算及 1 MiB 正文限额，核对部署固定租户、受信 subject 和最终同一有效 Product Session。它只调用 BFF，不读取分享数据库或内部 owner 服务。
+
+`session-share.ts` 只承接原 session catch-all 的精确分享 POST/DELETE，保持原 scope、project_ref、Idempotency-Key 和请求正文语义，校验 canonical Origin 与正式 share_id ACK；非分享及 SSE 原路径不变。`lib/shared-tasks-json.ts` 只负责本片 raw JSON 的 UTF-8、重复键和深度边界，`lib/shared-tasks.schema.ts` 由正式生成形状派生运行时校验，不建立另一份可编辑 contract。
+
 # lib/server — Web BFF 服务端边界
 
 ## 职责

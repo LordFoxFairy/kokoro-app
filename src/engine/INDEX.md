@@ -1,3 +1,7 @@
+## SET21 停止分享回执
+
+`SessionClient.revokeShare` 接受正式平面 `ShareReceipt`（share_id），与 createShare 使用相同回执形状；旧 ok:true 不再表示成功。该方法可接收 AbortSignal，让设置页停止分享和完整重读共用一次总预算。ShareButton 原交互以及其他会话、移动、SSE 方法保持各自既有职责。
+
 <!-- SET16：task-notification.ts 只认本页MessageCreateReceipt或validated active execution_head及其nullable event_watermark；machine直接逐事件subscribeTaskNotifications，不用React快照充当消息队列。retireTaskNotifications使旧receipt/snapshot代际失效；view-only注入engine可无订阅，正式engine总接线。 -->
 # engine — 会话引擎（状态机 + 浏览器 I/O 唯一编排者）
 

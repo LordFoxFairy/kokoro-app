@@ -7,10 +7,10 @@ import * as sdk from "@/generated/bff-account-sessions/sdk.gen"
 import { accountSessionsSchema, accountSessionRevokeSchema } from "@/lib/account-sessions.schema"
 it("pins the complete formal public15.2 artifact with 145 operations and exactly two narrow SDK exports", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5")
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("15.2.0")
-  expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(145)
+  expect(spec.info.version).toBe("15.3.0")
+  expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(146)
   expect(Object.keys(sdk)).toEqual(["listAccountSessions", "revokeAccountSession"])
 })
 it("nested raw closed validation rejects added credentials before normal generated stripping", () => {

@@ -109,11 +109,11 @@ export function SettingsNavigation({
     { kind: "placeholder", id: "email", label: t("settings.email"), icon: Mail, group: "assets" },
     { kind: "placeholder", id: "phone", label: t("settings.phoneTitle"), icon: Smartphone },
     { kind: "placeholder", id: "wallet", label: t("settings.walletTitle"), icon: WalletCards },
-    { kind: "placeholder", id: "data-management", label: t("settings.dataManagementTitle"), icon: DatabaseBackup, group: "data" },
+    { kind: "tab", key: "data-management", label: t("settings.dataManagementTitle"), icon: DatabaseBackup, group: "data" },
     { kind: "placeholder", id: "integration", label: t("settings.integrationTitle"), icon: Cable },
     { kind: "placeholder", id: "developer", label: t("settings.developerTitle"), icon: Code2 },
     { kind: "tab", key: "team", label: t("rail.navTeams"), icon: Building2, group: "support" },
-    { kind: "placeholder", id: "help", label: t("settings.helpTitle"), icon: CircleHelp },
+    { kind: "tab", key: "help", label: t("settings.helpTitle"), icon: CircleHelp },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const renderedNav = normalizedQuery.length === 0

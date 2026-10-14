@@ -409,13 +409,40 @@ describe("SettingsModal 设置中心模态", () => {
     renderSettings();
 
     expect(screen.getByTestId("settings-tab-team")).toBeInTheDocument();
-    for (const id of ["mail", "computer", "email", "phone", "wallet", "data-management", "integration", "developer", "help"]) {
+    for (const id of ["mail", "computer", "email", "phone", "wallet", "integration", "developer"]) {
       expect(screen.getByTestId(`settings-placeholder-${id}`)).toHaveAttribute("aria-disabled", "true");
     }
     expect(screen.queryByTestId("settings-tab-deployment")).toBeNull();
     expect(screen.queryByTestId("settings-tab-integration")).toBeNull();
     expect(screen.queryByTestId("settings-tab-library")).toBeNull();
     expect(screen.queryByTestId("settings-tab-developer")).toBeNull();
+  });
+
+  it("SET21 Data is selectable and exposes same-page sections with unavailable management disabled", () => {
+    renderSettings();
+    const tab = screen.getByTestId("settings-tab-data-management");
+    expect(tab).not.toBeDisabled();
+    fireEvent.keyDown(tab, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "数据管理", level: 1 })).toBeInTheDocument();
+    for (const name of ["已分享任务", "已分享文件", "已归档任务", "授权应用", "云浏览器数据", "已购买域名"]) {
+      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "管理" })).toHaveLength(3);
+    for (const button of screen.getAllByRole("button", { name: "管理" })) expect(button).toBeDisabled();
+  });
+
+  it("SET22 Help is selectable and provides this product help without a fake support submission", () => {
+    renderSettings();
+    const tab = screen.getByTestId("settings-tab-help");
+    expect(tab).not.toBeDisabled();
+    fireEvent.keyDown(tab, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "获取帮助", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "账户与设备" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "任务分享" })).toBeInTheDocument();
+    expect(screen.getByText(/通过任务分享按钮/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /发送|提交反馈|联系客服/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Manus/ })).toBeNull();
   });
 
   it("技能导入完成后只关闭子弹窗，不卸载设置中心", async () => {

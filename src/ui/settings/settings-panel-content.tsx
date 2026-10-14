@@ -22,6 +22,8 @@ import {
 } from "@/ui/shell/page-clients";
 
 import {
+  DataManagementSection,
+  HelpSection,
   AccountCard,
   AppearanceCard,
   ChatPrefsCard,
@@ -43,6 +45,7 @@ type SettingsPanelContentProps = {
   onOpenSubscription: () => void;
   onTogglePreviewPinnedSkill: (name: string) => void;
   onOpenPricing: () => void;
+  onSelectSetting: (tab: SettingsTab) => void;
   onCreateSkillWithAi?: () => void;
   onTrySkill?: (skill: SkillCard) => void;
 };
@@ -63,10 +66,15 @@ export function SettingsPanelContent({
   onOpenSubscription,
   onTogglePreviewPinnedSkill,
   onOpenPricing,
+  onSelectSetting,
   onCreateSkillWithAi,
   onTrySkill,
 }: SettingsPanelContentProps) {
   switch (tab) {
+    case "data-management":
+      return <DataManagementSection preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
+    case "help":
+      return <HelpSection onSelectSetting={onSelectSetting} />;
     case "account":
       return (
         <AccountCard

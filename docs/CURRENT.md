@@ -1,3 +1,55 @@
+## SET21/22 Data/Help 源码接收与运行接续（2026-10-15）
+
+正式消费BFF eec3244645d5129407147774ecb07e03848420c4/public15.3.0/146，canonical全文SHA256694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5。Data/Help可选择；Data同页三段与三管理行，仅本人任务分享具备正式读取/停止分享，其余容量明确不可用。Help只导航本产品实际账户/数据说明。createShare/revokeShare均单有界预算、正规share_id ACK，未知停止结果须完整重读再明确继续；身份变化退役旧操作。其他菜单与权限保持，Skills/连接器业务源码未修改。
+
+Root独立复现原266四核心行为4FAIL/50SKIP/54，冻结后152专项PASS；9locale旧键逆变换和47旧scoped生成正文保持，原Next五业务case逐字保持。77 writer与855原保护字节、7 Root文档原后缀及正规owner Gitblob独核，独审无确定P1/P2。纯contract283/architecture50、lint/typecheck/build通过。首冻Next把500错认ready；V2严格401仍未ready。Root捕获实际middleware依赖解析失败，V3仅隔离两个scratch依赖链接、取Next正式helpers，严格401/预算/七oracle不放宽，产品与依赖声明未改；原路径真实Next七例7PASS/13.65s（真实Next/Redis与替身BFF，非正常IAM/PG用户旅程）。
+
+Root正确配置完整pnpm test：3912PASS/7FAIL/0SKIP；七项均此前已有失败（Skills创建三、语言覆盖及MCP文案、定时日期、R177登录handoff同12≠11），不宣全门绿。首轮漏旧Redis环境的16FAIL/154SKIP输出保留，补环境重跑没有改断言。隔离原配置Playwright桌面/移动：14PASS/6FAIL/4SKIP，六项与此前相同桌面preview超时；不是正常设置旅程。各轮实际PG库名/测试Redis键集合前后完全恢复，无清理共享资源。正常组合即将接入本片；账户保存/刷新/重登、团队和分享的正常浏览器操作仍待验，完整设置Goal active。
+
+SET21分享浏览器接缝准入澄清：现 engine/client.ts 仅 createShare/revokeShare 两方法可共用具名有界分享调用，createShare 增可选 AbortSignal，原 POST {}、idempotency key/value、路径编码和 flat ShareReceipt 保持。两分享操作各浏览器单10s覆盖 fetch/headers/body/strict ACK，停止分享外部单10s同时涵盖写与完整重读；不扩大 generic postJson、其他会话/SSE/Move 方法或 ShareButton 源，不新文件/框架/依赖。现 client-artifact-share 测试可沿这两个方法补具名 deadline/abort/坏ACK负控，原 oracle 保持。现 lint/type 通过是阶段输出，终态仍须重新冻结和复验。
+
+SET21终态检查窄准入：tests/architecture/governance.test.ts 仅将原 contract script 期待值 prepend 正规 shared-tasks check，与已批准 package 注册一致，原所有其他规则/语义断言保持。新 Help 菜单行为 case 的 h1 必须使用既有 zh settings.helpTitle“获取帮助”，不改旧 locale 值；最初该新case误期望“帮助”的50PASS/1FAIL日志保留。Root以最终稳定两测试hash在原266重现RED，不拿错误标题测试作产品缺陷。
+
+## SET21/22 修正菜单操作后的原源码 RED（2026-10-15）
+
+Root 已将稳定的两份行为测试置于原266源码私有副本，其他902原 tracked 字节逐 hash 保持。固定 Node22 实际51项47PASS/4断言FAIL，exit1：正式 share_id 撤销回执被拒、旧 ok:true 被接受、Data/Help 可选择 tab 尚不存在。测试使用真实 settings-tab 控件及 Enter，不再以错误 role=button 断言导航；最初日志原样保留，不能当作准确交互依据。终态 GREEN 仍待完整实现冻结。Root 另独占三份相邻 INDEX 的本片职责追加，原内容保持；writer 保护集合需排除这三 INDEX 与原四 Root 文档。正常服务保持，完整 Goal active。
+
+SET21消费接缝窄准入：tests/engine/fakes.ts仅revokeShare stub采用同文件createShare既有share_id，其他fake oracle/方法不动；src/ui/settings/settings-modal.tsx仅把已有selectTab callback传入SettingsPanelContent，panel/Help沿具名props回调导航，禁止裸TabsTrigger或DOM模拟点击/新框架。前条tests/engine/client.test.ts经实际核没有revokeShare（ok:true属于rename），不需要修改，原rename oracle保持。现真实导航是Radix tab；两先冻Data/Help tests修正为真实role=tab及键盘选择并保全部内容断言，Root将在原266源码私有副本重现修正后的真实RED；旧不准确button交互日志保留，不替代正确菜单证据。
+
+SET21必要窄准入补充：src/dev/preview-transport.ts只revokeShare方法从旧ok:true返回既有createShare相同的明确preview share_id，修正SessionClient类型约束；不引API/持久事实/新fixture或改其他preview能力。tests/engine/client.test.ts只旧revokeShare合法fixture及receipt断言同步正式share_id，新增旧ok:true反例可沿该case；原其余client oracle保留。两路径由runtime_audit唯一writer，纳终态freeze，不授其他领域。已授server读取的BodyInit类型修补属于既定source路径，纯类型/实际字节预算语义保持；测试ByRoleOptions移除不支持exact属性不改变准确字符串name断言。
+
+## SET-21/22 Root真实RED已复现，具名source准入（2026-10-15）
+
+Root固定Node22对两冻结原入口测试实际复现4FAIL/47PASS/51（exit1）：formal share_id回执被拒、旧ok:true被接受、Data/Help不可选。898保护原路径逐hash保持，只有两测试与四Root docs变化。runtime_audit现为本仓唯一源码writer，准入下方既定SET21/22所有具名source/正常generated/locale/测试范围，不另建owner/framework/依赖/可编辑manifest。正式eec3244645d5129407147774ecb07e03848420c4/public15.3/146全文694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5原字节经单正规snapshot及正常生成消费；旧能力形状/语义oracle保持。Root设计/docs/INDEX/Git/资源/正常服务/CUA仍独占。
+
+以当前Manus同页Data三段及三管理行为准，Help本产品真实说明，不做伪提交。单预算/严格wire/六字段最终session/unknown写锁及完整重读后明确继续、preview零API和scope同步退役沿三设计。worker可写具名真实Next HTTP测试但不自行运行需要资源的integration/完整资源测试；纯contract/architecture/lint/type/build及focused可跑。最终freeze exactwriter/hash/原904保护与准确日志/exit，Root独审复验/实际Next HTTP后提交，正常浏览器另验；整体Goal保持active。
+
+## SET-21/22 正式 owner 已到达，现授具名 tests-only（2026-10-15）
+
+BFF eec3244645d5129407147774ecb07e03848420c4已正式提交/推送至现功能分支，public15.3.0/146全文SHA256 694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5。Root冻审、83专项/build、实际HTTP→PG事实链/150ms锁超时及同pool恢复/EXPLAIN、自有资源收尾通过；旧全门失败保留。Web唯一writer runtime_audit此刻仅准修改tests/engine/client-artifact-share.test.ts和tests/ui/settings-modal.test.tsx：正规share_id DELETE ACK应成功、旧ok:true拒绝，Data/Help菜单应可选择且同页合法内容。只用现实际client/modal入口，不能import未存在模块制造collection错误；其余900源码/生成/合同保持，Root四docs另计。不启动资源或改Git。Root复现冻结真实断言RED后再授下方原既定source/正式生成与其余测试集；当前不写源码或消费候选。
+
+Data按Root当前Manus实际CUA同页三段/三管理行，Help沿本产品真实说明。只有任务分享管理可用，其余能力disabled；正常浏览器等待旧HTTP标签人工恢复，独立实现继续。下方“尚未授tests”等段为历史，完整Goal active，Skills/连接器排除。
+
+SET21/22参考页面澄清（Root实际CUA）：Manus Data为同页依次“已分享任务”“已分享文件”“已归档任务”三段，不是页内三个tab；其下授权应用、云浏览器数据、已购买域名各有管理入口。Web只新增Data/Help两导航tab，Data内容沿同页三段及三管理行。现只任务分享具备真实owner，其他段保不可用说明/禁用管理，不制造“暂无”的假空事实。Help为侧栏底部本产品帮助入口，不能复用Manus客服。
+
+## SET-21/22-Web Data/Help任务卡（2026-10-15；D0独审通过，尚未授源码）
+
+storage_platform_audit绑定26695df四文只读独审无确定P1/P2；server从正规oidcRpConfig fixed tenant与HttpOnly subject核cursor，browser不新增tenant字段。仍未授tests或source，必须等待BFF正式发行。
+
+正式基线26695df038ea5a5d5f45e652c8bef789f0271db0/904 tracked clean，Root保存原hash；SET20正常服务已精确启动该Web，fresh16scope/真实凭据表单链通过，CUA旧data断线页仍待人工恢复。BFF唯一writer实现本人分享GET，正式15.3 commit/digest前Web不消费；本阶段四D0由Root写，runtime_audit只读核接缝，storage_platform_audit后继独审。完整设置Goal active，非技能/连接器范围继续。
+
+| 任务 / 文件集 | 后继具名范围（不是当前源码授权） |
+| --- | --- |
+| SET21 source | 新app/api/account/shared-tasks/route.ts、lib/server/shared-tasks.ts、lib/server/session-share.ts、lib/shared-tasks.schema.ts、lib/shared-tasks-json.ts、ui/settings/shared-tasks-client.ts、use-shared-tasks.ts、sections/data-management-section.tsx；新源只已有目录。 |
+| SET22 source | 新sections/help-section.tsx；沿真实本产品说明，禁假客服/发消息/外部Manus客服。 |
+| 现source | settings-types/navigation/header/panel-content、sections/index、settings-modal.module.css只两新tab；engine/client只revokeShare正式ShareReceipt与可选signal/预算支持；app/api/session/[...path]/route.ts只exact share提前分派。ShareButton源/非share generic/Team/账户/Skills保持。九locale只append具名Data/Help键，旧键值不改。 |
+| 机器 | 新scripts/generate-bff-shared-tasks-client.mjs、openapi-ts.bff-shared-tasks.config.ts、src/generated/bff-shared-tasks正常生成；正规单src/generated/bff-public-openapi.yaml原字节；现scripts/generate-bff-team-client.mjs、generate-bff-account-sessions-client.mjs、generate-bff-account-profile-client.mjs、generate-bff-agent-failure.mjs/三openapi-ts.bff-Team/account-sessions/profile config及既有generated正常出处变更。没有新可编辑public manifest/schema。正式owner提交后记录新pin/digest再另授。 |
+| 测试 | 新contract/bff-shared-tasks-public.test.ts、lib/shared-tasks-schema.test.ts、system/shared-tasks-product-route.test.ts、system/session-share-product-route.test.ts、ui/shared-tasks-client.test.ts、ui/use-shared-tasks.test.tsx、ui/data-management-section.test.tsx、ui/help-section.test.tsx；现engine/client-artifact-share仅正规ACK修fixture+负控、ui/share-button仅合法fixture并保原行为，ui/settings-modal/系统Next HTTP追加两tab/精确route；现其他session-route两测试只加share分支并保非share。 |
+| shared whole出处 | contract/api-contract.test.ts与现bff-Team/account-sessions/profile/agent-failure/project-create/project-resource/library-file/library-artifact/skills-mcp public测试仅正式pin/version/count及新外层逆门，原能力oracle保持；package仅具名生成/contract/test注册，不加deps/lock。 |
+| 依赖 / 验收 | 当前只D0，等独审及正式owner再tests-only真RED→Root复現→source另授。固定Node22/pnpm11纯门/真实Next HTTP/冻结独审/Roothash与实际PG/正常CUA分开；任何旧门失败保留。Root docs/INDEX/Git/资源，worker不自行扩大文件集或启动共享服务。 |
+
+具体cursor/两10s/HTTP origin/EOF/六字段退役/完整重读后显式继续以三设计一致顶部为准。ACK无session_id，绑定请求上下文而不虚构字段级目标校验；opaque旧ID/title保真。只有新分享列表可用，其他Data区域disabled并说明未提供，不假空。正常正向分享需真实任务/合法执行链，受控PG链不冒正常UI。
+
 ## SET-20-Web 团队可靠恢复任务卡（2026-10-15；V2源码已接收，正常集成进行中）
 
 基线3ed206c26dd42df8b979c3b1cba8e9649e1c5a97、901tracked clean；原字节Root保存var/dev/set20-web-baseline.json。TECH/API/DATA文首明确单owner、六现mutation/九operation、single budget/ACK binding/EOF/身份退役/unknown写栅栏。Root仍独占docs/INDEX/Git与真实资源；storage_platform_audit已绑定三设计只读独审无确定P1/P2。四具名测试先真实RED28FAIL/55PASS，原52oracle另实际PASS；Root固定Node22/pnpm11独立复现相同28FAIL/55PASS后授runtime_audit同一卡精确源文件实现，不以旧32PASS冒新反例已覆盖。

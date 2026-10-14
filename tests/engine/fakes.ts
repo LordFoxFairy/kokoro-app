@@ -90,7 +90,7 @@ export function createFakeClient(): FakeClient {
     listSessions: () => Promise.resolve({ sessions: [], next_cursor: null }),
     listModels: () => Promise.resolve({ models: [] }),
     createShare: () => Promise.resolve({ share_id: "shr_fake000000000000000000000000000" }),
-    revokeShare: () => Promise.resolve({ ok: true as const }),
+    revokeShare: () => Promise.resolve({ share_id: "shr_fake000000000000000000000000000" }),
     createMessage: (sessionId, body) => {
       client.createCalls.push({ sessionId, body })
       return client.nextCreate(sessionId, body)

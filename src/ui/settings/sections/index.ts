@@ -7,3 +7,6 @@ export { PersonalizationCard } from "./personalization-card";
 export { ChatPrefsCard } from "./chat-preferences-card";
 export { CommunicationPreferencesSection } from "./communication-preferences-section";
 export { ShortcutsCard } from "./shortcuts-card";
+
+export { DataManagementSection } from "./data-management-section"
+export { HelpSection } from "./help-section"

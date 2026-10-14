@@ -1,5 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -76,6 +85,39 @@ function get(
   });
 }
 
+async function linkFixtureDependencies(
+  project: string,
+  root: string,
+): Promise<void> {
+  const installed = path.join(project, "node_modules");
+  const destination = path.join(root, "node_modules");
+  await mkdir(destination);
+  for (const entry of await readdir(installed, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    const source = path.join(installed, entry.name);
+    const target = path.join(destination, entry.name);
+    if (entry.name.startsWith("@")) {
+      await mkdir(target);
+      for (const scoped of await readdir(source)) {
+        if (scoped.startsWith(".")) continue;
+        await symlink(
+          await realpath(path.join(source, scoped)),
+          path.join(target, scoped),
+          "dir",
+        );
+      }
+    } else {
+      await symlink(await realpath(source), target, "dir");
+    }
+  }
+  const nextPackage = await realpath(path.join(installed, "next"));
+  const helpers = await realpath(
+    path.join(path.dirname(nextPackage), "@swc/helpers"),
+  );
+  await mkdir(path.join(destination, "@swc"), { recursive: true });
+  await symlink(helpers, path.join(destination, "@swc/helpers"), "dir");
+}
+
 describe("Product BFF real Next HTTP admission", () => {
   let child: ChildProcess;
   let root = "";
@@ -120,11 +162,7 @@ export async function GET(): Promise<Response> {
     ]) {
       await cp(path.join(project, file), path.join(root, file));
     }
-    await symlink(
-      path.join(project, "node_modules"),
-      path.join(root, "node_modules"),
-      "dir",
-    );
+    await linkFixtureDependencies(project, root);
     bff = createServer((_request, response) => {
       bffCalls += 1;
       response.writeHead(500);
@@ -158,16 +196,18 @@ export async function GET(): Promise<Response> {
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
+    child.stdout?.on("data", () => undefined);
+    child.stderr?.on("data", () => undefined);
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
       try {
-        if ((await get(nextPort)).status > 0) return;
+        if ((await get(nextPort)).status === 401) return;
       } catch {
         /* wait */
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    throw new Error("Next fixture did not become ready");
+    throw new Error("Next fixture did not reach anonymous session 401");
   }, 30_000);
 
   afterAll(async () => {
@@ -312,4 +352,241 @@ export async function GET(): Promise<Response> {
     expect(response.body).toContain("session_unavailable");
     expect(bffCalls).toBe(0);
   });
+});
+
+// Separate from the original dead-Redis failclosed fixture: Root alone runs this
+// stored Product-session protocol fixture against its isolated test Redis.
+describe("SET21 stored Product session real Next HTTP", () => {
+  let root: string,
+    child: ChildProcess,
+    bff: Server,
+    nextPort: number,
+    origin: string,
+    cookie: string;
+  let badAck = false;
+  const sessionId = crypto.randomUUID(),
+    secret = "set21-owned-next-session-fixture-secret-32";
+  const redisUrl = process.env.KOKORO_TEST_REDIS_URL;
+  const calls: string[] = [];
+  beforeAll(async () => {
+    if (!redisUrl)
+      throw Error("KOKORO_TEST_REDIS_URL required for stored-session fixture");
+    const project = process.cwd();
+    root = await mkdtemp(path.join(tmpdir(), "kokoro-shared-tasks-next-"));
+    await cp(path.join(project, "src"), path.join(root, "src"), {
+      recursive: true,
+    });
+    await cp(path.join(project, "public"), path.join(root, "public"), {
+      recursive: true,
+    });
+    for (const file of [
+      "package.json",
+      "tsconfig.json",
+      "next.config.ts",
+      "next-env.d.ts",
+      "postcss.config.mjs",
+    ])
+      await cp(path.join(project, file), path.join(root, file));
+    await linkFixtureDependencies(project, root);
+    const fixture = path.join(
+      root,
+      "src/app/api/set21-owned-session-fixture/route.ts",
+    );
+    await mkdir(path.dirname(fixture), { recursive: true });
+    await writeFile(
+      fixture,
+      `import { createSession } from "@/lib/server/product-session-store"
+import { productSessionCookie } from "@/lib/server/product-session"
+export async function GET(){const config={redisUrl:process.env.KOKORO_WEB_REDIS_URL!,webOrigin:process.env.KOKORO_WEB_ORIGIN!,secret:process.env.KOKORO_WEB_AUTH_SECRET!};const now=Date.now();const candidate=await createSession(config,"fixture-refresh",{id:process.env.SET21_OWNED_SESSION_ID!,expiresAt:now+600000});const cookie=await productSessionCookie({id:candidate.id,generation:0,subject:"fixture-subject",access:"fixture-access",accessExpiresAt:now+600000,expiresAt:candidate.expiresAt},config.secret,config.webOrigin);return new Response(null,{status:204,headers:{"set-cookie":cookie}})}`,
+    );
+    bff = createServer((request, response) => {
+      calls.push(request.url ?? "");
+      const requestId = request.headers["x-kokoro-request-id"];
+      response.writeHead(200, {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "x-request-id": String(requestId),
+      });
+      response.end(
+        JSON.stringify(
+          request.url?.startsWith("/v1/account/shared-tasks")
+            ? {
+                data: {
+                  items: [
+                    {
+                      session_id: "opaque:old",
+                      title: "Real owner fixture",
+                      shared_at: "2026-10-15T00:00:00.000Z",
+                      expires_at: null,
+                    },
+                  ],
+                  next_cursor: null,
+                },
+              }
+            : badAck
+              ? { data: { ok: true }, meta: { request_id: requestId } }
+              : {
+                  data: { share_id: "shr_fixture" },
+                  meta: { request_id: requestId },
+                },
+        ),
+      );
+    });
+    const bffPort = await listen(bff);
+    nextPort = await unusedPort();
+    origin = `http://localhost:${nextPort}`;
+    child = spawn(
+      process.execPath,
+      [
+        path.join(project, "node_modules/next/dist/bin/next"),
+        "dev",
+        "--webpack",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        String(nextPort),
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          KOKORO_BFF_BASE_URL: `http://127.0.0.1:${bffPort}`,
+          KOKORO_DOMAIN: "localhost",
+          KOKORO_WEB_ORIGIN: origin,
+          NEXTAUTH_URL: `${origin}/api/auth`,
+          KOKORO_WEB_AUTH_SECRET: secret,
+          KOKORO_INTERNAL_SECRET_WEB_BFF: "fixture-internal",
+          KOKORO_WEB_REDIS_URL: redisUrl,
+          KOKORO_OIDC_CLIENT_ID: "fixture-product",
+          KOKORO_OIDC_CLIENT_SECRET: "fixture-client-secret",
+          KOKORO_TENANT_ID: "fixture-tenant",
+          SET21_OWNED_SESSION_ID: sessionId,
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    child.stdout?.on("data", () => undefined);
+    child.stderr?.on("data", () => undefined);
+    const deadline = Date.now() + 45000;
+    let ready = false;
+    while (Date.now() < deadline) {
+      try {
+        if (
+          (
+            await get(
+              nextPort,
+              undefined,
+              "/api/account/shared-tasks?limit=100",
+            )
+          ).status === 401
+        ) {
+          ready = true;
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!ready) throw Error("strict shared-tasks401 readiness missing");
+    const issued = await get(
+      nextPort,
+      undefined,
+      "/api/set21-owned-session-fixture",
+    );
+    expect(issued.status).toBe(204);
+    const raw = issued.headers["set-cookie"];
+    if (!Array.isArray(raw) || !raw[0]) throw Error("fixture cookie missing");
+    cookie = raw[0].split(";", 1)[0]!;
+  }, 60000);
+  afterAll(async () => {
+    if (child) await stop(child);
+    if (bff) await new Promise<void>((resolve) => bff.close(() => resolve()));
+    if (origin && redisUrl) {
+      const { createClient } = await import("redis");
+      const { createHash } = await import("node:crypto");
+      const redis = createClient({
+        url: redisUrl,
+        socket: { reconnectStrategy: false, connectTimeout: 1000 },
+      });
+      redis.on("error", () => undefined);
+      try {
+        await redis.connect();
+        const key = `kokoro:web:product-session:${createHash("sha256").update(origin).digest("hex")}:${sessionId}`;
+        await redis.del([key, `${key}:tombstone`]);
+        expect(await redis.exists(key)).toBe(0);
+        expect(await redis.exists(`${key}:tombstone`)).toBe(0);
+      } finally {
+        redis.destroy();
+      }
+    }
+    if (root) await rm(root, { recursive: true, force: true });
+  }, 15000);
+  const write = (method: "POST" | "DELETE") =>
+    new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: "127.0.0.1",
+          port: nextPort,
+          path: "/api/session/sessions/opaque%3Aold/share",
+          method,
+          headers: {
+            host: `localhost:${nextPort}`,
+            origin,
+            cookie,
+            "idempotency-key": `session-mutation:${crypto.randomUUID()}`,
+            ...(method === "POST"
+              ? { "content-type": "application/json" }
+              : {}),
+          },
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.once("end", () =>
+            resolve({
+              status: response.statusCode ?? 0,
+              body: Buffer.concat(chunks).toString("utf8"),
+            }),
+          );
+        },
+      );
+      req.once("error", reject);
+      req.end(method === "POST" ? "{}" : undefined);
+    });
+  it("real Next GET returns safe four-field list and POST/EOF DELETE unwrap formal share ACK", async () => {
+    const page = await get(
+      nextPort,
+      cookie,
+      "/api/account/shared-tasks?limit=100",
+    );
+    expect(page.status).toBe(200);
+    expect(JSON.parse(page.body)).toEqual({
+      data: {
+        items: [
+          {
+            session_id: "opaque:old",
+            title: "Real owner fixture",
+            shared_at: "2026-10-15T00:00:00.000Z",
+            expires_at: null,
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+    for (const method of ["POST", "DELETE"] as const) {
+      const response = await write(method);
+      expect(response.status).toBe(200);
+      expect(JSON.parse(response.body)).toEqual({ share_id: "shr_fixture" });
+    }
+    expect(calls).toContain("/v1/account/shared-tasks?limit=100");
+  }, 30000);
+  it("real Next rejects owner legacy ok:true ACK instead of reporting success", async () => {
+    badAck = true;
+    try {
+      const response = await write("DELETE");
+      expect(response.status).toBe(502);
+    } finally {
+      badAck = false;
+    }
+  }, 30000);
 });

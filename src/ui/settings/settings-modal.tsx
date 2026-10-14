@@ -262,6 +262,7 @@ export function SettingsModal({
                           onOpenSubscription={() => selectTab("subscription")}
                           onTogglePreviewPinnedSkill={togglePreviewPinnedSkill}
                           onOpenPricing={() => selectTab("subscription")}
+                          onSelectSetting={selectTab}
                           {...(onCreateSkillWithAi === undefined
                             ? {}
                             : { onCreateSkillWithAi })}
