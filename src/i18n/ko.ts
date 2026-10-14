@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.logoutUnconfirmed": "로그아웃을 확인할 수 없습니다. 로그아웃 버튼을 다시 눌러 재시도하세요.",
   "settings.preferenceNotSaved": "현재 선택은 적용되었지만 저장되지 않았습니다. 새로고침하면 이전 설정으로 돌아갈 수 있습니다.",
   "settings.retryPreferenceSave": "저장 다시 시도",
   "settings.name.save": "이름 저장",

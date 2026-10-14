@@ -85,7 +85,24 @@ export function AccountCard({
         }
       : null;
   const [devicesOpen, setDevicesOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
+  const logoutScope = JSON.stringify([preview, readBoundary?.admitted ?? false, readBoundary?.subject ?? null, readBoundary?.generation ?? null])
+  const [logoutState, setLogoutState] = useState({ scope: logoutScope, busy: false, failed: false })
+  if (logoutState.scope !== logoutScope) {
+    setLogoutState({ scope: logoutScope, busy: false, failed: false })
+  }
+  const loggingOut = logoutState.scope === logoutScope && logoutState.busy
+  const logoutFailed = logoutState.scope === logoutScope && logoutState.failed
+  const logoutOperation = useRef<{ controller: AbortController; clear: () => void } | null>(null)
+  const currentLogoutScope = useRef(logoutScope)
+  useLayoutEffect(() => {
+    currentLogoutScope.current = logoutScope
+    return () => {
+      const operation = logoutOperation.current
+      logoutOperation.current = null
+      operation?.controller.abort(new DOMException("Logout retired", "AbortError"))
+      operation?.clear()
+    }
+  }, [logoutScope])
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
   const [verificationCode, setVerificationCode] = useState("")
@@ -160,17 +177,53 @@ export function AccountCard({
 
 
   const logout = async (): Promise<void> => {
-    setLoggingOut(true)
-    if (preview) {
-      router.push("/")
-      return
+    if (logoutOperation.current) return
+    const controller = new AbortController()
+    const deadline = performance.now() + 10_000
+    const timer = setTimeout(() => controller.abort(new DOMException("Logout timed out", "TimeoutError")), 10_000)
+    let rejectAbort!: (reason: unknown) => void
+    const interrupted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
+    // Preview and synchronous client failures can finish before the race is attached.
+    void interrupted.catch(() => undefined)
+    const abort = () => rejectAbort(controller.signal.reason)
+    controller.signal.addEventListener("abort", abort, { once: true })
+    const operation = {
+      controller,
+      clear: () => {
+        clearTimeout(timer)
+        controller.signal.removeEventListener("abort", abort)
+      },
+    }
+    logoutOperation.current = operation
+    const active = () => logoutOperation.current === operation && currentLogoutScope.current === logoutScope && !controller.signal.aborted
+    setLogoutState({ scope: logoutScope, busy: true, failed: false })
+    let handedOff = false
+    const navigate = (url: string) => {
+      if (!active()) return
+      if (performance.now() >= deadline) {
+        controller.abort(new DOMException("Logout timed out", "TimeoutError"))
+        return
+      }
+      window.location.assign(url)
+      handedOff = true
+      operation.clear()
     }
     try {
-      await endProductSession()
+      if (preview) {
+        router.push("/")
+        handedOff = true
+      } else {
+        await Promise.race([endProductSession(navigate, controller.signal), interrupted])
+      }
     } catch {
-      // 登出失败也回首页：信封若仍在，首页闸会重新裁决。
+      if (!handedOff && logoutOperation.current === operation && currentLogoutScope.current === logoutScope) {
+        logoutOperation.current = null
+        setLogoutState({ scope: logoutScope, busy: false, failed: true })
+      }
+    } finally {
+      operation.clear()
     }
-    // Product sign-out owns the issuer confirmation navigation.
+    // A confirmed handoff stays busy until navigation leaves this component.
   }
 
   const displayName = account?.displayName ?? "—"
@@ -356,6 +409,8 @@ export function AccountCard({
           {loggingOut ? <Spinner aria-hidden="true" /> : <LogOut aria-hidden="true" />}
         </Button>
       </div>
+
+      {logoutFailed ? <p role="alert">{t("settings.logoutUnconfirmed")}</p> : null}
 
       <div className={styles.planCard}>
         <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>

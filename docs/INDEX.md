@@ -1,3 +1,4 @@
+<!-- SET24：账户退出失败/timeout与scope退役，三设计及CURRENT具名门。 -->
 <!-- SET23：通用主题/语言持久化失败与明确重试见三设计/CURRENT；现Provider和AppearanceCard局部修补，无网络/owner变更。 -->
 <!-- SET20：团队页可靠性与原文/身份边界见TECHNICAL_DESIGN、API_CONTRACT、DATA_MODEL具名前缀，Root真实HTTP与完整门事实见CURRENT/ACCEPTANCE。 -->
 <!-- SET19：TECH/API/DATA/CURRENT文首记录正式BFF15.2姓名保存切片；源/生成冻结独审与实际测试结果分别记录，正常fresh16scope/CUA不由静态门替代。 -->

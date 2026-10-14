@@ -1662,3 +1662,275 @@ describe("SET23 real preference persistence feedback", () => {
     }
   });
 });
+
+
+let set24ProfileSubject = "settings-reader";
+function set24ProfileFixture() {
+  let restoreProfile = () => {};
+  beforeEach(async () => {
+    set24ProfileSubject = "settings-reader";
+    const client = await import("@/ui/settings/account-profile-client");
+    const spy = vi.spyOn(client, "readAccountProfile").mockImplementation(async () => ({
+      subject: set24ProfileSubject, name: "Fixture Owner", email: "owner@example.test", email_verified: true,
+    }));
+    restoreProfile = () => spy.mockRestore();
+  });
+  afterEach(() => restoreProfile());
+}
+
+// SET24 private preparation only. Original accepted 50-case prefix preserved.
+// Run only first case for original-source RED after formal tests-only admission.
+describe("SET24 bounded account logout", () => {
+  set24ProfileFixture();
+  it("rejected signout announces an unconfirmed result and restores the explicit logout button", async () => {
+    endProductSession.mockRejectedValueOnce(new Error("Product sign-out unavailable"));
+    try {
+      renderSettings();
+      const logout = screen.getByTestId("settings-logout");
+      fireEvent.click(logout);
+      await waitFor(() => expect(endProductSession).toHaveBeenCalledOnce());
+      const alert = await screen.findByText(/无法确认.*退出|退出.*无法确认/, { selector: '[role="alert"]' });
+      expect(alert).toHaveTextContent(/无法确认.*退出|退出.*无法确认/);
+      expect(logout).toBeEnabled();
+      expect(endProductSession).toHaveBeenCalledTimes(1);
+    } finally {
+      endProductSession.mockReset();
+      endProductSession.mockResolvedValue(undefined);
+    }
+  });
+
+  // GREEN followups use this helper so actual client cancellation is exercised,
+  // not a mock that voluntarily suppresses stale navigation.
+  async function installActualSignout() {
+    const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>(
+      "@/ui/auth/product-auth-client",
+    );
+    endProductSession.mockImplementation(actual.endProductSession);
+  }
+
+  it("real signout client cannot dispatch POST after retirement during pending CSRF body", async () => {
+    let finishBody!: (value: { csrfToken: string }) => void;
+    let csrfSignal: AbortSignal | undefined;
+    const fetcher = vi.fn().mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      csrfSignal = init?.signal ?? undefined;
+      return Promise.resolve({ ok: true, json: () => new Promise((resolve) => { finishBody = resolve; }) });
+    });
+    try {
+      await installActualSignout();
+      vi.stubGlobal("fetch", fetcher);
+      const mounted = renderSettings();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      mounted.unmount();
+      expect(csrfSignal?.aborted).toBe(true);
+      const { act } = await import("@testing-library/react");
+      await act(async () => { finishBody({ csrfToken: "Csrf123" }); });
+      expect(fetcher).toHaveBeenCalledTimes(1); // no late signout POST
+    } finally {
+      endProductSession.mockReset();
+      endProductSession.mockResolvedValue(undefined);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("explicit retry dispatches once even for two clicks in the same turn", async () => {
+    let settle!: () => void;
+    endProductSession.mockRejectedValueOnce(new Error("unconfirmed"));
+    try {
+      renderSettings();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      await screen.findByRole("alert");
+      endProductSession.mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve; }));
+      const { act } = await import("@testing-library/react");
+      act(() => {
+        const button = screen.getByTestId("settings-logout");
+        button.click();
+        button.click();
+      });
+      expect(endProductSession).toHaveBeenCalledTimes(2); // failure + one explicit retry
+      await act(async () => { settle(); });
+    } finally {
+      endProductSession.mockReset();
+      endProductSession.mockResolvedValue(undefined);
+    }
+  });
+});
+
+
+// Executable GREEN draft cases; not run or admitted into repository yet.
+describe("SET24 deadline and retirement followups", () => {
+  set24ProfileFixture();
+  function restoreSignout() {
+    endProductSession.mockReset();
+    endProductSession.mockResolvedValue(undefined);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+
+  function mountScopedLogout() {
+    const draw = (subject: string, generation: number, admitted: boolean) => {
+      set24ProfileSubject = subject;
+      return (
+      <ThemeProvider><LocaleProvider>
+        <SettingsModal brandName="Acme" initialTab="account" preview={false}
+          readBoundary={{ subject, generation, admitted }} onClose={() => {}} />
+      </LocaleProvider></ThemeProvider>
+    );
+    };
+    const mounted = render(draw("logout-owner", 1, true));
+    return { ...mounted, change: (subject: string, generation: number, admitted: boolean) =>
+      mounted.rerender(draw(subject, generation, admitted)) };
+  }
+
+  it("one absolute 10s budget aborts a noncooperative promise and restores explicit retry", async () => {
+    let signal: AbortSignal | undefined;
+    endProductSession.mockImplementation((_navigate: unknown, currentSignal?: AbortSignal) => {
+      signal = currentSignal;
+      return new Promise<void>(() => {});
+    });
+    try {
+      renderSettings();
+      vi.useFakeTimers();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      const { act } = await import("@testing-library/react");
+      await act(async () => { await vi.advanceTimersByTimeAsync(9_999); });
+      expect(screen.getByTestId("settings-logout")).toBeDisabled();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(signal?.aborted).toBe(false);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(signal?.aborted).toBe(true);
+      expect(screen.getByRole("alert")).toHaveTextContent(/无法确认.*退出|退出.*无法确认/);
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      expect(endProductSession).toHaveBeenCalledOnce();
+    } finally { restoreSignout(); }
+  });
+
+  it.each([
+    ["subject", "another-owner", 1, true],
+    ["generation", "logout-owner", 2, true],
+    ["admission", "logout-owner", 1, false],
+  ] as const)("%s retirement aborts old operation and ignores late failure", async (_kind, subject, generation, admitted) => {
+    let signal: AbortSignal | undefined;
+    let rejectOld!: (reason: Error) => void;
+    endProductSession.mockImplementation((_navigate: unknown, currentSignal?: AbortSignal) => {
+      signal = currentSignal;
+      return new Promise<void>((_resolve, reject) => { rejectOld = reject; });
+    });
+    try {
+      const mounted = mountScopedLogout();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      expect(endProductSession).toHaveBeenCalledOnce();
+      mounted.change(subject, generation, admitted);
+      expect(signal?.aborted).toBe(true);
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      const { act } = await import("@testing-library/react");
+      await act(async () => { rejectOld(new Error("late rejection")); });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      mounted.change("logout-owner", 1, true);
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally { restoreSignout(); }
+  });
+
+  it("actual client suppresses late valid503 issuer navigation after identity retirement", async () => {
+    const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
+    const navigate = vi.fn();
+    let finishBody!: (raw: { issuer_end_session_url: string }) => void;
+    let requestSignal: AbortSignal | undefined;
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
+      .mockImplementationOnce((_input: unknown, init?: RequestInit) => {
+        requestSignal = init?.signal ?? undefined;
+        return Promise.resolve({ ok: false, status: 503,
+          json: () => new Promise((resolve) => { finishBody = resolve; }) });
+      });
+    endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
+    try {
+      vi.stubGlobal("fetch", fetcher);
+      const mounted = mountScopedLogout();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      await waitFor(() => expect(finishBody).toBeTypeOf("function"));
+      mounted.change("logout-owner", 2, true);
+      expect(requestSignal?.aborted).toBe(true);
+      const { act } = await import("@testing-library/react");
+      await act(async () => { finishBody({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }); });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+    } finally { restoreSignout(); }
+  });
+
+  it("actual503 issuer handoff clears the deadline while leaving success busy", async () => {
+    const actual = await vi.importActual<typeof import("@/ui/auth/product-auth-client")>("@/ui/auth/product-auth-client");
+    const navigate = vi.fn();
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ csrfToken: "Csrf123" }) })
+      .mockResolvedValueOnce({ ok: false, status: 503,
+        json: async () => ({ issuer_end_session_url: "/iam/oauth2/end-session?fixture=valid" }) });
+    endProductSession.mockImplementation((_guardedNavigate: unknown, signal?: AbortSignal) => actual.endProductSession(navigate, signal));
+    try {
+      vi.stubGlobal("fetch", fetcher);
+      renderSettings();
+      vi.useFakeTimers();
+      const { act } = await import("@testing-library/react");
+      await act(async () => { fireEvent.click(screen.getByTestId("settings-logout")); });
+      expect(navigate).toHaveBeenCalledExactlyOnceWith("/iam/oauth2/end-session?fixture=valid");
+      await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByTestId("settings-logout")).toBeDisabled();
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally { restoreSignout(); }
+  });
+
+
+  it("component guarded navigation suppresses an old callback after replacement scope", async () => {
+    let oldNavigate!: (url: string) => void;
+    let signal: AbortSignal | undefined;
+    const navigate = vi.fn();
+    const realWindow = window;
+    // Private test-local location facade, no change to shared router fixture.
+    const locationFacade = {
+      assign: navigate,
+      pathname: realWindow.location.pathname,
+      search: realWindow.location.search,
+      href: realWindow.location.href,
+    };
+    const windowFacade = new Proxy(realWindow, {
+      get(target, key) {
+        if (key === "location") return locationFacade;
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    endProductSession.mockImplementation((callback: (url: string) => void, currentSignal?: AbortSignal) => {
+      oldNavigate = callback;
+      signal = currentSignal;
+      return new Promise<void>(() => {});
+    });
+    try {
+      vi.stubGlobal("window", windowFacade);
+      const mounted = mountScopedLogout();
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      expect(oldNavigate).toBeTypeOf("function");
+      mounted.change("another-owner", 1, true);
+      expect(signal?.aborted).toBe(true);
+      oldNavigate("/iam/oauth2/end-session?fixture=valid");
+      expect(navigate).not.toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByTestId("settings-logout")).toBeEnabled();
+    } finally { restoreSignout(); }
+  });
+
+  it("preview logout performs zero Product authentication requests", async () => {
+    const fetcher = vi.fn();
+    try {
+      vi.stubGlobal("fetch", fetcher);
+      renderSettings(() => {}, undefined, true);
+      fireEvent.click(screen.getByTestId("settings-logout"));
+      expect(endProductSession).not.toHaveBeenCalled();
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { restoreSignout(); }
+  });
+});

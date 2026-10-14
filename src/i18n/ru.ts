@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.logoutUnconfirmed": "Не удалось подтвердить выход. Нажмите кнопку выхода ещё раз, чтобы повторить попытку.",
   "settings.preferenceNotSaved": "Текущий выбор применён, но не сохранён. Обновление страницы может восстановить прежнюю настройку.",
   "settings.retryPreferenceSave": "Повторить сохранение",
   "settings.name.save": "Сохранить имя",

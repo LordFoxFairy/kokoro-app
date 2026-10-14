@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "settings.logoutUnconfirmed": "Die Abmeldung konnte nicht bestätigt werden. Klicken Sie zum Wiederholen erneut auf die Abmeldeschaltfläche.",
   "settings.preferenceNotSaved": "Ihre aktuelle Auswahl ist wirksam, wurde aber nicht gespeichert. Beim Neuladen kann die vorherige Einstellung wiederhergestellt werden.",
   "settings.retryPreferenceSave": "Speichern erneut versuchen",
   "settings.name.save": "Namen speichern",

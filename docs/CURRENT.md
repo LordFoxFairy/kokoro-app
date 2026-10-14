@@ -1,3 +1,19 @@
+## SET24 账户退出修补正式接收（2026-10-15；完整设置Goal继续）
+
+AccountCard调用方具名单10s/AbortSignal/race、同步双击单发、完整preview/admitted/subject/generation退役与导航guard已实现。请求拒绝/超时后明确“无法确认退出”，恢复原按钮以显式重试，不假称仍登录/已回滚/自动重试。正规503 issuer handoff成功清timer并保持busy，Product auth client原字节保持；profile读取失败不阻退出。九语言仅一新key；旧50项完整prefix与921保护、Root7由Root/独审逐hash核，无确定P1/P2。
+
+原source终态测试真实缺logout专属alert FAIL已由Root复现；终态Root三文件132PASS。contract283/architecture50/lint/type/build通过，i18n99PASS/2同此前FAIL。正确配置full3927PASS/6FAIL/0SKIP：ja覆盖、MCP硬编码、Skills三项和排程日期一项；此前native认证波动本轮通过，不能据单次称稳定性问题已修。隔离正常Playwright14PASS/6同名此前desktop timeout/4SKIP，非Account设置真实浏览器验证。两门owned资源库存exact恢复。正常账户退出/CUA仍待既有HTTP页人工恢复，不能由组件或替身链代替。
+
+本片接入现功能PR14，本地沿现Next dev重编译；后继SET25仅已有chat模型深链保存失败反馈与目录加载/重试，正式新base后D0/tests-only，非新增General模型入口。Skills/连接器排除，整个设置Goal继续active。
+
+SET24阶段准入：原source首个拒绝case由writer与Root各实际1FAIL/60SKIP，缺logout专属无法确认alert、无profile/setup假RED；原50prefix/931保护/Root7 exact。当前授runtime_audit仅D0具名AccountCard与九locale一键及同一新测试后缀补正，Product auth client源保持。失败后的按钮恢复断言在原RED缺alert之后未到达，不冒已测。终态冻结/独审/Root正规门待。
+
+## SET24 账户退出失败恢复（2026-10-15；正式D0，先tests-only）
+
+Web现有AccountCard退出交互的局部修补；基线03fc794403116f93c318eeec3534ae0d199cb690，939 tracked clean。Root绑定921原保护，唯一writer runtime_audit；Root独占三设计/CURRENT/相邻INDEX与Git/资源/运行/浏览器，storage_platform_audit只读审查。Skills/连接器、Product auth client源码、API/contract/generated/lock/依赖/CSS及其他owner排除。独立D0审查无确定P1/P2。
+
+任务SET24/P1：账户logout失败不恢复。允许writer11现路径：AccountCard、九locale各追加一键、settings-modal原50项完整prefix后新增测试；禁止新文件/模块或改旧oracle。先实际第一具名拒绝RED，Root复现后授source；新夹具隔离profile读，logout专属alert，避免profile错误假RED。GREEN覆盖明确重试/同步双击单发、10s非合作、身份/permission/preview/unmount退役、真实client迟到CSRF/503导航、安全成功handoff。之后冻结11/921/Root7、独审、Root专项复验与正规contract/architecture/lint/type/build/full/E2E；旧失败不放宽，正常CUA另验。当前source尚未授写。完整设置Goal保持active，本片通过后继续后继。
+
 ## SET23 通用偏好失败反馈源码接收（2026-10-15）
 
 两Provider独立保存失败状态；当前选择即时生效，General对应行明确未保存/刷新可恢复，显式重试当前值成功只清自身错误。关闭重开Modal保Provider失败，真正重挂按持久值恢复。九locale各两新键，无新API/store/deps/CSS，旧key/值、SSR/system/协商/IAMlang保持。Root独核382f7196冻结13 writer/919原保护/7 Root、旧47case完整prefix与九locale逆变换；终态独审无确定P1/P2。

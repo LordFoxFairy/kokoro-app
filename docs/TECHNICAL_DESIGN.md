@@ -1,3 +1,9 @@
+## SET24 账户退出失败恢复（2026-10-15；正式D0，先tests-only）
+
+Web现有AccountCard退出交互的局部修补；基线03fc794403116f93c318eeec3534ae0d199cb690，939 tracked clean。Root绑定921原保护，唯一writer runtime_audit；Root独占三设计/CURRENT/相邻INDEX与Git/资源/运行/浏览器，storage_platform_audit只读审查。Skills/连接器、Product auth client源码、API/contract/generated/lock/依赖/CSS及其他owner排除。独立D0审查无确定P1/P2。
+
+当前logout先置busy，endProductSession拒绝后catch未恢复，按钮永久disabled/Spinner，旧注释错误。目标仅现AccountCard caller：full preview/admitted/subject/generation绑定操作，同步ref阻重复；绝对单10s覆盖CSRF/POST/body/导航，传既有AbortSignal且race abort以恢复非合作promise。timer先abort再settle；失败/timeout显示可访问的“无法确认退出”翻译并恢复原按钮以显式重试，无自动重试或已回滚/仍登录承诺。layout/卸载取消仅自身操作；新scope即idle，迟到catch/finally不得改新操作。guarded navigation核现operation/scope/signal/绝对deadline；正常成功handoff清timer/listener并保持busy至离页。保现503+合法issuer handoff及preview home零auth。profile可用或admission成功不是退出先决条件；scope仅用于退役。扩现组件胜于新通用logout框架，不新增模块或文件。
+
 ## SET23 通用语言与主题保存失败反馈（2026-10-15；D0与Root真实RED通过，具名source准入）
 
 归属Web现有浏览器偏好Provider和General AppearanceCard，是现文件局部修补，不新增模块、API、owner、依赖或存储框架。正式基线293ac84d7b2b6562b73e46c56436aadc4c1c2e3b，939 tracked clean已绑定；原主题/语言即时生效，setItem失败无提示，不能说整体不可用。候选独审无确定P1/P2。

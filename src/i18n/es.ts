@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  "settings.logoutUnconfirmed": "No se ha podido confirmar el cierre de sesión. Pulsa de nuevo el botón para reintentarlo.",
   "settings.preferenceNotSaved": "La selección actual se ha aplicado, pero no se ha guardado. Al actualizar, puede restaurarse la configuración anterior.",
   "settings.retryPreferenceSave": "Reintentar guardar",
   "settings.name.save": "Guardar nombre",

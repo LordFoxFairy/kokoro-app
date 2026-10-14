@@ -1,3 +1,9 @@
+## SET24 账户退出失败恢复（2026-10-15；正式D0，先tests-only）
+
+Web现有AccountCard退出交互的局部修补；基线03fc794403116f93c318eeec3534ae0d199cb690，939 tracked clean。Root绑定921原保护，唯一writer runtime_audit；Root独占三设计/CURRENT/相邻INDEX与Git/资源/运行/浏览器，storage_platform_audit只读审查。Skills/连接器、Product auth client源码、API/contract/generated/lock/依赖/CSS及其他owner排除。独立D0审查无确定P1/P2。
+
+不改传输或正式owner合同。现endProductSession(navigate,signal)完整保留：GET /api/auth/csrf、form POST /api/auth/signout、既有合法issuer URL与503 handoff。AccountCard只提供有界生命周期和导航护栏，无新scope/header/API/授权、CSRF绕过或host放宽。未确认结果不能自动POST重试或假成功跳首页；手动重试由用户明确点击。
+
 ## SET23 通用语言与主题保存失败反馈（2026-10-15；D0与Root真实RED通过，具名source准入）
 
 归属Web现有浏览器偏好Provider和General AppearanceCard，是现文件局部修补，不新增模块、API、owner、依赖或存储框架。正式基线293ac84d7b2b6562b73e46c56436aadc4c1c2e3b，939 tracked clean已绑定；原主题/语言即时生效，setItem失败无提示，不能说整体不可用。候选独审无确定P1/P2。

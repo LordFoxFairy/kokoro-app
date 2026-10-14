@@ -42,6 +42,7 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "settings.logoutUnconfirmed": "无法确认退出登录。请再次点击退出按钮重试。",
   "settings.preferenceNotSaved": "当前选择已生效，但未保存。刷新可能恢复之前的设置。",
   "settings.retryPreferenceSave": "重试保存",
   "settings.name.save": "保存姓名",
