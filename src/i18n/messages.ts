@@ -876,6 +876,10 @@ export const zh = {
   "team.errInviteExpired": "邀请已过期。",
   "team.errInviteStale": "邀请已失效。",
   "team.errForbidden": "你没有权限执行该操作。",
+  "team.incompleteRead": "团队资料尚未完整读取。已有条目仅为部分结果，请重新读取后再操作。",
+  "team.readRequired": "需重新验证登录后才能读取团队。",
+  "team.unknown": "无法确认操作结果。请先重新读取团队，再明确决定是否继续；不会自动重试。",
+  "team.continueAfterRead": "已重新读取团队；允许下一次明确操作",
   "team.errGeneric": "操作失败，请稍后再试。",
   // 连接面板（MCP-UX）：MCP server 注册/启停/软删 + 凭据 handle 管理
   "rail.navMcp": "连接",

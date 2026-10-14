@@ -338,3 +338,14 @@
   .panel :global(select),
   .panel :global([role="combobox"]) { min-height: 2.75rem; }
 }
+
+/* Explicit recovery remains readable in every locale on narrow screens. */
+.recoveryAction {
+  max-width: 100%;
+  min-height: 2.25rem;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  text-align: start;
+}

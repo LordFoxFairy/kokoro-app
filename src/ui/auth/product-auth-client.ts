@@ -27,13 +27,20 @@ async function currentCsrf(signal?: AbortSignal): Promise<string> {
 
 export async function endProductSession(
   navigate: (url: string) => void = (url) => window.location.assign(url),
+  signal?: AbortSignal,
 ): Promise<void> {
+  signal?.throwIfAborted();
+  const csrfToken = await currentCsrf(signal);
+  signal?.throwIfAborted();
   const response = await fetch("/api/auth/signout", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ csrfToken: await currentCsrf() }),
+    body: new URLSearchParams({ csrfToken }),
+    ...(signal ? { signal } : {}),
   });
+  signal?.throwIfAborted();
   const raw: unknown = await response.json().catch(() => null);
+  signal?.throwIfAborted();
   const url =
     typeof raw === "object" && raw !== null
       ? (raw as { issuer_end_session_url?: unknown }).issuer_end_session_url
@@ -43,9 +50,11 @@ export async function endProductSession(
     typeof url === "string" &&
     url.startsWith("/iam/oauth2/end-session?")
   ) {
+    signal?.throwIfAborted();
     navigate(url);
     return;
   }
+  signal?.throwIfAborted();
   if (response.ok) navigate("/");
   else throw new Error("Product sign-out unavailable");
 }

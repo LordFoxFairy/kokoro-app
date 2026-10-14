@@ -232,6 +232,31 @@ export async function GET(): Promise<Response> {
     expect(bffCalls).toBe(before);
   }, 30_000);
 
+  it("Team mutation uses real Next EOF and exact explicit Origin before owner admission", async () => {
+    const remove = (origin: string | undefined, body?: string) => new Promise<{ status: number; headers: Record<string, string | string[] | undefined> }>((resolve, reject) => {
+      const request = httpRequest({ hostname: "127.0.0.1", port: nextPort, path: "/api/team/members/member-1", method: "DELETE", headers: {
+        host: `localhost:${nextPort}`, ...(origin === undefined ? {} : { origin }), ...(body === undefined ? {} : { "content-length": Buffer.byteLength(body) }),
+      } }, (response) => {
+        response.resume()
+        response.once("end", () => resolve({ status: response.statusCode ?? 0, headers: response.headers }))
+      })
+      request.once("error", reject)
+      request.end(body)
+    })
+    const before = bffCalls
+    const eof = await remove(`http://localhost:${nextPort}`)
+    expect(eof.status).toBe(401)
+    expect(eof.headers["cache-control"]).toContain("no-store")
+    expect(eof.headers["x-request-id"]).toBeTruthy()
+    const missing = await remove(undefined)
+    expect(missing.status).toBe(403)
+    const scheme = await remove(`https://localhost:${nextPort}`)
+    expect(scheme.status).toBe(403)
+    const nonempty = await remove(`http://localhost:${nextPort}`, "x")
+    expect(nonempty.status).toBe(400)
+    expect(bffCalls).toBe(before)
+  }, 30_000)
+
   it("returns 401 without a Product Session and never connects to BFF", async () => {
     const response = await get(nextPort);
     expect(response.status).toBe(401);

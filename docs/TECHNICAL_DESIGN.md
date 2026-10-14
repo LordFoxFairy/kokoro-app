@@ -1,3 +1,20 @@
+## SET-20 团队操作可靠恢复（2026-10-15；V2冻结独审通过，Root集成验收中）
+
+基线3ed206c26dd42df8b979c3b1cba8e9649e1c5a97、901tracked原字节Root已保存。正式BFF a88/public15.2的九个Team operation与IAM c64保持原合同，不新增owner/SQL/generated/pin。现Team实际支持成员/角色/邀请读取和六种mutation；两个只读审查已确认unknown后可重复写、异步身份未退役、ACK未绑定、无全程预算、Origin过宽、EOF-only拒绝、有界权限分页等缺口。Root旧三测试32PASS不是上述负控已覆盖。SET19源码/运行已发行，CUA暂待用户把data错误标签恢复HTTP；本片独立继续，不冒姓名浏览器门通过。
+
+| 项 | 决定 |
+| --- | --- |
+| Owner / 执行 | IAM唯一拥有Membership/Invitation/Role及授权，BFF发布Team Product API；Web只同源adapter/状态/视图。Root设计/docs/Git/资源与浏览器；runtime_audit唯一源码writer，storage_platform_audit独审D0通过。四具名真实行为RED28FAIL/55PASS已由Root独立复现，现授同一卡源实现。 |
+| 位置 / 粒度 | A扩全局同源/auth/bff-response为所有产品加新框架：淘汰，会扩大既有调用责任。B沿现team/client、schema、team route、team-panel与Settings Team分支；新增普通src/ui/team/use-team-settings.ts拥有该页权限读取/写恢复/生命周期，src/team/json.ts只拥有Team原文JSON校验：采用，无新目录/module。schema只closed wire，client只I/O，hook只交互状态，panel保组件/确认/反馈。不将codec+网络/状态混成通用helper。 |
+| 原始wire | Team独立原文codec保合法字符串原码元（display_name可沿历史姓名含escaped lone），拒坏UTF8/BOM/重复decoded key/尾随内容/过深JSON；在现teamTransport的原字节接缝核closed响应后交generated consumer，避免generated transport的JSON.parse先丢重复键；不手改生成物。输入仍正规email/roles，删除再生tenant/actor字段、query/bare?或未发布key/body，不复制Profile codec形成跨能力依赖。 |
+| 浏览器预算 / ACK | 每次调用入口单10s含generated normalization/fetch/headers+body（2MiB）/strict parse；当前session读取沿真实closed投影，取消主动取消fetch/read与迟到结果，零写retry。mutation200及request-id/meta一致；resend/cancel绑定invitationID，remove/replace绑定memberID，replace role集合必须完全等值且无重复；leave绑定权威actor memberID，仅内部client期望参数，不进入body。create仅绑定新pending ID/status，不伪造合同未提供的email/roles。 |
+| 同源server | 唯一10s从route入口含params/metadata/真实≤16KiB正文/session/BFF headers+body/最终session，明确canonical scheme/Host；mutation必须完全相同Origin，GET允许缺省或相同Origin。不改全局sameOriginOk。EOF-only在预算内读至EOF后允许无正文四操作，任一byte拒；不把non-null流直接判body违规。只有formal九paths/method/query，无caller身份。最终六session字段逐项等值且两expiry有效；变化后401，unknown不能解释为owner回滚。 |
+| 生命周期 / 恢复 | Team分支传preview及现admitted subject/generation；未准入/缺boundary零读写，真实scope变化/close/unmount同步退役snapshot、draft、controller、confirmation和迟到结果。同步pending ref阻same-render双写。ACK后完整权威加载actor/全部roles及合法首屏members/invitations，不以局部invitation刷新授新权限；失败锁写。401/传输/超时/取消/坏ACK及5xx未知先锁写，保意图，成功权威加载后仍需显式确认继续；分页或失败重读不解锁、不自动再次mutation。 |
+| 权限读取 / 分页 | whole-load单10s，查actor与全roles各最多20页/2000条并核unique cursor/item，超界或不完整fail closed，不用部分role目录授权。More保部分提示与scope/pending，不能解除未知写栅栏；成功首屏重新加载才更新权限。IAM最终授权/LastOwner约束仍唯一权威，Web按钮只是提示，不修改角色语义/权限域。 |
+| 退出团队 | 正规leave ACK先核actor/scoped active，才显示已退出并沿原Product signout；预览零auth POST。现endProductSession仅加可选调用者signal与各await/导航前check，Team提供有界scope signal，原无signal调用行为保持。取消或新scope后迟到CSRF不得POST注销新会话，迟到退出回执不得导航新身份；不改auth wire/server、密码或Issuer权限。 |
+| 文案 / 样式 | 九locale仅appendTeam unknown/readfailed/explicit continue和bounded/incomplete提示，原键值尤其Skill/连接器不改；现team-panel.module.css只必要token/focus/mobile状态。原确认/LastOwner错误/分页与多role选择保留。 |
+| 排除 / 验证 | 无IAM/BFF源/SQL/Redis/deps/lock/API pin/Skills连接器修改，Root独占资源/服务/Git。先具名行为RED→GREEN，再正常contract/architecture/lint/type/build、冻结精确源/901保护和独审；Root正常full/E2E/实际Next EOF与真实IAM disposable Team验收。旧失败不放宽，真实owner/浏览器不由组件mock替代。 |
+
 ## SET-19 账户姓名真实保存（2026-10-15；源码已接收，正常浏览器待验）
 
 本仓基线08125f9baacc53db22255379b3f79d8e8a30febd，Root已保存875 tracked原字节。正式IAM姓名owner c64faa7992301f31495e163d04049c48a23d0225/internal0.13.0与BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0/145已发行；BFF canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453。当前Web唯一生成输入已按该正式Git对象原字节更新，四个正规生成检查通过；原Team/设备生成正文保持。storage_platform_audit绑定本基线与三D0只读独审通过，无确定P1/P2；Root已沿CURRENT准入唯一writer，设计审查不冒实现验收。

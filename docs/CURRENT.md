@@ -1,3 +1,25 @@
+## SET-20-Web 团队可靠恢复任务卡（2026-10-15；V2源码已接收，正常集成进行中）
+
+基线3ed206c26dd42df8b979c3b1cba8e9649e1c5a97、901tracked clean；原字节Root保存var/dev/set20-web-baseline.json。TECH/API/DATA文首明确单owner、六现mutation/九operation、single budget/ACK binding/EOF/身份退役/unknown写栅栏。Root仍独占docs/INDEX/Git与真实资源；storage_platform_audit已绑定三设计只读独审无确定P1/P2。四具名测试先真实RED28FAIL/55PASS，原52oracle另实际PASS；Root固定Node22/pnpm11独立复现相同28FAIL/55PASS后授runtime_audit同一卡精确源文件实现，不以旧32PASS冒新反例已覆盖。
+
+| 范围 | 候选允许 |
+| --- | --- |
+| 现源 | src/team/client.ts、schema.ts；src/app/api/team/[...path]/route.ts；src/ui/team/team-panel.tsx与team-panel.module.css；src/ui/settings/settings-panel-content.tsx仅Team分支props；src/ui/auth/product-auth-client.ts仅endProductSession可选signal/退役check，其他原调用保持 |
+| 新普通源 | src/ui/team/use-team-settings.ts（权限读取/写恢复/作用域状态）；src/team/json.ts（Team raw codec） |
+| locale | 现九i18n文件只append本片Team反馈键，旧全部键值/Skill连接器不动 |
+| 现测试 | tests/team/client.test.ts；tests/ui/team-panel.test.tsx；tests/system/team-product-route.test.ts；tests/ui/product-auth-client.test.ts；tests/ui/settings-modal.test.tsx仅Team实props与原菜单不变；tests/system/product-bff-next-http.integration.test.ts仅真实Team EOF/scheme/missing Origin负控，fixture资源由Root运行；tests/team/permissions.test.ts若必要新增完整权限分页场景但不改角色语义 |
+| 新测试 | tests/ui/use-team-settings.test.tsx仅直接有意义的unknown锁/生命周期/同步双写/有界权限读负控，可选择以现component覆盖而不新文件；不新资源runner |
+| 门 / 保护 | Root旧三tests32PASS留存；先真实RED后source；固定Node22/pnpm11，normalcontract/architecture/lint/type/build、精确freeze+901保护。Root实际全测/资源/E2E/CUA统一，未授worker Git/进程/数据库/浏览器、其他repo/dependency/framework/public合同修改。必要越界先报Root。 |
+
+Root正常SET19已按正式Web3ed/BFFa88/IAMc64运行，fresh login及精确16scope核验；首次启动配置失败已纠正并保留日志。CUA旧tab为禁止data错误页，安全策略拒reload/goto，已请用户手动恢复HTTP；不换browser/伪造UI结果，只有浏览器门待回复，独立Team修补继续。
+
+
+SET20 V2冻结25writer（22既有/3新）及875原字节保护经Root独立逐hash/范围/原设计后缀核；首冻独审指出默认follow，唯一client/test窄修redirect:error、真实2FAIL→39clientPASS；V2其余23writer和875保护不变，复审无剩余确定P1/P2。首冻7专项172PASS及Root独立172PASS；原52业务oracle另独立PASS，fixture例外只正规ACK/Origin/在线身份/signal。normal contract282/architecture50、lint/type/build已通过，V2lint/type通过；Root最终V2七专项174PASS，最终build exit0；完整normal仍有失败，不宣全绿。
+
+Root实际Next HTTP原四项和新增Team EOF/explicitOrigin共5PASS。首轮全部500输出保留；固定工具PATH后私有诊断及正规原文件均5PASS，未独立确定首轮500原因，不修改正规fixture/oracle。Root额外自有双HTTP端口原生GET307/308在首冻实际接受foreign末端响应，2真实FAIL；V2后同样原生GET两例PASS且foreign目标零请求。原生POST307/308因Node22 detachedArrayBuffer不能证明follow，与作者mock策略负控准确区分。正常团队浏览器journey仍待旧断线标签人工恢复，未伪造通过。
+
+Root完整normal首轮3833PASS/8FAIL，复轮3830PASS/11FAIL：六既有UI/翻译/Skills失败、既有R177以及登录/仪表/运行清单的波动原输出均保留。续期单例1PASS，当前五系统波动项隔离分轮3PASS+2PASS，原3ed私有副本同五项5PASS；不声称全仓成功或确定首轮失败根因。Playwright14PASS/6此前同名桌面超时/4SKIP；Redis测试库原key集合与PostgreSQL库名集合精确恢复。源码验收接收，正常发行/runtime/browser仍按Root后继门继续，整体Goal active。
+
 ## SET-19 Web 源码及真实 Next HTTP 已接收（2026-10-15；正常浏览器待验）
 
 冻结0f1644e6的64writer路径/833原保护与875基线由Root独立逐hash核，formal BFF a88/public15.2/145全文3214e32d与Git blob精确相同；storage_platform_audit终态独审无剩余确定P1/P2。九locale仅append9姓名键；八原contract与api-contract原业务断言逆向重建恢复基线；Team/设备原生成正文保持，依赖/锁/SQL/Skills连接器功能不改。Root继续更新CURRENT及三设计实际状态/INDEX/ACCEPTANCE，故Root文档另计，不宣称与冻结旧doc hash等值。

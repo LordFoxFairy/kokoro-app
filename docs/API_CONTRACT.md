@@ -1,3 +1,13 @@
+## SET-20 browser-private Team 可靠性（2026-10-15；V2冻结独审通过，Root集成验收中）
+
+唯一正式合同仍为BFF a88/public15.2九个Team operation；本片不编辑snapshot/generated/public schema或IAM API。现/api/team/[...path]只映射现members/invitations/roles及六mutation；成功均200，closed data/meta字段与正式error envelope保持。caller actor/tenant永不从body读取，leave内部期望memberID只用于客户端ACK校验，不传输为身份字段。
+
+canonical scheme/Host全部核，GET Origin缺省或完全相同，mutation Origin必须明确完全相同。无query的mutation同时拒bare?；未发布Idempotency-Key、content-encoding或body字段不接受。create/replace JSON原文≤16KiB、fatal UTF8/duplicate/closed；resend/cancel/remove/leave只允许实际EOF，在同一预算内验证为空，不转发fake空JSON。路径及page query沿原闭集，不新增接受/切团队/创建团队API。
+
+server单10s从入口含params/body/session/BFF全响应及最终六session等值有效核；browser单10s、2MiB headers+body且主动取消不合作读取/迟到fetch。成功严格raw schema、200、no-store、meta/header request-id一致，正式4xx拒绝与未知网络/401最终身份变化/5xx/坏ACK区分；错误message不透未验证的原始upstream值。九操作429的Retry-After可缺省，存在时为^[1-9][0-9]{0,4}$即1..99999；503及其他未声明状态不接受该头，不套用姓名的必填或86400规则。server final-session退役即便owner已成功写仍401，客户端不能假未提交。
+
+创建invitation ACK只新ID/pending；resend/cancel绑定请求invitationID；replace/remove绑定请求memberID，replace绑定完整角色集合；leave绑定已完整权限加载得到的actor memberID。首次权限加载查actor及全role有界20页/2000条、whole-read10s；未知写或ACK后刷新失败拒第二写，只有完整成功authority reload及显式决定可继续，More不提供该资格。subject/admission/generation/close/unmount退役结果及signout signal，无自动mutation retry或邮箱投递承诺。
+
 ## SET-19 browser-private 姓名PATCH（2026-10-15；源码已接收，正常浏览器待验）
 
 现GET /api/account/profile保留userinfo读取。新PATCH同一路径只调用正式BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0 updateAccountProfile；唯一canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453，唯一输入已按该正式Git对象更新，不创建第二份可编辑public schema。新增窄正常生成器消费唯一正式artifact，由generated派生严格input/ACK/error并在strip前校验原始JSON（含重复键/坏UTF8）。其余方法405/Allow GET,PATCH，不新增通用proxy。

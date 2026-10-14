@@ -1,3 +1,4 @@
+<!-- SET20：团队页可靠性与原文/身份边界见TECHNICAL_DESIGN、API_CONTRACT、DATA_MODEL具名前缀，Root真实HTTP与完整门事实见CURRENT/ACCEPTANCE。 -->
 <!-- SET19：TECH/API/DATA/CURRENT文首记录正式BFF15.2姓名保存切片；源/生成冻结独审与实际测试结果分别记录，正常fresh16scope/CUA不由静态门替代。 -->
 <!-- SET16：三设计与CURRENT文首为通用通知/声音候选；不新增owner契约或数据，实际模型完成投递仍待正规执行先决条件。 -->
 <!-- SET-SHORTCUTS: 快捷键规则 src/lib/keyboard-shortcuts.ts；订阅 src/hooks/use-keyboard-shortcuts.ts；编辑 src/ui/settings/sections/shortcuts-card.tsx；回归 tests/lib/keyboard-shortcuts.test.ts 与 tests/ui/keyboard-shortcuts.test.tsx。 -->

@@ -376,6 +376,15 @@ describe("SettingsModal 设置中心模态", () => {
     expect(screen.queryByRole("button", { name: "创建团队" })).toBeNull();
   });
 
+  it("passes the real admitted Team boundary and retires the Team branch when admission is lost", async () => {
+    const view = render(<ThemeProvider><LocaleProvider><SettingsModal brandName="Acme" preview={false}
+      readBoundary={{ admitted: true, subject: "user-me", generation: 1 }} initialTab="team" onClose={() => {}} /></LocaleProvider></ThemeProvider>)
+    expect(await screen.findByTestId("member-row-member-me")).toHaveTextContent("Me")
+    view.rerender(<ThemeProvider><LocaleProvider><SettingsModal brandName="Acme" preview={false}
+      readBoundary={{ admitted: false, subject: "user-me", generation: 2 }} initialTab="team" onClose={() => {}} /></LocaleProvider></ThemeProvider>)
+    expect(screen.queryByTestId("member-row-member-me")).toBeNull()
+  })
+
   it("默认渲染账户 tab 和完整设置导航，不把团队名冒充个人姓名", () => {
     renderSettings();
     expect(screen.getByTestId("settings-account")).toBeInTheDocument();

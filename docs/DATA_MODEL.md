@@ -1,3 +1,11 @@
+## SET-20 团队视图不拥有持久化（2026-10-15；V2冻结独审通过，Root集成验收中）
+
+Membership/Invitation/Role/Audit与LastOwner事务继续唯一IAM owner；BFF只正式Product adapter，Web没有业务表、跨owner SQL、cache或新receipt。Team snapshot、invite/role draft、pending意图、confirmation及reconciliationRequired只存在当次可信subject/generation/admitted生命周期的内存，真实scope退役清除且取消迟到结果。不将部分权限页或failed GET制造为空团队、邀请成功或新权限。
+
+unknown及可能已提交的401/5xx保意图锁写；完整成功重读actor/全roles/合法首屏之后仍由用户显式决定再操作。owner ACK后的权威重读失败同样锁写，分页不清栅栏。最大20页/2000条只读预算失败保错误，不新增数据owner或索引。leave经已有IAM事实与已有Product注销，preview无auth写；客户端新增signal只退休异步，不宣称owner事务回滚。
+
+无SQL/schema/依赖/lock/Redis业务事实/normal资源改动，真实测试只由Root创建和清理自己的disposable fixture；不创建对真实第三人的邀请/授权、不会发送外部邮件。三设计一致且独审后才授源码。当前正常姓名CUA因旧标签data协议阻塞待用户恢复，不影响本片设计推进，也不宣称整个设置完成。
+
 ## SET-19 姓名保存无Web持久化（2026-10-15；源码已接收，正常浏览器待验）
 
 唯一User.name、原值CAS和Audit事实由IAM拥有，Web/BFF不增姓名数据库、Redis事实、schema/SQL、receipt或localStorage缓存。HttpOnly Product Session现存凭据/opaqueID/generation和两expiry边界保持，browser看不到Bearer；姓名来自正规userinfo，expected_name逐字保存原值，不能由当前输入、ID token旧claim、preview或跨身份缓存合成。

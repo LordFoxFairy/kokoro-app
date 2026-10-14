@@ -122,7 +122,7 @@ export function SettingsPanelContent({
         />
       );
     case "team":
-      return <TeamContent client={teamClient} embedded />;
+      return <TeamContent client={teamClient} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} embedded />;
   }
 }
 
