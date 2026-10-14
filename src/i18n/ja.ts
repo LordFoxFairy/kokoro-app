@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "モデル設定は保存されていません。新しいチャットには今回の未保存の選択は適用されません。",
+  "settings.modelCatalogLoading": "モデル一覧を読み込み中…",
+  "settings.modelCatalogFailed": "モデル一覧を読み込めませんでした。再試行してください。",
+  "settings.modelCatalogEmpty": "現在選択できるモデルはありません。スペースの既定値を使用できます。",
+  "settings.modelCatalogRetry": "読み込みを再試行",
   "settings.logoutUnconfirmed": "ログアウトを確認できませんでした。ログアウトボタンをもう一度押して再試行してください。",
   "settings.preferenceNotSaved": "現在の選択は反映されていますが、保存されていません。再読み込みすると以前の設定に戻る場合があります。",
   "settings.retryPreferenceSave": "保存を再試行",

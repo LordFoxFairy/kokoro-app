@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "Die Modellpräferenz wurde nicht gespeichert; neue Chats verwenden diese ungespeicherte Auswahl nicht.",
+  "settings.modelCatalogLoading": "Modellkatalog wird geladen…",
+  "settings.modelCatalogFailed": "Der Modellkatalog konnte nicht geladen werden. Bitte versuchen Sie es erneut.",
+  "settings.modelCatalogEmpty": "Derzeit sind keine Modelle verfügbar; Sie können den Standard des Bereichs verwenden.",
+  "settings.modelCatalogRetry": "Laden erneut versuchen",
   "settings.logoutUnconfirmed": "Die Abmeldung konnte nicht bestätigt werden. Klicken Sie zum Wiederholen erneut auf die Abmeldeschaltfläche.",
   "settings.preferenceNotSaved": "Ihre aktuelle Auswahl ist wirksam, wurde aber nicht gespeichert. Beim Neuladen kann die vorherige Einstellung wiederhergestellt werden.",
   "settings.retryPreferenceSave": "Speichern erneut versuchen",

@@ -42,6 +42,11 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "settings.modelPreferenceNotSaved": "模型偏好未保存；新对话不会采用这次未保存的选择。",
+  "settings.modelCatalogLoading": "正在加载模型目录…",
+  "settings.modelCatalogFailed": "模型目录加载失败，请重试。",
+  "settings.modelCatalogEmpty": "当前没有可选模型；可以跟随空间缺省。",
+  "settings.modelCatalogRetry": "重试加载",
   "settings.logoutUnconfirmed": "无法确认退出登录。请再次点击退出按钮重试。",
   "settings.preferenceNotSaved": "当前选择已生效，但未保存。刷新可能恢复之前的设置。",
   "settings.retryPreferenceSave": "重试保存",

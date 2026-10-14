@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "모델 설정이 저장되지 않았습니다. 새 대화에는 이번에 저장되지 않은 선택이 적용되지 않습니다.",
+  "settings.modelCatalogLoading": "모델 목록을 불러오는 중…",
+  "settings.modelCatalogFailed": "모델 목록을 불러오지 못했습니다. 다시 시도하세요.",
+  "settings.modelCatalogEmpty": "현재 선택할 수 있는 모델이 없습니다. 공간 기본값을 따를 수 있습니다.",
+  "settings.modelCatalogRetry": "불러오기 다시 시도",
   "settings.logoutUnconfirmed": "로그아웃을 확인할 수 없습니다. 로그아웃 버튼을 다시 눌러 재시도하세요.",
   "settings.preferenceNotSaved": "현재 선택은 적용되었지만 저장되지 않았습니다. 새로고침하면 이전 설정으로 돌아갈 수 있습니다.",
   "settings.retryPreferenceSave": "저장 다시 시도",

@@ -1,3 +1,23 @@
+## SET25 终态源码接收与回归事实（2026-10-15）
+
+模型偏好失败不污染原raw/cache或误报saved，显式保存重试当前草稿；目录有loading/error/真实空、单10s caller预算、显式retry及layout/epoch退役。原chat深链保留，Manus General模型入口未新增；Genericstore/client/Skills/连接器无变化。13writer/919保护/Root7及原61完整prefix、九locale五key、五处E2E逆变换Root独核，独审无确定P1/P2。Root在原源码再次真实2FAIL/65SKIP，终态专项138PASS；contract283/architecture50/lint/type/build通过。
+
+完整test3933PASS/6既有FAIL/0SKIP（日本语言覆盖、MCP文案、Skills import三、定时日期），本轮native认证组通过，不代表全套波动已修。正规隔离Playwright18PASS/2FAIL/4SKIP，35.3s；原networkidle边界六例现四业务PASS（rail logout、stream、approve/reject），另两个真实进入390px阅读轴断言发现偏移，布局尚未修；不把此前未触达断言冒称旧几何失败已证实。PG/Redis库存exact恢复，正常IAM/browser账户旅程仍待人工恢复被策略拒绝的错误页。本片源代码接收不等于完整设置Goal完成，后继接可信用量/订阅scope、目录期限与恢复。
+
+## SET25 浏览器测试就绪边界窄准入（2026-10-15）
+
+仅现tests/e2e/web-governance.spec.ts原65/107/267/405/470五个初始/app goto覆盖六例：networkidle改DOMContentLoaded后准确Chat input可见/启用/可编辑web断言。原229及其余goto保持。已有实际六desktop等待超时证据及只读独审无确定P1/P2；官方Playwright建议测试以web断言判断ready。原logout POST/issuer、reading轴/长markdown/stream/HITL所有业务oracle、mock、skip、timeout、route保持，R137观察器仍先于首次发送。不能以输入就绪冒称业务通过，也不宣定位具体网络请求根因。无Product源码/fixture/权限改动；沿runtime_audit同一writer，SET25扩为13writer/919保护/Root7，仅本项追加范围，其余原边界保持。最终正规E2E运行仍待验。
+
+## SET25 模型偏好源码准入（2026-10-15）
+
+Root 对已冻结新增测试独立重现两项真实断言失败：存储写入失败污染模型读取缓存，目录请求拒绝缺少明确错误反馈。原61项完整测试前缀、931个tests-only保护路径及Root7准确保持。现授runtime_audit唯一writer，沿既定12路径/920保护/Root7实施本页五个locale key、准确保存结果及单尝试10s目录caller预算/手动重试。无新General模型入口，不改变通用store、client、Skills或连接器；Root独占文档、Git、资源和正常运行。终态冻结/独审/Root复验、完整门禁与正常接入仍待执行，整个设置Goal active。
+
+## SET25 原有模型偏好深链可靠性（2026-10-15；正式D0，先tests-only）
+
+Web既有chat-prefs/ChatPreferencesSection/旧chat深链局部修补；正式基线6921a1cbffd723fc37c4cc64342bb3a6f89369a1，939 tracked clean，12writer/920保护/Root7绑定。唯一writer runtime_audit，Root设计/文档/Git/资源/运行/CUA；候选独审无确定P1/P2。Manus General实为任务发送偏好，现TaskDelivery已对应，不加General模型/左栏入口，更正旧卡注释。无新源文件/模块/owner/依赖/CSS，通用store/client/API/generated/Skills/连接器保护。
+
+SET25/P1：现chat深链不假saved、不假空。允许12文件仅两source、九locale五key与modal原61项完整byte prefix后新增case；Root7自有。新keys settings.modelPreferenceNotSaved/modelCatalogLoading/modelCatalogFailed/modelCatalogEmpty/modelCatalogRetry；save retry复用settings.retryPreferenceSave。先原source真key-scoped写/cache失败与目录reject两RED，Root复现后source。GREEN覆盖保存retry/null、后继reader、目录状态、10s非合作/late retry/preview layout/unmount。公共mock/旧oracle保持，冻结12/920/7独审和Root专项后正规contract/arch/lint/type/build/full/E2E；旧失败保留，正常CUA另待HTTP页恢复。完整设置Goal active。
+
 ## SET24 账户退出修补正式接收（2026-10-15；完整设置Goal继续）
 
 AccountCard调用方具名单10s/AbortSignal/race、同步双击单发、完整preview/admitted/subject/generation退役与导航guard已实现。请求拒绝/超时后明确“无法确认退出”，恢复原按钮以显式重试，不假称仍登录/已回滚/自动重试。正规503 issuer handoff成功清timer并保持busy，Product auth client原字节保持；profile读取失败不阻退出。九语言仅一新key；旧50项完整prefix与921保护、Root7由Root/独审逐hash核，无确定P1/P2。

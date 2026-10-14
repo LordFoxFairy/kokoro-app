@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "A preferência de modelo não foi guardada; as novas conversas não usarão esta escolha não guardada.",
+  "settings.modelCatalogLoading": "A carregar o catálogo de modelos…",
+  "settings.modelCatalogFailed": "Não foi possível carregar o catálogo de modelos. Tente novamente.",
+  "settings.modelCatalogEmpty": "Não há modelos disponíveis; pode usar o modelo predefinido do espaço.",
+  "settings.modelCatalogRetry": "Tentar carregar novamente",
   "settings.logoutUnconfirmed": "Não foi possível confirmar o fim da sessão. Clique novamente no botão de terminar sessão para tentar de novo.",
   "settings.preferenceNotSaved": "A seleção atual foi aplicada, mas não foi guardada. Atualizar a página pode restaurar a definição anterior.",
   "settings.retryPreferenceSave": "Tentar guardar novamente",

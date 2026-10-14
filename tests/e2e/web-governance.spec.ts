@@ -62,7 +62,10 @@ test.describe("Web production boundary", () => {
     test.skip(isMobile, "the workspace rail is rendered only on desktop")
     await mockProductLogout(page)
     const signout = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/auth/signout")
-    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.goto("/app", { waitUntil: "domcontentloaded" })
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEnabled()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEditable()
     await page.getByTestId("rail-utility-account").click()
     await page.getByRole("menuitem", { name: /退出登录|Sign out/iu }).click()
     const request = await signout
@@ -104,7 +107,10 @@ test.describe("Web production boundary", () => {
     test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the geometry fixture is available only on the local preview server")
 
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.goto("/app", { waitUntil: "domcontentloaded" })
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEnabled()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEditable()
     await page.getByRole("textbox", { name: "Chat input" }).fill("Check the responsive reading axis")
     await page.getByRole("button", { name: "Send message" }).click()
     await expect(page.locator('[data-slot="message-scroller-content"]')).toBeVisible()
@@ -264,7 +270,10 @@ test.describe("Web production boundary", () => {
     test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the long-thread fixture is available only on the local preview server")
 
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.goto("/app", { waitUntil: "domcontentloaded" })
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEnabled()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEditable()
     const chatInput = page.getByRole("textbox", { name: "Chat input" })
     await chatInput.fill("!long")
     await page.getByRole("button", { name: "Send message" }).click()
@@ -402,7 +411,10 @@ test.describe("Web production boundary", () => {
   test("R137 keeps the in-flight answer streaming when a safe process is the newest segment", async ({ page }, testInfo) => {
     test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the deterministic preview stream is available only on the local preview server")
 
-    await page.goto("/app", { waitUntil: "networkidle" })
+    await page.goto("/app", { waitUntil: "domcontentloaded" })
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeVisible()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEnabled()
+    await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEditable()
     await page.evaluate(() => {
       type Evidence = { answer: string; formingCount: number; streamingCount: number }
       const target = window as typeof window & {
@@ -467,7 +479,10 @@ test.describe("Web production boundary", () => {
     test(`R137 ${decision.button.toLowerCase()} settles the same safe tool activity`, async ({ page }, testInfo) => {
       test.skip(Boolean(process.env.KOKORO_E2E_BASE_URL?.trim()), "the deterministic preview HITL stream is available only on the local preview server")
 
-      await page.goto("/app", { waitUntil: "networkidle" })
+      await page.goto("/app", { waitUntil: "domcontentloaded" })
+      await expect(page.getByRole("textbox", { name: "Chat input" })).toBeVisible()
+      await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEnabled()
+      await expect(page.getByRole("textbox", { name: "Chat input" })).toBeEditable()
       await page.getByRole("textbox", { name: "Chat input" }).fill(`!hitl R137 ${decision.button.toLowerCase()}`)
       await page.getByRole("button", { name: "Send message" }).click()
 

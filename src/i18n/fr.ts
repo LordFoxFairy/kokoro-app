@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "La préférence de modèle n’est pas enregistrée ; les nouvelles conversations n’utiliseront pas ce choix non enregistré.",
+  "settings.modelCatalogLoading": "Chargement du catalogue de modèles…",
+  "settings.modelCatalogFailed": "Impossible de charger le catalogue de modèles. Réessayez.",
+  "settings.modelCatalogEmpty": "Aucun modèle n’est disponible ; vous pouvez suivre le modèle par défaut de l’espace.",
+  "settings.modelCatalogRetry": "Réessayer le chargement",
   "settings.logoutUnconfirmed": "La déconnexion n’a pas pu être confirmée. Cliquez à nouveau sur le bouton de déconnexion pour réessayer.",
   "settings.preferenceNotSaved": "Votre choix actuel est appliqué, mais n’a pas été enregistré. Une actualisation peut rétablir le réglage précédent.",
   "settings.retryPreferenceSave": "Réessayer l’enregistrement",

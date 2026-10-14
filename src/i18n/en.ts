@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "Model preference not saved; new chats will not use this unsaved choice.",
+  "settings.modelCatalogLoading": "Loading model catalog…",
+  "settings.modelCatalogFailed": "Could not load the model catalog. Please retry.",
+  "settings.modelCatalogEmpty": "No models are currently available; you can follow the space default.",
+  "settings.modelCatalogRetry": "Retry loading",
   "settings.logoutUnconfirmed": "Sign-out could not be confirmed. Click the sign-out button again to retry.",
   "settings.preferenceNotSaved": "Your current choice has taken effect but was not saved. Refreshing may restore your previous setting.",
   "settings.retryPreferenceSave": "Retry saving",

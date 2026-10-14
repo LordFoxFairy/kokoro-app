@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.modelPreferenceNotSaved": "Настройка модели не сохранена; новые чаты не будут использовать этот несохранённый выбор.",
+  "settings.modelCatalogLoading": "Загрузка каталога моделей…",
+  "settings.modelCatalogFailed": "Не удалось загрузить каталог моделей. Повторите попытку.",
+  "settings.modelCatalogEmpty": "Сейчас нет доступных моделей; можно использовать модель пространства по умолчанию.",
+  "settings.modelCatalogRetry": "Повторить загрузку",
   "settings.logoutUnconfirmed": "Не удалось подтвердить выход. Нажмите кнопку выхода ещё раз, чтобы повторить попытку.",
   "settings.preferenceNotSaved": "Текущий выбор применён, но не сохранён. Обновление страницы может восстановить прежнюю настройку.",
   "settings.retryPreferenceSave": "Повторить сохранение",

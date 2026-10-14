@@ -1,3 +1,8 @@
+## SET25 浏览器测试就绪边界窄准入（2026-10-15）
+
+仅现tests/e2e/web-governance.spec.ts原65/107/267/405/470五个初始/app goto覆盖六例：networkidle改DOMContentLoaded后准确Chat input可见/启用/可编辑web断言。原229及其余goto保持。已有实际六desktop等待超时证据及只读独审无确定P1/P2；官方Playwright建议测试以web断言判断ready。原logout POST/issuer、reading轴/长markdown/stream/HITL所有业务oracle、mock、skip、timeout、route保持，R137观察器仍先于首次发送。不能以输入就绪冒称业务通过，也不宣定位具体网络请求根因。无Product源码/fixture/权限改动；沿runtime_audit同一writer，SET25扩为13writer/919保护/Root7，仅本项追加范围，其余原边界保持。最终正规E2E运行仍待验。
+
+<!-- SET25：现chat-prefs准确保存结果，现卡目录10s caller/epoch，不加General模型入口。 -->
 <!-- SET24：现AccountCard持有单10s退出生命周期、失败显式重试与身份退役；正式auth client保持。 -->
 <!-- SET23：AppearanceCard对应主题/语言行显示Provider各自保存失败及明确重试；Modal关闭重开不清Provider失败。 -->
 <!-- SET21/22：Data 与 Help 属于现设置模态，不新建页面框架。 -->
