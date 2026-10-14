@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "Greyed-out menu items are currently unavailable.",
+  "settings.accountActionsUnavailable": "Changing your email, managing sign-in methods, and deleting your account are currently unavailable.",
   "settings.personalizationMemoryUnavailable": "Knowledge and memory imports are not connected yet.",
   "settings.billingRequiresIdentity": "Usage and plans can load after your sign-in status is confirmed.",
   "settings.modelPreferenceNotSaved": "Model preference not saved; new chats will not use this unsaved choice.",

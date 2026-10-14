@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "회색으로 표시된 메뉴는 현재 사용할 수 없습니다.",
+  "settings.accountActionsUnavailable": "이메일 변경, 로그인 방법 관리 및 계정 삭제는 현재 사용할 수 없습니다.",
   "settings.personalizationMemoryUnavailable": "지식 및 메모리 가져오기는 아직 연결되지 않았습니다.",
   "settings.billingRequiresIdentity": "로그인 상태가 확인되면 사용량과 요금제를 불러올 수 있습니다.",
   "settings.modelPreferenceNotSaved": "모델 설정이 저장되지 않았습니다. 새 대화에는 이번에 저장되지 않은 선택이 적용되지 않습니다.",

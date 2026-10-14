@@ -609,3 +609,25 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.unavailableNavigation {
+  margin: 0.5rem 0 0.75rem;
+  padding-inline: 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+
+@media (max-width: 47.99rem) {
+  .unavailableNavigation {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

@@ -1,3 +1,13 @@
+## SET30 未接通菜单与账户操作说明（2026-10-15；正式D0）
+
+基线Web 0ab7bfaedf7425332049f5f867bcec79fccd285c，939 tracked clean；runtime_audit唯一writer，12既有source/920保护/Root7。所有tests原字节保护；Root设计、docs、独审、资源、Git、正常激活/CUA。实际Manus菜单已有对应本地入口，七个placeholder及三账户按钮仍按能力不可用，不引入owner/contract/API/deps或新source。
+
+现导航在搜索/列表旁显示简短不可用说明，useId实例ID供七个placeholder aria-describedby；保持原nav数组/顺序/过滤/选项/焦点/非操作状态和pointer-events语义。只新增具名note CSS；窄屏3.25rem图标rail不得被长段说明挤满，说明仍可被辅助技术读取。Account复用既有FieldDescription呈现production三操作未提供说明，实例ID关联邮箱/登录方式/删除三个按钮；preview展示、姓名编辑/恢复、copyUserId、devices、logout及弹窗原逻辑保持。
+
+两个新增纯本地化key settings.unavailableNavigation、settings.accountActionsUnavailable；中文zh位于messages.ts的zh对象，八语言overlay各自翻译，只可追加这两项，原locale数据逐字保护。说明不表明接通新服务，也不重新启用或请求任何禁用能力；团队仍是当前部署租户的成员管理，不冒称创建团队。
+
+低影响呈现改动，不新增或弱化tests；保原全tests与能力边界，现导航/账户聚焦验证、locale/contract/architecture/lint/type/build，Root完整unit/E2E与库存恢复后才验收。正常认证Browser仍等待原error页人工恢复，工程Playwright不冒称该journey；Skills/连接器业务排除，整Goal active。
+
 ## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
 
 Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "グレー表示のメニューは現在利用できません。",
+  "settings.accountActionsUnavailable": "メールアドレスの変更、ログイン方法の管理、アカウントの削除は現在利用できません。",
   "settings.personalizationMemoryUnavailable": "知識とメモリのインポートはまだ接続されていません。",
   "settings.billingRequiresIdentity": "ログイン状態が確認されると、利用状況とプランを読み込めます。",
   "settings.modelPreferenceNotSaved": "モデル設定は保存されていません。新しいチャットには今回の未保存の選択は適用されません。",

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "Las opciones de menú atenuadas no están disponibles actualmente.",
+  "settings.accountActionsUnavailable": "Cambiar el correo electrónico, gestionar los métodos de inicio de sesión y eliminar la cuenta no están disponibles actualmente.",
   "settings.personalizationMemoryUnavailable": "La importación de conocimientos y memoria aún no está conectada.",
   "settings.billingRequiresIdentity": "El uso y los planes se cargarán cuando se confirme el inicio de sesión.",
   "settings.modelPreferenceNotSaved": "La preferencia de modelo no se ha guardado; los nuevos chats no usarán esta selección sin guardar.",

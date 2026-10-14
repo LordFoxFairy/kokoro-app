@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -92,6 +93,7 @@ export function SettingsNavigation({
   activeTabRef,
 }: SettingsNavigationProps) {
   const { t } = useLocale();
+  const unavailableId = useId();
   const [query, setQuery] = useState("");
   const tabListRef = useRef<HTMLDivElement | null>(null);
 
@@ -168,6 +170,7 @@ export function SettingsNavigation({
         <Search aria-hidden="true" />
         <Input value={query} aria-label={t("settings.search")} placeholder={t("settings.search")} onChange={(event) => setQuery(event.target.value)} />
       </label>
+      <p id={unavailableId} className={styles.unavailableNavigation}>{t("settings.unavailableNavigation")}</p>
       <div className={styles.tabRail}>
         <TabsList ref={tabListRef} className={styles.tabList} variant="line">
           {renderedNav.map((entry) => {
@@ -193,7 +196,7 @@ export function SettingsNavigation({
                     <span className={styles.tabLabel}>{entry.label}</span>
                   </TabsTrigger>
                 ) : (
-                  <div className={styles.placeholderTab} data-testid={`settings-placeholder-${entry.id}`} aria-disabled="true">
+                  <div className={styles.placeholderTab} data-testid={`settings-placeholder-${entry.id}`} aria-disabled="true" aria-describedby={unavailableId}>
                     <Icon aria-hidden="true" />
                     <span className={styles.tabLabel}>{entry.label}</span>
                     {entry.id === "help" ? <ArrowUpRight className={styles.helpExternal} aria-hidden="true" /> : null}

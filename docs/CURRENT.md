@@ -1,3 +1,19 @@
+## SET30 不可用说明已接收，SET31继续（2026-10-15）
+
+七个灰菜单在搜索/列表旁显示短说明并关联useId；production账户用FieldDescription说明更改邮箱/登录方式/删除账户三操作不可用，三按钮关联实例ID，preview不显示/不关联。未启用禁用功能；原nav数组/过滤/焦点/顺序及姓名/复制ID/devices/logout/dialog逻辑完整inverse，12source逐字逆恢复，920保护含全部tests，Root7；两key九语言仅新增，原locale值精确保留。窄于48rem导航说明仅sr-only，不声称所有宽度视觉可见。独审无确定P1/P2，原focused81/contract283/architecture50/lint/type/build0；i18n99PASS2旧FAIL。
+
+终态全test3973PASS/10此前具名FAIL/0SKIP，208.59s；正规隔离Playwright20PASS/0FAIL/4原SKIP，20.1s，资源库存exact恢复。i18n/Skills/MCP/scheduled/native旧门未闭环；正常认证Browser未验，这些工程checks不冒称全部设置真实旅程完成。接续SET31现runtime owned dispatch/commit retirement负控，保护AppGate与R175/R177计数；整Goal active、Skills/连接器业务排除。
+
+## SET30 未接通菜单与账户操作说明（2026-10-15；正式D0）
+
+基线Web 0ab7bfaedf7425332049f5f867bcec79fccd285c，939 tracked clean；runtime_audit唯一writer，12既有source/920保护/Root7。所有tests原字节保护；Root设计、docs、独审、资源、Git、正常激活/CUA。实际Manus菜单已有对应本地入口，七个placeholder及三账户按钮仍按能力不可用，不引入owner/contract/API/deps或新source。
+
+现导航在搜索/列表旁显示简短不可用说明，useId实例ID供七个placeholder aria-describedby；保持原nav数组/顺序/过滤/选项/焦点/非操作状态和pointer-events语义。只新增具名note CSS；窄屏3.25rem图标rail不得被长段说明挤满，说明仍可被辅助技术读取。Account复用既有FieldDescription呈现production三操作未提供说明，实例ID关联邮箱/登录方式/删除三个按钮；preview展示、姓名编辑/恢复、copyUserId、devices、logout及弹窗原逻辑保持。
+
+两个新增纯本地化key settings.unavailableNavigation、settings.accountActionsUnavailable；中文zh位于messages.ts的zh对象，八语言overlay各自翻译，只可追加这两项，原locale数据逐字保护。说明不表明接通新服务，也不重新启用或请求任何禁用能力；团队仍是当前部署租户的成员管理，不冒称创建团队。
+
+低影响呈现改动，不新增或弱化tests；保原全tests与能力边界，现导航/账户聚焦验证、locale/contract/architecture/lint/type/build，Root完整unit/E2E与库存恢复后才验收。正常认证Browser仍等待原error页人工恢复，工程Playwright不冒称该journey；Skills/连接器业务排除，整Goal active。
+
 ## SET29 侧栏余额可信生命周期已接收，SET30继续（2026-10-15）
 
 可信ProjectReadBoundary沿原AppFrame/rail/shell/account传入；live admitted/nonblank subject/safe非负generation与marker一致才读取，marker不授权限。scope包含preview/admitted/subject/generation/actor，同主体重核/换代同步隐藏、layout真取消、uniquecontroller守非合作迟到及A-B-A；原preview/BigInt/失败—、admin/menu/signout/通知完整原子树保持。4source+1既有test/927保护/Root7，原73全文逆核，17新增真实负控：原source Root14FAIL76PASS90，终态90PASS；一处new suffix this:Storage类型标注擦除还原原RED hash，无oracle更改。独审无确定P1/P2，contract283/architecture50/lint/type/build0。

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "Les éléments de menu grisés sont actuellement indisponibles.",
+  "settings.accountActionsUnavailable": "La modification de l’adresse e-mail, la gestion des méthodes de connexion et la suppression du compte sont actuellement indisponibles.",
   "settings.personalizationMemoryUnavailable": "L’importation de connaissances et de mémoire n’est pas encore connectée.",
   "settings.billingRequiresIdentity": "L’utilisation et les offres peuvent être chargées une fois votre connexion confirmée.",
   "settings.modelPreferenceNotSaved": "La préférence de modèle n’est pas enregistrée ; les nouvelles conversations n’utiliseront pas ce choix non enregistré.",

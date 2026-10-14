@@ -42,6 +42,8 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "settings.unavailableNavigation": "灰色菜单暂不可用。",
+  "settings.accountActionsUnavailable": "更改邮箱、管理登录方式和删除账户暂不可用。",
   "settings.personalizationMemoryUnavailable": "知识与记忆导入暂未接通。",
   "settings.billingRequiresIdentity": "登录状态确认后才能加载用量和套餐。",
   "settings.modelPreferenceNotSaved": "模型偏好未保存；新对话不会采用这次未保存的选择。",

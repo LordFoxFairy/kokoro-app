@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CircleHelp, KeyRound, LogOut, Sparkles } from "lucide-react"
 
@@ -67,6 +67,7 @@ export function AccountCard({
   onOpenSubscription: () => void
 }) {
   const t = useT()
+  const unavailableActionsId = useId()
   const router = useRouter()
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
@@ -424,13 +425,14 @@ export function AccountCard({
       {/* Keep the account sheet's information architecture intact without
        * inventing identity data that the current Web contract does not
        * provide. The unavailable values intentionally remain em dashes. */}
+      {!preview ? <FieldDescription id={unavailableActionsId}>{t("settings.accountActionsUnavailable")}</FieldDescription> : null}
       <div className={styles.accountDetailRows}>
         <div className={styles.accountDetailRow}>
           <div>
             <strong>{t("settings.email")}</strong>
             <span>{account?.email ?? "—"}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} disabled={!preview || !account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
         </div>
         <div className={styles.accountDetailRow}>
           <div>
@@ -444,7 +446,7 @@ export function AccountCard({
             <strong>{t("settings.loginMethod")}</strong>
             <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
         </div>
         <div className={styles.accountDetailRow}>
           <div>
@@ -458,7 +460,7 @@ export function AccountCard({
             <strong>{t("settings.deleteAccount")}</strong>
             <span>{t("settings.deleteAccountHint")}</span>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
+          <Button variant="outline" size="sm" type="button" aria-describedby={!preview ? unavailableActionsId : undefined} onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
         </div>
       </div>
 

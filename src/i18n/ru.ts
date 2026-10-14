@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "Пункты меню, выделенные серым, сейчас недоступны.",
+  "settings.accountActionsUnavailable": "Изменение электронной почты, управление способами входа и удаление аккаунта сейчас недоступны.",
   "settings.personalizationMemoryUnavailable": "Импорт знаний и памяти пока не подключён.",
   "settings.billingRequiresIdentity": "Использование и тарифы можно загрузить после подтверждения входа.",
   "settings.modelPreferenceNotSaved": "Настройка модели не сохранена; новые чаты не будут использовать этот несохранённый выбор.",

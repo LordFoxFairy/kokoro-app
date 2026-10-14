@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "settings.unavailableNavigation": "Ausgegraute Menüpunkte sind derzeit nicht verfügbar.",
+  "settings.accountActionsUnavailable": "Das Ändern der E-Mail-Adresse, das Verwalten der Anmeldemethoden und das Löschen des Kontos sind derzeit nicht verfügbar.",
   "settings.personalizationMemoryUnavailable": "Der Import von Wissen und Erinnerungen ist noch nicht angebunden.",
   "settings.billingRequiresIdentity": "Verbrauch und Tarife können nach Bestätigung Ihres Anmeldestatus geladen werden.",
   "settings.modelPreferenceNotSaved": "Die Modellpräferenz wurde nicht gespeichert; neue Chats verwenden diese ungespeicherte Auswahl nicht.",
