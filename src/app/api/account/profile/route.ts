@@ -1,3 +1,4 @@
+import { updateAccountProfile } from "@/lib/server/account-profile-update";
 import { readAccountProfile } from "@/lib/server/account-profile";
 
 export const runtime = "nodejs";
@@ -14,13 +15,13 @@ function methodNotAllowed(): Response {
     },
     {
       status: 405,
-      headers: { "cache-control": "private, no-store", allow: "GET" },
+      headers: { "cache-control": "private, no-store", allow: "GET, PATCH" },
     },
   );
 }
 export const POST = methodNotAllowed;
 export const PUT = methodNotAllowed;
-export const PATCH = methodNotAllowed;
+export const PATCH = updateAccountProfile;
 export const DELETE = methodNotAllowed;
 export const HEAD = methodNotAllowed;
 export const OPTIONS = methodNotAllowed;

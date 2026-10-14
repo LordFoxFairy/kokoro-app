@@ -34,7 +34,7 @@ const TEAM_SCOPES = [...TEAM_READ_SCOPES, ...TEAM_WRITE_SCOPES]
 const SKILL_SCOPES = ["iam:authorization.check", "iam:skill-authorization.check", "iam:publisher-profile.read"]
 const ORIGINAL_SCOPE = `${BASE_SCOPE} ${TEAM_SCOPES.join(" ")}`
 const PREVIOUS_SCOPE = `${ORIGINAL_SCOPE} ${SKILL_SCOPES.join(" ")}`
-const EXPECTED_SCOPE = `${PREVIOUS_SCOPE} iam:account-session.read iam:account-session.revoke`
+const EXPECTED_SCOPE = `${PREVIOUS_SCOPE} iam:account-session.read iam:account-session.revoke iam:account-profile.write`
 const ENV = {
   NODE_ENV: "test",
   KOKORO_BFF_BASE_URL: "https://bff.example.test",
@@ -132,10 +132,11 @@ describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
       },
     })
     expect(provider.checks).toEqual(["pkce", "state", "nonce"])
+    expect(OIDC_SCOPE.split(" ").slice(0, 15).join(" ")).toBe(`${PREVIOUS_SCOPE} iam:account-session.read iam:account-session.revoke`)
     expect(OIDC_SCOPE.split(" ").slice(0, 13).join(" ")).toBe(PREVIOUS_SCOPE)
-    expect(OIDC_SCOPE.split(" ")).toHaveLength(15)
-    expect(new Set(OIDC_SCOPE.split(" ")).size).toBe(15)
-    expect(OIDC_SCOPE.split(" ").slice(13)).toEqual(["iam:account-session.read", "iam:account-session.revoke"])
+    expect(OIDC_SCOPE.split(" ")).toHaveLength(16)
+    expect(new Set(OIDC_SCOPE.split(" ")).size).toBe(16)
+    expect(OIDC_SCOPE.split(" ").slice(13)).toEqual(["iam:account-session.read", "iam:account-session.revoke", "iam:account-profile.write"])
   })
 
   it("accepts the complete fixed scope in the Auth.js authorization redirect", async () => {
@@ -155,6 +156,7 @@ describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
     ]),
     ["old ten scopes", ORIGINAL_SCOPE],
     ["previous thirteen scopes", PREVIOUS_SCOPE],
+    ["previous fifteen scopes", `${PREVIOUS_SCOPE} iam:account-session.read iam:account-session.revoke`],
     ["missing account read", `${PREVIOUS_SCOPE} iam:account-session.revoke`],
     ["missing account revoke", `${PREVIOUS_SCOPE} iam:account-session.read`],
     ["reordered account pair", `${PREVIOUS_SCOPE} iam:account-session.revoke iam:account-session.read`],

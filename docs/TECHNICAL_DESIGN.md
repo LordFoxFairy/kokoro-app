@@ -1,3 +1,21 @@
+## SET-19 账户姓名真实保存（2026-10-15；源码已接收，正常浏览器待验）
+
+本仓基线08125f9baacc53db22255379b3f79d8e8a30febd，Root已保存875 tracked原字节。正式IAM姓名owner c64faa7992301f31495e163d04049c48a23d0225/internal0.13.0与BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0/145已发行；BFF canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453。当前Web唯一生成输入已按该正式Git对象原字节更新，四个正规生成检查通过；原Team/设备生成正文保持。storage_platform_audit绑定本基线与三D0只读独审通过，无确定P1/P2；Root已沿CURRENT准入唯一writer，设计审查不冒实现验收。
+
+| 项 | 决定 |
+| --- | --- |
+| Owner / writer | IAM独占User.name/资格/原值CAS/Audit；BFF发布public PATCH；Web仅同源adapter/交互。Root三设计/CURRENT/INDEX/Git/资源/浏览器，runtime_audit后继唯一源码writer，storage_platform_audit只读独审。 |
+| 现状 / 目标 | live AccountCard全名只读，preview失焦仅编辑预览，GET userinfo可用。目标live独立草稿与显式保存、权威读取和冲突/unknown恢复；preview原有行为保持，不用本地编辑冒真实存储。 |
+| 放置 / 粒度 | A扩通用business mutation/catchall或直接写IAM：淘汰，遗漏原值与身份退役边界。B现account/profile route追加PATCH，新增普通server/account-profile-update、lib/account-profile-update.schema、settings/account-profile-update-client与use-account-profile-editor：采用。四文件分别HTTP I/O、generated-derived closed wire与局部JSON codec、browser I/O、草稿与生命周期；不建新业务模块/框架/服务。 |
+| 依赖 | Browser→同源PATCH /api/account/profile→正式BFF PATCH /v1/account/profile→IAM；原productBffConfig/productBffHeaders/currentProductSession/requestWithDomain。body恰name/expected_name，不接受subject/tenant/client，不发送issuer cookie或浏览器Bearer。 |
+| 同源 / 时间 | PATCH要求canonical scheme/Host及明确完全相同Origin；无query含空?、无Idempotency-Key、唯一application/json、无Content-Encoding或identity，合法chunked可读。server入口唯一10s deadline覆盖metadata/输入真实64KiB/cookie/BFF headers+body/最终cookie，browser也单10s与1MiB响应；主动取消不合作fetch/read与迟到结果，无自动写重试。 |
+| 姓名读取 | expected_name取正规userinfo原string≤16384 UTF16，包含空/控制/空白/lone surrogate亦保真，绝不trim/normalize。只放宽原name投影，subject/email原规则不变；GET server/browser响应总界同步256KiB以覆盖JSON escaping，原5s保持。name缺失/null不授予保存。 |
+| 最终身份 | PATCH和其权威GET重读返回前再次读HttpOnly Product Session，id/generation/subject/access/accessExpiresAt/expiresAt逐项等值，且两expiry仍有效；同ID/subject的刷新也退役迟到响应。UI以admitted subject/generation作用域，关闭/退出/身份变化同步退役草稿、请求和结果。 |
+| 状态 / unknown | ready/editing/invalid/submitting/saved/conflict/reconciliationRequired/readFailed显式。仅严格绑定subject和提交原name的ACK表明本次提交完成；随后正规GET刷新显示，GET不可用不以输入制造profile。409或传输/timeout/无效ACK先锁再次PATCH，保草稿并读取当前userinfo；成功读取后由用户选择采用服务器值或用新真实original显式再提交，取消不表示数据库rollback。 |
+| 契约 / 生成 | 正式BFF15.2单artifact原字节；新增窄profile generator/config/generated，原三个Team/Agent/设备generator仅完整出处同步和正规再生成，旧operation shape/fingerprint保持。OIDC_SCOPE仅在原十五项有序末尾append iam:account-profile.write；旧refresh不提升，正常fresh authorize由Root集成。 |
+| 数据 / 删除 | 无Web姓名数据库/cache/localStorage/receipt/身份副本；只内存草稿与权威profile。删除当前live readonly约束，preview保持预览；不留旧BFF15.1fallback/双pin，不碰Skills/连接器、邮箱/密码/账户删除或支付。 |
+| 验证 | 真实缺失PATCH RED；strict input/ACK/errors/header/Unicode与长旧名、同源/auth/总预算/最终session刷新退役、unknown与conflict不重试、preview保留、locale/窄屏键盘。正常生成/contract/architecture/lint/type/build及适当全门；冻结独审/Root复核后正式接收，再正常fresh16scope与CUA保存→刷新→重新登录。旧全门失败保留，后台门不冒页面完成。 |
+
 ## SET-18 账户登录设备（2026-10-14；源码已接收，正常运行待验）
 
 正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。

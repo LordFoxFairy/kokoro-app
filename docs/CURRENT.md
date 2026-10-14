@@ -1,3 +1,28 @@
+## SET-19 Web 源码及真实 Next HTTP 已接收（2026-10-15；正常浏览器待验）
+
+冻结0f1644e6的64writer路径/833原保护与875基线由Root独立逐hash核，formal BFF a88/public15.2/145全文3214e32d与Git blob精确相同；storage_platform_audit终态独审无剩余确定P1/P2。九locale仅append9姓名键；八原contract与api-contract原业务断言逆向重建恢复基线；Team/设备原生成正文保持，依赖/锁/SQL/Skills连接器功能不改。Root继续更新CURRENT及三设计实际状态/INDEX/ACCEPTANCE，故Root文档另计，不宣称与冻结旧doc hash等值。
+
+作者纯门175专项PASS、50architecturePASS、282contractPASS与四正常生成检查通过，lint/type/build exit0；Root正常真实Next HTTP四项PASS（含原文重复key与明确canonical Origin、无登录401及零BFF）。正常完整测试正确复用既有Redis9后202files/3759PASS/7FAIL/0SKIP；其中六个失败已在原正常台账，R177匿名handoff的12/11断言又在原保留checkout同条件独立复现、相同诊断，非本片新失败。首轮漏显式Redis地址的16FAIL/154SKIP记录保留，不冒合格资源门。测试退出后Redis9原0key与10个数据库名称集合精确恢复。
+
+正常Playwright候选隔离copy运行14PASS/6FAIL/4SKIP，六个desktop preview/navigation timeout与上一轮具名失败一致，尚未解决；不以它们冒全E2E绿。首copy的Turbopack symlink越root启动失败保留；只测试副本root改共同父目录后重跑，正式next.config原字节保持。真实用户姓名保存/刷新/重新登录由Root正式集成fresh16scope后验，不能由上述组件/fixture绿替代。整套设置Goal仍active，Team/Data/Help待后继。
+
+## SET-19-Web 本人姓名保存任务卡（2026-10-15；D0独审通过，源码准入）
+
+正常contract新增的唯一whole-artifact断言失败已定位为现`contract/api-contract.test.ts:719–720`旧15.1/SHA；Root补准入仅该两值同步15.2/3214e32d，原Scheduler shape、负控、描述和其余字节保持，不把新增失败记作旧债。401可能出现在owner ACK后的最终session退役，因此UI按unknown锁写并权威重读，成功后仍需显式review选择。429必须有合法1..86400 Retry-After，其他状态出现该header拒绝；两端原预算和closed响应规则保持。
+
+基线08125f9baacc53db22255379b3f79d8e8a30febd，875tracked原字节Root保存；原checkout clean。现正常账户name只读，userinfo GET、设备管理已验收。正式BFF已commit/push a88e710d2201342200017f44c2bc34325937b5d0，public15.2.0/145，canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453；IAM c64/internal0.13正式前置保持。BFF V2独审、Root108项及真实十四HTTP请求/数据库/资源收尾通过，不代表Web已完成。Root三设计已明确长旧名保真与最终完整session等值栅栏、显式保存和unknown重读；storage_platform_audit只读D0独审无确定P1/P2，runtime_audit现获下表唯一源码权限，不重复总体设计。
+
+| 项 | 范围与完成条件 |
+| --- | --- |
+| 目标 / 分工 | 本人name真实保存→权威GET→刷新/重登；runtime_audit后继唯一源码writer，storage_platform_audit独审，Root docs/INDEX/Git/正常集成/真实CUA。 Skills/连接器排除，其他账户敏感写不纳本片。 |
+| 新普通源 | src/lib/server/account-profile-update.ts；src/lib/account-profile-update.schema.ts（generated-derived closed shape及本片raw JSON codec）；src/ui/settings/account-profile-update-client.ts；src/ui/settings/use-account-profile-editor.ts。无新业务目录/模块/框架。 |
+| 现源 | app/api/account/profile/route.ts增加PATCH/精确Allow；lib/account-profile.schema.ts仅原name16384保真；lib/server/account-profile.ts与ui/settings/account-profile-client.ts仅256KiB/final-session/raw读的必要接线；ui/settings/use-account-profile.ts提供同scope权威reload结果；sections/account-card.tsx与settings-sections.module.css仅live编辑/显式保存/反馈，preview保持；lib/server/oidc-provider.ts仅第16scope append。 |
+| 机器 / 正规生成 | 唯一src/generated/bff-public-openapi.yaml取正式BFF15.2 Git blob；新增scripts/generate-bff-account-profile-client.mjs、openapi-ts.bff-account-profile.config.ts、src/generated/bff-account-profile/**正常产物。原scripts/generate-bff-account-sessions-client.mjs、generate-bff-team-client.mjs、generate-bff-agent-failure.mjs仅新完整commit/digest及正常旧产物再生成，old shape/fingerprint保持；package.json仅新generate/check接线。 |
+| i18n / 测试 | 九locale仅新增姓名editor文案，不改Skills/连接器键；现tests/app/account-profile.test.ts、tests/ui/account-profile-client.test.ts、tests/ui/account-card.test.tsx及tests/architecture/governance.test.ts必要行为/注册；新增tests/server/account-profile-update.test.ts、tests/ui/account-profile-update-client.test.ts、tests/ui/use-account-profile-editor.test.tsx、tests/contract/bff-account-profile-public.test.ts；现tests/system/product-bff-next-http.integration.test.ts增加具名Next HTTP PATCH用例。其他必要路径先报Root，旧语义oracle保持。 |
+| 门 / 保护 | BFF正式发行＋三D0独审后才准写；真实RED→GREEN，固定Node22.22.2/pnpm11.25，正常生成/contract/architecture/lint/type/build及适当全门，freeze exact paths/hash与原875保护；Root冻结独审及真实资源/CUA。依赖锁/SQL/其他repo/正常服务/Git不授worker，旧全仓失败不冒绿。 |
+
+Root额外准入现tests/contract/bff-{account-sessions,team,project-create,library-file,project-resource,library-artifact,agent-failure,skills-mcp}-public.test.ts仅唯一完整artifact出处commit/digest/version/count及其精确assert同步；原各能力shape/fingerprint/语义负控保持，混合Skills文件不改业务字段或功能。现tests/server/oidc-provider.test.ts仅16有序scope及旧15/13/10等负控，保原15前缀精确证明。该必要消费者出处更新不授Skills/连接器实现权限。
+
 ## SET-18 正常 DELETE 空流修补与真实设备撤销验收（2026-10-14）
 
 Root 已按正式 gitlinks 正常启动 SET-18，并取得十五项有序 scope 的真实新 code grant；真实浏览器登录及本人设备列表读取成功。退出其他会话实际被 Web 返回 400 account_session_invalid_request，目标仍在权威列表，不能称撤销成功；较晚旧 cookie 的 401 可能来自 access token 自然过期，已明确撤回其撤销证明用途。

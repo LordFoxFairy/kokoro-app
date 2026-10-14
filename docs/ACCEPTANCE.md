@@ -1,3 +1,9 @@
+## SET-19 姓名保存验收（2026-10-15）
+
+formal IAM c64/internal0.13→BFF a88/public15.2/145；Web冻结64源/833原保护独审通过。175专项、282正常contract、50architecture、lint/type/build通过；Root真实Next HTTP四项通过，正常全测3759PASS/7原复现FAIL/0SKIP，隔离normal Playwright14PASS/6既有具名FAIL/4SKIP，原失败与资源初始化诊断保持。unknown/401/CAS锁写、权威GET和显式review选择均被具名负控覆盖；资源精确恢复见Root私有日志，不记录凭据。
+
+正常fresh16scope登录、真实改名→权威读回→刷新→退出重新登录仍待Root CUA；此项未完成前不将姓名页记为产品通过。技能和连接器功能排除，整个设置Goal不因本切片停止。
+
 ## R256 会话标题与工具按钮独立命中（2026-10-06）
 
 Root冻结后明确Node22.22.2复跑lint/typecheck/3现UI文件167断言/build，原句柄37970实际exit0；首次wrapper漏打印句柄未作为exit证据，确认原build结束后独立重跑本次终态。未跑全量system/test:e2e/axe/视觉预算，不替代以上原页面用户证据。

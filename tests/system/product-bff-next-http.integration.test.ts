@@ -176,6 +176,62 @@ export async function GET(): Promise<Response> {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
+  it("name PATCH uses real Next raw body and canonical Origin before any BFF call", async () => {
+    const patch = (body: string, origin = `http://localhost:${nextPort}`) =>
+      new Promise<{
+        status: number;
+        headers: Record<string, string | string[] | undefined>;
+        body: string;
+      }>((resolve, reject) => {
+        const request = httpRequest(
+          {
+            hostname: "127.0.0.1",
+            port: nextPort,
+            path: "/api/account/profile",
+            method: "PATCH",
+            headers: {
+              host: `localhost:${nextPort}`,
+              origin,
+              "content-type": "application/json",
+            },
+          },
+          (response) => {
+            const chunks: Buffer[] = [];
+            response.on("data", (chunk: Buffer) => chunks.push(chunk));
+            response.once("end", () =>
+              resolve({
+                status: response.statusCode ?? 0,
+                headers: response.headers,
+                body: Buffer.concat(chunks).toString("utf8"),
+              }),
+            );
+          },
+        );
+        request.once("error", reject);
+        request.end(body);
+      });
+    const before = bffCalls;
+    const anonymous = await patch(
+      JSON.stringify({ name: "New", expected_name: "\ud800 Original " }),
+    );
+    expect(anonymous.status).toBe(401);
+    expect(JSON.parse(anonymous.body)).toMatchObject({
+      error: { code: "session_invalid" },
+    });
+    expect(anonymous.headers["cache-control"]).toContain("no-store");
+    expect(anonymous.headers["x-request-id"]).toBeTruthy();
+    const duplicate = await patch(
+      '{"name":"A","name":"B","expected_name":"Old"}',
+    );
+    expect(duplicate.status).toBe(400);
+    const foreign = await patch(
+      JSON.stringify({ name: "New", expected_name: "Old" }),
+      `https://localhost:${nextPort}`,
+    );
+    expect(foreign.status).toBe(403);
+    expect(bffCalls).toBe(before);
+  }, 30_000);
+
   it("returns 401 without a Product Session and never connects to BFF", async () => {
     const response = await get(nextPort);
     expect(response.status).toBe(401);

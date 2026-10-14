@@ -14,6 +14,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { useAccountProfileEditor } from "../use-account-profile-editor"
 import { useAccountProfile } from "../use-account-profile"
 
 import { AccountDevicesDialog } from "./account-devices-dialog"
@@ -70,6 +71,7 @@ export function AccountCard({
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
   const live = useAccountProfile(preview, readBoundary);
+  const nameEditor = useAccountProfileEditor(preview ? "" : live.scope, live.profile, live.reload);
   const account = preview
     ? { ...previewAccount, ...previewAccountEdits }
     : live.profile
@@ -267,7 +269,87 @@ export function AccountCard({
           <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
-          <Input className={styles.identityInput} value={displayName} onChange={(event) => { if(preview) setPreviewAccountEdits(current=>({...current,displayName:event.target.value})) }} readOnly={!preview} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} disabled={!preview} />
+            <Input
+              className={styles.identityInput}
+              value={
+                preview
+                  ? displayName
+                  : nameEditor.initialized
+                    ? nameEditor.draft
+                    : "—"
+              }
+              onChange={(event) => {
+                if (preview)
+                  setPreviewAccountEdits((current) => ({
+                    ...current,
+                    displayName: event.target.value,
+                  }));
+                else nameEditor.change(event.target.value);
+              }}
+              aria-label={t("settings.fullName")}
+              aria-invalid={!preview && nameEditor.phase === "invalid"}
+              onBlur={(event) => {
+                if (preview) void saveName(event.currentTarget.value);
+              }}
+              disabled={!preview && !nameEditor.editable}
+            />
+            {!preview ? (
+              <div className={styles.nameActions}>
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={!nameEditor.canSave}
+                  onClick={() => void nameEditor.save()}
+                >
+                  {t("settings.name.save")}
+                </Button>
+                {nameEditor.phase === "submitting" ? (
+                  <p role="status">{t("settings.name.saving")}</p>
+                ) : null}
+                {nameEditor.phase === "saved" ? (
+                  <p role="status">{t("settings.name.saved")}</p>
+                ) : null}
+                {nameEditor.phase === "invalid" ? (
+                  <p role="alert">{t("settings.name.invalid")}</p>
+                ) : null}
+                {["conflict", "reconciliationRequired", "readFailed"].includes(
+                  nameEditor.phase,
+                ) ? (
+                  <div role="alert">
+                    <p>{t("settings.name.readRequired")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void nameEditor.retryRead()}
+                    >
+                      {t("billing.retry")}
+                    </Button>
+                  </div>
+                ) : null}
+                {nameEditor.phase === "review" ? (
+                  <div role="alert">
+                    <p>{t("settings.name.review")}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={nameEditor.adoptServer}
+                    >
+                      {t("settings.name.adopt")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={nameEditor.keepDraft}
+                    >
+                      {t("settings.name.keep")}
+                    </Button>
+                  </div>
+                ) : null}
+                {nameEditor.phase === "rejected" ? (
+                  <p role="alert">{t("settings.name.rejected")}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <Button variant="outline" size="icon-sm" type="button" aria-label={t("settings.logout")} data-testid="settings-logout" onClick={() => void logout()} disabled={loggingOut}>

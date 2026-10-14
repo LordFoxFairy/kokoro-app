@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "Namen speichern",
+  "settings.name.saving": "Wird gespeichert…",
+  "settings.name.saved": "Name gespeichert und erneut gelesen.",
+  "settings.name.invalid": "Verwende 1–100 UTF-16-Einheiten ohne Steuerzeichen oder Leerzeichen am Anfang oder Ende.",
+  "settings.name.readRequired": "Erneut lesen, um das Ergebnis zu prüfen. Der Entwurf bleibt erhalten.",
+  "settings.name.review": "Der aktuelle Name wurde gelesen. Wähle den nächsten Schritt.",
+  "settings.name.adopt": "Servernamen übernehmen",
+  "settings.name.keep": "Entwurf behalten und bearbeiten",
+  "settings.name.rejected": "Speichern abgelehnt. Prüfe Anmeldung oder Eingabe.",
+
   "settings.devices.rejected": "Entfernung abgelehnt. Lesen Sie die Sitzungen erneut und prüfen Sie Berechtigung und Ziel.",
   "settings.devices.conflict": "Die aktuelle Sitzung kann nicht entfernt werden. Erneut lesen.",
   "settings.devices.notFound": "Die Zielsitzung fehlt oder ist nicht zugänglich. Erneut lesen.",

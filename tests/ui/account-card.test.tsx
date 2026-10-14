@@ -14,18 +14,16 @@ const fetcher = vi.fn();
 beforeEach(() => {
   localStorage.setItem("kokoro.locale", "en");
   vi.stubGlobal("fetch", fetcher);
-  fetcher
-    .mockReset()
-    .mockResolvedValue(
-      Response.json({
-        data: {
-          subject: "alice",
-          name: "Alice Actual",
-          email: "alice@example.test",
-          email_verified: true,
-        },
-      }),
-    );
+  fetcher.mockReset().mockResolvedValue(
+    Response.json({
+      data: {
+        subject: "alice",
+        name: "Alice Actual",
+        email: "alice@example.test",
+        email_verified: true,
+      },
+    }),
+  );
 });
 afterEach(() => {
   cleanup();
@@ -214,12 +212,74 @@ it("offers admitted users a separate login devices entry without enabling previe
   expect(screen.getByRole("button", { name: "Login devices" })).toBeDisabled();
 });
 it("places login devices in the existing account row between login methods and account deletion", async () => {
-  render(card()); await screen.findByText("alice@example.test")
-  const entry = screen.getByRole("button", { name: "Login devices" })
-  const row = entry.parentElement!
-  expect(row.querySelector("strong")).toHaveTextContent("Login devices")
-  expect(row.querySelector("span")).toHaveTextContent("Only confirmed sign-in sessions and their creation and expiry times are shown.")
-  expect(entry).toHaveTextContent("Manage")
-  expect(row.previousElementSibling).toHaveTextContent("Manage sign-in method")
-  expect(row.nextElementSibling).toHaveTextContent("Delete account")
+  render(card());
+  await screen.findByText("alice@example.test");
+  const entry = screen.getByRole("button", { name: "Login devices" });
+  const row = entry.parentElement!;
+  expect(row.querySelector("strong")).toHaveTextContent("Login devices");
+  expect(row.querySelector("span")).toHaveTextContent(
+    "Only confirmed sign-in sessions and their creation and expiry times are shown.",
+  );
+  expect(entry).toHaveTextContent("Manage");
+  expect(row.previousElementSibling).toHaveTextContent("Manage sign-in method");
+  expect(row.nextElementSibling).toHaveTextContent("Delete account");
+});
+
+it("offers explicit live name save without saving on blur", async () => {
+  render(card());
+  const input = await screen.findByRole("textbox", { name: "Full name" });
+  await waitFor(() => expect(input).toHaveValue("Alice Actual"));
+  expect(input).not.toBeDisabled();
+  fireEvent.change(input, { target: { value: "New Alice" } });
+  fireEvent.blur(input);
+  expect(
+    fetcher.mock.calls.filter((call) => call[1]?.method === "PATCH"),
+  ).toHaveLength(0);
+  expect(screen.getByRole("button", { name: "Save name" })).toBeEnabled();
+});
+
+it("saves live name only on explicit action then displays authority from GET", async () => {
+  let authoritative = "Alice Actual";
+  fetcher.mockImplementation(async (_url, options) => {
+    if (options?.method === "PATCH") {
+      authoritative = "New Alice";
+      return Response.json(
+        { data: { subject: "alice", name: authoritative } },
+        {
+          headers: {
+            "cache-control": "private, no-store",
+            "x-request-id": "request",
+          },
+        },
+      );
+    }
+    return Response.json({
+      data: {
+        subject: "alice",
+        name: authoritative,
+        email: "alice@example.test",
+        email_verified: true,
+      },
+    });
+  });
+  render(card());
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue(
+      "Alice Actual",
+    ),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Full name" }), {
+    target: { value: "New Alice" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+  await screen.findByText("Name saved and read back.");
+  expect(
+    fetcher.mock.calls.filter((call) => call[1]?.method === "PATCH"),
+  ).toHaveLength(1);
+  expect(screen.getByRole("textbox", { name: "Full name" })).toHaveValue(
+    "New Alice",
+  );
+  expect(
+    fetcher.mock.calls.filter((call) => call[1]?.method === "GET"),
+  ).toHaveLength(2);
 });

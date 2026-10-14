@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "Guardar nombre",
+  "settings.name.saving": "Guardando…",
+  "settings.name.saved": "Nombre guardado y leído de nuevo.",
+  "settings.name.invalid": "Usa de 1 a 100 unidades UTF-16 sin caracteres de control ni espacios al principio o al final.",
+  "settings.name.readRequired": "Vuelve a leer para confirmar el resultado. Se conserva el borrador.",
+  "settings.name.review": "Se ha leído el nombre actual. Elige qué hacer a continuación.",
+  "settings.name.adopt": "Usar nombre del servidor",
+  "settings.name.keep": "Conservar borrador y editar",
+  "settings.name.rejected": "Guardado rechazado. Revisa el inicio de sesión o los datos.",
+
   "settings.devices.rejected": "Se rechazó la eliminación. Vuelve a leer las sesiones para comprobar los permisos y el destino.",
   "settings.devices.conflict": "No se puede eliminar la sesión actual. Vuelve a leer las sesiones.",
   "settings.devices.notFound": "La sesión de destino no existe o no es accesible. Vuelve a leer las sesiones.",

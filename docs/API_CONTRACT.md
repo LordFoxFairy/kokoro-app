@@ -1,3 +1,15 @@
+## SET-19 browser-private 姓名PATCH（2026-10-15；源码已接收，正常浏览器待验）
+
+现GET /api/account/profile保留userinfo读取。新PATCH同一路径只调用正式BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0 updateAccountProfile；唯一canonical全文SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453，唯一输入已按该正式Git对象更新，不创建第二份可编辑public schema。新增窄正常生成器消费唯一正式artifact，由generated派生严格input/ACK/error并在strip前校验原始JSON（含重复键/坏UTF8）。其余方法405/Allow GET,PATCH，不新增通用proxy。
+
+PATCH严格同canonical scheme/Host、必须明确同Origin；无query/Idempotency-Key，唯一application/json，Content-Encoding仅缺省/identity，真实正文≤65536bytes。body恰{name,expected_name}；name1..100 UTF16、well-formed Unicode、无C0/C1和ECMAScript trim边界；expected_name恰正规userinfo原string≤16384 UTF16，不修剪/归一化/过滤旧值。name缺失/null不授予保存，不自报subject/tenant/client。仅HttpOnly session中的access经productBffHeaders提交BFF。
+
+成功200严格{data:{subject,name}}，subject绑定同一可信session、name绑定提交原文；PATCH plain error严格{error:{code,message,retryable}}，private/no-store与合法x-request-id仅header，无meta、凭据或raw owner消息。BFF正规status/code/retryable tuple安全投影；本地400 account_profile_input_invalid、403 account_profile_forbidden、413 account_profile_request_too_large、401 session_invalid、502 account_profile_response_invalid、503 account_profile_unavailable，retryable只有429/503真。429必须有合法1..86400 Retry-After，其他状态出现该header拒绝。既有非PATCH方法405 account_profile_method_not_allowed保持原错误形状/private,no-store/Allow: GET,PATCH，不声称具备PATCH receipt。server/browser单10s，BFF headers+body总≤1MiB，最后same-session复核同一预算；未知写结果绝不自动retry或宣称未提交。
+
+权威GET仍原5s与原四字段安全投影，只name放宽到原string≤16384 UTF16；响应总256KiB（含header与body）覆盖合法旧值JSON escaping，sub/email规则及userinfo其他字段剥离保持。GET和PATCH最终session的id/generation/subject/access/两个expiry逐项等值且未过期。PATCH ACK后的GET失败不构造本地profile；409、失去ACK、取消/超时/非法上游结果均需成功GET reconciliation后再由用户显式决定新PATCH。401可能由owner成功写入后的最终session退役产生，同样锁写、保草稿、权威重读，不把失败响应解释为数据库未写。
+
+原十五OIDC scope严格有序追加iam:account-profile.write，16项只由fresh authorize获得，不改旧refresh/userinfo/ID token生命周期。正常scope资源与启动由Root在三owner正式提交后集成，不用旧运行假测试。Skills/连接器不变。
+
 ## SET-18 正文为空的 DELETE 输入核验（2026-10-14）
 
 Account session DELETE 仍禁止业务正文、Transfer-Encoding、非零 Content-Length 和 idempotency-key。Next Node adapter 可为合法无正文请求提供非 null stream，故同源 adapter 在既有十秒总预算内验证 EOF；发现任何正文 byte 即拒绝，悬挂读取主动取消并释放 reader，未验证为空前不读取 session 或调用 BFF。空 stream 不构成新正文合同，不转发至 owner；其他 Host/Origin/path/ACK/final-session 约束保持。

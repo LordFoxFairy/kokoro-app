@@ -1,3 +1,4 @@
+import { parseAccountProfileJson } from "@/lib/account-profile-update.schema";
 import { randomUUID } from "node:crypto";
 import { accountUserinfoSchema } from "@/lib/account-profile.schema";
 import { matchesCanonicalWebRequest } from "./iam-relay-config";
@@ -110,7 +111,7 @@ export async function readAccountProfile(request: Request): Promise<Response> {
         method: "GET",
         signal: controller.signal,
         timeoutMs: Math.max(1, Math.ceil(deadlineAt - performance.now())),
-        maxResponseBytes: 16_384,
+        maxResponseBytes: 262_144,
         headers: new Headers({
           accept: "application/json",
           authorization: `Bearer ${session.access}`,
@@ -143,21 +144,25 @@ export async function readAccountProfile(request: Request): Promise<Response> {
     const declared = upstream.headers.get("content-length");
     if (
       declared !== null &&
-      (!/^\d+$/u.test(declared) || Number(declared) > 16_384)
+      (!/^\d+$/u.test(declared) || Number(declared) > 262_144)
     )
       return fail(502, "account_profile_invalid_response");
     let text = "";
     let size = 0;
+    upstream.headers.forEach((value, key) => {
+      size += new TextEncoder().encode(`${key}: ${value}\r\n`).byteLength;
+    });
+    if (size > 262_144) return fail(502, "account_profile_invalid_response");
     if (upstream.body) {
       reader = upstream.body.getReader();
-      const decoder = new TextDecoder("utf-8", { fatal: true });
+      const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
       try {
         for (;;) {
           const part = await reader.read();
           check();
           if (part.done) break;
           size += part.value.byteLength;
-          if (size > 16_384)
+          if (size > 262_144)
             return fail(502, "account_profile_invalid_response");
           text += decoder.decode(part.value, { stream: true });
         }
@@ -176,7 +181,7 @@ export async function readAccountProfile(request: Request): Promise<Response> {
     check();
     let raw: unknown;
     try {
-      raw = JSON.parse(text) as unknown;
+      raw = parseAccountProfileJson(text);
     } catch {
       return fail(502, "account_profile_invalid_response");
     }
@@ -190,6 +195,9 @@ export async function readAccountProfile(request: Request): Promise<Response> {
       latest.id !== session.id ||
       latest.generation !== session.generation ||
       latest.subject !== session.subject ||
+      latest.access !== session.access ||
+      latest.accessExpiresAt !== session.accessExpiresAt ||
+      latest.expiresAt !== session.expiresAt ||
       latest.accessExpiresAt <= Date.now() ||
       latest.expiresAt <= Date.now()
     )

@@ -1,3 +1,11 @@
+## SET-19 姓名保存无Web持久化（2026-10-15；源码已接收，正常浏览器待验）
+
+唯一User.name、原值CAS和Audit事实由IAM拥有，Web/BFF不增姓名数据库、Redis事实、schema/SQL、receipt或localStorage缓存。HttpOnly Product Session现存凭据/opaqueID/generation和两expiry边界保持，browser看不到Bearer；姓名来自正规userinfo，expected_name逐字保存原值，不能由当前输入、ID token旧claim、preview或跨身份缓存合成。
+
+草稿、提交原值、pending/冲突/unknown恢复状态仅当前admitted subject/generation的编辑器内存；关闭/身份变化/unmount主动退役，迟到response不得写新身份。ACK证明owner已提交而非永久最新值；显示profile仍来自权威GET，unknown锁再次写直到成功重读并显式选择，重读失败保留草稿与错误，不以本地状态冒成功/回滚。长旧name≤16384 UTF16和JSON escaping有有限读取预算；缺失/null name不产生可用CAS基准。
+
+正式BFF a88e710d2201342200017f44c2bc34325937b5d0/public15.2.0单artifact（SHA256 3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453）与窄generated是build-time合同消费，不是数据库镜像。旧single pin退休而非双读；scope16只新authorize，不修改旧session/refresh角色或权限记录。三设计已独审、上游已正式发行，现准入源码；源码独审/正常浏览器保存刷新仍待，Skills/连接器事实不变。
+
 ## SET-18 登录设备仅安全会话投影（2026-10-14；源码已接收）
 
 正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。

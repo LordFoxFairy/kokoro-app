@@ -73,7 +73,8 @@ beforeEach(() => {
     NEXTAUTH_URL: "http://web.test/api/auth",
   }))
     vi.stubEnv(key, value);
-  currentProductSession.mockImplementation(async () => session());
+  const stableSession = session();
+  currentProductSession.mockImplementation(async () => stableSession);
   verifyProductIdentity.mockResolvedValue(undefined);
   requestWithDomain.mockImplementation(async () => owner());
 });
@@ -205,22 +206,20 @@ it.each([
   "changed-subject",
   "expired",
 ])("revalidates session before returning: %s", async (kind) => {
-  currentProductSession
-    .mockResolvedValueOnce(session())
-    .mockResolvedValueOnce(
-      kind === null
-        ? null
-        : {
-            ...session(),
-            ...(kind === "changed-id"
-              ? { id: "other" }
-              : kind === "changed-generation"
-                ? { generation: 3 }
-                : kind === "changed-subject"
-                  ? { subject: "bob" }
-                  : { accessExpiresAt: Date.now() - 1 }),
-          },
-    );
+  currentProductSession.mockResolvedValueOnce(session()).mockResolvedValueOnce(
+    kind === null
+      ? null
+      : {
+          ...session(),
+          ...(kind === "changed-id"
+            ? { id: "other" }
+            : kind === "changed-generation"
+              ? { generation: 3 }
+              : kind === "changed-subject"
+                ? { subject: "bob" }
+                : { accessExpiresAt: Date.now() - 1 }),
+        },
+  );
   expect((await GET(request())).status).toBe(401);
 });
 it.each(["initial-store", "admission", "fetch", "body", "final-store"])(
@@ -288,7 +287,7 @@ it.each(["oversize", "malformed", "content-type", "declared-size"])(
   async (kind) => {
     requestWithDomain.mockResolvedValue(
       kind === "oversize"
-        ? owner({ sub: "alice", other: "x".repeat(16_384) })
+        ? owner({ sub: "alice", other: "x".repeat(262_144) })
         : kind === "malformed"
           ? new Response("{", {
               headers: { "content-type": "application/json" },
@@ -298,7 +297,7 @@ it.each(["oversize", "malformed", "content-type", "declared-size"])(
             : new Response("{}", {
                 headers: {
                   "content-type": "application/json",
-                  "content-length": "16385",
+                  "content-length": "262145",
                 },
               }),
     );
@@ -309,17 +308,36 @@ it.each(["oversize", "malformed", "content-type", "declared-size"])(
 it("does not restart the 5s budget between initial store and fetch", async () => {
   vi.useFakeTimers();
   let finish!: (value: ReturnType<typeof session>) => void;
-  currentProductSession.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  currentProductSession.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
   requestWithDomain.mockReturnValueOnce(new Promise(() => {}));
-  const pending=GET(request());
-  await vi.advanceTimersByTimeAsync(4_000);finish(session());
+  const pending = GET(request());
+  await vi.advanceTimersByTimeAsync(4_000);
+  finish(session());
   await vi.advanceTimersByTimeAsync(1_001);
   expect((await pending).status).toBe(503);
-  expect(requestWithDomain.mock.calls[0]![2].timeoutMs).toBeLessThanOrEqual(1_000);
+  expect(requestWithDomain.mock.calls[0]![2].timeoutMs).toBeLessThanOrEqual(
+    1_000,
+  );
 });
-it("never follows redirects or leaks owner cookies",async()=>{
-  requestWithDomain.mockResolvedValue(new Response(null,{status:302,headers:{location:"https://private.test", "set-cookie":"secret=issuer"}}));
-  const response=await GET(request());expect(response.status).toBe(502);expect(response.headers.get("location")).toBeNull();expect(response.headers.get("set-cookie")).toBeNull();expect(requestWithDomain).toHaveBeenCalledTimes(1);
+it("never follows redirects or leaks owner cookies", async () => {
+  requestWithDomain.mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: {
+        location: "https://private.test",
+        "set-cookie": "secret=issuer",
+      },
+    }),
+  );
+  const response = await GET(request());
+  expect(response.status).toBe(502);
+  expect(response.headers.get("location")).toBeNull();
+  expect(response.headers.get("set-cookie")).toBeNull();
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
 });
 
 it("admits Next internal localhost URL with the canonical browser Host and Origin", async () => {
@@ -359,3 +377,27 @@ it.each([
     expect(requestWithDomain).not.toHaveBeenCalled();
   },
 );
+
+it.each(["access", "accessExpiresAt", "expiresAt"])(
+  "retires GET on same id/subject %s refresh",
+  async (key) => {
+    const first = session();
+    currentProductSession
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce({
+        ...first,
+        [key]:
+          typeof first[key as keyof typeof first] === "number"
+            ? Date.now() + 90000
+            : "new-access",
+      });
+    expect((await GET(request())).status).toBe(401);
+  },
+);
+it("preserves max original UTF16 userinfo name including escaped lone and controls", async () => {
+  const name = "\ud800\u0000 ".repeat(5461) + "x";
+  requestWithDomain.mockResolvedValue(owner({ sub: "alice", name }));
+  const response = await GET(request());
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.name).toBe(name);
+});

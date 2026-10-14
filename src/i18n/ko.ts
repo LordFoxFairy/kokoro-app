@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "이름 저장",
+  "settings.name.saving": "저장 중…",
+  "settings.name.saved": "이름을 저장하고 다시 읽었습니다.",
+  "settings.name.invalid": "제어 문자나 앞뒤 공백 없이 UTF-16 1~100단위를 입력하세요.",
+  "settings.name.readRequired": "저장 결과를 확인하려면 다시 읽으세요. 초안은 유지됩니다.",
+  "settings.name.review": "현재 이름을 읽었습니다. 다음 작업을 선택하세요.",
+  "settings.name.adopt": "서버 이름 사용",
+  "settings.name.keep": "초안 유지하고 편집",
+  "settings.name.rejected": "저장이 거부되었습니다. 로그인이나 입력을 확인하세요.",
+
   "settings.devices.rejected": "제거가 거부되었습니다. 세션을 다시 읽어 권한과 대상을 확인하세요.",
   "settings.devices.conflict": "현재 세션은 제거할 수 없습니다. 다시 읽어 주세요.",
   "settings.devices.notFound": "대상 세션이 없거나 접근할 수 없습니다. 다시 읽어 주세요.",

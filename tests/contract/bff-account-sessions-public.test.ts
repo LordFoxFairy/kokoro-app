@@ -5,12 +5,12 @@ import { expect, it } from "vitest"
 import YAML from "yaml"
 import * as sdk from "@/generated/bff-account-sessions/sdk.gen"
 import { accountSessionsSchema, accountSessionRevokeSchema } from "@/lib/account-sessions.schema"
-it("pins the complete formal public15.1 artifact with 144 operations and exactly two narrow SDK exports", async () => {
+it("pins the complete formal public15.2 artifact with 145 operations and exactly two narrow SDK exports", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(createHash("sha256").update(bytes).digest("hex")).toBe("5972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d")
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe("3214e32d273fbc514db1c1f2307f7855b623f1f613fb1da710cc51d23c41f453")
   const spec = YAML.parse(bytes.toString())
-  expect(spec.info.version).toBe("15.1.0")
-  expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(144)
+  expect(spec.info.version).toBe("15.2.0")
+  expect(Object.values(spec.paths).flatMap((path) => Object.keys(path as object).filter((key) => ["get", "post", "put", "delete", "patch", "head", "options"].includes(key)))).toHaveLength(145)
   expect(Object.keys(sdk)).toEqual(["listAccountSessions", "revokeAccountSession"])
 })
 it("nested raw closed validation rejects added credentials before normal generated stripping", () => {

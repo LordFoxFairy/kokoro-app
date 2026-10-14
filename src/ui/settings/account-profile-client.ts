@@ -1,3 +1,4 @@
+import { parseAccountProfileJson } from "@/lib/account-profile-update.schema";
 import {
   accountProfileResponseSchema,
   type AccountProfile,
@@ -60,16 +61,20 @@ export async function readAccountProfile(
     }
     let text = "";
     let size = 0;
+    response.headers.forEach((value, key) => {
+      size += new TextEncoder().encode(`${key}: ${value}\r\n`).byteLength;
+    });
+    if (size > 262_144) throw new Error("Account response oversized");
     if (response.body) {
       reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8", { fatal: true });
+      const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
       try {
         for (;;) {
           const part = await reader.read();
           check();
           if (part.done) break;
           size += part.value.byteLength;
-          if (size > 16_384) throw new Error("Account response oversized");
+          if (size > 262_144) throw new Error("Account response oversized");
           text += decoder.decode(part.value, { stream: true });
         }
         text += decoder.decode();
@@ -80,7 +85,7 @@ export async function readAccountProfile(
       }
     }
     check();
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = parseAccountProfileJson(text);
     return accountProfileResponseSchema.parse(raw).data;
   };
   try {

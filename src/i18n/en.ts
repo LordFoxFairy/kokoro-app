@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "Save name",
+  "settings.name.saving": "Saving…",
+  "settings.name.saved": "Name saved and read back.",
+  "settings.name.invalid": "Use 1–100 UTF-16 units without control characters or leading or trailing whitespace.",
+  "settings.name.readRequired": "Read again to confirm the save result. Your draft is preserved.",
+  "settings.name.review": "The current name was read. Choose what to do next.",
+  "settings.name.adopt": "Use server name",
+  "settings.name.keep": "Keep draft and edit",
+  "settings.name.rejected": "Save rejected. Check sign-in or input.",
+
   "settings.devices.rejected": "Removal was rejected. Read sessions again to check permissions and the target.",
   "settings.devices.conflict": "The current session cannot be removed. Read sessions again.",
   "settings.devices.notFound": "The target session was not found or is inaccessible. Read sessions again.",

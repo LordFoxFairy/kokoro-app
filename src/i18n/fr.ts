@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "Enregistrer le nom",
+  "settings.name.saving": "Enregistrement…",
+  "settings.name.saved": "Nom enregistré et relu.",
+  "settings.name.invalid": "Utilisez de 1 à 100 unités UTF-16 sans caractères de contrôle ni espaces en début ou fin.",
+  "settings.name.readRequired": "Relisez pour confirmer le résultat. Le brouillon est conservé.",
+  "settings.name.review": "Le nom actuel a été lu. Choisissez la suite.",
+  "settings.name.adopt": "Utiliser le nom du serveur",
+  "settings.name.keep": "Garder le brouillon et modifier",
+  "settings.name.rejected": "Enregistrement refusé. Vérifiez la connexion ou la saisie.",
+
   "settings.devices.rejected": "Suppression refusée. Relisez les sessions pour vérifier les autorisations et la cible.",
   "settings.devices.conflict": "La session actuelle ne peut pas être supprimée. Relisez les sessions.",
   "settings.devices.notFound": "La session cible est introuvable ou inaccessible. Relisez les sessions.",

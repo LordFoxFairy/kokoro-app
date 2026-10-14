@@ -38,7 +38,7 @@ export function useAccountProfile(
       r.controller.signal.aborted ||
       scopeRef.current !== r.scope
     )
-      return;
+      return null;
     r.pending = true;
     setView({ scope: r.scope, profile: null, phase: "loading" });
     try {
@@ -49,8 +49,11 @@ export function useAccountProfile(
         read.current === r &&
         scopeRef.current === r.scope &&
         !r.controller.signal.aborted
-      )
+      ) {
         setView({ scope: r.scope, profile, phase: "ready" });
+        return profile;
+      }
+      return null;
     } catch {
       if (
         read.current === r &&
@@ -58,6 +61,7 @@ export function useAccountProfile(
         !r.controller.signal.aborted
       )
         setView({ scope: r.scope, profile: null, phase: "error" });
+      return null;
     } finally {
       r.pending = false;
     }
@@ -81,6 +85,10 @@ export function useAccountProfile(
       : { scope, profile: null, phase: "loading" as const };
   return {
     ...visible,
+    async reload() {
+      const r = read.current;
+      return r ? await load(r) : null;
+    },
     retry() {
       const r = read.current;
       if (r) void load(r);

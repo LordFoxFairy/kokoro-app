@@ -1212,3 +1212,6 @@
 
 .devicesDialog { max-height: min(85dvh, 48rem); overflow-y: auto; }
 .deviceRow { display: grid; gap: var(--spacing-2, 0.5rem); border-block-end: 1px solid var(--border); padding-block: 1rem; overflow-wrap: anywhere; }
+
+.nameActions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.nameActions p { color: var(--muted-foreground); font-size: 0.875rem; }

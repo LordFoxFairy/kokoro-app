@@ -52,7 +52,7 @@ it.each([401, 429, 503, 302])(
 );
 it("rejects oversized actual body", async () => {
   fetcher.mockResolvedValue(
-    Response.json({ data: { ...data, name: "x".repeat(16_384) } }),
+    Response.json({ data: { ...data, name: "x".repeat(262_144) } }),
   );
   await expect(readAccountProfile(signal())).rejects.toThrow();
 });
@@ -123,4 +123,10 @@ it("headers do not restart the total body deadline", async () => {
   await vi.advanceTimersByTimeAsync(1_001);
   expect(await result).toMatchObject({ name: "TimeoutError" });
   expect(cancel).toHaveBeenCalled();
+});
+
+it("preserves original 16384 UTF16 name including escaped controls and lone code units", async () => {
+  const name = "\ud800\u0000 ".repeat(5461) + "x";
+  fetcher.mockResolvedValue(Response.json({ data: { ...data, name } }));
+  expect((await readAccountProfile(signal())).name).toBe(name);
 });

@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "Сохранить имя",
+  "settings.name.saving": "Сохранение…",
+  "settings.name.saved": "Имя сохранено и прочитано заново.",
+  "settings.name.invalid": "Введите 1–100 единиц UTF-16 без управляющих символов и пробелов по краям.",
+  "settings.name.readRequired": "Прочитайте снова для подтверждения результата. Черновик сохранён.",
+  "settings.name.review": "Текущее имя прочитано. Выберите дальнейшее действие.",
+  "settings.name.adopt": "Использовать имя с сервера",
+  "settings.name.keep": "Сохранить черновик и редактировать",
+  "settings.name.rejected": "Сохранение отклонено. Проверьте вход или введённые данные.",
+
   "settings.devices.rejected": "Удаление отклонено. Прочитайте сеансы снова и проверьте права и цель.",
   "settings.devices.conflict": "Текущий сеанс нельзя удалить. Прочитайте сеансы снова.",
   "settings.devices.notFound": "Целевой сеанс не найден или недоступен. Прочитайте сеансы снова.",

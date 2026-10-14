@@ -9,14 +9,21 @@ const text = (limit: number, minimum = 0) =>
 /** Consumer projection only; IAM owns the userinfo contract. */
 export const accountUserinfoSchema = z.object({
   sub: text(256, 1),
-  name: text(1024).nullable().optional(),
+  name: z
+    .string()
+    .refine((value) => value.length <= 16384)
+    .nullable()
+    .optional(),
   email: text(1024).nullable().optional(),
   email_verified: z.boolean().nullable().optional(),
 });
 export const accountProfileSchema = z
   .object({
     subject: text(256, 1),
-    name: text(1024).nullable(),
+    name: z
+      .string()
+      .refine((value) => value.length <= 16384)
+      .nullable(),
     email: text(1024).nullable(),
     email_verified: z.boolean().nullable(),
   })

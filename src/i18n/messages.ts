@@ -42,6 +42,16 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  "settings.name.save": "保存姓名",
+  "settings.name.saving": "正在保存…",
+  "settings.name.saved": "姓名已保存并重新读取。",
+  "settings.name.invalid": "请输入1–100个UTF-16字符，不能含控制字符或首尾空白。",
+  "settings.name.readRequired": "保存结果需重新读取确认，草稿已保留。",
+  "settings.name.review": "已读取当前姓名，请明确选择后续操作。",
+  "settings.name.adopt": "采用服务器姓名",
+  "settings.name.keep": "保留草稿并重新编辑",
+  "settings.name.rejected": "保存被拒绝，请检查登录或输入。",
+
   "settings.devices.rejected": "移除请求被拒绝。请重新读取当前会话后核实权限和目标。",
   "settings.devices.conflict": "当前会话无法移除。请重新读取会话。",
   "settings.devices.notFound": "目标会话不存在或已不可访问。请重新读取会话。",

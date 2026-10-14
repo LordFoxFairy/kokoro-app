@@ -4,6 +4,16 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "settings.name.save": "名前を保存",
+  "settings.name.saving": "保存中…",
+  "settings.name.saved": "名前を保存し、再読み込みしました。",
+  "settings.name.invalid": "制御文字や前後の空白を含めず、UTF-16で1～100単位を入力してください。",
+  "settings.name.readRequired": "保存結果を確認するには再読み込みしてください。下書きは保持されています。",
+  "settings.name.review": "現在の名前を読み込みました。次の操作を選択してください。",
+  "settings.name.adopt": "サーバーの名前を使う",
+  "settings.name.keep": "下書きを保持して編集",
+  "settings.name.rejected": "保存が拒否されました。ログインや入力を確認してください。",
+
   "settings.devices.rejected": "削除が拒否されました。セッションを再読み込みし、権限と対象を確認してください。",
   "settings.devices.conflict": "現在のセッションは削除できません。再読み込みしてください。",
   "settings.devices.notFound": "対象のセッションが見つからないかアクセスできません。再読み込みしてください。",
