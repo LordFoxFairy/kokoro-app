@@ -20,7 +20,7 @@ export async function accountSessions(request: Request, sessionTarget?: string |
   if (url.protocol !== origin.protocol || request.headers.get("host") !== origin.host ||
     (method === "DELETE" ? request.headers.get("origin") !== origin.origin : request.headers.has("origin") && request.headers.get("origin") !== origin.origin)) return fail(403, "account_session_forbidden_origin")
   let limit = 25; let cursor: string | undefined
-  if (request.body !== null || request.headers.has("transfer-encoding") || request.headers.has("idempotency-key") ||
+  if ((method === "GET" && request.body !== null) || request.headers.has("transfer-encoding") || request.headers.has("idempotency-key") ||
     (request.headers.has("content-length") && request.headers.get("content-length") !== "0")) return fail(400, "account_session_invalid_request")
   if (method === "GET") {
     if (url.pathname !== "/api/account/sessions") return fail(400, "account_session_invalid_request")
@@ -51,6 +51,19 @@ export async function accountSessions(request: Request, sessionTarget?: string |
   const operation = async () => {
     check()
     if (method === "DELETE") {
+      // Next's Node adapter provides a stream even for a bodyless DELETE.
+      // Prove EOF inside the existing budget instead of testing stream presence.
+      if (request.body !== null) {
+        reader = request.body.getReader()
+        for (;;) {
+          const part = await reader.read()
+          check()
+          if (part.done) break
+          if (part.value.byteLength > 0) return fail(400, "account_session_invalid_request")
+        }
+        reader.releaseLock()
+        reader = undefined
+      }
       sessionId = await sessionTarget
       check()
     try {

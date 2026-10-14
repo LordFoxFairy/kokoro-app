@@ -1,3 +1,9 @@
+## SET-18 正常 DELETE 空流修补（2026-10-14，浏览器复验待执行）
+
+Root 已按正式 gitlinks 正常启动 SET-18，并取得十五项有序 scope 的真实新 code grant；真实浏览器登录及本人设备列表读取成功。退出其他会话实际被 Web 返回 400 account_session_invalid_request，目标仍在权威列表，不能称撤销成功；较晚旧 cookie 的 401 可能来自 access token 自然过期，已明确撤回其撤销证明用途。
+
+原因已核本仓 Next Node adapter：无正文的 DELETE 仍可带 EOF-only Request stream。现具名 adapter 在原十秒总预算内读取并证明 EOF，继续拒绝任何非零字节、非零 Content-Length、Transfer-Encoding 和不合法 Origin；不转发正文，不修改 owner 合同、身份检查或数据库。两 EOF 正控和悬挂输入反例在原实现 3FAIL/43PASS；修补后具名文件 46PASS，七个设备相关文件 124PASS。正常启动后的 CUA 撤销、权威重读及未过期旧会话在线拒绝仍须复验，不能用 unit 代替。
+
 ## SET-18 登录设备源码已接收（2026-10-14；正常运行待验）
 
 正式前置为 IAM `284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9` / internal `0.12.0`，BFF `53996400e4100ed5940b104f0dce139d44fec383` / public `15.1.0` / 144 operations，唯一 canonical SHA256 `5972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d`。58 个实现、生成与测试路径已冻结，经独立审查和 Root 逐字节复核；独审没有剩余确定 P1/P2。设备入口采用既有账户行，位于登录方式之后、删除账户之前；当前会话无移除操作，其他会话需确认并取得真实 ACK 后重读。

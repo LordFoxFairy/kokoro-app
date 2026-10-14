@@ -1,3 +1,7 @@
+## SET-18 正文为空的 DELETE 输入核验（2026-10-14）
+
+Account session DELETE 仍禁止业务正文、Transfer-Encoding、非零 Content-Length 和 idempotency-key。Next Node adapter 可为合法无正文请求提供非 null stream，故同源 adapter 在既有十秒总预算内验证 EOF；发现任何正文 byte 即拒绝，悬挂读取主动取消并释放 reader，未验证为空前不读取 session 或调用 BFF。空 stream 不构成新正文合同，不转发至 owner；其他 Host/Origin/path/ACK/final-session 约束保持。
+
 ## SET-18 browser-private 登录Session（2026-10-14；源码已接收，运行待验）
 
 正式前置已接收：IAM284bfd8fea91d57dae18fa2b7c772d75c7b6dcd9/internal0.12/f6f3588d；BFF53996400e4100ed5940b104f0dce139d44fec383/public15.1.0/canonical与inventory144/SHA2565972f7be07a0117d8ee036fa4e742da7942b3c864d009c2847e70e69112a747d。Root沿SET18-Web任务卡授billing_scheduler_audit唯一源码writer；D0同一sessionID/generation/subject/access与session寿命最终复核规则保持。实现已冻结、独审并由Root接收，正常运行/browser尚未完成。Web实际OIDC_SCOPE按现原十三项严格顺序append账户read/revoke两scope，以正规fresh authorize取得；不得用旧refresh/machine提升。

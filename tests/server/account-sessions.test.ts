@@ -49,6 +49,28 @@ describe("account session same-origin adapter", () => {
     reply({ transform: (raw) => ({ data: { session_id: "wrong", revoked: true }, meta: { request_id: raw.meta.request_id } }) })
     expect((await accountSessions(r, "other")).status).toBe(502)
   })
+  it.each([undefined, "0"])("accepts an EOF-only DELETE stream with content-length %s", async (length) => {
+    reply({ transform: (raw) => ({ data: { session_id: "other", revoked: true }, meta: { request_id: raw.meta.request_id } }) })
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
+    const init: RequestInit & { duplex: "half" } = { method: "DELETE", body, duplex: "half", headers: { origin: "https://web.test", ...(length === undefined ? {} : { "content-length": length }) } }
+    const response = await revokeRoute.DELETE(request("/api/account/sessions/other", init), { params: Promise.resolve({ sessionId: "other" }) })
+    expect(response.status).toBe(200); expect(upstream).toHaveBeenCalledOnce()
+    expect(upstream.mock.calls[0]![2].body).toBeUndefined(); expect(body.locked).toBe(false)
+  })
+  it("rejects actual DELETE bytes even when content-length claims zero", async () => {
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1])); controller.close() } })
+    const init: RequestInit & { duplex: "half" } = { method: "DELETE", body, duplex: "half", headers: { origin: "https://web.test", "content-length": "0" } }
+    expect((await accountSessions(request("/api/account/sessions/other", init), "other")).status).toBe(400)
+    expect(session).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled(); expect(body.locked).toBe(false)
+  })
+  it("bounds a hanging incoming DELETE stream and releases its reader before any owner I/O", async () => {
+    vi.useFakeTimers(); const cancel = vi.fn(() => new Promise<void>(() => {}))
+    const body = new ReadableStream<Uint8Array>({ pull: () => new Promise(() => {}), cancel })
+    const init: RequestInit & { duplex: "half" } = { method: "DELETE", body, duplex: "half", headers: { origin: "https://web.test" } }
+    const result = accountSessions(request("/api/account/sessions/other", init), "other")
+    await vi.advanceTimersByTimeAsync(10000); expect((await result).status).toBe(503)
+    expect(cancel).toHaveBeenCalled(); expect(body.locked).toBe(false); expect(session).not.toHaveBeenCalled(); expect(upstream).not.toHaveBeenCalled()
+  })
   it.each(["id", "generation", "subject", "access", "accessExpiresAt", "expiresAt"])("rejects final changed %s even under the same session", async (field) => {
     session.mockResolvedValueOnce(claims).mockResolvedValueOnce({ ...claims, [field]: typeof claims[field as keyof typeof claims] === "number" ? 9 : "changed" })
     expect((await accountSessions(request())).status).toBe(401)
