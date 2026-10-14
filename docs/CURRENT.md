@@ -1,3 +1,21 @@
+## SET28 Web阅读轴修补已接收，SET29接续（2026-10-15）
+
+现Web thread viewport统一隐藏滚动条稳定槽，原10.59375px双侧漂移消除；只1CSS具名selector+property，逆核恢复原7518ab84源码，931保护/Root7与全部测试/阈值/业务oracle原字节。overflow/shared/mobile primitive及滚动逻辑保持，可见滚动条拖动入口消失；独审无确定P1/P2，contract283/architecture50/type通过，V2 lint/build通过。
+
+完整test3959PASS/7此前具名FAIL/0SKIP，201.99s；此前UI/i18n与原生登录完整门未闭环。正规隔离Playwright20PASS/0FAIL/4SKIP，20s：现原responsive精确阅读轴全矩阵、长Markdown/尾部/第二轮与logout/stream/HITL原完整业务断言均PASS，资源库存exact恢复。首隔离脚本absolute-path漏覆盖只跑到旧baseRED，已修canonical相对路径与复制哈希校验后V2真实PASS，非V1产品失败。仅现工程Chromium，正常认证Browser/多引擎/辅助技术未验；后继SET29沿现可信boundary修侧栏余额，原native观察边界另分类，完整设置Goal active、Skills/连接器排除。
+
+## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
+
+正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。
+
+Root真实390px DOM测量：内容左右26.59375/363.40625，Composer16/374，双侧thin scrollbar稳定槽各约11px造成10.59375对称漂移。仅现Web专属.main[data-desktop-web=true][data-web-view=thread] viewport slot规则新增scrollbar-width:none，保overflow-y:auto；共享/mobile viewport与组件逻辑原字节。该呈现沿现autoscrolling已有隐藏条模式，统一非自动状态去槽，wheel/touch/键盘/程序滚动与自动定位保持，取消可见滚动条拖动。无猜测11px offset、JS测量框架或公开布局控制。独立候选审查确认最窄；Root隔离原两失败case全矩阵/长Markdown/尾部/第二轮18.0s全部PASS，非正常认证Browser证明。
+
+本片无API/权限/owner/依赖/新源文件/生成变化，所有请求与状态控制保留；仅Web现有阅读视图样式。Skills/连接器与设置行为排除。
+
+无数据事实/持久化/状态机变化；仅阅读区视觉宽度。旧48rem cap、各宽度/rail布局与精确<=1px业务oracle保持。当前证据覆盖工程现Chromium门，不冒称额外浏览器通过。
+
+源码只具名scope选择器一property与必要注释；冻结1writer/931保护/Root7独审，Root实际原geometry/longthread及正常stream/HITL完整E2E、规定contract/architecture/lint/type/full/build，库存精确恢复后接入同PR。既有native登录完整门稳定性与正常认证设置journey另未决；侧栏余额可信generation后继，整个设置Goal仍active。
+
 ## SET27 个性化未接通入口正式接收（2026-10-15）
 
 个人资料/知识line tabs、AI导入及记忆导入入口已呈现；知识及导入按钮真实disabled/无handler，上方本地化说明用实例useId关联，不展示假知识空列表、导入流程或成功。四字段/保存/冲突/未知写恢复原子树逐字保留；source仅现Card与具名CSS，九locale单key。Root原源最终缺知识入口1FAIL/68SKIP再次复现，终态117专项PASS；12writer/920保护/Root7、原69测试两替换/两附加assert及locale/CSS逆核，独审无确定P1/P2，contract283/architecture50/lint/type/build通过。首轮zh键位置失败已修并保留日志。

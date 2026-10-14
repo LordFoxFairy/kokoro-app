@@ -1,3 +1,11 @@
+## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
+
+正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。
+
+Root真实390px DOM测量：内容左右26.59375/363.40625，Composer16/374，双侧thin scrollbar稳定槽各约11px造成10.59375对称漂移。仅现Web专属.main[data-desktop-web=true][data-web-view=thread] viewport slot规则新增scrollbar-width:none，保overflow-y:auto；共享/mobile viewport与组件逻辑原字节。该呈现沿现autoscrolling已有隐藏条模式，统一非自动状态去槽，wheel/touch/键盘/程序滚动与自动定位保持，取消可见滚动条拖动。无猜测11px offset、JS测量框架或公开布局控制。独立候选审查确认最窄；Root隔离原两失败case全矩阵/长Markdown/尾部/第二轮18.0s全部PASS，非正常认证Browser证明。
+
+源码只具名scope选择器一property与必要注释；冻结1writer/931保护/Root7独审，Root实际原geometry/longthread及正常stream/HITL完整E2E、规定contract/architecture/lint/type/full/build，库存精确恢复后接入同PR。既有native登录完整门稳定性与正常认证设置journey另未决；侧栏余额可信generation后继，整个设置Goal仍active。
+
 ## SET27 个性化未接通入口（2026-10-15；正式D0）
 
 Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。

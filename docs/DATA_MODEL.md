@@ -1,3 +1,9 @@
+## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
+
+正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。
+
+无数据事实/持久化/状态机变化；仅阅读区视觉宽度。旧48rem cap、各宽度/rail布局与精确<=1px业务oracle保持。当前证据覆盖工程现Chromium门，不冒称额外浏览器通过。
+
 ## SET27 个性化未接通入口（2026-10-15；正式D0）
 
 Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_audit现Web唯一writer，12具名路径/920保护/Root7。Root设计/文档/Git/资源/运行/CUA。独立候选审查无确定P1/P2；原SET26已接收，本轮只个人资料呈现，不混入余额/支付/阅读轴。
