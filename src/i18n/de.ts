@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "Verbrauch und Tarife können nach Bestätigung Ihres Anmeldestatus geladen werden.",
   "settings.modelPreferenceNotSaved": "Die Modellpräferenz wurde nicht gespeichert; neue Chats verwenden diese ungespeicherte Auswahl nicht.",
   "settings.modelCatalogLoading": "Modellkatalog wird geladen…",
   "settings.modelCatalogFailed": "Der Modellkatalog konnte nicht geladen werden. Bitte versuchen Sie es erneut.",

@@ -31,7 +31,7 @@ type CheckoutResult =
   | { status: "unavailable" }
   | { status: "unauthenticated" }
 
-export type PricingFailureReason = "network" | "http" | "parse" | "not_configured"
+export type PricingFailureReason = "network" | "http" | "parse" | "not_configured" | "timeout" | "aborted"
 
 export class PricingClientError extends Error {
   readonly reason: PricingFailureReason
@@ -56,36 +56,91 @@ function describeUnknown(error: unknown): string {
 
 export type PricingClient = {
   // 正式套餐目录只读；503作为不可用，不能由目录非空推断支付能力。
-  plans: () => Promise<PlanCatalog>
+  plans: (signal?: AbortSignal) => Promise<PlanCatalog>
   // 既有运输协议保留501/401映射；当前正规目录UI不发起此请求。
   checkout: (planId: string) => Promise<CheckoutResult>
 }
 
 export function createPricingClient(): PricingClient {
   return {
-    plans: async () => {
-      let response: Response
-      try {
-        response = await fetch(PLANS_PATH, { cache: "no-store" })
-      } catch (error) {
-        throw new PricingClientError("network", describeUnknown(error), null)
+    plans: async (signal) => {
+      const controller = new AbortController()
+      const deadline = performance.now() + 10_000
+      let response: Response | undefined
+      let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+      let retired = false
+      let rejectAbort!: (reason: unknown) => void
+      const interrupted = new Promise<never>((_resolve, reject) => { rejectAbort = reject })
+      let bodyCancelled = false
+      const cancel = () => {
+        if (bodyCancelled || !response?.body) return
+        bodyCancelled = true
+        if (reader) {
+          const owned = reader
+          reader = undefined
+          void owned.cancel().catch(() => undefined)
+          owned.releaseLock()
+        } else {
+          void response.body.cancel().catch(() => undefined)
+        }
       }
-      if (response.status === 503) {
-        throw new PricingClientError("not_configured", "payment not configured", 503)
+      const abort = () => { cancel(); rejectAbort(controller.signal.reason) }
+      const parentAbort = () => controller.abort(new PricingClientError("aborted", "Plans read retired", null))
+      controller.signal.addEventListener("abort", abort, { once: true })
+      signal?.addEventListener("abort", parentAbort, { once: true })
+      const timer = setTimeout(() => controller.abort(new PricingClientError("timeout", "Plans read timed out", null)), 10_000)
+      const check = () => {
+        controller.signal.throwIfAborted()
+        if (performance.now() >= deadline) {
+          controller.abort(new PricingClientError("timeout", "Plans read timed out", null))
+          controller.signal.throwIfAborted()
+        }
       }
-      if (!response.ok) {
-        throw new PricingClientError("http", `plans request failed with status ${response.status}`, response.status)
+      const operation = async () => {
+        check()
+        try { response = await fetch(PLANS_PATH, { cache: "no-store", signal: controller.signal }) }
+        catch (error) { check(); throw new PricingClientError("network", describeUnknown(error), null) }
+        if (retired || controller.signal.aborted) { cancel(); check() }
+        check()
+        if (response.status === 503) throw new PricingClientError("not_configured", "payment not configured", 503)
+        if (!response.ok) throw new PricingClientError("http", `plans request failed with status ${response.status}`, response.status)
+        let raw: unknown
+        try {
+          let text = ""
+          if (response.body) {
+            const owned = response.body.getReader()
+            reader = owned
+            const decoder = new TextDecoder()
+            try {
+              for (;;) {
+                const part = await owned.read()
+                check()
+                if (part.done) break
+                text += decoder.decode(part.value, { stream: true })
+              }
+              text += decoder.decode()
+            } finally {
+              if (reader === owned) {
+                reader = undefined
+                owned.releaseLock()
+              }
+            }
+          }
+          raw = JSON.parse(text)
+        }
+        catch (error) { check(); throw new PricingClientError("parse", describeUnknown(error), response.status) }
+        check()
+        try { const parsed = planCatalogSchema.parse(raw); check(); return parsed }
+        catch (error) { check(); throw new PricingClientError("parse", describeUnknown(error), response.status) }
       }
-      let raw: unknown
-      try {
-        raw = await response.json()
-      } catch (error) {
-        throw new PricingClientError("parse", describeUnknown(error), response.status)
-      }
-      try {
-        return planCatalogSchema.parse(raw)
-      } catch (error) {
-        throw new PricingClientError("parse", describeUnknown(error), response.status)
+      if (signal?.aborted) parentAbort()
+      try { return await Promise.race([operation(), interrupted]) }
+      finally {
+        retired = true
+        if (response && !response.ok) cancel()
+        clearTimeout(timer)
+        signal?.removeEventListener("abort", parentAbort)
+        controller.signal.removeEventListener("abort", abort)
       }
     },
 

@@ -97,6 +97,8 @@ export function SettingsPanelContent({
     case "credits":
       return (
         <BillingContent
+          preview={preview}
+          {...(readBoundary === undefined ? {} : { readBoundary })}
           client={browserBillingClient({ preview })}
           onOpenPricing={onOpenPricing}
           embedded
@@ -104,7 +106,7 @@ export function SettingsPanelContent({
       );
     case "subscription":
       return (
-        <PricingContent client={browserPricingClient({ preview })} embedded />
+        <PricingContent preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} client={browserPricingClient({ preview })} embedded />
       );
     case "skills":
       return (

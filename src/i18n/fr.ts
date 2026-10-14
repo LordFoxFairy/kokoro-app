@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "L’utilisation et les offres peuvent être chargées une fois votre connexion confirmée.",
   "settings.modelPreferenceNotSaved": "La préférence de modèle n’est pas enregistrée ; les nouvelles conversations n’utiliseront pas ce choix non enregistré.",
   "settings.modelCatalogLoading": "Chargement du catalogue de modèles…",
   "settings.modelCatalogFailed": "Impossible de charger le catalogue de modèles. Réessayez.",

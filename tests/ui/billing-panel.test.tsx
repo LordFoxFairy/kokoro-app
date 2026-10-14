@@ -29,14 +29,14 @@ function makeClient(overrides: Partial<BillingClient> = {}): BillingClient {
 }
 
 function renderPanel(client: BillingClient) {
-  return render(<BillingPanel client={client} onClose={vi.fn()} />, { wrapper: LocaleProvider })
+  return render(<BillingPanel {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} onClose={vi.fn()} />, { wrapper: LocaleProvider })
 }
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs() })
 
 describe("BillingPanel", () => {
   it("uses the compact reference hierarchy when embedded in Settings", async () => {
-    render(<BillingContent client={makeClient({
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({
       summary: vi.fn().mockResolvedValue({
         credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "10000000",
         held_micros: "0"
@@ -168,7 +168,7 @@ describe("R54 embedded billing precision and unknown owner facts", () => {
     ["1", "0.000001"],
     ["9007199254740993", "9007199254.740993"],
   ])("renders exact embedded balance for %s micros", async (micros, expected) => {
-    render(<BillingContent client={makeClient({
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({
       summary: vi.fn().mockResolvedValue({
         credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: micros,
         held_micros: "0"
@@ -186,7 +186,7 @@ describe("R54 embedded billing precision and unknown owner facts", () => {
     ["9007199254740993", "+9007199254.740993", "positive"],
     ["-9007199254740993", "-9007199254.740993", "negative"],
   ])("renders exact signed embedded ledger delta for %s micros", async (micros, expected, sign) => {
-    render(<BillingContent client={makeClient({
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({
       ledger: vi.fn().mockResolvedValue({
         items: [{
           sequence: "1", source_ref: "owner-ref", journal_id: "r54-entry",
@@ -206,7 +206,7 @@ describe("R54 embedded billing precision and unknown owner facts", () => {
   })
 
   it("does not infer a Free plan when plan_label is absent", async () => {
-    render(<BillingContent client={makeClient({
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({
       summary: vi.fn().mockResolvedValue({
         credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "1000000",
         held_micros: "0"
@@ -221,7 +221,7 @@ describe("R54 embedded billing precision and unknown owner facts", () => {
   })
 
   it("does not relabel all balance as free credits when free_credit_micros is absent", async () => {
-    render(<BillingContent client={makeClient({
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({
       summary: vi.fn().mockResolvedValue({
         credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "2000000",
         held_micros: "0"
@@ -235,7 +235,7 @@ describe("R54 embedded billing precision and unknown owner facts", () => {
   })
 
   it("does not publish unsupported membership or daily credit facts", async () => {
-    render(<BillingContent client={makeClient({ summary: vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "2000000", held_micros: "0" }), ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ summary: vi.fn().mockResolvedValue({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "2000000", held_micros: "0" }), ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })} embedded />, { wrapper: LocaleProvider })
     await screen.findByText("2", { exact: true })
     expect(screen.queryByText("Free", { exact: true })).toBeNull()
     expect(screen.queryByText("Free credits")).toBeNull()
@@ -309,7 +309,7 @@ describe("R255 committed personal Credit reads", () => {
 
   it("renders exact available and held credits in the real embedded Credits reader", async () => {
     r255NativeBillingFetch()
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     expect(await screen.findByText("9007199254.740993")).toBeInTheDocument()
     expect(screen.getByText("0.5")).toBeInTheDocument()
     expect(screen.queryByText("Free credits")).not.toBeInTheDocument()
@@ -319,7 +319,7 @@ describe("R255 committed personal Credit reads", () => {
 
   it("renders signed exact journals and groups the owner UTC instants without guessing conversation links", async () => {
     r255NativeBillingFetch()
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     expect(await screen.findByText("-0.000001")).toHaveAttribute("data-sign", "negative")
     expect(screen.getByText("+9007199254.740993")).toHaveAttribute("data-sign", "positive")
     const days = screen.getAllByTestId("billing-day")
@@ -331,7 +331,7 @@ describe("R255 committed personal Credit reads", () => {
 
   it("requests only the two published reads and never invents a by-model operation", async () => {
     const fetcher = r255NativeBillingFetch()
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     await waitFor(() => expect(fetcher.mock.calls.some(([input]) => String(input).includes("/billing/ledger"))).toBe(true))
     expect(fetcher.mock.calls.map(([input]) => new URL(String(input), "http://localhost").pathname).sort()).toEqual([
       "/api/session/billing/ledger",
@@ -416,12 +416,12 @@ describe("R255 bounded Credit read and mounted recovery", () => {
       return Promise.resolve(Response.json({ items: [], page: { next_cursor: null } }, { headers: { "cache-control": "private, no-store", "x-request-id": "r255-empty" } }))
     }))
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-actor-A")
-    const mounted = render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    const mounted = render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "r255-actor-A", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     await waitFor(() => expect(signals).toHaveLength(1))
     mounted.unmount()
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-actor-B")
     const next = makeClient({ summary: vi.fn().mockResolvedValue({ ...r255ExistingSummary, available_micros: "7000000" }), ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })
-    render(<BillingContent client={next} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "r255-actor-B", generation: 1 } }} client={next} embedded />, { wrapper: LocaleProvider })
     await act(async () => { late.resolve(Response.json(r255ExistingSummary)); await Promise.resolve() })
     expect(signals.every((signal) => signal?.aborted)).toBe(true)
     expect(await screen.findByText("7", { exact: true })).toBeInTheDocument()
@@ -431,7 +431,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
   it("refresh failure is an error instead of advertising the previously read balance as current", async () => {
     const summary = vi.fn().mockResolvedValueOnce(r255ExistingSummary).mockRejectedValueOnce(new Error("billing_unavailable"))
     const ledger = vi.fn().mockRejectedValueOnce(new Error("ledger unavailable")).mockResolvedValueOnce({ items: [], page: { next_cursor: null } })
-    render(<BillingContent client={makeClient({ summary, ledger })} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ summary, ledger })} embedded />, { wrapper: LocaleProvider })
     await screen.findByText("42", { exact: true })
     fireEvent.click(await screen.findByRole("button", { name: "Reload" }))
     await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
@@ -444,11 +444,11 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     const oldLedger = r255Deferred<{ items: typeof r255ExistingEntry[]; page: { next_cursor: string | null } }>()
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-actor-A")
     const old = makeClient({ summary: vi.fn().mockResolvedValue(r255ExistingSummary), ledger: vi.fn(() => oldLedger.promise) })
-    const mounted = render(<BillingContent client={old} embedded />, { wrapper: LocaleProvider })
+    const mounted = render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={old} embedded />, { wrapper: LocaleProvider })
     await screen.findByText("42", { exact: true })
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-actor-B")
     const current = makeClient({ summary: vi.fn().mockResolvedValue({ ...r255ExistingSummary, available_micros: "7000000" }), ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }) })
-    mounted.rerender(<BillingContent client={current} embedded />)
+    mounted.rerender(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={current} embedded />)
     await act(async () => { oldLedger.resolve({ items: [r255ExistingEntry], page: { next_cursor: null } }); await Promise.resolve() })
     expect(await screen.findByText("7", { exact: true })).toBeInTheDocument()
     expect(screen.queryByText("42", { exact: true })).not.toBeInTheDocument()
@@ -459,7 +459,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     const page = r255Deferred<{ items: typeof r255ExistingEntry[]; page: { next_cursor: string | null } }>()
     const ledger = vi.fn().mockResolvedValueOnce({ items: [r255ExistingEntry], page: { next_cursor: "same-opaque-page" } })
       .mockImplementationOnce(() => page.promise).mockResolvedValueOnce({ items: [{ ...r255ExistingEntry, journal_id: "33333333-3333-4333-8333-333333333333", source_kind: "r255-second" }], page: { next_cursor: null } })
-    render(<BillingContent client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
     const more = await screen.findByRole("button", { name: "Load more" })
     fireEvent.click(more)
     expect(more).toBeDisabled()
@@ -478,7 +478,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
   it("does not duplicate a journal or loop when the next page repeats its consumed cursor", async () => {
     const ledger = vi.fn().mockResolvedValueOnce({ items: [r255ExistingEntry], page: { next_cursor: "repeat-page" } })
       .mockResolvedValueOnce({ items: [r255ExistingEntry], page: { next_cursor: "repeat-page" } })
-    render(<BillingContent client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={makeClient({ ledger })} embedded />, { wrapper: LocaleProvider })
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }))
     await waitFor(() => expect(ledger).toHaveBeenCalledTimes(2))
     await act(async () => { await Promise.resolve() })
@@ -490,7 +490,7 @@ describe("R255 bounded Credit read and mounted recovery", () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => Promise.resolve(Response.json(String(input).endsWith("/summary") ? r255CreditAccount : { ...r255CreditLedger, page: { next_cursor: null } }, {
       headers: { "cache-control": "private, no-store", "x-request-id": "r255-terminal" },
     }))))
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     await screen.findByText("-0.000001")
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
   })
@@ -531,7 +531,7 @@ describe("R255 closed read boundary and honest account states", () => {
         headers: { "cache-control": "private, no-store", "x-request-id": "r255-account-state" },
       },
     ))))
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     const balance = screen.getByTestId("billing-balance")
     if (expected === null) {
       await waitFor(() => expect(balance).toHaveTextContent("Failed to load"))
@@ -580,7 +580,7 @@ describe("R255 missing Credit account domain state", () => {
   it("renders both exact account-not-found reads as not opened, without zero balance or retry", async () => {
     const fetcher = vi.fn(async () => Response.json(missingBody, { status: 404, headers: responseHeaders }))
     vi.stubGlobal("fetch", fetcher)
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
 
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
@@ -600,7 +600,7 @@ describe("R255 missing Credit account domain state", () => {
     { name: "404 missing its request metadata", status: 404, body: { error: { code: "billing_account_not_found", message: "Billing account was not found" } } },
   ])("keeps $name as a retryable display error rather than an unopened account", async ({ status, body }) => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(body, { status, headers: responseHeaders })))
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
 
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
@@ -618,7 +618,7 @@ describe("R255 missing Credit account domain state", () => {
         meta: { request_id: requestId },
       }, { status: missing ? 404 : 503, headers: responseHeaders })
     }))
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
 
     const missingSection = screen.getByTestId(missingRead === "summary" ? "billing-balance" : "billing-ledger")
     const failedSection = screen.getByTestId(missingRead === "summary" ? "billing-ledger" : "billing-balance")
@@ -662,7 +662,7 @@ describe("R255 missing Credit account domain state", () => {
       }
       return new Response(JSON.stringify(body), { status: 404, headers })
     }))
-    render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     for (const sectionId of ["billing-balance", "billing-ledger"]) {
       const section = screen.getByTestId(sectionId)
       expect(await within(section).findByText(/^Failed to load/)).toBeInTheDocument()
@@ -732,7 +732,7 @@ describe("R255 missing Credit account domain state", () => {
       signals.push(init?.signal)
       return new Response(body, { status: 404, headers: { ...responseHeaders, "content-type": "application/json" } })
     }))
-    const mounted = render(<BillingContent client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
+    const mounted = render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={createBillingClient()} embedded />, { wrapper: LocaleProvider })
     await waitFor(() => expect(bodies).toHaveLength(2))
     await waitFor(() => expect(bodies.every((body) => body.locked)).toBe(true))
     mounted.unmount()
@@ -761,10 +761,10 @@ describe("R255 missing Credit account domain state", () => {
     }))
     const client = createBillingClient()
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-A")
-    const mounted = render(<BillingContent client={client} embedded />, { wrapper: LocaleProvider })
+    const mounted = render(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} embedded />, { wrapper: LocaleProvider })
     await waitFor(() => expect(oldSignals).toHaveLength(2))
     window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-missing-actor-B")
-    mounted.rerender(<BillingContent client={client} embedded />)
+    mounted.rerender(<BillingContent {...{ preview: false, readBoundary: { admitted: true, subject: "billing-test-owner", generation: 1 } }} client={client} embedded />)
     if (currentMissing) await screen.findAllByText("No credit account yet")
     else await screen.findByText("7", { exact: true })
     await act(async () => {
@@ -785,3 +785,53 @@ describe("R255 missing Credit account domain state", () => {
     expect(screen.queryByText("r255-entry")).not.toBeInTheDocument()
   })
 })
+
+// SET26 real scoped read regressions; trusted props use spread until source accepts them.
+describe("SET26 billing scope retirement", () => {
+  const boundary = { admitted: true, subject: "billing-owner-A", generation: 1 };
+  it("an initially unadmitted live view dispatches zero summary and ledger reads", async () => {
+    const client = makeClient();
+    render(<LocaleProvider><BillingContent {...{ client, preview: false, readBoundary: { ...boundary, admitted: false } }} /></LocaleProvider>);
+    await act(async () => {});
+    expect(client.summary).not.toHaveBeenCalled();
+    expect(client.ledger).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("billing-balance")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+  });
+  it.each(["admission", "generation"])("%s change synchronously hides the old summary and ledger", async (kind) => {
+    const client = makeClient();
+    const draw = (readBoundary: typeof boundary) => <LocaleProvider><BillingContent {...{ client, preview: false, readBoundary }} /></LocaleProvider>;
+    const mounted = render(draw(boundary));
+    await screen.findByText("12.5 credits");
+    const summary = vi.mocked(client.summary);
+    const ledger = vi.mocked(client.ledger);
+    const beforeSummary = summary.mock.calls.length;
+    const beforeLedger = ledger.mock.calls.length;
+    mounted.rerender(draw(kind === "admission" ? { ...boundary, admitted: false } : { ...boundary, generation: 2 }));
+    expect(screen.queryByText("12.5 credits")).toBeNull();
+    expect(screen.queryByText("Model call")).toBeNull();
+    if (kind === "admission") {
+      expect(summary).toHaveBeenCalledTimes(beforeSummary);
+      expect(ledger).toHaveBeenCalledTimes(beforeLedger);
+      expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+    }
+  });
+
+  it("pending summary is aborted at admission retirement and a noncooperative late response stays hidden", async () => {
+    let finish!: (value: Awaited<ReturnType<BillingClient["summary"]>>) => void;
+    let signal: AbortSignal | undefined;
+    const summary = vi.fn().mockImplementation((current?: AbortSignal) => {
+      signal = current;
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    const client = makeClient({ summary });
+    const draw = (admitted: boolean) => <LocaleProvider><BillingContent {...{ client, preview: false, readBoundary: { ...boundary, admitted } }} /></LocaleProvider>;
+    const mounted = render(draw(true));
+    await waitFor(() => expect(summary).toHaveBeenCalledOnce());
+    mounted.rerender(draw(false));
+    expect(signal?.aborted).toBe(true);
+    await act(async () => { finish({ credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active", available_micros: "777000000", held_micros: "0" }); });
+    expect(screen.queryByText("777 credits")).toBeNull();
+    expect(summary).toHaveBeenCalledOnce();
+  });
+});

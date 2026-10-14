@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "Использование и тарифы можно загрузить после подтверждения входа.",
   "settings.modelPreferenceNotSaved": "Настройка модели не сохранена; новые чаты не будут использовать этот несохранённый выбор.",
   "settings.modelCatalogLoading": "Загрузка каталога моделей…",
   "settings.modelCatalogFailed": "Не удалось загрузить каталог моделей. Повторите попытку.",

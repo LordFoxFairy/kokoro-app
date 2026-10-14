@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "Usage and plans can load after your sign-in status is confirmed.",
   "settings.modelPreferenceNotSaved": "Model preference not saved; new chats will not use this unsaved choice.",
   "settings.modelCatalogLoading": "Loading model catalog…",
   "settings.modelCatalogFailed": "Could not load the model catalog. Please retry.",

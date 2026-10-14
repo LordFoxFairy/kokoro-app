@@ -1,6 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { BillingLedgerEntry } from "@/contract/http"
 import { BillingClientError, type BillingClient } from "@/billing/client"
@@ -26,18 +28,34 @@ function uniqueEntries(entries: BillingLedgerEntry[]): BillingLedgerEntry[] {
 }
 
 type BillingPanelProps = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   client: BillingClient
   onClose: () => void
   onOpenPricing?: () => void
 }
 
 type BillingContentProps = {
+  preview?: boolean
+  readBoundary?: ProjectReadBoundary
   client: BillingClient
   onOpenPricing?: () => void
   embedded?: boolean
 }
 
-export function BillingContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
+export function BillingContent(props: BillingContentProps) {
+  const { preview = false, readBoundary, client } = props
+  const t = useT()
+  const [clientIdentity, setClientIdentity] = useState({ client, epoch: 0 })
+  if (clientIdentity.client !== client) setClientIdentity({ client, epoch: clientIdentity.epoch + 1 })
+  const identity = clientIdentity.client === client ? clientIdentity.epoch : clientIdentity.epoch + 1
+  const admitted = preview || (readBoundary?.admitted === true && typeof readBoundary.subject === "string" && readBoundary.subject.trim() !== "" && Number.isSafeInteger(readBoundary.generation) && readBoundary.generation >= 0)
+  const scope = JSON.stringify([preview, readBoundary?.admitted, readBoundary?.subject, readBoundary?.generation, identity])
+  if (!admitted) return <p>{t("settings.billingRequiresIdentity")}</p>
+  return <BillingScopedContent key={scope} {...props} />
+}
+
+function BillingScopedContent({ client, onOpenPricing, embedded = false }: BillingContentProps) {
   const actor = readActor()
   const [projection, setProjection] = useState<{ client: BillingClient; actor: string | null | undefined; summary: SummaryState; ledger: LedgerState }>({ client, actor, summary: { kind: "loading" }, ledger: { kind: "loading" } })
   const [filter, setFilter] = useState<LedgerFilter>("all")
@@ -77,7 +95,7 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
     void Promise.all([summaryRead(), ledgerRead()]).finally(() => { if (current()) setRetrying(false) })
   }, [actor, client])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let live = true
     queueMicrotask(() => { if (live) refresh() })
     return () => { live = false; attempt.current?.controller.abort(); attempt.current = null }
@@ -115,7 +133,7 @@ export function BillingContent({ client, onOpenPricing, embedded = false }: Bill
   )
 }
 
-export function BillingPanel({ client, onClose, onOpenPricing }: BillingPanelProps) {
+export function BillingPanel({ preview = false, readBoundary, client, onClose, onOpenPricing }: BillingPanelProps) {
   const t = useT()
   const { open, requestClose, onCloseAutoFocus } = useOverlayClose(onClose)
   return (
@@ -123,7 +141,7 @@ export function BillingPanel({ client, onClose, onOpenPricing }: BillingPanelPro
       <DialogContent className={cn(styles.panel, "p-0 box-border")} data-testid="billing-panel" closeLabel={t("billing.close")} closeButtonTestId="billing-close" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogTitle className="sr-only">{t("billing.title")}</DialogTitle>
         <header className={styles.head}><h2 className={styles.title}>{t("billing.title")}</h2></header>
-        <BillingContent client={client} {...(onOpenPricing === undefined ? {} : { onOpenPricing })} />
+        <BillingContent preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} client={client} {...(onOpenPricing === undefined ? {} : { onOpenPricing })} />
       </DialogContent>
     </Dialog>
   )

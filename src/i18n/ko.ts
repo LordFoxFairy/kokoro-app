@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "로그인 상태가 확인되면 사용량과 요금제를 불러올 수 있습니다.",
   "settings.modelPreferenceNotSaved": "모델 설정이 저장되지 않았습니다. 새 대화에는 이번에 저장되지 않은 선택이 적용되지 않습니다.",
   "settings.modelCatalogLoading": "모델 목록을 불러오는 중…",
   "settings.modelCatalogFailed": "모델 목록을 불러오지 못했습니다. 다시 시도하세요.",

@@ -1,3 +1,19 @@
+## SET26 reader ownership correction (2026-10-15)
+
+Independent final review found a P2: Response.json owns a locked body reader, so body.cancel cannot release a real noncooperative stream. Only plans will own its reader, UTF-8 decoding and JSON.parse inside the same absolute 10s budget; cancellation cancels that reader and releases its lock, including parent retirement and late response cleanup. No new size/header policy, compatibility branch, checkout change or owner contract. Add real Response/ReadableStream deadline and parent-abort negative controls before the narrow source correction. Existing 171 assertions and strict catalog semantics remain.
+
+## SET26 用量与套餐可信读取（2026-10-15；正式D0，先tests-only）
+
+正式Web基线a9183585ab403797f79b522aedb120de562a64e9、939 tracked clean。仅现Web Billing/Pricing/settings消费接缝，runtime_audit唯一writer，17具名路径/914保护/Root8；Root独占设计/docs/Git/资源/正常运行/CUA。候选独审无确定阻断P1/P2。Skills/连接器、owner契约/SQL/generated/依赖、checkout源码与全局QueryStore保护；无新源文件/模块/owner。
+
+当前Billing只有auth-index actor且Settings未传可信boundary，same-subject退役/新generation仍可能展示旧余额；Pricing固定billing/plans跨preview/live共享缓存，旧data先于error，plans无browser期限。目标两面明确preview/readBoundary，live缺/撤销admitted或可信subject/generation则暂停解释、不读、不重试、不页读、隐藏旧值；scope含preview/admitted/subject/generation并绑定client，现actor/index异常及变化保作附加guard，不作授权。render同步隐藏不匹配投影，layout退役清timer并abort，旧tuple不得复活；standalone Panel也透传一致资格。
+
+保Billing精确BigInt、summary/ledger独立成败、missing-account、cursor/dedup/防重复、显式retry及paging，原BillingClient不扩大。Pricing扩现文件局部scope/client投影，删除此目录useResource/全局key消费，胜于改通用store或引无清晰取消owner的shared cache；其他query消费者原字节保。目录loading/error/unavailable/真empty/ready、显式retry；错误不能被旧data掩盖，preview值不得入live。caller每attempt单绝对10s覆盖非合作注入，退休/timeout abort并退役，late不能覆新retry；formal plans自身10s覆盖headers/body/schema，两预算并行不串阶段，不能宣取消非合作peer。
+
+Settings两分支与两个Panel均传preview/boundary；没有其他生产Panel caller。sidebar独立余额generation缺口列后继，本片不冒称修全部余额。
+
+tests-only仅四具名现测试。旧case必要时仅补明确trusted props到原helper/call，actor A→B竞态同时更新可信subject为B，保旧迟到、金额、missing-account、checkout、分页全部语义oracle。Settings mock只准具名Billing/Pricing读fixture补全来验证真实分支透传，原其他mock/oracle保护；不得preview:true替代真实client资格。先四项旧基线与新actual RED冻稿Root复现后，另授source/locale。后继17/914/8终态独审/Root专项与正规完整门禁，源测试不是正常IAM/CUA旅程。完整设置Goal active。
+
 ## SET25 浏览器测试就绪边界窄准入（2026-10-15）
 
 仅现tests/e2e/web-governance.spec.ts原65/107/267/405/470五个初始/app goto覆盖六例：networkidle改DOMContentLoaded后准确Chat input可见/启用/可编辑web断言。原229及其余goto保持。已有实际六desktop等待超时证据及只读独审无确定P1/P2；官方Playwright建议测试以web断言判断ready。原logout POST/issuer、reading轴/长markdown/stream/HITL所有业务oracle、mock、skip、timeout、route保持，R137观察器仍先于首次发送。不能以输入就绪冒称业务通过，也不宣定位具体网络请求根因。无Product源码/fixture/权限改动；沿runtime_audit同一writer，SET25扩为13writer/919保护/Root7，仅本项追加范围，其余原边界保持。最终正规E2E运行仍待验。

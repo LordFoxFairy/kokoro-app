@@ -1,3 +1,37 @@
+## SET26 用量与套餐可信读取正式接收（2026-10-15）
+
+两页及独立Panel明确preview/可信subject/generation/admitted，render同步隐藏旧余额/目录，layout退役owned请求；Pricing局部scope/client投影、明确loading/error/unavailable/empty/ready与手动单发重试。正式plans自有真实reader、单总10s、parent取消/迟到body清理及立即释放锁，caller预算并行；不改checkout整段、BigInt/ledger旧行为、全局QueryStore或BillingClient。首冻真实readerP2由Root两项RED复现后窄修，独审已关闭，无新增确定P1/P2。
+
+Root逐hash核17writer/914保护/Root8、原151逆恢复/九locale单键/checkout字节，最终测试在原a918源码仍11真实FAIL，终态四文件178PASS；contract283/architecture50/lint/type/build通过。Web无format:check脚本，不虚称该门运行。完整test3956PASS/10FAIL/0SKIP，200.11s：六持续旧UI/i18n失败及四已历史复现的原生登录测试失败；native稳定性仍未闭环，不归因于并发或本轮已修。
+
+正规隔离Playwright18PASS/2FAIL/4SKIP，35.6s；两390px阅读轴断言仍失败，原阈值/业务oracle保留。两个owned门PG/Redis库存exact恢复。正常IAM账户/团队/分享浏览器旅程仍待人工恢复既有错误页；上述组件与替身E2E不能代替。整个设置Goal继续active，后继个性化未接通知识/导入入口明确禁用，侧栏余额generation另续，Skills/连接器排除。
+
+## SET26 final review P2 correction pending (2026-10-15)
+
+First freeze 4279a3dc has 171 focused PASS, but independent review found real locked Response body cancellation unverified and broken. That freeze is not accepted. runtime_audit first adds two real-stream negative controls only to existing pricing tests, preserving the 171 existing cases; Root reproduces before narrow plans reader ownership correction. Same 17 writer / 914 protected / Root8, checkout and other clients protected. Full/E2E and normal activation await corrected freeze. Settings Goal remains active.
+
+## SET26 真实RED后具名源码准入（2026-10-15）
+
+Root 固定Node22对冻结四测试独立复现11FAIL/151PASS，原四完整prefix、927个tests-only保护路径和Root8哈希保持，无collection或测试自身timeout假失败。真实oracle为same-subject admission/generation旧投影、未准入仍读、目录preview/live/client旧值、退休无abort、单10s fetch/body仍pending及实际Settings两分支未透传。后续retry/late断言在原源码尚未全部到达，终态必须完整跑过。
+
+现授runtime_audit唯一writer沿既定17路径/914保护/Root8，四现source/九locale/四tests；仅旧测试明确trustedfixture补全和原actor竞态可信subject同步，全部语义oracle保护。三设计现方案、checkout整段原字节与GenericQueryStore/BillingClient/Skills/连接器边界保持。Root文档/Git/资源/正常运行独占；终态freeze/独审/Root复验与全部门禁、正常浏览器旅程仍待，不冒完整Goal结束。
+
+## SET26 用量与套餐可信读取（2026-10-15；正式D0，先tests-only）
+
+正式Web基线a9183585ab403797f79b522aedb120de562a64e9、939 tracked clean。仅现Web Billing/Pricing/settings消费接缝，runtime_audit唯一writer，17具名路径/914保护/Root8；Root独占设计/docs/Git/资源/正常运行/CUA。候选独审无确定阻断P1/P2。Skills/连接器、owner契约/SQL/generated/依赖、checkout源码与全局QueryStore保护；无新源文件/模块/owner。
+
+当前Billing只有auth-index actor且Settings未传可信boundary，same-subject退役/新generation仍可能展示旧余额；Pricing固定billing/plans跨preview/live共享缓存，旧data先于error，plans无browser期限。目标两面明确preview/readBoundary，live缺/撤销admitted或可信subject/generation则暂停解释、不读、不重试、不页读、隐藏旧值；scope含preview/admitted/subject/generation并绑定client，现actor/index异常及变化保作附加guard，不作授权。render同步隐藏不匹配投影，layout退役清timer并abort，旧tuple不得复活；standalone Panel也透传一致资格。
+
+保Billing精确BigInt、summary/ledger独立成败、missing-account、cursor/dedup/防重复、显式retry及paging，原BillingClient不扩大。Pricing扩现文件局部scope/client投影，删除此目录useResource/全局key消费，胜于改通用store或引无清晰取消owner的shared cache；其他query消费者原字节保。目录loading/error/unavailable/真empty/ready、显式retry；错误不能被旧data掩盖，preview值不得入live。caller每attempt单绝对10s覆盖非合作注入，退休/timeout abort并退役，late不能覆新retry；formal plans自身10s覆盖headers/body/schema，两预算并行不串阶段，不能宣取消非合作peer。
+
+Settings两分支与两个Panel均传preview/boundary；没有其他生产Panel caller。sidebar独立余额generation缺口列后继，本片不冒称修全部余额。
+
+仅既有PricingClient.plans加可选AbortSignal及准确timeout/aborted failure reason，现同源GET/no-store/严格schema/503 not_configured/金额wire保持；每call一个绝对10s race，signal转owned fetch，取消body可用时执行，headers/body/schema无phase预算重置或自动retry。checkout整体原字节保护，当前UI永久disabled购买且0checkout/redirect，owner capability不因目录非空而成立。可信scope只本地投影/生命周期，不把subject/generation/actor写wire，不复制BFF/Billing契约。
+
+Web无新增持久化owner/schema；原owner摘要/流水/目录与金额wire保持。新scope/client投影只在各已挂载页面内存，不跨preview/live或被撤销generation复用；auth-index不是授权事实。暂停不造0/empty/missing-account，失败不造套餐。唯一locale新key九语言settings.billingRequiresIdentity：zh“登录状态确认后才能加载用量和套餐。”，既有read retry/error文案保持。
+
+tests-only仅四具名现测试。旧case必要时仅补明确trusted props到原helper/call，actor A→B竞态同时更新可信subject为B，保旧迟到、金额、missing-account、checkout、分页全部语义oracle。Settings mock只准具名Billing/Pricing读fixture补全来验证真实分支透传，原其他mock/oracle保护；不得preview:true替代真实client资格。先四项旧基线与新actual RED冻稿Root复现后，另授source/locale。后继17/914/8终态独审/Root专项与正规完整门禁，源测试不是正常IAM/CUA旅程。完整设置Goal active。
+
 ## SET25 终态源码接收与回归事实（2026-10-15）
 
 模型偏好失败不污染原raw/cache或误报saved，显式保存重试当前草稿；目录有loading/error/真实空、单10s caller预算、显式retry及layout/epoch退役。原chat深链保留，Manus General模型入口未新增；Genericstore/client/Skills/连接器无变化。13writer/919保护/Root7及原61完整prefix、九locale五key、五处E2E逆变换Root独核，独审无确定P1/P2。Root在原源码再次真实2FAIL/65SKIP，终态专项138PASS；contract283/architecture50/lint/type/build通过。

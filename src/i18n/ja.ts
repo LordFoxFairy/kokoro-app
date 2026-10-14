@@ -4,6 +4,7 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "settings.billingRequiresIdentity": "ログイン状態が確認されると、利用状況とプランを読み込めます。",
   "settings.modelPreferenceNotSaved": "モデル設定は保存されていません。新しいチャットには今回の未保存の選択は適用されません。",
   "settings.modelCatalogLoading": "モデル一覧を読み込み中…",
   "settings.modelCatalogFailed": "モデル一覧を読み込めませんでした。再試行してください。",

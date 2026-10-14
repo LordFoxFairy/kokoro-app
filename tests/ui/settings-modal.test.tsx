@@ -2073,3 +2073,17 @@ describe("SET25 existing chat model preference reliability", () => {
     } finally { vi.useRealTimers(); spy.mockRestore(); }
   });
 });
+
+describe("SET26 actual settings billing/pricing admission props", () => {
+  it.each([["credits", false], ["subscription", true]] as const)("real %s branch forwards preview=%s and the existing boundary", async (tab, preview) => {
+    const billing = await import("@/ui/billing/billing-panel");
+    const pricing = await import("@/ui/billing/pricing-panel");
+    const billed = vi.spyOn(billing, "BillingContent").mockImplementation(() => <div>Billing read fixture</div>);
+    const priced = vi.spyOn(pricing, "PricingContent").mockImplementation(() => <div>Pricing read fixture</div>);
+    try {
+      renderSettings(() => {}, undefined, preview, undefined, tab);
+      const observed = tab === "credits" ? billed : priced;
+      expect(observed.mock.calls.at(-1)?.[0]).toMatchObject({ preview, readBoundary: { admitted: true, subject: "settings-reader", generation: 1 } });
+    } finally { billed.mockRestore(); priced.mockRestore(); }
+  });
+});

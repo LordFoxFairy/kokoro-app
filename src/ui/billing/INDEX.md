@@ -1,3 +1,11 @@
+SET26 review correction: formal plans owns the actual body reader; one absolute deadline and parent retirement cancel it and release its lock. Response.json plus locked body.cancel is rejected. Checkout and all wire behavior remain protected.
+
+## SET26 用量与套餐可信读取（2026-10-15；正式D0，先tests-only）
+
+正式Web基线a9183585ab403797f79b522aedb120de562a64e9、939 tracked clean。仅现Web Billing/Pricing/settings消费接缝，runtime_audit唯一writer，17具名路径/914保护/Root8；Root独占设计/docs/Git/资源/正常运行/CUA。候选独审无确定阻断P1/P2。Skills/连接器、owner契约/SQL/generated/依赖、checkout源码与全局QueryStore保护；无新源文件/模块/owner。
+
+职责为现Billing/Pricing/settings读取边界及恢复；源码与测试17路径、Root8索引/设计，scope只局部可信生命周期，目录无全局query变更，单10s/显式retry/disabled交易。新locale仅一个key，其余当前资料保持。
+
 ## SET-17 当前目录与退役支付入口
 
 当前固定BFF提供真实目录读取，但不提供checkout。PricingPanel/PricingContent保留loading、error/retry、unavailable、empty和真实金额展示；非空目录首次购买disabled并解释不可用，无checkout/redirect状态。升级按钮仍导航目录。MockPayPanel无orderId prop，只显示不可用、disabled动作及返回工作区；已发布直接pay URL保留，不读取或确认订单。mock-pay同源adapter在配置/Origin/准入守卫后所有环境503，无body消费或owner I/O。Team入口复用现团队标签，仅管理原固定tenant成员，不提供创建团队。
