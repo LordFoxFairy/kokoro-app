@@ -1,3 +1,9 @@
+## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
+
+Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。
+
+Web不持久化余额；原formatCredits BigInt、missing-account/失败显示—、卸载取消、preview和marker撤回原语义保留。有效可信boundary只准许读取，不从marker伪造subject。原所有rail行为保护，无schema/数据库/Redis/资金写。
+
 ## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
 
 正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。

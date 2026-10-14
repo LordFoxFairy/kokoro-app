@@ -1,3 +1,25 @@
+## SET29 侧栏余额可信生命周期已接收，SET30继续（2026-10-15）
+
+可信ProjectReadBoundary沿原AppFrame/rail/shell/account传入；live admitted/nonblank subject/safe非负generation与marker一致才读取，marker不授权限。scope包含preview/admitted/subject/generation/actor，同主体重核/换代同步隐藏、layout真取消、uniquecontroller守非合作迟到及A-B-A；原preview/BigInt/失败—、admin/menu/signout/通知完整原子树保持。4source+1既有test/927保护/Root7，原73全文逆核，17新增真实负控：原source Root14FAIL76PASS90，终态90PASS；一处new suffix this:Storage类型标注擦除还原原RED hash，无oracle更改。独审无确定P1/P2，contract283/architecture50/lint/type/build0。
+
+完整test3975PASS/8此前具名FAIL/0SKIP，205.57s；隔离正规Playwright20PASS/0FAIL/4原SKIP，20.5s，库存exact恢复。原生登录/UI/i18n遗留全门未闭环，正常认证Browser仍未验；本项不是正常用户端视觉或余额服务性能证明。现正式源激活后续SET30补未接通说明、SET31 runtime请求退休分类；Skills/连接器业务排除，整设置Goal active。
+
+## SET29 source已准入（2026-10-15；Root真实RED）
+
+Root独立验证tests-only冻结manifest c2f375cccd9255c9ebe64271791b01bbf921cf788ec8f95b0aefca6c40e43742；931保护与Root7精确，原rail测试逆核完整恢复ad232a44，仅可信参数fixture与附加分隔换行。原source全文件实际14FAIL/76PASS/90，5.65s，全部原73仍PASS，失败是断言不是setup/timeout；迟到/新7等后续断言在RED尚未全部到达。现仅授4既有source，tests字节冻结919eeb4f；不授任何admin/signout/其他client。实施后Root独审、focused/pure/full/build/E2E、正常源码激活继续，Goal不按此切片结束。
+
+## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
+
+Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。
+
+现账户余额只看preview与local auth-index marker；同主体probe撤回admission/换generation时marker保留，旧余额可继续显示、pending结果可落地。沿现ProjectReadBoundary透传AppFrame railProps→WorkspaceRail现spread→shell→account，不借conversationReads injected fallback或解析opaque identity，不增hook/framework/source/API。live要求admitted===true、非空subject、安全非负generation，marker只是额外失败/变化guard且必须与可信subject一致；preview沿既有路径。显式局部scope纳入preview/admitted/subject/generation/actor，render同步隐藏并永久退役旧投影，layout取消旧请求，controller/闭合scope守迟到结果，A→B→A不复活。
+
+Web只调用原browserBillingClient.summary(signal)→同源→正式BFF/Billing；服务器权限/契约/金额/checkout/依赖/generated不变。本片是读取资格与本地投影生命周期，不是新授权或业务余额事实。admin-access/menu/signout原子树与其他读取不改。
+
+Web不持久化余额；原formatCredits BigInt、missing-account/失败显示—、卸载取消、preview和marker撤回原语义保留。有效可信boundary只准许读取，不从marker伪造subject。原所有rail行为保护，无schema/数据库/Redis/资金写。
+
+原rail全文件测试先基线；既有R255 fixtures仅明确可信参数，原大金额/失败/A-B/marker删除/卸载oracle精确inverse保持，不改global renderRail默认资格。新增真实负控：同subject撤准入同步隐藏42/零read、pending换generation abort+迟到不落、readmit仅新7、A-B-A不复活、无boundary/空subject零read、现shell链实际透传。Root在原source跑RED后才授4source；终态原fixture逆核、独审、contract/architecture/lint/type/full/build/E2E与库存exact恢复。正常认证Browser及原生runtime登录稳定性仍另未决，整设置Goal active。
+
 ## SET28 Web阅读轴修补已接收，SET29接续（2026-10-15）
 
 现Web thread viewport统一隐藏滚动条稳定槽，原10.59375px双侧漂移消除；只1CSS具名selector+property，逆核恢复原7518ab84源码，931保护/Root7与全部测试/阈值/业务oracle原字节。overflow/shared/mobile primitive及滚动逻辑保持，可见滚动条拖动入口消失；独审无确定P1/P2，contract283/architecture50/type通过，V2 lint/build通过。

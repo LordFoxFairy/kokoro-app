@@ -1,3 +1,11 @@
+## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
+
+Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。
+
+现账户余额只看preview与local auth-index marker；同主体probe撤回admission/换generation时marker保留，旧余额可继续显示、pending结果可落地。沿现ProjectReadBoundary透传AppFrame railProps→WorkspaceRail现spread→shell→account，不借conversationReads injected fallback或解析opaque identity，不增hook/framework/source/API。live要求admitted===true、非空subject、安全非负generation，marker只是额外失败/变化guard且必须与可信subject一致；preview沿既有路径。显式局部scope纳入preview/admitted/subject/generation/actor，render同步隐藏并永久退役旧投影，layout取消旧请求，controller/闭合scope守迟到结果，A→B→A不复活。
+
+原rail全文件测试先基线；既有R255 fixtures仅明确可信参数，原大金额/失败/A-B/marker删除/卸载oracle精确inverse保持，不改global renderRail默认资格。新增真实负控：同subject撤准入同步隐藏42/零read、pending换generation abort+迟到不落、readmit仅新7、A-B-A不复活、无boundary/空subject零read、现shell链实际透传。Root在原source跑RED后才授4source；终态原fixture逆核、独审、contract/architecture/lint/type/full/build/E2E与库存exact恢复。正常认证Browser及原生runtime登录稳定性仍另未决，整设置Goal active。
+
 ## SET28 Web阅读轴滚动槽修补（2026-10-15；正式D0）
 
 正式Web基线7e062cd5e69847bfb34181b6674cb998c4cc50f1，939 tracked clean。runtime_audit唯一writer仅app-frame-main.module.css；931保护/Root7。Root设计/docs/Git/资源/正常激活/CUA。既有精确E2E已多次真实RED，无新tests-only或新增镜像测试；全部tests/阈值/mock/skip/等待保持字节。

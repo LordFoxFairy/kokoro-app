@@ -73,6 +73,7 @@ export function WorkspaceRailShell({
   onOpenSettings,
   onOpenNotifications,
   accountTriggerRef,
+  readBoundary,
   preview = false,
   listLoading,
   listLoadingMore = false,
@@ -411,6 +412,7 @@ export function WorkspaceRailShell({
             </div>
           ) : null}
           <WorkspaceRailAccount
+            {...(readBoundary === undefined ? {} : { readBoundary })}
             {...(brandName === undefined ? {} : { brandName })}
             preview={preview}
             compactDesktop={compactDesktop}

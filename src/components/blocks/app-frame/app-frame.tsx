@@ -709,6 +709,7 @@ function AppFrameRuntime({
   )
 
   const railProps: Omit<WorkspaceRailProps, "withinProvider"> = {
+    ...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary }),
     compactDesktopRail: layout.compactDesktopRail,
     collapsed: layout.resolvedRailCollapsed,
     onToggleCollapse: () => {

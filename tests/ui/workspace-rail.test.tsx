@@ -12,6 +12,7 @@ import type { ConversationStore } from "@/core/conversations"
 import { WorkspaceRailAccount } from "@/components/blocks/workspace-rail/workspace-rail-account"
 import { WorkspaceRail } from "@/components/blocks/workspace-rail/workspace-rail"
 import railStyles from "@/components/blocks/workspace-rail/workspace-rail.module.css"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
 import type { ConversationListController } from "@/ui/shell/use-conversation-list"
@@ -1206,7 +1207,7 @@ it.each([false, true])("账户菜单精确显示 available 且不虚构免费套
     ledger: vi.fn().mockResolvedValue({ items: [], page: { next_cursor: null } }),
   })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-credit-owner")
-  renderRail()
+  renderRail({ readBoundary: { admitted: true, subject: "r255-credit-owner", generation: 1 } })
   const account = screen.getByRole("button", { name: /个人工作区|用户范围/ })
   fireEvent.pointerDown(account, { button: 0 })
   fireEvent.click(account)
@@ -1222,8 +1223,8 @@ function r255DeferredAccount() {
   return { promise, resolve }
 }
 const r255AccountValue = { credit_account_id: "11111111-1111-4111-8111-111111111111", status: "active" as const, available_micros: "42000000", held_micros: "0" }
-function r255AccountElement() {
-  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} /></LocaleProvider></ThemeProvider>
+function r255AccountElement(readBoundary: ProjectReadBoundary) {
+  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} readBoundary={readBoundary} /></LocaleProvider></ThemeProvider>
 }
 async function r255OpenAccountMenu() {
   const button = screen.getByRole("button", { name: /个人工作区|用户范围/ })
@@ -1238,11 +1239,11 @@ it("账户余额主体切换先撤旧值，旧读取迟到不覆盖B且取消原
   const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-B")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-B", generation: 2 }))
   await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
   expect(menu).not.toHaveTextContent("42")
   expect(signals[0]?.aborted).toBe(true)
@@ -1255,17 +1256,17 @@ it("账户准入marker撤回时立即隐藏旧余额而不读取未知主体", a
   const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => readmit.promise)
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   const menu = await r255OpenAccountMenu()
   await waitFor(() => expect(menu).toHaveTextContent("42"))
   window.localStorage.removeItem("kokoro.web.auth-index-subject")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   await act(async () => { await Promise.resolve() })
   expect(menu).not.toHaveTextContent("42")
   expect(menu).toHaveTextContent("—")
   expect(summary).toHaveBeenCalledTimes(1)
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  view.rerender(r255AccountElement())
+  view.rerender(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   expect(menu).not.toHaveTextContent("42")
   expect(summary).toHaveBeenCalledTimes(2)
   await act(async () => { readmit.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
@@ -1277,7 +1278,7 @@ it("账户卸载真正abort且迟到completion不进入后续菜单", async () =
   const summary = vi.fn((value?: AbortSignal) => { signal = value; return late.promise })
   vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
   window.localStorage.setItem("kokoro.web.auth-index-subject", "r255-A")
-  const view = render(r255AccountElement())
+  const view = render(r255AccountElement({ admitted: true, subject: "r255-A", generation: 1 }))
   await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
   view.unmount()
   expect(signal?.aborted).toBe(true)
@@ -1361,4 +1362,133 @@ it("ordinary account capability read uses its own exact endpoint and exposes no 
   await screen.findByRole("menu")
   expect(screen.queryByRole("menuitem", { name: /后台管理/ })).toBeNull()
   expect(document.querySelector('a[href="/manage"]')).toBeNull()
+})
+
+// SET29: trusted rail balance lifecycle
+function set29Account(readBoundary?: ProjectReadBoundary, preview = false) {
+  return <ThemeProvider><LocaleProvider><WorkspaceRailAccount compactDesktop={false} onOpenSettings={() => {}} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} /></LocaleProvider></ThemeProvider>
+}
+function set29Summary() {
+  const summary = vi.fn().mockResolvedValue(r255AccountValue)
+  const client = vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  return { summary, client }
+}
+const set29A = { admitted: true, subject: "set29-A", generation: 1 }
+it("SET29 same-subject withdrawal synchronously hides 42 and reads zero until readmitted", async () => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  view.rerender(set29Account({ ...set29A, admitted: false, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  expect(menu).toHaveTextContent("—")
+  await act(async () => { await Promise.resolve() })
+  expect(summary).toHaveBeenCalledTimes(1)
+  summary.mockResolvedValue({ ...r255AccountValue, available_micros: "7000000" })
+  view.rerender(set29Account({ ...set29A, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  await waitFor(() => expect(menu).toHaveTextContent("7"))
+  expect(summary).toHaveBeenCalledTimes(2)
+})
+it("SET29 pending same-subject generation retires signal and ignores late result before new 7", async () => {
+  const late = r255DeferredAccount()
+  const fresh = r255DeferredAccount()
+  const signals: (AbortSignal | undefined)[] = []
+  const summary = vi.fn((signal?: AbortSignal) => { signals.push(signal); return signals.length === 1 ? late.promise : fresh.promise })
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(1))
+  view.rerender(set29Account({ ...set29A, admitted: false, generation: 2 }))
+  expect(signals[0]?.aborted).toBe(true)
+  expect(summary).toHaveBeenCalledTimes(1)
+  await act(async () => { late.resolve(r255AccountValue); await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("42")
+  view.rerender(set29Account({ ...set29A, generation: 2 }))
+  expect(summary).toHaveBeenCalledTimes(2)
+  await act(async () => { fresh.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it("SET29 A-B-A does not revive the original ready tuple or B late completion", async () => {
+  const pendingB = r255DeferredAccount()
+  const newA = r255DeferredAccount()
+  const summary = vi.fn().mockResolvedValueOnce(r255AccountValue).mockImplementationOnce(() => pendingB.promise).mockImplementationOnce(() => newA.promise)
+  vi.spyOn(pageClients, "browserBillingClient").mockReturnValue({ summary, ledger: vi.fn() })
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const view = render(set29Account(set29A))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  // The marker is unchanged: mismatched B may not use it as admission authority.
+  view.rerender(set29Account({ admitted: true, subject: "set29-B", generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  expect(summary).toHaveBeenCalledTimes(1)
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-B")
+  view.rerender(set29Account({ admitted: true, subject: "set29-B", generation: 2 }))
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(2))
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  view.rerender(set29Account(set29A))
+  expect(menu).not.toHaveTextContent("42")
+  await waitFor(() => expect(summary).toHaveBeenCalledTimes(3))
+  await act(async () => { pendingB.resolve({ ...r255AccountValue, available_micros: "99000000" }); await Promise.resolve() })
+  expect(menu).not.toHaveTextContent("99")
+  await act(async () => { newA.resolve({ ...r255AccountValue, available_micros: "7000000" }); await Promise.resolve() })
+  expect(menu).toHaveTextContent("7")
+})
+it.each([
+  ["missing boundary", undefined],
+  ["not admitted", { ...set29A, admitted: false }],
+  ["null subject", { ...set29A, subject: null }],
+  ["empty subject", { ...set29A, subject: "" }],
+  ["blank subject", { ...set29A, subject: "   " }],
+  ["negative generation", { ...set29A, generation: -1 }],
+  ["fractional generation", { ...set29A, generation: 1.5 }],
+  ["unsafe generation", { ...set29A, generation: Number.MAX_SAFE_INTEGER + 1 }],
+  ["nonfinite generation", { ...set29A, generation: Number.NaN }],
+] as const)("SET29 %s reads no summary despite a marker", async (_label, boundary) => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  render(set29Account(boundary))
+  await act(async () => { await Promise.resolve() })
+  expect(summary).not.toHaveBeenCalled()
+  const menu = await r255OpenAccountMenu()
+  expect(menu).toHaveTextContent("—")
+  expect(menu).not.toHaveTextContent("42")
+})
+it.each(["missing", "mismatch", "failure"])("SET29 marker %s cannot authorize a trusted live boundary", async (kind) => {
+  const { summary } = set29Summary()
+  if (kind === "mismatch") window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-B")
+  if (kind === "failure") {
+    const getItem = Storage.prototype.getItem
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key) {
+      if (key === "kokoro.web.auth-index-subject") throw new Error("storage unavailable")
+      return getItem.call(this, key)
+    })
+  }
+  render(set29Account(set29A))
+  await act(async () => { await Promise.resolve() })
+  expect(summary).not.toHaveBeenCalled()
+  const menu = await r255OpenAccountMenu()
+  expect(menu).toHaveTextContent("—")
+})
+it("SET29 actual rail shell forwards trusted balance admission and retires it", async () => {
+  const { summary } = set29Summary()
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "set29-A")
+  const { rerender } = renderRail({ readBoundary: set29A })
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  const frame = (readBoundary: ProjectReadBoundary) => <ThemeProvider><LocaleProvider><WorkspaceRail collapsed={false} onToggleCollapse={() => {}} onNewChat={() => {}} chatHref="/app" conversations={[]} activeId={null} awaitingIds={new Set()} onSelectConversation={() => {}} onDeleteConversation={async () => true} onRenameConversation={() => {}} onOpenSettings={() => {}} listLoading={false} listError={false} hasMore={false} onLoadMore={() => {}} readBoundary={readBoundary} /></LocaleProvider></ThemeProvider>
+  rerender(frame({ ...set29A, admitted: false, generation: 2 }))
+  expect(menu).not.toHaveTextContent("42")
+  await act(async () => { await Promise.resolve() })
+  expect(summary).toHaveBeenCalledTimes(1)
+})
+it("SET29 preview keeps the published preview balance path without a live boundary or marker", async () => {
+  const { summary, client } = set29Summary()
+  render(set29Account(undefined, true))
+  const menu = await r255OpenAccountMenu()
+  await waitFor(() => expect(menu).toHaveTextContent("42"))
+  expect(client).toHaveBeenCalledWith({ preview: true })
+  expect(summary).toHaveBeenCalledTimes(1)
 })
