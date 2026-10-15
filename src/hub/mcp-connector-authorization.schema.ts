@@ -21,7 +21,18 @@ const allowedSelector = z.string().min(1).max(256).regex(/^\S(?:[\s\S]*\S)?(?![\
 const authorizationUrl = z.string().max(4096).refine((value) => {
   try {
     const parsed = new URL(value)
-    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash
+    const developmentLoopback =
+      process.env.NODE_ENV !== "production" &&
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "[::1]")
+    return (
+      (parsed.protocol === "https:" || developmentLoopback) &&
+      !parsed.username &&
+      !parsed.password &&
+      !parsed.hash
+    )
   } catch {
     return false
   }
