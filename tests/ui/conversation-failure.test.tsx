@@ -64,14 +64,15 @@ function emptyFailedThread(): SessionStreamState {
   }
 }
 
-function renderFailure(thread: SessionStreamState, onRetry = vi.fn()) {
+function renderFailure(thread: SessionStreamState, onRetry = vi.fn(), submissionFailureCode?: string | null) {
   return render(
     <ConversationThread
       sessionId="ses_1"
       thread={thread}
       isStreaming={false}
       isReconnecting={false}
-      hasFailed={thread.unattributedFailure !== null}
+      hasFailed={thread.unattributedFailure !== null || submissionFailureCode !== undefined}
+      {...(submissionFailureCode === undefined ? {} : { submissionFailureCode })}
       canRetryPendingSubmission={false}
       creditRejected={false}
       onOpenBilling={vi.fn()}
@@ -330,6 +331,16 @@ describe("failureCopyKey — generated 10-code safe profile localization", () =>
   it("generic 与 null 终态使用通用安全文案", () => {
     expect(failureCopyKey(stateFromSnapshot(makeFailedSnapshot(null)).runFailuresById.run_failed ?? null)).toBe("fail.generic")
     expect(failureCopyKey(null)).toBe("fail.generic")
+  })
+
+  it("BFF 明确 Agent 未配置时使用配置说明，而不是误导用户立即重试", () => {
+    expect(failureCopyKey(null, "agent_not_configured")).toBe("fail.agentNotConfigured")
+    expect(zh["fail.agentNotConfigured"]).toBeTruthy()
+
+    const thread = createSessionStreamState()
+    thread.messages = [{ id: "m_u", role: "user", content: "start", runId: "m_u" }]
+    renderFailure(thread, vi.fn(), "agent_not_configured")
+    expect(screen.getByText(zh["fail.agentNotConfigured"])).toBeInTheDocument()
   })
 
   it("中文安全文案不承诺重发原消息或暴露错误详情", () => {

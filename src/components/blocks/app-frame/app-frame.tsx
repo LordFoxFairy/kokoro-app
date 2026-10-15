@@ -528,6 +528,7 @@ function AppFrameRuntime({
     executionPhase: machine.phase,
     isReconnecting: connection.status === "reconnecting",
     hasFailed,
+    submissionFailureCode: machine.error,
     canRetryPendingSubmission,
     canRetryResume: engine?.getSnapshot().canRetryResume ?? false,
     onRetryResume: () => engine?.retryResume(),
