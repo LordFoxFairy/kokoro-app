@@ -50,13 +50,19 @@ describe("/api/admin/[...path] product-session adapter", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/mcp/providers?limit=50", {
         method: "POST",
-        headers: { "content-type": "application/json", "content-length": "2", "idempotency-key": "command-key" },
+        headers: {
+          "content-type": "application/json",
+          "content-length": "2",
+          "idempotency-key": "command-key",
+          "x-kokoro-request-id": "admin-request-id",
+        },
         body: "{}",
       }),
       params(["mcp", "providers"]),
     )
 
     expect(response.status).toBe(201)
+    expect(response.headers.get("x-request-id")).toBe("admin-request-id")
     expect(await response.json()).toEqual({ data: { provider_key: "fixture" } })
     expect(fetchWithDomain).toHaveBeenCalledWith(
       "http://bff.test/v1/admin/mcp/providers?limit=50",

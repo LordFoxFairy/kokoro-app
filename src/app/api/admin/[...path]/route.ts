@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto"
-
+import { requestIdForRequest } from "@/lib/server/bff-response"
 import { admittedProductSession, productBffConfig, productBffHeaders } from "@/lib/server/product-bff"
 import { fetchWithDomain } from "@/lib/server/upstream-http"
 
@@ -35,7 +34,10 @@ async function readBody(request: Request): Promise<ArrayBuffer | null> {
  * credential to the BFF.
  */
 async function handle(request: Request, context: Context): Promise<Response> {
-  const requestId = randomUUID()
+  // Admin uses this response correlation ID to prove that its same-origin
+  // product adapter actually handled the command. Keep an upstream-supplied
+  // value intact instead of minting a second ID at this hop.
+  const requestId = requestIdForRequest(request)
   const config = productBffConfig()
   if (config === null) return failure(503, "admin_gateway_unavailable", requestId)
   const { path } = await context.params
