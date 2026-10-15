@@ -191,6 +191,7 @@
 
 .chatPreferencesSection .select[data-slot="select-trigger"] {
   width: 13rem;
+  max-width: 100%;
   height: 2.25rem;
   min-height: 0;
   border-color: rgb(255 255 255 / 20%);
@@ -1029,6 +1030,11 @@
 }
 
 @media (max-width: 480px) {
+  .chatPreferenceRow {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
   .row {
     flex-direction: column;
     align-items: flex-start;

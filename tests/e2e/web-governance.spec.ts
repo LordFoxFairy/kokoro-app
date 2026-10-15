@@ -646,3 +646,34 @@ for (const width of [1280, 390, 320]) {
   });
 }
 // SET41-END: theme-options-within-content
+
+// SET42-BEGIN: task-delivery-narrow-layout
+for (const width of [1280, 390, 320]) {
+  test(`SET42 task delivery label and control stay separate at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#/account/settings/general", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const section = modal.getByRole("region", { name: "Chat preferences", exact: true });
+    await section.scrollIntoViewIfNeeded();
+    const label = section.getByText("Default behavior while a task is running", { exact: true });
+    const control = section.getByRole("combobox", { name: "Default behavior while a task is running", exact: true });
+    await expect(control).toBeDisabled();
+    await expect(control).toHaveText("Add to queue");
+    const labelBox = await label.boundingBox();
+    const controlBox = await control.boundingBox();
+    const viewportBox = await modal.getByRole("tabpanel").locator('[data-slot="scroll-area-viewport"]').boundingBox();
+    expect(labelBox).not.toBeNull();
+    expect(controlBox).not.toBeNull();
+    expect(viewportBox).not.toBeNull();
+    const separate = labelBox!.x + labelBox!.width <= controlBox!.x + 1 ||
+      labelBox!.y + labelBox!.height <= controlBox!.y + 1;
+    expect(separate).toBe(true);
+    for (const box of [labelBox!, controlBox!]) {
+      expect(box.x).toBeGreaterThanOrEqual(viewportBox!.x - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewportBox!.x + viewportBox!.width + 1);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`set42-task-row-${width}.png`), fullPage: true });
+  });
+}
+// SET42-END: task-delivery-narrow-layout

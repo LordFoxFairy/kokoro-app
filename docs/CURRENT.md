@@ -1,3 +1,7 @@
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+基线ba975fccf1497d403e70e5221f8d7126a9491060，2writer/930保护/Root7；SET41主题已正常登录CUA测得实际320三项边界完整，352实点浅色→自动并刷新保留。现补SET41截图发现的320英文禁用发送行文案重叠；先RED再局部CSS，不重复修改主题/容器规则。完整门仍FAILED，SET40新增失败根因未关闭；诊断在私有不可变副本进行，不改正式源或oracle。
+
 ## SET41 主题窄屏裁切局部修复（2026-10-15）
 
 主题选项允许换行，General现Radix内容table固定布局，语言选择不超过容器；仅2个CSS，既有E2E追加6个实际case。3writer/929保护/Root7、两个CSS整体逆恢复和原测试完整prefix exact，独立审查无确定P1/P2。首探6PASS因逐项滚动掩盖默认裁切，记录保留后修新oracle；旧CSS准确2PASS4FAIL15.1s。V1全E2E30PASS2个320pxFAIL4原SKIP31.0s；V2保持新旧断言，32PASS0FAIL4原SKIP38.4s，库存恢复，1280/390/320六张截图已实际检查。contract283/architecture50/lint/type/build通过。纯CSS/E2E变化未重跑完整pnpm test，继承SET40的FAILED门，5旧及3新增proxy503未归因，早前instrumentation/welcome根因亦未关闭；不称全仓通过。实际部署和正常认证CUA将在接入后单独记录。

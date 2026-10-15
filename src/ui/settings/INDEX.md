@@ -1,3 +1,7 @@
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+任务发送label/hint与禁用queue选择框在窄屏纵向排列，desktop保持同行；只改现sections CSS，现E2E验证文字/选择框无重叠及内容viewport边界。
+
 <!-- SET41 V2 D0: SET41 V2仅General现panel内Radix table-layout:fixed，不改变共享ScrollArea；现General语言select不超过容器。主题原回归与旧tests保持。 -->
 
 ## SET41 主题选项窄屏可达性（2026-10-15；D0）

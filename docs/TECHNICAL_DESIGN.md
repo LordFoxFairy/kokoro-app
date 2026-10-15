@@ -1,3 +1,7 @@
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+Root本片唯一writer。SET41真实320英文截图显示任务发送标签与禁用选择框重叠；现flex并排行在窄宽把min-width0的文案压至小于单词宽。仅现sections CSS在既有480px media中将chatPreferenceRow堆叠，现chat select加max-width100%，桌面布局及disabled queue语义保持；不改共享组件、业务、locale或Skills/连接器。先在现E2E尾部追加1280/390/320实测标签和控件无重叠且控件在内容viewport内，原文prefix保持；旧CSS RED后同oracle复验。
+
 <!-- SET41 V2 D0: V1实际全E2E为30PASS/2个320px主题裁切FAIL/4原SKIP。CUA确认Radix viewport内inline display:table使用auto表格布局，其自身宽可超过viewport（实际352px时286.58>252），使主题group按错误可用宽换行。D0扩至现modal CSS第三writer：仅General appearance panel的现Radix table设置table-layout:fixed，复用现width100%，不改shared ScrollArea与inline样式；现General语言select加max-width100%避免父容器正确收窄后超出。同一新增oracle完全冻结，原全测试prefix保持；先前失败保留。 -->
 
 ## SET41 主题选项窄屏可达性（2026-10-15；D0）

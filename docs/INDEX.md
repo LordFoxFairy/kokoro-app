@@ -1,3 +1,7 @@
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+任务发送窄屏堆叠归现sections/settings-sections.module.css；真实无重叠回归追加既有web-governance.spec.ts，无新模块。
+
 <!-- SET41 V2 D0: V2还使用现settings-modal.module.css约束General内Radix table固定布局；shared ScrollArea保持。 -->
 
 ## SET41 主题选项窄屏可达性（2026-10-15；D0）

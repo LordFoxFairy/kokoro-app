@@ -1,3 +1,7 @@
+## SET42 任务发送行窄屏排版（2026-10-15；D0）
+
+现General任务发送行窄屏堆叠由settings-sections.module.css负责；原禁用业务边界保持。
+
 <!-- SET41 V2 D0: SET41 V2：General父级table布局约束归现settings-modal.module.css；主题和语言控件可用宽归现sections CSS。 -->
 
 ## SET41 主题选项窄屏可达性（2026-10-15；D0）
