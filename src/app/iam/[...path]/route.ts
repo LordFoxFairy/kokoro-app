@@ -96,7 +96,11 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
   if (request.headers.has("authorization")) return browserResponse(errorResponse("iam_relay_credential_rejected", 403, id))
   const config = iamRelayConfig(process.env)
   if (config === null) return browserResponse(errorResponse("iam_relay_unavailable", 503, id))
-  if (!matchesCanonicalWebRequest(request, config, "GET")) return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
+  const opaqueAuthorizeNavigation = route.relativePath === "/oauth2/authorize" &&
+    request.headers.get("host") === config.webHost && request.headers.get("origin") === "null"
+  if (!matchesCanonicalWebRequest(request, config, "GET") && !opaqueAuthorizeNavigation) {
+    return browserResponse(errorResponse("iam_relay_origin_rejected", 403, id))
+  }
   if (route.relativePath === "/oauth2/end-session") {
     const query = new URLSearchParams(route.query)
     const clientId = process.env.KOKORO_OIDC_CLIENT_ID?.trim()
@@ -122,7 +126,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     if (!safeShortHeader(accept)) return browserResponse(errorResponse("iam_relay_header_invalid", 400, id))
     headers.set("accept", accept)
   }
-  if (origin !== null) headers.set("origin", origin)
+  if (origin === config.webOrigin) headers.set("origin", origin)
   if (cookie !== "") headers.set("cookie", cookie)
   headers.set(SERVICE_HEADER, SERVICE_VALUE)
   headers.set(INTERNAL_SECRET_HEADER, config.secret)
