@@ -37,6 +37,32 @@ function safeShortHeader(value: string): boolean {
   return Buffer.byteLength(value) <= 256 && /^[\x20-\x7e]*$/u.test(value)
 }
 
+// Diagnostics intentionally retain only routing shape: the relay Location can
+// carry OIDC state and authorization codes, which must never enter logs.
+function authorizeLocationDiagnostics(value: string | null, webOrigin: string): Record<string, string | number | boolean> {
+  if (value === null) return { location_present: false }
+  try {
+    const target = new URL(value, webOrigin)
+    const rawTarget = `${target.pathname}${target.search}`
+    const path = target.pathname === "/api/auth/callback/kokoro-iam"
+      ? "rp_callback"
+      : IAM_RELAY_POLICY.webInteractionPaths.includes(target.pathname)
+        ? "interaction"
+        : resolveBrowserIamGet(`/iam${rawTarget}`, "GET") === null
+          ? "other"
+          : "iam_relay"
+    return {
+      location_present: true,
+      location_relative: value.startsWith("/"),
+      location_same_origin: target.origin === webOrigin,
+      location_path_kind: path,
+      location_query_count: [...target.searchParams.keys()].length,
+    }
+  } catch {
+    return { location_present: true, location_parseable: false }
+  }
+}
+
 function rawPathAndQuery(absoluteUrl: string): string | null {
   const scheme = absoluteUrl.indexOf("://")
   if (scheme < 1) return null
@@ -151,6 +177,7 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
         has_location: upstream.headers.has("location"),
         set_cookie_names: upstream.setCookies.map((cookie) => cookie.split("=", 1)[0] ?? "").join(","),
         body_bytes: upstream.body.byteLength,
+        ...authorizeLocationDiagnostics(upstream.headers.get("location"), config.webOrigin),
       })
     }
     return browserResponse(response
