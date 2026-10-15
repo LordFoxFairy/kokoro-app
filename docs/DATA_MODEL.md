@@ -1,3 +1,9 @@
+## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
+
+基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。
+
+仅测试进程闭集事件记录，不持久化业务数据，无数据库/Redis/schema变化。复用既有隔离fixture和原清理，不新增服务进程。
+
 ## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
 
 基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。

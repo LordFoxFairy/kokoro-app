@@ -1,3 +1,21 @@
+## SET32 原生顺序诊断已接收，继续就绪门修正（2026-10-15）
+
+仅现native测试22具名新增块，去除后精确恢复原310179bytes；1writer/931保护/Root7、全product source与原assert/helper/count/timeout/mock/cleanup字节保护，独审无确定P1/P2，lint/type/architecture50均0。显式env仅R175/R177输出闭集事件，最多512普通+1截断；Node观察非Browser内部dispatch，跨层始终ambiguous。
+
+Root真实过滤原生2case：1PASS/1FAIL(R175原owner12≠11)/79过滤未跑，40.30s；显式verbose/silent=false再R177为1PASS/80过滤未跑，37.76s，全部库存exact恢复。Vitest Agent reporter默认passed-only隐藏通过日志，非R177未执行。R175 baseline8767.273ms后proxy runtime8774.590ms到达，Browser runtime8713.823ms已观察于baseline前；R177 proxy到达在baseline前且原精确断言通过。仅支持已观察就绪竞态，不精确配对跨层请求、不证明全native产品根因。
+
+后继仅两初始withdraw case可选cold+reload到达门，沿原剩余deadline，先冷请求已到proxy再reload，记录pre-reload count后等待新增arrival；不等成功响应（合法404）、不改原计数/安全/期限。计数仍不普遍证明document generation，多cold并发界限保留。全源无变化故不重复SET31full/build/E2E；正常Browser未验，Goal active，Skills/连接器排除。
+
+## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
+
+基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。
+
+仅测试显式KOKORO_TEST_NATIVE_ORDER=1时为R175/R177启用单调Node观察器；原helper/reload/readiness/baseline/计数/安全shell断言/timeout/mock/资源清理全部不改。记录helper reload前后/ready、baseline/focus、Browser runtime与session probe事件、proxy arrival/reply和合法handoff commit/watchdog。Browser层用request对象关联自身response/failure，proxy层同闭包关联自身reply；跨层无共享请求ID时不伪造关联，非唯一一律ambiguous。Node接收事件时刻不是Browser内部dispatch时刻。所有新增块边界标记，删除后必须逐字恢复原完整测试文件；不得改product source或添加等待门。
+
+只在测试进程输出closed category、sequence、相对elapsed ms、status、phase及stage；不得记录原URL/query/header/body/cookie/token/异常全文。无正式API/contract/owner/授权变化，不能用诊断记录替代原生实际断言。
+
+唯一目的用真实隔离R175/R177请求顺序区分reload合法请求迟到和额外请求；不减原runtime计数、不放宽timeout/断言，不先加入barrier。Root先验完整inverse/931保护/Root7，worker只跑lint/type/architecture等无资源门，Root串行独占原生资源验证并核对库存恢复。测试若失败则如实保留，并据实际事件判断下一修补。正常认证Browser未验；Goal active，Skills/连接器排除。
+
 ## SET31 runtime请求与投影退休已接收，SET32继续（2026-10-15）
 
 现有useRuntimeManifest仅本地preview/attempt closed scope：layout cleanup真实abort，queued dispatch、JSON前后、payload/error提交都检查退休；模式切换render同步回对应默认，旧live或旧retry不复活、不覆盖新结果。原helpers/schema/options/public返回/URL/query/Accept及AppGate/native计数精确保留，原9测试完整7759bytes prefix未改。Root原source实际10FAIL10PASS20；终态20focused/283contract/50arch/lint/type/build全0，独审无确定P1/P2；2writer/930保护/Root7精确。

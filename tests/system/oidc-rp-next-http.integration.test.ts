@@ -12,6 +12,75 @@ import { decode } from "next-auth/jwt"
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Locator, type Page, type Response as BrowserResponse } from "@playwright/test"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
+// SET32-BEGIN: recorder
+type Set32Category = "runtime" | "session_probe" | "document" | "lifecycle" | "handoff"
+type Set32EventKind = "browser_request" | "browser_response" | "browser_failed" | "proxy_arrival"
+  | "proxy_upstream_response" | "proxy_response" | "helper_start" | "helper_cold_ready"
+  | "helper_reload_start" | "helper_reload_end" | "helper_ready" | "helper_failed"
+  | "baseline" | "focus_before" | "focus_after" | "handoff_commit" | "handoff_watchdog" | "complete" | "truncated"
+type Set32Event = { seq: number; relative_ms: number; kind: Set32EventKind; category: Set32Category; status?: number; request_seq?: number }
+type Set32Recorder = {
+  record: (kind: Set32EventKind, category: Set32Category, status?: number, requestSeq?: number) => number | undefined
+  emit: () => void
+}
+const set32ProxyOrders = new WeakMap<Server, Set32Recorder>()
+const set32PageOrders = new WeakMap<Page, Set32Recorder>()
+const set32ProxyRequests = new WeakMap<import("node:http").IncomingMessage, { recorder: Set32Recorder; category: Set32Category; seq: number }>()
+function set32Category(pathname: string): Set32Category | undefined {
+  if (pathname === "/api/system/runtime-manifest") return "runtime"
+  if (pathname === "/api/auth/session") return "session_probe"
+  if (["/app", "/login", "/iam/oauth2/authorize", "/api/auth/callback/kokoro-iam"].includes(pathname)) return "document"
+  return undefined
+}
+function set32NativeOrder(testCase: "R175" | "R177"): Set32Recorder | undefined {
+  if (process.env.KOKORO_TEST_NATIVE_ORDER !== "1") return undefined
+  const startedAt = process.hrtime.bigint()
+  const events: Set32Event[] = []
+  let sequence = 0
+  let truncated = false
+  const record: Set32Recorder["record"] = (kind, category, status, requestSeq) => {
+    const relativeMs = () => Math.round(Number(process.hrtime.bigint() - startedAt) / 1_000) / 1_000
+    if (events.length >= 512) {
+      if (!truncated) {
+        truncated = true
+        events.push({ seq: ++sequence, relative_ms: relativeMs(), kind: "truncated", category: "lifecycle" })
+      }
+      return undefined
+    }
+    const seq = ++sequence
+    events.push({ seq, relative_ms: relativeMs(), kind, category,
+      ...(status === undefined ? {} : { status }), ...(requestSeq === undefined ? {} : { request_seq: requestSeq }) })
+    return seq
+  }
+  return { record, emit: () => {
+    record("complete", "lifecycle")
+    // These are Node event-observation times, never browser-internal dispatch
+    // timestamps. Local request_seq links only within its own layer; there is
+    // no shared Browser/proxy ID, so cross-layer correspondence is ambiguous.
+    console.log("KOKORO_TEST_NATIVE_ORDER " + JSON.stringify({ test_case: testCase, cross_layer_pairing: "ambiguous", events }))
+  } }
+}
+function set32ObservePage(page: Page, recorder: Set32Recorder | undefined): void {
+  if (recorder === undefined) return
+  set32PageOrders.set(page, recorder)
+  const requests = new WeakMap<import("@playwright/test").Request, number>()
+  page.on("request", (request) => {
+    const category = set32Category(new URL(request.url()).pathname)
+    if (category === undefined) return
+    const seq = recorder.record("browser_request", category)
+    if (seq !== undefined) requests.set(request, seq)
+  })
+  page.on("response", (response) => {
+    const request = response.request()
+    const category = set32Category(new URL(request.url()).pathname)
+    if (category !== undefined) recorder.record("browser_response", category, response.status(), requests.get(request))
+  })
+  page.on("requestfailed", (request) => {
+    const category = set32Category(new URL(request.url()).pathname)
+    if (category !== undefined) recorder.record("browser_failed", category, undefined, requests.get(request))
+  })
+}
+// SET32-END: recorder
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
 type NextDevEngine = "webpack" | "programmatic"
 
@@ -350,6 +419,10 @@ async function sessionProbeProxy(nextPort: number): Promise<{
     const upstream = httpRequest({ hostname: "127.0.0.1", port: nextPort, method: request.method,
       path: `${target.pathname}${target.search}`, headers: { ...request.headers, host: `localhost:${nextPort}` } }, (reply) => {
       if (resource.upstreamStatuses.length < 8) resource.upstreamStatuses.push(reply.statusCode ?? 0)
+      // SET32-BEGIN: proxy-upstream-response
+      const nativeRequest = set32ProxyRequests.get(request)
+      nativeRequest?.recorder.record("proxy_upstream_response", nativeRequest.category, reply.statusCode ?? 0, nativeRequest.seq)
+      // SET32-END: proxy-upstream-response
       if (request.method === "GET" && target.pathname === "/api/auth/session") {
         const chunks: Buffer[] = []
         let size = 0
@@ -398,6 +471,15 @@ async function sessionProbeProxy(nextPort: number): Promise<{
 
   const server = createServer((request, response) => {
     const target = new URL(request.url ?? "/", `http://localhost:${nextPort}`)
+    // SET32-BEGIN: proxy-arrival
+    const nativeOrder = set32ProxyOrders.get(server)
+    const nativeCategory = set32Category(target.pathname)
+    if (nativeOrder !== undefined && nativeCategory !== undefined) {
+      const seq = nativeOrder.record("proxy_arrival", nativeCategory)
+      if (seq !== undefined) set32ProxyRequests.set(request, { recorder: nativeOrder, category: nativeCategory, seq })
+      response.once("finish", () => nativeOrder.record("proxy_response", nativeCategory, response.statusCode, seq))
+    }
+    // SET32-END: proxy-arrival
     if (request.method === "GET" && target.pathname === "/__fixture/r176-static-control") {
       const navigate = target.searchParams.get("navigate") === "1"
       response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" })
@@ -453,6 +535,9 @@ async function sessionProbeProxy(nextPort: number): Promise<{
                 ...Object.fromEntries(keys.map((key) => [key, value[key]])) } as typeof anonymousHandoffs[number])
               const count = (predicate: (path: string) => boolean): number => [...resources.entries()]
                 .filter(([path]) => predicate(path)).reduce((total, [, resource]) => total + resource.requests, 0)
+              // SET32-BEGIN: handoff
+              set32ProxyOrders.get(server)?.record(value.phase === "commit" ? "handoff_commit" : "handoff_watchdog", "handoff")
+              // SET32-END: handoff
               anonymousHandoffOwners.push({
                 phase: value.phase,
                 session_owner: count((path) => path.startsWith("/api/session/")),
@@ -1496,6 +1581,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     failureDiagnostic?: (stage: string) => Promise<string>,
   ): Promise<void> {
     const remaining = (): number => Math.max(1, deadline - Date.now())
+    // SET32-BEGIN: helper-start
+    const nativeOrder = set32PageOrders.get(page)
+    nativeOrder?.record("helper_start", "lifecycle")
+    // SET32-END: helper-start
     try {
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
       await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
@@ -1505,8 +1594,17 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
 
+      // SET32-BEGIN: helper-cold-ready
+      nativeOrder?.record("helper_cold_ready", "lifecycle")
+      // SET32-END: helper-cold-ready
       const sessionsBeforeReload = proxy.sessionRequests()
+      // SET32-BEGIN: helper-reload-start
+      nativeOrder?.record("helper_reload_start", "lifecycle")
+      // SET32-END: helper-reload-start
       const reloadResponse = await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
+      // SET32-BEGIN: helper-reload-end
+      nativeOrder?.record("helper_reload_end", "lifecycle", reloadResponse?.status())
+      // SET32-END: helper-reload-end
       if (reloadResponse?.status() !== 200) {
         throw new Error(`reload document status ${reloadResponse?.status() ?? "missing"}`)
       }
@@ -1518,7 +1616,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
       await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
+      // SET32-BEGIN: helper-ready
+      nativeOrder?.record("helper_ready", "lifecycle")
+      // SET32-END: helper-ready
     } catch (error) {
+      // SET32-BEGIN: helper-failed
+      nativeOrder?.record("helper_failed", "lifecycle")
+      // SET32-END: helper-failed
       const diagnostic = failureDiagnostic === undefined
         ? await browserProbeDiagnostic(stage, page, response, proxy, outputStart)
         : await failureDiagnostic(stage)
@@ -3336,6 +3440,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("R175 removes private Runtime before a server-admitted document hands anonymous control to native login", async () => {
     const proxy = await sessionProbeProxy(nextPort)
+    // SET32-BEGIN: R175-recorder
+    const nativeOrder = set32NativeOrder("R175")
+    if (nativeOrder !== undefined) set32ProxyOrders.set(proxy.server, nativeOrder)
+    // SET32-END: R175-recorder
     let browser: Browser | undefined
     let context: BrowserContext | undefined
     const outputStart = output.length
@@ -3348,6 +3456,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await admitBrowserContext(context)
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
+      // SET32-BEGIN: R175-browser
+      set32ObservePage(page, nativeOrder)
+      // SET32-END: R175-browser
       const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
       if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
         "anonymous_handoff_document", page, response, proxy, outputStart,
@@ -3362,10 +3473,19 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .filter(({ path }) => path.startsWith("/api/session/") || path === "/api/system/runtime-manifest")
         .reduce((total, resource) => total + resource.requests, 0)
       const ownerBaseline = ownerRequests()
+      // SET32-BEGIN: R175-baseline
+      nativeOrder?.record("baseline", "lifecycle")
+      // SET32-END: R175-baseline
       const probeBaseline = proxy.sessionRequests()
 
       proxy.setFault("anonymous")
+      // SET32-BEGIN: R175-focus-before
+      nativeOrder?.record("focus_before", "lifecycle")
+      // SET32-END: R175-focus-before
       await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      // SET32-BEGIN: R175-focus-after
+      nativeOrder?.record("focus_after", "lifecycle")
+      // SET32-END: R175-focus-after
       await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
       await expect.poll(() => proxy.anonymousHandoffDiagnostics().length, { timeout: 10_000 }).toBe(1)
       expect(proxy.anonymousHandoffDiagnostics()[0]).toEqual({
@@ -3386,6 +3506,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
       expect(proxy.loginRequests()).toBe(1)
     } finally {
+      // SET32-BEGIN: R175-emit
+      nativeOrder?.emit()
+      // SET32-END: R175-emit
       proxy.releaseLoginRequests()
       try { await context?.close() }
       finally {
@@ -3397,6 +3520,10 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
 
   it("R177 keeps anonymous native handoff data-free without reviving a visible retry interstitial", async () => {
     const proxy = await sessionProbeProxy(nextPort)
+    // SET32-BEGIN: R177-recorder
+    const nativeOrder = set32NativeOrder("R177")
+    if (nativeOrder !== undefined) set32ProxyOrders.set(proxy.server, nativeOrder)
+    // SET32-END: R177-recorder
     let browser: Browser | undefined
     let context: BrowserContext | undefined
     const outputStart = output.length
@@ -3409,6 +3536,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await admitBrowserContext(context)
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
+      // SET32-BEGIN: R177-browser
+      set32ObservePage(page, nativeOrder)
+      // SET32-END: R177-browser
       const response = await page.goto(`http://localhost:${nextPort}/app`, { waitUntil: "domcontentloaded" })
       if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic(
         "no_interstitial_document", page, response, proxy, outputStart,
@@ -3429,13 +3559,22 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         runtime_manifest: proxy.resourceDiagnostics().find(({ path }) => path === "/api/system/runtime-manifest")?.requests ?? 0,
       })
       const ownerBaseline = ownerRequests()
+      // SET32-BEGIN: R177-baseline
+      nativeOrder?.record("baseline", "lifecycle")
+      // SET32-END: R177-baseline
       const ownerBeforeHandoff = ownerSnapshot()
       const probeBaseline = proxy.sessionRequests()
       const resource = (path: string) => proxy.resourceDiagnostics().find((candidate) => candidate.path === path)
       const appDocumentsBeforeHandoff = resource("/app")?.request_categories.document ?? 0
 
       proxy.setFault("anonymous")
+      // SET32-BEGIN: R177-focus-before
+      nativeOrder?.record("focus_before", "lifecycle")
+      // SET32-END: R177-focus-before
       await page.evaluate(() => window.dispatchEvent(new Event("focus")))
+      // SET32-BEGIN: R177-focus-after
+      nativeOrder?.record("focus_after", "lifecycle")
+      // SET32-END: R177-focus-after
       await expect.poll(() => proxy.sessionRequests(), { timeout: 10_000 }).toBe(probeBaseline + 1)
       await expect.poll(() => proxy.heldLoginRequests(), { timeout: 5_000 }).toBe(1)
       await expect.poll(
@@ -3484,6 +3623,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .toBe("r177-native-login-recovered")
       await composer.fill("")
     } finally {
+      // SET32-BEGIN: R177-emit
+      nativeOrder?.emit()
+      // SET32-END: R177-emit
       proxy.releaseLoginRequests()
       try { await context?.close() }
       finally {
