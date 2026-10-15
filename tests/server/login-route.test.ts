@@ -1,11 +1,7 @@
 import { NextRequest } from "next/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const { authGet, authPost } = vi.hoisted(() => ({ authGet: vi.fn(), authPost: vi.fn() }))
-vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ GET: authGet, POST: authPost }))
 vi.mock("@/lib/server/oidc-bff-agent", () => ({ boundedOidcBffAgent: vi.fn() }))
-const { setCookie, getCookie } = vi.hoisted(() => ({ setCookie: vi.fn(), getCookie: vi.fn() }))
-vi.mock("next/headers", () => ({ cookies: async () => ({ set: setCookie, get: getCookie }) }))
 
 import { GET } from "@/app/login/route"
 
@@ -29,19 +25,7 @@ function browserRequest(path = "/login"): NextRequest {
 }
 
 beforeEach(() => {
-  vi.resetAllMocks()
   for (const [key, value] of Object.entries(ENV)) vi.stubEnv(key, value)
-  authGet.mockResolvedValue(new Response(JSON.stringify({ csrfToken: "a".repeat(64) }), {
-    status: 200,
-    headers: { "content-type": "application/json", "set-cookie": `next-auth.csrf-token=token%7Cdigest; Path=/; HttpOnly; SameSite=Lax` },
-  }))
-  authPost.mockResolvedValue(new Response(null, {
-    status: 302,
-    headers: {
-      location: `${ORIGIN}/iam/oauth2/authorize?client_id=product-web`,
-      "set-cookie": "next-auth.state=state; Path=/; HttpOnly; SameSite=Lax",
-    },
-  }))
 })
 
 afterEach(() => vi.unstubAllEnvs())
@@ -50,21 +34,19 @@ describe("GET /login", () => {
   it.each([
     "/app/project/project_00000000-0000-4000-8000-000000000301?conversation=conv_00000000-0000-4000-8000-000000000302",
     "/app?conversation=conv_00000000-0000-4000-8000-000000000302",
-  ])("preserves a valid product pathname plus conversation query through internal auth context: %s", async (target) => {
+  ])("issues a fixed browser-native OIDC start for a valid target: %s", async (target) => {
     const response = await GET(browserRequest(`/login?${new URLSearchParams({ return_to: target })}`))
-    expect(response.status).toBe(302)
-    expect(response.headers.get("location")).toBe(`${ORIGIN}/iam/oauth2/authorize?client_id=product-web`)
+    expect(response.status).toBe(200)
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-    expect(authGet).toHaveBeenCalledOnce()
-    expect(authPost).toHaveBeenCalledOnce()
-    const [request, context] = authPost.mock.calls[0] as [NextRequest, { params: Promise<{ nextauth: string[] }>; productReturnTarget?: string }]
-    expect(context.productReturnTarget).toBe(target)
-    expect(await context.params).toEqual({ nextauth: ["signin", "kokoro-iam"] })
-    expect(request.nextUrl.search).toBe("")
-    expect(await request.text()).toBe(new URLSearchParams({ csrfToken: "a".repeat(64) }).toString())
-    expect(request.headers.has("return_to")).toBe(false)
-    expect(request.headers.has("x-product-return-target")).toBe(false)
+    expect(response.headers.get("content-security-policy")).toMatch(/^default-src 'none'; script-src 'nonce-[A-Za-z0-9_-]{22}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'$/u)
+    expect(response.headers.getSetCookie()).toHaveLength(2)
+    expect(response.headers.getSetCookie()[0]).toMatch(/^next-auth\.csrf-token=[A-Za-z0-9%|]+; Path=\/; HttpOnly; SameSite=Lax$/u)
+    expect(response.headers.getSetCookie()[1]).toMatch(/^kokoro_product_login_return=[A-Za-z0-9%._~-]+\.[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Lax$/u)
+    const html = await response.text()
+    expect(html).toContain('method="post" action="/api/auth/signin/kokoro-iam"')
+    expect(html).toMatch(/name="csrfToken" value="[a-f0-9]{64}"/u)
+    expect(html).not.toContain(target)
   })
 
   it.each([
@@ -75,46 +57,29 @@ describe("GET /login", () => {
     "/login?return_to=%2Fapp%3Fconversation%3Dnot-canonical",
     "/login?return_to=%2Fapp%2Flibrary%3Fq%3D%FF",
     "/login?return_to=%2Fapp%2Flibrary%3Fq%3D%",
-  ])("rejects invalid or ambiguous navigation intent before CSRF/signin: %s", async (path) => {
+  ])("rejects invalid or ambiguous navigation intent before issuing a browser start: %s", async (path) => {
     const response = await GET(browserRequest(path))
     expect(response.status).toBeGreaterThanOrEqual(400)
     expect(response.headers.get("location")).toBeNull()
-    expect(authGet).not.toHaveBeenCalled()
-    expect(authPost).not.toHaveBeenCalled()
+    expect(response.headers.getSetCookie()).toHaveLength(0)
   })
 
-  it("starts Product OIDC on the server and redirects straight to IAM", async () => {
+  it("starts the default product target with a real browser POST rather than a nested Route Handler call", async () => {
     const response = await GET(new NextRequest("http://127.0.0.1:43123/login", {
       headers: { host: "web.example.test" },
     }))
-    expect(response.status).toBe(302)
-    expect(response.headers.get("location")).toMatch(/^https:\/\/web\.example\.test\/iam\/oauth2\/authorize\?/u)
-    expect(response.headers.getSetCookie()).toHaveLength(2)
-    expect(response.headers.get("cache-control")).toBe("no-store")
-    expect(authGet).toHaveBeenCalledOnce()
-    expect(authPost).toHaveBeenCalledOnce()
-    expect(authPost.mock.calls[0]?.[1].productReturnTarget).toBe("/app")
-    expect(setCookie).toHaveBeenCalledWith("next-auth.csrf-token", "token|digest", expect.objectContaining({ httpOnly: true }))
-    const signInRequest = authPost.mock.calls[0]?.[0] as NextRequest
-    expect(signInRequest.headers.get("origin")).toBe(ORIGIN)
-    expect(signInRequest.headers.get("cookie")).toBe("next-auth.csrf-token=token%7Cdigest")
-    expect(new URLSearchParams(await signInRequest.text()).get("csrfToken")).toBe("a".repeat(64))
+    expect(response.status).toBe(200)
+    const [csrf, target] = response.headers.getSetCookie()
+    expect(csrf).toMatch(/^next-auth\.csrf-token=/u)
+    expect(target).toMatch(/^kokoro_product_login_return=/u)
+    expect(await response.text()).toContain('id="kokoro-login-start"')
   })
 
-  it("never renders the removed handoff or retry page when RP is absent", async () => {
+  it("never renders a retry document when the RP is absent", async () => {
     vi.stubEnv("KOKORO_OIDC_CLIENT_ID", "")
     const response = await GET(browserRequest())
     expect(response.status).toBe(503)
     expect(await response.text()).toBe("")
     expect(response.headers.get("content-type")).toBeNull()
-    expect(authGet).not.toHaveBeenCalled()
-  })
-
-  it("does not navigate to a fallback document after an RP start failure", async () => {
-    authPost.mockResolvedValue(new Response(null, { status: 303, headers: { location: "/auth/retry" } }))
-    const response = await GET(browserRequest())
-    expect(response.status).toBe(503)
-    expect(response.headers.get("location")).toBeNull()
-    expect(await response.text()).toBe("")
   })
 })
