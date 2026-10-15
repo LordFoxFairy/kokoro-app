@@ -1,3 +1,9 @@
+## SET34 到期日期测试按实际时区验日末（2026-10-15；D0，仅现测试）
+
+基线Web fd627496a6f860c7ed3e1afef51c65fbc3bcca57，939 tracked clean；runtime_audit唯一writer仅现tests/ui/kokoro-scheduled-surface.test.tsx，932保护/Root6。Root设计/docs/独审/Git/实际复核；全product source与其它全部测试字节保护。
+
+不改产品API或wire；仍提交同一timezone与UTC expiresAt，只修测试对所选当地日期日末的独立预期。
+
 ## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
 
 基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。

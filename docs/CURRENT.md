@@ -1,3 +1,17 @@
+## SET34 到期日期时区测试已接收，SET35继续（2026-10-15）
+
+唯一现测试仅修时区依赖的错误UTC正则和不实几何标题；独立Intl按所选时区校验当地2026-09-30 23:59:59与毫秒999，不调用被测转换函数。原日期必填/按钮/保存/timezone断言和其余33例保护；逆修精确恢复原46937bytes。932保护/Root6逐哈希精确，独审无确定P1/P2，lint/type为0。
+
+Root同一冻结文件在两个独立Node过程TZ=Asia/Shanghai和America/Los_Angeles各34PASS0FAIL0SKIP。全product source未变，不重复SET31完整source门，正常认证Browser未验；继续SET35十四个实际使用的日文设置缺译，再做整套回归。Goal active，Skills/连接器业务排除。
+
+## SET34 到期日期测试按实际时区验日末（2026-10-15；D0，仅现测试）
+
+基线Web fd627496a6f860c7ed3e1afef51c65fbc3bcca57，939 tracked clean；runtime_audit唯一writer仅现tests/ui/kokoro-scheduled-surface.test.tsx，932保护/Root6。Root设计/docs/独审/Git/实际复核；全product source与其它全部测试字节保护。
+
+原case取Intl实际环境timezone，却把expiresAt写死为负offset才成立的10月1日凌晨UTC regex；Shanghai正确的09月30日15:59:59.999Z被误报。只修该case标题（不再声称未测的短viewport几何）和expiresAt预期：保全部dateRequired/disabled/enabled/onSave timezone及原UI操作；正则改string类型后，独立Intl.DateTimeFormat en-CA、显式timezone/h23 formatToParts核提交UTC instant在当地为2026-09-30 23:59:59，并验UTC毫秒999。不调用被测转换生成预期，不改source、时区mock、timeout/skip或扩正则。新增断言块标记，逆去块并还原两准许替换后须逐字恢复全原test。
+
+同一现有测试文件以两个独立Node过程TZ=Asia/Shanghai与America/Los_Angeles运行，证明正负offset下日期必填和当地日末约束；无新重复case/持久化或资源。worker可跑本地unit/lint/type纯门，Root冻结后独立实跑两时区；原native/source门保持SET33/31证据，后继SET35实际日文缺译后再执行一次整套回归。Goal active，正常Browser未验，Skills/连接器排除。
+
 ## SET33 两条原生测试就绪修正已接收，SET34继续（2026-10-15）
 
 仅现native helper默认false参数，两初始withdraw调用开启cold到达/reload新增到达前置，全部使用原remaining预算；不等status、不排除runtime、不改count/safety/mock/timeout/cleanup或SET32诊断。6块逆删除恢复原317426bytes，1writer/931保护/Root7，全product source字节保护，独审无确定P1/P2，lint/type/architecture50全部0。
