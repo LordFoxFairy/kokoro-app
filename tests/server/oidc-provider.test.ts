@@ -144,11 +144,10 @@ describe("Product OIDC fixed-tenant Team and Skill scopes", () => {
     expect(issueOidcState).toHaveBeenCalledOnce()
     expect(issueOidcState).toHaveBeenCalledWith(expect.objectContaining({ state: "s".repeat(32) }))
   })
-  it("accepts the fixed same-origin browser document navigation when Chromium omits Origin", async () => {
+  it("accepts the fixed no-referrer browser document navigation emitted by Chromium", async () => {
     nextAuth.mockResolvedValueOnce(authorizeResponse(EXPECTED_SCOPE))
     const response = await POST(new NextRequest(`${ENV.NEXTAUTH_URL}/signin/kokoro-iam`, {
-      method: "POST", headers: { host: "web.example.test", "content-type": "application/x-www-form-urlencoded",
-        "sec-fetch-site": "same-origin", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
+      method: "POST", headers: { host: "web.example.test", origin: "null", "content-type": "application/x-www-form-urlencoded" },
       body: "csrfToken=Token123",
     }), { params: Promise.resolve({ nextauth: ["signin", "kokoro-iam"] }) })
     expect(response.status).toBe(302)
