@@ -601,6 +601,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.errSecretRef": "Выбранные учетные данные недействительны или не существуют.",
   "mcp.errNotFound": "Соединение не обнаружено.",
   "mcp.errInvalid": "Неверная запись: проверьте имя, URL-адрес и метод передачи.",
+  "mcp.errDuplicateUrl": "Этот URL сервера уже добавлен. Измените существующий коннектор или используйте другой URL.",
   "mcp.errGeneric": "Операция не удалась, повторите попытку позже.",
   "composer.modelSwitch": "Модель переключения",
   "composer.modelLocked": "Модель: {model} (заблокировано в этом раунде)",

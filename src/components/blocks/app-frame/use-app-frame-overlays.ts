@@ -11,6 +11,7 @@ import {
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import type { SettingsTab } from "@/ui/settings/settings-modal";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 
 import {
   COMMAND_SETTINGS_HANDOFF_MS,
@@ -23,7 +24,7 @@ export type AppFrameOverlayOptions = {
   settingsTab: SettingsTab | null;
   setSettingsTab: Dispatch<SetStateAction<SettingsTab | null>>;
   settingsHistoryEntryRef: RefObject<boolean | null>;
-  syncSettingsUrl: (tab: SettingsTab | null, mode: "push" | "replace") => void;
+  syncSettingsUrl: (tab: SettingsTab | null, mode: "push" | "replace", skillsScope?: SkillsScopeFilter) => void;
   shellRef: RefObject<HTMLDivElement | null>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   accountTriggerRef: RefObject<HTMLButtonElement | null>;
@@ -41,6 +42,9 @@ export function useAppFrameOverlays({
   accountTriggerRef,
 }: AppFrameOverlayOptions) {
   const [commandOpen, setCommandOpen] = useState(false);
+  // Opening Settings can carry one capability-specific view intent. It is
+  // consumed by the modal on mount, rather than keeping a second page alive.
+  const [settingsSkillsScope, setSettingsSkillsScope] = useState<SkillsScopeFilter | undefined>();
   // The command palette is controlled by the shell so every entry point shares
   // one focus-return contract.
   const commandTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -96,7 +100,11 @@ export function useAppFrameOverlays({
   }, [mounted, settingsTab]);
 
   const openSettings = useCallback(
-    (tab: SettingsTab, explicitReturnTarget?: HTMLElement | null): void => {
+    (
+      tab: SettingsTab,
+      explicitReturnTarget?: HTMLElement | null,
+      options?: Readonly<{ skillsScope?: SkillsScopeFilter }>,
+    ): void => {
       // A queued command-menu → Composer handoff must not steal focus from a
       // Settings surface opened immediately afterwards.
       if (commandNewChatTimerRef.current !== null) {
@@ -129,13 +137,14 @@ export function useAppFrameOverlays({
       }
       const open = () => {
         commandSettingsTimerRef.current = null;
+        setSettingsSkillsScope(tab === "skills" ? options?.skillsScope : undefined);
         setSettingsTab(tab);
         const hasSettingsUrl = settingsTabFromLocation() !== null;
         if (hasSettingsUrl) {
-          syncSettingsUrl(tab, "replace");
+          syncSettingsUrl(tab, "replace", options?.skillsScope);
         } else {
           settingsHistoryEntryRef.current = true;
-          syncSettingsUrl(tab, "push");
+          syncSettingsUrl(tab, "push", options?.skillsScope);
         }
       };
       if (commandOpen) {
@@ -160,7 +169,7 @@ export function useAppFrameOverlays({
     ],
   );
 
-  const closeSettings = useCallback((): void => {
+  const closeSettings = useCallback((mode: "close" | "handoff" = "close"): void => {
     if (commandSettingsTimerRef.current !== null) {
       window.clearTimeout(commandSettingsTimerRef.current);
       commandSettingsTimerRef.current = null;
@@ -172,10 +181,14 @@ export function useAppFrameOverlays({
     // after the unmount commit as the final focus handoff.
     const rememberedTarget = settingsReturnFocusRef.current;
     setSettingsTab(null);
-    if (settingsHistoryEntryRef.current && settingsTabFromLocation() !== null) {
+    if (mode === "close" && settingsHistoryEntryRef.current && settingsTabFromLocation() !== null) {
       settingsHistoryEntryRef.current = false;
       window.history.back();
     } else {
+      // A creation/use handoff owns the destination route itself. Replacing
+      // the fragment avoids an asynchronous history.back() overtaking that
+      // navigation and putting the user back on the catalogue.
+      settingsHistoryEntryRef.current = false;
       syncSettingsUrl(null, "replace");
     }
     window.requestAnimationFrame(() => {
@@ -234,6 +247,7 @@ export function useAppFrameOverlays({
     commandSettingsTimerRef,
     commandNewChatTimerRef,
     settingsReturnFocusRef,
+    settingsSkillsScope,
     mcpCreateReturnFocusRef,
     mcpCreateMode,
     setMcpCreateMode,

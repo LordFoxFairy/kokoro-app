@@ -1,11 +1,11 @@
 "use client";
 
 import type { GithubImported } from "./personal-skill-github-import-flow";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { HubClient } from "@/hub/client";
-import type { SkillCard } from "@/hub/schemas";
+import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -19,13 +19,13 @@ import { toInstalledCatalogCard, toSkillActionCard } from "./skills-card-model";
 import { GithubImportDialog } from "./github-import-dialog";
 import { ManusSkillDetailDialog } from "./manus-skill-detail-dialog";
 import { type SkillsPool, skillStateKey } from "./skills-pool-model";
+import type { SkillsScopeFilter } from "./skills-scope";
 import { SkillsPoolTab } from "./skills-pool-tab";
 import {
   SKILLS_CATALOG_KEY,
   SKILLS_KEY,
   skillResourceKey,
 } from "./skills-resource-cache";
-import { SkillDetailDialog } from "./skill-detail-dialog";
 import { SkillUploadDialog } from "./skill-upload-dialog";
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
@@ -147,8 +147,37 @@ type SkillsContentProps = {
   onTrySkill?: (skill: SkillCard, prompt?: string) => void;
   embedded?: boolean;
   /** Opens the shared direct-chat Composer with the skill-creator prompt. */
-  onCreateWithAi?: () => void;
+  onCreateWithAi?: (prompt?: string) => void;
+  /** Controlled Settings catalog route. It shares state with the Settings
+   * heading so compact and desktop layouts cannot drift. */
+  embeddedCatalogOpen?: boolean;
+  onEmbeddedCatalogOpenChange?: (open: boolean) => void;
+  catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
+  initialScope?: SkillsScopeFilter;
 };
+
+type SkillDetailSelection = Readonly<{
+  skill: SkillCatalogCard;
+  installationState: Readonly<{ installed: boolean; enabled: boolean }>;
+}>;
+
+function detailSelectionFor(
+  skill: SkillCard | SkillCatalogCard,
+): SkillDetailSelection | null {
+  if ("installed" in skill) {
+    return {
+      skill,
+      installationState: { installed: skill.installed, enabled: skill.enabled },
+    };
+  }
+  if (skill.skill_id === undefined || skill.revision_skill_id === undefined) {
+    return null;
+  }
+  return {
+    skill: toInstalledCatalogCard(skill),
+    installationState: { installed: true, enabled: skill.enabled === true },
+  };
+}
 
 export function SkillsContent(props: SkillsContentProps) {
   return <InstalledSkillsContent {...props} />;
@@ -168,13 +197,18 @@ function InstalledSkillsContent({
   onTrySkill,
   embedded = false,
   onCreateWithAi,
+  embeddedCatalogOpen,
+  onEmbeddedCatalogOpenChange,
+  catalogTriggerRef,
+  initialScope,
 }: SkillsContentProps) {
   const [githubOpen, setGithubOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const githubReturnFocusRef = useRef<HTMLElement | null>(null);
   const uploadReturnFocusRef = useRef<HTMLElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [detailSkill, setDetailSkill] = useState<SkillCard | null>(null);
+  const [detailSelection, setDetailSelection] =
+    useState<SkillDetailSelection | null>(null);
   const [githubImportNotice, setGithubImportNotice] =
     useState<GithubImported | null>(null);
   const [recentSkillKey, setRecentSkillKey] = useState<string | null>(null);
@@ -224,13 +258,16 @@ function InstalledSkillsContent({
   const mutationAttemptRef = useRef(0);
   const mountedRef = useRef(true);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // React development Strict Mode performs a mount/cleanup/remount probe.
+    // Restore the liveness gate on the committed mount so a completed owner
+    // mutation clears its pending UI state instead of leaving the toggle locked.
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
       mutationAttemptRef.current += 1;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const enabledAction = useAsyncAction(
     async ({ skill, enabled }: { skill: SkillCard; enabled: boolean }) => {
@@ -318,6 +355,7 @@ function InstalledSkillsContent({
               setExpanded((prev) => (prev === stateKey ? null : stateKey))
             }
             embedded={embedded}
+            {...(brandName === undefined ? {} : { brandName })}
             onOpenUpload={(returnFocusRef) => {
               uploadReturnFocusRef.current =
                 returnFocusRef?.current ?? poolCreateTriggerRef.current;
@@ -335,8 +373,16 @@ function InstalledSkillsContent({
             {...(onCreateWithAi === undefined ? {} : { onCreateWithAi })}
             onOpenDetail={(skill, source) => {
               detailReturnFocusRef.current = source;
-              setDetailSkill(skill);
+              setDetailSelection(detailSelectionFor(skill));
             }}
+            {...(embeddedCatalogOpen === undefined
+              ? {}
+              : { embeddedCatalogOpen })}
+            {...(onEmbeddedCatalogOpenChange === undefined
+              ? {}
+              : { onEmbeddedCatalogOpenChange })}
+            {...(catalogTriggerRef === undefined ? {} : { catalogTriggerRef })}
+            {...(initialScope === undefined ? {} : { initialScope })}
           />
         </div>
       </div>
@@ -354,20 +400,16 @@ function InstalledSkillsContent({
         returnFocusRef={uploadReturnFocusRef}
         onPublished={invalidateSkills}
       />
-      {detailSkill?.skill_id !== undefined &&
-      detailSkill.revision_skill_id !== undefined ? (
+      {detailSelection !== null ? (
         <ManusSkillDetailDialog
           readBoundary={readBoundary}
-          skill={toInstalledCatalogCard(detailSkill)}
+          skill={detailSelection.skill}
           publisherLabel={brandName ?? "Kokoro"}
-          categoryLabels={detailSkill.categories ?? []}
+          categoryLabels={detailSelection.skill.categories ?? []}
           open
-          installationState={{
-            installed: true,
-            enabled: detailSkill.enabled === true,
-          }}
+          installationState={detailSelection.installationState}
           onOpenChange={(open) => {
-            if (!open) setDetailSkill(null);
+            if (!open) setDetailSelection(null);
           }}
           returnFocusRef={detailReturnFocusRef}
           onAdd={(skill) =>
@@ -378,34 +420,18 @@ function InstalledSkillsContent({
             )
           }
           onTry={(prompt) => {
+            const detailSkill = toSkillActionCard(detailSelection.skill);
             if (onTrySkill) onTrySkill(detailSkill, prompt);
-            else if (!pinned.includes(detailSkill.name))
+            else if (
+              detailSelection.installationState.installed &&
+              !pinned.includes(detailSkill.name)
+            ) {
               onTogglePin(detailSkill.name);
-            setDetailSkill(null);
-          }}
-        />
-      ) : (
-        <SkillDetailDialog
-          skill={detailSkill}
-          {...(brandName === undefined ? {} : { brandName })}
-          open={detailSkill !== null}
-          onOpenChange={(open) => {
-            if (!open) setDetailSkill(null);
-          }}
-          returnFocusRef={detailReturnFocusRef}
-          onTry={(skill, prompt) => {
-            if (onTrySkill) {
-              // Keep the existing one-argument Try callback shape intact. Only
-              // prompt cards add their visible text as a second argument.
-              if (prompt === undefined) onTrySkill(skill);
-              else onTrySkill(skill, prompt);
-            } else if (!pinned.includes(skill.name)) {
-              onTogglePin(skill.name);
             }
-            setDetailSkill(null);
+            setDetailSelection(null);
           }}
         />
-      )}
+      ) : null}
     </>
   );
 }

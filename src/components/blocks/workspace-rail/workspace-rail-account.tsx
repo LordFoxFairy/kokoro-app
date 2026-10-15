@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react"
 import Link from "next/link"
-import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, ShieldCheck, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
+import { ArrowUpRight, Bell, ChevronRight, ChevronsUpDown, CircleHelp, FileText, Grid2X2, Home, LogOut, Monitor, ShieldCheck, SlidersHorizontal, Sparkles, UserRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -71,7 +71,6 @@ export function WorkspaceRailAccount({
       <div className={railStyles.userAvatar} aria-hidden>{initial}</div>
       {!compactDesktop ? <div className={railStyles.userText}>
         <p className={railStyles.userName}>{display}</p>
-        <p className={railStyles.userMeta}>{t("rail.userScope")}</p>
       </div> : null}
     </>
   )
@@ -211,6 +210,18 @@ export function WorkspaceRailAccount({
         </DropdownMenuContent>
       </DropdownMenu>
       <span className={railStyles.accountStatus}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={railStyles.utilityAction}
+          disabled
+          aria-disabled="true"
+          aria-label={t("rail.computer")}
+          title={`${t("rail.computer")} · ${t("firstSite.unavailable")}`}
+        >
+          <Monitor className={railStyles.icon} aria-hidden="true" />
+        </Button>
         <Popover>
           <PopoverTrigger asChild>
             <Button

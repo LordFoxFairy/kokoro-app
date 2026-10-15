@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChevronDown, Link2, ListFilter, Search } from "lucide-react";
+import { Check, ChevronDown, Link2, ListFilter, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,12 +26,20 @@ type Category = keyof typeof MCP_CATEGORY_MESSAGES;
 export function McpProviderDirectory({
   providers,
   query,
+  onQueryChange,
+  showSearch = false,
+  presentation = "dialog",
+  connectedProviderKeys,
   categoryFilter,
   onCategoryFilterChange,
   onSelectProvider,
 }: {
   providers: McpConnectorProvider[];
   query: string;
+  onQueryChange?: (value: string) => void;
+  showSearch?: boolean;
+  presentation?: "plaza" | "dialog";
+  connectedProviderKeys?: ReadonlySet<string>;
   categoryFilter: "all" | Category;
   onCategoryFilterChange: (category: "all" | Category) => void;
   onSelectProvider: (
@@ -62,8 +70,20 @@ export function McpProviderDirectory({
   });
 
   return (
-    <>
+    <div className={styles.providerDirectory} data-presentation={presentation}>
       <div className={styles.directoryControls}>
+        {showSearch ? (
+          <label className={styles.directorySearch}>
+            <Search aria-hidden="true" />
+            <span className="sr-only">{t("plugins.search")}</span>
+            <input
+              type="search"
+              value={query}
+              placeholder={t("plugins.search")}
+              onChange={(event) => onQueryChange?.(event.target.value)}
+            />
+          </label>
+        ) : null}
         <nav className={styles.categoryRail} aria-label={t("mcp.categoryAria")}>
           <button
             type="button"
@@ -174,12 +194,15 @@ export function McpProviderDirectory({
                       </span>
                     ) : null}
                   </span>
+                  <span className={styles.providerAction} aria-hidden="true">
+                    {connectedProviderKeys?.has(provider.provider_key) ? <Check /> : <Plus />}
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
         )}
       </section>
-    </>
+    </div>
   );
 }

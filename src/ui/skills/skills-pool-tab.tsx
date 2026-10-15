@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   ChevronDown,
+  CircleDot,
+  Compass,
+  Plus,
   Search,
-  ShieldCheck,
   SquarePen,
   Upload,
   X,
@@ -43,7 +45,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { HubClient } from "@/hub/client";
-import type { SkillCard } from "@/hub/schemas";
+import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import { SkillCatalogDialog } from "./skills-catalog-dialog";
@@ -51,11 +53,12 @@ import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
 import { SkillRevisions } from "./skill-revisions";
 import { type SkillsPool, skillStateKey } from "./skills-pool-model";
+import type { SkillsScopeFilter } from "./skills-scope";
 import styles from "./skills-panel.module.css";
 
 const OFFICIAL_SCOPE = "official";
 
-type ScopeFilter = "all" | "personal" | "official" | "thirdParty";
+type ScopeFilter = SkillsScopeFilter;
 
 type SkillScope = Exclude<ScopeFilter, "all">;
 
@@ -63,6 +66,53 @@ function skillScope(scope: string): SkillScope {
   if (scope === OFFICIAL_SCOPE) return "official";
   if (scope === "third_party" || scope === "third-party") return "thirdParty";
   return "personal";
+}
+
+type SkillCreateMenuItemsProps = {
+  includeBrowse: boolean;
+  brandName?: string;
+  onBrowse: (event: Event) => void;
+  onCreateWithAi?: (event: Event) => void;
+  onRecordSkill?: (event: Event) => void;
+  onUpload: (event: Event) => void;
+  onImportGithub: (event: Event) => void;
+};
+
+/** Reused action list keeps the toolbar and personal empty state on one menu contract. */
+function SkillCreateMenuItems({
+  includeBrowse,
+  brandName,
+  onBrowse,
+  onCreateWithAi,
+  onRecordSkill,
+  onUpload,
+  onImportGithub,
+}: SkillCreateMenuItemsProps) {
+  const t = useT();
+  return (
+    <DropdownMenuGroup>
+      {includeBrowse ? <DropdownMenuItem onSelect={onBrowse}>
+        <Compass aria-hidden="true" />
+        {t("skills.browse")}
+      </DropdownMenuItem> : null}
+      {onCreateWithAi ? <DropdownMenuItem onSelect={onCreateWithAi}>
+        <SquarePen aria-hidden="true" />
+        {brandName ? t("skills.createWithBrand", { brand: brandName }) : t("skills.createWithAi")}
+      </DropdownMenuItem> : null}
+      {onRecordSkill ? <DropdownMenuItem onSelect={onRecordSkill}>
+        <CircleDot aria-hidden="true" />
+        {t("skills.recordSkill")}
+      </DropdownMenuItem> : null}
+      <DropdownMenuItem onSelect={onUpload}>
+        <Upload aria-hidden="true" />
+        {t("skills.uploadSkill")}
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={onImportGithub}>
+        <Image src="/assets/connectors/github.webp" alt="" width={16} height={16} />
+        {t("skills.importGithub")}
+      </DropdownMenuItem>
+    </DropdownMenuGroup>
+  );
 }
 
 export function SkillsPoolTab({
@@ -91,7 +141,12 @@ export function SkillsPoolTab({
   recentSkillKey,
   onDismissGithubImportNotice,
   onCreateWithAi,
+  brandName,
   onOpenDetail,
+  embeddedCatalogOpen,
+  onEmbeddedCatalogOpenChange,
+  catalogTriggerRef: suppliedCatalogTriggerRef,
+  initialScope = "all",
 }: {
   pool: SkillsPool | null;
   loading: boolean;
@@ -111,21 +166,30 @@ export function SkillsPoolTab({
   disableError: string | null;
   onToggleExpand: (stateKey: string) => void;
   embedded?: boolean;
+  brandName?: string;
   onOpenUpload: (returnFocusRef?: RefObject<HTMLElement | null>) => void;
   onOpenGithub: (returnFocusRef?: RefObject<HTMLElement | null>) => void;
   createTriggerRef: RefObject<HTMLButtonElement | null>;
   githubImportNotice: GithubImported | null;
   recentSkillKey: string | null;
   onDismissGithubImportNotice: () => void;
-  onCreateWithAi?: () => void;
-  onOpenDetail: (skill: SkillCard, source: HTMLElement) => void;
+  onCreateWithAi?: (prompt?: string) => void;
+  onOpenDetail: (skill: SkillCard | SkillCatalogCard, source: HTMLElement) => void;
+  /** Settings owns the embedded catalog route so its heading and content
+   * transition from one state source. Standalone Skills keeps local state. */
+  embeddedCatalogOpen?: boolean;
+  onEmbeddedCatalogOpenChange?: (open: boolean) => void;
+  /** The Settings panel owns this ref so its shared back header restores focus. */
+  catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
+  /** Initial intent supplied by the marketplace "我的技能" handoff. */
+  initialScope?: SkillsScopeFilter;
 }) {
   const t = useT();
   // 视图态:搜索词 / 范围筛选 / 停用二次确认(停用是破坏性——离池,先确认)。
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<ScopeFilter>("all");
+  const [scope, setScope] = useState<ScopeFilter>(initialScope);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [localCatalogOpen, setLocalCatalogOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createActionHandledRef = useRef(false);
   const catalogHandoffRef = useRef<(() => void) | null>(null);
@@ -137,7 +201,8 @@ export function SkillsPoolTab({
     {},
   );
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const catalogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const localCatalogTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const catalogTriggerRef = suppliedCatalogTriggerRef ?? localCatalogTriggerRef;
 
   const selectCreateAction = (action: () => void, event?: Event) => {
     // Radix closes a controlled menu after onSelect. Run the destination
@@ -154,17 +219,26 @@ export function SkillsPoolTab({
     });
   };
 
-  const restoreCatalogTriggerFocus = useCallback((event: Event) => {
+  const restoreCatalogTriggerFocus = (event: Event) => {
     if (catalogTriggerRef.current === null) return;
     event.preventDefault();
     window.requestAnimationFrame(() => catalogTriggerRef.current?.focus());
-  }, []);
+  };
+
+  const catalogOpen = embedded ? (embeddedCatalogOpen ?? false) : localCatalogOpen;
+  const setCatalogOpen = useCallback((open: boolean) => {
+    if (embedded) {
+      onEmbeddedCatalogOpenChange?.(open);
+      return;
+    }
+    setLocalCatalogOpen(open);
+  }, [embedded, onEmbeddedCatalogOpenChange]);
 
   const queueCatalogHandoff = useCallback((handoff: () => void) => {
     catalogHandoffRef.current = handoff;
     setCatalogOpen(false);
     setCatalogHandoffVersion((version) => version + 1);
-  }, []);
+  }, [setCatalogOpen]);
 
   const finishCatalogHandoff = useCallback((event?: Event) => {
     const handoff = catalogHandoffRef.current;
@@ -184,13 +258,19 @@ export function SkillsPoolTab({
     return () => window.cancelAnimationFrame(frame);
   }, [catalogOpen, catalogHandoffVersion, finishCatalogHandoff]);
 
-  const handleCatalogCloseAutoFocus = useCallback(
-    (event: Event) => {
-      if (finishCatalogHandoff(event)) return;
-      restoreCatalogTriggerFocus(event);
-    },
-    [finishCatalogHandoff, restoreCatalogTriggerFocus],
-  );
+  const handleCatalogCloseAutoFocus = (event: Event) => {
+    if (finishCatalogHandoff(event)) return;
+    restoreCatalogTriggerFocus(event);
+  };
+
+  // The Settings parent owns the embedded route state; the standalone page
+  // owns its dialog state locally. Both entry points use this one transition.
+  const openCatalog = useCallback(() => {
+    setCatalogOpen(true);
+  }, [setCatalogOpen]);
+  const closeCatalog = useCallback(() => {
+    setCatalogOpen(false);
+  }, [setCatalogOpen]);
 
   // The destructive action is replaced inline. Explicitly move focus to the
   // confirmation control so the scroll viewport never becomes the active
@@ -249,6 +329,30 @@ export function SkillsPoolTab({
     official: t("skills.filterOfficial"),
     thirdParty: t("skills.filterThirdParty"),
   };
+
+  if (embedded && catalogOpen) {
+    return (
+      <SkillCatalogDialog
+        inline
+        open
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) return;
+          closeCatalog();
+          window.requestAnimationFrame(() => catalogTriggerRef.current?.focus());
+        }}
+        onCloseAutoFocus={handleCatalogCloseAutoFocus}
+        client={client}
+        enabledOverrides={enabledOverrides}
+        installedOverrides={installedOverrides}
+        busy={busy}
+        errorName={disableError}
+        onOpenUpload={() => onOpenUpload(catalogTriggerRef)}
+        onOpenGithub={() => onOpenGithub(catalogTriggerRef)}
+        onSetEnabled={onSetEnabled}
+        onOpenDetail={onOpenDetail}
+      />
+    );
+  }
 
   return (
     <>
@@ -325,7 +429,7 @@ export function SkillsPoolTab({
             variant="outline"
             type="button"
             className={styles.embeddedBrowse}
-            onClick={() => setCatalogOpen(true)}
+            onClick={openCatalog}
           >
             {t("skills.browse")}
           </Button>
@@ -341,6 +445,7 @@ export function SkillsPoolTab({
                 type="button"
                 className={styles.embeddedCreate}
               >
+                {embedded ? <Plus aria-hidden="true" /> : null}
                 {t("skills.create")}
                 <ChevronDown aria-hidden="true" />
               </Button>
@@ -349,56 +454,23 @@ export function SkillsPoolTab({
               align="end"
               className={styles.createMenuContent}
             >
-              <DropdownMenuGroup>
-                {onCreateWithAi ? (
-                  <DropdownMenuItem
-                    onSelect={(event) =>
-                      selectCreateAction(onCreateWithAi, event)
-                    }
-                  >
-                    <SquarePen aria-hidden="true" />
-                    {t("skills.createWithAi")}
-                  </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem
-                  onSelect={(event) =>
-                    selectCreateAction(() => {
-                      setCatalogOpen(false);
-                      onOpenUpload(createTriggerRef);
-                    }, event)
-                  }
-                >
-                  <Upload aria-hidden="true" />
-                  {t("skills.uploadSkill")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) =>
-                    selectCreateAction(() => {
-                      setCatalogOpen(false);
-                      onOpenGithub(createTriggerRef);
-                    }, event)
-                  }
-                >
-                  <Image
-                    src="/assets/connectors/github.webp"
-                    alt=""
-                    width={16}
-                    height={16}
-                  />
-                  {t("skills.importGithub")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) =>
-                    selectCreateAction(() => {
-                      setScope("official");
-                      setCatalogOpen(true);
-                    }, event)
-                  }
-                >
-                  <ShieldCheck aria-hidden="true" />
-                  {t("skills.addOfficial")}
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              <SkillCreateMenuItems
+                includeBrowse={embedded}
+                {...(brandName === undefined ? {} : { brandName })}
+                onBrowse={(event) => selectCreateAction(openCatalog, event)}
+                {...(onCreateWithAi === undefined ? {} : {
+                  onCreateWithAi: (event) => selectCreateAction(onCreateWithAi, event),
+                  onRecordSkill: (event) => selectCreateAction(() => onCreateWithAi(t("skills.recordPrompt")), event),
+                })}
+                onUpload={(event) => selectCreateAction(() => {
+                  setCatalogOpen(false);
+                  onOpenUpload(createTriggerRef);
+                }, event)}
+                onImportGithub={(event) => selectCreateAction(() => {
+                  setCatalogOpen(false);
+                  onOpenGithub(createTriggerRef);
+                }, event)}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -477,7 +549,10 @@ export function SkillsPoolTab({
           <Skeleton className={styles.loadingLineShort} aria-hidden="true" />
         </div>
       ) : !hasSkills ? (
-        <Empty className={styles.emptyState} data-testid="skills-empty">
+        <Empty
+          className={styles.emptyState}
+          data-testid="skills-empty"
+        >
           <EmptyHeader>
             <EmptyTitle>{t("skills.empty")}</EmptyTitle>
             <EmptyDescription>{t("skills.emptyGuide")}</EmptyDescription>
@@ -501,6 +576,9 @@ export function SkillsPoolTab({
             // an official card and must not inherit its toggle state.
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
+            const detailAvailable =
+              skill.skill_id !== undefined &&
+              skill.revision_skill_id !== undefined;
             if (embedded) {
               return (
                 <li key={`${skill.scope}/${skill.name}`}>
@@ -510,6 +588,7 @@ export function SkillsPoolTab({
                     busy={busy !== null}
                     pending={busy === stateKey}
                     locked={isLocked}
+                    detailAvailable={detailAvailable}
                     error={
                       disableError === stateKey
                         ? t("skills.disableError")
@@ -542,7 +621,12 @@ export function SkillsPoolTab({
                             variant="ghost"
                             type="button"
                             className={cn(styles.name, styles.detailTrigger)}
-                            title={skill.name}
+                            title={
+                              detailAvailable
+                                ? skill.name
+                                : t("skills.detailUnavailable")
+                            }
+                            disabled={!detailAvailable}
                             onClick={(event) =>
                               onOpenDetail(skill, event.currentTarget)
                             }
@@ -698,7 +782,7 @@ export function SkillsPoolTab({
           })}
         </ul>
       )}
-      <SkillCatalogDialog
+      {!embedded ? <SkillCatalogDialog
         open={catalogOpen}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false);
@@ -721,7 +805,8 @@ export function SkillsPoolTab({
           queueCatalogHandoff(() => onOpenGithub(focusRef));
         }}
         onSetEnabled={onSetEnabled}
-      />
+        onOpenDetail={onOpenDetail}
+      /> : null}
     </>
   );
 }

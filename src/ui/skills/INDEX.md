@@ -39,8 +39,9 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 - `@/hub/client`（纯请求）、`@/hub/rules`（`isRequiredLockError` / `isQuotaExhausted`）、`@/hub/schemas`。
 - `GithubImportDialog`（`github-import-dialog.tsx`）：`parseGithubRepository` 负责 HTTPS GitHub owner/repo
   边界校验；focused GitHub client 为正式 Preview/immutable Import 入口，后续由flow消费原Publish/Install；旧optional注入已删除，不把Preview或draft响应伪装成已安装。
-- `SkillDetailDialog`（`skill-detail-dialog.tsx`）：技能名称打开独立详情 surface，展示文件树、YAML 复制和
-  试用入口；它不伪造后端文件读取，待 Hub 提供完整内容 projection 后再替换详情内容源。
+- `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
+  返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
+  不再由浏览器合成 YAML、文件树或示例正文。
 - `@/lib/query`：池+配额合并读走 `useResource("hub/skills")`；启停/发布成功后 `invalidate("hub/skills")`。版本历史键 `hub/skill-revisions/<name>`。
 
 ## 陷阱

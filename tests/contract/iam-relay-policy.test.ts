@@ -19,13 +19,13 @@ describe("fixed BFF IAM relay policy consumer", () => {
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(IAM_RELAY_POLICY_PROVENANCE.policySha256)
     expect(IAM_RELAY_POLICY_PROVENANCE).toEqual({
       ownerRepository: "kokoro-bff",
-      ownerCommit: "1105553cfc24d4f44a90f626132bc30323a77946",
-      policySha256: "8f7d4f4cb6fa0ec34d2cce8702d8882d3270a316a6cbdb2d8bdaccefb9c6b4a1",
+      ownerCommit: "78d06f783c2bce28f646459929df3b0bab783d32",
+      policySha256: "63e36a79c7448d4b9e47442df4f5467f230ecf0e9ac702a350cbc92a2c77eb46",
     })
     expect(IAM_RELAY_POLICY.version).toBe("2.1.0")
-    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("a4c2b61467f1fc1772d6b6d8e98f081c090289fb")
-    expect(IAM_RELAY_POLICY.iamOpenapiVersion).toBe("0.6.0")
-    expect(IAM_RELAY_POLICY.iamOpenapiSha256).toBe("392ca0e49544c0ec6e0d2fa782c46c33c1847e2c350102e7ad3b8af43f858ced")
+    expect(IAM_RELAY_POLICY.iamOwnerCommit).toBe("e3c035b99cf9479ac8357c7d38147f1541dcbcac")
+    expect(IAM_RELAY_POLICY.iamOpenapiVersion).toBe("0.7.0")
+    expect(IAM_RELAY_POLICY.iamOpenapiSha256).toBe("c8d7af8a365ad5d13eaabccf7f31133e0918ef198bdc3e7c790d90933eae91b2")
     expect(IAM_RELAY_POLICY.iamAllowlistSha256).toBe("f63dacfa8a7bcec3c56efb8ffb762a3f8bd82bb380eff40a1462db1e77d61ead")
     expect(IAM_RELAY_POLICY.iamSnapshotSha256).toBe("b2eac1919e16fdc30a40bee0f3c4300b641bd8f674214aea7731bf10299559e1")
     expect(IAM_RELAY_POLICY.routes).toEqual({
@@ -73,7 +73,7 @@ describe("fixed BFF IAM relay policy consumer", () => {
 
   it("admits the fixed browser GET subset including issuer logout confirmation entry", () => {
     expect(IAM_RELAY_POLICY.webInteractionPaths).toEqual([
-      "/auth/sign-in", "/auth/select-tenant", "/auth/consent",
+      "/auth/sign-in", "/auth/select-tenant", "/auth/consent", "/iam/interactions/consent",
     ])
     for (const path of [
       "/iam/.well-known/openid-configuration",

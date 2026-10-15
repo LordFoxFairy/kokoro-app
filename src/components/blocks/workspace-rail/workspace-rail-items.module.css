@@ -13,6 +13,52 @@
 .sectionRow { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; }
 .sectionRow .section { min-width: 0; }
 .section { margin: 0; padding: 0.55rem 0.65rem 0.35rem; color: var(--muted-foreground); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; }
+.sectionDisclosure {
+  display: inline-flex;
+  min-width: 0;
+  height: 2rem;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0 0.25rem;
+  padding-inline: 0.4rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.sectionDisclosure svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  opacity: 0;
+  transition: transform var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard);
+}
+.sectionDisclosure[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.sectionRow:hover .sectionDisclosure svg,
+.sectionRow:focus-within .sectionDisclosure svg { opacity: 1; }
+.sectionHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-right: 0.125rem;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+.sectionRow:hover .sectionHeaderActions,
+.sectionRow:focus-within .sectionHeaderActions {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+.sectionHeaderAction {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  color: var(--muted-foreground);
+}
+.sectionHeaderAction svg { width: 1rem; height: 1rem; }
+.sectionHeaderAction:disabled { opacity: 0.46; }
 .sectionActions { display: flex; align-items: center; gap: 0.125rem; }
 .sectionAction { flex: 0 0 auto; margin: 0 0.25rem 0 0.5rem; color: var(--muted-foreground); }
 .sectionAction:hover { color: var(--foreground); }
@@ -20,6 +66,25 @@
 .empty,
 .listNotice { margin: 0; padding: 0.4rem 0.65rem; color: var(--muted-foreground); font-size: 0.82rem; }
 .listNotice { display: grid; justify-items: start; gap: 0.45rem; }
+
+/* Preserve the rail row geometry during initial owner reads without a visible
+ * "正在加载…" copy state. The parent retains role=status for assistive tech. */
+.loadingPlaceholder {
+  display: flex;
+  min-height: 2.75rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.65rem;
+}
+.loadingLine,
+.loadingLineShort {
+  height: 0.45rem;
+  border-radius: 999px;
+}
+.loadingLine { width: 72%; }
+.loadingLineShort { width: 48%; }
+
 
 .item { display: flex; min-width: 0; align-items: center; border-radius: var(--radius-sm); transition: background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard); }
 .itemSelect { display: flex; min-width: 0; min-height: 2.1rem; flex: 1; align-items: center; gap: 0.4rem; border-radius: var(--radius-sm); padding: 0.4rem 6.5rem 0.4rem 0.55rem; font-size: 0.825rem; text-align: left; }
@@ -85,24 +150,41 @@
   .item { transition: none; }
 }
 
-/* A folder owns a vertical branch; only its disclosure and overview share a row. */
+/* A selected Manus project becomes a compact folder: its own conversations
+ * render immediately beneath the row. Inactive rows stay visually flat and
+ * only reveal their entry chevron/actions on hover or keyboard focus. */
 .item.projectFolder { position: relative; width: 100%; flex-direction: column; align-items: stretch; }
 .projectFolderRow { display: flex; width: 100%; min-width: 0; align-items: center; }
 .projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 0.55rem; }
-.folderToggle { flex-shrink: 0; }
+.folderToggle { display: none; flex: 0 0 auto; }
+.item[data-project-active="true"] .folderToggle { display: inline-flex; }
 .folderToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .projectFolderChildren { width: 100%; min-width: 0; box-sizing: border-box; padding-inline-start: var(--spacing-4, 1rem); }
 .projectFolderChildren .list { margin-top: 0.125rem; margin-bottom: 0.25rem; }
 .projectFolderChildren .empty { padding: 0.125rem 0.65rem; font-size: 0.75rem; line-height: 1.4; }
-
-/* Expanded folders keep their existing list actions on the owning folder row. */
-.projectFolder:has(> .projectFolderChildren) > .projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 4rem; }
 .projectFolderChildren .sectionRow { position: absolute; top: 0; right: 0.25rem; z-index: 2; height: 2.1rem; }
 .projectFolderChildren .sectionRow .section { display: none; }
 .projectFolderChildren .sectionAction { margin: 0; }
+.item[data-project-expanded="true"] .projectGlyph > svg { transition: none; }
+.item[data-project-expanded="true"] .projectChevronIcon { display: none; }
+.projectGlyph { position: relative; display: inline-grid; width: 1rem; height: 1rem; flex: 0 0 1rem; place-items: center; }
+.projectGlyph > svg { position: absolute; transition: opacity var(--motion-fast) var(--ease-standard); }
+.projectChevronIcon { opacity: 0; }
+.item[data-drag-kind="project"]:not([data-project-expanded="true"]):hover .projectFolderIcon,
+.item[data-drag-kind="project"]:not([data-project-expanded="true"]):focus-within .projectFolderIcon { opacity: 0; }
+.item[data-drag-kind="project"]:not([data-project-expanded="true"]):hover .projectChevronIcon,
+.item[data-drag-kind="project"]:not([data-project-expanded="true"]):focus-within .projectChevronIcon { opacity: 1; }
+.projectActions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.1rem; margin-right: 0.1rem; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--ease-standard); }
+.item[data-drag-kind="project"]:hover .projectActions,
+.item[data-drag-kind="project"]:focus-within .projectActions { visibility: visible; opacity: 1; pointer-events: auto; }
+.projectAction { width: 2rem; height: 2rem; padding: 0; color: var(--muted-foreground); }
+.projectAction:hover { color: var(--foreground); }
+.projectAction svg { width: 1rem; height: 1rem; }
+@media (hover: none) {
+  .projectActions { visibility: visible; opacity: 1; pointer-events: auto; }
+}
 
 @media (max-width: 960px) {
-  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectFolder:has(> .projectFolderChildren) > .projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 6.25rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectFolderChildren .sectionRow { height: 2.75rem; }
   [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectFolderChildren .sectionAction { width: 2.75rem; height: 2.75rem; }
 }

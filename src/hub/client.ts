@@ -911,7 +911,8 @@ export type HubClient = {
     query?: string;
     cursor?: string;
   }) => Promise<SkillCatalog>;
-  skillQuota: () => Promise<SkillQuota>;
+  /** The owner may omit quota facts for a catalog-only Skills projection. */
+  skillQuota: () => Promise<SkillQuota | null>;
   skillRevisions: (name: string, scope?: string) => Promise<SkillRevision[]>;
   /** Mutates one owner-issued installation. Display names and series IDs are never write identities. */
   setSkillEnabled: (installationId: string, enabled: boolean) => Promise<void>;

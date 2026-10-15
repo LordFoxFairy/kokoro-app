@@ -18,6 +18,7 @@ export function McpSettingsToolbar({
   onBrowse,
   onCreate,
   showBrowse = true,
+  showSearch = true,
   settingsLayout = false,
 }: {
   view: "catalog" | "connections"
@@ -27,17 +28,19 @@ export function McpSettingsToolbar({
   onBrowse: (target: HTMLElement) => void
   onCreate?: (mode: McpCreateMode, target: HTMLElement | null) => void
   showBrowse?: boolean
+  /** The plaza owns its directory search below the featured/header row. */
+  showSearch?: boolean
 }) {
   const t = useT()
   const triggerRef = useRef<HTMLButtonElement | null>(null)
 
   return (
     <div className={styles.settingsToolbar}>
-      <label className={styles.searchField}>
-        <Search aria-hidden="true" />
-        <span className="sr-only">{t("plugins.search")}</span>
-        <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("plugins.search")} />
-      </label>
+      {showSearch ? <label className={styles.searchField}>
+          <Search aria-hidden="true" />
+          <span className="sr-only">{t("plugins.search")}</span>
+          <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("plugins.search")} />
+        </label> : null}
       <div className={styles.toolbarActions}>
         {showBrowse ? <Button type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
           {view === "connections" ? t("mcp.browse") : t("plugins.manageConnectors")}

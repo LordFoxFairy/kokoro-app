@@ -741,6 +741,7 @@ function AppFrameRuntime({
       onRetryProjects: refreshProjects,
     } : {}),
     onCreateProject: project.createProject,
+    onRequestProjectRename: project.requestProjectRename,
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,
     conversations,
@@ -809,6 +810,7 @@ function AppFrameRuntime({
     <AppFrameOverlaySurfaces
       mounted={mounted}
       settingsTab={navigationState.settingsTab}
+      {...(overlays.settingsSkillsScope === undefined ? {} : { settingsSkillsScope: overlays.settingsSkillsScope })}
       brandName={brandName}
       preview={preview}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}

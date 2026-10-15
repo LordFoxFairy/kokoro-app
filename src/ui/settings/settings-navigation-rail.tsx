@@ -204,6 +204,7 @@ export function SettingsNavigationRail({
                 <div
                   className={styles.placeholderTab}
                   data-testid={`settings-placeholder-${entry.id}`}
+                  data-compact-primary="false"
                   aria-disabled="true"
                 >
                   <Icon aria-hidden="true" />

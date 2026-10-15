@@ -4,7 +4,7 @@ import type { GithubImported } from "@/ui/skills/personal-skill-github-import-fl
 
 import Image from "next/image"
 import { useCallback, useMemo, useRef, useState } from "react"
-import { Check, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
+import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -264,14 +264,20 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {query ? <Button type="button" variant="ghost" size="icon-xs" aria-label={t("skills.clearSearch")} onClick={() => setQuery("")}><X aria-hidden="true" /></Button> : null}
           </label>
           <div className={styles.headerActions}>
-            <Button type="button" variant="outline" className={styles.mySkillsButton} onClick={(event) => onOpenSettings?.("skills", event.currentTarget)}>{t("skills.mySkills")}</Button>
+            <Button
+              type="button"
+              variant="outline"
+              className={styles.mySkillsButton}
+              onClick={(event) => onOpenSettings?.("skills", event.currentTarget, { skillsScope: "personal" })}
+            >{t("skills.mySkills")}</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.create")}<ChevronDown aria-hidden="true" /></Button>
+                <Button ref={createRef} type="button" variant="outline" className={styles.createButton}>{t("skills.createMarketplace")}<ChevronDown aria-hidden="true" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className={styles.createMenu}>
                 <DropdownMenuGroup>
                   <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi() : startChat(t("skills.createPrompt"))}><span className={styles.createMenuIcon}><SquarePen aria-hidden="true" /></span>{t("skills.createWithBrand", { brand: brandName })}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onCreateSkillWithAi ? onCreateSkillWithAi(t("skills.recordPrompt")) : startChat(t("skills.recordPrompt"))}><span className={styles.createMenuIcon}><CircleDot aria-hidden="true" /></span>{t("skills.recordSkill")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { uploadRef.current = createRef.current; setUploadOpen(true) }}><span className={styles.createMenuIcon}><Upload aria-hidden="true" /></span>{t("skills.uploadSkill")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { githubRef.current = createRef.current; setGithubOpen(true) }}><span className={styles.createMenuIcon}><Image src="/assets/connectors/github.webp" alt="" width={16} height={16} /></span>{t("skills.importGithub")}</DropdownMenuItem>
                 </DropdownMenuGroup>
@@ -287,18 +293,20 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
             {t("skills.added")} {lastAddedSkill}
           </span>
         ) : null}
-          <div className={styles.content}>
-          <nav className={styles.categoryTabs} aria-label={t("skills.categoryAria")}>
-            {CATEGORIES.map(({ value, key }) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={category === value}
-                onClick={() => setCategory(value)}
-              >
-                {t(key)}
-              </button>
-            ))}
+        <div className={styles.content}>
+          <nav className={styles.categoryFilter} aria-label={t("skills.categoryAria")}>
+            <div className={styles.compactCategoryTabs} role="group" aria-label={t("skills.categoryAria")}>
+              {CATEGORIES.map(({ value, key }) => (
+                <button
+                  key={value}
+                  type="button"
+                  data-active={category === value || undefined}
+                  onClick={() => setCategory(value)}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
           </nav>
 
           {importNotice ? (
@@ -351,7 +359,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
                     }}
                   >
                     <button type="button" className={styles.cardArt} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }} aria-label={`${t("skills.viewDetails")} ${skill.name}`}>
-                      {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 100vw, 30rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                      <span className={styles.bookCover}>
+                        {skill.cover_image ? <Image src={skill.cover_image} alt="" fill sizes="(max-width: 42rem) 7.5rem, 7.5rem" unoptimized /> : <span className={styles.coverUnavailable} aria-hidden="true"><BrandFallback /></span>}
+                      </span>
                     </button>
                     <CardContent className={styles.cardBody}>
                       <button type="button" className={styles.cardTitle} onClick={(event) => { detailRef.current = event.currentTarget; setDetailSkill(skill) }}>{skill.name}</button>

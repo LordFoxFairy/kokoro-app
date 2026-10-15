@@ -265,7 +265,6 @@
  * surface is already the visible state, so it must not acquire a second dark
  * rectangle that Manus does not render on initial open. */
 .tabRail .tab[data-state="active"]:focus-visible {
-  outline: 0;
   box-shadow: none;
 }
 
@@ -392,6 +391,13 @@
   padding-top: 2.125rem;
 }
 
+/* The installed-skills view begins directly with its search/actions row in
+ * Manus.  Only the Explore subview owns a right-pane heading because it
+ * needs a visible back affordance to return to this list. */
+.panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
+  display: none;
+}
+
 .panelHeader[data-panel="account"]:has(.panelBack) {
   height: 5rem;
 }
@@ -502,6 +508,8 @@
   margin-inline: auto;
 }
 
+.contentColumn[data-panel="skills"],
+.contentColumn[data-panel="mcp"],
 .contentColumn:has(.panelHeader[data-panel="skills"]),
 .contentColumn:has(.panelHeader[data-panel="mcp"]) {
   width: min(48rem, calc(100% - 3rem));
@@ -531,10 +539,9 @@
  * outer inset no longer fits. */
 @media (max-width: 47.99rem) {
   .dialogContent[data-slot="dialog-content"] {
-    /* Direct measurement of the current Manus compact Settings surface is a
-     * 380px CSS sheet (760px on the Retina capture) even inside a laptop
-     * browser. It is deliberately not a near-full-viewport desktop sheet.
-     * A phone can still consume the available width with a 16px outer inset. */
+    /* Measured directly against the current Manus compact Settings dialog:
+     * 380 × 580 CSS px at a 448 × 764 CSS px viewport. A phone still uses
+     * the available width while preserving the 16px outer inset. */
     width: min(23.75rem, calc(100vw - 2rem));
     min-width: 0;
     height: min(36.25rem, calc(100vh - 2rem));
@@ -668,6 +675,15 @@
     font-size: 0.875rem;
   }
 
+  /* The strip contains the desktop navigation so keyboard and search behavior
+   * remain one source of truth. At compact width, reserve its measured six
+   * complete labels and hand every remaining destination to More instead of
+   * letting a seventh CJK label paint beneath the menu icon. */
+  .tabRail .tab[data-compact-primary="false"],
+  .tabRail .placeholderTab[data-compact-primary="false"] {
+    display: none;
+  }
+
   .tabRail .tab[data-slot="tabs-trigger"][data-state="active"]::after {
     position: absolute;
     right: 0;
@@ -680,10 +696,9 @@
     opacity: 1;
   }
 
-  /* Manus keeps one complete, scrollable category strip. The More trigger is
-   * an additional shortcut, not a replacement that deletes Mail/Computer and
-   * the later categories from the strip. Hiding those entries made the local
-   * rail look tidy at the cost of disagreeing with the reference state. */
+  /* Keep the placeholder rule scoped to visible compact-primary entries. The
+   * overflow entries are deliberately hidden above and remain reachable from
+   * More; a later generic display:flex declaration must not restore them. */
   .tabRail .placeholderTab {
     display: flex;
     width: auto;
@@ -819,6 +834,9 @@
     flex: 1 1 auto;
   }
 
+  .contentColumn[data-panel="skills"],
+  .contentColumn[data-panel="mcp"],
+  .contentColumn:has(.panelHeader[data-panel="skills"]),
   .contentColumn:has(.panelHeader[data-panel="mcp"]) {
     width: calc(100% - 2rem);
   }

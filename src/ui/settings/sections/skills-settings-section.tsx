@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type RefObject } from "react";
 
 import type { HubClient } from "@/hub/client";
 import type { SkillCard } from "@/hub/schemas";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { SkillsContent } from "@/ui/skills/skills-panel";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 
 type SkillsSettingsSectionProps = {
   readBoundary: ProjectReadBoundary;
@@ -14,7 +15,11 @@ type SkillsSettingsSectionProps = {
   preview: boolean;
   brandName: string;
   onTrySkill?: (skill: SkillCard) => void;
-  onCreateWithAi?: () => void;
+  onCreateWithAi?: (prompt?: string) => void;
+  embeddedCatalogOpen: boolean;
+  onEmbeddedCatalogOpenChange: (open: boolean) => void;
+  catalogTriggerRef: RefObject<HTMLButtonElement | null>;
+  initialScope?: SkillsScopeFilter;
 };
 
 /** Settings embedding for Skills. Preview-only pin intent belongs to this
@@ -26,6 +31,10 @@ export function SkillsSettingsSection({
   brandName,
   onTrySkill,
   onCreateWithAi,
+  embeddedCatalogOpen,
+  onEmbeddedCatalogOpenChange,
+  catalogTriggerRef,
+  initialScope,
 }: SkillsSettingsSectionProps) {
   // The legacy Hub pool projection is retired for the live Settings surface.
   // Manus-compatible Skills reads use their typed owner operations; preview
@@ -55,6 +64,10 @@ export function SkillsSettingsSection({
       onTogglePin={preview ? togglePreviewPin : () => {}}
       {...(onTrySkill === undefined ? {} : { onTrySkill })}
       {...(onCreateWithAi === undefined ? {} : { onCreateWithAi })}
+      embeddedCatalogOpen={embeddedCatalogOpen}
+      onEmbeddedCatalogOpenChange={onEmbeddedCatalogOpenChange}
+      catalogTriggerRef={catalogTriggerRef}
+      {...(initialScope === undefined ? {} : { initialScope })}
       embedded
     />
   );

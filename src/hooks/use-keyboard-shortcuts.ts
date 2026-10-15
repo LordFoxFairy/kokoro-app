@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 
 import {
-  KEYBOARD_SHORTCUTS_CHANGED_EVENT,
   readKeyboardShortcuts,
+  subscribeKeyboardShortcuts,
   type KeyboardShortcutMap,
 } from "@/lib/keyboard-shortcuts";
 
@@ -14,12 +14,7 @@ export function useKeyboardShortcuts(): KeyboardShortcutMap {
 
   useEffect(() => {
     const refresh = () => setShortcuts(readKeyboardShortcuts());
-    window.addEventListener(KEYBOARD_SHORTCUTS_CHANGED_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener(KEYBOARD_SHORTCUTS_CHANGED_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-    };
+    return subscribeKeyboardShortcuts(refresh);
   }, []);
 
   return shortcuts;

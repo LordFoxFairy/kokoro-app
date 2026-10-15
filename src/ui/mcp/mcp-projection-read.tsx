@@ -132,6 +132,11 @@ export function McpProjectionRead({
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
+  const connectedProviderKeys = new Set(
+    connectors
+      .filter((connector) => connector.status === "active")
+      .map((connector) => connector.provider_key),
+  );
   const customApis = customApiState.data?.items ?? [];
   const providersByKey = new Map(
     providers.map((provider) => [provider.provider_key, provider]),
@@ -347,6 +352,7 @@ export function McpProjectionRead({
           onQueryChange={
             view === "connections" ? setConnectorQuery : setProviderQuery
           }
+          showSearch={!embedded}
           onBrowse={(target) => {
             if (view === "catalog" && onManageConnectors) {
               onManageConnectors(target);
@@ -396,6 +402,10 @@ export function McpProjectionRead({
           <McpProviderDirectory
             providers={providers}
             query={providerQuery}
+            onQueryChange={setProviderQuery}
+            showSearch={embedded}
+            presentation={embedded ? "plaza" : "dialog"}
+            connectedProviderKeys={connectedProviderKeys}
             categoryFilter={categoryFilter}
             onCategoryFilterChange={setCategoryFilter}
             onSelectProvider={openProvider}

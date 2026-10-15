@@ -17,6 +17,7 @@ type InstalledSkillCardProps = {
   pending: boolean;
   locked: boolean;
   error: string | null;
+  detailAvailable: boolean;
   onEnabledChange: (enabled: boolean) => void;
   onOpenDetail: (source: HTMLElement) => void;
 };
@@ -28,6 +29,7 @@ export function InstalledSkillCard({
   pending,
   locked,
   error,
+  detailAvailable,
   onEnabledChange,
   onOpenDetail,
 }: InstalledSkillCardProps) {
@@ -46,7 +48,8 @@ export function InstalledSkillCard({
               variant="ghost"
               type="button"
               className={styles.installedCardName}
-              title={skill.name}
+              title={detailAvailable ? skill.name : t("skills.detailUnavailable")}
+              disabled={!detailAvailable}
               onClick={(event) => onOpenDetail(event.currentTarget)}
             >
               {skill.name}

@@ -1,9 +1,12 @@
 "use client";
 
+import type { RefObject } from "react";
+
 import type { HubClient } from "@/hub/client";
 import type { SkillCard } from "@/hub/schemas";
 import type { TeamClient } from "@/team/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import { BillingContent } from "@/ui/billing/billing-panel";
 import { PricingContent } from "@/ui/billing/pricing-panel";
 import { TeamContent } from "@/ui/team/team-panel";
@@ -34,8 +37,12 @@ type SettingsPanelContentProps = {
   onAccountLoginMethodsChange: (open: boolean) => void;
   onOpenSubscription: () => void;
   onOpenPricing: () => void;
-  onCreateSkillWithAi?: () => void;
+  onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard) => void;
+  skillsCatalogOpen: boolean;
+  onSkillsCatalogOpenChange: (open: boolean) => void;
+  skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;
+  initialSkillsScope?: SkillsScopeFilter;
 };
 
 /**
@@ -56,6 +63,10 @@ export function SettingsPanelContent({
   onOpenPricing,
   onCreateSkillWithAi,
   onTrySkill,
+  skillsCatalogOpen,
+  onSkillsCatalogOpenChange,
+  skillsCatalogTriggerRef,
+  initialSkillsScope,
 }: SettingsPanelContentProps) {
   switch (tab) {
     case "account":
@@ -111,6 +122,10 @@ export function SettingsPanelContent({
           {...(onCreateSkillWithAi === undefined
             ? {}
             : { onCreateWithAi: onCreateSkillWithAi })}
+          embeddedCatalogOpen={skillsCatalogOpen}
+          onEmbeddedCatalogOpenChange={onSkillsCatalogOpenChange}
+          catalogTriggerRef={skillsCatalogTriggerRef}
+          {...(initialSkillsScope === undefined ? {} : { initialScope: initialSkillsScope })}
         />
       );
     case "mcp":

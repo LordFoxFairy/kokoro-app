@@ -174,7 +174,10 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
 
   "skills.mySkills": "My skills",
   "skills.createPersonal": "Create a personal skill",
+  "skills.createMarketplace": "Create",
   "skills.createWithBrand": "Create a skill with {brand}",
+  "skills.recordSkill": "Record a skill",
+  "skills.recordPrompt": "Help me record a reusable skill. First ask me about the workflow, required tools, and completion criteria I want to capture.",
   "skills.categoryAria": "Skill categories",
   "skills.categoryAll": "All",
   "skills.categoryCoding": "Coding",
@@ -242,6 +245,7 @@ const skillsFallback: Partial<Record<MessageKey, string>> = {
   "skills.detailLoading": "Loading skill details…",
   "skills.packageViewDetails": "View details",
   "skills.packageBack": "Back to overview",
+  "skills.packageBackToDetails": "Skill details",
   "skills.packageReader": "Skill contents",
   "skills.packageLoading": "Reading skill files…",
   "skills.packageUnavailable": "Skill files are temporarily unavailable",

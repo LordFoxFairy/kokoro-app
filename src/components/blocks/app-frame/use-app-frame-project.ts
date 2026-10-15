@@ -153,21 +153,26 @@ export function useAppFrameProject({
       scope.busy = false
     }
   }, [projectRef, refreshRenamedProject, renameContext, setRenameView])
+  const openRename = useCallback(() => {
+    const scope = renameScopeRef.current
+    if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
+    scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const retained = scope.intent
+    setRenameView(retained ? { open: true, name: retained.rawInput, status: retained.readOnly ? "read-error" : "unknown",
+      problem: retained.readOnly ? "read" : "unknown" } : { open: true, name: projectDetail.status === "ready" ? projectDetail.data.name : "", status: "idle", problem: null })
+  }, [projectDetail, renameAvailable, renameContext, setRenameView])
   const projectRename: ProjectRenameControl = {
     focusScopeToken: renameContext,
     available: renameAvailable,
     ...renameView,
-    onOpen: () => {
-      const scope = renameScopeRef.current
-      if (!renameAvailable || !scope?.active || scope.context !== renameContext || scope.busy) return
-      scope.route = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      const retained = scope.intent
-      setRenameView(retained ? { open: true, name: retained.rawInput, status: retained.readOnly ? "read-error" : "unknown",
-        problem: retained.readOnly ? "read" : "unknown" } : { open: true, name: projectDetail.status === "ready" ? projectDetail.data.name : "", status: "idle", problem: null })
-    },
+    onOpen: openRename,
     onClose: () => {
       const scope = renameScopeRef.current
       if (!scope?.active || scope.context !== renameContext || scope.busy) return
+      if (window.location.hash === "#rename") {
+        window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`)
+        scope.route = `${window.location.pathname}${window.location.search}`
+      }
       setRenameView(scope.intent ? { ...renameView, open: false } : { open: false, name: "", status: "idle", problem: scope.revoked ? "permission" : null })
     },
     onChange: (name) => {
@@ -197,6 +202,15 @@ export function useAppFrameProject({
       void runRename(true, true)
     },
   }
+  const requestProjectRename = useCallback((target: string) => {
+    if (preview || !projectRenameIdSchema.safeParse(target).success) return
+    navigateMountedSurface(`/app/project/${encodeURIComponent(target)}#rename`)
+  }, [preview])
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#rename" || !renameAvailable || renameView.open) return
+    openRename()
+  }, [openRename, renameAvailable, renameView.open])
+
   const [previewProjection, setPreviewProjection] = useState<{ context: object; instruction: string; history: readonly ProjectInstructionRevision[] } | null>(null)
   const saveScopeRef = useRef<{ context: object; active: boolean; controllers: Set<AbortController> } | null>(null)
   useLayoutEffect(() => {
@@ -430,7 +444,8 @@ export function useAppFrameProject({
     finishProjectNavigation(intent)
   }, [finishProjectNavigation, onProjectCreated])
 
-  const createProject = useCallback((handoffDraft = draft) => {
+  const createProject = useCallback((input: Readonly<{ name?: string; draft?: string }> = {}) => {
+    const handoffDraft = input.draft ?? draft
     if (creationInFlightRef.current) return
     if (preview) {
       openProject(createPreviewProjectRef(), handoffDraft)
@@ -447,7 +462,8 @@ export function useAppFrameProject({
     const scope = renameScopeRef.current
     if (!scope?.active || scope.context.admitted === false) return
     const key = crypto.randomUUID()
-    const intent: ProjectCreationIntent = { key, name: `${t("firstSite.newProject")} ${key.slice(0, 8)}`, draft: handoffDraft,
+    const suppliedName = input.name?.trim()
+    const intent: ProjectCreationIntent = { key, name: suppliedName || `${t("firstSite.newProject")} ${key.slice(0, 8)}`, draft: handoffDraft,
       route: `${window.location.pathname}${window.location.search}${window.location.hash}`,
       subject: scope.context.subject, navigationScope: scope }
     creationIntentRef.current = intent
@@ -472,6 +488,7 @@ export function useAppFrameProject({
     setProjectSkillEnabled,
     openProject,
     createProject,
+    requestProjectRename,
     projectCreation,
     retryProjectCreation,
   }

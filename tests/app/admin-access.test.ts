@@ -25,9 +25,12 @@ beforeEach(() => {
   for (const [key, value] of Object.entries(ENV)) process.env[key] = value
   vi.mocked(admittedProductSession).mockReset()
   vi.mocked(admittedProductSession).mockResolvedValue({
+    id: "00000000-0000-4000-8000-000000000001",
+    generation: 0,
     subject: "admin-user",
     access: "product-access",
     accessExpiresAt: Date.now() + 60_000,
+    expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
   })
   vi.mocked(fetchWithDomain).mockReset()
 })

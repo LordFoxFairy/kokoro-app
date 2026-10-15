@@ -2,6 +2,40 @@
 
 import type { z } from "zod"
 
+// All persisted stores share one native storage subscription.  Individual
+// stores still receive only their own key through their local filter below,
+// while the document never accumulates one `storage` listener per feature.
+// This matters in the App shell, where conversation state, shortcuts and
+// optional panels can coexist for the whole page lifetime.
+const storageListeners = new Set<(event: StorageEvent) => void>()
+let storageEventWindow: Window | null = null
+
+function dispatchStorageEvent(event: StorageEvent): void {
+  // A listener may unsubscribe itself (or a sibling) during notification.
+  // Snapshotting preserves delivery to every store that was subscribed when
+  // this browser event began.
+  for (const listener of [...storageListeners]) listener(event)
+}
+
+function subscribeToBrowserStorage(listener: (event: StorageEvent) => void): void {
+  if (typeof window === "undefined") return
+  if (storageEventWindow !== null && storageEventWindow !== window) {
+    storageEventWindow.removeEventListener("storage", dispatchStorageEvent)
+    storageEventWindow = null
+  }
+  storageListeners.add(listener)
+  if (storageEventWindow !== null) return
+  window.addEventListener("storage", dispatchStorageEvent)
+  storageEventWindow = window
+}
+
+function unsubscribeFromBrowserStorage(listener: (event: StorageEvent) => void): void {
+  storageListeners.delete(listener)
+  if (storageListeners.size !== 0 || storageEventWindow === null) return
+  storageEventWindow.removeEventListener("storage", dispatchStorageEvent)
+  storageEventWindow = null
+}
+
 export type PersistedStore<T> = {
   // 缓存稳定引用：raw 未变时返回同一对象（useSyncExternalStore 快照要求）。
   read: () => T | null
@@ -88,13 +122,13 @@ export function createPersistedStore<T>(options: {
   const subscribe = (onChange: () => void): (() => void) => {
     listeners.add(onChange)
     if (!storageBound && typeof window !== "undefined") {
-      window.addEventListener("storage", onStorage)
+      subscribeToBrowserStorage(onStorage)
       storageBound = true
     }
     return () => {
       listeners.delete(onChange)
       if (listeners.size === 0 && storageBound && typeof window !== "undefined") {
-        window.removeEventListener("storage", onStorage)
+        unsubscribeFromBrowserStorage(onStorage)
         storageBound = false
       }
     }

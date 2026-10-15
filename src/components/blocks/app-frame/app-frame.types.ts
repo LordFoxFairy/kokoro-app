@@ -11,6 +11,7 @@ import type { SessionClient } from "@/engine/client";
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import type { SettingsTab } from "@/ui/settings/settings-modal";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type {
   RuntimeFeatureFlag,
   RuntimeNavigationItem,
@@ -161,9 +162,10 @@ export type EmptyStateProps = {
   onOpenSettings?: (
     tab: SettingsTab,
     returnTarget?: HTMLElement | null,
+    options?: Readonly<{ skillsScope?: SkillsScopeFilter }>,
   ) => void;
   /** Explicit creation intent, separate from opening an owner-issued project ID. */
-  onCreateProject?: (draft?: string) => void;
+  onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void;
   /** Project picker handoff used by the direct welcome surface. */
   onOpenProject?: (projectRef: string, draft?: string) => void;
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
@@ -172,7 +174,7 @@ export type EmptyStateProps = {
     returnTarget?: HTMLElement | null,
   ) => void;
   /** Skill catalog actions hand off to the shell-owned direct Chat session. */
-  onCreateSkillWithAi?: () => void;
+  onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard, prompt?: string) => void;
   /** Optional live model catalog for site-owned empty surfaces. */
   models?: readonly ModelCandidate[];

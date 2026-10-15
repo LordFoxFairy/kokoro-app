@@ -15,8 +15,10 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs } from "@/components/ui/tabs";
 import { browserHubClient, browserTeamClient } from "@/ui/shell/page-clients";
 import type { SkillCard } from "@/hub/schemas";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import styles from "./settings-modal.module.css";
 import { useOverlayClose } from "@/ui/shell/use-overlay-close";
+import { settingsSkillsScopeFromLocation } from "./settings-location";
 import { useWarmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 
@@ -68,6 +70,8 @@ type SettingsModalProps = {
   readBoundary?: import("@/ui/auth/use-session-state").ProjectReadBoundary;
   // 打开时的初始 tab(shell 从入口/URL 传入);变化即重置内部 tab(支持重开切 tab)。
   initialTab: SettingsTab;
+  /** Optional entry intent for the one shared Skills panel. */
+  initialSkillsScope?: SkillsScopeFilter;
   onClose: () => void;
   /** Controlled Dialogs have no trigger in the shell; return focus to the invoking control. */
   returnFocusRef?: RefObject<HTMLElement | null>;
@@ -75,7 +79,7 @@ type SettingsModalProps = {
   focusScopeRef?: RefObject<HTMLElement | null>;
   // 内部切 tab 时上抛,供 shell 同步 URL `?settings=`(刷新/深链/可分享)。
   onTabChange?: (tab: SettingsTab) => void;
-  onCreateSkillWithAi?: () => void;
+  onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard) => void;
 };
 
@@ -84,6 +88,7 @@ export function SettingsModal({
   preview = false,
   readBoundary,
   initialTab,
+  initialSkillsScope,
   onClose,
   onTabChange,
   returnFocusRef,
@@ -93,6 +98,9 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useLocale();
   const resolvedBrandName = brandName ?? "Kokoro";
+  // `/settings/skills/personal` is the marketplace handoff URL used by Manus.
+  // A reload keeps the same one-panel intent; direct Settings opens keep All.
+  const resolvedInitialSkillsScope = initialSkillsScope ?? settingsSkillsScopeFromLocation();
   // Keep the mounted shell immediately responsive to a rail click, then
   // reconcile it with a deep link or outer-shell change. The previous
   // render-only value made the modal depend on parent navigation to reflect
@@ -237,6 +245,7 @@ export function SettingsModal({
 
               <SettingsPanel
                 activeTab={tab}
+                {...(resolvedInitialSkillsScope === undefined ? {} : { initialSkillsScope: resolvedInitialSkillsScope })}
                 brandName={resolvedBrandName}
                 preview={preview}
                 {...(readBoundary === undefined ? {} : { readBoundary })}

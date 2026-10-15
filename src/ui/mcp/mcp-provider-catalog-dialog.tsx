@@ -106,6 +106,7 @@ export function McpProviderCatalogDialog({
             <McpProviderDirectory
               providers={providers}
               query={query}
+              onQueryChange={onQueryChange}
               categoryFilter={categoryFilter}
               onCategoryFilterChange={onCategoryFilterChange}
               onSelectProvider={onSelectProvider}

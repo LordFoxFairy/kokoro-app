@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronRight, FileText, Folder, MessageCircle } from "lucide-react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +23,7 @@ import { useT } from "@/i18n/context"
 import { SkillUploadDialog } from "./skill-upload-dialog"
 import { PersonalSkillPublishDialog } from "./personal-skill-publish-dialog"
 import { getManusSkillPackage } from "./manus-skill-client"
+import { SkillPackageDocument } from "./skill-package-document"
 import styles from "./personal-skills-read.module.css"
 import readerStyles from "./manus-skill-detail-dialog.module.css"
 import type { CatalogPackageData } from "@/hub/schemas"
@@ -39,16 +38,37 @@ type InstallationState = { kind: "loading" } | { kind: "error"; status: number |
 type ActionState = { kind: "idle" } | { kind: "busy" | "unknown" | "rejected" | "confirmed" | "ready"; intent: InstallationIntent; id?: string; current?: PersonalInstallation; status?: number | null }
 type ActiveAction = { controller: AbortController; intent: InstallationIntent; id: string | null }
 
+/**
+ * The owner publishes immutable revisions, so the managed projection may
+ * contain several active records for one series. The personal directory is a
+ * management surface, not a revision history: present its current revision
+ * once and keep the exact revision identity for detail/update/withdraw.
+ */
+function latestRevisionPerSeries(skills: readonly ManagedPersonalSkill[]): ManagedPersonalSkill[] {
+  const latest = new Map<string, ManagedPersonalSkill>()
+  for (const skill of skills) {
+    const current = latest.get(skill.series_id)
+    if (current === undefined || BigInt(skill.revision) > BigInt(current.revision)) latest.set(skill.series_id, skill)
+  }
+  return skills.filter((skill) => latest.get(skill.series_id)?.skill_id === skill.skill_id)
+}
 
-export function PersonalSkillsRead(props: { client: HubClient; embedded?: boolean; onOpenSettings?: (section: "skills", trigger: HTMLElement) => void }) {
+
+export function PersonalSkillsRead(props: {
+  client: HubClient
+  embedded?: boolean
+  onOpenSettings?: (section: "skills", trigger: HTMLElement) => void
+  onBack?: () => void
+}) {
   const boundary = useSessionProbe().projectReadBoundary
   return <PersonalSkillsReadScope key={boundary.subject ?? "anonymous"} {...props} boundary={boundary} />
 }
 
-function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings, boundary }: {
+function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings, onBack, boundary }: {
   client: HubClient
   embedded?: boolean
   onOpenSettings?: (section: "skills", trigger: HTMLElement) => void
+  onBack?: () => void
   boundary: import("@/ui/auth/use-session-state").ProjectReadBoundary
 }) {
   const t = useT()
@@ -223,6 +243,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings, bou
         <div><p className={styles.eyebrow}>{t("skills.mySkills")}</p><h1>{t("skills.title")}</h1></div>
         <div className={styles.headerActions}>
           <Button type="button" className={styles.primaryAction} onClick={() => setImportOpen(true)}>{t("skills.uploadSkill")}</Button>
+          {onBack ? <Button type="button" variant="outline" className={styles.secondaryAction} onClick={onBack}>{t("skills.browse")}</Button> : null}
           {!embedded && onOpenSettings ? <Button type="button" variant="outline" className={styles.secondaryAction} onClick={(event) => onOpenSettings("skills", event.currentTarget)}>{t("skills.mySkills")}</Button> : null}
         </div>
       </header>
@@ -244,7 +265,7 @@ function PersonalSkillsReadScope({ client, embedded = false, onOpenSettings, bou
       {pageState.kind === "loading" ? <div role="status" className="flex items-center gap-2"><Spinner aria-hidden="true" />{t("skills.loading")}</div> : null}
       {pageState.kind === "error" ? <Alert variant="destructive" role="alert"><AlertDescription>{t("skills.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={() => { setPageState({ kind: "loading" }); setGeneration((value) => value + 1) }}>{t("skills.retry")}</Button></Alert> : null}
       {page?.skills.length === 0 ? <p className={styles.empty}>{t("skills.noMatch")}</p> : null}
-      {page ? <div className={styles.grid} data-testid="personal-skills-grid">{page.skills.map((skill) => (
+      {page ? <div className={styles.grid} data-testid="personal-skills-grid">{latestRevisionPerSeries(page.skills).map((skill) => (
         <Card key={skill.source_ref} className={styles.card}>
           <CardContent className={styles.cardContent}>
             <Button type="button" variant="ghost" className={styles.skillName} onClick={() => openDetail(skill.source_ref)}>{skill.name}</Button>
@@ -432,7 +453,7 @@ function PersonalSkillPackageReader({ skillId, title, onBack }: { skillId: strin
         {!loading && !failed && directory?.files.length === 0 ? <p>{t("skills.packageEmpty")}</p> : null}
         {!loading && !failed && directory !== null && directory.files.length > 0 && selectedPath === null ? <p>{t("skills.packageNoMarkdown")}</p> : null}
         {!loading && !failed && selectedFile !== null ? selectedFile.path.toLowerCase().endsWith(".md")
-          ? <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={{ img: ({ alt }) => <span>{alt}</span>, a: ({ children }) => <span>{children}</span> }}>{selectedFile.text}</ReactMarkdown>
+          ? <SkillPackageDocument text={selectedFile.text} />
           : <pre>{selectedFile.text}</pre> : null}
       </div>
     </section>

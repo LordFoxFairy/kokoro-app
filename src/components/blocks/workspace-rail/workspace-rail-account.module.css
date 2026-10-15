@@ -1,4 +1,4 @@
-/* WorkspaceRail account responsibility: portaled account menu and invite card. */
+/* WorkspaceRail account responsibility: portaled account menu. */
 
 .accountMenu { width: 17.75rem; padding: 0.25rem; border: 0; }
 .accountSummary { display: flex; box-sizing: border-box; height: 3.5rem; align-items: flex-start; gap: 0.5rem; padding: 0.5rem; }
@@ -27,15 +27,5 @@
 .accountPlan :global([data-slot="button"]:hover) { background: color-mix(in srgb, var(--foreground) 88%, var(--background)); color: var(--background); }
 .accountMenu :global([data-slot="dropdown-menu-item"][data-variant="destructive"]),
 .accountMenu :global([data-slot="dropdown-menu-item"][data-variant="destructive"] svg) { color: rgb(251 73 79); }
-
-.inviteCard[data-slot="button"] { display: flex; width: 100%; min-width: 0; height: 3.5rem; min-height: 3.5rem; box-sizing: border-box; align-items: center; justify-content: flex-start; gap: 0.55rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--card); padding: 0.5rem 0.55rem; text-align: left; }
-.inviteCard:hover { background: var(--accent); }
-.inviteIcon { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; color: var(--muted-foreground); }
-.inviteCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 0.1rem; }
-.inviteCopy strong,
-.inviteCopy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inviteCopy strong { color: var(--foreground); font-size: 0.875rem; font-weight: 650; line-height: 1.25rem; }
-.inviteCopy small { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1rem; }
-.inviteChevron { width: 0.9rem; height: 0.9rem; flex: 0 0 auto; color: var(--muted-foreground); }
 
 .accountStatus .icon { width: 1rem; height: 1rem; }

@@ -4,6 +4,7 @@ import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
 import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal";
 import type { SkillCard } from "@/hub/schemas";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
@@ -16,12 +17,13 @@ import type { AppCommandMenuProps } from "./app-command-menu";
 export type AppFrameOverlaySurfacesProps = {
   mounted: boolean;
   settingsTab: SettingsTab | null;
+  settingsSkillsScope?: SkillsScopeFilter;
   brandName: string | undefined;
   preview: boolean;
   readBoundary?: ProjectReadBoundary;
   onCloseSettings: () => void;
   onTabChange: (tab: SettingsTab) => void;
-  onCreateSkillWithAi: () => void;
+  onCreateSkillWithAi: (prompt?: string) => void;
   onTrySkill: (skill: SkillCard, prompt?: string) => void;
   settingsReturnFocusRef: RefObject<HTMLElement | null>;
   shellRef: RefObject<HTMLDivElement | null>;
@@ -38,6 +40,7 @@ export type AppFrameOverlaySurfacesProps = {
 export function AppFrameOverlaySurfaces({
   mounted,
   settingsTab,
+  settingsSkillsScope,
   brandName,
   preview,
   readBoundary,
@@ -92,6 +95,7 @@ export function AppFrameOverlaySurfaces({
         <SettingsModal
           {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
+          {...(settingsSkillsScope === undefined ? {} : { initialSkillsScope: settingsSkillsScope })}
           preview={preview}
           {...(readBoundary === undefined ? {} : { readBoundary })}
           onClose={onCloseSettings}

@@ -155,6 +155,11 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
   if (existing !== undefined) return existing
   const client: ManusSkillHubClient = {
     ...base,
+    // The Manus-compatible owner projection deliberately has no quota read.
+    // Returning an explicit absence keeps the installed Skills surface from
+    // issuing the retired `/self/skills/quota` request (and its visible 404)
+    // just to render a catalog that does not expose quota facts.
+    skillQuota: async () => null,
     listSkillPool: async (): Promise<SkillCard[]> => {
       const installed = await post("ListSkills", {}, manuscriptListSchema)
       // ListSkills repeats an installed official skill in userAddedSkills to
