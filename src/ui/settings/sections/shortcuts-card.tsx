@@ -23,10 +23,11 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import styles from "./settings-sections.module.css";
 
-const shortcutLabels: Record<ShortcutId, "settings.shortcutNewTask" | "settings.shortcutSearch" | "settings.shortcutSidebar"> = {
+const shortcutLabels: Record<ShortcutId, "settings.shortcutNewTask" | "settings.shortcutSearch" | "settings.shortcutSidebar" | "settings.shortcutCopyTaskLink"> = {
   newTask: "settings.shortcutNewTask",
   search: "settings.shortcutSearch",
   sidebar: "settings.shortcutSidebar",
+  copyTaskLink: "settings.shortcutCopyTaskLink",
 };
 
 /** Settings is the sole editing surface; AppFrame and Sidebar read this
@@ -102,7 +103,7 @@ export function ShortcutsCard() {
             const parts = keyboardShortcutParts(shortcuts[id]);
             return (
               <div className={styles.shortcutRow} key={id}>
-                <div className={styles.shortcutLabel}>{label}</div>
+                <div className={styles.shortcutLabel}>{label}{id === "copyTaskLink" ? <p>{t("settings.shortcutCopyTaskLinkHint")}</p> : null}</div>
                 <div className={styles.shortcutActions} data-recording={recording === id || undefined}>
                   <Button
                     className={styles.shortcutKeys}

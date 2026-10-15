@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "작업 링크 복사",
+  "settings.shortcutCopyTaskLinkHint": "작업이 열려 있을 때",
+  "shell.taskLinkCopied": "작업 링크를 복사했습니다",
+  "shell.taskLinkCopyFailed": "작업 링크를 복사하지 못했습니다. 클립보드 권한을 확인한 후 다시 시도하세요.",
+  // SET36-END: copy-task-link-messages
+
   "settings.unavailableNavigation": "회색으로 표시된 메뉴는 현재 사용할 수 없습니다.",
   "settings.accountActionsUnavailable": "이메일 변경, 로그인 방법 관리 및 계정 삭제는 현재 사용할 수 없습니다.",
   "settings.personalizationMemoryUnavailable": "지식 및 메모리 가져오기는 아직 연결되지 않았습니다.",

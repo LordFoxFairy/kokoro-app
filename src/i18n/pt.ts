@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "Copiar link da tarefa",
+  "settings.shortcutCopyTaskLinkHint": "Quando uma tarefa estiver aberta",
+  "shell.taskLinkCopied": "Link da tarefa copiado",
+  "shell.taskLinkCopyFailed": "Não foi possível copiar o link da tarefa. Verifique as permissões da área de transferência e tente novamente.",
+  // SET36-END: copy-task-link-messages
+
   "settings.unavailableNavigation": "As opções de menu a cinzento estão indisponíveis de momento.",
   "settings.accountActionsUnavailable": "Alterar o e-mail, gerir os métodos de início de sessão e eliminar a conta estão indisponíveis de momento.",
   "settings.personalizationMemoryUnavailable": "A importação de conhecimento e memória ainda não está ligada.",

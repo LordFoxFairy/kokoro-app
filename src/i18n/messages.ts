@@ -42,6 +42,13 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "复制任务链接",
+  "settings.shortcutCopyTaskLinkHint": "当任务打开时",
+  "shell.taskLinkCopied": "任务链接已复制",
+  "shell.taskLinkCopyFailed": "无法复制任务链接。请检查剪贴板权限后重试。",
+  // SET36-END: copy-task-link-messages
+
   "settings.unavailableNavigation": "灰色菜单暂不可用。",
   "settings.accountActionsUnavailable": "更改邮箱、管理登录方式和删除账户暂不可用。",
   "settings.personalizationMemoryUnavailable": "知识与记忆导入暂未接通。",

@@ -81,3 +81,30 @@ it("recording reports a legacy symbol alias conflict and preserves the original 
   expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
   expect(screen.getByRole("button", { name: "编辑切换侧边栏快捷键" })).toHaveTextContent("输入按键序列");
 });
+
+// SET36-BEGIN: copy-task-link-settings-row
+it("SET36 copy task link row explains availability and supports edit clear reset", () => {
+  mount();
+  expect(screen.getByText("当任务打开时")).toBeInTheDocument();
+  const edit = screen.getByRole("button", { name: "编辑复制任务链接快捷键" });
+  expect(edit).toHaveTextContent("L");
+  fireEvent.click(edit);
+  fireEvent.keyDown(window, { key: "j", ctrlKey: true, shiftKey: true });
+  expect(readKeyboardShortcuts()).toHaveProperty("copyTaskLink.key", "j");
+  expect(screen.getByRole("status", { name: "已保存" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "清除复制任务链接快捷键" }));
+  expect(readKeyboardShortcuts()).toHaveProperty("copyTaskLink.key", "");
+  fireEvent.click(screen.getByRole("button", { name: "重设为预设值" }));
+  expect(readKeyboardShortcuts()).toHaveProperty("copyTaskLink", { key: "l", primary: true, shift: true, alt: false });
+});
+it("SET36 copy recording failure never claims saved or changes its previous binding", () => {
+  mount();
+  const before = readKeyboardShortcuts();
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
+  fireEvent.click(screen.getByRole("button", { name: "编辑复制任务链接快捷键" }));
+  fireEvent.keyDown(window, { key: "j", ctrlKey: true, shiftKey: true });
+  expect(screen.getByRole("alert")).toHaveTextContent("无法保存");
+  expect(screen.queryByRole("status", { name: "已保存" })).toBeNull();
+  expect(readKeyboardShortcuts()).toEqual(before);
+});
+// SET36-END: copy-task-link-settings-row

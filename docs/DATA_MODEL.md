@@ -1,3 +1,9 @@
+## SET36 复制当前任务链接（2026-10-15；D0，先tests-only）
+
+基线Web 97a6d9694cf9e52d54c50d516fac7cde2889bcf1，939 tracked clean；runtime_audit唯一writer，最终13现source/4现test/914保护/Root8。先仅四现test可追加，927其余字节保护。Root方案/docs/独审/原source RED/Git/资源与正常激活。
+
+仅现localStorage快捷键map新增可缺省输入copyTaskLink，旧三required值保持、统一输出严格四项，旧读零写/稳定缓存；新默认碰撞只禁新增项，不新增key/持久化owner。
+
 ## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
 
 基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。

@@ -507,3 +507,34 @@ test.describe("Web production boundary", () => {
     })
   }
 })
+
+// SET36-BEGIN: copy-task-link-real-browser
+test("SET36 copy task link settings persist and actual current task copies a canonical URL", async ({ page, context }, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#settings/shortcuts", { waitUntil: "domcontentloaded" });
+  const edit = page.getByRole("button", { name: "Edit Copy task link shortcut" });
+  await expect(edit).toBeVisible();
+  await edit.click();
+  await page.keyboard.press("ControlOrMeta+Shift+J");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("kokoro.web.keyboard-shortcuts") ?? "{}").copyTaskLink?.key)).toBe("j");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(edit).toContainText("J");
+  await page.screenshot({ path: testInfo.outputPath("set36-copy-task-link-settings.png"), fullPage: true });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings-modal")).toHaveCount(0);
+  const input = page.getByRole("textbox", { name: "Chat input" });
+  await expect(input).toBeEditable();
+  await input.fill("SET36 persisted preview task");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("预览模式：已收到「SET36 persisted preview task」。", { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.getAll("conversation").length).toBe(1);
+  const current = new URL(page.url());
+  const expected = `${current.origin}${current.pathname}?conversation=${encodeURIComponent(current.searchParams.get("conversation")!)}`;
+  await input.blur();
+  await page.keyboard.press("ControlOrMeta+Shift+J");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  await expect(page.getByRole("status").filter({ hasText: "Task link copied" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("set36-copy-task-link-feedback.png"), fullPage: true });
+});
+// SET36-END: copy-task-link-real-browser

@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "Copiar enlace de la tarea",
+  "settings.shortcutCopyTaskLinkHint": "Cuando hay una tarea abierta",
+  "shell.taskLinkCopied": "Enlace de la tarea copiado",
+  "shell.taskLinkCopyFailed": "No se pudo copiar el enlace de la tarea. Revisa los permisos del portapapeles e inténtalo de nuevo.",
+  // SET36-END: copy-task-link-messages
+
   "settings.unavailableNavigation": "Las opciones de menú atenuadas no están disponibles actualmente.",
   "settings.accountActionsUnavailable": "Cambiar el correo electrónico, gestionar los métodos de inicio de sesión y eliminar la cuenta no están disponibles actualmente.",
   "settings.personalizationMemoryUnavailable": "La importación de conocimientos y memoria aún no está conectada.",

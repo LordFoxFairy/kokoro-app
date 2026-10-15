@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { createPersistedStore } from "@/lib/persisted-store";
 
-export const shortcutIds = ["newTask", "search", "sidebar"] as const;
+export const shortcutIds = ["newTask", "search", "sidebar", "copyTaskLink"] as const;
 const STORAGE_KEY = "kokoro.web.keyboard-shortcuts";
 export const KEYBOARD_SHORTCUTS_CHANGED_EVENT = "kokoro.keyboard-shortcuts.changed";
 export type ShortcutId = (typeof shortcutIds)[number];
@@ -36,13 +36,21 @@ const shortcutsSchema = z
     newTask: shortcutSchema,
     search: shortcutSchema,
     sidebar: shortcutSchema,
+    copyTaskLink: shortcutSchema.optional(),
   })
-  .strict();
+  .strict()
+  .transform((value): KeyboardShortcutMap => {
+    if (value.copyTaskLink !== undefined) return { ...value, copyTaskLink: value.copyTaskLink };
+    const candidate = defaults.copyTaskLink;
+    const collision = [value.newTask, value.search, value.sidebar].some((binding) => sameKeyboardShortcut(binding, candidate));
+    return { ...value, copyTaskLink: collision ? { key: "", primary: false, shift: false, alt: false } : candidate };
+  });
 
 const defaults: KeyboardShortcutMap = {
   newTask: { key: "o", primary: true, shift: true, alt: false },
   search: { key: "k", primary: true, shift: false, alt: false },
   sidebar: { key: "b", primary: true, shift: false, alt: false },
+  copyTaskLink: { key: "l", primary: true, shift: true, alt: false },
 };
 
 const store = createPersistedStore({
@@ -124,7 +132,8 @@ export function sameKeyboardShortcut(a: KeyboardShortcut, b: KeyboardShortcut): 
 export function validKeyboardShortcut(shortcut: KeyboardShortcut): boolean {
   if (!shortcut.primary || !/^[a-z0-9.]$/i.test(shortcut.key)) return false;
   // These combinations belong to browser/OS navigation, windows or tabs.
-  return !"qwrtnl".includes(shortcut.key.toLowerCase())
+  return (shortcut.key.toLowerCase() === "l" && shortcut.shift && !shortcut.alt
+    || !"qwrtnl".includes(shortcut.key.toLowerCase()))
     && !(shortcut.alt && shortcut.key.toLowerCase() === "b");
 }
 

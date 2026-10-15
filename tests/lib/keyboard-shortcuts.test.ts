@@ -100,3 +100,65 @@ it.each([
   resetKeyboardShortcuts();
   expect(readKeyboardShortcuts().sidebar.key).toBe("b");
 });
+
+// SET36-BEGIN: copy-task-link-storage-and-binding
+const set36CopyBinding = { key: "l", primary: true, shift: true, alt: false };
+const set36LegacyMap = {
+  newTask: { key: "o", primary: true, shift: true, alt: false },
+  search: { key: "k", primary: true, shift: false, alt: false },
+  sidebar: { key: "b", primary: true, shift: false, alt: false },
+};
+it("SET36 old three-field storage gains copy binding with stable reference and zero writes", () => {
+  const raw = JSON.stringify(set36LegacyMap);
+  localStorage.setItem("kokoro.web.keyboard-shortcuts", raw);
+  const writes = vi.spyOn(Storage.prototype, "setItem");
+  const first = readKeyboardShortcuts();
+  expect(first).toEqual({ ...set36LegacyMap, copyTaskLink: set36CopyBinding });
+  expect(readKeyboardShortcuts()).toBe(first);
+  expect(writes).not.toHaveBeenCalled();
+  expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
+});
+it("SET36 old binding collision only clears the newly introduced copy default", () => {
+  const legacy = { ...set36LegacyMap, search: set36CopyBinding };
+  const raw = JSON.stringify(legacy);
+  localStorage.setItem("kokoro.web.keyboard-shortcuts", raw);
+  const writes = vi.spyOn(Storage.prototype, "setItem");
+  expect(readKeyboardShortcuts()).toEqual({ ...legacy, copyTaskLink: { key: "", primary: false, shift: false, alt: false } });
+  expect(writes).not.toHaveBeenCalled();
+  expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
+});
+it("SET36 strict maps reject missing old fields and unknown fields without rewriting storage", () => {
+  for (const invalid of [
+    { search: set36LegacyMap.search, sidebar: set36LegacyMap.sidebar },
+    { ...set36LegacyMap, unexpected: set36CopyBinding },
+    { ...set36LegacyMap, copyTaskLink: { ...set36CopyBinding, unexpected: true } },
+  ]) {
+    const raw = JSON.stringify(invalid);
+    localStorage.setItem("kokoro.web.keyboard-shortcuts", raw);
+    expect(readKeyboardShortcuts()).toHaveProperty("copyTaskLink", set36CopyBinding);
+    expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
+  }
+});
+it("SET36 only exact primary Shift L becomes newly valid and has platform-specific dispatch", async () => {
+  const { validKeyboardShortcut, matchesSavedKeyboardShortcut } = await import("@/lib/keyboard-shortcuts");
+  expect(validKeyboardShortcut(set36CopyBinding)).toBe(true);
+  expect(validKeyboardShortcut({ ...set36CopyBinding, shift: false })).toBe(false);
+  expect(validKeyboardShortcut({ ...set36CopyBinding, alt: true })).toBe(false);
+  expect(validKeyboardShortcut({ ...set36CopyBinding, key: "q" })).toBe(false);
+  const copyId = "copyTaskLink" as Parameters<typeof matchesSavedKeyboardShortcut>[1];
+  vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  expect(matchesSavedKeyboardShortcut(new KeyboardEvent("keydown", { key: "L", metaKey: true, shiftKey: true }), copyId)).toBe(true);
+  expect(matchesSavedKeyboardShortcut(new KeyboardEvent("keydown", { key: "L", ctrlKey: true, shiftKey: true }), copyId)).toBe(false);
+  expect(matchesSavedKeyboardShortcut(new KeyboardEvent("keydown", { key: "L", metaKey: true, ctrlKey: true, shiftKey: true }), copyId)).toBe(false);
+});
+it("SET36 explicit copy edits persist current shape and failed writes retain prior binding", () => {
+  const current = readKeyboardShortcuts();
+  const changed = { ...current, copyTaskLink: { ...set36CopyBinding, key: "j" } };
+  writeKeyboardShortcuts(changed);
+  expect(JSON.parse(localStorage.getItem("kokoro.web.keyboard-shortcuts")!)).toEqual(changed);
+  const writes = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
+  expect(() => writeKeyboardShortcuts({ ...changed, copyTaskLink: set36CopyBinding } as Parameters<typeof writeKeyboardShortcuts>[0])).toThrow();
+  expect(readKeyboardShortcuts()).toEqual(changed);
+  writes.mockRestore();
+});
+// SET36-END: copy-task-link-storage-and-binding

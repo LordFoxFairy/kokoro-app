@@ -1,3 +1,9 @@
+## SET36 复制当前任务链接（2026-10-15；D0，先tests-only）
+
+基线Web 97a6d9694cf9e52d54c50d516fac7cde2889bcf1，939 tracked clean；runtime_audit唯一writer，最终13现source/4现test/914保护/Root8。先仅四现test可追加，927其余字节保护。Root方案/docs/独审/原source RED/Git/资源与正常激活。
+
+现keyboard shortcut/Card/AppFrame+九locale及现四测试，复制当前真实task leaf，不公开分享；原测试完整保留，先RED后source，原三快捷键与权限边界保护。
+
 ## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
 
 基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。

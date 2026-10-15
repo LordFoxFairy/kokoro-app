@@ -1,3 +1,23 @@
+## SET36 复制当前任务链接已接收，继续诊断与缺译（2026-10-15）
+
+现快捷键新增复制当前任务链接，primary+Shift+L且仅打开的同源真实任务可用；旧三项值与默认不变、旧数据读零写、碰撞只禁新增默认。设置支持编辑/清除/重置；动作检可信准入、owner meta、hydration、实际唯一conversation及当前选择，复制仅正规需登录URL，不创建share。独立owned attempt/synchronous engine订阅永久退休中间选择变化、旧finally及3500ms timer不影响新attempt；反馈不挡指针。
+
+Root原126PASS、新28旧source真实14FAIL/14PASS；终态独立154PASS，contract283/arch50/lint/type/build全0，独审确定P2已关闭。四旧test完整prefix/九locale整体逆变换及旧值/914保护/Root8精确；新增测试仅修告警目标、动作时路由和类型擦除夹具，历史失败保留。完整test4017PASS/5此前SET35已观察case标题FAIL/0SKIP，209.92s；隔离Playwright桌面+手机22PASS/0FAIL/4原SKIP，22.2s，真实设置持久化及剪贴板各有截图，两门库存exact恢复。正常认证Computer Use仍受既有浏览器错误页URL策略限制，未冒充完成。继续SET37刷新早期错误诊断、SET38六语言实际设置缺译；Goal active，Skills/连接器排除。
+
+## SET36 源码阶段放行（2026-10-15）
+
+Root独立原source运行原126项全PASS；修订后的新增28项14FAIL/14PASS，126项CLI过滤未跑，缺失map演进、设置行和真实Clipboard行为构成RED。四现test完整旧prefix保持，改动仅新增测试；源码实现范围仍为既定13现文件，其余914保护，四test冻结不再编辑。新反馈目标避免无关project alert，pending route与selection一致但不声称独立隔离hydrating/meta两守卫。原整批welcome路由单次波动未归因，负控在无功能旧source上PASS不证明实现。
+
+## SET36 复制当前任务链接（2026-10-15；D0，先tests-only）
+
+基线Web 97a6d9694cf9e52d54c50d516fac7cde2889bcf1，939 tracked clean；runtime_audit唯一writer，最终13现source/4现test/914保护/Root8。先仅四现test可追加，927其余字节保护。Root方案/docs/独审/原source RED/Git/资源与正常激活。
+
+Computer Use真实参考页有复制任务链接及“当任务打开时”提示，当前缺失。扩现shortcut map与Card/AppFrame动作边界，不建模块/API/分享/依赖；默认primary+Shift+L，旧三默认与全部保存值不改。schema原三仍required/strict，仅新增copyTaskLink输入可缺省、输出统一四项；旧map读零写且raw缓存引用稳定，新默认撞旧binding则仅新增项留空，显式reset才重置。只新增精确primary+Shift+L且无Alt的valid例外，原primary+L及其它保留组合仍拒绝。
+
+按键处理沿原输入/弹窗/repeat/IME/defaultPrevented防护。复制前action-time检实际chatHref同源再取path，或sessionScope精确projectpath；单conversation query等于current engine activeId，!hydrating、可见thread及owner snapshot/session.created提供的thread.meta，空占位不复制。preview须明确且仍非空；正式需可信admitted subject/generation及marker一致，marker不能授权。构造仅origin/path/conversation的正规登录任务URL，删除设置hash与其它query，不创建公共share。copy独立owned action/ref防在途重复；主体/代际/路由/当前selection退休同步隐藏反馈，非合作迟到不复活；缺Clipboard/reject显示失败，只有真实resolve且仍current才显示成功。可用现shell CSS新增小token化状态，原几何/flow不变。
+
+原四测试全文prefix保护，仅追加marked blocks；先Root原source真实RED验证缺row/任务复制/旧map演进等业务断言，再授source。覆盖direct/project正规URL正控、旧三field/碰撞/坏数据/stable reference/零读写、edit/clear/reset/失败、primary+L负控、空任务/未准入/换代/错路由/重复query/输入弹窗/repeatIME零调用、Clipboard失败与迟到，share client零调用；原断言不减。E2E追加现governance真实isolatedChromium设置持久化和可行Clipboard路径，不替代正常认证Browser；worker纯门、Rootfull/E2E串行且库存exact恢复。Goal active，Skills/连接器排除；SET35完整3988PASS6已观测FAIL/20E2EPASS4原SKIP保留。
+
 ## SET35 实际设置日文缺译已接收，SET36继续（2026-10-15）
 
 现ja.ts只新增十四个实际调用设置key，删唯一块精确恢复原93843bytes；旧值/931保护含全tests及其它locale/Root7全核，独审无确定P1/P2。Root实际执行模块确认Ja1703→1717/1800（95.3889%），包含共享英文fallback，不冒称日语完整；i18n99PASS2FAIL，原MCP硬编码与同一覆盖循环现暴露ko1672/1800不足，未改算法/阈值/其它locale。contract283/architecture50/lint/type/build全0。

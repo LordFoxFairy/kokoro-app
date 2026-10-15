@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "Копировать ссылку на задачу",
+  "settings.shortcutCopyTaskLinkHint": "Когда задача открыта",
+  "shell.taskLinkCopied": "Ссылка на задачу скопирована",
+  "shell.taskLinkCopyFailed": "Не удалось скопировать ссылку на задачу. Проверьте разрешения буфера обмена и повторите попытку.",
+  // SET36-END: copy-task-link-messages
+
   "settings.unavailableNavigation": "Пункты меню, выделенные серым, сейчас недоступны.",
   "settings.accountActionsUnavailable": "Изменение электронной почты, управление способами входа и удаление аккаунта сейчас недоступны.",
   "settings.personalizationMemoryUnavailable": "Импорт знаний и памяти пока не подключён.",

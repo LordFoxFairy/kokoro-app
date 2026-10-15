@@ -483,8 +483,144 @@ function AppFrameRuntime({
   }, [actions])
   const { openCommand } = overlays
 
+  // Copying a private task URL neither creates a share nor grants access.
+  const copySubject = projectReadBoundary?.subject ?? null
+  const copyGeneration = projectReadBoundary?.generation
+  const copyAdmitted = projectReadBoundary?.admitted === true
+    && typeof copySubject === "string" && copySubject.trim().length > 0
+    && Number.isSafeInteger(copyGeneration) && (copyGeneration ?? -1) >= 0
+  const copyRoute = typeof window === "undefined" ? "" : window.location.href
+  const [copyNavigationEpoch, setCopyNavigationEpoch] = useState(0)
+  const copyView = useMemo(() => ({
+    engine, scope: moveScopeKey, activeId, preview, subject: copySubject,
+    generation: copyGeneration, admitted: copyAdmitted, actor: moveActor,
+    route: copyRoute, epoch: copyNavigationEpoch, mounted, hydrating,
+    meta: thread.meta, visible: navigationState.routeOwnsConversation, standaloneSurface,
+  }), [engine, moveScopeKey, activeId, preview, copySubject, copyGeneration, copyAdmitted,
+    moveActor, copyRoute, copyNavigationEpoch, mounted, hydrating, thread.meta,
+    navigationState.routeOwnsConversation, standaloneSurface])
+  type CopyTaskAttempt = { view: typeof copyView; live: boolean; pending: symbol | null; feedbackTimer: number | null; onStorage: ((event: StorageEvent) => void) | null }
+  const copyLifetimeRef = useRef<CopyTaskAttempt | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<{ lifetime: CopyTaskAttempt; kind: "success" | "failure" } | null>(null)
+  useLayoutEffect(() => {
+    const lifetime: CopyTaskAttempt = { view: copyView, live: true, pending: null, feedbackTimer: null, onStorage: null }
+    copyLifetimeRef.current = lifetime
+    const retire = () => {
+      lifetime.live = false
+      setCopyNavigationEpoch((epoch) => epoch + 1)
+    }
+    // Engine notify is synchronous: observe intermediate A→B→A selections even
+    // when React batches them into one committed render.
+    const observeSelection = () => {
+      const current = copyView.engine?.getSnapshot()
+      if (current && ((current.store?.activeId ?? null) !== copyView.activeId
+        || current.hydrating !== copyView.hydrating
+        || (current.thread.meta === null) !== (copyView.meta === null)
+        || current.thread.meta?.ownerId !== copyView.meta?.ownerId)) {
+        if (lifetime.live) retire()
+      }
+    }
+    const unsubscribeSelection = copyView.engine?.subscribe(observeSelection)
+    observeSelection()
+    window.addEventListener("popstate", retire)
+    window.addEventListener("hashchange", retire)
+    window.addEventListener("kokoro:surface-navigation", retire)
+    return () => {
+      lifetime.live = false
+      unsubscribeSelection?.()
+      if (lifetime.feedbackTimer !== null) window.clearTimeout(lifetime.feedbackTimer)
+      window.removeEventListener("popstate", retire)
+      window.removeEventListener("hashchange", retire)
+      window.removeEventListener("kokoro:surface-navigation", retire)
+      if (lifetime.onStorage !== null) window.removeEventListener("storage", lifetime.onStorage)
+      if (copyLifetimeRef.current === lifetime) copyLifetimeRef.current = null
+    }
+  }, [copyView])
+  const currentTaskLink = useCallback((): string | null => {
+    if (!mounted || !engine || standaloneSurface || !navigationState.routeOwnsConversation) return null
+    if (!preview) {
+      if (!copyAdmitted) return null
+      try { if (window.localStorage.getItem("kokoro.web.auth-index-subject") !== copySubject) return null }
+      catch { return null }
+    }
+    const snapshot = engine.getSnapshot()
+    const id = snapshot.store?.activeId
+    if (!id?.trim() || id !== activeId || snapshot.hydrating || snapshot.thread.meta === null
+      || snapshot.thread.messages.length === 0) return null
+    const actual = new URL(window.location.href)
+    if (actual.href !== copyRoute) return null
+    let direct: URL
+    try { direct = new URL(chatHref, actual) } catch { return null }
+    if (direct.origin !== actual.origin) return null
+    const path = sessionScope.kind === "project"
+      ? `/app/project/${encodeURIComponent(sessionScope.projectRef)}` : direct.pathname
+    if (actual.pathname !== path || actual.searchParams.getAll("conversation").length !== 1
+      || actual.searchParams.get("conversation") !== id) return null
+    const target = new URL(actual.origin)
+    target.pathname = path
+    target.searchParams.set("conversation", id)
+    return target.href
+  }, [mounted, engine, standaloneSurface, navigationState.routeOwnsConversation, preview,
+    copyAdmitted, copySubject, activeId, chatHref, sessionScope, copyRoute])
+  const copyCurrentTaskLink = useCallback(() => {
+    const lifetime = copyLifetimeRef.current
+    const target = currentTaskLink()
+    if (!lifetime?.live || lifetime.view !== copyView || lifetime.pending !== null || target === null) return
+    const attempt = Symbol("copy-task-link")
+    lifetime.pending = attempt
+    if (lifetime.feedbackTimer !== null) window.clearTimeout(lifetime.feedbackTimer)
+    lifetime.feedbackTimer = null
+    // Subscribe only while this feature owns a visible result or operation.
+    if (lifetime.onStorage === null) {
+      lifetime.onStorage = (event) => {
+        if (event.key !== null && event.key !== "kokoro.web.auth-index-subject") return
+        lifetime.live = false
+        setCopyNavigationEpoch((epoch) => epoch + 1)
+      }
+      window.addEventListener("storage", lifetime.onStorage)
+    }
+    setCopyFeedback(null)
+    const stillCurrent = () => lifetime.live && copyLifetimeRef.current === lifetime
+      && lifetime.pending === attempt && currentTaskLink() === target
+    const finish = (kind: "success" | "failure") => {
+      if (!stillCurrent()) return
+      setCopyFeedback({ lifetime, kind })
+      const timer = window.setTimeout(() => {
+        if (lifetime.feedbackTimer !== timer) return
+        lifetime.feedbackTimer = null
+        if (lifetime.live && copyLifetimeRef.current === lifetime) {
+          setCopyFeedback((current) => current?.lifetime === lifetime ? null : current)
+        }
+      }, 3500)
+      lifetime.feedbackTimer = timer
+    }
+    // Clipboard writes cannot be undone; a retired view can only suppress its result.
+    try {
+      if (typeof navigator.clipboard?.writeText !== "function") {
+        finish("failure")
+        lifetime.pending = null
+        return
+      }
+      void Promise.resolve(navigator.clipboard.writeText(target)).then(
+        () => finish("success"), () => finish("failure"),
+      ).finally(() => {
+        if (copyLifetimeRef.current === lifetime && lifetime.pending === attempt) lifetime.pending = null
+      })
+    } catch {
+      finish("failure")
+      if (copyLifetimeRef.current === lifetime && lifetime.pending === attempt) lifetime.pending = null
+    }
+  }, [copyView, currentTaskLink])
+
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (matchesSavedKeyboardShortcut(event, "copyTaskLink")) {
+        if (currentTaskLink() !== null) {
+          event.preventDefault()
+          copyCurrentTaskLink()
+        }
+        return
+      }
       if (matchesSavedKeyboardShortcut(event, "search")) {
         event.preventDefault()
         openCommand()
@@ -497,7 +633,7 @@ function AppFrameRuntime({
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [openCommand, startNewChatWithMoveFence])
+  }, [openCommand, startNewChatWithMoveFence, currentTaskLink, copyCurrentTaskLink])
 
   const hasMessages = thread.messages.length > 0
   const showConversation = hasMessages && !standaloneSurface && navigationState.routeOwnsConversation
@@ -799,6 +935,12 @@ function AppFrameRuntime({
   }
 
   const overlaySurfaces = (
+    <>
+    {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
+      <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
+        {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}
+      </div>
+    ) : null}
     <AppFrameOverlaySurfaces
       mounted={mounted}
       settingsTab={navigationState.settingsTab}
@@ -822,6 +964,7 @@ function AppFrameRuntime({
       commandOpen={overlays.commandOpen}
       onCommandOpenChange={overlays.setCommandOpen}
     />
+    </>
   )
 
   const {

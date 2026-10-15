@@ -4,6 +4,13 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  // SET36-BEGIN: copy-task-link-messages
+  "settings.shortcutCopyTaskLink": "タスクのリンクをコピー",
+  "settings.shortcutCopyTaskLinkHint": "タスクが開いているとき",
+  "shell.taskLinkCopied": "タスクのリンクをコピーしました",
+  "shell.taskLinkCopyFailed": "タスクのリンクをコピーできませんでした。クリップボードの権限を確認して再試行してください。",
+  // SET36-END: copy-task-link-messages
+
   // SET35-BEGIN: active-settings-japanese-translations
   "settings.assetsTitle": "資産",
   "settings.phoneTitle": "電話",
