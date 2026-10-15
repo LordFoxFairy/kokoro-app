@@ -21,7 +21,7 @@ const ENV = {
 } satisfies NodeJS.ProcessEnv
 
 function browserRequest(path = "/login"): NextRequest {
-  return new NextRequest(`${ORIGIN}${path}`, { headers: { host: "web.example.test" } })
+  return new NextRequest(`${ORIGIN}${path}`, { headers: { host: "web.example.test", "x-nonce": "a".repeat(48) } })
 }
 
 beforeEach(() => {
@@ -39,7 +39,7 @@ describe("GET /login", () => {
     expect(response.status).toBe(200)
     expect(response.headers.get("cache-control")).toBe("no-store")
     expect(response.headers.get("referrer-policy")).toBe("no-referrer")
-    expect(response.headers.get("content-security-policy")).toMatch(/^default-src 'none'; script-src 'nonce-[A-Za-z0-9_-]{22}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'$/u)
+    expect(response.headers.get("content-security-policy")).toMatch(/^default-src 'none'; script-src 'nonce-[A-Za-z0-9_-]{48}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'$/u)
     expect(response.headers.getSetCookie()).toHaveLength(2)
     expect(response.headers.getSetCookie()[0]).toMatch(/^next-auth\.csrf-token=[A-Za-z0-9%|]+; Path=\/; HttpOnly; SameSite=Lax$/u)
     expect(response.headers.getSetCookie()[1]).toMatch(/^kokoro_product_login_return=[A-Za-z0-9%._~-]+\.[a-f0-9]{64}; Path=\/; HttpOnly; SameSite=Lax$/u)
@@ -66,7 +66,7 @@ describe("GET /login", () => {
 
   it("starts the default product target with a real browser POST rather than a nested Route Handler call", async () => {
     const response = await GET(new NextRequest("http://127.0.0.1:43123/login", {
-      headers: { host: "web.example.test" },
+      headers: { host: "web.example.test", "x-nonce": "a".repeat(48) },
     }))
     expect(response.status).toBe(200)
     const [csrf, target] = response.headers.getSetCookie()

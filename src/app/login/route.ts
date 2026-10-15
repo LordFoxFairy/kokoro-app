@@ -48,7 +48,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   // so issue its compatible double-submit cookie and let the browser make the
   // one fixed provider POST.
   const token = randomBytes(32).toString("hex")
-  const nonce = randomBytes(16).toString("base64url")
+  const nonce = request.headers.get("x-nonce")
+  if (nonce === null || !/^[A-Za-z0-9_-]{16,128}$/u.test(nonce)) return unavailable("request_nonce")
   const csrfName = `${config.relay.secureCookies ? "__Host-" : ""}next-auth.csrf-token`
   const headers = new Headers({
     "cache-control": "no-store",
