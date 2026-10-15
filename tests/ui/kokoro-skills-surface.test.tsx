@@ -26,6 +26,7 @@ const catalog = {
   }], tagOptions: { values: [] }, nextPageToken: undefined,
 }
 
+
 function response(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } })
 }
@@ -40,7 +41,7 @@ beforeEach(() => {
   sessionBoundary.admitted = true
   window.localStorage.clear()
   window.localStorage.setItem("kokoro.locale", "zh")
-  invalidate("hub/skills/standalone-catalog")
+  invalidate(SKILL_CATALOG_RESOURCE_KEY)
 })
 
 it("uses the shell boundary without mounting session probes for closed skill dialogs", async () => {
@@ -61,7 +62,7 @@ it("uses the distinct Manus DownloadSkill service operation", async () => {
   expect(fetchMock).toHaveBeenCalledWith("/api/skill.v1.SkillService/DownloadSkill", expect.objectContaining({ method: "POST", body: JSON.stringify({ skillId: "skill-manim" }) }))
 })
 
-it("uses the exact Manus-style list operations, not the retired flattened catalog endpoint", async () => {
+it("reads the live catalog from the typed owner projections without duplicate reads", async () => {
   const fetchMock = vi.fn(async (path: string, _init?: RequestInit) => {
     void _init
     if (path.endsWith("/ListHubSkills")) return response(catalog)
@@ -73,11 +74,15 @@ it("uses the exact Manus-style list operations, not the retired flattened catalo
 
   expect(await screen.findByRole("button", { name: "Manim 动画师" })).toBeInTheDocument()
   expect(screen.getByText("已使用 37k 次")).toBeInTheDocument()
-  expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+  expect(fetchMock.mock.calls).toHaveLength(2)
+  expect(fetchMock).toHaveBeenCalledWith(
     "/api/skill.v1.SkillOptionalService/ListHubSkills",
+    expect.objectContaining({ cache: "no-store" }),
+  )
+  expect(fetchMock).toHaveBeenCalledWith(
     "/api/skill.v1.SkillOptionalService/ListSkills",
-  ])
-  expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({ pageSize: 30, includeOfficialSkills: true })
+    expect.objectContaining({ cache: "no-store" }),
+  )
 })
 
 it("loads one Manus catalog page at a time instead of eagerly walking every cursor", async () => {

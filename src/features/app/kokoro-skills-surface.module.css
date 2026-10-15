@@ -500,3 +500,13 @@
     transition: none;
   }
 }
+
+/* An empty owner catalog and an empty search result are different states.
+ * Keep the creation actions above available while making the former explicit. */
+.emptyState > span {
+  max-width: 28rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: center;
+}

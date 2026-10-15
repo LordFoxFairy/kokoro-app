@@ -82,10 +82,16 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
   const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "third_party" ? t("skills.community") : brandName
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
-  const client = useMemo(() => {
-    const base = browserHubClient({ preview })
-    return preview ? base : createManusSkillHubClient(base)
-  }, [preview])
+  // The standalone page and the embedded Settings page must consume the same
+  // owner-backed Skills projection.  The generic Hub client still addresses
+  // the retired `/self/skills/catalog` route, which the BFF deliberately
+  // rejects; leaving it here made the outer Skills page fail while Settings
+  // appeared healthy.  Keep one typed read adapter for both entry points so
+  // a tab switch never turns into a different data contract or an error card.
+  const client = useMemo(
+    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview })),
+    [preview],
+  )
   const catalog = useResource<SkillCatalog>(
     `${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`,
     useCallback(() => client.listSkillCatalog(), [client]),
@@ -310,7 +316,17 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           ) : catalog.error !== undefined && catalog.data === undefined ? (
             <div className={styles.errorState} role="alert"><p>{t("skills.loadError")}</p><Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>{catalog.loading ? <Spinner aria-hidden="true" /> : null}{t("skills.retry")}</Button></div>
           ) : filtered.length === 0 ? (
-            <div className={styles.emptyState} data-testid="skills-catalog-empty"><Search aria-hidden="true" /><p>{t("skills.noMatch")}</p></div>
+            <div className={styles.emptyState} data-testid="skills-catalog-empty">
+              <Search aria-hidden="true" />
+              {displayedCatalog?.skills.length === 0 && query.trim() === "" && category === "all" ? (
+                <>
+                  <p>{t("skills.empty")}</p>
+                  <span>{t("skills.emptyGuide")}</span>
+                </>
+              ) : (
+                <p>{t("skills.noMatch")}</p>
+              )}
+            </div>
           ) : (
             <>
               <div className={styles.grid} data-testid="skills-catalog-grid">
