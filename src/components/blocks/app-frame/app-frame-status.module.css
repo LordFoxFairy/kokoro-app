@@ -67,14 +67,6 @@
 }
 .loadingLine { width: min(18rem, 68%); }
 .loadingLineShort { width: min(11rem, 42%); }
-.loadingMessage {
-  width: min(48rem, 100%);
-  margin: 0 auto;
-  color: var(--muted-foreground);
-  font-size: 0.82rem;
-  line-height: 1.35;
-  text-align: center;
-}
 .conversationErrorSurface {
   display: flex;
   flex: 1;
