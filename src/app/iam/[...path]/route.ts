@@ -144,6 +144,15 @@ export async function GET(request: Request, context: RouteContext): Promise<Resp
     const response = route.relativePath === "/oauth2/authorize"
       ? browserAuthorizeResponse(upstream, config.webOrigin, config.secureCookies, id)
       : nativeIamResponse(upstream, config.webOrigin, config.secureCookies, id, route.relativePath)
+    if (response === null && route.relativePath === "/oauth2/authorize") {
+      console.error("Kokoro IAM authorize relay rejected", {
+        status: upstream.status,
+        content_type: upstream.headers.get("content-type") ?? "none",
+        has_location: upstream.headers.has("location"),
+        set_cookie_names: upstream.setCookies.map((cookie) => cookie.split("=", 1)[0] ?? "").join(","),
+        body_bytes: upstream.body.byteLength,
+      })
+    }
     return browserResponse(response
       ?? errorResponse("iam_relay_response_invalid", 502, id))
   } catch {
