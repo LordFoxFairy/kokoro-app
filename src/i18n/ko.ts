@@ -1355,4 +1355,11 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionPersonalSpending": "개인 지출 추적 앱 만들기",
   "firstSite.appSuggestionTasks": "작업 관리 기능이 있는 할 일 앱 만들기",
   "firstSite.appSuggestionProductivity": "개인 생산성 도구 모음 만들기",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "작업",
+  "billing.websitesGamesScope": "웹사이트 및 게임",
+  "billing.phoneScope": "전화",
+  "billing.resourceCategories": "사용량 분류",
+  "billing.resourceUnavailable": "웹사이트 및 게임, 컴퓨터, 전화의 사용 요금은 아직 이용할 수 없습니다.",
+  // SET46-END: embedded-billing-resource-categories
 }

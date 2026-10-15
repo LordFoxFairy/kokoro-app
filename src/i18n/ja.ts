@@ -1388,4 +1388,11 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionPersonalSpending": "個人支出トラッカーを作成",
   "firstSite.appSuggestionTasks": "タスク管理付きToDoアプリを作成",
   "firstSite.appSuggestionProductivity": "個人生産性ツールキットを作成",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "タスク",
+  "billing.websitesGamesScope": "ウェブサイトとゲーム",
+  "billing.phoneScope": "電話",
+  "billing.resourceCategories": "利用状況の分類",
+  "billing.resourceUnavailable": "ウェブサイトとゲーム、コンピューター、電話の利用料金はまだ表示できません。",
+  // SET46-END: embedded-billing-resource-categories
 }

@@ -1,3 +1,11 @@
+## SET46 设置内用量资源分类（2026-10-15；D0）
+
+基线aa2e02a，实际Manus当前用量页有任务、网站与游戏、电脑、电话四类，本地尚缺分类。Root唯一writer；现BillingScopedContent只在embedded+已准入时使用既有Tabs固定任务为活动面板，其余三类disabled并关联可见本地化说明；原summary/ledger内容与读取生命周期、独立BillingPanel不变。现TSX/CSS+九locale共11writer，4文档/926保护，无新文件/模块/状态/API/schema/依赖；Skills/连接器不改。不新增镜像实现的低影响文案测试，所有现测试原字节保护；相关既有测试及完整门、独审、真实运行副本和正常CUA逐项验证。单台服务器不是这些能力永久不可实现的理由；它们当前没有已接入的服务契约。
+
+只读owner复核确认：当前Billing没有正式零余额开户入口或注册事件消费者，不能为页面展示调用正额grant或旧entitlement账户路径。当前正常账户如实显示尚未开通，付款仍禁用。上一轮SET45已完成本地与远端候选接入，完整4055PASS/5既有FAIL，Goal active。
+
+SET46验证：相关既有用例276PASS/2既有FAIL；contract283、architecture50、lint、typecheck、build通过。完整4052PASS/8FAIL（228.43s），较SET45新增两项登录503及一项instrumentation采集超时，均未归因；完整门仍FAILED。Playwright38PASS/4原SKIP（39.7s）。原版六例原字节序列6PASS，候选4PASS但IAM readiness失败致两例未执行；该结果不能做等价通过比较。私有诊断首轮IAM collection语法失败仅4PASS，不算行为证据；修正仅私有诊断包装、串行fixture后6PASS/143 CLI过滤（43.49s），无503再现，不构成根因修复或全门通过。正式源码及全部原测试未为诊断改动，11writer/4文档/926保护哈希exact，资源库存恢复。独审无确定P1/P2，仅接受保留回退点的本地候选；实际运行同步和正常认证CUA另验，Goal active。
+
 ## SET45 侧栏快捷键预设对齐当前参考页（2026-10-15；代码验证完成）
 
 基线6cd51d9。正常Computer Use当前Manus显示切换侧栏为primary+period，本地预设源码仍为primary+B；未在参考账户执行重置，不将当前绑定冒称其全局默认。仅现keyboard-shortcuts.ts的sidebar预设改为period，用于无已存配置及显式重置；所有已存三字段/四字段绑定保持，零自动迁移。Root唯一writer，3writer/3Root文档/935保护，无新源/API/schema/依赖，Skills/连接器不改。两现test只调整三个明确依赖新预设的旧断言/事件，追加一个真实Sidebar保存B→重挂保留→显式reset→period触发/B不触发旅程；其余旧测试字节、超时和skip不变。旧source真实RED20PASS/4FAIL；候选相关227PASS，contract283/architecture50/lint/type/build通过。完整4055PASS/5既有FAIL（240.39s），Playwright38PASS/4原SKIP（38.0s）；完整门仍FAILED。共享资源恢复、最终三源/测试及935保护哈希exact，独审无确定P1/P2。验收后仅更新三份文档的结果与空行，未改被验代码；实际运行副本同步与正常CUA另行记录。

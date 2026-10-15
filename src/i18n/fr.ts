@@ -1355,4 +1355,11 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionPersonalSpending": "Créer un suivi des dépenses personnelles",
   "firstSite.appSuggestionTasks": "Créer une app de tâches avec gestion de projet",
   "firstSite.appSuggestionProductivity": "Créer une boîte à outils de productivité personnelle",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "Tâches",
+  "billing.websitesGamesScope": "Sites web et jeux",
+  "billing.phoneScope": "Téléphone",
+  "billing.resourceCategories": "Catégories d’utilisation",
+  "billing.resourceUnavailable": "La facturation des sites web et jeux, de l’ordinateur et du téléphone n’est pas encore disponible.",
+  // SET46-END: embedded-billing-resource-categories
 }

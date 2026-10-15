@@ -2766,3 +2766,9 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 ## SET45 浏览器侧栏快捷键预设（2026-10-15）
 
 现`src/lib/keyboard-shortcuts.ts`继续唯一拥有快捷键预设与存储解释：sidebar的未配置/显式reset预设由primary+B改为当前Manus参考页所示primary+period；已有保存配置包括B和旧三字段形状原样保留，读不写。现hook、Sidebar、设置编辑器、权限、事件匹配、schema、存储key和失败恢复不变，不新增模块或迁移。此决定仅替代前述历史SET36中“旧三默认不改”的sidebar一项；其他三个预设及全部已保存值保持。
+
+## SET46 设置内用量资源分类（2026-10-15）
+
+现`ui/billing/billing-panel.tsx`继续唯一拥有余额与流水编排；只在embedded已准入内容外层复用既有Tabs，tasks固定选中，网站与游戏/电脑/电话原生disabled并以aria-describedby关联可见的未接通说明。任务面板保留现summary/ledger原内容，不新增effect、选择状态、请求、fallback、财务事实、URL或持久化。独立BillingPanel直接返回原内容。现CSS负责分类换行与窄屏边界，九locale仅追加分类及说明，不改旧值。此处只投影当前能力，不构建计费新owner或假造可用余额；未来分类启用须先有各owner正式契约。
+
+SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归通过；完整4052PASS/8FAIL，新增登录503/采集超时未归因。原字节候选登录夹具未就绪，不与基线六例通过等价；私有串行诊断六例通过不替代完整门。仅可回退本地候选，正常认证CUA另验。

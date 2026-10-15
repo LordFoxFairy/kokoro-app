@@ -80,3 +80,9 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 ## SET45 侧栏预设
 
 `src/lib/keyboard-shortcuts.ts`的sidebar新配置/显式重置采用当前参考页的primary+period；现存B或其它自定义绑定不自动重写。既有编辑、订阅和真实Sidebar dispatch保持，相关回归仍在原两个keyboard-shortcuts测试中。
+
+## SET46 用量分类（2026-10-15；D0）
+
+SettingsPanelContent仍只装配既有BillingContent；设置内任务/网站与游戏/电脑/电话分类由现ui/billing的embedded布局负责，不把余额读取或分类状态复制进设置壳。后三类保持禁用和可见说明。
+
+SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归通过；完整4052PASS/8FAIL，新增登录503/采集超时未归因。原字节候选登录夹具未就绪，不与基线六例通过等价；私有串行诊断六例通过不替代完整门。仅可回退本地候选，正常认证CUA另验。

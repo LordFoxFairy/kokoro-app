@@ -1355,4 +1355,11 @@ export const de: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionPersonalSpending": "Persönliche Ausgaben verfolgen",
   "firstSite.appSuggestionTasks": "To-do-App mit Aufgabenverwaltung erstellen",
   "firstSite.appSuggestionProductivity": "Persönliches Produktivitäts-Toolkit erstellen",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "Aufgaben",
+  "billing.websitesGamesScope": "Websites und Spiele",
+  "billing.phoneScope": "Telefon",
+  "billing.resourceCategories": "Nutzungskategorien",
+  "billing.resourceUnavailable": "Die Abrechnung für Websites und Spiele, Computer und Telefon ist noch nicht verfügbar.",
+  // SET46-END: embedded-billing-resource-categories
 }

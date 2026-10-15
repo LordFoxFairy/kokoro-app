@@ -1677,4 +1677,11 @@ export const en: Partial<Record<MessageKey, string>> = {
   "agents.qrCode": "{platform} connection QR code",
   "agents.closeSetup": "Close Agent setup",
 
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "Tasks",
+  "billing.websitesGamesScope": "Websites & games",
+  "billing.phoneScope": "Phone",
+  "billing.resourceCategories": "Usage categories",
+  "billing.resourceUnavailable": "Billing for websites and games, computer, and phone is not available yet.",
+  // SET46-END: embedded-billing-resource-categories
 }

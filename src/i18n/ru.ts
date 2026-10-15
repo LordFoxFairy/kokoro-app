@@ -1355,4 +1355,11 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionPersonalSpending": "Создать трекер личных расходов",
   "firstSite.appSuggestionTasks": "Создать приложение задач с управлением делами",
   "firstSite.appSuggestionProductivity": "Создать набор инструментов личной продуктивности",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "Задачи",
+  "billing.websitesGamesScope": "Сайты и игры",
+  "billing.phoneScope": "Телефон",
+  "billing.resourceCategories": "Категории использования",
+  "billing.resourceUnavailable": "Учёт расходов на сайты и игры, компьютер и телефон пока недоступен.",
+  // SET46-END: embedded-billing-resource-categories
 }

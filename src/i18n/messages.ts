@@ -2039,6 +2039,13 @@ export const zh = {
   "skills.shareInstallationUnavailable": "暂时无法确认安装状态，请重试。",
   "skills.shareOtherPin":
     "我的技能中已安装该技能的其他固定版本；本页不会自动升级。",
+  // SET46-BEGIN: embedded-billing-resource-categories
+  "billing.tasksScope": "任务",
+  "billing.websitesGamesScope": "网站与游戏",
+  "billing.phoneScope": "电话",
+  "billing.resourceCategories": "用量分类",
+  "billing.resourceUnavailable": "网站与游戏、电脑和电话的用量计费暂不可用。",
+  // SET46-END: embedded-billing-resource-categories
 } as const;
 
 export type MessageKey = keyof typeof zh;

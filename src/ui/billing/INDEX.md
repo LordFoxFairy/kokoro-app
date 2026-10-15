@@ -41,3 +41,9 @@ Account与rail popover未知套餐均占位，保身份/订阅入口及原布局
 - 流水/目录中的分页列表是本地 accumulator（同 use-session-list 范式），不走 query 层。
 - 固定配对checkout不可用，目录购买首次disabled；不得用非空目录推断支付可用。
 - 低余额阈值 = 50 积分（`LOW_BALANCE_MICROS`）；配额进度未做（周期已用量需后端聚合，见 B1 挂点）。
+
+## SET46 设置内资源分类（2026-10-15；D0）
+
+现BillingScopedContent在embedded时给既有真实积分读取加资源分类：任务固定选中，网站与游戏/电脑/电话禁用并有可见原因。现Tabs/CSS/九locale承接，不新增组件/状态/请求；独立BillingPanel及账户/流水生命周期保持。正常用户尚无CreditAccount时仍显示未开通，不能以grant或旧账户模型补页面。
+
+SET46验收范围：既有契约/架构/lint/type/build及38项浏览器回归通过；完整4052PASS/8FAIL，新增登录503/采集超时未归因。原字节候选登录夹具未就绪，不与基线六例通过等价；私有串行诊断六例通过不替代完整门。仅可回退本地候选，正常认证CUA另验。
