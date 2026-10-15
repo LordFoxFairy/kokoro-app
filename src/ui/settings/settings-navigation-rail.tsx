@@ -80,28 +80,33 @@ export function SettingsNavigationRail({
         const left = activeRect.left - listRect.left + list.scrollLeft;
         const right = activeRect.right - listRect.left + list.scrollLeft;
         const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
-        const snapToItemBoundary = (wanted: number): number => {
-          const offsets = Array.from(
-            list.querySelectorAll<HTMLElement>(
-              '[data-slot="tabs-trigger"], [data-testid^="settings-placeholder-"]',
-            ),
-          ).map(
-            (item) =>
-              item.getBoundingClientRect().left -
-              listRect.left +
-              list.scrollLeft,
-          );
+        const itemOffsets = Array.from(
+          list.querySelectorAll<HTMLElement>(
+            '[data-slot="tabs-trigger"], [data-testid^="settings-placeholder-"]',
+          ),
+        ).map(
+          (item) =>
+            item.getBoundingClientRect().left -
+            listRect.left +
+            list.scrollLeft,
+        );
+        const snapFromStart = (wanted: number): number => {
           return Math.min(
             maxScroll,
-            offsets.reduce(
+            itemOffsets.reduce(
               (nearest, offset) => (offset <= wanted ? offset : nearest),
               0,
             ),
           );
         };
-        if (left < list.scrollLeft) list.scrollLeft = snapToItemBoundary(left);
+        const snapFromEnd = (wanted: number): number =>
+          Math.min(
+            maxScroll,
+            itemOffsets.find((offset) => offset >= wanted) ?? maxScroll,
+          );
+        if (left < list.scrollLeft) list.scrollLeft = snapFromStart(left);
         else if (right > list.scrollLeft + list.clientWidth)
-          list.scrollLeft = snapToItemBoundary(right - list.clientWidth);
+          list.scrollLeft = snapFromEnd(right - list.clientWidth);
 
         // A browser focus reveal is permitted to stop part way through a
         // label. Move one whole item earlier whenever that happens so the
