@@ -1,3 +1,11 @@
+## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
+
+基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。
+
+依据SET32真实R175 baseline早于proxy runtime arrival、Browser已有pre-focus runtime事件，及R177 arrival早于baseline且原assert通过的对照；独审放行阶段性readiness设计，不据此认定全native产品根因。仅requireStableAuthenticatedWorkspace增加默认false的明确runtimeArrivalBarrier参数，两初始anonymous_handoff_runtime与no_interstitial_runtime调用显式开启，R177 recovery与其余全部调用默认关闭。原冷DOM就绪后，沿原remaining deadline先等至少一个runtime proxy arrival，再在reload前同步记录当前runtime arrival数；reload后等新增arrival才宣布ready。只等到达，不等成功status（404合法），不增加deadline或固定sleep，不从owner计数中排除runtime。
+
+新增SET33-BEGIN/END块逆删除必须精确恢复SET32原完整native测试bytes，原SET32观察器/事件字段不改，全部旧业务assert逐字保留。worker只跑lint/type/architecture无资源门；Root独立inverse/审查后真实R175+R177原case实跑，显式verbose/silent=false，库存恢复。此计数门只针对观测到的单cold阶段竞态，不普遍证明document generation；多cold并发可能混计的界限保留，实际复跑后才判断成效。全Goal active，正常Browser未验，Skills/连接器排除。
+
 ## SET32 原生登录请求顺序诊断（2026-10-15；D0，仅现测试）
 
 基线Web 52b535789b93ebac740db7aa8e5296c82b6622b6，939 tracked clean；runtime_audit唯一writer仅tests/system/oidc-rp-next-http.integration.test.ts，931保护/Root7。Root设计/docs/独审/资源/Git与正常实例。现runtime修补已接收，终态20focused/3987PASS7旧FAIL/Playwright20PASS4原SKIP；不能据此认定R175/R177旧native多请求根因。

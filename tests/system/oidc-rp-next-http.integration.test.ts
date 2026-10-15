@@ -1579,6 +1579,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     outputStart: number,
     deadline: number,
     failureDiagnostic?: (stage: string) => Promise<string>,
+    // SET33-BEGIN: optional-runtime-arrival-barrier
+    runtimeArrivalBarrier = false,
+    // SET33-END: optional-runtime-arrival-barrier
   ): Promise<void> {
     const remaining = (): number => Math.max(1, deadline - Date.now())
     // SET32-BEGIN: helper-start
@@ -1597,10 +1600,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       // SET32-BEGIN: helper-cold-ready
       nativeOrder?.record("helper_cold_ready", "lifecycle")
       // SET32-END: helper-cold-ready
+      // SET33-BEGIN: cold-runtime-arrival
+      const runtimeArrivals = (): number => proxy.resourceDiagnostics()
+        .find(({ path }) => path === "/api/system/runtime-manifest")?.requests ?? 0
+      if (runtimeArrivalBarrier) {
+        await expect.poll(runtimeArrivals, { timeout: remaining() }).toBeGreaterThan(0)
+      }
+      // SET33-END: cold-runtime-arrival
       const sessionsBeforeReload = proxy.sessionRequests()
       // SET32-BEGIN: helper-reload-start
       nativeOrder?.record("helper_reload_start", "lifecycle")
       // SET32-END: helper-reload-start
+      // SET33-BEGIN: runtime-baseline-before-reload
+      const runtimeBeforeReload = runtimeArrivalBarrier ? runtimeArrivals() : 0
+      // SET33-END: runtime-baseline-before-reload
       const reloadResponse = await page.reload({ waitUntil: "domcontentloaded", timeout: remaining() })
       // SET32-BEGIN: helper-reload-end
       nativeOrder?.record("helper_reload_end", "lifecycle", reloadResponse?.status())
@@ -1609,6 +1622,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         throw new Error(`reload document status ${reloadResponse?.status() ?? "missing"}`)
       }
       await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBeGreaterThan(sessionsBeforeReload)
+      // SET33-BEGIN: reload-runtime-arrival
+      if (runtimeArrivalBarrier) {
+        await expect.poll(runtimeArrivals, { timeout: remaining() }).toBeGreaterThan(runtimeBeforeReload)
+      }
+      // SET33-END: reload-runtime-arrival
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
       await page.locator('[data-app-frame-main="true"]').waitFor({ state: "visible", timeout: remaining() })
       await page.locator('[data-slot="composer-input"]').waitFor({ state: "visible", timeout: remaining() })
@@ -3466,6 +3484,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const runtimeDeadline = Date.now() + 12_000
       await requireStableAuthenticatedWorkspace(
         "anonymous_handoff_runtime", page, response, proxy, outputStart, runtimeDeadline,
+        // SET33-BEGIN: anonymous_handoff_runtime-barrier
+        undefined, true,
+        // SET33-END: anonymous_handoff_runtime-barrier
       )
       const composer = page.locator('[data-slot="composer-input"]')
       await composer.fill("private-draft-must-not-survive-anonymous-handoff")
@@ -3545,6 +3566,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       ))
       await requireStableAuthenticatedWorkspace(
         "no_interstitial_runtime", page, response, proxy, outputStart, Date.now() + 12_000,
+        // SET33-BEGIN: no_interstitial_runtime-barrier
+        undefined, true,
+        // SET33-END: no_interstitial_runtime-barrier
       )
       await page.locator('[data-slot="composer-input"]').fill("private-draft-must-be-removed-before-native-login")
       const ownerRequests = (): number => proxy.resourceDiagnostics()

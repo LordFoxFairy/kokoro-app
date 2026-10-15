@@ -1,3 +1,17 @@
+## SET33 两条原生测试就绪修正已接收，SET34继续（2026-10-15）
+
+仅现native helper默认false参数，两初始withdraw调用开启cold到达/reload新增到达前置，全部使用原remaining预算；不等status、不排除runtime、不改count/safety/mock/timeout/cleanup或SET32诊断。6块逆删除恢复原317426bytes，1writer/931保护/Root7，全product source字节保护，独审无确定P1/P2，lint/type/architecture50全部0。
+
+Root真实原生R175/R177均PASS（2PASS0FAIL79过滤未跑），41.17s，库存exact恢复；各自两runtime arrival在baseline前，focus至commit/watchdog之间无新Browser runtime事件，全部原精确owner/safe-shell/recovery断言通过。R177重新登录后的runtime请求是合法恢复，不误报复活；Node观察非内部dispatch、跨层ambiguous/计数不普遍证明document generation界限仍在，不宣全native稳定或正常Browser完成。产品源未动，不重复SET31完整source门；继续SET34到期日期测试按实际时区修正及SET35实际设置日文缺译，Goal active，Skills/连接器排除。
+
+## SET33 两条原生withdraw测试的就绪前置（2026-10-15；D0，仅现测试）
+
+基线Web d7f5d5d41ce4740de219480ccd6d7bf7d9166d40，939 tracked clean；runtime_audit唯一writer仅现native测试，931保护/Root7。Root资源/Git/docs/独审/正常运行；全部product source及原计数/安全assert/timeout/mock/cleanup仍保护。
+
+依据SET32真实R175 baseline早于proxy runtime arrival、Browser已有pre-focus runtime事件，及R177 arrival早于baseline且原assert通过的对照；独审放行阶段性readiness设计，不据此认定全native产品根因。仅requireStableAuthenticatedWorkspace增加默认false的明确runtimeArrivalBarrier参数，两初始anonymous_handoff_runtime与no_interstitial_runtime调用显式开启，R177 recovery与其余全部调用默认关闭。原冷DOM就绪后，沿原remaining deadline先等至少一个runtime proxy arrival，再在reload前同步记录当前runtime arrival数；reload后等新增arrival才宣布ready。只等到达，不等成功status（404合法），不增加deadline或固定sleep，不从owner计数中排除runtime。
+
+新增SET33-BEGIN/END块逆删除必须精确恢复SET32原完整native测试bytes，原SET32观察器/事件字段不改，全部旧业务assert逐字保留。worker只跑lint/type/architecture无资源门；Root独立inverse/审查后真实R175+R177原case实跑，显式verbose/silent=false，库存恢复。此计数门只针对观测到的单cold阶段竞态，不普遍证明document generation；多cold并发可能混计的界限保留，实际复跑后才判断成效。全Goal active，正常Browser未验，Skills/连接器排除。
+
 ## SET32 原生顺序诊断已接收，继续就绪门修正（2026-10-15）
 
 仅现native测试22具名新增块，去除后精确恢复原310179bytes；1writer/931保护/Root7、全product source与原assert/helper/count/timeout/mock/cleanup字节保护，独审无确定P1/P2，lint/type/architecture50均0。显式env仅R175/R177输出闭集事件，最多512普通+1截断；Node观察非Browser内部dispatch，跨层始终ambiguous。
