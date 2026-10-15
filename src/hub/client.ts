@@ -617,7 +617,8 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     const expected =
       operation === "create" ||
       operation === "createConnection" ||
-      operation === "registerServer"
+      operation === "registerServer" ||
+      operation === "importJson"
         ? 201
         : 200;
     if (response.status === expected) {
