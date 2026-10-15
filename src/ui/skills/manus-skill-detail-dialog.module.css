@@ -1,10 +1,11 @@
 .dialog[data-slot="dialog-content"] {
-  /* The live Manus preview remains a compact 800 × 600 workspace even when
-   * opened from a wide three-card marketplace. Its reader uses this exact
-   * envelope too, so detail and source inspection feel like one surface. */
+  /* A summary is a lightweight preview, not a document workspace. Keep it
+   * content-sized so a skill without prompts does not leave a large inert
+   * white panel below its real description. The package reader explicitly
+   * opts into the fixed 800 × 600 workspace further down. */
   width:min(50rem,calc(100vw - 2rem));
   max-width:calc(100vw - 2rem);
-  height:min(37.5rem,calc(100dvh - 2rem));
+  height:auto;
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -34,12 +35,11 @@
 .detailLabel svg { width:1rem; height:1rem; }
 .actions { display:flex; gap:.5rem; margin-top:.875rem; }.actions button { box-sizing:border-box; min-height:2rem; height:2rem; padding:0 .75rem; border-radius:.5rem; font-size:.875rem; font-weight:500; line-height:1rem; }.actions svg { width:1rem; height:1rem; }
 .cover { pointer-events:none; position:absolute; right:3rem; bottom:0; width:8.5rem; height:8.5rem; overflow:hidden; border-radius:.5rem .5rem 0 0; background:var(--muted); box-shadow:0 .5rem 1rem rgb(0 0 0 / 10%); }.cover img { object-fit:cover; }
-.body { flex:1 1 auto; min-height:0; overflow:auto; padding:1.5rem; }.description { max-width:46rem; margin:0 0 1rem; font-size:.875rem; line-height:1.5rem; color:var(--foreground); }.status { color:var(--muted-foreground); }
+.body { flex:0 1 auto; min-height:0; max-height:calc(100dvh - 15.875rem); overflow:auto; padding:1.5rem; }.description { max-width:46rem; margin:0 0 1rem; font-size:.875rem; line-height:1.5rem; color:var(--foreground); }.status { color:var(--muted-foreground); }
 .examples { display:grid; gap:.625rem; }.examples button { box-sizing:border-box; min-height:2.75rem; display:flex; align-items:center; gap:.625rem; width:100%; padding:.625rem .75rem; border:1px solid var(--border); border-radius:.5rem; background:transparent; color:var(--foreground); text-align:left; font:inherit; cursor:pointer; }.examples button:hover { background:var(--muted); }.examples button span { font-size:.8125rem; line-height:1.25rem; }.examples svg { width:1rem; height:1rem; flex:0 0 1rem; color:var(--muted-foreground); }
 @media(max-width:42rem) {
-  /* The compact Manus preview is 95vw × 600px at 448×764. Its title and
-   * action block remain a stable 222px header; shrinking it to content height
-   * made every real detail jump when its summary or examples differed. */
+  /* The compact summary keeps its title and action block stable, while the
+   * overall sheet follows the content just like its desktop counterpart. */
   .dialog[data-slot="dialog-content"] {
     width:min(90rem,95vw);
     max-width:95vw;
