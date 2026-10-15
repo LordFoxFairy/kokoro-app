@@ -41,7 +41,7 @@ it("recording consumes existing actions, rejects duplicates and plain text, Esc 
   mount();
   const bubble = vi.fn(); window.addEventListener("keydown", bubble);
   fireEvent.click(screen.getByRole("button", { name: "编辑搜寻任务快捷键" }));
-  fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+  fireEvent.keyDown(window, { key: ".", ctrlKey: true });
   expect(screen.getByRole("alert")).toHaveTextContent("已绑定");
   expect(bubble).not.toHaveBeenCalled();
   expect(screen.getByTestId("sidebar-state")).toHaveTextContent("expanded");
@@ -57,7 +57,7 @@ it("the real sidebar consumes edited bindings but ignores typing, repeats and co
   const toggle = screen.getByTestId("sidebar-state");
   fireEvent.click(screen.getByRole("button", { name: "编辑切换侧边栏快捷键" }));
   fireEvent.keyDown(window, { key: "j", ctrlKey: true, shiftKey: true });
-  fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+  fireEvent.keyDown(window, { key: ".", ctrlKey: true });
   expect(toggle).toHaveTextContent("expanded");
   fireEvent.keyDown(window, { key: "j", ctrlKey: true, shiftKey: true });
   expect(toggle).toHaveTextContent("collapsed");
@@ -108,3 +108,27 @@ it("SET36 copy recording failure never claims saved or changes its previous bind
   expect(readKeyboardShortcuts()).toEqual(before);
 });
 // SET36-END: copy-task-link-settings-row
+
+// SET45-BEGIN: reference-sidebar-preset-with-saved-binding-preservation
+it("SET45 retains a saved B binding until explicit reset then dispatches period to the real sidebar", () => {
+  const saved = { ...readKeyboardShortcuts(), sidebar: { key: "b", primary: true, shift: false, alt: false } };
+  writeKeyboardShortcuts(saved);
+  const raw = localStorage.getItem("kokoro.web.keyboard-shortcuts");
+  const view = mount();
+  expect(screen.getByRole("button", { name: "编辑切换侧边栏快捷键" })).toHaveTextContent("B");
+  fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+  expect(screen.getByTestId("sidebar-state")).toHaveTextContent("collapsed");
+  expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
+  view.unmount();
+  mount();
+  expect(screen.getByRole("button", { name: "编辑切换侧边栏快捷键" })).toHaveTextContent("B");
+  expect(localStorage.getItem("kokoro.web.keyboard-shortcuts")).toBe(raw);
+  fireEvent.click(screen.getByRole("button", { name: "重设为预设值" }));
+  expect(readKeyboardShortcuts().sidebar).toEqual({ key: ".", primary: true, shift: false, alt: false });
+  expect(screen.getByRole("button", { name: "编辑切换侧边栏快捷键" })).toHaveTextContent(".");
+  fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+  expect(screen.getByTestId("sidebar-state")).toHaveTextContent("expanded");
+  fireEvent.keyDown(window, { key: ".", code: "Period", ctrlKey: true });
+  expect(screen.getByTestId("sidebar-state")).toHaveTextContent("collapsed");
+});
+// SET45-END: reference-sidebar-preset-with-saved-binding-preservation

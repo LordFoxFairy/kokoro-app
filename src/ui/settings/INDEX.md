@@ -76,3 +76,7 @@ Web基线91fb1aee87df9e6dc0acadcdda4db5375623a13a，939 tracked clean；runtime_
 - `sections/` 按账户、外观、个性化、设备、部署、整合、对话偏好与快捷键分组件；共享 sections 视觉样式位于 `sections/settings-sections.module.css`。订阅使用 `BillingContent` + `PricingContent`；模态两栏壳层位于 `settings-modal.module.css`。
 
 - SET-07：账户只读资料经 `/api/account/profile` 安全投影既有 BFF `/v1/me` + `/iam/oauth2/userinfo`。`lib/server/account-profile.ts` 复用唯一 RP 配置与 Product session，5s总期限/16KiB、在线准入与最终同session复验；共用 `lib/account-profile.schema.ts` 白名单 wire。settings 的 `account-profile-client.ts`/`use-account-profile.ts` 绑定既有 admitted subject/generation、取消迟到并允许失败重读。live 姓名受控只读，邮箱写/登录方式/删除仍不可用；真实用户ID复制处理失败及身份退役，preview独立。
+
+## SET45 侧栏预设
+
+`src/lib/keyboard-shortcuts.ts`的sidebar新配置/显式重置采用当前参考页的primary+period；现存B或其它自定义绑定不自动重写。既有编辑、订阅和真实Sidebar dispatch保持，相关回归仍在原两个keyboard-shortcuts测试中。

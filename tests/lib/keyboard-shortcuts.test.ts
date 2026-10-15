@@ -98,7 +98,7 @@ it.each([
   writeKeyboardShortcuts({ ...readKeyboardShortcuts(), sidebar: binding }, { id: "sidebar", event });
   expect(matchesSavedKeyboardShortcut(event, "sidebar")).toBe(true);
   resetKeyboardShortcuts();
-  expect(readKeyboardShortcuts().sidebar.key).toBe("b");
+  expect(readKeyboardShortcuts().sidebar.key).toBe(".");
 });
 
 // SET36-BEGIN: copy-task-link-storage-and-binding

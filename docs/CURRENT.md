@@ -1,3 +1,9 @@
+## SET45 侧栏快捷键预设对齐当前参考页（2026-10-15；代码验证完成）
+
+基线6cd51d9。正常Computer Use当前Manus显示切换侧栏为primary+period，本地预设源码仍为primary+B；未在参考账户执行重置，不将当前绑定冒称其全局默认。仅现keyboard-shortcuts.ts的sidebar预设改为period，用于无已存配置及显式重置；所有已存三字段/四字段绑定保持，零自动迁移。Root唯一writer，3writer/3Root文档/935保护，无新源/API/schema/依赖，Skills/连接器不改。两现test只调整三个明确依赖新预设的旧断言/事件，追加一个真实Sidebar保存B→重挂保留→显式reset→period触发/B不触发旅程；其余旧测试字节、超时和skip不变。旧source真实RED20PASS/4FAIL；候选相关227PASS，contract283/architecture50/lint/type/build通过。完整4055PASS/5既有FAIL（240.39s），Playwright38PASS/4原SKIP（38.0s）；完整门仍FAILED。共享资源恢复、最终三源/测试及935保护哈希exact，独审无确定P1/P2。验收后仅更新三份文档的结果与空行，未改被验代码；实际运行副本同步与正常CUA另行记录。
+
+SET44正常邀请创建/刷新/撤销，以及个性化四字段、多行和双标签冲突的两个选择均已实际验证并恢复原资料；本地IAM无SMTP，重发只验证无错误与pending保留，不声称邮件交付。当前正常Agent关闭；实际测试消息失败、刷新无持久任务，分享撤销仍未实测。Agent真实调用授权消费者缺失，现临时launcher停止会清理其IAM/BFF事实，不为本片重启。此前RP-auth503、instrumentation/welcome偶发失败未根因关闭。PR仍draft，Goal active。
+
 ## SET43 已撤销会话资料读取候选（2026-10-15；代码验证完成）
 
 正常设备移除后的资料503已真实复现；现只将可信BFF401 session_invalid映射既有401 account_profile_session_required，其它依赖故障保持503。原200、callback/refresh策略和全部原测试未改。新增真实HTTP18例先16PASS/2预期401实际503，再修3个源文件；前两轮仅collection失败不算行为RED。4writer/930保护/Root7全部逐文件核对，独立审查无确定P1/P2。

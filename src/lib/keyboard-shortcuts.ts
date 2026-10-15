@@ -49,7 +49,7 @@ const shortcutsSchema = z
 const defaults: KeyboardShortcutMap = {
   newTask: { key: "o", primary: true, shift: true, alt: false },
   search: { key: "k", primary: true, shift: false, alt: false },
-  sidebar: { key: "b", primary: true, shift: false, alt: false },
+  sidebar: { key: ".", primary: true, shift: false, alt: false },
   copyTaskLink: { key: "l", primary: true, shift: true, alt: false },
 };
 

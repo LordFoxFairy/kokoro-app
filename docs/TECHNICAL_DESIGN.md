@@ -2762,3 +2762,7 @@ Web 不复制 BFF OpenAPI，也不把同源 contract 放进 Developer API。详�
 | 状态 / 限制 | GET canonical host/origin、无query/body；总5秒包含初始store、在线准入、userinfo body和最终store，外层明确deadline race并清理迟到/取消I/O，最多16KiB JSON、无redirect。userinfo sub必须等于当前subject；optional姓名/邮箱/验证状态缺失显示不可用。所有响应private,no-store。UI只在已admitted boundary读取，换subject/generation/失准入同步清旧资料/abort并拒迟到结果；失败可重试。 |
 | 展示 / 删除 | live只显示真实姓名/邮箱/用户ID，可复制真实ID并处理复制失败；姓名、邮箱等写流程未接通时继续明确不可用，不因资料读取成功启用preview假写、不造计划/积分或登录方式。删除live null固定占位的读取缺口，保preview隔离。 |
 | 验证 | 无/过期session、Redis失败、在线准入失败、错tenant/subject、畸形/超限/慢body/redirect、userinfo非200、logout/generation退休、白名单/无token/cookie泄漏、缺可选字段、UI身份切换/重试/复制；Root最终类型/lint/契约/build及真实登录computer use。 |
+
+## SET45 浏览器侧栏快捷键预设（2026-10-15）
+
+现`src/lib/keyboard-shortcuts.ts`继续唯一拥有快捷键预设与存储解释：sidebar的未配置/显式reset预设由primary+B改为当前Manus参考页所示primary+period；已有保存配置包括B和旧三字段形状原样保留，读不写。现hook、Sidebar、设置编辑器、权限、事件匹配、schema、存储key和失败恢复不变，不新增模块或迁移。此决定仅替代前述历史SET36中“旧三默认不改”的sidebar一项；其他三个预设及全部已保存值保持。
