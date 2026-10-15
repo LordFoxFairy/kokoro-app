@@ -8,6 +8,7 @@ const railRoot = path.dirname(fileURLToPath(import.meta.url))
 const responsibilityFiles = [
   "workspace-rail.tsx",
   "workspace-rail-shell.tsx",
+  "workspace-rail-header.tsx",
   "workspace-rail-navigation.tsx",
   "workspace-rail-session-list.tsx",
   "workspace-rail-session-item.tsx",
