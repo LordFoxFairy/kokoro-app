@@ -24,7 +24,11 @@ export function ProjectIdentity({ brandName = DEFAULT_BRAND.name, preview = fals
     <header className={cn(styles.projectIdentity, layoutStyles.projectIdentity)}>
       <span className={styles.projectMark} aria-hidden="true"><Folder /></span>
       <div>
-        <h1>{preview ? t("firstSite.kokoro", { brand: brandName }) : projectDetail?.status === "ready" ? projectDetail.data.name : t("firstSite.projectsUnavailable")}</h1>
+        <h1>
+          {preview ? t("firstSite.kokoro", { brand: brandName }) : projectDetail?.status === "ready" ? projectDetail.data.name
+            : projectDetail?.status === "loading" ? <span className={styles.projectTitleSkeleton} data-testid="project-title-loading" aria-hidden="true" />
+              : t("firstSite.projectsUnavailable")}
+        </h1>
         {preview ? <p className={styles.projectMeta}>
           <span>{t("firstSite.projectCreatedBy")}</span>
           <span aria-hidden="true"> · </span>
