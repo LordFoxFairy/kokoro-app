@@ -1,6 +1,6 @@
 "use client"
 
-import { type Dispatch, type RefObject, type SetStateAction, useState } from "react"
+import { Fragment, type Dispatch, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
 import { Bot, ChevronDown, ChevronRight, Ellipsis, Folder, Monitor, Plus, SquarePen, WandSparkles } from "lucide-react"
 
@@ -29,10 +29,11 @@ import { isRuntimeNavigationEnabled, navigationIcon, registeredNavigationRoute }
 import { interceptMountedSurfaceNavigation } from "@/ui/navigation/mounted-surface-navigation"
 
 import { type RailDragKind, type RailDragProps, type RailDragState, markPointerFocus } from "./workspace-rail-actions"
-import type { WorkbenchNavigationItem, WorkspaceRailProject } from "./workspace-rail-types"
+import type { RailConversationReads, WorkbenchNavigationItem, WorkspaceRailProject } from "./workspace-rail-types"
 import { itemStyles, navigationStyles, railStyles } from "./workspace-rail-styles"
 import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailProjectCreateDialog } from "./workspace-rail-project-create-dialog"
+import { ScopedConversationGroup } from "./workspace-rail-session-list"
 export { WorkspaceRailHeader, type WorkspaceRailHeaderProps } from "./workspace-rail-header"
 
 export type WorkspaceRailNavigationProps = {
@@ -59,6 +60,8 @@ export type WorkspaceRailNavigationProps = {
   navigationExpanded: boolean
   navigationTransitionKey: string
   newSessionLabel: string
+  conversationReads?: RailConversationReads
+  preview: boolean
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
   dragOverKey: string | null
@@ -88,6 +91,8 @@ export function WorkspaceRailNavigation({
   navigationExpanded,
   navigationTransitionKey,
   newSessionLabel,
+  conversationReads,
+  preview,
   dragProps,
   dragState,
   dragOverKey,
@@ -98,6 +103,10 @@ export function WorkspaceRailNavigation({
   // the navigation composition boundary lets its contents collapse without
   // changing the owner-backed project collection or project-route selection.
   const [projectsExpanded, setProjectsExpanded] = useState(true)
+  // An expanded project owns exactly one scoped list.  A closed project is not
+  // mounted, so it cannot issue a background session read merely because it is
+  // visible in the project index.
+  const [projectConversationExpansion, setProjectConversationExpansion] = useState<ReadonlyMap<string, boolean>>(new Map())
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
   const keyboardShortcuts = useKeyboardShortcuts()
   const enabledNavigation = navigation?.filter((item) => isRuntimeNavigationEnabled(item, featureFlags))
@@ -134,6 +143,14 @@ export function WorkspaceRailNavigation({
   ) : projectListStatus === "blocked" ? (
     <p role="status" data-testid="projects-blocked">{t("firstSite.projectsUnavailable")}</p>
   ) : null
+
+  const toggleProjectConversations = (projectId: string, currentlyExpanded: boolean) => {
+    setProjectConversationExpansion((current) => {
+      const next = new Map(current)
+      next.set(projectId, !currentlyExpanded)
+      return next
+    })
+  }
 
   return (
     <nav className={navigationStyles.nav} aria-label={t("rail.navAria")}>
@@ -380,13 +397,14 @@ export function WorkspaceRailNavigation({
               {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
               {orderedProjects.map((project) => {
                 const active = (projectActive && project.href === projectHref) || project.active === true
+                const conversationsExpanded = projectConversationExpansion.get(project.id) ?? active
                 const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
                 const dragging = dragState?.kind === "project" && dragState.id === project.id
                 const dragOver = dragOverKey === `project:${project.id}`
                 return (
+                  <Fragment key={project.id}>
                   <SidebarMenuItem
-                    key={project.id}
-                    className={cn(itemStyles.item, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    className={cn(itemStyles.item, conversationReads && navigationStyles.projectRow, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
                     data-project-active={active ? "true" : "false"}
@@ -412,6 +430,18 @@ export function WorkspaceRailNavigation({
                         <span className={itemStyles.itemTitle}>{project.name}</span>
                       </Link>
                     </SidebarMenuButton>
+                    {conversationReads ? <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className={navigationStyles.projectConversationToggle}
+                      aria-label={t(conversationsExpanded ? "rail.collapseProjectAria" : "rail.expandProjectAria", { name: project.name, position: String(orderedProjects.indexOf(project) + 1) })}
+                      aria-expanded={conversationsExpanded}
+                      aria-controls={`rail-project-conversations-${project.id}`}
+                      onClick={() => toggleProjectConversations(project.id, conversationsExpanded)}
+                    >
+                      <ChevronDown aria-hidden="true" />
+                    </Button> : null}
                     {onRequestProjectRename ? <span className={itemStyles.projectActions}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -431,6 +461,30 @@ export function WorkspaceRailNavigation({
                       </Button>
                     </span> : null}
                   </SidebarMenuItem>
+                  {conversationsExpanded && conversationReads ? <SidebarMenuItem
+                      id={`rail-project-conversations-${project.id}`}
+                      className={navigationStyles.projectConversationGroup}
+                    >
+                      <ScopedConversationGroup
+                        scope={{ kind: "project", projectRef: project.id }}
+                        reads={conversationReads}
+                        preview={preview}
+                        compactDesktop={false}
+                        query=""
+                        searchOpen={false}
+                        awaitingIds={new Set()}
+                        closeNavigation={closeNavigation}
+                        onNewChat={onNewChat}
+                        hideSectionHeader
+                        conversationMove={null}
+                        conversationMovePending={false}
+                        conversationMoveFailed={false}
+                        projects={orderedProjects}
+                        projectListReady={projectListStatus === "ready"}
+                        onRequestDelete={() => {}}
+                      />
+                    </SidebarMenuItem> : null}
+                  </Fragment>
                 )
               })}
             </SidebarMenu>

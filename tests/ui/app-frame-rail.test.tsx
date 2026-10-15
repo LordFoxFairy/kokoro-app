@@ -1282,7 +1282,7 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
-it("R254 项目正文旁的直接会话区保持独立，选择直接会话只更新直接路由", async () => {
+it("R254 项目会话嵌套在项目行，直接会话仍独立并只更新直接路由", async () => {
   const alpha = projectReadFixtures[0]!
   const directId = "conv_flat_direct"
   const projectEngine = createSessionEngine({
@@ -1317,8 +1317,8 @@ it("R254 项目正文旁的直接会话区保持独立，选择直接会话只�
   try {
     const project = await screen.findByRole("link", { name: alpha.name })
     const projectRow = project.closest("[data-project-id]")
-    expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
-    expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
+    expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).not.toBeNull()
+    expect(screen.getByRole("navigation", { name: "项目会话" })).toHaveAttribute("data-conversation-list", "project-conversation")
     const direct = screen.getByRole("navigation", { name: "直接会话" })
     const row = await within(direct).findByRole("button", { name: "外部普通持久会话" })
     fireEvent.click(row)
