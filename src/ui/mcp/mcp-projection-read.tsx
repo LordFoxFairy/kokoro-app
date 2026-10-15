@@ -352,7 +352,10 @@ export function McpProjectionRead({
           onQueryChange={
             view === "connections" ? setConnectorQuery : setProviderQuery
           }
-          showSearch={!embedded}
+          /* The catalog plaza owns its own directory search. The embedded
+             Settings connections view is a different Manus surface and keeps
+             its search field beside Browse/Create. */
+          showSearch={!embedded || settingsLayout}
           onBrowse={(target) => {
             if (view === "catalog" && onManageConnectors) {
               onManageConnectors(target);

@@ -18,9 +18,9 @@
 }
 
 .surface[data-settings-layout="true"] .header:not(:has(h2)) .searchField {
-  width: auto;
+  width: 20rem;
   min-width: 0;
-  flex: 1 1 0;
+  flex: 0 1 20rem;
 }
 
 .surface[data-settings-layout="true"] .toolbarActions {
@@ -1193,13 +1193,12 @@
   }
 }
 
-/* The Settings shell deliberately remains compact until its measured desktop
- * threshold. Scope this override to the embedded surface so a standalone MCP
- * page keeps its independent responsive layout. */
-@media (max-width: 95.99rem) {
-  .surface[data-settings-layout="true"] .providerGrid,
+/* Desktop Settings has a broad right pane after its navigation rail. Match
+ * Manus with two installed connector cards; only the compact sheet drops to
+ * one column. */
+@media (min-width: 48rem) {
   .surface[data-settings-layout="true"] .connectorGrid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
