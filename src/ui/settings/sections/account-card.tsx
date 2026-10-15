@@ -48,12 +48,19 @@ function LoginProviderIcon({ provider }: { provider: "google" | "microsoft" | "a
 export function AccountCard({
   brandName,
   preview = false,
+  subject = null,
   loginMethodsOpen,
   onLoginMethodsChange,
   onOpenSubscription,
 }: {
   brandName?: string
   preview?: boolean
+  /**
+   * This is the already-admitted Product Session subject supplied by the
+   * shell. Account does not issue a second session request just to redraw
+   * information that the shell has already verified.
+   */
+  subject?: string | null
   loginMethodsOpen: boolean
   onLoginMethodsChange: (open: boolean) => void
   onOpenSubscription: () => void
@@ -62,7 +69,18 @@ export function AccountCard({
   const router = useRouter()
   const previewAccount = makePreviewAccount(t)
   const [previewAccountEdits, setPreviewAccountEdits] = useState<Partial<AccountProjection>>({})
-  const account = preview ? { ...previewAccount, ...previewAccountEdits } : null
+  const account = preview
+    ? { ...previewAccount, ...previewAccountEdits }
+    : subject === null
+      ? null
+      : {
+          displayName: subject,
+          email: "",
+          userId: subject,
+          planLabel: "",
+          credits: "",
+          loginMethods: [],
+        }
   const [loggingOut, setLoggingOut] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailStep, setEmailStep] = useState<"verify" | "replace">("verify")
@@ -89,7 +107,7 @@ export function AccountCard({
     // Product sign-out owns the issuer confirmation navigation.
   }
 
-  const displayName = account?.displayName ?? "—"
+  const displayName = account?.displayName ?? ""
   const initial = (displayName.trim().charAt(0) || "K").toUpperCase()
   const saveName = async (name: string): Promise<void> => {
     if (!preview || !account || !name.trim() || name.trim() === account.displayName) return
@@ -145,7 +163,7 @@ export function AccountCard({
     }
   }
 
-  if (loginMethodsOpen) {
+  if (preview && loginMethodsOpen) {
     return (
       <div className={styles.loginMethods} data-testid="settings-login-methods">
         <div className={styles.loginProviderList}>
@@ -179,7 +197,9 @@ export function AccountCard({
           <span className={styles.identityAvatar} aria-hidden>{initial}</span>
           <div className={styles.identityText}>
             <span className={styles.identityFieldLabel}>{t("settings.fullName")}</span>
-          <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} disabled={!preview} />
+            {preview
+              ? <Input className={styles.identityInput} defaultValue={displayName} aria-label={t("settings.fullName")} onBlur={(event) => void saveName(event.currentTarget.value)} />
+              : <strong className={styles.identityValue} data-testid="settings-account-subject">{displayName}</strong>}
           </div>
         </div>
         <Button variant="outline" size="icon-sm" type="button" aria-label={t("settings.logout")} data-testid="settings-logout" onClick={() => void logout()} disabled={loggingOut}>
@@ -187,47 +207,48 @@ export function AccountCard({
         </Button>
       </div>
 
-      <div className={styles.planCard}>
-        <div className={styles.planHeader}><strong>{account?.planLabel ?? "—"}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
-        <div className={styles.planBody} data-slot="account-plan-body">
-          <div className={styles.creditGroup} data-slot="account-credit-group">
-            <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits ?? "—"}</strong></div>
+      {preview ? (
+        <div className={styles.planCard}>
+          <div className={styles.planHeader}><strong>{account?.planLabel}</strong><Button variant="default" size="sm" type="button" onClick={onOpenSubscription}>{t("firstSite.upgrade")}</Button></div>
+          <div className={styles.planBody} data-slot="account-plan-body">
+            <div className={styles.creditGroup} data-slot="account-credit-group">
+              <div className={styles.creditTotal}><span><Sparkles />{t("settings.creditsMenu")}<CircleHelp /></span><strong>{account?.credits}</strong></div>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
-      {/* Keep the account sheet's information architecture intact without
-       * inventing identity data that the current Web contract does not
-       * provide. The unavailable values intentionally remain em dashes. */}
       <div className={styles.accountDetailRows}>
         <div className={styles.accountDetailRow}>
           <div>
-            <strong>{t("settings.email")}</strong>
-            <span>{account?.email ?? "—"}</span>
-          </div>
-          <Button variant="outline" size="sm" type="button" disabled={!account?.email} onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
-        </div>
-        <div className={styles.accountDetailRow}>
-          <div>
             <strong>{t("settings.userId")}</strong>
-            <span>{account?.userId ?? "—"}</span>
+            <span>{account?.userId ?? ""}</span>
           </div>
           <Button variant="outline" size="sm" type="button" disabled={!account?.userId} onClick={() => { if (account?.userId) void navigator.clipboard.writeText(account.userId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }) }}>{copied ? t("settings.copied") : t("settings.copyUserId")}</Button>
         </div>
-        <div className={styles.accountDetailRow}>
-          <div>
-            <strong>{t("settings.loginMethod")}</strong>
-            <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
+        {preview ? <>
+          <div className={styles.accountDetailRow}>
+            <div>
+              <strong>{t("settings.email")}</strong>
+              <span>{account?.email}</span>
+            </div>
+            <Button variant="outline" size="sm" type="button" onClick={() => setEmailOpen(true)}>{t("settings.changeEmail")}</Button>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)} disabled={!preview}>{t("settings.manage")}</Button>
-        </div>
-        <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
-          <div>
-            <strong>{t("settings.deleteAccount")}</strong>
-            <span>{t("settings.deleteAccountHint")}</span>
+          <div className={styles.accountDetailRow}>
+            <div>
+              <strong>{t("settings.loginMethod")}</strong>
+              <span>{t("settings.loginMethodHint", { brand: brandName ?? "Kokoro" })}</span>
+            </div>
+            <Button variant="outline" size="sm" type="button" onClick={() => onLoginMethodsChange(true)}>{t("settings.manage")}</Button>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)} disabled={!preview}>{t("settings.deleteAccount")}</Button>
-        </div>
+          <div className={`${styles.accountDetailRow} ${styles.dangerRow}`}>
+            <div>
+              <strong>{t("settings.deleteAccount")}</strong>
+              <span>{t("settings.deleteAccountHint")}</span>
+            </div>
+            <Button variant="outline" size="sm" type="button" onClick={() => setDeleteOpen(true)}>{t("settings.deleteAccount")}</Button>
+          </div>
+        </> : null}
       </div>
 
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>

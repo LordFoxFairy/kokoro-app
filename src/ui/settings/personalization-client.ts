@@ -47,6 +47,13 @@ export class PersonalizationClientError extends Error {
 
 const endpoint = "/api/hub/preferences/personalization";
 
+// Settings panels intentionally unmount when users switch sections. Keep a
+// per-subject snapshot for the lifetime of the browser document so returning
+// to Personalization does not flash an empty, disabled form before issuing the
+// same private read again. The cache is never shared across subjects.
+const snapshots = new Map<string, PersonalizationSnapshot>();
+const reads = new Map<string, Promise<PersonalizationSnapshot>>();
+
 async function parseError(
   response: Response,
 ): Promise<PersonalizationClientError> {
@@ -61,20 +68,42 @@ async function parseError(
 }
 
 /** Browser-private adapter for the BFF-owned personalization projection. */
-export async function readPersonalization(): Promise<PersonalizationSnapshot> {
-  const response = await fetch(endpoint, { cache: "no-store" });
-  if (!response.ok) throw await parseError(response);
-  const parsed = responseSchema.safeParse(await response.json());
-  if (!parsed.success) {
-    throw new PersonalizationClientError(
-      "Personalization response is invalid",
-      response.status,
-    );
-  }
-  return parsed.data.data;
+export function cachedPersonalization(
+  subject: string,
+): PersonalizationSnapshot | undefined {
+  return snapshots.get(subject);
+}
+
+export async function readPersonalization(
+  subject: string,
+): Promise<PersonalizationSnapshot> {
+  const cached = snapshots.get(subject);
+  if (cached !== undefined) return cached;
+  const pending = reads.get(subject);
+  if (pending !== undefined) return pending;
+
+  const request = fetch(endpoint, { cache: "no-store" })
+    .then(async (response) => {
+      if (!response.ok) throw await parseError(response);
+      const parsed = responseSchema.safeParse(await response.json());
+      if (!parsed.success) {
+        throw new PersonalizationClientError(
+          "Personalization response is invalid",
+          response.status,
+        );
+      }
+      snapshots.set(subject, parsed.data.data);
+      return parsed.data.data;
+    })
+    .finally(() => {
+      reads.delete(subject);
+    });
+  reads.set(subject, request);
+  return request;
 }
 
 export async function replacePersonalization(
+  subject: string,
   fields: PersonalizationFields,
   expectedRevision: number,
 ): Promise<PersonalizationSnapshot> {
@@ -94,5 +123,6 @@ export async function replacePersonalization(
       response.status,
     );
   }
+  snapshots.set(subject, parsed.data.data);
   return parsed.data.data;
 }

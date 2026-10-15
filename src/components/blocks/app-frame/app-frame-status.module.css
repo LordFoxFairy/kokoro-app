@@ -153,6 +153,24 @@
   flex-direction: column;
   overflow: hidden;
 }
+.bootingHeader {
+  display: flex;
+  height: 3.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+.bootingHeaderTitle,
+.bootingHeaderTools {
+  display: block;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted-foreground) 12%, transparent);
+}
+.bootingHeaderTitle { width: min(10rem, 36%); height: 1rem; }
+.bootingHeaderTools { width: 4.5rem; height: 1.8rem; }
 .timelineStage > [data-slot="conversation-timeline"] { min-height: 0; }
 .timelineStage[data-canvas-reopen="true"] > [data-slot="conversation-timeline"] [data-slot="message-scroller-viewport"] {
   /* The reopen affordance is an overlay on the timeline, so reserve a real

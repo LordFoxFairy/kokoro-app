@@ -1,37 +1,38 @@
-import type { ComponentType, RefObject } from "react"
+import { useEffect, type ComponentType, type RefObject } from "react";
 
-import { CustomApiDialog } from "@/ui/mcp/connector-catalog-dialog"
-import { McpCreateDialog, type McpCreateMode } from "@/ui/mcp/mcp-panel"
-import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal"
-import type { SkillCard } from "@/hub/schemas"
-import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
-import { browserHubClient } from "@/ui/shell/page-clients"
+import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
+import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
+import { SettingsModal, type SettingsTab } from "@/ui/settings/settings-modal";
+import type { SkillCard } from "@/hub/schemas";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import { browserHubClient } from "@/ui/shell/page-clients";
+import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
+import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
+import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client";
+import { warmSkillsPool } from "@/ui/skills/skills-panel";
 
-import type { AppCommandMenuProps } from "./app-command-menu"
+import type { AppCommandMenuProps } from "./app-command-menu";
 
 export type AppFrameOverlaySurfacesProps = {
-  mounted: boolean
-  settingsTab: SettingsTab | null
-  brandName: string | undefined
-  preview: boolean
-  readBoundary?: ProjectReadBoundary
-  onCloseSettings: () => void
-  onTabChange: (tab: SettingsTab) => void
-  onCreateSkillWithAi: () => void
-  onTrySkill: (skill: SkillCard, prompt?: string) => void
-  settingsReturnFocusRef: RefObject<HTMLElement | null>
-  shellRef: RefObject<HTMLDivElement | null>
-  mcpCreateMode: McpCreateMode | null
-  setMcpCreateMode: (mode: McpCreateMode | null) => void
-  mcpCreateReturnFocusRef: RefObject<HTMLElement | null>
-  customApiOpen: boolean
-  setCustomApiOpen: (open: boolean) => void
-  customApiReturnFocusRef: RefObject<HTMLElement | null>
-  commandMenu: ComponentType<AppCommandMenuProps>
-  commandProps: Omit<AppCommandMenuProps, "open" | "onOpenChange">
-  commandOpen: boolean
-  onCommandOpenChange: (open: boolean) => void
-}
+  mounted: boolean;
+  settingsTab: SettingsTab | null;
+  brandName: string | undefined;
+  preview: boolean;
+  readBoundary?: ProjectReadBoundary;
+  onCloseSettings: () => void;
+  onTabChange: (tab: SettingsTab) => void;
+  onCreateSkillWithAi: () => void;
+  onTrySkill: (skill: SkillCard, prompt?: string) => void;
+  settingsReturnFocusRef: RefObject<HTMLElement | null>;
+  shellRef: RefObject<HTMLDivElement | null>;
+  mcpCreateMode: McpCreateMode | null;
+  setMcpCreateMode: (mode: McpCreateMode | null) => void;
+  mcpCreateReturnFocusRef: RefObject<HTMLElement | null>;
+  commandMenu: ComponentType<AppCommandMenuProps>;
+  commandProps: Omit<AppCommandMenuProps, "open" | "onOpenChange">;
+  commandOpen: boolean;
+  onCommandOpenChange: (open: boolean) => void;
+};
 
 /** Owns the mounted Settings/MCP/command overlay surfaces and their adapters. */
 export function AppFrameOverlaySurfaces({
@@ -49,14 +50,41 @@ export function AppFrameOverlaySurfaces({
   mcpCreateMode,
   setMcpCreateMode,
   mcpCreateReturnFocusRef,
-  customApiOpen,
-  setCustomApiOpen,
-  customApiReturnFocusRef,
   commandMenu: CommandMenu,
   commandProps,
   commandOpen,
   onCommandOpenChange,
 }: AppFrameOverlaySurfacesProps) {
+  // Start the small, read-only connector projections with the admitted app
+  // session rather than when the Settings dialog first mounts. The Settings
+  // section still joins this exact client/identity flight, but opening it no
+  // longer has to show a transient placeholder before its known list appears.
+  const connectorIdentity = preview
+    ? "preview"
+    : readBoundary?.admitted === true
+      ? readBoundary.subject
+      : null;
+  useEffect(() => {
+    if (!mounted || connectorIdentity === null) return undefined;
+    const client = browserHubClient({ preview });
+    const releaseMcp = warmMcpProjection({
+      client,
+      identity: connectorIdentity,
+    });
+    const releaseCustomApi = warmCustomApiProjection({
+      client,
+      identity: connectorIdentity,
+    });
+    const releaseSkills = warmSkillsPool(
+      preview ? client : createManusSkillHubClient(client),
+    );
+    return () => {
+      releaseMcp();
+      releaseCustomApi();
+      releaseSkills();
+    };
+  }, [connectorIdentity, mounted, preview]);
+
   return (
     <>
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
@@ -80,17 +108,10 @@ export function AppFrameOverlaySurfaces({
           client={browserHubClient({ preview })}
           mode={mcpCreateMode}
           open
-          onOpenChange={(open) => { if (!open) setMcpCreateMode(null) }}
+          onOpenChange={(open) => {
+            if (!open) setMcpCreateMode(null);
+          }}
           returnFocusRef={mcpCreateReturnFocusRef}
-        />
-      ) : null}
-
-      {mounted ? (
-        <CustomApiDialog
-          client={browserHubClient({ preview })}
-          open={customApiOpen}
-          onOpenChange={setCustomApiOpen}
-          returnFocusRef={customApiReturnFocusRef}
         />
       ) : null}
 
@@ -100,5 +121,5 @@ export function AppFrameOverlaySurfaces({
         onOpenChange={onCommandOpenChange}
       />
     </>
-  )
+  );
 }
