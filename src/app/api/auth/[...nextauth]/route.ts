@@ -160,7 +160,15 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
-  if (url.pathname !== expectedPath || !matchesCanonicalWebRequest(request, config.relay, method)) {
+  // Browser form navigations omit Origin in Chromium. The provider start is still
+  // bound to the live double-submit CSRF cookie below; admit only the exact
+  // same-origin document-navigation metadata emitted by the fixed /login form.
+  const browserProviderFormPost = action === "signin" && method === "POST" &&
+    request.headers.get("host") === config.relay.webHost && request.headers.get("origin") === null &&
+    request.headers.get("sec-fetch-site") === "same-origin" && request.headers.get("sec-fetch-mode") === "navigate" &&
+    request.headers.get("sec-fetch-dest") === "document"
+  if (url.pathname !== expectedPath ||
+    (!matchesCanonicalWebRequest(request, config.relay, method) && !browserProviderFormPost)) {
     return errorResponse(403, "rp_origin_rejected")
   }
   if (request.headers.has("authorization") || request.headers.has("x-kokoro-service") || request.headers.has("x-kokoro-internal-secret")) {
