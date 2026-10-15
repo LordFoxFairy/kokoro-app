@@ -37,6 +37,7 @@ export function ConnectorsSettingsSection({
   return (
     <>
       <McpContent
+        key={`connectors-${connectorRefreshKey}`}
         client={client}
         preview={preview}
         embedded
