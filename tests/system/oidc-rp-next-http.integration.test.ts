@@ -5649,6 +5649,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     const started = new Promise<void>((resolve) => {
       onRefreshStarted = () => { onRefreshStarted = undefined; resolve() }
     })
+    // SET37-BEGIN: refresh-before metadata
+    const refreshManifestsBefore = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
+    // SET37-END: refresh-before metadata
     holdRefresh = true
     try {
       const refreshing = http(nextPort, "/api/auth/session", "POST", form,
@@ -5664,7 +5667,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         ),
       ])
       if (first.kind === "response") {
-        throw new Error(responseDiagnostic("refresh_before_token", first.response, outputStart, pathStart))
+        // SET37-BEGIN: refresh-after metadata
+        const refreshManifestsAfter = await nextManifestMetadata().catch(() => [{ error_code: "metadata_unavailable" }])
+        // SET37-END: refresh-after metadata
+        throw new Error(nextFailureDiagnostic("refresh_before_token", first.response, outputStart, pathStart,
+          refreshManifestsBefore, refreshManifestsAfter))
       }
       if (first.kind === "rejection") {
         throw new Error(`refresh_before_token diagnostic: ${JSON.stringify({

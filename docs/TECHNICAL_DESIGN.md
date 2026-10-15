@@ -1,3 +1,11 @@
+## SET37 登录刷新早期失败诊断（2026-10-15；D0）
+
+基线Web 01780925f62f5cdf2552567d8f97d0c0ee85abc5。runtime_audit仅改现OIDC实际Next测试；932文件保护，Root6文档。产品源码、原race/count/oracle/timeout/fixture/cleanup均不变。
+
+现pending-refresh例在refresh token fixture收到请求前已返回500 HTML、Unexpected end of JSON input，与SET20/28/35观测签名一致，但尚无根因。仅在本例启动refresh前及意外早返后调用已有nextManifestMetadata，并把该早返分支转为已有nextFailureDiagnostic。固定名单、摘要/size/json-validity及既有净化parse/request诊断，不记正文、cookie、凭据、任意路径或原始异常。不新建诊断框架/依赖、重试/请求或修改业务逻辑。新增I/O可能影响时序，metadata的750ms截止不代表底层read取消；文件变化仅关联证据，须parse来源与摘要相符才能确认根因。
+
+新增标记块+显式微替换须整体逆恢复原测试文件，保留SET32/33全部逻辑。worker仅静态纯门，Root独立审查逆变换及输出后，实跑同一原case，显式verbose/silent=false，使用已拥有的隔离fixture并核共享库存恢复。若PASS仅表示本次未复现，不宣称已修复或整体native稳定。正常认证Browser另待验证；Skills/连接器不改，Goal active。
+
 ## SET36 源码阶段放行（2026-10-15）
 
 Root独立原source运行原126项全PASS；修订后的新增28项14FAIL/14PASS，126项CLI过滤未跑，缺失map演进、设置行和真实Clipboard行为构成RED。四现test完整旧prefix保持，改动仅新增测试；源码实现范围仍为既定13现文件，其余914保护，四test冻结不再编辑。新反馈目标避免无关project alert，pending route与selection一致但不声称独立隔离hydrating/meta两守卫。原整批welcome路由单次波动未归因，负控在无功能旧source上PASS不证明实现。
