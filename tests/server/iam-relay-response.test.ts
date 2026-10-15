@@ -30,6 +30,16 @@ describe("closed Product IAM RP callback navigation", () => {
     }
   })
 
+  it("preserves a valid OAuth error callback for the RP", () => {
+    const error = new URLSearchParams({ error: "invalid_request", state: "state_valid_123456789", iss: `${WEB_ORIGIN}/iam`, error_description: "request rejected" })
+    const location = `${WEB_ORIGIN}${CALLBACK_PATH}?${error}`
+    const response = nativeIamResponse(nativeRedirect(location), WEB_ORIGIN, false, "request-error")
+
+    expect(response?.status).toBe(302)
+    expect(response?.headers.get("location")).toBe(location)
+    expect(validIamRpCallbackNavigation(location, WEB_ORIGIN)).toBe(true)
+  })
+
   it("converts the exact JSON authorize continuation", () => {
     const location = `${WEB_ORIGIN}${CALLBACK_PATH}?${QUERY}`
     const response = browserAuthorizeResponse(authorizeJson({ redirect: true, url: location }), WEB_ORIGIN, false, "request-json")
