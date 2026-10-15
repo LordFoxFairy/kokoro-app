@@ -77,6 +77,19 @@ describe("/iam/[...path] read-only relay", () => {
     expect(call.headers.has("authorization")).toBe(false)
   })
 
+  it("does not forward the browser's opaque no-referrer Origin to the IAM owner", async () => {
+    requestIamRelay.mockResolvedValue(upstream({ headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-request-id": "upstream-opaque" },
+      setCookies: ["kokoro-issuer.session_token=one; Path=/iam; HttpOnly; SameSite=Lax"],
+      body: JSON.stringify({ redirect: true, url: "https://web.example.test/auth/sign-in?opaque=one" }) }))
+    const { GET } = await import("@/app/iam/[...path]/route")
+    const response = await GET(browserRequest("https://web.example.test/iam/oauth2/authorize?client_id=web", {
+      headers: { origin: "null" },
+    }), params(["oauth2", "authorize"]))
+    expect(response.status).toBe(302)
+    const call = requestIamRelay.mock.calls[0]?.[0] as { headers: Headers }
+    expect(call.headers.has("origin")).toBe(false)
+  })
+
   it("preserves a valid native redirect and each Set-Cookie field", async () => {
     requestIamRelay.mockResolvedValue(upstream({
       status: 302,
