@@ -31,7 +31,12 @@ export async function GET(request: Request): Promise<Response> {
   if (!upstream.ok || bffErrorEnvelopeSchema.safeParse(raw).success) return webErrorResponse("admin_access_unavailable", 503, requestId)
   const parsed = currentUserSchema.safeParse(raw)
   if (!parsed.success || parsed.data.data.user_id !== claims.subject) return webErrorResponse("admin_access_unavailable", 503, requestId)
-  return NextResponse.json({ platform_admin: parsed.data.data.platform_admin, ...(parsed.data.data.platform_admin ? { manage_url: "/manage" } : {}) }, {
+  return NextResponse.json({
+    platform_admin: parsed.data.data.platform_admin,
+    user_id: parsed.data.data.user_id,
+    tenant_id: parsed.data.data.tenant_id,
+    ...(parsed.data.data.platform_admin ? { manage_url: "/manage" } : {}),
+  }, {
     headers: { "cache-control": "private, no-store", "x-request-id": parsed.data.meta.request_id },
   })
 }
