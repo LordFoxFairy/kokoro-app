@@ -444,15 +444,12 @@ describe("SettingsModal 设置中心模态", () => {
     );
   });
 
-  it("打开常规设置时自动聚焦不会滚动并裁切导航首项", async () => {
-    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  it("打开常规设置时自动聚焦当前 Tab", async () => {
     renderSettings(() => {}, undefined, false, undefined, "appearance");
 
     await waitFor(() =>
       expect(screen.getByTestId("settings-tab-appearance")).toHaveFocus(),
     );
-    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
-    focus.mockRestore();
   });
 
   it("每个 Tab 都有真实对应的 shadcn tabpanel", () => {

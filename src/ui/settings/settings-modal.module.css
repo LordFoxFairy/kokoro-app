@@ -524,11 +524,12 @@
 /* The compact Manus settings surface keeps its account identity and category
  * names visible.  Its navigation becomes one horizontally scrollable row,
  * never an unlabeled icon rail. */
-/* Settings has its own measured mode boundary. Manus stays in the compact,
- * horizontal sheet through the common laptop-width envelope; the full
- * workbench only appears once there is room for both a 220px rail and a
- * readable content column. Do not reuse a generic phone/tablet breakpoint. */
-@media (max-width: 95.99rem) {
+/* Settings has its own measured mode boundary. At the same 811×764 CSS
+ * viewport, Manus keeps a 720px workbench with its 220px rail; switching the
+ * whole surface to the 380px sheet there was the source of the broken
+ * “shrunk sidebar” behavior. Collapse only once the 720px envelope plus its
+ * outer inset no longer fits. */
+@media (max-width: 47.99rem) {
   .dialogContent[data-slot="dialog-content"] {
     /* Direct measurement of the current Manus compact Settings surface is a
      * 380px CSS sheet (760px on the Retina capture) even inside a laptop
@@ -804,7 +805,10 @@
 
   @media (max-width: 26rem) {
     .tabRail .tab[data-slot="tabs-trigger"] {
-      padding-inline: 0.4rem;
+      /* This is the narrowest sheet. Increasing the compact padding here
+       * made the horizontal rail lose an entire CJK label as the viewport
+       * contracted. Preserve the normal 4px rhythm instead. */
+      padding-inline: 0.25rem;
       font-size: 0.8125rem;
     }
   }
