@@ -463,6 +463,23 @@ describe("提交链路", () => {
     expect(client.streams).toHaveLength(0)
   })
 
+  it("BFF 明确 Agent 未配置时保留公开错误码，供界面提供可操作说明", async () => {
+    buildEngine()
+    client.nextCreate = () => Promise.reject(new SessionClientError(
+      "http",
+      "Agent execution is disabled or not configured",
+      "agent_not_configured",
+    ))
+
+    engine.submit("hello")
+    await settle()
+
+    expect(engine.getSnapshot().machine).toMatchObject({
+      phase: "error",
+      error: "agent_not_configured",
+    })
+  })
+
   it("活跃 run 409（session_run_active）显式进错误态", async () => {
     buildEngine()
     client.nextCreate = () =>

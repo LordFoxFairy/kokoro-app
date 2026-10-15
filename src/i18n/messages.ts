@@ -443,6 +443,7 @@ export const zh = {
   "fail.modelUnavailable": "当前模型暂时不可用，这一轮已停止。",
   "fail.dependencyUnavailable": "执行所需的服务暂时不可用，这一轮已停止。",
   "fail.modelAccessDenied": "当前账号没有使用这个模型的权限，请联系管理员。",
+  "fail.agentNotConfigured": "Agent 服务尚未配置，当前任务无法开始。请检查服务连接后再重试。",
   "fail.generic": "这一轮没能完成，稍后再试一次。",
   "fail.internalHint": "如果问题持续，请联系支持团队并提供会话时间。",
   // 模式菜单提示

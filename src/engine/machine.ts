@@ -772,7 +772,12 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ) {
           return
         }
-        const detail = describeUnknown(error)
+        // HTTP owner failures expose a reviewed public code. Preserve that
+        // code for recovery UX (credit checks already rely on this), while
+        // keeping unknown/network errors as their local diagnostic detail.
+        const detail = error instanceof SessionClientError && error.code !== null
+          ? error.code
+          : describeUnknown(error)
         if (recoveringExpiredCursor || connection.status !== "connected") {
           recoveredSubmission = submission
           recoveredSubmissionError = detail
