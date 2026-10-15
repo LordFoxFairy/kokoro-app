@@ -29,12 +29,14 @@ import {
   Sparkles,
   UserRound,
   WalletCards,
+  X,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocale } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/messages";
 
 import type { SettingsTab } from "./settings-types";
 import styles from "./settings-modal.module.css";
@@ -80,7 +82,31 @@ type SettingsNavigationProps = {
   brandName: string;
   selectedTab: SettingsTab;
   activeTabRef: RefObject<HTMLButtonElement | null>;
+  onSelectSetting: (tab: SettingsTab) => void;
 };
+
+// Only labels already visible on navigable product pages belong here. Values,
+// hidden dialogs and the separate Skills/connector catalogs are not indexed.
+const settingLabels: Partial<Record<SettingsTab, readonly MessageKey[]>> = {
+  account: ["settings.fullName", "settings.email", "settings.userId", "settings.loginMethod", "settings.devices.title", "settings.deleteAccount"],
+  appearance: ["settings.appearanceSection", "settings.notificationsGroup", "settings.language", "settings.theme", "settings.taskDelivery", "settings.browserNotifications", "settings.soundNotifications", "settings.productUpdates", "settings.brandAds"],
+  shortcuts: ["settings.shortcutNewTask", "settings.shortcutSearch", "settings.shortcutSidebar", "settings.shortcutCopyTaskLink", "settings.shortcutVoice"],
+  personalization: ["settings.personalProfile", "settings.nickname", "settings.occupation", "settings.aboutYou", "settings.customInstructions", "settings.knowledge", "settings.importFromAi", "settings.importMemory", "settings.importMemoryAction"],
+  credits: ["billing.ledgerTitle"],
+  team: ["team.membersTitle", "team.invitesTitle"],
+  "data-management": ["data.sharedTasks", "data.sharedFiles", "data.archivedTasks", "data.authorizedApps", "data.cloudBrowser", "data.domains"],
+  help: ["help.accountTitle", "help.shareTitle", "help.limitsTitle"],
+};
+
+// Case folding can expand a code point. Only use folded offsets when they
+// still address the original text; React escapes every rendered fragment.
+function matchedLabel(label: string, query: string) {
+  const folded = label.toLocaleLowerCase();
+  const needle = query.toLocaleLowerCase();
+  const index = folded.indexOf(needle);
+  if (index < 0 || folded.length !== label.length || needle.length !== query.length) return label;
+  return <>{label.slice(0, index)}<mark>{label.slice(index, index + query.length)}</mark>{label.slice(index + query.length)}</>;
+}
 
 /**
  * Navigation only exposes a selectable tab when its backing capability exists.
@@ -91,11 +117,13 @@ export function SettingsNavigation({
   brandName,
   selectedTab,
   activeTabRef,
+  onSelectSetting,
 }: SettingsNavigationProps) {
   const { t } = useLocale();
   const unavailableId = useId();
   const [query, setQuery] = useState("");
   const tabListRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const nav: readonly SettingsNavigationEntryOrPlaceholder[] = [
     { kind: "tab", key: "account", label: t("settings.accountTitle"), icon: UserRound, group: "account" },
@@ -118,11 +146,15 @@ export function SettingsNavigation({
     { kind: "tab", key: "help", label: t("settings.helpTitle"), icon: CircleHelp },
   ];
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const renderedNav = normalizedQuery.length === 0
-    ? nav
-    : nav.filter((entry) =>
-      (entry.kind === "tab" && entry.key === selectedTab) ||
-      entry.label.toLocaleLowerCase().includes(normalizedQuery));
+  const searching = normalizedQuery.length > 0;
+  const searchResults = searching ? nav.flatMap((entry) => {
+    const children = entry.kind === "tab"
+      ? (settingLabels[entry.key] ?? []).map((key) => ({ key, label: t(key) }))
+        .filter((child) => child.label.toLocaleLowerCase().includes(normalizedQuery))
+      : [];
+    return entry.label.toLocaleLowerCase().includes(normalizedQuery) || children.length > 0
+      ? [{ entry, children }] : [];
+  }) : [];
 
   // Preserve the reference panel's initial top-of-rail position. Only move
   // enough to reveal a selected row that is actually outside the viewport;
@@ -153,7 +185,7 @@ export function SettingsNavigation({
   };
 
   return (
-    <nav className={styles.nav} aria-label={t("settings.title")}>
+    <nav className={styles.nav} data-searching={searching ? "true" : undefined} aria-label={t("settings.title")}>
       <div className={styles.brand}>
         <div className={styles.brandIdentity}>
           <Avatar className={styles.brandAvatar}>
@@ -166,14 +198,37 @@ export function SettingsNavigation({
           <ChevronsUpDown className={styles.brandSwitcher} aria-hidden="true" />
         </div>
       </div>
-      <label className={styles.settingsSearch}>
-        <Search aria-hidden="true" />
-        <Input value={query} aria-label={t("settings.search")} placeholder={t("settings.search")} onChange={(event) => setQuery(event.target.value)} />
-      </label>
+      <div className={styles.searchToolbar}>
+        <div className={styles.settingsSearch}>
+          <Search aria-hidden="true" />
+          <Input ref={searchRef} value={query} aria-label={t("settings.search")} placeholder={t("settings.search")} onChange={(event) => setQuery(event.target.value)} />
+          {query.length > 0 ? <button type="button" className={styles.searchClear} aria-label={t("settings.searchClear")} onClick={() => { setQuery(""); searchRef.current?.focus(); }}><X aria-hidden="true" /></button> : null}
+        </div>
+        {searching ? (
+          <div className={styles.searchResults}>
+            {searchResults.length === 0 ? <p role="status" className={styles.searchEmpty}>{t("settings.searchEmpty")}</p> : (
+              <ul className={styles.searchList}>
+                {searchResults.map(({ entry, children }) => (
+                  <li key={entry.kind === "tab" ? entry.key : entry.id}>
+                    {entry.kind === "tab" ? (
+                      <button type="button" className={styles.searchParent} onClick={() => onSelectSetting(entry.key)}>{matchedLabel(entry.label, query.trim())}</button>
+                    ) : (
+                      <div className={styles.searchUnavailable} aria-disabled="true" aria-describedby={unavailableId}>{matchedLabel(entry.label, query.trim())}</div>
+                    )}
+                    {entry.kind === "tab" && children.length > 0 ? <ul className={styles.searchChildren}>
+                      {children.map((child) => <li key={child.key}><button type="button" className={styles.searchChild} onClick={() => onSelectSetting(entry.key)}>{matchedLabel(child.label, query.trim())}</button></li>)}
+                    </ul> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </div>
       <p id={unavailableId} className={styles.unavailableNavigation}>{t("settings.unavailableNavigation")}</p>
       <div className={styles.tabRail}>
         <TabsList ref={tabListRef} className={styles.tabList} variant="line">
-          {renderedNav.map((entry) => {
+          {nav.map((entry) => {
             const label = groupLabel(entry.group);
             const Icon = entry.icon;
             const itemKey = entry.kind === "tab" ? entry.key : entry.id;

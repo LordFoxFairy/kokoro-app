@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  // SET40-BEGIN: settings-search-feedback
+  "settings.searchClear": "検索をクリア",
+  "settings.searchEmpty": "結果が見つかりません",
+  // SET40-END: settings-search-feedback
   // SET39-BEGIN: active-settings-translation-gaps
   "settings.importMemoryAction": "インポート",
   // SET39-END: active-settings-translation-gaps

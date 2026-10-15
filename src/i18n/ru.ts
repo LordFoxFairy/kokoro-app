@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  // SET40-BEGIN: settings-search-feedback
+  "settings.searchClear": "Очистить поиск",
+  "settings.searchEmpty": "Ничего не найдено",
+  // SET40-END: settings-search-feedback
   // SET38-BEGIN: active-settings-translations
   "settings.assetsTitle": "Активы",
   "settings.phoneTitle": "Телефон",

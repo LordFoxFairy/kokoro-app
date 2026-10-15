@@ -220,6 +220,7 @@ export function SettingsModal({
                 brandName={resolvedBrandName}
                 selectedTab={tab}
                 activeTabRef={activeTabRef}
+                onSelectSetting={selectTab}
               />
 
               {SETTINGS_TABS.map((panelTab) => (

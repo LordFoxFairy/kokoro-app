@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  // SET40-BEGIN: settings-search-feedback
+  "settings.searchClear": "검색 지우기",
+  "settings.searchEmpty": "검색 결과가 없습니다",
+  // SET40-END: settings-search-feedback
   // SET38-BEGIN: active-settings-translations
   "settings.assetsTitle": "자산",
   "settings.phoneTitle": "전화",

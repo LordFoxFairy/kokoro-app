@@ -1,3 +1,45 @@
+## SET40 具体设置搜索本地候选，完整门仍未通过（2026-10-15）
+
+对照 Manus 实际搜索：昵称/通知返回所属页面与匹配子项；仅父标题命中时不带无关子项。一个搜索输入、原生按钮、清除回焦、无结果提示、query/结果焦点保留；只索引静态可见标签，无私有值、隐藏对话框或 Skills/连接器子内容。灰色入口仍不可操作；移动端搜索首行横跨两列，结果有界滚动，原图标导航与内容明确落第二行。九语言只新增两键，旧值与整文件逆恢复 exact；两个旧测试全文 prefix 与冻结 suffix exact，916保护、Root8一致；额外现shell源协调设置初始handoff，已在modal内的焦点保留。
+
+Root旧source原69PASS，新19为18FAIL/1PASS，原69被CLI过滤未跑；最终Root独立88PASS。contract283/architecture50、lint/type/build通过；i18n99PASS/2既有FAIL。最新完整test 4033PASS/8FAIL，214.25s：5既有失败，新增3项proxy RP auth503尚未归因，不当作旧失败。隔离Playwright桌面与手机共26PASS/4原SKIP，31.7s；两门资源库存恢复，四张新搜索截图保留。V1完整4035PASS/6FAIL有新增instrumentation采集超时；V3首次4034PASS/7FAIL还有新增欢迎页项目路由失败。原全量复验两项未复现，根因均未关闭。不可变f82完整4017PASS/5FAIL；原与候选四case序列各4PASS/77 CLI过滤；同一原欢迎页case两版各PASS；私有诊断副本3959PASS/5旧FAIL/77 CLI过滤。这些局部结果不替代全门。全部原始失败保留，完整门FAILED，只允许明确记录风险、可回退的本地试用与草稿提交。独立只读评审未发现确定源码直接回归证据，但不能排除间接影响。V1/V2 E2E均24PASS/2手机焦点FAIL/4原SKIP；V2 Modal guard未解决且已撤回。V3修现shell每settingsTab变化的同步与rAF handoff，保留modal内焦点；原断言保持后复验通过。
+
+正常 Computer Use 已恢复。实际启动器把 Web copytree 到临时 Next 根；此前仅更新 Git 与 receipt 不能证明运行代码更新。Root已备份并将已接收SET39全部634个src/public文件对齐运行副本，保留配置、注入路由、同一PID与登录；刷新实际看到新版个性化。昵称、主题、语言、快捷键实际修改/刷新/恢复通过；此前旧副本上的账户/设备/团队/分享读取证据单独注明。SET40接入后仍须再核对运行副本与正常搜索；Goal active。
+
+## SET40 V3 设置内导航保留焦点（2026-10-15）
+
+V1/V2真实E2E均24PASS/2相同390px焦点FAIL/4原SKIP；Modal延后初始focus guard未解决，撤回该尝试。现shell use-app-frame-overlays 的 effect 随每次settingsTab改变同步及rAF强制focus原tab；桌面搜索rail隐藏，手机可见，因此会覆盖仍存在的结果焦点。Root是唯一writer，扩展一个既有shell源文件，15writer（13source+2冻结tests）/916保护/Root8，无新文件/依赖/owner。现INDEX记录shell归属。
+
+保留命令菜单→设置的初始handoff；同步和rAF各自先检查当前focus是否已在现settings-modal内，已在内部则保留，否则只在该modal内查对应tab并focus。关闭返回、原Tab/键盘/Skills/连接器流程不改。Modal恢复V1仅透传selectTab。禁止把结果无条件focus或隐藏手机rail；原两测试字节冻结。完整旧shell测试、focused88、lint/type/build、独审、原四case instrumentation对照、full/E2E和正常CUA验证后才接收。V1完整test新增采集超时仍未归因。
+
+## SET40 V2 移动端搜索焦点修复（2026-10-15）
+
+Root真实E2E V1为24PASS/2新FAIL/4原SKIP：两个390px项目从搜索结果Enter导航后焦点离开结果。保持原oracle不变，只放行现Modal初始自动聚焦回调的所有权保护；先核对trace和浏览器，再防止延后初始聚焦覆盖用户已转移的焦点。不得把结果无条件强行focus、禁用原iconrail、改timeout或放宽断言。单独全量test还发现1个新观察instrumentation采集超时，仍未归因，不称旧fail；Root串行复验。
+
+## SET40 设置字段搜索源码阶段放行（2026-10-15）
+
+Root 在旧 source 独立执行原69项全PASS；新19项18FAIL/1PASS，69项被CLI过滤未跑。缺失字段结果、父子导航和空结果提示构成真实RED；原测试完整前缀不变。源码范围12现文件，其余917保护，两test冻结。普通本地已登录 Computer Use 已恢复，账户资料、登录设备、团队成员/邀请、已分享任务空状态实际读取成功；积分账户未开通显示真实状态。
+
+## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
+
+基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。
+
+runtime_audit唯一writer，Root设计/审查/放行/Git/资源；最终12现source+2现tests/917保护/Root8，无新文件/依赖/契约。现Navigation维护闭合静态标签索引和唯一search DOM/query；Modal仅透传现selectTab。非空query只显示命中parent及匹配child，不把selected当命中；parent仅名称命中时无不匹配child；结果普通button/列表，不伪造第二Tabs或combobox，点击仅现selectTab，不自动focus/写偏好/执行灰操作。全query按literal includes，React片段mark；折叠前后长度变化时退普通原文，不用错索引切片，不注HTML。无结果本地化status；clear具名且focus回唯一input。输入不拦IME，键盘用原生Tab/Enter/Space。
+
+单Input/结果位于Nav toolbar。desktop原flex，search时toolbar flex1/min-height0，结果自身滚动，原tabRail仅CSS display:none退出可访问与键盘树而保持挂载/原ID；content和Tabs关系保持。<48rem nav display:contents、brand隐藏；layout第一行跨两列toolbar，右留close入口，结果max-height:min(30vh,12rem)滚动；第2行52px原iconrail与content显式grid坐标，iconrail保留且不受query过滤。无portal/新dialog/第二份搜索DOM。
+
+索引只来自已有可见静态设置标题/字段/开关：账户、通用、快捷键、个性化、数据管理、帮助，以及已有团队/Billing可见静态章节。值、草稿、成员、余额、隐藏dialog/预览演示、无导航chat页均排除；Skills/连接器仅保原菜单名搜索，业务与child排除。禁用菜单匹配仍是aria-disabled说明，禁用卡片项只导航其已有页不启用操作。九locale只加settings.searchClear/searchEmpty两native值，原locale值不变、各一marked块可整体逆向。
+
+先仅两现test追加marked区块，旧全文prefix保护；929其余文件（含全部product source）冻结。Root运行旧source的新例真实RED，保原modal基线，再授12source。新例覆盖字段/菜单/多结果/无结果保持当前页/clear/focus/locale更新/literal不注HTML/灰操作不执行；现E2E追加真实桌面与390px搜索、键盘、长结果独立滚动、无横向溢出、close可达及query保留。测试不降低原断言/timeout/skip；正常认证CUA另列，隔离工程Browser不能替代。实现后worker focused/i18n/contract/arch/lint/type/build，Root独审逆向+full/E2E串行及资源库存恢复，所有失败真实报告。Goal active。
+
+| 现文件 | 本次职责 |
+| --- | --- |
+| settings-navigation.tsx | 既有设置导航、静态child索引与唯一搜索交互 |
+| settings-modal.tsx | 仅传递既有selectTab回调 |
+| settings-modal.module.css | 唯一搜索DOM响应布局及结果可访问显隐 |
+| 九个既有locale | 两个搜索反馈native值 |
+| 两个既有test | 追加用户行为与真实布局证据 |
+
 ## SET39 英日文实际设置缺译已接收（2026-10-15）
 
 英文补用户ID复制成功、个性化读取失败/冲突三键，日文补现禁用导入按钮的一键。Root实际执行模块并与独立审查交叉核对：en1772→1775/1804，ja1721→1722/1804（均含既有fallback，非native完整度），旧值和完整原文件逆变换exact，930保护文件含全部tests与产品行为源保持。i18n99PASS/2原FAIL；lint/type/build通过；纯4值变更未重复contract/architecture/full/E2E，SET38/SET36既有证据独立保留。Goal active，正常认证Browser尚未验。

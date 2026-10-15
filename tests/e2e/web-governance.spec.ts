@@ -538,3 +538,66 @@ test("SET36 copy task link settings persist and actual current task copies a can
   await page.screenshot({ path: testInfo.outputPath("set36-copy-task-link-feedback.png"), fullPage: true });
 });
 // SET36-END: copy-task-link-real-browser
+
+// SET40-BEGIN: settings-search-real-layout
+for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+  test(`SET40 settings item search keyboard and bounded results at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport);
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#settings/account", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const search = modal.getByRole("textbox", { name: "Search", exact: true });
+    await expect(search).toHaveCount(1);
+    await expect(search).toBeVisible();
+    await search.fill("Nickname");
+    await expect(modal.getByRole("button", { name: "Personalization", exact: true })).toBeVisible();
+    const nickname = modal.getByRole("button", { name: "Nickname", exact: true });
+    await nickname.focus();
+    await page.keyboard.press("Enter");
+    await expect(modal.getByRole("heading", { name: "Personalization", level: 1 })).toBeVisible();
+    await expect(search).toHaveValue("Nickname");
+    await expect(nickname).toBeFocused();
+    await modal.getByRole("button", { name: "Clear search", exact: true }).click();
+    await expect(search).toHaveValue("");
+    await expect(search).toBeFocused();
+    await search.fill("Browser notifications");
+    const notification = modal.getByRole("button", { name: "Browser notifications", exact: true });
+    await notification.focus();
+    await page.keyboard.press("Space");
+    await expect(modal.getByRole("heading", { name: "General", level: 1 })).toBeVisible();
+    await expect(notification).toBeFocused();
+    await expect(search).toHaveValue("Browser notifications");
+    await search.fill("a");
+    const firstResult = modal.getByRole("button", { name: "Account", exact: true });
+    await expect(firstResult).toBeVisible();
+    const scroll = await firstResult.evaluate((element) => {
+      let ancestor = element.parentElement;
+      while (ancestor) {
+        const style = getComputedStyle(ancestor);
+        if (/(auto|scroll)/u.test(style.overflowY) && ancestor.scrollHeight > ancestor.clientHeight) {
+          ancestor.scrollTop = ancestor.scrollHeight;
+          return { height: ancestor.clientHeight, scrollTop: ancestor.scrollTop };
+        }
+        ancestor = ancestor.parentElement;
+      }
+      return null;
+    });
+    expect(scroll).not.toBeNull();
+    expect(scroll!.scrollTop).toBeGreaterThan(0);
+    if (viewport.width === 390) expect(scroll!.height).toBeLessThanOrEqual(193);
+    await expect(modal.getByTestId("settings-tab-account")).toBeVisible({ visible: viewport.width === 390 });
+    const dimensions = await modal.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }));
+    expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client);
+    const close = page.getByTestId("settings-close");
+    await expect(close).toBeVisible();
+    const closeBox = await close.boundingBox();
+    const searchBox = await search.boundingBox();
+    expect(closeBox).not.toBeNull();
+    expect(searchBox).not.toBeNull();
+    if (viewport.width === 390) expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(closeBox!.x);
+    await page.screenshot({ path: testInfo.outputPath(`set40-search-${viewport.width}.png`), fullPage: true });
+    await close.click();
+    await expect(modal).toHaveCount(0);
+  });
+}
+// SET40-END: settings-search-real-layout

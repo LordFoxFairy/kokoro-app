@@ -2089,3 +2089,140 @@ describe("SET26 actual settings billing/pricing admission props", () => {
     } finally { billed.mockRestore(); priced.mockRestore(); }
   });
 });
+
+// SET40-BEGIN: concrete-setting-search
+import { useLocale as useSet40Locale } from "@/i18n/context";
+
+describe("SET40 concrete settings search", () => {
+  function searchFor(value: string) {
+    const input = screen.getByRole("textbox", { name: "搜索" });
+    expect(screen.getAllByRole("textbox", { name: "搜索" })).toHaveLength(1);
+    fireEvent.change(input, { target: { value } });
+    return input;
+  }
+  const navigation = () => screen.getByRole("navigation", { name: "设置" });
+
+  it("SET40 a field returns its parent and matching child, selecting preserves query and result focus", () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange, true);
+    const input = searchFor("昵称");
+    expect(within(navigation()).getByRole("button", { name: "个性化" })).toBeVisible();
+    const child = within(navigation()).getByRole("button", { name: "昵称" });
+    expect(within(navigation()).queryByRole("button", { name: "职业" })).toBeNull();
+    child.focus();
+    fireEvent.click(child);
+    expect(onTabChange).toHaveBeenCalledWith("personalization");
+    expect(screen.getByRole("heading", { name: "个性化", level: 1 })).toBeVisible();
+    expect(input).toHaveValue("昵称");
+    expect(child).toHaveFocus();
+  });
+
+  it("SET40 notification search finds the actual general setting without changing its value", () => {
+    renderSettings(() => {}, undefined, true);
+    const stored = localStorage.getItem("kokoro.web.communication-prefs");
+    searchFor("通知");
+    expect(within(navigation()).getByRole("button", { name: "通用" })).toBeVisible();
+    const result = within(navigation()).getByRole("button", { name: "浏览器通知" });
+    fireEvent.click(result);
+    expect(screen.getByRole("heading", { name: "通用", level: 1 })).toBeVisible();
+    expect(localStorage.getItem("kokoro.web.communication-prefs")).toBe(stored);
+  });
+
+  it.each([
+    ["积分历史", "用量与计费"],
+    ["成员", "团队"],
+    ["团队邀请", "团队"],
+  ])("SET40 static section %s is discoverable under %s without loading its dynamic contents", (child, parent) => {
+    renderSettings();
+    searchFor(child);
+    expect(within(navigation()).getByRole("button", { name: parent })).toBeVisible();
+    expect(within(navigation()).getByRole("button", { name: child })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+  });
+
+  it("SET40 a menu-name-only match does not add unrelated children or the selected account", () => {
+    renderSettings();
+    searchFor("个性化");
+    expect(within(navigation()).getByRole("button", { name: "个性化" })).toBeVisible();
+    expect(within(navigation()).queryByRole("button", { name: "昵称" })).toBeNull();
+    expect(within(navigation()).queryByRole("button", { name: "账户" })).toBeNull();
+  });
+
+  it("SET40 multiple matches retain both real children under the same parent", () => {
+    renderSettings();
+    searchFor("任务");
+    expect(within(navigation()).getAllByRole("button", { name: "数据管理" })).toHaveLength(1);
+    expect(within(navigation()).getByRole("button", { name: "已分享任务" })).toBeVisible();
+    expect(within(navigation()).getByRole("button", { name: "已归档任务" })).toBeVisible();
+  });
+
+  it("SET40 no result keeps the current panel; clear restores navigation and focuses the only input", () => {
+    renderSettings();
+    const input = searchFor("no-setting-matches-4071");
+    expect(within(navigation()).getByRole("status")).toHaveTextContent("未找到结果");
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+    fireEvent.click(within(navigation()).getByRole("button", { name: "清除搜索" }));
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+    for (const tab of NAV_TAB_KEYS) expect(screen.getByTestId(`settings-tab-${tab}`)).toBeInTheDocument();
+    expect(within(navigation()).queryByRole("status")).toBeNull();
+  });
+
+  it.each(["[", "<script>", "\"'"])("SET40 unsafe-looking %s is a literal query with no injected element", (query) => {
+    renderSettings();
+    const before = document.querySelectorAll("script").length;
+    const input = searchFor(query);
+    expect(input).toHaveValue(query);
+    expect(within(navigation()).getByRole("status")).toHaveTextContent("未找到结果");
+    expect(document.querySelectorAll("script")).toHaveLength(before);
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+  });
+
+  it("SET40 a disabled menu match remains unavailable and cannot change the selected panel", () => {
+    const onTabChange = vi.fn();
+    renderSettings(() => {}, onTabChange);
+    searchFor("钱包");
+    const matches = within(navigation()).getAllByText("钱包", { exact: true });
+    for (const match of matches) {
+      expect(match.closest('[aria-disabled="true"]')).not.toBeNull();
+      fireEvent.click(match);
+      fireEvent.keyDown(match, { key: "Enter" });
+    }
+    expect(onTabChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "账户", level: 1 })).toBeVisible();
+  });
+
+  it("SET40 indexes current-locale labels and updates a retained query when the locale changes", async () => {
+    function LocaleControl() {
+      const { setLocale } = useSet40Locale();
+      return <button onClick={() => setLocale("en")}>SET40 switch English</button>;
+    }
+    render(<ThemeProvider><LocaleProvider><LocaleControl /><SettingsModal preview initialTab="appearance" onClose={() => {}} /></LocaleProvider></ThemeProvider>);
+    const input = searchFor("nIcKnAmE");
+    expect(within(navigation()).getByRole("status")).toHaveTextContent("未找到结果");
+    fireEvent.click(screen.getByText("SET40 switch English", { exact: true }));
+    const englishNavigation = await screen.findByRole("navigation", { name: "Settings" });
+    expect(within(englishNavigation).getByRole("button", { name: "Personalization" })).toBeVisible();
+    expect(within(englishNavigation).getByRole("button", { name: "Nickname" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Search" })).toBe(input);
+    expect(input).toHaveValue("nIcKnAmE");
+  });
+
+  it.each(["技能", "连接器"])("SET40 %s retains title search without catalog child indexing", (title) => {
+    renderSettings();
+    searchFor(title);
+    const results = within(navigation()).getAllByRole("button").filter((button) => button.textContent === title);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toHaveTextContent(title);
+    expect(within(navigation()).queryByRole("button", { name: "我的技能" })).toBeNull();
+    expect(within(navigation()).queryByRole("button", { name: "Google Drive" })).toBeNull();
+  });
+
+  it.each(["Acme", "Alex", "Opus", "验证身份"])("SET40 does not index dynamic values, placeholders or hidden flows: %s", (query) => {
+    renderSettings();
+    searchFor(query);
+    expect(within(navigation()).getByRole("status")).toHaveTextContent("未找到结果");
+    expect(screen.queryByTestId("settings-tab-chat")).toBeNull();
+  });
+});
+// SET40-END: concrete-setting-search

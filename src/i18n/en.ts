@@ -4,6 +4,10 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  // SET40-BEGIN: settings-search-feedback
+  "settings.searchClear": "Clear search",
+  "settings.searchEmpty": "No results found",
+  // SET40-END: settings-search-feedback
   // SET39-BEGIN: active-settings-translation-gaps
   "settings.copied": "Copied",
   "settings.personalizationLoadFailed": "Personalization settings cannot be loaded right now. Try again.",

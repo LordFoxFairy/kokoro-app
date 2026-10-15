@@ -42,6 +42,10 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+  // SET40-BEGIN: settings-search-feedback
+  "settings.searchClear": "清除搜索",
+  "settings.searchEmpty": "未找到结果",
+  // SET40-END: settings-search-feedback
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "复制任务链接",
   "settings.shortcutCopyTaskLinkHint": "当任务打开时",
