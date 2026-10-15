@@ -1,6 +1,8 @@
 import {
   mcpConnectorIdSchema,
   mcpPrivateServerMatches,
+  mcpPrivateJsonImportMatches,
+  mcpPrivateJsonImportInputSchema,
   mcpPrivateServerRegistrationInputSchema,
   mcpPrivateServerPrepareInputSchema,
   mcpPrivateServerUpdateInputSchema,
@@ -425,9 +427,14 @@ async function proxyMcpConnector(
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | undefined =
-    path.length === 2 && path[1] === "servers" && request.method === "POST"
-      ? "registerServer"
-      : path.length === 3 && path[1] === "servers" && request.method === "GET"
+    path.length === 3 &&
+      path[1] === "servers" &&
+      path[2] === "import" &&
+      request.method === "POST"
+      ? "importJson"
+      : path.length === 2 && path[1] === "servers" && request.method === "POST"
+        ? "registerServer"
+        : path.length === 3 && path[1] === "servers" && request.method === "GET"
         ? "server"
         : path.length === 4 &&
             path[1] === "servers" &&
@@ -514,6 +521,7 @@ async function proxyMcpConnector(
   ].includes(operation);
   const privateServer = [
     "registerServer",
+    "importJson",
     "server",
     "prepareServer",
     "updateServer",
@@ -535,6 +543,7 @@ async function proxyMcpConnector(
     "remove",
     "createConnection",
     "registerServer",
+    "importJson",
     "prepareServer",
     "updateServer",
     "deleteServer",
@@ -661,7 +670,9 @@ async function proxyMcpConnector(
             : mcpConnectorCreateConnectionSchema.safeParse(input).success
         : operation === "registerServer"
           ? mcpPrivateServerRegistrationInputSchema.safeParse(input).success
-          : operation === "prepareServer" || operation === "deleteServer"
+          : operation === "importJson"
+            ? mcpPrivateJsonImportInputSchema.safeParse(input).success
+            : operation === "prepareServer" || operation === "deleteServer"
             ? mcpPrivateServerPrepareInputSchema.safeParse(input).success
             : operation === "updateServer"
               ? mcpPrivateServerUpdateInputSchema.safeParse(input).success
@@ -759,11 +770,12 @@ async function proxyMcpConnector(
     const expected =
       operation === "create" ||
       operation === "createConnection" ||
-      operation === "registerServer"
+      operation === "registerServer" ||
+      operation === "importJson"
         ? 201
         : 200;
     const connectorOperation =
-      operation === "registerServer"
+      operation === "registerServer" || operation === "importJson"
         ? "create"
         : operation === "server"
           ? "connector"
@@ -778,12 +790,14 @@ async function proxyMcpConnector(
               input,
             )
           : privateServer
-            ? mcpPrivateServerMatches(
-                operation as McpPrivateServerOperation,
-                raw,
-                id,
-                input,
-              )
+            ? operation === "importJson"
+              ? mcpPrivateJsonImportMatches(raw, input)
+              : mcpPrivateServerMatches(
+                  operation as McpPrivateServerOperation,
+                  raw,
+                  id,
+                  input,
+                )
             : mcpConnectorMatches(
                 operation as McpConnectorOperation,
                 raw,

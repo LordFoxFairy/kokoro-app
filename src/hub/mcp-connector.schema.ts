@@ -410,6 +410,60 @@ export type McpPrivateServerRegistration = z.infer<
   typeof mcpPrivateServerRegistrationSchema
 >;
 export type McpPrivateJsonImport = z.infer<typeof mcpPrivateJsonImportSchema>;
+
+/** Validates the atomic JSON-import projection without exposing raw config or secrets. */
+export function mcpPrivateJsonImportMatches(value: unknown, input?: unknown): boolean {
+  const body = mcpPrivateJsonImportInputSchema.safeParse(input);
+  if (!body.success) return false;
+  let document: unknown;
+  try {
+    document = JSON.parse(body.data.config_json);
+  } catch {
+    return false;
+  }
+  if (
+    typeof document !== "object" ||
+    document === null ||
+    Array.isArray(document) ||
+    typeof (document as Record<string, unknown>).mcpServers !== "object" ||
+    (document as Record<string, unknown>).mcpServers === null ||
+    Array.isArray((document as Record<string, unknown>).mcpServers)
+  )
+    return false;
+  const expected = Object.entries(
+    (document as { mcpServers: Record<string, unknown> }).mcpServers,
+  ).map(([displayName, raw]) => {
+    if (
+      typeof raw !== "object" ||
+      raw === null ||
+      Array.isArray(raw) ||
+      (raw as Record<string, unknown>).type !== "streamableHttp" ||
+      typeof (raw as Record<string, unknown>).url !== "string"
+    )
+      return undefined;
+    return { displayName, serverUrl: (raw as { url: string }).url };
+  });
+  if (expected.some((entry) => entry === undefined)) return false;
+  const parsed = z
+    .object({ data: mcpPrivateJsonImportSchema })
+    .strict()
+    .safeParse(value);
+  return (
+    parsed.success &&
+    parsed.data.data.imports.length === expected.length &&
+    parsed.data.data.imports.every((entry, index) => {
+      const match = expected[index];
+      return (
+        match !== undefined &&
+        entry.server.display_name === match.displayName &&
+        entry.server.server_url === match.serverUrl &&
+        entry.connector.server_id === entry.server.server_id &&
+        entry.connector.enabled === false &&
+        entry.connector.status === "pending"
+      );
+    })
+  );
+}
 export type McpPrivateServerPrepare = z.infer<
   typeof mcpPrivateServerPrepareSchema
 >;
