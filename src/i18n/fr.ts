@@ -4,6 +4,23 @@
 import type { MessageKey } from "./messages"
 
 export const fr: Partial<Record<MessageKey, string>> = {
+  // SET38-BEGIN: active-settings-translations
+  "settings.assetsTitle": "Actifs",
+  "settings.phoneTitle": "Téléphone",
+  "settings.walletTitle": "Portefeuille",
+  "settings.personalizationLoadFailed": "Impossible de charger les paramètres de personnalisation pour le moment. Réessayez.",
+  "settings.personalizationConflict": "Les paramètres ont été modifiés ailleurs. Actualisez la page avant de les enregistrer.",
+  "settings.copied": "Copié",
+  "settings.taskDelivery": "Comportement d’envoi par défaut pendant une tâche",
+  "settings.taskDeliveryHint": "Par défaut, les nouveaux messages sont mis en file d’attente et envoyés une fois la tâche en cours terminée.",
+  "settings.taskDeliveryQueue": "Ajouter à la file d’attente",
+  "settings.shortcutSaveFailed": "Impossible d’enregistrer le raccourci. Vérifiez le stockage du navigateur, puis réessayez.",
+  "settings.shortcutInvalid": "Utilisez Ctrl (⌘ sur Mac) avec une lettre, un chiffre ou un point. Vous pouvez ajouter Maj/Alt ; les combinaisons réservées au navigateur ne sont pas disponibles.",
+  "settings.shortcutConflict": "Cette combinaison est déjà associée à une autre action. Choisissez-en une autre.",
+  "settings.shortcutHelp": "Cliquez sur Modifier, puis appuyez sur une combinaison de touches ; Échap annule. Les raccourcis sont enregistrés uniquement dans ce navigateur et ne se déclenchent pas pendant la saisie de texte ni dans les boîtes de dialogue.",
+  "settings.shortcutVoiceUnavailable": "La saisie vocale est indisponible pour le moment",
+  "settings.shortcutCancel": "Annuler l’enregistrement du raccourci",
+  // SET38-END: active-settings-translations
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "Copier le lien de la tâche",
   "settings.shortcutCopyTaskLinkHint": "Lorsqu’une tâche est ouverte",

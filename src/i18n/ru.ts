@@ -4,6 +4,23 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+  // SET38-BEGIN: active-settings-translations
+  "settings.assetsTitle": "Активы",
+  "settings.phoneTitle": "Телефон",
+  "settings.walletTitle": "Кошелёк",
+  "settings.personalizationLoadFailed": "Сейчас не удаётся загрузить настройки персонализации. Повторите попытку.",
+  "settings.personalizationConflict": "Настройки были изменены в другом месте. Обновите страницу перед сохранением.",
+  "settings.copied": "Скопировано",
+  "settings.taskDelivery": "Отправка сообщений по умолчанию во время выполнения задачи",
+  "settings.taskDeliveryHint": "По умолчанию новые сообщения добавляются в очередь и отправляются после завершения текущей задачи.",
+  "settings.taskDeliveryQueue": "Добавить в очередь",
+  "settings.shortcutSaveFailed": "Не удалось сохранить сочетание клавиш. Проверьте хранилище браузера и повторите попытку.",
+  "settings.shortcutInvalid": "Используйте Ctrl (⌘ на Mac) с буквой, цифрой или точкой. Можно добавить Shift/Alt; зарезервированные браузером сочетания недоступны.",
+  "settings.shortcutConflict": "Это сочетание уже назначено другому действию. Выберите другое.",
+  "settings.shortcutHelp": "Нажмите «Изменить» и введите сочетание клавиш; Esc отменяет запись. Сочетания сохраняются только в этом браузере и не срабатывают при вводе текста и в диалоговых окнах.",
+  "settings.shortcutVoiceUnavailable": "Голосовой ввод пока недоступен",
+  "settings.shortcutCancel": "Отменить запись сочетания клавиш",
+  // SET38-END: active-settings-translations
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "Копировать ссылку на задачу",
   "settings.shortcutCopyTaskLinkHint": "Когда задача открыта",

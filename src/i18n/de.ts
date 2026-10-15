@@ -4,6 +4,23 @@
 import type { MessageKey } from "./messages"
 
 export const de: Partial<Record<MessageKey, string>> = {
+  // SET38-BEGIN: active-settings-translations
+  "settings.assetsTitle": "Vermögenswerte",
+  "settings.phoneTitle": "Telefon",
+  "settings.walletTitle": "Wallet",
+  "settings.personalizationLoadFailed": "Die Personalisierungseinstellungen können derzeit nicht geladen werden. Bitte versuche es erneut.",
+  "settings.personalizationConflict": "Die Einstellungen wurden an anderer Stelle geändert. Lade die Seite neu, bevor du speicherst.",
+  "settings.copied": "Kopiert",
+  "settings.taskDelivery": "Standardverhalten beim Senden während einer Aufgabe",
+  "settings.taskDeliveryHint": "Standardmäßig werden neue Nachrichten in die Warteschlange gestellt und nach Abschluss der aktuellen Aufgabe gesendet.",
+  "settings.taskDeliveryQueue": "Zur Warteschlange hinzufügen",
+  "settings.shortcutSaveFailed": "Das Tastenkürzel kann nicht gespeichert werden. Prüfe den Browserspeicher und versuche es erneut.",
+  "settings.shortcutInvalid": "Verwende Strg (⌘ auf dem Mac) mit einem Buchstaben, einer Zahl oder einem Punkt. Umschalt/Alt sind zusätzlich möglich; vom Browser reservierte Kombinationen sind nicht verfügbar.",
+  "settings.shortcutConflict": "Diese Kombination ist bereits einer anderen Aktion zugewiesen. Wähle eine andere.",
+  "settings.shortcutHelp": "Klicke auf Bearbeiten und drücke eine Tastenkombination; Esc bricht ab. Tastenkürzel werden nur in diesem Browser gespeichert und bei der Texteingabe sowie in Dialogen nicht ausgelöst.",
+  "settings.shortcutVoiceUnavailable": "Spracheingabe ist derzeit nicht verfügbar",
+  "settings.shortcutCancel": "Aufzeichnung des Tastenkürzels abbrechen",
+  // SET38-END: active-settings-translations
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "Aufgabenlink kopieren",
   "settings.shortcutCopyTaskLinkHint": "Wenn eine Aufgabe geöffnet ist",

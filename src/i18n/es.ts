@@ -4,6 +4,23 @@
 import type { MessageKey } from "./messages"
 
 export const es: Partial<Record<MessageKey, string>> = {
+  // SET38-BEGIN: active-settings-translations
+  "settings.assetsTitle": "Activos",
+  "settings.phoneTitle": "Teléfono",
+  "settings.walletTitle": "Cartera",
+  "settings.personalizationLoadFailed": "No se puede cargar la personalización en este momento. Inténtalo de nuevo.",
+  "settings.personalizationConflict": "La configuración se ha actualizado en otro lugar. Actualiza la página antes de guardar.",
+  "settings.copied": "Copiado",
+  "settings.taskDelivery": "Comportamiento de envío predeterminado durante una tarea",
+  "settings.taskDeliveryHint": "De forma predeterminada, los mensajes nuevos se añaden a la cola y se envían cuando finaliza la tarea actual.",
+  "settings.taskDeliveryQueue": "Añadir a la cola",
+  "settings.shortcutSaveFailed": "No se puede guardar el atajo. Comprueba el almacenamiento del navegador e inténtalo de nuevo.",
+  "settings.shortcutInvalid": "Usa Ctrl (⌘ en Mac) con una letra, un número o un punto. Puedes añadir Mayús/Alt; las combinaciones reservadas del navegador no están disponibles.",
+  "settings.shortcutConflict": "Esta combinación ya está asignada a otra acción. Elige otra.",
+  "settings.shortcutHelp": "Haz clic en editar y pulsa una combinación de teclas; Esc cancela. Los atajos solo se guardan en este navegador y no se activan al escribir texto ni en los cuadros de diálogo.",
+  "settings.shortcutVoiceUnavailable": "La entrada de voz no está disponible por el momento",
+  "settings.shortcutCancel": "Cancelar grabación del atajo",
+  // SET38-END: active-settings-translations
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "Copiar enlace de la tarea",
   "settings.shortcutCopyTaskLinkHint": "Cuando hay una tarea abierta",

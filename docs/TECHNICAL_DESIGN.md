@@ -1,3 +1,11 @@
+## SET38 六种语言的实际设置缺译（2026-10-15；D0）
+
+基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。
+
+每语言只补15个有实际设置调用点的native值：资产/电话/钱包灰菜单标题，个性化读取失败/冲突，账户ID复制成功，任务发送标题/排队说明/排队选项，快捷键保存失败/非法/冲突/帮助/语音不可用/取消。保原中文语义和全部原语言值；SET36 copy-link新key不重复，预览专用身份验证/邮箱/密钥演示和无调用点文案排除，Skills/连接器不改。每locale一个标记块，移除后整体逆恢复原文件；不改回退/覆盖算法/阈值或加英文灌水。
+
+纯本地化值不新增镜像测试；执行既有i18n、contract、architecture、lint/type/build，Root独立native语义及实际模块key集/全部原values/逆变换核对。覆盖数含共享英文回退，不是native翻译完整度；六语言此前1672/1800，单加15仍不足95%，以SET36后最新实际模块值重算，不冒称全覆盖或门禁已绿。正常认证Browser验证另列；Goal active。
+
 ## SET37 登录刷新早期失败诊断（2026-10-15；D0）
 
 基线Web 01780925f62f5cdf2552567d8f97d0c0ee85abc5。runtime_audit仅改现OIDC实际Next测试；932文件保护，Root6文档。产品源码、原race/count/oracle/timeout/fixture/cleanup均不变。

@@ -1,3 +1,17 @@
+## SET38 六种语言实际设置文案已接收（2026-10-15）
+
+ko/es/fr/de/pt/ru各补15个既有设置key的native值；Root实际执行locale模块、独立语义复核及整文件逆变换确认全部旧值不变，926保护文件（含全tests、产品逻辑）和Root7匹配。六种实际OVERLAYS均1676→1691/1804（93.7361%，含共享English fallback，不是native完整率）。i18n99PASS/2既有FAIL（MCP硬编码及ko覆盖不足95%）；contract283/architecture50/lint/type/build通过。未修改算法、门限或Skills/连接器。纯文案变更不重复完整/E2E，SET36的4017PASS/5FAIL与22PASS/4原SKIP证据独立保留，不冒称为本commit重跑。
+
+正常认证Browser仍未验，Goal active。SET37的真实refresh-before-token原case独立1PASS/0FAIL/80 CLI filtered，16.35s，固定manifest元数据诊断并未复现此前500，也不构成根因修复。
+
+## SET38 六种语言的实际设置缺译（2026-10-15；D0）
+
+基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。
+
+每语言只补15个有实际设置调用点的native值：资产/电话/钱包灰菜单标题，个性化读取失败/冲突，账户ID复制成功，任务发送标题/排队说明/排队选项，快捷键保存失败/非法/冲突/帮助/语音不可用/取消。保原中文语义和全部原语言值；SET36 copy-link新key不重复，预览专用身份验证/邮箱/密钥演示和无调用点文案排除，Skills/连接器不改。每locale一个标记块，移除后整体逆恢复原文件；不改回退/覆盖算法/阈值或加英文灌水。
+
+纯本地化值不新增镜像测试；执行既有i18n、contract、architecture、lint/type/build，Root独立native语义及实际模块key集/全部原values/逆变换核对。覆盖数含共享英文回退，不是native翻译完整度；六语言此前1672/1800，单加15仍不足95%，以SET36后最新实际模块值重算，不冒称全覆盖或门禁已绿。正常认证Browser验证另列；Goal active。
+
 ## SET37 刷新早期失败诊断已接收，继续六语种缺译（2026-10-15）
 
 现OIDC实际Next测试仅原refresh前及意外早response后采已有固定名单metadata，早分支用现净化nextFailureDiagnostic。两个marked块+唯一表达式逆恢复完整原318631bytes；全部产品源/原断言/race/count/timeout/fixture/cleanup/932保护/Root6精确。lint/typecheck全0，独审无确定P1/P2。

@@ -4,6 +4,23 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+  // SET38-BEGIN: active-settings-translations
+  "settings.assetsTitle": "자산",
+  "settings.phoneTitle": "전화",
+  "settings.walletTitle": "지갑",
+  "settings.personalizationLoadFailed": "개인화 설정을 지금 불러올 수 없습니다. 다시 시도하세요.",
+  "settings.personalizationConflict": "다른 곳에서 설정이 변경되었습니다. 새로고침한 후 저장하세요.",
+  "settings.copied": "복사됨",
+  "settings.taskDelivery": "작업 실행 중 기본 메시지 전송 방식",
+  "settings.taskDeliveryHint": "현재 기본 설정은 새 메시지를 대기열에 추가하고 현재 작업이 끝난 후 전송하는 것입니다.",
+  "settings.taskDeliveryQueue": "대기열에 추가",
+  "settings.shortcutSaveFailed": "단축키를 저장할 수 없습니다. 브라우저 저장소를 확인한 후 다시 시도하세요.",
+  "settings.shortcutInvalid": "Ctrl(Mac에서는 ⌘)과 문자, 숫자 또는 마침표를 함께 사용하세요. Shift/Alt를 추가할 수 있으며 브라우저 예약 조합은 사용할 수 없습니다.",
+  "settings.shortcutConflict": "이 조합은 다른 동작에 이미 지정되어 있습니다. 다른 조합을 선택하세요.",
+  "settings.shortcutHelp": "편집을 클릭한 후 키 조합을 누르세요. Esc로 취소합니다. 단축키는 현재 브라우저에만 저장되며 텍스트 입력 중이나 대화 상자에서는 작동하지 않습니다.",
+  "settings.shortcutVoiceUnavailable": "음성 입력은 현재 사용할 수 없습니다",
+  "settings.shortcutCancel": "단축키 기록 취소",
+  // SET38-END: active-settings-translations
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "작업 링크 복사",
   "settings.shortcutCopyTaskLinkHint": "작업이 열려 있을 때",
