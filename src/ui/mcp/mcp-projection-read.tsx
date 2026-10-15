@@ -468,14 +468,30 @@ export function McpProjectionRead({
           onClose={resetEditor}
           onSaveConfiguration={(input) => {
             if (!editor?.server || !client.updatePrivateMcpServer) return;
+            const server = editor.server;
+            const notesChanged = input.notes !== (server.notes ?? "");
+            const nameChanged = input.display_name !== server.display_name;
+            const urlChanged = input.server_url !== server.server_url;
+            const headersChanged =
+              input.header_upserts.length > 0 || input.header_removals.length > 0;
+
+            // The Platform owner deliberately puts a server back into the
+            // preparation state when its endpoint or headers change.  Do not
+            // resend those values while saving a label or note: doing so made
+            // a harmless metadata edit look like a transport change and
+            // disconnected a prepared connector.
+            if (!notesChanged && !nameChanged && !urlChanged && !headersChanged)
+              return;
             void runAction(editor.server.server_id, () =>
               client.updatePrivateMcpServer!(editor.server!.server_id, {
                 expected_state_version: editor.server!.state_version,
-                display_name: input.display_name,
-                server_url: input.server_url,
-                ...(input.notes
-                  ? { notes: input.notes }
-                  : { clear_notes: true }),
+                ...(nameChanged ? { display_name: input.display_name } : {}),
+                ...(urlChanged ? { server_url: input.server_url } : {}),
+                ...(notesChanged
+                  ? input.notes
+                    ? { notes: input.notes }
+                    : { clear_notes: true }
+                  : {}),
                 ...(input.header_upserts.length
                   ? { header_upserts: input.header_upserts }
                   : {}),
