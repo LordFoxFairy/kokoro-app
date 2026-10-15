@@ -1,3 +1,23 @@
+## SET31 runtime请求与投影退休已接收，SET32继续（2026-10-15）
+
+现有useRuntimeManifest仅本地preview/attempt closed scope：layout cleanup真实abort，queued dispatch、JSON前后、payload/error提交都检查退休；模式切换render同步回对应默认，旧live或旧retry不复活、不覆盖新结果。原helpers/schema/options/public返回/URL/query/Accept及AppGate/native计数精确保留，原9测试完整7759bytes prefix未改。Root原source实际10FAIL10PASS20；终态20focused/283contract/50arch/lint/type/build全0，独审无确定P1/P2；2writer/930保护/Root7精确。
+
+完整test3987PASS/7此前具名FAIL/0SKIP，212.28s；正规隔离Playwright20PASS/0FAIL/4原SKIP，21.6s，库存exact恢复。此修补不证明runtime请求有期限，也不证明R175/R177旧原生计数根因；正常认证Browser仍未验。继续SET32仅诊断native请求先后，保留原helper/readiness/断言/timeout/mock；整Goal active，Skills/连接器业务排除。
+
+## SET31 唯一hook source已准入（2026-10-15；Root真实RED）
+
+Root独立验tests-only4faa3d065e1bfc3cfde260116f689551a67d7acf60d22ce7cfc723efa6bdabe5，931保护/Root7精确，原9完整7759bytes prefix19b81358保留。原source实际10FAIL10PASS20，1.67s，是queued dispatch/退休late response与JSON/error/旧A覆盖B/旧live在preview保留等真实断言，原9与合法settled卸载正控PASS；后继尚未到达assert明列保留。现只授src/system/use-runtime-manifest.ts，tests frozen3ba53ed8；原options/retry/schema/URL/merge helpers与AppGate/R175/R177原native计数保护，局部preview/attempt scope退役不复活旧投影，不能把unit修补冒称原native多请求原因。终态独审/全门/正式激活后继续下一诊断，Goal active。
+
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+现effect将fetch排到microtask，cleanup只abort，dispatch前和response/payload/error提交均无退休检查。只在现useRuntimeManifest持有同一owned request生命周期，取消前未dispatch则零调用，已dispatch非合作迟到不能提交manifest/source/retrying，旧response与旧reject不可覆盖新attempt。保持当前options/retry/public返回形态、正式URL/query/schema及所有merge/navigation/theme/brand边界。以现preview+attempt为局部呈现scope；新scope先显示该模式默认manifest与loading/preview，live→preview→live不借旧live投影冒称当前已完成。不得另建hook/framework/helper公共层或改AppGate。
+
+沿原同源 /api/system/runtime-manifest、原product_id/locale/surface_id和Accept header，System仍是正式呈现事实owner，认证仍由Product session负责。无新授权、contract/HTTP错误/status/query或owner服务变更，取消只退休本hook拥有的请求。System可选呈现不可阻塞核心Chat。
+
+先原9测试完整baseline；只追加真正生命周期case并完整保留原测试bytes：effect排队后同act卸载/转preview零dispatch、已发非合作late响应或JSON/错误退休不落地、live→preview→live新B不被旧A/旧reject覆盖，新live未完成不冒用旧manifest，以及合法settled请求退休无额外调用。Root原source实际RED后才授source，failure需业务断言而非setup/timeouts。R175/R177有runtime1→2且其余owner稳定的实际观察，但reload helper未等runtime到达baseline，仍可能是合法reload request；count/timeout不放宽，不排除runtime，不claim已分类。终态原9逆核、独审、pure/full/build/E2E与资源库存恢复，正常认证Browser另待人工恢复，Goal active。
+
 ## SET30 不可用说明已接收，SET31继续（2026-10-15）
 
 七个灰菜单在搜索/列表旁显示短说明并关联useId；production账户用FieldDescription说明更改邮箱/登录方式/删除账户三操作不可用，三按钮关联实例ID，preview不显示/不关联。未启用禁用功能；原nav数组/过滤/焦点/顺序及姓名/复制ID/devices/logout/dialog逻辑完整inverse，12source逐字逆恢复，920保护含全部tests，Root7；两key九语言仅新增，原locale值精确保留。窄于48rem导航说明仅sr-only，不声称所有宽度视觉可见。独审无确定P1/P2，原focused81/contract283/architecture50/lint/type/build0；i18n99PASS2旧FAIL。

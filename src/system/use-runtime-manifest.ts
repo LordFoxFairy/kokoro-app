@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { PREVIEW_RUNTIME_MANIFEST, PRODUCT_RUNTIME_MANIFEST, type PreviewRuntimeManifest, type RuntimeFeatureFlag } from "./preview-runtime"
 import { publicRuntimeManifestSchema } from "./runtime-manifest"
@@ -153,13 +153,25 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
   const preview = options.preview ?? (
     process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SESSION_PREVIEW === "1"
   )
-  const [manifest, setManifest] = useState(preview ? PREVIEW_RUNTIME_MANIFEST : PRODUCT_RUNTIME_MANIFEST)
-  const [source, setSource] = useState<RuntimeManifestSource>(preview ? "preview" : "loading")
   const [attempt, setAttempt] = useState(0)
+  // Object identity closes each mounted mode/attempt; returning to an old
+  // primitive tuple cannot revive its previously settled presentation.
+  const scope = useMemo(() => ({ preview, attempt }), [preview, attempt])
+  const [projection, setProjection] = useState<{ scope: typeof scope; manifest: PreviewRuntimeManifest; source: RuntimeManifestSource }>({
+    scope,
+    manifest: preview ? PREVIEW_RUNTIME_MANIFEST : PRODUCT_RUNTIME_MANIFEST,
+    source: preview ? "preview" : "loading",
+  })
   const [retrying, setRetrying] = useState(false)
+  const currentProjection = projection.scope === scope
+  const manifest = currentProjection ? projection.manifest : preview ? PREVIEW_RUNTIME_MANIFEST : PRODUCT_RUNTIME_MANIFEST
+  const source: RuntimeManifestSource = currentProjection ? projection.source : preview ? "preview" : "loading"
+  if (!currentProjection) {
+    setProjection({ scope, manifest, source })
+    if (preview && retrying) setRetrying(false)
+  }
   const retry = useCallback(() => {
     setRetrying(true)
-    setSource("loading")
     setAttempt((value) => value + 1)
   }, [])
 
@@ -190,38 +202,45 @@ export function useRuntimeManifest(options: { preview?: boolean } = {}): {
     }
   }, [manifest.theme])
 
-  useEffect(() => {
-    if (preview) return
+  useLayoutEffect(() => {
+    if (scope.preview) return
     const controller = new AbortController()
+    const current = () => !controller.signal.aborted
 
     const locale = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en-US"
     const query = new URLSearchParams({ product_id: "kokoro", locale, surface_id: "user-web" })
-    void Promise.resolve().then(() => fetch(`/api/system/runtime-manifest?${query.toString()}`, {
-      signal: controller.signal,
-      headers: { Accept: "application/json" },
-    }))
+    void Promise.resolve().then(() => {
+      if (!current()) return
+      return fetch(`/api/system/runtime-manifest?${query.toString()}`, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      })
+    })
       .then(async (response) => {
+        if (!current() || response === undefined) return
         if (!response.ok) throw new Error(`runtime manifest ${response.status}`)
-        return response.json() as Promise<unknown>
+        const payload: unknown = await response.json()
+        if (!current()) return
+        return payload
       })
       .then((payload) => {
+        if (!current()) return
         const next = mergeManifest(payload)
         if (!next) throw new Error("invalid runtime manifest")
-        setManifest(next)
-        setSource("live")
+        if (!current()) return
+        setProjection({ scope, manifest: next, source: "live" })
         setRetrying(false)
       })
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name === "AbortError") return
+        if (!current() || (error as { name?: string }).name === "AbortError") return
         // Clear any previously verified site skin before reporting a failure.
         // Product defaults are not preview capabilities or a preview transport.
-        setManifest(PRODUCT_RUNTIME_MANIFEST)
-        setSource("error")
+        setProjection({ scope, manifest: PRODUCT_RUNTIME_MANIFEST, source: "error" })
         setRetrying(false)
       })
 
     return () => controller.abort()
-  }, [attempt, preview])
+  }, [scope])
 
   // Preview can be the first render while the session probe is undecided. When
   // authentication switches this hook to live mode, project the stale preview

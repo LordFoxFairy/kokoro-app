@@ -1,3 +1,9 @@
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+现runtime hook owned dispatch/commit退休与局部scope呈现，AppGate接口和原生观察计数保护；原9测试仅追加负控。
+
 <!-- SET20：TeamContent→use-team-settings拥有admitted subject/generation内权限首读、单次写与unknown重读/显式继续；team/client拥有固定同源I/O/ACK，team/json拒原文重复键；现team route保持九operation/单预算/EOF与最终身份栅栏。验收与未决见CURRENT。 -->
 <!-- SET19：AccountCard显式保存→account-profile-update-client→/api/account/profile PATCH→lib/server/account-profile-update→正式BFF15.2/IAM0.13；use-account-profile-editor拥有身份代际内草稿/unknown重读，account-profile-update.schema只负责generated-derived closed wire/原文JSON。userinfo权威GET保持独立，正常浏览器验收见CURRENT。 -->
 <!-- SET18：账户已连接设备入口复用现AccountCard；account-sessions-client/use-account-sessions/account-devices-dialog分别负责I/O、身份代际状态和确认视图；/api/account/sessions两route→lib/server/account-sessions→正式BFF15.1；schema消费唯一artifact的正规bff-account-sessions窄生成。真实浏览器撤销验收见CURRENT，不伪造设备/位置。 -->

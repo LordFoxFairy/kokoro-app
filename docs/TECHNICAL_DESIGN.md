@@ -1,3 +1,13 @@
+## SET31 runtime请求退休（2026-10-15；D0，先tests-only）
+
+基线Web dc26502bfa47ba0c22422623118b455d46644be0，939 tracked clean；runtime_audit唯一writer，1既有hook/1既有test/930最终保护/Root7，先仅tests其余931保护。Root设计/docs/独审/资源/Git/正常激活/CUA。AppGate及原生R175/R177全部源码/oracle保护；不扩大trusted admission接口，不把hook负控冒称原生多请求根因。
+
+现effect将fetch排到microtask，cleanup只abort，dispatch前和response/payload/error提交均无退休检查。只在现useRuntimeManifest持有同一owned request生命周期，取消前未dispatch则零调用，已dispatch非合作迟到不能提交manifest/source/retrying，旧response与旧reject不可覆盖新attempt。保持当前options/retry/public返回形态、正式URL/query/schema及所有merge/navigation/theme/brand边界。以现preview+attempt为局部呈现scope；新scope先显示该模式默认manifest与loading/preview，live→preview→live不借旧live投影冒称当前已完成。不得另建hook/framework/helper公共层或改AppGate。
+
+沿原同源 /api/system/runtime-manifest、原product_id/locale/surface_id和Accept header，System仍是正式呈现事实owner，认证仍由Product session负责。无新授权、contract/HTTP错误/status/query或owner服务变更，取消只退休本hook拥有的请求。System可选呈现不可阻塞核心Chat。
+
+先原9测试完整baseline；只追加真正生命周期case并完整保留原测试bytes：effect排队后同act卸载/转preview零dispatch、已发非合作late响应或JSON/错误退休不落地、live→preview→live新B不被旧A/旧reject覆盖，新live未完成不冒用旧manifest，以及合法settled请求退休无额外调用。Root原source实际RED后才授source，failure需业务断言而非setup/timeouts。R175/R177有runtime1→2且其余owner稳定的实际观察，但reload helper未等runtime到达baseline，仍可能是合法reload request；count/timeout不放宽，不排除runtime，不claim已分类。终态原9逆核、独审、pure/full/build/E2E与资源库存恢复，正常认证Browser另待人工恢复，Goal active。
+
 ## SET30 未接通菜单与账户操作说明（2026-10-15；正式D0）
 
 基线Web 0ab7bfaedf7425332049f5f867bcec79fccd285c，939 tracked clean；runtime_audit唯一writer，12既有source/920保护/Root7。所有tests原字节保护；Root设计、docs、独审、资源、Git、正常激活/CUA。实际Manus菜单已有对应本地入口，七个placeholder及三账户按钮仍按能力不可用，不引入owner/contract/API/deps或新source。
