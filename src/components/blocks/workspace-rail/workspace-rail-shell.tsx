@@ -30,7 +30,7 @@ import {
 import { WorkspaceRailAccount } from "./workspace-rail-account"
 import { WorkspaceRailHeader, WorkspaceRailNavigation } from "./workspace-rail-navigation"
 import { ConversationGroup, ScopedConversationGroup } from "./workspace-rail-session-list"
-import type { WorkspaceRailProject, WorkspaceRailProps } from "./workspace-rail-types"
+import type { WorkspaceRailProps } from "./workspace-rail-types"
 import { itemStyles, railStyles } from "./workspace-rail-styles"
 
 const RAIL_WIDTH_TRANSITION_MS = 200
@@ -136,12 +136,6 @@ export function WorkspaceRailShell({
       active: projectActive,
     }]
   }, [preview, projectActive, projectHref, projects, t])
-  // Route selection is the live navigation fact.  Project snapshots may be
-  // reused across surfaces and carry an older `active: false`, which must not
-  // collapse the folder currently being viewed.
-  const isCurrentProject = useCallback((project: WorkspaceRailProject) => (
-    (projectActive && project.href === projectHref) || project.active === true
-  ), [projectActive, projectHref])
   const moveDestinations = projectListStatus === "ready" && conversationScope !== undefined
     ? [
         ...(conversationScope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
@@ -164,36 +158,6 @@ export function WorkspaceRailShell({
     ...(onReorderProjects === undefined ? {} : { onReorderProjects }),
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })
-
-  // The active Manus project is a compact folder: its task list lives directly
-  // below the selected project row, while the top-level task feed remains
-  // independent. Keep disclosure state scoped to the admitted reader identity
-  // so a sign-out or workspace switch cannot reveal an obsolete list.
-  const folderIntentIdentity = conversationReads?.folderIntentIdentity
-  const folderIdentity = folderIntentIdentity === undefined ? conversationReads?.identity ?? "controlled" : folderIntentIdentity
-  const preservePendingFolderIntent = folderIntentIdentity !== undefined && folderIntentIdentity !== null
-  const foldersAdmitted = conversationReads?.admitted ?? true
-  const [folderState, setFolderState] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null)
-  if (folderState !== null && (folderIdentity === null || folderState.identity !== folderIdentity || (!foldersAdmitted && !preservePendingFolderIntent))) setFolderState(null)
-  const expandedProjectIds = useMemo(() => (
-    foldersAdmitted && folderIdentity !== null
-      ? folderState?.identity === folderIdentity ? folderState.ids : new Set(projectItems.filter(isCurrentProject).map((project) => project.id))
-      : new Set<string>()
-  ), [folderIdentity, folderState, foldersAdmitted, isCurrentProject, projectItems])
-  useEffect(() => {
-    if (!foldersAdmitted || folderIdentity === null || projectListStatus !== "ready" || folderState?.identity === folderIdentity) return
-    const ids = new Set(projectItems.filter(isCurrentProject).map((project) => project.id))
-    let live = true
-    queueMicrotask(() => { if (live) setFolderState((current) => current?.identity === folderIdentity ? current : { identity: folderIdentity, ids }) })
-    return () => { live = false }
-  }, [folderIdentity, folderState?.identity, foldersAdmitted, isCurrentProject, projectItems, projectListStatus])
-  const toggleProject = useCallback((id: string) => {
-    if (!foldersAdmitted || folderIdentity === null) return
-    const ids = new Set(expandedProjectIds)
-    if (ids.has(id)) ids.delete(id)
-    else ids.add(id)
-    setFolderState({ identity: folderIdentity, ids })
-  }, [expandedProjectIds, folderIdentity, foldersAdmitted])
 
   const hasConversations = conversations.length > 0
 
@@ -401,43 +365,6 @@ export function WorkspaceRailShell({
             projectActive={projectActive}
             {...(projects === undefined ? {} : { projects })}
             orderedProjects={orderedProjects}
-            expandedProjectIds={expandedProjectIds}
-            onToggleProject={toggleProject}
-            renderProjectConversations={(project) => {
-              const current = isCurrentProject(project)
-              if (conversationReads) {
-                return <ScopedConversationGroup
-                  key={`${project.id}:${conversationReads.identity}`}
-                  scope={{ kind: "project", projectRef: project.id }} reads={conversationReads} preview={preview}
-                  groupLabel={project.name} compactDesktop={contentCompactDesktop} query={query} searchOpen={searchOpen}
-                  awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
-                  onRequestDelete={onRequestDelete} projects={projectItems}
-                  projectListReady={projectListStatus === "ready"}
-                  conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
-                  conversationMoveFailed={conversationMoveFailed}
-                  {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-                />
-              }
-              if (!current) return null
-              return <ConversationGroup
-                projectActive
-                groupLabel={project.name}
-                scopeKey={`project:${project.id}`}
-                onRenameConversation={onRenameConversation}
-                {...(onReorderConversations === undefined ? {} : { onReorderConversations })}
-                compactDesktop={contentCompactDesktop} searchOpen={searchOpen} query={query}
-                conversations={conversations} hasConversations={hasConversations} activeId={activeId}
-                awaitingIds={awaitingIds} listLoading={listLoading} listLoadingMore={listLoadingMore}
-                listError={listError} {...(onRetryList === undefined ? {} : { onRetryList })}
-                hasMore={hasMore} onLoadMore={onLoadMore} onNewChat={onNewChat}
-                closeNavigation={closeNavigation} onSelectConversation={onSelectConversation}
-                onRequestDelete={onRequestDelete} moveDestinations={moveDestinations}
-                conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
-                conversationMoveFailed={conversationMoveFailed}
-                {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
-                {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-              />
-            }}
             {...(projectListStatus === undefined ? {} : { projectListStatus })}
             {...(projectListRetryable === undefined ? {} : { projectListRetryable })}
             {...(onRetryProjects === undefined ? {} : { onRetryProjects })}

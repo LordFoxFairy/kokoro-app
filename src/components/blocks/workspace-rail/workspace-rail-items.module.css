@@ -150,20 +150,9 @@
   .item { transition: none; }
 }
 
-/* A selected Manus project becomes a compact folder: its own conversations
- * render immediately beneath the row. Inactive rows stay visually flat and
- * only reveal their entry chevron/actions on hover or keyboard focus. */
-.item.projectFolder { position: relative; width: 100%; flex-direction: column; align-items: stretch; }
-.projectFolderRow { display: flex; width: 100%; min-width: 0; align-items: center; }
-.projectFolderRow .itemSelect[data-navigation-section="project"] { padding-right: 0.55rem; }
-.folderToggle { display: inline-flex; flex: 0 0 auto; }
-.folderToggle[aria-expanded="true"] svg { transform: rotate(90deg); }
-.projectFolderChildren { width: 100%; min-width: 0; box-sizing: border-box; padding-inline-start: var(--spacing-4, 1rem); }
-.projectFolderChildren .list { margin-top: 0.125rem; margin-bottom: 0.25rem; }
-.projectFolderChildren .empty { padding: 0.125rem 0.65rem; font-size: 0.75rem; line-height: 1.4; }
-.projectFolderChildren .sectionRow { position: absolute; top: 0; right: 0.25rem; z-index: 2; height: 2.1rem; }
-.projectFolderChildren .sectionRow .section { display: none; }
-.projectFolderChildren .sectionAction { margin: 0; }
+/* Manus keeps project rows flat. A project is the shared context of its
+ * conversations, not a nested copy of the task feed; its task history lives
+ * in the project workspace while the rail retains a single global task list. */
 .projectGlyph { position: relative; display: inline-grid; width: 1rem; height: 1rem; flex: 0 0 1rem; place-items: center; }
 .projectActions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.1rem; margin-right: 0.1rem; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity var(--motion-fast) var(--ease-standard); }
 .item[data-drag-kind="project"]:hover .projectActions,
@@ -173,9 +162,4 @@
 .projectAction svg { width: 1rem; height: 1rem; }
 @media (hover: none) {
   .projectActions { visibility: visible; opacity: 1; pointer-events: auto; }
-}
-
-@media (max-width: 960px) {
-  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectFolderChildren .sectionRow { height: 2.75rem; }
-  [data-desktop-web="true"]:not([data-desktop-rail="true"]) .projectFolderChildren .sectionAction { width: 2.75rem; height: 2.75rem; }
 }

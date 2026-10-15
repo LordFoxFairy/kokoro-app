@@ -1,6 +1,6 @@
 "use client"
 
-import { type Dispatch, type MouseEvent, type PointerEvent, type RefObject, type ReactNode, type SetStateAction, useState } from "react"
+import { type Dispatch, type MouseEvent, type PointerEvent, type ReactNode, type RefObject, type SetStateAction, useState } from "react"
 import Link from "next/link"
 import { Bot, ChevronDown, ChevronRight, Ellipsis, Folder, Monitor, Plus, Search, SquarePen, WandSparkles, X } from "lucide-react"
 
@@ -202,9 +202,6 @@ export type WorkspaceRailNavigationProps = {
   projectActive: boolean
   projects?: readonly WorkspaceRailProject[]
   orderedProjects: WorkspaceRailProject[]
-  expandedProjectIds: ReadonlySet<string>
-  onToggleProject: (id: string) => void
-  renderProjectConversations: (project: WorkspaceRailProject) => ReactNode
   projectListStatus?: "blocked" | "loading" | "ready" | "error"
   projectListRetryable?: boolean
   onRetryProjects?: () => void
@@ -235,9 +232,6 @@ export function WorkspaceRailNavigation({
   projectActive,
   projects,
   orderedProjects,
-  expandedProjectIds,
-  onToggleProject,
-  renderProjectConversations,
   projectListStatus,
   projectListRetryable = false,
   onRetryProjects,
@@ -544,77 +538,58 @@ export function WorkspaceRailNavigation({
           ) : (
             <SidebarMenu id="rail-project-list" data-project-list="true" aria-label={t("firstSite.projects")}>
               {projectReadFeedback ? <SidebarMenuItem>{projectReadFeedback}</SidebarMenuItem> : null}
-              {orderedProjects.map((project, position) => {
+              {orderedProjects.map((project) => {
                 const active = (projectActive && project.href === projectHref) || project.active === true
-                const expanded = expandedProjectIds.has(project.id)
                 const testId = active || orderedProjects.length === 1 ? "rail-project" : `rail-project-${project.id}`
                 const dragging = dragState?.kind === "project" && dragState.id === project.id
                 const dragOver = dragOverKey === `project:${project.id}`
                 return (
                   <SidebarMenuItem
                     key={project.id}
-                    className={cn(itemStyles.item, itemStyles.projectFolder, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
+                    className={cn(itemStyles.item, dragging && itemStyles.itemDragging, dragOver && itemStyles.itemDragOver)}
                     data-project-id={project.id}
                     data-drag-kind="project"
                     data-project-active={active ? "true" : "false"}
-                    data-project-expanded={expanded ? "true" : "false"}
                     data-dragging={dragging ? "true" : "false"}
                     data-drag-over={dragOver ? "true" : "false"}
                   >
-                    <div className={itemStyles.projectFolderRow}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className={itemStyles.folderToggle}
-                        aria-label={t(expanded ? "rail.collapseProjectAria" : "rail.expandProjectAria", { name: project.name, position: position + 1 })}
-                        aria-expanded={expanded}
-                        aria-controls={`project-children-${encodeURIComponent(project.id)}`}
-                        onClick={() => onToggleProject(project.id)}
+                    <SidebarMenuButton asChild type="button" className={itemStyles.itemSelect} isActive={active}>
+                      <Link
+                        href={project.href}
+                        {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
+                        {...dragProps("project", project.id)}
+                        onPointerDown={markPointerFocus}
+                        onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
+                        onClick={closeNavigation}
+                        aria-label={project.name}
+                        aria-current={active ? "page" : undefined}
+                        data-testid={testId}
+                        data-navigation-section="project"
                       >
-                        <ChevronRight aria-hidden="true" />
+                        <span className={itemStyles.projectGlyph} aria-hidden="true">
+                          <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
+                        </span>
+                        <span className={itemStyles.itemTitle}>{project.name}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {onRequestProjectRename ? <span className={itemStyles.projectActions}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.projectOptions")}>
+                            <Ellipsis aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" side="right" sideOffset={4} className={navigationStyles.projectMenu}>
+                          <DropdownMenuItem onSelect={() => onRequestProjectRename(project.id)}>
+                            <SquarePen aria-hidden="true" />
+                            {t("firstSite.renameProject")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.renameProject")} onClick={() => onRequestProjectRename(project.id)}>
+                        <SquarePen aria-hidden="true" />
                       </Button>
-                      <SidebarMenuButton asChild type="button" className={itemStyles.itemSelect} isActive={active}>
-                        <Link
-                          href={project.href}
-                          {...(mountedSurfacePrefetch === undefined ? {} : { prefetch: mountedSurfacePrefetch })}
-                          {...dragProps("project", project.id)}
-                          onPointerDown={markPointerFocus}
-                          onClickCapture={(event) => interceptMountedSurfaceNavigation(event, project.href)}
-                          onClick={closeNavigation}
-                          aria-label={project.name}
-                          aria-current={active ? "page" : undefined}
-                          data-testid={testId}
-                          data-navigation-section="project"
-                        >
-                          <span className={itemStyles.projectGlyph} aria-hidden="true">
-                            <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
-                          </span>
-                          <span className={itemStyles.itemTitle}>{project.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                      {!expanded && onRequestProjectRename ? <span className={itemStyles.projectActions}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.projectOptions")}>
-                              <Ellipsis aria-hidden="true" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" side="right" sideOffset={4} className={navigationStyles.projectMenu}>
-                            <DropdownMenuItem onSelect={() => onRequestProjectRename(project.id)}>
-                              <SquarePen aria-hidden="true" />
-                              {t("firstSite.renameProject")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button type="button" variant="ghost" size="icon-xs" className={itemStyles.projectAction} aria-label={t("firstSite.renameProject")} onClick={() => onRequestProjectRename(project.id)}>
-                          <SquarePen aria-hidden="true" />
-                        </Button>
-                      </span> : null}
-                    </div>
-                    {expanded ? <div id={`project-children-${encodeURIComponent(project.id)}`} className={itemStyles.projectFolderChildren}>
-                      {renderProjectConversations(project)}
-                    </div> : null}
+                    </span> : null}
                   </SidebarMenuItem>
                 )
               })}
