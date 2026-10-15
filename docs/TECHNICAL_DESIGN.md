@@ -1,3 +1,20 @@
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+基线Web6880ec4。正常CUA退出→IAM确认→登录页、匿名/app被送回登录、原测试账户重登及资料恢复已通过。独立HTTP客户端按现正式登录表单创建自有会话，CUA取消后保留、确认移除后列表消失；旧cookie读取sessions为401 session_invalid，但profile持续503 account_profile_admission_failed，auth/session GET仍是本地200投影。根因是profile将在线identity的全部错误统一503；这是本次可重现读取映射问题，不是SET40未归因proxy503的根因。
+
+runtime_audit唯一产品writer，Root设计/文档/资源/审查/Git/接入。现product-identity只对已配置BFF /v1/me的401、严格error/meta闭集及session_invalid、非空message、本次outbound ID同时绑定x-request-id与meta.request_id、JSON精确media type、no-store且无Location/Set-Cookie，抛具名ProductIdentitySessionRejectedError；16KiB/5s/取消保留，401正文解析后复核signal。标准JSON解析后做结构校验，不宣称raw重复键防护。其余错误及原200验证保持。现account-profile catch先check()，仅此instanceof→401 account_profile_session_required，其余503，零userinfo回退。
+
+| 路径 | 归属与选择 |
+| --- | --- |
+| src/lib/server/product-identity.ts | 现有BFF身份准入与局部错误分类；避免在profile复制第二个/v1/me请求 |
+| src/lib/server/product-identity.error.ts（新） | 独立内部异常类型供identity/profile共享；按TS手册8.4拆离I/O实现，不放通用errors或新目录 |
+| src/lib/server/account-profile.ts | 现有账户GET状态投影，只映射已确认无效session |
+| tests/app/account-profile-admission.integration.test.ts（新） | 真实HTTP BFF transport与现GET handler连测，仅mock Web session store；不把所有步骤mock成实现镜像 |
+
+先只准新test，全部原tests和product源码字节保护。Root在旧source跑新test得真实RED，再准上述3source；4writer（2既有+2新）/930原tracked保护/Root7。测试覆盖正确401、错误ID/额外键/缺no-store/重定向或cookie/畸形JSON/其他401码与503仍依赖故障、200成功及userinfo调用计数。原断言/超时/skip/阈值不改。修后focused含identity/profile/provider/auth与原Next用例、contract/architecture/lint/type/build、一次必要完整test与E2E串行；继承原失败诚实区分。Root核实际运行源和正常撤销会话再访问401。Skills/连接器与IAM/BFF源码不改。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 Root本片唯一writer。SET41真实320英文截图显示任务发送标签与禁用选择框重叠；现flex并排行在窄宽把min-width0的文案压至小于单词宽。仅现sections CSS在既有480px media中将chatPreferenceRow堆叠，现chat select加max-width100%，桌面布局及disabled queue语义保持；不改共享组件、业务、locale或Skills/连接器。先在现E2E尾部追加1280/390/320实测标签和控件无重叠且控件在内容viewport内，原文prefix保持；旧CSS RED后同oracle复验。

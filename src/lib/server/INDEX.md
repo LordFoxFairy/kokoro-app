@@ -1,3 +1,11 @@
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+runtime_audit唯一产品writer，Root设计/文档/资源/审查/Git/接入。现product-identity只对已配置BFF /v1/me的401、严格error/meta闭集及session_invalid、非空message、本次outbound ID同时绑定x-request-id与meta.request_id、JSON精确media type、no-store且无Location/Set-Cookie，抛具名ProductIdentitySessionRejectedError；16KiB/5s/取消保留，401正文解析后复核signal。标准JSON解析后做结构校验，不宣称raw重复键防护。其余错误及原200验证保持。现account-profile catch先check()，仅此instanceof→401 account_profile_session_required，其余503，零userinfo回退。
+
+product-identity.error.ts只维护内部异常类型；不返回原始BFF错误、token或消息。原callback/refresh仍fail closed，未改其状态策略。
+
 ## SET21 分享边界
 
 `shared-tasks.ts` 承接具名 `/api/account/shared-tasks` GET，使用正式 BFF public artifact 的闭合 schema、单 10 秒总预算及 1 MiB 正文限额，核对部署固定租户、受信 subject 和最终同一有效 Product Session。它只调用 BFF，不读取分享数据库或内部 owner 服务。

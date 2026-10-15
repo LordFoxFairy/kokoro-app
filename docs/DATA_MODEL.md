@@ -1,3 +1,9 @@
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+无owner/schema/SQL/Redis键或cookie清理变化。会话撤销仍IAM，Web仅区分已确认失效与依赖不可用，不删其他会话或伪造identity。正常测试仅创建并清理本轮自有会话，原有会话保留。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 仅CSS及现E2E追加，无数据owner、schema、持久化键值或默认行为变化。

@@ -1,3 +1,21 @@
+## SET43 已撤销会话资料读取候选（2026-10-15；代码验证完成）
+
+正常设备移除后的资料503已真实复现；现只将可信BFF401 session_invalid映射既有401 account_profile_session_required，其它依赖故障保持503。原200、callback/refresh策略和全部原测试未改。新增真实HTTP18例先16PASS/2预期401实际503，再修3个源文件；前两轮仅collection失败不算行为RED。4writer/930保护/Root7全部逐文件核对，独立审查无确定P1/P2。
+
+Root相关211PASS；contract283/architecture50、lint/typecheck/build通过。一次必要原完整test4054PASS/5既有FAIL（223.67s），此前3项proxy503本轮未复现但根因未关闭，早前instrumentation/welcome亦未根因关闭。完整门仍FAILED，PR维持draft。原完整Playwright38PASS/4原SKIP（35.1s），两门库存恢复，全部源与原测试字节保护。E2E第一次未启动用例：系统旧Python不支持tar filter；改用已有3.12后正式运行，原失败保留。
+
+仅接受可回退本地候选；Root另核实际运行副本与正常登录的独立新会话撤销，HTTP fixture不冒称真实IAM端到端。先前自有会话已触发本地失效检查，其后来401不能证明本次修复。Skills/连接器、owner API、scope、schema和会话清理不变。Goal active。
+
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+基线Web6880ec4。正常CUA退出→IAM确认→登录页、匿名/app被送回登录、原测试账户重登及资料恢复已通过。独立HTTP客户端按现正式登录表单创建自有会话，CUA取消后保留、确认移除后列表消失；旧cookie读取sessions为401 session_invalid，但profile持续503 account_profile_admission_failed，auth/session GET仍是本地200投影。根因是profile将在线identity的全部错误统一503；这是本次可重现读取映射问题，不是SET40未归因proxy503的根因。
+
+runtime_audit唯一产品writer，Root设计/文档/资源/审查/Git/接入。现product-identity只对已配置BFF /v1/me的401、严格error/meta闭集及session_invalid、非空message、本次outbound ID同时绑定x-request-id与meta.request_id、JSON精确media type、no-store且无Location/Set-Cookie，抛具名ProductIdentitySessionRejectedError；16KiB/5s/取消保留，401正文解析后复核signal。标准JSON解析后做结构校验，不宣称raw重复键防护。其余错误及原200验证保持。现account-profile catch先check()，仅此instanceof→401 account_profile_session_required，其余503，零userinfo回退。
+
+先只准新test，全部原tests和product源码字节保护。Root在旧source跑新test得真实RED，再准上述3source；4writer（2既有+2新）/930原tracked保护/Root7。测试覆盖正确401、错误ID/额外键/缺no-store/重定向或cookie/畸形JSON/其他401码与503仍依赖故障、200成功及userinfo调用计数。原断言/超时/skip/阈值不改。修后focused含identity/profile/provider/auth与原Next用例、contract/architecture/lint/type/build、一次必要完整test与E2E串行；继承原失败诚实区分。Root核实际运行源和正常撤销会话再访问401。Skills/连接器与IAM/BFF源码不改。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 基线ba975fccf1497d403e70e5221f8d7126a9491060，2writer/930保护/Root7；SET41主题已正常登录CUA测得实际320三项边界完整，352实点浅色→自动并刷新保留。现补SET41截图发现的320英文禁用发送行文案重叠；先RED再局部CSS，不重复修改主题/容器规则。完整门仍FAILED，SET40新增失败根因未关闭；诊断在私有不可变副本进行，不改正式源或oracle。

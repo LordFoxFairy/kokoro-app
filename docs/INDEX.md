@@ -1,3 +1,9 @@
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+现product-identity.ts负责准入分类，独立product-identity.error.ts负责内部类型，现account-profile.ts负责状态映射；新account-profile-admission.integration.test.ts验证真实HTTP边界。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 任务发送窄屏堆叠归现sections/settings-sections.module.css；真实无重叠回归追加既有web-governance.spec.ts，无新模块。

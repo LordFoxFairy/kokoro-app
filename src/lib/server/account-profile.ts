@@ -5,6 +5,7 @@ import { matchesCanonicalWebRequest } from "./iam-relay-config";
 import { oidcRpConfig } from "./oidc-provider";
 import { currentProductSession } from "./product-session";
 import { verifyProductIdentity } from "./product-identity";
+import { ProductIdentitySessionRejectedError } from "./product-identity.error";
 import {
   requestWithDomain,
   UpstreamResponseTooLargeError,
@@ -99,8 +100,10 @@ export async function readAccountProfile(request: Request): Promise<Response> {
         session.subject,
         controller.signal,
       );
-    } catch {
+    } catch (error) {
       check();
+      if (error instanceof ProductIdentitySessionRejectedError)
+        return fail(401, "account_profile_session_required");
       return fail(503, "account_profile_admission_failed");
     }
     check();

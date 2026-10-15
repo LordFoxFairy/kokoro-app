@@ -1,3 +1,9 @@
+## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
+
+测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。
+
+仅browser-private GET /api/account/profile：已确认BFF401 session_invalid在线拒绝映射既有401 account_profile_session_required；服务认证/503/畸形或未绑定结果仍503，不把所有401当失效登录。BFF /v1/me原精确error/meta envelope，不接受retryable plain包络；本次outbound ID绑定x-request-id及meta，JSON MIME允许charset、不接受json-malicious，no-store且无Location/Set-Cookie。其余原200/userinfo/错误形状、上限和总预算保持；不新增owner API、scope或授权。auth/session GET本地投影、callback/refresh策略不改。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 任务发送现禁用queue选项仅改窄屏排版，无HTTP/事件/授权/契约/provider变化；不得开启灰选项或宣称其它发送策略已实现。
