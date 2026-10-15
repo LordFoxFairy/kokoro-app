@@ -1,3 +1,9 @@
+## SET47 真实归档/恢复消费者（2026-10-15；源码与浏览器回归已验，完整门FAILED）
+
+基线Web b979cc946166df9e8d75ecdb3d958239aa286e55，固定消费BFF53f222ec41500d7a608da0c221a4695c402ff678的public15.4.0/150原字节，SHA-256 87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817。任务菜单归档、Data本人分页与恢复、独立archive revision和active状态GET已接线；旧ACK只压过更早读取，post-ACK状态/列表可覆盖；真正尚未持久化draft有同步provenance，列表/状态/成功回执或owner snapshot证明后退休，后续404不合成已删除任务。归档不删除、不清engine、不取消Run、不撤销Share。预览/未可信准入不发archive IO；unknown不自动重写，权威重读后需显式继续。点段历史ID禁用并展示理由，合法历史Unicode保留。技能/连接器业务未改；原测试全文prefix、超时、skip保留，相关声明与owner全文inverse分别核验。
+
+Node22.22.2实际结果：相关9文件253PASS；contract284PASS（含正常generated检查）；typecheck、lint、build exit0。architecture此前单独50PASS，最后与Turbopack构建并行时49PASS/1既有ScheduledTask扫描用例5秒timeout（原日志保留，不改timeout、不冒全绿）。新增framing三例、preview/未准入两例、持久化provenance三例、archive布局class一例与可见点ID理由一例均保留真实RED和修后日志；旧machine首次创建证明两例RED沿用原交接证据。system新例当前为handler/依赖替身，不能冒称真实Next或IAM端到端。Root完整pnpm test实际4124PASS/8FAIL（251.31s；执行收据252.054s），失败为5项既有Skills/MCP/全局翻译及3项HTTPS代理RP auth503，后者仍未归因；无新增归档用例失败，不以未再现关闭此前instrumentation/welcome问题。完整Playwright42PASS/4原SKIP（47.7s），新增4例仅证明preview无归档IO、键盘和边界，不冒真实mutation。93writer/881protected对941基线、九locale完整逆恢复、五原测试全文prefix、owner公契约全文及15.3完整逆恢复均exact，资源库存恢复；冻结源码独审无新增确定P1/P2。验收后仅本CURRENT更新实际结果，业务源与原oracle不变。正常独立实例登录及Data空态另验；旧实例及其数据库/session保留。完整门FAILED、PR仍draft，仅可回退本地候选，不宣完整产品或生产验收。
+
 ## SET46 设置内用量资源分类（2026-10-15；D0）
 
 基线aa2e02a，实际Manus当前用量页有任务、网站与游戏、电脑、电话四类，本地尚缺分类。Root唯一writer；现BillingScopedContent只在embedded+已准入时使用既有Tabs固定任务为活动面板，其余三类disabled并关联可见本地化说明；原summary/ledger内容与读取生命周期、独立BillingPanel不变。现TSX/CSS+九locale共11writer，4文档/926保护，无新文件/模块/状态/API/schema/依赖；Skills/连接器不改。不新增镜像实现的低影响文案测试，所有现测试原字节保护；相关既有测试及完整门、独审、真实运行副本和正常CUA逐项验证。单台服务器不是这些能力永久不可实现的理由；它们当前没有已接入的服务契约。

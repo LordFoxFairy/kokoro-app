@@ -677,3 +677,26 @@ for (const width of [1280, 390, 320]) {
   });
 }
 // SET42-END: task-delivery-narrow-layout
+
+// SET47-BEGIN: preview archive boundary, not authenticated mutation evidence.
+for(const width of [1280,390]) {
+ test(`SET47 preview Data archive boundary is readable and has zero archive IO at ${width}px`,async({page})=>{
+  await page.setViewportSize({width,height:844});
+  await page.addInitScript(()=>window.localStorage.setItem("kokoro.locale","en"));
+  let archiveCalls=0;page.on("request",request=>{if(/\/api\/(?:account\/archived-tasks|session\/sessions\/[^/]+\/(?:archive|restore))(?:[?]|$)/u.test(request.url()))archiveCalls++;});
+  await page.goto("/app#/account/settings/data-management",{waitUntil:"domcontentloaded"});
+  const modal=page.getByTestId("settings-modal");const data=modal.getByTestId("settings-data-management");
+  await expect(data.getByRole("heading",{name:"Archived tasks",exact:true})).toBeVisible();
+  await expect(data.getByRole("button",{name:"Restore task",exact:true})).toHaveCount(0);
+  await expect(data.getByRole("button",{name:"Manage",exact:true})).toHaveCount(3);
+  for(const button of await data.getByRole("button",{name:"Manage",exact:true}).all())await expect(button).toBeDisabled();
+  await expect(data.getByText("No archived tasks.",{exact:true})).toHaveCount(0);
+  await expect(modal).toBeVisible();expect(archiveCalls).toBe(0);
+  const bounds=await data.evaluate(node=>({width:node.clientWidth,scroll:node.scrollWidth}));expect(bounds.scroll).toBeLessThanOrEqual(bounds.width+1);
+  const close=page.getByTestId("settings-close");await close.focus();await expect(close).toBeFocused();
+  await page.keyboard.press("Tab");
+  const focused=await modal.evaluate(node=>node.contains(document.activeElement));expect(focused).toBe(true);
+  await page.keyboard.press("Escape");await expect(modal).toHaveCount(0);expect(archiveCalls).toBe(0);
+ });
+}
+// SET47-END

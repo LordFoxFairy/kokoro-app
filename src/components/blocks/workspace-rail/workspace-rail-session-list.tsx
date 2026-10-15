@@ -46,6 +46,8 @@ export type WorkspaceRailSessionListProps = {
   onNewChat: () => void
   closeNavigation: () => void
   onSelectConversation: (id: string) => void
+  onArchiveConversation?: (id:string)=>void
+  archiveBusy?:boolean
   onRequestDelete: (conversation: ConversationSummary) => void
   renameInputRef: RefObject<HTMLInputElement | null>
   editingId: string | null
@@ -87,6 +89,8 @@ export function WorkspaceRailSessionList({
   closeNavigation,
   onSelectConversation,
   onRequestDelete,
+  onArchiveConversation,
+  archiveBusy,
   renameInputRef,
   editingId,
   draftTitle,
@@ -210,6 +214,8 @@ export function WorkspaceRailSessionList({
                       onCancelRename={onCancelRename}
                       onSelect={(id) => { onSelectConversation(id); closeNavigation() }}
                       onStartRename={onStartRename}
+                      {...(onArchiveConversation===undefined?{}:{onArchiveConversation})}
+                      {...(archiveBusy===undefined?{}:{archiveBusy})}
                       onRequestDelete={onRequestDelete}
                       moveDestinations={moveDestinations}
                       conversationMove={conversationMove?.sessionId === conversation.id ? conversationMove : null}
@@ -346,6 +352,8 @@ function IndependentScopedConversationGroup({ scope: desiredScope, reads, previe
     activeId: null, thread: reads.thread,
     isStreaming: false, focusComposer: reads.focusComposer, scope,
     scopeRevision: reads.scopeVersions.get(key) ?? 0,
+    archiveRevision: reads.archiveRevision ?? 0,
+    ...(reads.archiveReceipt===undefined?{}:{archiveReceipt:reads.archiveReceipt}),
     readBoundary: { identity: reads.identity, admitted: reads.admitted },
     onDeleteConfirmed: reads.onDeleteConfirmed,
   })
@@ -368,6 +376,8 @@ function ScopedConversationGroupView({ scope, reads, projects, projectListReady,
     listLoading={controller.loading} listLoadingMore={controller.loadingMore} listError={controller.error}
     {...(reads.admitted ? { onRetryList: controller.refresh } : {})} hasMore={controller.hasMore} onLoadMore={controller.loadMore}
     onSelectConversation={(id) => { if (reads.admitted) reads.onSelect(scope, id) }}
+    {...(reads.onArchive===undefined?{}:{onArchiveConversation:reads.onArchive})}
+    {...(reads.archiveBusy===undefined?{}:{archiveBusy:reads.archiveBusy})}
     onRequestDelete={(conversation) => onRequestDelete(conversation, controller.deleteConversation)}
     onRenameConversation={controller.renameConversation}
     moveDestinations={destinations}

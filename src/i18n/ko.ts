@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const ko: Partial<Record<MessageKey, string>> = {
+
+  // SET47-BEGIN: task-archive
+  "archive.action": "작업 보관",
+  "archive.restore": "작업 복원",
+  "archive.empty": "보관된 작업이 없습니다.",
+  "archive.checking": "보관 상태 확인 중…",
+  "archive.stateFailed": "보관 상태를 확인할 수 없습니다. 다시 시도하세요. 현재 작업은 계속 사용할 수 있습니다.",
+  "archive.idUnavailable": "이 이전 작업 ID는 브라우저에서 안전하게 접근할 수 없습니다.",
+  // SET47-END: task-archive
   // SET40-BEGIN: settings-search-feedback
   "settings.searchClear": "검색 지우기",
   "settings.searchEmpty": "검색 결과가 없습니다",

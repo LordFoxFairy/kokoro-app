@@ -1,3 +1,6 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：任务菜单与Data归档恢复通过现AppFrame接线；新schema/raw JSON、lib/server归档列表与状态adapter、四操作generated组、settings客户端/hooks及shell active-state/command hooks各有单一职责。BFF归档事实唯一owner，Web无archive数据库或全局缓存。完整验收与正常3312激活待Root，3311保留。
+
 ## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
 
 测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。

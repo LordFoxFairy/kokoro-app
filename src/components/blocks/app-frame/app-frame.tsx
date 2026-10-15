@@ -1,4 +1,5 @@
 "use client"
+import { useSessionArchive } from "@/ui/shell/use-session-archive"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
@@ -45,6 +46,7 @@ import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { sessionScopeKey } from "@/engine/session-scope"
+import archiveStyles from "@/ui/settings/settings-modal.module.css"
 import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
@@ -224,6 +226,7 @@ function AppFrameRuntime({
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
     if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
   }, [engine, moveScopeKey])
+  const archive = useSessionArchive({preview,boundary:projectReadBoundary,engine,scope:moveScopeKey})
   const conversationsCtl = useConversationList({
     engine,
     preview,
@@ -234,6 +237,8 @@ function AppFrameRuntime({
     scope: sessionScope,
     readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
     scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
+    archiveRevision: archive.revision,
+    archiveReceipt: archive.event,
     onDeleteConfirmed: handleConversationDeleteConfirmed,
   })
   const conversationMove = moveSnapshot.intent
@@ -877,6 +882,7 @@ function AppFrameRuntime({
     awaitingIds,
     onSelectConversation: selectConversationWithMoveFence,
     onDeleteConversation: conversationsCtl.deleteConversation,
+    ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject ? {onArchiveConversation:(id:string)=>void archive.archive(id),archiveBusy:archive.busy||archive.blocked}:{}),
     onRenameConversation: conversationsCtl.renameConversation,
     conversationScope: sessionScope,
     conversationMove,
@@ -886,7 +892,7 @@ function AppFrameRuntime({
     conversationReads: {
       engine, scope: sessionScope, currentController: conversationsCtl,
       activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
-      identity: railReadIdentity, admitted: railReadAdmitted, folderIntentIdentity: railFolderIntentIdentity, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
+      identity: railReadIdentity, admitted: railReadAdmitted, folderIntentIdentity: railFolderIntentIdentity, scopeVersions: moveSnapshot.scopeVersions, archiveRevision:archive.revision, archiveReceipt:archive.event, archiveBusy:archive.busy||archive.blocked, ...(!preview && projectReadBoundary?.admitted && projectReadBoundary.subject?{onArchive:(id:string)=>void archive.archive(id)}:{}), focusComposer,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
         if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
@@ -936,6 +942,8 @@ function AppFrameRuntime({
 
   const overlaySurfaces = (
     <>
+    {!preview && projectReadBoundary?.admitted && archive.blocked ? <div className={archiveStyles.archiveFeedback} role="group" aria-label={t("data.unknown")}><p role="alert">{t("data.unknown")}</p><button type="button" disabled={archive.busy} onClick={()=>void archive.reconcile()}>{t("data.reload")}</button>{archive.review?<button type="button" disabled={archive.busy} onClick={archive.proceed}>{t("data.continue")}</button>:null}</div>:null}
+    {!preview && projectReadBoundary?.admitted && (projectWorkspace?routedConversationId:activeId) && conversationsCtl.archiveStatus!=="archived" && (conversationsCtl.archiveStatus==="unknown"||conversationsCtl.archiveStatus==="missing") ? <div className={archiveStyles.archiveFeedback} role="status">{conversationsCtl.archiveStateError?t("archive.stateFailed"):t("archive.checking")}{conversationsCtl.archiveStateError?<button type="button" onClick={conversationsCtl.retryArchiveState}>{t("data.reload")}</button>:null}</div>:null}
     {copyFeedback !== null && copyFeedback.lifetime.view === copyView && copyFeedback.lifetime.live ? (
       <div className={shellStyles.taskLinkFeedback} role={copyFeedback.kind === "success" ? "status" : "alert"}>
         {t(copyFeedback.kind === "success" ? "shell.taskLinkCopied" : "shell.taskLinkCopyFailed")}
@@ -946,6 +954,7 @@ function AppFrameRuntime({
       settingsTab={navigationState.settingsTab}
       brandName={brandName}
       preview={preview}
+      onArchiveChanged={archive.confirmed}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
       onCloseSettings={overlays.closeSettings}
       onTabChange={(tab) => navigationState.syncSettingsUrl(tab, "replace")}

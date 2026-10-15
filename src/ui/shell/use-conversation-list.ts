@@ -12,6 +12,8 @@ import type { EngineSnapshot } from "@/engine/machine"
 import type { SessionEngine } from "@/engine/machine"
 import { useSessionList } from "@/ui/rail/use-session-list"
 
+import { useActiveArchiveState } from "./use-active-archive-state"
+import type { ArchiveState } from "@/lib/archived-tasks.schema"
 import { browserListClient } from "./page-clients"
 import { DIRECT_SESSION_SCOPE, sessionScopeKey, type SessionScope } from "@/engine/session-scope"
 
@@ -20,6 +22,9 @@ type Thread = EngineSnapshot["thread"]
 type ConversationEntry = { id: string; title: string }
 
 export type ConversationListController = {
+  archiveStatus?: "unarchived" | "archived" | "unknown" | "missing"
+  archiveStateError?: boolean
+  retryArchiveState?: () => void
   conversations: ConversationEntry[]
   loading: boolean
   loadingMore: boolean
@@ -41,21 +46,23 @@ export function useConversationList(params: {
   isStreaming: boolean
   focusComposer: () => void
   scope?: SessionScope
+  archiveRevision?: number
+  archiveReceipt?: ArchiveState | null
   scopeRevision?: number
   readBoundary?: { identity: string; admitted: boolean }
   onDeleteConfirmed?: (scope: SessionScope, id: string) => void
 }): ConversationListController {
   const {
     engine, preview = false, activeId, thread, isStreaming, focusComposer,
-    scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, readBoundary, onDeleteConfirmed,
+    scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, archiveRevision = 0, archiveReceipt, readBoundary, onDeleteConfirmed,
   } = params
 
   const [listRefresh, setListRefresh] = useState(scopeRevision)
   const listRefreshRef = useRef(scopeRevision)
   const currentScopeKey = sessionScopeKey(scope)
-  const observedScopeRevisionRef = useRef({ scopeKey: currentScopeKey, revision: scopeRevision })
+  const observedScopeRevisionRef = useRef({ scopeKey: currentScopeKey, revision: scopeRevision, archiveRevision })
   const listClient = browserListClient({ preview })
-  const lifecycleIdentity = useMemo(() => ({ client: listClient, scopeKey: currentScopeKey, identity: readBoundary?.identity, admitted: readBoundary?.admitted ?? true }), [currentScopeKey, listClient, readBoundary?.identity, readBoundary?.admitted])
+  const lifecycleIdentity = useMemo(() => ({ client: listClient, engine, scopeKey: currentScopeKey, identity: readBoundary?.identity, admitted: readBoundary?.admitted ?? true }), [currentScopeKey, listClient, engine, readBoundary?.identity, readBoundary?.admitted])
   type LifecycleToken = { identity: typeof lifecycleIdentity; active: boolean; controllers: Set<AbortController> }
   const lifecycleRef = useRef<LifecycleToken | null>(null)
   type RenameOverlay = { title: string; sequence: number; reconcileAfter: number | null; lifecycle: LifecycleToken }
@@ -115,26 +122,38 @@ export function useConversationList(params: {
 
   useEffect(() => {
     const previous = observedScopeRevisionRef.current
-    observedScopeRevisionRef.current = { scopeKey: currentScopeKey, revision: scopeRevision }
+    observedScopeRevisionRef.current = { scopeKey: currentScopeKey, revision: scopeRevision, archiveRevision }
     // Entering a scope already starts its canonical first-page GET. Only a
     // revision change while that same scope has been observed needs a second,
     // explicitly post-ACK request.
-    if (previous.scopeKey !== currentScopeKey || previous.revision === scopeRevision) return
+    if (previous.scopeKey !== currentScopeKey || (previous.revision === scopeRevision && previous.archiveRevision === archiveRevision)) return
     requestListRefresh()
-  }, [currentScopeKey, requestListRefresh, scopeRevision])
+  }, [currentScopeKey, requestListRefresh, scopeRevision, archiveRevision])
 
   // 当前活跃会话若尚未在服务端清单出现：仅在它已有真实内容时合成置顶项。
   // 空工作区不应在「最近」里出现一个没有任何历史的“新对话”行；这会让
   // 首屏看起来像已经有一条任务，也不符合 Manus/Codex 的空工作台语义。
   const activeInList = activeId !== null && sessionList.entries.some((entry) => entry.id === activeId)
   const activeHasContent = thread.messages.length > 0 || Boolean(thread.meta?.title?.trim())
+  const archiveState = useActiveArchiveState({identity:lifecycleIdentity,admitted:!preview && readBoundary?.admitted===true,id:activeId,inList:activeInList,listSettled:!sessionList.loading,locallyCreated:engine?.getSnapshot?.().locallyCreatedSessionId===activeId,revision:archiveRevision,refresh:listRefresh,onPersisted:()=>{if(engine?.getSnapshot?.().locallyCreatedSessionId===activeId)engine.retireLocalCreationProvenance()},...(archiveReceipt===undefined?{}:{receipt:archiveReceipt})})
+  const receiptKey = archiveReceipt ? JSON.stringify(archiveReceipt) : null
+  const [archiveFence, setArchiveFence] = useState(() => ({ identity: lifecycleIdentity, revision: archiveRevision, receiptKey, beforeRefresh: listRefresh - 1 }))
+  let currentArchiveFence = archiveFence
+  if (archiveFence.identity !== lifecycleIdentity || archiveFence.revision !== archiveRevision || archiveFence.receiptKey !== receiptKey) {
+    // A newly mounted scope starts its read after the receipt; an existing scope
+    // waits for the explicit post-ACK refresh to supersede its old page.
+    currentArchiveFence = { identity: lifecycleIdentity, revision: archiveRevision, receiptKey, beforeRefresh: listRefresh - (archiveFence.identity !== lifecycleIdentity ? 1 : 0) }
+    setArchiveFence(currentArchiveFence)
+  }
+  const postReceiptPage=sessionList.settledFirstPage?.success===true && sessionList.settledFirstPage.refreshSignal>currentArchiveFence.beforeRefresh
+  const visibleEntries=sessionList.entries.filter(entry=>!(entry.id!==activeId && !postReceiptPage && archiveReceipt?.archived_at!=null && entry.id===archiveReceipt.session_id) && !(entry.id===activeId && archiveState.status==="archived"))
   const conversations =
-    lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent
+    lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent && (preview || archiveState.synthetic || (readBoundary === undefined && archiveState.status === "unarchived"))
       ? [
           { id: activeId, title: withOverride(activeId, thread.meta?.title ?? conversationTitle(thread.messages)) },
-          ...sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) })),
+          ...visibleEntries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) })),
         ]
-      : sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
+      : visibleEntries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
 
   // run 收尾（streaming→idle 落沿）即刷新清单：首条消息落库后新会话进服务端列表，标题也随之更新。
   const wasStreamingRef = useRef(false)
@@ -260,6 +279,7 @@ export function useConversationList(params: {
   }, [drainRenameQueue])
 
   return {
+    archiveStatus: archiveState.status, archiveStateError:archiveState.error, retryArchiveState:archiveState.retry,
     conversations,
     loading: sessionList.loading,
     loadingMore: sessionList.loadingMore,

@@ -762,3 +762,31 @@
     border: 0;
   }
 }
+
+/* SET47: page-owned archive uncertainty must remain actionable outside the rail. */
+.archiveFeedback {
+  position: fixed;
+  inset-inline-end: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  max-width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-md);
+  font-size: 0.875rem;
+}
+.archiveFeedback button {
+  margin-inline-end: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.archiveFeedback button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

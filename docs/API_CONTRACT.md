@@ -1,3 +1,15 @@
+## SET47 归档任务同源消费者（2026-10-15；已消费正式owner候选）
+
+SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
+
+唯一外部事实源是BFF public15.4.0/150正式发行53f222ec41500d7a608da0c221a4695c402ff678（全文SHA-256 87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817），四操作：listOwnedArchivedTasks、getSessionArchiveState、archiveSession、restoreSession；只读src/generated/bff-public-openapi.yaml已固定owner原字节并正常生成新窄客户端，禁止手改产物。历史15.3/146全包digest为694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5。新outer inverse先严格恢复该完整旧包，再运行所有旧断言/hash/negative；生成器及whole-artifact provenance按新发行精确迁移，不修改Skills/连接器业务断言。
+
+Web browser-private固定GET /api/account/archived-tasks与GET/POST /api/session/sessions/{encoded-id}/archive、POST /api/session/sessions/{encoded-id}/restore。沿既有session catch-all在generic proxy前精确分派archive/restore，其他操作不扩展；方法不允许则405。历史非空Unicode session ID采用唯一可逆encodeURIComponent编码，不强制conv UUID。列表仅limit/cursor闭集，POST仅严格JSON空对象、实际body含EOF最多4096字节、允许未指定或identity编码、允许chunked但拒Content-Length冲突和不支持的编码和唯一可见ASCII无逗号/空格1..128 idempotency-key，命令禁止query。状态/ACK为data.session_id+archived_at，不构造旧Chat meta envelope。
+
+两个具名server adapter沿固定Host/scheme，GET如带Origin须精确匹配，命令必需精确Origin；Product Session必须在线有效，所有BFF调用使用现正式server-only admission headers。参数Promise、body EOF、会话读、固定上游headers/EOF/strict JSON以及最终会话六字段id/generation/subject/access/accessExpiresAt/expiresAt复验共享单绝对10秒与request.signal。严禁重定向/透传Location/Set-Cookie；响应头+body最多1MiB、UTF8 fatal/BOM/重复键拒绝、精确request ID/JSON/no-store；success/error嵌套严格schema、精确目标session ID、cursor身份与limit/顺序闭集，错误message受控清洗，Retry-After仅正式429范围。
+
+浏览器具名四方法均支持AbortSignal，POST不自动retry；不新增machine token或浏览器自报tenant/subject。可读任务不推导可写权限。超时/断线的写入结果未知，UI先权威重读再显式继续，不将本地marker/旧ACK等同当前owner状态。新system测试当前为具名handler与依赖替身验证，覆盖总预算、EOF、最终六字段会话退休、严格目标/action及合法framing；真实Next HTTP和正常认证CUA仍由Root后续验收，不能以handler测试冒称端到端。
+
 ## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
 
 测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。

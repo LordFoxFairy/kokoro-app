@@ -12,9 +12,9 @@ import YAML from "yaml"
 import { messageRecordSchema } from "../../src/contract/chat"
 import { BFF_CHAT_MESSAGE_ROLES } from "../../src/generated/bff-agent-failure"
 
-const BFF_OWNER_COMMIT = "eec3244645d5129407147774ecb07e03848420c4"
-const BFF_PUBLIC_OPENAPI_SHA256 = "694251d4f4c1bcc9a79ae4fd2d4c050c87a0a8af39bea0a9f0bed3a4dcae5ad5"
-const BFF_PUBLIC_OPENAPI_VERSION = "15.3.0"
+const BFF_OWNER_COMMIT = "53f222ec41500d7a608da0c221a4695c402ff678"
+const BFF_PUBLIC_OPENAPI_SHA256 = "87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817"
+const BFF_PUBLIC_OPENAPI_VERSION = "15.4.0"
 const ROOT = process.cwd()
 const SNAPSHOT = resolve(ROOT, "src/generated/bff-public-openapi.yaml")
 const GENERATOR = resolve(ROOT, "scripts/generate-bff-agent-failure.mjs")
@@ -206,7 +206,7 @@ describe("pinned BFF Agent failure public contract", () => {
     const bytes = await readFile(SNAPSHOT)
     const spec = YAML.parse(bytes.toString("utf8")) as { info?: { version?: string } }
 
-    expect(BFF_OWNER_COMMIT).toBe("eec3244645d5129407147774ecb07e03848420c4")
+    expect(BFF_OWNER_COMMIT).toBe("53f222ec41500d7a608da0c221a4695c402ff678")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(BFF_PUBLIC_OPENAPI_SHA256)
     expect(spec.info?.version).toBe(BFF_PUBLIC_OPENAPI_VERSION)
   })

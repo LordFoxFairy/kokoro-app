@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+
+  // SET47-BEGIN: task-archive
+  "archive.action": "Archive task",
+  "archive.restore": "Restore task",
+  "archive.empty": "No archived tasks.",
+  "archive.checking": "Checking archive state…",
+  "archive.stateFailed": "Unable to confirm archive state. Retry; the current task remains available.",
+  "archive.idUnavailable": "This historical task ID cannot be safely addressed by the browser.",
+  // SET47-END: task-archive
   // SET40-BEGIN: settings-search-feedback
   "settings.searchClear": "Clear search",
   "settings.searchEmpty": "No results found",

@@ -1,3 +1,15 @@
+## SET47 无Web归档持久化owner（2026-10-15；候选实现）
+
+SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
+
+BFF Conversation新增archived_at nullable TIMESTAMPTZ(3)，active/deleted不扩展；Web无SQL/schema/migration，不持久化归档列表/真假状态。归档只整理列表，不删除消息、撤销分享、取消Run或清当前engine；Project删除仍处理已归档子项，tombstone不可恢复，父归属和幂等由BFF事务裁决。machine契约及owner schema不在Web重复维护。
+
+Web内存仅保存当前身份代际的分页列表、四字段投影、cursor/顺序检查、mutation busy/unknown/review、active archive三态和独立archive revision。不同身份/代际/scope/client/engine请求不得互相复用结果；archive ACK优先于更早请求与synthetic row，GET当前状态用于刷新后校准。unknown保留当前工作区但阻止冒出正常任务行和自动写重试；用户在产品内重读确认后继续。无新localStorage archive真源。
+
+可选EngineSnapshot.locallyCreatedSessionId仅本实例创建当前ID的provenance，不是服务端存在/未归档证明；赋值、匹配投影、打开历史/外部store/dispose/真实身份切换退休见TECHNICAL_DESIGN。只认当前可信准入且无更新归档事实的本地新任务404例外；同主体admission暂停不销毁证明。page-clients现engine key不含subject，清browser index同时同步退休证明，防止旧实例在新主体恢复资格。旧SSR与注入snapshot缺字段不授资格。当前列表/状态GET/成功ACK或owner snapshot证明持久化后同步退休现证明，后续404不合成已删除任务；无持久化证明的真正本地draft仍保留首次404例外。
+
+Root保留现正常3311全部事实和session。候选使用正式launcher新owned临时fixture DB/namespace，仍只复用现PG/Redis服务器，不改旧DB，不往正常列表插假任务。空态CUA、真实PG隔离并发/分页/归档恢复、Web渲染与真实Next边界各自报告，不混称完整Agent执行验收。
+
 ## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
 
 测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。

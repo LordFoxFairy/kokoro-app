@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const ru: Partial<Record<MessageKey, string>> = {
+
+  // SET47-BEGIN: task-archive
+  "archive.action": "Архивировать задачу",
+  "archive.restore": "Восстановить задачу",
+  "archive.empty": "Архивированных задач нет.",
+  "archive.checking": "Проверка состояния архива…",
+  "archive.stateFailed": "Не удалось подтвердить состояние. Повторите попытку; текущая задача остаётся доступной.",
+  "archive.idUnavailable": "Браузер не может безопасно обратиться к этому старому идентификатору задачи.",
+  // SET47-END: task-archive
   // SET40-BEGIN: settings-search-feedback
   "settings.searchClear": "Очистить поиск",
   "settings.searchEmpty": "Ничего не найдено",

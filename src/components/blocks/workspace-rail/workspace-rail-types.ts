@@ -22,6 +22,10 @@ export type RailConversationReads = {
   folderIntentIdentity?: string | null
   admitted: boolean
   scopeVersions: ReadonlyMap<string, number>
+  archiveReceipt?: import("@/lib/archived-tasks.schema").ArchiveState | null
+  archiveRevision?: number
+  archiveBusy?: boolean
+  onArchive?: (id:string)=>void
   failedMoveScopeKey: string | null
   focusComposer: () => void
   onSelect: (scope: SessionScope, id: string) => void
@@ -72,6 +76,8 @@ export type WorkspaceRailProps = {
   awaitingIds: ReadonlySet<string>
   onSelectConversation: (id: string) => void
   onDeleteConversation: (id: string) => Promise<boolean>
+  onArchiveConversation?: (id:string)=>void
+  archiveBusy?: boolean
   onRequestDelete?: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
   /** Live per-scope readers. Standalone controlled rails supply their direct list explicitly. */
   conversationReads?: RailConversationReads

@@ -36,6 +36,7 @@ type SettingsPanelContentProps = {
   tab: SettingsTab;
   brandName: string;
   preview: boolean;
+  onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void;
   readBoundary?: ProjectReadBoundary;
   hubClient: HubClient;
   teamClient: TeamClient;
@@ -58,6 +59,7 @@ export function SettingsPanelContent({
   brandName,
   preview,
   readBoundary,
+  onArchiveChanged,
   hubClient,
   teamClient,
   accountLoginMethods,
@@ -72,7 +74,7 @@ export function SettingsPanelContent({
 }: SettingsPanelContentProps) {
   switch (tab) {
     case "data-management":
-      return <DataManagementSection preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
+      return <DataManagementSection {...(onArchiveChanged===undefined?{}:{onArchiveChanged})} preview={preview} {...(readBoundary === undefined ? {} : { readBoundary })} />;
     case "help":
       return <HelpSection onSelectSetting={onSelectSetting} />;
     case "account":

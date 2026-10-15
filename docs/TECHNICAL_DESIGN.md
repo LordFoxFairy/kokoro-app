@@ -1,3 +1,34 @@
+## SET47 归档任务消费者（2026-10-15；已实现候选，Root完整验收待完成）
+
+SET47传输边界补充：WHATWG会规范化单独的`.`/`..`段及其percentencoded形式；BFF保持原始HTTP的exact encodeURIComponent契约。Web对仅这两个历史ID在任何fetch前拒绝并将动作禁用、解释不可用；不使用双重解码/替代API，也不宣称任意历史ID浏览器皆可操作。其余合法Unicode ID不限制为conv UUID。依据：[URL Standard](https://url.spec.whatwg.org/#single-dot-url-path-segment)。
+
+本切片基线Web b979cc946166df9e8d75ecdb3d958239aa286e55；BFF起点eec3244645d5129407147774ecb07e03848420c4。原基线Data只有归档不可用说明，普通列表会为不在列表的active合成行。候选已接任务菜单归档、Data分页与恢复、刷新一致的本人视图。固定消费BFF已提交发行53f222ec41500d7a608da0c221a4695c402ff678，public15.4.0/150，全文SHA-256 87186311e67eeebcd5f27d7974326186e1912de49d18d4d524a0bcbc940a0817。Skills/连接器业务、Run执行、分享生命周期及move coordinator不变。当前Web保留Next框架；BFF非Nest当前态及框架收敛不由本消费者实现。
+
+| 放置项 | 裁决 |
+| --- | --- |
+| Owner/写入 | Conversation归档事实唯一BFF owner；Web只持瞬时展示/请求资格，无数据库。Root集成与Git；同仓一名writer，阶段授写见当前计划。 |
+| 当前入口 | 现DataManagementSection/useSharedTasks、AppFrame/useConversationList、WorkspaceRail菜单、engine snapshot、Product Session同源adapter。 |
+| 目录比较 | 采用现settings客户端/hook和lib/server具名adapter；另建archive顶层模块会拆散现任务/Data职责，扩generic Chat proxy会扩大无关边界，均不采用。 |
+| 新文件 | 具名archive schema/raw JSON、两个server adapter、四操作生成组、settings浏览器client/hook与对应测试。无空目录/新进程/新owner/新依赖。 |
+| 现文件 | Data/SettingsModal/Panel传恢复回调；AppFrame持独立archive revision，rail types/shell/list/item传正确scope动作；useConversationList处理active三态；engine-types/machine与page-clients只增创建provenance及退休。九locale仅具名实用文案。 |
+| 依赖 | Browser→Web同源→固定BFF public四操作；Web不接owner DB/内部服务，不导入BFF源。已vendor正式owner原字节并用@hey-api/openapi-ts 0.99.0正常生成；所有旧操作保持。 |
+| 删除 | 替换Data归档不可用占位；不保留fake列表、不复用删除来归档、不引入legacy fallback。 |
+| 验证 | 精确父契约inverse/原oracle、tests-only真实RED、client/schema/adapter/engine/UI身份与取消负控、required contract/architecture/lint/type/full/build/E2E；正常CUA另验。 |
+
+任务菜单动作只对当前受信准入视图发起，owner最终判权限；归档ACK后通知所有已挂载scope重读，但不调用engine.deleteConversation/reconcileConversationCache，不清当前线程、不取消Run、不撤销Share。恢复通知同一路径。archive revision与move revision分别传递，禁止数值相加/伪装move事件或建全局归档事实缓存。project_ref可能是ID或slug，通知所有mounted scope防止别名漏刷新。
+
+active侧栏三态为confirmed-unarchived/archived/unknown。正式列表命中或GET archive null为当前未归档证据；archive ACK优先于旧请求和旧列表，禁止合成已归档active。当前active有内容但不在已完成首页时，仅有限一次owner state GET；unknown/loading/error显示确认中或重试，不冒普通任务行、不重置engine，不能随render循环请求。请求绑定subject/generation/client/scope/active/attempt，退休即abort且拒迟到响应。刷新/切换由同一规则重新判定，Data restore可以使列表恢复。
+
+新建但尚未持久化任务例外仅由EngineSnapshot.locallyCreatedSessionId证明本engine生成了当前active：只在首次无store submit与newConversation本地生成ID后、首次notify前赋值，buildSnapshot仅匹配active暴露；打开历史任务、真实外部store变更、dispose及真实身份切换/logout同步清除。page-clients现缓存key不含subject，必须在现browser index退休链清除所有live engine provenance；同主体续期不得误删。旧注入/SSR snapshot无字段即无证明。GET404不变成永久未归档事实；例外必须同时有可信准入、当前engine+active证明且无更高archive ACK/权威状态。
+
+归档ACK只压过更早的普通页/状态请求；已知发于ACK后的状态GET可覆盖该回执，非active任务在post-ACK首页settled后也恢复按正式列表展示。新挂载scope的首次读取即为post-ACK，不永久以旧回执过滤。预览和缺可信准入的注入视图不发归档状态GET；预览保留其原本地展示，注入视图仅可保留已有正式列表证明的当前行，不推断缺页历史未归档。
+
+本地provenance只覆盖尚无持久化证明的任务。当前owner普通列表命中、state GET成功、archive/restore ACK、message admission receipt、owner snapshot均退休现engine的证明；后续删除/404不能重新获得草稿资格。退休不清thread、不取消Run。首次真实本地submit与newConversation的同步证明、持久化退休及后续404边界均有具名回归。
+
+UI显式loading/empty/error/unknown/busy/review/success。列表顺序与cursor由正式契约校验，分页面最多20页/2000项，重复ID/回环cursor/逆序拒绝；历史标题不trim。写各自产生新key且无自动重试。写后无法确认进入unknown fence，先权威重读再由产品内“继续”解除，不能将未知当成功；身份变更/卸载退休全部operation。读与写各自单绝对10秒，不通过分阶段重置预算延长。
+
+运行策略：现3311和其owned DB/session保持；候选owner/Web冻结并提交后由Root更新正式pin，沿现launcher在另一端口起独立owned临时fixture DB/namespace，共用现PG/Redis服务器。不得改旧DB schema或seed虚构正常任务。Agent/model尚不可用时，正常CUA如实验归档空态，非空归档/恢复以隔离真实PG HTTP+Web旅程证明，不能混称正常任务已执行。
+
 ## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
 
 测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。

@@ -1,3 +1,6 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：use-session-archive只持AppFrame当前身份/engine/scope的命令资格、unknown与独立archiveRevision；use-active-archive-state只持当前active的owner证据与有界重读，不作全局真源。useConversationList以ACK先后顺序保护旧读，post-ACK state/list可覆盖旧回执；不delete/reconcile engine。page-clients在真实身份切换/logout退休全部live engine本地创建证明。
+
 ## SET29 侧栏账户余额可信读取（2026-10-15；D0，先tests-only）
 
 Web基线2d31cd502db44b5b0ad74e52321cba755624896f，939 tracked clean；runtime_audit唯一writer本片4既有source+1既有rail测试，927最终保护/Root7；先仅测试准入，其余931字节保护。Root管设计/docs/Git/资源/正式激活/CUA，Skills/连接器业务排除。

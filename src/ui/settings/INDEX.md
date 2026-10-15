@@ -1,3 +1,6 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：archived-tasks-client使用正式四操作窄generated client并在原始响应进入SDK前严格校验；use-archived-tasks持当前subject/generation的分页、restore和unknown/review fence。DataManagementSection展示真实空/加载/错误/不可用与恢复确认；恢复ACK由SettingsModal→AppFrame回调通知所有mounted scope重读，unknown须权威GETnull及显式继续。预览无archive IO。
+
 ## SET42 任务发送行窄屏排版（2026-10-15；D0）
 
 任务发送label/hint与禁用queue选择框在窄屏纵向排列，desktop保持同行；只改现sections CSS，现E2E验证文字/选择框无重叠及内容viewport边界。

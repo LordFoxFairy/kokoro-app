@@ -1,3 +1,6 @@
+<!-- SET47 archive consumer: 2026-10-15 -->
+SET47：archived-tasks.ts仅代理本人归档列表；session-archive.ts仅承接现session catch-all的GETarchive/POSTarchive|restore。固定BFF、server-only bearer、Origin/Host/scheme、严格raw闭集JSON与目标/action、1MiB、一次总10秒含params/body/会话/上游EOF/final六字段复验。POST允许identity/chunked的合法framing，拒冲突与不支持encoding，实际4096B+EOF；不改generic Chat/SSE代理。
+
 ## SET43 已移除会话的账户资料读取（2026-10-15；D0，先真实HTTP负控）
 
 测试夹具补充：GET不执行的Auth.js agent factory因server-only导入需空stub；身份准入与requestWithDomain仍是真实HTTP。前两轮仅collection失败，不算行为RED。

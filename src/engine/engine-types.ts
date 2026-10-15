@@ -30,6 +30,8 @@ export type ConversationMoveIntent = Readonly<{
 }>
 
 export type EngineSnapshot = {
+  // In-memory current-view creation provenance, never persisted or inferred from cache.
+  locallyCreatedSessionId?: string
   machine: MachineState
   // 瞬态通知（如插话投递失败）：下一次提交时清空；与相位错误（machine.error）分离。
   notice: NoticeSpec | null
@@ -86,6 +88,7 @@ export type SessionEngine = {
   selectConversation: (id: string) => void
   // 打开服务端清单里的会话（本地索引未见则先纳入缓存再水合）。
   openConversation: (id: string) => void
+  retireLocalCreationProvenance: () => void
   newConversation: () => void
   deleteConversation: (id: string) => Promise<boolean>
   /** Remove one confirmed-nonmember Conversation from this scope's browser index only. */

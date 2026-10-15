@@ -61,6 +61,8 @@ export function WorkspaceRailShell({
   awaitingIds,
   onSelectConversation,
   onRequestDelete,
+  onArchiveConversation,
+  archiveBusy,
   deleteDialogFallbackFocusRef,
   onRenameConversation,
   conversationScope,
@@ -391,6 +393,8 @@ export function WorkspaceRailShell({
             onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onSelectConversation={onSelectConversation}
+            {...(onArchiveConversation===undefined?{}:{onArchiveConversation})}
+            {...(archiveBusy===undefined?{}:{archiveBusy})}
             onRequestDelete={onRequestDelete}
             moveDestinations={moveDestinations}
             conversationMove={conversationMove ?? null}

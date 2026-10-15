@@ -157,6 +157,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   let filesSyncGeneration = 0
   let pendingTerminalRead: { generation: number; runs: Set<string> } | null = null
   let reattachTimer: ReturnType<typeof setTimeout> | null = null
+  let locallyCreatedSessionId: string | undefined
   let disposed = false
   let deleteIntentGeneration = 0
   let deleteIntent: { targetId: string; generation: number; promise: Promise<boolean> } | null = null
@@ -188,6 +189,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     return {
       machine,
+      ...(locallyCreatedSessionId !== undefined && locallyCreatedSessionId === store?.activeId ? {locallyCreatedSessionId} : {}),
       notice,
       store,
       thread,
@@ -353,6 +355,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
   ): void {
     const previous = thread
     const hydrated = stateFromSnapshot(sessionSnapshot)
+    if (locallyCreatedSessionId === sessionId) locallyCreatedSessionId = undefined
     // RR cannot regress an already known interaction baseline, even when the
     // snapshot and current cursor happen to be equal opaque values.
     for (const [runId, next] of Object.entries(hydrated.interactionsByRun)) {
@@ -545,6 +548,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
           notify()
           return
         }
+        locallyCreatedSessionId = undefined
         if (afterExpiredCursor) {
           // The owner snapshot supersedes the old stream's run and approvals.
           // Otherwise REATTACH rejects a changed run while streaming/HITL.
@@ -755,6 +759,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
         ) {
           return
         }
+        if (locallyCreatedSessionId === sessionId) locallyCreatedSessionId = undefined
         if (hydrating || recoveringExpiredCursor || connection.status !== "connected") {
           deferredCreateReceipt = { submission, receipt }
           return
@@ -866,6 +871,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     }
     if (!store) {
       store = addConversation(null, createId("conv"), now(), pendingMode)
+      locallyCreatedSessionId = store.activeId
     }
     const optimisticUserId = createId("usr")
     thread = appendUserMessage(thread, { id: optimisticUserId, content: trimmed })
@@ -995,6 +1001,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
 
   // 切换活跃会话的公共尾段：清流/清相位/清暂存，换空线程后按 snapshot 重新水合。
   function activateConversation(next: ConversationStore, shouldHydrate = true): void {
+    locallyCreatedSessionId = undefined
     taskNotifications.select(next.activeId)
     const previousSessionId = store?.activeId ?? null
     recoveringExpiredCursor = false
@@ -1076,6 +1083,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     abandonActiveRun()
     hydrateGeneration += 1
     const next = addConversation(store, createId("conv"), now(), store ? "fast" : pendingMode)
+    locallyCreatedSessionId = next.activeId
     closeStream()
     clearReattachTimer()
     machine = transition(machine, { type: "RESET" })
@@ -1190,7 +1198,14 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     selectedModel = model
   }
 
+  function retireLocalCreationProvenance(): void {
+    if (locallyCreatedSessionId === undefined) return
+    locallyCreatedSessionId = undefined
+    notify()
+  }
+
   function dispose(): void {
+    locallyCreatedSessionId = undefined
     taskNotifications.dispose()
     disposed = true
     deleteIntentGeneration += 1
@@ -1213,6 +1228,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     if (external === store) {
       return
     }
+    locallyCreatedSessionId = undefined
     const myActive = store?.activeId ?? null
     if (
       external !== null &&
@@ -1281,6 +1297,7 @@ export function createSessionEngine(deps: EngineDeps): SessionEngine {
     stageToolDecision,
     selectConversation,
     openConversation,
+    retireLocalCreationProvenance,
     newConversation,
     deleteConversation,
     reconcileConversationCache,

@@ -14,6 +14,7 @@ export type AppFrameOverlaySurfacesProps = {
   settingsTab: SettingsTab | null
   brandName: string | undefined
   preview: boolean
+  onArchiveChanged?: (state: import("@/lib/archived-tasks.schema").ArchiveState) => void
   readBoundary?: ProjectReadBoundary
   onCloseSettings: () => void
   onTabChange: (tab: SettingsTab) => void
@@ -40,6 +41,7 @@ export function AppFrameOverlaySurfaces({
   brandName,
   preview,
   readBoundary,
+  onArchiveChanged,
   onCloseSettings,
   onTabChange,
   onCreateSkillWithAi,
@@ -62,6 +64,7 @@ export function AppFrameOverlaySurfaces({
       {/* 设置中心：浮在工作区之上的模态卡片，语境原地保留。 */}
       {mounted && settingsTab !== null ? (
         <SettingsModal
+        {...(onArchiveChanged===undefined?{}:{onArchiveChanged})}
           {...(brandName === undefined ? {} : { brandName })}
           initialTab={settingsTab}
           preview={preview}

@@ -4,6 +4,15 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+
+  // SET47-BEGIN: task-archive
+  "archive.action": "タスクをアーカイブ",
+  "archive.restore": "タスクを復元",
+  "archive.empty": "アーカイブ済みタスクはありません。",
+  "archive.checking": "アーカイブ状態を確認中…",
+  "archive.stateFailed": "アーカイブ状態を確認できません。再試行してください。現在のタスクは引き続き利用できます。",
+  "archive.idUnavailable": "この過去のタスクIDはブラウザーで安全にアクセスできません。",
+  // SET47-END: task-archive
   // SET40-BEGIN: settings-search-feedback
   "settings.searchClear": "検索をクリア",
   "settings.searchEmpty": "結果が見つかりません",

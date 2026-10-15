@@ -38,6 +38,9 @@ const AUTH_INDEX_SUBJECT_KEY = "kokoro.web.auth-index-subject"
 /** Remove only browser-owned conversation indexes before admitting a live identity. */
 export function invalidateBrowserAuthSessionIndexes(): void {
   if (typeof window === "undefined") return
+  for (const [key, entry] of pageEngines) {
+    if (key.startsWith("live:")) entry.engine.retireLocalCreationProvenance()
+  }
   const prefix = `${STORAGE_KEY}.`
   const keys: string[] = []
   for (let index = 0; index < window.localStorage.length; index += 1) {

@@ -42,6 +42,15 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 
 // zh 是完整源（所有 key 必在此）。命名约定：<区域>.<用途>。{var} 为插值占位。
 export const zh = {
+
+  // SET47-BEGIN: task-archive
+  "archive.action": "归档任务",
+  "archive.restore": "恢复任务",
+  "archive.empty": "暂无已归档任务。",
+  "archive.checking": "正在确认归档状态…",
+  "archive.stateFailed": "归档状态暂无法确认，请重试。当前任务仍可使用。",
+  "archive.idUnavailable": "此历史任务标识无法通过浏览器安全访问，暂不可操作。",
+  // SET47-END: task-archive
   // SET40-BEGIN: settings-search-feedback
   "settings.searchClear": "清除搜索",
   "settings.searchEmpty": "未找到结果",

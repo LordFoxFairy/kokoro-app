@@ -1492,3 +1492,13 @@ it("SET29 preview keeps the published preview balance path without a live bounda
   expect(client).toHaveBeenCalledWith({ preview: true })
   expect(summary).toHaveBeenCalledTimes(1)
 })
+
+// SET47-BEGIN: the row menu delegates archive without destructive delete.
+import { itemStyles as set47ItemStyles } from "@/components/blocks/workspace-rail/workspace-rail-styles"
+it("SET47 task archive is a keyboard-accessible menu action with its own caller",async()=>{
+ const archive=vi.fn();const remove=vi.fn();renderRail({onArchiveConversation:archive,onDeleteConversation:remove});
+ const trigger=screen.getByRole("button",{name:"归档任务"});expect(set47ItemStyles.itemArchive).toBeTruthy();expect(trigger).toHaveClass(set47ItemStyles.itemArchive!);
+ fireEvent.keyDown(trigger,{key:"Enter",code:"Enter"});
+ const item=await screen.findByRole("menuitem",{name:"归档任务"});fireEvent.click(item);expect(archive).toHaveBeenCalledWith("ses_1");expect(remove).not.toHaveBeenCalled();
+});
+// SET47-END
