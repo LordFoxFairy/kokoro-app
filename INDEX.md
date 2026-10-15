@@ -1,3 +1,9 @@
+<!-- SET41 V2 D0: SET41 V2：General父级table布局约束归现settings-modal.module.css；主题和语言控件可用宽归现sections CSS。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+主题窄屏可达性归src/ui/settings/sections/settings-sections.module.css；追加原E2E尾部回归，业务provider保持。
+
 SET40：`src/components/blocks/app-frame/use-app-frame-overlays.ts` 协调初始设置handoff，保留设置内搜索结果的焦点；设置搜索仍归现Navigation。
 
 ## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）

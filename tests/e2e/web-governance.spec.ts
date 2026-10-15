@@ -601,3 +601,48 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
   });
 }
 // SET40-END: settings-search-real-layout
+
+// SET41-BEGIN: theme-options-within-content
+for (const width of [1280, 390, 320]) {
+  test(`SET41 all theme options remain reachable at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+    await page.goto("/app#/account/settings/general", { waitUntil: "domcontentloaded" });
+    const modal = page.getByTestId("settings-modal");
+    const appearance = modal.getByTestId("settings-appearance");
+    const contentViewport = modal.getByRole("tabpanel").locator('[data-slot="scroll-area-viewport"]');
+    const light = appearance.getByRole("radio", { name: "Light", exact: true });
+    const dark = appearance.getByRole("radio", { name: "Dark", exact: true });
+    const auto = appearance.getByRole("radio", { name: "Auto", exact: true });
+    await appearance.scrollIntoViewIfNeeded();
+    for (const label of ["Light", "Dark", "Auto"]) {
+      const option = appearance.getByRole("radio", { name: label, exact: true });
+      await expect(option).toBeVisible();
+      const clip = await contentViewport.boundingBox();
+      const button = await option.boundingBox();
+      const text = await option.getByText(label, { exact: true }).boundingBox();
+      expect(clip).not.toBeNull();
+      for (const box of [button, text]) {
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(clip!.x - 1);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(clip!.x + clip!.width + 1);
+      }
+    }
+    await light.click();
+    await expect(light).toBeChecked();
+    await auto.click();
+    await expect(auto).toBeChecked();
+    await auto.press("ArrowLeft");
+    await expect(dark).toBeFocused();
+    await dark.press("Space");
+    await expect(dark).toBeChecked();
+    await dark.press("ArrowRight");
+    await expect(auto).toBeFocused();
+    await auto.press("Space");
+    await expect(auto).toBeChecked();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(auto).toBeChecked();
+    await page.screenshot({ path: testInfo.outputPath(`set41-theme-${width}.png`), fullPage: true });
+  });
+}
+// SET41-END: theme-options-within-content

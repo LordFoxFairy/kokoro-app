@@ -1,3 +1,9 @@
+<!-- SET41 V2 D0: SET41 V2仅General现panel内Radix table-layout:fixed，不改变共享ScrollArea；现General语言select不超过容器。主题原回归与旧tests保持。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+主题固定尺寸选项由现sections/settings-sections.module.css按可用内容宽换行；保持现radio键盘及provider持久化。回归在原tests/e2e/web-governance.spec.ts尾部，判断实际内容viewport内按钮及文字，不能只检查modal未横溢。
+
 ## SET40 具体设置项搜索（2026-10-15；D0，先tests-only）
 
 基线Web f82c891965f80eed9ff0c022d3f77b39bdbad42e，939 tracked clean。Computer Use实际Manus：昵称→个性化+昵称、点child切页并保query/结果焦点；通知→通用+浏览器通知；仅菜单名命中只parent；无匹配未找到结果、当前内容不变。现仅菜单过滤且强留selected，窄屏隐藏search，存在明确功能缺口。

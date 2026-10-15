@@ -1,3 +1,15 @@
+## SET41 主题窄屏裁切局部修复（2026-10-15）
+
+主题选项允许换行，General现Radix内容table固定布局，语言选择不超过容器；仅2个CSS，既有E2E追加6个实际case。3writer/929保护/Root7、两个CSS整体逆恢复和原测试完整prefix exact，独立审查无确定P1/P2。首探6PASS因逐项滚动掩盖默认裁切，记录保留后修新oracle；旧CSS准确2PASS4FAIL15.1s。V1全E2E30PASS2个320pxFAIL4原SKIP31.0s；V2保持新旧断言，32PASS0FAIL4原SKIP38.4s，库存恢复，1280/390/320六张截图已实际检查。contract283/architecture50/lint/type/build通过。纯CSS/E2E变化未重跑完整pnpm test，继承SET40的FAILED门，5旧及3新增proxy503未归因，早前instrumentation/welcome根因亦未关闭；不称全仓通过。实际部署和正常认证CUA将在接入后单独记录。
+
+正常已登录SET40搜索CUA已通过：昵称/通知父子结果与跳转、保留query/按钮focus、无结果保持当前内容、清除回焦。窄屏实测355px，专用E2E另有真实390px，不混称尺寸。单次热态输入调用35ms、点击到标题162ms，含工具开销且不含资料GET完成，不是性能基准。已恢复中文/自动/空query/General，Skills和连接器业务不改。320截图另见禁用任务发送行挤压，后继窄修另行处理；Goal active。
+
+<!-- SET41 V2 D0: SET41 V1全E2E30PASS2FAIL4原SKIP，390已通过、320父级Radix table仍撑宽。补充D0为3writer/929保护/Root7：现modal CSS只限General table-layout:fixed，现sections CSS主题换行及语言select max-width100%；冻结原追加测试保持，不改oracle。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+基线cfdb9d9120c489e8d9b379b957c6213db0be153d；SET40为本地候选/草稿，完整门4033PASS8FAIL含3新增未归因proxy503，早前instrumentation与welcome失败亦未根因关闭。现634文件已实际同步正常实例。SET41仅2writer/930保护/Root7；先tests-only补1280/390/320真实radio+label几何及操作、刷新，再现CSS flex-wrap，原E2E全文prefix保持。不改Skills/连接器。
+
 ## SET40 具体设置搜索本地候选，完整门仍未通过（2026-10-15）
 
 对照 Manus 实际搜索：昵称/通知返回所属页面与匹配子项；仅父标题命中时不带无关子项。一个搜索输入、原生按钮、清除回焦、无结果提示、query/结果焦点保留；只索引静态可见标签，无私有值、隐藏对话框或 Skills/连接器子内容。灰色入口仍不可操作；移动端搜索首行横跨两列，结果有界滚动，原图标导航与内容明确落第二行。九语言只新增两键，旧值与整文件逆恢复 exact；两个旧测试全文 prefix 与冻结 suffix exact，916保护、Root8一致；额外现shell源协调设置初始handoff，已在modal内的焦点保留。

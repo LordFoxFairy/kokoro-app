@@ -448,6 +448,11 @@
   min-width: 0;
 }
 
+.content[data-testid="settings-panel-appearance"]
+  .contentBody :global([data-slot="scroll-area-viewport"] > div) {
+  table-layout: fixed;
+}
+
 .contentBody :global([data-slot="scroll-area-scrollbar"]) {
   width: 0.5rem;
   padding: 0;

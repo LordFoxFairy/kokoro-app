@@ -98,6 +98,7 @@
 
 .generalSettings .select[data-slot="select-trigger"] {
   width: 13rem;
+  max-width: 100%;
   /* Settings uses the same compact desktop control as Manus. The shared
    * Web button contract intentionally preserves a 44px touch minimum, but
    * that minimum must not leak into this desktop dialog and push every
@@ -291,6 +292,7 @@
 
 .themeChoices {
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
   align-items: flex-start;
   gap: 0.5rem;

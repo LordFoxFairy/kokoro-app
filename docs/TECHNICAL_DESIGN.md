@@ -1,3 +1,9 @@
+<!-- SET41 V2 D0: V1实际全E2E为30PASS/2个320px主题裁切FAIL/4原SKIP。CUA确认Radix viewport内inline display:table使用auto表格布局，其自身宽可超过viewport（实际352px时286.58>252），使主题group按错误可用宽换行。D0扩至现modal CSS第三writer：仅General appearance panel的现Radix table设置table-layout:fixed，复用现width100%，不改shared ScrollArea与inline样式；现General语言select加max-width100%避免父容器正确收窄后超出。同一新增oracle完全冻结，原全测试prefix保持；先前失败保留。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+Owner为Web现settings sections样式，Root本片唯一writer；已确认三个110px主题选项加间距需346px，手机实际内容更窄而nowrap使自动选项裁切。仅现themeChoices允许换行，保固定卡尺寸、桌面呈现、标签及radio键盘/持久化语义。选择扩展现CSS，排除改共享ToggleGroup或AppearanceCard逻辑；无模块/依赖/owner变化。先追加原E2E尾部按实际tabpanel内容viewport检查每项及文字边界、点击、键盘、刷新持久化（1280/390/320），旧CSS RED后单属性修复、原断言不改。SET40完整门仍失败，新增未知错误另存，不以本局部修复宣称关闭。
+
 ## SET40 V3 设置内导航保留焦点（2026-10-15）
 
 V1/V2真实E2E均24PASS/2相同390px焦点FAIL/4原SKIP；Modal延后初始focus guard未解决，撤回该尝试。现shell use-app-frame-overlays 的 effect 随每次settingsTab改变同步及rAF强制focus原tab；桌面搜索rail隐藏，手机可见，因此会覆盖仍存在的结果焦点。Root是唯一writer，扩展一个既有shell源文件，15writer（13source+2冻结tests）/916保护/Root8，无新文件/依赖/owner。现INDEX记录shell归属。

@@ -1,3 +1,9 @@
+<!-- SET41 V2 D0: V2只增加General现滚动table固定布局和语言select宽度上限，无任何传输边界变化；不改共享组件或radio/provider语义。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+仅现主题布局换行；无wire、HTTP、事件、授权、幂等或版本变化。原radio语义与provider存写接口保持。
+
 ## SET40 V3 焦点协调归属（2026-10-15）
 
 扩现AppFrame overlay hook，只在焦点未处于设置内部时执行原初始handoff；无API/wire、授权、schema或持久化变化。Root唯一writer；Skills/连接器业务不变。

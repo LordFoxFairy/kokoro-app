@@ -1,3 +1,9 @@
+<!-- SET41 V2 D0: V2仍仅现CSS布局，无数据模型、存储、授权及owner变化。 -->
+
+## SET41 主题选项窄屏可达性（2026-10-15；D0）
+
+仅CSS布局；无服务持久化owner、SQL、schema、localStorage键或值语义变化。测试只使用隔离浏览器既有主题偏好。
+
 ## SET40 V3 焦点协调归属（2026-10-15）
 
 扩现AppFrame overlay hook，只在焦点未处于设置内部时执行原初始handoff；无API/wire、授权、schema或持久化变化。Root唯一writer；Skills/连接器业务不变。
