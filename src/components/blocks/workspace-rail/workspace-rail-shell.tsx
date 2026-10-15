@@ -90,9 +90,9 @@ export function WorkspaceRailShell({
   const { state, isMobile, setOpen, setOpenMobile } = useSidebar()
   const visualCollapsed = state === "collapsed"
   const compactDesktop = !isMobile && visualCollapsed
-  // Sidebar owns the physical 300px → 52px track transition. If the rail
+  // Sidebar owns the physical 280px → 52px track transition. If the rail
   // content switches to icon mode in the same React commit, its labels vanish
-  // while the old 300px gap is still shrinking, producing a blank gray slab.
+  // while the old 280px gap is still shrinking, producing a blank gray slab.
   // Keep the expanded content projected during the collapse transition; on
   // expansion it is available immediately and simply reveals with the rail.
   const [contentCollapsed, setContentCollapsed] = useState(visualCollapsed)
@@ -237,14 +237,14 @@ export function WorkspaceRailShell({
     }
     const targetMode = toggleFocusRef.current
     if (targetMode !== null) {
-      responsiveFocusPendingRef.current = false
-      toggleFocusRef.current = null
       const target = targetMode.mode === "expanded"
         ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
         : compactDesktopRail
           ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
           : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
       if (!target || target.getAttribute("aria-hidden") === "true") return
+      responsiveFocusPendingRef.current = false
+      toggleFocusRef.current = null
       if (targetMode.mode === "collapsed" && targetMode.pointer) {
         target.dataset.pointerFocus = "true"
         target.addEventListener("blur", () => delete target.dataset.pointerFocus, { once: true })

@@ -68,11 +68,16 @@ export function useAppFrameLayout({
   // Clear it after crossing back to the wide layout so a later shrink always
   // starts from the reference's automatic 52px command rail instead of
   // reviving an expanded rail from an earlier window size.
+  const compactRailModeRef = useRef(compactDesktopRail)
   useEffect(() => {
+    compactRailModeRef.current = compactDesktopRail
     if (compactDesktopRail) return
     let active = true
     queueMicrotask(() => {
-      if (active) setCompactRailOpen(false)
+      // A first client media-query reconciliation can switch to compact mode
+      // between this effect and its queued cleanup. Do not let that stale
+      // wide-layout callback immediately close a rail the user just opened.
+      if (active && !compactRailModeRef.current) setCompactRailOpen(false)
     })
     return () => {
       active = false

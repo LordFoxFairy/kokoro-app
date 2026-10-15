@@ -35,6 +35,8 @@ export type AppFrameMainSurfaceProps = {
   resolvedRailCollapsed: boolean
   narrowWeb: boolean
   compactDesktopRail: boolean
+  onNavigationToggle: () => void
+  navigationExpanded: boolean
   railHidden: boolean
   showConversation: boolean
   conversationHydrating: boolean
@@ -95,6 +97,8 @@ export function AppFrameMainSurface({
   resolvedRailCollapsed,
   narrowWeb,
   compactDesktopRail,
+  onNavigationToggle,
+  navigationExpanded,
   railHidden,
   showConversation,
   conversationHydrating,
@@ -142,6 +146,8 @@ export function AppFrameMainSurface({
           // hidden. Once the rail is visible, its own shadcn trigger becomes
           // the owner so the canvas never shows two competing toggles.
           showNavigationTrigger={narrowWeb || (compactDesktopRail && railHidden)}
+          onNavigationToggle={onNavigationToggle}
+          navigationExpanded={navigationExpanded}
         />
       ) : null}
       {mounted && projectCreation.pending ? (

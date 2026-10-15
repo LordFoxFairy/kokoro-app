@@ -1588,7 +1588,7 @@ ScheduledTask 是 BFF 的调度产品定义；Agent Run 是执行实例。四者
    - `src/features/app/kokoro-welcome.tsx`、`kokoro-welcome-content.tsx`：去掉未接通广告/无效轮播状态；所有保留品牌文案传 `{ brand: brandName }`；正式 project 动作只显式调用新建或已知 ID 打开，不生成 preview ID。
    - `src/ui/composer/composer.module.css`：沿语义 token 仅保留一个可见编辑焦点边界；不改全局 Textarea 影响其他表单，不删除按钮自身键盘焦点。
    - `src/i18n/messages.ts`、`en.ts`：新增准确的 project conversation 文案并切换调用；不要修改仍属真正任务功能的共用 task 文案。其他 locale 缺词按现翻译机制，任何新增具体 overlay 需列入授权，禁止批量无关翻译。
-   - 直接测试 `tests/ui/workspace-rail.test.tsx`、`app-frame-rail.test.tsx`、`app-frame.smoke.test.tsx`、`kokoro-project-workspace.test.tsx`、`kokoro-welcome.test.tsx`、`composer.test.tsx`；必要现 `tests/i18n/resolve.test.ts`、`no-hardcoded-ui.test.ts` 和 `src/components/blocks/workspace-rail/workspace-rail-split.test.mjs` 同步准确语义断言。
+   - 直接测试 `tests/ui/workspace-rail.test.tsx`、`app-frame-rail.test.tsx`、`kokoro-project-workspace.test.tsx`、`kokoro-welcome.test.tsx`、`composer.test.tsx` 与 `skills-import-regression.test.tsx`；`tests/i18n/resolve.test.ts` 只验证用户可见文案解析，允许既定的中文 fallback。已退役的 `app-frame.smoke.test.tsx`、`no-hardcoded-ui.test.ts`、`workspace-rail-split.test.mjs` 和 `web-governance.spec.ts` 分别以组件细节、源码扫描、行数约束或登录状态/像素几何/截图附件锁死实现；公开壳层 E2E 仅检查可达性与无横向溢出。
 2. **后继真实 Project 集合/专属调度消费单独授写**：目前 rail 有 projects 注入接口，但 AppFrame 没有 typed Project list 消费；现 ProjectIdentity 仍按品牌显示。首片删除猜测项目而不伪称已完成完整列表/详情名称。若需所有项目列表、项目专属 ScheduledTask 列表/回执接线，先给既有 client/schema/read-state 的精确扩展集；不在首片引入项目持久 store，也不把个人 task 全集当项目列表。已知 projectRef 的独立页面/Conversation 过滤保留。
 
 首片 RED 必须覆盖：project conversation 的创建/选择仍操作同一 Conversation ID；“任务”入口不调用 startNewChat；

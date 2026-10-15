@@ -11,10 +11,10 @@ import { DEFAULT_BRAND } from "@/config/brand"
 
 export type { WorkspaceHeaderProps } from "./workspace-header.types"
 
-export function WorkspaceNavigationTrigger({ className }: { className?: string } = {}) {
+export function WorkspaceNavigationTrigger({ className, onToggle, expanded: expandedOverride }: { className?: string; onToggle?: () => void; expanded?: boolean } = {}) {
   const t = useT()
   const { isMobile, openMobile, state } = useSidebar()
-  const expanded = isMobile ? openMobile : state === "expanded"
+  const expanded = expandedOverride ?? (isMobile ? openMobile : state === "expanded")
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   const focusVisibleNavigationTarget = () => {
@@ -42,6 +42,7 @@ export function WorkspaceNavigationTrigger({ className }: { className?: string }
       aria-expanded={expanded}
       title={expanded ? t("rail.collapseAria") : t("rail.expandAria")}
       onClick={focusVisibleNavigationTarget}
+      {...(onToggle === undefined ? {} : { onToggle })}
     >
       <Menu aria-hidden="true" />
     </SidebarTrigger>
@@ -57,11 +58,16 @@ export function WorkspaceHeader({
   projectWorkspace = false,
   projectRename,
   showNavigationTrigger = false,
+  onNavigationToggle,
+  navigationExpanded,
 }: WorkspaceHeaderProps) {
   return (
     <header data-slot="workspace-header" data-empty-workspace={emptyWorkspace ? "true" : undefined} data-project-workspace={projectWorkspace ? "true" : undefined} className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/95 px-6 py-2 supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur">
       <div className="flex min-w-0 items-center gap-2">
-        {showNavigationTrigger ? <WorkspaceNavigationTrigger /> : null}
+        {showNavigationTrigger ? <WorkspaceNavigationTrigger
+          {...(onNavigationToggle === undefined ? {} : { onToggle: onNavigationToggle })}
+          {...(navigationExpanded === undefined ? {} : { expanded: navigationExpanded })}
+        /> : null}
         <WorkspaceHeaderIdentity
           brandName={brandName}
           {...(onOpenSettings === undefined ? {} : { onOpenSettings })}

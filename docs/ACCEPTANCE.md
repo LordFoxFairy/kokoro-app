@@ -24,6 +24,9 @@ Web现mcp-content传已有embedded，mcp-projection-read按embedded省重复h2�
 
 ## R255 本次左栏留白与重核展开意图（2026-10-06）
 
+> **已于 2026-10-15 退役。** 项目已改为平铺概览入口，任务列表独立；下列 folder 展开/新建意图记录仅保留为历史取证，不再是当前实现或验收基线。当前 rail 只保留可观察的导航与数据分区测试，不用源码行数、CSS 字符串或已删除交互阻断修复。
+> 本轮同时退役耦合过多的 `app-frame.smoke.test.tsx`、源码扫描 `no-hardcoded-ui.test.ts`、行数约束 `workspace-rail-split.test.mjs`，以及把登录状态、像素几何、截图附件和内部 DOM 细节混在一起的 `web-governance.spec.ts`；保留的 rail、项目、欢迎页、编辑器、技能导入与 i18n 测试仅断言用户可观察的点击、焦点、文案解析及数据分区。Playwright 仅保留公开壳层的可达性与无横向溢出检查；覆盖率百分比或翻译 key 数量不作为发布阻断。
+
 Web bf04df7 基线，现4生产路径与现workspace-rail测试窄修：空folder branch桌面43.52→26.80px；非数据folderIntentIdentity按已验证subject隔离，与read generation分离。同主体pending仍撤准入/卸载私有分支，恢复保展开；换subject/null清意图，原未提供稳定key的受控退役case保持。无新存储/API/认证例外。
 
 Root正常3310既有IAM/BFF实际：修前两folder展开，后捕获session GET200时已收起；修后实际重核GET200后两folder仍展开/Direct常驻/原同ID两历史marker。具体timer/focus触发未分别归因。1200×460最终非空P+空Q scroll0→204→0，Direct底346.55<footer356.80，无横溢；本轮早段Direct→P→Direct正规移动同ID已恢复，后段外部数据变为P1/Direct1，未替用户再变更。空态/真实会话均可读；原user标签同步超时，不冒其已刷新。物理触屏、长期分页/异常、全CRUD、撤准入期间scroll位置恢复仍未验/未修，不以保展开冒scroll恢复。

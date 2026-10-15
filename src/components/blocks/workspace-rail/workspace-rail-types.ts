@@ -17,8 +17,6 @@ export type RailConversationReads = {
   thread: EngineSnapshot["thread"]
   isStreaming: boolean
   identity: string
-  /** Verified subject for non-data folder intent; null retires it, omission keeps conservative reader retirement. */
-  folderIntentIdentity?: string | null
   admitted: boolean
   scopeVersions: ReadonlyMap<string, number>
   failedMoveScopeKey: string | null
