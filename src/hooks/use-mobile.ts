@@ -1,26 +1,27 @@
 import * as React from "react"
 
-// User Web keeps its full desktop workbench through the compact browser widths
-// used by a 2K/Retina window. The rail must not turn into a Sheet merely
-// because browser chrome reduces the CSS viewport; only the actual phone
-// breakpoint switches to the mobile surface.
-const MOBILE_BREAKPOINT = 767
+// The navigation composition is selected from the rendered canvas width. At a
+// narrow viewport, keeping the desktop rail in the flex layout squeezes the
+// active page; use the same overlay surface for touch and narrow desktop panes.
+// 768px is the first compact desktop width. Keeping this boundary one pixel
+// below the rail's compact breakpoint made the two compositions disagree at
+// exactly 768px: the page hid the rail track, then reopened a desktop rail
+// that pushed the content instead of using the overlay. The compact route is
+// part of the Sheet range, so the main surface never inherits a stale gap.
+const MOBILE_BREAKPOINT = 768
 
 export function useIsMobile() {
   return React.useSyncExternalStore(
     (onStoreChange) => {
       // Keep the JS breakpoint aligned with the shared mobile CSS boundary.
-      // Desktop Web remains a fixed, resizable workbench above this point.
-      // Browser zoom reduces CSS pixels, but it does not turn a desktop
-      // pointer/keyboard surface into a phone. Using coarse pointer as the
-      // second signal prevents a zoomed 2K desktop from silently switching
-      // to the Sheet/mobile composition.
-      const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px), (pointer: coarse)`)
+      // Pointer capability does not change the available layout width, so it
+      // must not keep a desktop rail in-flow once the canvas is compact.
+      const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
       const onChange = () => onStoreChange()
       mql.addEventListener("change", onChange)
       return () => mql.removeEventListener("change", onChange)
     },
-    () => window.innerWidth <= MOBILE_BREAKPOINT && window.matchMedia("(pointer: coarse)").matches,
+    () => window.innerWidth <= MOBILE_BREAKPOINT,
     () => false,
   )
 }

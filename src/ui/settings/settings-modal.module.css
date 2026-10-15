@@ -3,21 +3,19 @@
 
 .dialogContent[data-slot="dialog-content"] {
   display: flex;
-  /* The desktop settings workbench occupies the same broad envelope as the
-   * Manus reference. A 92vw cap preserves the wide, two-column content
-   * measure; the view remains inside the viewport on narrower screens. */
-  width: min(92vw, 75rem);
-  min-width: min(45rem, calc(100vw - 1rem));
-  max-width: calc(100vw - 1rem);
-  height: min(92vh, 62rem);
-  max-height: calc(100vh - 1rem);
+  /* Measured Manus desktop envelope; narrow screens retain their own layout. */
+  width: min(80vw, 90rem);
+  min-width: min(45rem, 98vw);
+  max-width: 98vw;
+  height: 90vh;
+  max-height: 95vh;
   flex-direction: column;
   gap: 0;
   overflow: hidden;
   padding: 0;
   border: 0;
   border-radius: 1rem;
-  background: var(--background);
+  background: var(--settings-surface, var(--background));
   box-shadow:
     0 0 0 1px rgb(0 0 0 / 6%),
     0 24px 24px -12px rgb(0 0 0 / 4%),
@@ -48,6 +46,13 @@
   display: none;
 }
 
+/* Compact-only overflow control. The desktop workbench keeps the measured
+ * full rail; Manus exposes this explicit list control only in its narrow
+ * settings surface. */
+.compactMoreTrigger {
+  display: none;
+}
+
 .tabs {
   display: flex;
   min-width: 0;
@@ -63,10 +68,8 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  /* Manus uses a 220px rail in its compact 720px dialog and grows it with the
-   * dialog until the desktop 296px measure. Keeping it fluid avoids consuming
-   * nearly half the panel on a narrow desktop viewport. */
-  grid-template-columns: clamp(13.75rem, 24.7%, 18.5rem) minmax(0, 1fr);
+  /* The reference rail is 220px plus its 1px divider. */
+  grid-template-columns: 13.8125rem minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   color: var(--foreground);
 }
@@ -82,7 +85,7 @@
   overflow: hidden;
   padding: 1.4375rem 0.75rem 0;
   border-right: 1px solid var(--border);
-  background: var(--background);
+  background: var(--settings-surface, var(--background));
 }
 
 .brand {
@@ -253,7 +256,7 @@
 
 .tabRail .tab:focus-visible {
   border-color: transparent;
-  outline: 0;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
   box-shadow: inset 0 0 0 2px var(--ring);
 }
@@ -348,6 +351,7 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .panelHeader {
@@ -381,8 +385,17 @@
   padding-top: 0;
 }
 
+.panelHeader[data-panel="skills"],
 .panelHeader[data-panel="mcp"] {
-  height: 5rem;
+  height: auto;
+  padding-top: 2.125rem;
+}
+
+/* The installed-skills view begins directly with its search/actions row in
+ * Manus.  Only the Explore subview owns a right-pane heading because it
+ * needs a visible back affordance to return to this list. */
+.panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
+  display: none;
 }
 
 .panelHeader[data-panel="account"]:has(.panelBack) {
@@ -435,7 +448,7 @@
   min-width: 0;
   min-height: 0;
   flex: 1;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .contentBody :global([data-slot="scroll-area-viewport"]) {
@@ -444,11 +457,16 @@
   height: 100%;
   margin-inline: 0;
   box-sizing: border-box;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 0;
 }
 
-.contentBody :global([data-slot="scroll-area-viewport"] > div) {
+/* Radix gives its viewport child a table display/min-width by default. That
+ * creates an invisible 32px gutter in the compact settings panel and causes
+ * the connector toolbar to collapse. Keep the owner content at the actual
+ * viewport width. */
+.contentBody :global([data-slot="scroll-area-viewport"]) > div {
   display: block;
   width: 100%;
   min-width: 0;
@@ -485,8 +503,17 @@
 
 .contentColumn {
   width: min(70rem, calc(100% - 3rem));
+  min-width: 0;
   min-height: 100%;
   margin-inline: auto;
+}
+
+.contentColumn[data-panel="skills"],
+.contentColumn[data-panel="mcp"],
+.contentColumn:has(.panelHeader[data-panel="skills"]),
+.contentColumn:has(.panelHeader[data-panel="mcp"]) {
+  width: min(48rem, calc(100% - 3rem));
+  min-height: 100%;
 }
 
 .contentBody :global([data-embedded="true"]) {
@@ -502,62 +529,339 @@
   padding-top: 1.5rem;
 }
 
-/* Browser zoom narrows the CSS viewport even on desktop. Collapse only the
- * navigation chrome; the active panel remains the same workbench. */
+/* The compact Manus settings surface keeps its account identity and category
+ * names visible.  Its navigation becomes one horizontally scrollable row,
+ * never an unlabeled icon rail. */
+/* Settings has its own measured mode boundary. At the same 811×764 CSS
+ * viewport, Manus keeps a 720px workbench with its 220px rail; switching the
+ * whole surface to the 380px sheet there was the source of the broken
+ * “shrunk sidebar” behavior. Collapse only once the 720px envelope plus its
+ * outer inset no longer fits. */
 @media (max-width: 47.99rem) {
+  .dialogContent[data-slot="dialog-content"] {
+    /* Measured directly against the current Manus compact Settings dialog:
+     * 380 × 580 CSS px at a 448 × 764 CSS px viewport. A phone still uses
+     * the available width while preserving the 16px outer inset. */
+    width: min(23.75rem, calc(100vw - 2rem));
+    min-width: 0;
+    height: min(36.25rem, calc(100vh - 2rem));
+    max-height: calc(100vh - 2rem);
+    border-radius: 1rem;
+  }
+
+  .desktopTitle {
+    display: block;
+    width: 100%;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 1rem 3.25rem 0.5rem 1rem;
+    color: var(--foreground);
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.75rem;
+  }
+
   .layout {
-    grid-template-columns: 3.25rem minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
   }
 
   .nav {
-    padding-inline: 0.375rem;
+    flex: 0 0 auto;
+    overflow: visible;
+    padding: 1.25rem 0.75rem 0.4375rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
   .brand {
-    padding-inline: 0.25rem;
+    padding: 0.5rem 0.5rem 0.875rem;
+  }
+
+  .brandAvatar {
+    width: 2rem;
+    height: 2rem;
+    flex-basis: 2rem;
+  }
+
+  .brandName {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .brandMeta {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .settingsSearch {
+    height: 2rem;
+    flex: 0 0 2rem;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    padding: 0 0.5rem 0 0.6875rem;
+    border: 1px solid rgb(0 0 0 / 12%);
+    border-radius: 0.5rem;
+  }
+
+  .settingsSearch > svg {
+    position: static;
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 1rem;
+  }
+
+  .settingsSearch :global(input[data-slot="input"]) {
+    height: 1.25rem;
+    min-height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: 0.875rem;
   }
 
   .brandIdentity {
-    justify-content: center;
-  }
-
-  .brandCopy,
-  .brandSwitcher,
-  .settingsSearch,
-  .sectionLabel {
-    display: none;
+    justify-content: flex-start;
   }
 
   .tabRail {
-    margin-inline: -0.375rem;
+    position: relative;
+    width: 100%;
+    height: 2.4375rem;
+    flex: 0 0 2.4375rem;
+    align-items: stretch;
+    margin: 0;
+    overflow: visible;
   }
 
-  .tabList {
-    padding-inline: 0.375rem;
+  .tabRail .tabList {
+    /* The More control owns a real column rather than floating over the
+     * scroll viewport.  With an absolute overlay, the final label could be
+     * painted beneath the menu glyph (notably “集成”), which made the compact
+     * rail look like the characters were colliding. */
+    width: calc(100% - 2rem);
+    min-width: 0;
+    height: 2.4375rem;
+    flex: 0 1 calc(100% - 2rem);
+    flex-direction: row;
+    align-items: stretch;
+    /* At the reference 380px compact sheet, six primary Chinese labels plus
+     * the independent More column fit only with the same 4px beat used by
+     * Manus. Eight pixels leaves the selected “连接器” with its final glyph
+     * hidden beneath the menu affordance. */
+    gap: 0.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+  }
+
+  .tabRail .tabList::-webkit-scrollbar {
+    display: none;
   }
 
   .tabRail .tab[data-slot="tabs-trigger"] {
+    width: auto;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    flex: 0 0 auto;
     justify-content: center;
-    padding-inline: 0;
+    /* 4px side bearings match Manus's compact label widths and deliberately
+     * keep the selected tab in the rail's horizontal-overflow model. */
+    padding: 0.5rem 0.25rem;
+    font-size: 0.875rem;
   }
 
-  .tabRail .placeholderTab {
-    justify-content: center;
-    padding-inline: 0;
+  /* The strip contains the desktop navigation so keyboard and search behavior
+   * remain one source of truth. At compact width, reserve its measured six
+   * complete labels and hand every remaining destination to More instead of
+   * letting a seventh CJK label paint beneath the menu icon. */
+  .tabRail .tab[data-compact-primary="false"],
+  .tabRail .placeholderTab[data-compact-primary="false"] {
+    display: none;
   }
 
-  .tabLabel {
+  .tabRail .tab[data-slot="tabs-trigger"][data-state="active"]::after {
     position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+    right: 0;
+    bottom: -0.125rem;
+    left: 0;
+    display: block;
+    height: 0.125rem;
+    background: var(--foreground);
+    content: "";
+    opacity: 1;
+  }
+
+  /* Keep the placeholder rule scoped to visible compact-primary entries. The
+   * overflow entries are deliberately hidden above and remain reachable from
+   * More; a later generic display:flex declaration must not restore them. */
+  .tabRail .placeholderTab {
+    display: flex;
+    width: auto;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0;
+    padding: 0.5rem 0.25rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    opacity: 1;
     white-space: nowrap;
   }
 
-  .panelHeader,
-  .contentBody :global([data-slot="scroll-area-viewport"]) {
+  .tabRail .tab > svg,
+  .tabRail .placeholderTab > svg,
+  .sectionLabel,
+  .supportDivider {
+    display: none;
+  }
+
+  .tabLabel {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+  }
+
+  .compactMoreTrigger {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    display: inline-flex;
+    width: 1.5rem;
+    height: 2.25rem;
+    flex: 0 0 1.5rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+  }
+
+  .compactMoreTrigger > svg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .compactMoreMenu {
+    position: absolute;
+    z-index: 60;
+    /* This menu is portalled beside the Radix dialog. Radix intentionally
+     * disables pointer events on body while a modal is open; restore them on
+     * the owned child surface so More remains a real navigation control. */
+    pointer-events: auto;
+    top: 2.5rem;
+    /* Manus anchors the compact overflow list over the last category labels,
+     * rather than to the card edge. This leaves the page's right rhythm
+     * visible and prevents the list from colliding with the dialog radius. */
+    right: 4.5rem;
+    /* The list is a layer inside the Settings card, not a document-height
+     * popover. Constraining it against the rail and the card's lower inset
+     * keeps the final item away from the rounded clipping boundary while its
+     * own viewport handles any remaining categories. */
+    bottom: 0.5rem;
+    width: 9rem;
+    min-width: 9rem;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 0.1875rem;
+    border: 1px solid rgb(0 0 0 / 8%);
+    border-radius: 0.75rem;
+    background: var(--settings-surface, var(--background));
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 10%);
+  }
+
+  .compactMoreMenu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .compactMoreMenuItem {
+    box-sizing: border-box;
+    display: flex;
+    height: 2.25rem;
+    width: 100%;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .compactMoreMenuItem {
+    min-height: 2.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    color: var(--foreground);
+    font-size: 0.9375rem;
+  }
+
+  .compactMoreMenuItem:hover:not(:disabled),
+  .compactMoreMenuItem:focus-visible:not(:disabled) {
+    background: rgb(0 0 0 / 5%);
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .compactMoreMenuItem:disabled {
+    cursor: default;
+    color: var(--foreground);
+    opacity: 1;
+  }
+
+  @media (max-width: 26rem) {
+    .tabRail .tab[data-slot="tabs-trigger"] {
+      /* This is the narrowest sheet. Increasing the compact padding here
+       * made the horizontal rail lose an entire CJK label as the viewport
+       * contracted. Preserve the normal 4px rhythm instead. */
+      padding-inline: 0.25rem;
+      font-size: 0.8125rem;
+    }
+  }
+
+  .content {
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+
+  .contentColumn[data-panel="skills"],
+  .contentColumn[data-panel="mcp"],
+  .contentColumn:has(.panelHeader[data-panel="skills"]),
+  .contentColumn:has(.panelHeader[data-panel="mcp"]) {
     width: calc(100% - 2rem);
+  }
+
+  .contentBody :global([data-slot="scroll-area-viewport"]) {
+    width: 100%;
+  }
+
+  /* In the measured connectors state, Settings owns only the shared chrome.
+   * The connector panel begins directly with its 32px toolbar. */
+  .panelHeader[data-panel="mcp"] {
+    display: none;
+  }
+
+  .mcpBody :global([data-embedded="true"]) {
+    padding-top: 0.25rem;
+  }
+
+  .contentBody :global([data-slot="scroll-area-viewport"]) {
+    width: 100%;
+    scrollbar-width: none;
+  }
+
+  .contentBody :global([data-slot="scroll-area-scrollbar"]) {
+    display: none;
   }
 }
 

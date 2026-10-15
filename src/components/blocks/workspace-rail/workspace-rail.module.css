@@ -159,9 +159,9 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 0.7rem;
-  background: var(--primary);
-  color: var(--primary-foreground);
+  border-radius: 999px;
+  background: rgb(32 163 187);
+  color: white;
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -195,8 +195,9 @@
   border-radius: 0.5rem;
 }
 .rail[data-desktop-rail="true"] .footer { gap: 0; }
-.rail[data-desktop-rail="true"] .userCard { margin: 0; height: 2rem; min-height: 2rem; padding: 0 0.125rem; }
+.rail[data-desktop-rail="true"] .userCard { margin: 0; height: 2.5rem; min-height: 2.5rem; padding: 0 0.125rem; }
 .rail[data-desktop-rail="true"] .userTrigger { justify-content: flex-start; padding-left: 0.125rem; }
+.rail[data-desktop-rail="true"] .userMeta { display: none; }
 
 /* Compact desktop account anchor: the footer stays on the 52px track while
  * the Sidebar itself animates between the expanded and collapsed widths. */

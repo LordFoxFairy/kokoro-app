@@ -67,6 +67,14 @@ export function AppFrameBootingMainSurface({ composer }: { composer: ReactNode }
       data-desktop-web="true"
       data-web-view="welcome"
     >
+      {/* The admitted document has no owner data yet. Reserve the stable
+       * workspace landmarks so the eventual page replaces structure instead
+       * of appearing after a blank frame. All of this is presentation-only;
+       * the disabled Composer below remains the sole interactive state. */}
+      <header className={statusStyles.bootingHeader} aria-hidden="true">
+        <span className={statusStyles.bootingHeaderTitle} />
+        <span className={statusStyles.bootingHeaderTools} />
+      </header>
       <div className={statusStyles.timelineStage} aria-hidden="true" />
       <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset>
     </section>

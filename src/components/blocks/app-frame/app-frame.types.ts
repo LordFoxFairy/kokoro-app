@@ -1,170 +1,191 @@
-import type { ComponentType, ReactNode } from "react"
+import type { ComponentType, ReactNode } from "react";
 
-import type { ModelCandidate } from "@/contract/http"
-import type { ProjectResourceListPage, ProjectResourceUploadResult } from "@/contract/project-resource"
-import type { SkillCard } from "@/hub/schemas"
-import type { SessionEngine } from "@/engine/machine"
-import type { SessionClient } from "@/engine/client"
-import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
-import type { McpCreateMode } from "@/ui/mcp/mcp-panel"
-import type { SettingsTab } from "@/ui/settings/settings-modal"
-import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
-import type { Project } from "@/contract/project"
-import type { ProjectReadState } from "@/features/app/use-project-list"
-import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import type { ModelCandidate } from "@/contract/http";
+import type {
+  ProjectResourceListPage,
+  ProjectResourceUploadResult,
+} from "@/contract/project-resource";
+import type { SkillCard } from "@/hub/schemas";
+import type { SessionEngine } from "@/engine/machine";
+import type { SessionClient } from "@/engine/client";
+import type { CreationIntent } from "@/ui/composer/creation-intent-pill";
+import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
+import type { SettingsTab } from "@/ui/settings/settings-modal";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
+import type {
+  RuntimeFeatureFlag,
+  RuntimeNavigationItem,
+} from "@/system/runtime-navigation";
+import type { Project } from "@/contract/project";
+import type { ProjectReadState } from "@/features/app/use-project-list";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 
-import type { ScheduledTaskClient } from "@/features/scheduled-tasks"
+import type { ScheduledTaskClient } from "@/features/scheduled-tasks";
 
-import type { AppCommandMenuProps } from "./app-command-menu"
+import type { AppCommandMenuProps } from "./app-command-menu";
 
 export type ProjectConversation = {
-  id: string
-  title: string
-  updatedAt?: number
-}
+  id: string;
+  title: string;
+  updatedAt?: number;
+};
 
 export type ProjectInstructionRevision = {
-  id: string
-  instruction: string
-  updatedAt: number
-  actorName: string
-  current?: boolean
-}
+  id: string;
+  instruction: string;
+  updatedAt: number;
+  actorName: string;
+  current?: boolean;
+};
 
 export type ProjectScheduledTaskInput = {
-  title: string
-  prompt: string
-  frequency: string
-  time: string
-  expiresAt?: string
-  autoApprove: boolean
-}
+  title: string;
+  prompt: string;
+  frequency: string;
+  time: string;
+  expiresAt?: string;
+  autoApprove: boolean;
+};
 
 export type WorkspaceCapabilities = {
-  instructions: boolean
-  connectors: boolean
-  resources: boolean
-  skills: boolean
-  projectConversations: boolean
+  instructions: boolean;
+  connectors: boolean;
+  resources: boolean;
+  skills: boolean;
+  projectConversations: boolean;
   /** Site-owned project surfaces may expose a task-backed website workspace. */
-  websites?: boolean
+  websites?: boolean;
   /** Site-owned project surfaces may expose scheduled-task creation. */
-  scheduledTasks?: boolean
-}
+  scheduledTasks?: boolean;
+};
 
 export type AppFrameProps = {
   /** Route-owned server-admitted shell; never mounts browser data controllers. */
-  booting?: boolean
-  projectReadBoundary?: ProjectReadBoundary
+  booting?: boolean;
+  projectReadBoundary?: ProjectReadBoundary;
   // 测试注入缝：不传则使用页面级单例引擎。
-  engine?: SessionEngine | null
+  engine?: SessionEngine | null;
   // 显式预览档：沿用完整 User Web 布局，但使用本地假传输。
-  preview?: boolean
+  preview?: boolean;
   // 服务端按 host 解析的站点品牌名（SITE-REAL），透传给 rail。
-  brandName?: string
+  brandName?: string;
   /** Runtime-projected site mark/logo; the shell only reserves the lockup slot. */
-  brandMark?: string
-  brandLogoUrl?: string
+  brandMark?: string;
+  brandLogoUrl?: string;
   /** Site-owned semantic skin. The shell never invents page-specific colors. */
-  webSkin?: "kokoro"
+  webSkin?: "kokoro";
   /** System-projected product menu. Undefined keeps the site-owned default menu for preview. */
-  navigation?: readonly RuntimeNavigationItem[]
-  featureFlags?: readonly RuntimeFeatureFlag[]
+  navigation?: readonly RuntimeNavigationItem[];
+  featureFlags?: readonly RuntimeFeatureFlag[];
   /** Typed site capability projection consumed by the site-owned empty surface. */
-  workspaceCapabilities?: WorkspaceCapabilities
+  workspaceCapabilities?: WorkspaceCapabilities;
   /** The site route that owns the conversation surface (preview and live may differ). */
-  chatHref: string
+  chatHref: string;
   /** Site-owned empty-workspace surface. The shell only supplies the prompt action. */
-  emptyState?: ComponentType<EmptyStateProps>
+  emptyState?: ComponentType<EmptyStateProps>;
   /** Explicit live Scheduled adapter; the shell never guesses its transport. */
-  scheduledTaskClient?: ScheduledTaskClient
+  scheduledTaskClient?: ScheduledTaskClient;
   /** Site welcome may own the empty-state composer slot without owning its logic. */
-  emptyStateOwnsComposer?: boolean
+  emptyStateOwnsComposer?: boolean;
   /**
    * Catalog routes (Agent, Plugins, Scheduled, Library) own the whole main
    * surface. They must not be replaced by a restored conversation when the
    * shared engine happens to have an active direct-chat message.
    */
-  standaloneSurface?: boolean
+  standaloneSurface?: boolean;
   /** Desktop site skins may prefer Manus-style icon rail on first visit. */
-  desktopRailCollapsed?: boolean
+  desktopRailCollapsed?: boolean;
   /** Route-owned catalog surfaces replace the conversation header with their own page header. */
-  hideWorkspaceHeader?: boolean
+  hideWorkspaceHeader?: boolean;
   /** Route-level project workspace state owned by the site adapter. */
-  projectWorkspace?: boolean
+  projectWorkspace?: boolean;
   /** Active command-rail destination; keeps route selection and visual selection in one source. */
-  activeNavigationKey?: string
+  activeNavigationKey?: string;
   /** Opaque project reference; absent selects the user's direct-chat inbox. */
-  projectRef?: string
+  projectRef?: string;
   /** Site-owned welcome project picker hands the draft to a mounted project route. */
-  onOpenProject?: (projectRef: string, draft?: string) => void
-  commandMenu?: ComponentType<AppCommandMenuProps>
-}
+  onOpenProject?: (projectRef: string, draft?: string) => void;
+  commandMenu?: ComponentType<AppCommandMenuProps>;
+};
 
 export type EmptyStateProps = {
   /**
    * The shell's current admission decision. Route-owned surfaces must use this
    * boundary before mounting their own browser reads.
    */
-  projectReadBoundary?: ProjectReadBoundary
-  projectInstructionContext?: object
-  projectHistoryStatus?: "blocked" | "loading" | "ready" | "error"
-  projectHistoryRetryable?: boolean
-  projectDetail?: ProjectReadState<Project>
-  onRetryProjectRead?: () => void
-  brandName?: string
+  projectReadBoundary?: ProjectReadBoundary;
+  projectInstructionContext?: object;
+  projectHistoryStatus?: "blocked" | "loading" | "ready" | "error";
+  projectHistoryRetryable?: boolean;
+  projectDetail?: ProjectReadState<Project>;
+  onRetryProjectRead?: () => void;
+  brandName?: string;
   /** Route-owned desktop surfaces use the same preview/live transport as the shell. */
-  preview?: boolean
+  preview?: boolean;
   /** Explicit scheduled-task adapter passed through the mounted shell. */
-  scheduledTaskClient?: ScheduledTaskClient
+  scheduledTaskClient?: ScheduledTaskClient;
   /** Current shell-owned draft; site surfaces may project draft-dependent layout without owning editor state. */
-  draft?: string
+  draft?: string;
   /** Explicit creation mode; a non-empty draft alone never selects a product workflow. */
-  creationIntent?: CreationIntent
-  onPrompt: (prompt: string, intent?: CreationIntent) => void
+  creationIntent?: CreationIntent;
+  onPrompt: (prompt: string, intent?: CreationIntent) => void;
   /** Selects a capability capsule without inventing prompt text in the editor. */
-  onCreationIntentSelect?: (intent: CreationIntent) => void
+  onCreationIntentSelect?: (intent: CreationIntent) => void;
   /** Session-backed conversations for a site-owned project workbench. */
-  projectConversations?: readonly ProjectConversation[]
-  activeProjectConversationId?: string | null
-  onSelectProjectConversation?: (id: string) => void
+  projectConversations?: readonly ProjectConversation[];
+  activeProjectConversationId?: string | null;
+  onSelectProjectConversation?: (id: string) => void;
   /** Open the artifact's source conversation without coupling a site surface to the engine. */
-  onOpenSession?: (id: string) => void
-  projectConversationsLoading?: boolean
-  projectConversationsError?: boolean
-  onRetryProjectConversations?: () => void
+  onOpenSession?: (id: string) => void;
+  projectConversationsLoading?: boolean;
+  projectConversationsError?: boolean;
+  onRetryProjectConversations?: () => void;
   /** Persisted project-level instructions loaded from the project projection. */
-  projectInstructions?: string
-  projectInstructionHistory?: readonly ProjectInstructionRevision[]
-  onSaveProjectInstructions?: (instructions: string) => Promise<void>
-  onUploadProjectResource?: (file: File, idempotencyKey: string) => Promise<ProjectResourceUploadResult>
-  onListProjectResources?: (cursor: string | null, signal: AbortSignal) => Promise<ProjectResourceListPage>
-  projectRef?: string
-  onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>
+  projectInstructions?: string;
+  projectInstructionHistory?: readonly ProjectInstructionRevision[];
+  onSaveProjectInstructions?: (instructions: string) => Promise<void>;
+  onUploadProjectResource?: (
+    file: File,
+    idempotencyKey: string,
+  ) => Promise<ProjectResourceUploadResult>;
+  onListProjectResources?: (
+    cursor: string | null,
+    signal: AbortSignal,
+  ) => Promise<ProjectResourceListPage>;
+  projectRef?: string;
+  onSetProjectSkillEnabled?: (skill: string, enabled: boolean) => Promise<void>;
   /** Explicit preview fixture callback only; formal tasks use the independent live surface. */
-  onCreateProjectScheduledTask?: (task: ProjectScheduledTaskInput) => Promise<void>
+  onCreateProjectScheduledTask?: (
+    task: ProjectScheduledTaskInput,
+  ) => Promise<void>;
   /** Site-owned welcome actions can hand off to shared workspace settings. */
-  onOpenSettings?: (tab: SettingsTab, returnTarget?: HTMLElement | null) => void
+  onOpenSettings?: (
+    tab: SettingsTab,
+    returnTarget?: HTMLElement | null,
+    options?: Readonly<{ skillsScope?: SkillsScopeFilter }>,
+  ) => void;
   /** Explicit creation intent, separate from opening an owner-issued project ID. */
-  onCreateProject?: (draft?: string) => void
+  onCreateProject?: (input?: Readonly<{ name?: string; draft?: string }>) => void;
   /** Project picker handoff used by the direct welcome surface. */
-  onOpenProject?: (projectRef: string, draft?: string) => void
+  onOpenProject?: (projectRef: string, draft?: string) => void;
   /** Route-owned catalogs can open the shared MCP creation dialogs directly. */
-  onCreateMcp?: (mode: McpCreateMode, returnTarget?: HTMLElement | null) => void
-  onCreateCustomApi?: (returnTarget?: HTMLElement | null) => void
+  onCreateMcp?: (
+    mode: McpCreateMode,
+    returnTarget?: HTMLElement | null,
+  ) => void;
   /** Skill catalog actions hand off to the shell-owned direct Chat session. */
-  onCreateSkillWithAi?: () => void
-  onTrySkill?: (skill: SkillCard, prompt?: string) => void
+  onCreateSkillWithAi?: (prompt?: string) => void;
+  onTrySkill?: (skill: SkillCard, prompt?: string) => void;
   /** Optional live model catalog for site-owned empty surfaces. */
-  models?: readonly ModelCandidate[]
-  selectedModel?: string | null
-  onModelChange?: (selector: string) => void
-  composer?: ReactNode
-  workspaceCapabilities?: WorkspaceCapabilities
+  models?: readonly ModelCandidate[];
+  selectedModel?: string | null;
+  onModelChange?: (selector: string) => void;
+  composer?: ReactNode;
+  workspaceCapabilities?: WorkspaceCapabilities;
   /** Project route renders the project workbench instead of the direct-chat home. */
-  projectWorkspace?: boolean
+  projectWorkspace?: boolean;
   /** Desktop project conversation route keeps a fresh conversation distinct from the project overview. */
-  projectConversation?: boolean
+  projectConversation?: boolean;
   /** Session share capability for project-style desktop headers. */
-  shareClient?: Pick<SessionClient, "createShare" | "revokeShare">
-}
+  shareClient?: Pick<SessionClient, "createShare" | "revokeShare">;
+};

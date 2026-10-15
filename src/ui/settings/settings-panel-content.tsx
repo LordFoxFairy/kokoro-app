@@ -1,18 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import type { HubClient } from "@/hub/client";
 import type { SkillCard } from "@/hub/schemas";
 import type { TeamClient } from "@/team/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import { SkillsContent } from "@/ui/skills/skills-panel";
-import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client";
-import {
-  McpContent,
-  McpCreateDialog,
-  type McpCreateMode,
-} from "@/ui/mcp/mcp-panel";
+import type { SkillsScopeFilter } from "@/ui/skills/skills-scope";
 import { BillingContent } from "@/ui/billing/billing-panel";
 import { PricingContent } from "@/ui/billing/pricing-panel";
 import { TeamContent } from "@/ui/team/team-panel";
@@ -25,8 +19,10 @@ import {
   AccountCard,
   AppearanceCard,
   ChatPrefsCard,
+  ConnectorsSettingsSection,
   PersonalizationCard,
   ShortcutsCard,
+  SkillsSettingsSection,
 } from "./sections";
 import type { SettingsTab } from "./settings-types";
 
@@ -38,18 +34,22 @@ type SettingsPanelContentProps = {
   hubClient: HubClient;
   teamClient: TeamClient;
   accountLoginMethods: boolean;
-  previewPinnedSkills: readonly string[];
   onAccountLoginMethodsChange: (open: boolean) => void;
   onOpenSubscription: () => void;
-  onTogglePreviewPinnedSkill: (name: string) => void;
   onOpenPricing: () => void;
-  onCreateSkillWithAi?: () => void;
+  onCreateSkillWithAi?: (prompt?: string) => void;
   onTrySkill?: (skill: SkillCard) => void;
+  skillsCatalogOpen: boolean;
+  onSkillsCatalogOpenChange: (open: boolean) => void;
+  skillsCatalogTriggerRef: RefObject<HTMLButtonElement | null>;
+  initialSkillsScope?: SkillsScopeFilter;
 };
 
-/** Each branch owns one existing settings capability. This keeps the modal
- * shell free from product-panel wiring and avoids reintroducing a catch-all
- * settings component as sections evolve independently. */
+/**
+ * Strict capability dispatcher. Each branch delegates to a section component
+ * that owns its own local intent and nested dialogs; this module intentionally
+ * contains no product state, loading state or modal lifecycle.
+ */
 export function SettingsPanelContent({
   tab,
   brandName,
@@ -58,13 +58,15 @@ export function SettingsPanelContent({
   hubClient,
   teamClient,
   accountLoginMethods,
-  previewPinnedSkills,
   onAccountLoginMethodsChange,
   onOpenSubscription,
-  onTogglePreviewPinnedSkill,
   onOpenPricing,
   onCreateSkillWithAi,
   onTrySkill,
+  skillsCatalogOpen,
+  onSkillsCatalogOpenChange,
+  skillsCatalogTriggerRef,
+  initialSkillsScope,
 }: SettingsPanelContentProps) {
   switch (tab) {
     case "account":
@@ -72,6 +74,9 @@ export function SettingsPanelContent({
         <AccountCard
           brandName={brandName}
           preview={preview}
+          subject={
+            readBoundary?.admitted === true ? readBoundary.subject : null
+          }
           loginMethodsOpen={accountLoginMethods}
           onLoginMethodsChange={onAccountLoginMethodsChange}
           onOpenSubscription={onOpenSubscription}
@@ -80,7 +85,14 @@ export function SettingsPanelContent({
     case "appearance":
       return <AppearanceCard />;
     case "personalization":
-      return <PersonalizationCard preview={preview} />;
+      return (
+        <PersonalizationCard
+          preview={preview}
+          subject={
+            readBoundary?.admitted === true ? readBoundary.subject : null
+          }
+        />
+      );
     case "chat":
       return <ChatPrefsCard preview={preview} />;
     case "shortcuts":
@@ -99,21 +111,26 @@ export function SettingsPanelContent({
       );
     case "skills":
       return (
-        <SkillsSettingsContent
+        <SkillsSettingsSection
+          readBoundary={
+            readBoundary ?? { admitted: false, subject: null, generation: 0 }
+          }
           hubClient={hubClient}
           preview={preview}
           brandName={brandName}
-          pinned={preview ? previewPinnedSkills : []}
-          onTogglePin={preview ? onTogglePreviewPinnedSkill : () => {}}
           {...(onTrySkill === undefined ? {} : { onTrySkill })}
           {...(onCreateSkillWithAi === undefined
             ? {}
             : { onCreateWithAi: onCreateSkillWithAi })}
+          embeddedCatalogOpen={skillsCatalogOpen}
+          onEmbeddedCatalogOpenChange={onSkillsCatalogOpenChange}
+          catalogTriggerRef={skillsCatalogTriggerRef}
+          {...(initialSkillsScope === undefined ? {} : { initialScope: initialSkillsScope })}
         />
       );
     case "mcp":
       return (
-        <ConnectorsSettingsContent
+        <ConnectorsSettingsSection
           client={hubClient}
           preview={preview}
           brandName={brandName}
@@ -123,90 +140,4 @@ export function SettingsPanelContent({
     case "team":
       return <TeamContent client={teamClient} embedded />;
   }
-}
-
-function SkillsSettingsContent({
-  hubClient,
-  preview,
-  brandName,
-  pinned,
-  onTogglePin,
-  onTrySkill,
-  onCreateWithAi,
-}: {
-  hubClient: HubClient;
-  preview: boolean;
-  brandName: string;
-  pinned: readonly string[];
-  onTogglePin: (name: string) => void;
-  onTrySkill?: (skill: SkillCard) => void;
-  onCreateWithAi?: () => void;
-}) {
-  const client = useMemo(
-    () => (preview ? hubClient : createManusSkillHubClient(hubClient)),
-    [hubClient, preview],
-  );
-  return (
-    <SkillsContent
-      client={client}
-      preview={preview}
-      brandName={brandName}
-      pinned={pinned}
-      onTogglePin={onTogglePin}
-      {...(onTrySkill === undefined ? {} : { onTrySkill })}
-      {...(onCreateWithAi === undefined ? {} : { onCreateWithAi })}
-      embedded
-    />
-  );
-}
-
-function ConnectorsSettingsContent({
-  client,
-  preview,
-  brandName,
-  readBoundary,
-}: {
-  client: HubClient;
-  preview: boolean;
-  brandName: string;
-  readBoundary?: ProjectReadBoundary;
-}) {
-  const [mode, setMode] = useState<McpCreateMode | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
-  const openCreate = (
-    nextMode: McpCreateMode,
-    target?: HTMLElement | null,
-  ): void => {
-    returnFocusRef.current = target ?? null;
-    setMode(nextMode);
-  };
-
-  return (
-    <>
-      <McpContent
-        client={client}
-        preview={preview}
-        embedded
-        initialView="connections"
-        settingsLayout
-        brandName={brandName}
-        {...(readBoundary === undefined ? {} : { readBoundary })}
-        onCreateMcp={openCreate}
-      />
-      {mode === null ? null : (
-        <McpCreateDialog
-          client={client}
-          mode={mode}
-          open
-          onOpenChange={(open) => {
-            if (!open) setMode(null);
-          }}
-          onDone={async () => {
-            setMode(null);
-          }}
-          returnFocusRef={returnFocusRef}
-        />
-      )}
-    </>
-  );
 }

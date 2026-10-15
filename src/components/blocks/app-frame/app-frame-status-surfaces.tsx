@@ -31,7 +31,6 @@ export function AppFrameLoadingSurface() {
         <span className={styles.loadingLine} />
         <span className={styles.loadingLineShort} />
       </div>
-      <p className={styles.loadingMessage}>{t("shell.loadingApp")}</p>
       <div className={styles.loadingComposer} aria-hidden="true">
         <span className={styles.loadingComposerLine} />
         <span className={styles.loadingComposerControls}>

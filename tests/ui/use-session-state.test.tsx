@@ -75,6 +75,28 @@ it("preserves authenticated Chat during recheck, and treats a later non-200 as u
   }
 })
 
+it("coalesces focus and visibility from one browser return into one boundary generation", async () => {
+  let settleRecheck: (response: Response) => void = () => { throw new Error("no pending recheck") }
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(session()).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed())
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { settleRecheck = resolve }))
+  vi.stubGlobal("fetch", fetchMock)
+  const view = renderHook(() => useSessionProbe())
+  try {
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    const generation = view.result.current.projectReadBoundary.generation
+    act(() => {
+      window.dispatchEvent(new Event("focus"))
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: false, generation: generation + 1 })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    await act(async () => { settleRecheck(session()) })
+    await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))
+    expect(view.result.current.projectReadBoundary.generation).toBe(generation + 1)
+  } finally { view.unmount() }
+})
+
 it("boolean authentication without a trusted subject does not admit Project reads", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ authenticated: true })))
   const view = renderHook(() => useSessionProbe())
@@ -395,9 +417,14 @@ it("allows pageshow to start a fresh chain before an aborted predecessor's late 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
     await act(async () => { window.dispatchEvent(new Event("pagehide")); window.dispatchEvent(new Event("pageshow")) })
     expect(fetchMock).toHaveBeenCalledTimes(5)
+    const freshGeneration = view.result.current.projectReadBoundary.generation
     await act(async () => { oldCsrf(csrf()) })
     expect(fetchMock.mock.calls[4]?.[1].signal.aborted).toBe(false)
-    act(() => window.dispatchEvent(new Event("focus")))
+    act(() => {
+      window.dispatchEvent(new Event("focus"))
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    expect(view.result.current.projectReadBoundary.generation).toBe(freshGeneration)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5))
     await act(async () => { freshRead(session()) })
     await waitFor(() => expect(view.result.current.projectReadBoundary.admitted).toBe(true))

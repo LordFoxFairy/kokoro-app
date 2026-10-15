@@ -164,7 +164,13 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
   useEffect(() => {
     if (EXPLICIT_PREVIEW || serverUnavailable) return
     let live = true
+    // A browser return commonly emits focus and visibilitychange in the same
+    // turn. They describe one admission check, so do not retire the same read
+    // boundary twice while that hook's check is still unsettled.
+    let checkPending = false
     const check = (): void => {
+      if (checkPending) return
+      checkPending = true
       const currentGeneration = ++generationRef.current
       // Preserve the mounted Chat while revoking Project reads, even when a
       // recheck returns the same subject. This generation never goes on wire.
@@ -175,6 +181,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
       } }))
       void requestSessionMode().then((resolved) => {
         if (!live || generationRef.current !== currentGeneration) return
+        checkPending = false
         if (resolved.mode === "unavailable") {
           browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
           setProbe((current) => current.mode === "authenticated"
@@ -242,6 +249,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     }
     const onPageHide = (): void => {
       documentSuspended = true
+      checkPending = false
       ++generationRef.current
       sessionProbeController?.abort()
       // A persisted pageshow may run before the aborted promise settles. Its

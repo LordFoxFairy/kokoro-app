@@ -1,81 +1,223 @@
-"use client"
+"use client";
 
-import { useRef, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { ChevronDown, Folder, ImageIcon, Plus, Trash2, Upload } from "lucide-react"
-import { useT } from "@/i18n/context"
-import { cn } from "@/lib/utils"
-import type { HubClient } from "@/hub/client"
-import type { McpTransport } from "@/hub/schemas"
+import { useMemo, useState, type FormEvent } from "react";
+import { ImagePlus, Link2, Plus, Trash2 } from "lucide-react";
 
-import styles from "./mcp-custom-form.module.css"
-import { humanizeError } from "./mcp-panel-model"
+import { Button } from "@/components/ui/button";
+import { DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  McpPrivateServerPrepare,
+  McpPrivateServerRegistration,
+} from "@/hub/mcp-connector.schema";
+import { HubClientError, type HubClient } from "@/hub/client";
+import { useT } from "@/i18n/context";
 
-type CustomHeaderDraft = { id: number; name: string; value: string }
+import styles from "./mcp-custom-form.module.css";
+import { isMcpCustomHeaderName } from "./mcp-header-validation";
+import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 
+type HeaderDraft = Readonly<{ id: string; name: string; value: string }>;
+type PreparedRegistration =
+  | McpPrivateServerRegistration
+  | McpPrivateServerPrepare;
+
+function createHeader(): HeaderDraft {
+  return { id: crypto.randomUUID(), name: "", value: "" };
+}
+
+function isHttpsMcpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const loopbackDevelopment =
+      process.env.NODE_ENV !== "production" &&
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]");
+    return (
+      value.trim() === value &&
+      (url.protocol === "https:" || loopbackDevelopment) &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.toString() === value
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The custom MCP creation surface owns its own fields and interaction model.
+ * It maps directly to the private-server V1 aggregate; it does not reuse the
+ * URL-MCP form or a compatibility adapter.
+ */
 export function CustomMcpForm({
   client,
   onDone,
+  onRegistered,
+  onCancel,
 }: {
-  client: HubClient
-  onDone: () => Promise<void>
+  client: HubClient;
+  onDone: () => Promise<void>;
+  onRegistered?: () => void;
+  onCancel: () => void;
 }) {
-  const t = useT()
-  const fileRef = useRef<HTMLInputElement | null>(null)
-  const [name, setName] = useState("")
-  const [transport, setTransport] = useState<McpTransport>("http")
-  const [iconFile, setIconFile] = useState<File | null>(null)
-  const [instructions, setInstructions] = useState("")
-  const [url, setUrl] = useState("")
-  const [headers, setHeaders] = useState<CustomHeaderDraft[]>([])
-  const [nextHeaderId, setNextHeaderId] = useState(1)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const t = useT();
+  const [name, setName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [url, setUrl] = useState("");
+  const [headers, setHeaders] = useState<HeaderDraft[]>([]);
+  const [registration, setRegistration] = useState<PreparedRegistration | null>(
+    null,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const canSubmit = name.trim().length > 0 && url.trim().length > 0 && !submitting
+  const configuredHeaders = headers.filter((header) => header.name.trim());
+  const partialHeader = headers.some(
+    (header) => Boolean(header.name.trim()) !== Boolean(header.value),
+  );
+  const duplicateHeader =
+    new Set(
+      configuredHeaders.map((header) => header.name.trim().toLowerCase()),
+    ).size !== configuredHeaders.length;
+  const invalidHeaderName = configuredHeaders.some(
+    (header) => !isMcpCustomHeaderName(header.name),
+  );
+  const invalidUrl = url.trim().length > 0 && !isHttpsMcpUrl(url.trim());
+  const canSubmit =
+    name.trim().length > 0 &&
+    isHttpsMcpUrl(url.trim()) &&
+    !partialHeader &&
+    !duplicateHeader &&
+    !invalidHeaderName &&
+    !submitting;
+  const stateLabel = useMemo(() => {
+    if (registration?.server.prepare_status === "needs_oauth")
+      return t("mcp.pending");
+    if (registration?.server.prepare_status === "ready") return t("mcp.active");
+    return t("mcp.error");
+  }, [registration?.server.prepare_status, t]);
 
-  const updateHeader = (id: number, field: "name" | "value", value: string): void => {
-    setHeaders((current) => current.map((header) => header.id === id ? { ...header, [field]: value } : header))
-  }
+  const oauthPopup = useMcpOAuthPopup({
+    onReload: () => void onDone(),
+  });
 
-  const addHeader = (): void => {
-    setHeaders((current) => [...current, { id: nextHeaderId, name: "", value: "" }])
-    setNextHeaderId((current) => current + 1)
-  }
+  const beginAuthorization = async (
+    prepared: PreparedRegistration,
+  ): Promise<void> => {
+    if (
+      !client.beginMcpConnectorAuthorization ||
+      prepared.server.prepare_status !== "needs_oauth"
+    )
+      throw new Error("private MCP authorization is unavailable");
+    await oauthPopup(async (signal) => {
+      const started = await client.beginMcpConnectorAuthorization!(
+        prepared.connector.connector_id,
+        {
+          server_id: prepared.server.server_id,
+          expected_state_version: prepared.connector.state_version,
+        },
+        signal,
+      );
+      return {
+        connectorId: prepared.connector.connector_id,
+        authorizationUrl: started.authorization.authorization_url,
+        expiresAt: started.authorization.expires_at,
+      };
+    });
+  };
 
-  const submit = async (enabled: boolean): Promise<void> => {
-    if (!canSubmit) return
-    setSubmitting(true)
-    setError(null)
+  const save = async (event?: FormEvent<HTMLFormElement>): Promise<void> => {
+    event?.preventDefault();
+    if (
+      (registration === null && !canSubmit) ||
+      !client.registerPrivateMcpServer ||
+      !client.preparePrivateMcpServer
+    )
+      return;
+    setError("");
+    setSubmitting(true);
     try {
-      if (!client.registerCustomMcp) {
-        throw new Error("custom connector contract unavailable")
-      }
-      const asset = iconFile && client.uploadConnectorIcon
-        ? await client.uploadConnectorIcon(iconFile)
-        : null
-      await client.registerCustomMcp({
-        name: name.trim(),
-        transport,
-        endpoint_url: url.trim(),
-        icon_asset_id: asset?.asset_id ?? null,
-        instructions: instructions.trim() || null,
-        headers: headers
-          .map((header) => ({ name: header.name.trim(), value: header.value }))
-          .filter((header) => header.name.length > 0 && header.value.length > 0),
-        enabled,
-      })
-      await onDone()
-    } catch (caught) {
-      setError(humanizeError(t, caught))
+      const registered =
+        registration ??
+        (await client.registerPrivateMcpServer({
+          display_name: name.trim(),
+          server_url: url.trim(),
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(configuredHeaders.length
+            ? {
+                headers: configuredHeaders.map((header) => ({
+                  name: header.name.trim().toLowerCase(),
+                  value: header.value,
+                })),
+              }
+            : {}),
+        }));
+      setRegistration(registered);
+      // Register has already created the owner aggregate even if the following
+      // remote Prepare fails. Refresh the underlying list now, while leaving
+      // this result dialog open for retry/OAuth recovery.
+      onRegistered?.();
+      setHeaders((current) =>
+        current.map((header) => ({ ...header, value: "" })),
+      );
+      const prepared = await client.preparePrivateMcpServer(
+        registered.server.server_id,
+        registered.server.state_version,
+      );
+      setRegistration(prepared);
+      if (prepared.server.prepare_status === "ready") await onDone();
+    } catch (cause) {
+      setError(
+        cause instanceof HubClientError &&
+          cause.code === "mcp_personal_server_url_conflict"
+          ? t("mcp.errDuplicateUrl")
+          : t("mcp.error"),
+      );
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
+  };
+
+  if (registration !== null) {
+    const needsOAuth = registration.server.prepare_status === "needs_oauth";
+    return (
+      <section className={styles.customMcpResult} aria-live="polite">
+        <DialogTitle className={styles.customMcpTitle}>
+          {registration.server.display_name}
+        </DialogTitle>
+        <p>{stateLabel}</p>
+        {error ? <p role="alert">{error}</p> : null}
+        <footer>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {t("mcp.cancel")}
+          </Button>
+          {needsOAuth ? (
+            <Button
+              type="button"
+              disabled={submitting || !client.beginMcpConnectorAuthorization}
+              onClick={() => void beginAuthorization(registration)}
+            >
+              {t("settings.connect")}
+            </Button>
+          ) : null}
+          {!needsOAuth && registration.server.prepare_status !== "ready" ? (
+            <Button
+              type="button"
+              disabled={submitting}
+              onClick={() => void save()}
+            >
+              {submitting ? t("mcp.submitting") : t("mcp.retry")}
+            </Button>
+          ) : null}
+        </footer>
+      </section>
+    );
   }
 
   return (
@@ -83,142 +225,168 @@ export function CustomMcpForm({
       className={styles.customMcpForm}
       data-testid="custom-mcp-form"
       autoComplete="off"
-      onSubmit={(event) => {
-        event.preventDefault()
-        void submit(true)
-      }}
+      onSubmit={(event) => void save(event)}
     >
+      <DialogTitle className={styles.customMcpTitle}>
+        {t("mcp.registerDialogTitle")}
+      </DialogTitle>
       <div className={styles.customMcpFields}>
         <Field className={styles.customMcpField}>
-          <FieldLabel htmlFor="custom-mcp-name">{t("mcp.customName")}</FieldLabel>
+          <FieldLabel htmlFor="custom-mcp-name">
+            {t("mcp.customName")}
+          </FieldLabel>
           <Input
             id="custom-mcp-name"
+            autoFocus
             value={name}
             placeholder={t("mcp.customNamePlaceholder")}
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
         <Field className={styles.customMcpField}>
-          <FieldLabel htmlFor="custom-mcp-transport">{t("mcp.customTransport")}</FieldLabel>
-          <Select value={transport} onValueChange={(value) => setTransport(value as McpTransport)}>
-            <SelectTrigger id="custom-mcp-transport" aria-label={t("mcp.customTransport")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="http">HTTP</SelectItem>
-                <SelectItem value="streamable_http">Streamable HTTP</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <FieldLabel htmlFor="custom-mcp-transport">
+            {t("mcp.customTransport")}
+          </FieldLabel>
+          <Input
+            id="custom-mcp-transport"
+            aria-label={t("mcp.customTransport")}
+            value="HTTP"
+            readOnly
+          />
         </Field>
-
-        <Field className={cn(styles.customMcpField, styles.customMcpWide)}>
-          <FieldLabel>{t("mcp.customIcon")}</FieldLabel>
+        <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
+          <FieldLabel>图标</FieldLabel>
           <div className={styles.iconUploadRow}>
-            <button type="button" className={styles.iconPreview} onClick={() => fileRef.current?.click()} aria-label={t("mcp.customUpload")}>
-              <ImageIcon aria-hidden="true" />
-            </button>
+            <span className={styles.iconPreview} aria-hidden="true">
+              <ImagePlus />
+            </span>
             <div className={styles.iconUploadCopy}>
-              <Button variant="outline" type="button" className={styles.uploadButton} onClick={() => fileRef.current?.click()}>
-                <Upload aria-hidden="true" />
-                {t("mcp.customUpload")}
-                <ChevronDown aria-hidden="true" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={styles.uploadButton}
+                disabled
+              >
+                上传
               </Button>
-              <span>{iconFile?.name ?? t("mcp.customIconHint")}</span>
+              <span>PNG 或 JPG，最大 1 MB。推荐尺寸 256×256 像素。</span>
             </div>
-            <input
-              ref={fileRef}
-              className={styles.hiddenFile}
-              type="file"
-              accept="image/png,image/jpeg"
-              onChange={(event) => {
-                const next = event.target.files?.[0] ?? null
-                if (next && next.size > 1024 * 1024) {
-                  setError(t("mcp.customIconTooLarge"))
-                  event.target.value = ""
-                  return
-                }
-                setError(null)
-                setIconFile(next)
-              }}
-            />
           </div>
         </Field>
-
-        <Field className={cn(styles.customMcpField, styles.customMcpWide, styles.customMcpNotes)}>
-          <FieldLabel htmlFor="custom-mcp-instructions">{t("mcp.customInstructions")}<span>{t("mcp.optional")}</span></FieldLabel>
+        <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
+          <FieldLabel htmlFor="custom-mcp-notes">
+            {t("mcp.customInstructions")} <span>{t("mcp.optional")}</span>
+          </FieldLabel>
           <Textarea
-            id="custom-mcp-instructions"
-            value={instructions}
+            id="custom-mcp-notes"
+            value={notes}
             placeholder={t("mcp.customInstructionsPlaceholder")}
-            onChange={(event) => setInstructions(event.target.value)}
+            onChange={(event) => setNotes(event.target.value)}
+            maxLength={4000}
           />
         </Field>
-
-        <Field className={cn(styles.customMcpField, styles.customMcpWide)}>
-          <FieldLabel htmlFor="custom-mcp-url">{t("mcp.customServerUrl")}</FieldLabel>
-          <Input
-            id="custom-mcp-url"
-            value={url}
-            placeholder="https://mcp.yourserver.com/mcp"
-            onChange={(event) => setUrl(event.target.value)}
-          />
+        <Field className={`${styles.customMcpField} ${styles.customMcpWide}`}>
+          <FieldLabel htmlFor="custom-mcp-url">
+            {t("mcp.customServerUrl")}
+          </FieldLabel>
+          <div className={styles.urlInput}>
+            <Link2 aria-hidden="true" />
+            <Input
+              id="custom-mcp-url"
+              value={url}
+              placeholder="https://mcp.yourserver.com/mcp"
+              onChange={(event) => setUrl(event.target.value)}
+            />
+          </div>
+          {invalidUrl ? (
+            <p className={styles.customMcpUrlValidation} role="alert">
+              {t("mcp.errInvalid")}
+            </p>
+          ) : null}
         </Field>
-
-        <div className={cn(styles.customMcpField, styles.customMcpWide)}>
-          <FieldLabel>{t("mcp.customHeaders")}<span>{t("mcp.optional")}</span></FieldLabel>
-          {headers.length > 0 ? <div className={styles.headerRows}>
-            {headers.map((header, index) => (
-              <div className={styles.headerRow} key={header.id}>
-                <Input
-                  value={header.name}
-                  name={`custom-mcp-header-name-${header.id}`}
-                  autoComplete="off"
-                  aria-label={t("mcp.customHeaderName", { count: index + 1 })}
-                  placeholder={t("mcp.customHeaderNamePlaceholder")}
-                  onChange={(event) => updateHeader(header.id, "name", event.target.value)}
-                />
-                <Input
-                  value={header.value}
-                  type="password"
-                  name={`custom-mcp-header-value-${header.id}`}
-                  autoComplete="new-password"
-                  aria-label={t("mcp.customHeaderValue", { count: index + 1 })}
-                  placeholder={t("mcp.customHeaderValuePlaceholder")}
-                  onChange={(event) => updateHeader(header.id, "value", event.target.value)}
-                />
-                <Button variant="ghost" size="icon-sm" type="button" onClick={() => setHeaders((current) => current.filter((entry) => entry.id !== header.id))} aria-label={t("mcp.customRemoveHeader")}>
-                  <Trash2 aria-hidden="true" />
-                </Button>
-              </div>
-            ))}
-          </div> : null}
-          <Button variant="outline" type="button" className={styles.addHeaderButton} onClick={addHeader}>
+        <fieldset className={`${styles.customMcpField} ${styles.customMcpWide}`}>
+          <legend>
+            {t("mcp.customHeaders")} <span>{t("mcp.optional")}</span>
+          </legend>
+          {headers.length > 0 ? (
+            <div className={styles.headerRows}>
+              {headers.map((header, index) => (
+                <div className={styles.headerRow} key={header.id}>
+                  <Input
+                    value={header.name}
+                    autoComplete="off"
+                    aria-label={t("mcp.customHeaderName", {
+                      count: index + 1,
+                    })}
+                    placeholder={t("mcp.customHeaderNamePlaceholder")}
+                    onChange={(event) =>
+                      setHeaders((current) =>
+                        current.map((candidate) =>
+                          candidate.id === header.id
+                            ? { ...candidate, name: event.target.value }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  />
+                  <Input
+                    value={header.value}
+                    type="password"
+                    autoComplete="new-password"
+                    aria-label={t("mcp.customHeaderValue", {
+                      count: index + 1,
+                    })}
+                    placeholder={t("mcp.customHeaderValuePlaceholder")}
+                    onChange={(event) =>
+                      setHeaders((current) =>
+                        current.map((candidate) =>
+                          candidate.id === header.id
+                            ? { ...candidate, value: event.target.value }
+                            : candidate,
+                        ),
+                      )
+                    }
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    type="button"
+                    onClick={() =>
+                      setHeaders((current) =>
+                        current.filter((candidate) => candidate.id !== header.id),
+                      )
+                    }
+                    aria-label={`${t("mcp.customRemoveHeader")} ${index + 1}`}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {invalidHeaderName ? (
+            <p className={styles.customMcpUrlValidation} role="alert">
+              {t("mcp.errHeaderName")}
+            </p>
+          ) : null}
+          <Button
+            variant="outline"
+            type="button"
+            className={styles.addHeaderButton}
+            onClick={() => setHeaders((current) => [...current, createHeader()])}
+          >
             <Plus aria-hidden="true" />
             {t("mcp.customAddHeader")}
           </Button>
-        </div>
+        </fieldset>
       </div>
-
       {error ? <p className={styles.customMcpError} role="alert">{error}</p> : null}
-
-      <div className={styles.customMcpActions}>
-        <div className={styles.splitSave}>
-          <Button type="submit" disabled={!canSubmit}>{submitting ? t("mcp.submitting") : t("mcp.save")}</Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" disabled={!canSubmit} aria-label={t("mcp.customSaveOptions")}><ChevronDown aria-hidden="true" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className={styles.publishMenu} align="end" side="top" sideOffset={4}>
-              <DropdownMenuItem onSelect={() => void submit(false)}>
-                <Folder aria-hidden="true" />
-                {t("mcp.customPublishToProjects")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <footer className={styles.customMcpActions}>
+        <Button type="submit" disabled={!canSubmit}>
+          {submitting ? t("mcp.submitting") : t("mcp.save")}
+        </Button>
+      </footer>
     </form>
-  )
+  );
 }

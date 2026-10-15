@@ -6,10 +6,18 @@
 
 <!-- T-K03.14-WEB-LOCAL-IMPORT UI slice -->
 - `skill-upload-dialog.tsx`：目录/个人新建共用普通拖放 `.zip`/`.skill`；不手填发布元数据、不消费旧preview/confirm。
+- `skill-upload-dialog.module.css`：承接普通上传的400px窗口、标题/投放区/要求排版，复用站点Settings表面token；空footer不占位，运行/恢复/完成状态的真实按钮仍正常呈现。关闭后的焦点恢复由既有组件持有，样式不改变导入命令或网络生命周期。
 - `personal-skill-import-flow.ts`：原File/hash、冻结命令与未知结果、当前账号locator及GET恢复；只浏览器状态，不解析ZIP、不拥有持久业务事实。
 - `personal-skill-publish-dialog.tsx` 保留已存在draft包更新/恢复，不是普通新建入口。导入完成后重新读取权威目录/个人列表，不生成卡片。
 
 # ui/skills — 技能面板
+
+## V1 目录读取
+
+主页的正式 Skills 目录只消费 `HubClient.listSkillCatalog` 的同源
+`GET /api/hub/self/skills/catalog` 投影；不再合并 `ListHubSkills` 与
+`ListSkills`。主页与 Settings 使用 `hub/skills/catalog` 缓存命名空间，
+提交成功时按此前缀失活，避免产生彼此独立的旧目录快照。
 
 ## W3 第二阶段 B 当前边界
 正式 `/app/skills` 与 Settings Skills 共用 `personal-skills-read.tsx` 的单 ZIP 发布入口；`personal-skill-publish-dialog.tsx` 管本地输入/阶段和关闭重开同意图，`personal-skill-publish-flow.ts` 管 CreateDraft→Get→Begin→PUT→Complete→Validate→Publish 的同键恢复。Draft raw body ≤65,536 字节、Begin filename 先本地预检，输入错误可编辑重选，不先创建 Draft。Complete pending/unknown 只显示 partial，复核当前 attempt 后可继续，旧 attempt 明确重新开始；首轮未知 Publish 只核 by-ID，后续显式复核仍 404 才原 key/零 body 重发。只有 ACTIVE Publish 回执或本人 by-ID 核回显示发布，401/403 原码失败且不重发。网络/签名 PUT 和严格 wire 在 `src/hub/skill-publish-client.ts`。旧 `SkillUploadDialog`/GitHub import/preview-confirm 仍仅显式 preview fixture；下文旧说明只适用于 preview，不是正式 API。六项 BFF 写候选 default-off，真浏览器 owner 验收另门。
@@ -23,7 +31,7 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 成功后刷新技能池；不会把 GitHub 地址误送入 zip 上传流程。
 
 ## 公开件
-- `SkillsPanel`（`skills-panel.tsx`）：props `client: HubClient` / `onClose` / `pinned` / `onTogglePin`。
+- `SkillsPanel`（`skills-panel.tsx`）：props `client: HubClient` / `readBoundary: ProjectReadBoundary` / `onClose` / `pinned` / `onTogglePin`；子 Dialog 只消费页面或 App shell 已确认的 boundary，不各自注册 Session probe。
 - `SkillUploadDialog`（`skill-upload-dialog.tsx`）：桌面独立上传入口，`.zip`/`.skill` dropzone + preview/candidate
   selection/confirm 状态；通过 `returnFocusRef` 回到 Create/Browse 触发点，关闭/卸载会取消当前 multipart 请求。
 
@@ -31,8 +39,9 @@ hub self 面技能池（有效可用项）：列表/启停/配额/版本历史 +
 - `@/hub/client`（纯请求）、`@/hub/rules`（`isRequiredLockError` / `isQuotaExhausted`）、`@/hub/schemas`。
 - `GithubImportDialog`（`github-import-dialog.tsx`）：`parseGithubRepository` 负责 HTTPS GitHub owner/repo
   边界校验；focused GitHub client 为正式 Preview/immutable Import 入口，后续由flow消费原Publish/Install；旧optional注入已删除，不把Preview或draft响应伪装成已安装。
-- `SkillDetailDialog`（`skill-detail-dialog.tsx`）：技能名称打开独立详情 surface，展示文件树、YAML 复制和
-  试用入口；它不伪造后端文件读取，待 Hub 提供完整内容 projection 后再替换详情内容源。
+- `ManusSkillDetailDialog`（`manus-skill-detail-dialog.tsx`）：唯一的详情与文件阅读面；只在 owner
+  返回 `skill_id` 与 `revision_skill_id` 时读取真实 package tree 和正文。缺少 binding 的旧投影保持详情入口禁用，
+  不再由浏览器合成 YAML、文件树或示例正文。
 - `@/lib/query`：池+配额合并读走 `useResource("hub/skills")`；启停/发布成功后 `invalidate("hub/skills")`。版本历史键 `hub/skill-revisions/<name>`。
 
 ## 陷阱

@@ -2,8 +2,8 @@ import policySnapshot from "@/generated/iam-relay-policy.json"
 
 export const IAM_RELAY_POLICY_PROVENANCE = Object.freeze({
   ownerRepository: "kokoro-bff",
-  ownerCommit: "1105553cfc24d4f44a90f626132bc30323a77946",
-  policySha256: "8f7d4f4cb6fa0ec34d2cce8702d8882d3270a316a6cbdb2d8bdaccefb9c6b4a1",
+  ownerCommit: "78d06f783c2bce28f646459929df3b0bab783d32",
+  policySha256: "63e36a79c7448d4b9e47442df4f5467f230ecf0e9ac702a350cbc92a2c77eb46",
 })
 
 export type IamRelayPolicy = Readonly<{
@@ -52,7 +52,7 @@ export type IamRelayPolicy = Readonly<{
   maxDurationMs: number
 }>
 
-const EXPECTED_IAM_COMMIT = "a4c2b61467f1fc1772d6b6d8e98f081c090289fb"
+const EXPECTED_IAM_COMMIT = "e3c035b99cf9479ac8357c7d38147f1541dcbcac"
 const EXPECTED_INVITATION_ROUTES = [
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/context", "GET", "getTenantInvitationContext"],
   ["/v1/tenants/{tenant_id}/invitations/{invitation_id}/accept", "POST", "acceptTenantInvitation"],
@@ -76,8 +76,8 @@ export function validateIamRelayPolicySnapshot(value: unknown): IamRelayPolicy {
     policy.version !== "2.1.0" ||
     policy.iamOwnerCommit !== EXPECTED_IAM_COMMIT ||
     policy.iamOpenapiPath !== "contract/openapi/iam.internal.v1.json" ||
-    policy.iamOpenapiVersion !== "0.6.0" ||
-    policy.iamOpenapiSha256 !== "392ca0e49544c0ec6e0d2fa782c46c33c1847e2c350102e7ad3b8af43f858ced" ||
+    policy.iamOpenapiVersion !== "0.7.0" ||
+    policy.iamOpenapiSha256 !== "c8d7af8a365ad5d13eaabccf7f31133e0918ef198bdc3e7c790d90933eae91b2" ||
     !Array.isArray(policy.invitationRoutes) || policy.invitationRoutes.length !== 3 ||
     !policy.invitationSignUp || !policy.invitationLocation ||
     typeof policy.routes !== "object" || policy.routes === null ||

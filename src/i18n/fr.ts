@@ -601,6 +601,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mcp.errSecretRef": "Les informations d'identification sélectionnées ne sont pas valides ou n'existent pas.",
   "mcp.errNotFound": "La connexion n'a pas été trouvée.",
   "mcp.errInvalid": "Entrée incorrecte : veuillez vérifier le nom, l'URL et la méthode de transfert.",
+  "mcp.errDuplicateUrl": "Cette URL de serveur est déjà ajoutée. Modifiez le connecteur existant ou utilisez une autre URL.",
   "mcp.errGeneric": "L'opération a échoué, veuillez réessayer plus tard.",
   "composer.modelSwitch": "Changer de modèle",
   "composer.modelLocked": "Modèle : {model} (verrouillé dans ce tour)",

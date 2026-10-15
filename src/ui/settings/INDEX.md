@@ -1,7 +1,17 @@
 # ui/settings — 用户设置中心（模态）
 
+## Skills / MCP 当前样式边界
+两页共用 `settings-modal.module.css` 的窗口与滚动容器。Settings 不采用通用手机/平板断点：实测 Manus 在 `1436×900` 仍使用约 `768px` 的紧凑横栏 sheet，只有 `≥96rem` 才切为左侧 `221px` rail 的宽屏工作台。紧凑 sheet 保留账户区、搜索、完整文字分类；横栏主路径固定为账户、用量与计费、通用、快捷键、个性化、连接器、技能，Mail/电脑/邮箱等次级项归“更多”。`600×900` 下主栏必须不裁字且不遮住技能；`1600×900` 下才允许双栏连接器工作台。
+
+嵌入 Settings 的连接器列表遵循 shell 模式而非页面 viewport：紧凑 sheet 固定单列，宽屏工作台双列。标题区仅对 Skills/MCP 使用相应顶部间距；表面颜色由站点皮肤的 `--settings-*` token 提供，不改全站白色画布。订阅计划在应用外层管理，不进入 Settings rail。
+
 ## 职责
 登录后的设置中心（WEB-FACE 面三），与管理后台严格分离。它是浮在工作区之上的 shadcn/Radix `Dialog`，不是整页路由——打开不导航离开、语境原地保留，关闭走背幕/Esc/右上关闭按钮。紧凑桌面使用横向 Tabs + 更多菜单，宽桌面使用两栏导航；内容区一次显一个 tab。开关态由 shell 持有并同步 Manus 风格 URL `#/account/settings/X`（兼容旧 `?settings=X` 深链）（刷新/深链/可分享）。皮肤守 --* token，亮暗双态。
+
+- `settings-modal.tsx` 只负责 Dialog 生命周期、焦点返还、顶层 tab 选择与稳定 client 注入；不持有账户子页、技能 pin 或连接器弹窗状态。
+- `settings-navigation.tsx` 是组合根；`settings-navigation-model.ts` 是唯一分类数据源，`settings-navigation-brand.tsx` 只负责品牌/搜索，`settings-navigation-rail.tsx` 只负责选择可见性与溢出菜单。窄屏主分类行可横向滚动，内容滚动保留在右侧 `ScrollArea`，不会由卡片外壳接管。
+- `settings-panel.tsx` 拥有 tab panel/viewport 与账户“登录方式”子页的共享标题状态；`settings-panel-content.tsx` 仅按 capability 分派。
+- `sections/` 的账户、外观、个性化、快捷键、技能与连接器均是独立组件。技能的 preview pin 与连接器创建 Dialog 各自归所属 section，不向上泄漏到模态壳层。
 
 ## 公开件
 - `SettingsModal`（`settings-modal.tsx`）：props `brandName?` / `brandMark?` / `brandLogoUrl?` / `initialTab`(SettingsTab) / `onClose` / `onTabChange?`。客户端组件；tab 内部自持（`initialTab` 定初值、变化即重置，`onTabChange` 上抛供 AppFrame 同步 URL）。**不自持匿名闸**——只在 AppFrame（信封有效）内渲染，会话态由上游保证。

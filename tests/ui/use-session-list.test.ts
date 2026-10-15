@@ -381,6 +381,27 @@ describe("Project reads stay independent from conversation list/title state", ()
   const beta = { ...alpha, id: "project-B", name: "Canonical B", slug: "beta" }
   const envelope = (project: typeof alpha) => Response.json({ data: { project }, meta: { request_id: "req_detail" } })
 
+  it("dispatches one collection GET across StrictMode effect replay", async () => {
+    const { useProjectList } = await import("@/features/app/use-project-list")
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ data: { projects: [alpha] }, meta: { request_id: "req_list" } }),
+    )
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(StrictMode, null, children)
+    const view = renderHook(() => useProjectList(false, { admitted: true, subject: "reader", generation: 1 }), { wrapper })
+    await waitFor(() => expect(view.result.current.list).toEqual({ status: "ready", data: [alpha] }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    view.unmount()
+  })
+
+  it("does not dispatch a collection GET after its first effect is retired before the microtask", async () => {
+    const { useProjectList } = await import("@/features/app/use-project-list")
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+    const view = renderHook(() => useProjectList(false, { admitted: true, subject: "reader", generation: 1 }))
+    view.unmount()
+    await Promise.resolve()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it("cancels A detail on A→B, rejects late A, and never reuses an earlier A generation on B→A", async () => {
     const { useProjectList } = await import("@/features/app/use-project-list")
     let resolveA: (response: Response) => void = () => { throw new Error("no pending A") }

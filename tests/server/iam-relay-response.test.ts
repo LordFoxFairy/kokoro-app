@@ -4,7 +4,7 @@ import { browserAuthorizeResponse, nativeIamResponse, validIamRpCallbackNavigati
 import type { IamRelayUpstream } from "@/lib/server/iam-relay-transport"
 
 const WEB_ORIGIN = "http://127.0.0.1:3310"
-const CALLBACK_PATHS = ["/api/auth/callback/kokoro-iam", "/manage/api/auth/callback/kokoro-iam"]
+const CALLBACK_PATH = "/api/auth/callback/kokoro-iam"
 const QUERY = new URLSearchParams({ code: "code.valid_~-", state: "state_valid_123456789", iss: `${WEB_ORIGIN}/iam` }).toString()
 
 function nativeRedirect(location: string): IamRelayUpstream {
@@ -20,9 +20,9 @@ function authorizeJson(value: unknown): IamRelayUpstream {
   }
 }
 
-describe("closed User and Admin IAM RP callback navigation", () => {
-  it.each(CALLBACK_PATHS)("preserves native 302 for exact %s", (path) => {
-    for (const location of [`${path}?${QUERY}`, `${WEB_ORIGIN}${path}?${QUERY}`]) {
+describe("closed Product IAM RP callback navigation", () => {
+  it("preserves native 302 for the exact Product callback", () => {
+    for (const location of [`${CALLBACK_PATH}?${QUERY}`, `${WEB_ORIGIN}${CALLBACK_PATH}?${QUERY}`]) {
       const response = nativeIamResponse(nativeRedirect(location), WEB_ORIGIN, false, "request-native")
       expect(response?.status).toBe(302)
       expect(response?.headers.get("location")).toBe(location)
@@ -30,8 +30,8 @@ describe("closed User and Admin IAM RP callback navigation", () => {
     }
   })
 
-  it.each(CALLBACK_PATHS)("converts exact JSON authorize continuation to %s", (path) => {
-    const location = `${WEB_ORIGIN}${path}?${QUERY}`
+  it("converts the exact JSON authorize continuation", () => {
+    const location = `${WEB_ORIGIN}${CALLBACK_PATH}?${QUERY}`
     const response = browserAuthorizeResponse(authorizeJson({ redirect: true, url: location }), WEB_ORIGIN, false, "request-json")
 
     expect(response?.status).toBe(302)
@@ -56,14 +56,14 @@ describe("closed User and Admin IAM RP callback navigation", () => {
     expect(browserAuthorizeResponse(authorizeJson({ redirect: true, url: location }), WEB_ORIGIN, false, "request-json")).toBeNull()
   })
 
-  it.each(CALLBACK_PATHS)("rejects invalid origin, issuer and query on %s", (path) => {
-    const valid = `${WEB_ORIGIN}${path}?${QUERY}`
+  it("rejects invalid origin, issuer and query", () => {
+    const valid = `${WEB_ORIGIN}${CALLBACK_PATH}?${QUERY}`
     const invalid = [
-      `http://127.0.0.1:3320${path}?${QUERY}`,
-      `http://localhost:3310${path}?${QUERY}`,
-      `https://127.0.0.1:3310${path}?${QUERY}`,
-      `http://user:pass@127.0.0.1:3310${path}?${QUERY}`,
-      `//127.0.0.1:3310${path}?${QUERY}`,
+      `http://127.0.0.1:3320${CALLBACK_PATH}?${QUERY}`,
+      `http://localhost:3310${CALLBACK_PATH}?${QUERY}`,
+      `https://127.0.0.1:3310${CALLBACK_PATH}?${QUERY}`,
+      `http://user:pass@127.0.0.1:3310${CALLBACK_PATH}?${QUERY}`,
+      `//127.0.0.1:3310${CALLBACK_PATH}?${QUERY}`,
       valid.replace("/callback/", "\\callback/"),
       `${valid}#fragment`,
       `${valid}&extra=true`,
@@ -93,9 +93,9 @@ describe("closed User and Admin IAM RP callback navigation", () => {
   })
 
   it("rejects relative JSON authorize callback and non-exact JSON envelope", () => {
-    const absolute = `${WEB_ORIGIN}${CALLBACK_PATHS[1]}?${QUERY}`
+    const absolute = `${WEB_ORIGIN}${CALLBACK_PATH}?${QUERY}`
     for (const value of [
-      { redirect: true, url: `${CALLBACK_PATHS[1]}?${QUERY}` },
+      { redirect: true, url: `${CALLBACK_PATH}?${QUERY}` },
       { redirect: false, url: absolute },
       { redirect: "true", url: absolute },
       { redirect: true, url: absolute, extra: true },

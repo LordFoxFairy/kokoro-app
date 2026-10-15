@@ -13,13 +13,15 @@ import {
 } from "react"
 
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
+import { ChevronDown, Ellipsis, ListFilter, SquarePen } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "@/components/ui/sidebar"
 import { useT } from "@/i18n/context"
 import type { SettingsTab } from "@/ui/settings/settings-modal"
 import { DIRECT_SESSION_SCOPE } from "@/engine/session-scope"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 
-import { WorkspaceInviteCard } from "./workspace-invite-card"
 import {
   DRAG_HELP_ID,
   markPointerFocus,
@@ -28,8 +30,10 @@ import {
 import { WorkspaceRailAccount } from "./workspace-rail-account"
 import { WorkspaceRailHeader, WorkspaceRailNavigation } from "./workspace-rail-navigation"
 import { ConversationGroup, ScopedConversationGroup } from "./workspace-rail-session-list"
-import type { WorkspaceRailProps } from "./workspace-rail-types"
-import { railStyles } from "./workspace-rail-styles"
+import type { WorkspaceRailProject, WorkspaceRailProps } from "./workspace-rail-types"
+import { itemStyles, railStyles } from "./workspace-rail-styles"
+
+const RAIL_WIDTH_TRANSITION_MS = 200
 
 export type WorkspaceRailShellProps = Omit<WorkspaceRailProps, "onRequestDelete" | "deleteDialogFallbackFocusRef"> & {
   onRequestDelete: (conversation: ConversationSummary, remove?: (id: string) => Promise<boolean>) => void
@@ -49,6 +53,7 @@ export function WorkspaceRailShell({
   projectHref,
   projectActive = false,
   onCreateProject,
+  onRequestProjectRename,
   projects,
   projectListStatus,
   projectListRetryable,
@@ -85,17 +90,29 @@ export function WorkspaceRailShell({
   const { state, isMobile, setOpen, setOpenMobile } = useSidebar()
   const visualCollapsed = state === "collapsed"
   const compactDesktop = !isMobile && visualCollapsed
+  // Sidebar owns the physical 300px → 52px track transition. If the rail
+  // content switches to icon mode in the same React commit, its labels vanish
+  // while the old 300px gap is still shrinking, producing a blank gray slab.
+  // Keep the expanded content projected during the collapse transition; on
+  // expansion it is available immediately and simply reveals with the rail.
+  const [contentCollapsed, setContentCollapsed] = useState(visualCollapsed)
+  useEffect(() => {
+    const delay = visualCollapsed ? RAIL_WIDTH_TRANSITION_MS : 0
+    const timeout = window.setTimeout(() => setContentCollapsed(visualCollapsed), delay)
+    return () => window.clearTimeout(timeout)
+  }, [visualCollapsed])
+  const contentCompactDesktop = !isMobile && contentCollapsed
   // Mounted-surface routes are projected through history on desktop, so their
   // default viewport/hover RSC prefetch is redundant. Keep mobile Link native.
   const mountedSurfacePrefetch = isMobile ? undefined : false
-  const navigationExpanded = !compactDesktop
+  const navigationExpanded = !contentCompactDesktop
   const navigationTransitionKey = `${activeNavigationKey ?? "none"}:${projectActive ? "project" : "direct"}`
 
   const closeNavigation = useCallback(() => {
     if (isMobile) setOpenMobile(false)
   }, [isMobile, setOpenMobile])
 
-  const newSessionLabel = t("rail.newChat")
+  const newSessionLabel = t("rail.newTask")
   const fallbackBrandMark = (
     <BrandFallback
       {...(brandMark === undefined ? {} : { mark: brandMark })}
@@ -105,6 +122,10 @@ export function WorkspaceRailShell({
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [projectPickerOpen, setProjectPickerOpen] = useState(false)
+  // Manus keeps the top-level task feed independently collapsible from the
+  // project collection.  This is presentation state only: reads stay mounted
+  // and owner-backed while the rows are hidden, so opening it is instantaneous.
+  const [tasksExpanded, setTasksExpanded] = useState(true)
   const projectItems = useMemo(() => {
     if (projects !== undefined) return [...projects]
     if (!preview || !projectHref) return []
@@ -115,6 +136,12 @@ export function WorkspaceRailShell({
       active: projectActive,
     }]
   }, [preview, projectActive, projectHref, projects, t])
+  // Route selection is the live navigation fact.  Project snapshots may be
+  // reused across surfaces and carry an older `active: false`, which must not
+  // collapse the folder currently being viewed.
+  const isCurrentProject = useCallback((project: WorkspaceRailProject) => (
+    (projectActive && project.href === projectHref) || project.active === true
+  ), [projectActive, projectHref])
   const moveDestinations = projectListStatus === "ready" && conversationScope !== undefined
     ? [
         ...(conversationScope.kind === "direct" ? [] : [{ id: null, name: t("rail.directChatsAria") }]),
@@ -138,29 +165,81 @@ export function WorkspaceRailShell({
     ...(onReorderConversations === undefined ? {} : { onReorderConversations }),
   })
 
+  // The active Manus project is a compact folder: its task list lives directly
+  // below the selected project row, while the top-level task feed remains
+  // independent. Keep disclosure state scoped to the admitted reader identity
+  // so a sign-out or workspace switch cannot reveal an obsolete list.
   const folderIntentIdentity = conversationReads?.folderIntentIdentity
   const folderIdentity = folderIntentIdentity === undefined ? conversationReads?.identity ?? "controlled" : folderIntentIdentity
   const preservePendingFolderIntent = folderIntentIdentity !== undefined && folderIntentIdentity !== null
   const foldersAdmitted = conversationReads?.admitted ?? true
   const [folderState, setFolderState] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null)
   if (folderState !== null && (folderIdentity === null || folderState.identity !== folderIdentity || (!foldersAdmitted && !preservePendingFolderIntent))) setFolderState(null)
-  const expandedProjectIds = foldersAdmitted && folderIdentity !== null
-    ? folderState?.identity === folderIdentity ? folderState.ids : new Set(projectItems.filter((project) => project.active).map((project) => project.id))
-    : new Set<string>()
+  const expandedProjectIds = useMemo(() => (
+    foldersAdmitted && folderIdentity !== null
+      ? folderState?.identity === folderIdentity ? folderState.ids : new Set(projectItems.filter(isCurrentProject).map((project) => project.id))
+      : new Set<string>()
+  ), [folderIdentity, folderState, foldersAdmitted, isCurrentProject, projectItems])
   useEffect(() => {
     if (!foldersAdmitted || folderIdentity === null || projectListStatus !== "ready" || folderState?.identity === folderIdentity) return
-    const ids = new Set(projectItems.filter((project) => project.active).map((project) => project.id))
+    const ids = new Set(projectItems.filter(isCurrentProject).map((project) => project.id))
     let live = true
     queueMicrotask(() => { if (live) setFolderState((current) => current?.identity === folderIdentity ? current : { identity: folderIdentity, ids }) })
     return () => { live = false }
-  }, [folderIdentity, folderState?.identity, foldersAdmitted, projectItems, projectListStatus])
-  const toggleProject = (id: string) => {
+  }, [folderIdentity, folderState?.identity, foldersAdmitted, isCurrentProject, projectItems, projectListStatus])
+  const toggleProject = useCallback((id: string) => {
     if (!foldersAdmitted || folderIdentity === null) return
     const ids = new Set(expandedProjectIds)
     if (ids.has(id)) ids.delete(id)
     else ids.add(id)
     setFolderState({ identity: folderIdentity, ids })
-  }
+  }, [expandedProjectIds, folderIdentity, foldersAdmitted])
+
+  const hasConversations = conversations.length > 0
+
+  const directConversationGroup = conversationReads ? <ScopedConversationGroup
+    key={`direct:${conversationReads.identity}`}
+    scope={DIRECT_SESSION_SCOPE} reads={conversationReads} preview={preview}
+    compactDesktop={contentCompactDesktop} query={query} searchOpen={searchOpen}
+    awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
+    onRequestDelete={onRequestDelete} projects={projectItems}
+    projectListReady={projectListStatus === "ready"}
+    conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
+    conversationMoveFailed={conversationMoveFailed}
+    hideSectionHeader={!contentCompactDesktop}
+    {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+  /> : (
+    <ConversationGroup
+      projectActive={false}
+      scopeKey="direct"
+      onRenameConversation={onRenameConversation}
+      {...(onReorderConversations === undefined ? {} : { onReorderConversations })}
+      compactDesktop={contentCompactDesktop}
+      searchOpen={searchOpen}
+      query={query}
+      conversations={conversations}
+      hasConversations={hasConversations}
+      activeId={activeId}
+      awaitingIds={awaitingIds}
+      listLoading={listLoading}
+      listLoadingMore={listLoadingMore}
+      listError={listError}
+      {...(onRetryList === undefined ? {} : { onRetryList })}
+      hasMore={hasMore}
+      onLoadMore={onLoadMore}
+      onNewChat={onNewChat}
+      closeNavigation={closeNavigation}
+      onSelectConversation={onSelectConversation}
+      onRequestDelete={onRequestDelete}
+      moveDestinations={moveDestinations}
+      conversationMove={conversationMove ?? null}
+      conversationMovePending={conversationMovePending}
+      conversationMoveFailed={conversationMoveFailed}
+      hideSectionHeader={!contentCompactDesktop}
+      {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
+      {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+    />
+  )
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchToggleRef = useRef<HTMLButtonElement>(null)
@@ -231,7 +310,7 @@ export function WorkspaceRailShell({
     if (!target || target === active || target.getAttribute("aria-hidden") === "true") return
     target.focus({ preventScroll: true })
     responsiveFocusPendingRef.current = false
-  }, [compactDesktopRail, visualCollapsed])
+  }, [compactDesktopRail, contentCompactDesktop, visualCollapsed])
 
   useEffect(() => {
     if (!searchOpen) return
@@ -276,7 +355,6 @@ export function WorkspaceRailShell({
   }
 
   const openSettings = (tab: SettingsTab) => onOpenSettings(tab)
-  const hasConversations = conversations.length > 0
 
   return (
     <Sidebar side="left" collapsible="icon" className={railStyles.sidebar} data-desktop-web="true">
@@ -284,7 +362,7 @@ export function WorkspaceRailShell({
         ref={railRootRef}
         className={railStyles.rail}
         aria-label={t("rail.railAria")}
-        data-collapsed={visualCollapsed}
+        data-collapsed={contentCollapsed}
         data-active-navigation-key={activeNavigationKey ?? "none"}
         data-desktop-web="true"
         data-desktop-rail={!isMobile ? "true" : undefined}
@@ -295,7 +373,7 @@ export function WorkspaceRailShell({
           {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
           fallbackBrandMark={fallbackBrandMark}
           mountedSurfacePrefetch={mountedSurfacePrefetch}
-          compactDesktop={compactDesktop}
+          compactDesktop={contentCompactDesktop}
           compactDesktopRail={compactDesktopRail}
           isMobile={isMobile}
           navigationExpanded={navigationExpanded}
@@ -319,101 +397,122 @@ export function WorkspaceRailShell({
           <WorkspaceRailNavigation
             {...(navigation === undefined ? {} : { navigation })}
             {...(featureFlags === undefined ? {} : { featureFlags })}
-            chatHref={chatHref}
             {...(projectHref === undefined ? {} : { projectHref })}
             projectActive={projectActive}
             {...(projects === undefined ? {} : { projects })}
             orderedProjects={orderedProjects}
             expandedProjectIds={expandedProjectIds}
             onToggleProject={toggleProject}
-            renderProjectConversations={(project) => conversationReads ? <ScopedConversationGroup
-              key={`${project.id}:${conversationReads.identity}`}
-              scope={{ kind: "project", projectRef: project.id }} reads={conversationReads} preview={preview}
-              groupLabel={project.name} compactDesktop={compactDesktop} query={query} searchOpen={searchOpen}
-              awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
-              onRequestDelete={onRequestDelete} projects={projectItems}
-              projectListReady={projectListStatus === "ready"}
-              conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
-              conversationMoveFailed={conversationMoveFailed}
-              {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-            /> : null}
+            renderProjectConversations={(project) => {
+              const current = isCurrentProject(project)
+              if (conversationReads) {
+                return <ScopedConversationGroup
+                  key={`${project.id}:${conversationReads.identity}`}
+                  scope={{ kind: "project", projectRef: project.id }} reads={conversationReads} preview={preview}
+                  groupLabel={project.name} compactDesktop={contentCompactDesktop} query={query} searchOpen={searchOpen}
+                  awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
+                  onRequestDelete={onRequestDelete} projects={projectItems}
+                  projectListReady={projectListStatus === "ready"}
+                  conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
+                  conversationMoveFailed={conversationMoveFailed}
+                  {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+                />
+              }
+              if (!current) return null
+              return <ConversationGroup
+                projectActive
+                groupLabel={project.name}
+                scopeKey={`project:${project.id}`}
+                onRenameConversation={onRenameConversation}
+                {...(onReorderConversations === undefined ? {} : { onReorderConversations })}
+                compactDesktop={contentCompactDesktop} searchOpen={searchOpen} query={query}
+                conversations={conversations} hasConversations={hasConversations} activeId={activeId}
+                awaitingIds={awaitingIds} listLoading={listLoading} listLoadingMore={listLoadingMore}
+                listError={listError} {...(onRetryList === undefined ? {} : { onRetryList })}
+                hasMore={hasMore} onLoadMore={onLoadMore} onNewChat={onNewChat}
+                closeNavigation={closeNavigation} onSelectConversation={onSelectConversation}
+                onRequestDelete={onRequestDelete} moveDestinations={moveDestinations}
+                conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
+                conversationMoveFailed={conversationMoveFailed}
+                {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
+                {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
+              />
+            }}
             {...(projectListStatus === undefined ? {} : { projectListStatus })}
             {...(projectListRetryable === undefined ? {} : { projectListRetryable })}
             {...(onRetryProjects === undefined ? {} : { onRetryProjects })}
             projectPickerOpen={projectPickerOpen}
             setProjectPickerOpen={setProjectPickerOpen}
             {...(onCreateProject === undefined ? {} : { onCreateProject })}
+            {...(onRequestProjectRename === undefined ? {} : { onRequestProjectRename })}
             onNewChat={onNewChat}
             closeNavigation={closeNavigation}
             onOpenSettings={openSettings}
             deleteDialogFallbackFocusRef={deleteDialogFallbackFocusRef}
             {...(activeNavigationKey === undefined ? {} : { activeNavigationKey })}
             mountedSurfacePrefetch={mountedSurfacePrefetch}
-            compactDesktop={compactDesktop}
+            compactDesktop={contentCompactDesktop}
             navigationExpanded={navigationExpanded}
-            isMobile={isMobile}
             navigationTransitionKey={navigationTransitionKey}
             newSessionLabel={newSessionLabel}
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}
           />
-          {conversationReads ? <ScopedConversationGroup
-            key={`direct:${conversationReads.identity}`}
-            scope={DIRECT_SESSION_SCOPE} reads={conversationReads} preview={preview}
-            compactDesktop={compactDesktop} query={query} searchOpen={searchOpen}
-            awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
-            onRequestDelete={onRequestDelete} projects={projectItems}
-            projectListReady={projectListStatus === "ready"}
-            conversationMove={conversationMove ?? null} conversationMovePending={conversationMovePending}
-            conversationMoveFailed={conversationMoveFailed}
-            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-          /> : (
-          <ConversationGroup
-            projectActive={false}
-            scopeKey="direct"
-            onRenameConversation={onRenameConversation}
-            {...(onReorderConversations === undefined ? {} : { onReorderConversations })}
-            compactDesktop={compactDesktop}
-            searchOpen={searchOpen}
-            query={query}
-            conversations={conversations}
-            hasConversations={hasConversations}
-            activeId={activeId}
-            awaitingIds={awaitingIds}
-            listLoading={listLoading}
-            listLoadingMore={listLoadingMore}
-            listError={listError}
-            {...(onRetryList === undefined ? {} : { onRetryList })}
-            hasMore={hasMore}
-            onLoadMore={onLoadMore}
-            onNewChat={onNewChat}
-            closeNavigation={closeNavigation}
-            onSelectConversation={onSelectConversation}
-            onRequestDelete={onRequestDelete}
-            moveDestinations={moveDestinations}
-            conversationMove={conversationMove ?? null}
-            conversationMovePending={conversationMovePending}
-            conversationMoveFailed={conversationMoveFailed}
-            {...(onMoveConversation === undefined ? {} : { onMoveConversation })}
-            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
-          />
-          )}
+          {!contentCompactDesktop ? <div className={itemStyles.sectionRow} data-task-section-header="true">
+            <Button
+              type="button"
+              variant="ghost"
+              className={itemStyles.sectionDisclosure}
+              aria-label={t(tasksExpanded ? "rail.collapseTasks" : "rail.expandTasks")}
+              aria-expanded={tasksExpanded}
+              aria-controls="rail-direct-task-list"
+              onClick={() => setTasksExpanded((expanded) => !expanded)}
+            >
+              <span>{t("rail.tasks")}</span>
+              <ChevronDown aria-hidden="true" />
+            </Button>
+            <span className={itemStyles.sectionHeaderActions}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className={itemStyles.sectionHeaderAction}
+                aria-label={t("rail.taskOptions")}
+                disabled
+              >
+                <Ellipsis aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className={itemStyles.sectionHeaderAction}
+                aria-label={t("rail.taskFilters")}
+                disabled
+              >
+                <ListFilter aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className={itemStyles.sectionHeaderAction}
+                aria-label={newSessionLabel}
+                onClick={() => { onNewChat(); closeNavigation() }}
+              >
+                <SquarePen aria-hidden="true" />
+              </Button>
+            </span>
+          </div> : null}
+          {contentCompactDesktop || tasksExpanded ? <div id="rail-direct-task-list">{directConversationGroup}</div> : null}
         </SidebarContent>
 
         <SidebarFooter className={railStyles.footer}>
-          {!compactDesktop && !isMobile ? (
-            <div className={railStyles.footerInvite} data-desktop-invite="true">
-              <WorkspaceInviteCard
-                brandName={brandName ?? "Workspace"}
-                onOpen={() => openSettings("team")}
-              />
-            </div>
-          ) : null}
           <WorkspaceRailAccount
             {...(brandName === undefined ? {} : { brandName })}
             preview={preview}
-            compactDesktop={compactDesktop}
+            compactDesktop={contentCompactDesktop}
             onOpenSettings={openSettings}
             {...(onOpenNotifications === undefined ? {} : { onOpenNotifications })}
             {...(accountTriggerRef === undefined ? {} : { accountTriggerRef })}

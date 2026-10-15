@@ -1,0 +1,485 @@
+.overlay {
+  background: rgb(0 0 0 / 42%);
+  backdrop-filter: blur(5px);
+}
+
+.dialog[data-slot="dialog-content"] {
+  width: min(42.5rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 1rem;
+  background: var(--background);
+}
+
+.detail,
+.configuration {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
+}
+
+/* Custom API shares the secure-detail dialog primitive with Custom MCP, but
+ * it is a smaller aggregate: name, note and configured-secret count.  Keep
+ * its layout explicit instead of inheriting the MCP detail's fixed-height
+ * hero geometry, which previously left a distracting empty lower half. */
+.detail.apiDetail {
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 2rem);
+}
+.apiDetailHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid rgb(0 0 0 / 7%);
+}
+.apiDetailHeader .icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-basis: 2.75rem;
+  border-radius: 0.625rem;
+}
+.apiDetailHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.apiDetailHeader p {
+  margin: 0.125rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.apiDetailBody {
+  display: grid;
+  gap: 1rem;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.apiFacts {
+  display: grid;
+  gap: 0.875rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 0.75rem;
+}
+.apiFacts div {
+  display: grid;
+  gap: 0.25rem;
+}
+.apiFacts dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+}
+.apiFacts dd {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.apiFacts code {
+  font-family: inherit;
+  font-size: 0.8125rem;
+}
+.apiManagement {
+  display: flex;
+  justify-content: flex-end;
+}
+.apiManagement > button,
+.apiRemove {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.875rem;
+  font-size: 0.875rem;
+}
+.apiRemove {
+  width: fit-content;
+  color: var(--destructive);
+}
+.configuration.apiConfiguration {
+  height: min(44.625rem, calc(100dvh - 2rem));
+}
+.apiConfigurationHeader {
+  padding: 1.25rem 1.25rem 0;
+}
+.apiConfigurationHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.apiConfigurationHeader p {
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+.apiConfigurationBody {
+  display: grid;
+  flex: 1;
+  gap: 0.875rem;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+.apiConfigurationFooter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid rgb(0 0 0 / 7%);
+}
+.apiConfigurationFooter > button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.875rem;
+  font-size: 0.875rem;
+}
+
+/* Manus custom MCP detail: 680×558, its own state separate from configuration. */
+.detail {
+  height: min(34.875rem, calc(100dvh - 2rem));
+}
+.detailHero {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  padding: 3.75rem 3rem 1.75rem;
+  text-align: center;
+}
+.icon {
+  display: grid;
+  width: 4rem;
+  height: 4rem;
+  flex: 0 0 4rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: var(--secondary);
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.detailHero h2 {
+  margin: 1.125rem 0 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+}
+.detailActions,
+.configurationActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.detailActions > button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.875rem;
+  font-size: 0.875rem;
+}
+.detailActions > button:first-child {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+.detailActions svg,
+.configurationFooter svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.detailBody {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0 1.5rem;
+}
+.detailBody > h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+.facts {
+  display: grid;
+  min-height: 12.75rem;
+  gap: 1rem;
+  margin: 0;
+  padding: 1.125rem;
+  border: 1px solid rgb(0 0 0 / 8%);
+  border-radius: 0.75rem;
+}
+.facts div {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+}
+.facts dt {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+.facts dd {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.uuid {
+  width: fit-content;
+  height: auto;
+  min-height: 1.25rem;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  text-align: left;
+}
+.uuid svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+.feedback {
+  flex: 0 0 auto;
+  padding: 1rem 1.5rem 1.375rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-align: center;
+  text-decoration: underline;
+}
+
+.managementMenu {
+  min-width: 12rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1.25rem rgb(0 0 0 / 12%);
+}
+.managementMenu :global([data-slot="dropdown-menu-item"]) {
+  min-height: 2.5rem;
+  gap: 0.625rem;
+  padding: 0.5rem 0.375rem;
+  font-size: 0.875rem;
+}
+.managementMenu :global([data-slot="dropdown-menu-item"] svg) {
+  width: 1rem;
+  height: 1rem;
+}
+.managementDivider {
+  height: 1px;
+  margin: 0;
+  background: rgb(0 0 0 / 8%);
+}
+.dangerMenuItem { color: var(--destructive); }
+.deleteConfirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.deleteConfirm span {
+  flex: 1 1 100%;
+  font-size: 0.875rem;
+}
+
+/* Manus configuration is a separate 600×714 editing layer. */
+.dialog[data-variant="configuration"] {
+  width: min(37.5rem, calc(100vw - 2rem));
+}
+.configuration {
+  height: min(44.625rem, calc(100dvh - 2rem));
+}
+.configurationBody {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+.configurationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.configurationHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.5rem;
+}
+.configurationHeader button {
+  height: 1.75rem;
+  min-height: 1.75rem;
+  padding-inline: 0.5rem;
+  font-size: 0.75rem;
+}
+.configurationHeader svg { width: 0.875rem; height: 0.875rem; }
+.configurationGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.field,
+.iconField {
+  display: grid;
+  gap: 0.375rem;
+  margin-top: 0.875rem;
+}
+.configurationGrid .field { margin-top: 0; }
+.field label,
+.iconField label,
+.headers legend {
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+}
+.optional { color: var(--muted-foreground); font-weight: 400; }
+.field :global(input) {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  border-radius: 0.5rem;
+}
+.field textarea {
+  min-height: 6.25rem;
+  resize: vertical;
+}
+.staticValue {
+  display: flex;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0.5rem;
+  background: var(--secondary);
+  padding: 0 0.875rem;
+  font-size: 0.875rem;
+}
+.staticValue svg { width: 1rem; height: 1rem; }
+.iconUploadRow {
+  display: grid;
+  grid-template-columns: 3.75rem auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+.configurationIcon {
+  display: grid;
+  width: 3.75rem;
+  height: 3.75rem;
+  place-items: center;
+  border: 1px dashed rgb(0 0 0 / 15%);
+  border-radius: 0.5rem;
+  background: var(--secondary);
+  font-size: 0.875rem;
+}
+.uploadUnavailable {
+  display: inline-flex;
+  width: fit-content;
+  height: 2.25rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0 0.75rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+.iconUploadRow small {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.headers {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.875rem 0 0;
+  padding: 0;
+  border: 0;
+}
+.headers > button { width: fit-content; }
+.existingHeader,
+.headerDraft {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 2rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+.headerDraft { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2rem; }
+.existingHeader small { color: var(--muted-foreground); }
+.configurationFooter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid rgb(0 0 0 / 7%);
+}
+.configurationFooter > button,
+.configurationActions button {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+}
+.saveSplit {
+  display: inline-flex;
+}
+.saveSplit button {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}
+.saveSplit button:first-child {
+  border-radius: 0.5rem 0 0 0.5rem;
+  border-right-color: rgb(255 255 255 / 22%);
+}
+.saveSplit button:last-child {
+  min-width: 2.25rem;
+  padding-inline: 0.5rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+.configurationMenu {
+  min-width: 8.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.625rem;
+}
+.configurationMenu :global([data-slot="dropdown-menu-item"]) {
+  min-height: 2.25rem;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 44rem) {
+  .detailHero { padding-inline: 1rem; }
+  .detailBody { padding-inline: 1rem; }
+  .configurationGrid { grid-template-columns: 1fr; gap: 0; }
+}
+@media (max-width: 34rem) {
+  .iconUploadRow { grid-template-columns: 3.75rem auto; }
+  .iconUploadRow small { grid-column: 1 / -1; }
+  .configurationFooter { align-items: flex-end; gap: 0.75rem; }
+  .configurationActions { flex-wrap: wrap; justify-content: flex-end; }
+  .headerDraft { grid-template-columns: 1fr 2rem; }
+  .headerDraft > input:first-child { grid-column: 1 / -1; }
+}

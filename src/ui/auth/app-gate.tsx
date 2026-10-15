@@ -10,7 +10,7 @@ import { DEFAULT_BRAND } from "@/config/brand"
 
 import { useSessionProbe } from "./use-session-state"
 import { openProductSignIn } from "./product-auth-client"
-import { RuntimeLoading, RuntimeSessionUnavailable } from "./runtime-loading"
+import { RuntimeSessionUnavailable } from "./runtime-loading"
 import { browserScheduledTaskClient } from "@/ui/shell/page-clients"
 
 export function AppGate({ brandName, serverAdmitted = false, serverUnavailable = false }: {
@@ -53,7 +53,17 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
       pendingLabel={t("shell.loadingApp")} onRetry={probe.retry} pending={probe.requestPending} />
   }
   if ((state === "checking" || state === "anonymous") && !serverAdmitted) {
-    return <RuntimeLoading label={t("shell.loadingApp")} />
+    // Direct deep links can reach the browser before the server-side cookie
+    // admission is available. Keep the data-free product shell in place while
+    // the client probe decides, rather than replacing the whole page with a
+    // transient loading card. `booting` mounts no Runtime data clients.
+    return <KokoroAppSurface
+      booting
+      brandName={brandName ?? DEFAULT_BRAND.name}
+      brandMark={DEFAULT_BRAND.mark}
+      preview={false}
+      projectReadBoundary={probe.projectReadBoundary}
+    />
   }
 
   // Product-owned defaults are not preview data. Only a verified live manifest

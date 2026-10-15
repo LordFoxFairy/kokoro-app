@@ -7,23 +7,25 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
 import { createSkillLocalImportClient } from "@/hub/skill-local-import-client"
-import { useSessionProbe } from "@/ui/auth/use-session-state"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useT } from "@/i18n/context"
 import { createPersonalSkillImportFlow } from "./personal-skill-import-flow"
 import styles from "./skill-upload-dialog.module.css"
 
 const defaultClient = createSkillLocalImportClient()
-type Props = { open: boolean; onOpenChange: (open: boolean) => void; onPublished?: () => void; returnFocusRef?: RefObject<HTMLElement | null>; importClient?: ReturnType<typeof createSkillLocalImportClient> }
+type Props = { readBoundary: ProjectReadBoundary; open: boolean; onOpenChange: (open: boolean) => void; onPublished?: () => void; returnFocusRef?: RefObject<HTMLElement | null>; importClient?: ReturnType<typeof createSkillLocalImportClient> }
 
 /** Ordinary local import: the owner parses SKILL.md and commits installation. */
-export function SkillUploadDialog({ open, onOpenChange, onPublished, returnFocusRef, importClient = defaultClient }: Props) {
+export function SkillUploadDialog({ readBoundary: boundary, open, onOpenChange, onPublished, returnFocusRef, importClient = defaultClient }: Props) {
   const t = useT()
-  const probe = useSessionProbe()
-  const boundary = probe.projectReadBoundary
   const flow = useMemo(() => {
     let storage: Storage | undefined
     try { storage = typeof window === "undefined" ? undefined : window.sessionStorage } catch { /* Optional locator. */ }
-    return createPersonalSkillImportFlow({ client: importClient, subject: boundary.subject ?? "", ...(storage ? { storage } : {}) })
+    return createPersonalSkillImportFlow({
+      client: importClient,
+      subject: boundary.subject ?? "",
+      ...(storage && boundary.subject !== null ? { storage } : {}),
+    })
   }, [importClient, boundary.subject])
   const state = useSyncExternalStore(flow.subscribe, flow.getSnapshot, flow.getSnapshot)
   const input = useRef<HTMLInputElement | null>(null)
@@ -32,7 +34,6 @@ export function SkillUploadDialog({ open, onOpenChange, onPublished, returnFocus
   const onPublishedRef = useRef(onPublished)
   useEffect(() => { onPublishedRef.current = onPublished }, [onPublished])
   useEffect(() => { flow.setAdmitted(boundary.admitted && boundary.subject !== null); return () => flow.cancel() }, [flow, boundary.admitted, boundary.subject, boundary.generation])
-  useEffect(() => { if (probe.state === "anonymous") flow.retire(true) }, [flow, probe.state])
   useEffect(() => () => flow.retire(false), [flow])
   useEffect(() => { if (!open) flow.cancel() }, [open, flow])
   useEffect(() => { if (state.kind === "completed" && state !== completed.current) { completed.current = state; onPublishedRef.current?.() } }, [state])
@@ -56,7 +57,7 @@ export function SkillUploadDialog({ open, onOpenChange, onPublished, returnFocus
         <section className={styles.requirements} aria-labelledby="skill-upload-requirements"><h3 id="skill-upload-requirements">{t("skills.uploadRequirements")}</h3><ul><li>{t("skills.uploadRequirementZip")}</li><li>{t("skills.uploadRequirementYaml")}</li></ul><p className={styles.learn}><ExternalLink aria-hidden="true" /><a href="https://agentskills.io/what-are-skills" target="_blank" rel="noreferrer">{t("skills.uploadLearn")}</a><span aria-hidden="true">{t("skills.uploadOr")}</span><a href="https://agentskills.io/" target="_blank" rel="noreferrer">{t("skills.uploadExample")}</a></p></section>
       </> : null}
       {busy ? <div className={styles.progress} role="status" aria-live="polite"><Spinner aria-hidden="true" /><span>{t("skills.localImport.processing")}</span></div> : null}
-      {["unknown", "rejected", "recoverable", "reselect", "expired"].includes(state.kind) && !idle ? <Alert role="alert" className={styles.error}><AlertDescription>{t(state.kind === "unknown" ? "skills.localImport.unknown" : state.kind === "recoverable" ? "skills.localImport.recoverable" : state.kind === "reselect" ? "skills.localImport.reselect" : state.kind === "expired" ? "skills.localImport.expired" : "skills.uploadError")}</AlertDescription>{state.code ? <p>{state.code}</p> : null}</Alert> : null}
+      {["unknown", "rejected", "recoverable", "reselect", "expired"].includes(state.kind) && !idle ? <Alert role="alert" className={styles.error}><AlertDescription>{t(state.kind === "unknown" ? state.code === "local_skill_import_dependency_unavailable" ? "skills.localImport.unavailable" : "skills.localImport.unknown" : state.kind === "recoverable" ? "skills.localImport.recoverable" : state.kind === "reselect" ? "skills.localImport.reselect" : state.kind === "expired" ? "skills.localImport.expired" : "skills.uploadError")}</AlertDescription>{state.code ? <p>{state.code}</p> : null}</Alert> : null}
       {state.kind === "completed" ? <div className={styles.done} role="status"><FileArchive aria-hidden="true" /><strong>{state.skill?.name}</strong><p>{t(state.installed ? "skills.localImport.complete" : "skills.localImport.installationUnconfirmed")}</p></div> : null}
       <DialogFooter className={styles.footer}>
         {busy ? <Button variant="outline" onClick={() => flow.cancel()}>{t("skills.cancel")}</Button> : null}

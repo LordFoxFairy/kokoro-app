@@ -97,6 +97,38 @@
 }
 .inset { min-width: 0; min-height: 0; overflow: hidden; background: var(--background); }
 
+/* Server admission deliberately renders before any browser-owned Runtime
+ * clients mount. Keep its quiet, non-interactive rail in the exact desktop
+ * lane that the real collapsed rail occupies. It is a structural continuity
+ * surface, not a progress indicator: no text, spinner, pulse or animation. */
+.bootingRail {
+  display: flex;
+  width: 52px;
+  min-width: 52px;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-right: 1px solid var(--sidebar-border);
+  background: var(--sidebar);
+}
+.bootingRailBrand,
+.bootingRailAction,
+.bootingRailAccount {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--muted-foreground) 13%, transparent);
+}
+.bootingRailBrand { width: 1.7rem; height: 1.7rem; border-radius: 999px; }
+.bootingRailAction { width: 1.25rem; height: 1.25rem; }
+.bootingRailAccount { width: 1.5rem; height: 1.5rem; margin-top: auto; border-radius: 999px; }
+
+@media (max-width: 768px) {
+  .bootingRail { display: none; }
+}
+
 /* Standalone Web surfaces intentionally omit WorkspaceHeader, but a hidden
  * narrow-desktop rail still needs the same single menu affordance as the
  * normal chat header. Keep it in the shell coordinate space so opening the
@@ -168,12 +200,14 @@
   /* The handle is the only painted seam. `::before` remains hit-area only,
      so a clamp never composites a second hairline beside the boundary. */
   background: var(--sidebar-border);
-  /* Keep the seam hidden/shown only after the rail geometry finishes moving.
-     A shorter opacity transition exposes it at an intermediate x position. */
+  /* The seam, reserved gap and fixed rail must share one transition clock.
+     Letting the seam use the longer motion token left a visible rule behind
+     the already-expanded rail for roughly 300ms, which read as a transparent
+     second divider during open/close. */
   visibility: visible;
   opacity: 1;
   left: calc(var(--rail-seam-width, var(--sidebar-width, 20rem)) - 1px);
-  transition: left var(--motion-relaxed) linear, opacity 0ms linear var(--motion-relaxed);
+  transition: left 200ms linear, opacity 0ms linear;
 }
 .resizer[data-seam-visible="true"] {
   /* The seam remains a painted contract when the wide rail is collapsed. Do
@@ -248,7 +282,8 @@
  * Tailwind's `md` breakpoint. The compact state removes the rail track
  * entirely and leaves one header trigger, rather than creating a second
  * miniature navigation mode. This is deliberately scoped by the Web marker;
- * the phone Sheet never receives these rules. */
+ * the Sheet composition has no desktop sidebar nodes for these rules to
+ * affect. */
 @media (pointer: fine) {
   /* Match the compact fine-pointer layout from the very first browser paint.
    * `useCompactDesktopRail()` cannot know the client media query during SSR,

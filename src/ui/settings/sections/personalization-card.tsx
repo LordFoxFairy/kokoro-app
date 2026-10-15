@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/i18n/context";
 import {
+  cachedPersonalization,
   PersonalizationClientError,
   readPersonalization,
   replacePersonalization,
@@ -46,24 +47,28 @@ function emptyFields(): PersonalizationFields {
 /** BFF-backed profile preferences. Memory import and knowledge entries remain
  * hidden until their owner exposes a durable contract instead of dead routes. */
 export function PersonalizationCard({
+  subject,
   preview = false,
 }: {
+  subject: string | null;
   preview?: boolean;
 }) {
   const t = useT();
+  const cached =
+    !preview && subject !== null ? cachedPersonalization(subject) : undefined;
   const [fields, setFields] = useState<PersonalizationFields>(() =>
-    preview ? readPreviewFields() : emptyFields(),
+    preview ? readPreviewFields() : (cached?.personalization ?? emptyFields()),
   );
-  const [revision, setRevision] = useState(0);
+  const [revision, setRevision] = useState(cached?.revision ?? 0);
   const [state, setState] = useState<ProfileState>(
-    preview ? "ready" : "loading",
+    preview || cached !== undefined ? "ready" : "loading",
   );
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (preview) return;
+    if (preview || subject === null) return;
     let active = true;
-    void readPersonalization()
+    void readPersonalization(subject)
       .then((snapshot) => {
         if (!active) return;
         setFields(snapshot.personalization ?? emptyFields());
@@ -78,7 +83,7 @@ export function PersonalizationCard({
     return () => {
       active = false;
     };
-  }, [preview, t]);
+  }, [preview, subject, t]);
 
   const update = (field: keyof PersonalizationFields, value: string): void => {
     setFields((current) => ({ ...current, [field]: value }));
@@ -96,7 +101,8 @@ export function PersonalizationCard({
     setState("saving");
     setMessage(null);
     try {
-      const snapshot = await replacePersonalization(fields, revision);
+      if (subject === null) return;
+      const snapshot = await replacePersonalization(subject, fields, revision);
       setRevision(snapshot.revision);
       setState("ready");
       setMessage(t("settings.saved"));
@@ -118,15 +124,22 @@ export function PersonalizationCard({
       className={styles.personalization}
       data-testid="settings-personalization"
     >
-      <div className={styles.personalizationProfile}>
-        {state === "loading" ? (
-          <p className={styles.profileStatus}>{t("settings.loading")}</p>
-        ) : null}
-        {message !== null ? (
-          <p className={styles.profileStatus} role="status">
-            {message}
-          </p>
-        ) : null}
+      <div
+        className={styles.personalizationProfile}
+        aria-busy={state === "loading" || undefined}
+      >
+        <div className={styles.profileStatusSlot} aria-live="polite">
+          {state === "loading" ? (
+            <span className="sr-only" role="status">
+              {t("settings.loading")}
+            </span>
+          ) : null}
+          {message !== null ? (
+            <p className={styles.profileStatus} role="status">
+              {message}
+            </p>
+          ) : null}
+        </div>
         <div className={styles.profileColumns}>
           <label>
             <span>{t("settings.nickname")}</span>

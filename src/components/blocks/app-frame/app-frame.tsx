@@ -83,6 +83,17 @@ function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<Ap
   return (
     <div className={shellStyles.shell} data-desktop-web="true" data-web-skin="kokoro">
       <div className={`${shellStyles.inset} flex flex-1`} data-slot="sidebar-inset">
+        {/* Keep the first admitted document spatially continuous with the
+         * mounted workspace. This is intentionally a static shell, not a
+         * loading indicator: it prevents the empty, full-width flash that
+         * made a route handoff feel like the app had disappeared. */}
+        <aside className={shellStyles.bootingRail} aria-hidden="true">
+          <span className={shellStyles.bootingRailBrand} />
+          <span className={shellStyles.bootingRailAction} />
+          <span className={shellStyles.bootingRailAction} />
+          <span className={shellStyles.bootingRailAction} />
+          <span className={shellStyles.bootingRailAccount} />
+        </aside>
         <div className={shellStyles.workspace}>
           <div className={`${shellStyles.mainPanel} flex-1`}>
             <AppFrameBootingMainSurface composer={composer} />
@@ -657,7 +668,6 @@ function AppFrameRuntime({
     onOpenProject: project.openProject,
     onCreateProject: project.createProject,
     onCreateMcp: overlays.openMcpCreate,
-    onCreateCustomApi: overlays.openCustomApiCreate,
     onCreateSkillWithAi: actions.startSkillCreationFromSettings,
     onTrySkill: actions.startSkillUseFromSettings,
     models: selectors.models,
@@ -731,6 +741,7 @@ function AppFrameRuntime({
       onRetryProjects: refreshProjects,
     } : {}),
     onCreateProject: project.createProject,
+    onRequestProjectRename: project.requestProjectRename,
     ...(activeNavigationKey === undefined ? {} : { activeNavigationKey }),
     preview,
     conversations,
@@ -799,6 +810,7 @@ function AppFrameRuntime({
     <AppFrameOverlaySurfaces
       mounted={mounted}
       settingsTab={navigationState.settingsTab}
+      {...(overlays.settingsSkillsScope === undefined ? {} : { settingsSkillsScope: overlays.settingsSkillsScope })}
       brandName={brandName}
       preview={preview}
       {...(projectReadBoundary === undefined ? {} : { readBoundary: projectReadBoundary })}
@@ -811,9 +823,6 @@ function AppFrameRuntime({
       mcpCreateMode={overlays.mcpCreateMode}
       setMcpCreateMode={(mode) => overlays.setMcpCreateMode(mode)}
       mcpCreateReturnFocusRef={overlays.mcpCreateReturnFocusRef}
-      customApiOpen={overlays.customApiOpen}
-      setCustomApiOpen={overlays.setCustomApiOpen}
-      customApiReturnFocusRef={overlays.customApiReturnFocusRef}
       commandMenu={CommandMenu}
       commandProps={commandProps}
       commandOpen={overlays.commandOpen}

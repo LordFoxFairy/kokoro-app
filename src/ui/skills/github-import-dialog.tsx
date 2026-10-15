@@ -11,7 +11,7 @@ import { parseGithubRepository } from "@/hub/client"
 import { createSkillGithubImportClient } from "@/hub/skill-github-import-client"
 import { createSkillPublishClient } from "@/hub/skill-publish-client"
 import { createSkillInstallationClient } from "@/hub/client"
-import { useSessionProbe } from "@/ui/auth/use-session-state"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { useT } from "@/i18n/context"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { createPersonalSkillGithubImportFlow, type GithubImported } from "./personal-skill-github-import-flow"
@@ -19,16 +19,16 @@ import styles from "./github-import-dialog.module.css"
 export { parseGithubRepository } from "@/hub/client"
 
 const clients = { github: createSkillGithubImportClient(), publish: createSkillPublishClient(), installation: createSkillInstallationClient() }
-type Props = { open: boolean; onOpenChange: (open: boolean) => void; onImported?: (result: GithubImported) => void; returnFocusRef?: RefObject<HTMLElement | null> }
-export function GithubImportDialog({ open, onOpenChange, onImported, returnFocusRef }: Props) {
-  const t = useT(), probe = useSessionProbe(), boundary = probe.projectReadBoundary
+type Props = { readBoundary: ProjectReadBoundary; open: boolean; onOpenChange: (open: boolean) => void; onImported?: (result: GithubImported) => void; returnFocusRef?: RefObject<HTMLElement | null> }
+export function GithubImportDialog({ readBoundary: boundary, open, onOpenChange, onImported, returnFocusRef }: Props) {
+  const t = useT()
   const flow = useMemo(() => createPersonalSkillGithubImportFlow({ ...clients, subject: boundary.subject ?? "" }), [boundary.subject])
   const state = useSyncExternalStore(flow.subscribe, flow.getSnapshot, flow.getSnapshot)
   const [value, setValue] = useState(""), [invalid, setInvalid] = useState(false)
   const completed = useRef<unknown>(null), callback = useRef(onImported)
   useEffect(() => { callback.current = onImported }, [onImported])
   useLayoutEffect(() => { flow.setAdmitted(boundary.admitted && Boolean(boundary.subject)); return () => flow.cancel() }, [flow, boundary.admitted, boundary.subject, boundary.generation])
-  useEffect(() => { if (probe.state === "anonymous") flow.retire() }, [flow, probe.state])
+  useEffect(() => { if (boundary.subject === null) flow.retire() }, [boundary.subject, flow])
   useEffect(() => () => flow.retire(), [flow])
   useLayoutEffect(() => { if (!open) { flow.cancel(); flow.finishCompleted() } }, [open, flow])
   useEffect(() => { if (open && boundary.admitted && state.kind === "completed" && state.result && completed.current !== state.result) { completed.current = state.result; callback.current?.(state.result) } }, [open, boundary.admitted, state])

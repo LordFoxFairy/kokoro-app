@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useT } from "@/i18n/context"
 import { cn } from "@/lib/utils"
 import { TeamClientError, type TeamClient, type TeamInvitation, type TeamMember, type TeamRole } from "@/team/client"
@@ -149,7 +150,10 @@ export function TeamContent({ client, embedded = false }: TeamContentProps) {
             void load().then((value) => { setSnapshot(value); setNeedsRefresh(false); setNotice(null) }).catch(() => setLoadError(true))
           }}>{t("team.retry")}</Button>
         </div>
-      ) : snapshot === null ? <p className={styles.hint}>{t("team.loading")}</p> : (
+      ) : snapshot === null ? <div className={styles.loadingState} role="status" aria-label={t("team.loading")}>
+        <Skeleton className={styles.loadingLine} />
+        <Skeleton className={styles.loadingLine} />
+      </div> : (
         <>
           {notice && <div className={styles.notice} role="alert" data-testid="team-notice">
             {notice}

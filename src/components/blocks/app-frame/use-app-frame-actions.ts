@@ -34,7 +34,7 @@ export type AppFrameActionsOptions = {
   setConversationRouteId: (id: string | null) => void
   conversations: ConversationListController
   focusComposer: () => void
-  closeSettings: () => void
+  closeSettings: (mode?: "close" | "handoff") => void
   brandName: string | undefined
   commandNewChatTimerRef: MutableRefObject<number | null>
 }
@@ -233,34 +233,34 @@ export function useAppFrameActions({
     }
   }, [focusComposer, projectWorkspace, standaloneSurface, startNewChatWithUrl])
 
-  const startSkillCreationFromSettings = useCallback(() => {
-    // Manus treats “create with AI” as a prompt starter, not an upload form:
-    // close Settings, return to the direct Composer, and seed the skill
-    // creator command in a fresh session.
-    closeSettings()
+  const handOffSkillPrompt = useCallback((prompt: string) => {
+    // A workflow handoff replaces the Settings fragment rather than replaying
+    // its history entry. This keeps the direct-chat navigation authoritative
+    // and prevents a delayed browser back traversal from restoring the
+    // catalogue after the prompt has already been staged.
+    closeSettings("handoff")
     startNewChatWithUrl()
-    const prompt = t("skills.createPrompt")
     const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
     if (nextSessionId) stashConversationDraft(nextSessionId, prompt)
     else updateDraft(prompt)
     window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => focusComposer())
+      window.requestAnimationFrame(() => {
+        focusComposer()
+      })
     })
-  }, [closeSettings, engine, focusComposer, startNewChatWithUrl, t, updateDraft])
+  }, [closeSettings, engine, focusComposer, startNewChatWithUrl, updateDraft])
+
+  const startSkillCreationFromSettings = useCallback((creationPrompt?: string) => {
+    // Manus treats “create with AI” as a prompt starter, not an upload form:
+    // return to a fresh direct Composer and seed the skill creator command.
+    handOffSkillPrompt(creationPrompt ?? t("skills.createPrompt"))
+  }, [handOffSkillPrompt, t])
 
   const startSkillUseFromSettings = useCallback((skill: SkillCard, prompt?: string) => {
     // Preview's name-based Try action may seed editable text, but it must not
     // mutate the formal engine's typed Skill source selection.
-    closeSettings()
-    startNewChatWithUrl()
-    const nextPrompt = prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name })
-    const nextSessionId = engine?.getSnapshot().store?.activeId ?? null
-    if (nextSessionId) stashConversationDraft(nextSessionId, nextPrompt)
-    else updateDraft(nextPrompt)
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => focusComposer())
-    })
-  }, [brandName, closeSettings, engine, focusComposer, startNewChatWithUrl, t, updateDraft])
+    handOffSkillPrompt(prompt ?? t("skills.tryPrompt", { brand: brandName ?? "Kokoro", name: skill.name }))
+  }, [brandName, handOffSkillPrompt, t])
 
   const dismissCreationIntent = useCallback(() => {
     setDeploymentIntent(null)

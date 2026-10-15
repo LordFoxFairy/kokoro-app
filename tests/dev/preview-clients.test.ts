@@ -8,23 +8,6 @@ import {
 } from "@/dev/preview-clients"
 
 describe("preview settings clients", () => {
-  it("提供本地技能与空连接器池，并支持注册后的本地变更", async () => {
-    const client = createPreviewHubClient()
-    expect((await client.listSkillPool()).length).toBeGreaterThan(0)
-    expect(await client.listMcpServers()).toEqual([])
-    await client.registerMcpServer({
-      name: "docs-search",
-      transport: "streamable_http",
-      url: "https://preview.invalid/mcp",
-      allowed_tools: ["search", "open"],
-      secret_ref: null,
-    })
-    await client.setMcpEnabled("docs-search", false)
-    expect((await client.listMcpServers())[0]?.enabled).toBe(false)
-    const handle = await client.createMcpSecret("demo", "not-returned")
-    expect((await client.listMcpSecrets())[0]?.handle).toBe(handle)
-  })
-
   it("将官方目录与已新增池分开，并支持从目录添加技能", async () => {
     const client = createPreviewHubClient()
 

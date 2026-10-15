@@ -121,7 +121,7 @@ export default function SharedSkillPage() {
   </main>
   const category = { programming: "skills.categoryCoding", data: "skills.categoryData", automation: "skills.categoryAutomation", business: "skills.categoryBusiness", design: "skills.categoryDesign", media: "skills.categoryMedia", content: "skills.categoryContent", apps: "skills.categoryApps" } as const
   return <main>
-    <ManusSkillDetailDialog skill={null} sharedSummary={summary} open busy={writing || !boundary.admitted || fact === null || fact.failed || differentPin}
+    <ManusSkillDetailDialog readBoundary={boundary} skill={null} sharedSummary={summary} open busy={writing || !boundary.admitted || fact === null || fact.failed || differentPin}
       installationState={{ installed: Boolean(fact?.value?.installed && !differentPin), enabled: Boolean(fact?.value?.enabled && !differentPin) }} actionFailed={writeFailed}
       installationNotice={fact?.failed ? t("skills.shareInstallationUnavailable") : differentPin ? t("skills.shareOtherPin") : undefined} onRetryInstallation={fact?.failed ? () => setAttempt(value => value + 1) : undefined}
       publisherLabel={summary.skill.author?.display_name ?? (summary.skill.source_kind === "third_party" ? t("skills.community") : manifest.brand.name)}

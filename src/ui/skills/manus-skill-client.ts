@@ -3,7 +3,9 @@ import { z } from "zod"
 import { hasHubNoStoreDirective, type HubClient } from "@/hub/client"
 import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
-export const SKILL_CATALOG_RESOURCE_KEY = "hub/skills/standalone-catalog"
+// Catalog consumers share the v1 resource namespace. Callers can append their
+// own view parameters, while an owner mutation invalidates this prefix once.
+export const SKILL_CATALOG_RESOURCE_KEY = "hub/skills/catalog"
 
 const categories = {
   SKILL_HUB_TAG_CODING: "coding",
@@ -23,6 +25,12 @@ type ManusSkillHubClient = Omit<HubClient, "listSkillCatalog"> & {
     input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal },
   ) => Promise<SkillCatalog>
 }
+
+// Every visible Skills entry point is backed by the browser's one Hub client.
+// Keep one adapter per base client so Settings, the external Skills page, and
+// app-shell prewarming address the same query-cache identity instead of
+// starting three cold reads for the same subject.
+const clients = new WeakMap<HubClient, ManusSkillHubClient>()
 
 async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", body: unknown, schema: T, signal?: AbortSignal): Promise<z.infer<T>> {
   const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
@@ -143,8 +151,15 @@ function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"):
  * read projection only; mutations remain on the typed installation boundary.
  */
 export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient {
-  return {
+  const existing = clients.get(base)
+  if (existing !== undefined) return existing
+  const client: ManusSkillHubClient = {
     ...base,
+    // The Manus-compatible owner projection deliberately has no quota read.
+    // Returning an explicit absence keeps the installed Skills surface from
+    // issuing the retired `/self/skills/quota` request (and its visible 404)
+    // just to render a catalog that does not expose quota facts.
+    skillQuota: async () => null,
     listSkillPool: async (): Promise<SkillCard[]> => {
       const installed = await post("ListSkills", {}, manuscriptListSchema)
       // ListSkills repeats an installed official skill in userAddedSkills to
@@ -220,6 +235,8 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
       return { skills, next_cursor: hub.nextPageToken ?? null }
     },
   }
+  clients.set(base, client)
+  return client
 }
 
 
