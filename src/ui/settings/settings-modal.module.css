@@ -385,17 +385,18 @@
   padding-top: 0;
 }
 
-.panelHeader[data-panel="skills"],
+.panelHeader[data-panel="skills"] {
+  /* The wide Manus settings workbench gives the installed collection its own
+   * title band. Keeping it mounted prevents the roomy two-pane dialog from
+   * rendering the compact-sheet composition with a toolbar flush to the top. */
+  height: 8rem;
+  justify-content: flex-end;
+  padding: 0 0 1.5rem;
+}
+
 .panelHeader[data-panel="mcp"] {
   height: auto;
   padding-top: 2.125rem;
-}
-
-/* The installed-skills view begins directly with its search/actions row in
- * Manus.  Only the Explore subview owns a right-pane heading because it
- * needs a visible back affordance to return to this list. */
-.panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
-  display: none;
 }
 
 .panelHeader[data-panel="account"]:has(.panelBack) {
@@ -848,6 +849,12 @@
   /* In the measured connectors state, Settings owns only the shared chrome.
    * The connector panel begins directly with its 32px toolbar. */
   .panelHeader[data-panel="mcp"] {
+    display: none;
+  }
+
+  /* The compact Manus sheet omits the installed-skills heading: its shared
+   * account rail already supplies context and the toolbar needs the space. */
+  .panelHeader[data-panel="skills"]:not([data-skills-catalog-open="true"]) {
     display: none;
   }
 

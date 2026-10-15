@@ -1260,10 +1260,22 @@
   .tabs.embeddedTabs { padding: 0; }
   .body { padding: 1.35rem 2rem 2rem; }
   .embeddedBody { padding-inline: 0; }
-  /* The settings sheet is a reading surface, not a marketplace grid. A
-   * single column keeps the title, switch and three-line summary aligned at
-   * the same vertical rhythm as the Manus installed-skills list. */
-  .list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+  .embeddedSearchField { width: 20rem; }
+  /* The desktop settings workbench uses the same two-column installed-card
+   * grid as Manus. The compact sheet below retains one column, so a viewport
+   * change changes density rather than card behavior. */
+  .embeddedBody .list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .embeddedBody .installedCard[data-slot="card"] {
+    height: 13.75rem;
+    min-height: 13.75rem;
+  }
+  .embeddedBody .installedCardMeta {
+    margin-top: auto;
+  }
   .item { min-height: 8.45rem; padding: 1rem; border-radius: var(--radius-lg); }
   .itemContent { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 0.75rem; }
   .itemMain { min-width: 0; }
@@ -1276,14 +1288,12 @@
   .filterBar { margin-bottom: 1rem; }
 }
 
-/* Pointer precision must not change the information architecture. The former
- * fine-pointer override silently returned Settings to a two-column grid after
- * zooming or resizing, which made the same skills look like a different
- * product than the narrow sheet. */
+/* Pointer precision must not change the information architecture. The desktop
+ * breakpoint above, rather than input hardware, owns the two-column mode. */
 @media (pointer: fine) {
   .embeddedBody .list {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
   }
   .embeddedBody .list > li {
@@ -1525,6 +1535,10 @@
     /* Manus starts the installed-skills toolbar 8px below the shared Settings
      * rail. The desktop 24px lead left an extra 16px band in compact mode. */
     padding-top: 0.5rem;
+  }
+
+  .embeddedBody .list {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .embeddedSearchField {
