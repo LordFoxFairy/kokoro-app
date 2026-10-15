@@ -20,9 +20,9 @@ afterEach(() => {
 })
 
 describe("useRailResize", () => {
-  it("公开桌面 Rail 的 52px 收起轨道、300px 默认宽度和 768px 自动收起阈值", () => {
+  it("公开桌面 Rail 的 52px 收起轨道、280px 默认宽度和 768px 自动收起阈值", () => {
     expect(RAIL_COLLAPSED_WIDTH).toBe(52)
-    expect(RAIL_DEFAULT).toBe(300)
+    expect(RAIL_DEFAULT).toBe(280)
     expect(RAIL_COMPACT_BREAKPOINT).toBe(768)
   })
 
@@ -52,7 +52,7 @@ describe("useRailResize", () => {
       preventDefault: vi.fn(),
     } as unknown as ReactKeyboardEvent<HTMLElement>))
 
-    expect(result.current.width).toBe(316)
+    expect(result.current.width).toBe(296)
   })
 
   it("拖动结束时恢复页面原有的指针与选择策略", () => {

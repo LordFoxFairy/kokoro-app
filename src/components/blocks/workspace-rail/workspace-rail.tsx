@@ -102,7 +102,7 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
       forceDesktop
       // Standalone embeds inherit the live width contract of the full shell.
       style={{
-        "--sidebar-width": "var(--rail-width, 20rem)",
+        "--sidebar-width": "var(--rail-width, 17.5rem)",
         "--sidebar-width-icon": `${RAIL_COLLAPSED_WIDTH}px`,
       } as CSSProperties}
       open={!props.collapsed}

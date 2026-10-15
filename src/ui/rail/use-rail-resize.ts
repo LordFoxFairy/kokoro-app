@@ -17,9 +17,9 @@ export const RAIL_MAX = 440
 // Keep this contract separate from the resizable expanded width and the mobile
 // Sheet width so the seam, gap, and icon centers share one value.
 export const RAIL_COLLAPSED_WIDTH = 52
-// Manus' expanded command rail starts at 300px. This leaves the same readable
-// project/task column and context column as the reference at 1280px.
-export const RAIL_DEFAULT = 300
+// Keep the expanded rail compact enough that the workspace remains the primary
+// surface, while still fitting the project and task labels at desktop widths.
+export const RAIL_DEFAULT = 280
 // Keep the full Manus workbench above 768px. At exactly 768px the narrow
 // desktop destination must already be active; using 767 here created a
 // one-pixel layout discontinuity where the rail was expanded at 768 and
