@@ -269,6 +269,46 @@ it("空的直接会话桌面页仍保留独立会话分区", () => {
   expect(within(chats).queryByText("项目会话")).toBeNull()
 })
 
+it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混合", async () => {
+  const projectId = "project_22222222-2222-4222-8222-222222222222"
+  const selectProjectConversation = vi.fn()
+  const listSessions = vi.fn()
+  const directFetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes("project_ref=")) listSessions(url)
+    return Response.json({ sessions: [], next_cursor: null })
+  })
+  vi.stubGlobal("fetch", directFetch)
+  renderRail({
+    projects: [{ id: projectId, name: "产品规划", href: `/app/project/${projectId}`, active: true }],
+    projectHref: `/app/project/${projectId}`,
+    projectActive: true,
+    conversations: [],
+    conversationReads: {
+      engine: null,
+      scope: { kind: "project", projectRef: projectId },
+      currentController: {
+        conversations: [{ id: "conv_project_1", title: "项目内会话" }],
+        loading: false, loadingMore: false, error: false, hasMore: false,
+        refresh: () => {}, loadMore: () => {}, selectConversation: () => {},
+        deleteConversation: async () => true, renameConversation: () => {}, startNewChat: () => {},
+      },
+      activeId: "conv_project_1", thread: { messages: [] } as never, isStreaming: false,
+      identity: "reader-a", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null,
+      focusComposer: () => {}, onSelect: selectProjectConversation, onNewChat: () => {},
+      onMove: () => {}, onDeleteConfirmed: () => {},
+    },
+  })
+
+  const projectConversations = await screen.findByRole("navigation", { name: "项目会话" })
+  expect(within(projectConversations).getByRole("button", { name: "项目内会话" })).toBeInTheDocument()
+  expect(within(screen.getByRole("navigation", { name: "直接会话" })).queryByText("项目内会话")).toBeNull()
+  expect(listSessions).not.toHaveBeenCalled()
+
+  fireEvent.click(within(projectConversations).getByRole("button", { name: "项目内会话" }))
+  expect(selectProjectConversation).toHaveBeenCalledWith({ kind: "project", projectRef: projectId }, "conv_project_1")
+})
+
 it("收起态不复制直接会话或孤立项目会话 stop，并保留项目与底部账户锚点", () => {
   renderRail({
     collapsed: true,
