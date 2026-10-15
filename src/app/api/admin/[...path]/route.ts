@@ -77,7 +77,7 @@ async function handle(request: Request, context: Context): Promise<Response> {
   let upstream: Response
   try {
     upstream = await fetchWithDomain(
-      `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/${path.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
+      `${config.bffBaseUrl.replace(/\/+$/u, "")}/v1/admin/${path.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
       config.domain,
       { method: request.method, headers, ...(body === null ? {} : { body }), cache: "no-store", signal: request.signal },
     )

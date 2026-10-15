@@ -59,7 +59,7 @@ describe("/api/admin/[...path] product-session adapter", () => {
     expect(response.status).toBe(201)
     expect(await response.json()).toEqual({ data: { provider_key: "fixture" } })
     expect(fetchWithDomain).toHaveBeenCalledWith(
-      "http://bff.test/v1/mcp/providers?limit=50",
+      "http://bff.test/v1/admin/mcp/providers?limit=50",
       "dev.kokoro.localhost",
       expect.objectContaining({ method: "POST", cache: "no-store" }),
     )
