@@ -4,6 +4,22 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  // SET35-BEGIN: active-settings-japanese-translations
+  "settings.assetsTitle": "資産",
+  "settings.phoneTitle": "電話",
+  "settings.walletTitle": "ウォレット",
+  "settings.personalizationLoadFailed": "パーソナライズ設定を読み込めませんでした。再試行してください。",
+  "settings.personalizationConflict": "設定が別の場所で更新されました。再読み込みしてから保存してください。",
+  "settings.shortcutCancel": "キー入力をキャンセル",
+  "settings.shortcutConflict": "このキーの組み合わせは別の操作に割り当てられています。別の組み合わせを選んでください。",
+  "settings.shortcutHelp": "クリックして編集し、キーの組み合わせを押してください。Escでキャンセルします。ショートカットは現在のブラウザーにのみ保存され、テキスト入力中やダイアログ内では動作しません。",
+  "settings.shortcutInvalid": "Ctrl（Macでは⌘）と英字・数字・ピリオドを組み合わせてください。ShiftやAltも追加できます。ブラウザーが予約している組み合わせは使用できません。",
+  "settings.shortcutSaveFailed": "ショートカットを保存できませんでした。ブラウザーのストレージを確認してから再試行してください。",
+  "settings.shortcutVoiceUnavailable": "音声入力は現在利用できません",
+  "settings.taskDelivery": "タスク実行中の既定の送信方法",
+  "settings.taskDeliveryHint": "現在、新しいメッセージは既定でキューに追加され、実行中のタスクが完了してから送信されます。",
+  "settings.taskDeliveryQueue": "キューに追加",
+  // SET35-END: active-settings-japanese-translations
   "settings.unavailableNavigation": "グレー表示のメニューは現在利用できません。",
   "settings.accountActionsUnavailable": "メールアドレスの変更、ログイン方法の管理、アカウントの削除は現在利用できません。",
   "settings.personalizationMemoryUnavailable": "知識とメモリのインポートはまだ接続されていません。",

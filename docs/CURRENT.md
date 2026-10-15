@@ -1,3 +1,17 @@
+## SET35 实际设置日文缺译已接收，SET36继续（2026-10-15）
+
+现ja.ts只新增十四个实际调用设置key，删唯一块精确恢复原93843bytes；旧值/931保护含全tests及其它locale/Root7全核，独审无确定P1/P2。Root实际执行模块确认Ja1703→1717/1800（95.3889%），包含共享英文fallback，不冒称日语完整；i18n99PASS2FAIL，原MCP硬编码与同一覆盖循环现暴露ko1672/1800不足，未改算法/阈值/其它locale。contract283/architecture50/lint/type/build全0。
+
+完整test3988PASS/6此前已观察case标题的FAIL/0SKIP，214.52s，scheduled日期case已通过；Playwright20PASS/0FAIL/4原SKIP，20.9s，两门库存exact恢复。正常认证Browser仍未验；接续SET36补参考快捷键的复制当前任务链接，禁止空任务/退役页面复制与误报成功，不创建公开分享。Goal active，Skills/连接器业务排除。
+
+## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
+
+基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。
+
+只添加十四个有实际调用点的设置日文key：灰菜单资产/电话/钱包，个性化读取失败/冲突，快捷键取消录制/冲突/帮助/非法组合/保存失败/语音不可用，任务发送标题/排队说明/添加队列。保现中文语义与全部原日文值，不触碰技能/连接器文案、不补无调用点personalizationSaveFailed、不改覆盖算法或95%阈值。新块边界标记，去除后须完整逆恢复原ja.ts。
+
+既有OVERLAYS.ja实际运行key集为1703/1800，其中包含共享英文回退，不能冒称1703条均为日文。十四项独立有用户价值；实施后测真实key集，当前实际1717/1800（95.3889%）；原覆盖循环随后暴露ko1672/1800不足，未修改其它locale或门阈值。纯文案不新增镜像测试；worker现i18n/contract/architecture/lint/type/build，Root完整test/E2E串行并核资源恢复。正常认证Browser未验，Goal active，Skills/连接器业务排除。
+
 ## SET34 到期日期时区测试已接收，SET35继续（2026-10-15）
 
 唯一现测试仅修时区依赖的错误UTC正则和不实几何标题；独立Intl按所选时区校验当地2026-09-30 23:59:59与毫秒999，不调用被测转换函数。原日期必填/按钮/保存/timezone断言和其余33例保护；逆修精确恢复原46937bytes。932保护/Root6逐哈希精确，独审无确定P1/P2，lint/type为0。

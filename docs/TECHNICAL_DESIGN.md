@@ -1,3 +1,11 @@
+## SET35 十四个实际设置日文提示（2026-10-15；D0，仅现locale）
+
+基线Web 3f97368ef38c9cea4c88d53ad29e61b83a8716eb，939 tracked clean；runtime_audit唯一writer仅现src/i18n/ja.ts，931保护/Root7。Root设计/docs/独审/Git/资源与实际回归；全部tests与其它locale/产品逻辑字节保护。
+
+只添加十四个有实际调用点的设置日文key：灰菜单资产/电话/钱包，个性化读取失败/冲突，快捷键取消录制/冲突/帮助/非法组合/保存失败/语音不可用，任务发送标题/排队说明/添加队列。保现中文语义与全部原日文值，不触碰技能/连接器文案、不补无调用点personalizationSaveFailed、不改覆盖算法或95%阈值。新块边界标记，去除后须完整逆恢复原ja.ts。
+
+既有OVERLAYS.ja实际运行key集为1703/1800，其中包含共享英文回退，不能冒称1703条均为日文。十四项独立有用户价值；实施后测真实key集，当前实际1717/1800（95.3889%）；原覆盖循环随后暴露ko1672/1800不足，未修改其它locale或门阈值。纯文案不新增镜像测试；worker现i18n/contract/architecture/lint/type/build，Root完整test/E2E串行并核资源恢复。正常认证Browser未验，Goal active，Skills/连接器业务排除。
+
 ## SET34 到期日期测试按实际时区验日末（2026-10-15；D0，仅现测试）
 
 基线Web fd627496a6f860c7ed3e1afef51c65fbc3bcca57，939 tracked clean；runtime_audit唯一writer仅现tests/ui/kokoro-scheduled-surface.test.tsx，932保护/Root6。Root设计/docs/独审/Git/实际复核；全product source与其它全部测试字节保护。
