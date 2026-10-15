@@ -160,13 +160,11 @@ async function handle(request: NextRequest, context: Context, method: "GET" | "P
   if (config === null) return errorResponse(503, "rp_unavailable")
   const expectedPath = `/api/auth/${parts.join("/")}`
   const url = request.nextUrl
-  // Browser form navigations omit Origin in Chromium. The provider start is still
-  // bound to the live double-submit CSRF cookie below; admit only the exact
-  // same-origin document-navigation metadata emitted by the fixed /login form.
+  // The no-referrer login handoff makes Chromium send the fixed browser form
+  // POST with `Origin: null`. It remains bound to the live Auth.js double-submit
+  // CSRF cookie below; admit this exact provider-start exception only.
   const browserProviderFormPost = action === "signin" && method === "POST" &&
-    request.headers.get("host") === config.relay.webHost && request.headers.get("origin") === null &&
-    request.headers.get("sec-fetch-site") === "same-origin" && request.headers.get("sec-fetch-mode") === "navigate" &&
-    request.headers.get("sec-fetch-dest") === "document"
+    request.headers.get("host") === config.relay.webHost && request.headers.get("origin") === "null"
   if (url.pathname !== expectedPath ||
     (!matchesCanonicalWebRequest(request, config.relay, method) && !browserProviderFormPost)) {
     return errorResponse(403, "rp_origin_rejected")
