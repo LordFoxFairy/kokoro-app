@@ -4,6 +4,9 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  // SET39-BEGIN: active-settings-translation-gaps
+  "settings.importMemoryAction": "インポート",
+  // SET39-END: active-settings-translation-gaps
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "タスクのリンクをコピー",
   "settings.shortcutCopyTaskLinkHint": "タスクが開いているとき",

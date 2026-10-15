@@ -1,3 +1,9 @@
+## SET39 英日文实际设置缺译（2026-10-15；D0）
+
+Root接收SET38后作为此小切片唯一writer，仅en.ts补复制用户ID成功、个性化读取失败/并发冲突3个已有key，ja.ts补生产禁用导入按钮的导入1个key。与billing_scheduler_audit只读调用点复核一致；不修改任何旧文案、界面行为、回退算法、门限、依赖或测试，Skills/连接器排除。2 source/930保护/Root7。每locale一个标记块，删除整体恢复原文件。
+
+纯文案不新增镜像测试：Root执行实际模块核对旧值/新增key/完整文件逆变换，既有i18n、lint/type/build；contract/architecture和完整/E2E不因4个native值重复，继承SET38/SET36证据并单独标注。独立审查后精确路径提交并接入同一实例。正常认证Browser仍需单独验证，Goal active。
+
 ## SET38 六种语言的实际设置缺译（2026-10-15；D0）
 
 基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。

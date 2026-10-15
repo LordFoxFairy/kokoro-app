@@ -4,6 +4,11 @@
 import type { MessageKey } from "./messages"
 
 export const en: Partial<Record<MessageKey, string>> = {
+  // SET39-BEGIN: active-settings-translation-gaps
+  "settings.copied": "Copied",
+  "settings.personalizationLoadFailed": "Personalization settings cannot be loaded right now. Try again.",
+  "settings.personalizationConflict": "The settings were updated elsewhere. Refresh before saving.",
+  // SET39-END: active-settings-translation-gaps
   // SET36-BEGIN: copy-task-link-messages
   "settings.shortcutCopyTaskLink": "Copy task link",
   "settings.shortcutCopyTaskLinkHint": "When a task is open",

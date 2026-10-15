@@ -1,3 +1,7 @@
+## SET39 英日文实际设置缺译（2026-10-15；D0）
+
+仅现有en/ja补实际调用MessageKey值；无API/wire/schema变化，全旧值、全tests及其它源保护。
+
 ## SET38 六种语言的实际设置缺译（2026-10-15；D0）
 
 基线Web 76a42c2e574eda12b86d97eaaf30d1bad3380068，939 tracked clean。runtime_audit唯一writer仅现ko/es/fr/de/pt/ru六locale，926文件保护/Root7；所有tests和产品逻辑字节不变。

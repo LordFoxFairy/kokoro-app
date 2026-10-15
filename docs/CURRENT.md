@@ -1,3 +1,13 @@
+## SET39 英日文实际设置缺译已接收（2026-10-15）
+
+英文补用户ID复制成功、个性化读取失败/冲突三键，日文补现禁用导入按钮的一键。Root实际执行模块并与独立审查交叉核对：en1772→1775/1804，ja1721→1722/1804（均含既有fallback，非native完整度），旧值和完整原文件逆变换exact，930保护文件含全部tests与产品行为源保持。i18n99PASS/2原FAIL；lint/type/build通过；纯4值变更未重复contract/architecture/full/E2E，SET38/SET36既有证据独立保留。Goal active，正常认证Browser尚未验。
+
+## SET39 英日文实际设置缺译（2026-10-15；D0）
+
+Root接收SET38后作为此小切片唯一writer，仅en.ts补复制用户ID成功、个性化读取失败/并发冲突3个已有key，ja.ts补生产禁用导入按钮的导入1个key。与billing_scheduler_audit只读调用点复核一致；不修改任何旧文案、界面行为、回退算法、门限、依赖或测试，Skills/连接器排除。2 source/930保护/Root7。每locale一个标记块，删除整体恢复原文件。
+
+纯文案不新增镜像测试：Root执行实际模块核对旧值/新增key/完整文件逆变换，既有i18n、lint/type/build；contract/architecture和完整/E2E不因4个native值重复，继承SET38/SET36证据并单独标注。独立审查后精确路径提交并接入同一实例。正常认证Browser仍需单独验证，Goal active。
+
 ## SET38 六种语言实际设置文案已接收（2026-10-15）
 
 ko/es/fr/de/pt/ru各补15个既有设置key的native值；Root实际执行locale模块、独立语义复核及整文件逆变换确认全部旧值不变，926保护文件（含全tests、产品逻辑）和Root7匹配。六种实际OVERLAYS均1676→1691/1804（93.7361%，含共享English fallback，不是native完整率）。i18n99PASS/2既有FAIL（MCP硬编码及ko覆盖不足95%）；contract283/architecture50/lint/type/build通过。未修改算法、门限或Skills/连接器。纯文案变更不重复完整/E2E，SET36的4017PASS/5FAIL与22PASS/4原SKIP证据独立保留，不冒称为本commit重跑。
