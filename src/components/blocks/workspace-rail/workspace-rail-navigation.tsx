@@ -589,7 +589,6 @@ export function WorkspaceRailNavigation({
                         >
                           <span className={itemStyles.projectGlyph} aria-hidden="true">
                             <Folder className={cn(railStyles.icon, itemStyles.projectFolderIcon)} />
-                            <ChevronRight className={cn(railStyles.icon, itemStyles.projectChevronIcon)} />
                           </span>
                           <span className={itemStyles.itemTitle}>{project.name}</span>
                         </Link>

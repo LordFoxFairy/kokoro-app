@@ -983,6 +983,19 @@ it("当前项目展开后显示其独立空会话态，任务区不被替换", (
   expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
 })
 
+it("项目文件夹把展开控制与项目入口分开，入口始终保留文件夹标识", () => {
+  renderRail({
+    projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
+    projectListStatus: "ready",
+    projectHref: "/app/project/project_a",
+    projectActive: true,
+  })
+
+  const project = screen.getByRole("link", { name: "独立项目名称" })
+  expect(screen.getByRole("button", { name: /收起专案 独立项目名称/ })).toBeInTheDocument()
+  expect(project.querySelectorAll("svg")).toHaveLength(1)
+})
+
 it("正式 rail 只有当前路由而无集合时不造通用项目；显式 preview 仍独立", () => {
   renderRail({ projectHref: "/app/project/deep-link", preview: false })
   expect(document.querySelector('[data-project-list] [data-project-id]')).toBeNull()
