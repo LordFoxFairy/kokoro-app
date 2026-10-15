@@ -39,6 +39,7 @@ export type AppFrameShellProps = {
   shellRef: RefObject<HTMLDivElement | null>
   workspaceRef: RefObject<HTMLDivElement | null>
   onRailOpenChange: (open: boolean) => void
+  onNavigationToggle: () => void
   onResizeStart: (event: ReactPointerEvent<HTMLElement>) => void
   onResizeKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void
   onCanvasLayoutChange: (layout: Record<string, number>) => void
@@ -66,6 +67,7 @@ export function AppFrameShell({
   shellRef,
   workspaceRef,
   onRailOpenChange,
+  onNavigationToggle,
   onResizeStart,
   onResizeKeyDown,
   onCanvasLayoutChange,
@@ -118,6 +120,7 @@ export function AppFrameShell({
         {compactDesktopRail && hideWorkspaceHeader && railHidden ? (
           <WorkspaceNavigationTrigger
             {...(styles.compactNavigationTrigger === undefined ? {} : { className: styles.compactNavigationTrigger })}
+            onToggle={onNavigationToggle}
           />
         ) : null}
         <WorkspaceRail withinProvider {...railProps} />

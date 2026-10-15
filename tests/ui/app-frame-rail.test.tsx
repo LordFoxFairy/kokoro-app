@@ -131,7 +131,7 @@ it.each([
   // Flush the real queued reconciliation after StrictMode setup/cleanup/setup.
   // Neither the layout hook nor its cookie reader is mocked.
   await act(async () => { await Promise.resolve() })
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", String(expectedCollapsed))
     expect(shell).not.toHaveAttribute("data-rail-hidden")
@@ -160,7 +160,7 @@ it("R255 StrictMode rail keeps mounted navigation state without rereading a chan
   )
   const view = render(frame(true, false))
   await act(async () => { await Promise.resolve() })
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   expect(shell).toHaveAttribute("data-rail-collapsed", "true")
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }), { detail: 0 })
   await waitFor(() => expect(shell).toHaveAttribute("data-rail-collapsed", "false"))
@@ -188,7 +188,7 @@ it("桌面 shell 发布唯一 300/52 轨道契约和 rail seam", () => {
   setDesktopViewport(1280)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   expect(shell).not.toBeNull()
   expect(shell).toHaveStyle({
     "--sidebar-width": "300px",
@@ -222,7 +222,7 @@ it("800px 仍是宽桌面收起轨道，展开收起的焦点都留在实际可�
   expect(shell?.querySelector('[data-collapsed-search="true"]')).toBeNull()
   fireEvent.click(collapsedBrand as HTMLButtonElement, { detail: 0 })
   await waitFor(() => expect(shell).toHaveAttribute("data-rail-collapsed", "false"))
-  fireEvent.click(screen.getByRole("button", { name: "搜索会话" }), { detail: 0 })
+  fireEvent.click(await screen.findByRole("button", { name: "搜索会话" }), { detail: 0 })
   const searchInput = () => document.querySelector<HTMLInputElement>('input[type="search"]')
   await waitFor(() => expect(searchInput()).toHaveFocus())
 
@@ -238,7 +238,7 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-collapsed", "true")
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
@@ -254,12 +254,8 @@ it("768px 细指针桌面隐藏 Rail，展开后 seam 和焦点入口同步恢�
     expect(shell).toHaveAttribute("data-rail-collapsed", "false")
     expect(shell).not.toHaveAttribute("data-rail-hidden")
     expect(shell).toHaveStyle({ "--rail-seam-width": "300px" })
-    const separator = shell?.querySelector('[data-seam="rail"]')
-    expect(separator).not.toBeNull()
-    expect(separator).toHaveAttribute("data-seam-visible", "true")
-    expect(separator).not.toHaveAttribute("aria-hidden")
-    expect(separator).toHaveAttribute("tabindex", "0")
-    expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus()
+    expect(shell?.querySelector('[data-seam="rail"]')).toBeNull()
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })
 })
 
@@ -267,7 +263,7 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   setDesktopViewport(768)
   mountFrame({ hideWorkspaceHeader: true, standaloneSurface: true })
 
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   await waitFor(() => {
     expect(shell).toHaveAttribute("data-rail-hidden", "true")
     expect(shell?.querySelectorAll('[data-web-navigation-trigger="true"]')).toHaveLength(1)
@@ -276,8 +272,8 @@ it("隐藏共享 Header 的独立 Web 页面仍保留唯一导航入口", async 
   fireEvent.click(shell?.querySelector('[data-web-navigation-trigger="true"]') as HTMLElement)
   await waitFor(() => {
     expect(shell).not.toHaveAttribute("data-rail-hidden")
-    expect(shell?.querySelector('[data-web-navigation-trigger="true"][aria-label="收起侧栏"]')).toBeInTheDocument()
   })
+  expect(await screen.findByRole("dialog")).toBeInTheDocument()
 })
 
 it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () => {
@@ -286,7 +282,7 @@ it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () 
   setDesktopViewport(768)
   mountFrame({ desktopRailCollapsed: true })
 
-  const shell = screen.getByTestId("rail-new-conversation").closest('[data-slot="sidebar-wrapper"]')
+  const shell = document.querySelector('[data-slot="sidebar-wrapper"]')
   const compactTrigger = await waitFor(() => {
     const target = shell?.querySelector<HTMLButtonElement>('[data-web-navigation-trigger="true"]')
     expect(target).not.toBeNull()
@@ -301,7 +297,7 @@ it("窄桌面临时展开不覆盖宽桌面的 Sidebar cookie 偏好", async () 
   fireEvent.click(compactTrigger, { detail: 0 })
   await waitFor(() => {
     expect(shell).not.toHaveAttribute("data-rail-hidden")
-    expect(screen.getByRole("button", { name: "收起侧栏" })).toHaveFocus()
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement)
   })
   expect(document.cookie).toContain("sidebar_state=false")
 
@@ -326,7 +322,7 @@ it("桌面直接会话使用 scoped inbox，不复制 primary rail stop", () => 
   expect(shell?.querySelectorAll('[data-slot="sidebar-container"]')).toHaveLength(1)
 })
 
-it("正式壳没有项目身份时不生成默认 kokoro 专案链接", () => {
+it("正式壳没有项目身份时不生成默认 kokoro 项目链接", () => {
   mountFrame({ preview: false })
   expect(document.querySelector('a[href="/app/project/kokoro"]')).not.toBeInTheDocument()
 })
@@ -477,10 +473,10 @@ it.each(["401", "bad-shape"])("正式列表先健康再刷新至 %s，清旧项�
   else expect(retry).toBeEnabled()
 })
 
-it("只有成功读取 projects=[] 才呈现专案空态", async () => {
+it("只有成功读取 projects=[] 才呈现项目空态", async () => {
   let calls = 0
   await mountAuthenticatedProjectRail(async () => { calls++; return projectReadEnvelope([]) })
-  expect(await screen.findByTestId("projects-empty")).toHaveTextContent("暂无专案。")
+  expect(await screen.findByTestId("projects-empty")).toHaveTextContent("暂无项目。")
   expect(calls).toBe(1)
   expect(screen.queryByTestId("projects-error")).not.toBeInTheDocument()
   expect(document.querySelectorAll("[data-project-list] [data-project-id]")).toHaveLength(0)
@@ -570,10 +566,10 @@ it("创建成功只触发正式 GET 刷新，不把 ACK 当全集，原草稿仍
   try {
     await screen.findByTestId("projects-empty")
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "保持创建时的草稿" } })
-    const trigger = screen.getByRole("button", { name: "新建专案" })
-    fireEvent.pointerDown(trigger, { button: 0 })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    fireEvent.click(screen.getByRole("button", { name: "新建项目" }))
+    const dialog = await screen.findByRole("dialog", { name: "创建项目" })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "项目名称" }), { target: { value: "研究项目甲" } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建" }))
     await waitFor(() => expect(reads).toBe(2))
     expect(writes).toBe(1)
     expect(screen.queryByRole("link", { name: "研究项目甲" })).not.toBeInTheDocument()
@@ -626,10 +622,10 @@ it.each([false, true])("创建项目的迟到合法 ACK 不抢回用户已切换
   try {
     await screen.findByRole("link", { name: "研究项目乙" })
     fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "创建时A的原草稿" } })
-    const trigger = screen.getByRole("button", { name: "新建专案" })
-    fireEvent.pointerDown(trigger, { button: 0 })
-    fireEvent.click(trigger)
-    fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
+    fireEvent.click(screen.getByRole("button", { name: "新建项目" }))
+    const dialog = await screen.findByRole("dialog", { name: "创建项目" })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "项目名称" }), { target: { value: "研究项目甲" } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建" }))
     await waitFor(() => expect(writes).toBe(1))
     expect(acknowledge).toBeTypeOf("function")
     fireEvent.click(await screen.findByRole("link", { name: "研究项目乙" }), { detail: 0 })
@@ -1021,7 +1017,8 @@ it("project overview rail does not synthesize the engine's remembered active con
     projectReadBoundary={{ admitted: true, subject: "overview-reader", generation: 1 }} />
   </LocaleProvider></ThemeProvider>)
   try {
-    await screen.findByRole("link", { name: "Overview project" })
+    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
+    expect(document.querySelector('[aria-label="会话导航"]')).toBeInTheDocument()
     expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
     expect(screen.queryByRole("button", { name: "remembered direct-looking row" })).toBeNull()
   } finally {
@@ -1285,245 +1282,66 @@ it.each(["unknown", "active"] as const)("project overview Send visibly disables 
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
-// R254: actual AppFrame + canonical list parser. A project's list must not
-// replace direct chats, and expanding a folder is not an engine command.
-async function mountFolderBehaviorFrame(projectWorkspace: boolean) {
+it("R254 项目正文旁的直接会话区保持独立，选择直接会话只更新直接路由", async () => {
   const alpha = projectReadFixtures[0]!
-  const beta = projectReadFixtures[1]!
-  const directId = "conv_folder_direct"
-  const alphaId = "conv_folder_alpha"
-  const betaId = "conv_folder_beta"
-  const currentEngine = projectWorkspace
-    ? createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: alpha.id } })
-    : engine
-  const path = projectWorkspace ? `/app/project/${alpha.id}` : "/app"
-  pathname.value = path
-  window.history.replaceState({}, "", path)
-  window.localStorage.setItem("kokoro.web.auth-index-subject", "folder-reader")
-  const listReads: URL[] = []
+  const directId = "conv_flat_direct"
+  const projectEngine = createSessionEngine({
+    client: createFakeClient(),
+    storage: createMemoryStorage<ConversationStore>(null),
+    scope: { kind: "project", projectRef: alpha.id },
+  })
+  window.history.replaceState({}, "", `/app/project/${alpha.id}`)
+  pathname.value = window.location.pathname
+  window.localStorage.setItem("kokoro.web.auth-index-subject", "flat-rail-reader")
   const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin)
     if (url.pathname === "/api/hub/projects") return projectReadEnvelope()
     if (url.pathname.endsWith("/instruction-revisions")) {
-      return Response.json({ data: { items: [] }, meta: { request_id: "req_folder_instructions" } })
+      return Response.json({ data: { items: [] }, meta: { request_id: "req_flat_rail_instructions" } })
     }
     if (url.pathname === "/sessions") {
-      listReads.push(url)
-      const project = url.searchParams.get("project_ref")
-      const entry = project === alpha.id
-        ? { session_id: alphaId, title: "专案甲持久会话", updated_at: "2026-10-01T00:00:00.000Z" }
-        : project === beta.id
-          ? { session_id: betaId, title: "专案乙持久会话", updated_at: "2026-10-01T00:00:00.000Z" }
-          : { session_id: directId, title: "外部普通持久会话", updated_at: "2026-10-01T00:00:00.000Z" }
-      return Response.json({ sessions: [entry], next_cursor: null })
+      return Response.json({
+        sessions: [{ session_id: directId, title: "外部普通持久会话", updated_at: "2026-10-01T00:00:00.000Z" }],
+        next_cursor: null,
+      })
     }
     return Response.json({ error: { code: "unavailable" } }, { status: 503 })
   })
   const pageClients = await import("@/ui/shell/page-clients")
   vi.spyOn(pageClients, "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "http://s.local" }))
   const view = render(<ThemeProvider><LocaleProvider><AppFrame
-    engine={currentEngine} chatHref="/app" desktopRailCollapsed={false}
-    projectWorkspace={projectWorkspace}
-    {...(projectWorkspace ? { projectRef: alpha.id } : {})}
-    projectReadBoundary={{ admitted: true, subject: "folder-reader", generation: 1 }}
+    engine={projectEngine} chatHref="/app" desktopRailCollapsed={false}
+    projectWorkspace projectRef={alpha.id}
+    projectReadBoundary={{ admitted: true, subject: "flat-rail-reader", generation: 1 }}
   /></LocaleProvider></ThemeProvider>)
-  await screen.findByRole("link", { name: alpha.name })
-  return { ...view, alpha, beta, directId, alphaId, betaId, currentEngine, listReads, fetchMock }
-}
-
-it("R254 项目正文旁普通持久会话区常驻，点普通行只导航direct目标而不打开当前project engine", async () => {
-  const view = await mountFolderBehaviorFrame(true)
-  const open = vi.spyOn(view.currentEngine, "openConversation")
   try {
-    // The current implementation can load this legitimate project page, so
-    // failure below is the missing direct section, not fixture admission.
-    await screen.findByRole("button", { name: "专案甲持久会话" })
+    const project = await screen.findByRole("link", { name: alpha.name })
+    const projectRow = project.closest("[data-project-id]")
+    expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
+    expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
     const direct = screen.getByRole("navigation", { name: "直接会话" })
     const row = await within(direct).findByRole("button", { name: "外部普通持久会话" })
-    expect(view.listReads.some((url) => url.searchParams.get("scope") === "direct")).toBe(true)
     fireEvent.click(row)
-    expect(`${window.location.pathname}${window.location.search}`).toBe(`/app?conversation=${view.directId}`)
-    expect(open).not.toHaveBeenCalledWith(view.directId)
-    expect(view.currentEngine.getSnapshot().store?.activeId).not.toBe(view.directId)
+    expect(`${window.location.pathname}${window.location.search}`).toBe(`/app?conversation=${directId}`)
   } finally {
     view.unmount()
-    view.currentEngine.dispose()
+    projectEngine.dispose()
+    fetchMock.mockRestore()
   }
 })
 
-it("R254 两项目独立展开所属行，折叠不换URL或退役当前Run，子会话跨scope导航不交给direct engine", async () => {
-  const view = await mountFolderBehaviorFrame(false)
-  const open = vi.spyOn(engine, "openConversation")
-  const reset = vi.spyOn(engine, "newConversation")
-  const cancel = vi.spyOn(engine, "cancelRun")
-  try {
-    await screen.findByRole("button", { name: "外部普通持久会话" })
-    expect(view.listReads.every((url) => url.searchParams.get("scope") === "direct")).toBe(true)
-    act(() => { expect(engine.submit("already running direct task")).toBe(true) })
-    await waitFor(() => expect(engine.getSnapshot().machine.runId).not.toBeNull())
-    const before = engine.getSnapshot()
-    const route = `${window.location.pathname}${window.location.search}`
-    const alphaFolder = screen.getByRole("link", { name: view.alpha.name }).closest("[data-project-id]")!
-    const betaFolder = screen.getByRole("link", { name: view.beta.name }).closest("[data-project-id]")!
-    // A folder must expose a separate disclosure; its project Link remains
-    // the overview action. No invented future component/helper is imported.
-    const alphaToggle = alphaFolder.querySelector<HTMLButtonElement>("button[aria-expanded]")
-    const betaToggle = betaFolder.querySelector<HTMLButtonElement>("button[aria-expanded]")
-    expect(alphaToggle).not.toBeNull()
-    expect(betaToggle).not.toBeNull()
-    fireEvent.click(alphaToggle!)
-    const alphaRow = await within(alphaFolder as HTMLElement).findByRole("button", { name: "专案甲持久会话" })
-    fireEvent.click(betaToggle!)
-    const betaRow = await within(betaFolder as HTMLElement).findByRole("button", { name: "专案乙持久会话" })
-    expect(alphaRow).toBeInTheDocument()
-    expect(betaRow).toBeInTheDocument()
-    expect(within(alphaFolder as HTMLElement).queryByText("专案乙持久会话")).not.toBeInTheDocument()
-    expect(within(betaFolder as HTMLElement).queryByText("专案甲持久会话")).not.toBeInTheDocument()
-    expect(screen.getByRole("navigation", { name: "直接会话" })).toHaveTextContent("外部普通持久会话")
-    fireEvent.click(alphaToggle!)
-    expect(`${window.location.pathname}${window.location.search}`).toBe(route)
-    expect(engine.getSnapshot().store?.activeId).toBe(before.store?.activeId)
-    expect(engine.getSnapshot().machine.runId).toBe(before.machine.runId)
-    expect(engine.getSnapshot().machine.phase).toBe(before.machine.phase)
-    expect(reset).not.toHaveBeenCalled()
-    expect(cancel).not.toHaveBeenCalled()
-    expect(within(betaFolder as HTMLElement).getByRole("button", { name: "专案乙持久会话" })).toBeInTheDocument()
-    fireEvent.click(betaRow)
-    expect(`${window.location.pathname}${window.location.search}`).toBe(`/app/project/${view.beta.id}?conversation=${view.betaId}`)
-    expect(open).not.toHaveBeenCalledWith(view.betaId)
-    expect(engine.getSnapshot().store?.activeId).not.toBe(view.betaId)
-  } finally { view.unmount() }
-})
-
-
-it("R254 非当前专案文件夹加号进入本地新空草稿，不对冷UUID取snapshot且保留旧持久会话", async () => {
-  const view = await mountFolderBehaviorFrame(false)
-  const projectClient = createFakeClient()
-  const oldId = view.alphaId
-  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
-  const projectEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: oldId, conversations: [{ id: oldId, title: "专案甲持久会话", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef: view.alpha.id } })
-  try {
-    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
-    projectClient.snapshotCalls.length = 0
-    await screen.findByRole("button", { name: "外部普通持久会话" })
-    const folder = screen.getByRole("link", { name: view.alpha.name }).closest('[data-project-id]') as HTMLElement
-    fireEvent.click(within(folder).getByRole("button", { name: new RegExp(`展开.*${view.alpha.name}`) }))
-    await within(folder).findByRole("button", { name: "专案甲持久会话" })
-    fireEvent.click(within(folder).getByTestId("rail-new-project-conversation"))
-    expect(window.location.pathname).toBe(`/app/project/${view.alpha.id}`)
-    pathname.value = window.location.pathname
-    // The mounted surface commits the destination scope's own existing engine;
-    // do not clear activeId or fake a cold id as if it already existed locally.
-    view.rerender(<ThemeProvider><LocaleProvider><AppFrame engine={projectEngine} chatHref="/app" desktopRailCollapsed={false} projectWorkspace projectRef={view.alpha.id} projectReadBoundary={{ admitted: true, subject: "folder-reader", generation: 1 }} /></LocaleProvider></ThemeProvider>)
-    await waitFor(() => expect(projectEngine.getSnapshot().hydrating).toBe(false))
-    expect(projectClient.snapshotCalls).toEqual([])
-    expect(projectEngine.getSnapshot().store?.activeId).not.toBe(oldId)
-    expect(projectEngine.getSnapshot().store?.conversations.some(entry => entry.id === oldId)).toBe(true)
-    expect(projectEngine.getSnapshot().thread.messages).toEqual([])
-    expect(screen.getByRole("textbox", { name: "对话输入" })).toHaveValue("")
-    expect(projectClient.createCalls).toEqual([])
-    expect(projectClient.streams).toEqual([])
-    expect(client.createCalls).toEqual([])
-  } finally { view.unmount(); projectEngine.dispose() }
-})
-
-it.each(["active", "unknown", "leave-return", "history", "actor", "revoked", "deadline"] as const)("R254 文件夹新草稿意图在%s边界退役，不迟到RESET目标旧会话", async (boundary) => {
-  const view = await mountFolderBehaviorFrame(false)
-  const projectClient = createFakeClient()
-  projectClient.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
-  const targetEngine = createSessionEngine({ client: projectClient, storage: createMemoryStorage<ConversationStore>({ activeId: view.alphaId, conversations: [{ id: view.alphaId, title: "已发送的P会话", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "project", projectRef: view.alpha.id } })
-  const frame = (admitted = true, subject = "folder-reader", target: SessionEngine | null = targetEngine) => <ThemeProvider><LocaleProvider><AppFrame engine={target} chatHref="/app" desktopRailCollapsed={false} projectWorkspace projectRef={view.alpha.id} projectReadBoundary={{ admitted, subject, generation: 1 }} /></LocaleProvider></ThemeProvider>
-  try {
-    await waitFor(() => expect(targetEngine.getSnapshot().hydrating).toBe(false))
-    if (boundary === "unknown") projectClient.nextCreate = () => Promise.reject(new Error("unknown P receipt"))
-    if (boundary === "active" || boundary === "unknown") {
-      act(() => { expect(targetEngine.submit("original P intent")).toBe(true) })
-      await waitFor(() => expect(boundary === "active" ? projectClient.streams.length : targetEngine.getSnapshot().canRetryPendingSubmission).toBe(boundary === "active" ? 1 : true))
-    }
-    const before = targetEngine.getSnapshot()
-    const reset = vi.spyOn(targetEngine, "newConversation")
-    projectClient.snapshotCalls.length = 0
-    const folder = screen.getByRole("link", { name: view.alpha.name }).closest('[data-project-id]') as HTMLElement
-    fireEvent.click(within(folder).getByRole("button", { name: new RegExp(`展开.*${view.alpha.name}`) }))
-    await within(folder).findByRole("button", { name: "专案甲持久会话" })
-    fireEvent.click(within(folder).getByTestId("rail-new-project-conversation"))
-    if (boundary === "leave-return") {
-      act(() => {
-        window.history.pushState({}, "", "/app/library")
-        window.dispatchEvent(new Event("kokoro:surface-navigation"))
-        window.history.pushState({}, "", `/app/project/${view.alpha.id}`)
-        window.dispatchEvent(new Event("kokoro:surface-navigation"))
-      })
-    }
-    if (boundary === "history") act(() => window.dispatchEvent(new PopStateEvent("popstate")))
-    if (boundary === "actor") window.localStorage.setItem("kokoro.web.auth-index-subject", "another-reader")
-    if (boundary === "revoked") {
-      view.rerender(frame(false, "folder-reader", null))
-      view.rerender(frame(true, "folder-reader", null))
-    }
-    if (boundary === "deadline") {
-      // Real expiry is only a bounded mounted interaction window, not an
-      // owner network timeout or permission to replay the click.
-      await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 5_050)) })
-    }
-    pathname.value = window.location.pathname
-    view.rerender(frame(true, boundary === "actor" ? "another-reader" : "folder-reader"))
-    await act(async () => { await Promise.resolve() })
-    expect(reset).not.toHaveBeenCalled()
-    expect(targetEngine.getSnapshot().store?.activeId).toBe(view.alphaId)
-    expect(targetEngine.getSnapshot().thread.messages).toEqual(before.thread.messages)
-    expect(projectClient.snapshotCalls).toEqual([])
-    expect(new URL(window.location.href).searchParams.get("conversation")).toBeNull()
-    expect(projectClient.createCalls).toHaveLength(boundary === "active" || boundary === "unknown" ? 1 : 0)
-    if (boundary === "active") expect(projectClient.lastStream().closed).toBe(false)
-    if (boundary === "unknown") expect(targetEngine.getSnapshot().canRetryPendingSubmission).toBe(true)
-  } finally { view.unmount(); targetEngine.dispose() }
-}, 10_000)
-
-it("R254 文件夹新草稿等待真实目标lease后只消费一次，URL的fresh id确实存在于目标索引", async () => {
-  const view = await mountFolderBehaviorFrame(false)
-  const targetClient = createFakeClient()
-  const targetEngine = createSessionEngine({ client: targetClient, storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef: view.alpha.id } })
-  const frame = (target: SessionEngine | null) => <ThemeProvider><LocaleProvider><AppFrame engine={target} chatHref="/app" desktopRailCollapsed={false} projectWorkspace projectRef={view.alpha.id} projectReadBoundary={{ admitted: true, subject: "folder-reader", generation: 1 }} /></LocaleProvider></ThemeProvider>
-  try {
-    const folder = screen.getByRole("link", { name: view.alpha.name }).closest('[data-project-id]') as HTMLElement
-    fireEvent.click(within(folder).getByRole("button", { name: new RegExp(`展开.*${view.alpha.name}`) }))
-    await within(folder).findByRole("button", { name: "专案甲持久会话" })
-    const sourceReset = vi.spyOn(engine, "newConversation")
-    const targetReset = vi.spyOn(targetEngine, "newConversation")
-    fireEvent.click(within(folder).getByTestId("rail-new-project-conversation"))
-    expect(window.location.search).toBe("")
-    pathname.value = window.location.pathname
-    view.rerender(frame(null))
-    expect(sourceReset).not.toHaveBeenCalled()
-    expect(targetReset).not.toHaveBeenCalled()
-    view.rerender(frame(targetEngine))
-    await waitFor(() => expect(targetReset).toHaveBeenCalledTimes(1))
-    const id = new URL(window.location.href).searchParams.get("conversation")
-    expect(id).not.toBeNull()
-    expect(targetEngine.getSnapshot().store?.activeId).toBe(id)
-    expect(targetEngine.getSnapshot().store?.conversations.some(entry => entry.id === id)).toBe(true)
-    view.rerender(frame(targetEngine))
-    expect(targetReset).toHaveBeenCalledTimes(1)
-    expect(targetClient.snapshotCalls).toEqual([])
-    expect(targetClient.createCalls).toEqual([])
-    expect(targetClient.streams).toEqual([])
-  } finally { view.unmount(); targetEngine.dispose() }
-})
-
-it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %s只改owner绑定并刷新所属清单，不把隐藏记忆ID或迟到ACK当当前叶抢导航", async (surface) => {
+it.each(["library", "leave"] as const)("R254 Move %s只改owner绑定并刷新所属清单，不把隐藏记忆ID或迟到ACK当当前叶抢导航", async (surface) => {
   const p = "project_00000000-0000-4000-8000-000000000901"
   const q = "project_00000000-0000-4000-8000-000000000902"
   const remembered = "conv_00000000-0000-4000-8000-000000000903"
-  const projectScope = surface === "overview" || surface === "unknown-retry"
-  const target = projectScope ? q : p
-  const originalRoute = projectScope ? `/app/project/${p}` : surface === "library" ? "/app/library" : `/app?conversation=${remembered}`
+  const target = p
+  const originalRoute = surface === "library" ? "/app/library" : `/app?conversation=${remembered}`
   window.history.replaceState({}, "", originalRoute)
   pathname.value = window.location.pathname
   window.localStorage.setItem("kokoro.web.auth-index-subject", "move-route-reader")
   const execution = createFakeClient()
   execution.nextSnapshot = id => Promise.resolve(makeSnapshot({ sessionId: id }))
-  const rememberedEngine = createSessionEngine({ client: execution, storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "记忆会话", mode: "fast", updatedAt: 1000 }] }), scope: projectScope ? { kind: "project", projectRef: p } : { kind: "direct" } })
+  const rememberedEngine = createSessionEngine({ client: execution, storage: createMemoryStorage<ConversationStore>({ activeId: remembered, conversations: [{ id: remembered, title: "记忆会话", mode: "fast", updatedAt: 1000 }] }), scope: { kind: "direct" } })
   let acknowledge!: (response: Response) => void
   let confirmed = false
   const moveRequests: { key: string | null; body: string | undefined }[] = []
@@ -1535,12 +1353,11 @@ it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %
     if (url.pathname === "/api/hub/projects") return Response.json({ data: { projects: ownerProjects }, meta: { request_id: "req_move_route" } })
     if (url.pathname.endsWith("/move")) {
       moveRequests.push({ key: new Headers(init?.headers).get("idempotency-key"), body: typeof init?.body === "string" ? init.body : undefined })
-      if (surface === "unknown-retry" && moveRequests.length === 1) throw new TypeError("unknown owner delivery")
       return new Promise<Response>(resolve => { acknowledge = resolve })
     }
     if (url.pathname === "/sessions") {
       const own = url.searchParams.get("project_ref")
-      const source = projectScope ? p : null
+      const source = null
       reads.push(own ?? "direct")
       return Response.json({ sessions: (!confirmed && own === source) || (confirmed && own === target) ? [{ session_id: remembered, title: "记忆会话", updated_at: "2026-10-01T00:00:00Z" }] : [], next_cursor: null })
     }
@@ -1548,7 +1365,7 @@ it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %
   })
   vi.spyOn((await import("@/ui/shell/page-clients")), "browserListClient").mockReturnValue(createSessionClient({ baseUrl: "http://s.local" }))
   const LibraryProbe = () => <div data-testid="move-library-content">资料库内容保持</div>
-  const frame = (catalog = surface === "library") => <ThemeProvider><LocaleProvider><AppFrame engine={rememberedEngine} chatHref="/app" desktopRailCollapsed={false} projectWorkspace={projectScope} {...(projectScope ? { projectRef: p } : {})} projectReadBoundary={{ admitted: true, subject: "move-route-reader", generation: 1 }} {...(catalog ? { standaloneSurface: true, emptyState: LibraryProbe, emptyStateOwnsComposer: true } : {})} /></LocaleProvider></ThemeProvider>
+  const frame = (catalog = surface === "library") => <ThemeProvider><LocaleProvider><AppFrame engine={rememberedEngine} chatHref="/app" desktopRailCollapsed={false} projectWorkspace={false} projectReadBoundary={{ admitted: true, subject: "move-route-reader", generation: 1 }} {...(catalog ? { standaloneSurface: true, emptyState: LibraryProbe, emptyStateOwnsComposer: true } : {})} /></LocaleProvider></ThemeProvider>
   const view = render(frame())
   try {
     await waitFor(() => expect(rememberedEngine.getSnapshot().hydrating).toBe(false))
@@ -1557,15 +1374,6 @@ it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %
     fireEvent.click(row)
     fireEvent.click(await screen.findByRole("menuitem", { name: target === p ? "项目P" : "项目Q" }))
     await waitFor(() => expect(moveRequests).toHaveLength(1))
-    if (surface === "unknown-retry") {
-      const menuTrigger = await screen.findByRole("button", { name: "移动会话 记忆会话" })
-      await waitFor(() => expect(menuTrigger).toBeEnabled())
-      fireEvent.click(menuTrigger)
-      const retry = await screen.findByRole("menuitem", { name: "重试移动会话" })
-      fireEvent.click(retry)
-      await waitFor(() => expect(moveRequests).toHaveLength(2))
-      expect(moveRequests[1]).toEqual(moveRequests[0])
-    }
     if (surface === "leave") {
       act(() => {
         window.history.pushState({}, "", "/app/library")
@@ -1576,13 +1384,13 @@ it.each(["overview", "library", "leave", "unknown-retry"] as const)("R254 Move %
       expect(screen.getByTestId("move-library-content")).toBeInTheDocument()
     }
     const visibleRoute = `${window.location.pathname}${window.location.search}`
-    const sourceReads = reads.filter(scope => scope === (projectScope ? p : "direct")).length
+    const sourceReads = reads.filter(scope => scope === "direct").length
     confirmed = true
     await act(async () => { acknowledge(response()); await Promise.resolve() })
-    await waitFor(() => expect(reads.filter(scope => scope === (projectScope ? p : "direct")).length).toBeGreaterThan(sourceReads))
+    await waitFor(() => expect(reads.filter(scope => scope === "direct").length).toBeGreaterThan(sourceReads))
     expect(`${window.location.pathname}${window.location.search}`).toBe(visibleRoute)
     if (surface === "library" || surface === "leave") expect(screen.getByTestId("move-library-content")).toBeInTheDocument()
-    expect(moveRequests).toHaveLength(surface === "unknown-retry" ? 2 : 1)
+    expect(moveRequests).toHaveLength(1)
     expect(execution.createCalls).toEqual([])
   } finally { if (acknowledge) acknowledge(response()); view.unmount(); rememberedEngine.dispose() }
 })

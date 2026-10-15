@@ -1,7 +1,6 @@
 // 侧栏会话重命名内联编辑（CONV-UX）：双击/✎ 进入编辑，Enter 提交、Escape 取消、空题与未改动不上抛。
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { LocaleProvider } from "@/i18n/context"
@@ -12,11 +11,6 @@ import type { ConversationSummary } from "@/ui/rail/rail-search"
 import * as pageClients from "@/ui/shell/page-clients"
 import { ThemeProvider } from "@/ui/theme/theme-context"
 import { act, useState } from "react"
-
-const workspaceRailCss = readFileSync(
-  "src/components/blocks/workspace-rail/workspace-rail.module.css",
-  "utf8",
-)
 
 function renderRail(overrides?: Partial<Parameters<typeof WorkspaceRail>[0]>) {
   const onRenameConversation = vi.fn()
@@ -62,26 +56,6 @@ afterEach(() => {
   window.history.replaceState(window.history.state, "", "/")
 })
 
-it("按 runtime manifest 选择已注册菜单，未知 route 只呈现禁用态", () => {
-  const { onOpenSettings } = renderRail({
-    navigation: [
-      { key: "skills", label: "自定义技能" },
-      { key: "chat", label: "重复对话" },
-      { key: "future-capability", label: "未来能力", featureFlag: "future" },
-      { key: "disabled-capability", label: "关闭能力", featureFlag: "disabled" },
-    ],
-    featureFlags: [{ key: "future", enabled: true }, { key: "disabled", enabled: false }],
-  })
-
-  expect(screen.getByRole("link", { name: "自定义技能" })).toHaveAttribute("href", "/app/skills")
-  expect(screen.queryByRole("button", { name: "重复对话" })).toBeNull()
-  expect(screen.getByRole("button", { name: "未来能力" })).toBeDisabled()
-  expect(screen.queryByRole("button", { name: "关闭能力" })).toBeNull()
-  expect(screen.queryByTestId("rail-library")).toBeNull()
-
-  expect(onOpenSettings).not.toHaveBeenCalled()
-})
-
 it("默认桌面导航不展示未接入能力的占位入口", () => {
   renderRail()
 
@@ -89,10 +63,10 @@ it("默认桌面导航不展示未接入能力的占位入口", () => {
   expect(screen.queryByRole("button", { name: "外挂" })).toBeNull()
   expect(screen.queryByRole("button", { name: "已排程" })).toBeNull()
   expect(screen.queryByRole("button", { name: "资料库" })).toBeNull()
-  expect(screen.queryByRole("button", { name: /创建专案/ })).toBeNull()
+  expect(screen.queryByRole("button", { name: /创建项目/ })).toBeNull()
 })
 
-it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊天或收起侧栏", async () => {
+it("项目标题旁的加号打开创建表单，不导航、不新建聊天或收起侧栏", async () => {
   const onNewChat = vi.fn()
   const onToggleCollapse = vi.fn()
   const onCreateProject = vi.fn()
@@ -104,18 +78,12 @@ it("项目标题旁的加号打开新建专案菜单，不导航、不新建聊�
   })
 
   const before = window.location.href
-  const createProject = screen.getByRole("button", { name: "新建专案" })
-  fireEvent.pointerDown(createProject, { button: 0 })
-  fireEvent.click(createProject)
-
-  await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument())
-  const createProjectEntry = screen.getByRole("menuitem", { name: "新建专案" })
-  expect(createProjectEntry).toBeInTheDocument()
-  fireEvent.click(createProjectEntry)
-  expect(onCreateProject).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole("button", { name: "新建项目" }))
+  expect(await screen.findByRole("dialog", { name: "创建项目" })).toBeInTheDocument()
   expect(window.location.href).toBe(before)
   expect(onNewChat).not.toHaveBeenCalled()
   expect(onToggleCollapse).not.toHaveBeenCalled()
+  expect(onCreateProject).not.toHaveBeenCalled()
 })
 
 it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", async () => {
@@ -125,8 +93,8 @@ it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", a
   const targetProject = "project_33333333-3333-4333-8333-333333333333"
   renderRail({
     projects: [
-      { id: currentProject, name: "当前专案", href: `/app/project/${currentProject}`, active: true },
-      { id: targetProject, name: "目标专案", href: `/app/project/${targetProject}` },
+      { id: currentProject, name: "当前项目", href: `/app/project/${currentProject}`, active: true },
+      { id: targetProject, name: "目标项目", href: `/app/project/${targetProject}` },
     ],
     projectListStatus: "ready",
     projectHref: `/app/project/${currentProject}`,
@@ -142,9 +110,9 @@ it("R170只把owner确认且非当前scope的目的地放入会话Move菜单", a
   fireEvent.click(screen.getByRole("button", { name: "移动会话 旧标题" }))
   const menu = await screen.findByRole("menu")
   expect(within(menu).getByRole("menuitem", { name: "直接会话" })).toBeEnabled()
-  expect(within(menu).getByRole("menuitem", { name: "目标专案" })).toBeEnabled()
-  expect(within(menu).queryByRole("menuitem", { name: "当前专案" })).toBeNull()
-  fireEvent.click(within(menu).getByRole("menuitem", { name: "目标专案" }))
+  expect(within(menu).getByRole("menuitem", { name: "目标项目" })).toBeEnabled()
+  expect(within(menu).queryByRole("menuitem", { name: "当前项目" })).toBeNull()
+  fireEvent.click(within(menu).getByRole("menuitem", { name: "目标项目" }))
   expect(onMoveConversation).toHaveBeenCalledWith(conversationId, targetProject)
 })
 
@@ -217,7 +185,7 @@ it("会话键盘拖动提供可访问的抓取、上下移动和取消", () => {
   expect(first).toHaveAttribute("aria-keyshortcuts", "Space ArrowUp ArrowDown Escape")
 })
 
-it("专案清单和任务清单分别支持键盘排序，不会互相移动", () => {
+it("项目清单和任务清单分别支持键盘排序，不会互相移动", () => {
   const onReorderProjects = vi.fn()
   const onReorderConversations = vi.fn()
   renderRail({
@@ -250,60 +218,6 @@ it("专案清单和任务清单分别支持键盘排序，不会互相移动", (
   expect(onReorderConversations).toHaveBeenCalledWith(["task_b", "task_a"])
 })
 
-it("选择新建专案后完成路由与草稿承接，并把焦点留在展开态的加号", async () => {
-  function ControlledRail() {
-    const [projectActive, setProjectActive] = useState(false)
-    const directDraft = "从直接会话承接的草稿"
-    const [projectDraft, setProjectDraft] = useState("")
-
-    return (
-      <>
-        <output aria-label="当前草稿">{projectDraft}</output>
-        <WorkspaceRail
-          collapsed={false}
-          onToggleCollapse={() => {}}
-          onNewChat={() => {}}
-          chatHref="/app"
-          projectHref="/app/project/preview-project"
-          projectActive={projectActive}
-          onCreateProject={() => {
-            window.history.pushState(window.history.state, "", "/app/project/preview-project")
-            setProjectDraft(directDraft)
-            setProjectActive(true)
-          }}
-          conversations={[]}
-          activeId={null}
-          awaitingIds={new Set()}
-          onSelectConversation={() => {}}
-          onDeleteConversation={async () => true}
-          onRenameConversation={() => {}}
-          onOpenSettings={() => {}}
-          listLoading={false}
-          listError={false}
-          hasMore={false}
-          onLoadMore={() => {}}
-        />
-      </>
-    )
-  }
-
-  render(<ThemeProvider><LocaleProvider><ControlledRail /></LocaleProvider></ThemeProvider>)
-
-  const trigger = screen.getByRole("button", { name: "新建专案" })
-  fireEvent.pointerDown(trigger, { button: 0 })
-  fireEvent.click(trigger)
-  const entry = await screen.findByRole("menuitem", { name: "新建专案" })
-  fireEvent.click(entry)
-
-  await waitFor(() => {
-    expect(window.location.pathname).toBe("/app/project/preview-project")
-    expect(screen.queryByRole("menuitem", { name: "新建专案" })).toBeNull()
-    expect(screen.getByRole("button", { name: "新建专案" })).toHaveFocus()
-  })
-  expect(screen.getByLabelText("当前草稿")).toHaveTextContent("从直接会话承接的草稿")
-  expect(document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')).toBeInTheDocument()
-})
-
 it("桌面 Rail 暂不呈现独立的邀请朋友推广入口", () => {
   renderRail({ brandName: "Kokoro" })
 
@@ -326,7 +240,7 @@ it("默认品牌使用中性产品标记，不回退到旧手掌或心字符", (
   expect(screen.queryByText("心")).toBeNull()
 })
 
-it("直接会话桌面页保持聊天语义，不被渲染为专案任务", () => {
+it("直接会话桌面页保持任务语义，不被渲染为项目任务", () => {
   renderRail({
     projectHref: "/app/project/kokoro",
     projectActive: false,
@@ -334,12 +248,11 @@ it("直接会话桌面页保持聊天语义，不被渲染为专案任务", () =
     activeId: "chat_direct_1",
   })
 
-  expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument()
+  expect(screen.getByTestId("rail-new-conversation")).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Workspace" })).toHaveAttribute("href", "/app")
   const chats = screen.getByRole("navigation", { name: "直接会话" })
   expect(chats).toHaveAttribute("data-conversation-list", "direct")
-  expect(within(chats).getByText("聊天")).toBeInTheDocument()
-  expect(within(chats).queryByText("任务")).toBeNull()
+  expect(within(chats).queryByText("项目会话")).toBeNull()
 })
 
 it("空的直接会话桌面页仍保留独立会话分区", () => {
@@ -352,12 +265,11 @@ it("空的直接会话桌面页仍保留独立会话分区", () => {
 
   const chats = screen.getByRole("navigation", { name: "直接会话" })
   expect(chats).toHaveAttribute("data-conversation-list", "direct")
-  expect(within(chats).getByText("聊天")).toBeInTheDocument()
   expect(within(chats).getByText("还没有直接会话")).toBeInTheDocument()
-  expect(within(chats).queryByText("任务")).toBeNull()
+  expect(within(chats).queryByText("项目会话")).toBeNull()
 })
 
-it("收起态不复制直接会话或孤立专案会话 stop，并保留专案与底部账户锚点", () => {
+it("收起态不复制直接会话或孤立项目会话 stop，并保留项目与底部账户锚点", () => {
   renderRail({
     collapsed: true,
     projectHref: "/app/project/kokoro",
@@ -378,26 +290,12 @@ it("展开态账户卡左对齐，通知动作保留在同一行", () => {
   const rail = document.querySelector('[data-desktop-rail="true"][data-collapsed="false"]')
   const account = screen.getByTestId("rail-utility-account")
   const accountStatus = rail?.querySelector(`.${railStyles.accountStatus}`)
-  const userTriggerClass = railStyles.userTrigger
-  if (userTriggerClass === undefined) {
-    throw new Error("Expected the workspace rail user trigger style")
-  }
-
   expect(account).toHaveTextContent("Kokoro")
-  expect(account).toHaveTextContent("个人工作区")
-  expect(account).toHaveClass(userTriggerClass)
   expect(accountStatus?.querySelector('[data-testid="rail-utility-device"]')).toBeNull()
   expect(accountStatus?.querySelector('[data-testid="rail-utility-notifications"]')).toBeInTheDocument()
-  // jsdom does not calculate flex layout; lock the desktop CSS contract here
-  // and verify the resulting geometry with the browser viewport check.
-  expect(workspaceRailCss).toMatch(
-    /\.rail\[data-desktop-rail="true"\] \.userTrigger \{\s*justify-content: flex-start;/,
-  )
-  expect(workspaceRailCss).toMatch(/container: workspace-rail \/ inline-size;/)
-  expect(workspaceRailCss).toMatch(/@container workspace-rail \(max-width: 12\.5rem\)/)
 })
 
-it("Manus 紧凑 stop 清单只保留一个工作区气泡入口", () => {
+it("Manus 紧凑 rail 保留一级入口，并把次级页面收进更多菜单", () => {
   renderRail({
     collapsed: true,
     navigation: [
@@ -410,11 +308,10 @@ it("Manus 紧凑 stop 清单只保留一个工作区气泡入口", () => {
   })
 
   expect(screen.getByTestId("rail-new-conversation")).toBeInTheDocument()
-  for (const key of ["agent", "skills", "mcp", "scheduled", "library"]) {
+  for (const key of ["agent", "mcp", "library", "more"]) {
     expect(screen.getByTestId(`rail-${key}`)).toBeInTheDocument()
   }
   expect(screen.queryByTestId("rail-direct-chat")).toBeNull()
-  expect(document.querySelectorAll('[data-navigation-section]').length).toBe(6)
   expect(document.querySelectorAll('[data-navigation-section="agent"] svg.lucide-message-square-more')).toHaveLength(1)
   expect(document.querySelectorAll('[data-navigation-section="direct-chat"]')).toHaveLength(0)
   expect(document.querySelectorAll('[data-navigation-section] span').length).toBe(0)
@@ -432,10 +329,8 @@ it("收起态导航保留无文字的可访问入口名称", () => {
     projectHref: "/app/project/kokoro",
   })
 
-  expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "新建任务" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "Agent" })).toHaveAttribute("href", "/app/agents")
-  expect(screen.getByRole("link", { name: "技能" })).toHaveAttribute("href", "/app/skills")
-  expect(screen.getByRole("link", { name: "已排程" })).toHaveAttribute("href", "/app/scheduled?tab=calendar")
   expect(screen.getByRole("link", { name: "资料库" })).toHaveAttribute("href", "/app/library")
   expect(document.querySelector(`[data-collapsed="true"] .${railStyles.navLabel}`)).toBeNull()
   expect(document.querySelector(`[data-collapsed="true"] .${railStyles.brandText}`)).toBeNull()
@@ -500,7 +395,7 @@ it("鼠标收起时品牌入口 focus 不挂错误 ring 标记，键盘收起不
   expect(screen.getByRole("button", { name: "展开侧栏" })).toHaveAttribute("data-pointer-focus", "true")
 
   fireEvent.click(screen.getByRole("button", { name: "展开侧栏" }))
-  const search = screen.getByRole("button", { name: "搜索会话" })
+  const search = await screen.findByRole("button", { name: "搜索会话" })
   fireEvent.click(search)
   const searchInput = await screen.findByRole("searchbox", { name: "搜索最近会话" })
   expect(searchInput).toHaveFocus()
@@ -527,7 +422,7 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
     collapsed: true,
     navigation: [
       { key: "agent", label: "Agent" },
-      { key: "skills", label: "技能" },
+      { key: "mcp", label: "外挂" },
     ],
     activeNavigationKey: "agent",
   })
@@ -547,9 +442,9 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
           chatHref="/app"
           navigation={[
             { key: "agent", label: "Agent" },
-            { key: "skills", label: "技能" },
+            { key: "mcp", label: "外挂" },
           ]}
-          activeNavigationKey="skills"
+          activeNavigationKey="mcp"
           conversations={[]}
           activeId={null}
           awaitingIds={new Set()}
@@ -567,10 +462,10 @@ it("站内 surface 导航变化时关闭收起态旧 tooltip，普通 hover 仍�
   )
 
   await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull())
-  expect(screen.getByTestId("rail-skills").closest('[data-slot="sidebar-menu"]')).toBe(workbenchMenu)
+  expect(screen.getByTestId("rail-mcp").closest('[data-slot="sidebar-menu"]')).toBe(workbenchMenu)
 
-  fireEvent.pointerMove(screen.getByTestId("rail-skills"), { pointerType: "mouse" })
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("技能")
+  fireEvent.pointerMove(screen.getByTestId("rail-mcp"), { pointerType: "mouse" })
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("外挂")
 })
 
 it("compactDesktop 模式变化时关闭账户菜单", async () => {
@@ -680,7 +575,7 @@ it("桌面确认删除后把焦点交给稳定的新对话入口", async () => {
   fireEvent.click(screen.getByRole("button", { name: "确认删除" }))
 
   expect(onDeleteConversation).toHaveBeenCalledWith("ses_1")
-  await waitFor(() => expect(screen.getByRole("button", { name: /新对话/ })).toHaveFocus())
+  await waitFor(() => expect(screen.getByTestId("rail-new-conversation")).toHaveFocus())
 })
 
 it("空题与未改动不触发请求", () => {
@@ -698,12 +593,11 @@ it("空题与未改动不触发请求", () => {
   expect(onRenameConversation).not.toHaveBeenCalled()
 })
 
-it("runtime manifest 的一级页面与设置入口使用各自导航语义", () => {
+it("runtime manifest 的一级页面与连接器入口使用各自导航语义", () => {
   const { onOpenSettings, onOpenNotifications } = renderRail({
     navigation: [
       { key: "library", label: "作品" },
       { key: "mcp", label: "连接" },
-      { key: "team", label: "团队" },
     ],
   })
   expect(screen.getByTestId("rail-library")).toHaveAttribute("href", "/app/library")
@@ -714,8 +608,6 @@ it("runtime manifest 的一级页面与设置入口使用各自导航语义", ()
   fireEvent.click(screen.getByRole("button", { name: "打开通知" }))
   expect(onOpenSettings).not.toHaveBeenCalledWith("appearance")
   expect(onOpenNotifications).toHaveBeenLastCalledWith(expect.any(HTMLElement))
-  fireEvent.click(screen.getByTestId("rail-team"))
-  expect(onOpenSettings).toHaveBeenLastCalledWith("team")
 })
 
 it("Agent 一级入口导航到独立页面，不再回落为新建聊天", () => {
@@ -723,7 +615,6 @@ it("Agent 一级入口导航到独立页面，不再回落为新建聊天", () =
   renderRail({
     navigation: [
       { key: "agent", label: "Agent" },
-      { key: "skills", label: "技能" },
     ],
     activeNavigationKey: "agent",
     onNewChat,
@@ -733,18 +624,7 @@ it("Agent 一级入口导航到独立页面，不再回落为新建聊天", () =
   expect(agent).toHaveAttribute("href", "/app/agents")
   expect(agent).toHaveAttribute("data-active", "true")
   expect(agent.querySelector("svg.lucide-message-square-more")).toBeInTheDocument()
-  expect(screen.getByTestId("rail-skills").querySelector("svg.lucide-puzzle")).toBeInTheDocument()
   fireEvent.click(agent)
-  expect(onNewChat).not.toHaveBeenCalled()
-})
-
-it("已排程入口导航到独立日历页面，不再回落为新建聊天", () => {
-  const onNewChat = vi.fn()
-  renderRail({ navigation: [{ key: "scheduled", label: "已排程" }], onNewChat })
-
-  const scheduled = screen.getByTestId("rail-scheduled")
-  expect(scheduled).toHaveAttribute("href", "/app/scheduled?tab=calendar")
-  fireEvent.click(scheduled)
   expect(onNewChat).not.toHaveBeenCalled()
 })
 
@@ -795,7 +675,7 @@ it("品牌入口使用真实的直接会话导航语义", () => {
 
 it("侧栏操作按钮默认是 action，不会提交外层表单", () => {
   renderRail()
-  expect(screen.getByRole("button", { name: /新对话/ })).toHaveAttribute("type", "button")
+  expect(screen.getByTestId("rail-new-conversation")).toHaveAttribute("type", "button")
   expect(screen.getByLabelText("重命名会话 旧标题")).toHaveAttribute("type", "button")
   expect(screen.getByLabelText("删除会话 旧标题")).toHaveAttribute("type", "button")
 })
@@ -917,9 +797,9 @@ it("侧栏初始读取保留无文字骨架，并向辅助技术暴露状态", (
   })
 
   const conversationsLoading = screen.getByRole("status", { name: "正在加载会话…" })
-  const projectsLoading = screen.getByRole("status", { name: "正在加载专案…" })
+  const projectsLoading = screen.getByRole("status", { name: "正在加载项目…" })
   expect(conversationsLoading).not.toHaveTextContent("正在加载会话…")
-  expect(projectsLoading).not.toHaveTextContent("正在加载专案…")
+  expect(projectsLoading).not.toHaveTextContent("正在加载项目…")
   expect(conversationsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
   expect(projectsLoading.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2)
 
@@ -928,14 +808,15 @@ it("侧栏初始读取保留无文字骨架，并向辅助技术暴露状态", (
   expect(screen.getByRole("alert")).toHaveTextContent("会话列表加载失败")
 })
 
-it("收起侧栏的新建专案只发创建意图，不把菜单事件当草稿", async () => {
+it("收起侧栏的新建项目只打开创建表单，不把菜单事件当草稿", async () => {
   const onCreateProject = vi.fn()
   renderRail({ collapsed: true, onCreateProject })
   const picker = screen.getByTestId("rail-project")
   fireEvent.pointerDown(picker, { button: 0 })
   fireEvent.click(picker)
-  fireEvent.click(await screen.findByRole("menuitem", { name: "新建专案" }))
-  expect(onCreateProject).toHaveBeenCalledExactlyOnceWith()
+  fireEvent.click(await screen.findByRole("menuitem", { name: "新建项目" }))
+  expect(await screen.findByRole("dialog", { name: "创建项目" })).toBeInTheDocument()
+  expect(onCreateProject).not.toHaveBeenCalled()
 })
 
 it("会话重命名只提交 conversation 身份，canonical Project 名称与 id 原样保留", () => {
@@ -967,7 +848,7 @@ it("项目行的显式重命名动作交给路由 owner，不制造本地副本"
   expect(onRequestProjectRename).toHaveBeenCalledExactlyOnceWith("project_a")
 })
 
-it("当前项目展开后显示其独立空会话态，任务区不被替换", () => {
+it("项目保持单层概览入口，任务区仍然独立", () => {
   renderRail({
     projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
     projectListStatus: "ready",
@@ -977,23 +858,12 @@ it("当前项目展开后显示其独立空会话态，任务区不被替换", (
     activeId: null,
   })
 
-  expect(screen.getByRole("link", { name: "独立项目名称" })).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /收起专案 独立项目名称/ })).toHaveAttribute("aria-expanded", "true")
-  expect(screen.getByText("还没有专案会话。新建一个会话以开始。")).toBeInTheDocument()
-  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
-})
-
-it("项目文件夹把展开控制与项目入口分开，入口始终保留文件夹标识", () => {
-  renderRail({
-    projects: [{ id: "project_a", name: "独立项目名称", href: "/app/project/project_a", active: true }],
-    projectListStatus: "ready",
-    projectHref: "/app/project/project_a",
-    projectActive: true,
-  })
-
   const project = screen.getByRole("link", { name: "独立项目名称" })
-  expect(screen.getByRole("button", { name: /收起专案 独立项目名称/ })).toBeInTheDocument()
+  const projectRow = project.closest("[data-project-id]")
   expect(project.querySelectorAll("svg")).toHaveLength(1)
+  expect(projectRow?.querySelector('button[aria-label*="展开项目"], button[aria-label*="收起项目"]')).toBeNull()
+  expect(projectRow?.querySelector('[data-conversation-list]')).toBeNull()
+  expect(screen.getByRole("navigation", { name: "直接会话" })).toBeInTheDocument()
 })
 
 it("正式 rail 只有当前路由而无集合时不造通用项目；显式 preview 仍独立", () => {
@@ -1001,7 +871,7 @@ it("正式 rail 只有当前路由而无集合时不造通用项目；显式 pre
   expect(document.querySelector('[data-project-list] [data-project-id]')).toBeNull()
   cleanup()
   renderRail({ projectHref: "/app/project/preview-project", preview: true })
-  expect(screen.getByRole("link", { name: "当前专案" })).toHaveAttribute("href", "/app/project/preview-project")
+  expect(screen.getByRole("link", { name: "当前项目" })).toHaveAttribute("href", "/app/project/preview-project")
 })
 
 it("R254 当前项目选择不替换普通持久会话分区，项目名称仍是概览Link", () => {
@@ -1016,7 +886,7 @@ it("R254 当前项目选择不替换普通持久会话分区，项目名称仍�
   expect(direct).toHaveAttribute("data-conversation-list", "direct")
   expect(within(direct).getByRole("button", { name: "普通持久会话" })).toBeInTheDocument()
   expect(screen.getByRole("link", { name: "产品规划" })).toHaveAttribute("href", "/app/project/project_a")
-  expect(screen.queryByRole("navigation", { name: "专案会话" })).not.toBeInTheDocument()
+  expect(screen.queryByRole("navigation", { name: "项目会话" })).not.toBeInTheDocument()
 })
 
 

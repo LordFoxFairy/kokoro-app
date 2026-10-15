@@ -237,14 +237,14 @@ export function WorkspaceRailShell({
     }
     const targetMode = toggleFocusRef.current
     if (targetMode !== null) {
-      responsiveFocusPendingRef.current = false
-      toggleFocusRef.current = null
       const target = targetMode.mode === "expanded"
         ? railRootRef.current?.querySelector<HTMLElement>('[data-rail-anchor="rail-toggle"]')
         : compactDesktopRail
           ? document.querySelector<HTMLElement>('[data-web-navigation-trigger="true"]:not([aria-hidden="true"])')
           : railRootRef.current?.querySelector<HTMLElement>('[data-collapsed-brand="true"]')
       if (!target || target.getAttribute("aria-hidden") === "true") return
+      responsiveFocusPendingRef.current = false
+      toggleFocusRef.current = null
       if (targetMode.mode === "collapsed" && targetMode.pointer) {
         target.dataset.pointerFocus = "true"
         target.addEventListener("blur", () => delete target.dataset.pointerFocus, { once: true })

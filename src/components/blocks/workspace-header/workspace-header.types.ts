@@ -26,6 +26,8 @@ export type WorkspaceHeaderProps = {
   emptyWorkspace?: boolean
   projectWorkspace?: boolean
   showNavigationTrigger?: boolean
+  onNavigationToggle?: () => void
+  navigationExpanded?: boolean
 }
 
 export type WorkspaceHeaderIdentityProps = Pick<

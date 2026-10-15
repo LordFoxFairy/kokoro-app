@@ -36,10 +36,10 @@ it("hands AI skill creation to the shared composer instead of only writing an or
   const onPrompt = renderSurface()
   await screen.findByTestId("skills-catalog-grid")
 
-  const create = screen.getByRole("button", { name: "添加" })
+  const create = screen.getByRole("button", { name: "创建" })
   fireEvent.pointerDown(create, { button: 0, ctrlKey: false })
   fireEvent.click(create)
-  fireEvent.click(await screen.findByRole("menuitem", { name: "使用 Kokoro 建立技能" }))
+  fireEvent.click(await screen.findByRole("menuitem", { name: "使用 Kokoro 创建技能" }))
 
   expect(onPrompt).toHaveBeenCalledWith("帮我使用 /skill-creator 一起创建一个技能。首先问我这个技能应该做什么。")
   expect(screen.queryByRole("menu")).toBeNull()
@@ -51,7 +51,7 @@ it("starts GitHub with formal Preview rather than the removed URL direct-import 
   const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { selection_required: true, repository_url: "https://github.com/acme/skills", commit: "a".repeat(40), paths: ["one", "two"] } }), { headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "github-ui" } }))
   vi.stubGlobal("fetch", fetchMock)
   renderSurface(); await screen.findByTestId("skills-catalog-grid")
-  fireEvent.pointerDown(screen.getByRole("button", { name: "添加" })); fireEvent.click(await screen.findByRole("menuitem", { name: "从 GitHub 导入" }))
+  fireEvent.pointerDown(screen.getByRole("button", { name: "创建" })); fireEvent.click(await screen.findByRole("menuitem", { name: "从 GitHub 导入技能" }))
   const dialog = await screen.findByTestId("github-import-dialog")
   fireEvent.change(within(dialog).getByTestId("github-repository-input"), { target: { value: "acme/skills" } }); fireEvent.click(within(dialog).getByTestId("github-import-submit"))
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/hub/skills/github/preview", expect.objectContaining({ body: JSON.stringify({ repository_url: "https://github.com/acme/skills" }) })))
@@ -81,15 +81,16 @@ it.each(["close", "subject"] as const)("blocks duplicate Preview and cancels a p
   expect(screen.queryByTestId("github-import-complete")).toBeNull()
 })
 
-it("uses the short Manus creation trigger and preserves all three existing creation choices", async () => {
+it("uses the short Manus creation trigger and exposes the four supported creation choices", async () => {
   renderSurface()
   await screen.findByTestId("skills-catalog-grid")
-  const create = screen.getByRole("button", { name: /^添加$/ })
+  const create = screen.getByRole("button", { name: /^创建$/ })
   fireEvent.pointerDown(create, { button: 0, ctrlKey: false })
   fireEvent.click(create)
   const menu = await screen.findByRole("menu")
-  expect(within(menu).getAllByRole("menuitem")).toHaveLength(3)
+  expect(within(menu).getAllByRole("menuitem")).toHaveLength(4)
+  expect(within(menu).getByRole("menuitem", { name: /^使用 Kokoro 创建技能$/ })).toBeInTheDocument()
+  expect(within(menu).getByRole("menuitem", { name: /^记录技能$/ })).toBeInTheDocument()
   expect(within(menu).getByRole("menuitem", { name: /^上传技能$/ })).toBeInTheDocument()
-  expect(within(menu).getByRole("menuitem", { name: /^从 GitHub 导入$/ })).toBeInTheDocument()
-  expect(within(menu).getByRole("menuitem", { name: /^使用 Kokoro 建立技能$/ })).toBeInTheDocument()
+  expect(within(menu).getByRole("menuitem", { name: /^从 GitHub 导入技能$/ })).toBeInTheDocument()
 })

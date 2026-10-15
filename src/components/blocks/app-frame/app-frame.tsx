@@ -226,9 +226,6 @@ function AppFrameRuntime({
   const routedConversationId = navigationState.resolvedConversationRouteId
   const railReadIdentity = JSON.stringify([projectReadBoundary?.subject ?? "injected", projectReadBoundary?.generation ?? 0])
   const railReadAdmitted = preview || (projectReadBoundary === undefined ? injectedEngine !== undefined : projectReadBoundary.admitted && projectReadBoundary.subject !== null)
-  const railFolderIntentIdentity = projectReadBoundary === undefined
-    ? preview ? "preview" : injectedEngine !== undefined ? "injected" : null
-    : projectReadBoundary.subject
   const [moveSelectionGeneration, setMoveSelectionGeneration] = useState(0)
   const handleConversationDeleteConfirmed = useCallback((scope: typeof sessionScope, id: string) => {
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
@@ -425,58 +422,6 @@ function AppFrameRuntime({
     brandName,
     commandNewChatTimerRef: overlays.commandNewChatTimerRef,
   })
-  // A folder's explicit new-chat action is consumed by the destination's
-  // committed engine, never by a made-up deep-link conversation id. This
-  // mounted handoff is short-lived; it is not a queued owner command.
-  const folderNewChatIntentRef = useRef<{
-    identity: string
-    scopeKey: string
-    target: string
-    actor: string | null
-    timer: number
-  } | null>(null)
-  const clearFolderNewChatIntent = useCallback(() => {
-    const intent = folderNewChatIntentRef.current
-    folderNewChatIntentRef.current = null
-    if (intent !== null) window.clearTimeout(intent.timer)
-  }, [])
-  useEffect(() => {
-    const onNavigation = () => {
-      const intent = folderNewChatIntentRef.current
-      if (intent !== null && `${window.location.pathname}${window.location.search}${window.location.hash}` !== intent.target) clearFolderNewChatIntent()
-    }
-    // Even history returning to the same address must not resurrect a click.
-    window.addEventListener("popstate", clearFolderNewChatIntent)
-    window.addEventListener("kokoro:surface-navigation", onNavigation)
-    return () => {
-      window.removeEventListener("popstate", clearFolderNewChatIntent)
-      window.removeEventListener("kokoro:surface-navigation", onNavigation)
-      clearFolderNewChatIntent()
-    }
-  }, [clearFolderNewChatIntent])
-  useLayoutEffect(() => {
-    const intent = folderNewChatIntentRef.current
-    if (intent === null) return
-    let actor: string | null
-    try { actor = window.localStorage.getItem("kokoro.web.auth-index-subject") }
-    catch { clearFolderNewChatIntent(); return }
-    if (!railReadAdmitted || intent.identity !== railReadIdentity || actor !== intent.actor ||
-      `${window.location.pathname}${window.location.search}${window.location.hash}` !== intent.target) {
-      clearFolderNewChatIntent()
-      return
-    }
-    // Preserve the source scope while the destination lease is committing.
-    if (intent.scopeKey !== moveScopeKey || engine === null) return
-    const destination = engine.getSnapshot()
-    if (destination.canRetryPendingSubmission || destination.machine.phase !== "idle" || destination.connection.status !== "connected") {
-      clearFolderNewChatIntent()
-      return
-    }
-    if (destination.hydrating) return
-    if (!destination.canSubmitMessage) { clearFolderNewChatIntent(); return }
-    clearFolderNewChatIntent() // consume before synchronous engine notification
-    actions.startNewChatAndFocus()
-  }, [actions, clearFolderNewChatIntent, engine, hydrating, machine.phase, moveScopeKey, railReadAdmitted, railReadIdentity])
   const selectConversationWithMoveFence = useCallback((id: string) => {
     setMoveSelectionGeneration((generation) => generation + 1)
     actions.selectConversationWithUrl(id)
@@ -680,6 +625,11 @@ function AppFrameRuntime({
 
   const composer = <AppFrameComposer {...composerProps} />
 
+  const toggleNavigationRail = useCallback(() => {
+    if (layout.compactDesktopRail) layout.setCompactRailOpen((open) => !open)
+    else layout.setRailCollapsed((collapsed) => !collapsed)
+  }, [layout])
+
   const mainSurface = (
     <AppFrameMainSurface
       brandName={brandName}
@@ -693,6 +643,8 @@ function AppFrameRuntime({
       resolvedRailCollapsed={layout.resolvedRailCollapsed}
       narrowWeb={narrowWeb}
       compactDesktopRail={layout.compactDesktopRail}
+      onNavigationToggle={toggleNavigationRail}
+      navigationExpanded={!layout.resolvedRailCollapsed}
       railHidden={layout.railHidden}
       showConversation={showConversation}
       conversationHydrating={navigationState.conversationHydrating}
@@ -758,7 +710,7 @@ function AppFrameRuntime({
     conversationReads: {
       engine, scope: sessionScope, currentController: conversationsCtl,
       activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
-      identity: railReadIdentity, admitted: railReadAdmitted, folderIntentIdentity: railFolderIntentIdentity, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
+      identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
         if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
@@ -769,18 +721,6 @@ function AppFrameRuntime({
       },
       onNewChat: (scope) => {
         if (sessionScopeKey(scope) === moveScopeKey) startNewChatWithMoveFence()
-        else {
-          clearFolderNewChatIntent()
-          if (!railReadAdmitted) return
-          let actor: string | null
-          try { actor = window.localStorage.getItem("kokoro.web.auth-index-subject") }
-          catch { return }
-          const target = scope.kind === "direct" ? "/app" : `/app/project/${encodeURIComponent(scope.projectRef)}`
-          const timer = window.setTimeout(clearFolderNewChatIntent, 5_000)
-          folderNewChatIntentRef.current = { identity: railReadIdentity, scopeKey: sessionScopeKey(scope), target, actor, timer }
-          setMoveSelectionGeneration((generation) => generation + 1)
-          navigateMountedSurface(target)
-        }
       },
       onMove: moveConversation,
       onDeleteConfirmed: handleConversationDeleteConfirmed,
@@ -855,6 +795,7 @@ function AppFrameRuntime({
       shellRef={layout.shellRef}
       workspaceRef={layout.workspaceRef}
       onRailOpenChange={onRailOpenChange}
+      onNavigationToggle={toggleNavigationRail}
       onResizeStart={layout.onResizeStart}
       onResizeKeyDown={layout.onResizeKeyDown}
       onCanvasLayoutChange={layout.onCanvasLayoutChange}

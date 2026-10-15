@@ -111,9 +111,9 @@ describe("Composer model selector", () => {
     expect(screen.getByRole("button", { name: /Switch mode:/ })).toBeInTheDocument()
   })
 
-  it("站点可以为专案上下文投影专属输入提示", () => {
-    renderComposer({ placeholder: "在此专案开始会话" })
-    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("placeholder", "在此专案开始会话")
+  it("站点可以为项目上下文投影专属输入提示", () => {
+    renderComposer({ placeholder: "在此项目开始会话" })
+    expect(screen.getByRole("textbox", { name: "Chat input" })).toHaveAttribute("placeholder", "在此项目开始会话")
   })
 
   it("网站创作意图显示固定选中胶囊，普通聊天不显示", () => {
@@ -281,7 +281,7 @@ describe("Composer model selector", () => {
     expect(screen.getByRole("button", { name: "Voice input" })).toBeInTheDocument()
   })
 
-  it("活动专案线程同时保留任务状态入口与底部桌面环境锚点", () => {
+  it("活动项目线程同时保留任务状态入口与底部桌面环境锚点", () => {
     renderComposer({
       models: [],
       projectWorkspace: true,
