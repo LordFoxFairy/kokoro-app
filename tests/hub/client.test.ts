@@ -1153,6 +1153,8 @@ describe("personal installation consumer", () => {
       await client.list({
         installed: false,
         enabled: false,
+        source_kind: "third_party",
+        query: "  report builder  ",
         limit: 50,
         cursor: "opaque +/=",
       }),
@@ -1161,7 +1163,7 @@ describe("personal installation consumer", () => {
       meta: { next_cursor: "opaque +/=" },
     });
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "installed=false&enabled=false&limit=50&cursor=opaque+%2B%2F%3D",
+      "installed=false&enabled=false&source_kind=third_party&query=report+builder&limit=50&cursor=opaque+%2B%2F%3D",
     );
     expect(await client.get("install-1")).toEqual(installation);
   });

@@ -658,6 +658,18 @@ export const installationListQuerySchema = z
   .object({
     installed: z.boolean().optional(),
     enabled: z.boolean().optional(),
+    // Keep the browser boundary aligned with the owner pagination contract.
+    // Applying either predicate after a 50-row page would make a matching
+    // installation disappear from the UI even though it exists in a later
+    // owner page.
+    source_kind: z.enum(["personal", "official", "third_party"]).optional(),
+    query: z
+      .string()
+      .trim()
+      .min(1)
+      .max(1024)
+      .refine((value) => !/[\uD800-\uDFFF]/u.test(value))
+      .optional(),
     limit: z.number().int().min(1).max(100).optional(),
     cursor: installationCursor.optional(),
   })
