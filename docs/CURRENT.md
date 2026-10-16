@@ -1,3 +1,11 @@
+## SET54 More 原生键盘操作验收（2026-10-16；组件通过，完整门仍失败）
+
+在SET53候选facd846上修复原生Enter/Space打不开More：现同一组件处理detail0原生激活、箭头首末项/循环/Home/End与禁用跳过、Escape仅关本菜单并回焦、选择回焦及外点不抢焦；window capture只处理最近所属Dialog，不拦嵌套Dialog。无API/数据/依赖/Skills业务变化。旧源码新增回归真实5FAIL；最终组件97PASS，原UI/E2E全文前缀精确保留。
+
+Root最终冻结树验证：contract284PASS、architecture50PASS、lint/typecheck/build exit0；完整test3728PASS/10FAIL（3738全部执行，391.36秒），仍为两IAM及八RP登录/项目会话系统用例，未根因关闭。完整浏览器32PASS/2FAIL（约1分钟）；新增SET54两个project原生键盘旅程均通过，原SET53六项中五项通过，mobile说明/文档行测量得到y差3.7109375而门限1，另有原mobile项目链接超时。没有放宽布局断言，不能将该门描述为通过。正常已登录CUA稳定同帧中文宽屏测量y差0，只是额外诊断，不关闭英文mobile失败或证明根因。
+
+冻结manifest SHA-256 bb29e36bca6ef5637dcce62538b3a16fbd79e2db5ec110106f5550761f86e841，3writer/5Root/998保护匹配，各资源门PG/Redis库存恢复。独立只读审查无确定P1/P2。owned本地预览仅热更新此菜单，未重启/重置服务与数据；CUA实际Enter/Space开菜单、末项循环、跳过电脑、Escape保留设置并回焦、Enter选择邮箱关闭菜单均验过。请求320px覆盖下截图实际291×818（当前浏览器缩放），E2E实际320px另已通过；临时视口已恢复为859×885。该预览仍为验收夹具，不代表六项后台接通。验收后仅本文补结果，产品/测试冻结不变；继续同一draft PR，不merge main，完整设置目标仍active。
+
 ## SET53 六个灰色入口补齐（2026-10-16；页面完成，完整门仍有失败）
 
 基线主线 d42fe1d29e984fccabd1d4916afb534ff0450cab，交付前核对远端未前移。Computer Use 实际查看 Manus 当前 Mail、邮箱、电话、钱包、集成、开发者六页；本轮已将六个灰色入口补为可进入页面，含导航/深链/搜索/compact More、Mail 设置/收件箱及开发者 API 密钥/Webhooks 局部页签。电脑仍禁用，Skills/MCP 业务排除。BFF public16 当前没有这些资产管理 API，未伪造邮箱地址、号码、密钥、余额、连接状态或无资产结论；创建/授权/绑定/连接/文档等无正式服务的动作明确说明并禁用。此处完成的是页面，不是六项后台服务。

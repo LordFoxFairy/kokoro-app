@@ -1990,3 +1990,148 @@ describe("SET53 service settings stay honest about unavailable owner services", 
   });
 });
 // SET53-END: service-settings-pages
+
+// SET54-BEGIN: compact-more-keyboard
+describe("SET54 compact More owns native keyboard activation and dismissal", () => {
+  it("opens on a native keyboard click, focuses the first enabled item and toggles closed", () => {
+    const onClose = vi.fn();
+    renderSettings(onClose, undefined, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    trigger.focus();
+    // jsdom does not synthesize the browser's Enter/Space click default action.
+    // Real key events are covered in the appended browser journey.
+    fireEvent.click(trigger, { detail: 0 });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("settings-more-skills")).toHaveFocus();
+    trigger.focus();
+    fireEvent.click(trigger, { detail: 0 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("opens with arrows, cycles enabled items, skips computer and isolates Escape from the parent dialog", async () => {
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
+    renderSettings(onClose, onSelect, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const first = screen.getByTestId("settings-more-skills");
+    const last = screen.getByTestId("settings-more-help");
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "End" });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: "ArrowDown" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "ArrowUp" });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: "Home" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    expect(screen.getByTestId("settings-more-email")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
+    expect(screen.getByTestId("settings-more-mail")).toHaveFocus();
+    fireEvent.click(screen.getByTestId("settings-more-computer"));
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("settings-modal")).toBeVisible();
+    fireEvent.keyDown(trigger, { key: "ArrowUp" });
+    expect(screen.getByTestId("settings-more-help")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps one pointer gesture to one toggle and restores trigger focus after selecting", () => {
+    const onSelect = vi.fn();
+    renderSettings(() => {}, onSelect, true, undefined, "mail");
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger, { detail: 1 });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    fireEvent.pointerDown(trigger, { button: 0 });
+    fireEvent.click(trigger, { detail: 1 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(trigger, { detail: 0 });
+    const email = screen.getByTestId("settings-more-email");
+    email.focus();
+    fireEvent.click(email, { detail: 0 });
+    expect(onSelect).toHaveBeenLastCalledWith("email");
+    expect(screen.getByRole("heading", { name: "邮箱", level: 1 })).toBeVisible();
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("does not steal outside focus or consume Escape from a nested dialog", async () => {
+    const { Dialog, DialogContent, DialogDescription, DialogTitle } =
+      await import("@/components/ui/dialog");
+    const { SettingsCompactMoreMenu } =
+      await import("@/ui/settings/settings-compact-more-menu");
+    const onParentChange = vi.fn();
+    function NestedDialogFixture() {
+      const [nestedOpen, setNestedOpen] = useState(false);
+      return (
+        <Dialog open onOpenChange={onParentChange}>
+          <DialogContent data-testid="settings-modal">
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>Parent settings dialog</DialogDescription>
+            <SettingsCompactMoreMenu
+              label="More"
+              items={[{ id: "email", label: "Email", tab: "email" }]}
+              onSelectTab={() => {}}
+              triggerClassName=""
+              menuClassName=""
+              itemClassName=""
+            />
+            <button type="button" onClick={() => setNestedOpen(true)}>
+              Open nested dialog
+            </button>
+            <input aria-label="Search" />
+            <Dialog open={nestedOpen} onOpenChange={setNestedOpen}>
+              <DialogContent data-testid="nested-dialog">
+                <DialogTitle>Nested dialog</DialogTitle>
+                <DialogDescription>Independent dialog scope</DialogDescription>
+                <button type="button">Nested action</button>
+              </DialogContent>
+            </Dialog>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    render(<ThemeProvider><NestedDialogFixture /></ThemeProvider>);
+    const trigger = screen.getByTestId("settings-more");
+    fireEvent.click(trigger, { detail: 0 });
+    expect(screen.getByRole("menu")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Open nested dialog" }));
+    const nestedAction = screen.getByRole("button", { name: "Nested action" });
+    nestedAction.focus();
+    fireEvent.keyDown(nestedAction, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByTestId("nested-dialog")).toBeNull());
+    expect(onParentChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu")).toBeVisible();
+    const search = screen.getByRole("textbox", { name: "Search" });
+    search.focus();
+    fireEvent.pointerDown(search, { button: 0 });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(search).toHaveFocus();
+  });
+
+  it("retires its Escape listener on unmount", () => {
+    const view = renderSettings(() => {}, undefined, true, undefined, "mail");
+    fireEvent.click(screen.getByTestId("settings-more"), { detail: 0 });
+    expect(screen.getByRole("menu")).toBeVisible();
+    view.unmount();
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    window.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(false);
+  });
+});
+// SET54-END: compact-more-keyboard

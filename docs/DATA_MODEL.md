@@ -1477,3 +1477,6 @@ Web 无新增持久业务数据/SQL/Redis；BFF personalization 唯一持久化 
 ## SET-07：账户资料数据边界
 
 无新增数据库、表、schema、Redis键、profile缓存或localStorage；IAM现User是唯一资料owner。Product session沿现有id/generation/subject与server-only access，Web不回传credential。资料只在当前已admitted身份的UI内存显示，换主体/失准入/卸载清理旧请求与旧显示，刷新重新经owner读。preview示例与live严格隔离，不用示例填补真实字段、计划、余额或登录方式。此片只读，不改姓名/邮箱、凭据、授权范围、账户删除或支付事实；后继写入分别按现owner能力实现，不以此读取片冒称整个账户设置完成。
+## SET54 More 键盘行为（2026-10-16）
+
+无持久化 owner、schema或存储变更。打开/关闭及首末键盘焦点只属于既有菜单组件生命周期，不写浏览器偏好或服务端事实。

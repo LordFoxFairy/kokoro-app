@@ -335,3 +335,76 @@ test("SET53 service tabs keep complete words and documentation shares a roomy in
   expect(checkedRoomyRow).toBe(true);
 });
 // SET53-END: service-text-layout
+
+// SET54-BEGIN: compact-more-keyboard
+test("SET54 compact More opens and navigates with native keyboard without dismissing Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.addInitScript(() => window.localStorage.setItem("kokoro.locale", "en"));
+  await page.goto("/app#/account/settings/mail", { waitUntil: "domcontentloaded" });
+  const modal = page.getByTestId("settings-modal");
+  const trigger = modal.getByTestId("settings-more");
+  const first = page.getByTestId("settings-more-skills");
+  const last = page.getByTestId("settings-more-help");
+  const menu = modal.getByRole("menu");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await expect(page.getByTestId("settings-more-computer")).toBeDisabled();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-email")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByTestId("settings-more-mail")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(modal).toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  await page.keyboard.press("Space");
+  await expect(first).toBeFocused();
+  await trigger.focus();
+  await page.keyboard.press("Space");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(last).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(first).toBeFocused();
+  for (let step = 0; step < 3; step++) await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId("settings-more-email")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modal.getByRole("heading", { name: "Email", level: 1 })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).hash).toBe("#/account/settings/email");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await trigger.click();
+  await expect(menu).toHaveCount(0);
+  await trigger.press("Enter");
+  await expect(first).toBeFocused();
+  const search = modal.getByRole("textbox", { name: "Search", exact: true });
+  await search.click();
+  await expect(menu).toHaveCount(0);
+  await expect(search).toBeFocused();
+  await expect(modal).toBeVisible();
+  await trigger.focus();
+  await page.keyboard.press("Escape");
+  await expect(modal).toHaveCount(0);
+});
+// SET54-END: compact-more-keyboard

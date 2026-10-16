@@ -1861,3 +1861,6 @@ id and does not resend POST.
 唯一新Web入口GET /api/account/profile，不是新的公开Product或IAM业务API；禁止query/body，canonical Web请求，GET以外不提供动作。调用现BFF /v1/me在线准入与/iam/oauth2/userinfo；不直接访问IAM。成功仅{data:{subject,name,email,email_verified}}，后3字段可为null，姓名/邮箱缺scope不是匿名或伪造默认值；userinfo sub与Product subject必须一致。其他IAM字段不透传，包含token、credential、cookie、Location或原始error body均不得回浏览器。
 
 所有响应private,no-store；无有效会话401、请求不合法400/403、依赖或登记未配置503、非法上游502，错误只用本片稳定安全类别，不显示原始异常。userinfo401/403失败关闭，429/5xx不得转成功空资料。单请求总5秒包含所有读取与body，上限16KiB，取消/迟到拒成功；身份校验与最终session复验同一原request，不由浏览器传subject/tenant。现IAM/BFF contract、generated pin和scope权限语义不变。
+## SET54 More 键盘行为（2026-10-16）
+
+仅现设置菜单浏览器交互；无新增或变更 API、请求资格、同源 adapter、生成物及 owner 契约。聚焦 Skills/连接器菜单项不调用其业务；禁用项始终不可选择。

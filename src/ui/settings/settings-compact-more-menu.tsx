@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 import {
   type CSSProperties,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -49,7 +50,35 @@ export function SettingsCompactMoreMenu({
   } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const pendingFocus = useRef<"first" | "last" | null>(null);
   const menuId = useId();
+
+  const closeMenu = useCallback((restoreFocus: boolean): void => {
+    pendingFocus.current = null;
+    setOpen(false);
+    if (restoreFocus) {
+      rootRef.current
+        ?.querySelector<HTMLButtonElement>("button")
+        ?.focus({ preventScroll: true });
+    }
+  }, []);
+
+  const focusEdge = useCallback((edge: "first" | "last"): void => {
+    const enabled = menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      'button[role="menuitem"]:not(:disabled)',
+    );
+    const item = edge === "last" ? enabled?.[enabled.length - 1] : enabled?.[0];
+    item?.focus({ preventScroll: true });
+  }, []);
+
+  const openMenu = (edge: "first" | "last"): void => {
+    pendingFocus.current = edge;
+    if (open && menuRef.current) {
+      focusEdge(edge);
+      pendingFocus.current = null;
+    }
+    setOpen(true);
+  };
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -90,8 +119,15 @@ export function SettingsCompactMoreMenu({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (open && menuRef.current && pendingFocus.current) {
+      focusEdge(pendingFocus.current);
+      pendingFocus.current = null;
+    }
+  }, [open, menuLayer, focusEdge]);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open || !menuLayer) return;
 
     const closeOnOutsidePointer = (event: PointerEvent): void => {
       const target = event.target as Node;
@@ -99,19 +135,31 @@ export function SettingsCompactMoreMenu({
         !rootRef.current?.contains(target) &&
         !menuRef.current?.contains(target)
       ) {
-        setOpen(false);
+        closeMenu(false);
       }
     };
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setOpen(false);
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        !(event.target instanceof Element) ||
+        event.target.closest('[data-slot="dialog-content"]') !== menuLayer.host
+      ) {
+        return;
+      }
+      // Radix dismisses Dialog at document capture. This open menu owns only
+      // Escape from its own Dialog scope, before that parent handler runs.
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
-    document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", closeOnEscape, true);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
-      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", closeOnEscape, true);
     };
-  }, [open]);
+  }, [open, menuLayer, closeMenu]);
 
   return (
     <div ref={rootRef} className="contents">
@@ -122,17 +170,35 @@ export function SettingsCompactMoreMenu({
         aria-label={label}
         aria-controls={menuId}
         aria-expanded={open}
+        aria-haspopup="menu"
         onPointerDown={(event) => {
           event.stopPropagation();
           if (event.button === 0) {
             // Keep Radix's tab list from moving focus/scrolling the compact
             // rail while the independently-owned overflow surface opens.
             event.preventDefault();
-            setOpen((current) => !current);
+            if (open) closeMenu(true);
+            else {
+              pendingFocus.current = null;
+              setOpen(true);
+            }
           }
         }}
         onClick={(event) => {
           event.stopPropagation();
+          // Enter/Space and assistive activation produce a native detail=0
+          // click. Pointer activation was already handled on pointerdown.
+          if (event.detail === 0) {
+            if (open) closeMenu(true);
+            else openMenu("first");
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            event.stopPropagation();
+            openMenu(event.key === "ArrowUp" ? "last" : "first");
+          }
         }}
       >
         <Menu aria-hidden="true" />
@@ -146,6 +212,35 @@ export function SettingsCompactMoreMenu({
               data-settings-compact-more-menu
               role="menu"
               style={menuLayer.position}
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const enabled = Array.from(
+                  event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                    'button[role="menuitem"]:not(:disabled)',
+                  ),
+                );
+                if (!enabled.length) return;
+                const current = enabled.findIndex(
+                  (item) => item === document.activeElement,
+                );
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? enabled.length - 1
+                      : event.key === "ArrowUp"
+                        ? current <= 0
+                          ? enabled.length - 1
+                          : current - 1
+                        : (current + 1) % enabled.length;
+                enabled[next]?.focus({ preventScroll: true });
+              }}
             >
               {items.map((item) => (
                 <button
@@ -153,13 +248,14 @@ export function SettingsCompactMoreMenu({
                   type="button"
                   className={itemClassName}
                   role="menuitem"
+                  tabIndex={-1}
                   data-testid={`settings-more-${item.id}`}
                   disabled={item.disabled}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (!item.tab) return;
-                    setOpen(false);
+                    if (item.disabled || !item.tab) return;
+                    closeMenu(true);
                     onSelectTab(item.tab);
                   }}
                 >
