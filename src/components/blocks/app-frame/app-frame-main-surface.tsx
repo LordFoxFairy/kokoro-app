@@ -59,26 +59,33 @@ export type AppFrameMainSurfaceProps = {
 }
 
 /** Data-free server-admitted presentation; the Runtime component is not mounted. */
-export function AppFrameBootingMainSurface({ composer }: { composer: ReactNode }) {
+export function AppFrameBootingMainSurface({ composer, standaloneSurface, hideWorkspaceHeader }: {
+  composer: ReactNode
+  standaloneSurface: boolean
+  hideWorkspaceHeader: boolean
+}) {
   const t = useT()
   return (
     <section
       className={`${mainStyles.main} ${statusStyles.threadFrame}`}
       data-app-frame-main="true"
       data-server-admitted-shell="true"
+      data-standalone-surface={standaloneSurface ? "true" : undefined}
       data-desktop-web="true"
       data-web-view="welcome"
     >
       {/* The admitted document has no owner data yet. Reserve the stable
        * workspace landmarks so the eventual page replaces structure instead
-       * of appearing after a blank frame. All of this is presentation-only;
-       * the disabled Composer below remains the sole interactive state. */}
-      <header className={statusStyles.bootingHeader} aria-hidden="true">
-        <span className={statusStyles.bootingHeaderTitle} />
-        <span className={statusStyles.bootingHeaderTools} />
-      </header>
+       * of appearing after a blank frame. Respect the route presentation:
+       * catalogs must never briefly present a conversation Composer. */}
+      {!hideWorkspaceHeader ? (
+        <header className={statusStyles.bootingHeader} aria-hidden="true">
+          <span className={statusStyles.bootingHeaderTitle} />
+          <span className={statusStyles.bootingHeaderTools} />
+        </header>
+      ) : null}
       <div className={statusStyles.timelineStage} aria-hidden="true" />
-      <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset>
+      {!standaloneSurface ? <fieldset disabled aria-label={t("shell.loadingApp")}>{composer}</fieldset> : null}
     </section>
   )
 }

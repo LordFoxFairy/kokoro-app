@@ -115,6 +115,28 @@ afterEach(() => {
 })
 
 it.each([
+  { label: "direct chat", standaloneSurface: false, hideWorkspaceHeader: false, composer: true, header: true },
+  { label: "standalone catalog", standaloneSurface: true, hideWorkspaceHeader: true, composer: false, header: false },
+  { label: "standalone with header", standaloneSurface: true, hideWorkspaceHeader: false, composer: false, header: true },
+  { label: "chat without header", standaloneSurface: false, hideWorkspaceHeader: true, composer: true, header: false },
+])("cold admission shell respects $label presentation without mounting private content", async ({ standaloneSurface, hideWorkspaceHeader, composer, header }) => {
+  const privateSurface = vi.fn(() => <div>private catalog content</div>)
+  const fetch = vi.fn<typeof globalThis.fetch>()
+  vi.spyOn(globalThis, "fetch").mockImplementation(fetch)
+  mountFrame({ booting: true, standaloneSurface, hideWorkspaceHeader, emptyState: privateSurface })
+  await act(async () => { await Promise.resolve() })
+
+  const input = screen.queryByRole("textbox", { name: "对话输入" })
+  if (composer) expect(input).toBeDisabled()
+  else expect(input).not.toBeInTheDocument()
+  expect(document.querySelector("header") !== null).toBe(header)
+  expect(privateSurface).not.toHaveBeenCalled()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(client.snapshotCalls).toEqual([])
+  expect(client.streams).toEqual([])
+})
+
+it.each([
   { label: "saved expanded", cookie: "true", defaultCollapsed: true, expectedCollapsed: false },
   { label: "saved collapsed", cookie: "false", defaultCollapsed: false, expectedCollapsed: true },
   { label: "missing cookie / collapsed default", cookie: null, defaultCollapsed: true, expectedCollapsed: true },

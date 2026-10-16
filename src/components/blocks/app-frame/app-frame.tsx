@@ -50,7 +50,12 @@ export type { AppCommandMenuProps }
 export type { AppFrameProps, EmptyStateProps, WorkspaceCapabilities } from "./app-frame.types"
 export { COMPACT_DESKTOP_RAIL_BREAKPOINT, settingsTabFromLocation }
 
-function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<AppFrameProps, "brandName" | "projectWorkspace">) {
+function AppFrameBootingSurface({
+  brandName,
+  projectWorkspace = false,
+  standaloneSurface = false,
+  hideWorkspaceHeader = false,
+}: Pick<AppFrameProps, "brandName" | "projectWorkspace" | "standaloneSurface" | "hideWorkspaceHeader">) {
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const composer = (
     <AppFrameComposer
@@ -96,7 +101,11 @@ function AppFrameBootingSurface({ brandName, projectWorkspace = false }: Pick<Ap
         </aside>
         <div className={shellStyles.workspace}>
           <div className={`${shellStyles.mainPanel} flex-1`}>
-            <AppFrameBootingMainSurface composer={composer} />
+            <AppFrameBootingMainSurface
+              composer={composer}
+              standaloneSurface={standaloneSurface}
+              hideWorkspaceHeader={hideWorkspaceHeader}
+            />
           </div>
         </div>
       </div>
@@ -109,6 +118,8 @@ export function AppFrame(props: AppFrameProps) {
     ? <AppFrameBootingSurface
         {...(props.brandName === undefined ? {} : { brandName: props.brandName })}
         {...(props.projectWorkspace === undefined ? {} : { projectWorkspace: props.projectWorkspace })}
+        {...(props.standaloneSurface === undefined ? {} : { standaloneSurface: props.standaloneSurface })}
+        {...(props.hideWorkspaceHeader === undefined ? {} : { hideWorkspaceHeader: props.hideWorkspaceHeader })}
       />
     : <AppFrameRuntime {...props} />
 }
