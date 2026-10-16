@@ -1,3 +1,13 @@
+## 2026-10-16 登录故障静默恢复（局部交互修复）
+
+删除 `RuntimeSessionUnavailable` 及其全页/悬浮诊断卡片；临时故障不冒充匿名、不切 preview，也不要求用户反复点击 Retry。初始服务端 admission 异常保持数据空壳，按 1s/3s 两次 RSC refresh 重验，不整文档 reload；浏览器探针沿原有可信读取/续期链做有界快恢复，成功或卸载清理定时器。既有可见页两分钟重核和 focus/online 恢复保留，因此不是整个文档生命周期只重试两次。只有真实 anonymous 决定才进入现有固定登录流程。
+
+已核验 actor 的临时故障保留原有挂载展示和冻结意图，但现有 generation/admitted 围栏继续撤销所保护的 Project/Skills 读写。首次未确认时仍不挂载私有 Runtime；屏幕阅读器得到重连状态，无可见错误浮层。未改 token、OIDC 回调、凭据、IAM 允许列表、owner 契约或后端数据。
+
+既有 4 个真实 Next HTTP 用例不再强制错误卡片/手动 Retry：改验自动恢复，并保留无私有 I/O、请求去重、10 秒取消与 socket 关闭、迟到匿名尾丢弃、同文档草稿保留和唯一登录路径。4 项定向真实 HTTP PASS，现有 4 UI 文件 134 PASS；未新增 UI 套件。包含在途 Skills 更新代码的组合工作树 Node 22 `pnpm check` 最终 exit 0（contract 278、architecture 50、180 files / 3110 tests，lint/typecheck/build 通过）；此前 4 项旧交互断言失败已据新需求重写，不记为既存失败。独立公开壳层/preview 项目会话 E2E 桌面与窄屏 4 PASS，不把 preview 或受控 HTTP fixture 称为正常 owner 全链。
+
+本片不关闭个人安装原子更新、Agent/Billing 或全页面 Manus 一比一验收；远程 CI、push/PR/merge 继续暂停。正常入口的浏览器验收独立记录，不把组合候选编译通过当成实际装载证据。
+
 ## 2026-10-16 Skills 目录定时重核验收
 
 同 actor 正常重核保留搜索、筛选和精确详情 locator/模态壳，私有目录、详情与动作仍按代际退役。旧安装回调不借新 signal，未知安装重试保持原 source/key；确定拒绝可释放意图。未知分享跨重核仍要求明确新意图，导入重核清只读/已确认展示而保留未知恢复命令；详情追加页失败在模态内可见。

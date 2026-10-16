@@ -533,3 +533,36 @@ it("budgets cold readonly GET and CSRF together, not a fresh 10s per stage", asy
     expect(fetchMock).toHaveBeenCalledTimes(2)
   } finally { view.unmount() }
 })
+
+
+it("recovers a transient session check in the background without a manual retry or a new login", async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ authenticated: false }, { status: 503 })).mockResolvedValueOnce(Response.json({ authenticated: true, subject: "reader-a" })).mockResolvedValueOnce(csrf()).mockResolvedValueOnce(renewed());
+  vi.stubGlobal("fetch", fetchMock);
+  const view = renderHook(() => useSessionProbe());
+  try {
+    await act(async () => { await Promise.resolve(); });
+    expect(view.result.current.unavailable).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(view.result.current.projectReadBoundary).toMatchObject({ admitted: true, subject: "reader-a" });
+    expect(view.result.current.unavailable).toBe(false);
+    const count = fetchMock.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(count);
+  } finally { view.unmount(); }
+});
+it("bounds background outage retries and cancels them when the session probe unmounts", async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ authenticated: false }, { status: 503 })));
+  vi.stubGlobal("fetch", fetchMock);
+  const view = renderHook(() => useSessionProbe());
+  try {
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(view.result.current.projectReadBoundary.admitted).toBe(false);
+    expect(view.result.current.state).toBe("unavailable");
+  } finally { view.unmount(); }
+  await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});

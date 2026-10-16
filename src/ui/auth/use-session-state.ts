@@ -168,6 +168,16 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     // turn. They describe one admission check, so do not retire the same read
     // boundary twice while that hook's check is still unsettled.
     let checkPending = false
+    let recoveryAttempt = 0
+    let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+    const recoveryDelays = [1_000, 3_000]
+    const scheduleRecovery = () => {
+      if (!live || recoveryTimer !== undefined || recoveryAttempt >= recoveryDelays.length) return
+      recoveryTimer = setTimeout(() => {
+        recoveryTimer = undefined
+        if (document.visibilityState === "visible" && !documentSuspended) check()
+      }, recoveryDelays[recoveryAttempt++])
+    }
     const check = (): void => {
       if (checkPending) return
       checkPending = true
@@ -183,6 +193,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
         if (!live || generationRef.current !== currentGeneration) return
         checkPending = false
         if (resolved.mode === "unavailable") {
+          scheduleRecovery()
           browserConversationMoveCoordinator().suspendVerifiedSubject(admittedSubject)
           setProbe((current) => current.mode === "authenticated"
             ? { ...current, unavailable: true, requestPending: false, retry,
@@ -231,6 +242,9 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
           refreshUnconfirmed = false
           refreshSubject = null
         }
+        clearTimeout(recoveryTimer)
+        recoveryTimer = undefined
+        recoveryAttempt = 0
         setProbe({
           state: resolved.mode === "authenticated" ? "pass" : "anonymous",
           mode: resolved.mode === "authenticated" ? "authenticated" : "checking",
@@ -263,6 +277,7 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
       documentSuspended = false
       onVisible()
     }
+    window.addEventListener("online", onVisible)
     window.addEventListener("focus", onVisible)
     document.addEventListener("visibilitychange", onVisible)
     window.addEventListener("pagehide", onPageHide)
@@ -270,11 +285,13 @@ export function useSessionProbe(options: Readonly<{ serverUnavailable?: boolean 
     const timer = setInterval(onVisible, REFRESH_INTERVAL_MS)
     return () => {
       live = false
+      window.removeEventListener("online", onVisible)
       window.removeEventListener("focus", onVisible)
       document.removeEventListener("visibilitychange", onVisible)
       window.removeEventListener("pagehide", onPageHide)
       window.removeEventListener("pageshow", onPageShow)
       clearInterval(timer)
+      clearTimeout(recoveryTimer)
     }
   }, [retry, retryGeneration, serverUnavailable])
 

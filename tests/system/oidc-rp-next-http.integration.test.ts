@@ -3056,7 +3056,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 45_000)
 
-  it("R150 turns complete localStorage denial into a recoverable session alert instead of a private workspace", async () => {
+  it("R150 keeps a data-free shell on complete localStorage denial without a login diagnostic card", async () => {
     const { jar, location } = await start()
     const authorize = await http(nextPort, new URL(location).pathname + new URL(location).search)
     expect(authorize.status).toBe(302)
@@ -3088,9 +3088,13 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const page = await context.newPage()
       observeBrowserDiagnostics(page)
       let sessionRequests = 0
+      let privateRequests = 0
       const sessionStatuses: number[] = []
       page.on("request", (request) => {
-        if (new URL(request.url()).pathname === "/api/auth/session") sessionRequests += 1
+        const pathname = new URL(request.url()).pathname
+        if (pathname === "/api/auth/session") sessionRequests += 1
+        if (pathname.startsWith("/api/session/") || pathname.startsWith("/api/hub/") ||
+          pathname === "/api/system/runtime-manifest") privateRequests += 1
       })
       page.on("response", (response) => {
         if (new URL(response.url()).pathname === "/api/auth/session") sessionStatuses.push(response.status())
@@ -3114,9 +3118,9 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       const response = await page.goto(`${origin}/app`, { waitUntil: "domcontentloaded", timeout: remaining() })
       if (response?.status() !== 200) throw new Error(await diagnostic("storage_denial_document"))
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
       try {
-        await alert.waitFor({ state: "visible", timeout: remaining() })
+        await reconnecting.waitFor({ state: "attached", timeout: remaining() })
         await expect.poll(() => page.getByTestId("runtime-loading").count(), { timeout: remaining() }).toBe(0)
       } catch (error) {
         throw new Error(await diagnostic("storage_denial_alert"), { cause: error })
@@ -3124,15 +3128,18 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(sessionRequests).toBeGreaterThanOrEqual(1)
       expect(sessionStatuses).toHaveLength(sessionRequests)
       expect(sessionStatuses.every((status) => status === 200)).toBe(true)
-      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
-      expect(await page.locator('[data-slot="composer-input"]').count()).toBe(0)
+      expect(await page.locator('[data-server-admitted-shell="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(false)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await retry.count()).toBe(0)
+      expect(privateRequests).toBe(0)
     } finally {
       try { await context?.close() }
       finally { await browser?.close() }
     }
   }, 45_000)
 
-  it("R139 turns a pending browser session probe into a recoverable alert without request storms", async () => {
+  it("R139 silently recovers a timed-out browser session probe without request storms", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     const outputStart = output.length
@@ -3156,8 +3163,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         window.dispatchEvent(new Event("focus"))
       })
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      try { await alert.waitFor({ timeout: 12_000 }) }
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      try { await reconnecting.waitFor({ state: "attached", timeout: 12_000 }) }
       catch { throw new Error(await browserProbeDiagnostic("pending_alert", page, response, proxy, outputStart)) }
       expect(proxy.sessionRequests()).toBe(1)
       expect(new URL(page.url()).pathname).toBe("/app")
@@ -3165,14 +3172,14 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 18_000
       const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
       expect(proxy.loginRequests()).toBe(0)
       proxy.releasePending()
       await requireStableAuthenticatedWorkspace(
         "pending_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      await expect.poll(() => alert.count(), { timeout: recoveryBudget() }).toBe(0)
+      await expect.poll(() => reconnecting.count(), { timeout: recoveryBudget() }).toBe(0)
       await context.close()
     } finally {
       proxy.releasePending()
@@ -3181,7 +3188,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
-  it("R227 aborts an unfinished 200 session body and recovers on Retry without accepting its late anonymous tail", async () => {
+  it("R227 aborts an unfinished 200 session body and silently recovers without accepting its late anonymous tail", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     let context: BrowserContext | undefined
@@ -3226,8 +3233,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         path === "/api/system/runtime-manifest")).toEqual([])
 
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      await alert.waitFor({ timeout: 12_000 })
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      await reconnecting.waitFor({ state: "attached", timeout: 12_000 })
       await expect.poll(() => failedBodies).toBe(1)
       await expect.poll(() => proxy.sessionBodyDiagnostics()[0]?.closed).toBe(true)
       const aborted = proxy.sessionBodyDiagnostics()[0]
@@ -3238,17 +3245,20 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.sessionRequests()).toBe(1)
       expect(proxy.loginRequests()).toBe(0)
       expect(new URL(page.url()).pathname).toBe("/app")
-      expect(await page.locator('[data-app-frame-main="true"]').count()).toBe(0)
+      expect(await page.locator('[data-server-admitted-shell="true"]').isVisible()).toBe(true)
+      expect(await page.locator('[data-slot="composer-input"]').isEnabled()).toBe(false)
+      expect(await page.locator('[data-slot="conversation-timeline"]').count()).toBe(0)
+      expect(await retry.count()).toBe(0)
 
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 18_000
       const remaining = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: remaining() }).toBe(2)
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: remaining() })
       const composer = page.locator('[data-slot="composer-input"]')
       await expect.poll(() => composer.isEnabled(), { timeout: remaining() }).toBe(true)
-      await expect.poll(() => alert.count(), { timeout: remaining() }).toBe(0)
+      await expect.poll(() => reconnecting.count(), { timeout: remaining() }).toBe(0)
       await composer.fill("r227-session-body-recovered")
       proxy.releaseSessionBodies()
       expect(proxy.sessionBodyDiagnostics()[0]).toMatchObject({
@@ -3261,7 +3271,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       }))
       expect(await composer.inputValue()).toBe("r227-session-body-recovered")
       expect(await composer.isEnabled()).toBe(true)
-      expect(await alert.count()).toBe(0)
+      expect(await reconnecting.count()).toBe(0)
       expect(proxy.sessionRequests()).toBe(2)
       expect(proxy.loginRequests()).toBe(0)
       expect(bodyResponses).toHaveLength(1)
@@ -3282,7 +3292,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     }
   }, 60_000)
 
-  it("R139 keeps a 503 session probe on an explicit retry surface instead of redirecting to login", async () => {
+  it("R139 silently recovers a 503 session probe without redirecting to login", async () => {
     const proxy = await sessionProbeProxy(nextPort)
     let browser: Browser | undefined
     const outputStart = output.length
@@ -3298,8 +3308,8 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       if (response?.status() !== 200) throw new Error(await browserProbeDiagnostic("unavailable_document", page, response, proxy, outputStart))
       await requireSessionProbe("unavailable_probe_barrier", 1, page, response, proxy, outputStart)
       const retry = page.getByRole("button", { name: /Retry|重试/u })
-      const alert = page.getByRole("alert").filter({ has: retry })
-      try { await alert.waitFor({ timeout: 12_000 }) }
+      const reconnecting = page.getByRole("status").filter({ hasText: /Reconnecting|重连中/u })
+      try { await reconnecting.waitFor({ state: "attached", timeout: 12_000 }) }
       catch { throw new Error(await browserProbeDiagnostic("unavailable_alert", page, response, proxy, outputStart)) }
       expect(new URL(page.url()).pathname).toBe("/app")
       expect(proxy.loginRequests()).toBe(0)
@@ -3308,7 +3318,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       proxy.setFault("pass")
       const recoveryDeadline = Date.now() + 15_000
       const recoveryBudget = (): number => Math.max(1, recoveryDeadline - Date.now())
-      await retry.click()
+      expect(await retry.count()).toBe(0)
       await expect.poll(() => proxy.sessionRequests(), { timeout: recoveryBudget() }).toBeGreaterThanOrEqual(2)
       expect(proxy.loginRequests()).toBe(0)
       await requireStableAuthenticatedWorkspace(

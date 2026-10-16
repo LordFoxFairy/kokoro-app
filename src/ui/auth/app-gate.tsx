@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { useT } from "@/i18n/context"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 import { useRuntimeManifest } from "@/system/use-runtime-manifest"
 import { KokoroAppSurface } from "@/features/app/kokoro-app-surface"
@@ -10,7 +10,6 @@ import { DEFAULT_BRAND } from "@/config/brand"
 
 import { useSessionProbe } from "./use-session-state"
 import { openProductSignIn } from "./product-auth-client"
-import { RuntimeSessionUnavailable } from "./runtime-loading"
 import { browserScheduledTaskClient } from "@/ui/shell/page-clients"
 
 export function AppGate({ brandName, serverAdmitted = false, serverUnavailable = false }: {
@@ -19,6 +18,7 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
   serverUnavailable?: boolean
 } = {}) {
   const pathname = usePathname()
+  const router = useRouter()
   const t = useT()
   const probe = useSessionProbe({ serverUnavailable })
   const anonymousNavigationStarted = useRef(false)
@@ -30,7 +30,6 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
   const brand = livePresentation ? manifest.brand : DEFAULT_BRAND
   const brandLogoUrl = livePresentation ? manifest.brand.logoUrl : undefined
   const state = probe.state
-  const retryServerAdmission = () => window.location.reload()
 
   useEffect(() => {
     if (state !== "anonymous" || window.location.pathname === "/login") {
@@ -43,43 +42,59 @@ export function AppGate({ brandName, serverAdmitted = false, serverUnavailable =
     catch { /* Keep the data-free shell; never restore private Runtime. */ }
   }, [pathname, state])
 
-  if (serverUnavailable) {
-    return <RuntimeSessionUnavailable label={t("shell.sessionUnavailable")} retryLabel={t("shell.sessionRetry")}
-      pendingLabel={t("shell.loadingApp")} onRetry={retryServerAdmission} pending={false} />
-  }
+  const unavailable = serverUnavailable || state === "unavailable" || probe.unavailable
+  // Retain the last verified actor's mounted presentation and frozen intents.
+  // The existing admission boundary still retires scoped reads and mutation actions.
+  const booting = serverUnavailable || probe.mode === "checking" || serverAdmitted && probe.mode !== "authenticated"
 
-  if (state === "unavailable") {
-    return <RuntimeSessionUnavailable label={t("shell.sessionUnavailable")} retryLabel={t("shell.sessionRetry")}
-      pendingLabel={t("shell.loadingApp")} onRetry={probe.retry} pending={probe.requestPending} />
-  }
-  if ((state === "checking" || state === "anonymous") && !serverAdmitted) {
-    // Direct deep links can reach the browser before the server-side cookie
-    // admission is available. Keep the data-free product shell in place while
-    // the client probe decides, rather than replacing the whole page with a
-    // transient loading card. `booting` mounts no Runtime data clients.
-    return <KokoroAppSurface
-      booting
-      brandName={brandName ?? DEFAULT_BRAND.name}
-      brandMark={DEFAULT_BRAND.mark}
-      preview={false}
-      projectReadBoundary={probe.projectReadBoundary}
-    />
-  }
+  useEffect(() => {
+    if (!serverUnavailable) return
+    let live = true
+    let attempt = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const delays = [1_000, 3_000]
+    const schedule = () => {
+      if (!live || timer !== undefined || attempt >= delays.length) return
+      timer = setTimeout(() => {
+        timer = undefined
+        if (!live || document.visibilityState !== "visible") return
+        attempt++
+        // RSC refresh re-runs the authoritative server admission without a
+        // document reload, a second login flow or exporting browser tokens.
+        router.refresh()
+        schedule()
+      }, delays[attempt])
+    }
+    const resume = () => {
+      if (document.visibilityState === "visible" && timer === undefined) {
+        attempt = 0
+        schedule()
+      }
+    }
+    schedule()
+    window.addEventListener("online", resume)
+    window.addEventListener("focus", resume)
+    return () => {
+      live = false
+      clearTimeout(timer)
+      window.removeEventListener("online", resume)
+      window.removeEventListener("focus", resume)
+    }
+  }, [serverUnavailable, router])
 
   // Product-owned defaults are not preview data. Only a verified live manifest
   // may override visual presentation or feature flags.
   return (<>
-    {probe.unavailable ? <RuntimeSessionUnavailable compact label={t("shell.sessionUnavailable")} retryLabel={t("shell.sessionRetry")}
-      pendingLabel={t("shell.loadingApp")} onRetry={probe.retry} pending={probe.requestPending} /> : null}
+    {unavailable ? <p role="status" aria-live="polite" className="sr-only">{t("thread.reconnecting")}</p> : null}
     <KokoroAppSurface
-      booting={serverAdmitted && probe.mode !== "authenticated"}
+      booting={booting}
       brandName={brandName ?? brand.name}
       brandMark={brand.mark}
       {...(brandLogoUrl === undefined ? {} : { brandLogoUrl })}
       {...(livePresentation ? { navigation: manifest.navigation, featureFlags: manifest.featureFlags } : {})}
-      preview={probe.mode === "preview"}
+      preview={!serverUnavailable && probe.mode === "preview"}
       projectReadBoundary={probe.projectReadBoundary}
-      {...(probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
+      {...(!booting && probe.mode === "authenticated" ? { scheduledTaskClient: browserScheduledTaskClient() } : {})}
     />
   </>)
 }
