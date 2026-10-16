@@ -4278,6 +4278,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         timeout: 10_000,
       }).toBeGreaterThan(0)
       const projectBReadsBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length
+      const projectBReadBeforeAck = moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)
       const composer = page.locator('[data-slot="composer-input"]')
       const projectBDraft = "R195 keep the mounted Project B draft"
       await composer.fill(projectBDraft)
@@ -4317,12 +4318,11 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
         .toBe(`/app/project/${moveProjectB}`)
       await expect.poll(() => page.locator('[data-slot="composer-input"]').inputValue(), { timeout: 10_000 })
         .toBe(projectBDraft)
-      await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).length, {
-        timeout: 10_000,
-      }).toBe(projectBReadsBeforeAck + 1)
-      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual({
-        scope: `project:${moveProjectB}`, bindingAtRead: moveProjectA, sessionIds: [],
-      })
+      // Direct→A has already received distinct post-ACK reads above. B is
+      // neither source nor target: navigation must retain its reader/pages,
+      // not require a remount GET just to keep the unrelated draft intact.
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`)).toHaveLength(projectBReadsBeforeAck)
+      expect(moveBindingScopeGets.filter((entry) => entry.scope === `project:${moveProjectB}`).at(-1)).toEqual(projectBReadBeforeAck)
       expect(moveBoundaryRequests).toHaveLength(1)
     } finally {
       moveBindingFixtureEnabled = false

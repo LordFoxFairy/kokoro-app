@@ -163,7 +163,7 @@ export function WorkspaceRailShell({
 
   const directConversationGroup = conversationReads ? <ScopedConversationGroup
     key={`direct:${conversationReads.identity}`}
-    scope={DIRECT_SESSION_SCOPE} reads={conversationReads} preview={preview}
+    scope={DIRECT_SESSION_SCOPE} reads={conversationReads}
     compactDesktop={contentCompactDesktop} query={query} searchOpen={searchOpen}
     awaitingIds={awaitingIds} closeNavigation={closeNavigation} onNewChat={onNewChat}
     onRequestDelete={onRequestDelete} projects={projectItems}
@@ -389,7 +389,6 @@ export function WorkspaceRailShell({
             conversationMoveFailed={conversationMoveFailed}
             {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
             {...(conversationReads === undefined ? {} : { conversationReads })}
-            preview={preview}
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}

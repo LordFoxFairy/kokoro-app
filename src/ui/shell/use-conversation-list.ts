@@ -27,10 +27,8 @@ export type ConversationListController = {
   refresh: () => void
   hasMore: boolean
   loadMore: () => void
-  selectConversation: (id: string) => void
   deleteConversation: (id: string) => Promise<boolean>
   renameConversation: (id: string, title: string) => void
-  startNewChat: () => void
 }
 
 export function useConversationList(params: {
@@ -41,14 +39,13 @@ export function useConversationList(params: {
   isStreaming: boolean
   /** False while another scope owns the engine, or its lease/snapshot is not ready. */
   observeRunStatus?: boolean
-  focusComposer: () => void
   scope?: SessionScope
   scopeRevision?: number
   readBoundary?: { identity: string; admitted: boolean }
   onDeleteConfirmed?: (scope: SessionScope, id: string) => void
 }): ConversationListController {
   const {
-    engine, preview = false, activeId, thread, isStreaming, observeRunStatus = true, focusComposer,
+    engine, preview = false, activeId, thread, isStreaming, observeRunStatus = true,
     scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, readBoundary, onDeleteConfirmed,
   } = params
 
@@ -102,12 +99,6 @@ export function useConversationList(params: {
     }
   }, [lifecycleIdentity])
 
-  const withOverride = (id: string, title: string): string => {
-    const overlay = titleOverrides[id]
-    if (overlay === undefined || overlay.lifecycle.identity !== lifecycleIdentity) return title
-    return overlay.title
-  }
-
   const requestListRefresh = useCallback((): number => {
     const next = listRefreshRef.current + 1
     listRefreshRef.current = next
@@ -128,15 +119,20 @@ export function useConversationList(params: {
   // 当前活跃会话若尚未在服务端清单出现：仅在它已有真实内容时合成置顶项。
   // 空工作区不应在「最近」里出现一个没有任何历史的“新对话”行；这会让
   // 首屏看起来像已经有一条任务，也不符合 Manus/Codex 的空工作台语义。
-  const activeInList = activeId !== null && sessionList.entries.some((entry) => entry.id === activeId)
-  const activeHasContent = thread.messages.length > 0 || Boolean(thread.meta?.title?.trim())
-  const conversations =
-    lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent
-      ? [
-          { id: activeId, title: withOverride(activeId, thread.meta?.title ?? conversationTitle(thread.messages)) },
-          ...sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) })),
-        ]
-      : sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
+  const activeMessages = activeId === null ? null : thread.messages
+  const activeTitle = activeId === null ? undefined : thread.meta?.title
+  const conversations = useMemo(() => {
+    const withOverride = (id: string, title: string): string => {
+      const overlay = titleOverrides[id]
+      return overlay?.lifecycle.identity === lifecycleIdentity ? overlay.title : title
+    }
+    const entries = sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
+    const activeInList = activeId !== null && sessionList.entries.some((entry) => entry.id === activeId)
+    const activeHasContent = (activeMessages?.length ?? 0) > 0 || Boolean(activeTitle?.trim())
+    return lifecycleIdentity.admitted && activeId !== null && !activeInList && activeHasContent
+      ? [{ id: activeId, title: withOverride(activeId, activeTitle ?? conversationTitle(activeMessages ?? [])) }, ...entries]
+      : entries
+  }, [activeId, lifecycleIdentity, sessionList.entries, activeMessages, activeTitle, titleOverrides])
 
   // run 收尾（streaming→idle 落沿）即刷新清单：首条消息落库后新会话进服务端列表，标题也随之更新。
   const observedRunRef = useRef<{ identity: typeof lifecycleIdentity; streaming: boolean } | null>(null)
@@ -152,24 +148,9 @@ export function useConversationList(params: {
     observedRunRef.current = { identity: lifecycleIdentity, streaming: isStreaming }
   }, [isStreaming, lifecycleIdentity, observeRunStatus, requestListRefresh])
 
-  const startNewChat = useCallback(() => {
-    // 不清 draft：newConversation 换 activeId 后，草稿 controller 会加载新会话自己的草稿。
-    engine?.newConversation()
-    focusComposer()
-  }, [engine, focusComposer])
-
   const refresh = useCallback(() => {
     requestListRefresh()
   }, [requestListRefresh])
-
-  const selectConversation = useCallback(
-    (id: string) => {
-      // 不清 draft：切 activeId 后草稿 controller 加载目标会话草稿（切走的草稿已落盘保留）。
-      engine?.openConversation(id)
-      focusComposer()
-    },
-    [engine, focusComposer],
-  )
 
   const deleteFlight = useRef<{ id: string; lifecycle: LifecycleToken; promise: Promise<boolean> } | null>(null)
   const deleteConversation = useCallback((id: string): Promise<boolean> => {
@@ -266,7 +247,7 @@ export function useConversationList(params: {
     drainRenameQueue(id, queue)
   }, [drainRenameQueue])
 
-  return {
+  return useMemo(() => ({
     conversations,
     loading: sessionList.loading,
     loadingMore: sessionList.loadingMore,
@@ -274,9 +255,8 @@ export function useConversationList(params: {
     refresh,
     hasMore: sessionList.hasMore,
     loadMore: sessionList.loadMore,
-    selectConversation,
     deleteConversation,
     renameConversation,
-    startNewChat,
-  }
+  }), [conversations, sessionList.loading, sessionList.loadingMore, sessionList.error, sessionList.hasMore,
+    sessionList.loadMore, refresh, deleteConversation, renameConversation])
 }

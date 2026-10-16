@@ -1037,6 +1037,68 @@ it.each(["idle", "streaming", "reattach-running", "reattach-completed"])("direct
   } finally { view.unmount(); projectEngine.dispose(); reattachedEngine?.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+it.each(["pages", "pending rename"] as const)("a project keeps its own reader across folder and route transitions (%s)", async (scenario) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000852"
+  const projectScope = { kind: "project", projectRef } as const
+  const projectEngine = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: projectScope })
+  let ownerTitle = "项目原题"
+  let acknowledgeRename: (() => void) | undefined
+  const listSessions = vi.fn<typeof client.listSessions>(async (cursor, scope) => scope?.kind === "project" ? {
+    sessions: [{ session_id: cursor === "project-page-two" ? "conv-project-page-two" : "conv-project-first", title: cursor === "project-page-two" ? "项目第二页" : ownerTitle, updated_at: "2026-10-15T00:00:00Z" }],
+    next_cursor: cursor === "project-page-two" ? null : "project-page-two",
+  } : { sessions: [], next_cursor: null })
+  const renameSession = vi.fn<typeof client.renameSession>((_id, title) => new Promise((resolve) => {
+    acknowledgeRename = () => { ownerTitle = title; resolve({ ok: true }) }
+  }))
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions, renameSession })
+  stubBusinessFetch(vi.fn<typeof fetch>().mockImplementation(async () => Response.json({
+    data: { projects: [{ id: projectRef, name: "项目生命周期", slug: "reader", description: "", created_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z" }] },
+    meta: { request_id: "req-project-reader" },
+  })))
+  const frame = (project: boolean) => <StrictMode><ThemeProvider><LocaleProvider><AppFrame
+    engine={project ? projectEngine : engine} chatHref="/app" desktopRailCollapsed={false}
+    projectWorkspace={project} {...(project ? { projectRef } : {})}
+    projectReadBoundary={{ admitted: true, subject: "project-reader", generation: 1 }}
+  /></LocaleProvider></ThemeProvider></StrictMode>
+  const projectReads = () => listSessions.mock.calls.filter(([, scope]) => scope?.kind === "project")
+  const group = () => within(screen.getByRole("navigation", { name: "项目会话" }))
+  window.history.replaceState({}, "", "/app")
+  const view = render(frame(false))
+  try {
+    const expand = await screen.findByRole("button", { name: /展开.*项目生命周期/ })
+    expect(projectReads()).toHaveLength(0) // unopened folders do not prefetch
+    fireEvent.click(expand)
+    await group().findByRole("button", { name: ownerTitle })
+    if (scenario === "pages") {
+      fireEvent.click(group().getByRole("button", { name: "加载更多" }))
+      await group().findByRole("button", { name: "项目第二页" })
+    } else {
+      fireEvent.click(group().getByRole("button", { name: "重命名会话 项目原题" }))
+      const input = group().getByRole("textbox")
+      fireEvent.change(input, { target: { value: "已确认的新题" } })
+      fireEvent.keyDown(input, { key: "Enter" })
+      await waitFor(() => expect(renameSession).toHaveBeenCalledOnce())
+    }
+    const readsBeforeNavigation = projectReads().length
+    act(() => window.history.pushState({}, "", `/app/project/${projectRef}`))
+    view.rerender(frame(true))
+    expect(group().getByRole("button", { name: scenario === "pages" ? "项目第二页" : "已确认的新题" })).toBeVisible()
+    expect(projectReads()).toHaveLength(readsBeforeNavigation)
+    act(() => window.history.pushState({}, "", "/app"))
+    view.rerender(frame(false))
+    fireEvent.click(screen.getByRole("button", { name: /收起.*项目生命周期/ }))
+    expect(screen.queryByRole("navigation", { name: "项目会话" })).toBeNull()
+    if (scenario === "pending rename") {
+      await act(async () => { acknowledgeRename!() })
+      await waitFor(() => expect(projectReads()).toHaveLength(readsBeforeNavigation + 1))
+    }
+    fireEvent.click(screen.getByRole("button", { name: /展开.*项目生命周期/ }))
+    expect(group().getByRole("button", { name: scenario === "pages" ? "项目第二页" : "已确认的新题" })).toBeVisible()
+    expect(projectReads()).toHaveLength(readsBeforeNavigation + (scenario === "pending rename" ? 1 : 0))
+  } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
 it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000801"
   const projectPath = `/app/project/${projectRef}`
@@ -1172,7 +1234,6 @@ function mountProjectSubmitBoundary(projectEngine: SessionEngine, projectRef: st
     standaloneSurface: false, chatHref: "/app", activeId: projectEngine.getSnapshot().store?.activeId ?? null,
     draft: "new root intent", clearDraft, updateDraft: vi.fn(), setDeploymentIntent: vi.fn(),
     syncConversationUrl, setConversationRouteId,
-    conversations: { conversations: [], loading: false, loadingMore: false, error: false, refresh: vi.fn(), hasMore: false, loadMore: vi.fn(), selectConversation: vi.fn(), deleteConversation: async () => true, renameConversation: vi.fn(), startNewChat: vi.fn() },
     focusComposer: vi.fn(), closeSettings: vi.fn(), brandName: "Kokoro", commandNewChatTimerRef: { current: null },
   }
   const view = renderHook(() => useAppFrameActions(options), { wrapper: LocaleProvider })

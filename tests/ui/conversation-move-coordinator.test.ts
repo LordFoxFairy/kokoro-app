@@ -35,7 +35,7 @@ describe("page Conversation Move coordinator", () => {
     expect(coordinator.getSnapshot().intent).toBeNull()
   })
 
-  it("bounds revisions to the latest confirmed source and target and clears them on subject change", async () => {
+  it("keeps unrelated scope revisions stable across moves and clears them on subject change", async () => {
     const projectB = "project_33333333-3333-4333-8333-333333333333"
     const moveSession = vi.fn()
       .mockResolvedValueOnce({ session_id: conversationA, project_ref: projectA })
@@ -45,9 +45,11 @@ describe("page Conversation Move coordinator", () => {
     })
     coordinator.admitVerifiedSubject("subject-a")
     await coordinator.start({ sourceScopeKey: "direct", sessionId: conversationA, targetProjectId: projectA })
+    const firstRevision = coordinator.getSnapshot().scopeVersions.get(`project:${projectA}`)
     await coordinator.start({ sourceScopeKey: `project:${projectB}`, sessionId: conversationB, targetProjectId: null })
 
-    expect([...coordinator.getSnapshot().scopeVersions.keys()].sort()).toEqual(["direct", `project:${projectB}`].sort())
+    expect([...coordinator.getSnapshot().scopeVersions.keys()].sort()).toEqual(["direct", `project:${projectA}`, `project:${projectB}`].sort())
+    expect(coordinator.getSnapshot().scopeVersions.get(`project:${projectA}`)).toBe(firstRevision)
     coordinator.admitVerifiedSubject("subject-b")
     expect(coordinator.getSnapshot().scopeVersions.size).toBe(0)
   })

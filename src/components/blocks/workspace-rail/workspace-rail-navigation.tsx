@@ -64,7 +64,6 @@ export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversatio
   conversationReads?: RailConversationReads
   onRequestDelete: NonNullable<WorkspaceRailProps["onRequestDelete"]>
   awaitingIds: ReadonlySet<string>
-  preview: boolean
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
   dragOverKey: string | null
@@ -101,7 +100,6 @@ export function WorkspaceRailNavigation({
   conversationMovePending = false,
   conversationMoveFailed = false,
   onRetryConversationMove,
-  preview,
   dragProps,
   dragState,
   dragOverKey,
@@ -486,7 +484,6 @@ export function WorkspaceRailNavigation({
                       <ScopedConversationGroup
                         scope={{ kind: "project", projectRef: project.id }}
                         reads={conversationReads}
-                        preview={preview}
                         compactDesktop={false}
                         query=""
                         searchOpen={false}

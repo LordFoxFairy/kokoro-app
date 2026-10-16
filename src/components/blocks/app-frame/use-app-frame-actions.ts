@@ -12,7 +12,6 @@ import { useT } from "@/i18n/context"
 import { MAX_INPUT_LENGTH } from "@/ui/composer/composer"
 import type { CreationIntent } from "@/ui/composer/creation-intent-pill"
 import { stashConversationDraft } from "@/ui/shell/use-draft"
-import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
 import { overlayHandoffDelay } from "@/ui/shell/overlay-handoff"
 
@@ -32,7 +31,6 @@ export type AppFrameActionsOptions = {
   setDeploymentIntent: (intent: CreationIntent | null) => void
   syncConversationUrl: (id: string | null, mode: "push" | "replace") => void
   setConversationRouteId: (id: string | null) => void
-  conversations: ConversationListController
   focusComposer: () => void
   closeSettings: (mode?: "close" | "handoff") => void
   brandName: string | undefined
@@ -54,14 +52,20 @@ export function useAppFrameActions({
   setDeploymentIntent,
   syncConversationUrl,
   setConversationRouteId,
-  conversations,
   focusComposer,
   closeSettings,
   brandName,
   commandNewChatTimerRef,
 }: AppFrameActionsOptions) {
   const t = useT()
-  const { startNewChat, selectConversation } = conversations
+  const startNewChat = useCallback(() => {
+    engine?.newConversation()
+    focusComposer()
+  }, [engine, focusComposer])
+  const selectConversation = useCallback((id: string) => {
+    engine?.openConversation(id)
+    focusComposer()
+  }, [engine, focusComposer])
 
   const routeAtRender = typeof window === "undefined" ? null : `${window.location.pathname}${window.location.search}`
   let actorAtRender: string | null | undefined

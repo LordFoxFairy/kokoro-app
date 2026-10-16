@@ -285,23 +285,16 @@ it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混�
     projectActive: true,
     conversations: [],
     conversationReads: {
-      engine: null,
       scope: { kind: "project", projectRef: projectId },
-      currentController: {
-        conversations: [{ id: "conv_project_1", title: "项目内会话" }],
+      read: (scope) => ({
+        conversations: scope.kind === "project" ? [{ id: "conv_project_1", title: "项目内会话" }] : [],
         loading: false, loadingMore: false, error: false, hasMore: false,
-        refresh: () => {}, loadMore: () => {}, selectConversation: () => {},
-        deleteConversation: async () => true, renameConversation: () => {}, startNewChat: () => {},
-      },
-      directController: {
-        conversations: [], loading: false, loadingMore: false, error: false, hasMore: false,
-        refresh: () => {}, loadMore: () => {}, selectConversation: () => {},
-        deleteConversation: async () => true, renameConversation: () => {}, startNewChat: () => {},
-      },
-      activeId: "conv_project_1", thread: { messages: [] } as never, isStreaming: false,
-      identity: "reader-a", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null,
-      focusComposer: () => {}, onSelect: selectProjectConversation, onNewChat: () => {},
-      onMove: () => {}, onDeleteConfirmed: () => {},
+        refresh: () => {}, loadMore: () => {},
+        deleteConversation: async () => true, renameConversation: () => {},
+      }),
+      ensureScope: () => {}, activeId: "conv_project_1",
+      identity: "reader-a", admitted: true, failedMoveScopeKey: null,
+      onSelect: selectProjectConversation, onNewChat: () => {}, onMove: () => {},
     },
   })
 
@@ -312,6 +305,19 @@ it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混�
 
   fireEvent.click(within(projectConversations).getByRole("button", { name: "项目内会话" }))
   expect(selectProjectConversation).toHaveBeenCalledWith({ kind: "project", projectRef: projectId }, "conv_project_1")
+})
+
+it("已准入但 reader 尚未注册时显示加载态，不误报不可用", () => {
+  renderRail({
+    conversationReads: {
+      scope: { kind: "direct" }, identity: "pending-reader", admitted: true,
+      read: () => undefined, ensureScope: () => {}, activeId: null, failedMoveScopeKey: null,
+      onSelect: () => {}, onNewChat: () => {}, onMove: () => {},
+    },
+  })
+  const direct = within(screen.getByRole("navigation", { name: "直接会话" }))
+  expect(direct.getByRole("status", { name: "正在加载会话…" })).toBeVisible()
+  expect(direct.queryByText("不可用")).toBeNull()
 })
 
 it("收起态不复制直接会话或孤立项目会话 stop，并保留项目与底部账户锚点", () => {

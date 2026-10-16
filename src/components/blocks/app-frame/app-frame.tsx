@@ -17,7 +17,7 @@ import {
 import { useAwaitingNotify } from "@/ui/shell/use-awaiting-notify"
 import { useCanvasWorkspace } from "@/ui/shell/use-canvas-workspace"
 import { useComposerSelectors } from "@/ui/shell/use-composer-selectors"
-import { useConversationList } from "@/ui/shell/use-conversation-list"
+import { useConversationReaders } from "@/ui/shell/use-conversation-readers"
 import { useDraft } from "@/ui/shell/use-draft"
 import type { ConversationThreadProps } from "@/ui/thread/conversation-thread"
 import type { WorkspaceRailProps } from "@/components/blocks/workspace-rail/workspace-rail"
@@ -43,7 +43,7 @@ import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
-import { DIRECT_SESSION_SCOPE, sessionScopeKey } from "@/engine/session-scope"
+import { sessionScopeKey } from "@/engine/session-scope"
 import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
@@ -234,37 +234,16 @@ function AppFrameRuntime({
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
     if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
   }, [engine, moveScopeKey])
-  const directScopeActive = sessionScope.kind === "direct"
-  // The direct list is permanent shell navigation, not a projection of the
-  // currently selected engine. Keep its reader alive while a project owns
-  // the main stage; do not copy project messages into the direct list.
-  const directConversationsCtl = useConversationList({
-    engine: directScopeActive ? engine : null,
-    preview,
-    activeId: directScopeActive ? (projectWorkspace ? routedConversationId : activeId) : null,
-    thread,
-    isStreaming: directScopeActive && isStreaming,
-    observeRunStatus: directScopeActive && engine !== null && !hydrating,
-    focusComposer,
-    scope: DIRECT_SESSION_SCOPE,
-    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
-    scopeRevision: moveSnapshot.scopeVersions.get("direct") ?? 0,
-    onDeleteConfirmed: handleConversationDeleteConfirmed,
-  })
-  const projectConversationsCtl = useConversationList({
-    engine: directScopeActive ? null : engine,
-    preview,
-    activeId: directScopeActive ? null : (projectWorkspace ? routedConversationId : activeId),
-    thread,
-    isStreaming: !directScopeActive && isStreaming,
-    observeRunStatus: !directScopeActive && engine !== null && !hydrating,
-    focusComposer,
+  const conversationReaders = useConversationReaders({
+    engine, preview,
+    activeId: projectWorkspace ? routedConversationId : activeId,
+    thread, isStreaming, observeRunStatus: engine !== null && !hydrating,
     scope: sessionScope,
-    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted && !directScopeActive },
-    scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
+    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
+    scopeVersions: moveSnapshot.scopeVersions,
     onDeleteConfirmed: handleConversationDeleteConfirmed,
   })
-  const conversationsCtl = directScopeActive ? directConversationsCtl : projectConversationsCtl
+  const conversationsCtl = conversationReaders.read(sessionScope)
   const conversationMove = moveSnapshot.intent
   const moveRouteContext = typeof window === "undefined" ? null : (() => {
     const url = new URL(window.location.href)
@@ -438,7 +417,6 @@ function AppFrameRuntime({
     setDeploymentIntent: navigationState.setDeploymentIntent,
     syncConversationUrl: navigationState.syncConversationUrl,
     setConversationRouteId: navigationState.setConversationRouteId,
-    conversations: conversationsCtl,
     focusComposer,
     closeSettings: overlays.closeSettings,
     brandName,
@@ -500,7 +478,7 @@ function AppFrameRuntime({
       : activeId === routedConversationId)
   )
   const canSend = draft.trim().length > 0 && canSubmitMessage && projectSubmissionAdmitted
-  const conversations = conversationsCtl.conversations
+  const conversations = conversationsCtl?.conversations ?? []
   const projectConversationView = projectWorkspace && navigationState.resolvedConversationRouteId !== null && !narrowWeb
   const projectedCreationIntent = projectWorkspace ? null : navigationState.deploymentIntent
   const projectedWorkspaceCapabilities = projectWorkspaceCapabilities(
@@ -621,9 +599,9 @@ function AppFrameRuntime({
     activeProjectConversationId: activeId,
     onSelectProjectConversation: selectConversationWithMoveFence,
     onOpenSession: selectConversationWithMoveFence,
-    projectConversationsLoading: conversationsCtl.loading,
-    projectConversationsError: conversationsCtl.error,
-    onRetryProjectConversations: conversationsCtl.refresh,
+    projectConversationsLoading: conversationsCtl?.loading ?? railReadAdmitted,
+    projectConversationsError: conversationsCtl?.error ?? !railReadAdmitted,
+    onRetryProjectConversations: () => conversationsCtl?.refresh(),
     projectInstructions: project.projectInstructions,
     projectInstructionHistory: project.projectInstructionHistory,
     onSaveProjectInstructions: project.saveProjectInstructions,
@@ -723,17 +701,16 @@ function AppFrameRuntime({
     activeId,
     awaitingIds,
     onSelectConversation: selectConversationWithMoveFence,
-    onDeleteConversation: conversationsCtl.deleteConversation,
-    onRenameConversation: conversationsCtl.renameConversation,
+    onDeleteConversation: (id) => conversationsCtl?.deleteConversation(id) ?? Promise.resolve(false),
+    onRenameConversation: (id, title) => conversationsCtl?.renameConversation(id, title),
     conversationScope: sessionScope,
     conversationMove,
     conversationMovePending: conversationMove?.status === "pending",
     conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
     onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
     conversationReads: {
-      engine, scope: sessionScope, currentController: conversationsCtl, directController: directConversationsCtl,
-      activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
-      identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
+      scope: sessionScope, read: conversationReaders.read, ensureScope: conversationReaders.ensureScope,
+      activeId: projectWorkspace ? routedConversationId : activeId, identity: railReadIdentity, admitted: railReadAdmitted,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,
       onSelect: (scope, id) => {
         if (sessionScopeKey(scope) === moveScopeKey) selectConversationWithMoveFence(id)
@@ -746,17 +723,16 @@ function AppFrameRuntime({
         if (sessionScopeKey(scope) === moveScopeKey) startNewChatWithMoveFence()
       },
       onMove: moveConversation,
-      onDeleteConfirmed: handleConversationDeleteConfirmed,
     },
     onRetryConversationMove: retryConversationMove,
     onOpenSettings: overlays.openSettings,
     accountTriggerRef,
-    listLoading: conversationsCtl.loading,
-    listLoadingMore: conversationsCtl.loadingMore,
-    listError: conversationsCtl.error,
-    onRetryList: conversationsCtl.refresh,
-    hasMore: conversationsCtl.hasMore,
-    onLoadMore: conversationsCtl.loadMore,
+    listLoading: conversationsCtl?.loading ?? railReadAdmitted,
+    listLoadingMore: conversationsCtl?.loadingMore ?? false,
+    listError: conversationsCtl?.error ?? !railReadAdmitted,
+    onRetryList: () => conversationsCtl?.refresh(),
+    hasMore: conversationsCtl?.hasMore ?? false,
+    onLoadMore: () => conversationsCtl?.loadMore(),
   }
 
   const commandProps: Omit<AppCommandMenuProps, "open" | "onOpenChange"> = {
@@ -804,6 +780,8 @@ function AppFrameRuntime({
   }, [layoutCompactDesktopRail, setCompactRailOpen, setRailCollapsed])
 
   return (
+    <>
+    {conversationReaders.hosts}
     <AppFrameShell
       preview={preview}
       webSkin={resolvedWebSkin}
@@ -830,5 +808,6 @@ function AppFrameRuntime({
       activeId={activeId}
       overlays={overlaySurfaces}
     />
+    </>
   )
 }

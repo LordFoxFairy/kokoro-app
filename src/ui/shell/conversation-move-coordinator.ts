@@ -97,7 +97,6 @@ export function createConversationMoveCoordinator(deps: CoordinatorDeps) {
         // The owner ACK is authoritative. A best-effort browser index failure
         // must not turn a confirmed binding into an unknown owner outcome.
       }
-      versions.clear()
       bumpScope(candidate.intent.sourceScopeKey)
       bumpScope(targetScopeKey(candidate.intent.targetProjectId))
       slot = null

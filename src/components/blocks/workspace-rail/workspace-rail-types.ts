@@ -4,29 +4,21 @@ import type { SettingsTab } from "@/ui/settings/settings-modal"
 import type { ConversationSummary } from "@/ui/rail/rail-search"
 import type { RuntimeFeatureFlag, RuntimeNavigationItem } from "@/system/runtime-navigation"
 import type { ConversationMoveIntent } from "@/engine/engine-types"
-import type { SessionEngine, EngineSnapshot } from "@/engine/machine"
 import type { SessionScope } from "@/engine/session-scope"
 import type { ConversationListController } from "@/ui/shell/use-conversation-list"
 
 export type RailConversationReads = {
-  engine: SessionEngine | null
   scope: SessionScope
-  /** AppFrame's canonical reader for the mounted scope; the rail must not open a duplicate flight for it. */
-  currentController: ConversationListController
-  /** Shell-owned direct reader remains mounted even while a project is selected. */
-  directController: ConversationListController
+  /** Both the rail and main stage consume the shell's one reader per scope. */
+  read: (scope: SessionScope) => ConversationListController | undefined
+  ensureScope: (scope: SessionScope) => void
   activeId: string | null
-  thread: EngineSnapshot["thread"]
-  isStreaming: boolean
   identity: string
   admitted: boolean
-  scopeVersions: ReadonlyMap<string, number>
   failedMoveScopeKey: string | null
-  focusComposer: () => void
   onSelect: (scope: SessionScope, id: string) => void
   onNewChat: (scope: SessionScope) => void
   onMove: (scope: SessionScope, id: string, target: string | null) => void
-  onDeleteConfirmed: (scope: SessionScope, id: string) => void
 }
 
 /** Public inputs owned by the mounted desktop shell and standalone embeds. */
