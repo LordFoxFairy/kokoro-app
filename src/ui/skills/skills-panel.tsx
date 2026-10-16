@@ -379,6 +379,7 @@ function InstalledSkillsContent({
           data-embedded={embedded || undefined}
         >
           <SkillsPoolTab
+            preview={preview}
             searchInputRef={updateFallbackFocus}
             pool={pool.data ?? null}
             loading={pool.loading}

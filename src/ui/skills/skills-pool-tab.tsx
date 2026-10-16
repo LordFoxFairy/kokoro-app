@@ -141,6 +141,7 @@ export function SkillsPoolTab({
   catalogTriggerRef: suppliedCatalogTriggerRef,
   searchInputRef,
   initialScope = "all",
+  preview = false,
 }: {
   pool: SkillsPool | null;
   loading: boolean;
@@ -151,6 +152,7 @@ export function SkillsPoolTab({
   busy: string | null;
   expanded: string | null;
   client: HubClient;
+  preview?: boolean;
   onRetry: () => void;
   onDisable: (skill: SkillCard, stateKey: string) => void;
   onSetEnabled: (skill: SkillCard, enabled: boolean, stateKey?: string) => void;
@@ -331,6 +333,7 @@ export function SkillsPoolTab({
   if (embedded && catalogOpen) {
     return (
       <SkillCatalogDialog
+        preview={preview}
         inline
         open
         onOpenChange={(nextOpen) => {
@@ -782,6 +785,7 @@ export function SkillsPoolTab({
         </ul>
       )}
       {!embedded ? <SkillCatalogDialog
+        preview={preview}
         open={catalogOpen}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setCatalogOpen(false);

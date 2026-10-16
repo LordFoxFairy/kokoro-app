@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   Check,
   ChevronDown,
@@ -29,7 +29,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import type { HubClient } from "@/hub/client";
+import type { ManusSkillHubClient } from "./manus-skill-client";
 import type { CatalogSkillCategory, SkillCard, SkillCatalog, SkillCatalogCard } from "@/hub/schemas";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -75,11 +75,13 @@ export function SkillCatalogDialog({
   onSetEnabled,
   onOpenDetail,
   inline = false,
+  preview = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus: (event: Event) => void;
-  client: HubClient;
+  client: ManusSkillHubClient;
+  preview?: boolean;
   enabledOverrides: ReadonlyMap<string, boolean>;
   installedOverrides: ReadonlyMap<string, boolean>;
   busy: string | null;
@@ -95,6 +97,11 @@ export function SkillCatalogDialog({
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
+  const [committedQuery, setCommittedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedQuery(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
   const [scope, setScope] = useState<"all" | "official" | "third_party">(
     inline ? "all" : "official",
   );
@@ -106,21 +113,21 @@ export function SkillCatalogDialog({
   const catalogSearchRef = useRef<HTMLInputElement | null>(null);
   const catalogCreateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const catalogMoreRef = useRef<HTMLDivElement | null>(null);
-  const loadingMoreRef = useRef(false);
-  // Category is a local view over one owner catalog page. Keeping it out of
-  // the resource key preserves the rendered list while the user changes tabs
-  // and avoids turning a visual filter into a new loading state.
-  const catalogKey = `${SKILLS_CATALOG_KEY}/${inline ? "catalog" : scope}/${query.trim().toLocaleLowerCase()}`;
+  const loadingMoreRef = useRef<{ controller: AbortController } | null>(null);
+  const catalogFilters = useMemo(() => ({
+    pageSize: 9,
+    ...(!inline && scope !== "all" ? { scope } : {}),
+    ...(committedQuery ? { query: committedQuery } : {}),
+    ...(category === "all" ? {} : { category }),
+  }), [category, committedQuery, inline, scope]);
+  const catalogKey = skillResourceKey(SKILLS_CATALOG_KEY, client,
+    JSON.stringify([inline ? "explore" : "dialog", 9, scope, committedQuery, category]));
   const catalog = useResource<SkillCatalog>(
-    skillResourceKey(
-      SKILLS_CATALOG_KEY,
-      client,
-      catalogKey.slice(`${SKILLS_CATALOG_KEY}/`.length),
-    ),
-    useCallback(async () => {
-      const baseQuery = !inline && scope !== "all" ? { scope, query } : { query };
-      return client.listSkillCatalog(baseQuery);
-    }, [client, inline, query, scope]),
+    catalogKey,
+    useCallback(() => client.listSkillCatalog({
+      ...catalogFilters,
+      ...(catalogFilters.scope === undefined && catalogFilters.query === undefined && catalogFilters.category === undefined ? { shuffle: true } : {}),
+    }), [catalogFilters, client]),
   );
   // A query owns a distinct cache key, so swapping text used to clear a
   // confirmed directory and paint a whole new skeleton grid on every key
@@ -142,13 +149,12 @@ export function SkillCatalogDialog({
     setLastConfirmedCatalog(catalog.data);
   }
   const catalogBase = catalog.data ?? lastConfirmedCatalog;
-  const catalogRefreshing =
-    catalog.data === undefined && lastConfirmedCatalog !== undefined && catalog.loading;
+  const catalogRefreshing = catalog.loading;
   const [pageState, setPageState] = useState<Readonly<{
     base: SkillCatalog | undefined;
     pages: readonly SkillCatalog[];
   }>>({ base: undefined, pages: [] });
-  const [loadingMoreFor, setLoadingMoreFor] = useState<SkillCatalog | undefined>();
+  const [loadingMoreFor, setLoadingMoreFor] = useState<{ base: SkillCatalog; controller: AbortController }>();
   const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>();
   const additionalPages = useMemo(
     () => pageState.base === catalog.data ? pageState.pages : [],
@@ -163,20 +169,37 @@ export function SkillCatalogDialog({
         ]),
     [additionalPages, catalog.data, catalogBase],
   );
-  const loadingMore = loadingMoreFor === catalog.data;
-  const loadMoreFailed = loadMoreFailedFor === catalog.data;
+  // Disconnect cannot retract an observer callback already queued by the
+  // browser. Fence both the read boundary and its current next cursor before
+  // an old callback can start another request or occupy the pending slot.
+  const readOwner = useMemo(() => ({ key: catalogKey, base: catalog.data, cursor: displayedCatalog?.next_cursor, open }),
+    [catalogKey, catalog.data, displayedCatalog?.next_cursor, open]);
+  const currentReadOwner = useRef<typeof readOwner | null>(null);
+  useLayoutEffect(() => {
+    currentReadOwner.current = readOwner;
+    return () => {
+      currentReadOwner.current = null;
+      loadingMoreRef.current?.controller.abort();
+      loadingMoreRef.current = null;
+    };
+  }, [readOwner]);
+  const loadingMore = loadingMoreFor?.base === catalog.data && loadingMoreFor !== undefined && !loadingMoreFor.controller.signal.aborted;
+  const loadMoreFailed = catalog.data !== undefined && loadMoreFailedFor === catalog.data;
   const loadMore = useCallback(async () => {
     const base = catalog.data;
     const cursor = displayedCatalog?.next_cursor;
-    if (base === undefined || cursor === null || cursor === undefined || loadingMoreRef.current) return;
-    loadingMoreRef.current = true;
-    setLoadingMoreFor(base);
+    if (!readOwner.open || currentReadOwner.current !== readOwner || base === undefined || cursor === null || cursor === undefined || loadingMoreRef.current !== null) return;
+    const pending = { base, controller: new AbortController() };
+    loadingMoreRef.current = pending;
+    setLoadingMoreFor(pending);
     setLoadMoreFailedFor(undefined);
     try {
       const page = await client.listSkillCatalog({
-        ...(!inline && scope !== "all" ? { scope, query } : { query }),
+        ...catalogFilters,
         cursor,
+        signal: pending.controller.signal,
       });
+      if (pending.controller.signal.aborted) return;
       if (page.next_cursor === cursor) {
         throw new Error("skill catalog cursor did not advance");
       }
@@ -185,22 +208,24 @@ export function SkillCatalogDialog({
         pages: current.base === base ? [...current.pages, page] : [page],
       }));
     } catch {
-      setLoadMoreFailedFor(base);
+      if (!pending.controller.signal.aborted) setLoadMoreFailedFor(base);
     } finally {
-      loadingMoreRef.current = false;
-      setLoadingMoreFor(undefined);
+      if (loadingMoreRef.current === pending) {
+        loadingMoreRef.current = null;
+        setLoadingMoreFor(undefined);
+      }
     }
-  }, [catalog.data, client, displayedCatalog?.next_cursor, inline, query, scope]);
+  }, [catalog.data, catalogFilters, client, displayedCatalog?.next_cursor, readOwner]);
 
   useEffect(() => {
     const target = catalogMoreRef.current;
-    if (target === null || displayedCatalog?.next_cursor === null || displayedCatalog?.next_cursor === undefined) return;
+    if (target === null || catalog.data === undefined || displayedCatalog?.next_cursor === null || displayedCatalog?.next_cursor === undefined) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) void loadMore();
     }, { rootMargin: "240px 0px" });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [displayedCatalog?.next_cursor, loadMore]);
+  }, [catalog.data, displayedCatalog?.next_cursor, loadMore]);
 
   useEffect(() => {
     if (!inline || !open) return;
@@ -227,7 +252,10 @@ export function SkillCatalogDialog({
   };
   const normalized = query.trim().toLocaleLowerCase();
   const skills = displayedCatalog?.skills ?? [];
-  const filtered = skills.filter((skill) => {
+  // A confirmed live page is already matched by the owner (including indexed
+  // content beyond these card fields). Local predicates are only a preview
+  // rule or a temporary projection of the previous page during a new read.
+  const filtered = !preview && catalog.data !== undefined ? skills : skills.filter((skill) => {
     const scopeMatches =
       inline ||
       scope === "all" ||
@@ -385,12 +413,20 @@ export function SkillCatalogDialog({
           <AlertDescription>{t("skills.addError")}</AlertDescription>
         </Alert>
       ) : null}
+      {catalog.error !== undefined && displayedCatalog !== undefined ? (
+        <div className={styles.catalogLoadError} role="alert">
+          <p>{t("skills.loadError")}</p>
+          <Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>
+            {t("skills.retry")}
+          </Button>
+        </div>
+      ) : null}
       <div
         className={styles.catalogGrid}
         data-testid="skills-catalog-scroll"
         aria-busy={catalogRefreshing || undefined}
       >
-        {displayedCatalog === undefined && catalog.error === undefined ? (
+        {(displayedCatalog === undefined && catalog.error === undefined) || (catalog.data === undefined && catalog.loading && filtered.length === 0) ? (
           Array.from({ length: 4 }, (_, index) => (
             <Card
               className={styles.catalogCard}
@@ -452,6 +488,7 @@ export function SkillCatalogDialog({
                       type="button"
                       className={styles.catalogCardCopy}
                       aria-label={`${t("skills.packageViewDetails")} ${skill.name}`}
+                      disabled={catalog.data === undefined}
                       onClick={(event) => onOpenDetail(skill, event.currentTarget)}
                     >
                       <span className={styles.catalogCardName}>{skill.name}</span>
@@ -472,7 +509,7 @@ export function SkillCatalogDialog({
                         variant={installed && enabled ? "outline" : "default"}
                         aria-label={`${actionLabel} ${skill.name}`}
                         data-installed={installed || undefined}
-                        disabled={busy !== null || (installed && enabled)}
+                        disabled={catalog.data === undefined || busy !== null || (installed && enabled)}
                         aria-busy={pending}
                         type="button"
                         onClick={() =>
@@ -513,7 +550,7 @@ export function SkillCatalogDialog({
           </Empty>
         )}
       </div>
-      {displayedCatalog?.next_cursor ? (
+      {catalog.data !== undefined && displayedCatalog?.next_cursor ? (
         <div ref={catalogMoreRef} className={styles.catalogMore}>
           {loadingMore ? <Spinner aria-hidden="true" /> : null}
           {loadMoreFailed ? (

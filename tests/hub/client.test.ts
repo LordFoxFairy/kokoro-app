@@ -1503,11 +1503,11 @@ it("keeps per-read marketplace paging separate from other consumers sharing the 
     return jsonResponse({ userAddedSkills: [], officialSkills: [] });
   }));
   const client = createManusSkillHubClient(createHubClient(), { admitted: true, subject: "shared-paging-reader", generation: 1 });
-  await client.listSkillCatalog({ pageSize: 9, shuffle: true });
+  await client.listSkillCatalog({ pageSize: 3, shuffle: true });
   await client.listSkillCatalog();
   expect(calls).toEqual([
-    { pageSize: 9, shuffle: true, includeOfficialSkills: true },
-    { pageSize: 30, includeOfficialSkills: true },
+    { pageSize: 3, shuffle: true, includeOfficialSkills: true },
+    { pageSize: 9, includeOfficialSkills: true },
   ]);
 });
 

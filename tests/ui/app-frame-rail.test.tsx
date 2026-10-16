@@ -16,6 +16,8 @@ import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
+import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
+import { createHubClient } from "@/hub/client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -112,6 +114,7 @@ afterEach(() => {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth })
   Object.defineProperty(window, "matchMedia", { configurable: true, value: originalMatchMedia })
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 it.each([
@@ -1816,6 +1819,137 @@ it("project trial survives the actual URL handoff and Composer submit action", a
   } finally { view.unmount(); projectEngine.dispose(); window.history.replaceState({}, "", "/app") }
 })
 
+
+function observeSettingsCatalogPages() {
+  const observers = new Set<IntersectionObserverCallback>()
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe() { observers.add(this.callback) }
+    disconnect() { observers.delete(this.callback) }
+  })
+  return Object.assign(() => act(() => {
+    expect(observers.size).toBeGreaterThan(0)
+    for (const callback of observers) callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+  }), { capture: () => [...observers] })
+}
+
+function mountSettingsCatalog() {
+  return render(<LocaleProvider><SkillsSettingsSection
+    readBoundary={{ admitted: true, subject: "settings-catalog-reader", generation: 1 }}
+    hubClient={createHubClient()} preview={false} brandName="Kokoro"
+    embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }}
+  /></LocaleProvider>)
+}
+
+it("queries Settings Explore through the owner and preserves its nine-item filters on every cursor", async () => {
+  const intersect = observeSettingsCatalogPages()
+  const calls: Record<string, unknown>[] = []
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-catalog" } })
+  const card = (id: string, name: string) => ({ skillId: id, displayName: name, userDescription: "Server indexed metadata", tags: { values: ["SKILL_HUB_TAG_CODING"] }, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body)); calls.push(body)
+      if (body.pageToken) return response({ skills: [card("remote-page", "Remote second result")], tagOptions: {} })
+      if (body.query) return response({ skills: [card("semantic-match", "Indexed document match")], tagOptions: {}, nextPageToken: "settings-query-next" })
+      if (body.tag) return response({ skills: [card("coding-match", "Remote coding result")], tagOptions: {} })
+      return response({ skills: [card("initial", "Initial settings item")], tagOptions: {}, nextPageToken: "settings-default-next" })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 Initial settings item" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, shuffle: true, includeOfficialSkills: true })
+  const completedPageObserver = intersect.capture()[0]!
+  intersect()
+  await screen.findByRole("button", { name: "查看详情 Remote second result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, pageToken: "settings-default-next" })
+  await act(async () => { completedPageObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
+  expect(calls).toHaveLength(2)
+  fireEvent.keyDown(screen.getByRole("button", { name: "技能分类" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编程" }))
+  await screen.findByRole("button", { name: "查看详情 Remote coding result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, tag: "SKILL_HUB_TAG_CODING" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "needle" } })
+  await screen.findByRole("button", { name: "查看详情 Indexed document match" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  intersect()
+  await screen.findByRole("button", { name: "查看详情 Remote second result" })
+  expect(calls.at(-1)).toEqual({ pageSize: 9, includeOfficialSkills: true, query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "settings-query-next" })
+})
+
+it("retires Settings cursor reads on filter changes and can retry the current page without late results", async () => {
+  const intersect = observeSettingsCatalogPages()
+  let releaseOld!: (response: Response) => void
+  let oldSignal: AbortSignal | null | undefined
+  let codingAttempts = 0
+  let oldRequests = 0
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retirement" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` }, tags: { values: ["SKILL_HUB_TAG_CODING"] } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.pageToken === "old-next") {
+        oldRequests++
+        oldSignal = init?.signal
+        return new Promise<Response>(resolve => { releaseOld = resolve })
+      }
+      if (body.pageToken === "coding-next") {
+        if (++codingAttempts === 1) throw Error("Transient page read failure")
+        return response({ skills: [card("coding-second")], tagOptions: {} })
+      }
+      return response({ skills: [card(body.query ? "coding-first" : "old-first")], tagOptions: {}, nextPageToken: body.query ? "coding-next" : "old-next" })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 old-first" })
+  const queuedOldObserver = intersect.capture()[0]!
+  intersect()
+  await waitFor(() => expect(oldSignal).toBeDefined())
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "coding" } })
+  await waitFor(() => expect(oldSignal?.aborted).toBe(true))
+  await screen.findByRole("button", { name: "查看详情 coding-first" })
+  await act(async () => { queuedOldObserver([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver) })
+  expect(oldRequests).toBe(1)
+  intersect()
+  fireEvent.click(await screen.findByRole("button", { name: "重试" }))
+  await screen.findByRole("button", { name: "查看详情 coding-second" })
+  await act(async () => { releaseOld(response({ skills: [card("late-old-page")], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "查看详情 late-old-page" })).toBeNull()
+  expect(codingAttempts).toBe(2)
+})
+
+it("shows a failed Settings filter read and retries it instead of turning the previous page into a successful empty result", async () => {
+  observeSettingsCatalogPages()
+  let attempts = 0
+  const response = (data: unknown) => Response.json(data, { headers: { "cache-control": "private, no-store", "x-request-id": "req-settings-retry" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.query === "offline" && ++attempts === 1) throw Error("Transient catalog read failure")
+      return response({ skills: [card(body.query ? "Recovered indexed match" : "Initial retained page")], tagOptions: {} })
+    }
+    throw Error("Unexpected settings request")
+  })
+  mountSettingsCatalog()
+  await screen.findByRole("button", { name: "查看详情 Initial retained page" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "offline" } })
+  await screen.findByRole("alert")
+  fireEvent.click(screen.getByRole("button", { name: "重试" }))
+  await screen.findByRole("button", { name: "查看详情 Recovered indexed match" })
+  expect(screen.queryByRole("alert")).toBeNull()
+  expect(attempts).toBe(2)
+})
 
 it("queries the complete owner catalog and keeps search/category bound to every cursor page", async () => {
   const calls: Record<string, unknown>[] = []

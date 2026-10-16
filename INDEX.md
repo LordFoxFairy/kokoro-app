@@ -222,4 +222,4 @@ lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 - Skill Share: `src/hub/skill-share.schema.ts` / `skill-share-client.ts` 严格消费正式六字段链接与精确 revision 摘要；`src/app/skills/shared/[id]/page.tsx` 复用真实摘要/包 reader，安装独立读取和 ACK。未知 Create 不自动重建；复制失败复用原 ACK。共享页消费既有 browser-private exact 下载句柄，严格绑定 source_ref/revision，流式下载原包，不借 series current 下载。
 
 - 目录重核：外层保同 actor 的搜索/筛选/精确详情 locator；`use-catalog-skill-installation` 拥有本代安装动作与冻结未知命令。详情/包文件展示仍按代际退休，`SkillPackageFiles` 仅渲染 owner 文件树。分享未知墓碑与当代 ACK 分离，导入只读/已确认结果重核退役，未知恢复意图保留。
-- 技能广场：每页9条，只有默认首读传 `shuffle:true`，续页由 owner cursor 延续同一随机序列，查询/分类首读不传 shuffle。分页策略使用独立内存资源键，写后仍失活整个 client 目录 namespace；共享 reader 不把策略泄漏给 Settings Explore，后者完整服务端分类另行收口。
+- 技能广场和 Settings Explore：每页9条，只有默认首读传 `shuffle:true`，续页由 owner cursor 延续同一随机序列，查询/分类首读不传 shuffle。两种展示使用独立内存资源键，写后失活整个 client 目录 namespace。探索页的 query/category 同样由 owner 查询；本地筛选只用于 preview 或新读期间的上页临时投影，未确认页禁动作、失败显式重读。分页按已提交的 key/base/next-cursor/open 退休，迟到的旧 observer 也没有重新发读或占用当前 pending 的资格。
