@@ -36,30 +36,55 @@ export function useMcpServerCreation(flow: McpServerCreationFlow, boundary: Proj
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
     onReload: () => { if (current()) void flow.reconcile(scope).then(connected => { if (connected && current()) void done(); }); },
   });
+  const requestAuthorization = async (signal: AbortSignal) => {
+    const facts = await flow.refresh(scope, true);
+    if (signal.aborted || !current() || flow.getSnapshot().unknown || !facts ||
+      facts.connector.status === "revoked" || facts.server.prepare_status !== "needs_oauth" ||
+      !flow.client.beginMcpConnectorAuthorization)
+      throw new Error("MCP authorization target retired");
+    const started = await flow.client.beginMcpConnectorAuthorization(
+      facts.connector.connector_id,
+      { server_id: facts.server.server_id, expected_state_version: facts.connector.state_version },
+      signal,
+    );
+    flow.authorizationAcknowledged();
+    if (signal.aborted || !current()) throw new Error("MCP authorization retired");
+    return { connectorId: facts.connector.connector_id,
+      authorizationUrl: started.authorization.authorization_url,
+      expiresAt: started.authorization.expires_at };
+  };
   const authorize = async () => {
     if (!current() || flow.getSnapshot().busy || flow.getSnapshot().unknown || completion !== "idle") return;
     setPopupError(null);
     try {
-      await startPopup(async signal => {
-        const facts = await flow.refresh(scope, true);
-        if (!current() || flow.getSnapshot().unknown || !facts || facts.connector.status === "revoked" || facts.server.prepare_status !== "needs_oauth" || !flow.client.beginMcpConnectorAuthorization)
-          throw new Error("MCP authorization target retired");
-        const started = await flow.client.beginMcpConnectorAuthorization(facts.connector.connector_id,
-          { server_id: facts.server.server_id, expected_state_version: facts.connector.state_version }, signal);
-        flow.authorizationAcknowledged();
-        if (!current()) throw new Error("MCP authorization retired");
-        return { connectorId: facts.connector.connector_id, authorizationUrl: started.authorization.authorization_url, expiresAt: started.authorization.expires_at };
-      });
+      await startPopup(requestAuthorization);
     } catch { if (current()) setPopupError(scope); }
   };
   const save = async (input?: McpPrivateServerRegistrationInput, oauth = false) => {
     if (!current() || state.busy || completion !== "idle") return;
     setPopupError(null);
-    const connected = state.unknown ? await flow.retry(scope)
-      : state.registered ? await flow.prepare(scope) : input ? await flow.submit(input, scope) : false;
-    if (!current()) return;
-    if (connected) await done();
-    else if (oauth && flow.getSnapshot().facts?.server.prepare_status === "needs_oauth") await authorize();
+    const run = () => state.unknown ? flow.retry(scope)
+      : state.registered ? flow.prepare(scope) : input ? flow.submit(input, scope) : Promise.resolve(false);
+    if (!oauth) {
+      if (await run() && current()) await done();
+      return;
+    }
+    // Reserve the popup in the click stack, before registration or discovery
+    // consumes the browser's transient user activation.
+    let connected = false;
+    try {
+      await startPopup(async signal => {
+        const pause = () => flow.pause(scope);
+        signal.addEventListener("abort", pause, { once: true });
+        try {
+          if (signal.aborted || !current()) throw new Error("MCP creation popup retired");
+          connected = await run();
+          if (signal.aborted || !current()) throw new Error("MCP creation popup retired");
+          return connected ? null : await requestAuthorization(signal);
+        } finally { signal.removeEventListener("abort", pause); }
+      });
+      if (connected && current()) await done();
+    } catch { if (current()) setPopupError(scope); }
   };
   const locked = !admitted || state.busy || state.unknown !== null || state.registered || completion !== "idle";
   return { state, completion, admitted, submitting: state.busy || completion === "closing", locked,

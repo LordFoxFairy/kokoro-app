@@ -170,6 +170,7 @@ export function createMcpServerCreationFlow(options: { client: Client; boundary:
     },
     attach: (value: object) => { if (window !== value) cancel(); window = value; publish(); return () => { if (window === value) { window = null; cancel(); } }; },
     refresh: read,
+    pause: (scope: McpCreationScope) => { if (matches(scope)) cancel(); },
     prepare,
     submit: (input: McpPrivateServerRegistrationInput, scope: McpCreationScope) => {
       if (!matches(scope) || active || locator || registration || preparation) return Promise.resolve(false);

@@ -2436,3 +2436,7 @@ AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 ConnectorCreationP
 仍属既有 App MCP：独立 typed 工作流持有注册和准备两阶段原命令，不把多阶段/私有读塞进单步 API/JSON 纯核。稳定 actor/client provider 持一份私有 MCP 创建工作流，Custom/URL 两种独立表单共享命令意图；每个表单有独立 window scope。准入/窗口退休清 facts、取消旧等待，未知注册/准备保原key/body，换actor/真正卸载清理。Register ACK只留精确server/connector locator并清secret；每次新的Prepare先经现有两个精确GET取得本代CAS；未知Prepare只恢复原key/version，不凭GET推断ACK。旧ACK仍失活原主体，禁止旧窗口/代际自动继续Prepare/OAuth。
 
 本地Hub方法改显式caller key，已有connector GET补本地client入口但不新增wire；原owner原子注册、准备external-command/receipt、指纹与原生OAuth协议不改。表单之外的详情Prepare caller随签名显式提供key，不把其完整未知命令恢复冒成本创建切片已完成。OAuth沿原popup接本代window/admission lifecycle，只用fresh精确目标；授权回调/关闭仅重新核对owner，不凭popup事件伪造成功。尚无真实OAuth提供方闭环证据时保持未验。
+
+### URL 创建授权窗口的用户手势（2026-10-16）
+
+仍沿原 Custom/URL 两阶段 owner 流程，不新增发布或授权协议。“保存并发布”在点击同步栈中预开现有隔离 popup，再执行 Register→fresh GET→Prepare→必要时原生 Begin；被浏览器拦截时不先创建隐形资源。owner 判定无需 OAuth 时只关闭预留窗口并完成，不把空窗口当授权失败。popup 关闭、超时、窗口/准入退休取消当前等待并保留原 unknown 命令，不继续旧 Prepare/Begin；晚 ACK 只更新原主体投影。普通 Save 和已有明确 Connect 入口保持各自时序，第三方真实授权闭环不由组件测试冒充。

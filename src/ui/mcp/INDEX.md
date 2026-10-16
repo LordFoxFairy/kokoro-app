@@ -39,3 +39,5 @@ MCP 注册／原子导入与已确认的个人命令，统一失活当前 client
 
 
 配置编辑的准入重核不重建表单或文本控件：尚未明确修改的owner值和已配置header/env描述立即清空，dirty用户输入仅在本actor内保留；控件readonly且保存/Prepare/管理/草稿增删暂停，Close/Retry仍可用。`use-mcp-editor-selection.ts`只保存字段ID、选择范围/方向/文本长度和控件内部scroll，不保字段值、已移除控件或凭据；恢复时限定当前仍聚焦的本表单控件，裁剪并更新范围，承接pending期间的新选择而非抢回旧焦点。原生不支持selection API的URL控件不强设range；generic provider editor/创建表单不冒称已覆盖本片。
+
+URL“保存并发布”先在用户点击中预开既有隔离 popup，再执行原创建与必要授权；弹窗被拦截时零注册，owner 无需 OAuth 时只清理预留窗口并完成。popup 关闭/超时与准入退休暂停当前两阶段等待，保留原 unknown 命令，不借旧 continuation 继续 Prepare/Begin；普通 Save 和显式 Connect 协议保持。第三方真实 OAuth 仍须单独验收。

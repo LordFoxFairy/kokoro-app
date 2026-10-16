@@ -85,7 +85,7 @@ export function useMcpOAuthPopup({
 
   const start = useCallback(
     async (
-      request: (signal: AbortSignal) => Promise<Authorization>,
+      request: (signal: AbortSignal) => Promise<Authorization | null>,
     ): Promise<void> => {
       if (lifecycleRef.current !== lifecycle || lifecycle?.admitted === false) throw new Error("oauth admission retired");
       const previous = active.current;
@@ -117,6 +117,12 @@ export function useMcpOAuthPopup({
         const authorization = await request(current.controller.signal);
         if (active.current !== current || lifecycleRef.current !== lifecycle)
           throw new Error("oauth popup request was superseded");
+        // A creation workflow can discover that no OAuth is required. The
+        // reserved user-gesture window is then closed without a false error.
+        if (authorization === null) {
+          cleanup(current);
+          return;
+        }
         if (!validOwnerUrl(authorization.authorizationUrl))
           throw new Error("invalid owner authorization URL");
         current.connectorId = authorization.connectorId;
