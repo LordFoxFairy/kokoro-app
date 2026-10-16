@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { useResource } from "@/lib/query";
 import { formatSkillDate } from "./skills-format";
 import { toSkillActionCard } from "./skills-card-model";
+import { mergeSkillCatalogPages, skillStateKey } from "./skills-pool-model";
 import { SKILLS_CATALOG_KEY, skillResourceKey } from "./skills-resource-cache";
 import styles from "./skills-panel.module.css";
 
@@ -43,10 +44,6 @@ function skillScope(scope: string): "official" | "thirdParty" | "personal" {
   if (scope === "official") return "official";
   if (scope === "third_party" || scope === "third-party") return "thirdParty";
   return "personal";
-}
-
-function skillStateKey(scope: string, name: string): string {
-  return `${scope}/${name}`;
 }
 
 type CatalogCategory = "all" | CatalogSkillCategory;
@@ -68,19 +65,6 @@ const CATALOG_CATEGORIES: readonly Readonly<{
 
 function hasCategory(skill: Pick<SkillCatalogCard, "categories">, category: CatalogCategory): boolean {
   return category === "all" || skill.categories?.includes(category) === true;
-}
-
-function mergeCatalogPages(pages: readonly SkillCatalog[]): SkillCatalog {
-  const skillsByKey = new Map<string, SkillCatalog["skills"][number]>();
-  for (const page of pages) {
-    for (const skill of page.skills) {
-      skillsByKey.set(`${skill.scope}/${skill.name}`, skill);
-    }
-  }
-  return {
-    skills: [...skillsByKey.values()],
-    next_cursor: pages.at(-1)?.next_cursor ?? null,
-  };
 }
 
 export function SkillCatalogDialog({
@@ -179,7 +163,7 @@ export function SkillCatalogDialog({
   const displayedCatalog = useMemo(
     () => catalogBase === undefined
       ? undefined
-      : mergeCatalogPages([
+      : mergeSkillCatalogPages([
           catalogBase,
           ...(catalog.data === undefined ? [] : additionalPages),
         ]),
@@ -442,7 +426,7 @@ export function SkillCatalogDialog({
           </div>
         ) : filtered.length > 0 ? (
           filtered.map((skill) => {
-            const stateKey = skillStateKey(skill.scope, skill.name);
+            const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
             const enabledOverride = enabledOverrides.get(stateKey);
             const installedOverride = installedOverrides.get(stateKey);
             const enabled = enabledOverride ?? skill.enabled;
@@ -456,7 +440,7 @@ export function SkillCatalogDialog({
             return (
               <Card
                 className={styles.catalogCard}
-                key={`${skill.scope}/${skill.name}`}
+                key={stateKey}
               >
                 <CardContent className={styles.catalogCardContent}>
                   <div className={styles.catalogCardRow}>

@@ -23,6 +23,7 @@ import type { MessageKey } from "@/i18n/messages"
 import { cn } from "@/lib/utils"
 import { GithubImportDialog } from "@/ui/skills/github-import-dialog"
 import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
+import { mergeSkillCatalogPages } from "@/ui/skills/skills-pool-model"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
@@ -54,14 +55,6 @@ type InstallationIntent = Readonly<{ seriesId: string; sourceRef: string; key: s
 
 function skillCategories(skill: Pick<SkillCatalogCard, "categories">): Exclude<SkillCategory, "all">[] {
   return [...new Set(skill.categories ?? [])]
-}
-
-function mergeCatalogPages(pages: readonly SkillCatalog[]): SkillCatalog {
-  const byKey = new Map<string, SkillCatalog["skills"][number]>()
-  for (const page of pages) {
-    for (const skill of page.skills) byKey.set(skill.skill_id ?? `${skill.scope}/${skill.name}`, skill)
-  }
-  return { skills: [...byKey.values()], next_cursor: pages.at(-1)?.next_cursor ?? null }
 }
 
 function formatUsage(value: string): string {
@@ -122,7 +115,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   // first-page snapshot, so a background refresh immediately ignores old
   // append state instead of flashing it while an effect resets local state.
   const additionalPages = useMemo(() => pageState.base === catalog.data ? pageState.pages : [], [catalog.data, pageState])
-  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
+  const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeSkillCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
   const loadingMore = loadingMoreFor === catalog.data
   const loadMoreFailed = loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {

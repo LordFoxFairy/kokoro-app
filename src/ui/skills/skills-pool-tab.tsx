@@ -310,9 +310,9 @@ export function SkillsPoolTab({
   if (recentSkillKey !== null) {
     filtered.sort((left, right) => {
       const leftRecent =
-        skillStateKey(left.scope, left.name) === recentSkillKey;
+        left.revision_skill_id === recentSkillKey;
       const rightRecent =
-        skillStateKey(right.scope, right.name) === recentSkillKey;
+        right.revision_skill_id === recentSkillKey;
       return Number(rightRecent) - Number(leftRecent);
     });
   }
@@ -567,13 +567,12 @@ export function SkillsPoolTab({
           {filtered.map((skill) => {
             const isOfficial = skill.scope === OFFICIAL_SCOPE;
             const isThirdParty = skillScope(skill.scope) === "thirdParty";
-            const stateKey = skillStateKey(skill.scope, skill.name);
+            const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
             const isLocked = locked.has(stateKey);
             const isPinned = pinned.includes(skill.name);
             const isConfirming = confirming === stateKey;
-            // The scope/name pair is the view identity. Do not fall back to
-            // a bare name: an imported personal skill may share a name with
-            // an official card and must not inherit its toggle state.
+            // Keep local mutation state on the owner series: same-name cards
+            // in the same scope are still independent installed Skills.
             const isEnabled =
               enabledOverrides.get(stateKey) ?? skill.enabled !== false;
             const detailAvailable =
@@ -581,7 +580,7 @@ export function SkillsPoolTab({
               skill.revision_skill_id !== undefined;
             if (embedded) {
               return (
-                <li key={`${skill.scope}/${skill.name}`}>
+                <li key={stateKey}>
                   <InstalledSkillCard
                     skill={skill}
                     enabled={isEnabled}
@@ -603,7 +602,7 @@ export function SkillsPoolTab({
               );
             }
             return (
-              <li key={`${skill.scope}/${skill.name}`}>
+              <li key={stateKey}>
                 <Collapsible
                   className={styles.itemDisclosure}
                   open={expanded === stateKey}

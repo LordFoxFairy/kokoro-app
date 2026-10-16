@@ -227,7 +227,7 @@ function InstalledSkillsContent({
       // list may contain many cards and the imported personal card is otherwise
       // appended below the fold, which makes a successful import look like a
       // no-op to the user.
-      setRecentSkillKey(`personal/${result.name}`);
+      setRecentSkillKey(result.skill_id);
       setGithubImportNotice(result);
     },
     [invalidateSkills],
@@ -290,7 +290,7 @@ function InstalledSkillsContent({
     async (
       skill: SkillCard,
       enabled: boolean,
-      stateKey = skillStateKey(skill.scope, skill.name),
+      stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id),
     ) => {
       // One mutation owns the shared hub action slot. State is for rendering;
       // the ref closes the same-frame double-click window before React commits
@@ -416,7 +416,7 @@ function InstalledSkillsContent({
             void onSetEnabled(
               toSkillActionCard(skill),
               true,
-              skillStateKey(skill.scope, skill.name),
+              skillStateKey(skill.scope, skill.name, skill.skill_id),
             )
           }
           onTry={(prompt) => {
