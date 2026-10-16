@@ -1727,3 +1727,41 @@ describe("installation request total budget", () => {
     expect(cancelled).toHaveBeenCalledOnce();
   });
 });
+
+
+describe("explicit installation update", () => {
+  const installation = {
+    installation_id: "installation-1", series_id: "series-1", source_ref: "skill:revision-b", revision: "2",
+    installed: true, enabled: false, installed_at: "2026-10-15T10:00:00Z", updated_at: "2026-10-16T10:00:00Z",
+    display_name: "Same installation", summary: "B", source_status: "active", skill_updated_at: "2026-10-16T09:00:00Z",
+    tags: [], example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "2" },
+  };
+  const body = { expected_source_ref: "skill:revision-a", source_ref: "skill:revision-b" };
+  const receipt = { installation, change: "upgraded", event_id: "event-update", replayed: false };
+  it("sends both frozen pins with the original key; a disabled installation stays disabled", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(publicResponse({ data: receipt })); vi.stubGlobal("fetch", fetchMock);
+    expect(await createSkillInstallationClient().update("installation-1", body, "update-key")).toEqual(receipt);
+    expect(fetchMock).toHaveBeenCalledWith("/api/hub/self/skill-installations/installation-1/update", expect.objectContaining({
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "update-key" }, body: JSON.stringify(body), redirect: "error", cache: "no-store",
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    { ...receipt, change: "unchanged", event_id: undefined }, { ...receipt, change: "installed" },
+    { ...receipt, event_id: undefined }, { ...receipt, installation: { ...installation, installation_id: "other" } },
+    { ...receipt, installation: { ...installation, source_ref: "skill:revision-c" } },
+    { ...receipt, installation: { ...installation, installed: false, removed_at: installation.updated_at } },
+    { ...receipt, private_token: "hidden" },
+  ])("rejects an update ACK for a different command or phase %#", async wrong => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(publicResponse({ data: wrong })));
+    await expect(createSkillInstallationClient().update("installation-1", body, "update-key")).rejects.toMatchObject({ reason: "parse" });
+  });
+  it.each([
+    { ...body, expected_source_ref: "skill:revision-a\n" }, { ...body, source_ref: "skill:revision-b\n" },
+    { ...body, enabled: true }, { source_ref: body.source_ref }, { ...body, expected_source_ref: null },
+  ])("rejects invalid update input without dispatch %#", async input => {
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    await expect(createSkillInstallationClient().update("installation-1", input as typeof body, "update-key")).rejects.toBeInstanceOf(Error);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

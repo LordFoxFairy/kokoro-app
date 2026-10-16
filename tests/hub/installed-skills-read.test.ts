@@ -185,3 +185,11 @@ it("retired identity forgets its confirmed pool projection instead of retaining 
   await Promise.resolve()
   expect(getResourceSnapshot<unknown>(key).data).toBeUndefined()
 })
+
+
+it("preserves only the owner-declared update target, without changing the current installed pin", async () => {
+  const available_update = { source_ref: "skill:version-new", revision: "18" };
+  vi.stubGlobal("fetch", vi.fn(async () => response({ data: [{ ...item("old", "personal"), available_update }] })));
+  const [card] = await createManusSkillHubClient(createHubClient(), boundary).listSkillPool();
+  expect(card).toMatchObject({ source_ref: "skill:version-old", installed_source_ref: "skill:version-old", available_update });
+});

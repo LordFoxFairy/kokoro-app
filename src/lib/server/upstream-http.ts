@@ -365,7 +365,9 @@ export function requestWithDomain(
 export async function readBoundedRequestBody(
   request: Request,
   maxBytes = DEFAULT_UPSTREAM_MAX_REQUEST_BYTES,
+  signal?: AbortSignal,
 ): Promise<ArrayBuffer> {
+  signal?.throwIfAborted()
   const declared = request.headers.get("content-length")
   if (declared !== null) {
     const length = Number(declared)
@@ -373,11 +375,16 @@ export async function readBoundedRequestBody(
   }
   if (request.body === null) return new ArrayBuffer(0)
   const reader = request.body.getReader()
+  const cancel = () => { void reader.cancel().catch(() => undefined) }
+  signal?.addEventListener("abort", cancel, { once: true })
+  if (signal?.aborted) cancel()
   const chunks: Uint8Array[] = []
   let total = 0
   try {
     while (true) {
+      signal?.throwIfAborted()
       const result = await reader.read()
+      signal?.throwIfAborted()
       if (result.done) break
       total += result.value.byteLength
       if (total > maxBytes) {
@@ -387,6 +394,7 @@ export async function readBoundedRequestBody(
       chunks.push(result.value)
     }
   } finally {
+    signal?.removeEventListener("abort", cancel)
     reader.releaseLock()
   }
   const output = new Uint8Array(total)

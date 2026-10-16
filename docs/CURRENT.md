@@ -1,3 +1,13 @@
+## 2026-10-16 Skills 显式安装更新候选（正常产品链待验）
+
+App 沿 BFF `615b16a` / public 14.8 / 139 operations 的原字节 snapshot 和既有两生成器接入唯一 update。安装池显示 owner 的 `available_update`，显式核对旧/新 pin 后更新同一安装，不拼 Remove/Install、不自动追目录最新版。actor-owned holder 保留同 actor 重核期间的原命令及幂等 key，失准入/代际更换撤销旧读取和旧回调；412 不当成回滚证明，未知结果只显式恢复原命令，ACK-known 后只重读。真实 `enabled=false` 由 owner 保留，不被 UI 推断为启用。
+
+首次挂载可直接打开更新；完成后回读并刷新目录/安装池，原按钮移除时键盘焦点返回搜索框。关闭/取消、StrictMode、unknown 后卸载及旧 action 不借新准入的回归均在现有 suites 或纯 flow 中，不恢复五套已移除 UI 测试。唯一 adapter 仍在线读取 Product Session；输入/返回继续严格绑定和有限字节/同一预算，修复继承的 stalled request body 不响应总 deadline 问题，无新网络协议、Schema、持久业务记录或依赖。
+
+最终候选 Node 22 `pnpm check` exit 0：contract 278、architecture 50、180 files / 3110 tests、lint/typecheck/build 通过；5 个定向文件 320 PASS；独立公开壳层/preview 项目会话 E2E 桌面和窄屏 4 PASS，随后正规 typecheck 再生 Next route 类型，未手改生成物。焦点用例先有效 RED（落 body）再修复，unknown cleanup 用例强化为 lost ACK 后卸载；独立只读复核未见新增确定 P0–P2。一次 typecheck 因测试误用 Testing Library 的 `exact` 选项失败，已用精确名称正则修正，未放宽焦点或请求断言。
+
+用户已批准 Platform/BFF 的本地短暂重启；两 owner 候选各自沿原 feature 分支 fast-forward 并加载，原配置在内存复用，健康/就绪各 200，无依赖/Schema/登录配置或数据写。App 正常入口尚待装载此候选并完成原安装 A→B、enabled/identity/installed_at、详情/试用 pin 及刷新验收；健康检查和受控 fixture 不当业务 ACK。Agent/Billing、Admin 当前消费基线与正常管理员生命周期仍有独立后继，远程 CI/push/PR/merge 继续暂停。
+
 ## 2026-10-16 登录故障静默恢复（局部交互修复）
 
 删除 `RuntimeSessionUnavailable` 及其全页/悬浮诊断卡片；临时故障不冒充匿名、不切 preview，也不要求用户反复点击 Retry。初始服务端 admission 异常保持数据空壳，按 1s/3s 两次 RSC refresh 重验，不整文档 reload；浏览器探针沿原有可信读取/续期链做有界快恢复，成功或卸载清理定时器。既有可见页两分钟重核和 focus/online 恢复保留，因此不是整个文档生命周期只重试两次。只有真实 anonymous 决定才进入现有固定登录流程。

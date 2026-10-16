@@ -1,10 +1,13 @@
 "use client";
 
 import type { GithubImported } from "./personal-skill-github-import-flow";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import type { HubClient } from "@/hub/client";
+import { createSkillInstallationClient, type HubClient } from "@/hub/client";
+import { Button } from "@/components/ui/button";
+import { createSkillInstallationUpdateFlow } from "./skill-installation-update-flow";
+import { SkillInstallationUpdateDialog } from "./skill-installation-update-dialog";
 import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
@@ -27,6 +30,7 @@ import {
   skillResourceKey,
 } from "./skills-resource-cache";
 import { SkillUploadDialog } from "./skill-upload-dialog";
+import { SKILL_CATALOG_RESOURCE_KEY } from "./manus-skill-client";
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
   const target = event.target;
@@ -180,7 +184,36 @@ function detailSelectionFor(
 }
 
 export function SkillsContent(props: SkillsContentProps) {
-  return <InstalledSkillsContent key={skillResourceKey(SKILLS_KEY, props.client)} {...props} />;
+  const { admitted, subject, generation } = props.readBoundary;
+  const t = useT();
+  // Lives outside the generation-keyed facts subtree. Never keep a private ACK
+  // or current installation here; the flow retires those on every recheck.
+  const updateFlow = useMemo(() => createSkillInstallationUpdateFlow({ client: createSkillInstallationClient(), boundary: { admitted: false, subject, generation: 0 } }), [subject]);
+  const updateState = useSyncExternalStore(updateFlow.subscribe, updateFlow.getSnapshot, updateFlow.getSnapshot);
+  const [updateOpen, setUpdateOpen] = useState<{ subject: string | null; open: boolean }>({ subject: null, open: false });
+  const updateReturnFocus = useRef<HTMLElement | null>(null);
+  const updateFallbackFocus = useRef<HTMLInputElement | null>(null);
+  useLayoutEffect(() => updateFlow.retain({ admitted, subject, generation }), [updateFlow, admitted, subject, generation]);
+  const updateCurrent = props.readBoundary.admitted && subject !== null && updateFlow.matches(props.readBoundary);
+  useEffect(() => {
+    if (!updateCurrent || !updateState.acknowledged) return;
+    invalidate(skillResourceKey(SKILLS_KEY, props.client));
+    invalidate(skillResourceKey(SKILLS_CATALOG_KEY, props.client));
+    invalidate(SKILL_CATALOG_RESOURCE_KEY);
+  }, [updateCurrent, updateState.acknowledged, props.client]);
+  const updateLocked = () => updateFlow.getSnapshot().kind !== "idle";
+  const openUpdate = (skill: SkillCard, source: HTMLElement) => {
+    if (!updateCurrent || !updateFlow.select(skill, props.readBoundary)) return false;
+    updateReturnFocus.current = source;
+    setUpdateOpen({ subject, open: true });
+    void updateFlow.readCurrent(props.readBoundary);
+    return true;
+  };
+  return <>
+    {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
+    <InstalledSkillsContent key={skillResourceKey(SKILLS_KEY, props.client)} {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} />
+    <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
+  </>;
 }
 
 /**
@@ -202,7 +235,11 @@ function InstalledSkillsContent({
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef,
   initialScope,
-}: SkillsContentProps) {
+  onUpdateSkill,
+  updateFallbackFocus,
+  updateLocked,
+  updatePending,
+}: SkillsContentProps & { onUpdateSkill: (skill: SkillCard, source: HTMLElement) => boolean; updateFallbackFocus: RefObject<HTMLInputElement | null>; updateLocked: () => boolean; updatePending: boolean }) {
   const [githubOpen, setGithubOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const githubReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -296,7 +333,7 @@ function InstalledSkillsContent({
       // One mutation owns the shared hub action slot. State is for rendering;
       // the ref closes the same-frame double-click window before React commits
       // the busy state.
-      if (mutationBusyRef.current) return;
+      if (mutationBusyRef.current || updateLocked()) return;
       mutationBusyRef.current = true;
       const attempt = ++mutationAttemptRef.current;
       // 池内项恒为「已启用」：唯一动作是停用（停用后离池）。required 撞 409 → 锁定回滚。
@@ -331,7 +368,7 @@ function InstalledSkillsContent({
       }
       mutationBusyRef.current = false;
     },
-    [client, enabledAction],
+    [client, enabledAction, updateLocked],
   );
 
   return (
@@ -342,13 +379,18 @@ function InstalledSkillsContent({
           data-embedded={embedded || undefined}
         >
           <SkillsPoolTab
+            searchInputRef={updateFallbackFocus}
             pool={pool.data ?? null}
             loading={pool.loading}
             failed={pool.error !== undefined && pool.data === undefined}
             refreshFailed={pool.error !== undefined && pool.data !== undefined}
             pinned={pinned}
             locked={locked}
-            busy={busy}
+            busy={updatePending ? "installation-update" : busy}
+            onUpdateSkill={(skill, source) => {
+              if (mutationBusyRef.current || !onUpdateSkill(skill, source)) return;
+              setEnabledOverrides(new Map()); setInstalledOverrides(new Map()); setDetailSelection(null);
+            }}
             expanded={expanded}
             client={client}
             onRetry={pool.refetch}

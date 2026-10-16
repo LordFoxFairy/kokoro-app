@@ -159,6 +159,23 @@ const firstSiteFallback: Partial<Record<MessageKey, string>> = {
 }
 
 const skillsFallback: Partial<Record<MessageKey, string>> = {
+  "skills.update.available": "Update to v{revision}",
+  "skills.update.title": "Update skill",
+  "skills.update.description": "Update this installation only, preserving its enabled state. Existing conversations and running tasks keep their pinned versions.",
+  "skills.update.versions": "Current v{current} \u00b7 Selected v{target}",
+  "skills.update.confirm": "Confirm update",
+  "skills.update.submitting": "Submitting update\u2026",
+  "skills.update.reading": "Checking current installation\u2026",
+  "skills.update.unknown": "The update result is unknown. Retry uses the original installation, selected version and request key, not a new update.",
+  "skills.update.readFailed": "The update was confirmed, but the current installation could not be read. Retry reads only; it does not repeat the update.",
+  "skills.update.checkFailed": "The current installation could not be read. Check it again before continuing.",
+  "skills.update.unavailable": "The installation or available version changed. This selection was not submitted. Close it and select again.",
+  "skills.update.completed": "The update was confirmed and the current installation has been read.",
+  "skills.update.retryOriginal": "Retry original update",
+  "skills.update.done": "Done",
+  "skills.update.confirmedNotice": "The skill update was confirmed. Check the current state.",
+  "skills.update.pendingNotice": "A skill update needs your attention.",
+  "skills.update.resume": "View update",
   "skills.localImport.hint": "Choose one archive containing SKILL.md. Its owner reads the metadata and adds it to My skills.",
   "skills.localImport.session": "Confirm your current sign-in before uploading.",
   "skills.localImport.processing": "Importing skill…",

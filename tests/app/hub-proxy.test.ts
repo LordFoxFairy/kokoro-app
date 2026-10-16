@@ -1551,7 +1551,9 @@ it("forwards only trusted installation headers, false body and safe retry respon
   });
   expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
   expect(options?.headers).not.toHaveProperty("cookie");
-  expect(options?.signal).toBe(request.signal);
+  expect(options?.signal?.aborted).toBe(false);
+  controller.abort();
+  expect(options?.signal?.aborted).toBe(true);
   expect(new TextDecoder().decode(options?.body)).toBe('{"enabled":false}');
 });
 
@@ -4598,4 +4600,52 @@ describe("personal MCP 14.0 provider and command adapter", () => {
     ).toBe(400);
     expect(vi.mocked(requestWithDomain)).not.toHaveBeenCalled();
   });
+});
+
+
+it("forwards the explicit installation update without promoting browser identity or enabling it", async () => {
+  const { POST } = await import("@/app/api/hub/[...path]/route");
+  vi.mocked(requestWithDomain).mockResolvedValue(new Response(JSON.stringify({ error: { code: "skill_installation_precondition_failed", message: "Changed pin", retryable: false } }), {
+    status: 412, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "update-1" },
+  }));
+  const body = '{"expected_source_ref":"skill:revision-a","source_ref":"skill:revision-b"}';
+  const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update", authorization: "Bearer forged", "x-kokoro-subject": "forged" }, body,
+  }), params(["self", "skill-installations", "i1", "update"]));
+  expect(response.status).toBe(412);
+  expect(requestWithDomain).toHaveBeenCalledTimes(1);
+  const [url,,options] = vi.mocked(requestWithDomain).mock.calls[0]!;
+  expect(url).toBe("http://bff.test/v1/skill-installations/i1/update");
+  expect(options?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "frozen-update" });
+  expect(options?.headers).not.toHaveProperty("x-kokoro-subject");
+  expect(new TextDecoder().decode(options?.body)).toBe(body);
+});
+
+it.each([
+  { expected_source_ref: "skill:a", source_ref: "skill:b", enabled: true },
+  { expected_source_ref: "skill:a", source_ref: "skill:b", tenant_id: "forged" },
+  { source_ref: "skill:b" }, { expected_source_ref: "skill:a\n", source_ref: "skill:b" },
+])("rejects malformed update bodies before upstream %#", async body => {
+  const { POST } = await import("@/app/api/hub/[...path]/route");
+  const response = await POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+    method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body: JSON.stringify(body),
+  }), params(["self", "skill-installations", "i1", "update"]));
+  expect(response.status).toBe(400); expect(requestWithDomain).not.toHaveBeenCalled();
+});
+
+it("an update's single budget cancels a stalled input before any BFF dispatch", async () => {
+  vi.useFakeTimers()
+  try {
+    const { POST } = await import("@/app/api/hub/[...path]/route");
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('{"expected_source_ref":')); }, cancel });
+    const pending = POST(new Request("http://localhost/api/hub/self/skill-installations/i1/update", {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "frozen-update" }, body, duplex: "half",
+    } as RequestInit), params(["self", "skill-installations", "i1", "update"]));
+    let settled = false; void pending.then(() => { settled = true });
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(settled).toBe(true);
+    const response = await pending;
+    expect(response.status).toBe(504); expect(cancel).toHaveBeenCalledTimes(1); expect(requestWithDomain).not.toHaveBeenCalled();
+  } finally { vi.useRealTimers() }
 });

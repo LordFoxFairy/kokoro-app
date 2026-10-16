@@ -69,6 +69,8 @@ import {
   installationIdSchema,
   installationKeySchema,
   installationSourceSchema,
+  installationUpdateRequestSchema,
+  type InstallationUpdateRequest,
   installationListQuerySchema,
   installationReceiptMatches,
   installationResponseSchema,
@@ -1285,6 +1287,7 @@ export function createHubClient(): HubClient {
 }
 
 export type SkillInstallationClient = {
+  update: (id: string, input: InstallationUpdateRequest, key: string, signal?: AbortSignal) => Promise<InstallationReceipt>;
   list: (
     query?: InstallationListQuery,
     signal?: AbortSignal,
@@ -1518,6 +1521,13 @@ export function createSkillInstallationClient(): SkillInstallationClient {
     return value;
   };
   return {
+    update: async (id, input, key, signal) => {
+      const body = installationUpdateRequestSchema.parse(input);
+      const result = await request("update", `${idPath(id)}/update`, { method: "POST", headers: commandHeaders(key, true), body: JSON.stringify(body) }, signal);
+      if (!("installation" in result.data) || !installationReceiptMatches("update", result.data, id, undefined, body.source_ref))
+        throw new HubClientError("parse", "Installation update receipt mismatch", null, 200);
+      return result.data;
+    },
     list: async (query = {}, signal) => {
       const input = installationListQuerySchema.parse(query);
       const search = new URLSearchParams();

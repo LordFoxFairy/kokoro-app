@@ -1,3 +1,13 @@
+## 安装更新的键盘返回
+
+显式更新确认后的 owner 回读会移除原更新按钮；普通关闭返回仍可用的真实触发器，原按钮已移除或禁用时返回同一安装池搜索框。从待核实通知恢复则记录本次通知按钮；不通过 DOM/CSS 字符串寻找或伪造数据卡片。
+
+## SKILLS-UPDATE U4（本地实施，正常组合待验）
+
+- `skill-installation-update-flow.ts`：actor-owned 原安装/两 pin/key 意图；unknown 原样显式重试，ACK-known 只 GET。当前事实每代退役，series/revision/installation ACK 绑定，不以 GET 到目标冒认成功。
+- `skill-installation-update-dialog.tsx`：真实当前安装/已选版本、确认、未知恢复和回读反馈；复用 Dialog/Button 与语义 token。
+- `SkillsContent` 持 flow，不在 generation-keyed `InstalledSkillsContent` 内；独立恢复入口不随卡片/筛选消失。`available_update` 仅来自 owner；更新期间锁住原安装操作，ACK 后失活安装池与目录，不重写历史试用/消息。
+
 <!-- T-K03.14-WEB-PERSONAL-LIFECYCLE D0: target, not implemented -->
 本人managed详情将显示真实例子/更新时间；更新沿personal-skill-publish flow正规新版本包链，撤回独立personal-skill-withdraw-dialog。仅owner范围；实现闭集及待验门见三设计具名前缀。
 

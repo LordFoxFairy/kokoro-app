@@ -135,9 +135,11 @@ export function SkillsPoolTab({
   onCreateWithAi,
   brandName,
   onOpenDetail,
+  onUpdateSkill,
   embeddedCatalogOpen,
   onEmbeddedCatalogOpenChange,
   catalogTriggerRef: suppliedCatalogTriggerRef,
+  searchInputRef,
   initialScope = "all",
 }: {
   pool: SkillsPool | null;
@@ -167,12 +169,15 @@ export function SkillsPoolTab({
   onDismissGithubImportNotice: () => void;
   onCreateWithAi?: (prompt?: string) => void;
   onOpenDetail: (skill: SkillCard | SkillCatalogCard, source: HTMLElement) => void;
+  onUpdateSkill: (skill: SkillCard, source: HTMLElement) => void;
   /** Settings owns the embedded catalog route so its heading and content
    * transition from one state source. Standalone Skills keeps local state. */
   embeddedCatalogOpen?: boolean;
   onEmbeddedCatalogOpenChange?: (open: boolean) => void;
   /** The Settings panel owns this ref so its shared back header restores focus. */
   catalogTriggerRef?: RefObject<HTMLButtonElement | null>;
+  /** Stable keyboard return target when a completed update removes its trigger. */
+  searchInputRef?: RefObject<HTMLInputElement | null>;
   /** Initial intent supplied by the marketplace "我的技能" handoff. */
   initialScope?: SkillsScopeFilter;
 }) {
@@ -192,7 +197,8 @@ export function SkillsPoolTab({
   const confirmDisableRefs = useRef<Record<string, HTMLButtonElement | null>>(
     {},
   );
-  const searchRef = useRef<HTMLInputElement | null>(null);
+  const localSearchRef = useRef<HTMLInputElement | null>(null);
+  const searchRef = searchInputRef ?? localSearchRef;
   const localCatalogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const catalogTriggerRef = suppliedCatalogTriggerRef ?? localCatalogTriggerRef;
 
@@ -585,6 +591,7 @@ export function SkillsPoolTab({
                         ? t("skills.disableError")
                         : null
                     }
+                    onUpdate={(source) => onUpdateSkill(skill, source)}
                     onEnabledChange={(enabled) =>
                       onSetEnabled(skill, enabled, stateKey)
                     }
@@ -660,6 +667,7 @@ export function SkillsPoolTab({
                           embedded && styles.embeddedItemActions,
                         )}
                       >
+                        {skill.available_update ? <Button type="button" variant="outline" disabled={busy !== null} onClick={event => onUpdateSkill(skill, event.currentTarget)}>{t("skills.update.available", { revision: skill.available_update.revision })}</Button> : null}
                         <Button
                           variant="outline"
                           type="button"

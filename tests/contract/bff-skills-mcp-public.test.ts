@@ -22,9 +22,9 @@ import {
   type InstallationOperation,
 } from "@/hub/schemas"
 
-const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
-const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
-const OWNER_VERSION = "14.7.0"
+const OWNER_COMMIT = "615b16a7f75917d30d334b66d5470d87339aacd1"
+const OWNER_SHA256 = "a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577"
+const OWNER_VERSION = "14.8.0"
 const SNAPSHOT = resolve(process.cwd(), "src/generated/bff-public-openapi.yaml")
 
 type Shape = {
@@ -197,7 +197,7 @@ function assertProjectionSemantics(spec: Spec): void {
 describe("pinned BFF Skills and MCP public consumer contract", () => {
   it("pins exact owner bytes and six current Skill draft/publish operations", async () => {
     const bytes = await readFile(SNAPSHOT)
-    expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
+    expect(OWNER_COMMIT).toBe("615b16a7f75917d30d334b66d5470d87339aacd1")
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
     const spec = YAML.parse(bytes.toString()) as Spec
     expect(spec.info.version).toBe(OWNER_VERSION)
@@ -269,9 +269,10 @@ describe("pinned BFF Skills and MCP public consumer contract", () => {
   })
 })
 
-it("pins the five Personal installation operations, safe projection and strict error-only headers", async () => {
+it("pins the six Personal installation operations, safe projection and strict error-only headers", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   for (const [method, path, id, success, errors] of [
+    ["post", "/v1/skill-installations/{installation_id}/update", "updatePersonalSkillInstallation", "SkillInstallationUpdateSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
     ["post", "/v1/skill-installations", "installPersonalSkill", "SkillInstallationMutationSuccess", [400, 401, 403, 404, 409, 412, 413, 429, 502, 503, 504]],
     ["get", "/v1/skill-installations", "listPersonalSkillInstallations", "SkillInstallationListSuccess", [400, 401, 403, 413, 429, 502, 503, 504]],
     [
@@ -391,6 +392,7 @@ it("compares every live publish/managed/installation component field matrix to t
 it("compares all five installation operation/status error families, including mutation-only skill authorization", async () => {
   const spec = YAML.parse(await readFile(SNAPSHOT, "utf8")) as Spec
   for (const [method, path, consumer] of [
+    ["post", "/v1/skill-installations/{installation_id}/update", "update"],
     ["post", "/v1/skill-installations", "install"],
     ["get", "/v1/skill-installations", "list"],
     ["get", "/v1/skill-installations/{installation_id}", "get"],

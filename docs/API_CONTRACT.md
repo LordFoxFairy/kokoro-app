@@ -1,3 +1,9 @@
+## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
+
+唯一来源 BFF 615b16a7f75917d30d334b66d5470d87339aacd1 / public14.8.0（139 operations），原 blob SHA256 a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577。既有同源 POST /api/hub/self/skill-installations/{installation_id}/update 精确映射 /v1/skill-installations/{installation_id}/update；严格两字段 expected_source_ref/source_ref、原 Idempotency-Key、JSON≤65536/同源准入，无 identity body/alias/query。原有非更新操作语义保持。
+
+成功200必须 change=upgraded、event_id、installed=true且无 removed_at，精确安装 ID/目标 pin；enabled 不要求 true，由 owner 事务保留。逐 status 错误沿本 operation 契约，不把未知/错 ACK当成功。安装卡片只消费 owner available_update，不用目录 currentVersion 推导自动升级；确认后保留同一 installation ID，历史消息/冻结试用意图不重写。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）

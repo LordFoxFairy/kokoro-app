@@ -5,13 +5,13 @@ import { resolve } from "node:path"
 import { expect, it } from "vitest"
 import YAML from "yaml"
 
-const OWNER_COMMIT = "413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0"
-const OWNER_SHA256 = "68a6b678aa72f0a7f3ab03fbcb1b50f7db899c127d852322912a4ad0e1d01b9d"
-const OWNER_VERSION = "14.7.0"
+const OWNER_COMMIT = "615b16a7f75917d30d334b66d5470d87339aacd1"
+const OWNER_SHA256 = "a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577"
+const OWNER_VERSION = "14.8.0"
 
 it("pins BFF project creation to the owner request, idempotency and canonical response", async () => {
   const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-public-openapi.yaml"))
-  expect(OWNER_COMMIT).toBe("413e3bbe4a8f5ad5baa43cc4841d95c9f3c1d1a0")
+  expect(OWNER_COMMIT).toBe("615b16a7f75917d30d334b66d5470d87339aacd1")
   expect(createHash("sha256").update(bytes).digest("hex")).toBe(OWNER_SHA256)
   const spec = YAML.parse(bytes.toString()) as {
     info: { version: string }
@@ -96,8 +96,8 @@ it("pins the sole added Project rename operation and its closed command receipt/
       .filter(([method]) => ["get", "post", "put", "patch", "delete", "options", "head"].includes(method))
       .map(([, operation]) => operation.operationId),
   )
-  expect(operations).toHaveLength(141)
-  expect(new Set(operations).size).toBe(141)
+  expect(operations).toHaveLength(139)
+  expect(new Set(operations).size).toBe(139)
   expect(operations.filter((operation) => operation === "renameProject")).toHaveLength(1)
   expect(spec.paths["/v1/projects/{projectId}/name"]?.patch).toMatchObject({
     operationId: "renameProject",

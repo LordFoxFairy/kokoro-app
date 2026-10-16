@@ -1,3 +1,9 @@
+## 2026-10-16 U4 consumer pin（本地实现，运行验收待完成）
+
+固定 BFF `615b16a7f75917d30d334b66d5470d87339aacd1` 的 committed `contract/openapi/v1/openapi.yaml` 原字节，public **14.8.0 / 139 operations**，SHA256 `a9729722383de5571821961357051499612d12c76aa835b8774828adea82a577`。本片增加显式个人 installation update；承接该 owner 既有未发行 MCP 写入口退役，不能从历史 snapshot 恢复。两既有 generator 正规 write/check；Team 派生15文件原字节不变，Agent failure 仅三项 provenance 变化，原 roles/tuples 不变。
+
+同源路径和 unknown/ACK-known 状态机见三面 U4 前缀。契约门 278 PASS 不等于正常组合更新或付费 Agent 执行验收；现有运行 owner/BFF 尚未切换。
+
 ## R257 MCP Connection 当前本地 owner artifact
 
 本人 Connection 只读消费者固定 BFF local immutable commit `6d46ec8bdd2d2ffaa06513fd0561272eae907919`、public `8.0.0` canonical OpenAPI SHA256 `8d5b452ba554f7b9ce723481a0a619abf12d9fb3174b9f15f52a395ad1372783`。这是当前本地 artifact pin；不表示 remote/registry 发布、正常服务激活或浏览器业务验收。下方旧 digest 仅保留其历史切片记录，不作为 R257 消费来源。

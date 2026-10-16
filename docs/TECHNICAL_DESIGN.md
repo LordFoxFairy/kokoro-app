@@ -1,3 +1,13 @@
+## 2026-10-16 SKILLS-UPDATE U4（本地实现，正常产品链待验）
+
+目标沿已审 SKILLS-UPDATE U0/U3：既有安装池卡片展示 owner 的 available_update，显式确认旧 pin→目标 pin 后调用唯一 update，而不是 Remove/Install。Web 只持浏览器意图，BFF 准入/Platform 事务继续唯一写入；不新增模块、网关、数据库或依赖。
+
+写区：现 hub schema/client、catch-all adapter、安装池投影/卡片/面板、相邻普通 update flow/dialog 与 i18n；固定 BFF 615b16a public14.8 原字节并用现两生成器。意图由 actor-owned SkillsContent 持有，越过同 actor read generation但不越过 actor；关闭/重核取消请求，unknown 只显式重放原 installation/两 pin/key。ACK 已确认而回读失败只重读，不再发写；换 actor 退役全部。UI 私有事实与回调仍按准入代际退役。
+
+独立设计复核承接：holder 位于 generation-keyed 子树之外；ACK 核 series/目标 revision，enabled 仅取 owner 值。412 不证明未提交，不允许换意图或凭 GET 合成 ACK。ACK-known 跨重核只保只读阶段，不保私有 ACK；恢复按钮不依赖 available_update 卡片仍存在，旧回调/旧 finally 按 attempt token 永久失效。更新期间关闭现安装操作入口，重新选择前旧 override 退役、最终回读收敛。
+
+验收：strict request/only-upgraded ACK/安装身份、disabled false、无 Remove/Install、原 key/body 恢复、ACK后回读失败、失准入/同actor重核与异actor隔离；现 client/proxy/纯 flow 定向测试与相关完整门，浏览器桌面/窄屏/键盘关键旅程。保持已删除五套 UI suites 退役，不加源码/CSS字符串断言。用户已批准本地短暂重启，新 owner/BFF 源候选已加载并分别通过健康/就绪检查；这不证明业务更新已成功。App 的正常显式更新、桌面/窄屏/键盘旅程与刷新验收仍待完成，受控 fixture 不冒产品完成。
+
 <!-- BEGIN:T-K03.13-WEB-MCP-PERSONAL-READ-D0 -->
 
 ## T-K03.13 Web 本人 MCP 读取 D0（目标，尚未实施）
