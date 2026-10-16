@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const ja: Partial<Record<MessageKey, string>> = {
+  "skills.downloadUnavailable": "このスキルは現在ダウンロード対象外です。",
+  "skills.downloadIncomplete": "ダウンロードが完了しませんでした。もう一度お試しください。",
   "skills.tryRequiresEnabledVersion": "このバージョンを追加して有効にしてから例を使用してください。別バージョンへの変更には明示的な更新が必要です。",
   "skills.tryUnavailable": "試用を開始できません。会話の接続とスキルの状態を確認して再試行してください。",
   "composer.removeSelectedSkill": "選択したスキル {name} を外す",

@@ -4,6 +4,8 @@
 import type { MessageKey } from "./messages"
 
 export const pt: Partial<Record<MessageKey, string>> = {
+  "skills.downloadUnavailable": "O download desta habilidade não está disponível no momento.",
+  "skills.downloadIncomplete": "O download não foi concluído. Tente novamente.",
   "skills.tryRequiresEnabledVersion": "Adicione e ative esta versão exata antes de usar um exemplo. Mudar de versão exige uma atualização explícita.",
   "skills.tryUnavailable": "Não foi possível iniciar o teste. Verifique a conexão da conversa e o estado da habilidade e tente novamente.",
   "composer.removeSelectedSkill": "Remover habilidade selecionada {name}",

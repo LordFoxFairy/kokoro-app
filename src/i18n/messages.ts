@@ -60,6 +60,8 @@ export const zh = {
   "firstSite.projectRenameReadRetry": "重新读取项目",
   "firstSite.projectRenameRetry": "重试同一改名",
   "firstSite.projectRenameRestart": "核对后重新编辑",
+  "skills.downloadUnavailable": "此技能当前未开放下载。",
+  "skills.downloadIncomplete": "下载未完成，请重试。",
   "skills.personal.published": "本人已发布",
   "skills.personal.installations": "本人安装",
   "skills.personal.install": "安装此技能",

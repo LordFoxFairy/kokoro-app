@@ -24,6 +24,8 @@ export const en: Partial<Record<MessageKey, string>> = {
   "firstSite.projectsError": "Projects could not be loaded.",
   "firstSite.projectsEmpty": "No projects yet.",
   "firstSite.projectsUnavailable": "Project unavailable",
+  "skills.downloadUnavailable": "This skill is not currently available for download.",
+  "skills.downloadIncomplete": "The download did not complete. Please try again.",
   "skills.personal.published": "My published Skills",
   "skills.personal.installations": "My installations",
   "skills.personal.install": "Install this Skill",

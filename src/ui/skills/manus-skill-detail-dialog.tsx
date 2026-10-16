@@ -11,7 +11,7 @@ import { useLocale } from "@/i18n/context"
 import type { SkillCatalogCard, CatalogPackageData, PersonalInstallation } from "@/hub/schemas"
 import { downloadManusSkill, getManusSkillDetail, getManusSkillPackage, type ManusSkillDetail } from "@/ui/skills/manus-skill-client"
 
-import { createSkillInstallationClient } from "@/hub/client"
+import { createSkillInstallationClient, HubClientError } from "@/hub/client"
 import { inspectInstallationPackage, downloadInstallationPackage } from "@/hub/skill-installation-content"
 import { createSkillShareClient } from "@/hub/skill-share-client"
 import type { ShareAck, ShareSummary } from "@/hub/skill-share.schema"
@@ -182,7 +182,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
   const [detail, setDetail] = useState<ManusSkillDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [downloading, setDownloading] = useState(false)
-  const [downloadFailed, setDownloadFailed] = useState(false)
+  const [downloadFailure, setDownloadFailure] = useState<"unavailable" | "incomplete" | null>(null)
   const downloadRequest = useRef<AbortController | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
   const [directory, setDirectory] = useState<CatalogPackageData | null>(null)
@@ -227,7 +227,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     setInstallation(null)
     setFailed(false)
     setDownloading(false)
-    setDownloadFailed(false)
+    setDownloadFailure(null)
     setReaderOpen(false)
     setDirectory(null)
     setSelectedPath(null)
@@ -337,7 +337,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
     downloadRequest.current?.abort()
     downloadRequest.current = controller
     setDownloading(true)
-    setDownloadFailed(false)
+    setDownloadFailure(null)
     try {
       if (sharedSummary) {
         const result = await createSkillShareClient().download(sharedSummary.share_id, sharedSummary.source_ref, sharedSummary.skill.revision, controller.signal)
@@ -350,8 +350,13 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
         const result = await downloadManusSkill(skill.skill_id, controller.signal)
         if (!controller.signal.aborted && isLive()) window.location.assign(result.downloadInfo.downloadUrl)
       }
-    } catch { if (!controller.signal.aborted && isLive()) setDownloadFailed(true) }
-    finally {
+    } catch (error) {
+      if (!controller.signal.aborted && isLive()) {
+        const unavailable = error instanceof HubClientError && error.reason === "http" && error.retryable === false
+          && (error.status === 403 && error.code === "skill_download_forbidden" || error.status === 404 && error.code === "skill_not_found")
+        setDownloadFailure(unavailable ? "unavailable" : "incomplete")
+      }
+    } finally {
       if (downloadRequest.current === controller) downloadRequest.current = null
       if (!controller.signal.aborted && isLive()) setDownloading(false)
     }
@@ -499,7 +504,7 @@ export function ManusSkillDetailDialog({ detailSource = "catalog", preview = fal
           {record !== null && skill?.revision_skill_id !== undefined && record.version !== skill.revision_skill_id ? <p className={styles.status}>{t("skills.packageChanged")}</p> : null}
           {examples.length > 0 ? <SkillTrialExamples key={JSON.stringify([boundary.subject, boundary.generation, skill?.skill_id, boundRevision, skill?.installed_source_ref, trialReady])} examples={examples} ready={trialReady} onTry={onTry} /> : null}
         </section>}
-        {downloadFailed ? <p className={styles.status} role="alert">{t("skills.detailUnavailable")}</p> : null}
+        {downloadFailure ? <p className={styles.status} role="alert">{t(downloadFailure === "unavailable" ? "skills.downloadUnavailable" : "skills.downloadIncomplete")}</p> : null}
         {readerOpen ? <section className={styles.reader} aria-label={t("skills.packageReader")}>
             <button
               type="button"

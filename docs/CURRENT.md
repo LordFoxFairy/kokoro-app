@@ -1828,3 +1828,15 @@ App57b510d后的本片把五项管理（server编辑/删除、connector编辑/�
 本片完整冻结门禁待下方补记；首轮全套3272通过发生于最终局部提示修改前，只是阶段证据。真实另一主体/撤回矩阵与完整 Manus 视觉、公开 v2 八类事实裁决、项目默认及正式执行、OAuth 创建恢复和远程 PR/Root main 汇总仍未闭环。Admin 临时开发进程与两自建浏览器标签已回收，正常共享服务保留。
 
 最终冻结验证（同15路径，业务/测试字节停写后）：Node22 `pnpm contract`280 PASS、`pnpm test:architecture`50 PASS、`pnpm lint`/`pnpm typecheck`0；`pnpm test --maxWorkers=2`181 files / 3275 PASS / 0 SKIP / 182.03秒。独立同基线候选 `pnpm build`0，`KOKORO_E2E_PORT=3325 pnpm test:e2e tests/e2e/public-shell.spec.ts --workers=1`桌面/移动6 PASS / 8.3秒，随后typecheck0。全测一条既有 jsdom navigation 诊断、E2E颜色环境 warnings 非失败，不冒零诊断。独审15冻结hash一致且无确定新增P0–P2；这只证明本片，不替代正常跨主体/撤回、完整视觉或全目标。最终只追加本段文档，14其它路径保持冻结。远程未操作，Root index空；BFF d176e3d/Platform ac56a1f clean，Storage原35 dirty paths保留。
+
+### 已撤回安装阅读与下载反馈（2026-10-16，验收进行中）
+
+基线0c9452c，同BFF d176e3d/Platform ac56a1f。正常同源Admin只撤回此前自建的pin样本B；新App页继续读取停用B的metadata和SKILL.md，目录不展示该系列且不自动回退A，下载独立失败。此前reader把下载错误误说“详情不可用”，现独立区分严格HubClientError的不可重试403/skill_download_forbidden或404/skill_not_found与其他未完成；九语言只改下载提示，不清正文、不更换版本、不把错误文字当授权事实。正常最终提示“此技能当前未开放下载。”且原B标题/正文保留。未单独记录真实wire状态，不把UI推导冒精确HTTP取证；owner契约的403与404分支均具名回归。
+
+原两分支真实RED后修复；403-only首候选没有匹配正常拒绝形态，核owner隐藏缺失规则、再补404回归先1FAIL后修复。沿既有rail suite扩展原用例，不新建UI套件。正常证据仅Root ignored pin-withdraw-normal.json及对应截图；当前样本源withdrawn、安装B/disabled，不再称其active。本轮Admin临时进程与自建tabs26/27已回收，正常共享服务保持；未永久删除、变更权限/凭据/积分或运行模型。完整门禁待冻结后补记；另一主体和完整目标仍OPEN。
+
+冻结首轮全套181files/3277项中1FAIL：既有share exact-download回归仍期待旧的“详情不可用”，实际新下载错误已独立呈现；不是服务启动/内存失败。保留错误绑定拒绝与不回退断言，改为下载未完成提示并加原摘要仍在、旧详情错误不在的行为断言，无新suite。扩为14路径后重新冻结验收，不将首轮称通过。进程核对显示该全测临时Next及浏览器随测试结束已退出；3320/3324/3325/39216/39217当时均无listener，正常3310与共享依赖保留。
+
+14路径最终停写验证：Node22下lint/typecheck退出0、contract280 PASS、architecture50 PASS；默认181files/3277 PASS/0SKIP/185.26s（2workers）。同基线独立候选build0、公共壳桌面/移动E2E6 PASS/8.1s（1worker）、posttype0。定向share+rail 2files/188 PASS；既有jsdom跨Document诊断与E2E颜色环境warning如实保留。只读增量复核14hash一致，无确定新增P0–P2；保留分享错误绑定与不回退断言。最终只补本结果段，另外13路径不变。
+
+本轮按用途与父子/cwd核对进程：自有Admin已停止，首轮及最终测试临时Next/浏览器均结束，候选E2E退出后3320/3324/3325/39216/39217均无监听；App/IAM/BFF/Platform/Storage正式健康入口200。正常3310、受管服务、共享PG/Redis与桌面工具运行时保留，不因RSS大或PPID1终止；外部Clash零RSS僵尸不占本轮可回收内存，不连带结束父进程。串行跑完整测试、候选build与E2E，无重复预览常驻。本片不代表八类来源、跨主体矩阵、完整视觉或总目标完成，远程CI/PR/merge及Root暂存仍暂停。
