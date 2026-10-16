@@ -2446,3 +2446,12 @@ AppFrameRuntime 在稳定 app segment 内持有唯一 ConnectorCommandProvider�
 替换前的创建 flow 和详情 runAction 分别分配 Prepare key；详情失败/关闭/重核后换 key 或新 CAS，且两个入口可能重复准备同一 server。改为 AppFrameRuntime 这一既有稳定 owner 中的 ConnectorCommandProvider：沿用 API/JSON/Register 的显式 typed 槽，另持当前 actor/client 下按精确 server/connector 标识划分的 Prepare 命令集合。每个资源独立串行、不同资源不互相阻塞；创建与详情共用同一资源的原命令，不是任意命令注册表。Provider 上移覆盖主页面与 overlays，旧 overlay-only provider 删除，不留双 owner 或 fallback。
 
 Prepare 的正文/CAS/key 在派发前冻结；unknown 只显式恢复原命令，已确认后只完成当前窗口或 fresh 读取，不换 key 再写。通用纯核仅承接三个实际消费者共用的单命令准入/unknown/lease机制，重命名为 connector-command，领域资源索引只属于 typed MCP Prepare owner。窗口退休不丢未知命令，准入/actor/client 退休取消旧等待和旧 UI 续接；晚 ACK 只失活原主体。确认断开/删除可退役精确资源命令，旧 ACK 不恢复已撤销连接。快照只含 locator/状态，不含 owner 正文、header 或 OAuth secret；无 browser 持久存储、新 owner/wire/Schema。详情的配置草稿、选择与事实代际规则沿现实现，权限/事务/receipt继续归BFF/Platform。 详情每个已提交窗口/准入代际持自己的等待取消信号，关闭、切页或重核立即暂停该等待但保留未知原命令。旧 ACK 可以确认同一冻结命令，只有仍准入的显式重试可消费该完成结果；退休窗口不关闭后继窗口，已撤销条目也不复活。
+
+
+### Connector 恢复错误的固定浏览器消费者（2026-10-16，实施设计）
+
+承接 Root 已裁决 owner→BFF→App 顺序；本阶段仅闭环机器错误穿过同源 adapter/Hub 的严格消费，后继再把分类接入原 actor 命令和表单指引，不把 transport 接线冒成产品恢复完成。固定 BFF d176e3d0cbbc2eab903dae2b2d969906ba5808fe 的 browser-private `contract/connector-command-errors-v1.json` 原字节及 digest，独立正规生成只读常量/provenance；Public14.8 snapshot、两既有public generator和其pin保持。选择窄 Hub 错误 validator（MCP/Custom API 两实际消费者），不建通用错误注册表、网络代理或引用Platform代码/类。
+
+同源与Hub共用已生成profile核验status/code/retryable；receipt型错误仅写路径可用，response_invalid作为现有安全拒绝可用于读。原生MCP授权保独立协议及合法generic CAS，与普通/private MCP共享同一错误validator；原仅重复错误校验的authorization export删除，不留alias。Custom API同时收紧已有envelope-only消费者的合法状态/通用错误闭集与create/list的404约束，读请求拒绝receipt型写错误。保持当前真实身份、请求ID/no-store、有界上游、取消/原CAS/key和零自动重放；仅透传已验机器分类，不用message推断操作，也不换key。
+
+先在现schema/Hub/adapter suites复现新typed错误被判坏响应和Custom API错码错retryable被放行的RED；正规固定生成及篡改负控后，复用现suite验证六类receipt、三项typed前置原因、正确原请求一次、错误tuple/read marker/无效envelope拒绝。无UI样式/状态机/存储/依赖/后端写或正常服务切换；页面恢复UX及正常三仓配对仍为下一阶段，不虚构已解决。

@@ -1625,3 +1625,6 @@ MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key
 
 
 MCP 详情准备与创建共享 typed 原命令 holder，只调用既有 preparePrivateMcpServer(serverId, expectedStateVersion, key, signal?) 和原 wire；重开/重核不能按 fresh detail CAS 分配新 key 覆盖 unknown。确认响应额外核对原 connector ID，拒绝同 server 上不匹配的 connector ACK。确认断开/删除只退役相应精确目标，不把 GET 当 command receipt，不新增网络恢复协议。
+
+
+Connector browser-private错误消费固定 BFF `d176e3d0cbbc2eab903dae2b2d969906ba5808fe` 的只读 `contract/connector-command-errors-v1.json`（SHA256 `24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71`），独立snapshot与正规生成常量，不改变public14.8/139、HTTP路径/正文/header或成功契约。现MCP普通/私有/原生授权与Custom API同源adapter及Hub分别核严格tuple；新receipt未知/过期/ownership-lost的false retryable不能被旧“503总可重试”规则误拒，通用503仍true。错误profile只说明恢复分类，不授新key/自动请求/授权；当前阶段仅机器错误传递，原UI统一unknown提示仍待后继替换。

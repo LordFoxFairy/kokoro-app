@@ -4649,3 +4649,75 @@ it("an update's single budget cancels a stalled input before any BFF dispatch", 
     expect(response.status).toBe(504); expect(cancel).toHaveBeenCalledTimes(1); expect(requestWithDomain).not.toHaveBeenCalled();
   } finally { vi.useRealTimers() }
 });
+
+describe("connector private recovery errors", () => {
+  const reply = (code: string, status: number, retryable: boolean) => new Response(JSON.stringify({ error: { code, message: "Safe failure", retryable } }), {
+    status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-recovery" },
+  });
+  const post = async (path: string[], body: unknown, key = true) => {
+    const { POST } = await import("@/app/api/hub/[...path]/route");
+    return POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", ...(key ? { "idempotency-key": "original-command-key" } : {}) },
+      body: JSON.stringify(body),
+    }), params(path));
+  };
+  it("relays the exact published MCP recovery tuple, trusted session and original command once", async () => {
+    for (const [code, status] of [
+      ["mcp_personal_command_outcome_unknown", 503], ["mcp_personal_command_replay_expired", 412], ["mcp_personal_command_ownership_lost", 409],
+    ] as const) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, false));
+      const before = vi.mocked(requestWithDomain).mock.calls.length;
+      const response = await post(["mcp", "servers", "server-one", "prepare"], { expected_state_version: "4" });
+      expect(response.status).toBe(status);
+      expect((await response.json()).error).toEqual({ code, message: "Safe failure", retryable: false });
+      expect(response.headers.get("x-request-id")).toBe("owner-recovery");
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
+      expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).toMatchObject({ authorization: "Bearer product-access", "idempotency-key": "original-command-key" });
+    }
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply("mcp_personal_needs_client", 412, false));
+    expect((await post(["mcp", "connectors", "connector-one", "authorization"], { server_id: "server-one", expected_state_version: "4" }, false)).status).toBe(412);
+    expect(vi.mocked(requestWithDomain).mock.calls.at(-1)![2]?.headers).not.toHaveProperty("idempotency-key");
+  });
+  it("rejects wrong Custom API recovery tuples rather than forwarding arbitrary status/code/retryable", async () => {
+    for (const [code, status, retryable] of [
+      ["custom_api_command_outcome_unknown", 503, true], ["custom_api_command_replay_expired", 409, false],
+      ["unpublished_custom_error", 503, true], ["custom_api_not_found", 404, false],
+    ] as const) {
+      vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+      const response = await post(["connectors", "custom-apis"], { name: "Test", environment: [] });
+      expect(response.status).toBe(502);
+      expect((await response.json()).error.code).toBe("custom_api_response_invalid");
+    }
+    expect(requestWithDomain).toHaveBeenCalledTimes(4);
+  });
+});
+
+
+it("preserves valid Custom API recovery errors while rejecting those write receipts on a read", async () => {
+  const route = await import("@/app/api/hub/[...path]/route");
+  const path = ["connectors", "custom-apis"];
+  const reply = (code: string, status: number, retryable: boolean) => new Response(JSON.stringify({ error: { code, message: "Safe failure", retryable } }), {
+    status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-request-id": "owner-api-recovery" },
+  });
+  for (const [code, status, retryable] of [
+    ["custom_api_command_in_progress", 409, true], ["custom_api_command_outcome_unknown", 503, false],
+    ["custom_api_command_replay_expired", 412, false], ["custom_api_conflict", 409, false],
+    ["custom_api_command_ownership_lost", 409, false], ["custom_api_response_invalid", 502, false],
+  ] as const) {
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+    const before = vi.mocked(requestWithDomain).mock.calls.length;
+    const response = await route.POST(new Request(`http://localhost/api/hub/${path.join("/")}`, {
+      method: "POST", headers: { origin: "http://localhost", "content-type": "application/json", "idempotency-key": "original-api-key" },
+      body: JSON.stringify({ name: "Test", environment: [] }),
+    }), params(path));
+    expect(response.status).toBe(status);
+    expect((await response.json()).error).toEqual({ code, message: "Safe failure", retryable });
+    expect(response.headers.get("x-request-id")).toBe("owner-api-recovery");
+    expect(requestWithDomain).toHaveBeenCalledTimes(before + 1);
+    vi.mocked(requestWithDomain).mockResolvedValueOnce(reply(code, status, retryable));
+    const read = await route.GET(new Request(`http://localhost/api/hub/${path.join("/")}`), params(path));
+    expect(read.status).toBe(502);
+    expect((await read.json()).error.code).toBe("custom_api_response_invalid");
+  }
+});

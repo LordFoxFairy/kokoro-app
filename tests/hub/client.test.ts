@@ -1861,3 +1861,62 @@ it.each(["", "invalid\nkey", "k".repeat(192)])("private MCP creation commands re
   await expect(hub.preparePrivateMcpServer!("valid-server", "1", key)).rejects.toBeInstanceOf(Error)
   expect(request).not.toHaveBeenCalled()
 })
+
+it("carries published MCP recovery reasons through the Hub once without replacing its original command", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["mcp_personal_command_outcome_unknown", 503, false],
+    ["mcp_personal_command_replay_expired", 412, false],
+    ["mcp_personal_command_ownership_lost", 409, false],
+    ["mcp_personal_not_prepared", 412, false],
+    ["mcp_personal_needs_client", 412, false],
+    ["mcp_personal_auth_method_unsupported", 412, false],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    const before = fetchMock.mock.calls.length;
+    await expect(hub.preparePrivateMcpServer!("private-server", "4", "original-prepare-key")).rejects.toMatchObject({ reason: "http", status, code, retryable });
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+    const [, init] = fetchMock.mock.calls.at(-1)!;
+    expect(new Headers(init?.headers).get("idempotency-key")).toBe("original-prepare-key");
+    expect(JSON.parse(String(init?.body))).toEqual({ expected_state_version: "4" });
+  }
+  const code = "mcp_personal_needs_client";
+  fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable: false } }, 412));
+  await expect(hub.beginMcpConnectorAuthorization!("connector-one", { server_id: "private-server", expected_state_version: "4" })).rejects.toMatchObject({ reason: "http", code });
+  expect(new Headers(fetchMock.mock.calls.at(-1)![1]?.headers).has("idempotency-key")).toBe(false);
+});
+
+it("rejects malformed Custom API error tuples and write receipt errors on reads", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["custom_api_command_outcome_unknown", 503, true],
+    ["custom_api_command_replay_expired", 409, false],
+    ["unpublished_custom_error", 503, true],
+    ["custom_api_not_found", 404, false],
+    ["custom_api_dependency_unavailable", 418, true],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    await expect(hub.createCustomApi!({ name: "Test", environment: [] }, "original-api-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ error: { code: "custom_api_command_outcome_unknown", message: "Safe failure", retryable: false } }, 503));
+  await expect(hub.listCustomApis!()).rejects.toMatchObject({ reason: "parse" });
+  expect(fetchMock).toHaveBeenCalledTimes(6);
+});
+
+
+it("accepts all published Custom API recovery tuples and keeps ordinary dependency failures separate", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const hub = createHubClient();
+  for (const [code, status, retryable] of [
+    ["custom_api_command_in_progress", 409, true], ["custom_api_command_outcome_unknown", 503, false],
+    ["custom_api_command_replay_expired", 412, false], ["custom_api_conflict", 409, false],
+    ["custom_api_command_ownership_lost", 409, false], ["custom_api_response_invalid", 502, false],
+    ["custom_api_dependency_unavailable", 503, true],
+  ] as const) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ error: { code, message: "Safe failure", retryable } }, status));
+    await expect(hub.createCustomApi!({ name: "Test", environment: [] }, "original-api-key")).rejects.toMatchObject({ reason: "http", code, status, retryable });
+  }
+  expect(fetchMock).toHaveBeenCalledTimes(7);
+});

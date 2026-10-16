@@ -1275,3 +1275,6 @@ Custom/URL 共用同一明确的私有 MCP actor/client 创建槽，独立于 AP
 
 
 MCP Prepare 的临时意图现只有一个 typed actor/client owner：按精确 server/connector 保存原 CAS/key，创建 flow 不再复制 Prepare intent，详情读出的新 CAS 不替换 unknown 正文。内存快照仅资源 locator/命令状态；不同资源独立，确认完成或断开/删除清条目，actor/client/真正卸载清全部。Provider 上移至 AppFrameRuntime 覆盖页面和 overlays，无新 owner Schema、browser storage、SQL 或跨服务数据访问。
+
+
+Connector恢复错误固定消费仅新增只读generated机器profile与provenance，Hub/adapter不保存owner异常或receipt副本，不新增SQL/Redis/browser持久化、字段或写入边界。仅严格校验现安全错误体并交付既有HubClientError；actor命令RAM生命周期本阶段不改，错误不是资源事实或执行授权。

@@ -43,7 +43,6 @@ import {
 } from "./mcp-connector.schema";
 import {
   mcpConnectorAuthorizationDataSchemas,
-  mcpConnectorAuthorizationErrorAllowed,
   type McpConnectorAuthorizationCallback,
   type McpConnectorAuthorizationCompleted,
   type McpConnectorAuthorizationInput,
@@ -56,6 +55,8 @@ import {
   customApiCreateInputSchema,
   customApiCreateSchema,
   customApiErrorSchema,
+  customApiErrorAllowed,
+  type CustomApiOperation,
   customApiGetSchema,
   customApiPageSchema,
   customApiRemoveInputSchema,
@@ -653,7 +654,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
           ? "connector"
           : operation;
     const errorAllowed = authorizationOperation
-      ? mcpConnectorAuthorizationErrorAllowed(response.status, parsed.data)
+      ? mcpConnectorErrorAllowed("authorization", response.status, parsed.data)
       : mcpConnectorErrorAllowed(
           connectorOperation as
             | McpConnectorCommandOperation
@@ -701,6 +702,7 @@ const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 /** A separate BFF product boundary for the Custom API aggregate. */
 async function requestCustomApi<T extends ZodTypeAny>(
+  operation: CustomApiOperation,
   path: string,
   schema: T,
   init?: RequestInit,
@@ -741,7 +743,7 @@ async function requestCustomApi<T extends ZodTypeAny>(
         response.status,
       );
     const raw = (await response.json()) as unknown;
-    if (response.status === 201 || response.status === 200) {
+    if (response.status === (operation === "create" ? 201 : 200)) {
       const parsed = z.object({ data: schema }).strict().safeParse(raw);
       if (!parsed.success)
         throw new HubClientError(
@@ -753,7 +755,7 @@ async function requestCustomApi<T extends ZodTypeAny>(
       return parsed.data.data;
     }
     const parsed = customApiErrorSchema.safeParse(raw);
-    if (!parsed.success)
+    if (!parsed.success || !customApiErrorAllowed(operation, response.status, raw))
       throw new HubClientError(
         "parse",
         "invalid Custom API error",
@@ -1013,6 +1015,7 @@ export function createHubClient(): HubClient {
       const body = customApiCreateInputSchema.parse(input);
       const profile = (
         await requestCustomApi(
+          "create",
           "/connectors/custom-apis",
           customApiCreateSchema,
           {
@@ -1036,6 +1039,7 @@ export function createHubClient(): HubClient {
       if (query.limit !== undefined) search.set("limit", String(query.limit));
       if (query.cursor !== undefined) search.set("cursor", query.cursor);
       return requestCustomApi(
+        "list",
         `/connectors/custom-apis${search.size === 0 ? "" : `?${search}`}`,
         customApiPageSchema,
         undefined,
@@ -1045,6 +1049,7 @@ export function createHubClient(): HubClient {
     getCustomApi: async (profileId, signal) =>
       (
         await requestCustomApi(
+          "get",
           `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
           customApiGetSchema,
           undefined,
@@ -1054,6 +1059,7 @@ export function createHubClient(): HubClient {
     updateCustomApi: async (profileId, input, signal) =>
       (
         await requestCustomApi(
+          "update",
           `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
           customApiUpdateSchema,
           {
@@ -1066,6 +1072,7 @@ export function createHubClient(): HubClient {
       ).custom_api,
     removeCustomApi: async (profileId, input, signal) => {
       await requestCustomApi(
+        "remove",
         `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
         customApiRemoveSchema,
         {

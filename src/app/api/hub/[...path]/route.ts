@@ -15,7 +15,6 @@ import {
 } from "@/hub/mcp-connector.schema";
 import {
   mcpConnectorAuthorizationCallbackSchema,
-  mcpConnectorAuthorizationErrorAllowed,
   mcpConnectorAuthorizationMatches,
   mcpConnectorAuthorizationRequestSchema,
   mcpConnectorCreateConnectionSchema,
@@ -25,7 +24,7 @@ import { parseMcpConnectorJson } from "@/hub/mcp-connector-json";
 import {
   customApiCreateInputSchema,
   customApiCreateSchema,
-  customApiErrorSchema,
+  customApiErrorAllowed,
   customApiGetSchema,
   customApiPageSchema,
   customApiRemoveInputSchema,
@@ -807,7 +806,7 @@ async function proxyMcpConnector(
                 input,
               )
         : authorization
-          ? mcpConnectorAuthorizationErrorAllowed(upstream.status, raw)
+          ? mcpConnectorErrorAllowed("authorization", upstream.status, raw)
           : mcpConnectorErrorAllowed(
               connectorOperation as McpConnectorOperation,
               upstream.status,
@@ -990,7 +989,7 @@ async function proxyCustomApi(
     const valid =
       upstream.status === successStatus
         ? schema.safeParse((raw as { data?: unknown })?.data).success
-        : customApiErrorSchema.safeParse(raw).success;
+        : customApiErrorAllowed(operation, upstream.status, raw);
     if (!valid) return fail(502, "custom_api_response_invalid");
     return NextResponse.json(raw, {
       status: upstream.status,

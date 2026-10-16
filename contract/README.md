@@ -159,3 +159,8 @@ artifact 可发布到 Developer API 门户。
 
 完整策略见 [`../docs/API_CONTRACT.md`](../docs/API_CONTRACT.md) 和
 [`../docs/ADR/0002-repository-coupled-contract-provenance.md`](../docs/ADR/0002-repository-coupled-contract-provenance.md)。
+
+
+## Connector browser-private error profile（2026-10-16，消费者候选）
+
+独立固定BFF `d176e3d0cbbc2eab903dae2b2d969906ba5808fe` 的 `contract/connector-command-errors-v1.json` 原字节至 `src/generated/bff-connector-command-errors.json`，SHA256 `24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71`。专用生成器正规 `--write/--check` 输出只读typed policy/provenance，check接入现contract入口；不更改独立public14.8 snapshot/pin，不从sibling源码生成或复制错误类。六项receipt及三项MCP typed原因由owner profile唯一决定，Hub/adapter消费同一窄validator；状态错配拒绝，不猜文案。当前只完成wire接线，页面恢复UX与正常组合启用尚待验收。

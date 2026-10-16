@@ -1794,3 +1794,8 @@ BFF 仍是 HTTP fixture，
 已有 AppFrame/Composer/纯模型回归承接版本、route、actor/storage、Strict Mode、A→B→A 与 frozen retry 风险，未恢复已退役五套 Skills/Settings/MCP UI tests。App `34092c7` 已同步本地运行分支，正常产品 Session 与正式 API 新建仅本人可见的隔离技能：发布、安装及 owner 回读成功。真实浏览器已核 Direct 示例→可编辑提示词/可移除实名标签、项目设置示例→同项目新会话 URL；实际项目消息 POST 携精确安装 source，却返回 `503 agent_not_configured`，项目会话权威回读仍为空，积分与冻结额未变。因此未证明 Agent 接纳、消费或执行。
 
 另发布隔离技能第二版、保留第一版安装，owner 回读确认 `available_update` 指向新版本；新版本详情加载完成后示例保持禁用，未自动升级。正式个人安装当前要求先移除旧版再装新版，App 又未消费可用更新；后续须经过 owner 契约/事务设计门，不在前端拼装隐式移除/重装冒原子更新。正常定时会话重核 200/authenticated 后已实际复现搜索清空和详情关闭；外层 key 含 admission/generation 的静态原因已定位，保持展示意图的修复待做。完整触屏/键盘与视觉对照仍待验。本节不代表 PR 已更新或已合并。
+
+
+## 2026-10-16 Connector恢复错误消费者候选（未正常配对）
+
+固定BFF d176e3d browser-private profile，正规生成并在同源/Hub核status/code/retryable；MCP六receipt/三typed原因不再被旧generic规则吞成parse，Custom API从只验envelope收紧为已知tuple，read拒receipt写错误。public14.8、原wire成功形状/准入/预算/key与UI状态机不变；已实际复现旧typed误拒/错tuple放行RED，完整工程验证与提交由Root有效计划记录。页面仍统一unknown提示，分类UX/正常Platform-BFF-App成对加载与真实浏览器验收未完成，不冒本片产品闭环。

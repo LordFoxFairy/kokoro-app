@@ -263,3 +263,8 @@ MCP Settings/Plugins 的纯展示意图按 actor 保持，事实/命令按 read 
 
 
 MCP/Custom API配置的焦点后继：保留readonly配置控件而不是临时卸载；owner-only值仍立即退休，选择/内部滚动按纯metadata恢复且不抢用户新焦点。具体边界见`src/ui/mcp/INDEX.md`，不涉及auth/owner契约或数据库变更。
+
+
+### Connector browser-private恢复错误消费
+
+`src/generated/bff-connector-command-errors.{json,ts}` 是固定BFF profile的原字节/正规派生；`scripts/generate-bff-connector-command-errors.mjs` 只检查或生成此窄profile。`src/hub/connector-command-error.ts` 与现MCP/Custom API schema在Hub和同源adapter共享严格tuple规则，不增网络层、错误registry或UI自动重试；后继actor恢复提示单独接线。

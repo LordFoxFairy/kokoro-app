@@ -1,5 +1,8 @@
+import { execFileSync } from "node:child_process"
+import { tmpdir } from "node:os"
+import { pathToFileURL } from "node:url"
 import { createHash } from "node:crypto"
-import { readFile } from "node:fs/promises"
+import { readFile, mkdtemp, mkdir, copyFile, writeFile, rm } from "node:fs/promises"
 import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -429,4 +432,37 @@ it("pins the current public revision's shared-skill operation without replacing 
     "expires_at",
     "revoked_at",
   ])
+})
+
+
+it("pins and derives the separate browser-private connector error profile without replacing public OpenAPI", async () => {
+  const { BFF_CONNECTOR_COMMAND_ERROR_PROVENANCE: provenance, BFF_CONNECTOR_COMMAND_ERROR_POLICY: policy } = await import("@/generated/bff-connector-command-errors")
+  const bytes = await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.json"))
+  expect(provenance).toEqual({ ownerCommit: "d176e3d0cbbc2eab903dae2b2d969906ba5808fe", sourceSha256: "24158f50a6f4dac1b34553797f0b1afcc8f99dbc79f36b916d03b56999a67a71", profileVersion: "1.0.0" })
+  expect(createHash("sha256").update(bytes).digest("hex")).toBe(provenance.sourceSha256)
+  expect(policy).toEqual(JSON.parse(bytes.toString("utf8")))
+  expect(policy.visibility).toBe("browser-private")
+  expect(policy.automatic_retries).toBe(false)
+  expect(policy.new_command_authorized).toBe(false)
+  const generator = await import(/* @vite-ignore */ pathToFileURL(resolve(process.cwd(), "scripts/generate-bff-connector-command-errors.mjs")).href) as { renderConnectorCommandErrors(bytes: Buffer): string }
+  expect(await readFile(resolve(process.cwd(), "src/generated/bff-connector-command-errors.ts"), "utf8")).toBe(generator.renderConnectorCommandErrors(bytes))
+  expect(() => generator.renderConnectorCommandErrors(Buffer.concat([bytes, Buffer.from("\n")]))).toThrow("digest drift")
+})
+
+it("executes private connector profile drift checks in an isolated fixture and cleans it up", async () => {
+  const fixture = await mkdtemp(resolve(tmpdir(), "kokoro-connector-profile-"))
+  const names = ["scripts/generate-bff-connector-command-errors.mjs", "src/generated/bff-connector-command-errors.json", "src/generated/bff-connector-command-errors.ts"]
+  try {
+    await mkdir(resolve(fixture, "scripts"), { recursive: true })
+    await mkdir(resolve(fixture, "src/generated"), { recursive: true })
+    for (const name of names) await copyFile(resolve(process.cwd(), name), resolve(fixture, name))
+    const check = () => execFileSync(process.execPath, [resolve(fixture, names[0]!), "--check"], { cwd: fixture, stdio: "pipe" })
+    expect(() => check()).not.toThrow()
+    const snapshot = await readFile(resolve(fixture, names[1]!))
+    await writeFile(resolve(fixture, names[1]!), Buffer.concat([snapshot, Buffer.from("\n")]))
+    expect(() => check()).toThrow()
+    await writeFile(resolve(fixture, names[1]!), snapshot)
+    await writeFile(resolve(fixture, names[2]!), "export const stale = true;\n")
+    expect(() => check()).toThrow()
+  } finally { await rm(fixture, { recursive: true, force: true }) }
 })

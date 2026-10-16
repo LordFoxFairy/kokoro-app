@@ -44,3 +44,6 @@ URL“保存并发布”先在用户点击中预开既有隔离 popup，再执�
 
 
 `mcp-preparation-commands.ts` 拥有按精确 server/connector 区分的原 Prepare 正文/CAS/key，创建和详情共用；不同资源互不阻塞，不新增第二份准备意图或 owner 投影。`connector-command-context.tsx` 的唯一 Provider 位于 AppFrameRuntime，覆盖主页面与 overlays，移除旧 overlay-only owner。unknown 关闭重开/重核仅恢复原命令，确认后只完成当前窗口；确认断开/删除退役精确命令，迟到 ACK 不复活已撤销目标。快照仅 locator/状态，无 private facts/secret，整个文档重载仍不持久恢复命令。 详情窗口/准入代际取消原等待；迟到的同命令 ACK 只可由当前显式重试或完成动作消费，不借旧窗口关闭新窗口。
+
+
+Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源adapter严格校验，拒绝错status/retryable及read上的receipt写错误。此阶段仅传递既有HubClientError的机器code；本目录actor命令/表单的差异化恢复UX仍待后继，不把profile的recovery当自动请求或新key许可。

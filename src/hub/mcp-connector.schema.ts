@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { connectorCommandErrorAllowed } from "./connector-command-error";
 
 export type McpConnectorReadOperation =
   | "connectors"
@@ -718,20 +719,15 @@ export type McpConnectorEnabledInput = z.infer<
 export type McpConnectorRemoveInput = z.infer<
   typeof mcpConnectorCommandRequestSchemas.remove
 >;
-export const mcpConnectorErrors: Record<number, readonly string[]> = {
+const mcpConnectorErrors: Record<number, readonly string[]> = {
   400: ["invalid_mcp_personal_request"],
   401: ["session_authentication_required", "session_invalid"],
   403: ["service_auth_failed", "session_forbidden", "product_tenant_forbidden"],
   404: ["mcp_personal_not_found"],
-  409: [
-    "mcp_personal_idempotency_conflict",
-    "mcp_personal_server_url_conflict",
-    "mcp_personal_command_in_progress",
-  ],
+  409: ["mcp_personal_server_url_conflict"],
   412: ["mcp_personal_precondition_failed"],
   413: ["mcp_personal_body_too_large"],
   429: ["session_rate_limited"],
-  502: ["mcp_personal_response_invalid"],
   503: [
     "product_tenant_not_configured",
     "iam_admission_unavailable",
@@ -750,7 +746,7 @@ export const mcpConnectorErrorSchema = z
   })
   .strict();
 export function mcpConnectorErrorAllowed(
-  operation: McpConnectorOperation,
+  operation: McpConnectorOperation | McpPrivateServerOperation | "authorization",
   httpStatus: number,
   value: unknown,
 ): boolean {
@@ -761,14 +757,14 @@ export function mcpConnectorErrorAllowed(
       httpStatus === 404)
   )
     return false;
+  const published = connectorCommandErrorAllowed("mcp", httpStatus, parsed.data.error,
+    !["connectors", "connector", "connections", "connection", "providers", "provider", "server"].includes(operation));
+  if (published !== undefined) return published;
   return (
     (mcpConnectorErrors[httpStatus]?.includes(parsed.data.error.code) ??
       false) &&
     parsed.data.error.retryable ===
-      (httpStatus === 429 ||
-        httpStatus === 503 ||
-        (httpStatus === 409 &&
-          parsed.data.error.code === "mcp_personal_command_in_progress"))
+      (httpStatus === 429 || httpStatus === 503)
   );
 }
 export function mcpConnectorMatches(
