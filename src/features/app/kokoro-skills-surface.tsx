@@ -3,7 +3,7 @@
 import type { GithubImported } from "@/ui/skills/personal-skill-github-import-flow"
 
 import Image from "next/image"
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
@@ -26,6 +26,7 @@ import { SkillUploadDialog } from "@/ui/skills/skill-upload-dialog"
 import { mergeSkillCatalogPages } from "@/ui/skills/skills-pool-model"
 import { ManusSkillDetailDialog } from "@/ui/skills/manus-skill-detail-dialog"
 import { createManusSkillHubClient, SKILL_CATALOG_RESOURCE_KEY } from "@/ui/skills/manus-skill-client"
+import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
 import { stashPendingDraft } from "@/ui/shell/use-draft"
 import { BrandFallback } from "@/components/blocks/brand-mark/brand-mark"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
@@ -67,12 +68,13 @@ function formatUsage(value: string): string {
 type KokoroSkillsSurfaceProps = Pick<EmptyStateProps, "preview" | "onPrompt" | "brandName" | "onOpenSettings" | "onCreateSkillWithAi" | "onTrySkill" | "projectReadBoundary">
 
 export function KokoroSkillsSurface(props: KokoroSkillsSurfaceProps) {
-  return <PreviewKokoroSkillsSurface {...props} />
+  const boundary = props.projectReadBoundary
+  return <PreviewKokoroSkillsSurface key={JSON.stringify([props.preview ?? true, boundary?.admitted ?? false, boundary?.subject ?? null, boundary?.generation ?? 0])} {...props} />
 }
 
 function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kokoro", onOpenSettings, onCreateSkillWithAi, onTrySkill, projectReadBoundary }: KokoroSkillsSurfaceProps) {
   const t = useT()
-  const readBoundary = projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }
+  const readBoundary = useMemo(() => projectReadBoundary ?? { admitted: preview, subject: preview ? "preview" : null, generation: 0 }, [preview, projectReadBoundary])
   const publisherLabel = (skill: Pick<SkillCatalogCard, "scope">) => skill.scope === "official" ? brandName : skill.scope === "third_party" ? t("skills.community") : undefined
   const categoryLabel = (value: CatalogSkillCategory) => t(CATEGORIES.find((item) => item.value === value)?.key ?? "skills.categoryCoding")
   // The standalone page and the embedded Settings page must consume the same
@@ -82,11 +84,12 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   // appeared healthy.  Keep one typed read adapter for both entry points so
   // a tab switch never turns into a different data contract or an error card.
   const client = useMemo(
-    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview })),
-    [preview],
+    () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview }), readBoundary),
+    [preview, readBoundary],
   )
+  const catalogKey = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client)
   const catalog = useResource<SkillCatalog>(
-    `${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`,
+    catalogKey,
     useCallback(() => client.listSkillCatalog(), [client]),
     { revalidateOnSubscribe: false },
   )
@@ -106,6 +109,12 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const [installationFacts, setInstallationFacts] = useState<Readonly<Record<string, { catalog: SkillCatalog | undefined; installed: boolean; enabled: boolean }>>>({})
   const installationIntents = useRef(new Map<string, InstallationIntent>())
   const submittingInstallation = useRef(false)
+  const installationLifetime = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const lifetime = new AbortController()
+    installationLifetime.current = lifetime
+    return () => { lifetime.abort(); if (installationLifetime.current === lifetime) installationLifetime.current = null }
+  }, [])
   const createRef = useRef<HTMLButtonElement | null>(null)
   const githubRef = useRef<HTMLElement | null>(null)
   const uploadRef = useRef<HTMLElement | null>(null)
@@ -179,6 +188,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     setBusy(stateKey)
     setErrorName(null)
     try {
+      const signal = installationLifetime.current?.signal
+      if (signal === undefined || !readBoundary.admitted || readBoundary.subject === null) throw new Error("skill_read_retired")
+      signal.throwIfAborted()
       if (!skill.skill_id) throw new Error("skill identity is unavailable")
       const installationClient = createSkillInstallationClient()
       let intent = installationIntents.current.get(stateKey)
@@ -189,7 +201,8 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
           const ids = new Set<string>()
           let cursor: string | undefined
           for (let page = 0; ; page += 1) {
-            const result = await installationClient.list({ installed: true, limit: 100, ...(cursor === undefined ? {} : { cursor }) })
+            const result = await installationClient.list({ installed: true, limit: 100, ...(cursor === undefined ? {} : { cursor }) }, signal)
+            signal.throwIfAborted()
             for (const installation of result.data) {
               if (ids.has(installation.installation_id)) throw new Error("duplicate installation identity")
               ids.add(installation.installation_id)
@@ -212,8 +225,9 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
         installationIntents.current.set(stateKey, intent)
       }
       const receipt = intent.installationId === undefined
-        ? await installationClient.install(intent.sourceRef, intent.key)
-        : await installationClient.setEnabled(intent.installationId, true, intent.key)
+        ? await installationClient.install(intent.sourceRef, intent.key, signal)
+        : await installationClient.setEnabled(intent.installationId, true, intent.key, signal)
+      signal.throwIfAborted()
       const installation = receipt.installation
       if (installation.source_ref !== intent.sourceRef || installation.series_id !== intent.seriesId
         || !installation.installed || !installation.enabled) throw new Error("installation ACK does not match the command")
@@ -222,18 +236,18 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       setInstallationFacts((current) => ({ ...current, [intent.seriesId]: { catalog: catalog.data, ...facts } }))
       setDetailSkill((current) => current !== null && actionIdentity(current) === stateKey ? { ...current, ...facts } : current)
       setLastAddedSkill(skill.name)
-      invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)
+      invalidate(catalogKey)
     } catch {
       setErrorName(stateKey)
     } finally {
       submittingInstallation.current = false
       setBusy(null)
     }
-  }, [preview, catalog.data])
+  }, [catalogKey, catalog.data, readBoundary])
 
   const handleImported = (result: GithubImported) => {
     setImportNotice(result)
-    invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)
+    invalidate(catalogKey)
   }
 
 
@@ -391,7 +405,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       </main>
 
       <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(`${SKILL_CATALOG_RESOURCE_KEY}/${preview ? "preview" : "live"}`)} />
+      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => invalidate(catalogKey)} />
       <ManusSkillDetailDialog
         readBoundary={readBoundary}
         key={detailSkill?.skill_id ?? "closed"}

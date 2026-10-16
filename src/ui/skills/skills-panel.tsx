@@ -180,7 +180,7 @@ function detailSelectionFor(
 }
 
 export function SkillsContent(props: SkillsContentProps) {
-  return <InstalledSkillsContent {...props} />;
+  return <InstalledSkillsContent key={skillResourceKey(SKILLS_KEY, props.client)} {...props} />;
 }
 
 /**

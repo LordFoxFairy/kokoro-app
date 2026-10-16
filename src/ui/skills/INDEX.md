@@ -18,10 +18,14 @@
 
 安装列表的 `source_kind`、`query` 由客户端和同源 adapter 校验并转发给 BFF `/v1/skill-installations`，由 owner 在分页前筛选；不在浏览器先截取一页再假装完整过滤。搜索长度按正式契约的 Unicode scalar（最多 1024）计数，重复或未知参数仍拒绝。
 
+Settings 已添加池直接读取正式 installation 集合，包含停用但不含已移除项；完整有界读取最多 10 页／1000 项，所有页共享 10 秒预算。来源只用 `product.source_kind`；缺失为 unknown，仅在全部可见，不用 ownership 或官方目录补猜。卡片保留 installation ID、series ID 与 `source_ref` 的精确 Skill UID，十进制 revision 不冒充 UID。循环 cursor、重复安装／系列、异常后页整体失败，不发布部分清单。
+
+Skills adapter 必须接收受信 readBoundary：同主体／generation／admitted 复用同一实例，不同代际退役旧读取与旧命令回调。暖池 lease 承接 StrictMode 重放；退役时清除该 client 的查询 namespace，旧响应不恢复旧数据。Settings 状态按 client 重挂；外部目录的缓存、分页、详情和安装意图按同一身份隔离，组件退役取消后续查找与提交。这里的取消不声称撤销已到 owner 的写入；未知 ACK 仍由原 actor 的正规幂等／回读流程核实。
+
 ## V1 目录读取
 
 正式主页与 Settings 共享 `createManusSkillHubClient`：目录经同源
-`ListHubSkills` 读取，安装状态来自同一 BFF 的 `ListSkills`；不访问已经退役的
+`ListHubSkills` 读取，目录安装状态来自同一 BFF 的 `ListSkills`，Settings 池使用上述正式安装集合；不访问已经退役的
 `GET /api/hub/self/skills/catalog`。公开 Developer API 的 `/v1/skill.list` 与这组
 browser-private 展示操作分开治理，均由 BFF 聚合实际 owner 事实。主页与 Settings 使用
 `hub/skills/catalog` 缓存命名空间，提交成功时按此前缀失活；目录没有 quota 投影，不请求旧 quota 路径。

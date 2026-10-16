@@ -52,21 +52,13 @@ import { SkillCatalogDialog } from "./skills-catalog-dialog";
 import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
 import { SkillRevisions } from "./skill-revisions";
-import { type SkillsPool, skillStateKey } from "./skills-pool-model";
+import { type SkillsPool, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import type { SkillsScopeFilter } from "./skills-scope";
 import styles from "./skills-panel.module.css";
 
 const OFFICIAL_SCOPE = "official";
 
 type ScopeFilter = SkillsScopeFilter;
-
-type SkillScope = Exclude<ScopeFilter, "all">;
-
-function skillScope(scope: string): SkillScope {
-  if (scope === OFFICIAL_SCOPE) return "official";
-  if (scope === "third_party" || scope === "third-party") return "thirdParty";
-  return "personal";
-}
 
 type SkillCreateMenuItemsProps = {
   includeBrowse: boolean;
@@ -293,7 +285,7 @@ export function SkillsPoolTab({
 
   const q = query.trim().toLowerCase();
   const filtered = resolvedPool.skills.filter((skill) => {
-    if (scope !== "all" && skillScope(skill.scope) !== scope) return false;
+    if (scope !== "all" && skillSourceScope(skill.scope) !== scope) return false;
     if (
       q !== "" &&
       !(
@@ -566,7 +558,7 @@ export function SkillsPoolTab({
         <ul className={styles.list}>
           {filtered.map((skill) => {
             const isOfficial = skill.scope === OFFICIAL_SCOPE;
-            const isThirdParty = skillScope(skill.scope) === "thirdParty";
+            const isThirdParty = skillSourceScope(skill.scope) === "thirdParty";
             const stateKey = skillStateKey(skill.scope, skill.name, skill.skill_id);
             const isLocked = locked.has(stateKey);
             const isPinned = pinned.includes(skill.name);
@@ -632,7 +624,7 @@ export function SkillsPoolTab({
                           >
                             {skill.name}
                           </Button>
-                          <Badge
+                          {skillSourceScope(skill.scope) !== "unknown" ? <Badge
                             variant="outline"
                             className={styles.badge}
                             data-scope={
@@ -648,7 +640,7 @@ export function SkillsPoolTab({
                               : isThirdParty
                                 ? t("skills.thirdParty")
                                 : t("skills.own")}
-                          </Badge>
+                          </Badge> : null}
                           {isLocked ? (
                             <Badge
                               variant="outline"

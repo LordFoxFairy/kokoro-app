@@ -40,8 +40,8 @@ export function SkillsSettingsSection({
   // Manus-compatible Skills reads use their typed owner operations; preview
   // continues to use its deterministic local client.
   const skillHubClient = useMemo(
-    () => (preview ? hubClient : createManusSkillHubClient(hubClient)),
-    [hubClient, preview],
+    () => (preview ? hubClient : createManusSkillHubClient(hubClient, readBoundary)),
+    [hubClient, preview, readBoundary],
   );
   const [previewPinnedSkills, setPreviewPinnedSkills] = useState<
     readonly string[]

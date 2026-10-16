@@ -1518,7 +1518,7 @@ it("preserves catalog revision Skill ID separately from series and checksum for 
     ),
   );
   const result =
-    await createManusSkillHubClient(createHubClient()).listSkillCatalog();
+    await createManusSkillHubClient(createHubClient(), { admitted: true, subject: "reader", generation: 1 }).listSkillCatalog();
   expect(result.skills[0]).toMatchObject({
     skill_id: "series-id",
     revision_skill_id: "revision-id",
@@ -1543,7 +1543,7 @@ it.each([
         }], tagOptions: {} }
       : { userAddedSkills: [{ id: "publisher-series", installationId: "installation-publisher", added: true, enabled: false }], officialSkills: [] },
   )));
-  const client = createManusSkillHubClient(createHubClient());
+  const client = createManusSkillHubClient(createHubClient(), { admitted: true, subject: "reader", generation: 1 });
   const result = await client.listSkillCatalog();
   expect(result.skills).toHaveLength(1);
   expect(result.skills[0]).toMatchObject({

@@ -9,7 +9,7 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
-import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client";
+import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
 
 import type { AppCommandMenuProps } from "./app-command-menu";
@@ -78,15 +78,25 @@ export function AppFrameOverlaySurfaces({
       client,
       identity: connectorIdentity,
     });
-    const releaseSkills = warmSkillsPool(
-      preview ? client : createManusSkillHubClient(client),
-    );
     return () => {
       releaseMcp();
       releaseCustomApi();
-      releaseSkills();
     };
   }, [connectorIdentity, mounted, preview]);
+
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const base = browserHubClient({ preview });
+    if (preview) return warmSkillsPool(base);
+    const boundary = readBoundary ?? { admitted: false, subject: null, generation: 0 };
+    // A blocked generation retires the previous actor's fetcher. Only an
+    // admitted lifetime warms data; its lease tolerates StrictMode replay.
+    const client = createManusSkillHubClient(base, boundary);
+    if (!boundary.admitted || boundary.subject === null) return undefined;
+    const releaseLifetime = retainManusSkillHubClient(client);
+    const releasePool = warmSkillsPool(client);
+    return () => { releasePool(); releaseLifetime(); };
+  }, [mounted, preview, readBoundary]);
 
   return (
     <>

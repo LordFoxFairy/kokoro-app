@@ -2,6 +2,13 @@ import type { SkillCard, SkillCatalog, SkillQuota } from "@/hub/schemas";
 
 export type SkillsPool = { skills: SkillCard[]; quota: SkillQuota | null };
 
+/** Missing provenance is neither personal nor third party. */
+export function skillSourceScope(scope: string): "personal" | "official" | "thirdParty" | "unknown" {
+  if (scope === "official" || scope === "personal") return scope;
+  if (scope === "third_party") return "thirdParty";
+  return "unknown";
+}
+
 /** Owner series identity outlives titles and is shared by pool/catalog actions.
  * Display-only preview entries have no owner binding and stay in their own key space. */
 export function skillStateKey(scope: string, name: string, skillId?: string): string {

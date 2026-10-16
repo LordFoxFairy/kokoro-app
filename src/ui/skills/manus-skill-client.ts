@@ -1,6 +1,9 @@
 import { z } from "zod"
 
-import { hasHubNoStoreDirective, type HubClient } from "@/hub/client"
+import { createSkillInstallationClient, hasHubNoStoreDirective, type HubClient } from "@/hub/client"
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
+import { retireResources } from "@/lib/query/resource-store"
+import { skillResourceKey, SKILLS_KEY, SKILLS_CATALOG_KEY } from "./skills-resource-cache"
 import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 // Catalog consumers share the v1 resource namespace. Callers can append their
@@ -19,18 +22,32 @@ const categories = {
 } as const
 
 type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
-type InstalledSkill = z.infer<typeof manuscriptListSchema>["userAddedSkills"][number]
 type ManusSkillHubClient = Omit<HubClient, "listSkillCatalog"> & {
   listSkillCatalog: (
     input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal },
   ) => Promise<SkillCatalog>
 }
 
-// Every visible Skills entry point is backed by the browser's one Hub client.
-// Keep one adapter per base client so Settings, the external Skills page, and
-// app-shell prewarming address the same query-cache identity instead of
-// starting three cold reads for the same subject.
-const clients = new WeakMap<HubClient, ManusSkillHubClient>()
+// Every Skills entry point shares one adapter for the current verified actor
+// and admission generation, never a tab-global cross-actor query identity.
+type ClientLifetime = { key: string; client: ManusSkillHubClient; controller: AbortController; leases: number }
+const clients = new WeakMap<HubClient, ClientLifetime>()
+const lifetimes = new WeakMap<ManusSkillHubClient, ClientLifetime>()
+
+/** The admitted shell owns this lease, not an individual Settings tab. Defer
+ * last release so StrictMode's effect replay can retain the same live client. */
+export function retainManusSkillHubClient(client: ManusSkillHubClient): () => void {
+  const lifetime = lifetimes.get(client)
+  if (lifetime === undefined || lifetime.controller.signal.aborted) throw new Error("skill_read_retired")
+  lifetime.leases++
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    lifetime.leases--
+    queueMicrotask(() => { if (lifetime.leases === 0) lifetime.controller.abort() })
+  }
+}
 
 async function post<T extends z.ZodTypeAny>(operation: "ListSkills" | "ListHubSkills" | "GetSkill" | "DownloadSkill", body: unknown, schema: T, signal?: AbortSignal): Promise<z.infer<T>> {
   const service = operation === "DownloadSkill" ? "SkillService" : "SkillOptionalService"
@@ -128,23 +145,38 @@ function toCard(skill: HubSkill, added: ReadonlyMap<string, Readonly<{ installed
   }
 }
 
-function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"): SkillCard {
-  const updatedAt = [skill.updatedAt, skill.addTime, skill.createdAt]
-    .map((value) => value === undefined ? Number.NaN : Date.parse(value))
-    .find(Number.isFinite)
-  return {
-    skill_id: skill.id,
-    ...(skill.installationId === undefined ? {} : { installation_id: skill.installationId }),
-    ...(skill.version !== undefined && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,190}$/u.test(skill.version)
-      ? { revision_skill_id: skill.version }
-      : {}),
-    name: skill.displayName ?? skill.name ?? skill.id,
-    description: skill.userDescription ?? skill.description ?? "",
-    content_hash: skill.id,
-    scope,
-    enabled: skill.enabled ?? false,
-    ...(updatedAt === undefined ? {} : { updated_at: Math.floor(updatedAt / 1000) }),
-  }
+async function installedCards(lifetimeSignal: AbortSignal, assertCurrent: () => void): Promise<SkillCard[]> {
+  assertCurrent()
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(), 10_000)
+  const signal = AbortSignal.any([lifetimeSignal, deadline.signal])
+  const installations = createSkillInstallationClient()
+  const cards: SkillCard[] = []
+  const ids = new Set<string>(), series = new Set<string>(), cursors = new Set<string>()
+  let cursor: string | undefined
+  try {
+    for (let pageNumber = 0; pageNumber < 10; pageNumber++) {
+      assertCurrent(); signal.throwIfAborted()
+      const page = await installations.list({ installed: true, limit: 100, ...(cursor === undefined ? {} : { cursor }) }, signal)
+      assertCurrent(); signal.throwIfAborted()
+      for (const item of page.data) {
+        if (!item.installed || ids.has(item.installation_id) || series.has(item.series_id)) throw new Error("skill_response_invalid")
+        ids.add(item.installation_id); series.add(item.series_id)
+        cards.push({
+          skill_id: item.series_id, installation_id: item.installation_id,
+          source_ref: item.source_ref, revision_skill_id: item.source_ref.slice(6),
+          name: item.display_name, description: item.summary, content_hash: item.series_id,
+          scope: item.product.source_kind ?? "unknown", enabled: item.enabled,
+          updated_at: Math.floor(Date.parse(item.skill_updated_at) / 1000),
+        })
+      }
+      cursor = page.meta?.next_cursor
+      if (cursor === undefined) return cards
+      if (cursors.has(cursor)) throw new Error("skill_response_invalid")
+      cursors.add(cursor)
+    }
+    throw new Error("skill_list_capacity_exceeded")
+  } finally { clearTimeout(timer) }
 }
 
 /**
@@ -152,9 +184,17 @@ function toInstalledCard(skill: InstalledSkill, scope: "official" | "personal"):
  * catalog transport with the Manus-compatible BFF methods. The adapter is a
  * read projection only; mutations remain on the typed installation boundary.
  */
-export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient {
+export function createManusSkillHubClient(base: HubClient, boundary: ProjectReadBoundary): ManusSkillHubClient {
+  const key = JSON.stringify([boundary.admitted, boundary.subject, boundary.generation])
   const existing = clients.get(base)
-  if (existing !== undefined) return existing
+  if (existing?.key === key && !existing.controller.signal.aborted) return existing.client
+  existing?.controller.abort()
+  const controller = new AbortController()
+  const admitted = boundary.admitted && boundary.subject !== null
+  const assertCurrent = () => {
+    controller.signal.throwIfAborted()
+    if (!admitted || clients.get(base)?.client !== client) throw new Error("skill_read_retired")
+  }
   const client: ManusSkillHubClient = {
     ...base,
     // The Manus-compatible owner projection deliberately has no quota read.
@@ -162,55 +202,24 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
     // issuing the retired `/self/skills/quota` request (and its visible 404)
     // just to render a catalog that does not expose quota facts.
     skillQuota: async () => null,
-    listSkillPool: async (): Promise<SkillCard[]> => {
-      const installed = await post("ListSkills", {}, manuscriptListSchema)
-      // ListSkills repeats an installed official skill in userAddedSkills to
-      // carry the per-user enabled state. It is still one official skill in
-      // the Settings grid; render its official metadata once and merge that
-      // user state instead of producing two visually identical cards.
-      const userAddedById = new Map(
-        installed.userAddedSkills
-          .filter((skill) => skill.added !== false)
-          .map((skill) => [skill.id, skill]),
-      )
-      const officialIds = new Set(
-        installed.officialSkills
-          .filter((skill) => skill.added === true)
-          .map((skill) => skill.id),
-      )
-      const cards = [
-        ...installed.userAddedSkills
-          .filter((skill) => skill.added !== false && !officialIds.has(skill.id))
-          .map((skill) => toInstalledCard(skill, "personal")),
-        ...installed.officialSkills
-          .filter((skill) => skill.added === true)
-          .map((skill) => toInstalledCard(
-            {
-              ...skill,
-              ...(skill.enabled === undefined && userAddedById.get(skill.id)?.enabled !== undefined
-                ? { enabled: userAddedById.get(skill.id)?.enabled }
-                : {}),
-            },
-            "official",
-          )),
-      ]
-      const seen = new Set<string>()
-      return cards.filter((skill) => {
-        if (seen.has(skill.content_hash)) return false
-        seen.add(skill.content_hash)
-        return true
-      })
-    },
+    listSkillPool: () => installedCards(controller.signal, assertCurrent),
+    setSkillEnabled: async (...args) => { assertCurrent(); const result = await base.setSkillEnabled(...args); assertCurrent(); return result },
+    ...(base.installSkill === undefined ? {} : { installSkill: async (...args: Parameters<NonNullable<HubClient["installSkill"]>>) => {
+      assertCurrent(); const result = await base.installSkill!(...args); assertCurrent(); return result
+    } }),
     listSkillCatalog: async (input = {}): Promise<SkillCatalog> => {
+      assertCurrent()
+      const signal = input.signal === undefined ? controller.signal : AbortSignal.any([controller.signal, input.signal])
       const [hub, installed] = await Promise.all([
         post("ListHubSkills", {
           pageSize: 30,
           includeOfficialSkills: true,
           ...(input.query?.trim() ? { query: input.query.trim() } : {}),
           ...(input.cursor ? { pageToken: input.cursor } : {}),
-        }, manuscriptHubPageSchema, input.signal),
-        post("ListSkills", {}, manuscriptListSchema, input.signal),
+        }, manuscriptHubPageSchema, signal),
+        post("ListSkills", {}, manuscriptListSchema, signal),
       ])
+      assertCurrent()
       const added = new Map<string, Readonly<{ installed: boolean; enabled: boolean; installationId?: string }>>()
       for (const skill of installed.userAddedSkills) {
         if (added.has(skill.id) || skill.added === false) throw new Error("skill_response_invalid")
@@ -237,7 +246,17 @@ export function createManusSkillHubClient(base: HubClient): ManusSkillHubClient 
       return { skills, next_cursor: hub.nextPageToken ?? null }
     },
   }
-  clients.set(base, client)
+  const lifetime = { key, client, controller, leases: 0 }
+  clients.set(base, lifetime)
+  lifetimes.set(client, lifetime)
+  controller.signal.addEventListener("abort", () => {
+    // Factory replacement can happen during render. Notify cache subscribers
+    // only after that render, without retaining retired actor data or closures.
+    queueMicrotask(() => {
+      retireResources(skillResourceKey(SKILLS_KEY, client))
+      retireResources(skillResourceKey(SKILLS_CATALOG_KEY, client))
+    })
+  }, { once: true })
   return client
 }
 

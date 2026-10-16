@@ -36,15 +36,9 @@ import { cn } from "@/lib/utils";
 import { useResource } from "@/lib/query";
 import { formatSkillDate } from "./skills-format";
 import { toSkillActionCard } from "./skills-card-model";
-import { mergeSkillCatalogPages, skillStateKey } from "./skills-pool-model";
+import { mergeSkillCatalogPages, skillStateKey, skillSourceScope } from "./skills-pool-model";
 import { SKILLS_CATALOG_KEY, skillResourceKey } from "./skills-resource-cache";
 import styles from "./skills-panel.module.css";
-
-function skillScope(scope: string): "official" | "thirdParty" | "personal" {
-  if (scope === "official") return "official";
-  if (scope === "third_party" || scope === "third-party") return "thirdParty";
-  return "personal";
-}
 
 type CatalogCategory = "all" | CatalogSkillCategory;
 
@@ -237,7 +231,7 @@ export function SkillCatalogDialog({
     const scopeMatches =
       inline ||
       scope === "all" ||
-      skillScope(skill.scope) ===
+      skillSourceScope(skill.scope) ===
         (scope === "third_party" ? "thirdParty" : "official");
     return (
       scopeMatches &&

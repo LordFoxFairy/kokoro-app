@@ -8,6 +8,7 @@ import {
   getResourceSnapshot,
   invalidate,
   refetchResource,
+  retireResources,
   subscribeResource,
 } from "@/lib/query/resource-store"
 
@@ -28,6 +29,31 @@ function deferred<T>(): Deferred<T> {
 }
 
 const noop = () => {}
+
+it("retiring an identity namespace clears facts and late work without refreshing or touching sibling keys", async () => {
+  const late = deferred<string>()
+  const oldFetcher = vi.fn(() => late.promise)
+  const changed = vi.fn()
+  subscribeResource("skills/1", oldFetcher, changed)
+  subscribeResource("skills/1/pages", () => Promise.resolve("old pages"), noop)
+  subscribeResource("skills/10", () => Promise.resolve("another actor"), noop)
+  await Promise.resolve()
+  changed.mockClear()
+  retireResources("skills/1")
+  expect(oldFetcher).toHaveBeenCalledTimes(1)
+  expect(changed).toHaveBeenCalledOnce()
+  expect(getResourceSnapshot("skills/1").data).toBeUndefined()
+  expect(getResourceSnapshot("skills/1/pages").data).toBeUndefined()
+  expect(getResourceSnapshot("skills/10").data).toBe("another actor")
+  late.resolve("retired actor")
+  await late.promise
+  expect(getResourceSnapshot("skills/1").data).toBeUndefined()
+  const fresh = vi.fn(async () => "fresh actor")
+  subscribeResource("skills/1", fresh, noop)
+  await Promise.resolve()
+  expect(fresh).toHaveBeenCalledOnce()
+  expect(getResourceSnapshot("skills/1").data).toBe("fresh actor")
+})
 
 describe("resource-store cache", () => {
   it("初挂载回 loading，取数落地后回 data", async () => {
