@@ -29,14 +29,14 @@ import { isRuntimeNavigationEnabled, navigationIcon, registeredNavigationRoute }
 import { interceptMountedSurfaceNavigation } from "@/ui/navigation/mounted-surface-navigation"
 
 import { type RailDragKind, type RailDragProps, type RailDragState, markPointerFocus } from "./workspace-rail-actions"
-import type { RailConversationReads, WorkbenchNavigationItem, WorkspaceRailProject } from "./workspace-rail-types"
+import type { RailConversationReads, WorkbenchNavigationItem, WorkspaceRailProject, WorkspaceRailProps } from "./workspace-rail-types"
 import { itemStyles, navigationStyles, railStyles } from "./workspace-rail-styles"
 import { WorkspaceRailLoadingPlaceholder } from "./workspace-rail-loading-placeholder"
 import { WorkspaceRailProjectCreateDialog } from "./workspace-rail-project-create-dialog"
 import { ScopedConversationGroup } from "./workspace-rail-session-list"
 export { WorkspaceRailHeader, type WorkspaceRailHeaderProps } from "./workspace-rail-header"
 
-export type WorkspaceRailNavigationProps = {
+export type WorkspaceRailNavigationProps = Pick<WorkspaceRailProps, "conversationMove" | "conversationMovePending" | "conversationMoveFailed" | "onRetryConversationMove"> & {
   navigation?: readonly RuntimeNavigationItem[]
   featureFlags?: readonly RuntimeFeatureFlag[]
   projectHref?: string
@@ -61,6 +61,8 @@ export type WorkspaceRailNavigationProps = {
   navigationTransitionKey: string
   newSessionLabel: string
   conversationReads?: RailConversationReads
+  onRequestDelete: NonNullable<WorkspaceRailProps["onRequestDelete"]>
+  awaitingIds: ReadonlySet<string>
   preview: boolean
   dragProps: (kind: RailDragKind, id: string) => RailDragProps
   dragState: RailDragState | null
@@ -92,6 +94,12 @@ export function WorkspaceRailNavigation({
   navigationTransitionKey,
   newSessionLabel,
   conversationReads,
+  onRequestDelete,
+  awaitingIds,
+  conversationMove = null,
+  conversationMovePending = false,
+  conversationMoveFailed = false,
+  onRetryConversationMove,
   preview,
   dragProps,
   dragState,
@@ -472,16 +480,17 @@ export function WorkspaceRailNavigation({
                         compactDesktop={false}
                         query=""
                         searchOpen={false}
-                        awaitingIds={new Set()}
+                        awaitingIds={awaitingIds}
                         closeNavigation={closeNavigation}
                         onNewChat={onNewChat}
                         hideSectionHeader
-                        conversationMove={null}
-                        conversationMovePending={false}
-                        conversationMoveFailed={false}
+                        conversationMove={conversationMove}
+                        conversationMovePending={conversationMovePending}
+                        conversationMoveFailed={conversationMoveFailed}
+                        {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
                         projects={orderedProjects}
                         projectListReady={projectListStatus === "ready"}
-                        onRequestDelete={() => {}}
+                        onRequestDelete={onRequestDelete}
                       />
                     </SidebarMenuItem> : null}
                   </Fragment>

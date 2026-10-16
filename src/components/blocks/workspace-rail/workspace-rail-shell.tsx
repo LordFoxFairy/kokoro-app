@@ -382,6 +382,12 @@ export function WorkspaceRailShell({
             navigationExpanded={navigationExpanded}
             navigationTransitionKey={navigationTransitionKey}
             newSessionLabel={newSessionLabel}
+            onRequestDelete={onRequestDelete}
+            awaitingIds={awaitingIds}
+            {...(conversationMove === undefined ? {} : { conversationMove })}
+            conversationMovePending={conversationMovePending}
+            conversationMoveFailed={conversationMoveFailed}
+            {...(onRetryConversationMove === undefined ? {} : { onRetryConversationMove })}
             {...(conversationReads === undefined ? {} : { conversationReads })}
             preview={preview}
             dragProps={dragProps}
