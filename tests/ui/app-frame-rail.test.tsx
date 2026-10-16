@@ -19,6 +19,8 @@ import { KokoroSkillsSurface } from "@/features/app/kokoro-skills-surface"
 import { SkillsSettingsSection } from "@/ui/settings/sections/skills-settings-section"
 import { createHubClient } from "@/hub/client"
 import { McpProjectionRead } from "@/ui/mcp/mcp-projection-read"
+import { SkillCatalogDialog, type CatalogDetailProjection } from "@/ui/skills/skills-catalog-dialog"
+import { createManusSkillHubClient } from "@/ui/skills/manus-skill-client"
 import { useAppFrameActions } from "@/components/blocks/app-frame/use-app-frame-actions"
 import { LocaleProvider } from "@/i18n/context"
 import { ThemeProvider } from "@/ui/theme/theme-context"
@@ -1860,6 +1862,171 @@ function mountSettingsCatalog() {
     embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }}
   /></LocaleProvider>)
 }
+
+it("retires a previously published Settings retry callback instead of borrowing the new client's fetcher", async () => {
+  let reads = 0
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-retired-retry" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      reads++
+      if (reads === 1) throw Error("Original read failed")
+      return response({ skills: [{ skillId: "retry-series", displayName: "Fresh retry item", currentVersion: { versionUid: "retry-revision" } }], tagOptions: {} })
+    }
+    throw Error("Unexpected retired retry request")
+  })
+  const hub = createHubClient()
+  const projections: CatalogDetailProjection[] = []
+  const onDetailProjection = (value: CatalogDetailProjection) => projections.push(value)
+  const content = (generation: number) => <LocaleProvider><SkillCatalogDialog inline open client={createManusSkillHubClient(hub, { admitted: true, subject: "retry-actor", generation })} enabledOverrides={new Map()} installedOverrides={new Map()} busy={null} errorName={null} onOpenChange={vi.fn()} onCloseAutoFocus={vi.fn()} onOpenUpload={vi.fn()} onOpenGithub={vi.fn()} onSetEnabled={vi.fn()} onOpenDetail={vi.fn()} selectedDetailKey={JSON.stringify(["retry-series", "retry-revision"])} onDetailProjection={onDetailProjection} /></LocaleProvider>
+  const view = render(content(1))
+  await screen.findByRole("button", { name: "重试" })
+  const retiredRetry = projections.at(-1)!.retry
+  view.rerender(content(2))
+  await screen.findByRole("button", { name: "查看详情 Fresh retry item" })
+  const confirmedReads = reads
+  await act(async () => { retiredRetry(); await Promise.resolve() })
+  expect(reads).toBe(confirmedReads)
+})
+
+it("keeps Settings Explore intent and its detail shell across same-actor rechecks without retaining private facts", async () => {
+  let round = 1
+  let failFreshRead = true
+  const calls: Record<string, unknown>[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-intent-recheck" } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      calls.push(JSON.parse(String(init?.body)))
+      if (round === 2 && failFreshRead) { failFreshRead = false; throw Error("Temporary new-generation read failure") }
+      return response({ skills: [{ skillId: "settings-intent-series", displayName: "Intent match", userDescription: round === 1 ? "Retired catalog facts" : "New catalog facts", currentVersion: { versionUid: "settings-intent-revision" } }], tagOptions: {} })
+    }
+    if (path.endsWith("GetSkill")) return response({ skill: { id: "settings-intent-series", version: "settings-intent-revision", displayName: "Intent match", description: round === 1 ? "Retired detail facts" : "New detail facts" }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-intent", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    throw Error("Unexpected settings recheck request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, subject: string, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject, generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, "settings-intent-actor", 1))
+  await screen.findByRole("button", { name: "查看详情 Intent match" })
+  const search = screen.getByRole("searchbox", { name: "搜索技能" })
+  fireEvent.change(search, { target: { value: "needle" } })
+  await waitFor(() => expect(calls.at(-1)).toMatchObject({ query: "needle" }))
+  fireEvent.keyDown(screen.getByRole("button", { name: "技能分类" }), { key: "ArrowDown" })
+  fireEvent.click(await screen.findByRole("menuitem", { name: "编程" }))
+  fireEvent.click(await screen.findByRole("button", { name: "查看详情 Intent match" }))
+  const dialog = screen.getByRole("dialog")
+  await within(dialog).findByText("Retired detail facts")
+  const count = calls.length
+  round = 2
+  view.rerender(content(false, "settings-intent-actor", 2))
+  expect(screen.getByRole("searchbox", { hidden: true, name: "搜索技能" })).toBe(search)
+  expect(search).toHaveValue("needle")
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Retired detail facts")).toBeNull()
+  expect(screen.queryByText("Retired catalog facts")).toBeNull()
+  await act(async () => { await Promise.resolve() })
+  expect(calls).toHaveLength(count)
+  view.rerender(content(true, "settings-intent-actor", 2))
+  await within(dialog).findByRole("alert")
+  expect(screen.queryByText("Retired detail facts")).toBeNull()
+  fireEvent.click(within(dialog).getByRole("button", { name: "重试" }))
+  await within(dialog).findByText("New detail facts")
+  expect(calls.at(-1)).toMatchObject({ query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }))
+  await waitFor(() => expect(search).toHaveFocus())
+  fireEvent.click(screen.getByRole("button", { name: "查看详情 Intent match" }))
+  await within(screen.getByRole("dialog")).findByText("New detail facts")
+  view.rerender(content(true, "settings-other-actor", 3))
+  expect(screen.queryByRole("dialog")).toBeNull()
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  view.rerender(content(true, "settings-intent-actor", 4))
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue("")
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+it("re-establishes the exact Settings detail revision on new cursor pages rather than substituting the latest revision", async () => {
+  const intersect = observeSettingsCatalogPages()
+  let round = 1
+  const details: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-exact-revision" } })
+  const card = (revision: string) => ({ skillId: "exact-settings-series", displayName: revision, currentVersion: { versionUid: revision } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) return response({ data: [] })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      return response(body.pageToken ? { skills: [card("chosen-revision")], tagOptions: {} } : { skills: [card(round === 1 ? "initial-revision" : "newest-revision")], tagOptions: {}, nextPageToken: `exact-next-${round}` })
+    }
+    if (path.endsWith("GetSkill")) {
+      details.push(String(init?.body))
+      return response({ skill: { id: "exact-settings-series", version: "chosen-revision", displayName: "chosen-revision", description: `Exact facts ${round}` }, downloadInfo: { downloadUrl: "/api/skill-downloads/settings-exact", filename: "fixture.zip", expiresAt: "2028-01-01T00:00:00Z" } })
+    }
+    throw Error("Unexpected exact revision request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject: "settings-exact-actor", generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  await screen.findByRole("button", { name: "查看详情 initial-revision" })
+  intersect()
+  fireEvent.click(await screen.findByRole("button", { name: "查看详情 chosen-revision" }))
+  const dialog = screen.getByRole("dialog")
+  await within(dialog).findByText("Exact facts 1")
+  round = 2
+  view.rerender(content(false, 2))
+  expect(screen.getByRole("dialog")).toBe(dialog)
+  expect(screen.queryByText("Exact facts 1")).toBeNull()
+  view.rerender(content(true, 2))
+  const more = await within(dialog).findByRole("button", { name: "加载更多" })
+  expect(within(dialog).queryByRole("heading", { name: "newest-revision" })).toBeNull()
+  expect(details).toHaveLength(1)
+  fireEvent.click(more)
+  await within(dialog).findByText("Exact facts 2")
+  expect(details).toHaveLength(2)
+  expect(screen.getByRole("dialog")).toBe(dialog)
+})
+
+it("retires Settings installation slots and stale actions without applying a late ACK to the new generation", async () => {
+  let releaseOld!: (reply: Response) => void
+  let writes = 0
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "settings-install-recheck" } })
+  const receipt = () => response({ data: { installation: {
+    installation_id: "settings-installation", source_ref: "skill:settings-install-revision", series_id: "settings-install-series", revision: "1", installed: true, enabled: true,
+    installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: "Current install", summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+  }, change: "installed", event_id: "settings-install-event", replayed: false } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const path = String(input)
+    if (path.includes("/self/skill-installations")) {
+      if (init?.method !== "POST") return response({ data: [] })
+      writes++
+      return writes === 1 ? new Promise<Response>(resolve => { releaseOld = resolve }) : receipt()
+    }
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (path.endsWith("ListHubSkills")) return response({ skills: [{ skillId: "settings-install-series", displayName: "Current install", currentVersion: { versionUid: "settings-install-revision" } }], tagOptions: {} })
+    throw Error("Unexpected installation recheck request")
+  })
+  const hubClient = createHubClient()
+  const content = (admitted: boolean, generation: number) => <LocaleProvider><SkillsSettingsSection readBoundary={{ admitted, subject: "settings-install-actor", generation }} hubClient={hubClient} preview={false} brandName="Kokoro" embeddedCatalogOpen onEmbeddedCatalogOpenChange={vi.fn()} catalogTriggerRef={{ current: null }} /></LocaleProvider>
+  const view = render(content(true, 1))
+  const retired = await screen.findByRole("button", { name: "添加 Current install" })
+  fireEvent.click(retired)
+  await waitFor(() => expect(writes).toBe(1))
+  view.rerender(content(false, 2))
+  view.rerender(content(true, 2))
+  const current = await screen.findByRole("button", { name: "添加 Current install" })
+  expect(current).toBeEnabled()
+  fireEvent.click(retired)
+  expect(writes).toBe(1)
+  fireEvent.click(current)
+  await screen.findByRole("button", { name: "已添加 Current install" })
+  expect(writes).toBe(2)
+  await act(async () => { releaseOld(receipt()) })
+  expect(screen.getByRole("button", { name: "已添加 Current install" })).toBeDisabled()
+  expect(screen.queryByRole("alert")).toBeNull()
+})
 
 it("queries Settings Explore through the owner and preserves its nine-item filters on every cursor", async () => {
   const intersect = observeSettingsCatalogPages()

@@ -48,7 +48,7 @@ import type { HubClient } from "@/hub/client";
 import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
-import { SkillCatalogDialog } from "./skills-catalog-dialog";
+import { SkillCatalogDialog, type CatalogDetailProjection } from "./skills-catalog-dialog";
 import { formatBytes } from "./skills-format";
 import { InstalledSkillCard } from "./skills-installed-card";
 import { SkillRevisions } from "./skill-revisions";
@@ -142,6 +142,9 @@ export function SkillsPoolTab({
   searchInputRef,
   initialScope = "all",
   preview = false,
+  selectedDetailKey,
+  onDetailProjection,
+  detailReturnFocusRef,
 }: {
   pool: SkillsPool | null;
   loading: boolean;
@@ -153,6 +156,9 @@ export function SkillsPoolTab({
   expanded: string | null;
   client: HubClient;
   preview?: boolean;
+  selectedDetailKey?: string | null;
+  onDetailProjection?: (projection: CatalogDetailProjection) => void;
+  detailReturnFocusRef?: RefObject<HTMLElement | null>;
   onRetry: () => void;
   onDisable: (skill: SkillCard, stateKey: string) => void;
   onSetEnabled: (skill: SkillCard, enabled: boolean, stateKey?: string) => void;
@@ -203,6 +209,15 @@ export function SkillsPoolTab({
   const searchRef = searchInputRef ?? localSearchRef;
   const localCatalogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const catalogTriggerRef = suppliedCatalogTriggerRef ?? localCatalogTriggerRef;
+  const [commandClient, setCommandClient] = useState(client);
+  if (commandClient !== client) {
+    setCommandClient(client);
+    setConfirming(null);
+    setCreateMenuOpen(false);
+  }
+  useLayoutEffect(() => {
+    return () => { catalogHandoffRef.current = null; };
+  }, [client]);
 
   const selectCreateAction = (action: () => void, event?: Event) => {
     // Radix closes a controlled menu after onSelect. Run the destination
@@ -333,6 +348,9 @@ export function SkillsPoolTab({
   if (embedded && catalogOpen) {
     return (
       <SkillCatalogDialog
+        {...(selectedDetailKey === undefined ? {} : { selectedDetailKey })}
+        {...(onDetailProjection === undefined ? {} : { onDetailProjection })}
+        {...(detailReturnFocusRef === undefined ? {} : { detailReturnFocusRef })}
         preview={preview}
         inline
         open
@@ -785,6 +803,9 @@ export function SkillsPoolTab({
         </ul>
       )}
       {!embedded ? <SkillCatalogDialog
+        {...(selectedDetailKey === undefined ? {} : { selectedDetailKey })}
+        {...(onDetailProjection === undefined ? {} : { onDetailProjection })}
+        {...(detailReturnFocusRef === undefined ? {} : { detailReturnFocusRef })}
         preview={preview}
         open={catalogOpen}
         onOpenChange={(nextOpen) => {

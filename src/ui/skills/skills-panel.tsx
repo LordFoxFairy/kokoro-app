@@ -12,7 +12,7 @@ import type { SkillCard, SkillCatalogCard } from "@/hub/schemas";
 import { isRequiredLockError } from "@/hub/rules";
 import { useT } from "@/i18n/context";
 import { cn } from "@/lib/utils";
-import { invalidate, useAsyncAction, useResource } from "@/lib/query";
+import { invalidate, useResource } from "@/lib/query";
 import { subscribeResource } from "@/lib/query/resource-store";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { useOverlayClose } from "@/ui/shell/use-overlay-close";
@@ -30,6 +30,7 @@ import {
   skillResourceKey,
 } from "./skills-resource-cache";
 import { SkillUploadDialog } from "./skill-upload-dialog";
+import type { CatalogDetailProjection } from "./skills-catalog-dialog";
 import { SKILL_CATALOG_RESOURCE_KEY } from "./manus-skill-client";
 
 function isNestedOverlayPointerEvent(event: Event): boolean {
@@ -184,6 +185,10 @@ function detailSelectionFor(
 }
 
 export function SkillsContent(props: SkillsContentProps) {
+  return <ActorSkillsContent key={JSON.stringify([props.preview ?? false, props.readBoundary.subject])} {...props} />;
+}
+
+function ActorSkillsContent(props: SkillsContentProps) {
   const { admitted, subject, generation } = props.readBoundary;
   const t = useT();
   // Lives outside the generation-keyed facts subtree. Never keep a private ACK
@@ -211,7 +216,7 @@ export function SkillsContent(props: SkillsContentProps) {
   };
   return <>
     {updateCurrent && updateState.kind !== "idle" ? <div className={styles.updateNotice} role="status"><span>{t(updateState.acknowledged ? "skills.update.confirmedNotice" : "skills.update.pendingNotice")}</span><Button type="button" variant="outline" onClick={event => { updateReturnFocus.current = event.currentTarget; setUpdateOpen({ subject, open: true }); void updateFlow.readCurrent(props.readBoundary); }}>{t("skills.update.resume")}</Button></div> : null}
-    <InstalledSkillsContent key={skillResourceKey(SKILLS_KEY, props.client)} {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} />
+    <InstalledSkillsContent {...props} onUpdateSkill={openUpdate} updateFallbackFocus={updateFallbackFocus} updateLocked={updateLocked} updatePending={updateState.kind !== "idle"} />
     <SkillInstallationUpdateDialog flow={updateFlow} boundary={props.readBoundary} state={updateState} admitted={updateCurrent} open={updateOpen.subject === subject && updateOpen.open} onOpenChange={open => { if (updateFlow.matches(props.readBoundary)) setUpdateOpen({ subject, open }); }} returnFocusRef={updateReturnFocus} fallbackFocusRef={updateFallbackFocus} />
   </>;
 }
@@ -245,8 +250,11 @@ function InstalledSkillsContent({
   const githubReturnFocusRef = useRef<HTMLElement | null>(null);
   const uploadReturnFocusRef = useRef<HTMLElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const [detailSelection, setDetailSelection] =
-    useState<SkillDetailSelection | null>(null);
+  // Only the exact locator and open intent survive a same-actor recheck.
+  // Selected cards, installation projections and callbacks never do.
+  const [detailIntent, setDetailIntent] = useState<{ key: string; source: "pool" | "catalog" } | null>(null);
+  const [catalogDetail, setCatalogDetail] = useState<{ client: HubClient; value: CatalogDetailProjection } | null>(null);
+  const [detailActionFact, setDetailActionFact] = useState<{ key: string; installed: boolean; enabled: boolean; source: string | undefined } | null>(null);
   const [githubImportNotice, setGithubImportNotice] =
     useState<GithubImported | null>(null);
   const [recentSkillKey, setRecentSkillKey] = useState<string | null>(null);
@@ -292,38 +300,36 @@ function InstalledSkillsContent({
   const [installedOverrides, setInstalledOverrides] = useState<
     Map<string, boolean>
   >(() => new Map());
+  const owner = useMemo(() => ({ client, admitted: readBoundary.admitted, subject: readBoundary.subject, generation: readBoundary.generation }), [client, readBoundary.admitted, readBoundary.subject, readBoundary.generation]);
+  const liveOwner = useRef<typeof owner | null>(null);
+  const [factsOwner, setFactsOwner] = useState(owner);
+  if (factsOwner !== owner) {
+    setFactsOwner(owner);
+    setCatalogDetail(null); setDetailActionFact(null);
+    setLocked(new Set()); setBusy(null); setDisableError(null);
+    setEnabledOverrides(new Map()); setInstalledOverrides(new Map());
+    setExpanded(null); setGithubImportNotice(null); setRecentSkillKey(null);
+    setGithubOpen(false); setUploadOpen(false);
+  }
   const mutationBusyRef = useRef(false);
   const mutationAttemptRef = useRef(0);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    // React development Strict Mode performs a mount/cleanup/remount probe.
-    // Restore the liveness gate on the committed mount so a completed owner
-    // mutation clears its pending UI state instead of leaving the toggle locked.
-    mountedRef.current = true;
+  // A committed owner owns the command slot. Cleanup also fences unmount
+  // and React StrictMode replay, without carrying a retired pending action.
+  useLayoutEffect(() => {
+    liveOwner.current = owner;
+    mutationBusyRef.current = false;
     return () => {
-      mountedRef.current = false;
+      if (liveOwner.current === owner) liveOwner.current = null;
       mutationAttemptRef.current += 1;
     };
-  }, []);
+  }, [owner]);
 
-  const enabledAction = useAsyncAction(
-    async ({ skill, enabled }: { skill: SkillCard; enabled: boolean }) => {
-      if (skill.installation_id !== undefined) {
-        await client.setSkillEnabled(skill.installation_id, enabled);
-        return;
-      }
-      if (
-        enabled &&
-        skill.source_ref !== undefined &&
-        client.installSkill !== undefined
-      ) {
-        await client.installSkill(skill.source_ref);
-        return;
-      }
-      throw new Error("skill installation identity is unavailable");
-    },
-  );
+  const receiveCatalogDetail = useCallback((value: CatalogDetailProjection) => {
+    // A committed child reports only this client's read projection. Keeping
+    // its owner alongside it prevents a retired projection becoming current.
+    setCatalogDetail({ client, value });
+  }, [client]);
+
   const onSetEnabled = useCallback(
     async (
       skill: SkillCard,
@@ -333,24 +339,24 @@ function InstalledSkillsContent({
       // One mutation owns the shared hub action slot. State is for rendering;
       // the ref closes the same-frame double-click window before React commits
       // the busy state.
-      if (mutationBusyRef.current || updateLocked()) return;
+      if (liveOwner.current !== owner || (!preview && (!owner.admitted || owner.subject === null)) || mutationBusyRef.current || updateLocked()) return;
       mutationBusyRef.current = true;
       const attempt = ++mutationAttemptRef.current;
       // 池内项恒为「已启用」：唯一动作是停用（停用后离池）。required 撞 409 → 锁定回滚。
       setBusy(stateKey);
       setDisableError(null);
-      const outcome = await enabledAction.run({ skill, enabled });
-      if (!mountedRef.current || attempt !== mutationAttemptRef.current) return;
+      let outcome: { ok: true } | { ok: false; error: unknown };
+      try {
+        if (skill.installation_id !== undefined) await client.setSkillEnabled(skill.installation_id, enabled);
+        else if (enabled && skill.source_ref !== undefined && client.installSkill !== undefined) await client.installSkill(skill.source_ref);
+        else throw new Error("skill installation identity is unavailable");
+        outcome = { ok: true };
+      } catch (error) { outcome = { ok: false, error }; }
+      if (liveOwner.current !== owner || attempt !== mutationAttemptRef.current) return;
       setBusy(null);
       if (outcome.ok) {
-        setDetailSelection(current => {
-          if (!current || current.skill.skill_id !== skill.skill_id || current.skill.revision_skill_id !== skill.revision_skill_id) return current;
-          const source = skill.installation_id === undefined ? skill.source_ref : skill.installed_source_ref;
-          const next = { ...current.skill, enabled, installed: enabled || current.installationState.installed };
-          delete next.installed_source_ref;
-          if (source !== undefined) next.installed_source_ref = source;
-          return { skill: next, installationState: { installed: next.installed, enabled } };
-        });
+        setDetailActionFact({ key: JSON.stringify([skill.skill_id, skill.revision_skill_id]), installed: true, enabled,
+          source: skill.installation_id === undefined ? skill.source_ref : skill.installed_source_ref });
         setEnabledOverrides((current) =>
           new Map(current).set(stateKey, enabled),
         );
@@ -368,8 +374,29 @@ function InstalledSkillsContent({
       }
       mutationBusyRef.current = false;
     },
-    [client, enabledAction, updateLocked],
+    [client, owner, preview, updateLocked],
   );
+
+  const admitted = preview || readBoundary.admitted && readBoundary.subject !== null;
+  const { refetch: refetchPool } = pool;
+  const retryPool = useCallback(() => {
+    if (liveOwner.current === owner && (preview || owner.admitted && owner.subject !== null)) refetchPool();
+  }, [owner, refetchPool, preview]);
+  const selectedPoolSkill = detailIntent?.source === "pool" && admitted
+    ? pool.data?.skills.find(skill => JSON.stringify([skill.skill_id, skill.revision_skill_id]) === detailIntent.key) : undefined;
+  const catalogProjection = admitted && catalogDetail?.client === client ? catalogDetail.value : null;
+  const selected = detailIntent?.source === "pool" ? selectedPoolSkill ? detailSelectionFor(selectedPoolSkill) : null
+    : catalogProjection?.skill ? detailSelectionFor(catalogProjection.skill) : null;
+  const detailSelection = selected === null ? null : (() => {
+    if (!detailActionFact || detailActionFact.key !== detailIntent?.key) return selected;
+    const skill = { ...selected.skill, installed: detailActionFact.installed, enabled: detailActionFact.enabled };
+    delete skill.installed_source_ref;
+    if (detailActionFact.source !== undefined) skill.installed_source_ref = detailActionFact.source;
+    return { skill, installationState: { installed: skill.installed, enabled: skill.enabled } };
+  })();
+  useLayoutEffect(() => {
+    if (detailIntent && !detailReturnFocusRef.current?.isConnected) detailReturnFocusRef.current = updateFallbackFocus.current;
+  }, [client, detailIntent, updateFallbackFocus]);
 
   return (
     <>
@@ -380,21 +407,24 @@ function InstalledSkillsContent({
         >
           <SkillsPoolTab
             preview={preview}
+            selectedDetailKey={detailIntent?.source === "catalog" ? detailIntent.key : null}
+            onDetailProjection={receiveCatalogDetail}
+            detailReturnFocusRef={detailReturnFocusRef}
             searchInputRef={updateFallbackFocus}
-            pool={pool.data ?? null}
-            loading={pool.loading}
-            failed={pool.error !== undefined && pool.data === undefined}
-            refreshFailed={pool.error !== undefined && pool.data !== undefined}
+            pool={admitted ? pool.data ?? null : null}
+            loading={!admitted || pool.loading}
+            failed={admitted && pool.error !== undefined && pool.data === undefined}
+            refreshFailed={admitted && pool.error !== undefined && pool.data !== undefined}
             pinned={pinned}
             locked={locked}
             busy={updatePending ? "installation-update" : busy}
             onUpdateSkill={(skill, source) => {
               if (mutationBusyRef.current || !onUpdateSkill(skill, source)) return;
-              setEnabledOverrides(new Map()); setInstalledOverrides(new Map()); setDetailSelection(null);
+              setEnabledOverrides(new Map()); setInstalledOverrides(new Map()); setDetailIntent(null);
             }}
             expanded={expanded}
             client={client}
-            onRetry={pool.refetch}
+            onRetry={retryPool}
             onDisable={(skill, stateKey) =>
               onSetEnabled(skill, false, stateKey)
             }
@@ -424,8 +454,14 @@ function InstalledSkillsContent({
             onDismissGithubImportNotice={() => setGithubImportNotice(null)}
             {...(onCreateWithAi === undefined ? {} : { onCreateWithAi })}
             onOpenDetail={(skill, source) => {
+              if (liveOwner.current !== owner || !admitted) return;
               detailReturnFocusRef.current = source;
-              setDetailSelection(detailSelectionFor(skill));
+              const selection = detailSelectionFor(skill);
+              if (!selection) return;
+              setDetailIntent({ key: JSON.stringify([selection.skill.skill_id, selection.skill.revision_skill_id]), source: "installed" in skill ? "catalog" : "pool" });
+              if ("installed" in skill) setCatalogDetail({ client, value: { skill, failed: false, busy: false, retry: () => {
+                if (liveOwner.current === owner) invalidate(skillResourceKey(SKILLS_CATALOG_KEY, client));
+              } } });
             }}
             {...(embeddedCatalogOpen === undefined
               ? {}
@@ -452,17 +488,22 @@ function InstalledSkillsContent({
         returnFocusRef={uploadReturnFocusRef}
         onPublished={invalidateSkills}
       />
-      {detailSelection !== null ? (
+      {detailIntent !== null ? (
         <ManusSkillDetailDialog
           preview={preview}
           readBoundary={readBoundary}
-          skill={detailSelection.skill}
+          skill={detailSelection?.skill ?? null}
+          pending={detailSelection === null}
+          pendingFailed={admitted && (detailIntent.source === "pool" ? pool.error !== undefined || pool.data !== undefined : catalogProjection?.failed === true)}
+          pendingBusy={!admitted || (detailIntent.source === "pool" ? pool.loading : catalogProjection?.busy !== false)}
+          {...(admitted && catalogProjection?.loadMore ? { onLoadMore: catalogProjection.loadMore } : {})}
+          onRetryPending={admitted ? detailIntent.source === "pool" ? retryPool : catalogProjection?.retry : undefined}
           publisherLabel={brandName ?? "Kokoro"}
-          categoryLabels={detailSelection.skill.categories ?? []}
+          categoryLabels={detailSelection?.skill.categories ?? []}
           open
-          installationState={detailSelection.installationState}
+          {...(detailSelection ? { installationState: detailSelection.installationState } : {})}
           onOpenChange={(open) => {
-            if (!open) setDetailSelection(null);
+            if (!open) setDetailIntent(null);
           }}
           returnFocusRef={detailReturnFocusRef}
           onAdd={(skill) =>
@@ -473,9 +514,10 @@ function InstalledSkillsContent({
             )
           }
           onTry={(prompt) => {
+            if (!detailSelection || liveOwner.current !== owner || !admitted) return false;
             const detailSkill = toSkillActionCard(detailSelection.skill);
-            if (onTrySkill?.(detailSkill, prompt)) { setDetailSelection(null); return true; }
-            if (preview && !onTrySkill) { if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name); setDetailSelection(null); return true; }
+            if (onTrySkill?.(detailSkill, prompt)) { setDetailIntent(null); return true; }
+            if (preview && !onTrySkill) { if (!pinned.includes(detailSkill.name)) onTogglePin(detailSkill.name); setDetailIntent(null); return true; }
             return false;
           }}
         />

@@ -107,6 +107,7 @@ type Props = {
   pendingFailed?: boolean
   pendingBusy?: boolean
   onLoadMore?: () => void
+  onRetryPending?: (() => void) | undefined
   sharedSummary?: ShareSummary
   onAddShared?: () => void
   installationNotice?: string | undefined
@@ -161,7 +162,7 @@ function displayDate(value: string | undefined, locale: string): string | null {
 /** A stable, server-backed catalog detail dialog. It never synthesizes prompts,
  * source state or package identifiers in the browser. Package text comes only
  * from the admitted published-revision inspection boundary. */
-export function ManusSkillDetailDialog({ preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
+export function ManusSkillDetailDialog({ preview = false, pending = false, pendingFailed = false, pendingBusy = false, onLoadMore, onRetryPending, readBoundary: boundary, skill, open, busy = false, installationState, actionFailed = false, publisherLabel, categoryLabels = [], onOpenChange, onAdd, onTry, returnFocusRef, sharedSummary, onAddShared, installationNotice, onRetryInstallation }: Props) {
   const { locale, t } = useLocale()
   const shareIntents = useRef(new Map<string, { identity: string; ack: ShareAck | null; unknown: boolean; pending: boolean; controller: AbortController | null }>())
   type ShareState = "pending" | "copied" | "copyFailed" | "failed" | "unknown"
@@ -422,6 +423,7 @@ export function ManusSkillDetailDialog({ preview = false, pending = false, pendi
         {pending ? <div className={styles.body}>
           <DialogTitle>{t("skills.title")}</DialogTitle>
           <DialogDescription role={pendingFailed ? "alert" : "status"}>{t(pendingFailed ? "skills.detailUnavailable" : "skills.detailLoading")}</DialogDescription>
+          {pendingFailed && onRetryPending ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onRetryPending}>{t("skills.retry")}</Button> : null}
           {onLoadMore ? <Button type="button" variant="outline" disabled={pendingBusy} onClick={onLoadMore}>{t("rail.loadMore")}</Button> : null}
         </div> : <>
         <DetailToolbar

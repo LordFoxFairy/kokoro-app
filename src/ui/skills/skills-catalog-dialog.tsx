@@ -42,6 +42,14 @@ import styles from "./skills-panel.module.css";
 
 type CatalogCategory = "all" | CatalogSkillCategory;
 
+export type CatalogDetailProjection = Readonly<{
+  skill: SkillCatalogCard | null;
+  failed: boolean;
+  busy: boolean;
+  loadMore?: () => void;
+  retry: () => void;
+}>;
+
 const CATALOG_CATEGORIES: readonly Readonly<{
   value: CatalogCategory;
   label: "skills.categoryAll" | "skills.categoryCoding" | "skills.categoryData" | "skills.categoryAutomation" | "skills.categoryBusiness" | "skills.categoryDesign" | "skills.categoryMedia" | "skills.categoryContent" | "skills.categoryApps";
@@ -76,12 +84,18 @@ export function SkillCatalogDialog({
   onOpenDetail,
   inline = false,
   preview = false,
+  selectedDetailKey,
+  onDetailProjection,
+  detailReturnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus: (event: Event) => void;
   client: ManusSkillHubClient;
   preview?: boolean;
+  selectedDetailKey?: string | null;
+  onDetailProjection?: (projection: CatalogDetailProjection) => void;
+  detailReturnFocusRef?: RefObject<HTMLElement | null>;
   enabledOverrides: ReadonlyMap<string, boolean>;
   installedOverrides: ReadonlyMap<string, boolean>;
   busy: string | null;
@@ -111,6 +125,11 @@ export function SkillCatalogDialog({
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createActionHandledRef = useRef(false);
   const catalogSearchRef = useRef<HTMLInputElement | null>(null);
+  useLayoutEffect(() => {
+    if (selectedDetailKey && detailReturnFocusRef && !detailReturnFocusRef.current?.isConnected) {
+      detailReturnFocusRef.current = catalogSearchRef.current;
+    }
+  }, [client, detailReturnFocusRef, selectedDetailKey]);
   const catalogCreateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const catalogMoreRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef<{ controller: AbortController } | null>(null);
@@ -156,6 +175,14 @@ export function SkillCatalogDialog({
   }>>({ base: undefined, pages: [] });
   const [loadingMoreFor, setLoadingMoreFor] = useState<{ base: SkillCatalog; controller: AbortController }>();
   const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>();
+  const [factsClient, setFactsClient] = useState(client);
+  if (factsClient !== client) {
+    setFactsClient(client);
+    setLastConfirmedCatalog(undefined);
+    setPageState({ base: undefined, pages: [] });
+    setLoadingMoreFor(undefined); setLoadMoreFailedFor(undefined);
+    setCreateMenuOpen(false);
+  }
   const additionalPages = useMemo(
     () => pageState.base === catalog.data ? pageState.pages : [],
     [catalog.data, pageState],
@@ -216,6 +243,25 @@ export function SkillCatalogDialog({
       }
     }
   }, [catalog.data, catalogFilters, client, displayedCatalog?.next_cursor, readOwner]);
+
+  const { refetch: refetchCatalog } = catalog;
+  const retry = useCallback(() => {
+    if (readOwner.open && currentReadOwner.current === readOwner) refetchCatalog();
+  }, [refetchCatalog, readOwner]);
+
+  useLayoutEffect(() => {
+    if (!selectedDetailKey || !onDetailProjection) return;
+    const skill = catalog.data === undefined ? null : displayedCatalog?.skills.find(
+      item => JSON.stringify([item.skill_id, item.revision_skill_id]) === selectedDetailKey,
+    ) ?? null;
+    onDetailProjection({
+      skill,
+      failed: loadMoreFailed || catalog.error !== undefined || catalog.data !== undefined && !displayedCatalog?.next_cursor,
+      busy: catalog.loading || loadingMore,
+      retry,
+      ...(displayedCatalog?.next_cursor && catalog.data !== undefined ? { loadMore: () => void loadMore() } : {}),
+    });
+  }, [catalog.data, catalog.error, catalog.loading, displayedCatalog, loadMore, loadMoreFailed, loadingMore, onDetailProjection, retry, selectedDetailKey]);
 
   useEffect(() => {
     const target = catalogMoreRef.current;
@@ -416,7 +462,7 @@ export function SkillCatalogDialog({
       {catalog.error !== undefined && displayedCatalog !== undefined ? (
         <div className={styles.catalogLoadError} role="alert">
           <p>{t("skills.loadError")}</p>
-          <Button type="button" variant="outline" onClick={catalog.refetch} disabled={catalog.loading}>
+          <Button type="button" variant="outline" onClick={retry} disabled={catalog.loading}>
             {t("skills.retry")}
           </Button>
         </div>
@@ -446,7 +492,7 @@ export function SkillCatalogDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={catalog.refetch}
+              onClick={retry}
               disabled={catalog.loading}
               aria-busy={catalog.loading}
             >

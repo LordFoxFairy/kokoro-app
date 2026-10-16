@@ -33,6 +33,19 @@ function renderSurface(onPrompt = vi.fn()) {
   return onPrompt
 }
 
+it("keeps explicit Settings preview usable without granting a live session or issuing owner requests", async () => {
+  const client = createPreviewHubClient()
+  const [skill] = await client.listSkillPool()
+  if (!skill) throw Error("preview fixture must contain a skill")
+  const fetch = vi.fn<typeof globalThis.fetch>()
+  vi.stubGlobal("fetch", fetch)
+  render(<LocaleProvider><SkillsContent readBoundary={{ admitted: false, subject: null, generation: 0 }} client={client} preview pinned={[]} onTogglePin={() => {}} embedded /></LocaleProvider>)
+  await screen.findByText(skill.name)
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: skill.name } })
+  expect(screen.getByRole("searchbox", { name: "搜索技能" })).toHaveValue(skill.name)
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 it("hands AI skill creation to the shared composer instead of only writing an orphaned pending draft", async () => {
   const onPrompt = renderSurface()
   await screen.findByTestId("skills-catalog-grid")
