@@ -1755,4 +1755,6 @@ BFF 仍是 HTTP fixture，
 
 当前分支将真实安装 source 与目录 current version 分开；只有启用安装、详情示例与精确 revision 一致时才允许试用。外部目录保留 Direct、项目设置保留 Project，在新会话实际 ID 上设置既有 `selected_skill_source_refs`，输入区显示可移除技能名。未就绪/身份或版本不一致保留详情，不退化为文字冒成功；preview 仅文字。
 
-已有 AppFrame/Composer/纯模型回归承接版本、route、actor/storage、Strict Mode、A→B→A 与 frozen retry 风险，未恢复已退役五套 Skills/Settings/MCP UI tests。正常本地唯一技能暂无示例，详情按钮→Composer 的真实正向旅程仍待验；Agent 模型授权 consumer 前置未闭合，不据浏览器 wire 或工程检查宣称实际技能执行完成。具体最终命令证据在本次交付记录；本节不代表 PR 已更新或已合并。
+已有 AppFrame/Composer/纯模型回归承接版本、route、actor/storage、Strict Mode、A→B→A 与 frozen retry 风险，未恢复已退役五套 Skills/Settings/MCP UI tests。App `34092c7` 已同步本地运行分支，正常产品 Session 与正式 API 新建仅本人可见的隔离技能：发布、安装及 owner 回读成功。真实浏览器已核 Direct 示例→可编辑提示词/可移除实名标签、项目设置示例→同项目新会话 URL；实际项目消息 POST 携精确安装 source，却返回 `503 agent_not_configured`，项目会话权威回读仍为空，积分与冻结额未变。因此未证明 Agent 接纳、消费或执行。
+
+另发布隔离技能第二版、保留第一版安装，owner 回读确认 `available_update` 指向新版本；新版本详情加载完成后示例保持禁用，未自动升级。正式个人安装当前要求先移除旧版再装新版，App 又未消费可用更新；后续须经过 owner 契约/事务设计门，不在前端拼装隐式移除/重装冒原子更新。正常定时会话重核 200/authenticated 后已实际复现搜索清空和详情关闭；外层 key 含 admission/generation 的静态原因已定位，保持展示意图的修复待做。完整触屏/键盘与视觉对照仍待验。本节不代表 PR 已更新或已合并。
