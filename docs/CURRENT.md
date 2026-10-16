@@ -1,8 +1,8 @@
-## 2026-10-16 Skills 目录定时重核候选
+## 2026-10-16 Skills 目录定时重核验收
 
 同 actor 正常重核保留搜索、筛选和精确详情 locator/模态壳，私有目录、详情与动作仍按代际退役。旧安装回调不借新 signal，未知安装重试保持原 source/key；确定拒绝可释放意图。未知分享跨重核仍要求明确新意图，导入重核清只读/已确认展示而保留未知恢复命令；详情追加页失败在模态内可见。
 
-本次源候选 Node 22.22.2 `pnpm check`：contract 278、architecture 50、179 files / 3074 tests、lint/typecheck/build 全通过；隔离 3324 `pnpm test:e2e` 桌面/窄屏 4 PASS（preview，不是 owner 执行）。现有 AppFrame 与纯 flow 用例覆盖 11 个新增风险场景；搜索 DOM 重置、4 项 review 问题均先有效 RED 后修复，未恢复已移除的五套 UI 测试。独立静态复核无剩余确定 P0–P2。正常定时重核的浏览器 GREEN 尚待本地源码切换后验证，不把测试替代实测。
+本次源候选 Node 22.22.2 `pnpm check`：contract 278、architecture 50、179 files / 3074 tests、lint/typecheck/build 全通过；隔离 3324 `pnpm test:e2e` 桌面/窄屏 4 PASS（preview，不是 owner 执行）。现有 AppFrame 与纯 flow 用例覆盖 11 个新增风险场景；搜索 DOM 重置、4 项 review 问题均先有效 RED 后修复，未恢复已移除的五套 UI 测试。独立静态复核无剩余确定 P0–P2。源码 `a9f4e64` 经正常 Product Session 的真实定时重核 GREEN：`/api/auth/session` 200/authenticated=true，随后目录/安装/GetSkill 新读均200；搜索与详情打开意图保留，前后位置及尺寸一致（1200×800视口，详情800×380）。关闭后焦点回新卡片标题、搜索仍保留。这是本目录前后状态/新回读的证据，不是每一帧或全页面无闪证明。
 
 个人安装原子更新与 Agent 正式运行仍未完成；实际旧试用 POST 为 `503 agent_not_configured`，这两项不因本轮 UI 修复转为已验收。远程 CI、PR/push/merge 保持暂停，当前工作只在既有分支本地累计。
 

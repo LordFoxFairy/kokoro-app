@@ -226,12 +226,12 @@ python3 scripts/verify-ten-repository-standard.py --format json
 
 - 当前自动回归覆盖精确安装与目录版本分离、同版本 handoff、Project URL→submitDraft wire、可移除标签及身份/会话退役；未知结果重试继续使用原冻结请求。仅扩展已有低层充分测试，不恢复已退役 UI 套件。
 - `34092c7` 正常产品 Session/正式 API 的本人隔离技能发布/安装/回读成功；真实浏览器 Direct 详情点击→提示词/实名标签、编辑后移除保留提示词、Project Settings 详情点击→同项目新会话 ID 已验证。实际 POST 的 source ref 与安装精确一致，返回 `503 agent_not_configured`；权威项目会话列表 200/空，积分仍 1,000、冻结 0、流水条数不变，不称 Agent 接纳或执行成功。
-- 发布第二版并保留第一版安装后，owner `available_update` 指向第二版；第二版详情加载完成，示例禁用且未改安装。已发现个人原子更新入口缺口及定时重核后搜索清空/详情关闭；这些尚未修复。390px 目录无水平溢出只证明该窄状态，不替代完整触屏/键盘、标签窄屏或视觉验收。
+- 发布第二版并保留第一版安装后，owner `available_update` 指向第二版；第二版详情加载完成，示例禁用且未改安装。已发现个人原子更新入口缺口及定时重核后搜索清空/详情关闭；当时均尚未修复；目录重核的后续验收见下节，个人原子更新仍待。390px 目录无水平溢出只证明该窄状态，不替代完整触屏/键盘、标签窄屏或视觉验收。
 - Agent 正式模型调用授权与相关 owner fresh authorization/真实运行仍是独立前置；preview E2E、构建、单元或非空 wire 均不替代。功能完成和远端 PR merge 分开记录，CI 暂停期间不冒已通过。
 
 
-### 目录重核回归候选（2026-10-16）
+### 目录重核回归验收（2026-10-16）
 
 新增风险覆盖搜索/详情 DOM 保留、私有事实退役及新代回读、actor A→B→A不复活、当前 cursor和失败重试/不替换新版、旧安装handler/ACK/finally隔离、冻结source/key、确定拒绝释放、未知分享显式新意图、GitHub只读选择退役与unknown命令保留、上传已确认结果退役。只扩展现有 AppFrame/纯 flow，不新增移除套件或锁定 CSS/源码字符串。
 
-Node22完整 `pnpm check`（278 contract / 50 architecture / 3074 tests / lint / typecheck / build）及隔离3324 preview E2E4项已通过；实际浏览器正常session定时重核 GREEN 待验。全页面视觉无闪、原子个人更新、实际Agent运行/扣费尚未验收。
+Node22完整 `pnpm check`（278 contract / 50 architecture / 3074 tests / lint / typecheck / build）及隔离3324 preview E2E4项已通过；`a9f4e64` 实际浏览器正常session定时重核200/authenticated=true，目录/安装/GetSkill重新200；前后搜索/详情保留且800×380同位置，关闭后焦点回新卡片。只读观察、不注入focus/timer、不做业务写入；Network与viewport override已清，原本地页恢复。全页面视觉无闪、原子个人更新、实际Agent运行/扣费尚未验收。
