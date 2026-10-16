@@ -1,20 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type {
-  McpPrivateServerPrepare,
-  McpPrivateServerRegistration,
-} from "@/hub/mcp-connector.schema";
+import { useCallback, useState } from "react";
+import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
+import type { McpServerCreationFlow } from "./mcp-server-creation-flow";
+import { useMcpServerCreation } from "./use-mcp-server-creation";
 import { Button } from "@/components/ui/button";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, Link2, Plus, Settings2, Trash2 } from "lucide-react";
 import { useT } from "@/i18n/context";
-import { HubClientError, type HubClient } from "@/hub/client";
 
 import styles from "./mcp-create-dialog.module.css";
-import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
 
 function isMcpEndpointUrl(value: string): boolean {
   try {
@@ -38,9 +35,6 @@ function isMcpEndpointUrl(value: string): boolean {
   }
 }
 
-type PreparedRegistration =
-  | McpPrivateServerRegistration
-  | McpPrivateServerPrepare;
 type HeaderDraft = Readonly<{ id: string; name: string; value: string }>;
 
 function createHeaderDraft(): HeaderDraft {
@@ -48,15 +42,15 @@ function createHeaderDraft(): HeaderDraft {
 }
 
 /**
- * One private MCP intent has one deterministic owner sequence: Register then
- * Prepare. OAuth is only opened from the owner-issued Prepare result; this
- * form never rereads the server or scans connector pages after the popup.
+ * URL creation keeps its own fields while the actor-owned workflow coordinates
+ * Register, fresh exact reads, Prepare and OAuth reconciliation. No connector
+ * page scan or popup notification substitutes for current owner facts.
  */
 export function UrlMcpForm({
-  client,
+  flow,
+  boundary,
   onCancel,
   onDone,
-  onRegistered,
   onAuthorizationNavigate,
   showTitle = true,
   title,
@@ -64,10 +58,10 @@ export function UrlMcpForm({
   showHeaders = false,
   showOAuth = true,
 }: {
-  client: HubClient;
+  flow: McpServerCreationFlow;
+  boundary: ProjectReadBoundary;
   onCancel: () => void;
   onDone: () => Promise<void>;
-  onRegistered?: () => void;
   onAuthorizationNavigate?: (url: string) => void;
   showTitle?: boolean;
   title?: string;
@@ -85,11 +79,9 @@ export function UrlMcpForm({
   ]);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const [registration, setRegistration] = useState<PreparedRegistration | null>(
-    null,
-  );
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const clearSecrets = useCallback(() => { setHeaders(current => current.map(header => ({ ...header, value: "" }))); setClientSecret(""); }, []);
+  const creation = useMcpServerCreation(flow, boundary, onCancel, onDone, clearSecrets, onAuthorizationNavigate);
+  const { state, completion, admitted, submitting, locked, editable, error, ready: isReady, needsOAuth: requiresOAuth } = creation;
   const configuredHeaders = headers.filter((header) => header.name.trim());
   const headerIsPartial =
     showHeaders &&
@@ -112,176 +104,27 @@ export function UrlMcpForm({
     !headerIsPartial &&
     !duplicateHeader &&
     !oauthIsPartial &&
-    !submitting;
-  const requiresOAuth = registration?.server.prepare_status === "needs_oauth";
-  const isReady = registration?.server.prepare_status === "ready";
-  const submitLabel = useMemo(
-    () => (submitting ? t("mcp.submitting") : t("mcp.save")),
-    [submitting, t],
-  );
-
-  const beginOAuth = async (prepared: PreparedRegistration): Promise<void> => {
-    if (
-      !client.beginMcpConnectorAuthorization ||
-      prepared.server.prepare_status !== "needs_oauth"
-    )
-      throw new Error("private MCP OAuth is unavailable");
-    await startOAuthPopup(async (signal) => {
-      const started = await client.beginMcpConnectorAuthorization(
-        prepared.connector.connector_id,
-        {
-          server_id: prepared.server.server_id,
-          expected_state_version: prepared.connector.state_version,
-        },
-        signal,
-      );
-      return {
-        connectorId: prepared.connector.connector_id,
-        authorizationUrl: started.authorization.authorization_url,
-        expiresAt: started.authorization.expires_at,
-      };
-    });
-  };
-
-  const startOAuthPopup = useMcpOAuthPopup({
-    ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
-    // The settings projection is the sole post-popup read owner.  Its parent
-    // closes this dialog and refreshes exactly once for success/error/close.
-    onReload: () => {
-      void onDone();
-    },
-  });
-
+    !submitting && !locked && flow.available;
   const registerAndPrepare = async (openOAuth: boolean): Promise<void> => {
-    if (
-      (registration === null && !canSubmit) ||
-      !client.registerPrivateMcpServer ||
-      !client.preparePrivateMcpServer
-    )
-      return;
-    setError("");
-    setSubmitting(true);
-    try {
-      const created =
-        registration === null
-          ? await client.registerPrivateMcpServer({
-              display_name: name.trim(),
-              server_url: url.trim(),
-              ...(showHeaders && configuredHeaders.length
-                ? {
-                    headers: configuredHeaders.map((header) => ({
-                      name: header.name.trim().toLowerCase(),
-                      value: header.value,
-                    })),
-                  }
-                : {}),
-              ...(showOAuth && clientId.trim()
-                ? {
-                    oauth_client: {
-                      client_id: clientId.trim(),
-                      client_secret: clientSecret,
-                    },
-                  }
-                : {}),
-            })
-          : registration;
-      // Registration and preparation are distinct owner operations. Persist
-      // the first confirmed result before starting the potentially remote
-      // Prepare phase, so a timeout/failure retries that same server instead
-      // of creating a second private aggregate.
-      setRegistration(created);
-      // A confirmed registration is visible to the owner before remote
-      // preparation. Keep the form open for recovery but refresh its list.
-      onRegistered?.();
-      // Values are write-only: retain neither header secrets nor the OAuth
-      // client secret after their one owner mutation has been issued.
-      setHeaders((current) =>
-        current.map((header) => ({ ...header, value: "" })),
-      );
-      setClientSecret("");
-      const prepared = await client.preparePrivateMcpServer(
-        created.server.server_id,
-        created.server.state_version,
-      );
-      setRegistration(prepared);
-      if (prepared.server.prepare_status === "ready") {
-        await onDone();
-        return;
-      }
-      if (openOAuth && prepared.server.prepare_status === "needs_oauth")
-        await beginOAuth(prepared);
-    } catch (cause) {
-      setError(
-        cause instanceof HubClientError &&
-          cause.code === "mcp_personal_server_url_conflict"
-          ? t("mcp.errDuplicateUrl")
-          : t("mcp.error"),
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    if (!canSubmit && !state.unknown && !state.registered) return;
+    await creation.save({ display_name: name.trim(), server_url: url.trim(),
+      ...(showHeaders && configuredHeaders.length ? { headers: configuredHeaders.map(header => ({ name: header.name.trim().toLowerCase(), value: header.value })) } : {}),
+      ...(showOAuth && clientId.trim() ? { oauth_client: { client_id: clientId.trim(), client_secret: clientSecret } } : {}),
+    }, openOAuth);
   };
+  const submitLabel = t(submitting ? "mcp.submitting" : state.unknown ? "mcp.retryOriginal" : "mcp.save");
 
-  if (registration !== null) {
-    return (
-      <section className={styles.urlMcpForm} aria-live="polite">
-        {showTitle ? (
-          <DialogTitle className={styles.urlMcpTitle}>
-            {registration.server.display_name}
-          </DialogTitle>
-        ) : null}
-        <p className={styles.urlWarning}>
-          {requiresOAuth
-            ? t("mcp.pending")
-            : isReady
-              ? t("mcp.active")
-              : t("mcp.error")}
-        </p>
-        {error ? (
-          <p className={styles.compactDialogError} role="alert">
-            {error}
-          </p>
-        ) : null}
-        <div className={styles.urlMcpActions}>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={submitting}
-            onClick={onCancel}
-          >
-            {t("mcp.cancel")}
-          </Button>
-          <span />
-          {requiresOAuth ? (
-            <Button
-              type="button"
-              disabled={submitting || !client.beginMcpConnectorAuthorization}
-              onClick={() => void beginOAuth(registration)}
-            >
-              {t("settings.connect")}
-            </Button>
-          ) : null}
-          {isReady ? (
-            <Button
-              type="button"
-              disabled={submitting}
-              onClick={() => void onDone()}
-            >
-              {t("mcp.save")}
-            </Button>
-          ) : null}
-          {!requiresOAuth && !isReady ? (
-            <Button
-              type="button"
-              disabled={submitting || !client.preparePrivateMcpServer}
-              onClick={() => void registerAndPrepare(false)}
-            >
-              {submitLabel}
-            </Button>
-          ) : null}
-        </div>
-      </section>
-    );
+  if (state.registered || completion !== "idle") {
+    return <section className={styles.urlMcpForm} aria-live="polite">
+      {showTitle ? <DialogTitle className={styles.urlMcpTitle}>{state.facts?.server.display_name ?? (state.name || name)}</DialogTitle> : null}
+      {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : <p className={styles.urlWarning}>{submitting ? t("mcp.submitting") : isReady ? t("mcp.active") : t("mcp.pending")}</p>}
+      {error || state.unknown ? <p className={styles.compactDialogError} role="alert">{t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}</p> : null}
+      <div className={styles.urlMcpActions}>
+        <Button type="button" variant="outline" onClick={creation.cancel}>{t("mcp.cancel")}</Button><span />
+        {requiresOAuth ? <Button type="button" disabled={!admitted || submitting || Boolean(state.unknown)} onClick={() => void creation.authorize()}>{t("settings.connect")}</Button> : null}
+        {isReady && !state.unknown || completion !== "idle" ? <Button type="button" disabled={!admitted || submitting} onClick={() => void creation.done()}>{t("mcp.creationDone")}</Button> : !requiresOAuth || state.unknown ? <Button type="button" disabled={!admitted || submitting} onClick={() => void registerAndPrepare(false)}>{submitLabel}</Button> : null}
+      </div>
+    </section>;
   }
 
   return (
@@ -292,6 +135,7 @@ export function UrlMcpForm({
         void registerAndPrepare(false);
       }}
     >
+      {!admitted ? <p className="sr-only" role="status">{t("mcp.creationSession")}</p> : null}
       {showTitle ? (
         <DialogTitle className={styles.urlMcpTitle}>
           {title ?? t("mcp.urlTitle")}
@@ -307,8 +151,9 @@ export function UrlMcpForm({
           id="url-mcp-name"
           autoFocus
           value={name}
+          readOnly={locked}
           placeholder={t("mcp.urlNamePlaceholder")}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => { if (editable()) setName(event.target.value); }}
         />
       </Field>
       <Field className={styles.urlMcpField}>
@@ -321,8 +166,9 @@ export function UrlMcpForm({
           <Input
             id="url-mcp-url"
             value={url}
+          readOnly={locked}
             placeholder="https://mcp.yourserver.com/mcp"
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => { if (editable()) setUrl(event.target.value); }}
           />
         </div>
         {invalidUrl ? (
@@ -355,9 +201,10 @@ export function UrlMcpForm({
                         count: index + 1,
                       })}
                       value={header.name}
+          readOnly={locked}
                       placeholder={t("mcp.customHeaderNamePlaceholder")}
                       onChange={(event) =>
-                        setHeaders((current) =>
+                        editable() && setHeaders((current) =>
                           current.map((candidate) =>
                             candidate.id === header.id
                               ? { ...candidate, name: event.target.value }
@@ -373,9 +220,10 @@ export function UrlMcpForm({
                       })}
                       type="password"
                       value={header.value}
+          readOnly={locked}
                       placeholder={t("mcp.customHeaderValuePlaceholder")}
                       onChange={(event) =>
-                        setHeaders((current) =>
+                        editable() && setHeaders((current) =>
                           current.map((candidate) =>
                             candidate.id === header.id
                               ? { ...candidate, value: event.target.value }
@@ -390,9 +238,9 @@ export function UrlMcpForm({
                       variant="ghost"
                       size="icon"
                       aria-label={`${t("mcp.customRemoveHeader")} ${index + 1}`}
-                      disabled={headers.length === 1}
+                      disabled={locked || headers.length === 1}
                       onClick={() =>
-                        setHeaders((current) =>
+                        editable() && setHeaders((current) =>
                           current.length === 1
                             ? current
                             : current.filter(
@@ -408,8 +256,9 @@ export function UrlMcpForm({
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={locked}
                   onClick={() =>
-                    setHeaders((current) => [
+                    editable() && setHeaders((current) => [
                       ...current,
                       createHeaderDraft(),
                     ])
@@ -427,7 +276,8 @@ export function UrlMcpForm({
                 aria-label="OAuth Client ID"
                 placeholder="OAuth 客户端 ID"
                 value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
+          readOnly={locked}
+                onChange={(event) => { if (editable()) setClientId(event.target.value); }}
                 autoComplete="off"
               />
               <Input
@@ -436,30 +286,31 @@ export function UrlMcpForm({
                 placeholder="OAuth 客户端密钥"
                 type="password"
                 value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
+          readOnly={locked}
+                onChange={(event) => { if (editable()) setClientSecret(event.target.value); }}
                 autoComplete="new-password"
               />
             </>
           ) : null}
         </div>
       ) : null}
-      {error ? (
+      {error || state.unknown ? (
         <p className={styles.compactDialogError} role="alert">
-          {error}
+          {t(state.unknown ? "mcp.serverCreateUnknown" : "mcp.error")}
         </p>
       ) : null}
       <p className={styles.urlWarning}>{t("mcp.urlWarning")}</p>
       <div className={styles.urlMcpActions}>
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={creation.cancel}>
           {t("mcp.cancel")}
         </Button>
         <span />
-        <Button type="submit" variant="outline" disabled={!canSubmit}>
+        <Button type="submit" variant="outline" disabled={!admitted || submitting || (!state.unknown && !canSubmit)}>
           {submitLabel}
         </Button>
         <Button
           type="button"
-          disabled={!canSubmit}
+          disabled={!admitted || submitting || (!state.unknown && !canSubmit)}
           onClick={() => void registerAndPrepare(true)}
         >
           {t("mcp.saveAndPublish")}

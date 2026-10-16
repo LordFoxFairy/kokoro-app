@@ -607,6 +607,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "資格",
   "mcp.loading": "読み込み中…",
   "mcp.loadError": "接続リストの読み込みに失敗しました",
+  "mcp.serverCreateUnknown": "作成または準備の結果は未確認です。再試行は元のリクエストを再開し、重複して作成しません。",
   "mcp.creationSession": "ログイン状態を確認しています…",
   "mcp.apiCreateUnknown": "追加結果は未確認です。再試行は元のリクエストを再開し、別の API は作成しません。",
   "mcp.retryOriginal": "元のリクエストを再試行",

@@ -569,6 +569,7 @@ export function McpProjectionRead({
               client.preparePrivateMcpServer!(
                 editor.server!.server_id,
                 editor.server!.state_version,
+                crypto.randomUUID(),
               ),
             );
           }}

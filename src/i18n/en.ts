@@ -826,6 +826,7 @@ export const en: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Credentials",
   "mcp.loading": "Loading…",
   "mcp.loadError": "Failed to load connections",
+  "mcp.serverCreateUnknown": "Creation or preparation is not confirmed. Retry resumes the original request without creating again.",
   "mcp.creationSession": "Confirming your session…",
   "mcp.apiCreateUnknown": "Creation is not confirmed. Retry resumes the original request instead of creating another API.",
   "mcp.retryOriginal": "Retry original request",

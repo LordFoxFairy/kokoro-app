@@ -1269,3 +1269,6 @@ Custom API 创建恢复状态只在稳定 actor/client 的 App 内存 holder 中
 
 
 JSON创建与API创建在同一稳定actor/client provider拥有两个明确且互相隔离的内存槽；共享纯生命周期不维护额外profile/server投影。原始JSON可能含header secret，故只在当前actor RAM保存未知请求，ACK清原文及body，换actor/真正卸载清理；无browser持久存储、URL或日志，没有新owner Schema。
+
+
+Custom/URL 共用同一明确的私有 MCP actor/client 创建槽，独立于 API/JSON 单命令槽。未知 Register 原正文（可含 header/OAuth secret）与 Prepare 原 server/version/key 只在 RAM；确认后清注册正文/实际 secret 草稿，仅保精确 server/connector locator。准入或窗口退休立即清 owner facts，换 actor/真正卸载清全部意图；fresh GET 只形成当代显示事实，不覆盖未知原命令。无 browser 持久存储、日志、数据库或新 Schema。

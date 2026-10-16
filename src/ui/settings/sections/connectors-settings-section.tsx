@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 
 import type { HubClient } from "@/hub/client";
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
-import { invalidateMcpConnectorProjection } from "@/ui/mcp/use-mcp-projection";
 import { McpContent } from "@/ui/mcp/mcp-content";
 import { McpCreateDialog } from "@/ui/mcp/mcp-create-dialog";
 import type { McpCreateMode } from "@/ui/mcp/mcp-panel-model";
@@ -53,17 +52,6 @@ export function ConnectorsSettingsSection({
           open
           onOpenChange={(open) => {
             if (!open) setMode(null);
-          }}
-          onDone={async () => {
-            const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;
-            if (mode === "form" || mode === "url") {
-              // Register and remote Prepare/OAuth can settle in different reads.
-              if (identity != null) invalidateMcpConnectorProjection(client, identity);
-            }
-          }}
-          onRegistered={() => {
-            const identity = preview ? "preview" : readBoundary?.admitted ? readBoundary.subject : null;
-            if (identity != null) invalidateMcpConnectorProjection(client, identity);
           }}
           returnFocusRef={returnFocusRef}
         />

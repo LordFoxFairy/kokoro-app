@@ -2429,3 +2429,10 @@ AppFrameOverlaySurfaces 在稳定 app segment 内持有唯一 ConnectorCreationP
 沿既有 App owner/命令协议扩展：JSON 原子导入与 Custom API 创建共用仅管理单个内存命令的纯生命周期函数（准入、冻结 key/body、显式恢复、StrictMode lease、退休和完成），不引入服务注册表/通用网络代理。各自保留 typed validator、client 调用和确认投影失活；Register/Prepare/OAuth 仍为独立后继，不塞进通用状态机。稳定 AppFrame 的唯一 ConnectorCreationProvider 明确持有 API 与 JSON 两个槽，窗口以上保留未知请求，actor/client 更换全退役；删除旧 API-only context 名称而不留兼容 alias。
 
 两表单共用本地完成/关闭生命周期 hook，UI 和输入校验各自独立。JSON 原文可含secret，只在当前actor RAM；发送前冻结完整文档和合法key，未知结果不得编辑后换key重试；ACK清原文及命令，关闭重开只恢复未知命令而非新事实。Hub client沿原schema及现mcpPrivateJsonImportMatches绑定ACK，owner继续原子导入全部项并持久receipt；无wire/Schema/权限/后端依赖变化。失败恢复仍显式，generic412不当成未提交。验证原API既有回归不退化，JSON准入/换actor/原key-body/关闭重开/迟到ACK，最后主路径浏览器与资源回收。
+
+
+### 私有 MCP Register→Prepare 创建恢复（2026-10-16）
+
+仍属既有 App MCP：独立 typed 工作流持有注册和准备两阶段原命令，不把多阶段/私有读塞进单步 API/JSON 纯核。稳定 actor/client provider 持一份私有 MCP 创建工作流，Custom/URL 两种独立表单共享命令意图；每个表单有独立 window scope。准入/窗口退休清 facts、取消旧等待，未知注册/准备保原key/body，换actor/真正卸载清理。Register ACK只留精确server/connector locator并清secret；每次新的Prepare先经现有两个精确GET取得本代CAS；未知Prepare只恢复原key/version，不凭GET推断ACK。旧ACK仍失活原主体，禁止旧窗口/代际自动继续Prepare/OAuth。
+
+本地Hub方法改显式caller key，已有connector GET补本地client入口但不新增wire；原owner原子注册、准备external-command/receipt、指纹与原生OAuth协议不改。表单之外的详情Prepare caller随签名显式提供key，不把其完整未知命令恢复冒成本创建切片已完成。OAuth沿原popup接本代window/admission lifecycle，只用fresh精确目标；授权回调/关闭仅重新核对owner，不凭popup事件伪造成功。尚无真实OAuth提供方闭环证据时保持未验。

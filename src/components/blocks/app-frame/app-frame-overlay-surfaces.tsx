@@ -9,7 +9,7 @@ import type { ProjectReadBoundary } from "@/ui/auth/use-session-state";
 import { browserHubClient } from "@/ui/shell/page-clients";
 import { warmCustomApiProjection } from "@/ui/mcp/use-custom-api-projection";
 import { ConnectorCreationProvider } from "@/ui/mcp/connector-creation-context";
-import { invalidateMcpConnectorProjection, warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
+import { warmMcpProjection } from "@/ui/mcp/use-mcp-projection";
 import { createManusSkillHubClient, retainManusSkillHubClient } from "@/ui/skills/manus-skill-client";
 import { warmSkillsPool } from "@/ui/skills/skills-panel";
 
@@ -127,13 +127,6 @@ export function AppFrameOverlaySurfaces({
           open
           onOpenChange={(open) => {
             if (!open) setMcpCreateMode(null);
-          }}
-          onRegistered={() => {
-            if (connectorIdentity !== null) invalidateMcpConnectorProjection(browserHubClient({ preview }), connectorIdentity);
-          }}
-          onDone={async () => {
-            if ((mcpCreateMode === "form" || mcpCreateMode === "url") && connectorIdentity !== null)
-              invalidateMcpConnectorProjection(browserHubClient({ preview }), connectorIdentity);
           }}
           returnFocusRef={mcpCreateReturnFocusRef}
         />

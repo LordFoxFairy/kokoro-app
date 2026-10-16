@@ -1619,3 +1619,6 @@ Custom API 创建恢复仅调整 Web 内部 client API：createCustomApi(input, 
 
 
 MCP JSON创建恢复的本地client签名为importPrivateMcpJson(configJson, key, signal?)，与API创建一样显式caller key，无默认新key。原/v1 browser/BFF/Platform contract、header及config_json wire不变；完整原文冻结、同key恢复，ACK沿既有mcpPrivateJsonImportMatches绑定。原子导入不主动Prepare、不逐条Register，原生OAuth没有新增header。
+
+
+私有 MCP 创建的本地 client 签名为 registerPrivateMcpServer(input, key, signal?) 与 preparePrivateMcpServer(serverId, expectedStateVersion, key, signal?)；均须显式合法 caller key，不再每次调用生成新 key。已有 GET /mcp/connectors/:id 补 Hub 读取入口并严格核对精确 connector ID，与 GET /mcp/servers/:id 配对，不新增 wire。Register/Prepare 响应沿既有结构与 mcpPrivateServerMatches 绑定；新 Prepare 用 fresh server CAS，未知 Prepare 恢复原 key/version，不能把 GET 或 popup 通知当 ACK。原生 OAuth Begin/Complete 协议没有新增幂等 header。

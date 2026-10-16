@@ -8,9 +8,7 @@ import type { HubClient } from "@/hub/client";
 
 import styles from "./mcp-create-dialog.module.css";
 import type { McpCreateMode } from "./mcp-panel-model";
-import { CustomMcpForm } from "./mcp-custom-form";
-import { UrlMcpForm } from "./mcp-url-form";
-import { CustomApiCreationForm, JsonMcpCreationForm } from "./connector-creation-context";
+import { CustomApiCreationForm, JsonMcpCreationForm, PrivateMcpCreationForm } from "./connector-creation-context";
 
 export function McpCreateDialog({
   client,
@@ -18,7 +16,6 @@ export function McpCreateDialog({
   open,
   onOpenChange,
   onDone,
-  onRegistered,
   returnFocusRef,
 }: {
   client: HubClient;
@@ -26,8 +23,6 @@ export function McpCreateDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone?: () => Promise<void>;
-  /** A private-server aggregate may persist before remote Prepare completes. */
-  onRegistered?: () => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const t = useT();
@@ -75,7 +70,7 @@ export function McpCreateDialog({
             focusFrame.current = null;
             if (committed.current !== lifetime) return;
             document.getElementById(
-              mode === "custom-api" ? "custom-api-name" : "url-mcp-name",
+              mode === "custom-api" ? "custom-api-name" : "custom-mcp-name",
             )?.focus();
           });
         }}
@@ -90,20 +85,8 @@ export function McpCreateDialog({
           <CustomApiCreationForm onCancel={close} onDone={complete} />
         ) : mode === "json" ? (
           <JsonMcpCreationForm onCancel={close} onDone={complete} />
-        ) : mode === "url" ? (
-          <UrlMcpForm
-            client={client}
-            onCancel={close}
-            onDone={complete}
-            {...(onRegistered === undefined ? {} : { onRegistered })}
-          />
         ) : (
-          <CustomMcpForm
-            client={client}
-            onDone={complete}
-            {...(onRegistered === undefined ? {} : { onRegistered })}
-            onCancel={close}
-          />
+          <PrivateMcpCreationForm mode={mode} onCancel={close} onDone={complete} />
         )}
       </DialogContent>
     </Dialog>

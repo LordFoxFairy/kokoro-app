@@ -1052,7 +1052,7 @@ describe("hub client", () => {
         publicResponse({
           data: {
             server: { ...server, state_version: "3" },
-            connector: { ...connector, state_version: "3" },
+            connector: { ...connector, enabled: true, state_version: "3" },
             declarations: [],
             replayed: false,
           },
@@ -1079,10 +1079,11 @@ describe("hub client", () => {
       server_url: "https://private.example/mcp",
       headers: [{ name: "x-api-key", value: "WRITE_ONLY" }],
       oauth_client: { client_id: "client-id", client_secret: "WRITE_ONLY" },
-    });
+    }, "register-command-key");
     const prepared = await client.preparePrivateMcpServer?.(
       "server-private",
       registered!.server.state_version,
+      "prepare-command-key",
     );
     const updated = await client.updatePrivateMcpServer?.("server-private", {
       expected_state_version: prepared!.server.state_version,
@@ -1110,7 +1111,10 @@ describe("hub client", () => {
     );
     expect(registered?.server).not.toHaveProperty("client_secret");
     expect(registered?.server.headers[0]).not.toHaveProperty("value");
-    for (const [, init] of fetchMock.mock.calls)
+    expect(fetchMock.mock.calls.slice(0, 2).map(([, init]) =>
+      new Headers((init as RequestInit).headers).get("idempotency-key"),
+    )).toEqual(["register-command-key", "prepare-command-key"]);
+    for (const [, init] of fetchMock.mock.calls.slice(2))
       expect(
         new Headers((init as RequestInit).headers).get("idempotency-key"),
       ).toMatch(/^mcp-private-server:/);
@@ -1835,5 +1839,25 @@ it.each(["", "invalid\nkey", "k".repeat(192)])("MCP JSON import rejects an inval
   const request = vi.fn<typeof fetch>()
   vi.stubGlobal("fetch", request)
   await expect(createHubClient().importPrivateMcpJson!("{}", key)).rejects.toBeInstanceOf(Error)
+  expect(request).not.toHaveBeenCalled()
+})
+
+
+it("reads an exact MCP connector and rejects a mismatched owner locator", async () => {
+  const connector = { connector_id: "exact-connector", connector_type: "mcp", provider_key: "private-exact", server_id: "exact-server", status: "pending", approved_scopes: [], enabled: false, state_version: "7" }
+  const request = vi.fn<typeof fetch>().mockResolvedValueOnce(publicResponse({ data: { connector } }))
+    .mockResolvedValueOnce(publicResponse({ data: { connector: { ...connector, connector_id: "wrong-connector" } } }))
+  vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.getMcpConnector!("exact-connector")).resolves.toEqual(connector)
+  expect(request.mock.calls[0]?.[0]).toBe("/api/hub/mcp/connectors/exact-connector")
+  await expect(hub.getMcpConnector!("exact-connector")).rejects.toMatchObject({ reason: "parse" })
+})
+
+it.each(["", "invalid\nkey", "k".repeat(192)])("private MCP creation commands reject invalid caller keys without I/O", async key => {
+  const request = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", request)
+  const hub = createHubClient()
+  await expect(hub.registerPrivateMcpServer!({ display_name: "Valid MCP", server_url: "https://mcp.example.test/valid" }, key)).rejects.toBeInstanceOf(Error)
+  await expect(hub.preparePrivateMcpServer!("valid-server", "1", key)).rejects.toBeInstanceOf(Error)
   expect(request).not.toHaveBeenCalled()
 })

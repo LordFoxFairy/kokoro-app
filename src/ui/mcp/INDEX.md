@@ -21,7 +21,8 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
 - `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
 - `connector-creation-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API 与 JSON 两个真实消费者共用，不是网络代理或命令注册表。
-- `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-creation-context.tsx`：各自 typed 输入/创建命令与稳定 App shell 的两个 actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
+- `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-creation-context.tsx`：各自 typed 输入/创建命令与稳定 App shell 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
+- `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
 
 
@@ -30,11 +31,11 @@ MCP 注册／原子导入与已确认的个人命令，统一失活当前 client
 
 ## 同 actor 登录重核
 
-`mcp-create-dialog.tsx` 单独拥有创建窗口的关闭：已提交的 client／mode／open 生命周期变化或卸载后，旧完成仍通知其原确认回调失活投影，但不关闭后开的创建窗口；Settings 不在确认回调内第二次关闭。排队的首次聚焦在窗口退休时取消，迟到帧也不操作新窗口。此处不把取消当作写入回滚，也不取消／自动重试 owner 命令；创建表单自身的准入、Register→Prepare 及未知结果恢复仍是后继。
+`mcp-create-dialog.tsx` 单独拥有创建窗口的关闭：已提交的 client／mode／open 生命周期变化或卸载后，旧完成仍通知其原确认回调失活投影，但不关闭后开的创建窗口；Settings 不在确认回调内第二次关闭。排队的首次聚焦在窗口退休时取消，迟到帧也不操作新窗口。此处不把取消当作写入回滚，也不取消／自动重试 owner 命令；API/JSON 单步创建与 Custom/URL 两阶段创建各自持有原命令恢复；详情编辑的 Prepare 未知恢复仍是后继。
 
 查询、分类、cursor、目录开关和精确 connector/server、provider/connection、API profile locator 属于 actor 稳定的展示意图；Settings 与 Plugins 不因临时失准入卸载整面板。所有 owner 投影、私有详情、错误/忙态与删除确认按 client/主体/准入代际退休；失准入只显示无私有数据的详情壳，恢复后从新页精确找回原资源，缺失或读取失败保留显式重试，不按名称或新绑定替代。换 actor（包括 A→B→A）清空意图。
 
-已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。详情协调器的 OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停。Custom API 创建现使用独立 actor flow，保同 actor 输入，重核只读、换 actor 清空、取消旧等待后只显式恢复原 key/body；未知期间禁止新命令，确认后完成或当前窗口关闭。MCP 三创建表单的准入／Register→Prepare／OAuth 和未知恢复仍为独立后继，不冒称已覆盖；整个文档重载不持久保存创建 secret/key。
+已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。详情协调器的 OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停。Custom API 创建现使用独立 actor flow，保同 actor 输入，重核只读、换 actor 清空、取消旧等待后只显式恢复原 key/body；未知期间禁止新命令，确认后完成或当前窗口关闭。JSON 原子导入及 Custom/URL Register→Prepare 也使用独立 actor/client 命令意图；原生 OAuth 接当前 window/admission，fresh owner 才决定 ready，不以 popup 通知作为完成证据。真实第三方 OAuth 提供方闭环、详情 Prepare 未知恢复仍未验收；整个文档重载不持久保存创建 secret/key。
 
 
 配置编辑的准入重核不重建表单或文本控件：尚未明确修改的owner值和已配置header/env描述立即清空，dirty用户输入仅在本actor内保留；控件readonly且保存/Prepare/管理/草稿增删暂停，Close/Retry仍可用。`use-mcp-editor-selection.ts`只保存字段ID、选择范围/方向/文本长度和控件内部scroll，不保字段值、已移除控件或凭据；恢复时限定当前仍聚焦的本表单控件，裁剪并更新范围，承接pending期间的新选择而非抢回旧焦点。原生不支持selection API的URL控件不强设range；generic provider editor/创建表单不冒称已覆盖本片。

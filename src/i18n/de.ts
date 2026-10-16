@@ -548,6 +548,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Anmeldeinformationen",
   "mcp.loading": "Laden…",
   "mcp.loadError": "Das Laden der Verbindungsliste ist fehlgeschlagen",
+  "mcp.serverCreateUnknown": "Erstellung oder Vorbereitung ist nicht bestätigt. Ein erneuter Versuch setzt die ursprüngliche Anfrage fort, ohne erneut zu erstellen.",
   "mcp.creationSession": "Sitzung wird bestätigt…",
   "mcp.apiCreateUnknown": "Die Erstellung ist nicht bestätigt. Erneut versuchen setzt die ursprüngliche Anfrage fort, ohne eine weitere API anzulegen.",
   "mcp.retryOriginal": "Ursprüngliche Anfrage wiederholen",

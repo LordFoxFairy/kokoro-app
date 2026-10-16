@@ -548,6 +548,7 @@ export const ru: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Реквизиты для входа",
   "mcp.loading": "Загрузка…",
   "mcp.loadError": "Не удалось загрузить список подключений",
+  "mcp.serverCreateUnknown": "Результат создания или подготовки не подтверждён. Повтор продолжит исходный запрос без повторного создания.",
   "mcp.creationSession": "Проверяем сеанс…",
   "mcp.apiCreateUnknown": "Создание не подтверждено. Повтор возобновит исходный запрос, не создавая ещё один API.",
   "mcp.retryOriginal": "Повторить исходный запрос",

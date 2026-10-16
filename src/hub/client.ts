@@ -7,6 +7,8 @@ import { createSkillPublishClient } from "./skill-publish-client";
 import {
   mcpConnectorPageSchema,
   mcpConnectorSchema,
+  mcpConnectorIdSchema,
+  mcpPrivateServerMatches,
   mcpConnectorErrorAllowed,
   mcpConnectorErrorSchema,
   mcpConnectorProviderPageSchema,
@@ -518,6 +520,7 @@ async function requestMcpConnector<T extends ZodTypeAny>(
     | McpConnectorAuthorizationOperation
     | McpPrivateServerOperation
     | "connectors"
+    | "connector"
     | "providers",
   path: string,
   schema: T,
@@ -850,8 +853,10 @@ export type HubClient = {
     input: CustomApiRemoveInput,
     signal?: AbortSignal,
   ) => Promise<void>;
+  getMcpConnector?: (connectorId: string, signal?: AbortSignal) => Promise<McpConnector>;
   registerPrivateMcpServer?: (
     input: McpPrivateServerRegistrationInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerRegistration>;
   importPrivateMcpJson?: (
@@ -866,6 +871,7 @@ export type HubClient = {
   preparePrivateMcpServer?: (
     serverId: string,
     expectedStateVersion: string,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<McpPrivateServerPrepare>;
   updatePrivateMcpServer?: (
@@ -1070,22 +1076,31 @@ export function createHubClient(): HubClient {
         signal,
       );
     },
-    registerPrivateMcpServer: (input, signal) =>
+    getMcpConnector: async (connectorId, signal) => {
+      const id = mcpConnectorIdSchema.parse(connectorId);
+      const result = await requestMcpConnector("connector", `/mcp/connectors/${encodeURIComponent(id)}`,
+        z.object({ connector: mcpConnectorSchema }).strict(), undefined, signal);
+      if (result.connector.connector_id !== id) throw new HubClientError("parse", "MCP connector locator mismatch", null, null);
+      return result.connector;
+    },
+    registerPrivateMcpServer: async (input, key, signal) =>
       requestMcpConnector(
         "registerServer",
         "/mcp/servers",
         mcpPrivateServerRegistrationSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateServerRegistrationInputSchema.parse(input),
           ),
         },
         signal,
-      ),
+      ).then(result => {
+        if (!mcpPrivateServerMatches("registerServer", { data: result }, undefined, input))
+          throw new HubClientError("parse", "MCP registration ACK binding mismatch", null, null);
+        return result;
+      }),
     importPrivateMcpJson: async (configJson, key, signal) =>
       requestMcpConnector(
         "importJson",
@@ -1114,16 +1129,14 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).server,
-    preparePrivateMcpServer: (serverId, expectedStateVersion, signal) =>
+    preparePrivateMcpServer: async (serverId, expectedStateVersion, key, signal) =>
       requestMcpConnector(
         "prepareServer",
         `/mcp/servers/${encodeURIComponent(serverId)}/prepare`,
         mcpPrivateServerPrepareSchema,
         {
           method: "POST",
-          headers: idempotencyHeaders("mcp-private-server", {
-            ...JSON_HEADERS,
-          }),
+          headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) },
           body: JSON.stringify(
             mcpPrivateServerPrepareInputSchema.parse({
               expected_state_version: expectedStateVersion,
@@ -1131,7 +1144,11 @@ export function createHubClient(): HubClient {
           ),
         },
         signal,
-      ),
+      ).then(result => {
+        if (!mcpPrivateServerMatches("prepareServer", { data: result }, serverId, { expected_state_version: expectedStateVersion }))
+          throw new HubClientError("parse", "MCP preparation ACK binding mismatch", null, null);
+        return result;
+      }),
     updatePrivateMcpServer: (serverId, input, signal) =>
       requestMcpConnector(
         "updateServer",

@@ -548,6 +548,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "신임장",
   "mcp.loading": "로드 중…",
   "mcp.loadError": "연결 목록을 로드하지 못했습니다.",
+  "mcp.serverCreateUnknown": "생성 또는 준비 결과가 확인되지 않았습니다. 재시도는 중복 생성 없이 원래 요청을 재개합니다.",
   "mcp.creationSession": "로그인 상태를 확인하는 중…",
   "mcp.apiCreateUnknown": "추가 결과가 확인되지 않았습니다. 다시 시도하면 새 API를 만들지 않고 원래 요청을 복구합니다.",
   "mcp.retryOriginal": "원래 요청 다시 시도",

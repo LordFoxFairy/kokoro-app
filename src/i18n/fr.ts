@@ -548,6 +548,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "mcp.tabSecrets": "Informations d'identification",
   "mcp.loading": "Chargement…",
   "mcp.loadError": "Le chargement de la liste de connexion a échoué",
+  "mcp.serverCreateUnknown": "La création ou la préparation n’est pas confirmée. Réessayer reprend la requête d’origine sans recréer.",
   "mcp.creationSession": "Vérification de votre session…",
   "mcp.apiCreateUnknown": "La création n’est pas confirmée. Réessayer reprend la demande initiale sans créer une autre API.",
   "mcp.retryOriginal": "Réessayer la demande initiale",

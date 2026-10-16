@@ -890,6 +890,7 @@ export const zh = {
   "mcp.tabSecrets": "凭据",
   "mcp.loading": "正在加载…",
   "mcp.loadError": "连接列表加载失败",
+  "mcp.serverCreateUnknown": "创建或准备结果尚未确认。重试会恢复原请求，不会重新创建。",
   "mcp.creationSession": "正在确认登录状态…",
   "mcp.apiCreateUnknown": "添加结果尚未确认。重试会恢复原请求，不会重新创建。",
   "mcp.retryOriginal": "重试原请求",
