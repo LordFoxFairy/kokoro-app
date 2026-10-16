@@ -24,7 +24,7 @@ const categories = {
 type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
 type ManusSkillHubClient = Omit<HubClient, "listSkillCatalog"> & {
   listSkillCatalog: (
-    input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { category?: CatalogSkillCategory; signal?: AbortSignal },
+    input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { category?: CatalogSkillCategory; pageSize?: number; shuffle?: boolean; signal?: AbortSignal },
   ) => Promise<SkillCatalog>
 }
 
@@ -216,8 +216,9 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
       const signal = input.signal === undefined ? controller.signal : AbortSignal.any([controller.signal, input.signal])
       const [hub, installed] = await Promise.all([
         post("ListHubSkills", {
-          pageSize: 30,
+          pageSize: input.pageSize ?? 30,
           includeOfficialSkills: true,
+          ...(input.shuffle === undefined ? {} : { shuffle: input.shuffle }),
           ...(input.query?.trim() ? { query: input.query.trim() } : {}),
           ...(tag === undefined ? {} : { tag }),
           ...(input.cursor ? { pageToken: input.cursor } : {}),

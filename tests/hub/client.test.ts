@@ -1492,6 +1492,25 @@ it("accepts APPS only on current catalog cards and keeps unknown catalog categor
   ).toBe(false);
 });
 
+it("keeps per-read marketplace paging separate from other consumers sharing the admitted client", async () => {
+  const { createManusSkillHubClient } = await import("@/ui/skills/manus-skill-client");
+  const calls: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("ListHubSkills")) {
+      calls.push(JSON.parse(String(init?.body)));
+      return jsonResponse({ skills: [], tagOptions: {} });
+    }
+    return jsonResponse({ userAddedSkills: [], officialSkills: [] });
+  }));
+  const client = createManusSkillHubClient(createHubClient(), { admitted: true, subject: "shared-paging-reader", generation: 1 });
+  await client.listSkillCatalog({ pageSize: 9, shuffle: true });
+  await client.listSkillCatalog();
+  expect(calls).toEqual([
+    { pageSize: 9, shuffle: true, includeOfficialSkills: true },
+    { pageSize: 30, includeOfficialSkills: true },
+  ]);
+});
+
 it("preserves catalog revision Skill ID separately from series and checksum for package reads", async () => {
   const { createManusSkillHubClient } =
     await import("@/ui/skills/manus-skill-client");

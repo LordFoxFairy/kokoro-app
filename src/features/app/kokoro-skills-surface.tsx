@@ -95,17 +95,21 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     return () => clearTimeout(timer)
   }, [query])
   const catalogFilters = useMemo(() => ({
+    pageSize: 9,
     ...(committedQuery ? { query: committedQuery } : {}),
     ...(category === "all" ? {} : { category }),
   }), [category, committedQuery])
-  // The unfiltered entry retains the shared Settings/prewarm resource. Each
-  // filtered cursor belongs to its exact query/category and admitted client.
+  // Paging policy belongs to this surface, not the shared client. Keep its
+  // nine-card random first page separate from other consumers' cached pages.
   const catalogNamespace = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client)
   const catalogKey = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client,
-    committedQuery || category !== "all" ? JSON.stringify([committedQuery, category]) : "")
+    JSON.stringify(["marketplace", 9, committedQuery, category]))
   const resource = useResource<SkillCatalog>(
     catalogKey,
-    useCallback(() => client.listSkillCatalog(catalogFilters), [catalogFilters, client]),
+    useCallback(() => client.listSkillCatalog({
+      ...catalogFilters,
+      ...(catalogFilters.query === undefined && catalogFilters.category === undefined ? { shuffle: true } : {}),
+    }), [catalogFilters, client]),
     { revalidateOnSubscribe: false },
   )
   const catalog = readBoundary.admitted && readBoundary.subject !== null ? resource : { ...resource, data: undefined, error: undefined, loading: true }
