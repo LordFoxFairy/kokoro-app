@@ -121,6 +121,7 @@ export function SettingsModal({
   const teamClient = useMemo(() => browserTeamClient({ preview }), [preview]);
   useWarmMcpProjection({
     client: hubClient,
+    readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     identity: preview
       ? "preview"
       : readBoundary?.admitted === true
@@ -140,8 +141,9 @@ export function SettingsModal({
     return warmCustomApiProjection({
       client: hubClient,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
-  }, [connectorIdentity, hubClient]);
+  }, [connectorIdentity, hubClient, preview, readBoundary?.generation]);
   const selectTab = (next: SettingsTab): void => {
     setLocalTab({ source: initialTab, value: next });
     onTabChange?.(next);

@@ -34,8 +34,12 @@ export function CustomApiDetailDialog({
   onClose,
   onSave,
   onDelete,
+  pendingError = false,
+  onRetry,
 }: {
-  profile: CustomApiProfile;
+  profile: CustomApiProfile | null;
+  pendingError?: boolean;
+  onRetry?: () => void;
   actionError: boolean;
   busy: boolean;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -46,12 +50,16 @@ export function CustomApiDetailDialog({
   const t = useT();
   const [editing, setEditing] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
-  const [name, setName] = useState(profile.name);
-  const [instructions, setInstructions] = useState(profile.instructions ?? "");
+  const [nameDraft, setName] = useState<string | null>(null);
+  const [instructionsDraft, setInstructions] = useState<string | null>(null);
+  const name = nameDraft ?? profile?.name ?? "";
+  const instructions = instructionsDraft ?? profile?.instructions ?? "";
+  const [facts, setFacts] = useState(profile);
+  if (facts !== profile) { setFacts(profile); setDeleteArmed(false); }
   const [secrets, setSecrets] = useState<SecretDraft[]>([]);
   const configuredNames = useMemo(
-    () => new Set(profile.environment.map(({ name }) => name)),
-    [profile.environment],
+    () => new Set(profile?.environment.map(({ name }) => name) ?? []),
+    [profile],
   );
   const valid =
     name.trim().length > 0 &&
@@ -60,7 +68,7 @@ export function CustomApiDetailDialog({
     !secrets.some((item) => configuredNames.has(item.name.trim()));
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid) return;
+    if (!valid || !profile) return;
     onSave({
       expected_state_version: profile.state_version,
       name: name.trim(),
@@ -95,7 +103,12 @@ export function CustomApiDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {editing ? (
+        {!profile ? (
+          <section className={styles.detail} aria-busy={!pendingError}>
+            <header className={styles.detailHero}><DialogTitle>自定义 API</DialogTitle></header>
+            <div className={styles.detailBody}>{pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}</div>
+          </section>
+        ) : editing ? (
           <form
             className={`${styles.configuration} ${styles.apiConfiguration}`}
             onSubmit={save}

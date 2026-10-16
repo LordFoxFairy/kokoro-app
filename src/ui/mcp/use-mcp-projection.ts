@@ -38,7 +38,7 @@ type ProjectionSubscription = {
 const inflight = new WeakMap<object, Map<string, ProjectionFlight>>();
 const resolved = new WeakMap<
   object,
-  Map<string, McpConnectorProviderPage | McpConnectorPage>
+  Map<string, { generation: number; data: McpConnectorProviderPage | McpConnectorPage }>
 >();
 
 // A confirmed connector projection is safe to retain for this browser tab: it
@@ -105,6 +105,7 @@ function projectionRequestKey(
   cursor: string | null,
   generation: number,
   revision = 0,
+  readGeneration = 0,
 ): string {
   return JSON.stringify([
     identity,
@@ -112,14 +113,17 @@ function projectionRequestKey(
     generation,
     resource,
     revision,
+    readGeneration,
   ]);
 }
 
 function cached<T extends McpConnectorProviderPage | McpConnectorPage>(
   client: HubClient,
   key: string,
+  generation = 0,
 ): T | undefined {
-  return resolved.get(client)?.get(key) as T | undefined;
+  const entry = resolved.get(client)?.get(key);
+  return entry?.generation === generation ? entry.data as T : undefined;
 }
 
 function sessionCached(
@@ -148,6 +152,7 @@ function remember(
   client: HubClient,
   key: string,
   value: McpConnectorProviderPage | McpConnectorPage,
+  generation: number,
   session?: {
     resource: McpProjectionResource;
     identity: string;
@@ -159,7 +164,7 @@ function remember(
     entries = new Map();
     resolved.set(client, entries);
   }
-  entries.set(key, value);
+  entries.set(key, { generation, data: value });
   if (!session || typeof window === "undefined" || session.cursor !== null)
     return;
   try {
@@ -237,33 +242,37 @@ function subscribe(
 export function warmMcpProjection({
   client,
   identity,
+  readGeneration = 0,
 }: {
   client: HubClient;
   identity: string;
+  readGeneration?: number;
 }): () => void {
   const warm = (resource: McpProjectionResource): (() => void) => {
     const cursor = null;
     const cacheKey = projectionCacheKey(resource, identity, cursor);
-    if (cached(client, cacheKey) !== undefined) return () => undefined;
+    if (cached(client, cacheKey, readGeneration) !== undefined) return () => undefined;
     const revision = resource === "connectors" ? connectorRevision(client, identity).value : 0;
     const subscription = subscribe(
       client,
-      projectionRequestKey(resource, identity, cursor, 0, revision),
+      projectionRequestKey(resource, identity, cursor, 0, revision, readGeneration),
       cursor,
       resource,
       identity,
     );
+    let active = true;
     void subscription.promise.then(
       (next) => {
+        if (!active) return;
         if (resource === "connectors" && connectorRevision(client, identity).value !== revision) return;
         if (resource === "providers" && next.providers)
-          remember(client, cacheKey, next.providers, {
+          remember(client, cacheKey, next.providers, readGeneration, {
             resource,
             identity,
             cursor,
           });
         if (resource === "connectors" && next.connectors)
-          remember(client, cacheKey, next.connectors, {
+          remember(client, cacheKey, next.connectors, readGeneration, {
             resource,
             identity,
             cursor,
@@ -271,7 +280,7 @@ export function warmMcpProjection({
       },
       () => undefined,
     );
-    return subscription.release;
+    return () => { active = false; subscription.release(); };
   };
   const releases = [warm("providers"), warm("connectors")];
   return () => releases.forEach((release) => release());
@@ -281,14 +290,16 @@ export function warmMcpProjection({
 export function useWarmMcpProjection({
   client,
   identity,
+  readGeneration = 0,
 }: {
   client: HubClient;
   identity: string | null;
+  readGeneration?: number;
 }): void {
   useEffect(() => {
     if (identity === null) return;
-    return warmMcpProjection({ client, identity });
-  }, [client, identity]);
+    return warmMcpProjection({ client, identity, readGeneration });
+  }, [client, identity, readGeneration]);
 }
 
 export function useMcpProjection({
@@ -297,6 +308,8 @@ export function useMcpProjection({
   cursor,
   view,
   connectorRefreshKey = 0,
+  admitted = true,
+  readGeneration = 0,
 }: {
   client: HubClient;
   identity: string;
@@ -304,6 +317,8 @@ export function useMcpProjection({
   view: "catalog" | "connections";
   /** External mutation generation; bypasses a stale cached connector page. */
   connectorRefreshKey?: number;
+  admitted?: boolean;
+  readGeneration?: number;
 }) {
   const revision = connectorRevision(client, identity);
   const subscribeRevision = useCallback((listener: () => void) => {
@@ -319,22 +334,23 @@ export function useMcpProjection({
     cached<McpConnectorProviderPage>(
       client,
       projectionCacheKey("providers", identity, null),
+      readGeneration,
     ) ??
-    (sessionCached("providers", identity, null) as
-      | McpConnectorProviderPage
-      | undefined);
+    (readGeneration === 0 ? sessionCached("providers", identity, null) as McpConnectorProviderPage | undefined : undefined);
   const initialConnectors =
     cached<McpConnectorPage>(
       client,
       projectionCacheKey("connectors", identity, cursor),
+      readGeneration,
     ) ??
-    (currentRevision === 0 ? sessionCached("connectors", identity, cursor) as McpConnectorPage | undefined : undefined);
+    (currentRevision === 0 && readGeneration === 0 ? sessionCached("connectors", identity, cursor) as McpConnectorPage | undefined : undefined);
   const [providerState, setProviderState] = useState<
-    McpResourceState<McpConnectorProviderPage>
+    McpResourceState<McpConnectorProviderPage> & { readGeneration: number }
   >(() =>
     initialProviders === undefined
-      ? { loading: true, error: false }
+      ? { loading: true, error: false, readGeneration }
       : {
+          readGeneration,
           data: initialProviders,
           dataIdentity: identity,
           requestIdentity: identity,
@@ -343,11 +359,12 @@ export function useMcpProjection({
         },
   );
   const [connectorState, setConnectorState] = useState<
-    McpResourceState<McpConnectorPage> & { revision: number }
+    McpResourceState<McpConnectorPage> & { revision: number; readGeneration: number }
   >(() =>
     initialConnectors === undefined
-      ? { loading: true, error: false, revision: currentRevision }
+      ? { loading: true, error: false, revision: currentRevision, readGeneration }
       : {
+          readGeneration,
           revision: currentRevision,
           data: initialConnectors,
           dataIdentity: identity,
@@ -365,6 +382,7 @@ export function useMcpProjection({
   }, [connectorRefreshKey]);
 
   useEffect(() => {
+    if (!admitted) return;
     let active = true;
     const subscriptions: ProjectionSubscription[] = [];
     const start = (resource: McpProjectionResource, generation: number) => {
@@ -375,12 +393,14 @@ export function useMcpProjection({
         requestCursor,
         generation,
         resource === "connectors" ? currentRevision : 0,
+        readGeneration,
       );
       const cacheKey = projectionCacheKey(resource, identity, requestCursor);
       if (completed.current.has(requestKey)) return;
       const existing = cached<McpConnectorProviderPage | McpConnectorPage>(
         client,
         cacheKey,
+        readGeneration,
       );
       // Section changes unmount Settings panels. Reuse the owner projection on
       // return instead of clearing a ready card into a centred loading panel.
@@ -388,6 +408,7 @@ export function useMcpProjection({
       if (generation === 0 && existing !== undefined) {
         if (resource === "providers") {
           setProviderState({
+            readGeneration,
             data: existing as McpConnectorProviderPage,
             dataIdentity: identity,
             requestIdentity: identity,
@@ -396,7 +417,8 @@ export function useMcpProjection({
           });
         } else {
           setConnectorState({
-            revision: currentRevision,
+            readGeneration,
+          revision: currentRevision,
             data: existing as McpConnectorPage,
             dataIdentity: identity,
             requestIdentity: identity,
@@ -408,14 +430,15 @@ export function useMcpProjection({
       }
       if (resource === "providers") {
         setProviderState((current) => ({
-          ...current,
+          ...(current.readGeneration === readGeneration ? current : { readGeneration }),
           requestIdentity: identity,
           loading: true,
           error: false,
         }));
       } else {
         setConnectorState((current) => ({
-          ...current,
+          ...(current.readGeneration === readGeneration ? current : { readGeneration }),
+          readGeneration,
           revision: currentRevision,
           requestIdentity: identity,
           loading: true,
@@ -435,12 +458,13 @@ export function useMcpProjection({
           if (!active || (resource === "connectors" && revision.value !== currentRevision)) return;
           completed.current.add(requestKey);
           if (resource === "providers" && next.providers) {
-            remember(client, cacheKey, next.providers, {
+            remember(client, cacheKey, next.providers, readGeneration, {
               resource,
               identity,
               cursor,
             });
             setProviderState({
+            readGeneration,
               data: next.providers,
               dataIdentity: identity,
               requestIdentity: identity,
@@ -449,13 +473,14 @@ export function useMcpProjection({
             });
           }
           if (resource === "connectors" && next.connectors) {
-            remember(client, cacheKey, next.connectors, {
+            remember(client, cacheKey, next.connectors, readGeneration, {
               resource,
               identity,
               cursor,
             });
             setConnectorState({
-              revision: currentRevision,
+              readGeneration,
+          revision: currentRevision,
               data: next.connectors,
               dataIdentity: identity,
               requestIdentity: identity,
@@ -491,20 +516,20 @@ export function useMcpProjection({
       active = false;
       subscriptions.forEach((subscription) => subscription.release());
     };
-  }, [client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view]);
+  }, [admitted, readGeneration, client, connectorGeneration, currentRevision, cursor, identity, providerGeneration, revision, view]);
 
   const providerProjection =
-    providerState.dataIdentity === identity ? providerState.data : undefined;
+    admitted && providerState.readGeneration === readGeneration && providerState.dataIdentity === identity ? providerState.data : undefined;
   const connectorProjection =
-    connectorState.dataIdentity === identity ? connectorState.data : undefined;
+    admitted && connectorState.readGeneration === readGeneration && connectorState.dataIdentity === identity ? connectorState.data : undefined;
   const reload = (resource: McpProjectionResource) => {
     if (resource === "providers") setProviderGeneration((value) => value + 1);
     else setConnectorGeneration((value) => value + 1);
   };
 
   return {
-    providerState,
-    connectorState: { ...connectorState, loading: connectorState.loading || connectorState.revision !== currentRevision },
+    providerState: admitted && providerState.readGeneration === readGeneration ? providerState : { loading: true, error: false, requestIdentity: identity },
+    connectorState: !admitted || connectorState.readGeneration !== readGeneration ? { loading: true, error: false, requestIdentity: identity } : { ...connectorState, loading: connectorState.loading || connectorState.revision !== currentRevision },
     providerProjection,
     connectorProjection,
     reload,

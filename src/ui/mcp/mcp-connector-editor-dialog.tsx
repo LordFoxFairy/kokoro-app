@@ -41,8 +41,14 @@ export function McpConnectorEditorDialog({
   onRetryAuthorization,
   onToggleEnabled,
   onDelete,
+  open,
+  pendingError = false,
+  onRetryPending,
 }: {
   editor: McpConnectorEditor | null;
+  open?: boolean;
+  pendingError?: boolean;
+  onRetryPending?: () => void;
   displayName: string;
   description: string;
   actionId: string | null;
@@ -90,7 +96,7 @@ export function McpConnectorEditorDialog({
 
   return (
     <Dialog
-      open={editor !== null}
+      open={open ?? editor !== null}
       onOpenChange={(open) => {
         if (!open && actionId === null) onClose();
       }}
@@ -223,7 +229,7 @@ export function McpConnectorEditorDialog({
               </Button>
             </footer>
           </form>
-        ) : null}
+        ) : pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetryPending}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
       </DialogContent>
     </Dialog>
   );

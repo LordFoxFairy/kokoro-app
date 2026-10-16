@@ -59,9 +59,13 @@ export function CustomMcpDetailDialog({
   onDeleteIntent,
   onCancelDelete,
   onDelete,
+  pendingError = false,
+  onRetry,
 }: {
-  connector: McpConnector;
-  server: McpPrivateServer;
+  connector: McpConnector | null;
+  server: McpPrivateServer | null;
+  pendingError?: boolean;
+  onRetry?: () => void;
   actionId: string | null;
   actionError: boolean;
   deleteId: string | null;
@@ -82,18 +86,25 @@ export function CustomMcpDetailDialog({
 }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(server.display_name);
-  const [notes, setNotes] = useState(server.notes ?? "");
-  const [serverUrl, setServerUrl] = useState(server.server_url);
+  // Store only explicit user edits across a recheck, never the previous owner
+  // projection. Untouched fields resolve from the newly admitted server.
+  const [nameDraft, setName] = useState<string | null>(null);
+  const [notesDraft, setNotes] = useState<string | null>(null);
+  const [urlDraft, setServerUrl] = useState<string | null>(null);
+  const name = nameDraft ?? server?.display_name ?? "";
+  const notes = notesDraft ?? server?.notes ?? "";
+  const serverUrl = urlDraft ?? server?.server_url ?? "";
+  const [managementOpen, setManagementOpen] = useState(false);
   const [headers, setHeaders] = useState<HeaderDraft[]>([]);
   const [removedHeaders, setRemovedHeaders] = useState<string[]>([]);
-  const busy = actionId === connector.connector_id;
+  const busy = actionId === connector?.connector_id;
   const invalidHeaderName = headers.some(
     (item) => Boolean(item.name.trim()) && !isMcpCustomHeaderName(item.name),
   );
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (
+      !server || !connector ||
       !name.trim() ||
       !serverUrl.trim() ||
       invalidHeaderName ||
@@ -132,7 +143,14 @@ export function CustomMcpDetailDialog({
         closeLabel={t("mcp.cancel")}
         onCloseAutoFocus={closeFocus}
       >
-        {editing ? (
+        {!server || !connector ? (
+          <section className={styles.detail} aria-busy={!pendingError}>
+            <header className={styles.detailHero}><DialogTitle>{t("mcp.edit")}</DialogTitle></header>
+            <div className={styles.detailBody}>
+              {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
+            </div>
+          </section>
+        ) : editing ? (
           <form className={styles.configuration} onSubmit={save}>
             <div className={styles.configurationBody}>
               <header className={styles.configurationHeader}>
@@ -293,7 +311,7 @@ export function CustomMcpDetailDialog({
               </fieldset>
             </div>
             <footer className={styles.configurationFooter}>
-              <DropdownMenu>
+              <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button type="button" variant="outline" size="sm" disabled={busy}>
                     管理
@@ -355,7 +373,7 @@ export function CustomMcpDetailDialog({
                   )}
                   试用一下
                 </Button>
-                <DropdownMenu>
+                <DropdownMenu open={managementOpen} onOpenChange={setManagementOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline">
                       管理

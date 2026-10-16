@@ -21,7 +21,9 @@ export function McpSettingsToolbar({
   showSearch = true,
   settingsLayout = false,
   plazaLayout = false,
+  disabled = false,
 }: {
+  disabled?: boolean
   view: "catalog" | "connections"
   settingsLayout?: boolean
   plazaLayout?: boolean
@@ -44,12 +46,12 @@ export function McpSettingsToolbar({
           <Input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("plugins.search")} />
         </label> : null}
       <div className={styles.toolbarActions}>
-        {showBrowse ? <Button type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
+        {showBrowse ? <Button disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="browse" onClick={(event) => onBrowse(event.currentTarget)}>
           {view === "connections" ? t("mcp.browse") : t("plugins.manageConnectors")}
         </Button> : null}
         {onCreate ? <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button ref={triggerRef} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="create">
+            <Button ref={triggerRef} disabled={disabled} type="button" variant="outline" className={styles.toolbarButton} data-settings-layout={settingsLayout || undefined} data-settings-control="create">
               {settingsLayout || plazaLayout ? null : <Plus aria-hidden="true" />}{t("plugins.create")}<ChevronDown aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

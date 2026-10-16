@@ -243,3 +243,8 @@ lint、typecheck、test、build、浏览器 E2E 或 live BFF 验收。
 ## MCP 写后投影失效（2026-10-16）
 
 全局创建与 Settings 内部注册／JSON 导入成功后，按 client／subject 失活个人连接器缓存并重读；在途预热按 revision 退休，不覆盖写后新结果。个人已确认命令复用该投影失效入口，Provider 元数据不随之重读；内容不因写入重挂，原搜索保留。既有 AppFrame 行为文件覆盖全局导入后立即管理、迟到预热、另一主体隔离及读取失败重试；不新增 UI 套件或源码／样式字符串断言。
+
+
+## MCP 同 actor 重核（2026-10-16 候选）
+
+MCP Settings/Plugins 的纯展示意图按 actor 保持，事实/命令按 read generation 退休；精确详情、配置 dirty 字段和目录控件不因重核整面板重挂。`src/ui/mcp/INDEX.md` 记录事实重读、失败恢复、OAuth 退休与独立 Custom API 写后失活边界。行为回归复用既有 rail suite，不恢复已退役的 UI 套件；正常浏览器与完整门的当前证据归 Root 有效闭环计划，不由此索引宣称完成。

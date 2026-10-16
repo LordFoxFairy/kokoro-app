@@ -36,8 +36,14 @@ export function McpProviderDetailDialog({
   onToggleEnabled,
   onRemoveConnection,
   onPrompt,
+  open,
+  pendingError = false,
+  onRetry,
 }: {
   provider: McpConnectorProvider | null;
+  open?: boolean;
+  pendingError?: boolean;
+  onRetry?: () => void;
   /** Defined only when this detail was entered from an installed provider row. */
   connection?: McpConnector | null;
   actionId: string | null;
@@ -52,12 +58,14 @@ export function McpProviderDetailDialog({
 }) {
   const t = useT();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [facts, setFacts] = useState(provider);
+  if (facts !== provider) { setFacts(provider); setConfirmDisconnect(false); }
   const categoryLabel = (category: keyof typeof MCP_CATEGORY_MESSAGES) =>
     t(MCP_CATEGORY_MESSAGES[category]);
   const connected = connection !== null && connection !== undefined;
   return (
     <Dialog
-      open={provider !== null}
+      open={open ?? provider !== null}
       onOpenChange={(open) => {
         if (!open) {
           setConfirmDisconnect(false);
@@ -181,7 +189,12 @@ export function McpProviderDetailDialog({
               </section> : null}
             </section>
           </>
-        ) : null}
+        ) : (
+          <section className={styles.providerDetailBody} aria-busy={!pendingError}>
+            <DialogTitle>{t("rail.navPlugins")}</DialogTitle>
+            {pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}
+          </section>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -87,13 +87,6 @@ export function McpProviderCatalogDialog({
           />
         </div>
         <div className={styles.catalogBody}>
-          {providers === undefined && loading ? (
-            <div className={styles.pendingCatalog} aria-busy="true">
-              <span className="sr-only" role="status">
-                {t("mcp.loading")}
-              </span>
-            </div>
-          ) : null}
           {error ? (
             <Alert variant="destructive" role="alert" className={styles.alert}>
               <AlertDescription>{t("mcp.loadError")}</AlertDescription>
@@ -102,16 +95,15 @@ export function McpProviderCatalogDialog({
               </Button>
             </Alert>
           ) : null}
-          {providers ? (
             <McpProviderDirectory
-              providers={providers}
+              providers={providers ?? []}
+              {...(providers === undefined ? { resultsPlaceholder: loading ? <div className={styles.pendingCatalog} aria-busy="true"><span className="sr-only" role="status">{t("mcp.loading")}</span></div> : null } : {})}
               query={query}
               onQueryChange={onQueryChange}
               categoryFilter={categoryFilter}
               onCategoryFilterChange={onCategoryFilterChange}
               onSelectProvider={onSelectProvider}
             />
-          ) : null}
         </div>
       </DialogContent>
     </Dialog>

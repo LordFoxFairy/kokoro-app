@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 const CHANNEL = "kokoro:mcp-oauth-complete:v1";
 const PENDING_TIMEOUT_MS = 120_000;
@@ -43,11 +43,15 @@ function validOwnerUrl(value: string): boolean {
 export function useMcpOAuthPopup({
   onAuthorizationNavigate,
   onReload,
+  lifecycle,
 }: {
   onAuthorizationNavigate?: (authorizationUrl: string) => void;
   onReload: () => void;
+  /** Local admission owner; it never goes on the OAuth wire. */
+  lifecycle?: Readonly<{ admitted: boolean }>;
 }) {
   const active = useRef<ActivePopup | null>(null);
+  const lifecycleRef = useRef(lifecycle);
   const reload = useRef(onReload);
   useEffect(() => {
     reload.current = onReload;
@@ -68,18 +72,22 @@ export function useMcpOAuthPopup({
     reload.current();
   }, []);
 
-  useEffect(
-    () => () => {
-      const current = active.current;
-      if (current) cleanup(current);
+  useLayoutEffect(
+    () => {
+      lifecycleRef.current = lifecycle;
+      return () => {
+        const current = active.current;
+        if (current) cleanup(current);
+      };
     },
-    [cleanup],
+    [cleanup, lifecycle],
   );
 
   const start = useCallback(
     async (
       request: (signal: AbortSignal) => Promise<Authorization>,
     ): Promise<void> => {
+      if (lifecycleRef.current !== lifecycle || lifecycle?.admitted === false) throw new Error("oauth admission retired");
       const previous = active.current;
       if (previous) cleanup(previous);
       const popup = onAuthorizationNavigate
@@ -107,7 +115,7 @@ export function useMcpOAuthPopup({
       }, PENDING_TIMEOUT_MS);
       try {
         const authorization = await request(current.controller.signal);
-        if (active.current !== current)
+        if (active.current !== current || lifecycleRef.current !== lifecycle)
           throw new Error("oauth popup request was superseded");
         if (!validOwnerUrl(authorization.authorizationUrl))
           throw new Error("invalid owner authorization URL");
@@ -149,7 +157,7 @@ export function useMcpOAuthPopup({
         throw error;
       }
     },
-    [cleanup, onAuthorizationNavigate, reloadOnce],
+    [cleanup, onAuthorizationNavigate, reloadOnce, lifecycle],
   );
 
   return start;

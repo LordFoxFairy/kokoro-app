@@ -73,16 +73,18 @@ export function AppFrameOverlaySurfaces({
     const releaseMcp = warmMcpProjection({
       client,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
     const releaseCustomApi = warmCustomApiProjection({
       client,
       identity: connectorIdentity,
+      readGeneration: preview ? 0 : readBoundary?.generation ?? 0,
     });
     return () => {
       releaseMcp();
       releaseCustomApi();
     };
-  }, [connectorIdentity, mounted, preview]);
+  }, [connectorIdentity, mounted, preview, readBoundary?.generation]);
 
   useEffect(() => {
     if (!mounted) return undefined;

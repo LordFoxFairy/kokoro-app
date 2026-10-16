@@ -24,3 +24,10 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 
 
 MCP 注册／原子导入与已确认的个人命令，统一失活当前 client／subject 的连接器页和首屏持久投影，并通知挂载读者重新读取；Provider 元数据保持独立。旧预热与旧请求按共享 revision 退休，即使取消后迟到也不写回。全局创建和 Settings 内部创建共用该规则，Settings 不再因写入重挂整个连接器内容，搜索等用户意图保留；Custom API 是独立投影，不把此 MCP 规则冒称全局 API 创建闭环。
+
+
+## 同 actor 登录重核
+
+查询、分类、cursor、目录开关和精确 connector/server、provider/connection、API profile locator 属于 actor 稳定的展示意图；Settings 与 Plugins 不因临时失准入卸载整面板。所有 owner 投影、私有详情、错误/忙态与删除确认按 client/主体/准入代际退休；失准入只显示无私有数据的详情壳，恢复后从新页精确找回原资源，缺失或读取失败保留显式重试，不按名称或新绑定替代。换 actor（包括 A→B→A）清空意图。
+
+已打开的自定义详情保持 Dialog DOM；配置仅保用户明确输入的 dirty 字段，未编辑字段从新 owner 配置读取，保存使用新 CAS。旧读取消且迟到不展示；旧命令不关当前窗口、不发布旧 ACK，已确认写仍按原 actor 失活正确的 MCP／Custom API 独立投影。OAuth popup 在准入退休时关闭、取消并禁止迟到导航，旧 Create 确认也失活 pending 连接，而不继续旧授权。新 create/browse 在重核期间暂停；现创建表单自身完整恢复矩阵与全局 Custom API 创建投影仍为独立后继，不冒称本片已覆盖。

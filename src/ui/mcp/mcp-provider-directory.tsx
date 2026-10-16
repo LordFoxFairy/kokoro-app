@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Image from "next/image";
 import { Check, ChevronDown, Link2, ListFilter, Plus, Search } from "lucide-react";
 
@@ -33,8 +34,11 @@ export function McpProviderDirectory({
   categoryFilter,
   onCategoryFilterChange,
   onSelectProvider,
+  resultsPlaceholder,
 }: {
   providers: McpConnectorProvider[];
+  /** Keep pure controls mounted while the owner result retires/revalidates. */
+  resultsPlaceholder?: ReactNode;
   query: string;
   onQueryChange?: (value: string) => void;
   showSearch?: boolean;
@@ -142,7 +146,7 @@ export function McpProviderDirectory({
         className={styles.providerSection}
         aria-label={t("mcp.provider")}
       >
-        {providers.length === 0 ? (
+        {resultsPlaceholder !== undefined ? resultsPlaceholder : providers.length === 0 ? (
           <div className={styles.emptyProvider}>
             <Link2 aria-hidden="true" />
             <p>{t("mcp.noProviders")}</p>

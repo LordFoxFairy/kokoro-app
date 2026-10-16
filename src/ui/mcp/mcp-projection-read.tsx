@@ -1,14 +1,10 @@
 "use client";
 
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { HubClient } from "@/hub/client";
-import {
-  customApiProfileSchema,
-  type CustomApiProfile,
-} from "@/hub/custom-api.schema";
 import type {
   McpConnector,
   McpConnectorProvider,
@@ -31,8 +27,10 @@ import styles from "./mcp-projection-read.module.css";
 import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
-import { useCustomApiProjection } from "./use-custom-api-projection";
+import { invalidateCustomApiProjection, useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
+
+const EMPTY_PROVIDERS: McpConnectorProvider[] = [];
 
 /**
  * Product-level MCP surface coordinator. It owns user intent and owner commands;
@@ -42,6 +40,8 @@ import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-pr
 export function McpProjectionRead({
   client,
   identity,
+  admitted = true,
+  readGeneration = 0,
   embedded = false,
   onManageConnectors,
   onAuthorizationNavigate,
@@ -59,6 +59,8 @@ export function McpProjectionRead({
   /** Owner mutations invalidate the connector projection without touching provider data. */
   refreshKey?: number;
   identity: string;
+  admitted?: boolean;
+  readGeneration?: number;
   /** The standalone plaza opens Settings/连接器 instead of replacing itself. */
   onManageConnectors?: (returnTarget: HTMLElement) => void;
   /** Tests may inject navigation; Platform owns the issued OAuth URL. */
@@ -71,6 +73,12 @@ export function McpProjectionRead({
   brandName?: string;
 }) {
   const t = useT();
+  const owner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
+  const ownerRef = useRef<typeof owner | null>(owner);
+  useLayoutEffect(() => {
+    ownerRef.current = owner;
+    return () => { if (ownerRef.current === owner) ownerRef.current = null; };
+  }, [owner]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<string | null>>([]);
   const [view, setView] = useState<McpProjectionView>(initialView);
@@ -78,34 +86,51 @@ export function McpProjectionRead({
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionError, setActionError] = useState(false);
   const [editor, setEditor] = useState<McpConnectorEditor | null>(null);
-  const [selectedProvider, setSelectedProvider] =
-    useState<McpConnectorProvider | null>(null);
-  const [selectedProviderConnection, setSelectedProviderConnection] =
-    useState<McpConnector | null>(null);
-  const [selectedCustomApi, setSelectedCustomApi] =
-    useState<CustomApiProfile | null>(null);
+  // Only exact locators and typed input survive an admission recheck.
+  const [connectorIntent, setConnectorIntent] = useState<{ connectorId: string; serverId?: string; entered: boolean } | null>(null);
+  const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
+  const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState<string | null>(null);
+  const [selectedCustomApiId, setSelectedCustomApiId] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
   const [providerQuery, setProviderQuery] = useState("");
   const [connectorQuery, setConnectorQuery] = useState("");
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<
     "all" | keyof typeof MCP_CATEGORY_MESSAGES
   >("all");
-  const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
+  const [displayNameDraft, setDisplayName] = useState<string | null>(null);
+  const [descriptionDraft, setDescription] = useState<string | null>(null);
+  const displayName = displayNameDraft ?? editor?.connector.display_name ?? "";
+  const description = descriptionDraft ?? editor?.connector.description ?? "";
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // Once the owner confirms deletion, hide that row immediately rather than
   // leaving a stale card visible while the background projection refreshes.
   // This is a confirmed projection transition, not an optimistic fake.
   const [confirmedRemovedConnectorIds, setConfirmedRemovedConnectorIds] =
     useState<ReadonlySet<string>>(() => new Set());
-  const [editorLoading, setEditorLoading] = useState(false);
+  const [factsOwner, setFactsOwner] = useState(owner);
+  if (factsOwner !== owner) {
+    setFactsOwner(owner);
+    setEditor(null);
+    setActionId(null);
+    setActionError(false);
+    setDeleteId(null);
+    setConfirmedRemovedConnectorIds(new Set());
+  }
   const surfaceRef = useRef<HTMLElement | null>(null);
   const editorReturnFocusRef = useRef<HTMLElement | null>(null);
   const catalogReturnFocusRef = useRef<HTMLElement | null>(null);
   const providerReturnFocusRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const fallback = surfaceRef.current?.querySelector<HTMLElement>('input[type="search"]') ?? null;
+    if (connectorIntent && !editorReturnFocusRef.current?.isConnected) editorReturnFocusRef.current = fallback;
+    if (selectedCustomApiId && !editorReturnFocusRef.current?.isConnected) editorReturnFocusRef.current = fallback;
+    if (selectedProviderKey && !providerReturnFocusRef.current?.isConnected) providerReturnFocusRef.current = fallback;
+  }, [owner, connectorIntent, selectedCustomApiId, selectedProviderKey]);
   const startOAuthPopup = useMcpOAuthPopup({
     ...(onAuthorizationNavigate ? { onAuthorizationNavigate } : {}),
-    onReload: () => reload("connectors"),
+    lifecycle: owner,
+    onReload: () => { if (ownerRef.current === owner && admitted) reload("connectors"); },
   });
   const {
     providerState,
@@ -116,6 +141,8 @@ export function McpProjectionRead({
   } = useMcpProjection({
     client,
     identity,
+    admitted,
+    readGeneration,
     cursor,
     view,
     connectorRefreshKey: refreshKey,
@@ -123,12 +150,14 @@ export function McpProjectionRead({
   const customApiState = useCustomApiProjection({
     client,
     identity,
+    admitted,
+    readGeneration,
     refreshKey,
   });
 
   // Provider card artwork is rendered from owner-owned `cover_image_url` in
   // McpProviderDirectory; this coordinator never substitutes local assets.
-  const providers = providerProjection?.items ?? [];
+  const providers = providerProjection?.items ?? EMPTY_PROVIDERS;
   const connectors = (connectorProjection?.items ?? []).filter(
     (connector) => !confirmedRemovedConnectorIds.has(connector.connector_id),
   );
@@ -138,6 +167,10 @@ export function McpProjectionRead({
       .map((connector) => connector.provider_key),
   );
   const customApis = customApiState.data?.items ?? [];
+  const selectedProviderConnection = selectedProviderConnectionId === null ? null : connectors.find(item => item.connector_id === selectedProviderConnectionId) ?? null;
+  const selectedProvider = admitted && (selectedProviderConnectionId === null || selectedProviderConnection?.provider_key === selectedProviderKey)
+    ? providers.find(item => item.provider_key === selectedProviderKey) ?? null : null;
+  const selectedCustomApi = admitted ? customApis.find(item => item.profile_id === selectedCustomApiId) ?? null : null;
   const providersByKey = new Map(
     providers.map((provider) => [provider.provider_key, provider]),
   );
@@ -158,68 +191,76 @@ export function McpProjectionRead({
 
   const resetEditor = () => {
     setEditor(null);
+    setConnectorIntent(null);
     setDeleteId(null);
-    setDisplayName("");
-    setDescription("");
+    setDisplayName(null);
+    setDescription(null);
   };
   const runAction = async (
     id: string,
     action: () => Promise<unknown>,
     onSuccess?: (result: unknown) => void,
+    resource: "connectors" | "custom-api" = "connectors",
   ) => {
+    if (!owner.admitted || ownerRef.current !== owner) return;
     setActionId(id);
     setActionError(false);
     try {
       const result = await action();
+      // A confirmed old-generation write still retires this exact actor's
+      // projection, but never publishes its private ACK or changes current UI.
+      if (resource === "custom-api") invalidateCustomApiProjection(client, identity);
+      else invalidateMcpConnectorProjection(client, identity);
+      if (ownerRef.current !== owner) return;
       resetEditor();
       onSuccess?.(result);
-      invalidateMcpConnectorProjection(client, identity);
     } catch {
-      setActionError(true);
+      if (ownerRef.current === owner) setActionError(true);
     } finally {
-      setActionId(null);
+      if (ownerRef.current === owner) setActionId(null);
     }
   };
-  const beginEdit = async (
-    connector: McpConnector,
-    returnFocus: HTMLElement,
-  ) => {
+  const beginEdit = (connector: McpConnector, returnFocus: HTMLElement) => {
+    if (!owner.admitted || ownerRef.current !== owner) return;
     editorReturnFocusRef.current = returnFocus;
+    providerReturnFocusRef.current = returnFocus;
     setDeleteId(null);
     setActionError(false);
-    // Do not manufacture an intermediate dialog while retrieving owner-only
-    // configuration. Manus keeps the list steady and opens the actual detail
-    // once its data is ready; the old branch opened a generic “Edit / Loading”
-    // dialog that visibly jumped between two unrelated layouts.
-    const isCustomMcp = Boolean(connector.server_id);
     setEditor(null);
-    setEditorLoading(true);
-    try {
-      const server =
-        connector.server_id && client.getPrivateMcpServer
-          ? await client.getPrivateMcpServer(connector.server_id)
-          : undefined;
-      if (!server) {
-        const provider = providersByKey.get(connector.provider_key);
-        if (provider) {
-          setSelectedProviderConnection(connector);
-          setSelectedProvider(provider);
+    setConnectorIntent({ connectorId: connector.connector_id, ...(connector.server_id ? { serverId: connector.server_id } : {}), entered: false });
+  };
+  const connectorId = connectorIntent?.connectorId;
+  const serverId = connectorIntent?.serverId;
+  const selectedConnector = connectorProjection?.items.find(item => item.connector_id === connectorId);
+  const providerReady = Boolean(serverId) || providerProjection !== undefined;
+  const selectedConnectorProvider = serverId ? undefined : providers.find(item => item.provider_key === selectedConnector?.provider_key);
+  useEffect(() => {
+    if (!admitted || !connectorId || !selectedConnector || (!serverId && !providerReady)) return;
+    let active = true;
+    const controller = new AbortController();
+    const read = async () => {
+      try {
+        // Never replace the selected aggregate with another row, even if its
+        // display name/provider matches or the page has changed underneath it.
+        if (selectedConnector.server_id !== serverId) throw Error("selected MCP binding changed");
+        const server = serverId && client.getPrivateMcpServer ? await client.getPrivateMcpServer(serverId, controller.signal) : undefined;
+        if (!active || ownerRef.current !== owner) return;
+        if (serverId && (!server || server.server_id !== serverId)) throw Error("MCP detail identity mismatch");
+        if (!server && selectedConnectorProvider) {
+          setSelectedProviderConnectionId(selectedConnector.connector_id);
+          setSelectedProviderKey(selectedConnector.provider_key);
+          setConnectorIntent(null);
           return;
         }
+        setEditor({ kind: "edit", connector: selectedConnector, ...(server ? { server } : {}) });
+        setConnectorIntent(current => current?.connectorId === connectorId ? { ...current, entered: true } : current);
+      } catch {
+        if (active && ownerRef.current === owner) setActionError(true);
       }
-      setDisplayName(server?.display_name ?? connector.display_name ?? "");
-      setDescription(server?.notes ?? connector.description ?? "");
-      setEditor({ kind: "edit", connector, ...(server ? { server } : {}) });
-    } catch {
-      // Do not fall back to the legacy generic editor if a custom MCP read
-      // fails. Keep the list stable and expose the action failure in its own
-      // surface instead of presenting an editor with absent configuration.
-      if (isCustomMcp) setEditor(null);
-      setActionError(true);
-    } finally {
-      setEditorLoading(false);
-    }
-  };
+    };
+    void read();
+    return () => { active = false; controller.abort(); };
+  }, [admitted, client, connectorId, serverId, selectedConnector, selectedConnectorProvider, providerReady, detailRetry, owner]);
   const connectProvider = (
     provider: McpConnectorProvider,
     onSuccess?: () => void,
@@ -236,6 +277,8 @@ export function McpProjectionRead({
               display_name: provider.display_name,
               description: provider.description ?? "",
             });
+            invalidateMcpConnectorProjection(client, identity);
+            if (ownerRef.current !== owner) throw new Error("MCP command retired");
             if (connector.status !== "pending")
               throw new Error("connector does not require authorization");
             const started = await client.beginMcpConnectorAuthorization(
@@ -318,6 +361,7 @@ export function McpProjectionRead({
     );
   };
   const openCatalog = (target?: HTMLElement) => {
+    if (ownerRef.current !== owner || !admitted) return;
     catalogReturnFocusRef.current =
       target ??
       surfaceRef.current?.querySelector<HTMLElement>(
@@ -330,10 +374,11 @@ export function McpProjectionRead({
     provider: McpConnectorProvider,
     trigger: HTMLElement,
   ) => {
+    if (ownerRef.current !== owner || !admitted) return;
     providerReturnFocusRef.current = trigger;
     setActionError(false);
-    setSelectedProviderConnection(null);
-    setSelectedProvider(provider);
+    setSelectedProviderConnectionId(null);
+    setSelectedProviderKey(provider.provider_key);
   };
   return (
     <section
@@ -359,7 +404,9 @@ export function McpProjectionRead({
              Settings connections view is a different Manus surface and keeps
              its search field beside Browse/Create. */
           showSearch={!embedded || settingsLayout}
+          disabled={!admitted}
           onBrowse={(target) => {
+            if (ownerRef.current !== owner || !admitted) return;
             if (view === "catalog" && onManageConnectors) {
               onManageConnectors(target);
               return;
@@ -371,15 +418,10 @@ export function McpProjectionRead({
               current === "connections" ? "catalog" : "connections",
             );
           }}
-          {...(onCreateMcp ? { onCreate: onCreateMcp } : {})}
+          {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
         />
       </header>
       <div className={styles.body}>
-      {view === "catalog" &&
-      providerProjection === undefined &&
-      providerRefreshing ? (
-        <ProjectionPending view="catalog" />
-      ) : null}
       {view === "catalog" && providerState.error ? (
         <ProjectionError onRetry={() => reload("providers")} />
       ) : null}
@@ -396,17 +438,18 @@ export function McpProjectionRead({
           }}
         />
       ) : null}
-      {actionError &&
-      editor === null &&
-      selectedProvider === null &&
-      selectedCustomApi === null ? (
-        <ActionError />
+      {(actionError || (admitted && connectorIntent !== null && connectorProjection !== undefined && !selectedConnector)) &&
+      (connectorIntent === null || !connectorIntent.entered) &&
+      selectedProviderKey === null &&
+      selectedCustomApiId === null ? (
+        <ActionError {...(connectorIntent ? { onRetry: () => { if (!admitted || ownerRef.current !== owner) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); } } : {})} />
       ) : null}
 
-      {view === "catalog" && providerProjection ? (
+      {view === "catalog" ? (
         <div className={styles.content}>
           <McpProviderDirectory
             providers={providers}
+            {...(providerProjection === undefined ? { resultsPlaceholder: providerRefreshing ? <ProjectionPending view="catalog" /> : null } : {})}
             query={providerQuery}
             onQueryChange={setProviderQuery}
             showSearch={embedded}
@@ -433,7 +476,7 @@ export function McpProjectionRead({
             onSelectCustomApi={(profile, trigger) => {
               editorReturnFocusRef.current = trigger;
               setActionError(false);
-              setSelectedCustomApi(profile);
+              setSelectedCustomApiId(profile.profile_id);
             }}
             previousEnabled={history.length > 0 && actionId === null}
             nextEnabled={
@@ -471,13 +514,15 @@ export function McpProjectionRead({
         onCategoryFilterChange={setCategoryFilter}
         onRetry={() => reload("providers")}
         onSelectProvider={openProvider}
-        {...(onCreateMcp ? { onCreate: onCreateMcp } : {})}
+        {...(onCreateMcp ? { onCreate: (mode: McpCreateMode, target?: HTMLElement | null) => { if (ownerRef.current === owner && admitted) onCreateMcp(mode, target); } } : {})}
       />
-      {editor?.server ? (
+      {connectorIntent?.serverId && (connectorIntent.entered || editor?.server) ? (
         <CustomMcpDetailDialog
-          key={`${editor.server.server_id}:${editor.server.state_version}`}
-          connector={editor.connector}
-          server={editor.server}
+          key={connectorIntent.serverId}
+          connector={editor?.server ? editor.connector : null}
+          server={editor?.server ?? null}
+          pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+          onRetry={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); if (!selectedConnector || connectorState.error) reload("connectors"); else setDetailRetry(value => value + 1); }}
           actionId={actionId}
           actionError={actionError}
           deleteId={deleteId}
@@ -563,10 +608,11 @@ export function McpProjectionRead({
         />
       ) : null}
       <McpConnectorEditorDialog
+        open={Boolean(connectorIntent?.entered && !connectorIntent.serverId)}
+        pendingError={admitted && (actionError || connectorState.error || (connectorProjection !== undefined && !selectedConnector))}
+        onRetryPending={() => { if (ownerRef.current !== owner || !admitted) return; setActionError(false); reload("connectors"); setDetailRetry(value => value + 1); }}
         editor={
-          editor?.server || (editorLoading && editor?.connector.server_id)
-            ? null
-            : editor
+          editor?.server ? null : editor
         }
         // Connection rows without a private server do not need a remote
         // configuration read. A custom MCP stays on the list until its typed
@@ -623,19 +669,22 @@ export function McpProjectionRead({
         }
       />
       <McpProviderDetailDialog
+        open={selectedProviderKey !== null}
+        pendingError={admitted && (providerState.error || (providerProjection !== undefined && selectedProvider === null && (selectedProviderConnectionId === null || !connectorState.loading)))}
+        onRetry={() => { if (ownerRef.current !== owner || !admitted) return; reload("providers"); reload("connectors"); }}
         provider={selectedProvider}
         connection={selectedProviderConnection}
         actionId={actionId}
         actionError={actionError}
         returnFocusRef={providerReturnFocusRef}
         onClose={() => {
-          setSelectedProvider(null);
-          setSelectedProviderConnection(null);
+          setSelectedProviderKey(null);
+          setSelectedProviderConnectionId(null);
           setActionError(false);
         }}
         onConnect={(provider) =>
           connectProvider(provider, () => {
-            setSelectedProvider(null);
+            setSelectedProviderKey(null);
             if (settingsLayout) setCatalogOpen(false);
             else setView("connections");
           })
@@ -661,42 +710,38 @@ export function McpProjectionRead({
               }),
             () => {
               hideConfirmedRemovedConnector(connection.connector_id);
-              setSelectedProvider(null);
-              setSelectedProviderConnection(null);
+              setSelectedProviderKey(null);
+              setSelectedProviderConnectionId(null);
             },
           )
         }
-        {...(onPrompt ? { onPrompt } : {})}
+        {...(onPrompt ? { onPrompt: (prompt: string) => { if (ownerRef.current === owner && admitted) onPrompt(prompt); } } : {})}
       />
-      {selectedCustomApi ? (
+      {selectedCustomApiId ? (
         <CustomApiDetailDialog
-          key={`${selectedCustomApi.profile_id}:${selectedCustomApi.state_version}`}
+          key={selectedCustomApiId}
           profile={selectedCustomApi}
-          busy={actionId === selectedCustomApi.profile_id}
+          busy={actionId === selectedCustomApiId}
+          pendingError={admitted && (customApiState.error || (!customApiState.loading && !selectedCustomApi))}
+          onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }}
           actionError={actionError}
           returnFocusRef={editorReturnFocusRef}
           onClose={() => {
-            setSelectedCustomApi(null);
+            setSelectedCustomApiId(null);
             setActionError(false);
           }}
           onSave={(input) => {
-            if (!client.updateCustomApi) return;
+            if (!selectedCustomApi || !client.updateCustomApi) return;
             void runAction(
               selectedCustomApi.profile_id,
               () =>
                 client.updateCustomApi!(selectedCustomApi.profile_id, input),
-              (result) => {
-                // The mutation response is the owner-confirmed projection.
-                // Apply it before the background re-read so immediately
-                // reopening the detail cannot show the prior note/version.
-                customApiState.replace(customApiProfileSchema.parse(result));
-                customApiState.reload();
-                setSelectedCustomApi(null);
-              },
+              () => setSelectedCustomApiId(null),
+              "custom-api",
             );
           }}
           onDelete={() => {
-            if (!client.removeCustomApi) return;
+            if (!selectedCustomApi || !client.removeCustomApi) return;
             void runAction(
               selectedCustomApi.profile_id,
               () =>
@@ -704,11 +749,10 @@ export function McpProjectionRead({
                   expected_state_version: selectedCustomApi.state_version,
                 }),
               () => {
-                customApiState.remove(selectedCustomApi.profile_id);
-                customApiState.reload();
-                setSelectedCustomApi(null);
+                setSelectedCustomApiId(null);
                 editorReturnFocusRef.current = null;
               },
+              "custom-api",
             );
           }}
         />
@@ -752,11 +796,12 @@ function ProjectionError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function ActionError() {
+function ActionError({ onRetry }: { onRetry?: () => void }) {
   const t = useT();
   return (
     <Alert variant="destructive" role="alert" className={styles.alert}>
       <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
+      {onRetry ? <Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button> : null}
     </Alert>
   );
 }
