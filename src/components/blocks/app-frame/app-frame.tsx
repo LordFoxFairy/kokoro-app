@@ -43,7 +43,7 @@ import { useAppFrameOverlays } from "./use-app-frame-overlays"
 import { useAppFrameProject } from "./use-app-frame-project"
 import { useProjectList } from "@/features/app/use-project-list"
 import { navigateMountedSurface } from "@/ui/navigation/mounted-surface-navigation"
-import { sessionScopeKey } from "@/engine/session-scope"
+import { DIRECT_SESSION_SCOPE, sessionScopeKey } from "@/engine/session-scope"
 import shellStyles from "./app-frame.module.css"
 
 export type { AppCommandMenuProps }
@@ -232,18 +232,37 @@ function AppFrameRuntime({
     if (sessionScopeKey(scope) === moveScopeKey) setMoveSelectionGeneration((generation) => generation + 1)
     if (engine === null || sessionScopeKey(scope) !== moveScopeKey) evictBrowserConversationIndex(sessionScopeKey(scope), id)
   }, [engine, moveScopeKey])
-  const conversationsCtl = useConversationList({
-    engine,
+  const directScopeActive = sessionScope.kind === "direct"
+  // The direct list is permanent shell navigation, not a projection of the
+  // currently selected engine. Keep its reader alive while a project owns
+  // the main stage; do not copy project messages into the direct list.
+  const directConversationsCtl = useConversationList({
+    engine: directScopeActive ? engine : null,
     preview,
-    activeId: projectWorkspace ? routedConversationId : activeId,
+    activeId: directScopeActive ? (projectWorkspace ? routedConversationId : activeId) : null,
     thread,
-    isStreaming,
+    isStreaming: directScopeActive && isStreaming,
+    observeRunStatus: directScopeActive && engine !== null && !hydrating,
+    focusComposer,
+    scope: DIRECT_SESSION_SCOPE,
+    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
+    scopeRevision: moveSnapshot.scopeVersions.get("direct") ?? 0,
+    onDeleteConfirmed: handleConversationDeleteConfirmed,
+  })
+  const projectConversationsCtl = useConversationList({
+    engine: directScopeActive ? null : engine,
+    preview,
+    activeId: directScopeActive ? null : (projectWorkspace ? routedConversationId : activeId),
+    thread,
+    isStreaming: !directScopeActive && isStreaming,
+    observeRunStatus: !directScopeActive && engine !== null && !hydrating,
     focusComposer,
     scope: sessionScope,
-    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted },
+    readBoundary: { identity: railReadIdentity, admitted: railReadAdmitted && !directScopeActive },
     scopeRevision: moveSnapshot.scopeVersions.get(moveScopeKey) ?? 0,
     onDeleteConfirmed: handleConversationDeleteConfirmed,
   })
+  const conversationsCtl = directScopeActive ? directConversationsCtl : projectConversationsCtl
   const conversationMove = moveSnapshot.intent
   const moveRouteContext = typeof window === "undefined" ? null : (() => {
     const url = new URL(window.location.href)
@@ -710,7 +729,7 @@ function AppFrameRuntime({
     conversationMoveFailed: moveFailureProjection?.identity === moveViewIdentity,
     onMoveConversation: (id, target) => moveConversation(sessionScope, id, target),
     conversationReads: {
-      engine, scope: sessionScope, currentController: conversationsCtl,
+      engine, scope: sessionScope, currentController: conversationsCtl, directController: directConversationsCtl,
       activeId: projectWorkspace ? routedConversationId : activeId, thread, isStreaming,
       identity: railReadIdentity, admitted: railReadAdmitted, scopeVersions: moveSnapshot.scopeVersions, focusComposer,
       failedMoveScopeKey: moveFailureProjection?.identity === moveViewIdentity ? moveFailureProjection.scopeKey : null,

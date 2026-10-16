@@ -13,6 +13,8 @@ export type RailConversationReads = {
   scope: SessionScope
   /** AppFrame's canonical reader for the mounted scope; the rail must not open a duplicate flight for it. */
   currentController: ConversationListController
+  /** Shell-owned direct reader remains mounted even while a project is selected. */
+  directController: ConversationListController
   activeId: string | null
   thread: EngineSnapshot["thread"]
   isStreaming: boolean

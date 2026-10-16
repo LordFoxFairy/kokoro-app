@@ -293,6 +293,11 @@ it("活动项目在侧栏展开其 own scope 的会话，不与直接任务混�
         refresh: () => {}, loadMore: () => {}, selectConversation: () => {},
         deleteConversation: async () => true, renameConversation: () => {}, startNewChat: () => {},
       },
+      directController: {
+        conversations: [], loading: false, loadingMore: false, error: false, hasMore: false,
+        refresh: () => {}, loadMore: () => {}, selectConversation: () => {},
+        deleteConversation: async () => true, renameConversation: () => {}, startNewChat: () => {},
+      },
       activeId: "conv_project_1", thread: { messages: [] } as never, isStreaming: false,
       identity: "reader-a", admitted: true, scopeVersions: new Map(), failedMoveScopeKey: null,
       focusComposer: () => {}, onSelect: selectProjectConversation, onNewChat: () => {},

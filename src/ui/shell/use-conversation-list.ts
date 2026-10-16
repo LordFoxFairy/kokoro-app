@@ -39,6 +39,8 @@ export function useConversationList(params: {
   activeId: string | null
   thread: Thread
   isStreaming: boolean
+  /** False while another scope owns the engine, or its lease/snapshot is not ready. */
+  observeRunStatus?: boolean
   focusComposer: () => void
   scope?: SessionScope
   scopeRevision?: number
@@ -46,7 +48,7 @@ export function useConversationList(params: {
   onDeleteConfirmed?: (scope: SessionScope, id: string) => void
 }): ConversationListController {
   const {
-    engine, preview = false, activeId, thread, isStreaming, focusComposer,
+    engine, preview = false, activeId, thread, isStreaming, observeRunStatus = true, focusComposer,
     scope = DIRECT_SESSION_SCOPE, scopeRevision = 0, readBoundary, onDeleteConfirmed,
   } = params
 
@@ -137,13 +139,18 @@ export function useConversationList(params: {
       : sessionList.entries.map((entry) => ({ id: entry.id, title: withOverride(entry.id, entry.title) }))
 
   // run 收尾（streaming→idle 落沿）即刷新清单：首条消息落库后新会话进服务端列表，标题也随之更新。
-  const wasStreamingRef = useRef(false)
+  const observedRunRef = useRef<{ identity: typeof lifecycleIdentity; streaming: boolean } | null>(null)
   useEffect(() => {
-    if (wasStreamingRef.current && !isStreaming) {
+    // Navigation is not a run-completed event. Preserve the last observation
+    // until this exact scope's engine is available again, and never compare
+    // an old subject/scope's stream against another lifecycle's idle state.
+    if (!observeRunStatus) return
+    const previous = observedRunRef.current
+    if (previous?.identity === lifecycleIdentity && previous.streaming && !isStreaming) {
       requestListRefresh()
     }
-    wasStreamingRef.current = isStreaming
-  }, [isStreaming, requestListRefresh])
+    observedRunRef.current = { identity: lifecycleIdentity, streaming: isStreaming }
+  }, [isStreaming, lifecycleIdentity, observeRunStatus, requestListRefresh])
 
   const startNewChat = useCallback(() => {
     // 不清 draft：newConversation 换 activeId 后，草稿 controller 会加载新会话自己的草稿。

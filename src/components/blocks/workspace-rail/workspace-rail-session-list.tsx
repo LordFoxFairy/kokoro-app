@@ -337,9 +337,12 @@ type ScopedGroupProps = Pick<WorkspaceRailSessionListProps,
 /** A folder reads only its canonical list; it never creates an engine or SSE. */
 export function ScopedConversationGroup({ scope: desiredScope, reads, preview, projects, projectListReady, onRequestDelete, ...props }: ScopedGroupProps) {
   const key = sessionScopeKey(desiredScope)
-  if (key === sessionScopeKey(reads.scope)) {
+  const ownedController = desiredScope.kind === "direct"
+    ? reads.directController
+    : key === sessionScopeKey(reads.scope) ? reads.currentController : null
+  if (ownedController !== null) {
     return <ScopedConversationGroupView {...props} scope={desiredScope} reads={reads} projects={projects}
-      projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={reads.currentController} />
+      projectListReady={projectListReady} onRequestDelete={onRequestDelete} controller={ownedController} />
   }
   return <IndependentScopedConversationGroup {...props} scope={desiredScope} reads={reads} preview={preview}
     projects={projects} projectListReady={projectListReady} onRequestDelete={onRequestDelete} />

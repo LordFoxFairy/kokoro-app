@@ -201,6 +201,35 @@ describe("useConversationList rename reconciliation", () => {
   const thread = { messages: [] } as never
   const focusComposer = () => undefined
 
+  it("defers run completion refresh while its engine is not observed, then reconciles on return", async () => {
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [item("same", "t1")], next_cursor: null })
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...createSessionClient({ baseUrl: "http://s.local" }), listSessions })
+    const view = renderHook(({ isStreaming, observeRunStatus }) => useConversationList({
+      engine: null, activeId: null, thread, isStreaming, observeRunStatus, focusComposer,
+    }), { initialProps: { isStreaming: true, observeRunStatus: true } })
+    await waitFor(() => expect(view.result.current.loading).toBe(false))
+    view.rerender({ isStreaming: false, observeRunStatus: false })
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    view.rerender({ isStreaming: false, observeRunStatus: true })
+    await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2))
+    view.unmount()
+  })
+
+  it("a different scope's idle snapshot is not completion of the previous scope's run", async () => {
+    const projectScope = { kind: "project", projectRef: "project-next" } as const
+    const listSessions = vi.fn().mockResolvedValue({ sessions: [], next_cursor: null })
+    vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...createSessionClient({ baseUrl: "http://s.local" }), listSessions })
+    const view = renderHook(({ project, isStreaming }) => useConversationList({
+      engine: null, activeId: null, thread, isStreaming, focusComposer,
+      scope: project ? projectScope : DIRECT_SESSION_SCOPE,
+    }), { initialProps: { project: false, isStreaming: true } })
+    await waitFor(() => expect(view.result.current.loading).toBe(false))
+    view.rerender({ project: true, isStreaming: false })
+    await waitFor(() => expect(view.result.current.loading).toBe(false))
+    expect(listSessions).toHaveBeenCalledTimes(2)
+    view.unmount()
+  })
+
   it("serializes one session's intents and keeps the latest overlay until a post-ACK owner GET completes", async () => {
     let resolveFirstRename!: () => void
     let resolveSecondRename!: () => void

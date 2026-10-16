@@ -962,6 +962,81 @@ it("R251 legal ACK during same-subject suspension conservatively retains its key
 
 // Actual AppFrame + actual scoped engines: URL projection must not silently
 // adopt the scoped index's remembered activeId as the project-root draft.
+it.each(["idle", "streaming", "reattach-running", "reattach-completed"])("direct rail preserves loaded pages across project switches but retires them on identity change (%s)", async (runState) => {
+  const projectRef = "project_00000000-0000-4000-8000-000000000851"
+  const projectEngine = createSessionEngine({ client: createFakeClient(), storage: createMemoryStorage<ConversationStore>(null), scope: { kind: "project", projectRef } })
+  if (runState !== "idle") {
+    engine.submit("keep running across navigation")
+    await waitFor(() => expect(client.streams).toHaveLength(1))
+  }
+  let directEngine: SessionEngine | null = engine
+  let reattachedEngine: SessionEngine | null = null
+  let directReads = 0
+  const listSessions = vi.fn<typeof client.listSessions>(async (_cursor, scope) => {
+    if (scope?.kind === "project") return { sessions: [], next_cursor: null }
+    if (_cursor === "next-direct") return { sessions: [{ session_id: "conv-direct-page-two", title: "第二页直接会话", updated_at: "2026-10-15T00:00:00Z" }], next_cursor: null }
+    if (++directReads > 1) return new Promise(() => {})
+    return { sessions: [{ session_id: "conv-stable-direct", title: "稳定直接会话", updated_at: "2026-10-15T00:00:00Z" }], next_cursor: "next-direct" }
+  })
+  const pageClients = await import("@/ui/shell/page-clients")
+  vi.spyOn(pageClients, "browserListClient").mockReturnValue({ ...client, listSessions })
+  stubBusinessFetch(vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+    data: { projects: [{ id: projectRef, name: "稳定项目", slug: "stable", description: "", created_at: "2026-10-15T00:00:00Z", updated_at: "2026-10-15T00:00:00Z" }] },
+    meta: { request_id: "req-stable-rail" },
+  })))
+  const frame = (project: boolean, subject = "stable-rail-reader") => <ThemeProvider><LocaleProvider><AppFrame
+    engine={project ? projectEngine : directEngine} chatHref="/app" desktopRailCollapsed={false}
+    projectWorkspace={project} {...(project ? { projectRef } : {})}
+    projectReadBoundary={{ admitted: true, subject, generation: 1 }}
+  /></LocaleProvider></ThemeProvider>
+  window.history.replaceState({}, "", "/app")
+  const view = render(frame(false))
+  try {
+    const direct = () => within(screen.getByRole("navigation", { name: "直接会话" }))
+    await direct().findByRole("button", { name: "稳定直接会话" })
+    fireEvent.click(direct().getByRole("button", { name: "加载更多" }))
+    await direct().findByRole("button", { name: "第二页直接会话" })
+    act(() => window.history.pushState({}, "", `/app/project/${projectRef}`))
+    view.rerender(frame(true))
+    expect(direct().getByRole("button", { name: "稳定直接会话" })).toBeVisible()
+    expect(direct().getByRole("button", { name: "第二页直接会话" })).toBeVisible()
+    expect(direct().queryByRole("status", { name: "正在加载会话…" })).toBeNull()
+    act(() => window.history.pushState({}, "", "/app"))
+    let settleSnapshot: (() => void) | undefined
+    if (runState.startsWith("reattach-")) {
+      directEngine = null
+      view.rerender(frame(false))
+      expect(directReads).toBe(1)
+      const retainedStore = engine.getSnapshot().store
+      if (retainedStore === null || retainedStore.activeId === null) throw new Error("streaming fixture has no retained conversation")
+      const restored = createFakeClient()
+      restored.nextSnapshot = () => new Promise((resolve) => {
+        settleSnapshot = () => resolve(makeSnapshot({
+          sessionId: retainedStore.activeId!,
+          ...(runState === "reattach-running" ? { activeRun: { run_id: "run_restored", status: "running" } } : {}),
+        }))
+      })
+      reattachedEngine = createSessionEngine({ client: restored, storage: createMemoryStorage<ConversationStore>(retainedStore) })
+      directEngine = reattachedEngine
+      expect(reattachedEngine.getSnapshot().hydrating).toBe(true)
+    }
+    view.rerender(frame(false))
+    expect(direct().getByRole("button", { name: "稳定直接会话" })).toBeVisible()
+    expect(directReads).toBe(1)
+    if (reattachedEngine !== null) {
+      await waitFor(() => expect(settleSnapshot).toBeTypeOf("function"))
+      await act(async () => { settleSnapshot!() })
+      await waitFor(() => expect(reattachedEngine?.getSnapshot().hydrating).toBe(false))
+    }
+    const settledReads = runState === "reattach-completed" ? 2 : 1
+    await waitFor(() => expect(directReads).toBe(settledReads))
+    view.rerender(frame(false, "different-rail-reader"))
+    expect(direct().queryByRole("button", { name: "稳定直接会话" })).toBeNull()
+    expect(direct().queryByRole("button", { name: "第二页直接会话" })).toBeNull()
+    await waitFor(() => expect(directReads).toBe(settledReads + 1))
+  } finally { view.unmount(); projectEngine.dispose(); reattachedEngine?.dispose(); window.history.replaceState({}, "", "/app") }
+})
+
 it("project overview draft and explicit new-conversation draft remain distinct after Home and project entry", async () => {
   const projectRef = "project_00000000-0000-4000-8000-000000000801"
   const projectPath = `/app/project/${projectRef}`

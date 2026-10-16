@@ -3860,6 +3860,7 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByText("R192 binding survives the filtered view move", { exact: true })
         .waitFor({ state: "visible", timeout: 10_000 })
 
+      const directGetsBeforeMove = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
       await directRowA.getByRole("button", {
         name: /Move conversation Move conversation alpha|移动会话 Move conversation alpha/u,
       }).click()
@@ -3875,17 +3876,25 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       await page.getByText("R192 binding survives the filtered view move", { exact: true })
         .waitFor({ state: "visible", timeout: 10_000 })
 
-      const directGetsAfterCommitBaseline = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
-      await page.locator('a[href="/app"]').first().click()
-      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      // The permanent Direct reader reconciles on the Move ACK, not by
+      // remounting when Home is opened. Preserve the post-commit owner GET
+      // oracle without requiring a redundant navigation-triggered GET.
       await expect.poll(() => moveBindingScopeGets.filter((entry) => entry.scope === "direct").length, { timeout: 10_000 })
-        .toBeGreaterThan(directGetsAfterCommitBaseline)
-      const directReturnRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
-      expect(directReturnRead).toEqual({
+        .toBeGreaterThan(directGetsBeforeMove)
+      const directPostCommitRead = moveBindingScopeGets.filter((entry) => entry.scope === "direct").at(-1)
+      expect(directPostCommitRead).toEqual({
         scope: "direct",
         bindingAtRead: moveProjectA,
         sessionIds: [moveConversationB],
       })
+      await expect.poll(() => directList.locator(`[data-conversation-id="${moveConversationA}"]`).count(), {
+        timeout: 10_000,
+      }).toBe(0)
+      await page.locator('a[href="/app"]').first().click()
+      await expect.poll(() => new URL(page.url()).pathname, { timeout: 10_000 }).toBe("/app")
+      expect(await directList.locator(`[data-conversation-id="${moveConversationA}"]`).count()).toBe(0)
+      await directList.locator(`[data-conversation-id="${moveConversationB}"]`)
+        .waitFor({ state: "visible", timeout: 10_000 })
       const directGetsBeforeReload = moveBindingScopeGets.filter((entry) => entry.scope === "direct").length
       await page.reload({ waitUntil: "domcontentloaded" })
       await page.locator('[data-server-admitted-shell="true"]').waitFor({ state: "detached", timeout: 15_000 })
