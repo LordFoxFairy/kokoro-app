@@ -382,6 +382,8 @@ export function WorkspaceRailShell({
             navigationExpanded={navigationExpanded}
             navigationTransitionKey={navigationTransitionKey}
             newSessionLabel={newSessionLabel}
+            {...(conversationReads === undefined ? {} : { conversationReads })}
+            preview={preview}
             dragProps={dragProps}
             dragState={dragState}
             dragOverKey={dragOverKey}

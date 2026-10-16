@@ -532,6 +532,8 @@ it("正式项目标题/时间只消费 canonical detail，切换 loading/error �
   expect(screen.queryByText("今天更新")).toBeNull()
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectRef="canonical-B" projectDetail={{ status: "loading" }} /></LocaleProvider>)
   expect(screen.queryByRole("heading", { name: "真正的项目名" })).toBeNull()
+  expect(screen.queryByText("项目不可用")).toBeNull()
+  expect(screen.getByTestId("project-title-loading")).toHaveAttribute("aria-hidden", "true")
   expect(screen.getByTestId("project-detail-loading")).toHaveTextContent("正在加载项目…")
   view.rerender(<LocaleProvider><KokoroProjectWorkspace {...props} projectDetail={{ status: "error", retryable: false }} /></LocaleProvider>)
   expect(screen.getByTestId("project-detail-error")).toBeInTheDocument()

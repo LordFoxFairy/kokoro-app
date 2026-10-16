@@ -37,6 +37,7 @@
 
 .projectMark svg { width: 1.5rem; height: 1.5rem; }
 .projectIdentity h1 { margin: 0; color: var(--foreground); font-size: 20px; font-weight: 500; line-height: 28px; }
+.projectTitleSkeleton { display: block; width: min(11rem, 38vw); height: 1.25rem; margin-block: 0.1875rem; border-radius: var(--radius-sm); background: var(--secondary); }
 .conversations h2 { margin: 0; color: var(--foreground); font-size: 1rem; font-weight: 500; line-height: 19px; }
 .projectIdentity p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 16px; }
 .conversations > p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 13px; line-height: 19.5px; }
