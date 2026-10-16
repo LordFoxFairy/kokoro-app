@@ -1817,6 +1817,109 @@ it("project trial survives the actual URL handoff and Composer submit action", a
 })
 
 
+it("queries the complete owner catalog and keeps search/category bound to every cursor page", async () => {
+  const calls: Record<string, unknown>[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-search" } })
+  const card = (id: string, name: string) => ({ skillId: id, displayName: name, userDescription: "needle in the full directory", tags: { values: ["SKILL_HUB_TAG_CODING"] }, currentVersion: { versionUid: `${id}-revision` } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      calls.push(body)
+      if (body.query !== "needle") return response({ skills: [card("first", "Initial page")], tagOptions: {} })
+      if (body.tag !== "SKILL_HUB_TAG_CODING") return response({ skills: [card("search", "Previously unloaded result")], tagOptions: {}, nextPageToken: "query-next" })
+      if (body.pageToken) return response({ skills: [card("second", "Filtered second page")], tagOptions: {} })
+      return response({ skills: [card("coding", "Filtered first page")], tagOptions: {}, nextPageToken: "query-coding-next" })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-search-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "Initial page" })
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索技能" }), { target: { value: "needle" } })
+  await screen.findByRole("button", { name: "Previously unloaded result" })
+  expect(calls.at(-1)).toMatchObject({ query: "needle" })
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "Filtered first page" })
+  expect(calls.at(-1)).toMatchObject({ query: "needle", tag: "SKILL_HUB_TAG_CODING" })
+  expect(calls.at(-1)).not.toHaveProperty("pageToken")
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: "Filtered second page" })
+  expect(calls.at(-1)).toMatchObject({ query: "needle", tag: "SKILL_HUB_TAG_CODING", pageToken: "query-coding-next" })
+  fireEvent.click(screen.getByRole("button", { name: "清除搜索" }))
+  await waitFor(() => expect(calls.at(-1)).toMatchObject({ tag: "SKILL_HUB_TAG_CODING" }))
+  await waitFor(() => expect(calls.at(-1)).not.toHaveProperty("query"))
+  expect(calls.at(-1)).not.toHaveProperty("pageToken")
+  expect(screen.queryByRole("button", { name: "Filtered second page" })).toBeNull()
+})
+
+it("retires a pending cursor when the category changes without blocking the new category page", async () => {
+  let releaseOld!: (response: Response) => void
+  let oldSignal: AbortSignal | null | undefined
+  const cursors: string[] = []
+  const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-filter-retirement" } })
+  const card = (id: string) => ({ skillId: id, displayName: id, currentVersion: { versionUid: `${id}-revision` }, tags: { values: ["SKILL_HUB_TAG_CODING"] } })
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (String(input).endsWith("ListSkills")) return response({ userAddedSkills: [], officialSkills: [] })
+    if (String(input).endsWith("ListHubSkills")) {
+      const body = JSON.parse(String(init?.body))
+      if (body.pageToken) {
+        cursors.push(body.pageToken)
+        if (body.pageToken === "old-filter-next") {
+          oldSignal = init?.signal
+          return new Promise<Response>((resolve) => { releaseOld = resolve })
+        }
+        return response({ skills: [card("current-filter-second")], tagOptions: {} })
+      }
+      return response({ skills: [card(body.tag ? "current-filter-first" : "old-filter-first")], nextPageToken: body.tag ? "current-filter-next" : "old-filter-next", tagOptions: {} })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-filter-retirement-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "old-filter-first" })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await waitFor(() => expect(cursors).toEqual(["old-filter-next"]))
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "current-filter-first" })
+  expect(oldSignal?.aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "全部" }))
+  await screen.findByRole("button", { name: "old-filter-first" })
+  expect(screen.getByRole("button", { name: "加载更多" })).toBeEnabled()
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  await screen.findByRole("button", { name: "current-filter-first" })
+  fireEvent.click(screen.getByRole("button", { name: "加载更多" }))
+  await screen.findByRole("button", { name: "current-filter-second" })
+  await act(async () => { releaseOld(response({ skills: [card("late-old-filter")], tagOptions: {} })) })
+  expect(screen.queryByRole("button", { name: "late-old-filter" })).toBeNull()
+  expect(cursors).toEqual(["old-filter-next", "current-filter-next"])
+})
+
+it("refreshes all cached catalog filters after a confirmed installation", async () => {
+  let installed = false
+  const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-filter-install" } })
+  const card = { skillId: "filter-install-series", displayName: "Filter install", currentVersion: { versionUid: "filter-install-revision" }, tags: { values: ["SKILL_HUB_TAG_CODING"] } }
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const path = String(input)
+    if (path.endsWith("ListHubSkills")) return response({ skills: [card], tagOptions: {} })
+    if (path.endsWith("ListSkills")) return response({ userAddedSkills: installed ? [{ id: card.skillId, version: "filter-install-revision", installationId: "filter-installation", added: true, enabled: true }] : [], officialSkills: [] })
+    if (path === "/api/hub/self/skill-installations") {
+      installed = true
+      return response({ data: { installation: {
+        installation_id: "filter-installation", source_ref: "skill:filter-install-revision", series_id: card.skillId, revision: "1", installed: true, enabled: true,
+        installed_at: "2026-10-16T00:00:00Z", updated_at: "2026-10-16T00:00:00Z", display_name: card.displayName, summary: "Owner description", source_status: "active", skill_updated_at: "2026-10-16T00:00:00Z", example_prompts: [], category_keys: [], product: { publication_audience: "owner", state_version: "1" }, tags: [],
+      }, change: "installed", event_id: "filter-install-event", replayed: false } })
+    }
+    throw Error("Unexpected catalog request")
+  })
+  render(<LocaleProvider><KokoroSkillsSurface preview={false} projectReadBoundary={{ admitted: true, subject: "catalog-filter-install-reader", generation: 1 }} onPrompt={vi.fn()} /></LocaleProvider>)
+  await screen.findByRole("button", { name: "添加 Filter install" })
+  fireEvent.click(screen.getByRole("button", { name: "编程" }))
+  fireEvent.click(await screen.findByRole("button", { name: "添加 Filter install" }))
+  expect(await screen.findByRole("button", { name: "已添加 Filter install" })).toBeDisabled()
+  fireEvent.click(screen.getByRole("button", { name: "全部" }))
+  expect(await screen.findByRole("button", { name: "已添加 Filter install" })).toBeDisabled()
+  expect(screen.queryByRole("button", { name: "添加 Filter install" })).toBeNull()
+})
+
 it("same actor recheck preserves catalog search and detail chrome while retiring private facts", async () => {
   let round = 1
   const response = (body: unknown) => Response.json(body, { headers: { "cache-control": "private, no-store", "x-request-id": "req-catalog-recheck" } })

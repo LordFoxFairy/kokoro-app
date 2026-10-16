@@ -4,7 +4,7 @@ import { createSkillInstallationClient, hasHubNoStoreDirective, type HubClient }
 import type { ProjectReadBoundary } from "@/ui/auth/use-session-state"
 import { retireResources } from "@/lib/query/resource-store"
 import { skillResourceKey, SKILLS_KEY, SKILLS_CATALOG_KEY } from "./skills-resource-cache"
-import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
+import { catalogPackageResponseSchema, catalogPackageErrorSchema, CATALOG_PACKAGE_ERRORS, catalogPackageMatches, catalogPackagePrivatePath, type CatalogPackageData, manuscriptReadErrorSchema, MANUSCRIPT_READ_ERRORS, manuscriptHubSkillSchema, manuscriptHubPageSchema, manuscriptListSchema, manuscriptDetailSchema, type CatalogSkillCategory, type SkillCard, type SkillCatalog, type SkillCatalogCard } from "@/hub/schemas"
 
 // Catalog consumers share the v1 resource namespace. Callers can append their
 // own view parameters, while an owner mutation invalidates this prefix once.
@@ -24,7 +24,7 @@ const categories = {
 type HubSkill = z.infer<typeof manuscriptHubSkillSchema>
 type ManusSkillHubClient = Omit<HubClient, "listSkillCatalog"> & {
   listSkillCatalog: (
-    input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { signal?: AbortSignal },
+    input?: NonNullable<Parameters<HubClient["listSkillCatalog"]>[0]> & { category?: CatalogSkillCategory; signal?: AbortSignal },
   ) => Promise<SkillCatalog>
 }
 
@@ -211,12 +211,15 @@ export function createManusSkillHubClient(base: HubClient, boundary: ProjectRead
     } }),
     listSkillCatalog: async (input = {}): Promise<SkillCatalog> => {
       assertCurrent()
+      const tag = input.category === undefined ? undefined : Object.entries(categories).find(([, category]) => category === input.category)?.[0]
+      if (input.category !== undefined && tag === undefined) throw new Error("skill_category_invalid")
       const signal = input.signal === undefined ? controller.signal : AbortSignal.any([controller.signal, input.signal])
       const [hub, installed] = await Promise.all([
         post("ListHubSkills", {
           pageSize: 30,
           includeOfficialSkills: true,
           ...(input.query?.trim() ? { query: input.query.trim() } : {}),
+          ...(tag === undefined ? {} : { tag }),
           ...(input.cursor ? { pageToken: input.cursor } : {}),
         }, manuscriptHubPageSchema, signal),
         post("ListSkills", {}, manuscriptListSchema, signal),

@@ -98,6 +98,7 @@ Web基线main `dc330a99332be28bb74a4fa2d2196ba8425f9dc5`；此新前缀覆盖下
 | `src/app/app/layout.tsx` | 登录后的桌面工作区布局 |
 | `src/i18n/context.tsx`、`src/ui/theme/theme-context.tsx` | 浏览器 locale/theme 偏好 Provider；存储拒绝时分别回到既有语言协商/系统主题，写失败只保留内存选择，不拥有认证事实 |
 | `src/features/app/kokoro-app-surface.tsx` | mounted surface 路由投影 |
+| `src/features/app/kokoro-skills-surface.tsx` | 技能广场的搜索／分类由正式目录查询，资源与追加 cursor 绑定同一筛选和准入 client；默认目录保留共享预热 key |
 | `src/components/blocks/app-frame/app-frame.tsx`、`app-frame-main-surface.tsx` | 桌面 shell 组合；准入期间只呈现无数据占位，并遵守路由的独立页面／会话及标题标志，不挂私有 Runtime |
 | `src/components/blocks/workspace-header/workspace-header.tsx` | 工作区导航入口；移动端标签与展开状态只读取抽屉状态，开关不修改桌面侧栏偏好 |
 | `src/components/blocks/app-frame/use-app-frame-navigation.ts` | URL归属与水合派生状态；终态错误不被错路由loading遮蔽，重试保留原深链 |

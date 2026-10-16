@@ -3,7 +3,7 @@
 import type { GithubImported } from "@/ui/skills/personal-skill-github-import-flow"
 
 import Image from "next/image"
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Check, CircleDot, ChevronDown, LoaderCircle, Plus, Search, SquarePen, Upload, X } from "lucide-react"
 
 import type { EmptyStateProps } from "@/components/blocks/app-frame/app-frame"
@@ -87,26 +87,43 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
     () => preview ? browserHubClient({ preview }) : createManusSkillHubClient(browserHubClient({ preview }), readBoundary),
     [preview, readBoundary],
   )
-  const catalogKey = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client)
+  const [query, setQuery] = useState("")
+  const [category, setCategory] = useState<SkillCategory>("all")
+  const [committedQuery, setCommittedQuery] = useState("")
+  useEffect(() => {
+    const timer = setTimeout(() => setCommittedQuery(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+  const catalogFilters = useMemo(() => ({
+    ...(committedQuery ? { query: committedQuery } : {}),
+    ...(category === "all" ? {} : { category }),
+  }), [category, committedQuery])
+  // The unfiltered entry retains the shared Settings/prewarm resource. Each
+  // filtered cursor belongs to its exact query/category and admitted client.
+  const catalogNamespace = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client)
+  const catalogKey = skillResourceKey(SKILL_CATALOG_RESOURCE_KEY, client,
+    committedQuery || category !== "all" ? JSON.stringify([committedQuery, category]) : "")
   const resource = useResource<SkillCatalog>(
     catalogKey,
-    useCallback(() => client.listSkillCatalog(), [client]),
+    useCallback(() => client.listSkillCatalog(catalogFilters), [catalogFilters, client]),
     { revalidateOnSubscribe: false },
   )
   const catalog = readBoundary.admitted && readBoundary.subject !== null ? resource : { ...resource, data: undefined, error: undefined, loading: true }
   const [pageState, setPageState] = useState<Readonly<{ base: SkillCatalog | undefined; pages: readonly SkillCatalog[] }>>({ base: undefined, pages: [] })
-  const [loadingMoreFor, setLoadingMoreFor] = useState<SkillCatalog | undefined>()
+  const [loadingMoreFor, setLoadingMoreFor] = useState<{ base: SkillCatalog; controller: AbortController }>()
   const [loadMoreFailedFor, setLoadMoreFailedFor] = useState<SkillCatalog | undefined>()
-  const loadingMoreRef = useRef(false)
-  const [query, setQuery] = useState("")
-  const [category, setCategory] = useState<SkillCategory>("all")
+  const loadingMoreRef = useRef<{ controller: AbortController } | null>(null)
+  useEffect(() => () => {
+    loadingMoreRef.current?.controller.abort()
+    loadingMoreRef.current = null
+  }, [catalogKey, catalog.data])
   const [githubOpen, setGithubOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [detailKey, setDetailKey] = useState<string | null>(null)
   const setDetailSkill = useCallback((skill: SkillCatalogCard | null) => setDetailKey(skill ? actionIdentity(skill) : null), [])
   const [notice, setNotice] = useState<{ catalogKey: string; value: GithubImported } | null>(null)
   const importNotice = notice?.catalogKey === catalogKey ? notice.value : null
-  const { busy, errorName, lastAddedSkill, installationFacts, setEnabled, isCurrent } = useCatalogSkillInstallation(readBoundary, catalog.data, catalogKey, actionIdentity)
+  const { busy, errorName, lastAddedSkill, installationFacts, setEnabled, isCurrent } = useCatalogSkillInstallation(readBoundary, catalog.data, catalogNamespace, actionIdentity)
   const createRef = useRef<HTMLButtonElement | null>(null)
   const githubRef = useRef<HTMLElement | null>(null)
   const uploadRef = useRef<HTMLElement | null>(null)
@@ -119,26 +136,30 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   // append state instead of flashing it while an effect resets local state.
   const additionalPages = useMemo(() => pageState.base === catalog.data ? pageState.pages : [], [catalog.data, pageState])
   const displayedCatalog = useMemo(() => catalog.data === undefined ? undefined : mergeSkillCatalogPages([catalog.data, ...additionalPages]), [additionalPages, catalog.data])
-  const loadingMore = loadingMoreFor === catalog.data
+  const loadingMore = loadingMoreFor !== undefined && loadingMoreFor.base === catalog.data && !loadingMoreFor.controller.signal.aborted
   const loadMoreFailed = loadMoreFailedFor === catalog.data
   const loadMore = useCallback(async () => {
     const cursor = displayedCatalog?.next_cursor
     const base = catalog.data
-    if (!cursor || base === undefined || loadingMoreRef.current) return
-    loadingMoreRef.current = true
-    setLoadingMoreFor(base)
+    if (!cursor || base === undefined || loadingMoreRef.current !== null) return
+    const pending = { base, controller: new AbortController() }
+    loadingMoreRef.current = pending
+    setLoadingMoreFor(pending)
     setLoadMoreFailedFor(undefined)
     try {
-      const page = await client.listSkillCatalog({ cursor })
+      const page = await client.listSkillCatalog({ ...catalogFilters, cursor, signal: pending.controller.signal })
+      if (pending.controller.signal.aborted) return
       if (page.next_cursor === cursor) throw new Error("skill catalog cursor did not advance")
       setPageState((current) => ({ base, pages: current.base === base ? [...current.pages, page] : [page] }))
     } catch {
-      setLoadMoreFailedFor(base)
+      if (!pending.controller.signal.aborted) setLoadMoreFailedFor(base)
     } finally {
-      loadingMoreRef.current = false
-      setLoadingMoreFor(undefined)
+      if (loadingMoreRef.current === pending) {
+        loadingMoreRef.current = null
+        setLoadingMoreFor(undefined)
+      }
     }
-  }, [catalog.data, client, displayedCatalog?.next_cursor])
+  }, [catalog.data, catalogFilters, client, displayedCatalog?.next_cursor])
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
@@ -150,9 +171,11 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       const matchesQuery = normalized === ""
         || skill.name.toLocaleLowerCase().includes(normalized)
         || skill.description.toLocaleLowerCase().includes(normalized)
-      return matchesCategory && matchesQuery
+      // Live matching is owned by the directory query, not by whichever
+      // cursor pages happen to be mounted. Preview still filters its fixture.
+      return !preview || matchesCategory && matchesQuery
     })
-  }, [catalog.data, category, displayedCatalog?.skills, installationFacts, query])
+  }, [catalog.data, category, displayedCatalog?.skills, installationFacts, preview, query])
 
   const startChat = useCallback((prompt: string) => {
     // When the catalog is mounted inside the app shell, hand the prompt to
@@ -178,7 +201,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
   const handleImported = (result: GithubImported) => {
     if (!isCurrent()) return
     setNotice({ catalogKey, value: result })
-    invalidate(catalogKey)
+    invalidate(catalogNamespace)
   }
 
 
@@ -335,7 +358,7 @@ function PreviewKokoroSkillsSurface({ preview = true, onPrompt, brandName = "Kok
       </main>
 
       <GithubImportDialog readBoundary={readBoundary} open={githubOpen} onOpenChange={setGithubOpen} returnFocusRef={githubRef} onImported={handleImported} />
-      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => { if (isCurrent()) invalidate(catalogKey) }} />
+      <SkillUploadDialog readBoundary={readBoundary} open={uploadOpen} onOpenChange={setUploadOpen} returnFocusRef={uploadRef} onPublished={() => { if (isCurrent()) invalidate(catalogNamespace) }} />
       <ManusSkillDetailDialog
         preview={preview}
         readBoundary={readBoundary}

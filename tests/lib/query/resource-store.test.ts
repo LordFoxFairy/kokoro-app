@@ -2,6 +2,8 @@
 // 竞态先发后至丢弃。以受控 deferred 精确编排 resolve 时序，不依赖真实计时。
 
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { createHubClient } from "@/hub/client"
+import { skillResourceKey } from "@/ui/skills/skills-resource-cache"
 
 import {
   __resetResourceStore,
@@ -29,6 +31,19 @@ function deferred<T>(): Deferred<T> {
 }
 
 const noop = () => {}
+
+it("invalidating one Skills client never refreshes another client with a longer numeric identity", async () => {
+  const clients = Array.from({ length: 11 }, () => createHubClient())
+  const fetchers = clients.map((_, index) => vi.fn(async () => `private-${index}`))
+  const keys = clients.map(client => skillResourceKey("hub/skills/catalog", client))
+  const unsubscribe = keys.map((key, index) => subscribeResource(key, fetchers[index]!, noop))
+  await Promise.resolve()
+  invalidate(keys[0]!)
+  await Promise.resolve()
+  expect(fetchers[0]).toHaveBeenCalledTimes(2)
+  for (const fetcher of fetchers.slice(1)) expect(fetcher).toHaveBeenCalledTimes(1)
+  for (const release of unsubscribe) release()
+})
 
 it("retiring an identity namespace clears facts and late work without refreshing or touching sibling keys", async () => {
   const late = deferred<string>()
