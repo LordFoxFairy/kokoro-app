@@ -6,7 +6,7 @@ import { createServer, request as httpRequest, type Server } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { createClient } from "redis"
-import { chromium } from "@playwright/test"
+import { chromium, type Response as BrowserResponse } from "@playwright/test"
 import AxeBuilder from "@axe-core/playwright"
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -15,6 +15,75 @@ import { iamCsrfKeyPrefix, issueIamInteractionCsrf } from "@/lib/server/iam-inte
 import { issuerCookieAfter, prepareInteraction } from "@/lib/server/iam-interaction-route"
 
 type HttpResult = Readonly<{ status: number; headers: Readonly<Record<string, string | string[] | undefined>>; body: string }>
+
+function loginStartCsrf(response: HttpResult): string {
+  expect(response.status).toBe(200)
+  expect(response.headers.location).toBeUndefined()
+  expect(response.headers["content-type"]).toBe("text/html; charset=utf-8")
+  expect(response.headers["cache-control"]).toBe("no-store")
+  expect(response.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin")
+  expect([...response.body.matchAll(/<form\b[^>]*>/giu)].map(([tag]) => tag)).toEqual([
+    '<form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam">',
+  ])
+  const inputs = [...response.body.matchAll(/<input\b[^>]*>/giu)].map(([tag]) => tag)
+  expect(inputs).toEqual([expect.stringMatching(/^<input type="hidden" name="csrfToken" value="[a-f0-9]{64}">$/u)])
+  const token = inputs[0]?.match(/value="([a-f0-9]{64})"/u)?.[1]
+  if (token === undefined) throw new Error("login start did not issue its single CSRF field")
+  expect([...response.body.matchAll(/<meta\b[^>]*\bname="referrer"[^>]*>/giu)].map(([tag]) => tag))
+    .toEqual(['<meta name="referrer" content="no-referrer">'])
+  const scripts = [...response.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map(([tag]) => tag)
+  expect(scripts).toEqual([expect.stringMatching(/^<script nonce="[A-Za-z0-9_-]{16,128}">document\.getElementById\("kokoro-login-start"\)\?\.submit\(\)<\/script>$/u)])
+  const nonce = scripts[0]?.match(/nonce="([A-Za-z0-9_-]{16,128})"/u)?.[1]
+  if (nonce === undefined) throw new Error("login start did not issue its nonce-bound script")
+  const csp = response.headers["content-security-policy"]
+  if (typeof csp !== "string") throw new Error("login start did not issue its response CSP")
+  const directives = csp.split(";").map((directive) => directive.trim().split(/\s+/u))
+  const policy = new Map(directives.map(([name, ...values]) => [name, values]))
+  expect(policy.size).toBe(directives.length)
+  expect(policy.get("script-src")).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", "'unsafe-eval'"])
+  expect(policy.get("form-action")).toEqual(["'self'"])
+  expect(policy.get("base-uri")).toEqual(["'self'"])
+  expect(policy.get("frame-ancestors")).toEqual(["'none'"])
+  const csrfCookies = (response.headers["set-cookie"] as string[] | undefined ?? [])
+    .filter((cookie) => cookie.startsWith("next-auth.csrf-token="))
+  const digest = createHash("sha256").update(`${token}${"a".repeat(32)}`).digest("hex")
+  expect(csrfCookies).toEqual([
+    `next-auth.csrf-token=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax`,
+  ])
+  return token
+}
+
+function providerStartLocation(response: HttpResult, origin: string): URL {
+  expect(response.status).toBe(302)
+  const location = new URL(response.headers.location as string)
+  expect(location.origin).toBe(origin)
+  expect(location.pathname).toBe("/iam/oauth2/authorize")
+  expect(location.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{16,1024}$/u)
+  expect((response.headers["set-cookie"] as string[] | undefined ?? [])
+    .some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
+  return location
+}
+
+async function expectBrowserLoginStart(login: BrowserResponse, signin: BrowserResponse): Promise<void> {
+  const issued = (await login.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+    .map(({ value }) => value)
+  const token = loginStartCsrf({ status: login.status(), headers: { ...await login.allHeaders(), "set-cookie": issued },
+    body: await login.text() })
+  const request = signin.request()
+  const origin = new URL(login.url()).origin
+  expect(request.url()).toBe(`${origin}/api/auth/signin/kokoro-iam`)
+  expect(request.method()).toBe("POST")
+  expect(request.isNavigationRequest()).toBe(true)
+  const headers = await request.allHeaders()
+  expect(headers.origin).toBe("null")
+  expect(headers["content-type"]).toBe("application/x-www-form-urlencoded")
+  expect([...new URLSearchParams(request.postData() ?? "")]).toEqual([["csrfToken", token]])
+  const cookies = headers.cookie?.split(/;\s*/u) ?? []
+  for (const cookie of issued) expect(cookies).toContain(cookie.split(";", 1)[0])
+  providerStartLocation({ status: signin.status(), headers: { ...await signin.allHeaders(),
+    "set-cookie": (await signin.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+      .map(({ value }) => value) }, body: "" }, origin)
+}
 
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve, reject) => {
@@ -611,17 +680,32 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
   afterAll(() => cleanupResources())
 
   it("starts Product OIDC from the server login route", async () => {
+    const origin = `http://localhost:${nextPort}`
+    const jar = pathCookieJar()
     const response = await rawHttp(nextPort, "/login")
-    if (response.status !== 302) throw new Error(`login status ${response.status}; ${nextOutput.slice(-1000)}`)
-    expect(response.headers.location).toContain("/iam/oauth2/authorize?")
+    if (response.status !== 200) throw new Error(`login status ${response.status}; ${nextOutput.slice(-1000)}`)
+    const token = loginStartCsrf(response)
     const issued = response.headers["set-cookie"] as string[] | undefined
     expect(issued?.some((cookie) => cookie.startsWith("next-auth.csrf-token="))).toBe(true)
     expect(issued?.filter((cookie) => cookie.startsWith("next-auth.csrf-token="))).toHaveLength(1)
-    expect(issued?.some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
-    const returning = await rawHttp(nextPort, "/login", `localhost:${nextPort}`, undefined, {
-      cookie: issued?.map((cookie) => cookie.split(";", 1)[0]).join("; ") ?? "",
+    jar.absorb(response)
+    const signin = await rawPost(nextPort, "/api/auth/signin/kokoro-iam", new URLSearchParams({ csrfToken: token }).toString(), {
+      origin: "null", cookie: jar.headerFor("/api/auth/signin/kokoro-iam"),
     })
-    expect(returning.status).toBe(302)
+    expect(providerStartLocation(signin, origin).href).toContain("/iam/oauth2/authorize?")
+    expect((signin.headers["set-cookie"] as string[] | undefined)
+      ?.some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
+    jar.absorb(signin)
+    const returning = await rawHttp(nextPort, "/login", `localhost:${nextPort}`, undefined, {
+      cookie: jar.headerFor("/login"),
+    })
+    const returningToken = loginStartCsrf(returning)
+    jar.absorb(returning)
+    const returningSignin = await rawPost(nextPort, "/api/auth/signin/kokoro-iam",
+      new URLSearchParams({ csrfToken: returningToken }).toString(), {
+        origin: "null", cookie: jar.headerFor("/api/auth/signin/kokoro-iam"),
+      })
+    providerStartLocation(returningSignin, origin)
   })
 
   it("navigates a real Chromium tab from authorize JSON to the Web sign-in page", async () => {
@@ -1010,10 +1094,14 @@ describe("IAM relay through the real Next HTTP boundary", { timeout: 30_000 }, (
       await page.getByLabel("邮箱").fill("user@example.test")
       await page.getByLabel("密码").fill("secret")
       const login = page.waitForResponse((response) => new URL(response.url()).pathname === "/login")
-      const post = page.waitForResponse((response) => response.request().method() === "POST")
+      const signin = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/signin/kokoro-iam" &&
+        response.request().method() === "POST")
+      const post = page.waitForResponse((response) => new URL(response.url()).pathname === "/auth/sign-in" &&
+        response.request().method() === "POST")
       await page.getByRole("button", { name: "登录" }).click()
-      expect((await post).status()).toBe(303)
-      expect((await login).status()).toBe(302)
+      const [expiredForm, loginStart, providerStart] = await Promise.all([post, login, signin])
+      expect(expiredForm.status()).toBe(303)
+      await expectBrowserLoginStart(loginStart, providerStart)
       await page.waitForURL(`http://localhost:${nextPort}/auth/sign-in?sig=fresh`)
       await expect.poll(() => page.getByRole("heading", { name: "欢迎回来" }).isVisible()).toBe(true)
       expect(await page.locator('input[name="csrf_token"]').inputValue()).not.toBe(oldToken)

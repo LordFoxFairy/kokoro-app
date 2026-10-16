@@ -1,3 +1,5 @@
+SET51：两现有 `tests/system/*next-http.integration.test.ts` 中的登录回归随当前 `/login` 的浏览器 CSRF 表单→provider POST→authorize 导航验证；生产源与项目/侧栏回归保持独立，结果见 CURRENT。
+
 <!-- SET47 archive consumer: 2026-10-15 -->
 SET47：任务菜单与Data归档恢复通过现AppFrame接线；新schema/raw JSON、lib/server归档列表与状态adapter、四操作generated组、settings客户端/hooks及shell active-state/command hooks各有单一职责。BFF归档事实唯一owner，Web无archive数据库或全局缓存。完整验收与正常3312激活待Root，3311保留。
 

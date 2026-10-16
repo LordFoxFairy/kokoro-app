@@ -1,3 +1,7 @@
+## SET51 登录回归范围（2026-10-16）
+
+仅验证现有 `/login` 浏览器表单和原 Product/OIDC/issuer 生命周期；GET 的 CSRF cookie 与后续 provider POST 的 state cookie 分阶段产生，测试保留该区分。无数据库、Redis schema、业务存储、cookie 格式或会话寿命变化；测试只清理自身 fixture 数据，原运行实例及用户事实保留。
+
 ## SET49 整合的数据边界（2026-10-16）
 
 无Web数据库、schema、迁移、cookie或持久化键新增。账户/个性化/余额/归档请求继续绑定准入与代际；主线项目链接不建立私有子任务reader。正常服务与业务事实保持，验证仅使用自有隔离fixture并复用现基础设施。

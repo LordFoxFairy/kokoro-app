@@ -955,6 +955,75 @@ function cookieHeader(...responses: HttpResult[]): string {
   return [...cookies.values()].join("; ")
 }
 
+function loginStartCsrf(response: HttpResult, authSecret: string): string {
+  expect(response.status).toBe(200)
+  expect(response.headers.location).toBeUndefined()
+  expect(response.headers["content-type"]).toBe("text/html; charset=utf-8")
+  expect(response.headers["cache-control"]).toBe("no-store")
+  expect(response.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin")
+  expect([...response.body.matchAll(/<form\b[^>]*>/giu)].map(([tag]) => tag)).toEqual([
+    '<form id="kokoro-login-start" method="post" action="/api/auth/signin/kokoro-iam">',
+  ])
+  const inputs = [...response.body.matchAll(/<input\b[^>]*>/giu)].map(([tag]) => tag)
+  expect(inputs).toEqual([expect.stringMatching(/^<input type="hidden" name="csrfToken" value="[a-f0-9]{64}">$/u)])
+  const token = inputs[0]?.match(/value="([a-f0-9]{64})"/u)?.[1]
+  if (token === undefined) throw new Error("login start did not issue its single CSRF field")
+  expect([...response.body.matchAll(/<meta\b[^>]*\bname="referrer"[^>]*>/giu)].map(([tag]) => tag))
+    .toEqual(['<meta name="referrer" content="no-referrer">'])
+  const scripts = [...response.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map(([tag]) => tag)
+  expect(scripts).toEqual([expect.stringMatching(/^<script nonce="[A-Za-z0-9_-]{16,128}">document\.getElementById\("kokoro-login-start"\)\?\.submit\(\)<\/script>$/u)])
+  const nonce = scripts[0]?.match(/nonce="([A-Za-z0-9_-]{16,128})"/u)?.[1]
+  if (nonce === undefined) throw new Error("login start did not issue its nonce-bound script")
+  const csp = response.headers["content-security-policy"]
+  if (typeof csp !== "string") throw new Error("login start did not issue its response CSP")
+  const directives = csp.split(";").map((directive) => directive.trim().split(/\s+/u))
+  const policy = new Map(directives.map(([name, ...values]) => [name, values]))
+  expect(policy.size).toBe(directives.length)
+  expect(policy.get("script-src")).toEqual(["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", "'unsafe-eval'"])
+  expect(policy.get("form-action")).toEqual(["'self'"])
+  expect(policy.get("base-uri")).toEqual(["'self'"])
+  expect(policy.get("frame-ancestors")).toEqual(["'none'"])
+  const csrfCookies = (response.headers["set-cookie"] as string[] | undefined ?? [])
+    .filter((cookie) => cookie.startsWith("next-auth.csrf-token="))
+  const digest = createHash("sha256").update(`${token}${authSecret}`).digest("hex")
+  expect(csrfCookies).toEqual([
+    `next-auth.csrf-token=${encodeURIComponent(`${token}|${digest}`)}; Path=/; HttpOnly; SameSite=Lax`,
+  ])
+  return token
+}
+
+function providerStartLocation(response: HttpResult, origin: string): URL {
+  expect(response.status).toBe(302)
+  const location = new URL(response.headers.location as string)
+  expect(location.origin).toBe(origin)
+  expect(location.pathname).toBe("/iam/oauth2/authorize")
+  expect(location.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{16,1024}$/u)
+  expect((response.headers["set-cookie"] as string[] | undefined ?? [])
+    .some((cookie) => cookie.startsWith("next-auth.state="))).toBe(true)
+  return location
+}
+
+async function expectBrowserLoginStart(login: BrowserResponse, signin: BrowserResponse, authSecret: string): Promise<void> {
+  const issued = (await login.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+    .map(({ value }) => value)
+  const token = loginStartCsrf({ status: login.status(), headers: { ...await login.allHeaders(), "set-cookie": issued },
+    body: await login.text() }, authSecret)
+  const request = signin.request()
+  const origin = new URL(login.url()).origin
+  expect(request.url()).toBe(`${origin}/api/auth/signin/kokoro-iam`)
+  expect(request.method()).toBe("POST")
+  expect(request.isNavigationRequest()).toBe(true)
+  const headers = await request.allHeaders()
+  expect(headers.origin).toBe("null")
+  expect(headers["content-type"]).toBe("application/x-www-form-urlencoded")
+  expect([...new URLSearchParams(request.postData() ?? "")]).toEqual([["csrfToken", token]])
+  const cookies = headers.cookie?.split(/;\s*/u) ?? []
+  for (const cookie of issued) expect(cookies).toContain(cookie.split(";", 1)[0])
+  providerStartLocation({ status: signin.status(), headers: { ...await signin.allHeaders(),
+    "set-cookie": (await signin.headersArray()).filter(({ name }) => name.toLowerCase() === "set-cookie")
+      .map(({ value }) => value) }, body: "" }, origin)
+}
+
 function jwt(privateKey: KeyObject, payload: Record<string, unknown>, algorithm: "EdDSA" | "RS256" = "EdDSA"): string {
   const header = Buffer.from(JSON.stringify({ alg: algorithm, typ: "JWT", kid: algorithm === "EdDSA" ? "fixture-key" : "rsa-key" })).toString("base64url")
   const claims = Buffer.from(JSON.stringify(payload)).toString("base64url")
@@ -3630,13 +3699,25 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
       expect(proxy.loginRequests()).toBe(1)
       expect(proxy.heldLoginDiagnostics()[0]).toMatchObject({ method: "GET", request_category: "document" })
 
+      const loginStarts: BrowserResponse[] = []
+      const providerStarts: BrowserResponse[] = []
+      page.on("response", (response) => {
+        const path = new URL(response.url()).pathname
+        if (path === "/login") loginStarts.push(response)
+        if (path === "/api/auth/signin/kokoro-iam") providerStarts.push(response)
+      })
       proxy.setFault("pass")
       proxy.forwardLoginRequests()
       const recoveryDeadline = Date.now() + 18_000
       await requireStableAuthenticatedWorkspace(
         "no_interstitial_recovery", page, response, proxy, outputStart, recoveryDeadline,
       )
-      expect(resource("/login")?.upstream_statuses).toContain(302)
+      expect(resource("/login")?.upstream_statuses).toContain(200)
+      expect(loginStarts).toHaveLength(1)
+      expect(providerStarts).toHaveLength(1)
+      await expectBrowserLoginStart(loginStarts[0]!, providerStarts[0]!, authSecret)
+      expect(resource("/api/auth/signin/kokoro-iam")?.methods).toEqual({ POST: 1 })
+      expect(resource("/api/auth/signin/kokoro-iam")?.upstream_statuses).toEqual([302])
       expect(resource("/iam/oauth2/authorize")?.upstream_statuses).toContain(302)
       expect(resource("/api/auth/callback/kokoro-iam")?.upstream_statuses).toContain(303)
       expect((resource("/app")?.request_categories.document ?? 0) - appDocumentsBeforeHandoff).toBeGreaterThanOrEqual(2)
@@ -5570,8 +5651,12 @@ describe("RP through real Next HTTP and strict BFF fixture", { timeout: 30_000 }
     expect(confirmed.headers.location).toBe("/login")
     expect(confirmed.body).toBe("")
     const nextLogin = await http(nextPort, confirmed.headers.location as string, "GET", "")
-    expect(nextLogin.status).toBe(302)
-    expect(nextLogin.headers.location).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
+    const nextToken = loginStartCsrf(nextLogin, authSecret)
+    const nextSignin = await http(nextPort, "/api/auth/signin/kokoro-iam", "POST",
+      new URLSearchParams({ csrfToken: nextToken }).toString(), { origin: "null", cookie: cookieHeader(nextLogin) })
+    const nextLocation = providerStartLocation(nextSignin, `http://localhost:${nextPort}`)
+    expect(nextLocation.href).toMatch(new RegExp(`^http://localhost:${nextPort}/iam/oauth2/authorize\\?`, "u"))
+    issuedStates.add(nextLocation.searchParams.get("state")!)
     const issuerAfter = cookieHeader(authorize, get, confirmed)
     expect((await http(nextPort, "/iam/get-session", "GET", "", { cookie: issuerAfter })).body)
       .toContain('"session":null')
