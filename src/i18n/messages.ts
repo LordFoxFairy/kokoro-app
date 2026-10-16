@@ -1997,7 +1997,7 @@ export const zh = {
   "skills.shareOtherPin":
     "我的技能中已安装该技能的其他固定版本；本页不会自动升级。",
   "mcp.recovery.in_progress": "原请求仍在处理中。可稍后恢复同一请求。",
-  "mcp.recovery.outcome_unknown": "原请求结果尚未确认。恢复时将使用原请求，不会重新创建。",
+  "mcp.recovery.outcome_unknown": "原请求结果尚未确认。恢复时将使用同一个请求。",
   "mcp.recovery.replay_expired": "原请求已超出可恢复期限。请关闭此窗口，在管理连接器中核验当前状态，请勿直接重新创建。",
   "mcp.recovery.identity_conflict": "原请求身份存在冲突。请先在管理连接器中核验当前状态。",
   "mcp.recovery.ownership_lost": "原请求的处理已中断。可显式恢复同一请求。",

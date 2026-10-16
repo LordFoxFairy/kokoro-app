@@ -2464,3 +2464,12 @@ Prepare 的正文/CAS/key 在派发前冻结；unknown 只显式恢复原命令�
 复用原表单/详情alert区域与现按钮，不新增大错误页、弹窗层或布局。九语言区分六receipt及三MCP前置原因；需要核验时保留只读意图、允许关闭并明确指向现管理连接器，不伪造自动修复或授权。Register和Prepare由原多阶段flow传播同一窄reason；原生OAuth创建窗口只展示当前scope的typed原因，不增加幂等key/自动授权。其他详情生命周期编辑与完整OAuth闭环仍独立未验。inspect_owner的人工核验不等于本片已提供receipt查询/结清API；未知资源不凭GET推断完成，后续产品解结流程仍OPEN。
 
 先复用现纯命令/rail/JSON行为套件复现expired/conflict被继续派发，再验证可恢复同key、终止原因零重发/零新建、关闭/同actor重核限制保留、换actor清除和迟到ACK规则；最终定向UI及相关工程门。仅本仓本地状态/九语言/现展示接线，无wire/DB/权限/依赖或正常后端切换。
+
+
+### Custom API 编辑/删除的原请求归属（2026-10-16，实施设计）
+
+沿既有AppFrameRuntime唯一ConnectorCommandProvider增加仅Custom API management的typed每profile命令索引；每资源仅update/remove之一，单命令纯核继续拥有准入、原key/body、ACK/未知/失败reason与lease。它不是任意命令registry；MCP Prepare/创建保持原owner。未决管理动作在关闭/重核后从同一profile详情恢复，资源暂缺时提供仅含意图ID的恢复入口，不把GET404当删除ACK。不同profile独立，未知编辑不能悄悄转成删除或新CAS；可显式结束已确认动作，未知/期限错误仍保原限制。
+
+Hub update/remove签名显式caller key，删隐式随机key，不留旧签名fallback。update ACK核精确ID及本次明确写入/清除字段、env upserts已配置/removals缺失；remove ACK核精确ID/deleted。仅确认后失活原主体API投影。详情window/准入代际各有取消信号，关闭允许且保原意图；旧ACK只失活原主体，不关新窗口。原dirty输入在unknown时只读，确认清真实secret，即使重核/旧ACK也不复活；恢复请求不依赖现输入或新读版本。
+
+删除先沿原明确确认，再重放原已确认意图，不自动删除/新key；正常浏览器不执行未经当次确认的永久删除，先以行为/受控传输验该风险。原HTTP/Schema/鉴权/owner事务不改。写区为Hub管理签名/ACK、typed命令index、现provider/协调/详情、现纯command/rail/client测试与设计/INDEX；复用现失败reason与i18n，不加网络协议、存储或依赖。先错误ACK/unknown编辑RED，再核心及UI主路径，最后本仓相关门。

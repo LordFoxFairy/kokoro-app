@@ -1252,7 +1252,7 @@ export const fr: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionTasks": "Créer une app de tâches avec gestion de projet",
   "firstSite.appSuggestionProductivity": "Créer une boîte à outils de productivité personnelle",
   "mcp.recovery.in_progress": "La requête initiale est en cours. Reprenez la même requête plus tard.",
-  "mcp.recovery.outcome_unknown": "Le résultat reste à confirmer. La reprise utilise la requête initiale, sans nouvelle création.",
+  "mcp.recovery.outcome_unknown": "Le résultat reste à confirmer. La reprise utilise la même requête initiale.",
   "mcp.recovery.replay_expired": "Le délai de reprise a expiré. Fermez cette fenêtre et vérifiez Gérer les connecteurs avant toute nouvelle création.",
   "mcp.recovery.identity_conflict": "L’identité de la requête initiale est en conflit. Vérifiez Gérer les connecteurs.",
   "mcp.recovery.ownership_lost": "Le traitement a été interrompu. Reprenez explicitement la même requête.",

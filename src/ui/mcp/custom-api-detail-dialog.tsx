@@ -21,6 +21,9 @@ import type {
 } from "@/hub/custom-api.schema";
 import { useT } from "@/i18n/context";
 
+import { connectorCommandMayResume, connectorCommandFailureMessage } from "./connector-command-failure";
+import type { CustomApiManagementSummary } from "./custom-api-management-commands";
+
 import styles from "./custom-mcp-detail-dialog.module.css";
 import { useMcpEditorSelection } from "./use-mcp-editor-selection";
 
@@ -31,6 +34,11 @@ export function CustomApiDetailDialog({
   profile,
   actionError,
   busy,
+  admitted,
+  command,
+  canUpdate,
+  canRemove,
+  onResume,
   returnFocusRef,
   onClose,
   onSave,
@@ -43,6 +51,11 @@ export function CustomApiDetailDialog({
   onRetry?: () => void;
   actionError: boolean;
   busy: boolean;
+  admitted: boolean;
+  command: CustomApiManagementSummary | undefined;
+  canUpdate: boolean;
+  canRemove: boolean;
+  onResume: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSave: (input: CustomApiUpdateInput) => void;
@@ -58,8 +71,15 @@ export function CustomApiDetailDialog({
   const [facts, setFacts] = useState(profile);
   if (facts !== profile) { setFacts(profile); setDeleteArmed(false); }
   const [secrets, setSecrets] = useState<SecretDraft[]>([]);
-  const ready = profile !== null;
-  const locked = busy || !ready;
+  const ready = profile !== null && admitted;
+  const unresolved = command?.kind === "running" || command?.kind === "unknown" || command?.kind === "completed";
+  const locked = unresolved || busy || !ready;
+  const [observedKind, setObservedKind] = useState(command?.kind);
+  if (observedKind !== command?.kind) {
+    setObservedKind(command?.kind);
+    // The command core drops its secret body at ACK; drop this editor's copy too.
+    if (command?.kind === "completed") { setSecrets([]); setName(null); setInstructions(null); }
+  }
   const selectionProps = useMcpEditorSelection(ready);
   const configuredNames = useMemo(
     () => new Set(profile?.environment.map(({ name }) => name) ?? []),
@@ -72,7 +92,7 @@ export function CustomApiDetailDialog({
     !secrets.some((item) => configuredNames.has(item.name.trim()));
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!valid || !profile) return;
+    if (locked || !canUpdate || !valid || !profile) return;
     onSave({
       expected_state_version: profile.state_version,
       name: name.trim(),
@@ -95,11 +115,18 @@ export function CustomApiDetailDialog({
     event.preventDefault();
     target.focus({ preventScroll: true });
   };
+  const commandStatus = (command && command.kind !== "rejected" ? <Alert role="status">
+          <AlertDescription>{t(command.kind === "completed" ? "mcp.creationDone" : command.kind === "running" ? "mcp.loading" : connectorCommandFailureMessage(command.failure, "mcp.recovery.outcome_unknown"))}</AlertDescription>
+          {command.kind === "unknown" || command.kind === "completed" ? <Button type="button" variant="outline"
+            disabled={!admitted || (command.kind === "unknown" && !connectorCommandMayResume(command.failure))} onClick={onResume}>
+            {t(command.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")}
+          </Button> : null}
+        </Alert> : null);
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !busy) onClose();
+        if (!open) onClose();
       }}
     >
       <DialogContent
@@ -123,6 +150,7 @@ export function CustomApiDetailDialog({
               </div>
             </header>
             <div className={styles.apiConfigurationBody}>
+              {commandStatus}
               {!ready ? pendingError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.loadError")}</AlertDescription>
@@ -139,11 +167,11 @@ export function CustomApiDetailDialog({
               <div className={styles.field}>
                 <Label htmlFor="custom-api-detail-name">名称</Label>
                 <Input
-                  readOnly={!ready}
+                  readOnly={locked}
                   id="custom-api-detail-name"
                   value={name}
                   maxLength={400}
-                  onChange={(event) => ready && setName(event.target.value)}
+                  onChange={(event) => !locked && setName(event.target.value)}
                   required
                 />
               </div>
@@ -152,11 +180,11 @@ export function CustomApiDetailDialog({
                   备注（可选）
                 </Label>
                 <Textarea
-                  readOnly={!ready}
+                  readOnly={locked}
                   id="custom-api-detail-instructions"
                   value={instructions}
                   maxLength={4000}
-                  onChange={(event) => ready && setInstructions(event.target.value)}
+                  onChange={(event) => !locked && setInstructions(event.target.value)}
                 />
               </div>
               <fieldset className={styles.headers}>
@@ -170,12 +198,12 @@ export function CustomApiDetailDialog({
                 {secrets.map((secret) => (
                   <div className={styles.headerDraft} key={secret.id}>
                     <Input
-                      readOnly={!ready}
+                      readOnly={locked}
                       id={`api-secret-${secret.id}-name`}
                       aria-label="密钥名称"
                       value={secret.name}
                       onChange={(event) =>
-                        ready && setSecrets((items) =>
+                        !locked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, name: event.target.value }
@@ -185,14 +213,14 @@ export function CustomApiDetailDialog({
                       }
                     />
                     <Input
-                      readOnly={!ready}
+                      readOnly={locked}
                       id={`api-secret-${secret.id}-value`}
                       aria-label="密钥值"
                       type="password"
                       value={secret.value}
                       autoComplete="new-password"
                       onChange={(event) =>
-                        ready && setSecrets((items) =>
+                        !locked && setSecrets((items) =>
                           items.map((item) =>
                             item.id === secret.id
                               ? { ...item, value: event.target.value }
@@ -208,7 +236,7 @@ export function CustomApiDetailDialog({
                       disabled={locked}
                       aria-label="移除新增密钥"
                       onClick={() =>
-                        ready && setSecrets((items) =>
+                        !locked && setSecrets((items) =>
                           items.filter((item) => item.id !== secret.id),
                         )
                       }
@@ -237,12 +265,11 @@ export function CustomApiDetailDialog({
               <Button
                 type="button"
                 variant="outline"
-                disabled={locked}
-                onClick={() => setEditing(false)}
+                onClick={() => { if (unresolved) onClose(); else setEditing(false); }}
               >
                 {t("mcp.cancel")}
               </Button>
-              <Button type="submit" disabled={locked || !valid}>
+              <Button type="submit" disabled={locked || !canUpdate || !valid}>
                 {busy ? (
                   <Spinner aria-hidden="true" />
                 ) : (
@@ -255,7 +282,7 @@ export function CustomApiDetailDialog({
         ) : !profile ? (
           <section className={styles.detail} aria-busy={!pendingError}>
             <header className={styles.detailHero}><DialogTitle>自定义 API</DialogTitle></header>
-            <div className={styles.detailBody}>{pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}</div>
+            <div className={styles.detailBody}>{commandStatus}{pendingError ? <Alert variant="destructive" role="alert"><AlertDescription>{t("mcp.loadError")}</AlertDescription><Button type="button" variant="outline" onClick={onRetry}>{t("mcp.retry")}</Button></Alert> : <span role="status">{t("mcp.loading")}</span>}</div>
           </section>
         ) : (
           <section className={`${styles.detail} ${styles.apiDetail}`}>
@@ -269,6 +296,7 @@ export function CustomApiDetailDialog({
               </div>
             </header>
             <div className={styles.apiDetailBody}>
+              {commandStatus}
               {actionError ? (
                 <Alert variant="destructive" role="alert">
                   <AlertDescription>{t("mcp.actionFailed")}</AlertDescription>
@@ -305,7 +333,7 @@ export function CustomApiDetailDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={busy}
+                  disabled={locked || !canUpdate}
                   onClick={() => setEditing(true)}
                 >
                   <Pencil aria-hidden="true" />
@@ -318,7 +346,7 @@ export function CustomApiDetailDialog({
                   <Button
                     type="button"
                     variant="destructive"
-                    disabled={busy}
+                    disabled={locked || !canRemove}
                     onClick={onDelete}
                   >
                     {t("mcp.deleteConfirm")}
@@ -326,7 +354,7 @@ export function CustomApiDetailDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={busy}
+                    disabled={locked || !canRemove}
                     onClick={() => setDeleteArmed(false)}
                   >
                     {t("mcp.cancel")}
@@ -337,7 +365,7 @@ export function CustomApiDetailDialog({
                   type="button"
                   variant="ghost"
                   className={styles.apiRemove}
-                  disabled={busy}
+                  disabled={locked || !canRemove}
                   onClick={() => setDeleteArmed(true)}
                 >
                   <Trash2 aria-hidden="true" />

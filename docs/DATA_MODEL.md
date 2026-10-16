@@ -1281,3 +1281,6 @@ Connector恢复错误固定消费仅新增只读generated机器profile与provena
 
 
 Connector命令快照只增加可选非敏感失败reason，原正文/key仍仅actor RAM；不持久化、不新增owner receipt副本。准入退休保原失败限制且清私有投影，actor/client退休清意图；晚ACK继续仅原主体确认失活，不借错误或读取结清未知写。
+
+
+Custom API管理pending意图只在当前actor/client RAM，以profile ID索引一个typed update/remove命令。snapshot仅ID/operation/kind/failure，不含正文、key、owner事实或secret；原env写值仅为未决原请求短存，ACK或actor退休清除。没有browser持久化/SQL/Redis或额外receipt事实源，列表缺资源不证明命令完成。

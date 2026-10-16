@@ -1252,7 +1252,7 @@ export const ko: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionTasks": "작업 관리 기능이 있는 할 일 앱 만들기",
   "firstSite.appSuggestionProductivity": "개인 생산성 도구 모음 만들기",
   "mcp.recovery.in_progress": "원래 요청을 처리 중입니다. 나중에 같은 요청을 재개하세요.",
-  "mcp.recovery.outcome_unknown": "결과가 확인되지 않았습니다. 새로 생성하지 않고 원래 요청을 재개합니다.",
+  "mcp.recovery.outcome_unknown": "결과가 확인되지 않았습니다. 재개 시 동일한 원래 요청을 사용합니다.",
   "mcp.recovery.replay_expired": "복구 기간이 만료되었습니다. 이 창을 닫고 커넥터 관리에서 상태를 먼저 확인하세요.",
   "mcp.recovery.identity_conflict": "원래 요청 식별자가 충돌합니다. 커넥터 관리에서 먼저 확인하세요.",
   "mcp.recovery.ownership_lost": "처리가 중단되었습니다. 같은 요청을 직접 재개할 수 있습니다.",

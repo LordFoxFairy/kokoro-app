@@ -1631,3 +1631,6 @@ Connector browser-private错误消费固定 BFF `d176e3d0cbbc2eab903dae2b2d96990
 
 
 Connector恢复UX只消费已固定BFF browser-private profile的合法tuple，再映射为本地reason；不改HTTP/成功ACK、原幂等正文/CAS/预算或原生OAuth协议。policy同请求恢复仅显式执行；inspect_owner或配置原因不触发retry/new key，GET不作ACK。错误提示不回显owner message、内部metadata或凭据；原创建/详情网络请求仍全部经现Hub。
+
+
+Custom API本地Hub updateCustomApi(profileId,input,key,signal?)、removeCustomApi(profileId,input,key,signal?)均要求caller合法Idempotency-Key，不保旧隐式随机入口。原wire不变；update严格核目标及明确写入字段/环境变量描述，remove核profile_id/deleted，不以GET/404结清命令。状态层保冻结operation/id/body/CAS/key，恢复只同请求，删除仍只承接原用户已确认意图。

@@ -1252,7 +1252,7 @@ export const pt: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionTasks": "Criar um app de tarefas com gerenciamento",
   "firstSite.appSuggestionProductivity": "Criar um kit de produtividade pessoal",
   "mcp.recovery.in_progress": "A solicitação original está em processamento. Retome a mesma solicitação mais tarde.",
-  "mcp.recovery.outcome_unknown": "O resultado não foi confirmado. A retomada usa a solicitação original sem criar outra.",
+  "mcp.recovery.outcome_unknown": "O resultado não foi confirmado. A retomada usa a mesma solicitação original.",
   "mcp.recovery.replay_expired": "O prazo de recuperação expirou. Feche esta janela e verifique Gerenciar conectores antes de criar novamente.",
   "mcp.recovery.identity_conflict": "A identidade da solicitação original está em conflito. Verifique Gerenciar conectores.",
   "mcp.recovery.ownership_lost": "O processamento foi interrompido. Retome explicitamente a mesma solicitação.",

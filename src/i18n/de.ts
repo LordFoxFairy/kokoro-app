@@ -1252,7 +1252,7 @@ export const de: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionTasks": "To-do-App mit Aufgabenverwaltung erstellen",
   "firstSite.appSuggestionProductivity": "Persönliches Produktivitäts-Toolkit erstellen",
   "mcp.recovery.in_progress": "Die ursprüngliche Anfrage wird verarbeitet. Setze dieselbe Anfrage später fort.",
-  "mcp.recovery.outcome_unknown": "Das Ergebnis ist unbestätigt. Die Fortsetzung verwendet die ursprüngliche Anfrage ohne neue Erstellung.",
+  "mcp.recovery.outcome_unknown": "Das Ergebnis ist unbestätigt. Die Fortsetzung verwendet dieselbe ursprüngliche Anfrage.",
   "mcp.recovery.replay_expired": "Der Wiederaufnahmezeitraum ist abgelaufen. Schließe dieses Fenster und prüfe zuerst die Verbindungsverwaltung.",
   "mcp.recovery.identity_conflict": "Die Identität der ursprünglichen Anfrage steht im Konflikt. Prüfe zuerst die Verbindungsverwaltung.",
   "mcp.recovery.ownership_lost": "Die Verarbeitung wurde unterbrochen. Setze dieselbe Anfrage ausdrücklich fort.",

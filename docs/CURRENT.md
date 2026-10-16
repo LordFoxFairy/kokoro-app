@@ -1804,3 +1804,10 @@ BFF 仍是 HTTP fixture，
 ## 2026-10-16 Connector恢复交互候选（未正常后端配对）
 
 API/JSON/Register/共享Prepare在actor RAM保存固定profile严格核过的失败reason，expired/conflict/invalid及配置前置原因阻断原请求重派；processing/unknown/ownership-lost只用户显式恢复原key/body。创建与Prepare详情复用原alert/button/九语言，不按message猜、不新建或GET冒ACK；原生OAuth创建窗口typed原因受当前scope保护。两项命令重派与JSON误导提示均有实际RED→GREEN；最终工程/审查/commit由Root计划记录。没有receipt人工结清API或真实OAuth完成证据，其他详情编辑失败恢复仍待处理。
+
+
+## 2026-10-16 Custom API 管理恢复候选
+
+当前App工作树在3b25bc6基础上将API update/remove移出通用runAction，接稳定actor/client按profile的原命令管理。未知编辑只读、显式恢复原key/body/CAS，不允许换删除/新版本；正常关闭暂停等待，不冒回滚。列表缺资源仍可打开原意图；ACK清secret草稿，旧窗口不关闭新窗口。Hub显式caller key并核目标/修改字段/env安全描述，原wire和后端不改。
+
+现有三suite316PASS，实际两产品缺陷RED（错目标ACK放行、编辑未知无恢复）及重复env ACK负控RED后修复；初始UI用错“保存更改”标签、后继取消按钮多匹配/完成微任务等待和错误构造参数测试fixture问题已纠正，未据此改产品契约。正常3310当前Session对自有零密钥API执行改名→列表刷新→精确详情回读→恢复原名→硬刷新持久保持，未删除/执行模型/工具/改资金。未知提交/缺行删除/过期/迟到ACK为受控组件与纯flow证据，不冒真实后端故障注入或全产品验收。最终相同业务/测试字节在Node22.22.2下contract280、architecture50、lint/typecheck退出0，默认181files/3250PASS/0skip/187.55s（2workers）；同字节原候选build0、现公共壳E2E桌面/窄屏6PASS/8.2s（1worker）、后继typecheck0。23路径冻结只读复核未见新增确定P0–P2，主方再次核hash；此结果仅本App候选，不称Platform历史format12失败或整体组合合并门已过。公共壳E2E只覆盖既有页面几何，不充当新管理故障或OAuth真实证据；没有新增suite/恢复五套退役UI。

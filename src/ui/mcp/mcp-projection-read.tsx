@@ -11,7 +11,7 @@ import type {
 } from "@/hub/mcp-connector.schema";
 import { useT } from "@/i18n/context";
 
-import { useMcpPreparationCommands } from "./connector-command-context";
+import { useCustomApiManagementCommands, useMcpPreparationCommands } from "./connector-command-context";
 import { McpConnectionList } from "./mcp-connection-list";
 import { McpConnectorEditorDialog } from "./mcp-connector-editor-dialog";
 import { CustomMcpDetailDialog } from "./custom-mcp-detail-dialog";
@@ -28,8 +28,10 @@ import styles from "./mcp-projection-read.module.css";
 import { CustomApiDetailDialog } from "./custom-api-detail-dialog";
 import { McpSettingsToolbar } from "./mcp-settings-toolbar";
 import { useMcpOAuthPopup } from "./use-mcp-oauth-popup";
-import { invalidateCustomApiProjection, useCustomApiProjection } from "./use-custom-api-projection";
+import { useCustomApiProjection } from "./use-custom-api-projection";
 import { invalidateMcpConnectorProjection, useMcpProjection } from "./use-mcp-projection";
+
+import type { CustomApiManagementIntent } from "./custom-api-management-commands";
 
 const EMPTY_PROVIDERS: McpConnectorProvider[] = [];
 
@@ -76,6 +78,9 @@ export function McpProjectionRead({
   const t = useT();
   const preparation = useMcpPreparationCommands(client, identity);
   const preparationStates = useSyncExternalStore(preparation.subscribe, preparation.getSnapshot, preparation.getSnapshot);
+  const apiManagement = useCustomApiManagementCommands(client, identity);
+  const apiManagementStates = useSyncExternalStore(apiManagement.subscribe, apiManagement.getSnapshot, apiManagement.getSnapshot);
+  const commandBoundary = { subject: identity, admitted, generation: readGeneration };
   const owner = useMemo(() => ({ client, identity, admitted, readGeneration }), [client, identity, admitted, readGeneration]);
   const ownerRef = useRef<typeof owner | null>(owner);
   useLayoutEffect(() => {
@@ -104,7 +109,16 @@ export function McpProjectionRead({
   const preparationState = preparationStates.find(item => item.serverId === connectorIntent?.serverId && item.connectorId === connectorIntent?.connectorId);
   const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
   const [selectedProviderConnectionId, setSelectedProviderConnectionId] = useState<string | null>(null);
-  const [selectedCustomApiId, setSelectedCustomApiId] = useState<string | null>(null);
+  const [apiIntent, setApiIntent] = useState<{ profileId: string; window: object } | null>(null);
+  const selectedCustomApiId = apiIntent?.profileId ?? null;
+  const apiWindow = useRef<{ intent: object; controller: AbortController } | null>(null);
+  useLayoutEffect(() => {
+    const window = apiIntent?.window;
+    const wait = window ? { intent: window, controller: new AbortController() } : null;
+    apiWindow.current = wait;
+    return () => { if (apiWindow.current === wait) apiWindow.current = null; wait?.controller.abort(); };
+  }, [apiIntent?.window, owner]);
+  const apiCommandState = apiManagementStates.find(item => item.profileId === selectedCustomApiId);
   const [detailRetry, setDetailRetry] = useState(0);
   const [providerQuery, setProviderQuery] = useState("");
   const [connectorQuery, setConnectorQuery] = useState("");
@@ -214,7 +228,6 @@ export function McpProjectionRead({
     id: string,
     action: () => Promise<unknown>,
     onSuccess?: (result: unknown) => void,
-    resource: "connectors" | "custom-api" = "connectors",
   ) => {
     if (!owner.admitted || ownerRef.current !== owner) return;
     setActionId(id);
@@ -223,8 +236,7 @@ export function McpProjectionRead({
       const result = await action();
       // A confirmed old-generation write still retires this exact actor's
       // projection, but never publishes its private ACK or changes current UI.
-      if (resource === "custom-api") invalidateCustomApiProjection(client, identity);
-      else invalidateMcpConnectorProjection(client, identity);
+      invalidateMcpConnectorProjection(client, identity);
       if (ownerRef.current !== owner) return;
       resetEditor();
       onSuccess?.(result);
@@ -233,6 +245,15 @@ export function McpProjectionRead({
     } finally {
       if (ownerRef.current === owner) setActionId(null);
     }
+  };
+  const runApiManagement = async (input?: CustomApiManagementIntent) => {
+    const wait = apiWindow.current;
+    if (!apiIntent || !wait || wait.intent !== apiIntent.window || ownerRef.current !== owner || !admitted) return;
+    const confirmed = input
+      ? await apiManagement.submit(input, commandBoundary, wait.controller.signal)
+      : await apiManagement.resume(apiIntent.profileId, commandBoundary, wait.controller.signal);
+    if (!confirmed || ownerRef.current !== owner || apiWindow.current !== wait) return;
+    if (apiManagement.finish(apiIntent.profileId, commandBoundary)) setApiIntent(null);
   };
   const beginEdit = (connector: McpConnector, returnFocus: HTMLElement) => {
     if (!owner.admitted || ownerRef.current !== owner) return;
@@ -475,6 +496,12 @@ export function McpProjectionRead({
           />
         </div>
       ) : null}
+      {view === "connections" && admitted ? apiManagementStates.filter(item =>
+        item.kind !== "rejected" && !customApis.some(profile => profile.profile_id === item.profileId)
+      ).map(item => <Button key={item.profileId} type="button" variant="outline" className="max-w-full" onClick={event => {
+        editorReturnFocusRef.current = event.currentTarget;
+        setApiIntent({ profileId: item.profileId, window: {} });
+      }}><span className="truncate">{t(item.kind === "completed" ? "mcp.creationDone" : "mcp.retryOriginal")} · {item.profileId}</span></Button>) : null}
       {view === "connections" && connectorProjection ? (
         <div className={styles.content}>
           <McpConnectionList
@@ -490,7 +517,7 @@ export function McpProjectionRead({
             onSelectCustomApi={(profile, trigger) => {
               editorReturnFocusRef.current = trigger;
               setActionError(false);
-              setSelectedCustomApiId(profile.profile_id);
+              setApiIntent({ profileId: profile.profile_id, window: {} });
             }}
             previousEnabled={history.length > 0 && actionId === null}
             nextEnabled={
@@ -749,39 +776,24 @@ export function McpProjectionRead({
         <CustomApiDetailDialog
           key={selectedCustomApiId}
           profile={selectedCustomApi}
-          busy={actionId === selectedCustomApiId}
+          busy={apiCommandState?.kind === "running"}
+          admitted={admitted}
+          command={apiCommandState}
+          canUpdate={apiManagement.canUpdate}
+          canRemove={apiManagement.canRemove}
+          onResume={() => { void runApiManagement(); }}
           pendingError={admitted && (customApiState.error || (!customApiState.loading && !selectedCustomApi))}
           onRetry={() => { if (ownerRef.current === owner && admitted) customApiState.reload(); }}
-          actionError={actionError}
+          actionError={apiCommandState?.kind === "rejected"}
           returnFocusRef={editorReturnFocusRef}
-          onClose={() => {
-            setSelectedCustomApiId(null);
-            setActionError(false);
-          }}
+          onClose={() => setApiIntent(null)}
           onSave={(input) => {
-            if (!selectedCustomApi || !client.updateCustomApi) return;
-            void runAction(
-              selectedCustomApi.profile_id,
-              () =>
-                client.updateCustomApi!(selectedCustomApi.profile_id, input),
-              () => setSelectedCustomApiId(null),
-              "custom-api",
-            );
+            if (!selectedCustomApi) return;
+            void runApiManagement({ operation: "update", profileId: selectedCustomApi.profile_id, input });
           }}
           onDelete={() => {
-            if (!selectedCustomApi || !client.removeCustomApi) return;
-            void runAction(
-              selectedCustomApi.profile_id,
-              () =>
-                client.removeCustomApi!(selectedCustomApi.profile_id, {
-                  expected_state_version: selectedCustomApi.state_version,
-                }),
-              () => {
-                setSelectedCustomApiId(null);
-                editorReturnFocusRef.current = null;
-              },
-              "custom-api",
-            );
+            if (!selectedCustomApi) return;
+            void runApiManagement({ operation: "remove", profileId: selectedCustomApi.profile_id, input: { expected_state_version: selectedCustomApi.state_version } });
           }}
         />
       ) : null}

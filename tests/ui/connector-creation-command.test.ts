@@ -420,3 +420,93 @@ it("an expired Prepare remains blocked across fresh CAS inputs and admission cha
   commands.bind({ ...admitted, subject: "other", generation: 3 });
   expect(commands.getSnapshot()).toEqual([]);
 });
+
+describe("Custom API per-profile management intents", () => {
+  it("keeps the original edit body, CAS and key across close/recheck and cannot switch it to deletion", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const update = vi.fn().mockRejectedValueOnce(new Error("lost ACK")).mockResolvedValue(profile)
+    const remove = vi.fn().mockResolvedValue(undefined), confirmed = vi.fn()
+    const flow = createCustomApiManagementCommands({ client: { updateCustomApi: update, removeCustomApi: remove }, boundary: admitted, onConfirmed: confirmed })
+    const release = flow.retain(admitted)
+    const body = { expected_state_version: "1", name: "Original edit", environment_upserts: [{ name: "SECRET", value: "fixture-management-secret" }] }
+    expect(await flow.submit({ operation: "update", profileId: "flow-api", input: body }, admitted)).toBe(false)
+    body.name = "New draft"; body.expected_state_version = "9"; body.environment_upserts[0]!.value = "changed"
+    expect(await flow.submit({ operation: "remove", profileId: "flow-api", input: { expected_state_version: "9" } }, admitted)).toBe(false)
+    expect(remove).not.toHaveBeenCalled()
+    flow.bind({ ...admitted, admitted: false, generation: 2 })
+    expect(await flow.resume("flow-api", admitted)).toBe(false)
+    const current = { ...admitted, generation: 2 }; flow.bind(current)
+    expect(await flow.resume("flow-api", current)).toBe(true)
+    expect(update.mock.calls[0]?.slice(0, 3)).toEqual(update.mock.calls[1]?.slice(0, 3))
+    expect(update.mock.calls[1]?.[1]).toEqual({ expected_state_version: "1", name: "Original edit", environment_upserts: [{ name: "SECRET", value: "fixture-management-secret" }] })
+    expect(flow.getSnapshot()).toEqual([{ profileId: "flow-api", operation: "update", kind: "completed" }])
+    expect(confirmed).toHaveBeenCalledOnce(); expect(flow.finish("flow-api", current)).toBe(true)
+    expect(flow.getSnapshot()).toEqual([]); release(); await Promise.resolve()
+  })
+
+  it("isolates resources, blocks expired replay and retires all intents with the actor", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const remove = vi.fn().mockRejectedValue(new HubClientError("http", "safe", "custom_api_command_replay_expired", 412, false))
+    const update = vi.fn().mockResolvedValue(profile)
+    const flow = createCustomApiManagementCommands({ client: { updateCustomApi: update, removeCustomApi: remove }, boundary: admitted, onConfirmed: vi.fn() })
+    expect(await flow.submit({ operation: "remove", profileId: "deleted-api", input: { expected_state_version: "4" } }, admitted)).toBe(false)
+    expect(await flow.submit({ operation: "update", profileId: "other-api", input: { expected_state_version: "1", name: "Other" } }, admitted)).toBe(true)
+    expect(await flow.resume("deleted-api", admitted)).toBe(false)
+    expect(remove).toHaveBeenCalledOnce()
+    expect(flow.getSnapshot()).toEqual([{ profileId: "deleted-api", operation: "remove", kind: "unknown", failure: "replay_expired" }, { profileId: "other-api", operation: "update", kind: "completed" }])
+    flow.bind({ ...admitted, subject: "other-actor" }); flow.bind(admitted)
+    expect(flow.getSnapshot()).toEqual([])
+    expect(await flow.resume("deleted-api", admitted)).toBe(false)
+  })
+
+  it("preserves a deletion after its window closes and consumes a late ACK without another request", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    let acknowledge!: () => void
+    const pending = new Promise<void>(resolve => { acknowledge = resolve })
+    const remove = vi.fn().mockReturnValue(pending), confirmed = vi.fn()
+    const flow = createCustomApiManagementCommands({ client: { removeCustomApi: remove }, boundary: admitted, onConfirmed: confirmed })
+    const controller = new AbortController()
+    const wait = flow.submit({ operation: "remove", profileId: "gone-api", input: { expected_state_version: "1" } }, admitted, controller.signal)
+    controller.abort()
+    expect(remove.mock.calls[0]?.[3].aborted).toBe(true)
+    expect(flow.getSnapshot()[0]?.kind).toBe("unknown")
+    acknowledge(); expect(await wait).toBe(false)
+    expect(flow.getSnapshot()[0]?.kind).toBe("completed")
+    expect(await flow.resume("gone-api", admitted)).toBe(true)
+    expect(flow.finish("gone-api", admitted)).toBe(true)
+    expect(remove).toHaveBeenCalledOnce(); expect(confirmed).toHaveBeenCalledOnce()
+  })
+
+  it("a first unambiguous validation rejection releases the slot but an uncertain rejection does not", async () => {
+    const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+    const invalid = new HubClientError("http", "safe", "invalid_custom_api_request", 400, false)
+    const update = vi.fn().mockRejectedValueOnce(invalid).mockRejectedValueOnce(new Error("lost ACK")).mockRejectedValue(invalid)
+    const flow = createCustomApiManagementCommands({ client: { updateCustomApi: update }, boundary: admitted, onConfirmed: vi.fn() })
+    const intent = { operation: "update" as const, profileId: "flow-api", input: { expected_state_version: "1", name: "Edit" } }
+    expect(await flow.submit(intent, admitted)).toBe(false); expect(flow.getSnapshot()[0]?.kind).toBe("rejected")
+    expect(await flow.submit(intent, admitted)).toBe(false); expect(update.mock.calls[0]?.[2]).not.toBe(update.mock.calls[1]?.[2])
+    expect(await flow.resume("flow-api", admitted)).toBe(false); expect(flow.getSnapshot()[0]?.kind).toBe("unknown")
+    expect(await flow.submit(intent, admitted)).toBe(false); expect(update).toHaveBeenCalledTimes(3)
+    expect(update.mock.calls[1]?.slice(0, 3)).toEqual(update.mock.calls[2]?.slice(0, 3))
+    flow.bind({ ...admitted, subject: null, admitted: false })
+  })
+})
+
+it("an earlier management ACK settles an active explicit retry without letting the first window consume it", async () => {
+  const { createCustomApiManagementCommands } = await import("@/ui/mcp/custom-api-management-commands")
+  let firstAck!: () => void, retryAck!: () => void
+  const first = new Promise<void>(resolve => { firstAck = resolve }), retry = new Promise<void>(resolve => { retryAck = resolve })
+  const remove = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(retry)
+  const confirmed = vi.fn()
+  const flow = createCustomApiManagementCommands({ client: { removeCustomApi: remove }, boundary: admitted, onConfirmed: confirmed })
+  const controller = new AbortController()
+  const oldWindow = flow.submit({ operation: "remove", profileId: "late-api", input: { expected_state_version: "1" } }, admitted, controller.signal)
+  controller.abort()
+  const currentWindow = flow.resume("late-api", admitted)
+  firstAck(); expect(await oldWindow).toBe(false)
+  expect(remove.mock.calls[1]?.[3].aborted).toBe(true)
+  retryAck(); expect(await currentWindow).toBe(true)
+  expect(flow.finish("late-api", admitted)).toBe(true)
+  expect(confirmed).toHaveBeenCalledTimes(2)
+  expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+})

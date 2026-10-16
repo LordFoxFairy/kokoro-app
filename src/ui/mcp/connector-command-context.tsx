@@ -14,7 +14,9 @@ import { UrlMcpForm } from "./mcp-url-form";
 import { CustomApiForm } from "./custom-api-form";
 import { invalidateCustomApiProjection } from "./use-custom-api-projection";
 
-const Commands = createContext<{ api: CustomApiCreateFlow; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
+import { createCustomApiManagementCommands, type CustomApiManagementCommands } from "./custom-api-management-commands";
+
+const Commands = createContext<{ api: CustomApiCreateFlow; apiManagement: CustomApiManagementCommands; json: McpJsonImportFlow; server: McpServerCreationFlow; preparation: McpPreparationCommands; client: HubClient; boundary: ProjectReadBoundary } | null>(null);
 
 /** The stable app shell owns the command; closing a modal does not abandon it. */
 export function ConnectorCommandProvider({ client, boundary, children }: {
@@ -24,6 +26,10 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
   const preparation = useMemo(() => createMcpPreparationCommands({
     client, boundary: { subject, admitted: false, generation: 0 },
     onConfirmed: () => { if (subject !== null) invalidateMcpConnectorProjection(client, subject); },
+  }), [client, subject]);
+  const apiManagement = useMemo(() => createCustomApiManagementCommands({
+    client, boundary: { subject, admitted: false, generation: 0 },
+    onConfirmed: () => { if (subject !== null) invalidateCustomApiProjection(client, subject); },
   }), [client, subject]);
   const api = useMemo(() => createCustomApiCreateFlow({
     client, boundary: { subject, admitted: false, generation: 0 },
@@ -39,12 +45,13 @@ export function ConnectorCommandProvider({ client, boundary, children }: {
   }), [client, subject, preparation]);
   useLayoutEffect(() => {
     const releasePreparation = preparation.retain({ subject, admitted, generation });
+    const releaseApiManagement = apiManagement.retain({ subject, admitted, generation });
     const releaseApi = api.retain({ subject, admitted, generation });
     const releaseJson = json.retain({ subject, admitted, generation });
     const releaseServer = server.retain({ subject, admitted, generation });
-    return () => { releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
-  }, [api, json, server, preparation, subject, admitted, generation]);
-  const value = useMemo(() => ({ api, json, server, preparation, client, boundary: { subject, admitted, generation } }), [api, json, server, preparation, client, subject, admitted, generation]);
+    return () => { releaseApiManagement(); releaseApi(); releaseJson(); releaseServer(); releasePreparation(); };
+  }, [api, apiManagement, json, server, preparation, subject, admitted, generation]);
+  const value = useMemo(() => ({ api, apiManagement, json, server, preparation, client, boundary: { subject, admitted, generation } }), [api, apiManagement, json, server, preparation, client, subject, admitted, generation]);
   return <Commands.Provider value={value}>{children}</Commands.Provider>;
 }
 
@@ -72,4 +79,11 @@ export function useMcpPreparationCommands(client: HubClient, identity: string) {
   if (value === null || value.client !== client || value.boundary.subject !== identity)
     throw new Error("MCP preparation requires the exact actor/client shell owner");
   return value.preparation;
+}
+
+export function useCustomApiManagementCommands(client: HubClient, identity: string) {
+  const value = useContext(Commands);
+  if (value === null || value.client !== client || value.boundary.subject !== identity)
+    throw new Error("Custom API management requires the exact actor/client shell owner");
+  return value.apiManagement;
 }

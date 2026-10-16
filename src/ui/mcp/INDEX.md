@@ -20,7 +20,7 @@ OAuth 点击同步预开并隔离 popup，再使用 owner 返回的 HTTPS URL；
 - `mcp-provider-catalog-dialog.tsx`、`mcp-provider-detail-dialog.tsx`、`mcp-connector-editor-dialog.tsx`：分别拥有目录、Provider 详情、Provider 生命周期编辑的焦点/弹窗边界。
 - `custom-mcp-detail-dialog.tsx`：只拥有自定义 MCP 的详情、管理菜单与 `MCP 配置`；读取 owner-issued server ID 后才渲染，绝不按显示名猜类型。
 - `custom-api-detail-dialog.tsx` / `custom-api-form.tsx` / `use-custom-api-projection.ts`：只拥有 Custom API profile 的安全详情和编辑；环境变量值永不进入读取视图。
-- `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建与 MCP Prepare 三个实际消费者共用，不是网络代理或命令注册表。
+- `connector-command.ts` / `use-connector-creation-form.ts`：仅本地单命令的准入/lease/unknown及异步完成关闭机制，由 API/JSON 创建、MCP Prepare 与 typed Custom API 管理实际消费者共用，不是网络代理或命令注册表。
 - `custom-api-create-flow.ts` / `mcp-json-import-flow.ts` / `connector-command-context.tsx`：各自 typed 输入/创建命令与稳定 AppFrameRuntime 的 API/JSON actor/client 命令槽。冻结正文/key只在RAM，unknown显式同请求恢复；关闭窗口不丢命令，换actor/真正卸载退休。确认清实际secret/JSON原文，API和JSON分别失活捕获主体的独立投影，Form/Dialog只拥有当前窗口关闭。JSON仍一次原子HTTP导入，不循环Register。
 - `mcp-server-creation-flow.ts` / `use-mcp-server-creation.ts`：Custom/URL 多阶段创建的独立 actor/client 工作流和当前窗口消费者；原 Register/Prepare key、正文与 CAS 仅在 RAM 保留，未知结果显式恢复原命令。Register 确认只留精确 locator，新 Prepare 读取本代 server/connector，OAuth 不借旧准入，晚 ACK 仅刷新原主体。
 - `mcp-projection-types.ts`：共享的投影视图类型、分类词汇和 owner artwork/status 映射；不含请求或模拟数据。
@@ -50,3 +50,6 @@ Connector恢复错误当前已固定BFF browser-private profile并由Hub/同源a
 
 
 `connector-command-failure.ts` 仅将固定BFF合法tuple映射为非敏感reason/本地提示，single-command与Register持原失败限制；same_command显式恢复，inspect_owner/配置原因在状态层拒重试，不自动换key。创建API/JSON/Custom/URL及共享Prepare详情复用原alert/button展示九语言；窗口可关闭，核验提示不代表新建许可或GET结清。OAuth创建popup错误仅保当前scope的reason，其他详情生命周期/真实OAuth与人工结清产品流程仍未验。
+
+
+`custom-api-management-commands.ts` 在稳定shell按profile ID持一个typed update/remove原意图，不经过通用runAction。未知期间不可改body/CAS或切换操作；Close/重核只暂停等待，显式恢复原key/body，首次明确400拒绝才允许修正新命令。summary只有locator/operation/kind/failure，ACK清core与已挂载编辑器实际secret草稿；其他资源独立、actor/client退休清理。列表缺资源仍显示可打开的原意图，不以GET/404结清；旧窗口迟到ACK只失活原主体投影，不能关闭后开窗口。Hub管理方法要求caller key且严格绑定目标及已写字段/安全env描述；删除仍需原用户确认。原生OAuth/其他MCP管理恢复和整文档重载仍未闭环。

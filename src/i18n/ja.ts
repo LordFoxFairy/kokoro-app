@@ -1302,7 +1302,7 @@ export const ja: Partial<Record<MessageKey, string>> = {
   "firstSite.appSuggestionTasks": "タスク管理付きToDoアプリを作成",
   "firstSite.appSuggestionProductivity": "個人生産性ツールキットを作成",
   "mcp.recovery.in_progress": "元のリクエストを処理中です。後で同じリクエストを再開してください。",
-  "mcp.recovery.outcome_unknown": "結果は未確認です。新規作成せず、元のリクエストを再開します。",
+  "mcp.recovery.outcome_unknown": "結果は未確認です。再開時は同じ元のリクエストを使用します。",
   "mcp.recovery.replay_expired": "復元期限を過ぎています。この画面を閉じ、コネクタ管理で状態を確認してから操作してください。",
   "mcp.recovery.identity_conflict": "元のリクエストIDが競合しています。先にコネクタ管理で確認してください。",
   "mcp.recovery.ownership_lost": "処理が中断されました。同じリクエストを明示的に再開できます。",

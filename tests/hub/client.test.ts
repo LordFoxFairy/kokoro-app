@@ -1920,3 +1920,30 @@ it("accepts all published Custom API recovery tuples and keeps ordinary dependen
   }
   expect(fetchMock).toHaveBeenCalledTimes(7);
 });
+
+it("does not acknowledge a Custom API management response for another profile", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const wrong = { profile_id: "other-profile", name: "Edited", state_version: "2", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] };
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: wrong, replayed: false } }));
+  await expect(createHubClient().updateCustomApi!("target-profile", { expected_state_version: "1", name: "Edited" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { profile_id: "other-profile", deleted: true, replayed: false } }));
+  await expect(createHubClient().removeCustomApi!("target-profile", { expected_state_version: "1" }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+});
+
+it("binds API edit ACK fields and descriptors and preserves the explicit management key", async () => {
+  const fetchMock = vi.fn<typeof fetch>(); vi.stubGlobal("fetch", fetchMock);
+  const profile = { profile_id: "managed-api", name: "Edited", instructions: "New note", state_version: "3", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [{ name: "SECRET", configured: true, status: "active", state_version: "1" }] };
+  const input = { expected_state_version: "1", name: "Edited", instructions: "New note", environment_upserts: [{ name: "SECRET", value: "fixture-only" }], environment_removals: ["OLD_SECRET"] };
+  const hub = createHubClient();
+  for (const wrong of [ { ...profile, name: "Other" }, { ...profile, instructions: "Old note" }, { ...profile, environment: [] }, { ...profile, environment: [{ ...profile.environment[0], configured: false }] }, { ...profile, environment: [...profile.environment, { ...profile.environment[0], name: "OLD_SECRET" }] }, { ...profile, environment: [...profile.environment, ...profile.environment] } ]) {
+    fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: wrong, replayed: false } }));
+    await expect(hub.updateCustomApi!("managed-api", input, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  }
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: profile, replayed: true } }));
+  await expect(hub.updateCustomApi!("managed-api", input, "management-key")).resolves.toEqual(profile);
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { custom_api: profile, replayed: true } }));
+  await expect(hub.updateCustomApi!("managed-api", { expected_state_version: "1", clear_instructions: true }, "management-key")).rejects.toMatchObject({ reason: "parse" });
+  fetchMock.mockResolvedValueOnce(publicResponse({ data: { profile_id: "managed-api", deleted: true, replayed: true } }));
+  await expect(hub.removeCustomApi!("managed-api", { expected_state_version: "1" }, "management-key")).resolves.toBeUndefined();
+  for (const [, request] of fetchMock.mock.calls) expect(new Headers(request?.headers).get("Idempotency-Key")).toBe("management-key");
+});

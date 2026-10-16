@@ -3479,7 +3479,7 @@ it.each([
     <CustomMcpDetailDialog connector={ready ? connector : null} server={ready || partial ? server(fresh) : null}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={close}
       onSaveConfiguration={save} onPrepare={prepare} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
-    <CustomApiDetailDialog profile={ready ? profile(fresh) : null} busy={false} actionError={false}
+    <CustomApiDetailDialog admitted={ready} command={undefined} canUpdate canRemove onResume={() => {}} profile={ready ? profile(fresh) : null} busy={false} actionError={false}
       returnFocusRef={{ current: null }} onClose={close} onSave={save} onDelete={vi.fn()} />}</LocaleProvider>
   const view = render(content(true))
   if (kind === "mcp") {
@@ -3533,7 +3533,7 @@ it.each(["mcp", "api"])("%s configuration restores a bounded range without steal
     <CustomMcpDetailDialog connector={name === null ? null : connector} server={name === null ? null : server(name)}
       actionId={null} actionError={false} deleteId={null} returnFocusRef={{ current: null }} onClose={vi.fn()} pendingError={pendingError} onRetry={vi.fn()}
       onSaveConfiguration={vi.fn()} onPrepare={vi.fn()} onDisconnect={vi.fn()} onDeleteIntent={vi.fn()} onCancelDelete={vi.fn()} onDelete={vi.fn()} /> :
-    <CustomApiDetailDialog profile={name === null ? null : profile(name)} busy={false} actionError={false}
+    <CustomApiDetailDialog admitted={name !== null} command={undefined} canUpdate canRemove onResume={() => {}} profile={name === null ? null : profile(name)} busy={false} actionError={false}
       returnFocusRef={{ current: null }} onClose={vi.fn()} onSave={vi.fn()} onDelete={vi.fn()} pendingError={pendingError} onRetry={vi.fn()} />}</LocaleProvider>
   const view = render(content("Long original name"))
   if (kind === "mcp") {
@@ -3779,4 +3779,109 @@ it("closing a preparing detail aborts its wait; a late ACK cannot close the succ
   fireEvent.click(await screen.findByRole("button", { name: "完成" }))
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   expect(prepare).toHaveBeenCalledOnce()
+})
+
+it("an unconfirmed Custom API edit keeps its draft read-only and exposes original-request recovery", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "unknown-api-edit", name: "Editable API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const update = vi.fn().mockRejectedValue(new Error("lost management ACK"))
+  const hub = { ...createHubClient(), updateCustomApi: update,
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile], page: { next_cursor: null } }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-management-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Editable API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  const name = screen.getByLabelText("名称")
+  fireEvent.change(name, { target: { value: "Original edit" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  await waitFor(() => expect(update).toHaveBeenCalledOnce())
+  expect(await screen.findByRole("button", { name: "重试原请求" })).toBeEnabled()
+  expect(name).toHaveAttribute("readonly")
+});
+
+it("an API deletion remains recoverable when the row disappears, without treating the list as its ACK", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "missing-api-command", name: "Delete API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  let listed = true
+  const remove = vi.fn().mockRejectedValueOnce(new Error("lost deletion ACK")).mockResolvedValue(undefined)
+  const hub = { ...createHubClient(), removeCustomApi: remove,
+    listCustomApis: vi.fn(async () => ({ items: listed ? [profile] : [], page: { next_cursor: null } })),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  const content = (generation: number) => <LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation, subject: "api-delete-actor" }} /></LocaleProvider>
+  const view = render(content(1))
+  fireEvent.click(await screen.findByRole("button", { name: "Delete API" }))
+  fireEvent.click(screen.getByRole("button", { name: "删除" }))
+  fireEvent.click(screen.getByRole("button", { name: "确认移除" }))
+  await screen.findByRole("button", { name: "重试原请求" })
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  listed = false; view.rerender(content(2))
+  const recovery = await screen.findByRole("button", { name: "重试原请求 · missing-api-command" })
+  expect(remove).toHaveBeenCalledOnce()
+  fireEvent.click(recovery)
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "重试原请求" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  expect(remove).toHaveBeenCalledTimes(2)
+  expect(remove.mock.calls[0]?.slice(0, 3)).toEqual(remove.mock.calls[1]?.slice(0, 3))
+  expect(screen.queryByRole("button", { name: "重试原请求 · missing-api-command" })).not.toBeInTheDocument()
+})
+
+it("a late API edit ACK clears actual secret drafts without closing a successor window", async () => {
+  const { McpContent: Content } = await import("@/ui/mcp/mcp-content")
+  const McpContent = withMcpCommandOwner(Content)
+  const profile = { profile_id: "late-managed-api", name: "Late managed API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const other = { ...profile, profile_id: "other-managed-api", name: "Other managed API" }
+  let acknowledge!: () => void
+  const pending = new Promise<void>(resolve => { acknowledge = resolve })
+  const update = vi.fn().mockReturnValue(pending)
+  const hub = { ...createHubClient(), updateCustomApi: update,
+    listCustomApis: vi.fn().mockResolvedValue({ items: [profile, other], page: { next_cursor: null } }),
+    listMcpConnectorProviders: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), listMcpConnectors: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) }
+  render(<LocaleProvider><McpContent client={hub} initialView="connections" readBoundary={{ admitted: true, generation: 1, subject: "api-late-window-actor" }} /></LocaleProvider>)
+  fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
+  fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
+  fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "private-draft" } })
+  fireEvent.click(screen.getByRole("button", { name: "保存修改" }))
+  fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "取消" }).at(-1)!)
+  expect(update.mock.calls[0]?.[3].aborted).toBe(true)
+  fireEvent.click(screen.getByRole("button", { name: "Other managed API" }))
+  const successor = screen.getByRole("dialog")
+  await act(async () => { acknowledge(); await pending })
+  expect(screen.getByRole("dialog")).toBe(successor)
+  fireEvent.click(within(successor).getByRole("button", { name: "取消" }))
+  fireEvent.click(await screen.findByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "完成" }))
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  fireEvent.click(screen.getByRole("button", { name: "Late managed API" }))
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
+  expect(screen.getByLabelText("名称")).not.toHaveAttribute("readonly")
+  expect(update).toHaveBeenCalledOnce()
+})
+
+it("a mounted API editor clears secret values on ACK and rejects submitted edits while unknown", async () => {
+  const { CustomApiDetailDialog } = await import("@/ui/mcp/custom-api-detail-dialog")
+  const profile = { profile_id: "mounted-api", name: "Mounted API", state_version: "1", created_at: "2026-10-16T12:00:00Z", updated_at: "2026-10-16T12:00:00Z", environment: [] }
+  const save = vi.fn(), resume = vi.fn()
+  const content = (kind?: "unknown" | "completed") => <LocaleProvider><CustomApiDetailDialog profile={profile} admitted busy={false} actionError={false} canUpdate canRemove
+    command={kind ? { profileId: profile.profile_id, operation: "update", kind } : undefined}
+    onResume={resume} onSave={save} onDelete={vi.fn()} onClose={vi.fn()} returnFocusRef={{ current: null }} /></LocaleProvider>
+  const view = render(content())
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }))
+  fireEvent.click(screen.getByRole("button", { name: "添加密钥" }))
+  fireEvent.change(screen.getByLabelText("密钥名称"), { target: { value: "SECRET" } })
+  fireEvent.change(screen.getByLabelText("密钥值"), { target: { value: "mounted-secret" } })
+  const name = screen.getByLabelText("名称") as HTMLInputElement
+  view.rerender(content("unknown"))
+  fireEvent.change(name, { target: { value: "Forbidden change" } })
+  expect(name.value).toBe("Mounted API")
+  fireEvent.submit(name.closest("form")!)
+  expect(save).not.toHaveBeenCalled()
+  expect(screen.getByLabelText("密钥值")).toHaveValue("mounted-secret")
+  view.rerender(content("completed"))
+  expect(screen.queryByLabelText("密钥值")).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "完成" })).toBeEnabled()
 })

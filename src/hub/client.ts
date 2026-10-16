@@ -52,6 +52,7 @@ import {
   type McpConnectorCreateConnectionInput,
 } from "./mcp-connector-authorization.schema";
 import {
+  customApiProfileSchema,
   customApiCreateInputSchema,
   customApiCreateSchema,
   customApiErrorSchema,
@@ -848,11 +849,13 @@ export type HubClient = {
   updateCustomApi?: (
     profileId: string,
     input: CustomApiUpdateInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<CustomApiProfile>;
   removeCustomApi?: (
     profileId: string,
     input: CustomApiRemoveInput,
+    key: string,
     signal?: AbortSignal,
   ) => Promise<void>;
   getMcpConnector?: (connectorId: string, signal?: AbortSignal) => Promise<McpConnector>;
@@ -1056,32 +1059,30 @@ export function createHubClient(): HubClient {
           signal,
         )
       ).custom_api,
-    updateCustomApi: async (profileId, input, signal) =>
-      (
-        await requestCustomApi(
-          "update",
-          `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
-          customApiUpdateSchema,
-          {
-            method: "PATCH",
-            headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-            body: JSON.stringify(customApiUpdateInputSchema.parse(input)),
-          },
-          signal,
-        )
-      ).custom_api,
-    removeCustomApi: async (profileId, input, signal) => {
-      await requestCustomApi(
-        "remove",
-        `/connectors/custom-apis/${encodeURIComponent(profileId)}`,
-        customApiRemoveSchema,
-        {
-          method: "DELETE",
-          headers: idempotencyHeaders("custom-api", { ...JSON_HEADERS }),
-          body: JSON.stringify(customApiRemoveInputSchema.parse(input)),
-        },
-        signal,
+    updateCustomApi: async (profileId, input, key, signal) => {
+      const id = customApiProfileSchema.shape.profile_id.parse(profileId);
+      const body = customApiUpdateInputSchema.parse(input);
+      const profile = (await requestCustomApi(
+        "update", `/connectors/custom-apis/${encodeURIComponent(id)}`, customApiUpdateSchema,
+        { method: "PATCH", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(body) }, signal,
+      )).custom_api;
+      const environment = new Map(profile.environment.map(item => [item.name, item]));
+      if (profile.profile_id !== id || environment.size !== profile.environment.length ||
+        (body.name !== undefined && profile.name !== body.name) ||
+        (body.instructions !== undefined && profile.instructions !== body.instructions) ||
+        (body.clear_instructions === true && profile.instructions !== undefined) ||
+        (body.environment_upserts ?? []).some(item => environment.get(item.name)?.configured !== true) ||
+        (body.environment_removals ?? []).some(name => environment.has(name)))
+        throw new HubClientError("parse", "Custom API update ACK binding mismatch", null, null);
+      return profile;
+    },
+    removeCustomApi: async (profileId, input, key, signal) => {
+      const id = customApiProfileSchema.shape.profile_id.parse(profileId);
+      const result = await requestCustomApi(
+        "remove", `/connectors/custom-apis/${encodeURIComponent(id)}`, customApiRemoveSchema,
+        { method: "DELETE", headers: { ...JSON_HEADERS, "Idempotency-Key": connectorCreationKeySchema.parse(key) }, body: JSON.stringify(customApiRemoveInputSchema.parse(input)) }, signal,
       );
+      if (result.profile_id !== id) throw new HubClientError("parse", "Custom API removal ACK binding mismatch", null, null);
     },
     getMcpConnector: async (connectorId, signal) => {
       const id = mcpConnectorIdSchema.parse(connectorId);
